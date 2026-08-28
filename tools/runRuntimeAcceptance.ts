@@ -889,6 +889,13 @@ function seedExportRecords(profile: Profile) {
 // Only AMBRRED2 may be used. A deleted note, a note that was never published,
 // a child record, a tag that differs only by capital letters, and a tag shaped
 // like a database attack must all be ignored.
+//
+// Every note that must be ignored owns an address that no other note mentions,
+// and the live note shares its addresses with nobody. The lookup reads one
+// note per request, so if the addresses overlapped a request could come back
+// empty simply because the database handed back the live note that day, and
+// the check would pass even with a broken filter. Separate addresses mean an
+// empty answer can only come from the note being left out.
 const REDIRECT_NOTE_DESTINATION = `/lib/${EXPORT_RECORDS.published.key}`;
 const REDIRECT_HOSTILE_TAG = `redirect-record'; DROP TABLE "item"; --`;
 
@@ -915,7 +922,7 @@ function seedRedirectNotes(profile: Profile) {
 			itemType: "Note",
 			deleted: 1,
 			parentItem: "NULL",
-			note: `deleted-route = ${REDIRECT_NOTE_DESTINATION}`,
+			note: `deleted-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
 			tag: "redirect-record",
 		},
 		{
@@ -923,7 +930,7 @@ function seedRedirectNotes(profile: Profile) {
 			itemType: "Attachment",
 			deleted: 0,
 			parentItem: `'${EXPORT_RECORDS.published.key}'`,
-			note: `child-route = ${REDIRECT_NOTE_DESTINATION}`,
+			note: `child-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
 			tag: "redirect-record",
 		},
 		{
@@ -931,7 +938,7 @@ function seedRedirectNotes(profile: Profile) {
 			itemType: "Note",
 			deleted: 0,
 			parentItem: "NULL",
-			note: `cased-route = ${REDIRECT_NOTE_DESTINATION}`,
+			note: `Case-Only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
 			tag: "Redirect-Record",
 		},
 		{
@@ -939,7 +946,7 @@ function seedRedirectNotes(profile: Profile) {
 			itemType: "Note",
 			deleted: 0,
 			parentItem: "NULL",
-			note: `injected-route = ${REDIRECT_NOTE_DESTINATION}`,
+			note: `injected-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
 			tag: REDIRECT_HOSTILE_TAG,
 		},
 	] as const;
@@ -964,7 +971,7 @@ function seedRedirectNotes(profile: Profile) {
 		`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('AMBRRED7', 'native', ${literal(
 			JSON.stringify({
 				itemType: "Note",
-				note: `draft-route = ${REDIRECT_NOTE_DESTINATION}`,
+				note: `draft-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
 			}),
 		)}::jsonb)`,
 	];
@@ -1713,16 +1720,24 @@ async function verifyNoteRedirects(profile: Profile) {
 	}
 
 	for (const [pathname, source] of [
-		["/deleted-route", "a deleted note"],
-		["/draft-route", "a note that was never published"],
-		["/child-route", "a child record"],
-		["/cased-route", "a tag that differs only by capital letters"],
-		["/injected-route", "a tag shaped like a database attack"],
+		["/deleted-only/2024", "a deleted note"],
+		["/draft-only/2024", "a note that was never published"],
+		["/child-only/2024", "a child record"],
+		["/Case-Only/2024", "a tag that differs only by capital letters"],
+		["/injected-only/2024", "a tag shaped like a database attack"],
 	] as const) {
 		assert.deepEqual(
 			await readRedirectLookup(profile, pathname.slice(1)),
 			{ destination: null },
 			`${source} must not create a redirect`,
+		);
+		// The live note must still answer right here. Together with the
+		// separate addresses above, this shows the empty answer came from the
+		// note being left out, not from the library reading some other note.
+		assert.deepEqual(
+			await readRedirectLookup(profile, "old-report/2024"),
+			{ destination: REDIRECT_NOTE_DESTINATION },
+			`the owner's own redirect must still work beside ${source}`,
 		);
 		const ignored = await firstHopForPath(profile, pathname);
 		assert.equal(
