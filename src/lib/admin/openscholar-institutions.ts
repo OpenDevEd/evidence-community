@@ -47,21 +47,35 @@ export function buildInstitutionCountsQuery(
 		? sql` WHERE ${itemInstitution.institutionName} ILIKE ${containsPattern(request.query)} ESCAPE '\\'`
 		: sql``;
 
+	const ascending = request.direction === "asc";
+	// Names always break a tie in the same direction, so a page never repeats
+	// or skips an institution that shares a record count with another.
 	const keyset = (() => {
 		if (!cursor) return sql``;
 		if (request.sort === "name") {
-			return sql` HAVING ${itemInstitution.institutionName} > ${cursor.name}`;
+			return ascending
+				? sql` HAVING ${itemInstitution.institutionName} > ${cursor.name}`
+				: sql` HAVING ${itemInstitution.institutionName} < ${cursor.name}`;
 		}
+		const pastCount = ascending
+			? sql`count(*) > ${cursor.count}`
+			: sql`count(*) < ${cursor.count}`;
 		return sql` HAVING (
-			count(*) < ${cursor.count}
+			${pastCount}
 			OR (count(*) = ${cursor.count} AND ${itemInstitution.institutionName} > ${cursor.name})
 		)`;
 	})();
 
-	const order =
-		request.sort === "name"
-			? sql`${itemInstitution.institutionName} ASC`
+	const order = (() => {
+		if (request.sort === "name") {
+			return ascending
+				? sql`${itemInstitution.institutionName} ASC`
+				: sql`${itemInstitution.institutionName} DESC`;
+		}
+		return ascending
+			? sql`count(*) ASC, ${itemInstitution.institutionName} ASC`
 			: sql`count(*) DESC, ${itemInstitution.institutionName} ASC`;
+	})();
 
 	return sql`
 		SELECT ${itemInstitution.institutionName} AS name, count(*) AS count
@@ -97,6 +111,7 @@ export async function listInstitutionCounts(
 			hasMore && last
 				? encodeOpenScholarInstitutionCursor({
 						count: last.count,
+						direction: request.direction,
 						name: last.name,
 						query: request.query.toLowerCase(),
 						sort: request.sort,

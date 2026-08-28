@@ -96,6 +96,7 @@ describe("OpenScholar collection request", () => {
 	it("lists the whole catalogue when no search text is given", () => {
 		expect(parseOpenScholarCollectionRequest({})).toEqual({
 			cursor: null,
+			ids: null,
 			pageSize: 50,
 			query: "",
 		});
@@ -108,9 +109,46 @@ describe("OpenScholar collection request", () => {
 				pageSize: "100",
 				query: "  teacher ",
 			}),
-		).toEqual({ cursor: "abc", pageSize: 100, query: "teacher" });
+		).toEqual({ cursor: "abc", ids: null, pageSize: 100, query: "teacher" });
 		expect(() =>
 			parseOpenScholarCollectionRequest({ pageSize: "101" }),
+		).toThrow();
+	});
+
+	it("reads a list of ids and drops repeats", () => {
+		expect(
+			parseOpenScholarCollectionRequest({
+				ids: " ABCD1234 , EFGH5678 ,ABCD1234",
+			}).ids,
+		).toEqual(["ABCD1234", "EFGH5678"]);
+	});
+
+	it("refuses more ids than a picker may ask for at once", () => {
+		const ids = Array.from({ length: 201 }, (_unused, index) =>
+			`ID${String(index).padStart(6, "0")}`,
+		).join(",");
+
+		expect(() => parseOpenScholarCollectionRequest({ ids })).toThrow();
+	});
+
+	it("refuses an id that is not a collection key", () => {
+		expect(() =>
+			parseOpenScholarCollectionRequest({ ids: "too-short" }),
+		).toThrow();
+	});
+
+	it("refuses ids asked for together with a search or a page", () => {
+		expect(() =>
+			parseOpenScholarCollectionRequest({
+				ids: "ABCD1234",
+				query: "teacher",
+			}),
+		).toThrow();
+		expect(() =>
+			parseOpenScholarCollectionRequest({
+				cursor: "abc",
+				ids: "ABCD1234",
+			}),
 		).toThrow();
 	});
 });

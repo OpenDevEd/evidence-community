@@ -87,7 +87,24 @@ describe("OpenScholar collections route", () => {
 		});
 		expect(listOpenScholarCollections).toHaveBeenCalledWith(
 			expect.objectContaining({ execute }),
-			{ cursor: "abc", pageSize: "10", query: "teacher" },
+			{ cursor: "abc", ids: null, pageSize: "10", query: "teacher" },
+		);
+	});
+
+	it("passes a list of ids through so saved link targets can be named", async () => {
+		const response = await getCollections(
+			request("/api/openscholar/collections?ids=ABCD1234,EFGH5678"),
+		);
+
+		expect(response.status).toBe(200);
+		expect(listOpenScholarCollections).toHaveBeenCalledWith(
+			expect.objectContaining({ execute }),
+			{
+				cursor: null,
+				ids: "ABCD1234,EFGH5678",
+				pageSize: undefined,
+				query: undefined,
+			},
 		);
 	});
 

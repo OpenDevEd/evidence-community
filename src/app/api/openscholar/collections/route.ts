@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json(
 			await listOpenScholarCollections(await getDatabase(), {
 				cursor: searchParams.get("cursor"),
+				ids: searchParams.get("ids"),
 				pageSize: searchParams.get("pageSize") ?? undefined,
 				query: searchParams.get("query") ?? undefined,
 			}),

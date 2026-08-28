@@ -46,6 +46,7 @@ describe("institution page request", () => {
 	it("reads the first page by count when nothing is asked for", () => {
 		expect(parseOpenScholarInstitutionRequest({})).toEqual({
 			cursor: null,
+			direction: "desc",
 			pageSize: 50,
 			query: "",
 			sort: "count",
@@ -70,9 +71,26 @@ describe("institution page request", () => {
 		).toThrow();
 	});
 
+	it("sorts by name from A to Z unless a direction is given", () => {
+		expect(parseOpenScholarInstitutionRequest({ sort: "name" }).direction).toBe(
+			"asc",
+		);
+		expect(
+			parseOpenScholarInstitutionRequest({ direction: "desc", sort: "name" })
+				.direction,
+		).toBe("desc");
+	});
+
+	it("refuses a direction it does not know", () => {
+		expect(() =>
+			parseOpenScholarInstitutionRequest({ direction: "sideways" }),
+		).toThrow();
+	});
+
 	it("round-trips an opaque cursor", () => {
 		const encoded = encodeOpenScholarInstitutionCursor({
 			count: 12,
+			direction: "desc",
 			name: "Amber Institute",
 			query: "amber",
 			sort: "count",
@@ -81,6 +99,7 @@ describe("institution page request", () => {
 		expect(encoded).not.toContain("Amber Institute");
 		expect(decodeOpenScholarInstitutionCursor(encoded)).toEqual({
 			count: 12,
+			direction: "desc",
 			name: "Amber Institute",
 			query: "amber",
 			sort: "count",
@@ -127,6 +146,7 @@ describe("institution counts query", () => {
 	it("keeps rows with the same count from repeating or going missing", () => {
 		const cursor = encodeOpenScholarInstitutionCursor({
 			count: 7,
+			direction: "desc",
 			name: "Amber Institute",
 			query: "",
 			sort: "count",
@@ -142,9 +162,43 @@ describe("institution counts query", () => {
 		expect(params).toContain("Amber Institute");
 	});
 
+	it("walks upwards through the counts when the direction is asc", () => {
+		const cursor = encodeOpenScholarInstitutionCursor({
+			count: 7,
+			direction: "asc",
+			name: "Amber Institute",
+			query: "",
+			sort: "count",
+		});
+
+		const { params, sql } = compile({ cursor, direction: "asc" });
+
+		expect(sql).toMatch(/order by\s+count\(\*\) asc/iu);
+		expect(sql).toContain("count(*) >");
+		expect(sql).not.toContain("count(*) <");
+		expect(sql).toContain('"institutionName" >');
+		expect(params).toContain(7);
+	});
+
+	it("walks backwards through the names when the direction is desc", () => {
+		const cursor = encodeOpenScholarInstitutionCursor({
+			count: 7,
+			direction: "desc",
+			name: "Indigo College",
+			query: "",
+			sort: "name",
+		});
+
+		const { sql } = compile({ cursor, direction: "desc", sort: "name" });
+
+		expect(sql).toMatch(/order by\s+"itemInstitution"\."institutionName" desc/iu);
+		expect(sql).toContain('"institutionName" <');
+	});
+
 	it("orders and walks by name alone when asked to sort by name", () => {
 		const cursor = encodeOpenScholarInstitutionCursor({
 			count: 7,
+			direction: "asc",
 			name: "Amber Institute",
 			query: "",
 			sort: "name",
@@ -177,6 +231,7 @@ describe("institution page", () => {
 		]);
 		expect(decodeOpenScholarInstitutionCursor(page.nextCursor!)).toEqual({
 			count: 4,
+			direction: "desc",
 			name: "Indigo College",
 			query: "",
 			sort: "count",
@@ -217,6 +272,7 @@ describe("institution page", () => {
 		const { database, execute } = databaseReturning([]);
 		const cursor = encodeOpenScholarInstitutionCursor({
 			count: 4,
+			direction: "desc",
 			name: "Amber Institute",
 			query: "amber",
 			sort: "count",
@@ -228,10 +284,27 @@ describe("institution page", () => {
 		expect(execute).not.toHaveBeenCalled();
 	});
 
+	it("refuses a cursor saved for a different direction", async () => {
+		const { database, execute } = databaseReturning([]);
+		const cursor = encodeOpenScholarInstitutionCursor({
+			count: 4,
+			direction: "desc",
+			name: "Amber Institute",
+			query: "",
+			sort: "count",
+		});
+
+		await expect(
+			listInstitutionCounts(database, { cursor, direction: "asc" }),
+		).rejects.toThrow(/does not match/iu);
+		expect(execute).not.toHaveBeenCalled();
+	});
+
 	it("refuses a cursor saved for a different sort", async () => {
 		const { database, execute } = databaseReturning([]);
 		const cursor = encodeOpenScholarInstitutionCursor({
 			count: 4,
+			direction: "desc",
 			name: "Amber Institute",
 			query: "",
 			sort: "count",

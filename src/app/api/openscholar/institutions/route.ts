@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json(
 			await listInstitutionCounts(await getDatabase(), {
 				cursor: searchParams.get("cursor"),
+				direction: searchParams.get("direction"),
 				pageSize: searchParams.get("pageSize") ?? undefined,
 				query: searchParams.get("query") ?? undefined,
 				sort: searchParams.get("sort") ?? undefined,

@@ -6,8 +6,15 @@ const OPENSCHOLAR_INSTITUTION_PAGE_SIZE = 50;
 const OPENSCHOLAR_INSTITUTION_MAX_PAGE_SIZE = 200;
 
 const institutionSortSchema = z.enum(["count", "name"]);
+const institutionDirectionSchema = z.enum(["asc", "desc"]);
 
-const institutionRequestSchema = z.object({
+/** Most records first when sorting by count, A to Z when sorting by name. */
+function defaultDirection(sort: z.infer<typeof institutionSortSchema>) {
+	return sort === "count" ? "desc" : "asc";
+}
+
+const institutionRequestSchema = z
+	.object({
 	cursor: z.string().min(1).nullable().default(null),
 	// A picker that asks for too much gets a full page, not an error.
 	pageSize: z.coerce
@@ -18,9 +25,14 @@ const institutionRequestSchema = z.object({
 		.transform((value) =>
 			Math.min(value, OPENSCHOLAR_INSTITUTION_MAX_PAGE_SIZE),
 		),
+	direction: institutionDirectionSchema.nullable().default(null),
 	query: z.string().trim().max(200).default(""),
 	sort: institutionSortSchema.default("count"),
-});
+	})
+	.transform((request) => ({
+		...request,
+		direction: request.direction ?? defaultDirection(request.sort),
+	}));
 
 export type OpenScholarInstitutionRequest = z.infer<
 	typeof institutionRequestSchema
@@ -35,6 +47,7 @@ export function parseOpenScholarInstitutionRequest(
 const institutionCursorSchema = z.object({
 	v: z.literal(1),
 	count: z.number().int().min(0),
+	direction: institutionDirectionSchema,
 	name: z.string().min(1),
 	query: z.string(),
 	sort: institutionSortSchema,
@@ -78,7 +91,8 @@ export function institutionCursorFor(request: OpenScholarInstitutionRequest) {
 	const cursor = decodeOpenScholarInstitutionCursor(request.cursor);
 	if (
 		cursor.query !== request.query.toLowerCase() ||
-		cursor.sort !== request.sort
+		cursor.sort !== request.sort ||
+		cursor.direction !== request.direction
 	) {
 		throw new AdminValidationError(
 			"The saved institution position does not match this search. Search again.",

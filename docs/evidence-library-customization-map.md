@@ -66,14 +66,28 @@ page.
 | Route | Parameters | Answer |
 | --- | --- | --- |
 | `GET /api/openscholar/collections` | `query`, `cursor`, `pageSize` (1 to 100, default 50) | `{ "items": [{ "count", "id", "parentId", "source", "title" }], "nextCursor" }` |
-| `GET /api/openscholar/institutions` | `query`, `cursor`, `pageSize` (1 to 200, default 50, a larger number is reduced to 200), `sort` = `count` or `name` | `{ "items": [{ "count", "name" }], "nextCursor" }` |
+| `GET /api/openscholar/collections` | `ids`: up to 200 collection ids separated by commas | the same items for those ids only, `"nextCursor": null` |
+| `GET /api/openscholar/institutions` | `query`, `cursor`, `pageSize` (1 to 200, default 50, a larger number is reduced to 200), `sort` = `count` or `name`, `direction` = `desc` or `asc` | `{ "items": [{ "count", "name" }], "nextCursor" }` |
 
-`query` matches anywhere in the name and ignores case. Institutions are
-ordered by record count, highest first, then by name; `sort=name` orders by
-name alone. `nextCursor` is `null` on the last page. Send it back unchanged to
-read the next page: it is opaque, and it only works with the same search and
-sort. A cursor that cannot be read, or that belongs to a different search,
-returns 400.
+`query` matches anywhere in the name and ignores case; PostgreSQL folds the
+case of the search and of the stored name together, so a name such as
+"İstanbul Üniversitesi" is found however it is typed.
+
+Institutions are ordered by record count, highest first, then by name.
+`sort=name` orders by name alone. `direction` turns an order around and
+defaults to `desc` for `count` and `asc` for `name`; names always break a tie
+from A to Z.
+
+`nextCursor` is `null` on the last page. Send it back unchanged to read the
+next page: it is opaque, and it only works with the same search, sort and
+direction. A cursor that cannot be read, or that belongs to a different
+search, returns 400.
+
+`ids` names the collections a saved setting points at, so a page can show
+their names and record counts without opening a picker. The items come back in
+the order they were asked for, repeated ids are read once, and an id that no
+longer exists is left out rather than reported. Asking for `ids` together with
+`query` or `cursor` returns 400.
 
 ## Runtime assets
 

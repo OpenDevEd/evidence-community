@@ -1545,24 +1545,29 @@ function removeInstitutionRecords(profile: Profile) {
 }
 
 /** Every institution the endpoint returns when it is read one row at a time. */
-async function pageThroughInstitutions(profile: Profile, sort: string) {
+async function pageThroughInstitutions(
+	profile: Profile,
+	sort: string,
+	direction: string,
+) {
 	const seen: { count: number; name: string }[] = [];
-	let cursor: string | null = null;
-	do {
-		const page: {
-			body: OpenScholarInstitutionPage;
-			response: Response;
-		} = await openScholarRead<OpenScholarInstitutionPage>(
+	let cursor = "";
+	for (let page = 0; page <= INSTITUTIONS_BY_COUNT.length; page += 1) {
+		const parameters = new URLSearchParams({
+			direction,
+			pageSize: "1",
+			sort,
+		});
+		if (cursor) parameters.set("cursor", cursor);
+		const answer = await openScholarRead<OpenScholarInstitutionPage>(
 			profile,
-			`/api/openscholar/institutions?pageSize=1&sort=${sort}${
-				cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
-			}`,
+			`/api/openscholar/institutions?${parameters.toString()}`,
 		);
-		assert.equal(page.response.status, 200);
-		assert.equal(page.body.items.length, 1);
-		seen.push(...page.body.items);
-		cursor = page.body.nextCursor;
-	} while (cursor && seen.length <= INSTITUTIONS_BY_COUNT.length);
+		assert.equal(answer.response.status, 200);
+		seen.push(...answer.body.items);
+		if (!answer.body.nextCursor) break;
+		cursor = answer.body.nextCursor;
+	}
 	return seen;
 }
 
@@ -1596,6 +1601,13 @@ async function verifyInstitutionCursorRules(profile: Profile) {
 	);
 	assert.equal(otherSort.response.status, 400);
 	assert.deepEqual(otherSort.body, mismatchBody);
+
+	const otherDirection = await openScholarRead(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${cursor}&direction=asc`,
+	);
+	assert.equal(otherDirection.response.status, 400);
+	assert.deepEqual(otherDirection.body, mismatchBody);
 
 	const unreadable = await openScholarRead(
 		profile,
@@ -1820,14 +1832,28 @@ async function verifyOpenScholarInstitutions(profile: Profile) {
 	});
 
 	assert.deepEqual(
-		await pageThroughInstitutions(profile, "count"),
+		await pageThroughInstitutions(profile, "count", "desc"),
 		INSTITUTIONS_BY_COUNT,
 		"paging by count must keep the order and repeat nothing",
 	);
 	assert.deepEqual(
-		await pageThroughInstitutions(profile, "name"),
+		await pageThroughInstitutions(profile, "name", "asc"),
 		INSTITUTIONS_BY_NAME,
 		"paging by name must keep the order and repeat nothing",
+	);
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "count", "asc"),
+		[...INSTITUTIONS_BY_COUNT].reverse().sort((first, second) =>
+			first.count === second.count
+				? first.name.localeCompare(second.name)
+				: first.count - second.count,
+		),
+		"paging by count upwards must keep the order and repeat nothing",
+	);
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "name", "desc"),
+		[...INSTITUTIONS_BY_NAME].reverse(),
+		"paging by name backwards must keep the order and repeat nothing",
 	);
 
 	const searched = await openScholarRead<OpenScholarInstitutionPage>(
@@ -1875,6 +1901,34 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		firstPage.body.items.length + secondPage.body.items.length,
 		"pages must not repeat collections",
 	);
+
+	// Saved link targets are named without opening the picker: the ids come
+	// back in the order they were asked for and an id that no longer exists is
+	// simply left out.
+	const named = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		"/api/openscholar/collections?ids=BBN8BK5J,ZZZZZZZZ,ZBJ4NBSL",
+	);
+	assert.equal(named.response.status, 200);
+	assert.deepEqual(
+		named.body.items.map(({ id, title }) => [id, title]),
+		[
+			["BBN8BK5J", "Amber theme collection"],
+			["ZBJ4NBSL", "Amber source collection"],
+		],
+	);
+	assert.equal(named.body.nextCursor, null);
+	assert.equal(
+		named.body.items.find(({ id }) => id === "ZBJ4NBSL")?.count,
+		1,
+		"a named collection carries its record count",
+	);
+
+	const idsWithSearch = await openScholarRead(
+		profile,
+		"/api/openscholar/collections?ids=ZBJ4NBSL&query=source",
+	);
+	assert.equal(idsWithSearch.response.status, 400);
 
 	const search = await openScholarRead<OpenScholarCollectionPage>(
 		profile,
