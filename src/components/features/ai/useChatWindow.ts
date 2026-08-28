@@ -7,6 +7,7 @@ import { useStickToBottom } from "use-stick-to-bottom";
 import type { ItemGetResponse } from "@/app/api/item/types";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
+import { isAnswering } from "@/lib/ai/chat-request";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import type { AIModelId } from "@/lib/ai/models";
@@ -62,6 +63,7 @@ function useChatConversation({
 	const publicationKey = data?.item?.key;
 	const publicationTitle = data?.item?.title;
 	const {
+		chat,
 		messages,
 		sendMessage,
 		error,
@@ -122,6 +124,7 @@ function useChatConversation({
 
 	return {
 		appendMessage: useAppendMessage(setMessages),
+		chat,
 		chatFailure: useChatFailure(error),
 		error,
 		getTranscriptContent: useTranscriptExport({ messages, modelId }),
@@ -140,16 +143,16 @@ function useChatComposer({
 	onSend,
 }: {
 	isBusy: boolean;
-	onSend: (question: string) => void;
+	/** Answers whether the question was taken. */
+	onSend: (question: string) => boolean;
 }) {
 	const [input, setInput] = useState("");
 	const [isComposerFocused, setIsComposerFocused] = useState(false);
 	const handleSubmit = (event: React.FormEvent) => {
 		event.preventDefault();
-		// Ignore submits while a response is generating; the input keeps its
-		// text so nothing is lost.
-		if (isBusy || !input.trim()) return;
-		onSend(input);
+		// A submit while a response is generating is turned away, and the
+		// input keeps its text so nothing is lost.
+		if (!onSend(input)) return;
 		setInput("");
 	};
 
@@ -198,10 +201,24 @@ export function useChatWindow({
 		modelId,
 	});
 	const isBusy = conversation.isLoading || screening.isMutating;
-	const composer = useChatComposer({
-		isBusy,
-		onSend: conversation.sendMessageWithContext,
-	});
+	/**
+	 * Asks a question, and answers whether it was taken. A question that
+	 * arrives while an answer is still being written is refused, so the field
+	 * it came from can keep it rather than losing it. The conversation itself
+	 * is asked because two quick clicks both happen before the window is
+	 * drawn again, so the state from the last drawing is already out of date.
+	 */
+	const ask = (question: string) => {
+		const asked = question.trim();
+		if (!asked) return false;
+		if (screening.isMutating || isAnswering(conversation.chat.status)) {
+			return false;
+		}
+		conversation.sendMessageWithContext(asked);
+
+		return true;
+	};
+	const composer = useChatComposer({ isBusy, onSend: ask });
 	const scrolling = useChatScrolling();
 
 	return {
@@ -209,15 +226,7 @@ export function useChatWindow({
 		...screening,
 		...composer,
 		...scrolling,
-		/**
-		 * Asks a question that came from somewhere else on the page, such as
-		 * the search field the reader opened the window from.
-		 */
-		ask: (question: string) => {
-			const asked = question.trim();
-			if (isBusy || !asked) return;
-			conversation.sendMessageWithContext(asked);
-		},
+		ask,
 		conversationStarted: conversation.messages.length > 1,
 		isDeepResearchEnabled,
 		isWaiting: isBusy && !conversation.error,

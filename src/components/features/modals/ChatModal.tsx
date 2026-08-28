@@ -40,7 +40,10 @@ import {
 type ChatWindowState = ReturnType<typeof useChatWindow>;
 
 /** What the page around the window can ask it to do. */
-export type ChatWindowHandle = { ask: (question: string) => void };
+export type ChatWindowHandle = {
+	/** Answers whether the question was taken. */
+	ask: (question: string) => boolean;
+};
 
 type Message = ResearchUIMessage;
 type ChatMessageListProps = {

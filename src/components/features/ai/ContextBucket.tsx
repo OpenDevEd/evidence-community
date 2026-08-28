@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect } from "react";
 import useSWR from "swr";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
@@ -18,19 +17,24 @@ function useBucketItem(itemKey: string) {
 	const { data, isLoading } = useSWR<ItemGetResponse>(
 		`/item/${itemKey}`,
 		fetcher,
-		{ revalidateOnFocus: false },
+		{
+			revalidateOnFocus: false,
+			// Where its cited pages live is recorded as the publication
+			// arrives, which is the moment that decides them. Everything
+			// asking for the same publication shares one request, and the
+			// same paths recorded twice change nothing.
+			onSuccess: (response) =>
+				registerPdfSources(
+					itemKey,
+					publicationPdfCitationSources(
+						itemKey,
+						response.item?.attachmentsData,
+					),
+				),
+		},
 	);
-	const item = data?.item;
 
-	useEffect(() => {
-		if (!item) return;
-		registerPdfSources(
-			itemKey,
-			publicationPdfCitationSources(itemKey, item.attachmentsData),
-		);
-	}, [item, itemKey, registerPdfSources]);
-
-	return { item, isLoading };
+	return { item: data?.item, isLoading };
 }
 
 /**

@@ -273,7 +273,7 @@ function LibraryFilters({
 	extraFilters,
 	itemsContext,
 }: {
-	askAI?: (text: string) => void;
+	askAI?: (text: string) => boolean;
 	extraFilters: ReactNode;
 	itemsContext: ReturnType<typeof useItemsList>;
 }) {
@@ -302,12 +302,12 @@ function LibraryFilters({
 				search={itemsContext.queryParams.search}
 				focusOnRequest
 				// Asking uses the text as a question, so it must not stay
-				// behind as a filter as well.
+				// behind as a filter as well. It only leaves the field once
+				// the chat has taken it.
 				onAsk={
 					askAI &&
 					((text: string, clear: () => void) => {
-						clear();
-						askAI(text);
+						if (askAI(text)) clear();
 					})
 				}
 				trailing={
@@ -349,7 +349,7 @@ function SearchTabContent({
 	setView: (view: string) => void;
 	showHeader: boolean;
 	/** Hand the text in the search field to the assistant instead. */
-	askAI?: (text: string) => void;
+	askAI?: (text: string) => boolean;
 }) {
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
@@ -595,10 +595,12 @@ function AskBoxActions({
 function useLibraryChatWindow() {
 	const { isOpen, onOpen, onOpenChange } = useDisclosure();
 	const chatWindow = useRef<ChatWindowHandle>(null);
+	/** Answers whether the question was taken, so it is never lost. */
 	const openChatWindow = (question: string) => {
 		onOpen();
-		if (!question.trim()) return;
-		chatWindow.current?.ask(question);
+		if (!question.trim()) return false;
+
+		return chatWindow.current?.ask(question) ?? false;
 	};
 
 	return {
@@ -618,9 +620,9 @@ function AITabContent({
 	onModelChange,
 	setExternalInput,
 }: {
-	askAI: (question: string) => void;
+	askAI: (question: string) => boolean;
 	onSwitchToSearch: () => void;
-	onChatOpen: (question: string) => void;
+	onChatOpen: (question: string) => boolean;
 	externalInput: string;
 	hasChatConversation: boolean;
 	onModelChange: (modelId: string) => void;
@@ -643,17 +645,16 @@ function AITabContent({
 	} = useDisclosure();
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	// The window opens with whatever is already in the field.
+	// The window opens with whatever is already in the field. The field only
+	// gives the question up once the window has taken it.
 	const handleOpenChat = () => {
-		onChatOpen(externalInput);
-		setExternalInput("");
+		if (onChatOpen(externalInput)) setExternalInput("");
 	};
 	// Asking a question opens the chat beside the results rather than over
 	// them, so the reader keeps their list while they read the answer.
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		askAI(externalInput);
-		setExternalInput("");
+		if (askAI(externalInput)) setExternalInput("");
 		onSwitchToSearch();
 	};
 

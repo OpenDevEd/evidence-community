@@ -2,7 +2,6 @@
 
 import {
 	createContext,
-	startTransition,
 	useCallback,
 	useContext,
 	useMemo,
@@ -53,10 +52,8 @@ type InlineChatLayoutValue = {
 };
 
 /** Text typed but not yet sent. One owner, so it survives page visits. */
-type InlineChatDraftValue = {
-	draft: string;
-	setDraft: (draft: string) => void;
-};
+type InlineChatDraftValue = { draft: string };
+type InlineChatDraftActions = { setDraft: (draft: string) => void };
 
 const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 	engaged: false,
@@ -73,10 +70,14 @@ const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 
 /**
  * The draft has its own context so that typing only redraws the message box,
- * not the results beside it.
+ * not the conversation or the results beside it. Changing it is kept apart
+ * from reading it, so the parts of the page that only hand a question over
+ * are not redrawn on every key press.
  */
 const InlineChatDraftContext = createContext<InlineChatDraftValue>({
 	draft: "",
+});
+const InlineChatDraftActionsContext = createContext<InlineChatDraftActions>({
 	setDraft: () => {},
 });
 
@@ -167,14 +168,16 @@ export function InlineChatLayoutProvider({
 }) {
 	// The flag survives navigation, so opening a result and coming back
 	// restores the split view. It only counts on the library page itself.
-	const [engagedState, setEngagedState] = useState(false);
-	const setEngaged = useCallback((engaged: boolean) => {
-		// Opening builds the chat and its controls, which is heavy work, so
-		// React is allowed to spread it over a few frames. Closing only swaps
-		// the light search controls back in, so it happens at once.
-		if (engaged) startTransition(() => setEngagedState(true));
-		else setEngagedState(false);
-	}, []);
+	// Opening and closing both happen at once. Opening used to be spread over
+	// a few frames because it builds the chat and its controls, but that made
+	// it wait behind the page's own address changes: a reader who typed and
+	// then asked within a moment could be left looking at the old page while
+	// the search caught up. Being sure the chat appears is worth the frame.
+	const [engaged, setEngagedState] = useState(false);
+	const setEngaged = useCallback(
+		(next: boolean) => setEngagedState(next),
+		[],
+	);
 	const pathname = usePathname();
 	const [searchFocusRequest, setSearchFocusRequest] = useState(0);
 	const [draft, setDraft] = useState("");
@@ -188,14 +191,14 @@ export function InlineChatLayoutProvider({
 	const value = useMemo(
 		() => ({
 			...sources,
-			engaged: engagedState && LIBRARY_PATHNAME.test(pathname),
+			engaged: engaged && LIBRARY_PATHNAME.test(pathname),
 			getInlineChat,
 			requestSearchFocus,
 			searchFocusRequest,
 			setEngaged,
 		}),
 		[
-			engagedState,
+			engaged,
 			getInlineChat,
 			pathname,
 			requestSearchFocus,
@@ -204,13 +207,16 @@ export function InlineChatLayoutProvider({
 			sources,
 		],
 	);
-	const draftValue = useMemo(() => ({ draft, setDraft }), [draft]);
+	const draftValue = useMemo(() => ({ draft }), [draft]);
+	const draftActions = useMemo(() => ({ setDraft }), []);
 
 	return (
 		<InlineChatLayoutContext.Provider value={value}>
-			<InlineChatDraftContext.Provider value={draftValue}>
-				{children}
-			</InlineChatDraftContext.Provider>
+			<InlineChatDraftActionsContext.Provider value={draftActions}>
+				<InlineChatDraftContext.Provider value={draftValue}>
+					{children}
+				</InlineChatDraftContext.Provider>
+			</InlineChatDraftActionsContext.Provider>
 		</InlineChatLayoutContext.Provider>
 	);
 }
@@ -219,6 +225,15 @@ export function useInlineChatLayout() {
 	return useContext(InlineChatLayoutContext);
 }
 
+/** For the message box, which both shows the draft and changes it. */
 export function useInlineChatDraft() {
-	return useContext(InlineChatDraftContext);
+	return {
+		...useContext(InlineChatDraftContext),
+		...useContext(InlineChatDraftActionsContext),
+	};
+}
+
+/** For anything that only puts the draft down, such as handing a question over. */
+export function useInlineChatDraftActions() {
+	return useContext(InlineChatDraftActionsContext);
 }

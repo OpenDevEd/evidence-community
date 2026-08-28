@@ -29,7 +29,7 @@ import {
 import { ChatErrorCard, ShortcutHint } from "./chat-shared";
 import { BucketSourcesLoader } from "./ContextBucket";
 import { SmartScreeningModal } from "./SmartScreeningModal";
-import { useInlineChat } from "./useInlineChat";
+import { useInlineChat, useInlineChatComposer } from "./useInlineChat";
 
 type InlineChat = ReturnType<typeof useInlineChat>;
 
@@ -237,25 +237,27 @@ function InlineChatComposer({
 }) {
 	const t = useTranslations("ai");
 	const {
+		ask,
 		canRunScreening,
 		composerDockRef,
 		composerFormRef,
 		handleScreening,
-		handleSubmit,
-		input,
 		isComposerFocused,
 		isDeepResearchEnabled,
-		isInputReady,
 		isMutating,
 		isWaiting,
 		mode,
 		prefersReducedMotion,
+		resizeComposer,
 		screenableContent,
 		screeningTooltip,
-		setInput,
 		setIsComposerFocused,
 		setMode,
 	} = chat;
+	// The draft is read here, so typing redraws the message box on its own
+	// rather than the conversation and the sources beside it.
+	const { handleSubmit, input, isInputReady, setInput } =
+		useInlineChatComposer({ ask, isWaiting, resizeComposer });
 	const isLit = isComposerFocused || isWaiting;
 
 	return (

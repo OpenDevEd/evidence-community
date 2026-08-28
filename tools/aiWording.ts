@@ -64,6 +64,32 @@ function lookUp(scopes: Scopes, name: string): Binding | undefined {
 	return undefined;
 }
 
+/** True when this import line brings something in from next-intl. */
+function isWordingImport(statement: ts.Statement) {
+	return (
+		ts.isImportDeclaration(statement) &&
+		ts.isStringLiteralLike(statement.moduleSpecifier) &&
+		statement.moduleSpecifier.text === WORDING_PACKAGE
+	);
+}
+
+/** Notes the names one next-intl import line brings into the file. */
+function addWordingNames(
+	bindings: ts.NamedImportBindings | undefined,
+	imports: WordingImports,
+) {
+	if (!bindings) return;
+	if (ts.isNamespaceImport(bindings)) {
+		imports.namespaces.add(bindings.name.text);
+
+		return;
+	}
+	for (const element of bindings.elements) {
+		const imported = element.propertyName?.text ?? element.name.text;
+		if (imported === WORDING_HOOK) imports.direct.add(element.name.text);
+	}
+}
+
 /** Reads the import list, so only next-intl's own hook counts as wording. */
 function readWordingImports(tree: ts.SourceFile): WordingImports {
 	const imports: WordingImports = {
@@ -72,23 +98,26 @@ function readWordingImports(tree: ts.SourceFile): WordingImports {
 	};
 
 	for (const statement of tree.statements) {
-		if (!ts.isImportDeclaration(statement)) continue;
-		if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-		if (statement.moduleSpecifier.text !== WORDING_PACKAGE) continue;
-
-		const bindings = statement.importClause?.namedBindings;
-		if (bindings && ts.isNamespaceImport(bindings)) {
-			imports.namespaces.add(bindings.name.text);
-			continue;
-		}
-		if (!bindings || !ts.isNamedImports(bindings)) continue;
-		for (const element of bindings.elements) {
-			const imported = element.propertyName?.text ?? element.name.text;
-			if (imported === WORDING_HOOK) imports.direct.add(element.name.text);
-		}
+		if (!isWordingImport(statement)) continue;
+		addWordingNames(
+			(statement as ts.ImportDeclaration).importClause?.namedBindings,
+			imports,
+		);
 	}
 
 	return imports;
+}
+
+/** True when this is next-intl's own hook, under whatever name it came in. */
+function isWordingHook(callee: ts.Expression, imports: WordingImports) {
+	if (ts.isIdentifier(callee)) return imports.direct.has(callee.text);
+
+	return (
+		ts.isPropertyAccessExpression(callee) &&
+		ts.isIdentifier(callee.expression) &&
+		imports.namespaces.has(callee.expression.text) &&
+		callee.name.text === WORDING_HOOK
+	);
 }
 
 /** The group named in a real `useTranslations("ui")` call, when there is one. */
@@ -97,15 +126,7 @@ function translationsGroup(
 	imports: WordingImports,
 ): string | undefined {
 	if (!ts.isCallExpression(node)) return undefined;
-
-	const callee = node.expression;
-	const isWordingHook = ts.isIdentifier(callee)
-		? imports.direct.has(callee.text)
-		: ts.isPropertyAccessExpression(callee) &&
-			ts.isIdentifier(callee.expression) &&
-			imports.namespaces.has(callee.expression.text) &&
-			callee.name.text === WORDING_HOOK;
-	if (!isWordingHook) return undefined;
+	if (!isWordingHook(node.expression, imports)) return undefined;
 
 	const [argument] = node.arguments;
 	if (argument && ts.isStringLiteralLike(argument)) return argument.text;
@@ -167,24 +188,30 @@ function writtenKeys(node: ts.Expression): string[] | null {
 	return null;
 }
 
-/** True when the node opens a new set of names, such as a function body. */
-function opensScope(node: ts.Node) {
-	return (
-		ts.isFunctionDeclaration(node) ||
-		ts.isFunctionExpression(node) ||
-		ts.isArrowFunction(node) ||
-		ts.isMethodDeclaration(node) ||
-		ts.isConstructorDeclaration(node) ||
-		ts.isGetAccessor(node) ||
-		ts.isSetAccessor(node) ||
-		ts.isCatchClause(node) ||
-		ts.isForStatement(node) ||
-		ts.isForOfStatement(node) ||
-		ts.isForInStatement(node) ||
-		ts.isBlock(node) ||
-		ts.isSourceFile(node)
-	);
-}
+/** Nodes that give a name to something that is never a translator. */
+const NAMED_DECLARATIONS = new Set<ts.SyntaxKind>([
+	ts.SyntaxKind.ClassDeclaration,
+	ts.SyntaxKind.FunctionDeclaration,
+	ts.SyntaxKind.ImportClause,
+	ts.SyntaxKind.ImportSpecifier,
+]);
+
+/** The kinds of node that open a new set of names, such as a function body. */
+const SCOPE_KINDS = new Set<ts.SyntaxKind>([
+	ts.SyntaxKind.ArrowFunction,
+	ts.SyntaxKind.Block,
+	ts.SyntaxKind.CatchClause,
+	ts.SyntaxKind.Constructor,
+	ts.SyntaxKind.ForInStatement,
+	ts.SyntaxKind.ForOfStatement,
+	ts.SyntaxKind.ForStatement,
+	ts.SyntaxKind.FunctionDeclaration,
+	ts.SyntaxKind.FunctionExpression,
+	ts.SyntaxKind.GetAccessor,
+	ts.SyntaxKind.MethodDeclaration,
+	ts.SyntaxKind.SetAccessor,
+	ts.SyntaxKind.SourceFile,
+]);
 
 /** Every plain name a binding introduces, including destructured ones. */
 function boundNames(name: ts.BindingName): string[] {
@@ -235,28 +262,25 @@ export function scanWordingInSource(file: string, source: string): WordingScan {
 		for (const bound of boundNames(name)) scope.set(bound, binding);
 	};
 
+	/** What a `const` introduces: a translator for a group, or anything else. */
+	const declaredVariable = (node: ts.VariableDeclaration): Binding => {
+		const group = node.initializer
+			? translationsGroup(node.initializer, imports)
+			: undefined;
+
+		return group ?? NOT_A_TRANSLATOR;
+	};
+
 	/** Names introduced where the node itself sits. */
 	const declare = (node: ts.Node, scopes: Scopes) => {
 		if (ts.isVariableDeclaration(node)) {
-			const group = node.initializer
-				? translationsGroup(node.initializer, imports)
-				: undefined;
-			bind(scopes, node.name, group ?? NOT_A_TRANSLATOR);
+			bind(scopes, node.name, declaredVariable(node));
 
 			return;
 		}
-		if (
-			(ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
-			node.name
-		) {
-			bind(scopes, node.name, NOT_A_TRANSLATOR);
-
-			return;
-		}
-		if (ts.isImportSpecifier(node) || ts.isImportClause(node)) {
-			const name = ts.isImportClause(node) ? node.name : node.name;
-			if (name) bind(scopes, name, NOT_A_TRANSLATOR);
-		}
+		if (!NAMED_DECLARATIONS.has(node.kind)) return;
+		const { name } = node as { name?: ts.Identifier };
+		if (name) bind(scopes, name, NOT_A_TRANSLATOR);
 	};
 
 	/** A function's own arguments belong to the function, not to its caller. */
@@ -288,7 +312,9 @@ export function scanWordingInSource(file: string, source: string): WordingScan {
 
 	const visit = (node: ts.Node, scopes: Scopes) => {
 		declare(node, scopes);
-		const next = opensScope(node) ? [...scopes, new Map()] : scopes;
+			const next = SCOPE_KINDS.has(node.kind)
+			? [...scopes, new Map()]
+			: scopes;
 		declareParameters(node, next);
 		readCall(node, next);
 		node.forEachChild((child) => visit(child, next));
@@ -300,7 +326,7 @@ export function scanWordingInSource(file: string, source: string): WordingScan {
 }
 
 /** Puts the wording of many files together, keeping each place it is used. */
-export function scanWording(
+function scanWording(
 	files: { file: string; source: string }[],
 ): WordingScan {
 	const uses: WordingUse[] = [];
@@ -334,7 +360,7 @@ export function missingWording(uses: WordingUse[], messages: Messages) {
 }
 
 /** Everything the reader sees when they use the assistant. */
-export const AI_SOURCES = [
+const AI_SOURCES = [
 	"src/components/features/ai",
 	"src/components/features/modals/AIControls.tsx",
 	"src/components/features/modals/ChatModal.tsx",
