@@ -47,3 +47,15 @@ test("a reader who has answered is never held still", async ({ page }) => {
 	await searchField.fill("school meals");
 	await expect(searchField).toHaveValue("school meals");
 });
+
+test("the page explaining the cookies is readable without answering", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.goto("/en-GB/privacy");
+
+	// The question is not asked here, so nothing is held and nothing covers
+	// the page the question itself points readers at.
+	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+});

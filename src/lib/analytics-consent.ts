@@ -1,3 +1,6 @@
+import { isPolicyPage } from "@/lib/legal-links";
+import { isAdminPath } from "@/lib/path";
+
 export type AnalyticsConsentState = "pending" | "granted" | "denied";
 
 export type AnalyticsConsentPreferences = {
@@ -151,4 +154,15 @@ export function readAnalyticsConsentCookieHeader(
 		.join("=");
 
 	return parseAnalyticsConsentRecord(value, policy, now);
+}
+
+/**
+ * Whether the cookie question is asked on this page.
+ *
+ * The admin area has no dialog, and the pages that explain the cookies must
+ * stay readable while the question is open, so neither is ever asked and
+ * neither is ever held still.
+ */
+export function asksAnalyticsConsent(pathname: string, locale: string) {
+	return !isAdminPath(pathname, locale) && !isPolicyPage(pathname);
 }

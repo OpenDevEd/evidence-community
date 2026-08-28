@@ -26,7 +26,6 @@ import {
 	AnalyticsConsentProvider,
 	useAnalyticsConsent,
 } from "@/components/features/analytics/AnalyticsConsentProvider";
-import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyticsManager";
 import { status as statusTable } from "@/db/schema/tables/status";
 import { toast as toastComponent } from "@/components/layout/Toast";
@@ -218,7 +217,7 @@ export default function Providers({
 	children: ReactNode;
 	status: RuntimeStatus;
 	gapmaps: GapMap[];
-	/** The reader's stored consent answer, as the server read it. */
+	/** The reader's stored answer to the cookie question, as the server read it. */
 	storedConsent: string | null;
 }) {
 	const router = useRouter();
@@ -240,11 +239,7 @@ export default function Providers({
 						refetchWhenOffline={isLoginEnabled ? undefined : false}
 					>
 						<AnalyticsConsentProvider
-							storedConsentFromServer={
-								storedConsent === null
-									? null
-									: `${ANALYTICS_CONSENT_COOKIE_NAME}=${storedConsent}`
-							}
+							storedConsentFromServer={storedConsent}
 						>
 							<CacheProvider status={status} gapmaps={gapmaps}>
 								<NextUIProvider navigate={router.push}>

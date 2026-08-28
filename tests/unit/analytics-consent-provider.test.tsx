@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
@@ -107,31 +108,6 @@ describe("analytics consent provider", () => {
 		});
 	});
 
-	it("holds the page still until an undecided reader answers", async () => {
-		await act(async () => {
-			root.render(
-				<AnalyticsConsentProvider>
-					<ConsentController />
-				</AnalyticsConsentProvider>,
-			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
-		});
-
-		const gate = container.querySelector("[data-consent-gate]");
-		expect(gate?.hasAttribute("inert")).toBe(true);
-
-		await act(async () => {
-			clickButton(container, "Decline consent");
-			await new Promise((resolve) => setTimeout(resolve, 0));
-		});
-
-		expect(
-			container
-				.querySelector("[data-consent-gate]")
-				?.hasAttribute("inert"),
-		).toBe(false);
-	});
-
 	it("lets a reader who already answered straight through", async () => {
 		const record = createAnalyticsConsentRecord(
 			{ scope: "https://library.example.org", version: 2 },
@@ -149,11 +125,6 @@ describe("analytics consent provider", () => {
 			);
 		});
 
-		expect(
-			container
-				.querySelector("[data-consent-gate]")
-				?.hasAttribute("inert"),
-		).toBe(false);
 		expect(
 			container.querySelector('[data-testid="consent-open"]')?.textContent,
 		).toBe("false");
@@ -328,5 +299,30 @@ describe("analytics consent provider", () => {
 			"pending",
 			{ analytics: false, sessionReplay: false },
 		);
+	});
+
+	it("uses the answer the server read, before anything is drawn", () => {
+		const answered = renderToStaticMarkup(
+			<AnalyticsConsentProvider
+				storedConsentFromServer={serializeAnalyticsConsentRecord(
+					createAnalyticsConsentRecord(
+						{ scope: "https://library.example.org", version: 2 },
+						{ analytics: false, sessionReplay: false },
+					),
+				)}
+			>
+				<ConsentController />
+			</AnalyticsConsentProvider>,
+		);
+
+		expect(answered).toContain('data-testid="consent-open">false');
+
+		const unanswered = renderToStaticMarkup(
+			<AnalyticsConsentProvider>
+				<ConsentController />
+			</AnalyticsConsentProvider>,
+		);
+
+		expect(unanswered).toContain('data-testid="consent-open">true');
 	});
 });
