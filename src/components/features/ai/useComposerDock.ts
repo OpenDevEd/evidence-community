@@ -84,9 +84,10 @@ function useComposerAutosize(
 		};
 	}, [composerFormRef, resizeComposer]);
 
-	/** Puts the caret at the end of whatever the field already holds. */
-	const focusComposer = useCallback(() => {
-		requestAnimationFrame(() => {
+	// Outside system: the browser's focus and caret. The field is built when
+	// the split view opens, so there is no click or key press to act on.
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => {
 			const element = composerTextarea(composerFormRef);
 			if (!element) return;
 			element.focus({ preventScroll: true });
@@ -96,9 +97,9 @@ function useComposerAutosize(
 			);
 			resizeComposer();
 		});
-	}, [composerFormRef, resizeComposer]);
 
-	return { focusComposer, resizeComposer };
+		return () => cancelAnimationFrame(frame);
+	}, [composerFormRef, resizeComposer]);
 }
 
 /**
@@ -191,8 +192,8 @@ export function useComposerDock({
 	value: string;
 }) {
 	const composerFormRef = useRef<HTMLFormElement>(null);
-	const { focusComposer } = useComposerAutosize(composerFormRef, value);
+	useComposerAutosize(composerFormRef, value);
 	const dock = useDockHeight({ isAtBottom, scrollToBottom });
 
-	return { ...dock, composerFormRef, focusComposer };
+	return { ...dock, composerFormRef };
 }

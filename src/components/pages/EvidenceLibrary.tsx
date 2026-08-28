@@ -58,7 +58,9 @@ import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import ChatModal from "../features/modals/ChatModal";
+import ChatModal, {
+	type ChatWindowHandle,
+} from "../features/modals/ChatModal";
 import type { ChatMode } from "@/types/ai";
 import ModelSelector from "../features/ai/ModelSelector";
 import DialogModal from "../nextui/DialogModal";
@@ -79,7 +81,7 @@ import {
 } from "@/context/LibraryConfigProvider";
 import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { useInlineChatLayout } from "@/context/InlineChatLayout";
+import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
@@ -585,7 +587,30 @@ function AskBoxActions({
 	);
 }
 
+/**
+ * Opens the full-screen chat window, asking whatever the reader had already
+ * typed on the page. The window is built before it is shown, so it can be
+ * asked straight away.
+ */
+function useLibraryChatWindow() {
+	const { isOpen, onOpen, onOpenChange } = useDisclosure();
+	const chatWindow = useRef<ChatWindowHandle>(null);
+	const openChatWindow = (question: string) => {
+		onOpen();
+		if (!question.trim()) return;
+		chatWindow.current?.ask(question);
+	};
+
+	return {
+		chatWindow,
+		isChatOpen: isOpen,
+		onChatOpenChange: onOpenChange,
+		openChatWindow,
+	};
+}
+
 function AITabContent({
+	askAI,
 	onSwitchToSearch,
 	onChatOpen,
 	externalInput,
@@ -593,8 +618,9 @@ function AITabContent({
 	onModelChange,
 	setExternalInput,
 }: {
+	askAI: (question: string) => void;
 	onSwitchToSearch: () => void;
-	onChatOpen: () => void;
+	onChatOpen: (question: string) => void;
 	externalInput: string;
 	hasChatConversation: boolean;
 	onModelChange: (modelId: string) => void;
@@ -617,17 +643,17 @@ function AITabContent({
 	} = useDisclosure();
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	const { setEngaged, setPendingInput, setPendingSend } =
-		useInlineChatLayout();
+	// The window opens with whatever is already in the field.
+	const handleOpenChat = () => {
+		onChatOpen(externalInput);
+		setExternalInput("");
+	};
 	// Asking a question opens the chat beside the results rather than over
 	// them, so the reader keeps their list while they read the answer.
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		const question = externalInput.trim();
-		setPendingInput(question);
-		setPendingSend(question.length > 0);
+		askAI(externalInput);
 		setExternalInput("");
-		setEngaged(true);
 		onSwitchToSearch();
 	};
 
@@ -672,7 +698,7 @@ function AITabContent({
 							startContent={<IoChatboxOutline />}
 							size="md"
 							className="!p-0"
-							onPress={onChatOpen}
+							onPress={handleOpenChat}
 						></Button>
 					</Tooltip>
 					<div className="relative flex-1">
@@ -892,11 +918,6 @@ export function ContentInteractions({
 	const itemsContext = use(ItemsContext);
 	const { selectedTab, setSelectedTab, activeCount } = useSearchMode();
 	const {
-		isOpen: isChatOpen,
-		onOpen: onChatOpen,
-		onOpenChange: onChatOpenChange,
-	} = useDisclosure();
-	const {
 		modelPresentation: { icon: Icon },
 		selectedModelId,
 		setSelectedModelId,
@@ -913,16 +934,13 @@ export function ContentInteractions({
 		useFiltersContext().queryParams,
 	);
 	const { isAISearchEnabled } = useIsAISearchEnabled();
-	const { setEngaged, setPendingInput, setPendingSend } =
-		useInlineChatLayout();
 	// One search field, two things to do with it: typing filters the library
 	// as you go, and Ask AI hands the same text to the assistant.
-	const askAI = (text: string) => {
-		const question = text.trim();
-		setPendingInput(question);
-		setPendingSend(question.length > 0);
-		setEngaged(true);
-	};
+	const askAI = useAskInlineChat(searchContext);
+	// The window is already built when it is closed, so a question typed on
+	// the page can be asked the moment the reader opens it.
+	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
+		useLibraryChatWindow();
 
 	return (
 		<div className="relative">
@@ -935,8 +953,7 @@ export function ContentInteractions({
 				onModelChange={handleModelChange}
 				onConversationStateChange={setHasChatConversation}
 				searchContext={searchContext}
-				externalInput={externalInput}
-				setExternalInput={setExternalInput}
+				ref={chatWindow}
 			/>
 			<AnimatePresence mode="wait">
 				{selectedTab === "search" ? (
@@ -957,8 +974,9 @@ export function ContentInteractions({
 				) : (
 					<ContentTabPanel key="ai-content">
 						<AITabContent
+							askAI={askAI}
 							onSwitchToSearch={() => setSelectedTab("search")}
-							onChatOpen={onChatOpen}
+							onChatOpen={openChatWindow}
 							externalInput={externalInput}
 							hasChatConversation={hasChatConversation}
 							onModelChange={handleModelChange}

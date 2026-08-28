@@ -1,24 +1,20 @@
 "use client";
 
-import { Chat, useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { useChat } from "@ai-sdk/react";
 import { useLocale } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
-import {
-	type InlineChatRequest,
-	useInlineChatLayout,
-} from "@/context/InlineChatLayout";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
-import { createTextMessage } from "@/lib/ai/chat-messages";
-import { getAnalyticsDistinctId } from "@/lib/analytics";
+import { inlineChatRequestOptions } from "@/lib/ai/inline-chat-request";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ChatMode } from "@/types/ai";
 
 /**
  * The conversation beside the search results. It belongs to the page layout
  * rather than to this component, so opening a publication and coming back
- * keeps it. Everything the request needs is read at the moment it is sent.
+ * keeps it. The model, the mode, the language and the reader's own search
+ * travel with each question instead of being stored somewhere in between.
  */
 export function useInlineChatSession({
 	greeting,
@@ -32,40 +28,40 @@ export function useInlineChatSession({
 	searchContext?: LibrarySearchContext;
 }) {
 	const locale = useLocale();
-	const { getChat, getChatRequest, setChatRequest } = useInlineChatLayout();
-	const fallback: InlineChatRequest = { locale, mode, modelId };
-	const [chat] = useState(() =>
-		getChat(
-			modelId,
-			() =>
-				new Chat<ResearchUIMessage>({
-					transport: new DefaultChatTransport({
-						api: "/api/ai/chat",
-						headers: () => ({
-							"Accept-Language": (getChatRequest() ?? fallback)
-								.locale,
-						}),
-						body: () => {
-							const request = getChatRequest() ?? fallback;
-
-							return {
-								modelId: request.modelId,
-								distinctId: getAnalyticsDistinctId(),
-								mode: request.mode,
-								searchContext: request.searchContext,
-							};
-						},
+	const { getInlineChat } = useInlineChatLayout();
+	const [chat] = useState(() => getInlineChat(modelId, greeting));
+	const { sendMessage, regenerate, ...rest } = useChat<ResearchUIMessage>({
+		throttle: 50,
+		chat,
+	});
+	return {
+		...rest,
+		// The request is built again for every question, so a new model, mode
+		// or search is used straight away.
+		sendMessage: useCallback(
+			(message: { parts: ResearchUIMessage["parts"] }) =>
+				sendMessage(
+					message,
+					inlineChatRequestOptions({
+						locale,
+						mode,
+						modelId,
+						searchContext,
 					}),
-					messages: [createTextMessage("assistant", greeting, "start")],
-				}),
+				),
+			[sendMessage, locale, mode, modelId, searchContext],
 		),
-	);
-
-	// Stored after each change rather than during the render, because the
-	// request only reads them when the reader actually sends something.
-	useEffect(() => {
-		setChatRequest({ locale, mode, modelId, searchContext });
-	}, [locale, mode, modelId, searchContext, setChatRequest]);
-
-	return useChat<ResearchUIMessage>({ throttle: 50, chat });
+		regenerate: useCallback(
+			() =>
+				regenerate(
+					inlineChatRequestOptions({
+						locale,
+						mode,
+						modelId,
+						searchContext,
+					}),
+				),
+			[regenerate, locale, mode, modelId, searchContext],
+		),
+	};
 }

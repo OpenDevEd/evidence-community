@@ -4,7 +4,31 @@ import {
 	latestResearchRequestContext,
 	researchRequestContextPart,
 	researchRequestContextsEqual,
+	type ResearchRequestContextSnapshot,
 } from "@/lib/ai/request-context";
+
+/**
+ * The parts one question is made of: what the reader was looking at, added
+ * only when it changed since the assistant last saw it, then the question.
+ */
+export function researchMessageParts(
+	messages: ResearchUIMessage[],
+	context: ResearchRequestContextSnapshot,
+	text: string,
+): ResearchUIMessage["parts"] {
+	const parts: ResearchUIMessage["parts"] = [];
+	if (
+		!researchRequestContextsEqual(
+			latestResearchRequestContext(messages),
+			context,
+		)
+	) {
+		parts.push(researchRequestContextPart(context));
+	}
+	parts.push({ type: "text", text });
+
+	return parts;
+}
 
 /** Builds a plain message with one block of text in it. */
 export function createTextMessage(

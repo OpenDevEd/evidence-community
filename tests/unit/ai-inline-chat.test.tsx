@@ -46,10 +46,8 @@ vi.mock("next-auth/react", () => ({
 }));
 
 import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
-import {
-	InlineChatLayoutProvider,
-	useInlineChatLayout,
-} from "@/context/InlineChatLayout";
+import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
+import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -123,11 +121,21 @@ describe("the chat beside the search results", () => {
 		vi.unstubAllGlobals();
 	});
 
+	/** The chat, with nothing of interest beside it. */
+	function Chat() {
+		return (
+			<InlineLibraryChat
+				modelId="gemini-2.5-flash"
+				renderSources={() => null}
+			/>
+		);
+	}
+
 	async function render() {
 		await act(async () => {
 			root.render(
 				<InlineChatLayoutProvider>
-					<InlineLibraryChat modelId="gemini-2.5-flash" />
+					<Chat />
 				</InlineChatLayoutProvider>,
 			);
 		});
@@ -148,7 +156,7 @@ describe("the chat beside the search results", () => {
 		question: string;
 		rebuild: boolean;
 	}) {
-		const { setPendingInput, setPendingSend } = useInlineChatLayout();
+		const askAI = useAskInlineChat();
 		const [engaged, setEngaged] = useState(openFirst);
 		const [rebuilt, setRebuilt] = useState(false);
 		const gone = rebuild && !rebuilt;
@@ -159,8 +167,7 @@ describe("the chat beside the search results", () => {
 					type="button"
 					data-testid="ask"
 					onClick={() => {
-						setPendingInput(question);
-						setPendingSend(true);
+						askAI(question);
 						setEngaged(true);
 					}}
 				>
@@ -173,9 +180,7 @@ describe("the chat beside the search results", () => {
 				>
 					settle
 				</button>
-				{engaged && !gone ? (
-					<InlineLibraryChat modelId="gemini-2.5-flash" />
-				) : null}
+				{engaged && !gone ? <Chat /> : null}
 			</>
 		);
 	}
@@ -299,6 +304,20 @@ describe("the chat beside the search results", () => {
 
 		expect(asked).toHaveLength(1);
 		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	// The question is sent before the chat is drawn, so the model and the
+	// mode have to travel with it rather than come from the chat.
+	it("sends the chosen model and mode with a handed-over question", async () => {
+		analyticsId.value = "reader-1";
+		await handOver("Does teacher training help?");
+
+		expect(asked).toHaveLength(1);
+		expect(asked[0]).toMatchObject({
+			distinctId: "reader-1",
+			modelId: "gemini-2.5-flash",
+			mode: "quick",
+		});
 	});
 
 	it("asks a question that arrives after it has opened", async () => {

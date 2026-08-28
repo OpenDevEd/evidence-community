@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +38,9 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: () => true,
 }));
 
-import ChatModal from "@/components/features/modals/ChatModal";
+import ChatModal, {
+	type ChatWindowHandle,
+} from "@/components/features/modals/ChatModal";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -191,24 +193,29 @@ describe("the full-screen chat window", () => {
 		});
 	});
 
-	it("asks a question typed elsewhere on the page as soon as it opens", async () => {
-		const setExternalInput = vi.fn();
-		await render({
-			externalInput: "Which countries were studied?",
-			setExternalInput,
+	// The page opens the window and hands over the question in the same
+	// click, so nothing has to watch for a question arriving later.
+	it("asks a question the page hands to it", async () => {
+		const window = createRef<ChatWindowHandle>();
+		await render({ ref: window });
+		expect(asked).toHaveLength(0);
+
+		await act(async () => {
+			window.current?.ask("Which countries were studied?");
 		});
 
 		expect(asked).toHaveLength(1);
 		expect(document.body.textContent).toContain(
 			"Which countries were studied?",
 		);
-		expect(setExternalInput).toHaveBeenCalledWith("");
 	});
 
-	it("asks nothing while the window is closed", async () => {
-		await render({
-			isOpen: false,
-			externalInput: "Which countries were studied?",
+	it("ignores an empty question from the page", async () => {
+		const window = createRef<ChatWindowHandle>();
+		await render({ ref: window });
+
+		await act(async () => {
+			window.current?.ask("   ");
 		});
 
 		expect(asked).toHaveLength(0);

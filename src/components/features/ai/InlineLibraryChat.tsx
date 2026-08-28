@@ -8,6 +8,7 @@ import { IoChevronDown } from "react-icons/io5";
 import { LuX } from "react-icons/lu";
 import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
+import type { ReactNode } from "react";
 
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { ScreeningLimitConfirmation } from "@/components/features/ai/ScreeningLimitConfirmation";
@@ -16,6 +17,7 @@ import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { SHORTCUT_KEYS } from "@/constants/shortcuts";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import type { BucketEntry } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -349,9 +351,16 @@ function InlineChatComposer({
  */
 export default function InlineLibraryChat({
 	modelId,
+	renderSources,
 	searchContext,
 }: {
 	modelId: AIModelId;
+	/**
+	 * What to show beside the chat. The publications the assistant has used
+	 * are worked out from the conversation, so they are handed over here
+	 * rather than stored somewhere else.
+	 */
+	renderSources: (entries: BucketEntry[]) => ReactNode;
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
@@ -365,6 +374,7 @@ export default function InlineLibraryChat({
 	} = useDisclosure();
 
 	return (
+		<>
 		<section
 			// The column's width is animated by the grid around it. Its
 			// height is the screen minus the headers above it.
@@ -407,5 +417,7 @@ export default function InlineLibraryChat({
 				/>
 			</div>
 		</section>
+		{renderSources(chat.bucketEntries)}
+		</>
 	);
 }

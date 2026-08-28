@@ -64,6 +64,20 @@ function readerName(call: ts.CallExpression): string | undefined {
 	return undefined;
 }
 
+/** The ways a screen picks one of two names it has written out. */
+const CHOICE_OPERATORS = new Set([
+	ts.SyntaxKind.BarBarToken,
+	ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+/** Both sides of a choice, but only when both are written out. */
+function bothSides(left: ts.Expression, right: ts.Expression) {
+	const first = writtenKeys(left);
+	const second = writtenKeys(right);
+
+	return first && second ? [...first, ...second] : null;
+}
+
 /**
  * Every name a wording argument can end up being, when they are all written
  * out. `t(open ? "a" : "b")` gives both. Anything worked out while the app
@@ -73,20 +87,13 @@ function writtenKeys(node: ts.Expression): string[] | null {
 	if (ts.isStringLiteralLike(node)) return [node.text];
 	if (ts.isParenthesizedExpression(node)) return writtenKeys(node.expression);
 	if (ts.isConditionalExpression(node)) {
-		const whenTrue = writtenKeys(node.whenTrue);
-		const whenFalse = writtenKeys(node.whenFalse);
-
-		return whenTrue && whenFalse ? [...whenTrue, ...whenFalse] : null;
+		return bothSides(node.whenTrue, node.whenFalse);
 	}
 	if (
 		ts.isBinaryExpression(node) &&
-		(node.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
-			node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+		CHOICE_OPERATORS.has(node.operatorToken.kind)
 	) {
-		const left = writtenKeys(node.left);
-		const right = writtenKeys(node.right);
-
-		return left && right ? [...left, ...right] : null;
+		return bothSides(node.left, node.right);
 	}
 
 	return null;
@@ -133,28 +140,30 @@ export function scanWordingInSource(file: string, source: string): WordingScan {
 		});
 	};
 
+	/** Remembers `const t = useTranslations("ai")` for the scope it is in. */
+	const declareReader = (node: ts.Node, scopes: Scopes) => {
+		if (!ts.isVariableDeclaration(node) || !node.initializer) return;
+		const group = translationsGroup(node.initializer);
+		if (group === undefined || !ts.isIdentifier(node.name)) return;
+		scopes[scopes.length - 1].set(node.name.text, group);
+	};
+
+	const readCall = (node: ts.Node, scopes: Scopes) => {
+		if (!ts.isCallExpression(node)) return;
+		// `useTranslations("ai")("askAI")` reads a message straight away.
+		const direct = translationsGroup(node.expression);
+		if (direct !== undefined) record(direct, node);
+
+		const name = readerName(node);
+		if (name === undefined) return;
+		const group = lookUp(scopes, name);
+		if (group !== undefined) record(group, node);
+	};
+
 	const visit = (node: ts.Node, scopes: Scopes) => {
 		const next = opensScope(node) ? [...scopes, new Map()] : scopes;
-
-		if (ts.isVariableDeclaration(node) && node.initializer) {
-			const group = translationsGroup(node.initializer);
-			if (group !== undefined && ts.isIdentifier(node.name)) {
-				next[next.length - 1].set(node.name.text, group);
-			}
-		}
-
-		if (ts.isCallExpression(node)) {
-			// `useTranslations("ai")("askAI")` reads a message straight away.
-			const direct = translationsGroup(node.expression);
-			if (direct !== undefined) record(direct, node);
-
-			const name = readerName(node);
-			if (name !== undefined) {
-				const group = lookUp(next, name);
-				if (group !== undefined) record(group, node);
-			}
-		}
-
+		declareReader(node, next);
+		readCall(node, next);
 		node.forEachChild((child) => visit(child, next));
 	};
 
