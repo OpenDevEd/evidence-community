@@ -365,8 +365,10 @@ export const maximalLibraryConfig = {
 	analytics: {
 		posthog: {
 			host: "https://analytics.example.org",
+			uiHost: "https://analytics-ui.example.org",
 			key: "phc_1234567890123456",
 		},
+		consentPolicyVersion: 1,
 		google: {
 			measurementId: "G-ABCD1234",
 		},

@@ -1309,6 +1309,7 @@ const aiSchema = z
 const posthogSchema = z
 	.object({
 		host: publicHttpsOriginSchema.optional(),
+		uiHost: publicHttpsOriginSchema.optional(),
 		key: z
 			.string()
 			.trim()
@@ -1326,11 +1327,19 @@ const posthogSchema = z
 				message: "PostHog host and key must be configured together",
 			});
 		}
+		if (posthog.uiHost && !posthog.host) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "PostHog UI host requires a configured PostHog client",
+				path: ["uiHost"],
+			});
+		}
 	});
 
 const analyticsSchema = z
 	.object({
 		posthog: posthogSchema,
+		consentPolicyVersion: z.number().int().min(1).default(1),
 		google: z
 			.object({
 				measurementId: z

@@ -10,11 +10,7 @@ import {
 import Script from "next/script";
 import { useEffect } from "react";
 
-export default function GoogleAnalyticsManager({
-	gaId,
-}: {
-	gaId: string;
-}) {
+export default function GoogleAnalyticsManager({ gaId }: { gaId: string }) {
 	const { consentState } = useAnalyticsConsent();
 	const isGranted = consentState === "granted";
 
@@ -39,7 +35,8 @@ export default function GoogleAnalyticsManager({
 
 	return (
 		<Script
-			id="ga-loader"
+			key={gaId}
+			id={`ga-loader-${gaId}`}
 			src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
 			strategy="afterInteractive"
 			onReady={() => {

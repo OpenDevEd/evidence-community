@@ -71,14 +71,11 @@ describe("revision-aware PostHog factory", () => {
 
 		expect(first).toBe(second);
 		expect(factory).toHaveBeenCalledOnce();
-		expect(factory).toHaveBeenCalledWith(
-			"phc_1234567890123456",
-			{
-				flushAt: 1,
-				flushInterval: 0,
-				host: "https://analytics.example.org",
-			},
-		);
+		expect(factory).toHaveBeenCalledWith("phc_1234567890123456", {
+			flushAt: 20,
+			flushInterval: 10_000,
+			host: "https://analytics.example.org",
+		});
 		expect(clients[0]).toMatchObject({
 			host: "https://analytics.example.org",
 			key: "phc_1234567890123456",

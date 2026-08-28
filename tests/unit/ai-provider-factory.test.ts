@@ -34,6 +34,7 @@ function providerFactories() {
 		google: vi.fn(create("google")),
 		mistral: vi.fn(create("mistral")),
 		openai: vi.fn(create("openai")),
+		openrouter: vi.fn(create("openrouter")),
 	} satisfies AIProviderClientFactories;
 
 	return { calls, factories };

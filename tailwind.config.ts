@@ -83,6 +83,105 @@ const config: Config = {
 	theme: {
 		extend: {
 			colors,
+			gridTemplateRows: {
+				chat: "minmax(0, 1fr) auto",
+			},
+			spacing: {
+				// Where the header sits once it has shrunk for the chat.
+				split: "1.625rem",
+				// The library's AI panel column.
+				"ai-panel": "2.375rem",
+				// Lines up a tool step's details under its title.
+				"tool-step": "1.375rem",
+				// Small icon sizes shared by chat and citation controls.
+				"icon-md": "1.125rem",
+				"icon-xs": "0.6875rem",
+			},
+			fontSize: {
+				citation: "0.68rem",
+			},
+			borderRadius: {
+				favicon: "0.2rem",
+			},
+			transitionProperty: {
+				// What moves when the chat opens beside the results.
+				chrome: "transform, border-radius",
+				header: "height, padding",
+				"page-space": "padding",
+				composer: "border-color, box-shadow",
+				citation:
+					"transform, border-color, background-color, box-shadow, color",
+			},
+			transformOrigin: {
+				"hover-card":
+					"var(--radix-hover-card-content-transform-origin)",
+			},
+			zIndex: {
+				"hover-card": "10000",
+			},
+			maxWidth: {
+				chat: "96rem",
+				// Everything on a page lines up with the header's width.
+				site: "96rem",
+				// The workbench row: the record's own controls.
+				"workbench-control": "120px",
+				"workbench-field": "520px",
+				// A long filter name is cut short so the row still fits.
+				"filter-chip": "16rem",
+				"results-note": "16rem",
+			},
+			scale: {
+				// The Ask AI button lifts a little under the pointer.
+				97: "0.97",
+				102: "1.02",
+			},
+			transitionDuration: {
+				// The header and the chat column open and close together.
+				split: "450ms",
+			},
+			height: {
+				navbar: "6.5rem",
+				"generative-modal": "45rem",
+				// The chat beside the results fills the viewport minus the
+				// header stack above it, which differs per breakpoint.
+				"chat-column": "calc(100dvh - 14rem)",
+				"chat-column-lg": "calc(100dvh - 6.5rem)",
+				"chat-column-small": "calc(100dvh - 9.625rem)",
+				"chat-column-small-xl": "calc(100dvh - 8rem)",
+			},
+			minHeight: {
+				"chat-column": "28rem",
+			},
+			minWidth: {
+				"workbench-field": "260px",
+			},
+			width: {
+				dialog: "calc(100% - 2rem)",
+				"workbench-control": "120px",
+				"workbench-list": "150px",
+			},
+			gridTemplateColumns: {
+				// The workbench row: what changed, then its two controls.
+				"workbench-row": "minmax(0,1fr) auto auto",
+				// The workbench itself: records, the record, its details.
+				workbench: "240px minmax(0,1fr) 360px",
+			},
+			backgroundSize: {
+				shimmer: "200% 100%",
+			},
+			maxHeight: {
+				// The navbar suggestion list must not cover the whole screen.
+				suggestions: "70vh",
+				"results-note": "32rem",
+				// A long list inside the workbench scrolls rather than
+				// pushing everything below it off the screen.
+				"workbench-menu": "52vh",
+				// The filter chips grow to fit, up to most of the screen.
+				"filter-chips": "32rem",
+			},
+			letterSpacing: {
+				"inspector-title": "-0.01em",
+			},
 			fontFamily: {
 				sans: ["var(--font-body)", "sans-serif"],
 				heading: ["var(--font-heading)", "sans-serif"],
@@ -99,13 +198,21 @@ const config: Config = {
 				"max-sm": { max: "639px" },
 			},
 			transitionTimingFunction: {
+				// The header and the chat column open and close together.
+				split: "cubic-bezier(0.16,1,0.3,1)",
 				spring: "cubic-bezier(0.68, -0.6, 0.32, 1.6)",
-				"bounce-custom":
-					"cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+				"bounce-custom": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
 			},
 			boxShadow: {
-				"accent-glow":
-					"0 0 15px theme(colors.accent.DEFAULT / 0.25)",
+				"card-soft": "0 4px 20px rgba(0, 0, 0, 0.05)",
+				"card-flat": "0 4px 20px rgba(0, 0, 0, 0.04)",
+				"card-hairline": "0 1px 0 rgba(0, 0, 0, 0.035)",
+				"card-lifted": "0 14px 36px -30px rgba(0, 0, 0, 0.45)",
+				composer: "0 12px 40px -34px rgba(0, 0, 0, 0.45)",
+				"composer-focus": "0 18px 48px -32px rgba(235, 126, 29, 0.22)",
+				"composer-focus-dark":
+					"0 18px 48px -32px rgba(235, 126, 29, 0.38)",
+				"accent-glow": "0 0 15px theme(colors.accent.DEFAULT / 0.25)",
 			},
 			keyframes: {
 				"gradient-x": {
@@ -113,9 +220,23 @@ const config: Config = {
 					"50%": { backgroundPosition: "100% 50%" },
 					"100%": { backgroundPosition: "0% 50%" },
 				},
+				"rise-in": {
+					"0%": {
+						opacity: "0",
+						transform: "scale(0.9) translateY(4px)",
+					},
+					"100%": {
+						opacity: "1",
+						transform: "scale(1) translateY(0)",
+					},
+				},
 			},
 			animation: {
 				"gradient-x": "gradient-x 2s ease infinite",
+				// "backwards" rather than "both", so the last frame stops
+				// applying once it is done and hover still moves the button.
+				"rise-in":
+					"rise-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards",
 			},
 		},
 	},

@@ -163,7 +163,7 @@ const CountryCard = ({
 		>
 			<motion.div
 				className={twMerge(
-					"relative h-full overflow-hidden rounded-xl border p-4 backdrop-blur-md transition-shadow duration-300 dark:border-white/10",
+					"relative h-full overflow-hidden rounded-xl border p-4 transition-shadow duration-300 dark:border-white/10",
 					isHovered
 						? "shadow-xl shadow-black/[0.12] dark:shadow-black/20"
 						: "shadow-medium dark:shadow-lg"

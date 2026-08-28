@@ -14,7 +14,8 @@ import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
+import { fetcher, fetcherPOST } from "@/lib/utils";
+import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
@@ -28,7 +29,6 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { twMerge } from "tailwind-merge";
-import type { AIProviderId } from "@/lib/ai-provider-factory";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 
 function randomUUID() {
@@ -40,47 +40,42 @@ function randomUUID() {
 
 function AiButton({
 	data,
-	isEmbedded,
-	setIsEmbedded,
 	variant,
 }: {
 	data: ItemGetResponse | undefined;
-	isEmbedded: boolean | null;
-	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
 	variant?: "default" | "inline";
 }) {
-	const {
-		selectedProviderId,
-		setSelectedProvider,
-	} = useSelectedModel();
+	const { selectedModelId, setSelectedModelId } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
-		provider: selectedProviderId,
 		distinctId: getAnalyticsDistinctId(),
 	};
 	const locale = useLocale();
-	
+
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
-		
+
 	const { data: questions } = useSWR(
-		isChatOpen ?[
-			`/ai/questions`,
-			body,
-			{
-				"Accept-Language": locale,
-			},
-		] : null,
+		isChatOpen
+			? [
+					`/ai/questions`,
+					body,
+					{
+						"Accept-Language": locale,
+					},
+				]
+			: null,
 		fetcherPOST,
 		{
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,
 			revalidateIfStale: false,
-		}
+		},
 	);
 	const [id, setId] = useState(randomUUID);
+	const [hasChatConversation, setHasChatConversation] = useState(false);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 
@@ -89,7 +84,7 @@ function AiButton({
 	>(`ai-history-v2`, {});
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
-		if (!selectedProviderId) return;
+		if (!selectedModelId) return;
 		setHistories((prev) => {
 			const newHistory = prev[prompt] || [];
 			const obj = newHistory.find((item) => item.id === id);
@@ -102,7 +97,7 @@ function AiButton({
 					date: new Date(),
 					title: data!.item!.title!,
 					key: data!.item!.key!,
-					provider: selectedProviderId,
+					modelId: selectedModelId,
 				});
 			}
 			return { ...prev, [prompt]: newHistory };
@@ -114,18 +109,19 @@ function AiButton({
 		id,
 		updateHistory,
 		data,
-		selectedProviderId
+		selectedModelId,
 	);
 	const explainFeature = useAIFeature(
 		"explain",
 		id,
 		updateHistory,
 		data,
-		selectedProviderId
+		selectedModelId,
 	);
 
-	const handleProviderChange = (provider: AIProviderId) => {
-		setSelectedProvider(provider);
+	const handleModelChange = (modelId: string) => {
+		setSelectedModelId(modelId);
+		setHasChatConversation(false);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
@@ -134,27 +130,38 @@ function AiButton({
 
 	return (
 		<motion.div
-			className={twMerge("", variant === "default" && "fixed bottom-0 right-0 z-40 print:hidden")}
+			className={twMerge(
+				"",
+				variant === "default" &&
+					"fixed bottom-0 right-0 z-40 print:hidden",
+			)}
 			initial={{ opacity: 0, x: 100 }}
 			animate={{ opacity: 1, x: 0 }}
 		>
-			<div className={twMerge(
-				"flex items-center justify-center",
-				variant === "default" && " p-4")}>
+			<div
+				className={twMerge(
+					"flex items-center justify-center",
+					variant === "default" && " p-4",
+				)}
+			>
 				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
-					selectedProvider={selectedProviderId}
-					onProviderChange={handleProviderChange}
+					selectedModelId={selectedModelId}
+					onModelChange={handleModelChange}
+					hasConversation={hasChatConversation}
+					onResetConversation={() => setHasChatConversation(false)}
 				/>
 				<ChatModal
+					// Changing the model starts a new conversation.
+					key={selectedModelId ?? "no-model"}
 					isOpen={isChatOpen}
 					onOpenChange={onChatOpenChange}
 					data={data}
-					provider={selectedProviderId}
+					modelId={selectedModelId}
+					onModelChange={handleModelChange}
+					onConversationStateChange={setHasChatConversation}
 					questions={questions}
-					isEmbedded={isEmbedded}
-					setIsEmbedded={setIsEmbedded}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -184,8 +191,7 @@ function AiButton({
 							isIconOnly={variant === "default"}
 							aria-label={tUI("aiMenuAriaLabel")}
 							className={twMerge(
-								// "bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent",
-								variant === "default" && "!p-0 rounded-full "
+								variant === "default" && "!p-0 rounded-full ",
 							)}
 							size={variant === "inline" ? "sm" : "lg"}
 						>
@@ -196,11 +202,11 @@ function AiButton({
 					<DropdownMenu
 						items={AI_DROPDOWN_ITEMS(
 							t,
-							selectedProviderId,
+							selectedModelId,
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,
-							onChatOpenChange
+							onChatOpenChange,
 						)}
 						itemClasses={{
 							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
@@ -231,32 +237,10 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
-	const { search } = useLibraryConfig();
-
-	const { data: embedded } = useSWR(
-		data?.item && search.embeddings
-			? `/item/${data.item.key}/embedded`
-			: null,
-		fetcher,
-		{
-			onSuccess: (data) => {
-				setIsEmbedded(data);
-			},
-		}
-	);
-
-	const aiAllowed = isAIAllowed(data?.item);
+	const aiAllowed = hasVisiblePdfAttachment(data?.item);
 	const isAIEnabled = useLibraryFeature("ai");
 
 	if (!isAIEnabled || !aiAllowed) return null;
 
-	return (
-		<AiButton
-			data={data}
-			isEmbedded={isEmbedded}
-			setIsEmbedded={setIsEmbedded}
-			variant={variant}
-		/>
-	);
+	return <AiButton data={data} variant={variant} />;
 }

@@ -40,7 +40,7 @@ vi.mock("@/lib/meilisearch", () => ({
 	})),
 }));
 
-import { GET } from "@/app/api/ai/embeddings/[key]/route";
+import { GET } from "@/app/api/similar/[key]/route";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 
 function meilisearchError(code: string) {
@@ -54,7 +54,7 @@ function meilisearchError(code: string) {
 
 function request(key = "ABCDEFGH") {
 	return GET(
-		new NextRequest(`https://library.example.org/api/ai/embeddings/${key}`),
+		new NextRequest(`https://library.example.org/api/similar/${key}`),
 		{ params: Promise.resolve({ key }) },
 	);
 }

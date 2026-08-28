@@ -6,8 +6,7 @@ const expectedConfigUpdatedAt =
 	process.env.PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT ??
 	"2026-07-27T12:30:00.000Z";
 const expectedIdentityName =
-	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ??
-	"Example Evidence Library";
+	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ?? "Example Evidence Library";
 const expectedLogoUrl =
 	process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ??
 	"https://assets.example.org/library/logo-light.webp";
@@ -18,13 +17,11 @@ const expectedFaviconUrl =
 	process.env.PLAYWRIGHT_EXPECTED_FAVICON_URL ??
 	"https://assets.example.org/library/favicon.png";
 const expectedLogoStyleToken =
-	process.env.PLAYWRIGHT_EXPECTED_LOGO_STYLE_TOKEN ??
-	"max-width: 12rem";
+	process.env.PLAYWRIGHT_EXPECTED_LOGO_STYLE_TOKEN ?? "max-width: 12rem";
 const expectedAccentRgb =
 	process.env.PLAYWRIGHT_EXPECTED_ACCENT_RGB ?? "230 129 36";
 const expectedGoogleFontFamilies = (
-	process.env.PLAYWRIGHT_EXPECTED_GOOGLE_FONT_FAMILIES ??
-	"Montserrat"
+	process.env.PLAYWRIGHT_EXPECTED_GOOGLE_FONT_FAMILIES ?? "Montserrat"
 ).split("|");
 const expectedLoadedLogo =
 	process.env.PLAYWRIGHT_EXPECTED_LOADED_LOGO === "true";
@@ -36,8 +33,7 @@ const expectedDatabaseItemKey =
 	process.env.PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY ?? "";
 const expectedDatabaseItemTitle =
 	process.env.PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE ?? "";
-const expectedThemeClass =
-	process.env.PLAYWRIGHT_EXPECTED_THEME_CLASS ?? "";
+const expectedThemeClass = process.env.PLAYWRIGHT_EXPECTED_THEME_CLASS ?? "";
 const expectedNavigationLabel =
 	process.env.PLAYWRIGHT_EXPECTED_NAVIGATION_LABEL ?? "Evidence";
 const expectedExternalNavigationLabel =
@@ -49,7 +45,8 @@ const expectedContactEmail =
 const expectedContactPhone =
 	process.env.PLAYWRIGHT_EXPECTED_CONTACT_PHONE ?? "+10000000000";
 const expectedContactAddress =
-	process.env.PLAYWRIGHT_EXPECTED_CONTACT_ADDRESS ?? "Evidence Library Office";
+	process.env.PLAYWRIGHT_EXPECTED_CONTACT_ADDRESS ??
+	"Evidence Library Office";
 const expectedFunderName =
 	process.env.PLAYWRIGHT_EXPECTED_FUNDER_NAME ?? "Funder One";
 const expectedDisclaimer =
@@ -94,8 +91,7 @@ const expectedYearFilter =
 const expectedTermsLink =
 	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
 const expectedInstitutionFilterLabel =
-	process.env.PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL ??
-	"Institutions";
+	process.env.PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL ?? "Institutions";
 const expectedCitationUrl =
 	process.env.PLAYWRIGHT_EXPECTED_CITATION_URL !== "false";
 const expectedEmbeddings =
@@ -110,16 +106,12 @@ const expectedNavbarSearch =
 	process.env.PLAYWRIGHT_EXPECTED_NAVBAR_SEARCH !== "false";
 const expectedThemeSwitcher =
 	process.env.PLAYWRIGHT_EXPECTED_THEME_SWITCHER !== "false";
-const expectedLogin =
-	process.env.PLAYWRIGHT_EXPECTED_LOGIN !== "false";
-const expectedAi =
-	process.env.PLAYWRIGHT_EXPECTED_AI !== "false";
-const expectedAiSearch =
-	process.env.PLAYWRIGHT_EXPECTED_AI_SEARCH !== "false";
+const expectedLogin = process.env.PLAYWRIGHT_EXPECTED_LOGIN !== "false";
+const expectedAi = process.env.PLAYWRIGHT_EXPECTED_AI !== "false";
+const expectedAiSearch = process.env.PLAYWRIGHT_EXPECTED_AI_SEARCH !== "false";
 const expectedDeepResearch =
 	process.env.PLAYWRIGHT_EXPECTED_DEEP_RESEARCH !== "false";
-const expectedContactPage =
-	process.env.PLAYWRIGHT_EXPECTED_EMAIL !== "false";
+const expectedContactPage = process.env.PLAYWRIGHT_EXPECTED_EMAIL !== "false";
 
 test("redirects the root route to the evidence library", async ({
 	request,
@@ -187,9 +179,7 @@ test("serves value-free machine-readable configuration contracts", async ({
 		schemaVersion: 1,
 		schemaUrl: "/library-config.schema.json",
 	});
-	expect(catalog.fields.writeOnlyPaths).toContain(
-		"services.database.url",
-	);
+	expect(catalog.fields.writeOnlyPaths).toContain("services.database.url");
 	expect(schemaText).not.toContain(expectedConfigRevision);
 	expect(catalogText).not.toContain(expectedConfigRevision);
 	expect(schemaText).not.toContain(expectedContactEmail);
@@ -216,9 +206,7 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 
 	await expect(page).toHaveTitle(expectedIdentityName);
 
-	const visibleLogo = page
-		.locator("img[data-library-logo]:visible")
-		.first();
+	const visibleLogo = page.locator("img[data-library-logo]:visible").first();
 	await expect(visibleLogo).toHaveAttribute("src", expectedLogoUrl);
 	if (expectedLoadedLogo) {
 		await expect
@@ -230,16 +218,12 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 			.toBeGreaterThan(0);
 	}
 
-	expect(
-		await page.locator("#library-logo-styles").textContent(),
-	).toContain(
+	expect(await page.locator("#library-logo-styles").textContent()).toContain(
 		expectedLogoStyleToken,
 	);
 	expect(
 		await page.locator("style[data-library-theme]").textContent(),
-	).toContain(
-		`--color-accent-500:${expectedAccentRgb}`,
-	);
+	).toContain(`--color-accent-500:${expectedAccentRgb}`);
 
 	const favicon = page
 		.locator(
@@ -302,8 +286,12 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	await expect(
 		page.getByRole("img", { name: expectedFunderName, exact: true }),
 	).toBeVisible();
-	await expect(page.getByText(expectedDisclaimer, { exact: true })).toBeVisible();
-	await expect(page.getByText(expectedAttribution, { exact: true })).toBeVisible();
+	await expect(
+		page.getByText(expectedDisclaimer, { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText(expectedAttribution, { exact: true }),
+	).toBeVisible();
 
 	await expect(
 		page
@@ -364,10 +352,8 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	);
 	expect(disabledResponse.status()).toBe(307);
 	expect(
-		new URL(
-			disabledResponse.headers().location!,
-			disabledResponse.url(),
-	).pathname,
+		new URL(disabledResponse.headers().location!, disabledResponse.url())
+			.pathname,
 	).toBe("/lib");
 
 	const defaultResponse = await request.get("/lib", {
@@ -420,9 +406,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		name: expectedConsentDecline,
 		exact: true,
 	});
-	await consentDecline
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await consentDecline.click({ timeout: 3_000 }).catch(() => undefined);
 
 	const secondaryNavigation = page.getByRole("navigation", {
 		name: "Secondary navigation",
@@ -499,9 +483,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 			exact: true,
 		})
 		.press("Enter");
-	await expect
-		.poll(() => new URL(page.url()).pathname)
-		.toBe("/lib");
+	await expect.poll(() => new URL(page.url()).pathname).toBe("/lib");
 	await expect(page.locator("html")).toHaveAttribute(
 		"lang",
 		expectedDefaultLocale,
@@ -555,7 +537,7 @@ test("enforces the runtime AI gate in both directions", async ({
 			headers,
 		}),
 		request.post("/api/ai/chat", {
-			data: { messages: [], mode: "full" },
+			data: { messages: [], mode: "research" },
 			headers,
 		}),
 	]);
@@ -638,11 +620,10 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	const yearFilter = page.getByText("Publication Year", {
 		exact: true,
 	});
-	const institutionFilter = page
-		.getByRole("combobox", {
-			name: expectedInstitutionFilterLabel,
-			exact: true,
-		});
+	const institutionFilter = page.getByRole("combobox", {
+		name: expectedInstitutionFilterLabel,
+		exact: true,
+	});
 	if (expectedYearFilter) {
 		await expect(yearFilter).toBeVisible();
 	} else {
@@ -656,8 +637,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 
 	const facetsResponse = await request.get("/api/facets");
 	expect(facetsResponse.status()).toBe(200);
-	const facetDistribution = (await facetsResponse.json())
-		.facetDistribution;
+	const facetDistribution = (await facetsResponse.json()).facetDistribution;
 	expect(Object.hasOwn(facetDistribution, "country_uncategorized")).toBe(
 		expectedCountryFacet,
 	);
@@ -708,15 +688,13 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 		institutions.institutions.length,
 	);
 
-	const embeddingsResponse = await request.get(
-		`/api/ai/embeddings/${firstItem.key}`,
-	);
-	expect(embeddingsResponse.status()).toBe(200);
-	const embeddings = await embeddingsResponse.json();
+	const similarResponse = await request.get(`/api/similar/${firstItem.key}`);
+	expect(similarResponse.status()).toBe(200);
+	const similar = await similarResponse.json();
 	if (expectedEmbeddings) {
-		expect(embeddings.hits.length).toBeGreaterThan(0);
+		expect(similar.hits.length).toBeGreaterThan(0);
 	} else {
-		expect(embeddings).toEqual({ hits: [], totalHits: 0 });
+		expect(similar).toEqual({ hits: [], totalHits: 0 });
 	}
 
 	await page.goto(`/en-GB/lib/${firstItem.key}`);
@@ -729,10 +707,9 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 		).toBeVisible();
 	}
 	const itemUrl = new URL(`/lib/${firstItem.key}`, page.url()).toString();
-	const citationUrlText = page.getByText(
-		`Available at ${itemUrl}.`,
-		{ exact: false },
-	);
+	const citationUrlText = page.getByText(`Available at ${itemUrl}.`, {
+		exact: false,
+	});
 	if (expectedCitationUrl) {
 		await expect(citationUrlText).toBeVisible();
 	} else {

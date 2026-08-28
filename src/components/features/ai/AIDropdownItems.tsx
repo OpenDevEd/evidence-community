@@ -1,17 +1,16 @@
-import { getAIProviderPresentation } from "@/constants/ai";
+import { getAIModelPresentation } from "@/constants/ai";
 import { useAIFeature } from "@/hooks/useAIFeature";
-import type { AIProviderId } from "@/lib/ai-provider-factory";
 import React from "react";
 
 export const AI_DROPDOWN_ITEMS = (
     t: any,
-    selectedProvider: AIProviderId | null,
+    selectedModelId: string | null,
     onChangeOpenChange: () => void,
     summaryFeature: ReturnType<typeof useAIFeature>,
     explainFeature: ReturnType<typeof useAIFeature>,
     onChatOpenChange: () => void,
 ) => {
-    const presentation = getAIProviderPresentation(selectedProvider);
+    const presentation = getAIModelPresentation(selectedModelId);
     return [
         {
             key: "change",

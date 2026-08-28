@@ -1,4 +1,4 @@
-import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
+import { Item, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
@@ -59,28 +59,6 @@ export function getCountryInfo(country: string) {
 
 export function localizeOrUseIfCapitalized(label: string, t: any) {
 	return label.charAt(0).toUpperCase() === label.charAt(0) ? label : t(label);
-}
-
-export function getTimeDuration(startTime: number): string {
-	const duration = (Date.now() - startTime) / 1000; // in seconds
-	return `[${duration.toFixed(1)}s] `;
-}
-
-export function cleanItemForAI(item: ItemGetResponse["item"] | ListItem | undefined) {
-	if (!item) return null;
-	return {
-		...item,
-		fullTextPDFs: undefined,
-		tags: undefined,
-		collectionsAncestry: undefined,
-		fullNames: undefined,
-		collections: undefined,
-		collectionsData: item.collectionsData?.map(({ name, title }) => ([title, name].filter(Boolean).join(" > "))),
-		attachmentsData: item.attachmentsData?.map(({ filename, url }) => ({
-			filename,
-			url,
-		})),
-	}
 }
 
 export function formatRange(range: string | null) {
@@ -181,26 +159,6 @@ export function getExtraValues(extraUnsplit: string) {
 	return finalMap;
 }
 
-export function isAIAllowed(item: Item | undefined) {
-	if (!item) return false;
-	const allowedInstitutions = ["EdTech Hub", "Open Development & Education", "eEkitabu"];
-	const allowedTags = ["_ai_enabled"]
-
-	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) ||
-		(Array.isArray(item.institution)
-			? item.institution.some(inst => allowedInstitutions.includes(inst))
-			: allowedInstitutions.includes(item.institution || "")) ||
-		allowedTags.some(tag => item.tags?.includes(tag))) {
-		return true;
-	}
-
-	return false;
-}
-
-export function generateRandomID(length: number = 12) {
-	return Math.random().toString(36).substring(2, 2 + length);
-}
-
 export function unescapeXML(safe: string) {
 	return safe
 		.replace(/&amp;/g, "&")
@@ -208,28 +166,6 @@ export function unescapeXML(safe: string) {
 		.replace(/&gt;/g, ">")
 		.replace(/&quot;/g, '"')
 		.replace(/&apos;/g, "'");
-}
-
-export function cleanAIResponse(response: string) {
-
-	// General regex to match any characters in brackets followed by /lib/ paths
-	const linkRegex = /\[(.*?)\](?:\(|\[)(\/lib\/[^)\]]+)(?:\)|\])([.,;:!?]*)/g;
-
-	// If no links, return the original response
-	if (!response.match(linkRegex)) return response;
-
-	const seenPaths = new Set();
-
-	// Replace links based on their path component
-	const result = response.replace(linkRegex, (match, label, path, punctuation) => {
-		if (!seenPaths.has(path)) {
-			seenPaths.add(path);
-			return `[${label}](${path})`; // Keep first occurrence but remove trailing punctuation
-		}
-		return ''; // Remove duplicate links
-	});
-
-	return result;
 }
 
 export function convertToImageURL(url: string) {
