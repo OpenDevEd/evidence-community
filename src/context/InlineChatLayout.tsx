@@ -2,7 +2,6 @@
 
 import {
 	createContext,
-	startTransition,
 	useCallback,
 	useContext,
 	useMemo,
@@ -10,11 +9,11 @@ import {
 	useState,
 	type ReactNode,
 } from "react";
-import type { Chat } from "@ai-sdk/react";
+import { Chat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 
 import type { ResearchUIMessage } from "@/lib/ai/agent";
-import type { LibrarySearchContext } from "@/lib/search-context";
-import type { ChatMode } from "@/types/ai";
+import { createTextMessage } from "@/lib/ai/chat-messages";
 import { usePathname } from "@/i18n/routing";
 
 export type BucketEntry = {
@@ -23,27 +22,10 @@ export type BucketEntry = {
 	source: "read" | "search";
 };
 
-/** What the chat sends with each question, read at the moment it is sent. */
-export type InlineChatRequest = {
-	modelId: string;
-	mode: ChatMode;
-	locale: string;
-	searchContext?: LibrarySearchContext;
-};
-
 type InlineChatLayoutValue = {
 	/** The library page is split in two: chat on one side, sources on the other. */
 	engaged: boolean;
 	setEngaged: (engaged: boolean) => void;
-	/** Publications the assistant has touched, most recent first. */
-	bucketEntries: BucketEntry[];
-	setBucketEntries: (entries: BucketEntry[]) => void;
-	/** Text typed in the AI tab before the split view took over. */
-	pendingInput: string;
-	setPendingInput: (input: string) => void;
-	/** That text came from a real send, so ask it as soon as the chat opens. */
-	pendingSend: boolean;
-	setPendingSend: (send: boolean) => void;
 	/**
 	 * When the library search field was last asked to take focus. It is a
 	 * request rather than a direct call because the field is rebuilt when the
@@ -53,145 +35,75 @@ type InlineChatLayoutValue = {
 	requestSearchFocus: () => void;
 	/**
 	 * The conversation outlives the page, so opening a result and coming back
-	 * keeps it. Changing the model starts a new one.
+	 * keeps it, and a question can be asked before the chat is on screen.
+	 * Changing the model starts a new one.
 	 */
-	getChat: (
+	getInlineChat: (
 		modelId: string,
-		create: () => Chat<ResearchUIMessage>,
+		greeting: string,
 	) => Chat<ResearchUIMessage>;
-	/** What the next question should be sent with. */
-	getChatRequest: () => InlineChatRequest | null;
-	setChatRequest: (request: InlineChatRequest) => void;
-	/** Text typed but not yet sent, kept across page visits. */
-	composerDraft: string;
-	setComposerDraft: (draft: string) => void;
-	/** Where the cited PDF pages live, for every publication in the bucket. */
-	pdfSources: Record<string, string>;
-	registerPdfSources: (
-		itemKey: string,
-		sources: Record<string, string>,
-	) => void;
 };
+
+/** Text typed but not yet sent. One owner, so it survives page visits. */
+type InlineChatDraftValue = { draft: string };
+type InlineChatDraftActions = { setDraft: (draft: string) => void };
 
 const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 	engaged: false,
 	setEngaged: () => {},
-	bucketEntries: [],
-	setBucketEntries: () => {},
-	pendingInput: "",
-	setPendingInput: () => {},
-	pendingSend: false,
-	setPendingSend: () => {},
 	searchFocusRequest: 0,
 	requestSearchFocus: () => {},
-	getChat: (_modelId, create) => create(),
-	getChatRequest: () => null,
-	setChatRequest: () => {},
-	composerDraft: "",
-	setComposerDraft: () => {},
-	pdfSources: {},
-	registerPdfSources: () => {},
+	getInlineChat: () => {
+		throw new Error("The library chat is only available inside its page.");
+	},
+});
+
+/**
+ * The draft has its own context so that typing only redraws the message box,
+ * not the conversation or the results beside it. Changing it is kept apart
+ * from reading it, so the parts of the page that only hand a question over
+ * are not redrawn on every key press.
+ */
+const InlineChatDraftContext = createContext<InlineChatDraftValue>({
+	draft: "",
+});
+const InlineChatDraftActionsContext = createContext<InlineChatDraftActions>({
+	setDraft: () => {},
 });
 
 /** The split view only exists on the library list page. */
 const LIBRARY_PATHNAME = /^\/lib\/?$/;
 
-/** True when both lists hold the same publications in the same order. */
-function sameEntries(before: BucketEntry[], after: BucketEntry[]) {
-	return (
-		before.length === after.length &&
-		before.every(
-			(entry, index) =>
-				entry.key === after[index].key &&
-				entry.source === after[index].source,
-		)
-	);
-}
-
-/** True when both records hold exactly the same paths. */
-function sameSources(
-	before: Record<string, string> | undefined,
-	after: Record<string, string>,
-) {
-	return (
-		Boolean(before) &&
-		Object.keys(before ?? {}).length === Object.keys(after).length &&
-		Object.entries(after).every(([name, path]) => before?.[name] === path)
-	);
-}
-
-/** Keeps one conversation for the whole visit, and what it has found. */
-function useBucket() {
-	const [bucketEntries, setEntries] = useState<BucketEntry[]>([]);
-	const [pdfSourcesByItem, setPdfSourcesByItem] = useState<
-		Record<string, Record<string, string>>
-	>({});
-
-	const setBucketEntries = useCallback((entries: BucketEntry[]) => {
-		setEntries((previous) =>
-			sameEntries(previous, entries) ? previous : entries,
-		);
-		if (entries.length === 0) setPdfSourcesByItem({});
-	}, []);
-
-	const registerPdfSources = useCallback(
-		(itemKey: string, sources: Record<string, string>) => {
-			setPdfSourcesByItem((previous) =>
-				sameSources(previous[itemKey], sources)
-					? previous
-					: { ...previous, [itemKey]: sources },
-			);
-		},
-		[],
-	);
-
-	const pdfSources = useMemo(
-		() =>
-			Object.assign(
-				{},
-				...Object.values(pdfSourcesByItem),
-			) as Record<string, string>,
-		[pdfSourcesByItem],
-	);
-
-	return useMemo(
-		() => ({
-			bucketEntries,
-			pdfSources,
-			registerPdfSources,
-			setBucketEntries,
-		}),
-		[bucketEntries, pdfSources, registerPdfSources, setBucketEntries],
-	);
-}
-
-/** The one conversation the split view uses, and what it is sent with. */
+/**
+ * The one conversation the split view uses. It is kept outside React state on
+ * purpose: it must survive the chat leaving the screen, and a question may be
+ * asked from the search field before the chat is drawn.
+ */
 function useChatHandle() {
 	const chatRef = useRef<{
 		modelId: string;
 		chat: Chat<ResearchUIMessage>;
 	} | null>(null);
-	const requestRef = useRef<InlineChatRequest | null>(null);
 
-	const getChat = useCallback(
-		(modelId: string, create: () => Chat<ResearchUIMessage>) => {
-			if (chatRef.current?.modelId !== modelId) {
-				chatRef.current = { modelId, chat: create() };
-			}
+	const getInlineChat = useCallback((modelId: string, greeting: string) => {
+		if (chatRef.current?.modelId !== modelId) {
+			chatRef.current = {
+				modelId,
+				chat: new Chat<ResearchUIMessage>({
+					transport: new DefaultChatTransport({
+						api: "/api/ai/chat",
+					}),
+					messages: [
+						createTextMessage("assistant", greeting, "start"),
+					],
+				}),
+			};
+		}
 
-			return chatRef.current.chat;
-		},
-		[],
-	);
-	const getChatRequest = useCallback(() => requestRef.current, []);
-	const setChatRequest = useCallback((request: InlineChatRequest) => {
-		requestRef.current = request;
+		return chatRef.current.chat;
 	}, []);
 
-	return useMemo(
-		() => ({ getChat, getChatRequest, setChatRequest }),
-		[getChat, getChatRequest, setChatRequest],
-	);
+	return getInlineChat;
 }
 
 export function InlineChatLayoutProvider({
@@ -201,62 +113,69 @@ export function InlineChatLayoutProvider({
 }) {
 	// The flag survives navigation, so opening a result and coming back
 	// restores the split view. It only counts on the library page itself.
-	const [engagedState, setEngagedState] = useState(false);
-	const setEngaged = useCallback((engaged: boolean) => {
-		// Opening builds the chat and its controls, which is heavy work, so
-		// React is allowed to spread it over a few frames. Closing only swaps
-		// the light search controls back in, so it happens at once.
-		if (engaged) startTransition(() => setEngagedState(true));
-		else setEngagedState(false);
-	}, []);
+	// Opening and closing both happen at once. Opening used to be spread over
+	// a few frames because it builds the chat and its controls, but that made
+	// it wait behind the page's own address changes: a reader who typed and
+	// then asked within a moment could be left looking at the old page while
+	// the search caught up. Being sure the chat appears is worth the frame.
+	const [engaged, setEngagedState] = useState(false);
+	const setEngaged = useCallback(
+		(next: boolean) => setEngagedState(next),
+		[],
+	);
 	const pathname = usePathname();
-	const [pendingInput, setPendingInput] = useState("");
-	const [pendingSend, setPendingSend] = useState(false);
 	const [searchFocusRequest, setSearchFocusRequest] = useState(0);
-	const [composerDraft, setComposerDraft] = useState("");
+	const [draft, setDraft] = useState("");
 	const requestSearchFocus = useCallback(
 		() => setSearchFocusRequest(Date.now()),
 		[],
 	);
-	const bucket = useBucket();
-	const handle = useChatHandle();
+	const getInlineChat = useChatHandle();
 
 	const value = useMemo(
 		() => ({
-			...bucket,
-			...handle,
-			composerDraft,
-			engaged: engagedState && LIBRARY_PATHNAME.test(pathname),
-			pendingInput,
-			pendingSend,
+			engaged: engaged && LIBRARY_PATHNAME.test(pathname),
+			getInlineChat,
 			requestSearchFocus,
 			searchFocusRequest,
-			setComposerDraft,
 			setEngaged,
-			setPendingInput,
-			setPendingSend,
 		}),
 		[
-			bucket,
-			composerDraft,
-			engagedState,
-			handle,
+			engaged,
+			getInlineChat,
 			pathname,
-			pendingInput,
-			pendingSend,
 			requestSearchFocus,
 			searchFocusRequest,
 			setEngaged,
 		],
 	);
+	const draftValue = useMemo(() => ({ draft }), [draft]);
+	const draftActions = useMemo(() => ({ setDraft }), []);
 
 	return (
 		<InlineChatLayoutContext.Provider value={value}>
-			{children}
+			<InlineChatDraftActionsContext.Provider value={draftActions}>
+				<InlineChatDraftContext.Provider value={draftValue}>
+					{children}
+				</InlineChatDraftContext.Provider>
+			</InlineChatDraftActionsContext.Provider>
 		</InlineChatLayoutContext.Provider>
 	);
 }
 
 export function useInlineChatLayout() {
 	return useContext(InlineChatLayoutContext);
+}
+
+/** For the message box, which both shows the draft and changes it. */
+export function useInlineChatDraft() {
+	return {
+		...useContext(InlineChatDraftContext),
+		...useContext(InlineChatDraftActionsContext),
+	};
+}
+
+/** For anything that only puts the draft down, such as handing a question over. */
+export function useInlineChatDraftActions() {
+	return useContext(InlineChatDraftActionsContext);
 }

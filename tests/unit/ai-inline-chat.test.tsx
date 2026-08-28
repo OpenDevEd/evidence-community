@@ -17,7 +17,9 @@ vi.mock("@/i18n/routing", () => ({
 	useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 	Link: ({ children }: { children: unknown }) => children,
 }));
-const analyticsId = { value: undefined as string | undefined };
+// The real reader has no analytics id until they agree to analytics, and
+// then it is null, not missing.
+const analyticsId = { value: null as string | null };
 vi.mock("@/lib/analytics", () => ({
 	getAnalyticsDistinctId: () => analyticsId.value,
 }));
@@ -46,10 +48,8 @@ vi.mock("next-auth/react", () => ({
 }));
 
 import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
-import {
-	InlineChatLayoutProvider,
-	useInlineChatLayout,
-} from "@/context/InlineChatLayout";
+import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
+import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -62,6 +62,9 @@ class NoResize {
 }
 globalThis.ResizeObserver ??= NoResize as unknown as typeof ResizeObserver;
 
+/** Set while a test wants the answer to stay half-written. */
+const answering = { held: false, release: () => {} };
+
 /** One answer, streamed back the way the AI service sends it. */
 function answerStream(text: string) {
 	const chunks = [
@@ -73,13 +76,20 @@ function answerStream(text: string) {
 	];
 
 	return new ReadableStream<Uint8Array>({
-		start(controller) {
+		async start(controller) {
 			const encoder = new TextEncoder();
-			for (const chunk of chunks) {
+			const send = (chunk: unknown) =>
 				controller.enqueue(
 					encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
 				);
+
+			send(chunks[0]);
+			if (answering.held) {
+				await new Promise<void>((resolve) => {
+					answering.release = resolve;
+				});
 			}
+			for (const chunk of chunks.slice(1)) send(chunk);
 			controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 			controller.close();
 		},
@@ -93,7 +103,9 @@ describe("the chat beside the search results", () => {
 
 	beforeEach(() => {
 		window.localStorage.clear();
-		analyticsId.value = undefined;
+		answering.held = false;
+		answering.release = () => {};
+		analyticsId.value = null;
 		asked = [];
 		container = document.createElement("div");
 		document.body.append(container);
@@ -113,6 +125,7 @@ describe("the chat beside the search results", () => {
 	});
 
 	afterEach(async () => {
+		answering.release();
 		// The window draws into the page itself, so it has to be taken down
 		// or the next test types into the one before it.
 		await act(async () => {
@@ -123,11 +136,21 @@ describe("the chat beside the search results", () => {
 		vi.unstubAllGlobals();
 	});
 
+	/** The chat, with nothing of interest beside it. */
+	function Chat() {
+		return (
+			<InlineLibraryChat
+				modelId="gemini-2.5-flash"
+				renderSources={() => null}
+			/>
+		);
+	}
+
 	async function render() {
 		await act(async () => {
 			root.render(
 				<InlineChatLayoutProvider>
-					<InlineLibraryChat modelId="gemini-2.5-flash" />
+					<Chat />
 				</InlineChatLayoutProvider>,
 			);
 		});
@@ -148,9 +171,10 @@ describe("the chat beside the search results", () => {
 		question: string;
 		rebuild: boolean;
 	}) {
-		const { setPendingInput, setPendingSend } = useInlineChatLayout();
+		const askAI = useAskInlineChat();
 		const [engaged, setEngaged] = useState(openFirst);
 		const [rebuilt, setRebuilt] = useState(false);
+		const [accepted, setAccepted] = useState<boolean[]>([]);
 		const gone = rebuild && !rebuilt;
 
 		return (
@@ -159,13 +183,13 @@ describe("the chat beside the search results", () => {
 					type="button"
 					data-testid="ask"
 					onClick={() => {
-						setPendingInput(question);
-						setPendingSend(true);
+						setAccepted((before) => [...before, askAI(question)]);
 						setEngaged(true);
 					}}
 				>
 					hand over
 				</button>
+				<output data-testid="accepted">{accepted.join(",")}</output>
 				<button
 					type="button"
 					data-testid="settle"
@@ -173,9 +197,7 @@ describe("the chat beside the search results", () => {
 				>
 					settle
 				</button>
-				{engaged && !gone ? (
-					<InlineLibraryChat modelId="gemini-2.5-flash" />
-				) : null}
+				{engaged && !gone ? <Chat /> : null}
 			</>
 		);
 	}
@@ -259,7 +281,7 @@ describe("the chat beside the search results", () => {
 	// A reader who turns cookies down has no analytics id. Sending an empty
 	// one made the library refuse every question they asked.
 	it("leaves the analytics id out when there is none", async () => {
-		analyticsId.value = undefined;
+		analyticsId.value = null;
 		await render();
 		await type("Does teacher training help?");
 		await send();
@@ -301,6 +323,20 @@ describe("the chat beside the search results", () => {
 		expect(container.textContent).toContain("Does teacher training help?");
 	});
 
+	// The question is sent before the chat is drawn, so the model and the
+	// mode have to travel with it rather than come from the chat.
+	it("sends the chosen model and mode with a handed-over question", async () => {
+		analyticsId.value = "reader-1";
+		await handOver("Does teacher training help?");
+
+		expect(asked).toHaveLength(1);
+		expect(asked[0]).toMatchObject({
+			distinctId: "reader-1",
+			modelId: "gemini-2.5-flash",
+			mode: "quick",
+		});
+	});
+
 	it("asks a question that arrives after it has opened", async () => {
 		// The chat is already open when the reader asks from the page.
 		await act(async () => {
@@ -320,6 +356,21 @@ describe("the chat beside the search results", () => {
 
 		expect(asked).toHaveLength(1);
 		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	// The AI service runs two questions at once and mixes the answers, so the
+	// second of two quick clicks has to be turned away.
+	it("does not ask the same question twice when the reader hurries", async () => {
+		answering.held = true;
+		await handOver("Does teacher training help?");
+		expect(asked).toHaveLength(1);
+
+		await press("ask");
+
+		expect(asked).toHaveLength(1);
+		expect(
+			container.querySelector('[data-testid="accepted"]')?.textContent,
+		).toBe("true,false");
 	});
 
 	it("ignores an empty question", async () => {

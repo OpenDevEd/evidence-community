@@ -4,6 +4,7 @@ import {
 	ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS,
 	ANALYTICS_CONSENT_COOKIE_NAME,
 	analyticsConsentState,
+	asksAnalyticsConsent,
 	createAnalyticsConsentRecord,
 	normalizeAnalyticsConsentScope,
 	parseAnalyticsConsentRecord,
@@ -115,5 +116,24 @@ describe("analytics consent records", () => {
 				now,
 			),
 		).toBeNull();
+	});
+});
+
+describe("where the cookie question is asked", () => {
+	it("asks on the library pages", () => {
+		expect(asksAnalyticsConsent("/en-GB/lib", "en-GB")).toBe(true);
+		expect(asksAnalyticsConsent("/en-GB", "en-GB")).toBe(true);
+		expect(asksAnalyticsConsent("/en-GB/map/", "en-GB")).toBe(true);
+	});
+
+	it("never asks in the admin area, which has no dialog to answer", () => {
+		expect(asksAnalyticsConsent("/en-GB/admin", "en-GB")).toBe(false);
+		expect(asksAnalyticsConsent("/en-GB/admin/items", "en-GB")).toBe(false);
+		expect(asksAnalyticsConsent("/admin", "en-GB")).toBe(false);
+	});
+
+	it("never asks on the pages that explain the cookies", () => {
+		expect(asksAnalyticsConsent("/en-GB/privacy", "en-GB")).toBe(false);
+		expect(asksAnalyticsConsent("/en-GB/cookie-policy/", "en-GB")).toBe(false);
 	});
 });

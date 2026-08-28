@@ -4,6 +4,7 @@ import { useCompletion } from "@ai-sdk/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback } from "react";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
+import { analyticsIdField } from "@/lib/ai/chat-request";
 
 
 export default function useAIStream(endpoint: string, onFinish: (completion: string, id: string) => void, id: string) {
@@ -15,9 +16,7 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
             "Content-Type": "application/json",
             "Accept-Language": locale,
         },
-        body: {
-            distinctId: getAnalyticsDistinctId()
-        },
+        body: analyticsIdField(getAnalyticsDistinctId()),
         onError: (e) => {
             (async () => {
                 const rateLimits = await getRateLimits();

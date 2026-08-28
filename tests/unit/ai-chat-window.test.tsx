@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +38,9 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: () => true,
 }));
 
-import ChatModal from "@/components/features/modals/ChatModal";
+import ChatModal, {
+	type ChatWindowHandle,
+} from "@/components/features/modals/ChatModal";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -52,6 +54,11 @@ class NoResize {
 }
 globalThis.ResizeObserver ??= NoResize as unknown as typeof ResizeObserver;
 
+/** Set while a test wants the answer to stay half-written. */
+const answering = { held: false, release: () => {} };
+/** Set when a test wants the assistant to fail. */
+const service = { fails: false };
+
 /** One answer, streamed back the way the AI service sends it. */
 function answerStream(text: string) {
 	const chunks = [
@@ -63,13 +70,20 @@ function answerStream(text: string) {
 	];
 
 	return new ReadableStream<Uint8Array>({
-		start(controller) {
+		async start(controller) {
 			const encoder = new TextEncoder();
-			for (const chunk of chunks) {
+			const send = (chunk: unknown) =>
 				controller.enqueue(
 					encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
 				);
+
+			send(chunks[0]);
+			if (answering.held) {
+				await new Promise<void>((resolve) => {
+					answering.release = resolve;
+				});
 			}
+			for (const chunk of chunks.slice(1)) send(chunk);
 			controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 			controller.close();
 		},
@@ -83,6 +97,9 @@ describe("the full-screen chat window", () => {
 
 	beforeEach(() => {
 		window.localStorage.clear();
+		answering.held = false;
+		answering.release = () => {};
+		service.fails = false;
 		asked = [];
 		container = document.createElement("div");
 		document.body.append(container);
@@ -94,6 +111,12 @@ describe("the full-screen chat window", () => {
 					JSON.parse(String(init.body)) as Record<string, unknown>,
 				);
 
+				if (service.fails) {
+					return new Response("The assistant is unavailable.", {
+						status: 500,
+					});
+				}
+
 				return new Response(answerStream("Two studies say yes."), {
 					headers: { "Content-Type": "text/event-stream" },
 				});
@@ -101,7 +124,18 @@ describe("the full-screen chat window", () => {
 		);
 	});
 
+	async function press(label: string) {
+		const button = document.body.querySelector(
+			`button[aria-label="${label}"]`,
+		);
+		if (!button) throw new Error(`the ${label} button is missing`);
+		await act(async () => {
+			button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+	}
+
 	afterEach(async () => {
+		answering.release();
 		// The window draws into the page itself, so it has to be taken down
 		// or the next test types into the one before it.
 		await act(async () => {
@@ -191,24 +225,74 @@ describe("the full-screen chat window", () => {
 		});
 	});
 
-	it("asks a question typed elsewhere on the page as soon as it opens", async () => {
-		const setExternalInput = vi.fn();
-		await render({
-			externalInput: "Which countries were studied?",
-			setExternalInput,
+	// The page opens the window and hands over the question in the same
+	// click, so nothing has to watch for a question arriving later.
+	it("asks a question the page hands to it", async () => {
+		const window = createRef<ChatWindowHandle>();
+		await render({ ref: window });
+		expect(asked).toHaveLength(0);
+
+		await act(async () => {
+			window.current?.ask("Which countries were studied?");
 		});
 
 		expect(asked).toHaveLength(1);
 		expect(document.body.textContent).toContain(
 			"Which countries were studied?",
 		);
-		expect(setExternalInput).toHaveBeenCalledWith("");
 	});
 
-	it("asks nothing while the window is closed", async () => {
-		await render({
-			isOpen: false,
-			externalInput: "Which countries were studied?",
+	// The AI service runs two questions at once and mixes the answers, so a
+	// second question has to wait, and the page must keep it.
+	it("refuses a second question while an answer is still arriving", async () => {
+		answering.held = true;
+		const window = createRef<ChatWindowHandle>();
+		await render({ ref: window });
+
+		let first: boolean | undefined;
+		let second: boolean | undefined;
+		// Both in one go, the way two quick clicks arrive.
+		await act(async () => {
+			first = window.current?.ask("Which countries were studied?");
+			second = window.current?.ask("And for how long?");
+		});
+
+		expect(first).toBe(true);
+		expect(second).toBe(false);
+		expect(asked).toHaveLength(1);
+	});
+
+	// The window is built once and kept, so a later choice has to travel with
+	// the question rather than sit in the conversation it was built with.
+	it("sends the mode the reader has just chosen", async () => {
+		await render();
+		await press("researchMode");
+		await ask("Does teacher training help?");
+
+		expect(asked).toHaveLength(1);
+		expect(asked[0]).toMatchObject({ mode: "research" });
+	});
+
+	it("sends the mode the reader has just chosen when trying again", async () => {
+		service.fails = true;
+		await render();
+		await ask("Does teacher training help?");
+		expect(asked[0]).toMatchObject({ mode: "quick" });
+
+		service.fails = false;
+		await press("researchMode");
+		await press("tryAgainLater");
+
+		expect(asked).toHaveLength(2);
+		expect(asked[1]).toMatchObject({ mode: "research" });
+	});
+
+	it("ignores an empty question from the page", async () => {
+		const window = createRef<ChatWindowHandle>();
+		await render({ ref: window });
+
+		await act(async () => {
+			window.current?.ask("   ");
 		});
 
 		expect(asked).toHaveLength(0);

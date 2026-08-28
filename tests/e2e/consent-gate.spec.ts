@@ -1,0 +1,76 @@
+import { expect, test } from "@playwright/test";
+
+import { dismissConsent } from "./consent";
+
+test.skip(
+	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
+	"Runtime acceptance only.",
+);
+
+/** What the cookie question calls itself, in the library's own language. */
+const consentTitle =
+	process.env.PLAYWRIGHT_EXPECTED_CONSENT_TITLE ??
+	"Help Us Improve Your Experience";
+
+test("a reader who has not answered cannot use the page yet", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.goto("/en-GB/lib");
+
+	// The question is still open, so the library is visible but held still.
+	const searchField = page.getByPlaceholder("Search", { exact: true }).first();
+	await expect(searchField).toBeVisible();
+	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(1);
+
+	await searchField.focus().catch(() => undefined);
+	expect(
+		await page.evaluate(
+			() => (document.activeElement as HTMLElement | null)?.tagName,
+		),
+	).not.toBe("INPUT");
+
+	// A screen reader is told what the question is before answering it.
+	await expect(page.getByRole("dialog", { name: consentTitle })).toBeVisible();
+
+	// Answering releases the page.
+	await dismissConsent(page);
+	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
+
+	await searchField.fill("school meals");
+	await expect(searchField).toHaveValue("school meals");
+});
+
+test("a reader who has answered is never held still", async ({ page }) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.goto("/en-GB/lib");
+	await dismissConsent(page);
+
+	// Coming back, the answer is known before anything is drawn.
+	await page.goto("/en-GB/lib");
+	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+
+	// Nothing stands between the reader and the search field. The page is
+	// still waking up in the browser, which can drop the first thing typed,
+	// so this asks again until the words stay put.
+	const searchField = page.getByPlaceholder("Search", { exact: true }).first();
+	await expect(async () => {
+		await searchField.fill("school meals");
+		await expect(searchField).toHaveValue("school meals", {
+			timeout: 1_000,
+		});
+	}).toPass({ timeout: 15_000 });
+});
+
+test("the page explaining the cookies is readable without answering", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.goto("/en-GB/privacy");
+
+	// The question is not asked here, so nothing is held and nothing covers
+	// the page the question itself points readers at.
+	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+});

@@ -1,27 +1,17 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
+import { Chat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useLocale, useTranslations } from "next-intl";
+import { useState } from "react";
 
 import type { ResearchUIMessage } from "@/lib/ai/agent";
-import { getAnalyticsDistinctId } from "@/lib/analytics";
+import { createTextMessage } from "@/lib/ai/chat-messages";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ChatMode } from "@/types/ai";
+import { useChatSession } from "./useChatSession";
 
-/** The greeting the reader sees before they ask anything. */
-function chatGreeting(text: string): ResearchUIMessage {
-	return {
-		id: "start",
-		role: "assistant",
-		parts: [{ type: "text", text }],
-	} as ResearchUIMessage;
-}
-
-/**
- * One conversation with the library's assistant: the request carries the
- * chosen model, the mode, the open publication, and the reader's own search.
- */
+/** The conversation in the full-screen chat window. */
 export function useChatWindowSession({
 	itemKey,
 	greeting,
@@ -35,22 +25,20 @@ export function useChatWindowSession({
 	modelId: string;
 	searchContext?: LibrarySearchContext;
 }) {
-	const locale = useLocale();
-
-	return useChat<ResearchUIMessage>({
-		throttle: 50,
-		transport: new DefaultChatTransport({
-			api: "/api/ai/chat",
-			headers: { "Accept-Language": locale },
-			body: () => ({
-				itemKey,
-				modelId,
-				distinctId: getAnalyticsDistinctId(),
-				mode,
-				searchContext,
+	const [chat] = useState(
+		() =>
+			new Chat<ResearchUIMessage>({
+				transport: new DefaultChatTransport({ api: "/api/ai/chat" }),
+				messages: [createTextMessage("assistant", greeting, "start")],
 			}),
-		}),
-		messages: [chatGreeting(greeting)],
+	);
+
+	return useChatSession(chat, {
+		itemKey,
+		locale: useLocale(),
+		mode,
+		modelId,
+		searchContext,
 	});
 }
 

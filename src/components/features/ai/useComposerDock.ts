@@ -3,6 +3,7 @@
 import {
 	useCallback,
 	useEffect,
+	useEffectEvent,
 	useLayoutEffect,
 	useRef,
 	useState,
@@ -29,10 +30,7 @@ function composerTextarea(form: RefObject<HTMLFormElement | null>) {
  * The message field sizes itself. The one NextUI ships mis-measures on focus
  * in Firefox, growing an empty field to several rows.
  */
-function useComposerAutosize(
-	composerFormRef: RefObject<HTMLFormElement | null>,
-	value: string,
-) {
+function useComposerAutosize(composerFormRef: RefObject<HTMLFormElement | null>) {
 	const resizeComposer = useCallback(() => {
 		const element = composerTextarea(composerFormRef);
 		if (!element) return;
@@ -51,11 +49,6 @@ function useComposerAutosize(
 			MAX_COMPOSER_HEIGHT,
 		)}px`;
 	}, [composerFormRef]);
-
-	// Follow every change: typing, filling the field, clearing it after a send.
-	useLayoutEffect(() => {
-		resizeComposer();
-	}, [resizeComposer, value]);
 
 	// The column opens from almost no width, so a height measured at the
 	// start sees the placeholder wrapped over many lines. Measure again once
@@ -84,9 +77,10 @@ function useComposerAutosize(
 		};
 	}, [composerFormRef, resizeComposer]);
 
-	/** Puts the caret at the end of whatever the field already holds. */
-	const focusComposer = useCallback(() => {
-		requestAnimationFrame(() => {
+	// Outside system: the browser's focus and caret. The field is built when
+	// the split view opens, so there is no click or key press to act on.
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => {
 			const element = composerTextarea(composerFormRef);
 			if (!element) return;
 			element.focus({ preventScroll: true });
@@ -96,9 +90,11 @@ function useComposerAutosize(
 			);
 			resizeComposer();
 		});
+
+		return () => cancelAnimationFrame(frame);
 	}, [composerFormRef, resizeComposer]);
 
-	return { focusComposer, resizeComposer };
+	return resizeComposer;
 }
 
 /**
@@ -115,16 +111,11 @@ function useDockHeight({
 }) {
 	const composerDockRef = useRef<HTMLDivElement>(null);
 	const [composerDockHeight, setComposerDockHeight] = useState(0);
-	const pinnedBeforeDockChangeRef = useRef(true);
 	const rearmOnNextScrollRef = useRef(false);
-	const rearmStickToBottomRef = useRef<() => void>(() => {});
-
-	useEffect(() => {
-		pinnedBeforeDockChangeRef.current = isAtBottom;
-	}, [isAtBottom]);
-	useEffect(() => {
-		rearmStickToBottomRef.current = scrollToBottom;
-	}, [scrollToBottom]);
+	// The observer and the timers below are set up once, but they must act on
+	// what is true now, not on what was true when they were set up.
+	const wasPinned = useEffectEvent(() => isAtBottom);
+	const rearmStickToBottom = useEffectEvent(() => scrollToBottom());
 
 	useLayoutEffect(() => {
 		const dock = composerDockRef.current;
@@ -139,7 +130,7 @@ function useDockHeight({
 			const shrank = height < lastHeight;
 			lastHeight = height;
 			setComposerDockHeight(height);
-			if (!shrank || !pinnedBeforeDockChangeRef.current) return;
+			if (!shrank || !wasPinned()) return;
 
 			// The padding shrinks in a later paint, and the browser's own
 			// scroll correction comes after that, so wait for it.
@@ -148,7 +139,7 @@ function useDockHeight({
 			fallback = setTimeout(() => {
 				if (!rearmOnNextScrollRef.current) return;
 				rearmOnNextScrollRef.current = false;
-				rearmStickToBottomRef.current();
+				rearmStickToBottom();
 			}, REARM_FALLBACK_MS);
 		});
 
@@ -160,21 +151,31 @@ function useDockHeight({
 		};
 	}, []);
 
-	const watchedRef = useRef<HTMLElement | null>(null);
-	const onClampScroll = useRef(() => {
-		if (!rearmOnNextScrollRef.current) return;
-		rearmOnNextScrollRef.current = false;
-		setTimeout(() => rearmStickToBottomRef.current(), REARM_SCROLL_MS);
-	});
-	const watchDockClamp = useCallback((element: HTMLElement | null) => {
-		if (watchedRef.current === element) return;
-		watchedRef.current?.removeEventListener(
-			"scroll",
-			onClampScroll.current,
-		);
-		watchedRef.current = element;
-		element?.addEventListener("scroll", onClampScroll.current);
-	}, []);
+	const [scrolled, setScrolled] = useState<HTMLElement | null>(null);
+	const watchDockClamp = useCallback(
+		(element: HTMLElement | null) => setScrolled(element),
+		[],
+	);
+
+	// Outside system: the message list's own scrolling, which the browser
+	// corrects after the padding shrinks.
+	useEffect(() => {
+		if (!scrolled) return;
+
+		let rearm: ReturnType<typeof setTimeout> | undefined;
+		const onClampScroll = () => {
+			if (!rearmOnNextScrollRef.current) return;
+			rearmOnNextScrollRef.current = false;
+			rearm = setTimeout(() => rearmStickToBottom(), REARM_SCROLL_MS);
+		};
+
+		scrolled.addEventListener("scroll", onClampScroll);
+
+		return () => {
+			clearTimeout(rearm);
+			scrolled.removeEventListener("scroll", onClampScroll);
+		};
+	}, [scrolled]);
 
 	return { composerDockHeight, composerDockRef, watchDockClamp };
 }
@@ -183,16 +184,13 @@ function useDockHeight({
 export function useComposerDock({
 	isAtBottom,
 	scrollToBottom,
-	value,
 }: {
 	isAtBottom: boolean;
 	scrollToBottom: () => void;
-	/** What the field currently holds, so its height can follow. */
-	value: string;
 }) {
 	const composerFormRef = useRef<HTMLFormElement>(null);
-	const { focusComposer } = useComposerAutosize(composerFormRef, value);
+	const resizeComposer = useComposerAutosize(composerFormRef);
 	const dock = useDockHeight({ isAtBottom, scrollToBottom });
 
-	return { ...dock, composerFormRef, focusComposer };
+	return { ...dock, composerFormRef, resizeComposer };
 }

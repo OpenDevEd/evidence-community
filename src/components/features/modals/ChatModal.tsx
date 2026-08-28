@@ -38,6 +38,13 @@ import {
 } from "./AIControls";
 
 type ChatWindowState = ReturnType<typeof useChatWindow>;
+
+/** What the page around the window can ask it to do. */
+export type ChatWindowHandle = {
+	/** Answers whether the question was taken. */
+	ask: (question: string) => boolean;
+};
+
 type Message = ResearchUIMessage;
 type ChatMessageListProps = {
 	chatFailure: ReturnType<typeof useChatFailure>;
@@ -508,8 +515,7 @@ export default function ChatModal({
 	data,
 	modelId,
 	questions,
-	externalInput,
-	setExternalInput,
+	ref,
 	searchContext,
 	onModelChange,
 	onConversationStateChange,
@@ -519,8 +525,8 @@ export default function ChatModal({
 	data?: ItemGetResponse | undefined;
 	modelId: AIModelId;
 	questions?: undefined | string[];
-	externalInput?: string;
-	setExternalInput?: (input: string) => void;
+	/** Lets the page ask a question when it opens the window. */
+	ref?: React.Ref<ChatWindowHandle>;
 	searchContext?: LibrarySearchContext;
 	onModelChange?: (modelId: string) => void;
 	onConversationStateChange?: (hasConversation: boolean) => void;
@@ -533,13 +539,12 @@ export default function ChatModal({
 	const modelPresentation = getAIModelPresentation(modelId);
 	const chat = useChatWindow({
 		data,
-		externalInput,
-		isOpen,
 		modelId,
 		onConversationStateChange,
 		searchContext,
-		setExternalInput,
 	});
+	const { ask } = chat;
+	React.useImperativeHandle(ref, () => ({ ask }), [ask]);
 	const {
 		canRunScreening,
 		chatFailure,

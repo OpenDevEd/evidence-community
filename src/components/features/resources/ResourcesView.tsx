@@ -726,7 +726,7 @@ export function ResourcesView({
 		itemsContext.queryParams,
 	]);
 
-	const { bucketEntries, engaged } = useInlineChatLayout();
+	const { engaged } = useInlineChatLayout();
 	const { selectedModelId } = useSelectedModel();
 	const searchContext = normalizeLibrarySearchContext(
 		useFiltersContext().queryParams,
@@ -764,14 +764,19 @@ export function ResourcesView({
 						key={selectedModelId}
 						modelId={selectedModelId}
 						searchContext={searchContext}
-					/>
-					<div className="flex min-w-0 flex-col gap-4">
-						{bucketEntries.length > 0 ? (
-							<BucketList entries={bucketEntries} />
-						) : (
-							results
+						renderSources={(bucketEntries, publications) => (
+							<div className="flex min-w-0 flex-col gap-4">
+								{bucketEntries.length > 0 ? (
+									<BucketList
+										entries={bucketEntries}
+										publications={publications}
+									/>
+								) : (
+									results
+								)}
+							</div>
 						)}
-					</div>
+					/>
 				</div>
 			) : (
 				results

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { dismissConsent } from "./consent";
 
 test.skip(
 	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
@@ -27,10 +28,7 @@ function chatPanel(page: Page) {
 test.beforeEach(async ({ page }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.goto("/en-GB/lib");
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await dismissConsent(page);
 	// The page has to be ready before the reader can type into it.
 	await expect(searchField(page)).toBeVisible();
 	await expect(askButton(page)).toBeVisible();
@@ -56,6 +54,30 @@ test("opens the chat beside the results and closes it again", async ({
 	await page.keyboard.press("Escape");
 	await expect(chatPanel(page)).toHaveCount(0);
 	await expect(searchField(page)).toBeFocused();
+});
+
+test("answers a reader who has turned cookies down", async ({ page }, run) => {
+	// The library counts how often one address may ask, by the address the
+	// server is told. This run asks from an address of its own, so being told
+	// to wait can never stand in for the question being taken.
+	await page.setExtraHTTPHeaders({
+		"x-real-ip": `10.${run.retry}.${run.workerIndex}.${run.repeatEachIndex + 1}`,
+	});
+
+	// Turning cookies down leaves the reader with no analytics id. The
+	// library used to refuse every question such a reader asked.
+	const asked = page.waitForResponse(
+		(response) =>
+			response.url().includes("/api/ai/chat") &&
+			response.request().method() === "POST",
+	);
+
+	await searchField(page).fill("teacher training");
+	await askButton(page).click();
+
+	const answer = await asked;
+	expect(answer.status()).toBe(200);
+	await expect(chatPanel(page)).toBeVisible();
 });
 
 test("opens the chat from the keyboard without leaving the search field", async ({

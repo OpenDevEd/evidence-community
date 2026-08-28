@@ -8,6 +8,7 @@ import { IoChevronDown } from "react-icons/io5";
 import { LuX } from "react-icons/lu";
 import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
+import type { ReactNode } from "react";
 
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { ScreeningLimitConfirmation } from "@/components/features/ai/ScreeningLimitConfirmation";
@@ -16,6 +17,8 @@ import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { SHORTCUT_KEYS } from "@/constants/shortcuts";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import type { BucketEntry } from "@/context/InlineChatLayout";
+import type { BucketPublications } from "./ContextBucket";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -25,9 +28,8 @@ import {
 	ChatComposerShell,
 } from "./ChatComposerControls";
 import { ChatErrorCard, ShortcutHint } from "./chat-shared";
-import { BucketSourcesLoader } from "./ContextBucket";
 import { SmartScreeningModal } from "./SmartScreeningModal";
-import { useInlineChat } from "./useInlineChat";
+import { useInlineChat, useInlineChatComposer } from "./useInlineChat";
 
 type InlineChat = ReturnType<typeof useInlineChat>;
 
@@ -235,25 +237,27 @@ function InlineChatComposer({
 }) {
 	const t = useTranslations("ai");
 	const {
+		ask,
 		canRunScreening,
 		composerDockRef,
 		composerFormRef,
 		handleScreening,
-		handleSubmit,
-		input,
 		isComposerFocused,
 		isDeepResearchEnabled,
-		isInputReady,
 		isMutating,
 		isWaiting,
 		mode,
 		prefersReducedMotion,
+		resizeComposer,
 		screenableContent,
 		screeningTooltip,
-		setInput,
 		setIsComposerFocused,
 		setMode,
 	} = chat;
+	// The draft is read here, so typing redraws the message box on its own
+	// rather than the conversation and the sources beside it.
+	const { handleSubmit, input, isInputReady, setInput } =
+		useInlineChatComposer({ ask, isWaiting, resizeComposer });
 	const isLit = isComposerFocused || isWaiting;
 
 	return (
@@ -349,9 +353,19 @@ function InlineChatComposer({
  */
 export default function InlineLibraryChat({
 	modelId,
+	renderSources,
 	searchContext,
 }: {
 	modelId: AIModelId;
+	/**
+	 * What to show beside the chat. The publications the assistant has used
+	 * are worked out from the conversation, so they are handed over here
+	 * rather than stored somewhere else.
+	 */
+	renderSources: (
+		entries: BucketEntry[],
+		publications: BucketPublications,
+	) => ReactNode;
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
@@ -365,47 +379,47 @@ export default function InlineLibraryChat({
 	} = useDisclosure();
 
 	return (
-		<section
-			// The column's width is animated by the grid around it. Its
-			// height is the screen minus the headers above it.
-			className={twMerge(
-				"relative flex h-chat-column flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white dark:border-white/10 dark:bg-card lg:h-chat-column-lg lg:min-h-chat-column",
-				theme.layout === "small"
-					? "xl:h-chat-column-small"
-					: "xl:h-chat-column-small-xl",
-			)}
-			aria-label={t("askAI")}
-		>
-			{chat.bucketEntries.map((entry) => (
-				<BucketSourcesLoader key={entry.key} itemKey={entry.key} />
-			))}
-			{chat.isSmartScreeningOpen ? (
-				<SmartScreeningModal
-					isOpen
-					onOpenChange={chat.onSmartScreeningOpenChange}
+		<>
+			<section
+				// The column's width is animated by the grid around it. Its
+				// height is the screen minus the headers above it.
+				className={twMerge(
+					"relative flex h-chat-column flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white dark:border-white/10 dark:bg-card lg:h-chat-column-lg lg:min-h-chat-column",
+					theme.layout === "small"
+						? "xl:h-chat-column-small"
+						: "xl:h-chat-column-small-xl",
+				)}
+				aria-label={t("askAI")}
+			>
+				{chat.isSmartScreeningOpen ? (
+					<SmartScreeningModal
+						isOpen
+						onOpenChange={chat.onSmartScreeningOpenChange}
+					/>
+				) : null}
+				<ModelSelector
+					isOpen={isModelOpen}
+					onOpenChange={onModelOpenChange}
+					selectedModelId={selectedModelId}
+					onModelChange={setSelectedModelId}
+					hasConversation={chat.conversationStarted}
+					onResetConversation={chat.resetChat}
 				/>
-			) : null}
-			<ModelSelector
-				isOpen={isModelOpen}
-				onOpenChange={onModelOpenChange}
-				selectedModelId={selectedModelId}
-				onModelChange={setSelectedModelId}
-				hasConversation={chat.conversationStarted}
-				onResetConversation={chat.resetChat}
-			/>
-			<ScreeningLimitConfirmation
-				selection={chat.pendingScreening}
-				onCancel={chat.cancelPendingScreening}
-				onConfirm={chat.confirmPendingScreening}
-			/>
-			<InlineChatHeader chat={chat} onModelOpen={onModelOpen} />
-			<div className="relative min-h-0 flex-1">
-				<InlineChatMessages chat={chat} modelId={modelId} />
-				<InlineChatComposer
-					chat={chat}
-					onScreeningSettings={chat.onSmartScreeningOpen}
+				<ScreeningLimitConfirmation
+					selection={chat.pendingScreening}
+					onCancel={chat.cancelPendingScreening}
+					onConfirm={chat.confirmPendingScreening}
 				/>
-			</div>
-		</section>
+				<InlineChatHeader chat={chat} onModelOpen={onModelOpen} />
+				<div className="relative min-h-0 flex-1">
+					<InlineChatMessages chat={chat} modelId={modelId} />
+					<InlineChatComposer
+						chat={chat}
+						onScreeningSettings={chat.onSmartScreeningOpen}
+					/>
+				</div>
+			</section>
+			{renderSources(chat.bucketEntries, chat.publications)}
+		</>
 	);
 }

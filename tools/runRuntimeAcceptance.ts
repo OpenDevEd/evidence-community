@@ -1310,6 +1310,7 @@ function publicExpectations(profile: Profile) {
 			: "",
 		PLAYWRIGHT_EXPECTED_CONSENT_ACCEPT: messages.ui.cookieAccept,
 		PLAYWRIGHT_EXPECTED_CONSENT_DECLINE: messages.ui.cookieDecline,
+		PLAYWRIGHT_EXPECTED_CONSENT_TITLE: messages.ui.cookieConsentTitle,
 		PLAYWRIGHT_EXPECTED_SEARCH_SCOPE_COUNT: String(scopes.length),
 		PLAYWRIGHT_EXPECTED_DEFAULT_SEARCH_SCOPE_LABEL:
 			messages.scopes[defaultScope.key] ?? defaultScope.name,
@@ -1402,6 +1403,34 @@ function runBrowserSuite(profile: Profile) {
 			"chromium",
 		],
 		playwrightEnvironment(`${profile.name}-smoke`, {
+			...commandEnvironment,
+			...publicExpectations(profile),
+		}),
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/ai-chat.spec.ts",
+			"--project",
+			"chromium",
+		],
+		playwrightEnvironment(`${profile.name}-ai-chat`, {
+			...commandEnvironment,
+			...publicExpectations(profile),
+		}),
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/consent-gate.spec.ts",
+			"--project",
+			"chromium",
+		],
+		playwrightEnvironment(`${profile.name}-consent-gate`, {
 			...commandEnvironment,
 			...publicExpectations(profile),
 		}),

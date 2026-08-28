@@ -20,16 +20,15 @@ import { getAIModelPresentation } from "@/constants/ai";
 import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
-import {
-	latestResearchRequestContext,
-	researchRequestContextPart,
-	researchRequestContextsEqual,
-	type ResearchRequestContextSnapshot,
-} from "@/lib/ai/request-context";
+import { analyticsIdField } from "@/lib/ai/chat-request";
+import type { ResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
 import type { ChatMode, SmartScreeningField } from "@/types/ai";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
-import { createTextMessage } from "@/lib/ai/chat-messages";
+import {
+	createTextMessage,
+	researchMessageParts,
+} from "@/lib/ai/chat-messages";
 import type { AIModelId } from "@/lib/ai/models";
 import { screeningSelection } from "@/lib/ai/screening-selection";
 
@@ -49,7 +48,7 @@ async function screenPublications({
 			keys,
 			modelId,
 			fields,
-			distinctId: getAnalyticsDistinctId(),
+			...analyticsIdField(getAnalyticsDistinctId()),
 		}),
 	});
 	if (!response.ok) throw new Error(await response.text());
@@ -146,30 +145,24 @@ function useScreenableContent<TMessage extends UIMessage>(
  * Sends a message, attaching the request context first whenever it changed
  * since the last one the assistant saw.
  */
-export function useSendWithContext<TMessage extends UIMessage>({
+export function useSendWithContext({
 	currentRequestContext,
 	messages,
 	sendMessage,
 }: {
 	currentRequestContext: () => ResearchRequestContextSnapshot;
-	messages: TMessage[];
-	sendMessage: (message: { parts: TMessage["parts"] }) => unknown;
+	messages: ResearchUIMessage[];
+	sendMessage: (message: { parts: ResearchUIMessage["parts"] }) => unknown;
 }) {
 	return useCallback(
-		(text: string) => {
-			const context = currentRequestContext();
-			const parts = [] as unknown as TMessage["parts"];
-			if (
-				!researchRequestContextsEqual(
-					latestResearchRequestContext(messages),
-					context,
-				)
-			) {
-				parts.push(researchRequestContextPart(context) as never);
-			}
-			parts.push({ type: "text", text } as never);
-			return sendMessage({ parts });
-		},
+		(text: string) =>
+			sendMessage({
+				parts: researchMessageParts(
+					messages,
+					currentRequestContext(),
+					text,
+				),
+			}),
 		[currentRequestContext, messages, sendMessage],
 	);
 }

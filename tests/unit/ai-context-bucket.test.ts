@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { ResearchUIMessage } from "@/lib/ai/agent";
-import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import {
+	BUCKET_PAGE_SIZE,
+	bucketEntriesFromMessages,
+	loadBucketPages,
+} from "@/lib/ai/context-bucket";
 
 type Part = ResearchUIMessage["parts"][number];
 
@@ -97,5 +101,56 @@ describe("the publications a conversation has used", () => {
 		]);
 
 		expect(entries).toEqual([{ key: "AAA", source: "search" }]);
+	});
+});
+
+describe("loading the publications a conversation has used", () => {
+	it("asks once when they all fit in one request", async () => {
+		const asked: number[] = [];
+		const items = await loadBucketPages(3, async (page) => {
+			asked.push(page);
+
+			return { items: ["a", "b", "c"], totalPages: 1 };
+		});
+
+		expect(items).toEqual(["a", "b", "c"]);
+		expect(asked).toEqual([1]);
+	});
+
+	it("keeps asking until it has more than one page of them", async () => {
+		const keyCount = BUCKET_PAGE_SIZE * 2 + 50;
+		const asked: number[] = [];
+		const items = await loadBucketPages(keyCount, async (page) => {
+			asked.push(page);
+
+			return {
+				items: Array.from(
+					{ length: page === 3 ? 50 : BUCKET_PAGE_SIZE },
+					(_, index) => `page${page}-${index}`,
+				),
+				totalPages: 3,
+			};
+		});
+
+		expect(asked).toEqual([1, 2, 3]);
+		expect(items).toHaveLength(keyCount);
+		expect(items[0]).toBe("page1-0");
+		expect(items[keyCount - 1]).toBe("page3-49");
+	});
+
+	it("gives up and says so when one request fails", async () => {
+		const asked: number[] = [];
+		const loading = loadBucketPages(BUCKET_PAGE_SIZE * 3, async (page) => {
+			asked.push(page);
+			if (page === 2) throw new Error("The library did not answer.");
+
+			return {
+				items: [`page${page}`],
+				totalPages: 3,
+			};
+		});
+
+		await expect(loading).rejects.toThrow("The library did not answer.");
+		expect(asked).toEqual([1, 2]);
 	});
 });

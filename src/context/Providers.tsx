@@ -212,10 +212,13 @@ export default function Providers({
 	children,
 	status,
 	gapmaps,
+	storedConsent,
 }: {
 	children: ReactNode;
 	status: RuntimeStatus;
 	gapmaps: GapMap[];
+	/** The reader's stored answer to the cookie question, as the server read it. */
+	storedConsent: string | null;
 }) {
 	const router = useRouter();
 	const { analytics, features, theme } = useLibraryConfig();
@@ -235,7 +238,9 @@ export default function Providers({
 						refetchOnWindowFocus={isLoginEnabled}
 						refetchWhenOffline={isLoginEnabled ? undefined : false}
 					>
-						<AnalyticsConsentProvider>
+						<AnalyticsConsentProvider
+							storedConsentFromServer={storedConsent}
+						>
 							<CacheProvider status={status} gapmaps={gapmaps}>
 								<NextUIProvider navigate={router.push}>
 									<Suspense>

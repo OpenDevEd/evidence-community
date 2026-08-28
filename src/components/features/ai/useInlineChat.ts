@@ -1,17 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useStickToBottom } from "use-stick-to-bottom";
 
-import { useInlineChatLayout } from "@/context/InlineChatLayout";
+import {
+	useInlineChatDraft,
+	useInlineChatLayout,
+} from "@/context/InlineChatLayout";
 import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import { isAnswering } from "@/lib/ai/chat-request";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import type { AIModelId } from "@/lib/ai/models";
 import type { ChatMode } from "@/types/ai";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { useScrollEdges } from "./chat-shared";
+import { useBucketPublications } from "./ContextBucket";
 import {
 	useAppendMessage,
 	useChatFailure,
@@ -34,6 +39,8 @@ function closesTheChat(event: KeyboardEvent) {
 
 /** Esc closes the chat, unless a dialog on top of it wants the key. */
 function useEscapeToClose(closeChat: () => void) {
+	// Outside system: the browser's keyboard, which has no React event here
+	// because Esc must work wherever the reader is on the page.
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (!closesTheChat(event)) return;
@@ -47,60 +54,6 @@ function useEscapeToClose(closeChat: () => void) {
 	}, [closeChat]);
 }
 
-/** Text typed but not sent survives leaving the page and coming back. */
-function useComposerDraft() {
-	const { composerDraft, pendingInput, pendingSend, setComposerDraft } =
-		useInlineChatLayout();
-	// A question that is about to be asked should not also fill the box.
-	const [input, setInput] = useState(() =>
-		pendingSend ? "" : pendingInput || composerDraft,
-	);
-	const inputRef = useRef(input);
-
-	useEffect(() => {
-		inputRef.current = input;
-	}, [input]);
-	useEffect(
-		() => () => setComposerDraft(inputRef.current),
-		[setComposerDraft],
-	);
-
-	return { input, setInput };
-}
-
-/**
- * A question typed in the search bar is asked as soon as the chat can ask it,
- * whether it was waiting before the chat opened or arrives just after. It is
- * put down as it is picked up, so it is asked exactly once.
- */
-function useOpeningQuestion({
-	onAsk,
-	onReady,
-}: {
-	onAsk: (question: string) => void;
-	onReady: () => void;
-}) {
-	const { pendingInput, pendingSend, setPendingInput, setPendingSend } =
-		useInlineChatLayout();
-	const handlersRef = useRef({ onAsk, onReady, setPendingInput, setPendingSend });
-
-	useEffect(() => {
-		handlersRef.current = { onAsk, onReady, setPendingInput, setPendingSend };
-	});
-	useEffect(() => {
-		handlersRef.current.onReady();
-	}, []);
-	useEffect(() => {
-		const question = pendingInput.trim();
-		if (!pendingSend || !question) return;
-		const { onAsk: ask, setPendingInput: put, setPendingSend: stop } =
-			handlersRef.current;
-		put("");
-		stop(false);
-		ask(question);
-	}, [pendingInput, pendingSend]);
-}
-
 /** The conversation itself, and the ways it changes. */
 function useInlineConversation({
 	mode,
@@ -112,8 +65,8 @@ function useInlineConversation({
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
-	const { setBucketEntries } = useInlineChatLayout();
 	const {
+		chat,
 		messages,
 		sendMessage,
 		error,
@@ -134,23 +87,20 @@ function useInlineConversation({
 	const resetChat = useCallback(() => {
 		clearError();
 		setMessages((current) => current.slice(0, 1));
-		setBucketEntries([]);
-	}, [clearError, setBucketEntries, setMessages]);
-
-	// What the assistant has used is read back out of the conversation, so it
-	// is right again after leaving the page and coming back.
-	useEffect(() => {
-		setBucketEntries(bucketEntriesFromMessages(messages));
-	}, [messages, setBucketEntries]);
+	}, [clearError, setMessages]);
 
 	return {
 		appendMessage: useAppendMessage(setMessages),
+		// What the assistant has used is read out of the conversation itself,
+		// so it is right again after leaving the page and coming back.
+		bucketEntries: bucketEntriesFromMessages(messages),
+		chat,
 		chatFailure: useChatFailure(error),
 		error,
 		getTranscriptContent: useTranscriptExport({ messages, modelId }),
 		isLoading: status === "submitted" || status === "streaming",
 		messages,
-		reload: useCallback(() => regenerate(), [regenerate]),
+		reload: regenerate,
 		resetChat,
 		sendMessageWithContext: useSendWithContext({
 			currentRequestContext,
@@ -161,7 +111,7 @@ function useInlineConversation({
 }
 
 /** Scrolling: the newest message, the faded edges, and the docked field. */
-function useInlineScrolling(input: string) {
+function useInlineScrolling() {
 	const { scrollRef, contentRef, isAtBottom, scrollToBottom } =
 		useStickToBottom({ initial: "smooth", resize: "smooth" });
 	const dock = useComposerDock({
@@ -170,7 +120,6 @@ function useInlineScrolling(input: string) {
 			() => void scrollToBottom({ animation: "instant" }),
 			[scrollToBottom],
 		),
-		value: input,
 	});
 	const { edges: scrollEdges, ref: scrollEdgesRef } = useScrollEdges();
 	const { watchDockClamp } = dock;
@@ -204,8 +153,7 @@ export function useInlineChat({
 	modelId: AIModelId;
 	searchContext?: LibrarySearchContext;
 }) {
-	const { bucketEntries, pdfSources, requestSearchFocus, setEngaged } =
-		useInlineChatLayout();
+	const { requestSearchFocus, setEngaged } = useInlineChatLayout();
 	const { isDeepResearchEnabled, mode, setMode } = useChatMode();
 	const conversation = useInlineConversation({
 		mode,
@@ -217,9 +165,11 @@ export function useInlineChat({
 		messages: conversation.messages,
 		modelId,
 	});
-	const { input, setInput } = useComposerDraft();
+	// Loaded once for the whole chat, so where the cited pages live is worked
+	// out from the conversation itself rather than kept anywhere.
+	const publications = useBucketPublications(conversation.bucketEntries);
 	const [isComposerFocused, setIsComposerFocused] = useState(false);
-	const scrolling = useInlineScrolling(input);
+	const scrolling = useInlineScrolling();
 	const isWaiting =
 		(conversation.isLoading || screening.isMutating) && !conversation.error;
 
@@ -228,41 +178,81 @@ export function useInlineChat({
 		requestSearchFocus();
 	}, [requestSearchFocus, setEngaged]);
 	useEscapeToClose(closeChat);
-	useOpeningQuestion({
-		onAsk: conversation.sendMessageWithContext,
-		onReady: scrolling.focusComposer,
-	});
 
-	const handleSubmit = (event: React.FormEvent) => {
-		event.preventDefault();
-		// Ignore submits while an answer is arriving; the field keeps its text
-		// so nothing is lost.
-		if (isWaiting || !input.trim()) return;
-		conversation.sendMessageWithContext(input);
-		setInput("");
+	/**
+	 * Asks a question, and answers whether it was taken. A question that
+	 * arrives while an answer is still being written is refused, so the field
+	 * it came from can keep it rather than losing it. The conversation itself
+	 * is asked because two quick presses both happen before the chat is drawn
+	 * again, so the state from the last drawing is already out of date.
+	 */
+	const ask = (question: string) => {
+		if (!question.trim()) return false;
+		if (screening.isMutating || isAnswering(conversation.chat.status)) {
+			return false;
+		}
+		conversation.sendMessageWithContext(question.trim());
+
+		return true;
 	};
 
 	return {
 		...conversation,
 		...screening,
 		...scrolling,
-		bucketEntries,
+		ask,
 		closeChat,
 		conversationStarted: conversation.messages.length > 1,
-		handleSubmit,
-		input,
 		isComposerFocused,
 		isDeepResearchEnabled,
-		isInputReady: input.trim().length > 0 && !isWaiting,
 		isWaiting,
 		isWaitingForAssistant:
 			conversation.isLoading &&
 			conversation.messages.at(-1)?.role === "user",
 		mode,
-		pdfSources,
+		pdfSources: publications.pdfSources,
 		prefersReducedMotion: useReducedMotion(),
-		setInput,
+		publications,
 		setIsComposerFocused,
 		setMode,
+	};
+}
+
+/**
+ * What the reader has typed into the chat beside the results, and what
+ * happens when they send it. The draft is read here rather than in
+ * `useInlineChat` so that typing only redraws the message box.
+ */
+export function useInlineChatComposer({
+	ask,
+	isWaiting,
+	resizeComposer,
+}: {
+	ask: (question: string) => boolean;
+	isWaiting: boolean;
+	resizeComposer: () => void;
+}) {
+	const { draft, setDraft } = useInlineChatDraft();
+
+	// Outside system: the message field's own height. The browser can only
+	// measure it once the new text has reached it, so this waits for the
+	// draft to be drawn rather than measuring the text it is replacing. It
+	// also catches a draft cleared from elsewhere, such as a question handed
+	// over from the search field.
+	useEffect(() => {
+		resizeComposer();
+	}, [draft, resizeComposer]);
+
+	return {
+		handleSubmit: (event: React.FormEvent) => {
+			event.preventDefault();
+			// A submit while an answer is arriving is turned away, and the
+			// field keeps its text so nothing is lost.
+			if (!ask(draft)) return;
+			setDraft("");
+		},
+		input: draft,
+		isInputReady: draft.trim().length > 0 && !isWaiting,
+		setInput: setDraft,
 	};
 }

@@ -1,3 +1,6 @@
+import { isPolicyPage } from "@/lib/legal-links";
+import { isAdminPath } from "@/lib/path";
+
 export type AnalyticsConsentState = "pending" | "granted" | "denied";
 
 export type AnalyticsConsentPreferences = {
@@ -17,7 +20,8 @@ export type AnalyticsConsentRecord = AnalyticsConsentPolicy & {
 
 export const ANALYTICS_CONSENT_COOKIE_NAME = "analytics_consent";
 export const ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
-export const DEFAULT_ANALYTICS_CONSENT_STATE: AnalyticsConsentState = "pending";
+/** Nobody has answered yet. */
+const DEFAULT_ANALYTICS_CONSENT_STATE: AnalyticsConsentState = "pending";
 export const DEFAULT_ANALYTICS_CONSENT_PREFERENCES = {
 	analytics: false,
 	sessionReplay: false,
@@ -151,4 +155,15 @@ export function readAnalyticsConsentCookieHeader(
 		.join("=");
 
 	return parseAnalyticsConsentRecord(value, policy, now);
+}
+
+/**
+ * Whether the cookie question is asked on this page.
+ *
+ * The admin area has no dialog, and the pages that explain the cookies must
+ * stay readable while the question is open, so neither is ever asked and
+ * neither is ever held still.
+ */
+export function asksAnalyticsConsent(pathname: string, locale: string) {
+	return !isAdminPath(pathname, locale) && !isPolicyPage(pathname);
 }

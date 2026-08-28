@@ -3,14 +3,10 @@
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import DialogModal from "@/components/nextui/DialogModal";
-import { usePathname } from "@/i18n/routing";
-import { isPolicyPage } from "@/lib/legal-links";
 
+/** The cookie question. The page around it decides where it is asked. */
 export default function Banner() {
 	const { isPreferencesOpen } = useAnalyticsConsent();
-	const pathname = usePathname();
-
-	if (isPolicyPage(pathname)) return null;
 
 	return (
 		<DialogModal
