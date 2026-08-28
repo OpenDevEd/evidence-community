@@ -85,6 +85,10 @@ describe("analytics consent provider", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 
+	/** What one of the test screen's own readouts says right now. */
+	const shown = (testId: string) =>
+		container.querySelector(`[data-testid="${testId}"]`)?.textContent;
+
 	beforeEach(() => {
 		(
 			globalThis as typeof globalThis & {
@@ -125,9 +129,7 @@ describe("analytics consent provider", () => {
 			);
 		});
 
-		expect(
-			container.querySelector('[data-testid="consent-open"]')?.textContent,
-		).toBe("false");
+		expect(shown("consent-open")).toBe("false");
 	});
 
 	it("asks again when the policy the reader agreed to has moved on", async () => {
@@ -137,21 +139,17 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
+		expect(shown("consent-open")).toBe("true");
 
 		// The reader answers, so the dialog closes and stays closed.
 		await act(async () => {
 			clickButton(container, "Decline consent");
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
-		expect(
-			container.querySelector('[data-testid="consent-open"]')?.textContent,
-		).toBe("false");
-		expect(
-			container.querySelector('[data-testid="consent-state"]')
-				?.textContent,
-		).toContain("denied");
+		await vi.waitFor(() => {
+			expect(shown("consent-open")).toBe("false");
+			expect(shown("consent-state")).toContain("denied");
+		});
 
 		// A new policy means the old answer no longer covers what we do.
 		runtime.config.analytics = {
@@ -164,16 +162,11 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
-
-		expect(
-			container.querySelector('[data-testid="consent-state"]')
-				?.textContent,
-		).toContain("pending");
-		expect(
-			container.querySelector('[data-testid="consent-open"]')?.textContent,
-		).toBe("true");
+		await vi.waitFor(() => {
+			expect(shown("consent-state")).toContain("pending");
+			expect(shown("consent-open")).toBe("true");
+		});
 	});
 
 	it("applies pending first and then stores scoped consent before granting", async () => {
