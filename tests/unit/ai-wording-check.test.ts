@@ -545,3 +545,45 @@ describe("names resolved to what they actually are", () => {
 		expect(names(uses)).toEqual(["ai.change"]);
 	});
 });
+
+describe("a translator given a second name", () => {
+	it("follows a plain copy of the translator", () => {
+		const { uses } = scan(`
+			import { useTranslations } from "next-intl";
+			export function Screen() {
+				const t = useTranslations("ai");
+				const translate = t;
+				return <p>{translate("askAI")}</p>;
+			}
+		`);
+
+		expect(names(uses)).toEqual(["ai.askAI"]);
+	});
+
+	it("follows a copy of a copy", () => {
+		const { uses } = scan(`
+			import { useTranslations } from "next-intl";
+			export function Screen() {
+				const t = useTranslations("ai");
+				const translate = t;
+				const say = translate;
+				return <p>{say("askAI")}</p>;
+			}
+		`);
+
+		expect(names(uses)).toEqual(["ai.askAI"]);
+	});
+
+	it("does not copy a name that is not a translator", () => {
+		const { uses } = scan(`
+			import { useTranslations } from "next-intl";
+			export function Screen(label: (key: string) => string) {
+				const t = useTranslations("ai");
+				const translate = label;
+				return <p>{t("askAI")}{translate("not-wording")}</p>;
+			}
+		`);
+
+		expect(names(uses)).toEqual(["ai.askAI"]);
+	});
+});

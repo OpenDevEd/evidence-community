@@ -386,7 +386,27 @@ function helperHooks(program: ts.Program, checker: ts.TypeChecker) {
 	return hooks;
 }
 
-/** A `const t = useTranslations("ai")` line names a translator. */
+/**
+ * The group a value reads for: either a call that hands a translator back, or
+ * another name that is already known to hold one.
+ */
+function groupOfValue(
+	value: ts.Expression,
+	context: WordingContext,
+	translators: Map<ts.Symbol, string>,
+) {
+	const group = translationsGroup(value, context);
+	if (group !== undefined) return group;
+	if (!ts.isIdentifier(value)) return undefined;
+	const named = context.checker.getSymbolAtLocation(value);
+
+	return named ? translators.get(named) : undefined;
+}
+
+/**
+ * A `const t = useTranslations("ai")` line names a translator, and so does a
+ * `const translate = t` line that gives that translator a second name.
+ */
 function noteTranslatorVariable(
 	node: ts.Node,
 	context: WordingContext,
@@ -394,7 +414,7 @@ function noteTranslatorVariable(
 ) {
 	if (!ts.isVariableDeclaration(node) || !node.initializer) return;
 	if (!ts.isIdentifier(node.name)) return;
-	const group = translationsGroup(node.initializer, context);
+	const group = groupOfValue(node.initializer, context, translators);
 	const named = context.checker.getSymbolAtLocation(node.name);
 	if (group !== undefined && named) translators.set(named, group);
 }
@@ -418,13 +438,23 @@ function noteGivenTranslators(
 	});
 }
 
-/** Every name in this file that holds a translator, and the group it reads. */
+/**
+ * Every name in this file that holds a translator, and the group it reads.
+ *
+ * The file is read again and again until nothing new is found, so a second
+ * name for a translator, and a second name for that one, are found too.
+ */
 function translatorsIn(tree: ts.SourceFile, context: WordingContext) {
 	const translators = new Map<ts.Symbol, string>();
-	walk(tree, (node) => {
-		noteTranslatorVariable(node, context, translators);
-		noteGivenTranslators(node, context, translators);
-	});
+	let found = -1;
+
+	while (found !== translators.size) {
+		found = translators.size;
+		walk(tree, (node) => {
+			noteTranslatorVariable(node, context, translators);
+			noteGivenTranslators(node, context, translators);
+		});
+	}
 
 	return translators;
 }
