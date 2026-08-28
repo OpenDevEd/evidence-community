@@ -1637,6 +1637,10 @@ function verifyInstitutionQueryPlans(profile: Profile) {
 		searched.includes("itemInstitution_name_search_idx"),
 		`the search plan must use the trigram index:\n${searched}`,
 	);
+
+	console.log(
+		`Institution paged plan: ${paged.split("\n").join(" | ")}\nInstitution search plan: ${searched.split("\n").join(" | ")}`,
+	);
 }
 
 async function verifyOpenScholarInstitutions(profile: Profile) {
