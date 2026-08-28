@@ -70,3 +70,34 @@ export function bucketEntriesFromMessages(
 
 	return Array.from(entries, ([key, source]) => ({ key, source })).reverse();
 }
+
+/** How many publications one request asks the library for. */
+export const BUCKET_PAGE_SIZE = 200;
+
+/**
+ * Loads every publication the conversation asks for, a page at a time.
+ *
+ * A conversation can touch more publications than one request returns, so the
+ * pages are asked for in turn until they are all in. If a request fails, the
+ * whole load fails and says why, instead of quietly missing publications.
+ */
+export async function loadBucketPages<Item>(
+	keyCount: number,
+	loadPage: (page: number) => Promise<{ items: Item[]; totalPages: number }>,
+): Promise<Item[]> {
+	// The library can never have more pages of these than we asked keys for.
+	const mostPages = Math.max(1, Math.ceil(keyCount / BUCKET_PAGE_SIZE));
+	const items: Item[] = [];
+	let page = 1;
+	let lastPage = 1;
+
+	do {
+		const answer = await loadPage(page);
+		items.push(...answer.items);
+		lastPage = Math.min(answer.totalPages, mostPages);
+		page += 1;
+	} while (page <= lastPage);
+
+	return items;
+}
+

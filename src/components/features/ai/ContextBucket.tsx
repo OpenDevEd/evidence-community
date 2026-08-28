@@ -8,6 +8,7 @@ import type { ItemsBatchResponse } from "@/app/api/items/batch/route";
 import type { ListItem } from "@/app/api/item/types";
 import Resource from "@/components/features/items/Resource";
 import type { BucketEntry } from "@/context/InlineChatLayout";
+import { BUCKET_PAGE_SIZE, loadBucketPages } from "@/lib/ai/context-bucket";
 import { bucketPdfCitationSources } from "@/lib/ai/citations";
 import { fetcherPOST } from "@/lib/utils";
 
@@ -19,11 +20,21 @@ export type BucketPublications = {
 	pdfSources: Record<string, string>;
 };
 
-/** Room for every publication one conversation could reasonably touch. */
-const BUCKET_PAGE_SIZE = 200;
+/** Asks the library for one page of the publications a chat has used. */
+async function loadBucketPage(keys: string[], page: number) {
+	const answer = (await fetcherPOST([
+		"/items/batch",
+		{ keys, page, perPage: BUCKET_PAGE_SIZE, includeHeavyFields: true },
+		undefined,
+	])) as ItemsBatchResponse;
+
+	return { items: answer.items, totalPages: answer.totalPages };
+}
 
 /**
- * The publications the assistant has used, loaded together in one request.
+ * The publications the assistant has used, loaded together rather than one at
+ * a time. Long conversations are loaded a page at a time until they are all
+ * in, so none is quietly left out.
  *
  * Where each one's cited pages live is worked out from that data while the
  * page is drawn, so it can never fall behind the conversation, and clearing
@@ -40,28 +51,22 @@ export function useBucketPublications(
 	// only done again when the list itself changes.
 	const shownOrder = entries.map((entry) => entry.key).join(" ");
 	const wanted = [...new Set(entries.map((entry) => entry.key))].sort();
-	const { data, isLoading } = useSWR<ItemsBatchResponse>(
-		wanted.length > 0
-			? [
-					"/items/batch",
-					{
-						keys: wanted,
-						page: 1,
-						perPage: BUCKET_PAGE_SIZE,
-						includeHeavyFields: true,
-					},
-				]
-			: null,
-		fetcherPOST,
+	const { data: items, isLoading } = useSWR<ListItem[]>(
+		wanted.length > 0 ? ["/items/batch", { keys: wanted }] : null,
+		([, request]: [string, { keys: string[] }]) =>
+			loadBucketPages(request.keys.length, (page) =>
+				loadBucketPage(request.keys, page),
+			),
 		{
 			keepPreviousData: true,
 			revalidateIfStale: false,
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,
+			// One failure is reported to the reader instead of being retried
+			// behind their back for as long as the chat is open.
+			shouldRetryOnError: false,
 		},
 	);
-
-	const items = data?.items;
 
 	return useMemo(() => {
 		const byKey: Record<string, BucketPublication> = {};
