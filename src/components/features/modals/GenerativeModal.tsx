@@ -3,7 +3,7 @@ import {
 	ListboxItem,
 	ModalBody,
 	ScrollShadow,
-	Tooltip
+	Tooltip,
 } from "@nextui-org/react";
 import { ModalContent } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -14,12 +14,12 @@ import {
 	BiCopy,
 	BiSolidBookBookmark,
 	BiSolidBookContent,
-	BiTrash
+	BiTrash,
 } from "react-icons/bi";
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
-import { getAIProviderPresentation } from "@/constants/ai";
+import { getAIModelPresentation } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
@@ -29,10 +29,11 @@ import {
 	BsCodeSlash,
 	BsMarkdown,
 } from "react-icons/bs";
-import { AIControls } from "./AIControls";
+import { AIContentControls } from "./AIControls";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { RiErrorWarningFill } from "react-icons/ri";
+import { clientAIError } from "@/lib/ai/client";
 
 export default function GenerativeModal({
 	history,
@@ -55,7 +56,7 @@ export default function GenerativeModal({
 }) {
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
-	
+
 	const format = useFormatter();
 	const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(0);
 	const selectedHistoryItem = history[selectedHistoryIndex];
@@ -82,7 +83,7 @@ export default function GenerativeModal({
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
 		>
-			<ModalContent className="p-0 h-[45rem] max-h-screen overflow-x-hidden">
+			<ModalContent className="h-generative-modal max-h-screen overflow-x-hidden p-0">
 				{(onClose) => (
 					<>
 						<AIHeader isLoading={false} onClose={onClose}>
@@ -101,12 +102,12 @@ export default function GenerativeModal({
 											duration: 0.2,
 										}}
 										className={twMerge(
-											"col-span-3 w-full h-full overflow-y-hidden"
+											"col-span-3 w-full h-full overflow-y-hidden",
 										)}
 									>
 										<ScrollShadow
 											className={twMerge(
-												"w-full gap-2 p-2 dark:bg-secondary bg-white lg:rounded-tr-3xl lg:rounded-bl-xl h-full"
+												"w-full gap-2 p-2 dark:bg-secondary bg-white lg:rounded-tr-3xl lg:rounded-bl-xl h-full",
 											)}
 										>
 											<Listbox
@@ -116,17 +117,23 @@ export default function GenerativeModal({
 														typeof keys === "string"
 															? keys
 															: Array.from(
-																	keys
-															  )[0];
+																	keys,
+																)[0];
 													setSelectedHistoryIndex(
-														Number(key)
+														Number(key),
 													);
 													setIsHistoryOpen(false);
 												}}
-												selectedKeys={isDesktop ? [
-													selectedHistoryIndex.toString(),
-												] : []}
-												disallowEmptySelection={isDesktop}
+												selectedKeys={
+													isDesktop
+														? [
+																selectedHistoryIndex.toString(),
+															]
+														: []
+												}
+												disallowEmptySelection={
+													isDesktop
+												}
 											>
 												{history.map((item, index) => (
 													<ListboxItem
@@ -134,13 +141,13 @@ export default function GenerativeModal({
 														startContent={
 															<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
 																{React.createElement(
-																	getAIProviderPresentation(
-																		item.provider
+																	getAIModelPresentation(
+																		item.modelId,
 																	).icon,
 																	{
 																		className:
 																			"h-full fill-white group-[.icon-container:hover]:scale-90 transition-all duration-300",
-																	}
+																	},
 																)}
 															</div>
 														}
@@ -150,11 +157,16 @@ export default function GenerativeModal({
 															{item.title}
 														</div>
 														<div className="text-xs text-black/50 dark:text-white/50 leading-4">
-															{format.dateTime(new Date(item.date), {
-																year: "2-digit",
-																month: "2-digit",
-																day: "2-digit"
-															})}
+															{format.dateTime(
+																new Date(
+																	item.date,
+																),
+																{
+																	year: "2-digit",
+																	month: "2-digit",
+																	day: "2-digit",
+																},
+															)}
 														</div>
 													</ListboxItem>
 												))}
@@ -173,7 +185,7 @@ export default function GenerativeModal({
 											duration: 0.2,
 										}}
 										className={twMerge(
-											"w-full col-span-9 flex flex-col h-full overflow-y-hidden"
+											"w-full col-span-9 flex flex-col h-full overflow-y-hidden",
 										)}
 									>
 										<div className="w-full dark:bg-secondary bg-white lg:rounded-tl-3xl p-2 flex gap-1 shrink-0">
@@ -189,73 +201,37 @@ export default function GenerativeModal({
 											>
 												{t("history")}
 											</Button>
-											<AIControls
-												controls={[
-													{
-														label: t("copyAsPlainText"),
-														icon: <BsBodyText />,
-														action: "plaintext",
-													},
-													{
-														label: t("copyAsMarkdown"),
-														icon: <BsMarkdown />,
-														action: "markdown",
-													},
-													{
-														label: t("copyAsHTML"),
-														icon: <BsCodeSlash />,
-														action: "html",
-													},
-												]}
-												contentRef={contentRef}
+											<AIContentControls
 												content={contentToDisplay}
-												type="copy"
-												buttonLabel={t("copy")}
-												buttonIcon={<BiCopy />}
-											/>
-											<AIControls
 												contentRef={contentRef}
-												controls={[
-													{
-														label: t("exportAsPlainText"),
-														icon: <BsBodyText />,
-														action: "plaintext",
-													},
-													{
-														label: t("exportAsMarkdown"),
-														icon: <BsMarkdown />,
-														action: "markdown",
-													},
-													{
-														label: t("exportAsHTML"),
-														icon: <BsCodeSlash />,
-														action: "html",
-													}
-												]}
-												content={contentToDisplay}
-												type="download"
-												buttonLabel={t("export")}
-												buttonIcon={
-													<BiSolidBookContent />
-												}
 											/>
 											{selectedHistoryItem && (
 												<Tooltip
-													content={format.dateTime(new Date(selectedHistoryItem.date), {
-														year: 'numeric',
-														month: 'long',
-														day: 'numeric',
-														hour: 'numeric',
-														minute: 'numeric',
-														second: 'numeric'
-													})}
-												>
-													<div className="text-xs text-black/50 dark:text-white/50 flex-1 flex justify-center items-center">
-														{format.dateTime(new Date(selectedHistoryItem.date), {
+													content={format.dateTime(
+														new Date(
+															selectedHistoryItem.date,
+														),
+														{
 															year: "numeric",
 															month: "long",
-															day: "numeric"
-														})}
+															day: "numeric",
+															hour: "numeric",
+															minute: "numeric",
+															second: "numeric",
+														},
+													)}
+												>
+													<div className="text-xs text-black/50 dark:text-white/50 flex-1 flex justify-center items-center">
+														{format.dateTime(
+															new Date(
+																selectedHistoryItem.date,
+															),
+															{
+																year: "numeric",
+																month: "long",
+																day: "numeric",
+															},
+														)}
 													</div>
 												</Tooltip>
 											)}
@@ -269,18 +245,20 @@ export default function GenerativeModal({
 															history.filter(
 																(_, index) =>
 																	index !==
-																	selectedHistoryIndex
-															)
+																	selectedHistoryIndex,
+															),
 														);
 														setSelectedHistoryIndex(
 															(prev) =>
 																prev == 0
 																	? 0
-																	: prev - 1
+																	: prev - 1,
 														);
 													}
 												}}
-												aria-label={tUI("deleteHistoryItemAriaLabel")}
+												aria-label={tUI(
+													"deleteHistoryItemAriaLabel",
+												)}
 											>
 												<span className="hidden lg:block">
 													{t("delete")}
@@ -304,7 +282,7 @@ export default function GenerativeModal({
 												>
 													{error &&
 													isSelectedCurrentItem ? (
-														<div className="text-red-500 flex items-center justify-center text-xl absolute inset-0 bg-red-500/10 rounded-2xl text-center px-24 text-balance overflow-hidden ">
+														<div className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-2xl bg-red-500/10 px-6 text-center text-red-600 dark:text-red-400 sm:px-12">
 															<motion.div
 																initial={{
 																	opacity: 0,
@@ -322,7 +300,15 @@ export default function GenerativeModal({
 																	delay: 0.5,
 																}}
 															>
-																<RiErrorWarningFill className="size-32 opacity-50" />
+																<RiErrorWarningFill className="mx-auto size-14 opacity-60" />
+																<p className="mt-4 max-w-2xl text-base font-medium sm:text-lg">
+																	{
+																		clientAIError(
+																			error,
+																		)
+																			.message
+																	}
+																</p>
 															</motion.div>
 														</div>
 													) : (

@@ -41,6 +41,11 @@ x-search-indexer-service: &search-indexer-service
 x-meilisearch-service: &meilisearch-service
   image: getmeili/meilisearch:v1.37
   init: true
+  # Lets Meilisearch call the embedding stand-in inside this test network.
+  # Never add this flag to docker/compose.library.yaml.
+  command:
+    - meilisearch
+    - --experimental-allowed-ip-networks=0.0.0.0/0
   labels: *acceptance-labels
   environment:
     MEILI_MASTER_KEY: acceptance-master-key
@@ -208,6 +213,8 @@ services:
     <<: *search-indexer-service
     depends_on:
       amber-meilisearch:
+        condition: service_healthy
+      fixture:
         condition: service_healthy
       postgres:
         condition: service_healthy

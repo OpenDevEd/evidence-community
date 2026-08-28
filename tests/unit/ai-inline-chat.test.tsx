@@ -1,0 +1,331 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+vi.mock("next-intl", () => ({
+	useLocale: () => "en-GB",
+	useTranslations: () => Object.assign((key: string) => key, {
+		rich: (key: string) => key,
+	}),
+}));
+vi.mock("@/i18n/routing", () => ({
+	usePathname: () => "/lib",
+	useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+	Link: ({ children }: { children: unknown }) => children,
+}));
+const analyticsId = { value: undefined as string | undefined };
+vi.mock("@/lib/analytics", () => ({
+	getAnalyticsDistinctId: () => analyticsId.value,
+}));
+vi.mock("@/context/LibraryConfigProvider", () => ({
+	useLibraryConfig: () => ({
+		ai: {
+			providers: [
+				{
+					provider: "google",
+					enabled: true,
+					defaultModel: "gemini-2.5-flash",
+				},
+			],
+		},
+		features: { aiSearch: true, deepResearch: false },
+		theme: { layout: "wide" },
+	}),
+	useLibraryFeature: (feature: string) => feature === "aiSearch",
+}));
+// Signed-in state belongs to the page around the chat.
+vi.mock("next-auth", () => ({}));
+// Server actions belong to the pages around the chat.
+vi.mock("@/lib/actions", () => ({ convertItem: vi.fn() }));
+vi.mock("next-auth/react", () => ({
+	useSession: () => ({ data: null, status: "unauthenticated" }),
+}));
+
+import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
+import {
+	InlineChatLayoutProvider,
+	useInlineChatLayout,
+} from "@/context/InlineChatLayout";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+	true;
+
+// The test page has no layout engine, so nothing ever changes size.
+class NoResize {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+globalThis.ResizeObserver ??= NoResize as unknown as typeof ResizeObserver;
+
+/** One answer, streamed back the way the AI service sends it. */
+function answerStream(text: string) {
+	const chunks = [
+		{ type: "start" },
+		{ type: "text-start", id: "0" },
+		{ type: "text-delta", id: "0", delta: text },
+		{ type: "text-end", id: "0" },
+		{ type: "finish" },
+	];
+
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			const encoder = new TextEncoder();
+			for (const chunk of chunks) {
+				controller.enqueue(
+					encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
+				);
+			}
+			controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+			controller.close();
+		},
+	});
+}
+
+describe("the chat beside the search results", () => {
+	let container: HTMLDivElement;
+	let root: Root;
+	let asked: Record<string, unknown>[];
+
+	beforeEach(() => {
+		window.localStorage.clear();
+		analyticsId.value = undefined;
+		asked = [];
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (_url: string, init: RequestInit) => {
+				asked.push(
+					JSON.parse(String(init.body)) as Record<string, unknown>,
+				);
+
+				return new Response(answerStream("Two studies say yes."), {
+					headers: { "Content-Type": "text/event-stream" },
+				});
+			}),
+		);
+	});
+
+	afterEach(async () => {
+		// The window draws into the page itself, so it has to be taken down
+		// or the next test types into the one before it.
+		await act(async () => {
+			root.unmount();
+		});
+		container.remove();
+		document.body.replaceChildren();
+		vi.unstubAllGlobals();
+	});
+
+	async function render() {
+		await act(async () => {
+			root.render(
+				<InlineChatLayoutProvider>
+					<InlineLibraryChat modelId="gemini-2.5-flash" />
+				</InlineChatLayoutProvider>,
+			);
+		});
+	}
+
+	/**
+	 * Stands in for the search field handing a question to the chat. The page
+	 * shows the chat because the reader asked, not because a question is
+	 * waiting. Clearing the field changes the page address, which rebuilds the
+	 * chat once, so the stand-in can do that too.
+	 */
+	function AskFromThePage({
+		openFirst = false,
+		question,
+		rebuild,
+	}: {
+		openFirst?: boolean;
+		question: string;
+		rebuild: boolean;
+	}) {
+		const { setPendingInput, setPendingSend } = useInlineChatLayout();
+		const [engaged, setEngaged] = useState(openFirst);
+		const [rebuilt, setRebuilt] = useState(false);
+		const gone = rebuild && !rebuilt;
+
+		return (
+			<>
+				<button
+					type="button"
+					data-testid="ask"
+					onClick={() => {
+						setPendingInput(question);
+						setPendingSend(true);
+						setEngaged(true);
+					}}
+				>
+					hand over
+				</button>
+				<button
+					type="button"
+					data-testid="settle"
+					onClick={() => setRebuilt(true)}
+				>
+					settle
+				</button>
+				{engaged && !gone ? (
+					<InlineLibraryChat modelId="gemini-2.5-flash" />
+				) : null}
+			</>
+		);
+	}
+
+	async function press(testId: string) {
+		await act(async () => {
+			container
+				.querySelector(`[data-testid="${testId}"]`)
+				?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+	}
+
+	async function handOver(question: string, rebuild = false) {
+		await act(async () => {
+			root.render(
+				<InlineChatLayoutProvider>
+					<AskFromThePage question={question} rebuild={rebuild} />
+				</InlineChatLayoutProvider>,
+			);
+		});
+		await press("ask");
+	}
+
+	function composer() {
+		const field = container.querySelector("textarea");
+		if (!field) throw new Error("the message box is missing");
+
+		return field;
+	}
+
+	async function type(text: string) {
+		await act(async () => {
+			const setter = Object.getOwnPropertyDescriptor(
+				HTMLTextAreaElement.prototype,
+				"value",
+			)?.set;
+			setter?.call(composer(), text);
+			composer().dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	}
+
+	async function send() {
+		await act(async () => {
+			composer().dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+			);
+		});
+	}
+
+	it("opens ready for a question, with nothing asked yet", async () => {
+		await render();
+
+		expect(composer().value).toBe("");
+		expect(asked).toHaveLength(0);
+	});
+
+	it("shows the question and the answer that comes back", async () => {
+		await render();
+		await type("Does teacher training help?");
+		await send();
+
+		expect(container.textContent).toContain("Does teacher training help?");
+		expect(container.textContent).toContain("Two studies say yes.");
+		expect(composer().value).toBe("");
+	});
+
+	it("sends the chosen model and mode with the question", async () => {
+		analyticsId.value = "reader-1";
+		await render();
+		await type("Does teacher training help?");
+		await send();
+
+		expect(asked).toHaveLength(1);
+		expect(asked[0]).toMatchObject({
+			distinctId: "reader-1",
+			modelId: "gemini-2.5-flash",
+			mode: "quick",
+		});
+	});
+
+	// A reader who turns cookies down has no analytics id. Sending an empty
+	// one made the library refuse every question they asked.
+	it("leaves the analytics id out when there is none", async () => {
+		analyticsId.value = undefined;
+		await render();
+		await type("Does teacher training help?");
+		await send();
+
+		expect(asked).toHaveLength(1);
+		expect(Object.keys(asked[0] as object)).not.toContain("distinctId");
+	});
+
+	it("keeps the text when Shift and Enter are pressed together", async () => {
+		await render();
+		await type("Half a question");
+		await act(async () => {
+			composer().dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "Enter",
+					shiftKey: true,
+					bubbles: true,
+				}),
+			);
+		});
+
+		expect(asked).toHaveLength(0);
+		expect(composer().value).toBe("Half a question");
+	});
+
+	it("asks a question handed over from the page as it opens", async () => {
+		await handOver("Does teacher training help?");
+
+		expect(asked).toHaveLength(1);
+		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	it("still asks the question when the page rebuilds the chat", async () => {
+		// The chat is not there when the reader asks; the page settles first.
+		await handOver("Does teacher training help?", true);
+		await press("settle");
+
+		expect(asked).toHaveLength(1);
+		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	it("asks a question that arrives after it has opened", async () => {
+		// The chat is already open when the reader asks from the page.
+		await act(async () => {
+			root.render(
+				<InlineChatLayoutProvider>
+					<AskFromThePage
+						question="Does teacher training help?"
+						rebuild={false}
+						openFirst
+					/>
+				</InlineChatLayoutProvider>,
+			);
+		});
+		expect(asked).toHaveLength(0);
+
+		await press("ask");
+
+		expect(asked).toHaveLength(1);
+		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	it("ignores an empty question", async () => {
+		await render();
+		await send();
+
+		expect(asked).toHaveLength(0);
+	});
+});

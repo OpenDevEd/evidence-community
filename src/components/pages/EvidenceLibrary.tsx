@@ -58,7 +58,8 @@ import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import ChatModal, { ChatMode } from "../features/modals/ChatModal";
+import ChatModal from "../features/modals/ChatModal";
+import type { ChatMode } from "@/types/ai";
 import ModelSelector from "../features/ai/ModelSelector";
 import DialogModal from "../nextui/DialogModal";
 import AIHeader from "../features/ai/AIHeader";
@@ -77,6 +78,16 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
+import { useFiltersContext } from "@/context/FiltersProvider";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
+import { useModEnterHint } from "@/hooks/useShortcutHints";
+import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
+import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
+import {
+	SMART_SCREENING_FIELD_TYPES,
+	type SmartScreeningField,
+} from "@/types/ai";
 
 function DropDownIcon({
 	Icon,
@@ -230,7 +241,92 @@ function ScopeComponent({
 	);
 }
 
+/** Hands whatever is in the search field to the assistant. */
+function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
+	const tAI = useTranslations("ai");
+
+	return (
+		// A plain button: press handling inside the search field's own
+		// content breaks the one the rest of the site uses.
+		<button
+			type="button"
+			onMouseDown={(event) => event.preventDefault()}
+			onClick={onAsk}
+			// Smaller on a phone, where the search field is shorter and
+			// there is no keyboard to show a shortcut for.
+			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 lg:h-9 lg:gap-1.5 lg:rounded-large lg:pl-3 lg:pr-1.5 lg:text-sm"
+		>
+			<BsStars className="size-3.5 shrink-0 lg:size-4" />
+			{tAI("askAI")}
+			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
+				{hint}
+			</kbd>
+		</button>
+	);
+}
+
+/** The search field and the filters beside it. */
+function LibraryFilters({
+	askAI,
+	extraFilters,
+	itemsContext,
+}: {
+	askAI?: (text: string) => void;
+	extraFilters: ReactNode;
+	itemsContext: ReturnType<typeof useItemsList>;
+}) {
+	// The server does not know the reader's keyboard, so the hint waits.
+	const shortcutHint = useModEnterHint();
+
+	if (itemsContext.config.interactionsStyle === "one-line") {
+		return (
+			<div className="flex gap-4">
+				<ScopeComponent itemsContext={itemsContext} />
+				<SortComponent itemsContext={itemsContext} />
+			</div>
+		);
+	}
+
+	return (
+		<section
+			role="search"
+			className={twMerge(
+				"lg:flex lg:flex-row gap-4",
+				itemsContext.userData ? "grid grid-cols-2" : "flex flex-col",
+			)}
+		>
+			<SearchBar
+				handleSearchChange={itemsContext.handleSearchChange}
+				search={itemsContext.queryParams.search}
+				focusOnRequest
+				// Asking uses the text as a question, so it must not stay
+				// behind as a filter as well.
+				onAsk={
+					askAI &&
+					((text: string, clear: () => void) => {
+						clear();
+						askAI(text);
+					})
+				}
+				trailing={
+					askAI && shortcutHint
+						? (ask: () => void) => (
+								<AskAIButton hint={shortcutHint} onAsk={ask} />
+							)
+						: undefined
+				}
+			/>
+			<ScopeComponent itemsContext={itemsContext} />
+			{itemsContext.userData ? (
+				<SortComponent itemsContext={itemsContext} />
+			) : null}
+			{extraFilters}
+		</section>
+	);
+}
+
 function SearchTabContent({
+	askAI,
 	header,
 	itemsContext,
 	extraFilters,
@@ -250,6 +346,8 @@ function SearchTabContent({
 	view: string;
 	setView: (view: string) => void;
 	showHeader: boolean;
+	/** Hand the text in the search field to the assistant instead. */
+	askAI?: (text: string) => void;
 }) {
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
@@ -331,33 +429,11 @@ function SearchTabContent({
 
 			<LibraryTagline show={showHeader} />
 
-			{/* Search and filters */}
-			{itemsContext.config.interactionsStyle === "one-line" ? (
-				<div className="flex gap-4">
-					<ScopeComponent itemsContext={itemsContext} />
-					<SortComponent itemsContext={itemsContext} />
-				</div>
-			) : (
-				<section
-					role="search"
-					className={twMerge(
-						"lg:flex lg:flex-row gap-4",
-						!itemsContext.userData
-							? "flex flex-col"
-							: "grid grid-cols-2",
-					)}
-				>
-					<SearchBar
-						handleSearchChange={itemsContext.handleSearchChange}
-						search={itemsContext.queryParams.search}
-					/>
-					{<ScopeComponent itemsContext={itemsContext} />}
-					{itemsContext.userData && (
-						<SortComponent itemsContext={itemsContext} />
-					)}
-					{extraFilters}
-				</section>
-			)}
+			<LibraryFilters
+				askAI={askAI}
+				extraFilters={extraFilters}
+				itemsContext={itemsContext}
+			/>
 
 			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
@@ -367,7 +443,7 @@ function SearchTabContent({
 				>
 					<h2
 						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre relative"
+						className="text-black dark:text-white/80 text-lg leading-none flex items-center whitespace-pre relative"
 					>
 						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
 							{countLabel ||
@@ -458,21 +534,75 @@ function SearchTabContent({
 	);
 }
 
+/** The research toggle and send button inside the quick ask box. */
+function AskBoxActions({
+	isDeepResearchEnabled,
+	mode,
+	setMode,
+}: {
+	isDeepResearchEnabled: boolean;
+	mode: ChatMode;
+	setMode: (mode: ChatMode) => void;
+}) {
+	const tUI = useTranslations("ui");
+	const isResearch = mode === "research";
+
+	return (
+		<div className="flex items-center gap-1">
+			{isDeepResearchEnabled && (
+				<Tooltip content={tUI("researchModeTooltip")}>
+					<Button
+						isIconOnly
+						size="sm"
+						variant="default"
+						className="shrink-0"
+						onPress={() =>
+							setMode(isResearch ? "quick" : "research")
+						}
+						aria-label={tUI("researchMode")}
+					>
+						<GiArchiveResearch
+							className={twMerge(
+								"size-4",
+								isResearch
+									? "text-accent"
+									: "text-black/60 dark:text-white/60",
+							)}
+						/>
+					</Button>
+				</Tooltip>
+			)}
+			<Button
+				type="submit"
+				isIconOnly
+				variant="default"
+				className="shrink-0"
+				size="sm"
+			>
+				<IoSend className="size-4" />
+			</Button>
+		</div>
+	);
+}
+
 function AITabContent({
 	onSwitchToSearch,
 	onChatOpen,
 	externalInput,
+	hasChatConversation,
+	onModelChange,
 	setExternalInput,
 }: {
 	onSwitchToSearch: () => void;
 	onChatOpen: () => void;
 	externalInput: string;
+	hasChatConversation: boolean;
+	onModelChange: (modelId: string) => void;
 	setExternalInput: (input: string) => void;
 }) {
 	const {
-		providerPresentation: { icon: Icon },
-		selectedProviderId,
-		setSelectedProvider,
+		modelPresentation: { icon: Icon },
+		selectedModelId,
 	} = useSelectedModel();
 
 	const {
@@ -485,11 +615,20 @@ function AITabContent({
 		onOpen: onSmartScreeningOpen,
 		onOpenChange: onSmartScreeningOpenChange,
 	} = useDisclosure();
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
+	const { setEngaged, setPendingInput, setPendingSend } =
+		useInlineChatLayout();
+	// Asking a question opens the chat beside the results rather than over
+	// them, so the reader keeps their list while they read the answer.
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		onChatOpen();
+		const question = externalInput.trim();
+		setPendingInput(question);
+		setPendingSend(question.length > 0);
+		setExternalInput("");
+		setEngaged(true);
+		onSwitchToSearch();
 	};
 
 	const tAI = useTranslations("ai");
@@ -497,12 +636,13 @@ function AITabContent({
 	const t = useTranslations("ui");
 
 	return (
-		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-[2.375rem]">
+		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-ai-panel">
 			<ModelSelector
 				isOpen={isModelOpen}
 				onOpenChange={onModelOpenChange}
-				selectedProvider={selectedProviderId}
-				onProviderChange={setSelectedProvider}
+				selectedModelId={selectedModelId}
+				onModelChange={onModelChange}
+				hasConversation={hasChatConversation}
 			/>
 
 			{isSmartScreeningOpen ? (
@@ -551,47 +691,13 @@ function AITabContent({
 								</Button>
 							}
 							endContent={
-								<div className="flex items-center gap-1">
-									{isDeepResearchEnabled && (
-										<Tooltip
-											content={tUI("researchModeTooltip")}
-										>
-											<Button
-												isIconOnly
-												size="sm"
-												variant="default"
-												className="shrink-0"
-												onPress={() =>
-													setMode(
-														mode === "full"
-															? "quick"
-															: "full",
-													)
-												}
-												aria-label={tUI("researchMode")}
-											>
-												<GiArchiveResearch
-													className={twMerge(
-														"size-4",
-														mode === "full"
-															? "text-accent"
-															: "text-black/60 dark:text-white/60",
-													)}
-												/>
-											</Button>
-										</Tooltip>
-									)}
-									<Button
-										type="submit"
-										isIconOnly
-										variant="default"
-										className="shrink-0"
-										size="sm"
-										onPress={onChatOpen}
-									>
-										<IoSend className="size-4" />
-									</Button>
-								</div>
+								<AskBoxActions
+									isDeepResearchEnabled={
+										isDeepResearchEnabled
+									}
+									mode={mode}
+									setMode={setMode}
+								/>
 							}
 							placeholder={tAI("askMeAnythingPublications")}
 							className="w-full"
@@ -624,24 +730,14 @@ function AITabContent({
 
 export type SearchMode = "search" | "ai" | "research";
 
-export function useIsAISearchEnabled() {
-	const isAISearchEnabled = useLibraryFeature("aiSearch");
-	const isDeepResearchEnabled =
-		useLibraryFeature("deepResearch");
-	return {
-		isAISearchEnabled,
-		isDeepResearchEnabled,
-	};
-}
-
-function useSelectedSearchMode(
+function selectedSearchMode(
 	mode: ChatMode,
 	selectedTab: SearchMode,
 	isAISearchEnabled: boolean,
-) {
-	if (selectedTab === "search" || !isAISearchEnabled) return "search";
-	if (selectedTab === "ai") return mode === "full" ? "research" : "ai";
-	return "search";
+): SearchMode {
+	if (selectedTab !== "ai" || !isAISearchEnabled) return "search";
+
+	return mode === "research" ? "research" : "ai";
 }
 
 export function useSearchMode() {
@@ -651,10 +747,10 @@ export function useSearchMode() {
 		"selectedSearchTab",
 		"search",
 	);
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
 
-	const selectedTab = useSelectedSearchMode(
+	const selectedTab = selectedSearchMode(
 		mode,
 		selectedTabOriginal,
 		isAISearchEnabled,
@@ -692,7 +788,7 @@ export function useSearchMode() {
 			tooltip: t("deepResearchTooltip"),
 			icon: <GiArchiveResearch className="size-5" />,
 			action: () => {
-				setMode("full");
+				setMode("research");
 				setSelectedTab("ai");
 			},
 			disabled: !isDeepResearchEnabled,
@@ -753,6 +849,29 @@ function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
 	);
 }
 
+/** One tab's content, sliding in from the side it belongs to. */
+function ContentTabPanel({
+	children,
+	fromLeft,
+}: {
+	children: ReactNode;
+	fromLeft?: boolean;
+}) {
+	const offset = fromLeft ? -20 : 20;
+
+	return (
+		<motion.div
+			initial={{ opacity: 0, x: offset, scale: 0.95 }}
+			animate={{ opacity: 1, x: 0, scale: 1 }}
+			exit={{ opacity: 0, x: -offset, scale: 0.95 }}
+			transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+			className="w-full p-1"
+		>
+			{children}
+		</motion.div>
+	);
+}
+
 export function ContentInteractions({
 	abstract,
 	onAbstractChange,
@@ -778,33 +897,50 @@ export function ContentInteractions({
 		onOpenChange: onChatOpenChange,
 	} = useDisclosure();
 	const {
-		providerPresentation: { icon: Icon },
-		selectedProviderId,
+		modelPresentation: { icon: Icon },
+		selectedModelId,
+		setSelectedModelId,
 	} = useSelectedModel();
 	const [externalInput, setExternalInput] = useState<string>("");
+	const [hasChatConversation, setHasChatConversation] = useState(false);
+	const handleModelChange = (modelId: string) => {
+		setSelectedModelId(modelId);
+		setHasChatConversation(false);
+	};
+	// What the reader is looking at right now, so the assistant can answer
+	// questions about these results.
+	const searchContext = normalizeLibrarySearchContext(
+		useFiltersContext().queryParams,
+	);
+	const { isAISearchEnabled } = useIsAISearchEnabled();
+	const { setEngaged, setPendingInput, setPendingSend } =
+		useInlineChatLayout();
+	// One search field, two things to do with it: typing filters the library
+	// as you go, and Ask AI hands the same text to the assistant.
+	const askAI = (text: string) => {
+		const question = text.trim();
+		setPendingInput(question);
+		setPendingSend(question.length > 0);
+		setEngaged(true);
+	};
 
 	return (
 		<div className="relative">
 			<ChatModal
+				// Changing the model starts a new conversation.
+				key={selectedModelId ?? "no-model"}
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
-				provider={selectedProviderId}
+				modelId={selectedModelId}
+				onModelChange={handleModelChange}
+				onConversationStateChange={setHasChatConversation}
+				searchContext={searchContext}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
 			/>
 			<AnimatePresence mode="wait">
-				{selectedTab === "search" && (
-					<motion.div
-						key="search-content"
-						initial={{ opacity: 0, x: -20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: 20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
+				{selectedTab === "search" ? (
+					<ContentTabPanel key="search-content" fromLeft>
 						<SearchTabContent
 							header={header}
 							itemsContext={itemsContext}
@@ -815,49 +951,20 @@ export function ContentInteractions({
 							view={view}
 							setView={setView}
 							showHeader={activeCount === 1}
+							askAI={isAISearchEnabled ? askAI : undefined}
 						/>
-					</motion.div>
-				)}
-				{selectedTab === "ai" && (
-					<motion.div
-						key="ai-content"
-						initial={{ opacity: 0, x: 20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: -20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
+					</ContentTabPanel>
+				) : (
+					<ContentTabPanel key="ai-content">
 						<AITabContent
 							onSwitchToSearch={() => setSelectedTab("search")}
 							onChatOpen={onChatOpen}
 							externalInput={externalInput}
+							hasChatConversation={hasChatConversation}
+							onModelChange={handleModelChange}
 							setExternalInput={setExternalInput}
 						/>
-					</motion.div>
-				)}
-
-				{selectedTab === "research" && (
-					<motion.div
-						key="research-content"
-						initial={{ opacity: 0, x: 20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: -20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
-						<AITabContent
-							onSwitchToSearch={() => setSelectedTab("search")}
-							onChatOpen={onChatOpen}
-							externalInput={externalInput}
-							setExternalInput={setExternalInput}
-						/>
-					</motion.div>
+					</ContentTabPanel>
 				)}
 			</AnimatePresence>
 		</div>
@@ -887,492 +994,10 @@ function MainContent() {
 	);
 }
 
-const smartScreeningFieldTypes = ["string", "number", "boolean"] as const;
-
-export type SmartScreeningField = {
-	label: string;
-	description: string;
-	type: (typeof smartScreeningFieldTypes)[number];
-};
-
-function SmartScreeningModal({
-	isOpen,
-	onOpenChange,
-}: {
-	isOpen: boolean;
-	onOpenChange: (open: boolean) => void;
-}) {
-	const t = useTranslations("ui");
-	const tabs = ["fields", "text"] as const;
-	const labels = [t("fields"), t("textLabel")] as const;
-	const [tab, setTab] = useState<(typeof tabs)[number]>(tabs[0]);
-	const [fields, setFields] = useLocalStorage<SmartScreeningField[]>(
-		"smart-screening-fields",
-		[],
-	);
-	const [localFields, setLocalFields] = useState<SmartScreeningField[]>(
-		() => [...fields],
-	);
-	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
-	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
-		" | ",
-	)}): ${t("description")}`;
-
-	const fieldSchema = z.object({
-		label: z.string().min(1, t("labelRequired")).max(64, t("labelTooLong")),
-		type: z.enum(["string", "number", "boolean"]),
-		description: z
-			.string()
-			.min(1, t("descriptionRequired"))
-			.max(1024, t("descriptionTooLong")),
-	});
-
-	const convertedText = fields
-		.map(
-			(field) =>
-				`${field.label.trim()} (${
-					field.type
-				}): ${field.description.trim()}`,
-		)
-		.join("\n");
-
-	const validatorFunction = (localFields: SmartScreeningField[]) => {
-		const newErrors: Record<number, string> = {};
-		let hasErrors = false;
-
-		// Check for duplicate labels
-		const labelCounts: Record<string, number[]> = {};
-		localFields.forEach((field, index) => {
-			const label = field.label.trim();
-			if (label) {
-				if (!labelCounts[label]) {
-					labelCounts[label] = [];
-				}
-				labelCounts[label].push(index);
-			}
-		});
-
-		// Mark duplicate labels as errors
-		Object.entries(labelCounts).forEach(([label, indices]) => {
-			if (indices.length > 1) {
-				indices.forEach((index) => {
-					newErrors[index] = `${t("fieldPrefix")} ${
-						index + 1
-					} ${label}: ${t("duplicateLabelError")}`;
-					hasErrors = true;
-				});
-			}
-		});
-
-		// Validate each field with Zod schema
-		localFields.forEach((field, index) => {
-			if (!newErrors[index]) {
-				// Only validate if not already marked as duplicate
-				try {
-					fieldSchema.parse(field);
-				} catch (error) {
-					if (error instanceof z.ZodError) {
-						const fieldError =
-							error.issues[0]?.message || t("invalidField");
-						newErrors[index] = `${t("fieldPrefix")} ${index + 1} ${
-							field.label
-						}: ${fieldError}`;
-						hasErrors = true;
-					}
-				}
-			}
-		});
-
-		setFieldErrors(newErrors);
-
-		if (!hasErrors) {
-			setFields(localFields);
-			toast({
-				title: t("fieldsSavedSuccess"),
-				description: t("fieldsSavedSuccess"),
-			});
-		} else {
-			toast({
-				title: "Please fix the errors in the fields",
-				description: Object.values(newErrors).join("\n"),
-			});
-		}
-	};
-
-	const handleFieldsSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		validatorFunction(localFields);
-	};
-
-	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		const formData = new FormData(e.target as HTMLFormElement);
-		const text = formData.get("text");
-		const localFields: SmartScreeningField[] = [];
-		const lines = text?.toString().split("\n");
-		if (lines) {
-			lines.forEach((line) => {
-				const [key, ...rest] = line.split(":");
-				const [label, typeWithParentheses] = key?.split("(") || [];
-				const [type, parentheses] =
-					typeWithParentheses?.split(")") || [];
-				const description = rest.join(":").trim();
-				if (line.length > 0) {
-					localFields.push({
-						label: label?.trim(),
-						type: type?.trim() as (typeof smartScreeningFieldTypes)[number],
-						description: description?.trim(),
-					});
-				}
-			});
-		}
-		validatorFunction(localFields);
-	};
-
-	return (
-		<DialogModal
-			size="xl"
-			scrollBehavior="inside"
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-		>
-			<ModalContent>
-				{(onClose) => (
-					<>
-						<AIHeader onClose={onClose}>
-							{t("smartScreening")}
-						</AIHeader>
-						<div className="flex gap-0 px-6 py-2">
-							{tabs.map((t, i) => (
-								<Button
-									key={t}
-									size="md"
-									color={tab === t ? "accent" : "secondary"}
-									className={twMerge(
-										"rounded-none",
-										t === tabs[0] && "rounded-l-2xl",
-										t === tabs.at(-1) && "rounded-r-2xl",
-									)}
-									onPress={() => setTab(t)}
-								>
-									{labels[i]}
-								</Button>
-							))}
-						</div>
-						<ModalBody className="p-0 relative">
-							<ScrollShadow className="h-full">
-								{tab === "fields" ? (
-									<form
-										id="fields-form"
-										key="fields"
-										onSubmit={handleFieldsSubmit}
-										className="flex flex-col gap-6"
-									>
-										<AnimatePresence mode="sync">
-											<div
-												key="fields"
-												className="p-6 flex flex-col gap-6"
-											>
-												{localFields.length === 0 && (
-													<p
-														key="empty"
-														className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
-													>
-														{t("noFieldsAdded")}
-													</p>
-												)}
-												{localFields.map(
-													(field, index) => (
-														<motion.div
-															key={index}
-															initial={{
-																opacity: 0,
-																y: 10,
-															}}
-															animate={{
-																opacity: 1,
-																y: 0,
-															}}
-															transition={{
-																duration: 0.3,
-															}}
-															className="flex flex-col gap-2"
-														>
-															<Input
-																isRequired
-																placeholder={t(
-																	"label",
-																)}
-																label={t(
-																	"label",
-																)}
-																value={
-																	field.label
-																}
-																isInvalid={
-																	!!fieldErrors[
-																		index
-																	] &&
-																	!field.label
-																}
-																errorMessage={
-																	fieldErrors[
-																		index
-																	] &&
-																	!field.label
-																		? fieldErrors[
-																				index
-																			]
-																		: undefined
-																}
-																onChange={(e) =>
-																	setLocalFields(
-																		localFields.map(
-																			(
-																				f,
-																				i,
-																			) =>
-																				i ===
-																				index
-																					? {
-																							...f,
-																							label: e
-																								.target
-																								.value,
-																						}
-																					: f,
-																		),
-																	)
-																}
-															/>
-															<Textarea
-																placeholder={t(
-																	"description",
-																)}
-																label={t(
-																	"description",
-																)}
-																value={
-																	field.description
-																}
-																isRequired={
-																	true
-																}
-																isInvalid={
-																	!!fieldErrors[
-																		index
-																	] &&
-																	!field.description
-																}
-																errorMessage={
-																	fieldErrors[
-																		index
-																	] &&
-																	!field.description
-																		? fieldErrors[
-																				index
-																			]
-																		: undefined
-																}
-																onChange={(e) =>
-																	setLocalFields(
-																		localFields.map(
-																			(
-																				f,
-																				i,
-																			) =>
-																				i ===
-																				index
-																					? {
-																							...f,
-																							description:
-																								e
-																									.target
-																									.value,
-																						}
-																					: f,
-																		),
-																	)
-																}
-																classNames={{
-																	inputWrapper:
-																		"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-																	input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
-																}}
-															/>
-															<div className="flex justify-between">
-																<Select
-																	color="tertiary"
-																	label={t(
-																		"typeLabel",
-																	)}
-																	placement="left"
-																	disallowEmptySelection={
-																		true
-																	}
-																	selectedKeys={
-																		field.type
-																			? [
-																					field.type,
-																				]
-																			: undefined
-																	}
-																	isInvalid={
-																		!!fieldErrors[
-																			index
-																		] &&
-																		!field.type
-																	}
-																	errorMessage={
-																		fieldErrors[
-																			index
-																		] &&
-																		!field.type
-																			? fieldErrors[
-																					index
-																				]
-																			: undefined
-																	}
-																	onSelectionChange={(
-																		value,
-																	) => {
-																		const selectedType =
-																			Array.from(
-																				value,
-																			)[0] as (typeof smartScreeningFieldTypes)[number];
-																		setLocalFields(
-																			localFields.map(
-																				(
-																					f,
-																					i,
-																				) =>
-																					i ===
-																					index
-																						? {
-																								...f,
-																								type: selectedType,
-																							}
-																						: f,
-																			),
-																		);
-																	}}
-																>
-																	{smartScreeningFieldTypes.map(
-																		(
-																			type,
-																		) => (
-																			<SelectItem
-																				key={
-																					type
-																				}
-																				value={
-																					type
-																				}
-																			>
-																				{
-																					type
-																				}
-																			</SelectItem>
-																		),
-																	)}
-																</Select>
-																<Button
-																	isIconOnly
-																	color="danger"
-																	onPress={() =>
-																		setLocalFields(
-																			localFields.filter(
-																				(
-																					_,
-																					i,
-																				) =>
-																					i !==
-																					index,
-																			),
-																		)
-																	}
-																	className="!p-0"
-																>
-																	<BiTrash className="size-4" />
-																</Button>
-															</div>
-														</motion.div>
-													),
-												)}
-											</div>
-										</AnimatePresence>
-									</form>
-								) : (
-									<form
-										id="text-form"
-										key="text"
-										onSubmit={handleSubmit}
-										className="flex flex-col gap-6 p-6"
-									>
-										<AnimatePresence mode="sync">
-											<Textarea
-												name="text"
-												defaultValue={convertedText}
-												classNames={{
-													inputWrapper:
-														"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
-												}}
-												placeholder={placeholderExample}
-												label={t("textLabel")}
-											/>
-										</AnimatePresence>
-									</form>
-								)}
-							</ScrollShadow>
-						</ModalBody>
-						<div
-							key="fields-footer"
-							className="flex justify-end gap-4 z-10 p-2 rounded-b-2xl"
-						>
-							{tab === "fields" ? (
-								<>
-									<Button
-										size="md"
-										onPress={() =>
-											setLocalFields([
-												...localFields,
-												{
-													label: "",
-													type: "string",
-													description: "",
-												},
-											])
-										}
-									>
-										{t("addField")}
-									</Button>
-									<Button
-										type="submit"
-										form="fields-form"
-										color="accent"
-										size="md"
-									>
-										{t("saveFields")}
-									</Button>
-								</>
-							) : (
-								<Button type="submit" form="text-form">
-									{t("save")}
-								</Button>
-							)}
-						</div>
-					</>
-				)}
-			</ModalContent>
-		</DialogModal>
-	);
-}
-
 export default function EvidenceLibrary() {
 	return (
 		<PageContainer>
-			<div className="flex xl:gap-[2.5rem] gap-8 flex-col lg:flex-row">
+			<div className="flex xl:gap-10 gap-8 flex-col lg:flex-row">
 				<MainContent />
 			</div>
 		</PageContainer>

@@ -3,15 +3,9 @@
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { InferSelectModel } from "drizzle-orm";
 import { Session } from "next-auth";
-import {
-	EXCLUDED_ITEM_TYPES,
-	ITEMS_PER_PAGE,
-	SORT_OPTIONS,
-} from "@/constants/items";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { generateRandomID } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -23,26 +17,17 @@ import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
-import { formatRange } from "@/lib/utils";
-import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
+import type { SmartScreeningField } from "@/types/ai";
 import { generateObject } from "ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
-import { getMainAttributes } from "@/lib/search";
+import { addRegionsToFacetDistribution } from "./country";
+import { getMainAttributes, resolveSearchRequest } from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
-import {
-	getRuntimeSearchAttributes,
-	getRuntimeSearchFacets,
-	normalizeRuntimeYearRange,
-	resolveRuntimeSearchScope,
-} from "@/config/library-config/search";
-import {
-	AIProviderUnavailableError,
-	getAIProviderForConfig,
-	type AIProviderId,
-} from "./ai-provider";
+import { getRuntimeSearchFacets } from "@/config/library-config/search";
+import { AIError } from "@/lib/ai/errors";
+import { resolveAIModel } from "@/lib/ai/model-resolution";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { CredentialsInput } from "@/lib/auth-credentials";
 import { authorizeForConfig } from "@/lib/auth-service";
@@ -78,155 +63,6 @@ export async function areLinksValid(links: string[]) {
 		return true;
 	}));
 	return validity;
-}
-
-export async function runScreening(
-	keys: string[],
-	provider: AIProviderId,
-	smartScreeningFields: SmartScreeningField[],
-) {
-	const libraryConfig = await getLibraryConfig();
-	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
-		return { error: "AI is disabled" };
-	}
-
-	let models;
-	try {
-		models = await getAIProviderForConfig(
-			libraryConfig,
-			provider,
-		);
-	} catch (error) {
-		if (error instanceof AIProviderUnavailableError) {
-			return { error: error.message };
-		}
-		throw error;
-	}
-
-	if (!keys || keys.length === 0) {
-		return { error: "No keys provided" };
-	}
-
-	const allItems = await Promise.allSettled(keys.map(async (key: string): Promise<ItemGetResponse["item"] | null> => {
-		const item = await getCachedItemSmall(key);
-		if (!item || !item.item) {
-			return null;
-		}
-		return {
-			...item.item,
-			fullTextPDFs: undefined,
-		}
-	}));
-
-	const items = allItems.filter(result => result.status === "fulfilled" && result.value).map(result => (result as PromiseFulfilledResult<any>).value).filter((item) => item.abstractNote && item.abstractNote.length > 0)
-		.map((item: ItemGetResponse["item"]) => ({
-			title: item?.title,
-			abstractNote: item?.abstractNote,
-			key: item?.key,
-		}));
-
-	const fieldMaps = new Map<string, string>();
-
-	const screeningFieldsSchema = z.object(
-		smartScreeningFields.reduce((acc: Record<string, z.ZodTypeAny>, field: SmartScreeningField) => {
-			const fieldKey = field.label.trim();
-			const randomKey = generateRandomID();
-			fieldMaps.set(randomKey, fieldKey);
-			switch (field.type.trim()) {
-				case 'number':
-					acc[randomKey] = z.number().describe(field.description);
-					break;
-				case 'boolean':
-					acc[randomKey] = z.boolean().describe(field.description);
-					break;
-				case 'string':
-				default:
-					acc[randomKey] = z.string().describe(field.description);
-					break;
-			}
-			return acc;
-		}, {} as Record<string, z.ZodTypeAny>) // Use ZodTypeAny to allow different types
-	);
-
-	// Process items in parallel chunks of 10
-	const resultObject: Record<string, any> = {};
-	const CHUNK_SIZE = 25;
-
-	// Split items into chunks
-	const chunks = [];
-	for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-		chunks.push(items.slice(i, i + CHUNK_SIZE));
-	}
-
-	// Process each chunk in parallel
-	for (const chunk of chunks) {
-		const chunkPromises = chunk.map(async (item) => {
-			try {
-				// Create schema for a single item
-				const singleItemSchema = z.object({
-					screeningFields: screeningFieldsSchema
-				});
-
-				const start = Date.now();
-				const result = await generateObject({
-					model: models.defaultModel,
-					schema: singleItemSchema,
-					temperature: 1,
-					providerOptions: {
-						openai: {
-							reasoningEffort: "low",
-						},
-						google: {
-                            thinkingConfig: {
-                                thinkingBudget: 0,
-                            },
-                        },
-					},
-					system: `You are an AI assistant that answers questions about the provided content.
-							You will answer questions according to the specified screening fields.
-							Return values in the appropriate type (string, number, or boolean) as specified in each field's type.`,
-					prompt: `Answer questions about the following item based on these screening fields:
-							${JSON.stringify(smartScreeningFields)}
-							
-							Item to analyze:
-							${JSON.stringify(item)}
-							
-							Provide answers for all the screening fields. You must answer every question.
-							If a question is not applicable to this item, respond with "N/A". Return values in the appropriate type as specified.`
-				});
-				const end = Date.now();
-
-				// Map the random keys back to the original field names
-				const newObject: Record<string, any> = {};
-				for (const fieldKey of Object.keys(result.object.screeningFields)) {
-					const mappedKey = fieldMaps.get(fieldKey);
-					if (mappedKey) {
-						newObject[mappedKey] = result.object.screeningFields[fieldKey];
-					}
-				}
-
-				// Return the result for this item
-				return {
-					key: item.key,
-					result: { screeningFields: newObject }
-				};
-			} catch (error) {
-				return { key: item.key, error };
-			}
-		});
-
-		// Wait for all items in the current chunk to complete
-		const chunkResults = await Promise.all(chunkPromises);
-
-		// Add results to the result object
-		for (const result of chunkResults) {
-			if (result.key && result.result) {
-				resultObject[result.key] = result.result;
-			}
-		}
-	}
-
-	return resultObject;
 }
 
 export async function authorize(
@@ -382,59 +218,22 @@ export async function searchIndex(
 ) {
 	const items = async () => {
 		const libraryConfig = await getLibraryConfig();
-		const pageNum = Math.max(1, Number(searchParams.page || 1));
-		const limitNum = ITEMS_PER_PAGE;
-		const sort = searchParams.sort || SORT_OPTIONS[0].key;
-		const search = searchParams.search || "";
-		const scope = resolveRuntimeSearchScope(
-			searchParams.scope,
-			libraryConfig.search,
-		);
-		const range = normalizeRuntimeYearRange(
-			searchParams.range,
-			libraryConfig.filters,
-		);
-		const institution =
-			libraryConfig.filters.institution.mode === "hidden"
-				? []
-				: searchParams.institution || [];
-		const country = libraryConfig.search.country
-			? searchParams.country || []
-			: [];
-		const author_country = libraryConfig.search.authorCountry
-			? searchParams.author_country || []
-			: [];
-		const author = searchParams.author || "";
-		const hiddenTags = libraryConfig.content.tags.hidden;
+		const {
+			attributesToSearchOn,
+			author_country,
+			country,
+			finalFilters: baseFilters,
+			limitNum,
+			pageNum,
+			search,
+			sortOption,
+		} = resolveSearchRequest(searchParams, libraryConfig);
 		const { index: searchIndex } =
 			await getMeilisearchForConfig(libraryConfig);
-		// If no search query and relevance is selected, default to desc (newest)
-		// Otherwise, use the selected sort
-		const effectiveSort = search.trim().length === 0 && sort === SORT_OPTIONS[0].key
-			? SORT_OPTIONS[1].key
-			: sort;
-		const sortOption =
-			SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
-			SORT_OPTIONS[0].sort;
-
-		// Generate hierarchical country filters
-		const countryFilters = createCountryFilters(country, author_country);
-
 		const finalFilters = [
-			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-			range ? formatRange(range) : null,
-			...(Array.isArray(institution)
-				? institution.map((value) => meilisearchEquals("institution", value))
-				: []),
-			...countryFilters, // Replace the old country filters with our hierarchical ones
-			author ? meilisearchEquals("fullNames", author) : null,
-			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
+			...baseFilters,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
-			"deleted != 1",
-			hiddenTags.length
-				? `tags NOT IN ${JSON.stringify(hiddenTags)}`
-				: null,
-		].filter((f): f is string => f !== null);
+		];
 
 		const allAttributes = await getMainAttributes(libraryConfig);
 
@@ -442,10 +241,7 @@ export async function searchIndex(
 			searchIndex.search(search, {
 				offset: (pageNum - 1) * limitNum,
 				limit: limitNum,
-				attributesToSearchOn: getRuntimeSearchAttributes(
-					scope,
-					libraryConfig.search,
-				),
+				attributesToSearchOn,
 				attributesToRetrieve: allAttributes,
 				...(sortOption ? { sort: [sortOption] } : {}),
 				...extraProperties,

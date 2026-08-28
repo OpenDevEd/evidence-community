@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import { useDisclosure } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { usePathname } from "@/i18n/routing";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 import { Logo } from "./Logo";
@@ -48,6 +49,7 @@ export default function Navbar() {
 		onClose: onLoginModalClose,
 	} = useDisclosure();
 
+	const { engaged: chatEngaged } = useInlineChatLayout();
 	const normalizedPathname = normalizePathname(pathname);
 	const isMapPage = normalizedPathname.includes("/map");
 
@@ -105,19 +107,30 @@ export default function Navbar() {
 		<>
 		<header
 			className={twMerge(
-				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-[transform,border-radius] origin-top",
+				"w-full max-w-site px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top",
 				styleVariant === "wide" && "bg-white dark:bg-secondary max-w-none",
 				isMapPage &&
 					(styleVariant !== "wide"
 						? "xl:absolute xl:top-6 xl:scale-75"
-						: "xl:absolute xl:scale-75 xl:rounded-b-2xl")
+						: "xl:absolute xl:scale-75 xl:rounded-b-2xl"),
+				// The small style floats the header below the top of the
+				// page; while the chat is open it sticks at the same offset,
+				// so the header and the chat do not jump apart on scroll.
+				chatEngaged &&
+					!isMapPage &&
+					(styleVariant !== "wide"
+						? "xl:sticky xl:top-split xl:scale-75"
+						: "xl:sticky xl:top-0 xl:scale-75 xl:rounded-b-2xl")
 			)}
 		>
 			<div
 				className={twMerge(
-					"xl:h-[6.5rem] h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
+					"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split",
+					// Only where the split view exists: on a phone the chat
+					// sits below the results and the header keeps its size.
+					chatEngaged && "lg:h-14 lg:py-2",
 					styleVariant === "wide" &&
-						"bg-transparent max-w-[96rem] mx-auto xl:px-14",
+						"bg-transparent max-w-site mx-auto xl:px-14",
 					// When the search bar is docked beneath the navbar (non-wide
 					// style), square the bottom so the two read as one unit.
 					styleVariant !== "wide" &&
@@ -209,7 +222,7 @@ export default function Navbar() {
 		    header itself is a full-bleed colored band. Aligned to the navbar's
 		    content width. */}
 		{showNavbarSearch && (
-			<div className="w-full max-w-[96rem] px-0 xl:px-14">
+			<div className="w-full max-w-site px-0 xl:px-14">
 				<NavbarSearch />
 			</div>
 		)}

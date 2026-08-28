@@ -44,9 +44,3 @@ export async function getAIProviderForConfig(
 	});
 	return service.resolve(requestedProvider as AIProviderId);
 }
-
-export {
-	AIProviderUnavailableError,
-	type AIProviderId,
-	type ResolvedAIModels,
-} from "./ai-provider-factory";

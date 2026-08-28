@@ -9,7 +9,6 @@ import * as userToFollowRelations from "./schema/relations/userToFollow";
 import * as userToLikesRelations from "./schema/relations/userToLikes";
 import * as collectionTable from "./schema/tables/collection";
 import * as adminItemListProjectionTable from "./schema/tables/adminItemListProjection";
-import * as embeddingsTable from "./schema/tables/embeddings";
 import * as itemTable from "./schema/tables/item";
 import * as itemInstitutionTable from "./schema/tables/itemInstitution";
 import * as itemLinkTable from "./schema/tables/itemLink";
@@ -53,7 +52,6 @@ export const schema = {
 	...itemToUserCollectionTable,
 	...itemToUserCollectionRelations,
 	...statusTable,
-	...embeddingsTable,
 };
 
 export type Database = NodePgDatabase<typeof schema>;

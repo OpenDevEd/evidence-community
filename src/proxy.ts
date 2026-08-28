@@ -42,8 +42,7 @@ function isRateLimitedAIRequest(request: NextRequest) {
 	return (
 		request.method === "POST" &&
 		(request.nextUrl.pathname === "/api/ai" ||
-			(request.nextUrl.pathname.startsWith("/api/ai/") &&
-				!request.nextUrl.pathname.startsWith("/api/ai/embeddings")))
+			request.nextUrl.pathname.startsWith("/api/ai/"))
 	);
 }
 

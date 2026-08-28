@@ -146,6 +146,21 @@ export const PLATFORM_AI_MODEL_CATALOG = {
 		large: ["deepseek-v4-pro"],
 		small: ["deepseek-v4-flash"],
 	},
+	openrouter: {
+		active: [
+			"openai/gpt-5.6-luna",
+			"google/gemini-3.7-flash",
+			"x-ai/grok-4.6",
+			"anthropic/claude-sonnet-5",
+			"anthropic/claude-opus-5",
+		],
+		large: [
+			"openai/gpt-5.6-luna",
+			"x-ai/grok-4.6",
+			"anthropic/claude-opus-5",
+		],
+		small: ["google/gemini-3.7-flash", "anthropic/claude-sonnet-5"],
+	},
 } as const;
 
 export const PLATFORM_AI_PROVIDERS = Object.keys(

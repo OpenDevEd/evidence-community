@@ -27,6 +27,7 @@ import { getMeilisearchForConfig } from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
 import { meilisearchEquals } from "./meilisearch-filter";
+import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 
 export const LIST_ITEM_FIELDS = [
 	"itemType",
@@ -135,23 +136,65 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 	}
 }
 
-function resolveSearchRequest(
+type SearchFilterInput = {
+	author: string;
+	author_country: string[];
+	collections: string[];
+	country: string[];
+	hiddenTags: readonly string[];
+	institution: string[];
+	range: string | null;
+	scope: string;
+};
+
+/** An empty search has no relevance to sort by, so it shows the newest first. */
+function resolveSortOption(search: string, sort: string) {
+	const effectiveSort =
+		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
+			? SORT_OPTIONS[1].key
+			: sort;
+	return (
+		SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
+		SORT_OPTIONS[0].sort
+	);
+}
+
+function buildSearchFilters({
+	author,
+	author_country,
+	collections,
+	country,
+	hiddenTags,
+	institution,
+	range,
+	scope,
+}: SearchFilterInput) {
+	return [
+		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
+		range ? formatRange(range) : null,
+		...institution.map((value) => meilisearchEquals("institution", value)),
+		...createCountryFilters(country, author_country),
+		author ? meilisearchEquals("fullNames", author) : null,
+		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
+		...collections.map((collection) =>
+			meilisearchEquals("collectionsAncestry", collection),
+		),
+		"deleted != 1",
+		hiddenTags.length ? `tags NOT IN ${JSON.stringify(hiddenTags)}` : null,
+	].filter((filter): filter is string => filter !== null);
+}
+
+export function resolveSearchRequest(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & {
 		search: RuntimeSearch;
 	},
 ) {
 	const pageNum = Math.max(1, Number(searchParams.page || 1));
-	const limitNum = ITEMS_PER_PAGE;
-	const sort = searchParams.sort || SORT_OPTIONS[0].key;
 	const search = searchParams.search || "";
 	const scope = resolveRuntimeSearchScope(
 		searchParams.scope,
 		libraryConfig.search,
-	);
-	const range = normalizeRuntimeYearRange(
-		searchParams.range,
-		libraryConfig.filters,
 	);
 	const institution =
 		libraryConfig.filters.institution.mode === "hidden"
@@ -163,37 +206,26 @@ function resolveSearchRequest(
 	const author_country = libraryConfig.search.authorCountry
 		? searchParams.author_country || []
 		: [];
-	const author = searchParams.author || "";
-	const collections = searchParams.collections || [];
-	const hiddenTags = libraryConfig.content.tags.hidden;
 
-	const effectiveSort =
-		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
-			? SORT_OPTIONS[1].key
-			: sort;
-	const sortOption =
-		SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
-		SORT_OPTIONS[0].sort;
-
-	const finalFilters = [
-		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-		range ? formatRange(range) : null,
-		...(Array.isArray(institution)
-			? institution.map((institutionValue) =>
-					meilisearchEquals("institution", institutionValue),
-				)
-			: []),
-		...createCountryFilters(country, author_country),
-		author ? meilisearchEquals("fullNames", author) : null,
-		scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
-		...collections.map((collection) =>
-			meilisearchEquals("collectionsAncestry", collection),
+	const finalFilters = buildSearchFilters({
+		author: searchParams.author || "",
+		author_country,
+		collections: searchParams.collections || [],
+		country,
+		hiddenTags: libraryConfig.content.tags.hidden,
+		institution,
+		range: normalizeRuntimeYearRange(
+			searchParams.range,
+			libraryConfig.filters,
 		),
-		"deleted != 1",
-		hiddenTags.length
-			? `tags NOT IN ${JSON.stringify(hiddenTags)}`
-			: null,
-	].filter((filter): filter is string => filter !== null);
+		scope,
+	});
+
+	const sortOption = resolveSortOption(
+		search,
+		searchParams.sort || SORT_OPTIONS[0].key,
+	);
+	const limitNum = ITEMS_PER_PAGE;
 
 	const attributesToSearchOn = getRuntimeSearchAttributes(
 		scope,

@@ -16,7 +16,7 @@ https://fixture, https://collector.localhost:{$FIXTURE_PORT}, https://localhost:
 	}
 
 	@analytics {
-		path /e/* /i/* /batch* /decide/*
+		path /e/* /i/* /s/* /batch* /decide/*
 	}
 	handle @analytics {
 		header {
@@ -26,6 +26,48 @@ https://fixture, https://collector.localhost:{$FIXTURE_PORT}, https://localhost:
 			Content-Type "application/json"
 		}
 		respond "{\"status\":1}" 200
+	}
+
+	@posthogFlags {
+		path /flags/*
+	}
+	handle @posthogFlags {
+		header {
+			Access-Control-Allow-Headers "*"
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Origin "*"
+			Content-Type "application/json"
+		}
+		respond `{
+			"errorsWhileComputingFlags": false,
+			"featureFlagPayloads": {},
+			"featureFlags": {},
+			"flags": {},
+			"requestId": "runtime-acceptance"
+		}` 200
+	}
+
+	@posthogConfig {
+		path /array/*/config
+	}
+	handle @posthogConfig {
+		header Access-Control-Allow-Origin "*"
+		header Content-Type "application/json"
+		respond `{
+			"autocapture_opt_out": false,
+			"captureDeadClicks": true,
+			"capturePerformance": {
+				"web_vitals": true
+			},
+			"hasFeatureFlags": false,
+			"heatmaps": true,
+			"isAuthenticated": false,
+			"sessionRecording": {},
+			"siteApps": [],
+			"supportedCompression": [],
+			"toolbarParams": {},
+			"toolbarVersion": "toolbar"
+		}` 200
 	}
 
 	respond "not found" 404
@@ -57,6 +99,17 @@ https://test.crossref.org, https://sandbox.zenodo.org {
 https://doi.org {
 	tls internal
 	respond 302
+}
+
+# A stand-in for the embedding service. Every record gets the same vector,
+# which is all the search index needs to accept and store one.
+http://fixture:5001 {
+	handle /embeddings {
+		header Content-Type "application/json"
+		respond "{\"embedding\":[0.11,0.22,0.33,0.44,0.55,0.66,0.77,0.88]}" 200
+	}
+
+	respond "not found" 404
 }
 
 http://storage:5000 {

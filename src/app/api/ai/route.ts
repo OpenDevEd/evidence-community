@@ -1,99 +1,132 @@
-import { NextResponse } from "next/server";
-import { getCachedItem } from "../cache";
-import { streamText } from 'ai';
-import { trackUsage } from "@/lib/ai";
-import { getRuntimeRequestLocale } from "@/i18n/server";
-import { isAIAllowed } from "@/lib/utils";
-import { getLibraryConfig } from "@/config/library-config/server";
-import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import {
-	AIProviderUnavailableError,
-	getAIProviderForConfig,
-} from "@/lib/ai-provider";
+	createUIMessageStreamResponse,
+	streamText,
+	toUIMessageStream,
+} from "ai";
+
+import { getRuntimeRequestLocale } from "@/i18n/server";
 import { getAISystemPrompt } from "@/lib/ai-prompts";
+import { publicationPromptParts } from "@/lib/ai/attachments";
+import {
+	aiErrorResponse,
+	aiStreamErrorMessage,
+	normalizeAIError,
+} from "@/lib/ai/errors";
+import {
+	OPENROUTER_RESPONSE_CACHE_TTL,
+	openRouterModelSettings,
+	openRouterResponseCacheHeaders,
+	openRouterSessionId,
+} from "@/lib/ai/openrouter";
+import {
+	currentDateContext,
+	EVIDENCE_CITATION_INSTRUCTIONS,
+} from "@/lib/ai/prompt-context";
+import { publicationGenerationSchema } from "@/lib/ai/schemas";
+import { trackAIUsage } from "@/lib/ai/telemetry";
+import { loadSelectedPublication, readAIRequest } from "./publication";
 
 export const maxDuration = 60;
 
-export async function POST(req: Request) {
-	const libraryConfig = await getLibraryConfig();
-	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
-		return new NextResponse("AI is disabled", { status: 403 });
-	}
+const FEATURE_INSTRUCTIONS = {
+	summarize: "Summarize this publication.",
+	explain: "Explain this publication.",
+} as const;
 
-	const { searchParams } = new URL(req.url);
-	const prompt = searchParams.get("prompt") || "summarize";
-	const locale = await getRuntimeRequestLocale(req);
-	const { prompt: key, provider, distinctId } = await req.json();
+export async function POST(request: Request) {
+	const startedAt = Date.now();
 
-	if (prompt !== "summarize" && prompt !== "explain") {
-		return new NextResponse("Invalid prompt", { status: 400 });
-	}
-
-	const item = await getCachedItem(key!);
-
-	if (!item || !item.item) {
-		return new NextResponse("Item not found", { status: 404 });
-	}
-
-	let models;
 	try {
-		models = await getAIProviderForConfig(
-			libraryConfig,
-			provider,
+		const { config, request: parsed } = await readAIRequest(
+			request,
+			publicationGenerationSchema,
 		);
-	} catch (error) {
-		if (error instanceof AIProviderUnavailableError) {
-			return new NextResponse(error.message, { status: 404 });
-		}
-		throw error;
-	}
-
-	const {fullTextPDFs, ...cleanItem} = item.item;
-
-	if (!isAIAllowed(cleanItem)) {
-		return new NextResponse("AI not allowed", { status: 403 });
-	}
-	
-	for (const attachment of cleanItem.attachmentsData || []) {
-		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
-		if (fullTextPDF) {
-			attachment.fullTextPDF = fullTextPDF as any;
-		}
-	}
-
-	const result = streamText({
-		model: models.defaultModel,
-		system: getAISystemPrompt(libraryConfig, prompt, {
-			hasPdf: Boolean(fullTextPDFs?.length),
-			locale,
-		}),
-		prompt: JSON.stringify(cleanItem),
-		temperature: 1,
-		providerOptions: {
-			openai: {
-				reasoningEffort: "low",
-			},
-			google: {
-				thinkingConfig: {
-					thinkingBudget: 0,
+		const { distinctId, feature, modelId, prompt: itemKey } = parsed;
+		const { publication, selectedModel } = await loadSelectedPublication(
+			config,
+			{ itemKey, modelId },
+		);
+		const locale = await getRuntimeRequestLocale(request);
+		const model = selectedModel.createModel(
+			selectedModel.modelId,
+			openRouterModelSettings(
+				selectedModel.provider,
+				selectedModel.modelId,
+				{
+					sessionId: openRouterSessionId(
+						"publication",
+						selectedModel.modelId,
+						locale,
+						itemKey,
+					),
 				},
+			),
+		);
+
+		const result = streamText({
+			model,
+			system: [
+				getAISystemPrompt(config, feature, {
+					hasPdf: publication.files.length > 0,
+					locale,
+				}),
+				currentDateContext(),
+				EVIDENCE_CITATION_INSTRUCTIONS,
+			].join("\n"),
+			messages: [
+				{
+					role: "user",
+					content: publicationPromptParts(
+						publication,
+						FEATURE_INSTRUCTIONS[feature],
+						selectedModel.provider,
+						selectedModel.modelId,
+					),
+				},
+			],
+			...(selectedModel.provider === "openrouter"
+				? {
+						headers: openRouterResponseCacheHeaders(
+							OPENROUTER_RESPONSE_CACHE_TTL.publication,
+						),
+					}
+				: {}),
+			async onFinish(event) {
+				await trackAIUsage(config, {
+					feature,
+					modelId: selectedModel.modelId,
+					distinctId,
+					startedAt,
+					success: true,
+					usage: event.usage,
+					providerMetadata: event.providerMetadata,
+					responseHeaders: event.response.headers,
+				});
 			},
-		},
-		async onFinish(event) {
-			await trackUsage(
-				libraryConfig,
-				"ai_" + prompt,
-				event,
-				distinctId,
-				prompt,
-			);
-		},
-	})
+			onError({ error }) {
+				const normalized = normalizeAIError(error, {
+					context: "document",
+				});
+				void trackAIUsage(config, {
+					feature,
+					modelId: selectedModel.modelId,
+					distinctId,
+					startedAt,
+					success: false,
+					errorCode: normalized.code,
+				});
+			},
+		});
 
-	return result.toTextStreamResponse({
-		headers: {
-			'Content-Type': 'text/event-stream',
-		},
-	})
-
+		return createUIMessageStreamResponse({
+			stream: toUIMessageStream({
+				stream: result.stream,
+				sendReasoning: false,
+				onError: (error) =>
+					aiStreamErrorMessage(error, { context: "document" }),
+			}),
+		});
+	} catch (error) {
+		return aiErrorResponse(error, { context: "document" });
+	}
 }

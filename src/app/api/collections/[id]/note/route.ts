@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { cacheLife, cacheTag } from "next/cache";
 import { getDatabaseForConfig } from "@/db";
@@ -15,31 +15,54 @@ async function getCachedNote(
 	descriptionTags: readonly string[],
 	config: LibraryServerConfig,
 ) {
-	'use cache'
-	cacheLife({ revalidate: 300 })
-	cacheTag('collection-note-' + id)
+	"use cache";
+	cacheLife({ revalidate: 300 });
+	cacheTag("collection-note-" + id);
 	if (!descriptionTags.length) return null;
 	const db = await getDatabaseForConfig(config);
 
-	return db.query.item.findFirst({
-		where: and(
-			sql`exists (
-				select 1 from ${itemToCollection}
-				where ${itemToCollection.itemKey} = ${item.key}
-					and ${itemToCollection.collectionKey} = ${id}
-			)`,
-			sql`exists (
-				select 1 from ${itemToTag}
-				where ${itemToTag.itemKey} = ${item.key}
-					and ${inArray(itemToTag.tagName, [...descriptionTags])}
-			)`,
-			eq(item.itemType, "Note"),
-			eq(item.deleted, 0),
-		),
-	});
+	const [note] = await db
+		.select()
+		.from(item)
+		.where(
+			and(
+				exists(
+					db
+						.select({ value: sql`1` })
+						.from(itemToCollection)
+						.where(
+							and(
+								eq(itemToCollection.itemKey, item.key),
+								eq(itemToCollection.collectionKey, id),
+							),
+						),
+				),
+				exists(
+					db
+						.select({ value: sql`1` })
+						.from(itemToTag)
+						.where(
+							and(
+								eq(itemToTag.itemKey, item.key),
+								inArray(itemToTag.tagName, [
+									...descriptionTags,
+								]),
+							),
+						),
+				),
+				eq(item.itemType, "Note"),
+				eq(item.deleted, 0),
+			),
+		)
+		.limit(1);
+
+	return note ?? null;
 }
 
-export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function GET(
+	request: NextRequest,
+	props: { params: Promise<{ id: string }> },
+) {
 	const params = await props.params;
 	const { id } = params;
 	const config = await getLibraryConfig();
@@ -51,9 +74,12 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 		config,
 	);
 
-	return NextResponse.json({ note }, {
-		headers: {
-			"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+	return NextResponse.json(
+		{ note },
+		{
+			headers: {
+				"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+			},
 		},
-	});
+	);
 }

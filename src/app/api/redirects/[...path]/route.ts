@@ -77,10 +77,14 @@ function decodeHtmlEntities(value: string) {
 		const lowerEntity = String(entity).toLowerCase();
 		if (lowerEntity in namedEntities) return namedEntities[lowerEntity];
 		if (lowerEntity.startsWith("#x")) {
-			return String.fromCodePoint(Number.parseInt(lowerEntity.slice(2), 16));
+			return String.fromCodePoint(
+				Number.parseInt(lowerEntity.slice(2), 16),
+			);
 		}
 		if (lowerEntity.startsWith("#")) {
-			return String.fromCodePoint(Number.parseInt(lowerEntity.slice(1), 10));
+			return String.fromCodePoint(
+				Number.parseInt(lowerEntity.slice(1), 10),
+			);
 		}
 
 		return match;
@@ -92,7 +96,7 @@ function noteHtmlToLines(html: string) {
 		html
 			.replace(/<br\s*\/?>/gi, "\n")
 			.replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
-			.replace(/<[^>]*>/g, "")
+			.replace(/<[^>]*>/g, ""),
 	)
 		.split(/\r?\n/)
 		.map((line) => line.trim());
@@ -138,7 +142,10 @@ function parseRedirects(noteHtml: string) {
 		const separatorIndex = line.indexOf("=");
 		if (separatorIndex < 1) continue;
 
-		const key = line.slice(0, separatorIndex).trim().replace(/^\/+|\/+$/g, "");
+		const key = line
+			.slice(0, separatorIndex)
+			.trim()
+			.replace(/^\/+|\/+$/g, "");
 		const destination = line.slice(separatorIndex + 1).trim();
 
 		if (key && destination) {
@@ -151,7 +158,7 @@ function parseRedirects(noteHtml: string) {
 
 export async function GET(
 	_request: NextRequest,
-	props: { params: Promise<{ path: string[] }> }
+	props: { params: Promise<{ path: string[] }> },
 ) {
 	const params = await props.params;
 	const requestedPath = params.path.join("/");
@@ -173,7 +180,7 @@ export async function GET(
 		config,
 	);
 	const destination = note?.note
-		? parseRedirects(note.note).get(requestedPath) ?? null
+		? (parseRedirects(note.note).get(requestedPath) ?? null)
 		: null;
 
 	return NextResponse.json<RedirectsResponse>(
@@ -182,6 +189,6 @@ export async function GET(
 			headers: {
 				"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
 			},
-		}
+		},
 	);
 }
