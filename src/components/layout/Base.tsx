@@ -7,7 +7,6 @@ import { getCachedStatus } from "@/app/api/cache";
 import MainWrapper from "./MainWrapper";
 import SiteChrome from "./SiteChrome";
 import { Suspense } from "react";
-import { connection } from "next/server";
 import ConsentDefaultsScript from "@/app/_components/ConsentDefaultsScript";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
@@ -69,9 +68,10 @@ export default async function Base({
 	children: React.ReactNode;
 	locale: string;
 }>) {
-	await connection();
-	// The pages here are already drawn per request, so reading the reader's
-	// stored answer costs nothing and lets the first drawing know it.
+	// Reading the reader's stored answer is a request-time read, so these
+	// pages are drawn per request and the runtime settings below are never
+	// baked into a build. That is what the earlier `connection()` call was
+	// for, so it is gone.
 	const storedConsent =
 		(await cookies()).get(ANALYTICS_CONSENT_COOKIE_NAME)?.value ?? null;
 	const libraryConfig = projectPublicLibraryConfig(await getLibraryConfig());
