@@ -4,6 +4,7 @@ import {
 	buildAdminLoginPageUrl,
 	getCanonicalLibraryRedirect,
 	getExternalRequestOrigin,
+	getRedirectLookupPath,
 	getUnlocalizedPathname,
 	getValidatedAdminReturnPath,
 	isAdminPageMethod,
@@ -195,5 +196,62 @@ describe("admin return path", () => {
 		).toBe(
 			"https://openscholar.example.org/evidence-libraries/amber?error=invalid_code&return=%2Fadmin",
 		);
+	});
+});
+
+describe("unknown path lookup", () => {
+	it.each([
+		"/404",
+		"/admin",
+		"/citation",
+		"/contact",
+		"/cookie-policy",
+		"/gapmaps",
+		"/lib",
+		"/map",
+		"/newlib",
+		"/privacy",
+		"/profile",
+		"/statistics",
+		"/takedown",
+	])("treats the built-in page %s as a known route", (pathname) => {
+		expect(getRedirectLookupPath(pathname, false)).toBeNull();
+		expect(getRedirectLookupPath(`/en-GB${pathname}`, false)).toBeNull();
+	});
+
+	it("keeps the terms page for itself when the owner wrote terms", () => {
+		expect(getRedirectLookupPath("/terms", true)).toBeNull();
+		expect(getRedirectLookupPath("/en-GB/terms", true)).toBeNull();
+	});
+
+	it("looks up /terms when the owner wrote no terms", () => {
+		expect(getRedirectLookupPath("/terms", false)).toBe("terms");
+		expect(getRedirectLookupPath("/en-GB/terms", false)).toBe("terms");
+	});
+
+	it("always looks up an address below /terms", () => {
+		expect(getRedirectLookupPath("/terms/archive", true)).toBe(
+			"terms/archive",
+		);
+		expect(getRedirectLookupPath("/en-GB/terms/archive", true)).toBe(
+			"terms/archive",
+		);
+		expect(getRedirectLookupPath("/terms/archive", false)).toBe(
+			"terms/archive",
+		);
+	});
+
+	it("looks up a path the library does not serve", () => {
+		expect(getRedirectLookupPath("/old-report/2024", true)).toBe(
+			"old-report/2024",
+		);
+		expect(getRedirectLookupPath("/en-GB/old-report/2024", true)).toBe(
+			"old-report/2024",
+		);
+	});
+
+	it("has nothing to look up at the site root", () => {
+		expect(getRedirectLookupPath("/", true)).toBeNull();
+		expect(getRedirectLookupPath("/en-GB", true)).toBeNull();
 	});
 });

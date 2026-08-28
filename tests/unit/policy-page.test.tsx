@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -75,5 +75,25 @@ describe("policy page", () => {
 
 		expect(markup).toContain("Terms of use");
 		expect(markup).toContain("Use the library for research and teaching.");
+	});
+
+	it("sends the update date as one readable sentence", async () => {
+		const document = await loadPolicyDocument(withManifestText, "terms");
+		// renderToString streams the page the same way the server does, so this
+		// is the HTML a reader's browser and a search engine actually receive.
+		const html = renderToString(
+			<PolicyPage
+				content={document!.content}
+				title="Terms of use"
+				description="The rules for using this library."
+				lastUpdated={document!.lastUpdated}
+				otherPolicyLink={{ href: "/privacy", label: "Privacy" }}
+				homeLabel="Home"
+			/>,
+		);
+
+		// The fixture's terms text carries no date, so the page falls back to
+		// the date the owner last saved their settings.
+		expect(html).toContain("Updated 27 July 2026");
 	});
 });
