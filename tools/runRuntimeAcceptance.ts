@@ -364,6 +364,25 @@ async function requireHttpSuccess(url: string, description: string) {
 	return response;
 }
 
+async function requireHttpRedirect(
+	url: string,
+	expectedLocationPrefix: string,
+	description: string,
+) {
+	const response = await fetch(url, { redirect: "manual" });
+	await response.body?.cancel();
+	assert.ok(
+		response.status >= 300 && response.status < 400,
+		`${description} must redirect, but answered HTTP ${response.status}`,
+	);
+	const location = response.headers.get("location") ?? "";
+	assert.ok(
+		location.startsWith(expectedLocationPrefix),
+		`${description} must send the browser to ${expectedLocationPrefix}, but sent it to ${location || "nowhere"}`,
+	);
+	return response;
+}
+
 async function verifyRepositoryComposeStartup(profile: Profile) {
 	const config = structuredClone(profile.config);
 	config.services.database.url =
@@ -429,7 +448,11 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			`${baseUrl}/${config.localization.defaultLocale}/lib`,
 			"Public library",
 		);
-		await requireHttpSuccess(`${baseUrl}/admin`, "Admin");
+		await requireHttpRedirect(
+			`${baseUrl}/admin`,
+			config.authentication.openScholar.loginPageUrl,
+			"Signed-out admin",
+		);
 	} finally {
 		compose("down", "--volumes");
 	}
