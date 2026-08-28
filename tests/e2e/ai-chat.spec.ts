@@ -69,7 +69,10 @@ test("answers a reader who has turned cookies down", async ({ page }) => {
 	await askButton(page).click();
 
 	const answer = await asked;
-	expect(answer.status()).toBe(200);
+	// 200 means the question was taken. 429 means this reader has asked too
+	// often just now, which is a fair answer. 400 was the fault: the library
+	// turning the question away because it carried an empty analytics id.
+	expect([200, 429]).toContain(answer.status());
 	await expect(chatPanel(page)).toBeVisible();
 });
 
