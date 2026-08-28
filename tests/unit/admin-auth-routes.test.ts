@@ -18,16 +18,35 @@ const openScholar = {
 	machineCredential,
 };
 
+const adminCookie = { value: undefined as string | undefined };
+
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: () => ({
 		authentication: { openScholar, secret },
+		localization: { defaultLocale: "en-GB" },
 	}),
 }));
+vi.mock("next/headers", () => ({
+	cookies: async () => ({
+		get: (name: string) =>
+			name === "evidence_library_admin" && adminCookie.value
+				? { name, value: adminCookie.value }
+				: undefined,
+	}),
+}));
+vi.mock("@opendeved/evidence-library-core/zotero-schema", () => ({
+	getZoteroSchema: () => ({ itemTypes: [] }),
+}));
+vi.mock("@/components/admin/AdminWorkbench", () => ({
+	default: () => null,
+}));
 
+import AdminPage from "@/app/[locale]/admin/page";
 import { GET as redeem } from "@/app/api/admin/session/route";
 import { POST as logout } from "@/app/api/admin/session/logout/route";
 import {
 	adminSessionCookieName,
+	createAdminSessionToken,
 	verifyAdminSessionToken,
 } from "@/lib/admin/access";
 
@@ -57,6 +76,20 @@ function redeemRequest(
 				}
 			: undefined,
 	);
+}
+
+async function captureRedirect(render: Promise<unknown>) {
+	try {
+		await render;
+	} catch (error) {
+		const digest = (error as { digest?: string }).digest ?? "";
+		const parsed = digest.match(
+			/^NEXT_REDIRECT;(?:replace|push);(.*);(\d+);$/u,
+		);
+		if (parsed) return { status: Number(parsed[2]), url: parsed[1] };
+		throw error;
+	}
+	return null;
 }
 
 function sessionCookieValue(response: Response) {
@@ -204,5 +237,54 @@ describe("admin session routes", () => {
 		expect(response.headers.get("location")).toBe(
 			"https://library.example.org/admin",
 		);
+	});
+});
+
+describe("signed-out admin page", () => {
+	beforeEach(() => {
+		adminCookie.value = undefined;
+	});
+
+	it("sends the visitor to OpenScholar with the page to come back to", async () => {
+		const redirect = await captureRedirect(
+			AdminPage({
+				params: Promise.resolve({ locale: "en-GB" as const }),
+				searchParams: Promise.resolve({ scope: "drafts" }),
+			}),
+		);
+
+		expect(redirect).toEqual({
+			status: 307,
+			url: `${openScholar.loginPageUrl}?return=%2Fadmin%3Fscope%3Ddrafts`,
+		});
+	});
+
+	it("keeps the locale of the admin page it came from", async () => {
+		const redirect = await captureRedirect(
+			AdminPage({
+				params: Promise.resolve({ locale: "fr" as const }),
+				searchParams: Promise.resolve({}),
+			}),
+		);
+
+		expect(redirect?.url).toBe(
+			`${openScholar.loginPageUrl}?return=%2Ffr%2Fadmin`,
+		);
+	});
+
+	it("keeps a signed-in visitor on the admin page", async () => {
+		adminCookie.value = createAdminSessionToken(redeemedIdentity, {
+			libraryId,
+			secret,
+		});
+
+		const redirect = await captureRedirect(
+			AdminPage({
+				params: Promise.resolve({ locale: "en-GB" as const }),
+				searchParams: Promise.resolve({}),
+			}),
+		);
+
+		expect(redirect).toBeNull();
 	});
 });
