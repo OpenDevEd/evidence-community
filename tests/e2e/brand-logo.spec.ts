@@ -32,8 +32,9 @@ type LogoShape = (typeof logoShapes)[number];
 type LogoBox = {
 	boxHeight: number;
 	cap: number;
-	exactWidth: boolean;
 	imageHeight: number;
+	/** Space kept inside the image, which the picture cannot use. */
+	padding: number;
 	place: string;
 };
 
@@ -41,36 +42,36 @@ const desktopBoxes = {
 	cookie: {
 		boxHeight: 32,
 		cap: 144,
-		exactWidth: true,
 		imageHeight: 32,
+		padding: 0,
 		place: "cookie",
 	},
 	footer: {
 		boxHeight: 48,
 		cap: 224,
-		exactWidth: true,
 		imageHeight: 48,
+		padding: 0,
 		place: "footer",
 	},
 	funder: {
 		boxHeight: 48,
 		cap: 160,
-		exactWidth: false,
-		imageHeight: 40,
+		imageHeight: 48,
+		padding: 8,
 		place: "funder",
 	},
 	header: {
 		boxHeight: 40,
 		cap: 192,
-		exactWidth: true,
 		imageHeight: 40,
+		padding: 0,
 		place: "header",
 	},
 	institution: {
 		boxHeight: 32,
 		cap: 32,
-		exactWidth: false,
 		imageHeight: 32,
+		padding: 8,
 		place: "institution",
 	},
 } satisfies Record<string, LogoBox>;
@@ -133,7 +134,10 @@ async function expectLogoFits(
 
 	const boxRectangle = await rectangleOf(boxLocator, `${label} box`);
 	const imageRectangle = await rectangleOf(image, `${label} image`);
-	const expectedWidth = Math.min(box.cap, box.imageHeight * shape.ratio);
+	const expectedWidth = Math.min(
+		box.cap,
+		(box.imageHeight - box.padding) * shape.ratio + box.padding,
+	);
 
 	console.log(
 		`${label}: box ${boxRectangle.width.toFixed(1)}x${boxRectangle.height.toFixed(1)} | image ${imageRectangle.width.toFixed(1)}x${imageRectangle.height.toFixed(1)} | expected height ${box.boxHeight} | cap ${box.cap}`,
@@ -142,11 +146,7 @@ async function expectLogoFits(
 	expect(boxRectangle.height).toBeCloseTo(box.boxHeight, 0);
 	expect(imageRectangle.height).toBeCloseTo(box.imageHeight, 0);
 	expect(boxRectangle.width).toBeLessThanOrEqual(box.cap + 0.5);
-	expect(imageRectangle.width).toBeLessThanOrEqual(box.cap + 0.5);
-
-	if (box.exactWidth) {
-		expect(imageRectangle.width).toBeCloseTo(expectedWidth, 0);
-	}
+	expect(imageRectangle.width).toBeCloseTo(expectedWidth, 0);
 }
 
 async function declineCookies(page: Page) {
