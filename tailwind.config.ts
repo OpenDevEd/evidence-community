@@ -129,6 +129,12 @@ const config: Config = {
 				// A long filter name is cut short so the row still fits.
 				"filter-chip": "16rem",
 				"results-note": "16rem",
+				// How wide a library logo may grow in each bar.
+				"logo-header": "12rem",
+				"logo-footer": "14rem",
+				"logo-cookie": "9rem",
+				"logo-funder": "10rem",
+				"logo-admin": "9rem",
 			},
 			scale: {
 				// The Ask AI button lifts a little under the pointer.
@@ -157,6 +163,10 @@ const config: Config = {
 			},
 			width: {
 				dialog: "calc(100% - 2rem)",
+				// While a logo picture loads its box holds the widest that
+				// logo may ever be, so the bar does not jump when it lands.
+				"logo-header": "12rem",
+				"logo-footer": "14rem",
 				"workbench-control": "120px",
 				"workbench-list": "150px",
 			},

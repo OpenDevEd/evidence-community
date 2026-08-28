@@ -42,11 +42,19 @@ svg { flex: none; vertical-align: -3px; }
 }
 
 /*
- * Tenant logo. [data-library-logo] mirrors LIBRARY_LOGO_DATA_ATTRIBUTE and
- * the rule below is what buildLibraryLogoCss() emits for
- * identity.assets.logoStyles in config/library.local.json.
+ * Tenant logo. [data-library-logo] mirrors LIBRARY_LOGO_DATA_ATTRIBUTE. The
+ * bar owns the height, as BrandLogoBox does in the real admin toolbar: the
+ * box is a fixed height, the picture fills it, keeps its shape and stops at
+ * the width cap. identity.assets.logoStyles can only change how the logo
+ * looks, never its size or place, so nothing here comes from the tenant.
  */
-[data-library-logo] { max-width: 11rem; height: auto; display: block; }
+[data-library-logo] {
+	display: block;
+	height: 28px;
+	width: auto;
+	max-width: 9rem;
+	object-fit: contain;
+}
 .brandmark { display: inline-flex; align-items: center; min-width: 0; flex: none; }
 .brandmark .brandname { font-weight: 500; white-space: nowrap; }
 

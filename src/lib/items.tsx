@@ -9,7 +9,7 @@ import { createFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import {
 	useLibraryConfig,
@@ -586,10 +586,9 @@ function ItemInstitution({ value, t, pathname }: FormatterProps) {
 								)}
 							>
 								{configuredInstitution?.logoUrl && (
-									<RuntimeAsset
-										reference={configuredInstitution.logoUrl}
+									<InstitutionLogo
 										alt=""
-										className="size-6 shrink-0 rounded-md bg-white object-contain p-0.5"
+										logoUrl={configuredInstitution.logoUrl}
 									/>
 								)}
 								<h3 className="text-white/80">{institution}</h3>

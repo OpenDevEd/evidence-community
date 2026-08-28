@@ -22,7 +22,7 @@
 				"https://assets.example.org/library/icon.svg",
 				"https://assets.example.org/library/icon.ico"
 			],
-			"logoStyles": "max-width: 12rem;\nheight: auto;",
+			"logoStyles": "border-radius: 8px;",
 			"shareImage": "https://assets.example.org/library/share-card.png"
 		}
 	},

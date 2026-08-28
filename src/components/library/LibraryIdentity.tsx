@@ -3,71 +3,274 @@
 /* Runtime asset hosts cannot be known to next/image at build time. */
 /* eslint-disable @next/next/no-img-element */
 
-import {
-	useCallback,
-	useEffect,
-	useRef,
-} from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
 
 import { LIBRARY_LOGO_ATTRIBUTES } from "@/config/library-config/identity";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-export function LibraryLogoImages({
+/**
+ * Which logo file is on screen right now, and whether that exact file has
+ * already settled — arrived, or failed for good.
+ *
+ * A library ships a light and a dark logo, and switching between light and
+ * dark swaps which one is shown. Every file that settles is remembered, so a
+ * colour scheme that has been shown once never asks the bar to hold room for
+ * it again. Readiness is worked out while the page is being drawn, so it
+ * cannot flicker for a frame after a switch.
+ */
+export function useLibraryLogo() {
+	const { identity } = useLibraryConfig();
+	const { resolvedTheme } = useTheme();
+	const [settledSources, setSettledSources] = useState<ReadonlySet<string>>(
+		() => new Set<string>(),
+	);
+	const shownSource =
+		resolvedTheme === "dark"
+			? identity.assets.logoDark
+			: identity.assets.logoLight;
+	const onLogoSettled = useCallback((source: string) => {
+		setSettledSources((current) =>
+			current.has(source) ? current : new Set(current).add(source),
+		);
+	}, []);
+
+	return { isLoaded: settledSources.has(shownSource), onLogoSettled };
+}
+
+/**
+ * The library's light and dark logo files. Deliberately not exported: every
+ * logo on the site must go through a box below, which owns its height.
+ */
+function LibraryLogoImages({
 	className,
-	onLoad,
+	onSettled,
 }: {
 	className?: string;
-	onLoad?: () => void;
+	onSettled?: (source: string) => void;
 }) {
 	const { identity } = useLibraryConfig();
 	const t = useTranslations("ui");
-	const lightLogoRef = useRef<HTMLImageElement>(null);
-	const darkLogoRef = useRef<HTMLImageElement>(null);
-	const hasReportedReady = useRef(false);
-	const reportReady = useCallback(() => {
-		if (hasReportedReady.current) return;
-		hasReportedReady.current = true;
-		onLoad?.();
-	}, [onLoad]);
-
-	useEffect(() => {
-		if (
-			lightLogoRef.current?.complete ||
-			darkLogoRef.current?.complete
-		) {
-			reportReady();
-		}
-	}, [reportReady]);
+	/**
+	 * Both files are reported, not only the one on screen. The hidden one is
+	 * the picture the other colour scheme uses, and remembering it is what
+	 * stops the bar holding room for it a second time.
+	 */
+	const reportSettled = useCallback(
+		(element: HTMLImageElement | null) => {
+			const source = element?.getAttribute("src");
+			if (source) onSettled?.(source);
+		},
+		[onSettled],
+	);
+	/**
+	 * A picture that was already in the browser's store finishes before the
+	 * page is wired up, so its load event never reaches us. Ask each one as it
+	 * is put on the page, which happens before anything is drawn.
+	 */
+	const checkAlreadyThere = useCallback(
+		(element: HTMLImageElement | null) => {
+			if (element?.complete) reportSettled(element);
+		},
+		[reportSettled],
+	);
 
 	return (
 		<>
 			<img
 				{...LIBRARY_LOGO_ATTRIBUTES}
-				ref={lightLogoRef}
+				ref={checkAlreadyThere}
 				alt={t("logoAlt", {
 					company: identity.name,
 					theme: "light",
 				})}
 				className={twMerge("dark:hidden", className)}
-				onError={reportReady}
-				onLoad={reportReady}
+				onError={(event) => reportSettled(event.currentTarget)}
+				onLoad={(event) => reportSettled(event.currentTarget)}
 				src={identity.assets.logoLight}
 			/>
 			<img
 				{...LIBRARY_LOGO_ATTRIBUTES}
-				ref={darkLogoRef}
+				ref={checkAlreadyThere}
 				alt={t("logoAlt", {
 					company: identity.name,
 					theme: "dark",
 				})}
 				className={twMerge("hidden dark:block", className)}
-				onError={reportReady}
-				onLoad={reportReady}
+				onError={(event) => reportSettled(event.currentTarget)}
+				onLoad={(event) => reportSettled(event.currentTarget)}
 				src={identity.assets.logoDark}
 			/>
 		</>
+	);
+}
+
+/**
+ * The rules every logo image carries. The box around it owns the height. The
+ * image fills that height, keeps its shape, and is never cut off.
+ *
+ * No display rule belongs here. The light and dark copies of a logo switch
+ * each other off with `hidden`, and a display rule added later would win and
+ * show both at once.
+ */
+const BRAND_LOGO_IMAGE_CLASS = "h-full w-auto object-contain";
+
+/**
+ * A slot of a fixed height for a logo. Give it the height its bar has room
+ * for. A square, wide or tall image file then always draws at that height
+ * instead of opening the bar to its own pixel size.
+ */
+function BrandLogoBox({
+	children,
+	className,
+	place,
+}: {
+	children: ReactNode;
+	className?: string;
+	place: string;
+}) {
+	return (
+		<span
+			// Nothing is drawn outside this box. A library's own logo CSS is
+			// already limited to what stays inside the picture, and this is
+			// the backstop if one of those checks is ever wrong.
+			className={twMerge(
+				"flex shrink-0 items-center overflow-hidden",
+				className,
+			)}
+			data-brand-logo-box={place}
+		>
+			{children}
+		</span>
+	);
+}
+
+/**
+ * How tall the library's own logo is drawn in each place, and how wide the
+ * box lets it grow. The image never sets its own width, so the cap here is
+ * the only thing that can stop a very wide logo.
+ */
+const LIBRARY_LOGO_SIZES = {
+	admin: "h-7 max-w-logo-admin",
+	cookie: "h-8 max-w-logo-cookie",
+	footer: "h-12 max-w-logo-footer",
+	// The header shrinks before the navigation does, so a wide logo can never
+	// push the buttons beside it off the bar.
+	header: "h-9 min-w-0 max-w-logo-header shrink xl:h-10",
+} as const;
+
+type LibraryLogoPlace = keyof typeof LIBRARY_LOGO_SIZES;
+
+/** The library's own logo, drawn inside the box its bar allows. */
+export function LibraryLogo({
+	className,
+	onSettled,
+	place,
+}: {
+	className?: string;
+	onSettled?: (source: string) => void;
+	place: LibraryLogoPlace;
+}) {
+	return (
+		<BrandLogoBox
+			className={twMerge(LIBRARY_LOGO_SIZES[place], className)}
+			place={place}
+		>
+			<LibraryLogoImages
+				className={twMerge(BRAND_LOGO_IMAGE_CLASS, "max-w-full")}
+				onSettled={onSettled}
+			/>
+		</BrandLogoBox>
+	);
+}
+
+/**
+ * The sizes an institution's logo is drawn at: a small mark in a suggestion
+ * row, a badge beside a line of text, and the square on a record page.
+ */
+const INSTITUTION_LOGO_SIZES = {
+	badge: {
+		box: "size-6 justify-center",
+		image: "rounded-md bg-white/80 p-0.5",
+	},
+	small: {
+		box: "size-4 justify-center",
+		image: "rounded bg-white/80 p-0.5",
+	},
+	row: {
+		box: "size-8 justify-center rounded-lg bg-accent/10 text-lg text-accent brightness-150",
+		image: "rounded-lg bg-white p-1",
+	},
+} as const;
+
+/**
+ * An institution's logo in its own square box. Without a logo it shows the
+ * fallback, or nothing when the caller has none.
+ */
+export function InstitutionLogo({
+	alt,
+	className,
+	fallback,
+	logoUrl,
+	size = "badge",
+}: {
+	alt: string;
+	className?: string;
+	fallback?: ReactNode;
+	logoUrl?: string;
+	size?: keyof typeof INSTITUTION_LOGO_SIZES;
+}) {
+	if (!logoUrl && !fallback) return null;
+	const shape = INSTITUTION_LOGO_SIZES[size];
+
+	return (
+		<BrandLogoBox
+			className={twMerge(shape.box, className)}
+			place={`institution-${size}`}
+		>
+			{logoUrl ? (
+				<RuntimeAsset
+					alt={alt}
+					className={twMerge(
+						BRAND_LOGO_IMAGE_CLASS,
+						"max-w-full",
+						shape.image,
+					)}
+					height={32}
+					reference={logoUrl}
+					width={32}
+				/>
+			) : (
+				fallback
+			)}
+		</BrandLogoBox>
+	);
+}
+
+/** A funder's logo in the footer, inside the box the footer row allows. */
+export function FunderLogo({
+	alt,
+	logoUrl,
+}: {
+	alt: string;
+	logoUrl: string;
+}) {
+	return (
+		<BrandLogoBox
+			className="h-12 max-w-logo-funder justify-center rounded-md bg-white"
+			place="funder"
+		>
+			<RuntimeAsset
+				alt={alt}
+				className={twMerge(BRAND_LOGO_IMAGE_CLASS, "max-w-full p-1")}
+				height={48}
+				reference={logoUrl}
+				width={160}
+			/>
+		</BrandLogoBox>
 	);
 }
 

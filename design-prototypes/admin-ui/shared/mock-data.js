@@ -16,15 +16,17 @@
 window.ProtoData = (function () {
 	/*
 	 * Mirrors config/library.local.json → identity, rendered the way the real
-	 * frontend does it: <img data-library-logo> (LibraryLogoImages.tsx) with
-	 * identity.assets.logoStyles applied via buildLibraryLogoCss(). forcedMode
-	 * is "dark", so only logoDark is used.
+	 * frontend does it: <img data-library-logo> (LibraryIdentity.tsx) inside a
+	 * box that owns the height, with identity.assets.logoStyles applied via
+	 * buildLibraryLogoCss(). Those styles may only change how the logo looks —
+	 * colour, border, corner radius, an inset shadow — never its size or
+	 * place. forcedMode is "dark", so only logoDark is used.
 	 */
 	const identity = {
 		name: "Purple Runtime Library",
 		assets: {
 			logoDark: "https://edu-works.org/logos/opendeved/logo.png",
-			logoStyles: "max-width: 11rem;\nheight: auto;",
+			logoStyles: "border-radius: 4px;",
 		},
 	};
 

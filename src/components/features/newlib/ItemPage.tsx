@@ -73,7 +73,7 @@ import {
 	type DoiDisplayLink,
 } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
@@ -430,19 +430,12 @@ function ItemInstitution({ institution }: { institution?: string }) {
 			<ItemRow
 				key={institution}
 				icon={
-					<div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg text-accent bg-accent/10 brightness-150 shrink-0">
-						{configuredInstitution?.logoUrl ? (
-							<RuntimeAsset
-								reference={configuredInstitution.logoUrl}
-								alt=""
-								className="size-full rounded-lg bg-white object-contain p-1"
-								width={32}
-								height={32}
-							/>
-						) : (
-							<HiAcademicCap />
-						)}
-					</div>
+					<InstitutionLogo
+						alt=""
+						fallback={<HiAcademicCap />}
+						logoUrl={configuredInstitution?.logoUrl}
+						size="row"
+					/>
 				}
 				title={institution}
 			/>

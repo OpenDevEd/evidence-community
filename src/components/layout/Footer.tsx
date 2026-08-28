@@ -10,10 +10,11 @@ import type { IconType } from "react-icons";
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
+	FunderLogo,
 	FundingPartners,
-	LibraryLogoImages,
+	LibraryLogo,
+	useLibraryLogo,
 } from "@/components/library/LibraryIdentity";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {
@@ -78,17 +79,14 @@ function FooterLink({ link }: { link: RuntimeLeafLink }) {
 }
 
 function Logo() {
-	const [isLoaded, setIsLoaded] = useState(false);
+	const { isLoaded, onLogoSettled } = useLibraryLogo();
 
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="flex h-14 w-58 items-center justify-center rounded-lg"
+			className="flex h-12 w-logo-footer items-center justify-center rounded-lg"
 		>
-			<LibraryLogoImages
-				className="h-auto max-h-full w-auto max-w-full"
-				onLoad={() => setIsLoaded(true)}
-			/>
+			<LibraryLogo onSettled={onLogoSettled} place="footer" />
 		</Skeleton>
 	);
 }
@@ -265,12 +263,9 @@ export default function Footer() {
 						const content = (
 							<span className="flex items-center gap-3 text-black/70 dark:text-white/70">
 								{funder.logoUrl && (
-									<RuntimeAsset
-										reference={funder.logoUrl}
+									<FunderLogo
 										alt={funder.name}
-										className="h-12 w-auto max-w-40 rounded-md bg-white object-contain p-1"
-										width={160}
-										height={48}
+										logoUrl={funder.logoUrl}
 									/>
 								)}
 								{!funder.logoUrl && (

@@ -17,5 +17,11 @@ export default defineConfig([{
         "@typescript-eslint/no-explicit-any": "off",
         "react-hooks/exhaustive-deps": "off",
         "no-var": "off",
+
+        // Every picture of a library, an institution or a funder must go
+        // through the shared logo boxes in LibraryIdentity.tsx, so it can
+        // never open the bar it sits in. A raw <img> is allowed only where
+        // those boxes are built, with a comment saying why.
+        "@next/next/no-img-element": "error",
     },
 }]);

@@ -27,8 +27,14 @@ vi.mock("@/components/features/analytics/AnalyticsConsentProvider", () => ({
 	}),
 }));
 vi.mock("@/components/library/LibraryIdentity", () => ({
+	FunderLogo: () => null,
 	FundingPartners: () => null,
-	LibraryLogoImages: () => null,
+	InstitutionLogo: () => null,
+	LibraryLogo: () => null,
+	useLibraryLogo: () => ({
+		isLoaded: true,
+		onLogoSettled: () => undefined,
+	}),
 }));
 
 const configState = { poweredBy: true };

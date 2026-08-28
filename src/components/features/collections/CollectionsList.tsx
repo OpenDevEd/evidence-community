@@ -46,7 +46,7 @@ import {
 import { BsList } from "react-icons/bs";
 import { Button } from "../../nextui/Button";
 import { InstitutionsData } from "@/app/api/institutions/types";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import {
 	useLibraryConfig,
@@ -880,10 +880,9 @@ export default function CollectionsList({
 				className="w-full flex justify-start mb-4"
 				startContent={
 					configuredInstitution?.logoUrl ? (
-						<RuntimeAsset
-							reference={configuredInstitution.logoUrl}
+						<InstitutionLogo
 							alt=""
-							className="size-6 shrink-0 rounded-md bg-white/80 object-contain p-0.5"
+							logoUrl={configuredInstitution.logoUrl}
 						/>
 					) : undefined
 				}

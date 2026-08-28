@@ -19,7 +19,7 @@
       "icons": [
         "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png"
       ],
-      "logoStyles": "width: 3rem;\nheight: 3rem;\nborder: 3px solid #818cf8;"
+      "logoStyles": "border: 3px solid #818cf8;"
     }
   },
   "institutions": [

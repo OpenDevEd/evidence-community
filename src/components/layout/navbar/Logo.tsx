@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 
-import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
+import {
+	LibraryLogo,
+	useLibraryLogo,
+} from "@/components/library/LibraryIdentity";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -14,7 +16,7 @@ interface LogoProps {
 }
 
 export function Logo({ interactive = true }: LogoProps) {
-	const [isLoaded, setIsLoaded] = useState(false);
+	const { isLoaded, onLogoSettled } = useLibraryLogo();
 	const { navigation } = useLibraryConfig();
 	const homeLink = getRuntimeHomeHref(navigation.links);
 
@@ -27,9 +29,16 @@ export function Logo({ interactive = true }: LogoProps) {
 					"cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105"
 			)}
 		>
-			<LibraryLogoImages
-				className="pointer-events-none h-auto max-h-full w-auto max-w-full"
-				onLoad={() => setIsLoaded(true)}
+			<LibraryLogo
+				className={twMerge(
+					"pointer-events-none",
+					// While the picture is on its way the box holds the widest
+					// a logo may be, so the bar does not jump when it lands.
+					// Once it is there the box is only as wide as the logo.
+					isLoaded ? "w-auto" : "w-logo-header",
+				)}
+				place="header"
+				onSettled={onLogoSettled}
 			/>
 		</div>
 	);
@@ -37,11 +46,9 @@ export function Logo({ interactive = true }: LogoProps) {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="w-[10.6875rem] h-[2.5rem] rounded-lg flex justify-center items-center"
+			className="flex h-9 w-auto min-w-0 max-w-logo-header shrink items-center justify-center rounded-lg xl:h-10"
 		>
 			{interactive ? <Link href={homeLink}>{logoContent}</Link> : logoContent}
 		</Skeleton>
 	);
 }
-
-export default Logo;

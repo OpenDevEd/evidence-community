@@ -27,7 +27,7 @@ container image can be started repeatedly with different mounted documents.
 | --- | --- | --- |
 | `schemaVersion`, `revision`, `updatedAt` | Contract version and revision identity | Schema version `1`; bounded revision; UTC timestamp |
 | `identity` | Name, short name, tagline, description, canonical origin, funding partners | HTTPS origin; tagline is one line up to 160 characters; description up to 300 characters and used for page and social previews; bounded unique partner IDs |
-| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; CSS declarations only |
+| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; logo CSS only from the allowed list below |
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
@@ -98,6 +98,43 @@ shared image is built.
 
 There are no customer assets under `public/logos` or `public/assets`, and there
 is no customer-dependent `/images` rewrite.
+
+The bar decides how tall a logo is drawn. The header gives it 40px (36px on a
+phone), the footer 48px, the cookie dialog 32px, and the admin toolbar 28px.
+The image fills that height, keeps its shape, and stops at 12rem, 14rem and
+9rem wide. A square, wide or tall logo file therefore never opens the bar to
+its own pixel size. Funder logos in the footer and institution logos on a
+record page, in a list and in a search suggestion use the same rule.
+
+`identity.assets.logoStyles` can still change how a logo looks, but only with
+rules from a written-out list: `background-color`, `color`, `filter`,
+`box-shadow`, `border-radius` with its four corners, and `border` with its
+sides, colours, styles and widths. Everything else is refused when the
+configuration is checked: sizes, spacing, position, transforms, custom
+properties, browser-prefixed rules, at-rules and comments. One line of CSS
+used to be enough to push a logo straight out of its bar, so the runtime now
+allows only what is on the list rather than trying to name everything unsafe.
+
+Nothing may be drawn outside the logo. A `box-shadow` must say `inset`, and
+`filter` may only change colour: `brightness`, `contrast`, `grayscale`,
+`hue-rotate`, `invert`, `opacity`, `saturate` and `sepia`. There is no
+`blur()` and no `drop-shadow()`, because both put ink beyond the edge of the
+picture.
+
+A colour may be written any way CSS allows — `rgb`, `rgba`, `hsl`, `hsla`,
+`hwb`, `lab`, `lch`, `oklab`, `oklch`, `color`, `color-mix` and `light-dark`.
+Every other name is refused, including sums such as `calc()`, `min()` and
+`clamp()`, which can hide a very large number inside a value that reads as if
+it were small, and anything that fetches or reads, such as `url()` or `var()`.
+A backslash and `//` are refused as well.
+
+Lengths are given in `px` and nothing else, and may not exceed 8px. Angles and
+percentages inside a colour are not lengths. A corner radius has no size
+limit, because it only ever cuts inwards.
+
+None of this is the last line of defence. Each logo box clips whatever is
+inside it, so nothing can reach the bar around it even if a check is ever
+wrong.
 
 ## Database boundary
 

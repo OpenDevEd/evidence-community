@@ -3,7 +3,7 @@
 import type { useFormatter } from "next-intl";
 import { twMerge } from "tailwind-merge";
 
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
@@ -133,22 +133,22 @@ export function PublicationStatusBadges({
 	);
 }
 
-export function InstitutionLogo({
+export function PreviewInstitutionLogo({
 	institution,
 	institutionAlt,
-	className = "size-6 shrink-0 rounded-md bg-white/80 object-contain p-0.5",
+	size = "badge",
 }: {
 	institution: PublicationPreviewData["institution"];
 	institutionAlt: (name: string) => string;
-	className?: string;
+	size?: "badge" | "small";
 }) {
 	if (!institution?.logoUrl) return null;
 
 	return (
-		<RuntimeAsset
-			reference={institution.logoUrl}
+		<InstitutionLogo
 			alt={institutionAlt(institution.name)}
-			className={className}
+			logoUrl={institution.logoUrl}
+			size={size}
 		/>
 	);
 }
@@ -165,7 +165,7 @@ function PreviewByline({
 
 	return (
 		<div className="flex items-center gap-1.5">
-			<InstitutionLogo
+			<PreviewInstitutionLogo
 				institution={institution}
 				institutionAlt={institutionAlt}
 			/>

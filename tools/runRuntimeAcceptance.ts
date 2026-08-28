@@ -1247,6 +1247,20 @@ function publicExpectations(profile: Profile) {
 			config.identity.assets.logoDark,
 			config.identity.assets.logoLight,
 		].join("|"),
+		// Every picture a library brings: its own logo, its institutions and
+		// its funders. The logo measurement serves each of these a test shape.
+		PLAYWRIGHT_EXPECTED_BRAND_ASSET_URLS: Array.from(
+			new Set([
+				config.identity.assets.logoDark,
+				config.identity.assets.logoLight,
+				...config.institutions
+					.map((institution) => institution.logoUrl)
+					.filter(Boolean),
+				...config.footer.funders
+					.map((funder) => funder.logoUrl)
+					.filter(Boolean),
+			]),
+		).join("|"),
 		PLAYWRIGHT_EXPECTED_FAVICON_URL: config.identity.assets.favicon,
 		PLAYWRIGHT_EXPECTED_LOGO_STYLE_TOKEN: logoStyleToken ?? "",
 		PLAYWRIGHT_EXPECTED_ACCENT_RGB: formatRgbChannels(
@@ -1383,6 +1397,7 @@ function runBrowserSuite(profile: Profile) {
 			"playwright",
 			"test",
 			"tests/e2e/smoke.spec.ts",
+			"tests/e2e/brand-logo.spec.ts",
 			"--project",
 			"chromium",
 		],
@@ -1457,6 +1472,7 @@ function runAdminBrowserSuite(profile: Profile) {
 		"tests/e2e/admin.spec.ts",
 		"tests/e2e/admin-runtime.spec.ts",
 		"tests/e2e/admin-links.spec.ts",
+		"tests/e2e/admin-brand-logo.spec.ts",
 		"--project",
 		"chromium",
 	]);

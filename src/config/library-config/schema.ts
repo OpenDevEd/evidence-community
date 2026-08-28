@@ -1,4 +1,5 @@
 import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
+import postcss, { type Root } from "postcss";
 import { z } from "zod";
 
 import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
@@ -57,105 +58,270 @@ const fundingPartnerSchema = z
 	})
 	.strict();
 
-function isCssDeclarationList(value: string) {
-	if (!value) return true;
+/**
+ * Everything a library may say about its logo. Each of these changes how the
+ * logo looks and nothing else. The bar decides how big the logo is and where
+ * it sits, so no rule that moves or resizes anything belongs here.
+ */
+const ALLOWED_LOGO_STYLE_PROPERTIES = new Set([
+	"background-color",
+	"border",
+	"border-bottom",
+	"border-bottom-color",
+	"border-bottom-left-radius",
+	"border-bottom-right-radius",
+	"border-bottom-style",
+	"border-bottom-width",
+	"border-color",
+	"border-left",
+	"border-left-color",
+	"border-left-style",
+	"border-left-width",
+	"border-radius",
+	"border-right",
+	"border-right-color",
+	"border-right-style",
+	"border-right-width",
+	"border-style",
+	"border-top",
+	"border-top-color",
+	"border-top-left-radius",
+	"border-top-right-radius",
+	"border-top-style",
+	"border-top-width",
+	"border-width",
+	"box-shadow",
+	"color",
+	"filter",
+]);
 
-	let declarationStart = 0;
-	let parentheses = 0;
-	let quote: "'" | '"' | null = null;
-	let escaped = false;
+const ALLOWED_LOGO_STYLE_LIST = Array.from(ALLOWED_LOGO_STYLE_PROPERTIES)
+	.sort()
+	.join(", ");
 
-	const isDeclaration = (declaration: string) => {
-		const trimmed = declaration.trim();
-		if (!trimmed) return true;
+/** The longest logo CSS a library may save. */
+const MAX_LOGO_STYLE_LENGTH = 10_000;
 
-		let colon = -1;
-		let nestedParentheses = 0;
-		let nestedQuote: "'" | '"' | null = null;
-		let nestedEscape = false;
+/**
+ * The largest length a logo rule may use, in pixels. A border thicker than
+ * this would take over the picture behind it.
+ */
+const MAX_LOGO_STYLE_LENGTH_PX = 8;
 
-		for (let index = 0; index < trimmed.length; index += 1) {
-			const character = trimmed[index];
-			if (nestedEscape) {
-				nestedEscape = false;
-				continue;
-			}
-			if (character === "\\") {
-				nestedEscape = true;
-				continue;
-			}
-			if (nestedQuote) {
-				if (character === nestedQuote) nestedQuote = null;
-				continue;
-			}
-			if (character === "'" || character === '"') {
-				nestedQuote = character;
-				continue;
-			}
-			if (character === "(") nestedParentheses += 1;
-			if (character === ")") nestedParentheses -= 1;
-			if (character === ":" && nestedParentheses === 0) {
-				colon = index;
-				break;
-			}
-		}
+/**
+ * The only names a logo value may call: a colour, or a change of colour.
+ *
+ * Nothing that draws beyond the edges of the picture is here. There is no
+ * `blur()` and no `drop-shadow()`, because both put ink outside the logo, and
+ * no sum such as `calc()`, which can hide a very large number inside a value
+ * that reads as if it were small.
+ */
+const ALLOWED_LOGO_STYLE_FUNCTIONS = new Set([
+	// Colours.
+	"color",
+	"color-mix",
+	"hsl",
+	"hsla",
+	"hwb",
+	"lab",
+	"lch",
+	"light-dark",
+	"oklab",
+	"oklch",
+	"rgb",
+	"rgba",
+	// Changes of colour.
+	"brightness",
+	"contrast",
+	"grayscale",
+	"hue-rotate",
+	"invert",
+	"opacity",
+	"saturate",
+	"sepia",
+]);
 
-		if (colon <= 0) return false;
-		const property = trimmed.slice(0, colon).trim();
-		const declarationValue = trimmed.slice(colon + 1).trim();
+const LOGO_STYLE_FUNCTION_PATTERN = /(-?[a-z][a-z0-9-]*)\s*\(/giu;
 
-		return (
-			/^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/.test(property) &&
-			declarationValue.length > 0
-		);
-	};
+/** The only unit that turns a number into a distance on the screen. */
+const LOGO_STYLE_LENGTH_UNIT_PATTERN = /^px$/iu;
 
-	for (let index = 0; index < value.length; index += 1) {
-		const character = value[index];
-		if (escaped) {
-			escaped = false;
-			continue;
-		}
-		if (character === "\\") {
-			escaped = true;
-			continue;
-		}
-		if (quote) {
-			if (character === quote) quote = null;
-			continue;
-		}
-		if (character === "'" || character === '"') {
-			quote = character;
-			continue;
-		}
-		if (character === "(") parentheses += 1;
-		if (character === ")") {
-			parentheses -= 1;
-			if (parentheses < 0) return false;
-		}
-		if (character === ";" && parentheses === 0) {
-			if (!isDeclaration(value.slice(declarationStart, index))) {
-				return false;
-			}
-			declarationStart = index + 1;
+/** Units that are an angle or a share, never a distance. */
+const LOGO_STYLE_NON_LENGTH_UNIT_PATTERN = /^(%|deg|grad|rad|turn)$/iu;
+
+/** Every number with a unit after it, such as `12px`. */
+const LOGO_STYLE_LENGTH_PATTERN = /(-?(?:\d+\.?\d*|\.\d+))\s*([a-z%]+)/giu;
+
+/** A corner radius only ever cuts inwards, so its size is the owner's business. */
+function isCornerRadius(property: string) {
+	return property.endsWith("radius");
+}
+
+/** The first name in a value that a logo may not call. */
+function findForbiddenFunction(value: string) {
+	for (const [, name] of value.matchAll(LOGO_STYLE_FUNCTION_PATTERN)) {
+		if (!ALLOWED_LOGO_STYLE_FUNCTIONS.has(name.toLowerCase())) {
+			return name;
 		}
 	}
 
-	return (
-		!quote &&
-		parentheses === 0 &&
-		isDeclaration(value.slice(declarationStart))
-	);
+	return null;
+}
+
+/** Splits a value on the commas that separate whole parts of it. */
+function splitLogoStyleLayers(value: string) {
+	const layers: string[] = [];
+	let depth = 0;
+	let start = 0;
+
+	for (let index = 0; index < value.length; index += 1) {
+		const character = value[index];
+		if (character === "(") depth += 1;
+		if (character === ")") depth -= 1;
+		if (character === "," && depth === 0) {
+			layers.push(value.slice(start, index));
+			start = index + 1;
+		}
+	}
+	layers.push(value.slice(start));
+
+	return layers;
+}
+
+/**
+ * The first shadow in the value that would be drawn outside the logo. Only an
+ * `inset` shadow stays within the picture, so only that one is allowed.
+ */
+function findOutwardShadow(property: string, value: string) {
+	if (property !== "box-shadow") return null;
+
+	for (const layer of splitLogoStyleLayers(value)) {
+		if (!/\binset\b/iu.test(layer)) return layer.trim();
+	}
+
+	return null;
+}
+
+function findLogoLengthProblem(property: string, value: string) {
+	// A colour such as #818cf8 reads like a number with letters after it, so
+	// take colours out before looking for sizes.
+	const sizes = value.replace(/#[0-9a-f]{3,8}/giu, " ");
+
+	for (const [, amount, unit] of sizes.matchAll(LOGO_STYLE_LENGTH_PATTERN)) {
+		if (LOGO_STYLE_NON_LENGTH_UNIT_PATTERN.test(unit)) continue;
+		if (!LOGO_STYLE_LENGTH_UNIT_PATTERN.test(unit)) {
+			return `Logo styles cannot measure "${property}" in "${unit}". Use px.`;
+		}
+		// A corner radius only ever cuts inwards, so its size is the owner's
+		// business. Everything else has to stay small.
+		if (
+			!isCornerRadius(property) &&
+			Math.abs(Number.parseFloat(amount)) > MAX_LOGO_STYLE_LENGTH_PX
+		) {
+			return `Logo styles cannot use ${amount}${unit} for "${property}". Nothing may reach more than ${MAX_LOGO_STYLE_LENGTH_PX}px outside the logo.`;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * The first thing wrong with one rule's value, or `null` when the value only
+ * changes how the logo looks and stays inside its box.
+ */
+function findLogoValueProblem(property: string, value: string) {
+	// A backslash can spell a name a different way, such as `\75 rl(` for
+	// `url(`, so no value may contain one. `//` is not CSS at all.
+	if (value.includes("\\") || value.includes("//")) {
+		return `Logo styles cannot use "\\" or "//" in the value of "${property}".`;
+	}
+
+	const forbidden = findForbiddenFunction(value);
+	if (forbidden) {
+		return `Logo styles cannot use "${forbidden.toLowerCase()}()". A logo may only be given plain colours, lengths and shapes.`;
+	}
+
+	const lengthProblem = findLogoLengthProblem(property, value);
+	if (lengthProblem) return lengthProblem;
+
+	const outward = findOutwardShadow(property, value);
+	if (outward !== null) {
+		return `Logo styles can only use a shadow drawn inside the logo. Write "inset" in "${outward}", or leave the shadow out.`;
+	}
+
+	return null;
+}
+
+/** What is wrong with the raw text, before any CSS reader touches it. */
+function findLogoTextProblem(value: string) {
+	// Everything here happens before the CSS reader sees the text. The reader
+	// follows a `sourceMappingURL` comment and opens the file it names, and it
+	// will work through a very long string for a long time, so neither of them
+	// ever reaches it.
+	if (value.length > MAX_LOGO_STYLE_LENGTH) {
+		return `Logo styles must be ${MAX_LOGO_STYLE_LENGTH} characters or fewer.`;
+	}
+	if (/[{}<>]/u.test(value)) {
+		return "Logo styles must contain CSS rules only, without braces or markup.";
+	}
+	if (value.includes("/*") || value.includes("*/")) {
+		return "Logo styles cannot contain comments.";
+	}
+
+	return null;
+}
+
+function findLogoRuleProblem(root: Root) {
+	for (const node of root.nodes) {
+		if (node.type !== "decl") {
+			return `Logo styles may only contain CSS rules, one per line. Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+		}
+
+		const property = node.prop.trim().toLowerCase();
+		if (
+			property.startsWith("--") ||
+			!ALLOWED_LOGO_STYLE_PROPERTIES.has(property)
+		) {
+			return `Logo styles cannot set "${node.prop.trim()}". A logo may only change how it looks. Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+		}
+
+		const valueProblem = findLogoValueProblem(property, node.value);
+		if (valueProblem) return valueProblem;
+	}
+
+	return null;
+}
+
+/**
+ * Reads the logo CSS the way a browser does and answers with the first thing
+ * wrong with it, or `null` when every line is allowed.
+ *
+ * A written-out list of allowed names is the only safe way to do this. A list
+ * of banned names always leaves a way through, such as `flex-basis`, a custom
+ * property, or the same rule behind a browser prefix.
+ */
+function findLogoStyleProblem(value: string) {
+	if (!value.trim()) return null;
+
+	const textProblem = findLogoTextProblem(value);
+	if (textProblem) return textProblem;
+
+	try {
+		return findLogoRuleProblem(
+			postcss.parse(value, { from: undefined, map: false }),
+		);
+	} catch {
+		return `Logo styles must be a list of CSS rules, such as "border-radius: 8px;". Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+	}
 }
 
 const logoStylesSchema = rawStringSchema
-	.pipe(z.string().max(10_000))
-	.refine((value) => !/[{}<]/.test(value), {
-		message:
-			"Logo styles must contain CSS declarations only, without braces or markup",
-	})
-	.refine(isCssDeclarationList, {
-		message: "Logo styles must be a valid CSS declaration list",
+	.pipe(z.string().max(MAX_LOGO_STYLE_LENGTH))
+	.superRefine((value, context) => {
+		const problem = findLogoStyleProblem(value);
+		if (!problem) return;
+
+		context.addIssue({ code: "custom", message: problem });
 	});
 
 const identityAssetsSchema = z
