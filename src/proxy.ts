@@ -20,9 +20,11 @@ import {
 	verifyAdminSessionToken,
 } from "./lib/admin/access";
 import {
+	ADMIN_PAGE_METHODS,
 	buildAdminLoginPageUrl,
 	getCanonicalLibraryRedirect,
 	getUnlocalizedPathname,
+	isAdminPageMethod,
 	isAdminPagePath,
 	isLoginProfilePath,
 } from "./lib/runtime-routing";
@@ -268,24 +270,50 @@ function redirectUnknownPathToNotFoundPage(request: NextRequest) {
 	return NextResponse.redirect(url, 307);
 }
 
-function getAdminLoginRedirect(
+function adminMethodNotAllowedResponse() {
+	return new NextResponse("Method Not Allowed", {
+		headers: {
+			Allow: ADMIN_PAGE_METHODS,
+			"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+			"Content-Type": "text/plain; charset=utf-8",
+		},
+		status: 405,
+	});
+}
+
+function hasAdminSession(
+	request: NextRequest,
+	authentication: LibraryServerConfig["authentication"],
+) {
+	return Boolean(
+		verifyAdminSessionToken(
+			request.cookies.get(adminSessionCookieName())?.value,
+			{
+				libraryId: authentication.openScholar.libraryId,
+				secret: authentication.secret,
+			},
+		),
+	);
+}
+
+function getAdminPageResponse(
 	request: NextRequest,
 	authentication: LibraryServerConfig["authentication"],
 ) {
 	if (!isAdminPagePath(request.nextUrl.pathname)) return null;
+	// An admin page only ever answers a page request. Sending anything else
+	// to OpenScholar would repeat the method and the body on another site.
+	if (!isAdminPageMethod(request.method)) {
+		return adminMethodNotAllowedResponse();
+	}
+	if (hasAdminSession(request, authentication)) return null;
 
-	const session = verifyAdminSessionToken(
-		request.cookies.get(adminSessionCookieName())?.value,
-		{
-			libraryId: authentication.openScholar.libraryId,
-			secret: authentication.secret,
-		},
-	);
-	if (session) return null;
-
-	return buildAdminLoginPageUrl(
-		authentication.openScholar.loginPageUrl,
-		`${request.nextUrl.pathname}${request.nextUrl.search}`,
+	return NextResponse.redirect(
+		buildAdminLoginPageUrl(
+			authentication.openScholar.loginPageUrl,
+			`${request.nextUrl.pathname}${request.nextUrl.search}`,
+		),
+		307,
 	);
 }
 
@@ -298,17 +326,6 @@ export default async function proxy(request: NextRequest) {
 	);
 	if (canonicalRedirect) {
 		return NextResponse.redirect(canonicalRedirect, 308);
-	}
-
-	// The admin page must answer with a real redirect. Rendering it and
-	// calling redirect() there streams a 200 first, so the browser would see
-	// the card-free page instead of the OpenScholar handoff.
-	const adminLoginRedirect = getAdminLoginRedirect(
-		request,
-		libraryConfig.authentication,
-	);
-	if (adminLoginRedirect) {
-		return NextResponse.redirect(adminLoginRedirect, 307);
 	}
 
 	if (request.nextUrl.pathname === "/") {
@@ -473,6 +490,17 @@ export default async function proxy(request: NextRequest) {
 		url.pathname = disabledLocaleRedirectPathname;
 		return NextResponse.redirect(url, 307);
 	}
+
+	// The admin page must answer with a real redirect. Rendering it and
+	// calling redirect() there streams a 200 first, so the browser would see
+	// the card-free page instead of the OpenScholar handoff. This runs after
+	// the locale rules so a switched-off locale is dropped here, not on
+	// OpenScholar.
+	const adminPageResponse = getAdminPageResponse(
+		request,
+		libraryConfig.authentication,
+	);
+	if (adminPageResponse) return adminPageResponse;
 
 	if (libraryConfig.generation.redirects) {
 		const noteRedirectDestination =

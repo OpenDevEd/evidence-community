@@ -364,6 +364,21 @@ async function requireHttpSuccess(url: string, description: string) {
 	return response;
 }
 
+async function requireMethodNotAllowed(url: string, description: string) {
+	const response = await fetch(url, { method: "POST", redirect: "manual" });
+	await response.body?.cancel();
+	assert.equal(
+		response.status,
+		405,
+		`${description} must refuse anything but a page request`,
+	);
+	assert.equal(
+		response.headers.get("allow"),
+		"GET, HEAD",
+		`${description} must say which methods it accepts`,
+	);
+}
+
 async function requireHttpRedirect(
 	url: string,
 	expectedLocationPrefix: string,
@@ -452,6 +467,19 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			`${baseUrl}/admin`,
 			config.authentication.openScholar.loginPageUrl,
 			"Signed-out admin",
+		);
+		await requireMethodNotAllowed(`${baseUrl}/admin`, "Signed-out admin");
+		const switchedOffLocale = PLATFORM_LOCALES.find(
+			(locale) => !config.localization.locales.includes(locale),
+		);
+		assert.ok(
+			switchedOffLocale,
+			"The Compose profile must leave one locale switched off",
+		);
+		await requireHttpRedirect(
+			`${baseUrl}/${switchedOffLocale}/admin`,
+			`${baseUrl}/admin`,
+			"Admin under a switched-off locale",
 		);
 	} finally {
 		compose("down", "--volumes");

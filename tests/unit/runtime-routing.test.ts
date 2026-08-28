@@ -6,6 +6,7 @@ import {
 	getExternalRequestOrigin,
 	getUnlocalizedPathname,
 	getValidatedAdminReturnPath,
+	isAdminPageMethod,
 	isAdminPagePath,
 	isLoginProfilePath,
 } from "@/lib/runtime-routing";
@@ -129,6 +130,19 @@ describe("admin page paths", () => {
 	])("leaves %s alone", (pathname) => {
 		expect(isAdminPagePath(pathname)).toBe(false);
 	});
+});
+
+describe("admin page methods", () => {
+	it.each(["GET", "HEAD"])("serves the admin page for %s", (method) => {
+		expect(isAdminPageMethod(method)).toBe(true);
+	});
+
+	it.each(["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "get"])(
+		"refuses %s on the admin page",
+		(method) => {
+			expect(isAdminPageMethod(method)).toBe(false);
+		},
+	);
 });
 
 describe("admin return path", () => {

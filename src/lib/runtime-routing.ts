@@ -61,6 +61,12 @@ export function isLoginProfilePath(pathname: string) {
 
 export const ADMIN_HOME_PATH = "/admin";
 
+export const ADMIN_PAGE_METHODS = "GET, HEAD";
+
+export function isAdminPageMethod(method: string) {
+	return method === "GET" || method === "HEAD";
+}
+
 export function isAdminPagePath(pathname: string) {
 	const unlocalizedPathname = getUnlocalizedPathname(pathname);
 	return (
