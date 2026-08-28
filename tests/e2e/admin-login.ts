@@ -41,10 +41,12 @@ export async function issueAdminLoginCode(
 export async function createAdminBrowserSession(
 	page: Page,
 	code?: string,
+	returnPath?: string,
 ): Promise<APIResponse> {
 	const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? page.url();
 	const url = new URL("/api/admin/session", baseUrl);
 	url.searchParams.set("code", code ?? (await issueAdminLoginCode()));
+	if (returnPath) url.searchParams.set("return", returnPath);
 	const response = await page.request.get(url.toString(), {
 		maxRedirects: 0,
 	});
@@ -55,20 +57,16 @@ export async function createAdminBrowserSession(
 }
 
 export async function openAdmin(page: Page) {
-	await page.goto("/admin");
-
-	const openScholarLink = page.getByRole("link", {
-		name: "Back to OpenScholar",
-	});
-	const newItemButton = page.getByRole("button", { name: "New item" });
-	await openScholarLink
-		.or(newItemButton)
-		.first()
-		.waitFor({ state: "visible" });
-	if (await openScholarLink.isVisible()) {
-		await createAdminBrowserSession(page);
-		await page.goto("/admin");
+	const response = await createAdminBrowserSession(page, undefined, "/admin");
+	const destination = new URL(response.headers().location);
+	if (destination.pathname !== "/admin" || destination.search !== "") {
+		throw new Error(
+			`Admin login sent the browser to ${destination.href} instead of the admin page`,
+		);
 	}
 
-	await newItemButton.waitFor({ state: "visible" });
+	await page.goto(destination.pathname);
+	await page
+		.getByRole("button", { name: "New item" })
+		.waitFor({ state: "visible" });
 }
