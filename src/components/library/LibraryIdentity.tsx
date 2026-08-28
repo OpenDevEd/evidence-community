@@ -134,9 +134,9 @@ function BrandLogoBox({
 }) {
 	return (
 		<span
-			// Nothing is drawn outside this box. A library can give its logo a
-			// shadow, a border or a blur, and none of them can spill into the
-			// bar however the numbers are written.
+			// Nothing is drawn outside this box. A library's own logo CSS is
+			// already limited to what stays inside the picture, and this is
+			// the backstop if one of those checks is ever wrong.
 			className={twMerge(
 				"flex shrink-0 items-center overflow-hidden",
 				className,

@@ -214,6 +214,61 @@ async function switchColourScheme(page: Page) {
 		.toBe(chosen === "dark");
 }
 
+/**
+ * Reads the header logo box on every frame the browser draws, so a width that
+ * appears for a single frame cannot slip past.
+ */
+async function startWatchingHeaderBox(page: Page) {
+	await page.evaluate(() => {
+		const box = document.querySelector('[data-brand-logo-box="header"]');
+		if (!box) throw new Error("The header logo box is not on the page");
+
+		const widths: number[] = [];
+		let watching = true;
+		const readFrame = () => {
+			widths.push(box.getBoundingClientRect().width);
+			if (watching) requestAnimationFrame(readFrame);
+		};
+
+		Object.assign(window, {
+			__headerBoxWidths: widths,
+			__stopHeaderBoxWatch: () => {
+				watching = false;
+			},
+		});
+		requestAnimationFrame(readFrame);
+	});
+}
+
+async function stopWatchingHeaderBox(page: Page) {
+	return page.evaluate(() => {
+		const scope = window as typeof window & {
+			__headerBoxWidths?: number[];
+			__stopHeaderBoxWatch?: () => void;
+		};
+		scope.__stopHeaderBoxWatch?.();
+
+		return scope.__headerBoxWidths ?? [];
+	});
+}
+
+/** Lets the browser draw a few more frames, without waiting on the clock. */
+async function settleFrames(page: Page, frames = 5) {
+	await page.evaluate(
+		(count) =>
+			new Promise<void>((resolve) => {
+				let left = count;
+				const step = () => {
+					left -= 1;
+					if (left <= 0) resolve();
+					else requestAnimationFrame(step);
+				};
+				requestAnimationFrame(step);
+			}),
+		frames,
+	);
+}
+
 test("holds the room once for each logo and never again", async ({ page }) => {
 	const shape = logoShapes[0];
 	const files = holdLogoFiles(page, shape);
@@ -240,23 +295,20 @@ test("holds the room once for each logo and never again", async ({ page }) => {
 	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
 
 	// Both pictures are here now. Switching either way must never put the
-	// held room back, in any frame.
-	for (let round = 0; round < 2; round += 1) {
-		const widths: number[] = [];
-		const watch = setInterval(() => {
-			void headerBoxWidth(page)
-				.then((width) => widths.push(width))
-				.catch(() => undefined);
-		}, 20);
+	// held room back, in any frame the browser draws.
+	await startWatchingHeaderBox(page);
+	await switchColourScheme(page);
+	await settleFrames(page);
+	await switchColourScheme(page);
+	await settleFrames(page);
 
-		await switchColourScheme(page);
-		await page.waitForTimeout(400);
-		clearInterval(watch);
+	const widths = await stopWatchingHeaderBox(page);
+	console.log(
+		`across both switches: ${widths.length} frames, widest header box ${Math.max(...widths)}`,
+	);
 
-		const widest = Math.max(...widths, await headerBoxWidth(page));
-		console.log(`switch ${round + 1}: widest header box ${widest}`);
-		expect(widest).toBeLessThan(headerReservation);
-	}
+	expect(widths.length).toBeGreaterThan(10);
+	expect(Math.max(...widths)).toBeCloseTo(logoBoxes.header.height, 0);
 });
 
 test("keeps a huge shadow and blur inside the logo box", async ({ page }) => {
