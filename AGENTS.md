@@ -234,9 +234,9 @@ npm run test:acceptance
 ```
 
 The normal local command keeps the large admin browser suite at one worker for
-stability. GitHub sets four workers on its Blacksmith runner. Do not export
-`CI=true` or `PLAYWRIGHT_WORKERS=4` locally unless you are deliberately stress
-testing the machine.
+stability. GitHub sets four workers on the isolated runtime runner. Do not
+export `CI=true` or `PLAYWRIGHT_WORKERS=4` locally unless you are deliberately
+stress testing the machine.
 
 Every local acceptance run must leave Docker clean. The normal command removes
 its environment automatically. Use `--keep` only while you are actively
@@ -251,10 +251,11 @@ ones started with `--keep`. A testing task is not done until this command report
 that no abandoned acceptance projects remain. Do not stop unrelated development
 containers.
 
-Do not run the full acceptance suite after every edit or commit. GitHub keeps
-the complete acceptance suite as a required merge check. Use Blacksmith Testbox
-only to reproduce a failure that needs a clean Linux machine or differs from
-GitHub. Warm one Testbox, reuse it for the investigation, and stop it afterward.
+Do not run the full acceptance suite after every edit or commit. GitHub runs the
+complete acceptance suite on the isolated self-hosted runtime runner. Read the
+aggregate `CI` result for the exact head before merging. The current GitHub plan
+cannot enforce that check for this private repository, so the integration owner
+must enforce it manually.
 
 ### Real-service checks
 
