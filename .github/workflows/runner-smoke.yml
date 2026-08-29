@@ -21,9 +21,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          cgroup_path="$(awk -F: '$1 == "0" { print $3 }' /proc/self/cgroup)"
+
           test "$RUNNER_NAME" = "new-el-ci-light-1"
-          test "$(cat /sys/fs/cgroup/cpu.max)" = "200000 100000"
-          test "$(cat /sys/fs/cgroup/memory.max)" = "8589934592"
+          test "$(cat "/sys/fs/cgroup${cgroup_path}/cpu.max")" = "200000 100000"
+          test "$(cat "/sys/fs/cgroup${cgroup_path}/memory.max")" = "8589934592"
 
           if sudo -n true 2>/dev/null; then
             echo "The runner can use sudo." >&2
