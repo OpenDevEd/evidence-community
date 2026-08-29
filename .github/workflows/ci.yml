@@ -117,6 +117,11 @@ jobs:
           comparison_sha="$(bash .github/scripts/resolve-fallow-comparison.sh)"
           echo "sha=$comparison_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare job-local npm tools
+        run: |
+          echo "NPM_CONFIG_PREFIX=$RUNNER_TEMP/npm-global" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/npm-global/bin" >> "$GITHUB_PATH"
+
       - name: Block new code-quality problems
         uses: fallow-rs/fallow@ecf5a314fd3e10974acb4f5a7f867c433030522d # v3.17.0
         with:
