@@ -47,16 +47,16 @@ then starts two independently configured libraries with disposable PostgreSQL,
 Meilisearch, Mailpit, workers, and local external-service fixtures. It runs
 every desktop and mobile browser check, verifies live configuration activation
 and rollback, then removes all test data and containers. The normal local run
-keeps the large admin suite at one worker for stability; GitHub uses four on
-Blacksmith. GitHub runs this complete suite before code can merge.
-
-Use Blacksmith Testbox only to reproduce a failure that needs a clean Linux
-machine or differs from GitHub. It is not the normal local development loop.
+keeps the large admin suite at one worker for stability; GitHub uses four on an
+isolated self-hosted runner. Read the aggregate `CI` result for the exact head
+before merging. The current GitHub plan cannot require that result for this
+private repository.
 
 ## Documentation
 
 - [Runtime customization map](docs/evidence-library-customization-map.md)
 - [Deployment and operations](docs/evidence-library-operations.md)
+- [Self-hosted CI](docs/self-hosted-ci.md)
 - [Analytics and consent](docs/analytics.md)
 - [Configuration example](config/library.example.json)
 - [Machine-readable JSON Schema](public/library-config.schema.json)
