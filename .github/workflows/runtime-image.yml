@@ -109,7 +109,7 @@ jobs:
           metadata="$RUNNER_TEMP/runtime-image-metadata.json"
 
           if docker buildx imagetools inspect --format '{{json .}}' "$image" > "$inspection" 2>/dev/null; then
-            revision="$(jq -r '.image["linux/amd64"].config.Labels["org.opencontainers.image.revision"] // empty' "$inspection")"
+            revision="$(jq -r '.image.config.Labels["org.opencontainers.image.revision"] // empty' "$inspection")"
             digest="$(jq -r '.manifest.digest // empty' "$inspection")"
             if [ "$revision" != "$RUNTIME_COMMIT" ]; then
               echo "The existing image tag belongs to a different source commit." >&2
