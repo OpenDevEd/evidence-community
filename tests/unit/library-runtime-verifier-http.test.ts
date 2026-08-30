@@ -542,6 +542,31 @@ describe("library runtime verifier HTTP contract", () => {
 		);
 	});
 
+	it("rejects a public Redis port", async () => {
+		await withServer(
+			async () =>
+				readyContainers().map((container) =>
+					container.service === "redis"
+						? { ...container, publishedPorts: [publishedPort(6379, 6379)] }
+						: container,
+				),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"redis_public_port",
+						"Redis must not publish a host port.",
+						"redis",
+					),
+				);
+			},
+		);
+	});
+
 	it("returns a fixed error and writes no logs when Docker inspection fails", async () => {
 		const consoleError = vi.spyOn(console, "error");
 		const secret = "docker-error-secret";

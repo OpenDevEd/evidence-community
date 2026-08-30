@@ -26,7 +26,10 @@ type ComposeModel = {
 };
 
 type LibraryConfig = {
-	services: { search: { host: string; key: string } };
+	services: {
+		redis: { url: string };
+		search: { host: string; key: string };
+	};
 };
 
 const runtimeImage =
@@ -178,6 +181,60 @@ function requireMeilisearchStorage(services: Record<string, ComposeService>) {
 	);
 }
 
+function requireRedisImageAndPrivacy(redis: ComposeService) {
+	requireCondition(
+		redis.image === "redis:7.2-alpine",
+		"Redis image must be pinned to 7.2 Alpine",
+	);
+	const ports = redis.ports ?? [];
+	const exposedPorts = redis.expose ?? [];
+	requireCondition(
+		ports.length === 0 && exposedPorts.length === 0,
+		"Redis must not publish or expose a port",
+	);
+}
+
+function requireRedisMemoryLimit(redis: ComposeService) {
+	const command = redis.command ?? [];
+	const requiredMemoryArguments = [
+		"--maxmemory",
+		"128mb",
+		"--maxmemory-policy",
+		"noeviction",
+	];
+	requireCondition(
+		requiredMemoryArguments.every((argument) => command.includes(argument)),
+		"Redis must fail closed at its 128 MB memory ceiling",
+	);
+}
+
+function requireRedisNetworkAndHealth(redis: ComposeService) {
+	requireCondition(
+		JSON.stringify(Object.keys(redis.networks ?? {}).sort()) ===
+			JSON.stringify(["private"]),
+		"Redis must join only the private application network",
+	);
+	requireCondition(
+		redis.healthcheck?.test?.includes("redis-cli"),
+		"Redis health check is missing",
+	);
+}
+
+function requireRedisRuntime(
+	services: Record<string, ComposeService>,
+	libraryConfig: LibraryConfig,
+) {
+	const redis = services.redis;
+	requireCondition(redis, "Private Redis service is missing");
+	requireRedisImageAndPrivacy(redis);
+	requireRedisMemoryLimit(redis);
+	requireRedisNetworkAndHealth(redis);
+	requireCondition(
+		libraryConfig.services.redis.url === "redis://redis:6379",
+		"Runtime Redis URL must use the private Compose service",
+	);
+}
+
 function requireSearchIndexer(services: Record<string, ComposeService>) {
 	const searchIndexer = services["search-indexer"];
 	requireCondition(searchIndexer, "Search indexer is missing");
@@ -230,7 +287,7 @@ function requireRuntimeService(name: string, service: ComposeService) {
 
 function requireRuntimeServices(services: Record<string, ComposeService>) {
 	for (const name of LIBRARY_COMPOSE_SERVICES.filter(
-		(name) => name !== "meilisearch",
+		(name) => name !== "meilisearch" && name !== "redis",
 	)) {
 		requireRuntimeService(name, services[name]);
 	}
@@ -257,15 +314,23 @@ function requirePublicationAndWeb(services: Record<string, ComposeService>) {
 		services.web.labels?.["traefik.docker.network"] === "coolify",
 		"The public proxy must reach web through the shared Coolify network",
 	);
+	requireCondition(
+		services.web.depends_on?.redis?.condition === "service_healthy",
+		"Web must wait for private Redis",
+	);
 }
 
 function requireRenderedConfig(model: ComposeModel) {
-	const renderedConfig = JSON.parse(
-		model.configs?.["library-config"]?.content ?? "null",
-	) as { services?: { search?: { host?: string } } } | null;
+	const content = model.configs?.["library-config"]?.content;
+	requireCondition(content, "Rendered runtime configuration is missing");
+	const renderedConfig = JSON.parse(content) as LibraryConfig;
 	requireCondition(
-		renderedConfig?.services?.search?.host === "http://meilisearch:7700",
+		renderedConfig.services.search.host === "http://meilisearch:7700",
 		"Rendered runtime search host must use the private Compose service",
+	);
+	requireCondition(
+		renderedConfig.services.redis.url === "redis://redis:6379",
+		"Rendered runtime Redis URL must use the private Compose service",
 	);
 }
 
@@ -298,6 +363,7 @@ function main() {
 	requireMeilisearchPorts(services);
 	requireMeilisearchNetwork(services);
 	requireMeilisearchStorage(services);
+	requireRedisRuntime(services, libraryConfig);
 	requireSearchIndexer(services);
 	requireRuntimeServices(services);
 	requirePublicationAndWeb(services);

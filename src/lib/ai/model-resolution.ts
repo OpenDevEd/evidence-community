@@ -7,16 +7,13 @@ import type { LanguageModelFactory } from "@/lib/ai-provider-factory";
 import { getAIProviderForConfig } from "@/lib/ai-provider";
 import { AIError } from "./errors";
 import {
-	isAIModelId,
+	isSelectableAIModelId,
 	starterQuestionsModelId,
 	type AIModelId,
 	type AIProvider,
 } from "./models";
 
-type AIModelConfig = Pick<
-	LibraryServerConfig,
-	"ai" | "revision" | "updatedAt"
->;
+type AIModelConfig = Pick<LibraryServerConfig, "ai" | "revision" | "updatedAt">;
 
 export type ResolvedAIModel = {
 	provider: AIProvider;
@@ -37,45 +34,47 @@ function unavailable(modelId: unknown): AIError {
 /**
  * Turns the model the request asked for into a usable model, or refuses.
  * A model counts as available only when an enabled provider in the library
- * manifest has it in one of its slots, so a request can never reach a model
+ * manifest has it in its ordered model list, so a request can never reach a model
  * the library did not configure.
  */
 export async function resolveAIModel(
 	config: AIModelConfig,
 	requestedModelId: unknown,
 ): Promise<ResolvedAIModel> {
-	if (!isAIModelId(requestedModelId)) throw unavailable(requestedModelId);
+	if (!isSelectableAIModelId(requestedModelId)) {
+		throw unavailable(requestedModelId);
+	}
 
 	for (const provider of config.ai.providers) {
 		if (!provider.enabled) continue;
+		if (!provider.models.includes(requestedModelId)) continue;
 
-		const models = await getAIProviderForConfig(
-			config,
-			provider.provider,
-		);
-		const slots = [
-			[models.defaultModelId, models.defaultModel],
-			[models.largeModelId, models.largeModel],
-			[models.smallModelId, models.smallModel],
-		] as const;
-		const match = slots.find(([modelId]) => modelId === requestedModelId);
-
-		if (match) {
-			return {
-				provider: provider.provider,
-				modelId: requestedModelId,
-				model: match[1],
-				createModel: models.createModel,
-			};
-		}
+		const models = await getAIProviderForConfig(config, provider.provider);
+		return {
+			provider: provider.provider,
+			modelId: requestedModelId,
+			model: models.createModel(requestedModelId),
+			createModel: models.createModel,
+		};
 	}
 
 	throw unavailable(requestedModelId);
 }
 
-export function resolveStarterQuestionsModel(config: AIModelConfig) {
-	return resolveAIModel(
-		config,
-		starterQuestionsModelId(config.ai.providers),
+export async function resolveStarterQuestionsModel(config: AIModelConfig) {
+	const modelId = starterQuestionsModelId(config.ai.providers);
+	if (!modelId) throw unavailable(modelId);
+
+	const openRouter = config.ai.providers.find(
+		(provider) => provider.enabled && provider.provider === "openrouter",
 	);
+	if (!openRouter) return resolveAIModel(config, modelId);
+
+	const models = await getAIProviderForConfig(config, "openrouter");
+	return {
+		provider: "openrouter" as const,
+		modelId,
+		model: models.createModel(modelId),
+		createModel: models.createModel,
+	};
 }

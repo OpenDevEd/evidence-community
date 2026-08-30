@@ -237,13 +237,16 @@ Conceptual input:
 ## Rate limiting and access
 
 - Do not add authentication for AI features.
-- Add an application-level per-IP limiter: ten top-level AI requests per IP per minute.
+- Use private Redis for shared limits across every web process. Give each
+  browser ten top-level AI requests per minute, 250 per day, 1,000 per seven
+  days, and 5,000 per 30 days. Keep a separate 1,000-per-minute network safety
+  limit on the proxy-owned real-client IP.
 - Count once: Summary, Explain, starter-question generation, each user chat message, each Deep Research message/request, and each Smart Screening request.
 - Internal model steps, searches, and PDF reads do not consume additional quota.
 - Similar Resources does not consume this quota.
 - Keep the infrastructure/Traefik limiter as an outer general limiter.
 - Use the deployment's trusted real-client IP header consistently; do not accept arbitrary client-supplied identity as a bypass.
-- Return a controlled `429` response and useful rate-limit headers without crashing the UI.
+- Return a controlled `429` response and useful rate-limit headers without crashing the UI. Return a controlled `503` when Redis is unavailable; never fail open.
 
 ## Validation, errors, and telemetry
 

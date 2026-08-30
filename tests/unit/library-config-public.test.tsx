@@ -138,9 +138,8 @@ describe("public library configuration", () => {
 			{
 				provider: "google",
 				enabled: true,
+				models: ["gemini-2.5-flash", "gemini-2.5-pro"],
 				defaultModel: "gemini-2.5-flash",
-				largeModel: "gemini-2.5-pro",
-				smallModel: "gemini-2.5-flash",
 			},
 		]);
 	});

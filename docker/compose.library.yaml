@@ -26,6 +26,8 @@ services:
     depends_on:
       publication-worker:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       search-indexer:
         condition: service_healthy
     labels:
@@ -141,6 +143,36 @@ services:
       - meilisearch-data:/meili_data
     networks:
       - private
+    labels: *runtime-labels
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    init: true
+    # Redis is an ephemeral rate-limit store. Mask the image's declared /data
+    # volume so container recreation cannot leave empty anonymous volumes behind.
+    tmpfs:
+      - /data
+    command:
+      [
+        "redis-server",
+        "--save",
+        "",
+        "--appendonly",
+        "no",
+        "--maxmemory",
+        "128mb",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      start_period: 5s
+      retries: 12
     labels: *runtime-labels
     restart: unless-stopped
 

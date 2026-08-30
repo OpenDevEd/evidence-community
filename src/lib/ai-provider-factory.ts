@@ -16,8 +16,7 @@ import { RevisionAwareResourceFactory } from "./revision-aware-resource";
 
 export type AIProviderId =
 	LibraryServerConfig["ai"]["providers"][number]["provider"];
-export type AIProviderConfiguration =
-	LibraryServerConfig["ai"]["providers"];
+export type AIProviderConfiguration = LibraryServerConfig["ai"]["providers"];
 
 /**
  * Per-request gateway settings. Only the OpenRouter path uses them; every
@@ -29,9 +28,7 @@ export type LanguageModelFactory = (
 	modelId: string,
 	settings?: ProviderModelSettings,
 ) => LanguageModel;
-export type AIProviderClientFactory = (
-	apiKey: string,
-) => LanguageModelFactory;
+export type AIProviderClientFactory = (apiKey: string) => LanguageModelFactory;
 export type AIProviderClientFactories = Record<
 	AIProviderId,
 	AIProviderClientFactory
@@ -41,12 +38,6 @@ type ResolvedAIModels = {
 	provider: AIProviderId;
 	/** Builds a model of this provider, with optional per-request settings. */
 	createModel: LanguageModelFactory;
-	defaultModel: LanguageModel;
-	defaultModelId: string;
-	largeModel: LanguageModel;
-	largeModelId: string;
-	smallModel: LanguageModel;
-	smallModelId: string;
 };
 
 const providerClientFactories: AIProviderClientFactories = {
@@ -72,8 +63,7 @@ const providerClientFactories: AIProviderClientFactories = {
 	},
 	openrouter(apiKey) {
 		const provider = createOpenRouter({ apiKey, compatibility: "strict" });
-		return (modelId, settings) =>
-			provider.languageModel(modelId, settings);
+		return (modelId, settings) => provider.languageModel(modelId, settings);
 	},
 };
 
@@ -98,29 +88,19 @@ export class AIProviderService {
 
 			const {
 				apiKey,
-				defaultModel,
-				largeModel,
+				models: configuredModels,
 				provider,
-				smallModel,
 			} = providerConfiguration;
-			if (!apiKey || !defaultModel) {
+			if (!apiKey || configuredModels.length === 0) {
 				throw new Error(
 					`Enabled AI provider is incomplete: ${provider}`,
 				);
 			}
 
 			const createModel = factories[provider](apiKey);
-			const resolvedLargeModel = largeModel ?? defaultModel;
-			const resolvedSmallModel = smallModel ?? defaultModel;
 			models.set(provider, {
 				provider,
 				createModel,
-				defaultModel: createModel(defaultModel),
-				defaultModelId: defaultModel,
-				largeModel: createModel(resolvedLargeModel),
-				largeModelId: resolvedLargeModel,
-				smallModel: createModel(resolvedSmallModel),
-				smallModelId: resolvedSmallModel,
 			});
 		}
 

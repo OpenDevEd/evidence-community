@@ -244,7 +244,8 @@ export const serviceUrlSchema = urlSchema({
 	noQuery: true,
 });
 
-export const postgresUrlSchema = z
+function privateServiceUrlSchema(protocols: string[], message: string) {
+	return z
 	.string()
 	.trim()
 	.min(1)
@@ -252,17 +253,28 @@ export const postgresUrlSchema = z
 	.superRefine((value, context) => {
 		try {
 			const parsed = new URL(value);
-			if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+			if (!protocols.includes(parsed.protocol)) {
 				throw new Error("invalid protocol");
 			}
 		} catch {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "Must be a valid postgres: or postgresql: URL",
+				message,
 			});
 		}
 	})
 	.meta({ format: "uri", writeOnly: true });
+}
+
+export const postgresUrlSchema = privateServiceUrlSchema(
+	["postgres:", "postgresql:"],
+	"Must be a valid postgres: or postgresql: URL",
+);
+
+export const redisUrlSchema = privateServiceUrlSchema(
+	["redis:", "rediss:"],
+	"Must be a valid redis: or rediss: URL",
+);
 
 function decodedPathSegments(value: string) {
 	let decoded = value;

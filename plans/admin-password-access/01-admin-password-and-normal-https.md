@@ -15,7 +15,7 @@ Replace the temporary Tailscale bypass with a small password login and deploy th
    - bind the token to both current secrets so changing either one ends old sessions.
 2. Replace `requireAdminBypass()` with one request-cookie gate in `src/lib/admin/http.ts`. Update every `/api/admin/**` handler to pass its request to that gate.
 3. Add native login and logout forms under `src/app/[locale]/admin/`. Post them to small session Route Handlers that set and delete the cookie. Keep errors plain and do not expose configuration details.
-4. Add a small bounded login-attempt limiter by extracting the reusable fixed-window logic from `src/lib/ai-rate-limit.ts`. Count only failed passwords. Confirm Coolify's proxy overwrites `X-Real-IP`. Do not add a second copy.
+4. Add a small bounded login-attempt limiter by reusing the Redis connection and atomic limiter pattern from `src/lib/ai/rate-limit.ts` with a separate admin-login policy. Count only failed passwords. Confirm Coolify's proxy overwrites `X-Real-IP`. Do not add a second copy.
 5. Remove every `ADMIN_AUTH_BYPASS` reference. Local browser tests use the private password and signing secret in their test library configuration instead.
 6. Add one shared verification helper that signs in through the session route and adds its returned cookie to admin requests. Use it in `tools/verifySearchIndexerWorker.ts`, `tools/verifyNativeFileHttp.ts`, `tools/verifyLinkedItemDraftLifecycle.ts`, and `tools/verifyAdminItemBatchHttp.ts`.
 

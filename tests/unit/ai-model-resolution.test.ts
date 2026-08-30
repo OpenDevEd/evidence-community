@@ -45,9 +45,9 @@ describe("choosing the model a request runs on", () => {
 		await expect(resolveAIModel(config(), "gpt-5.4")).rejects.toThrow(
 			AIError,
 		);
-		await expect(
-			resolveAIModel(config(), "gpt-5.4"),
-		).rejects.toMatchObject({ code: "MODEL_UNAVAILABLE", status: 400 });
+		await expect(resolveAIModel(config(), "gpt-5.4")).rejects.toMatchObject(
+			{ code: "MODEL_UNAVAILABLE", status: 400 },
+		);
 	});
 
 	it("refuses a model identifier the client made up", async () => {
@@ -62,13 +62,14 @@ describe("choosing the model a request runs on", () => {
 				provider: "google",
 				enabled: true,
 				apiKey: "google-api-key",
+				models: ["gemini-2.5-flash", "gemini-2.5-pro"],
 				defaultModel: "gemini-2.5-flash",
-				largeModel: "gemini-2.5-pro",
 			},
 			{
 				provider: "openai",
 				enabled: false,
 				apiKey: "openai-api-key",
+				models: ["gpt-5.4"],
 				defaultModel: "gpt-5.4",
 			},
 		]);
@@ -91,9 +92,8 @@ describe("choosing the model a request runs on", () => {
 					provider: "openrouter",
 					enabled: true,
 					apiKey: "openrouter-api-key",
-					defaultModel: "openai/gpt-5.6-luna",
-					largeModel: "x-ai/grok-4.6",
-					smallModel: "google/gemini-3.7-flash",
+					models: ["x-ai/grok-4.6", "google/gemini-3.7-flash"],
+					defaultModel: "x-ai/grok-4.6",
 				},
 			]),
 		);

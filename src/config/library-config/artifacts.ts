@@ -101,10 +101,7 @@ function collectEnumOptions(schema: JsonObject) {
 			path,
 			values: Array.from(values.values()),
 		}))
-		.filter(
-			({ path, values }) =>
-				values.length > 1 || enumPaths.has(path),
-		)
+		.filter(({ path, values }) => values.length > 1 || enumPaths.has(path))
 		.sort((left, right) => left.path.localeCompare(right.path));
 }
 
@@ -145,7 +142,9 @@ export function createLibraryConfigJsonSchema(): JsonObject {
 	};
 }
 
-export function createLibraryConfigCatalog(schema = createLibraryConfigJsonSchema()) {
+export function createLibraryConfigCatalog(
+	schema = createLibraryConfigJsonSchema(),
+) {
 	return {
 		catalogVersion: 1,
 		schemaVersion: 1,
@@ -178,8 +177,6 @@ export function createLibraryConfigCatalog(schema = createLibraryConfigJsonSchem
 				([provider, models]) => ({
 					provider,
 					active: [...models.active],
-					large: [...models.large],
-					small: [...models.small],
 				}),
 			),
 			promptSlots: PLATFORM_PROMPT_SLOTS.map((slot) => ({

@@ -5,6 +5,7 @@ export const LIBRARY_COMPOSE_SERVICES = [
 	"source-writeback",
 	"publication-worker",
 	"meilisearch",
+	"redis",
 ] as const;
 
 export type LibraryComposeService = (typeof LIBRARY_COMPOSE_SERVICES)[number];
@@ -22,6 +23,7 @@ const LIBRARY_COMPOSE_HEALTHY_SERVICES = [
 	"search-indexer",
 	"publication-worker",
 	"meilisearch",
+	"redis",
 ] as const satisfies readonly LibraryComposeService[];
 
 export const LIBRARY_COMPOSE_RELEASE_LABEL =
@@ -53,6 +55,7 @@ export type LibraryComposeContractErrorCode =
 	| "image_content_mismatch"
 	| "image_reference_mismatch"
 	| "meilisearch_public_port"
+	| "redis_public_port"
 	| "missing_service"
 	| "release_mismatch"
 	| "runtime_images_differ"
@@ -138,7 +141,11 @@ export function requireLibraryComposeServiceReadiness<
 
 export function requireLibraryComposeRuntimeReadiness<
 	T extends LibraryComposeContainerFact,
->(items: readonly T[], expectedCommit: string, expectedRuntimeImage: string): T[] {
+>(
+	items: readonly T[],
+	expectedCommit: string,
+	expectedRuntimeImage: string,
+): T[] {
 	requireExactLibraryComposeServices(items);
 	const ready = requireLibraryComposeServiceReadiness(items);
 	for (const item of ready) {
@@ -184,6 +191,14 @@ export function requireLibraryComposeRuntimeReadiness<
 			code: "meilisearch_public_port",
 			message: "Meilisearch must not publish a host port.",
 			service: "meilisearch",
+		});
+	}
+	const redis = ready.find((item) => item.service === "redis");
+	if (redis?.publishedPorts.length) {
+		throw new LibraryComposeContractError({
+			code: "redis_public_port",
+			message: "Redis must not publish a host port.",
+			service: "redis",
 		});
 	}
 	return ready;
