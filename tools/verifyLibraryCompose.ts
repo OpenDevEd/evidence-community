@@ -25,6 +25,10 @@ type ComposeModel = {
 	volumes?: Record<string, unknown>;
 };
 
+type VerifierComposeModel = {
+	services?: Record<string, ComposeService>;
+};
+
 type LibraryConfig = {
 	services: { search: { host: string; key: string } };
 };
@@ -76,6 +80,48 @@ function renderCompose(root: string, libraryConfig: LibraryConfig) {
 			},
 		),
 	) as ComposeModel;
+}
+
+function renderVerifierCompose(root: string) {
+	return JSON.parse(
+		execFileSync(
+			"docker",
+			[
+				"compose",
+				"--project-directory",
+				root,
+				"-f",
+				resolve(root, "docker/compose.runtime-verifier.yaml"),
+				"config",
+				"--format",
+				"json",
+			],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN: "compose-check",
+				},
+			},
+		),
+	) as VerifierComposeModel;
+}
+
+function requireVerifierDockerReads(model: VerifierComposeModel) {
+	const environment = model.services?.["docker-socket-proxy"]?.environment;
+	requireCondition(environment, "Runtime verifier socket proxy is missing");
+	requireCondition(
+		environment.CONTAINERS === "1",
+		"Runtime verifier must be able to read containers",
+	);
+	requireCondition(
+		environment.IMAGES === "1",
+		"Runtime verifier must be able to read image digests",
+	);
+	requireCondition(
+		environment.POST === "0",
+		"Runtime verifier must not write through the Docker API",
+	);
 }
 
 function requireExpectedServices(model: ComposeModel) {
@@ -280,6 +326,7 @@ function main() {
 	requireRenderedConfig(model);
 	requireNamedStorage(model);
 	requireCoolifyNetwork(model);
+	requireVerifierDockerReads(renderVerifierCompose(root));
 
 	console.log(
 		JSON.stringify({
