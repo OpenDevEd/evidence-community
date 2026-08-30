@@ -11,19 +11,19 @@ services:
             - "${EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT:?library Compose port is required}:3000"
 
     search-indexer:
-        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE:-evidence-library-acceptance-search-indexer:local}
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
         labels: *acceptance-labels
 
     source-sync:
-        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE:-evidence-library-acceptance-source-sync:local}
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
         labels: *acceptance-labels
 
     source-writeback:
-        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE:-evidence-library-acceptance-source-writeback:local}
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
         labels: *acceptance-labels
 
     publication-worker:
-        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:-evidence-library-acceptance-publication-worker:local}
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
         labels: *acceptance-labels
 
     meilisearch:

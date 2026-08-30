@@ -21,13 +21,17 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM base AS builder
 
+ARG EVIDENCE_LIBRARY_RELEASE_BUILD=0
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN npm --prefix packages/evidence-library-core run build
 
 RUN --mount=type=cache,target=/app/.next/cache \
-	npm run build
+	EVIDENCE_LIBRARY_RELEASE_BUILD=${EVIDENCE_LIBRARY_RELEASE_BUILD} npm run build
+
+RUN npm run publication:worker:build
 
 FROM npm-deps-base AS prod-deps
 
@@ -35,7 +39,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
 	npm install --omit=dev --no-audit --no-fund
 
-FROM ${RUNTIME_IMAGE} AS runner
+FROM ${RUNTIME_IMAGE} AS library-runtime
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -53,13 +57,16 @@ COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/docs ./docs
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
+COPY --from=builder --chown=nextjs:nodejs /app/packages ./packages
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/tools ./tools
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 
 EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-	CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/api/library-config/health`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
 ENTRYPOINT ["evidence-library-entrypoint"]
 CMD ["node_modules/.bin/next", "start"]
@@ -109,39 +116,4 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
 
 CMD ["node_modules/.bin/tsx", "tools/runLibraryRuntimeVerifier.ts"]
 
-FROM worker-base AS search-indexer
-
-ENV SEARCH_INDEX_WORKER_ID=search-indexer
-ENV SEARCH_INDEX_WORKER_INSTANCE_PATH=/tmp/evidence-library-search-indexer-instance
-
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-	CMD ["node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
-
-CMD ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
-
-FROM worker-base AS publication-worker
-
-ENV PUBLICATION_WORKER_ID=publication-worker
-ENV PUBLICATION_WORKER_INSTANCE_PATH=/tmp/evidence-library-publication-worker-instance
-
-RUN npm run publication:worker:build
-
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-	CMD ["node", ".next/publication/health.mjs"]
-
-CMD ["node", ".next/publication/worker.mjs", "--watch"]
-
-FROM worker-base AS source-worker-base
-FROM source-worker-base AS source-sync
-
-ENV SOURCE_SYNC_WORKER_ID=source-sync
-
-CMD ["node_modules/.bin/tsx", "tools/runSourceSync.ts", "--watch"]
-
-FROM source-worker-base AS source-writeback
-
-ENV SOURCE_WRITEBACK_WORKER_ID=source-writeback
-
-CMD ["node_modules/.bin/tsx", "tools/runSourceWriteback.ts", "--watch"]
-
-FROM runner AS final
+FROM library-runtime AS final

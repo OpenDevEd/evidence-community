@@ -17,6 +17,8 @@ import {
 const token = "test-runtime-verifier-token-with-at-least-32-bytes";
 const applicationUuid = "a1b2c3d4e5f6g7h8i9j0k1l2";
 const commit = "a1b2c3d4e5f678901234567890abcdef12345678";
+const runtimeImage = `ghcr.io/opendeved/evidence-library-runtime@sha256:${"b".repeat(64)}`;
+const runtimeImageId = `sha256:${"c".repeat(64)}`;
 
 function publishedPort(hostPort: number, containerPort: number) {
 	return {
@@ -34,7 +36,15 @@ function readyContainers(): LibraryRuntimeContainerFact[] {
 				? null
 				: "healthy",
 		labels: { [LIBRARY_COMPOSE_RELEASE_LABEL]: commit },
+		imageId:
+			service === "meilisearch" ? `sha256:${"d".repeat(64)}` : runtimeImageId,
+		imageReference:
+			service === "meilisearch" ? "getmeili/meilisearch:v1.31" : runtimeImage,
 		publishedPorts: service === "web" ? [publishedPort(443, 3000)] : [],
+		repoDigests:
+			service === "meilisearch"
+				? [`getmeili/meilisearch@sha256:${"e".repeat(64)}`]
+				: [runtimeImage],
 		service,
 		state: "running",
 	}));
@@ -85,7 +95,7 @@ function authorizedJson(body: unknown) {
 }
 
 function readinessBody() {
-	return { applicationUuid, commit };
+	return { applicationUuid, commit, runtimeImage };
 }
 
 function expectedServiceError(
@@ -112,12 +122,15 @@ describe("library runtime verifier HTTP contract", () => {
 
 				expect(response.status).toBe(200);
 				expect(response.headers.get("cache-control")).toBe("no-store");
-				expect(await response.json()).toEqual({
+					expect(await response.json()).toEqual({
 					applicationUuid,
 					commit,
 					ready: true,
+					runtimeImage,
 					services: readyContainers().map((container) => ({
 						health: container.health,
+						imageId: container.imageId,
+						imageReference: container.imageReference,
 						publishedPorts: container.publishedPorts,
 						releaseCommit: commit,
 						service: container.service,
@@ -198,7 +211,7 @@ describe("library runtime verifier HTTP contract", () => {
 		{
 			body: JSON.stringify({ ...readinessBody(), command: "docker ps" }),
 			code: "invalid_request",
-			message: "Send only applicationUuid and commit.",
+			message: "Send only applicationUuid, commit and runtimeImage.",
 		},
 		{
 			body: JSON.stringify({ ...readinessBody(), applicationUuid: "too-short" }),
@@ -210,6 +223,15 @@ describe("library runtime verifier HTTP contract", () => {
 			body: JSON.stringify({ ...readinessBody(), commit: "A".repeat(40) }),
 			code: "invalid_request",
 			message: "commit must be a lowercase 40-character Git commit.",
+		},
+		{
+			body: JSON.stringify({
+				...readinessBody(),
+				runtimeImage: "ghcr.io/opendeved/evidence-library-runtime:main",
+			}),
+			code: "invalid_request",
+			message:
+				"runtimeImage must be the fixed Evidence Library image with a sha256 digest.",
 		},
 	])("returns the fixed $code input error", async (example) => {
 		await withServer(async () => readyContainers(), async (baseUrl) => {
@@ -426,6 +448,69 @@ describe("library runtime verifier HTTP contract", () => {
 						"release_mismatch",
 						"source-writeback must use the requested release.",
 						"source-writeback",
+					),
+				);
+			},
+		);
+	});
+
+	it.each([
+		{
+			code: "image_reference_mismatch",
+			field: "imageReference" as const,
+			message: "search-indexer must use the requested runtime image reference.",
+			value: "ghcr.io/opendeved/evidence-library-runtime:main",
+		},
+		{
+			code: "image_content_mismatch",
+			field: "repoDigests" as const,
+			message: "search-indexer must contain the requested runtime image digest.",
+			value: [],
+		},
+	])("rejects a runtime $field mismatch", async (example) => {
+		await withServer(
+			async () =>
+				readyContainers().map((container) =>
+					container.service === "search-indexer"
+						? { ...container, [example.field]: example.value }
+						: container,
+				),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						example.code,
+						example.message,
+						"search-indexer",
+					),
+				);
+			},
+		);
+	});
+
+	it("rejects runtime services built from different image IDs", async () => {
+		await withServer(
+			async () =>
+				readyContainers().map((container) =>
+					container.service === "publication-worker"
+						? { ...container, imageId: `sha256:${"f".repeat(64)}` }
+						: container,
+				),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"runtime_images_differ",
+						"publication-worker must use the same runtime image as the other runtime services.",
+						"publication-worker",
 					),
 				);
 			},

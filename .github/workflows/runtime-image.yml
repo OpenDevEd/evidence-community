@@ -1,0 +1,151 @@
+name: Runtime image
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - main
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact green commit from main
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: runtime-image-${{ github.event.workflow_run.head_sha || inputs.commit }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish runtime image
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on:
+      group: Evidence Library Release
+      labels: evidence-library-release
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Select the exact green commit
+        id: release
+        env:
+          DISPATCH_COMMIT: ${{ inputs.commit }}
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+          WORKFLOW_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            runtime_commit="$DISPATCH_COMMIT"
+          else
+            runtime_commit="$WORKFLOW_COMMIT"
+          fi
+          if ! [[ "$runtime_commit" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "The runtime commit must be 40 lowercase hexadecimal characters." >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$runtime_commit" origin/main; then
+            echo "The runtime commit is not part of main." >&2
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            runs_url="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=$runtime_commit&status=completed&per_page=100"
+            green_runs="$(curl --fail --silent --show-error \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "$runs_url" | jq --arg commit "$runtime_commit" \
+              '[.workflow_runs[] | select(.head_sha == $commit and .conclusion == "success")] | length')"
+            if [ "$green_runs" -lt 1 ]; then
+              echo "The runtime commit does not have a successful main CI run." >&2
+              exit 1
+            fi
+          fi
+
+          git checkout --detach "$runtime_commit"
+          test "$(git rev-parse HEAD)" = "$runtime_commit"
+          echo "commit=$runtime_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to the private package registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Use the persistent release builder
+        run: |
+          docker buildx use evidence-library-release
+          docker buildx inspect --bootstrap
+
+      - name: Publish the immutable image
+        id: image
+        env:
+          RUNTIME_COMMIT: ${{ steps.release.outputs.commit }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/opendeved/evidence-library-runtime:$RUNTIME_COMMIT"
+          inspection="$RUNNER_TEMP/runtime-image-inspection.json"
+          metadata="$RUNNER_TEMP/runtime-image-metadata.json"
+
+          if docker buildx imagetools inspect --format '{{json .}}' "$image" > "$inspection" 2>/dev/null; then
+            revision="$(jq -r '.image["linux/amd64"].config.Labels["org.opencontainers.image.revision"] // empty' "$inspection")"
+            digest="$(jq -r '.manifest.digest // empty' "$inspection")"
+            if [ "$revision" != "$RUNTIME_COMMIT" ]; then
+              echo "The existing image tag belongs to a different source commit." >&2
+              exit 1
+            fi
+          else
+            docker buildx build \
+              --builder evidence-library-release \
+              --target library-runtime \
+              --platform linux/amd64 \
+              --build-arg EVIDENCE_LIBRARY_RELEASE_BUILD=1 \
+              --label org.opencontainers.image.source=https://github.com/OpenDevEd/new-el \
+              --label "org.opencontainers.image.revision=$RUNTIME_COMMIT" \
+              --tag "$image" \
+              --metadata-file "$metadata" \
+              --push .
+            digest="$(jq -r '."containerimage.digest" // empty' "$metadata")"
+          fi
+
+          if ! [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "The registry did not return an immutable image digest." >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "reference=ghcr.io/opendeved/evidence-library-runtime@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Record the published release
+        env:
+          RUNTIME_COMMIT: ${{ steps.release.outputs.commit }}
+          RUNTIME_DIGEST: ${{ steps.image.outputs.digest }}
+          RUNTIME_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: |
+          {
+            echo '### Evidence Library runtime image'
+            echo
+            echo "- Commit: \`$RUNTIME_COMMIT\`"
+            echo "- Digest: \`$RUNTIME_DIGEST\`"
+            echo "- Pull: \`$RUNTIME_REFERENCE\`"
+          } >> "$GITHUB_STEP_SUMMARY"

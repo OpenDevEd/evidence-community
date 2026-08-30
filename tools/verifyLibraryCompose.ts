@@ -25,6 +25,14 @@ type ComposeModel = {
 	volumes?: Record<string, unknown>;
 };
 
+type LibraryConfig = {
+	services: { search: { host: string; key: string } };
+};
+
+const runtimeImage =
+	"ghcr.io/opendeved/evidence-library-runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const sourceCommit = "a".repeat(40);
+
 function requireCondition(
 	condition: unknown,
 	message: string,
@@ -32,38 +40,45 @@ function requireCondition(
 	if (!condition) throw new Error(message);
 }
 
-function main() {
-	const root = resolve(import.meta.dirname, "..");
+function loadLibraryConfig(root: string): LibraryConfig {
 	const libraryConfigJson = readFileSync(
 		resolve(root, "config/library.example.json"),
 		"utf8",
 	);
-	const libraryConfig = JSON.parse(libraryConfigJson) as {
-		services: { search: { host: string; key: string } };
-	};
+	const libraryConfig = JSON.parse(libraryConfigJson) as LibraryConfig;
 	libraryConfig.services.search.host = "http://meilisearch:7700";
-	const rendered = execFileSync(
-		"docker",
-		[
-			"compose",
-			"--project-directory",
-			root,
-			"-f",
-			resolve(root, "docker/compose.library.yaml"),
-			"config",
-			"--format",
-			"json",
-		],
-		{
-			encoding: "utf8",
-			env: {
-				...process.env,
-				LIBRARY_CONFIG_JSON: JSON.stringify(libraryConfig),
-				MEILISEARCH_MASTER_KEY: libraryConfig.services.search.key,
+	return libraryConfig;
+}
+
+function renderCompose(root: string, libraryConfig: LibraryConfig) {
+	return JSON.parse(
+		execFileSync(
+			"docker",
+			[
+				"compose",
+				"--project-directory",
+				root,
+				"-f",
+				resolve(root, "docker/compose.library.yaml"),
+				"config",
+				"--format",
+				"json",
+			],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					LIBRARY_CONFIG_JSON: JSON.stringify(libraryConfig),
+					MEILISEARCH_MASTER_KEY: libraryConfig.services.search.key,
+					RUNTIME_IMAGE: runtimeImage,
+					SOURCE_COMMIT: sourceCommit,
+				},
 			},
-		},
-	);
-	const model = JSON.parse(rendered) as ComposeModel;
+		),
+	) as ComposeModel;
+}
+
+function requireExpectedServices(model: ComposeModel) {
 	const services = model.services ?? {};
 	const serviceNames = Object.keys(services).sort();
 	requireCondition(
@@ -71,7 +86,13 @@ function main() {
 			JSON.stringify([...LIBRARY_COMPOSE_SERVICES].sort()),
 		`Unexpected services: ${serviceNames.join(", ")}`,
 	);
+	return { serviceNames, services };
+}
 
+function requireMeilisearchRuntime(
+	services: Record<string, ComposeService>,
+	libraryConfig: LibraryConfig,
+) {
 	const meilisearch = services.meilisearch;
 	requireCondition(meilisearch, "Private Meilisearch service is missing");
 	requireCondition(
@@ -79,24 +100,46 @@ function main() {
 		"Meilisearch image must be pinned to v1.37",
 	);
 	requireCondition(
-		meilisearch.environment?.MEILI_ENV === "production" &&
-			meilisearch.environment.MEILI_NO_ANALYTICS === "true",
-		"Meilisearch production settings are incomplete",
+		meilisearch.environment?.MEILI_ENV === "production",
+		"Meilisearch must run in production mode",
+	);
+	requireCondition(
+		meilisearch.environment?.MEILI_NO_ANALYTICS === "true",
+		"Meilisearch analytics must be disabled",
 	);
 	requireCondition(
 		meilisearch.environment?.MEILI_MASTER_KEY ===
 			libraryConfig.services.search.key,
 		"Runtime search key and private Meilisearch key must match",
 	);
+}
+
+function requireMeilisearchPorts(services: Record<string, ComposeService>) {
+	const meilisearch = services.meilisearch;
+	requireCondition(meilisearch, "Private Meilisearch service is missing");
 	requireCondition(
-		!meilisearch.ports?.length && !meilisearch.expose?.length,
-		"Meilisearch must not publish or expose a port",
+		!meilisearch.ports?.length,
+		"Meilisearch must not publish a port",
 	);
+	requireCondition(
+		!meilisearch.expose?.length,
+		"Meilisearch must not expose a port",
+	);
+}
+
+function requireMeilisearchNetwork(services: Record<string, ComposeService>) {
+	const meilisearch = services.meilisearch;
+	requireCondition(meilisearch, "Private Meilisearch service is missing");
 	requireCondition(
 		JSON.stringify(Object.keys(meilisearch.networks ?? {}).sort()) ===
 			JSON.stringify(["private"]),
 		"Meilisearch must join only the private application network",
 	);
+}
+
+function requireMeilisearchStorage(services: Record<string, ComposeService>) {
+	const meilisearch = services.meilisearch;
+	requireCondition(meilisearch, "Private Meilisearch service is missing");
 	requireCondition(
 		meilisearch.volumes?.some(
 			(volume) =>
@@ -109,7 +152,9 @@ function main() {
 		meilisearch.healthcheck?.test?.includes("http://127.0.0.1:7700/health"),
 		"Meilisearch health check is missing",
 	);
+}
 
+function requireSearchIndexer(services: Record<string, ComposeService>) {
 	const searchIndexer = services["search-indexer"];
 	requireCondition(searchIndexer, "Search indexer is missing");
 	requireCondition(
@@ -127,35 +172,47 @@ function main() {
 		searchIndexer.healthcheck?.start_period === "1h0m0s",
 		"Search indexer needs a one-hour first-rebuild health window",
 	);
+}
 
+function requireRuntimeService(name: string, service: ComposeService) {
+	requireCondition(service, `${name} service is missing`);
+	requireCondition(
+		service.image === runtimeImage,
+		`${name} must use the requested runtime image`,
+	);
+	requireCondition(
+		service.environment?.LIBRARY_CONFIG_PATH ===
+			"/runtime/config/library.json",
+		`${name} must use the shared runtime configuration`,
+	);
+	requireCondition(
+		service.configs?.some(
+			(config) =>
+				config.source === "library-config" &&
+				config.target === "/runtime/config/library.json",
+		),
+		`${name} must mount the shared runtime configuration`,
+	);
+	requireCondition(
+		!service.ports?.length,
+		`${name} must not publish a host port`,
+	);
+	requireCondition(
+		JSON.stringify(Object.keys(service.networks ?? {}).sort()) ===
+			JSON.stringify(["coolify", "private"]),
+		`${name} must join the private and shared database networks`,
+	);
+}
+
+function requireRuntimeServices(services: Record<string, ComposeService>) {
 	for (const name of LIBRARY_COMPOSE_SERVICES.filter(
 		(name) => name !== "meilisearch",
 	)) {
-		const service = services[name];
-		requireCondition(service, `${name} service is missing`);
-		requireCondition(
-			service.environment?.LIBRARY_CONFIG_PATH ===
-				"/runtime/config/library.json",
-			`${name} must use the shared runtime configuration`,
-		);
-		requireCondition(
-			service.configs?.some(
-				(config) =>
-					config.source === "library-config" &&
-					config.target === "/runtime/config/library.json",
-			),
-			`${name} must mount the shared runtime configuration`,
-		);
-		requireCondition(
-			!service.ports?.length,
-			`${name} must not publish a host port`,
-		);
-		requireCondition(
-			JSON.stringify(Object.keys(service.networks ?? {}).sort()) ===
-				JSON.stringify(["coolify", "private"]),
-			`${name} must join the private and shared database networks`,
-		);
+		requireRuntimeService(name, services[name]);
 	}
+}
+
+function requirePublicationAndWeb(services: Record<string, ComposeService>) {
 	const publicationWorker = services["publication-worker"];
 	requireCondition(
 		publicationWorker?.depends_on?.["search-indexer"]?.condition ===
@@ -176,6 +233,9 @@ function main() {
 		services.web.labels?.["traefik.docker.network"] === "coolify",
 		"The public proxy must reach web through the shared Coolify network",
 	);
+}
+
+function requireRenderedConfig(model: ComposeModel) {
 	const renderedConfig = JSON.parse(
 		model.configs?.["library-config"]?.content ?? "null",
 	) as { services?: { search?: { host?: string } } } | null;
@@ -183,15 +243,43 @@ function main() {
 		renderedConfig?.services?.search?.host === "http://meilisearch:7700",
 		"Rendered runtime search host must use the private Compose service",
 	);
+}
+
+function requireNamedStorage(model: ComposeModel) {
 	requireCondition(
 		Boolean(model.volumes?.["meilisearch-data"]),
 		"Named Meilisearch volume is missing",
 	);
+}
+
+function requireCoolifyNetwork(model: ComposeModel) {
+	const coolify = model.networks?.coolify;
+	requireCondition(coolify, "Shared Coolify network is missing");
 	requireCondition(
-		model.networks?.coolify?.external === true &&
-			model.networks.coolify.name === "coolify",
-		"Shared PostgreSQL network must be the external Coolify network",
+		coolify.external === true,
+		"Shared PostgreSQL network must be external",
 	);
+	requireCondition(
+		coolify.name === "coolify",
+		"Shared PostgreSQL network must use the Coolify network",
+	);
+}
+
+function main() {
+	const root = resolve(import.meta.dirname, "..");
+	const libraryConfig = loadLibraryConfig(root);
+	const model = renderCompose(root, libraryConfig);
+	const { serviceNames, services } = requireExpectedServices(model);
+	requireMeilisearchRuntime(services, libraryConfig);
+	requireMeilisearchPorts(services);
+	requireMeilisearchNetwork(services);
+	requireMeilisearchStorage(services);
+	requireSearchIndexer(services);
+	requireRuntimeServices(services);
+	requirePublicationAndWeb(services);
+	requireRenderedConfig(model);
+	requireNamedStorage(model);
+	requireCoolifyNetwork(model);
 
 	console.log(
 		JSON.stringify({

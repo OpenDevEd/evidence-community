@@ -28,6 +28,7 @@ const maximumBodyBytes = 4 * 1_024;
 type ReadinessRequest = {
 	applicationUuid: string;
 	commit: string;
+	runtimeImage: string;
 };
 
 export type LibraryRuntimeContainerFact = LibraryComposeContainerFact;
@@ -52,15 +53,32 @@ function requireKnownPath(request: IncomingMessage) {
 }
 
 function requireRequestRecord(body: unknown) {
-	const message = "Send only applicationUuid and commit.";
+	const message = "Send only applicationUuid, commit and runtimeImage.";
 	if (!body || typeof body !== "object" || Array.isArray(body)) {
 		return invalidRequest(message);
 	}
 	const record = body as Record<string, unknown>;
-	if (Object.keys(record).sort().join(",") !== "applicationUuid,commit") {
+	if (
+		Object.keys(record).sort().join(",") !==
+		"applicationUuid,commit,runtimeImage"
+	) {
 		return invalidRequest(message);
 	}
 	return record;
+}
+
+function requireRuntimeImage(value: unknown) {
+	const message =
+		"runtimeImage must be the fixed Evidence Library image with a sha256 digest.";
+	if (
+		typeof value !== "string" ||
+		!/^ghcr\.io\/opendeved\/evidence-library-runtime@sha256:[a-f0-9]{64}$/u.test(
+			value,
+		)
+	) {
+		return invalidRequest(message);
+	}
+	return value;
 }
 
 function requireApplicationUuid(value: unknown) {
@@ -85,6 +103,7 @@ function parseReadinessRequest(serialized: string): ReadinessRequest {
 	return {
 		applicationUuid: requireApplicationUuid(record.applicationUuid),
 		commit: requireCommit(record.commit),
+		runtimeImage: requireRuntimeImage(record.runtimeImage),
 	};
 }
 
@@ -108,13 +127,17 @@ async function runReadiness(
 		const services = requireLibraryComposeRuntimeReadiness(
 			containers,
 			body.commit,
+			body.runtimeImage,
 		);
 		sendJson(response, 200, {
 			applicationUuid: body.applicationUuid,
 			commit: body.commit,
 			ready: true,
+			runtimeImage: body.runtimeImage,
 			services: services.map((container) => ({
 				health: container.health,
+				imageId: container.imageId,
+				imageReference: container.imageReference,
 				publishedPorts: container.publishedPorts.map((port) => ({
 					containerPort: port.containerPort,
 					hostIp: port.hostIp,

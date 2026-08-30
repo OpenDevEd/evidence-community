@@ -33,10 +33,17 @@ x-library-service: &library-service
     start_period: 10s
 
 x-search-indexer-service: &search-indexer-service
-  image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE:-evidence-library-acceptance-search-indexer:local}
+  image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
   init: true
   labels: *acceptance-labels
   restart: "no"
+  command: ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
+  healthcheck:
+    test: ["CMD", "node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
+    interval: 2s
+    timeout: 2s
+    retries: 60
+    start_period: 10s
 
 x-meilisearch-service: &meilisearch-service
   image: getmeili/meilisearch:v1.37
@@ -238,7 +245,7 @@ services:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/indigo:/runtime/config:ro"
 
   amber-publication-worker:
-    image: ${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:-evidence-library-acceptance-publication-worker:local}
+    image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
     init: true
     labels: *acceptance-labels
     depends_on:
@@ -254,6 +261,7 @@ services:
       LIBRARY_CONFIG_PATH: /runtime/config/library.json
       NODE_EXTRA_CA_CERTS: /ca/root.crt
       PUBLICATION_WORKER_ID: acceptance-amber-publication
+    command: ["node", ".next/publication/worker.mjs", "--watch"]
     volumes:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/amber:/runtime/config:ro"
       - caddy_ca:/ca:ro

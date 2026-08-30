@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+import { availableParallelism } from "node:os";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin();
@@ -7,10 +8,17 @@ const nextConfig = {
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheComponents: true,
 	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
+	typescript: {
+		ignoreBuildErrors:
+			process.env.EVIDENCE_LIBRARY_RELEASE_BUILD === "1",
+	},
 	experimental: {
+		cpus: Math.max(1, availableParallelism() - 1),
 		staleTimes: {
 			dynamic: 30,
 		},
+		turbopackFileSystemCacheForBuild: true,
+		workerThreads: true,
 	},
 	reactCompiler: true,
 	images: {

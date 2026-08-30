@@ -71,18 +71,6 @@ const runtimeDirectory = path.join(
 const image =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE ??
 	"evidence-library-acceptance:local";
-const searchIndexerImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
-	"evidence-library-acceptance-search-indexer:local";
-const sourceSyncImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE ??
-	"evidence-library-acceptance-source-sync:local";
-const sourceWritebackImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE ??
-	"evidence-library-acceptance-source-writeback:local";
-const publicationWorkerImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
-	"evidence-library-acceptance-publication-worker:local";
 const acceptanceOpenScholar = {
 	amber: {
 		libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
@@ -140,11 +128,7 @@ const sourceCommit =
 const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
 	EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE: image,
-	EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:
-		publicationWorkerImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE: sourceSyncImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE: sourceWritebackImage,
+	RUNTIME_IMAGE: image,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
 	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_LIBRARY_ID:
 		acceptanceOpenScholar.amber.libraryId,
@@ -492,6 +476,19 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			`${baseUrl}/admin`,
 			"Admin under a switched-off locale",
 		);
+	} catch (error) {
+		run(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"logs",
+				"--no-color",
+				"--tail",
+				"200",
+			),
+			environment,
+		);
+		throw error;
 	} finally {
 		compose("down", "--volumes");
 	}
@@ -2782,143 +2779,167 @@ async function verifyLiveConfigLifecycle(profile: Profile) {
 	);
 }
 
-async function main() {
-	if (cleanupOnly) {
-		const removedProjects = reapAbandonedProjects({
-			includePersistent: true,
-		});
-		console.log(
-			removedProjects === 0
-				? "No abandoned acceptance projects found."
-				: `Removed ${removedProjects} abandoned acceptance project${removedProjects === 1 ? "" : "s"}.`,
-		);
-		return;
-	}
+function cleanupAbandonedProjects() {
+	const removedProjects = reapAbandonedProjects({ includePersistent: true });
+	console.log(
+		removedProjects === 0
+			? "No abandoned acceptance projects found."
+			: `Removed ${removedProjects} abandoned acceptance project${removedProjects === 1 ? "" : "s"}.`,
+	);
+}
 
-	await initializeAcceptancePorts();
-	reapAbandonedProjects();
-	const profiles = [
+function loadAcceptanceProfiles() {
+	return [
 		loadProfile("amber", amberPort, amberMeilisearchPort),
 		loadProfile("indigo", indigoPort, indigoMeilisearchPort),
 	];
+}
 
+function prepareAcceptanceRuntime(profiles: Profile[]) {
 	rmSync(runtimeDirectory, { recursive: true, force: true });
 	profiles.forEach(prepareRuntimeConfig);
+}
 
-	try {
-		if (!skipBuild) {
-			run("docker", [
-				"buildx",
-				"bake",
-				"--file",
-				"docker-bake.acceptance.hcl",
-				"--load",
-				"--set",
-				`app.tags=${image}`,
-				"--set",
-				`search-indexer.tags=${searchIndexerImage}`,
-				"--set",
-				`source-sync.tags=${sourceSyncImage}`,
-				"--set",
-				`source-writeback.tags=${sourceWritebackImage}`,
-				"--set",
-				`publication-worker.tags=${publicationWorkerImage}`,
-				"acceptance",
-			]);
-		}
-		await verifyRootOwnedConfigStartup();
-		compose(
-			"up",
-			"--wait",
-			"--wait-timeout",
-			"180",
-			"postgres",
-			"amber-meilisearch",
-			"indigo-meilisearch",
+function buildAcceptanceImage() {
+	if (skipBuild) return;
+	run("docker", [
+		"buildx",
+		"bake",
+		"--file",
+		"docker-bake.acceptance.hcl",
+		"--load",
+		"--set",
+		`runtime.tags=${image}`,
+		"acceptance",
+	]);
+}
+
+async function startAcceptanceInfrastructure(profiles: Profile[]) {
+	await verifyRootOwnedConfigStartup();
+	compose(
+		"up",
+		"--wait",
+		"--wait-timeout",
+		"180",
+		"postgres",
+		"amber-meilisearch",
+		"indigo-meilisearch",
+	);
+	await verifyRepositoryComposeStartup(profiles[0]);
+	await verifyBaseAcceptanceServicesSurvived();
+	for (const profile of profiles) await seedSharedSearchIndexes(profile);
+}
+
+async function startAcceptanceSearchWorkers(profiles: Profile[]) {
+	compose(
+		"up",
+		"--wait",
+		"--wait-timeout",
+		"180",
+		"amber-search-indexer",
+		"indigo-search-indexer",
+	);
+	for (const profile of profiles) {
+		assert.equal(
+			postgresScalar(
+				profile.name,
+				`SELECT "searchIndexRebuildPending" FROM "status" WHERE "id" = 1`,
+			),
+			"f",
+			`${profile.name} search rebuild marker must clear before worker health passes`,
 		);
-		await verifyRepositoryComposeStartup(profiles[0]);
-		await verifyBaseAcceptanceServicesSurvived();
-		for (const profile of profiles) {
-			await seedSharedSearchIndexes(profile);
-		}
-		compose(
-			"up",
-			"--wait",
-			"--wait-timeout",
-			"180",
-			"amber-search-indexer",
-			"indigo-search-indexer",
-		);
-		for (const profile of profiles) {
-			assert.equal(
-				postgresScalar(
-					profile.name,
-					`SELECT "searchIndexRebuildPending" FROM "status" WHERE "id" = 1`,
-				),
-				"f",
-				`${profile.name} search rebuild marker must clear before worker health passes`,
-			);
-		}
-		for (const profile of profiles) {
-			await seedSearch(profile);
-			seedExportRecords(profile);
-			seedRedirectNotes(profile);
-		}
-		await verifySearchQueueIsolation(profiles);
-		compose(
-			"up",
-			"--wait",
-			"--wait-timeout",
-			"180",
-			"amber",
-			"indigo",
-			"amber-search-indexer",
-			"indigo-search-indexer",
-		);
-		await verifyLiveConfigLifecycle(profiles[0]);
-		await verifyPublicationLifecycle(profiles[0]);
-		await verifyZenodoReuseExternalLifecycle(profiles[0]);
-		await verifyPublicationAdminInterface(profiles[0]);
-		await verifyOpenScholarReadApi(profiles[0]);
-		await verifyOwnerLegalText(profiles[0]);
-		await verifyNoteRedirects(profiles[0]);
-		profiles.forEach(verifyServerAnalyticsTransport);
-		profiles.forEach(runBrowserSuite);
-		runAdminBrowserSuite(profiles[0]);
-		verifyJunitReports();
-		cleanupAcceptanceUsers();
-		console.log("\nRuntime acceptance passed for Amber and Indigo.");
-		if (keepRunning) {
-			console.log(
-				`Amber: http://127.0.0.1:${amberPort}\nIndigo: http://127.0.0.1:${indigoPort}\nCompose project: ${composeProject}`,
-			);
-		}
-	} catch (error) {
-		compose(
-			"logs",
-			"--no-color",
-			"--tail",
-			"200",
-			"amber",
-			"indigo",
-			"fixture",
-			"runtime-provider-fake",
-			"amber-publication-worker",
-			"mailpit",
-			"postgres",
-			"amber-meilisearch",
-			"indigo-meilisearch",
-		);
-		throw error;
-	} finally {
-		if (!keepRunning) {
-			compose("down", "--volumes", "--remove-orphans");
-			rmSync(runtimeDirectory, {
-				recursive: true,
-				force: true,
-			});
-		}
 	}
+}
+
+function seedAcceptanceRecords(profiles: Profile[]) {
+	for (const profile of profiles) {
+		seedSearch(profile);
+		seedExportRecords(profile);
+		seedRedirectNotes(profile);
+	}
+}
+
+async function runAcceptanceBehavior(profiles: Profile[]) {
+	await verifySearchQueueIsolation(profiles);
+	compose(
+		"up",
+		"--wait",
+		"--wait-timeout",
+		"180",
+		"amber",
+		"indigo",
+		"amber-search-indexer",
+		"indigo-search-indexer",
+	);
+	await verifyLiveConfigLifecycle(profiles[0]);
+	await verifyPublicationLifecycle(profiles[0]);
+	await verifyZenodoReuseExternalLifecycle(profiles[0]);
+	await verifyPublicationAdminInterface(profiles[0]);
+	await verifyOpenScholarReadApi(profiles[0]);
+	await verifyOwnerLegalText(profiles[0]);
+	await verifyNoteRedirects(profiles[0]);
+	profiles.forEach(verifyServerAnalyticsTransport);
+	profiles.forEach(runBrowserSuite);
+	runAdminBrowserSuite(profiles[0]);
+	verifyJunitReports();
+	cleanupAcceptanceUsers();
+}
+
+function reportAcceptanceSuccess() {
+	console.log("\nRuntime acceptance passed for Amber and Indigo.");
+	if (!keepRunning) return;
+	console.log(
+		`Amber: http://127.0.0.1:${amberPort}\nIndigo: http://127.0.0.1:${indigoPort}\nCompose project: ${composeProject}`,
+	);
+}
+
+function reportAcceptanceFailure(error: unknown): never {
+	compose(
+		"logs",
+		"--no-color",
+		"--tail",
+		"200",
+		"amber",
+		"indigo",
+		"fixture",
+		"runtime-provider-fake",
+		"amber-publication-worker",
+		"mailpit",
+		"postgres",
+		"amber-meilisearch",
+		"indigo-meilisearch",
+	);
+	throw error;
+}
+
+function cleanupAcceptanceRuntime() {
+	if (keepRunning) return;
+	compose("down", "--volumes", "--remove-orphans");
+	rmSync(runtimeDirectory, { recursive: true, force: true });
+}
+
+async function runAcceptance() {
+	await initializeAcceptancePorts();
+	reapAbandonedProjects();
+	const profiles = loadAcceptanceProfiles();
+	prepareAcceptanceRuntime(profiles);
+	try {
+		buildAcceptanceImage();
+		await startAcceptanceInfrastructure(profiles);
+		await startAcceptanceSearchWorkers(profiles);
+		seedAcceptanceRecords(profiles);
+		await runAcceptanceBehavior(profiles);
+		reportAcceptanceSuccess();
+	} catch (error) {
+		reportAcceptanceFailure(error);
+	} finally {
+		cleanupAcceptanceRuntime();
+	}
+}
+
+async function main() {
+	if (cleanupOnly) return cleanupAbandonedProjects();
+	await runAcceptance();
 }
 
 main().catch((error) => {

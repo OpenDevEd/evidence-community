@@ -12,14 +12,19 @@ No hosted runner service is part of the workflow.
 |---:|---|---:|---:|---|
 | 4 | `evidence-library-light` | 2 fixed guest CPUs each | 8 GiB each | lint, types, schemas, unit tests, Fallow and the final result |
 | 1 | `evidence-library-runtime` | guest CPUs 8 through 23 | 32 GiB | Docker build and runtime acceptance |
+| 1 | `evidence-library-release` | guest CPUs 8 through 23 | 32 GiB | publish the exact green runtime commit |
 
 The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk. The
-four light runners use guest CPUs 0 through 7. The runtime runner and its
-rootless Docker daemon use CPUs 8 through 23. Docker keeps one persistent
-`evidence-library-runtime` BuildKit builder.
+four light runners use guest CPUs 0 through 7. The runtime and release users
+are both limited to CPUs 8 through 23, so their combined Docker work cannot use
+more than those 16 cores. Their runner listeners share the
+`evidence-library-heavy.slice` limit. Each user owns a separate rootless Docker
+daemon and persistent BuildKit builder: `evidence-library-runtime` for tests
+and `evidence-library-release` for publication.
 
-The future image publisher gets a separate OS user, rootless Docker daemon,
-BuildKit cache and GitHub runner group. Do not put it in the CI runner group.
+Keep rootless Docker's user managers under `user.slice`. Moving either manager
+to the listener slice stops Docker from creating container scopes. Put the
+same `AllowedCPUs=8-23` limit on both user slices instead.
 
 ## Isolation
 
@@ -28,6 +33,8 @@ BuildKit cache and GitHub runner group. Do not put it in the CI runner group.
 - The guest firewall permits public internet access but denies the Hetzner host,
   private address ranges, Docker networks and cloud metadata addresses.
 - Only `OpenDevEd/new-el` can use the `Evidence Library CI` runner group.
+- Only `.github/workflows/runtime-image.yml` from the default branch can use
+  the separate `Evidence Library Release` runner group.
 - Pull requests from another repository do not receive a self-hosted job.
 - Test jobs receive `contents: read` and no deployment credentials.
 
@@ -44,6 +51,8 @@ Find the guest address and list its runners:
 ```sh
 ssh hetzner 'sudo virsh domifaddr new-el-ci --source lease'
 gh api orgs/OpenDevEd/actions/runner-groups/6/runners \
+  --jq '.runners[] | [.name, .status, .busy] | @tsv'
+gh api orgs/OpenDevEd/actions/runner-groups/7/runners \
   --jq '.runners[] | [.name, .status, .busy] | @tsv'
 ```
 
@@ -71,6 +80,19 @@ ssh -J hetzner ci-admin@192.168.122.185 '
 '
 ```
 
+Check the separate release cache the same way:
+
+```sh
+ssh -J hetzner ci-admin@192.168.122.185 '
+  release_uid=$(id -u gha-release)
+  sudo -u gha-release env \
+    HOME=/home/gha-release \
+    XDG_RUNTIME_DIR=/run/user/$release_uid \
+    DOCKER_HOST=unix:///run/user/$release_uid/docker.sock \
+    docker buildx inspect evidence-library-release
+'
+```
+
 Do not run a global Docker prune. Inspect the named builder first and remove
 only a cache or container that belongs to this CI guest.
 
@@ -85,3 +107,11 @@ Linux packages, so the job does not need `sudo`.
 runs. The rootless Docker daemon and named BuildKit builder keep Docker layers
 between runs. A failed or canceled run must still execute the acceptance
 cleanup before the next runtime job.
+
+## Runtime image build measurement
+
+The first clean unified-image build on the release account took **146.96
+seconds**. The unchanged rebuild took **4.05 seconds**, including loading the
+image into rootless Docker. The resulting image was **476,081,955 bytes**. The
+real publisher pushes to GHCR instead of loading locally, so registry transfer
+time is added to its first publish.
