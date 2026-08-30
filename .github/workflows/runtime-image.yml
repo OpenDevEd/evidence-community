@@ -30,8 +30,8 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main')
     runs-on:
-      - self-hosted
-      - evidence-library-release
+      group: Evidence Library Release
+      labels: evidence-library-release
     timeout-minutes: 30
     permissions:
       actions: read

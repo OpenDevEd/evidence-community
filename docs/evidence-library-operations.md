@@ -9,7 +9,7 @@ JSON document.
 | Input           | Required contract                                                                                                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
-| Image           | Build the repository `Dockerfile`; do not pass customer build arguments                                                                 |
+| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>`                               |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
 | Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                               |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
@@ -35,13 +35,13 @@ To change a Coolify deployment, update `LIBRARY_CONFIG_JSON` and redeploy the
 repository Compose file. The host-directory steps below are only for running
 the image directly with Docker. They do not apply to the Coolify Compose path.
 
-Run Compose from the repository root. This matches Coolify and keeps the build
-context on the repository Dockerfile and source tree:
+Run Compose from the repository root with the immutable image reference:
 
 ```bash
 MEILISEARCH_MASTER_KEY="$(jq -r .services.search.key config/library.example.json)" \
 LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"' config/library.example.json)" \
 SOURCE_COMMIT="$(git rev-parse HEAD)" \
+RUNTIME_IMAGE="ghcr.io/opendeved/evidence-library-runtime@sha256:<digest>" \
   docker compose --project-directory . \
   -f docker/compose.library.yaml config
 ```
@@ -56,6 +56,22 @@ stores the Compose expression as text instead of the release commit. Enabling
 source commits in builds also invalidates the Docker build cache on every
 commit. See Coolify's [application update API](https://coolify.io/docs/api-reference/api/applications/update-application-by-uuid)
 and [Docker Compose build settings](https://coolify.io/docs/applications/build-packs/docker-compose).
+
+## Publish a runtime image
+
+`.github/workflows/runtime-image.yml` publishes one private GHCR image after
+the complete `CI` workflow succeeds for an exact commit on `main`. Its release
+runner has a separate OS user, Docker daemon, BuildKit cache and GitHub runner
+group. The job receives `packages: write`; test jobs do not.
+
+The image tag is the 40-character source commit. Deployments use the digest
+reported in the workflow summary, never the tag. An existing tag is accepted
+only when its image revision label matches that commit, and the job does not
+rewrite it.
+
+For release recovery, run **Runtime image** from GitHub Actions and enter the
+exact commit. The workflow accepts only a commit in `main` with a successful
+`main` push run of `CI`.
 
 ## Run the library runtime verifier
 
@@ -94,7 +110,7 @@ POST /v1/library-runtime/readiness
 Authorization: Bearer <EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN>
 Content-Type: application/json
 
-{"applicationUuid":"<24-character Coolify application UUID>","commit":"<40-character Git commit>"}
+{"applicationUuid":"<24-character Coolify application UUID>","commit":"<40-character Git commit>","runtimeImage":"ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>"}
 ```
 
 It asks Docker for containers whose `com.docker.compose.project` label exactly
@@ -102,7 +118,10 @@ matches the requested application UUID. It checks the Coolify and project
 labels before inspecting a container, then checks them again in the inspect
 response. It returns ready only when the six expected services are running,
 the services with health checks are healthy, every release label matches the
-requested commit, and Meilisearch has no published host port.
+requested commit, and Meilisearch has no published host port. It also checks
+that the five Evidence Library services name the exact requested image, that
+Docker reports the requested digest for their local image, and that all five
+containers have the same image ID.
 
 Docker calls time out after two seconds. Each response is capped at 512 KiB,
 and one application can return at most 24 containers. Bad Docker data and proxy
