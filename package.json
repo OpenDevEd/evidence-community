@@ -23,6 +23,7 @@
 		"database:provision": "tsx ./tools/provisionLibraryDatabase.ts",
 		"database:provisioner": "tsx ./tools/runLibraryDatabaseProvisioner.ts",
 		"runtime:verifier": "tsx ./tools/runLibraryRuntimeVerifier.ts",
+		"volume:deleter": "tsx ./tools/runLibraryVolumeDeleter.ts",
 		"test:database-provisioning": "tsx ./tools/verifyLibraryDatabaseProvisioning.ts",
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
 		"test:source-configuration": "tsx ./tools/verifySourceConfiguration.ts",

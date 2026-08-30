@@ -128,6 +128,47 @@ and one application can return at most 24 containers. Bad Docker data and proxy
 errors return the fixed `runtime_inspection_failed` response. Docker error text
 never reaches the caller.
 
+## Delete a library search volume
+
+Deploy one fixed volume deleter on the development Coolify server from
+`docker/compose.volume-deleter.yaml`. The service receives a public HTTPS
+domain because hosted OpenScholar actions must reach it. Set one environment
+value:
+
+| Variable                                | Value                                    |
+| --------------------------------------- | ---------------------------------------- |
+| `EVIDENCE_LIBRARY_VOLUME_DELETER_TOKEN` | Bearer token containing 32 to 1024 bytes |
+
+Assign the domain to `volume-deleter:3000`. The container mounts the host
+Docker socket because Docker has no narrower credential for removing one
+volume. It exposes no Docker proxy. Keep the endpoint token private and do not
+place unrelated services in this Compose resource.
+
+The service accepts one deletion request:
+
+```http
+POST /v1/library-volumes/delete
+Authorization: Bearer <EVIDENCE_LIBRARY_VOLUME_DELETER_TOKEN>
+Content-Type: application/json
+
+{"applicationUuid":"<24-character Coolify application UUID>"}
+```
+
+The request accepts only `applicationUuid`. The service derives
+`<application-uuid>_meilisearch-data`; callers cannot send a volume name,
+Docker path or command. It asks Docker for every container that references the
+derived volume and returns `volume_in_use` without deleting when any exists.
+It then inspects the volume, deletes it without force and inspects it again.
+Success is `outcome: "deleted"` or the idempotent `outcome: "absent"`.
+Unexpected Docker responses, timeouts and an unconfirmed deletion return the
+fixed `volume_deletion_failed` response. Docker response text never reaches
+the caller.
+
+OpenScholar calls this service after deleting the matching Coolify
+application. A `volume_in_use` or `volume_deletion_failed` result keeps the
+library teardown pending for retry. Teardown is complete only after the
+service confirms the derived volume is absent.
+
 ## Create a library database
 
 Libraries share one PostgreSQL server, but each library has its own database

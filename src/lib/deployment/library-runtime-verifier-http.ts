@@ -4,6 +4,7 @@ import {
 	type ServerResponse,
 } from "node:http";
 
+import { isCoolifyApplicationUuid } from "./coolify-application";
 import {
 	LIBRARY_COMPOSE_RELEASE_LABEL,
 	LibraryComposeContractError,
@@ -84,7 +85,7 @@ function requireRuntimeImage(value: unknown) {
 function requireApplicationUuid(value: unknown) {
 	const message =
 		"applicationUuid must be a 24-character lowercase Coolify UUID.";
-	if (typeof value !== "string" || !/^[a-z0-9]{24}$/u.test(value)) {
+	if (!isCoolifyApplicationUuid(value)) {
 		return invalidRequest(message);
 	}
 	return value;

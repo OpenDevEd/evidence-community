@@ -55,6 +55,14 @@ export function requireMethod(
 	});
 }
 
+export function sendHealthResponse(
+	request: IncomingMessage,
+	response: ServerResponse,
+) {
+	requireMethod(request, "GET");
+	sendJson(response, 200, { status: "ok" });
+}
+
 export function requireAuthorization(request: IncomingMessage, token: string) {
 	const actual = Buffer.from(request.headers.authorization ?? "", "utf8");
 	const expected = Buffer.from(`Bearer ${token}`, "utf8");

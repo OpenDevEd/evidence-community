@@ -1,12 +1,13 @@
-import { once } from "node:events";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-
 import {
 	createLibraryRuntimeVerifierServer,
 	type LibraryRuntimeContainerFact,
 	type LibraryRuntimeContainerReader,
 } from "../src/lib/deployment/library-runtime-verifier-http";
+import { isCoolifyApplicationUuid } from "../src/lib/deployment/coolify-application";
+import {
+	listenForFixedHttpService,
+	runFixedHttpServiceMain,
+} from "./runFixedHttpService";
 
 const dockerApiVersion = "v1.41";
 const dockerRequestTimeoutMs = 2_000;
@@ -315,7 +316,7 @@ export function createDockerLibraryRuntimeContainerReader(
 	const baseUrl = requireDockerProxyUrl(dockerProxyUrl);
 	return async (applicationUuid) => {
 		try {
-			if (!/^[a-z0-9]{24}$/u.test(applicationUuid)) {
+			if (!isCoolifyApplicationUuid(applicationUuid)) {
 				return invalidDockerResponse();
 			}
 			const listUrl = new URL(`${dockerApiVersion}/containers/json`, baseUrl);
@@ -415,32 +416,21 @@ async function main() {
 		readContainers,
 		token: readToken(),
 	});
-	const stop = () => {
-		server.close((error) => {
-			if (error) {
-				console.error("Runtime verifier shutdown failed.");
-				process.exitCode = 1;
-			}
-		});
-	};
-	process.once("SIGINT", stop);
-	process.once("SIGTERM", stop);
 	const port = readPort(process.env.PORT);
-	server.listen(port, "0.0.0.0");
-	await once(server, "listening");
-	console.log(`Library runtime verifier is listening on port ${port}.`);
-}
-
-const entrypoint = process.argv[1]
-	? pathToFileURL(resolve(process.argv[1])).href
-	: undefined;
-if (entrypoint === import.meta.url) {
-	main().catch((error: unknown) => {
-		console.error(
-			error instanceof RuntimeVerifierStartupError
-				? error.message
-				: "Runtime verifier failed to start.",
-		);
-		process.exitCode = 1;
+	await listenForFixedHttpService({
+		listeningMessage: (activePort) =>
+			`Library runtime verifier is listening on port ${activePort}.`,
+		port,
+		server,
+		shutdownErrorMessage: "Runtime verifier shutdown failed.",
 	});
 }
+
+runFixedHttpServiceMain({
+	formatError: (error) =>
+		error instanceof RuntimeVerifierStartupError
+			? error.message
+			: "Runtime verifier failed to start.",
+	importMetaUrl: import.meta.url,
+	main,
+});
