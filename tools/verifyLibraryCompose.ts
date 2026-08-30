@@ -50,7 +50,11 @@ function loadLibraryConfig(root: string): LibraryConfig {
 	return libraryConfig;
 }
 
-function renderCompose(root: string, libraryConfig: LibraryConfig) {
+function renderComposeFile(
+	root: string,
+	file: string,
+	environment: Record<string, string>,
+) {
 	return JSON.parse(
 		execFileSync(
 			"docker",
@@ -59,23 +63,43 @@ function renderCompose(root: string, libraryConfig: LibraryConfig) {
 				"--project-directory",
 				root,
 				"-f",
-				resolve(root, "docker/compose.library.yaml"),
+				resolve(root, file),
 				"config",
 				"--format",
 				"json",
 			],
 			{
 				encoding: "utf8",
-				env: {
-					...process.env,
-					LIBRARY_CONFIG_JSON: JSON.stringify(libraryConfig),
-					MEILISEARCH_MASTER_KEY: libraryConfig.services.search.key,
-					RUNTIME_IMAGE: runtimeImage,
-					SOURCE_COMMIT: sourceCommit,
-				},
+				env: { ...process.env, ...environment },
 			},
 		),
 	) as ComposeModel;
+}
+
+function renderLibraryCompose(root: string, libraryConfig: LibraryConfig) {
+	return renderComposeFile(root, "docker/compose.library.yaml", {
+		LIBRARY_CONFIG_JSON: JSON.stringify(libraryConfig),
+		MEILISEARCH_MASTER_KEY: libraryConfig.services.search.key,
+		RUNTIME_IMAGE: runtimeImage,
+		SOURCE_COMMIT: sourceCommit,
+	});
+}
+
+function requireVerifierDockerReads(model: ComposeModel) {
+	const environment = model.services?.["docker-socket-proxy"]?.environment;
+	requireCondition(environment, "Runtime verifier socket proxy is missing");
+	requireCondition(
+		environment.CONTAINERS === "1",
+		"Runtime verifier must be able to read containers",
+	);
+	requireCondition(
+		environment.IMAGES === "1",
+		"Runtime verifier must be able to read image digests",
+	);
+	requireCondition(
+		environment.POST === "0",
+		"Runtime verifier must not write through the Docker API",
+	);
 }
 
 function requireExpectedServices(model: ComposeModel) {
@@ -268,7 +292,7 @@ function requireCoolifyNetwork(model: ComposeModel) {
 function main() {
 	const root = resolve(import.meta.dirname, "..");
 	const libraryConfig = loadLibraryConfig(root);
-	const model = renderCompose(root, libraryConfig);
+	const model = renderLibraryCompose(root, libraryConfig);
 	const { serviceNames, services } = requireExpectedServices(model);
 	requireMeilisearchRuntime(services, libraryConfig);
 	requireMeilisearchPorts(services);
@@ -280,6 +304,11 @@ function main() {
 	requireRenderedConfig(model);
 	requireNamedStorage(model);
 	requireCoolifyNetwork(model);
+	requireVerifierDockerReads(
+		renderComposeFile(root, "docker/compose.runtime-verifier.yaml", {
+			EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN: "compose-check",
+		}),
+	);
 
 	console.log(
 		JSON.stringify({
