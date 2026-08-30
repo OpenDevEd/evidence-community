@@ -71,41 +71,16 @@ flowchart LR
 14. Configuration activation is atomic: every field and dependency must pass
     before any part of the new revision is used.
 
-## Mandatory Claude Code review gate
+## Current review gate
 
-Every numbered implementation commit has the same completion gate:
+This plan records the original implementation sequence. Future maintenance
+follows `AGENTS.md` and `docs/agents/project.md`.
 
-1. Implement only that step.
-2. Run the step's stated verification.
-3. Invoke Claude Code with the `claude-fable-5` model in read-only plan mode.
-4. Give Claude the step's scope, acceptance criteria, test output, and exact
-   diff since the previous accepted step.
-5. Fix every blocking or important finding and rerun verification.
-6. Invoke Claude again after review-driven changes.
-7. Advance only when Claude reports no remaining blocking or important
-   findings.
-
-Review command shape:
-
-```bash
-claude -p \
-  --model claude-fable-5 \
-  --effort high \
-  --permission-mode plan \
-  --no-session-persistence \
-  "Review completed implementation step N. Do not edit files. Inspect the exact diff, tests, architecture, security boundaries, and acceptance criteria. Return findings ordered by severity with file and line references. Say explicitly when there are no blocking or important findings."
-```
-
-Claude review is additional verification. It never replaces lint, type-check,
-unit, integration, browser, or one-build runtime checks.
-
-Until the pre-existing repository lint baseline is repaired, a step's lint
-gate is `npx eslint <every lintable file changed by the step>`. The full
-`npm run lint` error and warning counts must also be included in that step's
-Claude review input, and neither count may increase from the previous accepted
-step. Commit 20 owns repair of every remaining baseline lint error. Commits 20
-and 21 cannot complete until the full repository lint command passes with no
-errors.
+Run focused checks while working. After a complete phase is integrated, run
+one read-only Fable review of the exact phase diff. Fix valid findings, rerun
+the affected focused checks, and let GitHub CI run the full required suite on
+the final PR head. Do not review every commit or repeat the full suite in each
+lane.
 
 ## Implementation commits
 

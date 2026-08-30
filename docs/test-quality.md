@@ -5,7 +5,7 @@ writing, changing, or reviewing a test. AI-generated tests are drafts. Do not
 commit one until every assertion proves real behavior.
 
 This guide applies to unit, integration, browser, worker, provider, and AI-output
-tests. The commands and cleanup rules remain in `AGENTS.md`.
+tests. The commands and cleanup rules are in `docs/agents/project.md`.
 
 ## First decide whether a test belongs
 
@@ -83,7 +83,8 @@ Do not use a full browser when a pure function gives the same confidence faster.
    Then implement the smallest change that makes it pass and clean up both code
    and test.
 4. Run the focused test without watch mode. Then run the wider checks required
-   by `AGENTS.md`. Stop and clean every disposable test environment you start.
+   by `docs/agents/project.md`. Stop and clean every disposable test
+   environment you start.
 5. Review every assertion using the rejection list below. Remove duplicate,
    tautological, flaky, and implementation-only tests before committing.
 
@@ -340,7 +341,8 @@ Before committing a test change, answer all of these with evidence:
   IDs, with retrying assertions and no fixed sleeps?
 - Is all state disposable, isolated, and cleaned up?
 - Does the test run in the required local command and CI job?
-- Did you run the focused check and every wider check required by `AGENTS.md`?
+- Did you run the focused check and every wider check required by
+  `docs/agents/project.md`?
 
 ## Sources
 
