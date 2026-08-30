@@ -19,7 +19,6 @@ import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
 import type { SmartScreeningField } from "@/types/ai";
 import { generateObject } from "ai";
-import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { addRegionsToFacetDistribution } from "./country";
@@ -31,20 +30,7 @@ import { resolveAIModel } from "@/lib/ai/model-resolution";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { CredentialsInput } from "@/lib/auth-credentials";
 import { authorizeForConfig } from "@/lib/auth-service";
-import { getAIRateLimitStatus } from "@/lib/ai-rate-limit";
 import { meilisearchEquals, meilisearchIn } from "@/lib/meilisearch-filter";
-
-export async function getRateLimits() {
-	const headersList = await headers();
-	const status = getAIRateLimitStatus(headersList);
-
-	return {
-		retryAt: status.resetAt,
-		remaining: status.remaining,
-		limit: status.limit,
-		retryAfter: status.allowed ? null : status.retryAfter,
-	}
-}
 
 export async function areLinksValid(links: string[]) {
 	const validity = await Promise.allSettled(links.map(async (link: string) => {

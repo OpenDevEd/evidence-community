@@ -30,6 +30,7 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 				{
 					provider: "google",
 					enabled: true,
+					models: ["gemini-2.5-flash"],
 					defaultModel: "gemini-2.5-flash",
 				},
 			],

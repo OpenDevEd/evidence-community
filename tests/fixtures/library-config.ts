@@ -40,6 +40,9 @@ export const minimalLibraryConfig = {
 		secret: "minimal-auth-secret-123456789012345",
 	},
 	services: {
+		redis: {
+			url: "redis://redis:6379",
+		},
 		database: {
 			url: "postgresql://library:password@database:5432/library",
 		},
@@ -195,7 +198,8 @@ export const maximalLibraryConfig = {
 		privacyMarkdown:
 			"# Privacy notice\n\n{{SITE_HOST}} keeps only what the library needs.\n\n**Last updated:** 1 August 2026",
 		cookieMarkdown: "# Cookie notice\n\nOnly essential cookies are used.",
-		termsMarkdown: "# Terms of use\n\nUse the library for research and teaching.",
+		termsMarkdown:
+			"# Terms of use\n\nUse the library for research and teaching.",
 	},
 	localization: {
 		locales: ["en-GB", "fr"],
@@ -298,6 +302,9 @@ export const maximalLibraryConfig = {
 		},
 	],
 	services: {
+		redis: {
+			url: "redis://redis:6379",
+		},
 		database: {
 			url: "postgresql://library:password@database:5432/library",
 		},
@@ -350,9 +357,8 @@ export const maximalLibraryConfig = {
 				provider: "google",
 				enabled: true,
 				apiKey: "google-api-key",
+				models: ["gemini-2.5-flash", "gemini-2.5-pro"],
 				defaultModel: "gemini-2.5-flash",
-				largeModel: "gemini-2.5-pro",
-				smallModel: "gemini-2.5-flash",
 			},
 		],
 		prompts: {

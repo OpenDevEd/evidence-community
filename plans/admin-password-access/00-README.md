@@ -26,7 +26,7 @@ Restore the development Evidence Library on its normal public HTTPS address. Kee
 
 - `src/lib/admin/http.ts` is the one API gate and already adds private no-store headers.
 - `src/app/[locale]/admin/page.tsx` is the one page gate.
-- `src/lib/ai-rate-limit.ts` already has a bounded, process-wide limiter design that can be made reusable.
+- `src/lib/ai/rate-limit.ts` owns the shared Redis connection and atomic limiter pattern that can be reused for a separate admin-login policy.
 - `docker/compose.library.yaml` is the normal web and search-worker deployment.
 - `tests/e2e/admin.spec.ts` already covers the real admin workbench.
 - `tools/verifyNativeFileHttp.ts` and the admin browser tests cover PDF upload behavior.

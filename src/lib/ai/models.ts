@@ -4,10 +4,6 @@ type ModelCatalog = typeof PLATFORM_AI_MODEL_CATALOG;
 
 export type AIProvider = keyof ModelCatalog;
 
-export type AIModelId = {
-	[Provider in AIProvider]: ModelCatalog[Provider]["active"][number];
-}[AIProvider];
-
 /**
  * Reasoning levels the AI modernization contract verified per model. Deep
  * Research raises a model to its own maximum for publication selection and
@@ -25,7 +21,7 @@ type PromptCache =
 export type AIModel = {
 	name: string;
 	company: string;
-	/** Configurable and usable server-side, but never offered in the picker. */
+	/** Reserved for internal server use and never accepted from public configuration. */
 	hidden: boolean;
 	/** Unset when no one has verified how far this model's reasoning goes. */
 	maximumReasoningEffort?: ReasoningEffort;
@@ -46,7 +42,7 @@ const anthropicHourCache = {
 	breakpoint: { type: "ephemeral", ttl: "1h" },
 } as const;
 
-export const AI_MODELS: Record<AIModelId, AIModel> = {
+const AI_MODEL_REGISTRY = {
 	"openai/gpt-5.6-luna": {
 		name: "GPT-5.6 Luna",
 		company: "OpenAI",
@@ -145,18 +141,17 @@ export const AI_MODELS: Record<AIModelId, AIModel> = {
 		company: "DeepSeek",
 		hidden: false,
 	},
-};
+} as const satisfies Record<string, AIModel>;
 
-/**
- * The cheap fixed model the contract reserves for generated starter
- * questions. Libraries that cannot reach it fall back to their own small
- * model — see {@link starterQuestionsModelId}.
- */
+export type AIModelId = keyof typeof AI_MODEL_REGISTRY;
+export const AI_MODELS: Record<AIModelId, AIModel> = AI_MODEL_REGISTRY;
+
+/** The fixed OpenRouter model reserved for generated starter questions. */
 export const CONTRACT_STARTER_QUESTIONS_MODEL_ID: AIModelId =
 	"openai/gpt-5.6-luna";
 
 export function isAIModelId(value: unknown): value is AIModelId {
-	return typeof value === "string" && value in AI_MODELS;
+	return typeof value === "string" && Object.hasOwn(AI_MODELS, value);
 }
 
 export function isSelectableAIModelId(value: unknown): value is AIModelId {
@@ -178,9 +173,8 @@ export function maximumReasoningEffort(modelId: AIModelId) {
 export type ConfiguredAIProvider = {
 	provider: AIProvider;
 	enabled: boolean;
+	models: readonly string[];
 	defaultModel?: string;
-	largeModel?: string;
-	smallModel?: string;
 };
 
 export type SelectableAIModel = {
@@ -191,11 +185,7 @@ export type SelectableAIModel = {
 };
 
 function configuredModelIds(provider: ConfiguredAIProvider) {
-	return [
-		provider.defaultModel,
-		provider.largeModel,
-		provider.smallModel,
-	].filter(isAIModelId);
+	return provider.models.filter(isAIModelId);
 }
 
 function enabledProviders(providers: readonly ConfiguredAIProvider[]) {
@@ -203,8 +193,7 @@ function enabledProviders(providers: readonly ConfiguredAIProvider[]) {
 }
 
 /**
- * Every model this library offers in its picker: the slots its enabled
- * providers configured, without the hidden ones.
+ * Every model this library offers in its picker, in the configured order.
  */
 export function selectableAIModels(
 	providers: readonly ConfiguredAIProvider[],
@@ -232,29 +221,28 @@ export function defaultAIModelId(
 	const selectable = selectableAIModels(providers);
 	const configuredDefault = enabledProviders(providers)
 		.map(({ defaultModel }) => defaultModel)
-		.find(isSelectableAIModelId);
+		.find(
+			(model): model is AIModelId =>
+				isSelectableAIModelId(model) &&
+				selectable.some(({ id }) => id === model),
+		);
 
 	return configuredDefault ?? selectable[0]?.id;
 }
 
 /**
- * Starter questions run on the contract's fixed cheap model when the library
- * has it configured. A library on its own provider keys cannot reach that
- * model, so it uses its smallest configured model instead.
+ * OpenRouter starter questions always use the fixed contract model. Other
+ * providers fall back to their configured default model.
  */
 export function starterQuestionsModelId(
 	providers: readonly ConfiguredAIProvider[],
 ): AIModelId | undefined {
 	const enabled = enabledProviders(providers);
-	const hasContractModel = enabled.some((provider) =>
-		configuredModelIds(provider).includes(
-			CONTRACT_STARTER_QUESTIONS_MODEL_ID,
-		),
-	);
-	if (hasContractModel) return CONTRACT_STARTER_QUESTIONS_MODEL_ID;
+	if (enabled.some(({ provider }) => provider === "openrouter")) {
+		return CONTRACT_STARTER_QUESTIONS_MODEL_ID;
+	}
 
 	const [first] = enabled;
 	if (!first) return undefined;
-	const smallest = first.smallModel ?? first.defaultModel;
-	return isAIModelId(smallest) ? smallest : undefined;
+	return isAIModelId(first.defaultModel) ? first.defaultModel : undefined;
 }

@@ -551,7 +551,7 @@ test("enforces the runtime AI gate in both directions", async ({
 	}
 });
 
-test("rate limits paid AI requests only when AI is enabled", async ({
+test("rate limits paid AI requests per browser when AI is enabled", async ({
 	request,
 }, testInfo) => {
 	const sendRequest = () =>
@@ -583,7 +583,10 @@ test("rate limits paid AI requests only when AI is enabled", async ({
 	expect(Number(rejected.headers()["retry-after"])).toBeGreaterThan(0);
 	expect(Number(rejected.headers()["retry-after"])).toBeLessThanOrEqual(60);
 	await expect(rejected.json()).resolves.toEqual({
-		error: "Rate limit exceeded",
+		error: {
+			code: "RATE_LIMITED",
+			message: expect.stringContaining("Try again in"),
+		},
 	});
 });
 

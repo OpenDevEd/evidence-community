@@ -21,6 +21,11 @@ const mocks = vi.hoisted(() => ({
 					provider: "openrouter",
 					enabled: true,
 					apiKey: "openrouter-key",
+					models: [
+						"openai/gpt-5.6-luna",
+						"x-ai/grok-4.6",
+						"google/gemini-3.7-flash",
+					],
 					defaultModel: "openai/gpt-5.6-luna",
 				},
 			],
@@ -132,16 +137,9 @@ describe("AI routes", () => {
 			aiSearch: true,
 			deepResearch: true,
 		};
-		// Each configured slot answers with the model it names, so a test can
-		// see which model a route chose.
+		// The provider builds the model a route has already allowed.
 		mocks.provider.mockResolvedValue({
 			createModel: vi.fn((modelId: string) => ({ id: modelId })),
-			defaultModel: { id: "openai/gpt-5.6-luna" },
-			defaultModelId: "openai/gpt-5.6-luna",
-			largeModel: { id: "x-ai/grok-4.6" },
-			largeModelId: "x-ai/grok-4.6",
-			smallModel: { id: "google/gemini-3.7-flash" },
-			smallModelId: "google/gemini-3.7-flash",
 		});
 		mocks.createUIMessageStreamResponse.mockImplementation(
 			({ stream }) => new Response(stream),

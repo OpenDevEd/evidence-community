@@ -442,6 +442,7 @@
         tone: "#f3a6ff",
         fields: [
           ["services.database.url", "Secret", "postgres or postgresql URL; ≤4,096", "Required; server-only"],
+          ["services.redis.url", "Secret", "redis or rediss URL; ≤4,096", "Required when AI is enabled; server-only"],
           ["services.search.host", "URL", "HTTP or HTTPS; no credentials/query", "Required; server-only"],
           ["services.search.key", "Secret", "1–512 characters", "Required; server-only"],
           ["services.search.index", "Text", "1–128; letters, numbers, underscore, hyphen", "Required"],
@@ -453,12 +454,11 @@
         name: "AI providers",
         tone: "#ffba75",
         fields: [
-          ["ai.providers", "Provider list", "OpenAI, Google, Anthropic, Mistral, DeepSeek", "Maximum 5"],
+          ["ai.providers", "Provider list", "OpenAI, Google, Anthropic, Mistral, DeepSeek, OpenRouter", "Maximum 5"],
           ["ai.providers[].enabled", "Toggle", "Boolean", "false"],
           ["ai.providers[].apiKey", "Secret", "1–512 characters", "Required when enabled"],
-          ["ai.providers[].defaultModel", "Model", "Active provider catalog model", "Required when enabled"],
-          ["ai.providers[].largeModel", "Model", "Approved large model", "Deep research"],
-          ["ai.providers[].smallModel", "Model", "Approved small model", "Optional"],
+          ["ai.providers[].models", "Model list", "Ordered active provider catalog models", "At least one when enabled"],
+          ["ai.providers[].defaultModel", "Model", "One model from the configured list", "Required when enabled"],
           ["ai.modelId", "Catalog ID", "1–128 approved ID characters", "No free-form UI"]
         ]
       },
@@ -588,12 +588,12 @@
       "content.tags.publish": ["User-defined valid tags"],
       "gapMaps[].sourceUrl": ["HTTPS URL"],
       "services.database.url": ["postgres:", "postgresql:"],
+      "services.redis.url": ["redis:", "rediss:"],
       "services.search.host": ["http:", "https:"],
       "services.zotero.translationUrl": ["http:", "https:"],
-      "ai.providers": ["openai", "google", "anthropic", "mistral", "deepseek"],
-      "ai.providers[].defaultModel": aiModels,
-      "ai.providers[].largeModel": aiModels,
-      "ai.providers[].smallModel": aiModels,
+      "ai.providers": ["openai", "google", "anthropic", "mistral", "deepseek", "openrouter"],
+      "ai.providers[].models": aiModels,
+	  "ai.providers[].defaultModel": aiModels,
       "ai.modelId": aiModels,
       "analytics.posthog.host": ["https:"],
       "email.smtp.security": ["tls", "starttls", "none"]

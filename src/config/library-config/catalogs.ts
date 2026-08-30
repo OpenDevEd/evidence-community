@@ -15,12 +15,7 @@ export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
 		key: "title_abstract_author_and_keywords",
 		legacyKey: "title_and_abstract",
 		name: "Title, abstract, authors and keywords",
-		attributesToSearchOn: [
-			"title",
-			"abstractNote",
-			"tags",
-			"fullNames",
-		],
+		attributesToSearchOn: ["title", "abstractNote", "tags", "fullNames"],
 	},
 	{
 		key: "title_abstract_and_keywords",
@@ -73,11 +68,9 @@ export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
 export type PlatformSearchScope =
 	(typeof PLATFORM_SEARCH_SCOPE_OPTIONS)[number]["key"];
 
-export const PLATFORM_SEARCH_SCOPES =
-	PLATFORM_SEARCH_SCOPE_OPTIONS.map(({ key }) => key) as [
-		PlatformSearchScope,
-		...PlatformSearchScope[],
-	];
+export const PLATFORM_SEARCH_SCOPES = PLATFORM_SEARCH_SCOPE_OPTIONS.map(
+	({ key }) => key,
+) as [PlatformSearchScope, ...PlatformSearchScope[]];
 
 export const PLATFORM_NAVBAR_ICON_IDS = [
 	"AboutUs",
@@ -97,8 +90,7 @@ export const PLATFORM_NAVBAR_ICON_IDS = [
 	"IoStatsChart",
 ] as const;
 
-export type PlatformNavbarIconId =
-	(typeof PLATFORM_NAVBAR_ICON_IDS)[number];
+export type PlatformNavbarIconId = (typeof PLATFORM_NAVBAR_ICON_IDS)[number];
 
 export const PLATFORM_SOCIAL_PROVIDERS = [
 	"github",
@@ -123,49 +115,29 @@ export const PLATFORM_FONT_CATALOG = {
 export const PLATFORM_AI_MODEL_CATALOG = {
 	openai: {
 		active: ["gpt-5.4", "gpt-5.4-mini"],
-		large: ["gpt-5.4"],
-		small: ["gpt-5.4-mini"],
 	},
 	google: {
 		active: ["gemini-2.5-flash", "gemini-2.5-pro"],
-		large: ["gemini-2.5-pro"],
-		small: ["gemini-2.5-flash"],
 	},
 	anthropic: {
 		active: ["claude-sonnet-4-6", "claude-haiku-4-5"],
-		large: ["claude-sonnet-4-6"],
-		small: ["claude-haiku-4-5"],
 	},
 	mistral: {
 		active: ["mistral-large-latest", "mistral-small-latest"],
-		large: ["mistral-large-latest"],
-		small: ["mistral-small-latest"],
 	},
 	deepseek: {
 		active: ["deepseek-v4-pro", "deepseek-v4-flash"],
-		large: ["deepseek-v4-pro"],
-		small: ["deepseek-v4-flash"],
 	},
 	openrouter: {
 		active: [
 			"openai/gpt-5.6-luna",
 			"google/gemini-3.7-flash",
 			"x-ai/grok-4.6",
-			"anthropic/claude-sonnet-5",
-			"anthropic/claude-opus-5",
 		],
-		large: [
-			"openai/gpt-5.6-luna",
-			"x-ai/grok-4.6",
-			"anthropic/claude-opus-5",
-		],
-		small: ["google/gemini-3.7-flash", "anthropic/claude-sonnet-5"],
 	},
 } as const;
 
-export const PLATFORM_AI_PROVIDERS = Object.keys(
-	PLATFORM_AI_MODEL_CATALOG,
-) as [
+export const PLATFORM_AI_PROVIDERS = Object.keys(PLATFORM_AI_MODEL_CATALOG) as [
 	keyof typeof PLATFORM_AI_MODEL_CATALOG,
 	...(keyof typeof PLATFORM_AI_MODEL_CATALOG)[],
 ];

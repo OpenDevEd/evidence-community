@@ -602,12 +602,23 @@ running before removing a stale lock.
   hidden tag are left out. Records carrying a coming-soon or internal tag stay
   in, because the public library shows them with a badge.
 - Proxied gap maps and generated exports are not cached by the application.
-- PostgreSQL, Meilisearch, SMTP, server analytics, and AI provider endpoints
-  must be reachable from the container network. Browser analytics hosts must
-  also be reachable from the user's browser.
-- Paid AI generation endpoints allow ten requests per `X-Real-IP` per minute.
-  The application deliberately trusts only that proxy-owned header and groups
-  requests without it into one fail-closed bucket.
+- PostgreSQL, Meilisearch, private Redis, SMTP, server analytics, and AI
+  provider endpoints must be reachable from the container network. Browser
+  analytics hosts must also be reachable from the user's browser.
+- AI generation endpoints use the private Redis URL in `services.redis.url`.
+  Each browser receives ten requests per minute, 250 per day, 1,000 per seven
+  days, and 5,000 per 30 days. A separate 1,000-per-minute network limit uses
+  the proxy-owned `X-Real-IP` header. Missing or unavailable Redis returns a
+  controlled 503 instead of allowing an uncounted request.
+- The day, week, and month counters start only after the browser returns its
+  issued cookie. Cookie-refusing clients create only minute-lived browser keys
+  and remain covered by the separate network limit. These browser counters are
+  an ordinary-use quota, not an authentication boundary: a client that refuses
+  or rotates cookies can avoid the browser identity windows, but still cannot
+  exceed the proxy-owned 1,000-per-minute network limit.
+- Redis reconnects after temporary socket loss. It fails closed at a 128 MB
+  `noeviction` ceiling, so a full Redis also returns the controlled 503 instead
+  of risking an out-of-memory container failure or uncounted AI requests.
 
 ## Release verification
 

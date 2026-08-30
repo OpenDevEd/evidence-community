@@ -148,9 +148,12 @@ describe("library configuration fixtures", () => {
 		expect(libraryConfigSchema.safeParse(readOnly).success).toBe(true);
 
 		const legacyDefault = cloneLibraryConfig(maximalLibraryConfig);
-		(legacyDefault.sources![0] as Record<string, unknown>).defaultWriteback =
-			true;
-		expect(libraryConfigSchema.safeParse(legacyDefault).success).toBe(false);
+		(
+			legacyDefault.sources![0] as Record<string, unknown>
+		).defaultWriteback = true;
+		expect(libraryConfigSchema.safeParse(legacyDefault).success).toBe(
+			false,
+		);
 	});
 
 	it("enables configured gap maps by default", () => {
@@ -261,7 +264,8 @@ describe("legal page text", () => {
 
 	it("leaves the terms link unset without terms text", () => {
 		expect(
-			libraryConfigSchema.parse(minimalLibraryConfig).legal.termsOfService,
+			libraryConfigSchema.parse(minimalLibraryConfig).legal
+				.termsOfService,
 		).toBeUndefined();
 	});
 });
@@ -291,9 +295,8 @@ describe("reusable field schemas", () => {
 		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
 
 		const missingOpenScholar = cloneLibraryConfig(minimalLibraryConfig);
-		delete (
-			missingOpenScholar.authentication as { openScholar?: unknown }
-		).openScholar;
+		delete (missingOpenScholar.authentication as { openScholar?: unknown })
+			.openScholar;
 		expect(libraryConfigSchema.safeParse(missingOpenScholar).success).toBe(
 			false,
 		);
@@ -445,16 +448,16 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
+			"AI features without private Redis",
+			(config: any) => {
+				delete config.services.redis;
+			},
+		],
+		[
 			"AI search without AI",
 			(config: any) => {
 				config.features.ai = false;
 				config.features.deepResearch = false;
-			},
-		],
-		[
-			"deep research without a large model",
-			(config: any) => {
-				delete config.ai.providers[0].largeModel;
 			},
 		],
 		[
@@ -580,7 +583,20 @@ describe("cross-field activation rules", () => {
 		[
 			"provider model from another catalog",
 			(config: any) => {
-				config.ai.providers[0].defaultModel = "gpt-5.4-mini";
+				config.ai.providers[0].models[0] = "gpt-5.4-mini";
+			},
+		],
+		[
+			"enabled provider without models",
+			(config: any) => {
+				config.ai.providers[0].models = [];
+			},
+		],
+		[
+			"default model outside the configured list",
+			(config: any) => {
+				config.ai.providers[0].defaultModel = "gemini-2.5-pro";
+				config.ai.providers[0].models = ["gemini-2.5-flash"];
 			},
 		],
 		[

@@ -23,6 +23,7 @@ import {
 	ADMIN_PAGE_METHODS,
 	buildAdminLoginPageUrl,
 	getCanonicalLibraryRedirect,
+	getExternalRequestOrigin,
 	getRedirectLookupPath,
 	getUnlocalizedPathname,
 	isAdminPageMethod,
@@ -34,9 +35,13 @@ import {
 	type RuntimeSearch,
 } from "./config/library-config/search";
 import {
+	AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS,
+	AI_RATE_LIMIT_COOKIE_NAME,
+	AI_RATE_LIMIT_COOKIE_PATH,
+	aiRateLimitHeaders,
 	consumeAIRateLimit,
-	type AIRateLimitStatus,
-} from "./lib/ai-rate-limit";
+	resolveAIRateLimitClientIdentity,
+} from "./lib/ai/rate-limit";
 
 function isRateLimitedAIRequest(request: NextRequest) {
 	return (
@@ -46,17 +51,101 @@ function isRateLimitedAIRequest(request: NextRequest) {
 	);
 }
 
-function setAIRateLimitHeaders(
+function trustedClientIp(request: NextRequest) {
+	const address = request.headers.get("x-real-ip")?.trim();
+	return address && address.length <= 128 ? address : "unresolved-client";
+}
+
+function setAIRateLimitCookie(
+	request: NextRequest,
 	response: NextResponse,
-	status: AIRateLimitStatus,
+	clientId: string,
+	shouldSetCookie: boolean,
 ) {
-	response.headers.set("X-RateLimit-Limit", String(status.limit));
-	response.headers.set("X-RateLimit-Remaining", String(status.remaining));
-	response.headers.set("X-RateLimit-Reset", String(status.resetAt));
-	if (!status.allowed) {
-		response.headers.set("Retry-After", String(status.retryAfter));
-	}
+	if (!shouldSetCookie) return response;
+
+	response.cookies.set({
+		name: AI_RATE_LIMIT_COOKIE_NAME,
+		value: clientId,
+		httpOnly: true,
+		sameSite: "strict",
+		secure:
+			getExternalRequestOrigin(request.nextUrl, request.headers)?.startsWith(
+				"https://",
+			) ?? false,
+		path: AI_RATE_LIMIT_COOKIE_PATH,
+		maxAge: AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS,
+	});
 	return response;
+}
+
+async function getAIRateLimitResponse(
+	request: NextRequest,
+	libraryConfig: LibraryServerConfig,
+) {
+	const clientIp = trustedClientIp(request);
+	const identity = resolveAIRateLimitClientIdentity(
+		request.cookies.get(AI_RATE_LIMIT_COOKIE_NAME)?.value,
+	);
+
+	try {
+		const result = await consumeAIRateLimit(
+			{
+				clientId: identity.clientId,
+				clientIp,
+				persistentClient: !identity.shouldSetCookie,
+			},
+			libraryConfig,
+		);
+		const response = result.allowed
+			? NextResponse.next()
+			: NextResponse.json(
+					{
+						error: {
+							code: "RATE_LIMITED",
+							message: `You have reached the AI request limit. Try again in ${result.retryAfter} seconds.`,
+						},
+					},
+					{ status: 429 },
+				);
+
+		for (const [name, value] of Object.entries(
+			aiRateLimitHeaders(result),
+		)) {
+			response.headers.set(name, value);
+		}
+		response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+		return setAIRateLimitCookie(
+			request,
+			response,
+			identity.clientId,
+			identity.shouldSetCookie,
+		);
+	} catch (error) {
+		console.error("[AI rate limit unavailable]", error);
+		const response = NextResponse.json(
+			{
+				error: {
+					code: "RATE_LIMIT_UNAVAILABLE",
+					message:
+						"AI access is temporarily unavailable. Try again shortly.",
+				},
+			},
+			{
+				status: 503,
+				headers: {
+					"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+					"Retry-After": "5",
+				},
+			},
+		);
+		return setAIRateLimitCookie(
+			request,
+			response,
+			identity.clientId,
+			identity.shouldSetCookie,
+		);
+	}
 }
 
 function handleLegacyScope(
@@ -484,17 +573,7 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
 		if (libraryConfig.features.ai && isRateLimitedAIRequest(request)) {
-			const rateLimit = consumeAIRateLimit(request.headers);
-			if (!rateLimit.allowed) {
-				return setAIRateLimitHeaders(
-					NextResponse.json(
-						{ error: "Rate limit exceeded" },
-						{ status: 429 },
-					),
-					rateLimit,
-				);
-			}
-			return setAIRateLimitHeaders(NextResponse.next(), rateLimit);
+			return getAIRateLimitResponse(request, libraryConfig);
 		}
 		return NextResponse.next();
 	}

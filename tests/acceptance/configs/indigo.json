@@ -240,6 +240,9 @@
     "atom": false
   },
   "services": {
+    "redis": {
+      "url": "redis://redis:6379"
+    },
     "database": {
       "url": "postgresql://library:library@postgres:5432/indigo"
     },
@@ -263,9 +266,8 @@
         "provider": "google",
         "enabled": true,
         "apiKey": "google-api-key",
-        "defaultModel": "gemini-2.5-flash",
-        "largeModel": "gemini-2.5-pro",
-        "smallModel": "gemini-2.5-flash"
+		"models": ["gemini-2.5-flash", "gemini-2.5-pro"],
+		"defaultModel": "gemini-2.5-flash"
       }
     ],
     "prompts": {

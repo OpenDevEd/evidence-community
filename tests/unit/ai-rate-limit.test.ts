@@ -1,132 +1,210 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 import {
-	AI_RATE_LIMIT_MAX_REQUESTS,
-	AI_RATE_LIMIT_WINDOW_MS,
-	AIRateLimiter,
-} from "@/lib/ai-rate-limit";
+	AI_RATE_LIMIT_CLIENT_WINDOWS,
+	AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS,
+	AI_RATE_LIMIT_NETWORK_WINDOW,
+	aiRateLimitHeaders,
+	buildAIRateLimitKeyPrefix,
+	createRedisAIRateLimitStore,
+	redisReconnectDelay,
+	resolveAIRateLimitClientIdentity,
+	type AIRateLimitPolicy,
+} from "@/lib/ai/rate-limit";
 
-function requestHeaders(address: string) {
-	return new Headers({ "x-real-ip": address });
-}
+const policy: AIRateLimitPolicy = {
+	clientWindows: AI_RATE_LIMIT_CLIENT_WINDOWS,
+	networkWindow: AI_RATE_LIMIT_NETWORK_WINDOW,
+	keyPrefix: buildAIRateLimitKeyPrefix("main", "library-one"),
+};
 
-let limiter: AIRateLimiter;
-
-beforeEach(() => {
-	limiter = new AIRateLimiter();
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
-
-describe("AI request rate limiting", () => {
-	it("allows the configured request budget and rejects the next request", () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date("2026-07-28T19:00:00.000Z"));
-		const headers = requestHeaders("198.51.100.10");
-
-		for (
-			let request = 1;
-			request <= AI_RATE_LIMIT_MAX_REQUESTS;
-			request += 1
-		) {
-			expect(limiter.consume(headers)).toMatchObject({
-				allowed: true,
-				remaining: AI_RATE_LIMIT_MAX_REQUESTS - request,
-			});
-		}
-
-		expect(limiter.consume(headers)).toMatchObject({
-			allowed: false,
-			remaining: 0,
-			retryAfter: AI_RATE_LIMIT_WINDOW_MS / 1_000,
+describe("AI request rate-limit policy", () => {
+	it("defines the browser and network quotas", () => {
+		expect(AI_RATE_LIMIT_CLIENT_WINDOWS).toEqual([
+			{ name: "minute", limit: 10, windowMs: 60_000 },
+			{ name: "day", limit: 250, windowMs: 86_400_000 },
+			{ name: "week", limit: 1_000, windowMs: 604_800_000 },
+			{ name: "month", limit: 5_000, windowMs: 2_592_000_000 },
+		]);
+		expect(AI_RATE_LIMIT_NETWORK_WINDOW).toEqual({
+			name: "minute",
+			limit: 1_000,
+			windowMs: 60_000,
 		});
-		expect(limiter.getStatus(headers)).toMatchObject({
-			remaining: 0,
-			retryAfter: AI_RATE_LIMIT_WINDOW_MS / 1_000,
-		});
+		expect(AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS).toBe(31_536_000);
 	});
 
-	it("isolates clients and resets an expired window", () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date("2026-07-28T20:00:00.000Z"));
-		const firstClient = requestHeaders("198.51.100.20");
-		const secondClient = requestHeaders("198.51.100.21");
-
-		expect(limiter.consume(firstClient).remaining).toBe(
-			AI_RATE_LIMIT_MAX_REQUESTS - 1,
-		);
-		expect(limiter.getStatus(secondClient).remaining).toBe(
-			AI_RATE_LIMIT_MAX_REQUESTS,
-		);
-
-		vi.advanceTimersByTime(AI_RATE_LIMIT_WINDOW_MS);
-
-		expect(limiter.getStatus(firstClient).remaining).toBe(
-			AI_RATE_LIMIT_MAX_REQUESTS,
-		);
-		expect(limiter.consume(firstClient)).toMatchObject({
-			allowed: true,
-			remaining: AI_RATE_LIMIT_MAX_REQUESTS - 1,
-		});
+	it("retries Redis connections with a bounded delay", () => {
+		expect([0, 1, 5, 20].map(redisReconnectDelay)).toEqual([
+			50, 100, 1_000, 1_000,
+		]);
 	});
 
-	it("can clear one client's current window", () => {
-		const headers = requestHeaders("198.51.100.22");
-		limiter.consume(headers);
-		limiter.reset(headers);
-		expect(limiter.getStatus(headers).remaining).toBe(
-			AI_RATE_LIMIT_MAX_REQUESTS,
+	it("separates deployment and library counters", () => {
+		const mainLibrary = buildAIRateLimitKeyPrefix("main", "library-one");
+
+		expect(mainLibrary).toBe(
+			"evidence-library:ai-rate-limit:v1:main:library-one",
+		);
+		expect(mainLibrary).not.toBe(
+			buildAIRateLimitKeyPrefix("main", "library-two"),
+		);
+		expect(mainLibrary).not.toBe(
+			buildAIRateLimitKeyPrefix("acceptance", "library-one"),
 		);
 	});
 
-	it("ignores client-controlled forwarding headers", () => {
-		const firstHeaders = new Headers({
-			"x-forwarded-for": "203.0.113.40",
-		});
-		const secondHeaders = new Headers({
-			"x-forwarded-for": "203.0.113.41",
-		});
-
-		expect(limiter.consume(firstHeaders)).toMatchObject({
-			allowed: true,
-			remaining: AI_RATE_LIMIT_MAX_REQUESTS - 1,
-		});
-		expect(limiter.getStatus(secondHeaders).remaining).toBe(
-			AI_RATE_LIMIT_MAX_REQUESTS - 1,
+	it("keeps a valid browser identity and replaces invalid values", () => {
+		const created = resolveAIRateLimitClientIdentity(undefined);
+		expect(created.shouldSetCookie).toBe(true);
+		expect(created.clientId).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
 		);
-	});
-
-	it("fails closed for new clients while every tracked bucket is live", () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date("2026-07-28T21:00:00.000Z"));
-		limiter = new AIRateLimiter({ maxTrackedClients: 2 });
-
-		expect(limiter.consume(requestHeaders("198.51.100.30")).allowed).toBe(
-			true,
-		);
-		expect(limiter.consume(requestHeaders("198.51.100.31")).allowed).toBe(
-			true,
-		);
-		expect(limiter.consume(requestHeaders("198.51.100.32"))).toMatchObject({
-			allowed: false,
-			remaining: 0,
-			retryAfter: AI_RATE_LIMIT_WINDOW_MS / 1_000,
+		expect(resolveAIRateLimitClientIdentity(created.clientId)).toEqual({
+			clientId: created.clientId,
+			shouldSetCookie: false,
 		});
 		expect(
-			limiter.getStatus(requestHeaders("198.51.100.32")),
+			resolveAIRateLimitClientIdentity("not-a-browser-id"),
 		).toMatchObject({
-			allowed: false,
-			remaining: 0,
-			retryAfter: AI_RATE_LIMIT_WINDOW_MS / 1_000,
+			shouldSetCookie: true,
 		});
+	});
 
-		vi.advanceTimersByTime(AI_RATE_LIMIT_WINDOW_MS);
+	it("sends one atomic Redis operation without exposing raw identities", async () => {
+		const calls: Array<{ keys: string[]; arguments: string[] }> = [];
+		const store = createRedisAIRateLimitStore(
+			{
+				eval: async (_script, options) => {
+					calls.push(options);
+					return [1, 0, 1, 60_000];
+				},
+			},
+			policy,
+		);
 
-		expect(limiter.consume(requestHeaders("198.51.100.32"))).toMatchObject({
+		await expect(
+			store.consume({
+				clientId: "00000000-0000-4000-8000-000000000001",
+				clientIp: "198.51.100.20",
+				persistentClient: true,
+			}),
+		).resolves.toMatchObject({
 			allowed: true,
-			remaining: AI_RATE_LIMIT_MAX_REQUESTS - 1,
+			blockedBy: null,
+			limit: 10,
+			remaining: 9,
+			window: "minute",
 		});
+
+		const [options] = calls;
+		if (!options) throw new Error("Redis eval was not called");
+		expect(options.keys).toHaveLength(5);
+		expect(options.arguments).toEqual([
+			"4",
+			"10",
+			"60000",
+			"250",
+			"86400000",
+			"1000",
+			"604800000",
+			"5000",
+			"2592000000",
+			"1000",
+			"60000",
+		]);
+		expect(options.keys.join(" ")).not.toContain("198.51.100.20");
+		expect(options.keys.join(" ")).not.toContain("00000000-0000");
+	});
+
+	it("reports the client window Redis blocked", async () => {
+		const store = createRedisAIRateLimitStore(
+			{ eval: vi.fn(async () => [0, 2, 250, 1_250]) },
+			policy,
+		);
+
+		const result = await store.consume({
+			clientId: "client",
+			clientIp: "ip",
+			persistentClient: true,
+		});
+		expect(result).toMatchObject({
+			allowed: false,
+			blockedBy: "client",
+			limit: 250,
+			remaining: 0,
+			retryAfter: 2,
+			window: "day",
+		});
+		expect(aiRateLimitHeaders(result)).toMatchObject({
+			"Retry-After": "2",
+			"X-RateLimit-Limit": "250",
+			"X-RateLimit-Remaining": "0",
+		});
+	});
+
+	it("reports the separate network safety limit", async () => {
+		const store = createRedisAIRateLimitStore(
+			{ eval: vi.fn(async () => [0, 5, 1_000, 900]) },
+			policy,
+		);
+
+		await expect(
+			store.consume({
+				clientId: "client",
+				clientIp: "ip",
+				persistentClient: true,
+			}),
+		).resolves.toMatchObject({
+			allowed: false,
+			blockedBy: "network",
+			limit: 1_000,
+			window: "minute",
+		});
+	});
+
+	it("rejects a malformed Redis reply", async () => {
+		const store = createRedisAIRateLimitStore(
+			{ eval: vi.fn(async () => [1, 0]) },
+			policy,
+		);
+
+		await expect(
+			store.consume({
+				clientId: "client",
+				clientIp: "ip",
+				persistentClient: true,
+			}),
+		).rejects.toThrow("invalid AI rate-limit result");
+	});
+
+	it("does not create long-lived counters before the browser cookie returns", async () => {
+		const calls: Array<{ keys: string[]; arguments: string[] }> = [];
+		const store = createRedisAIRateLimitStore(
+			{
+				eval: async (_script, options) => {
+					calls.push(options);
+					return [1, 0, 1, 60_000];
+				},
+			},
+			policy,
+		);
+
+		await store.consume({
+			clientId: "new-client",
+			clientIp: "198.51.100.20",
+			persistentClient: false,
+		});
+
+		expect(calls[0]?.keys).toHaveLength(2);
+		expect(calls[0]?.arguments).toEqual([
+			"1",
+			"10",
+			"60000",
+			"1000",
+			"60000",
+		]);
 	});
 });

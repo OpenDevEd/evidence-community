@@ -1,5 +1,4 @@
 import { toast } from "@/components/layout/Toast";
-import { getRateLimits } from "@/lib/actions";
 import { useCompletion } from "@ai-sdk/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback } from "react";
@@ -17,16 +16,14 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
             "Accept-Language": locale,
         },
         body: analyticsIdField(getAnalyticsDistinctId()),
-        onError: (e) => {
-            (async () => {
-                const rateLimits = await getRateLimits();
-                if (e.message.includes("Rate limit exceeded")) {
-                    toast({
-                        title: t("rateLimitedMessage", { seconds: rateLimits.retryAfter ?? 0 }),
-                        type: "error",
-                    });
-                }
-            })();
+        onError: (error) => {
+            if (error.message.includes("RATE_LIMITED")) {
+                const retryAfter = /Try again in (\d+) seconds/u.exec(error.message)?.[1] ?? "60";
+                toast({
+                    title: t("rateLimitedMessage", { seconds: Number(retryAfter) }),
+                    type: "error",
+                });
+            }
         }
     })
 

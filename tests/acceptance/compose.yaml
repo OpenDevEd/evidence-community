@@ -18,6 +18,8 @@ x-library-service: &library-service
       condition: service_healthy
     postgres:
       condition: service_healthy
+    redis:
+      condition: service_healthy
     runtime-provider-fake:
       condition: service_healthy
   restart: "no"
@@ -179,6 +181,31 @@ services:
       - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U library -d postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
+
+  redis:
+    image: redis:7.2-alpine
+    init: true
+    command:
+      [
+        "redis-server",
+        "--save",
+        "",
+        "--appendonly",
+        "no",
+        "--maxmemory",
+        "128mb",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
+    labels: *acceptance-labels
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 2s
       retries: 60

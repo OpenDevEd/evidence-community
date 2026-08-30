@@ -30,6 +30,7 @@ import {
 	nonEmptyStringSchema,
 	plainTextSchema,
 	postgresUrlSchema,
+	redisUrlSchema,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
 	revisionSchema,
@@ -787,7 +788,8 @@ const legalSchema = z
 		// Owner-written terms live on the runtime's own /terms page unless the
 		// owner points the link somewhere else.
 		termsOfService:
-			legal.termsOfService ?? (legal.termsMarkdown ? "/terms" : undefined),
+			legal.termsOfService ??
+			(legal.termsMarkdown ? "/terms" : undefined),
 	}));
 
 const localeSchema = z.enum(PLATFORM_LOCALES);
@@ -1301,6 +1303,12 @@ const publicationServicesSchema = z
 
 const servicesSchema = z
 	.object({
+		redis: z
+			.object({
+				url: redisUrlSchema,
+			})
+			.strict()
+			.optional(),
 		database: z
 			.object({
 				url: postgresUrlSchema,
@@ -1381,49 +1389,97 @@ const sourcesSchema = z
 		addDuplicateIssues(sources, context, (source) => source.groupId);
 	});
 
+type AIProviderConfiguration = {
+	provider: (typeof PLATFORM_AI_PROVIDERS)[number];
+	enabled: boolean;
+	apiKey?: string;
+	models: string[];
+	defaultModel?: string;
+};
+
+function addAIProviderRequirementIssues(
+	provider: AIProviderConfiguration,
+	context: z.RefinementCtx,
+) {
+	if (provider.enabled && !provider.apiKey) {
+		context.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Enabled AI providers require an API key",
+			path: ["apiKey"],
+		});
+	}
+
+	if (provider.enabled && provider.models.length === 0) {
+		context.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Enabled AI providers require at least one model",
+			path: ["models"],
+		});
+	}
+}
+
+function addAIProviderModelIssues(
+	provider: AIProviderConfiguration,
+	context: z.RefinementCtx,
+) {
+	const activeModels = PLATFORM_AI_MODEL_CATALOG[provider.provider]
+		.active as readonly string[];
+	const seenModels = new Set<string>();
+
+	for (const [index, model] of provider.models.entries()) {
+		if (!activeModels.includes(model)) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: `${model} is not an approved ${provider.provider} model`,
+				path: ["models", index],
+			});
+		}
+		if (seenModels.has(model)) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: `${model} appears more than once`,
+				path: ["models", index],
+			});
+		}
+		seenModels.add(model);
+	}
+}
+
+function addAIProviderDefaultModelIssues(
+	provider: AIProviderConfiguration,
+	context: z.RefinementCtx,
+) {
+	if (provider.enabled && !provider.defaultModel) {
+		context.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Enabled AI providers require a default model",
+			path: ["defaultModel"],
+		});
+		return;
+	}
+
+	if (provider.defaultModel && !provider.models.includes(provider.defaultModel)) {
+		context.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "The default model must be in the configured model list",
+			path: ["defaultModel"],
+		});
+	}
+}
+
 const aiProviderSchema = z
 	.object({
 		provider: z.enum(PLATFORM_AI_PROVIDERS),
 		enabled: z.boolean().default(false),
 		apiKey: secretSchema(1, 512).optional(),
+		models: z.array(modelIdSchema).max(20).default([]),
 		defaultModel: modelIdSchema.optional(),
-		largeModel: modelIdSchema.optional(),
-		smallModel: modelIdSchema.optional(),
 	})
 	.strict()
 	.superRefine((provider, context) => {
-		const catalog = PLATFORM_AI_MODEL_CATALOG[provider.provider];
-
-		if (provider.enabled && !provider.apiKey) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Enabled AI providers require an API key",
-				path: ["apiKey"],
-			});
-		}
-
-		if (provider.enabled && !provider.defaultModel) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Enabled AI providers require a default model",
-				path: ["defaultModel"],
-			});
-		}
-
-		for (const [field, allowed] of [
-			["defaultModel", catalog.active],
-			["largeModel", catalog.large],
-			["smallModel", catalog.small],
-		] as const) {
-			const value = provider[field];
-			if (value && !(allowed as readonly string[]).includes(value)) {
-				context.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: `${value} is not an approved ${provider.provider} ${field}`,
-					path: [field],
-				});
-			}
-		}
+		addAIProviderRequirementIssues(provider, context);
+		addAIProviderModelIssues(provider, context);
+		addAIProviderDefaultModelIssues(provider, context);
 	});
 
 function promptValueSchema(slot: (typeof PLATFORM_PROMPT_SLOTS)[number]) {
@@ -1815,6 +1871,13 @@ export function createLibraryConfigSchema(
 				"AI features require an enabled provider",
 			);
 		}
+		if (config.features.ai && !config.services.redis) {
+			addRequiredIssue(
+				context,
+				["services", "redis"],
+				"AI features require the private Redis service",
+			);
+		}
 
 		if (config.features.aiSearch && !config.features.ai) {
 			addRequiredIssue(
@@ -1837,13 +1900,6 @@ export function createLibraryConfigSchema(
 					context,
 					["features", "deepResearch"],
 					"Deep research requires AI search",
-				);
-			}
-			if (!enabledProviders.some((provider) => provider.largeModel)) {
-				addRequiredIssue(
-					context,
-					["features", "deepResearch"],
-					"Deep research requires an approved large model",
 				);
 			}
 		}
@@ -1971,9 +2027,8 @@ const publicAiProviderSchema = z
 	.object({
 		provider: z.enum(PLATFORM_AI_PROVIDERS),
 		enabled: z.boolean(),
+		models: z.array(modelIdSchema).max(20),
 		defaultModel: modelIdSchema.optional(),
-		largeModel: modelIdSchema.optional(),
-		smallModel: modelIdSchema.optional(),
 	})
 	.strict();
 

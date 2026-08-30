@@ -48,9 +48,8 @@ export function projectPublicLibraryConfig(
 			providers: config.ai.providers.map((provider) => ({
 				provider: provider.provider,
 				enabled: provider.enabled,
+				models: provider.models,
 				defaultModel: provider.defaultModel,
-				largeModel: provider.largeModel,
-				smallModel: provider.smallModel,
 			})),
 		},
 		analytics: config.analytics,

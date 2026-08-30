@@ -47,9 +47,8 @@ describe("runtime AI provider service", () => {
 			provider: "openai",
 			enabled: false,
 			apiKey: "disabled-openai-key",
+			models: ["gpt-5.4-mini", "gpt-5.4"],
 			defaultModel: "gpt-5.4-mini",
-			largeModel: "gpt-5.4",
-			smallModel: "gpt-5.4-mini",
 		});
 		const { calls, factories } = providerFactories();
 
@@ -64,9 +63,10 @@ describe("runtime AI provider service", () => {
 		]);
 		expect(google).toMatchObject({
 			provider: "google",
-			defaultModelId: "gemini-2.5-flash",
-			largeModelId: "gemini-2.5-pro",
-			smallModelId: "gemini-2.5-flash",
+		});
+		expect(google.createModel("gemini-2.5-pro")).toMatchObject({
+			provider: "google",
+			modelId: "gemini-2.5-pro",
 		});
 		expect(() => service.resolve("openai")).toThrow(
 			AIProviderUnavailableError,
@@ -79,9 +79,8 @@ describe("runtime AI provider service", () => {
 			provider: "openai",
 			enabled: true,
 			apiKey: "openai-api-key",
+			models: ["gpt-5.4-mini", "gpt-5.4"],
 			defaultModel: "gpt-5.4-mini",
-			largeModel: "gpt-5.4",
-			smallModel: "gpt-5.4-mini",
 		});
 		const { factories } = providerFactories();
 		const service = new AIProviderService(
@@ -92,11 +91,11 @@ describe("runtime AI provider service", () => {
 		const google = service.resolve("google");
 		const openai = service.resolve("openai");
 
-		expect(google.defaultModel).toMatchObject({
+		expect(google.createModel("gemini-2.5-flash")).toMatchObject({
 			provider: "google",
 			modelId: "gemini-2.5-flash",
 		});
-		expect(openai.defaultModel).toMatchObject({
+		expect(openai.createModel("gpt-5.4-mini")).toMatchObject({
 			provider: "openai",
 			modelId: "gpt-5.4-mini",
 		});
@@ -112,9 +111,7 @@ describe("runtime AI provider service", () => {
 			updatedAt: "2026-07-28T08:00:00.000Z",
 		});
 
-		const changedProviders = structuredClone(
-			libraryConfig.ai.providers,
-		);
+		const changedProviders = structuredClone(libraryConfig.ai.providers);
 		changedProviders[0].apiKey = "changed-google-key";
 
 		await expect(

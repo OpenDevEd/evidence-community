@@ -15,9 +15,12 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 				{
 					provider: "openrouter",
 					enabled: true,
+					models: [
+						"openai/gpt-5.6-luna",
+						"x-ai/grok-4.6",
+						"google/gemini-3.7-flash",
+					],
 					defaultModel: "openai/gpt-5.6-luna",
-					largeModel: "x-ai/grok-4.6",
-					smallModel: "google/gemini-3.7-flash",
 				},
 			],
 		},
