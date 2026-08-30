@@ -14,6 +14,7 @@ import {
 	requireAuthorization,
 	requireJsonContentType,
 	requireMethod,
+	sendHealthResponse,
 	sendJson,
 } from "./fixed-json-http";
 
@@ -137,8 +138,7 @@ async function handleRequest(
 	const url = new URL(request.url ?? "/", "http://localhost");
 	requireKnownPath(url);
 	if (url.pathname === "/health") {
-		requireMethod(request, "GET");
-		sendJson(response, 200, { status: "ok" });
+		sendHealthResponse(request, response);
 		return;
 	}
 	await handleDeleteRequest(request, response, options);

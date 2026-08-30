@@ -1,7 +1,4 @@
-import { once } from "node:events";
 import { request as sendHttpRequest } from "node:http";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { isCoolifyApplicationUuid } from "../src/lib/deployment/coolify-application";
 import {
@@ -9,6 +6,10 @@ import {
 	LibraryVolumeDeletionError,
 	type LibraryVolumeHttpDeleter,
 } from "../src/lib/deployment/library-volume-deleter-http";
+import {
+	listenForFixedHttpService,
+	runFixedHttpServiceMain,
+} from "./runFixedHttpService";
 
 const dockerSocketPath = "/var/run/docker.sock";
 const dockerRequestTimeoutMs = 2_000;
@@ -57,16 +58,18 @@ function requireContainerList(response: DockerVolumeResponse) {
 	if (!Array.isArray(body) || body.length > maximumVolumeContainers) {
 		return deletionFailed();
 	}
-	for (const candidate of body) {
-		if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-			return deletionFailed();
-		}
-		const id = (candidate as Record<string, unknown>).Id;
-		if (typeof id !== "string" || !/^[a-f0-9]{64}$/u.test(id)) {
-			return deletionFailed();
-		}
-	}
+	body.forEach(requireContainerSummary);
 	return body;
+}
+
+function requireContainerSummary(candidate: unknown) {
+	if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+		return deletionFailed();
+	}
+	const id = (candidate as Record<string, unknown>).Id;
+	if (typeof id !== "string" || !/^[a-f0-9]{64}$/u.test(id)) {
+		return deletionFailed();
+	}
 }
 
 function requireNamedVolume(
@@ -209,28 +212,19 @@ async function main() {
 		remove: createDockerLibraryVolumeDeleter(requestDockerSocket),
 		token,
 	});
-	const stop = () => {
-		server.close((error) => {
-			if (error) {
-				console.error("Volume deleter shutdown failed.");
-				process.exitCode = 1;
-			}
-		});
-	};
-	process.once("SIGINT", stop);
-	process.once("SIGTERM", stop);
 	const port = readPort(process.env.PORT);
-	server.listen(port, "0.0.0.0");
-	await once(server, "listening");
-	console.log(`Library volume deleter is listening on port ${port}.`);
-}
-
-const entrypoint = process.argv[1]
-	? pathToFileURL(resolve(process.argv[1])).href
-	: undefined;
-if (entrypoint === import.meta.url) {
-	main().catch((error: unknown) => {
-		console.error(error instanceof Error ? error.message : String(error));
-		process.exitCode = 1;
+	await listenForFixedHttpService({
+		listeningMessage: (activePort) =>
+			`Library volume deleter is listening on port ${activePort}.`,
+		port,
+		server,
+		shutdownErrorMessage: "Volume deleter shutdown failed.",
 	});
 }
+
+runFixedHttpServiceMain({
+	formatError: (error) =>
+		error instanceof Error ? error.message : String(error),
+	importMetaUrl: import.meta.url,
+	main,
+});
