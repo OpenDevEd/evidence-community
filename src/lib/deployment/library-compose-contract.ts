@@ -9,7 +9,7 @@ export const LIBRARY_COMPOSE_SERVICES = [
 
 export type LibraryComposeService = (typeof LIBRARY_COMPOSE_SERVICES)[number];
 
-export const LIBRARY_RUNTIME_SERVICES = [
+const LIBRARY_RUNTIME_SERVICES = [
 	"web",
 	"search-indexer",
 	"source-sync",
