@@ -71,18 +71,6 @@ const runtimeDirectory = path.join(
 const image =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE ??
 	"evidence-library-acceptance:local";
-const searchIndexerImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
-	"evidence-library-acceptance-search-indexer:local";
-const sourceSyncImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE ??
-	"evidence-library-acceptance-source-sync:local";
-const sourceWritebackImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE ??
-	"evidence-library-acceptance-source-writeback:local";
-const publicationWorkerImage =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
-	"evidence-library-acceptance-publication-worker:local";
 const acceptanceOpenScholar = {
 	amber: {
 		libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
@@ -140,11 +128,7 @@ const sourceCommit =
 const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
 	EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE: image,
-	EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:
-		publicationWorkerImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE: sourceSyncImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE: sourceWritebackImage,
+	RUNTIME_IMAGE: image,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
 	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_LIBRARY_ID:
 		acceptanceOpenScholar.amber.libraryId,
@@ -492,6 +476,19 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			`${baseUrl}/admin`,
 			"Admin under a switched-off locale",
 		);
+	} catch (error) {
+		run(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"logs",
+				"--no-color",
+				"--tail",
+				"200",
+			),
+			environment,
+		);
+		throw error;
 	} finally {
 		compose("down", "--volumes");
 	}
@@ -2814,15 +2811,7 @@ async function main() {
 				"docker-bake.acceptance.hcl",
 				"--load",
 				"--set",
-				`app.tags=${image}`,
-				"--set",
-				`search-indexer.tags=${searchIndexerImage}`,
-				"--set",
-				`source-sync.tags=${sourceSyncImage}`,
-				"--set",
-				`source-writeback.tags=${sourceWritebackImage}`,
-				"--set",
-				`publication-worker.tags=${publicationWorkerImage}`,
+				`runtime.tags=${image}`,
 				"acceptance",
 			]);
 		}

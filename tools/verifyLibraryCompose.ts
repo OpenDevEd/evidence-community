@@ -34,6 +34,9 @@ function requireCondition(
 
 function main() {
 	const root = resolve(import.meta.dirname, "..");
+	const runtimeImage =
+		"ghcr.io/opendeved/evidence-library-runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+	const sourceCommit = "a".repeat(40);
 	const libraryConfigJson = readFileSync(
 		resolve(root, "config/library.example.json"),
 		"utf8",
@@ -60,6 +63,8 @@ function main() {
 				...process.env,
 				LIBRARY_CONFIG_JSON: JSON.stringify(libraryConfig),
 				MEILISEARCH_MASTER_KEY: libraryConfig.services.search.key,
+				RUNTIME_IMAGE: runtimeImage,
+				SOURCE_COMMIT: sourceCommit,
 			},
 		},
 	);
@@ -133,6 +138,10 @@ function main() {
 	)) {
 		const service = services[name];
 		requireCondition(service, `${name} service is missing`);
+		requireCondition(
+			service.image === runtimeImage,
+			`${name} must use the requested runtime image`,
+		);
 		requireCondition(
 			service.environment?.LIBRARY_CONFIG_PATH ===
 				"/runtime/config/library.json",
