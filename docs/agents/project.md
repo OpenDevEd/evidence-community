@@ -95,13 +95,14 @@ The command list in `package.json` is authoritative.
 - Documentation-only work needs link checks and `git diff --check`, not the
   application suite.
 
-GitHub CI runs on Blacksmith. It owns the full final static lanes, runtime
+GitHub CI runs on the isolated self-hosted runners documented in
+`docs/self-hosted-ci.md`. It owns the full final static lanes, runtime
 acceptance, and aggregate merge gate on the exact PR head. Local lanes do not
 repeat the full suite.
 
-Blacksmith Testbox is optional. Use the `blacksmith-testbox` skill only to
-reproduce a CI-only failure or when the required service cannot run locally.
-Do not warm a Testbox for routine coding or focused local tests.
+The runtime job uses four Playwright workers. Read the aggregate `CI` result
+for the exact head before merging. The current GitHub plan cannot enforce that
+check for this private repository, so the integration owner must enforce it.
 
 ## Deployment and data safety
 
