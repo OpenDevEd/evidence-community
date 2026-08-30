@@ -14,6 +14,7 @@ const maximumDockerResponseBytes = 512 * 1_024;
 const maximumApplicationContainers = 24;
 const maximumLabels = 256;
 const maximumPortBindings = 128;
+const maximumRepoDigests = 64;
 
 const composeProjectLabel = "com.docker.compose.project";
 const composeServiceLabel = "com.docker.compose.service";
@@ -105,6 +106,27 @@ function requireContainerId(value: unknown) {
 	return value;
 }
 
+function requireImageId(value: unknown) {
+	if (typeof value !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(value)) {
+		return invalidDockerResponse();
+	}
+	return value;
+}
+
+function requireRepoDigests(value: unknown) {
+	if (value === null) return [];
+	if (!Array.isArray(value) || value.length > maximumRepoDigests) {
+		return invalidDockerResponse();
+	}
+	return value.map((candidate) => {
+		const digest = requireString(candidate, 512);
+		if (!/^.+@sha256:[a-f0-9]{64}$/u.test(digest)) {
+			return invalidDockerResponse();
+		}
+		return digest;
+	});
+}
+
 function requirePortNumber(value: string) {
 	if (!/^[1-9][0-9]{0,4}$/u.test(value)) return invalidDockerResponse();
 	const port = Number(value);
@@ -163,12 +185,15 @@ function requireContainerInspection(
 	value: unknown,
 	applicationUuid: string,
 	expectedContainerId: string,
-): LibraryRuntimeContainerFact {
+): Omit<LibraryRuntimeContainerFact, "repoDigests"> {
 	const inspection = requireRecord(value);
 	if (requireContainerId(inspection.Id) !== expectedContainerId) {
 		return invalidDockerResponse();
 	}
-	const labels = requireLabels(requireRecord(inspection.Config).Labels);
+	const config = requireRecord(inspection.Config);
+	const imageReference = requireString(config.Image, 512);
+	const imageId = requireImageId(inspection.Image);
+	const labels = requireLabels(config.Labels);
 	requireCoolifyApplicationLabels(labels, applicationUuid);
 	const service = requireString(labels[composeServiceLabel], 128);
 	if (!/^[a-z0-9][a-z0-9_.-]*$/u.test(service)) {
@@ -178,7 +203,15 @@ function requireContainerInspection(
 	const publishedPorts = requirePublishedPorts(
 		requireRecord(inspection.NetworkSettings).Ports,
 	);
-	return { ...state, labels, publishedPorts, service };
+	return { ...state, imageId, imageReference, labels, publishedPorts, service };
+}
+
+function requireImageInspection(value: unknown, expectedImageId: string) {
+	const inspection = requireRecord(value);
+	if (requireImageId(inspection.Id) !== expectedImageId) {
+		return invalidDockerResponse();
+	}
+	return requireRepoDigests(inspection.RepoDigests);
 }
 
 function requireContainerSummaries(value: unknown, applicationUuid: string) {
@@ -297,7 +330,7 @@ export function createDockerLibraryRuntimeContainerReader(
 				await readDockerJson(listUrl),
 				applicationUuid,
 			);
-			return await Promise.all(
+			const containers = await Promise.all(
 				ids.map(async (id) => {
 					const inspectUrl = new URL(
 						`${dockerApiVersion}/containers/${id}/json`,
@@ -310,6 +343,28 @@ export function createDockerLibraryRuntimeContainerReader(
 					);
 				}),
 			);
+			const uniqueImageIds = [...new Set(containers.map(({ imageId }) => imageId))];
+			const imageDigests = new Map(
+				await Promise.all(
+					uniqueImageIds.map(async (imageId) => {
+						const inspectUrl = new URL(
+							`${dockerApiVersion}/images/${imageId}/json`,
+							baseUrl,
+						);
+						return [
+							imageId,
+							requireImageInspection(
+								await readDockerJson(inspectUrl),
+								imageId,
+							),
+						] as const;
+					}),
+				),
+			);
+			return containers.map((container) => ({
+				...container,
+				repoDigests: imageDigests.get(container.imageId) ?? invalidDockerResponse(),
+			}));
 		} catch {
 			throw new DockerRuntimeInspectionError();
 		}

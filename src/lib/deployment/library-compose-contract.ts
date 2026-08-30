@@ -9,6 +9,14 @@ export const LIBRARY_COMPOSE_SERVICES = [
 
 export type LibraryComposeService = (typeof LIBRARY_COMPOSE_SERVICES)[number];
 
+export const LIBRARY_RUNTIME_SERVICES = [
+	"web",
+	"search-indexer",
+	"source-sync",
+	"source-writeback",
+	"publication-worker",
+] as const satisfies readonly LibraryComposeService[];
+
 const LIBRARY_COMPOSE_HEALTHY_SERVICES = [
 	"web",
 	"search-indexer",
@@ -33,15 +41,21 @@ export type LibraryComposePublishedPort = {
 };
 
 export type LibraryComposeContainerFact = LibraryComposeProcess & {
+	imageId: string;
+	imageReference: string;
 	labels: Readonly<Record<string, string>>;
 	publishedPorts: readonly LibraryComposePublishedPort[];
+	repoDigests: readonly string[];
 };
 
 export type LibraryComposeContractErrorCode =
 	| "duplicate_service"
+	| "image_content_mismatch"
+	| "image_reference_mismatch"
 	| "meilisearch_public_port"
 	| "missing_service"
 	| "release_mismatch"
+	| "runtime_images_differ"
 	| "service_not_running"
 	| "service_unhealthy"
 	| "unexpected_service";
@@ -124,7 +138,7 @@ export function requireLibraryComposeServiceReadiness<
 
 export function requireLibraryComposeRuntimeReadiness<
 	T extends LibraryComposeContainerFact,
->(items: readonly T[], expectedCommit: string): T[] {
+>(items: readonly T[], expectedCommit: string, expectedRuntimeImage: string): T[] {
 	requireExactLibraryComposeServices(items);
 	const ready = requireLibraryComposeServiceReadiness(items);
 	for (const item of ready) {
@@ -133,6 +147,34 @@ export function requireLibraryComposeRuntimeReadiness<
 				code: "release_mismatch",
 				message: `${item.service} must use the requested release.`,
 				service: item.service as LibraryComposeService,
+			});
+		}
+	}
+	const runtime = LIBRARY_RUNTIME_SERVICES.map((service) =>
+		requireOneService(ready, service),
+	);
+	const expectedImageId = runtime[0].imageId;
+	for (const item of runtime) {
+		const service = item.service as LibraryComposeService;
+		if (item.imageReference !== expectedRuntimeImage) {
+			throw new LibraryComposeContractError({
+				code: "image_reference_mismatch",
+				message: `${item.service} must use the requested runtime image reference.`,
+				service,
+			});
+		}
+		if (!item.repoDigests.includes(expectedRuntimeImage)) {
+			throw new LibraryComposeContractError({
+				code: "image_content_mismatch",
+				message: `${item.service} must contain the requested runtime image digest.`,
+				service,
+			});
+		}
+		if (item.imageId !== expectedImageId) {
+			throw new LibraryComposeContractError({
+				code: "runtime_images_differ",
+				message: `${item.service} must use the same runtime image as the other runtime services.`,
+				service,
 			});
 		}
 	}

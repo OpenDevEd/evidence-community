@@ -13,6 +13,8 @@ import { createDockerLibraryRuntimeContainerReader } from "../../tools/runLibrar
 const applicationUuid = "a1b2c3d4e5f6g7h8i9j0k1l2";
 const containerId = "a".repeat(64);
 const commit = "b".repeat(40);
+const imageId = `sha256:${"c".repeat(64)}`;
+const runtimeImage = `ghcr.io/opendeved/evidence-library-runtime@sha256:${"d".repeat(64)}`;
 const rejectedSummaryLabels: ReadonlyArray<{
 	labels: Record<string, string>;
 	name: string;
@@ -53,8 +55,9 @@ function containerSummary(overrides: Record<string, unknown> = {}) {
 
 function containerInspection(overrides: Record<string, unknown> = {}) {
 	return {
-		Config: { Labels: containerLabels() },
+		Config: { Image: runtimeImage, Labels: containerLabels() },
 		Id: containerId,
+		Image: imageId,
 		NetworkSettings: {
 			Ports: {
 				"3000/tcp": [
@@ -66,6 +69,14 @@ function containerInspection(overrides: Record<string, unknown> = {}) {
 			},
 		},
 		State: { Health: { Status: "healthy" }, Status: "running" },
+		...overrides,
+	};
+}
+
+function imageInspection(overrides: Record<string, unknown> = {}) {
+	return {
+		Id: imageId,
+		RepoDigests: [runtimeImage],
 		...overrides,
 	};
 }
@@ -118,6 +129,10 @@ describe("library runtime Docker reader", () => {
 					sendJson(response, 200, containerInspection());
 					return;
 				}
+				if (url.pathname === `/v1.41/images/${imageId}/json`) {
+					sendJson(response, 200, imageInspection());
+					return;
+				}
 				sendJson(response, 404, { message: "not found" });
 			},
 			async (baseUrl) => {
@@ -127,6 +142,8 @@ describe("library runtime Docker reader", () => {
 				await expect(readContainers(applicationUuid)).resolves.toEqual([
 					{
 						health: "healthy",
+						imageId,
+						imageReference: runtimeImage,
 						labels: containerLabels(),
 						publishedPorts: [
 							{
@@ -138,6 +155,7 @@ describe("library runtime Docker reader", () => {
 						],
 						service: "web",
 						state: "running",
+						repoDigests: [runtimeImage],
 					},
 				]);
 			},
@@ -145,7 +163,49 @@ describe("library runtime Docker reader", () => {
 		expect(requests).toEqual([
 			"GET /v1.41/containers/json",
 			`GET /v1.41/containers/${containerId}/json`,
+			`GET /v1.41/images/${imageId}/json`,
 		]);
+	});
+
+	it("inspects one shared image only once", async () => {
+		const secondContainerId = "e".repeat(64);
+		let imageRequests = 0;
+		await withDockerApi(
+			(request, response) => {
+				const url = new URL(request.url ?? "/", "http://docker.test");
+				if (url.pathname === "/v1.41/containers/json") {
+					sendJson(response, 200, [
+						containerSummary(),
+						containerSummary({ Id: secondContainerId }),
+					]);
+					return;
+				}
+				if (url.pathname === `/v1.41/containers/${containerId}/json`) {
+					sendJson(response, 200, containerInspection());
+					return;
+				}
+				if (url.pathname === `/v1.41/containers/${secondContainerId}/json`) {
+					sendJson(
+						response,
+						200,
+						containerInspection({ Id: secondContainerId }),
+					);
+					return;
+				}
+				if (url.pathname === `/v1.41/images/${imageId}/json`) {
+					imageRequests += 1;
+					sendJson(response, 200, imageInspection());
+					return;
+				}
+				sendJson(response, 404, { message: "not found" });
+			},
+			async (baseUrl) => {
+				const readContainers =
+					createDockerLibraryRuntimeContainerReader(baseUrl);
+				await expect(readContainers(applicationUuid)).resolves.toHaveLength(2);
+			},
+		);
+		expect(imageRequests).toBe(1);
 	});
 
 	it.each(rejectedSummaryLabels)(
