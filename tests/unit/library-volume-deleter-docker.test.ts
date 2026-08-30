@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { LibraryVolumeDeletionError } from "@/lib/deployment/library-volume-deleter-http";
@@ -5,6 +10,7 @@ import {
 	createDockerLibraryVolumeDeleter,
 	type DockerVolumeRequest,
 	parseDockerJsonResponse,
+	requestDockerSocket,
 } from "../../tools/runLibraryVolumeDeleter";
 
 const applicationUuid = "a1b2c3d4e5f6g7h8i9j0k1l2";
@@ -143,5 +149,38 @@ describe("library volume Docker deleter", () => {
 				status: 200,
 			}),
 		).toThrow(LibraryVolumeDeletionError);
+	});
+
+	it("settles when Docker sends an oversized partial response", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "volume-deleter-test-"));
+		const socketPath = join(directory, "docker.sock");
+		const server = createServer((_request, response) => {
+			response.writeHead(200, { "Content-Type": "application/json" });
+			response.write("x".repeat(70_000));
+		});
+		try {
+			await new Promise<void>((resolve, reject) => {
+				server.listen(socketPath, () => resolve());
+				server.once("error", reject);
+			});
+			await expect(
+				Promise.race([
+					requestDockerSocket(
+						{ method: "GET", path: "/containers/json" },
+						socketPath,
+					),
+					new Promise((_, reject) =>
+						setTimeout(
+							() => reject(new Error("The Docker request did not settle.")),
+							1_000,
+						),
+					),
+				]),
+			).rejects.toBeInstanceOf(LibraryVolumeDeletionError);
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>((resolve) => server.close(() => resolve()));
+			await rm(directory, { recursive: true });
+		}
 	});
 });

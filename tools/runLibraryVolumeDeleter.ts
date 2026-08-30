@@ -129,17 +129,17 @@ export function createDockerLibraryVolumeDeleter(
 	};
 }
 
-function requestDockerSocket(input: {
+export function requestDockerSocket(input: {
 	method: DockerMethod;
 	path: string;
-}): Promise<DockerVolumeResponse> {
+}, socketPath = dockerSocketPath): Promise<DockerVolumeResponse> {
 	return new Promise((resolveRequest, rejectRequest) => {
 		const request = sendHttpRequest(
 			{
 				headers: { Accept: "application/json" },
 				method: input.method,
 				path: input.path,
-				socketPath: dockerSocketPath,
+				socketPath,
 			},
 			(response) => {
 				const chunks: Buffer[] = [];
@@ -148,7 +148,9 @@ function requestDockerSocket(input: {
 					const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
 					bytes += buffer.byteLength;
 					if (bytes > maximumDockerResponseBytes) {
-						request.destroy();
+						request.destroy(
+							new LibraryVolumeDeletionError("volume_deletion_failed"),
+						);
 						return;
 					}
 					chunks.push(buffer);
@@ -171,7 +173,11 @@ function requestDockerSocket(input: {
 				});
 			},
 		);
-		request.setTimeout(dockerRequestTimeoutMs, () => request.destroy());
+		request.setTimeout(dockerRequestTimeoutMs, () =>
+			request.destroy(
+				new LibraryVolumeDeletionError("volume_deletion_failed"),
+			),
+		);
 		request.once("error", () => {
 			rejectRequest(
 				new LibraryVolumeDeletionError("volume_deletion_failed"),
