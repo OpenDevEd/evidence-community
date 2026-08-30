@@ -116,4 +116,15 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
 
 CMD ["node_modules/.bin/tsx", "tools/runLibraryRuntimeVerifier.ts"]
 
+FROM worker-base AS volume-deleter
+
+ENV PORT=3000
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+	CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/health`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+ENTRYPOINT ["node_modules/.bin/tsx", "tools/runLibraryVolumeDeleter.ts"]
+
 FROM library-runtime AS final

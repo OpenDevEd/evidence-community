@@ -1,0 +1,34 @@
+services:
+  volume-deleter:
+    init: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: volume-deleter
+    environment:
+      EVIDENCE_LIBRARY_VOLUME_DELETER_TOKEN: "${EVIDENCE_LIBRARY_VOLUME_DELETER_TOKEN:?volume deleter token is required}"
+      PORT: "3000"
+    networks:
+      - coolify
+    labels:
+      - "traefik.docker.network=coolify"
+    expose:
+      - "3000"
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  coolify:
+    name: coolify
+    external: true

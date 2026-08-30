@@ -7,6 +7,7 @@ import {
 	type LibraryRuntimeContainerFact,
 	type LibraryRuntimeContainerReader,
 } from "../src/lib/deployment/library-runtime-verifier-http";
+import { isCoolifyApplicationUuid } from "../src/lib/deployment/coolify-application";
 
 const dockerApiVersion = "v1.41";
 const dockerRequestTimeoutMs = 2_000;
@@ -315,7 +316,7 @@ export function createDockerLibraryRuntimeContainerReader(
 	const baseUrl = requireDockerProxyUrl(dockerProxyUrl);
 	return async (applicationUuid) => {
 		try {
-			if (!/^[a-z0-9]{24}$/u.test(applicationUuid)) {
+			if (!isCoolifyApplicationUuid(applicationUuid)) {
 				return invalidDockerResponse();
 			}
 			const listUrl = new URL(`${dockerApiVersion}/containers/json`, baseUrl);
