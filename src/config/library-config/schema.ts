@@ -330,6 +330,8 @@ const identityAssetsSchema = z
 		logoDark: stableImageUrlSchema,
 		logoLight: stableImageUrlSchema.optional(),
 		favicon: stableIconUrlSchema,
+		faviconLight: stableIconUrlSchema.optional(),
+		faviconDark: stableIconUrlSchema.optional(),
 		icons: z
 			.array(stableIconUrlSchema)
 			.max(12)
