@@ -90,7 +90,8 @@ for banned_ip in \
 	43.119.104.34 \
 	47.82.201.34 \
 	47.82.202.34 \
-	116.179.33.34
+	116.179.33.34 \
+	202.46.62.34
 do
 	last_code=$(curl -sS -o "$body_file" -w '%{http_code}' \
 		-H 'X-Forwarded-Method: GET' \
@@ -123,6 +124,16 @@ last_code=$(curl -sS -o "$body_file" -w '%{http_code}' \
 	-H "User-Agent: $browser_ua" \
 	"$base/decide")
 assert_code 'adjacent network is not banned' 401
+
+last_code=$(curl -sS -o "$body_file" -w '%{http_code}' \
+	-H 'X-Forwarded-Method: GET' \
+	-H 'X-Forwarded-Uri: /lib/MI3J6SZH' \
+	-H 'X-Forwarded-Host: docs.edtechhub.org' \
+	-H 'X-Forwarded-For: 202.46.63.34' \
+	-H 'Accept: text/html' \
+	-H "User-Agent: $browser_ua" \
+	"$base/decide")
+assert_code 'new ban does not cover adjacent network' 401
 
 request_decision GET '/lib/MI3J6SZH' 'text/html' "$browser_ua" 'ode_browser_check=1'
 assert_code 'cookied HTML passes' 204

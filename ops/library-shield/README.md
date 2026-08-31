@@ -69,15 +69,23 @@ The following networks are denied before cookie, route, or user-agent checks:
 47.82.201.0/24
 47.82.202.0/24
 116.179.33.0/24
+202.46.62.0/24
 ```
 
-They were selected from a Traefik access-log sample for `docs.edtechhub.org` on
-2026-08-31. Together they generated 294,998 requests from 666 rotating source
-IPs in roughly two hours, primarily spoofing ordinary Chrome user agents. The
-first four networks belong to Alibaba Cloud ranges; the fifth is a China Unicom
-range. Edit [forwardauth/banned-ips.conf](forwardauth/banned-ips.conf) only after
+The first five were selected from a Traefik access-log sample for
+`docs.edtechhub.org` on 2026-08-31. Together they generated 294,998 requests
+from 666 rotating source IPs in roughly two hours, primarily spoofing ordinary
+Chrome user agents. The first four networks belong to Alibaba Cloud ranges;
+the fifth is a China Unicom range.
+
+The sixth network generated 10,138 requests from 120 rotating source IPs
+against `docs.opendeved.net` in under 22 minutes on the same day. It requested
+8,074 unique paths, including dynamic API and RSC routes, while presenting the
+same ordinary Chrome user agent throughout.
+
+Edit [forwardauth/banned-ips.conf](forwardauth/banned-ips.conf) only after
 confirming distributed, high-volume crawling across several addresses in the
-same network. Do not derive a permanent ban from one request or one IP.
+same network. Do not derive a permanent network ban from one request or one IP.
 
 ## Components
 
