@@ -1,6 +1,7 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Building02Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { BsBuilding, BsSearch } from "react-icons/bs";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -145,7 +146,7 @@ export function InstitutionsTable({
 	);
 
 	return (
-		<SectionCard title={t("allInstitutions")} icon={BsBuilding}>
+		<SectionCard title={t("allInstitutions")} icon={Building02Icon}>
 			<div className="space-y-4">
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<Input
@@ -157,7 +158,7 @@ export function InstitutionsTable({
 						}}
 						placeholder={t("searchByInstitutionName")}
 						startContent={
-							<BsSearch className="text-black/40 dark:text-white/40" />
+							<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />
 						}
 					/>
 					<Select

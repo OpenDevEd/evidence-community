@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowLeft01Icon, ArrowRight01Icon, Calendar01Icon, Download01Icon, File02Icon, QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { Item } from "@/app/api/item/types";
 import { Button } from "@/components/nextui/Button";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -8,10 +10,6 @@ import { useResourceHref } from "@/hooks/useResourceHref";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { BsQuote } from "react-icons/bs";
-import { FaCalendar } from "react-icons/fa";
-import { IoChevronBack, IoChevronForward, IoDocumentText } from "react-icons/io5";
-import { LuDownload } from "react-icons/lu";
 import { RelationsType } from "@/types/item";
 import { Card } from "@/components/nextui/Card";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
@@ -49,7 +47,7 @@ export function ItemHeaderYear({ year }: { year?: string | null }) {
 
 	return (
 		<HeaderSection>
-			<FaCalendar className="size-4" aria-hidden="true" />
+			<HugeiconsIcon icon={Calendar01Icon} className="size-4" aria-hidden="true" />
 			{year}
 		</HeaderSection>
 	);
@@ -113,7 +111,7 @@ export default function ItemHeader({
 						className="rounded-2xl"
 						onPress={handleBack}
 						startContent={
-							<IoChevronBack className="rtl:rotate-180" />
+							<HugeiconsIcon icon={ArrowLeft01Icon} className="rtl:rotate-180" />
 						}
 						aria-label={t("itemBackAriaLabel")}
 					>
@@ -125,7 +123,7 @@ export default function ItemHeader({
 						<ItemHeaderYear year={item?.year} />
 
 						<HeaderSection>
-							<IoDocumentText className="size-4" />
+							<HugeiconsIcon icon={File02Icon} className="size-4" />
 							{item?.itemType ? tItemType(item?.itemType) : "-"}
 						</HeaderSection>
 					</div>
@@ -135,7 +133,7 @@ export default function ItemHeader({
 							fileName={item?.key || ""}
 							isIconOnly
 							itemData={item}
-							startContent={<LuDownload />}
+							startContent={<HugeiconsIcon icon={Download01Icon} />}
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
 						<GapMapAction tags={item?.tags} size="sm" />
@@ -167,7 +165,7 @@ export default function ItemHeader({
 								<Button
 									size="sm"
 									color="secondary"
-									startContent={<BsQuote className="size-4" />}
+									startContent={<HugeiconsIcon icon={QuoteUpIcon} className="size-4" />}
 									className="pointer-events-none"
 								>
 									<span className="font-bold">{getCitationCount(item)}</span>
@@ -181,8 +179,8 @@ export default function ItemHeader({
 									})}
 									size="sm"
 									color={isCitationPage ? "accent" : "secondary"}
-									startContent={<BsQuote className="size-4" />}
-									endContent={<IoChevronForward className={`size-3 opacity-50 ${isCitationPage ? "rotate-180" : ""}`} />}
+									startContent={<HugeiconsIcon icon={QuoteUpIcon} className="size-4" />}
+									endContent={<HugeiconsIcon icon={ArrowRight01Icon} className={`size-3 opacity-50 ${isCitationPage ? "rotate-180" : ""}`} />}
 								>
 									<span className="font-bold">{getCitationCount(item)}</span>
 									<span className="opacity-80 font-normal">{t("itemCitationsCount")}</span>

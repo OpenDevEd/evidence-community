@@ -1,6 +1,7 @@
 "use client";
 
-import { LuDownload } from "react-icons/lu";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Download01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { PropsWithChildren, useState } from "react";
 import { ModalContent, PropsOf, useDisclosure } from "@nextui-org/react";
@@ -95,7 +96,7 @@ export function DownloadModal({
 			onClose={onClose}
 		>
 			<ModalContent>
-				<GenericHeader startContent={<LuDownload />} onClose={onClose}>
+				<GenericHeader startContent={<HugeiconsIcon icon={Download01Icon} />} onClose={onClose}>
 					{t("download")}
 				</GenericHeader>
 				<ListModalBody

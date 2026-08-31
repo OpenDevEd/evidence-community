@@ -1,11 +1,12 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { useContext, useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
-import { LuChevronDown } from "react-icons/lu";
 import { Collection } from "@/app/api/collections/types";
 import { MAX_COLLAPSED_HEIGHT } from "@/constants/collections";
 import CollectionHierarchy from "./CollectionHierarchy";
@@ -99,7 +100,7 @@ export default function CollectionCategory({
 						<Button
 							className="w-full"
 							endContent={
-								<LuChevronDown
+								<HugeiconsIcon icon={ArrowDown01Icon}
 									className={twMerge(
 										expanded && "rotate-180"
 									)}

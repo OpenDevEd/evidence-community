@@ -1,10 +1,11 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useMemo, useCallback } from "react";
 import { twMerge } from "tailwind-merge";
 import { animate as animateFramer, AnimatePresence, AnimationProps, motion } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
-import { BiErrorCircle } from "react-icons/bi";
 import { useTranslations } from "next-intl";
 
 interface UseModalErrorProps {
@@ -64,11 +65,11 @@ export function useModalError({
 				className="bg-danger rounded-2xl overflow-hidden"
 			>
 				<div className="p-2 grid grid-cols-[auto_1fr] gap-2">
-					<BiErrorCircle 
-						className="size-8 p-1 aspect-square bg-black/50 rounded-full fill-white" 
+					<HugeiconsIcon icon={AlertCircleIcon}
+						className="size-8 p-1 aspect-square bg-black/50 rounded-full text-white"
 						aria-hidden="true"
 					/>
-					<span 
+					<span
 						className="text-sm flex items-center whitespace-pre-wrap text-white"
 						aria-hidden="true"
 					>

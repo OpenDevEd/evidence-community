@@ -1,6 +1,6 @@
-import type { ComponentType } from "react";
-import { BsStars } from "react-icons/bs";
-
+import { SparklesIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { createElement, type ComponentType } from "react";
 import ChatGPT from "@/components/icons/ChatGPT";
 import Claude from "@/components/icons/Claude";
 import DeepSeek from "@/components/icons/DeepSeek";
@@ -27,10 +27,14 @@ const COMPANY_ICONS: Record<
 	xAI: Grok,
 };
 
+function SparklesModelIcon({ className }: { className?: string }) {
+	return createElement(HugeiconsIcon, { icon: SparklesIcon, className });
+}
+
 export const AI_FALLBACK_PRESENTATION: AIModelPresentation = {
 	name: "AI",
 	company: "Configured model",
-	icon: BsStars,
+	icon: SparklesModelIcon,
 };
 
 /** How a model is named and pictured for the reader. */
@@ -43,6 +47,6 @@ export function getAIModelPresentation(
 	return {
 		name: model.name,
 		company: model.company,
-		icon: COMPANY_ICONS[model.company] ?? BsStars,
+		icon: COMPANY_ICONS[model.company] ?? SparklesModelIcon,
 	};
 }

@@ -1,36 +1,37 @@
 "use client";
 
 import {
-	Archive,
-	Check,
-	CloudUpload,
-	FileClock,
-	FileX,
-	Pencil,
-	RotateCcw,
-} from "lucide-react";
+	ArchiveIcon,
+	CloudUploadIcon,
+	FileClockIcon,
+	FileXIcon,
+	PencilIcon,
+	RotateLeft01Icon,
+	Tick01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 
 import type { AdminFileState, AdminRecordState } from "@/lib/admin/types";
 
 const stateConfig = {
 	deleted: {
 		className: "text-black/45 dark:text-white/45",
-		icon: Archive,
+		icon: ArchiveIcon,
 		label: "Deleted",
 	},
 	draft: {
 		className: "text-amber-700 dark:text-amber-300",
-		icon: FileClock,
+		icon: FileClockIcon,
 		label: "Draft",
 	},
 	edited: {
 		className: "text-accent-700 dark:text-accent-300",
-		icon: Pencil,
+		icon: PencilIcon,
 		label: "Edited",
 	},
 	published: {
 		className: "text-emerald-700 dark:text-emerald-300",
-		icon: Check,
+		icon: Tick01Icon,
 		label: "Published",
 	},
 } as const;
@@ -38,51 +39,49 @@ const stateConfig = {
 const fileConfig = {
 	none: {
 		className: "text-black/40 dark:text-white/40",
-		icon: FileX,
+		icon: FileXIcon,
 		label: "No PDF",
 	},
 	processing: {
 		className: "text-amber-700 dark:text-amber-300",
-		icon: RotateCcw,
+		icon: RotateLeft01Icon,
 		label: "Processing",
 	},
 	staged: {
 		className: "text-accent-700 dark:text-accent-300",
-		icon: CloudUpload,
+		icon: CloudUploadIcon,
 		label: "Staged",
 	},
 	published: {
 		className: "text-emerald-700 dark:text-emerald-300",
-		icon: Check,
+		icon: Tick01Icon,
 		label: "PDF live",
 	},
 } as const;
 
 function Status({
 	className,
-	icon: Icon,
+	icon,
 	label,
 }: {
 	className: string;
-	icon: typeof Check;
+	icon: IconSvgElement;
 	label: string;
 }) {
 	return (
 		<span
 			className={`inline-flex h-6 items-center gap-1 whitespace-nowrap text-[11px] font-medium ${className}`}
 		>
-			<Icon aria-hidden size={12} strokeWidth={2} />
+			<HugeiconsIcon icon={icon} aria-hidden size={12} strokeWidth={2} />
 			{label}
 		</span>
 	);
 }
 
 export function RecordStateChip({ state }: { state: AdminRecordState }) {
-	const config = stateConfig[state];
-	return <Status {...config} />;
+	return <Status {...stateConfig[state]} />;
 }
 
 export function FileStateChip({ state }: { state: AdminFileState }) {
-	const config = fileConfig[state];
-	return <Status {...config} />;
+	return <Status {...fileConfig[state]} />;
 }

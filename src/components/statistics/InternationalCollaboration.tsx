@@ -1,8 +1,9 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BarChartIcon, Flag02Icon, HierarchyIcon, InformationCircleIcon, Share01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsShare, BsInfo, BsBarChart, BsDiagram3, BsFlag } from "react-icons/bs";
 import {
 	BarChart,
 	Bar,
@@ -68,12 +69,12 @@ export function InternationalCollaboration({ collaborationStats }: International
 	const collaborationPages = Math.ceil(sortedCollaborationCountries.length / rowsPerPage);
 
 	return (
-		<SectionCard title={t("internationalCollaboration")} icon={BsShare}>
+		<SectionCard title={t("internationalCollaboration")} icon={Share01Icon}>
 			<div className="space-y-8">
 				{/* Explanation */}
 				<motion.div variants={itemVariants} className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4">
 					<h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
-						<BsInfo className="w-4 h-4" />
+						<HugeiconsIcon icon={InformationCircleIcon} className="w-4 h-4" />
 						{t("understandingCollaborationTypes")}
 					</h4>
 					<div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
@@ -135,7 +136,7 @@ export function InternationalCollaboration({ collaborationStats }: International
 					{/* Collaboration Rates Chart */}
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsBarChart className="text-accent" />
+							<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 							{t("countryCollaborationRates")}
 						</h3>
 						<Card color="card" className="p-6">
@@ -233,7 +234,7 @@ export function InternationalCollaboration({ collaborationStats }: International
 					{/* Top Collaborations */}
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsDiagram3 className="text-accent" />
+							<HugeiconsIcon icon={HierarchyIcon} className="text-accent" />
 							{t("topCountryPairs")}
 						</h3>
 						<Card color="card" className="p-6">
@@ -297,7 +298,7 @@ export function InternationalCollaboration({ collaborationStats }: International
 				{/* Detailed Collaboration Table */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsFlag className="text-accent" />
+						<HugeiconsIcon icon={Flag02Icon} className="text-accent" />
 						{t("countryCollaborationDetails")}
 					</h3>
 					<Table 

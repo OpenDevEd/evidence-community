@@ -1,8 +1,9 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BarChartIcon, ChartIncreaseIcon, Flag02Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsFlag, BsBarChart, BsGraphUp } from "react-icons/bs";
 import {
 	BarChart,
 	Bar,
@@ -96,7 +97,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 	const countriesPages = Math.ceil(sortedCountries.length / rowsPerPage);
 
 	return (
-		<SectionCard title={t("coauthorCountries")} icon={BsFlag}>
+		<SectionCard title={t("coauthorCountries")} icon={Flag02Icon}>
 			<div className="space-y-8">
 				{/* Hero Stats Row */}
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -161,7 +162,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 						className="space-y-4"
 					>
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsBarChart className="text-accent" />
+							<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 							{t("authorsVsItems")}
 						</h3>
 						<Card color="card" className="p-6">
@@ -373,7 +374,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 						className="space-y-4"
 					>
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsGraphUp className="text-accent" />
+						<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
 						H-Index {t("distribution")} -{" "}
 						{t("topCountries")}
 					</h3>
@@ -566,7 +567,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 					className="space-y-4"
 				>
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsFlag className="text-accent" />
+						<HugeiconsIcon icon={Flag02Icon} className="text-accent" />
 						{t("topCountriesLeaderboard")}
 					</h3>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -628,7 +629,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 				{/* Author Countries Table */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsFlag className="text-accent" />
+						<HugeiconsIcon icon={Flag02Icon} className="text-accent" />
 						{t("coauthorCountriesTable")}
 					</h3>
 					<div className="space-y-4">

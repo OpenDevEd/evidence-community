@@ -1,4 +1,5 @@
-import { BsGlobe } from "react-icons/bs";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Globe02Icon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
 
 type CountryFlagProps = {
@@ -10,7 +11,7 @@ export function CountryFlag({ countryCode, className = "w-6 h-4" }: CountryFlagP
 	if (!countryCode || countryCode.trim() === '') {
 		return (
 			<div className={`${className} rounded-sm bg-black/10 dark:bg-white/10 flex items-center justify-center flex-shrink-0`}>
-				<BsGlobe className="w-3 h-3 text-black/40 dark:text-white/40" />
+				<HugeiconsIcon icon={Globe02Icon} className="w-3 h-3 text-black/40 dark:text-white/40" />
 			</div>
 		);
 	}

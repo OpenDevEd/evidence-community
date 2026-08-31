@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, ArrowDown01Icon, ArrowUp01Icon, ArrowUpDownIcon, Calendar01Icon, DatabaseIcon, DragDropVerticalIcon, FileAttachmentIcon, Folder01Icon, LayoutThreeColumnIcon, LayoutThreeRowIcon, LockIcon, RotateLeft01Icon, Tag01Icon, Tick01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
 import { useDraggable } from "@dnd-kit/react";
 import {
 	Popover,
@@ -7,26 +9,6 @@ import {
 	PopoverTrigger,
 	Spinner,
 } from "@nextui-org/react";
-import {
-	ArrowDown,
-	ArrowUp,
-	CalendarDays,
-	Check,
-	ChevronDown,
-	ChevronsUpDown,
-	CircleAlert,
-	Columns3,
-	Database,
-	FileText,
-	Folder,
-	GripVertical,
-	Lock,
-	RotateCcw,
-	Rows3,
-	Tag,
-	UserRound,
-	type LucideIcon,
-} from "lucide-react";
 import {
 	flexRender,
 	getCoreRowModel,
@@ -124,7 +106,7 @@ function PlainCell({
 	title,
 }: {
 	children: React.ReactNode;
-	icon?: LucideIcon;
+	icon?: IconSvgElement;
 	numeric?: boolean;
 	title?: string;
 }) {
@@ -137,7 +119,7 @@ function PlainCell({
 			title={title}
 		>
 			{Icon ? (
-				<Icon aria-hidden className="shrink-0 opacity-45" size={13} />
+				<HugeiconsIcon icon={Icon} aria-hidden className="shrink-0 opacity-45" size={13} />
 			) : null}
 			{children}
 		</span>
@@ -149,7 +131,7 @@ function RelationCell({
 	icon: Icon,
 }: {
 	entries: readonly { key: string; label: string }[];
-	icon: LucideIcon;
+	icon: IconSvgElement;
 }) {
 	if (entries.length === 0) return <PlainCell>—</PlainCell>;
 	const visible = entries.slice(0, 2);
@@ -159,7 +141,8 @@ function RelationCell({
 			className="flex min-w-0 items-center gap-1 overflow-hidden text-[11px] text-black/55 dark:text-white/55"
 			title={entries.map(({ label }) => label).join(", ")}
 		>
-			<Icon
+			<HugeiconsIcon
+				icon={Icon}
 				aria-hidden
 				className="mr-0.5 shrink-0 opacity-45"
 				size={13}
@@ -195,7 +178,7 @@ function CollectionRelationCell({ keys }: { keys: readonly string[] }) {
 				key,
 				label: labels.get(key) ?? key,
 			}))}
-			icon={Folder}
+			icon={Folder01Icon}
 		/>
 	);
 }
@@ -306,7 +289,7 @@ function RecordTitleCell({
 					tabIndex={-1}
 					type="button"
 				>
-					<GripVertical aria-hidden size={14} />
+					<HugeiconsIcon icon={DragDropVerticalIcon} aria-hidden size={14} />
 				</button>
 			) : (
 				<span
@@ -314,14 +297,10 @@ function RecordTitleCell({
 					className="grid size-7 shrink-0 place-items-center text-black/20 dark:text-white/20"
 					title="Collection assignment unavailable for this source"
 				>
-					<Lock aria-hidden size={12} />
+					<HugeiconsIcon icon={LockIcon} aria-hidden size={12} />
 				</span>
 			)}
-			<FileText
-				aria-hidden
-				className="shrink-0 text-black/35 dark:text-white/35"
-				size={15}
-			/>
+			<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={15} />
 			<div className="min-w-0">
 				<p className="truncate text-sm font-medium text-black/85 dark:text-white/90">
 					{record.title}
@@ -376,7 +355,7 @@ function TableViewControls({
 			<Popover disableAnimation placement="bottom-end">
 				<PopoverTrigger>
 					<TableViewTrigger aria-label="Choose and arrange columns">
-						<Columns3 aria-hidden size={15} />
+						<HugeiconsIcon icon={LayoutThreeColumnIcon} aria-hidden size={15} />
 					</TableViewTrigger>
 				</PopoverTrigger>
 				<PopoverContent
@@ -395,7 +374,7 @@ function TableViewControls({
 								size="xs"
 								variant="transparent"
 							>
-								<RotateCcw aria-hidden size={14} />
+								<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
 							</Button>
 						</Tooltip>
 					</div>
@@ -460,10 +439,7 @@ function TableViewControls({
 													size="xs"
 													variant="transparent"
 												>
-													<ArrowUp
-														aria-hidden
-														size={13}
-													/>
+													<HugeiconsIcon icon={ArrowUp01Icon} aria-hidden size={13} />
 												</Button>
 												<Button
 													aria-label={`Move ${definition.label} right`}
@@ -488,18 +464,11 @@ function TableViewControls({
 													size="xs"
 													variant="transparent"
 												>
-													<ArrowDown
-														aria-hidden
-														size={13}
-													/>
+													<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden size={13} />
 												</Button>
 											</div>
 										) : (
-											<Lock
-												aria-label="Required column"
-												className="mx-2 opacity-30"
-												size={12}
-											/>
+											<HugeiconsIcon icon={LockIcon} aria-label="Required column" className="mx-2 opacity-30" size={12} />
 										)}
 									</div>
 								);
@@ -512,7 +481,7 @@ function TableViewControls({
 			<Popover disableAnimation placement="bottom-end">
 				<PopoverTrigger>
 					<TableViewTrigger aria-label="Change row density">
-						<Rows3 aria-hidden size={15} />
+						<HugeiconsIcon icon={LayoutThreeRowIcon} aria-hidden size={15} />
 					</TableViewTrigger>
 				</PopoverTrigger>
 				<PopoverContent className="w-44 rounded-xl border border-black/[0.08] bg-white p-2 shadow-lg dark:border-white/[0.09] dark:bg-card">
@@ -536,7 +505,7 @@ function TableViewControls({
 							>
 								{density}
 								{preferences.density === density ? (
-									<Check aria-hidden size={14} />
+									<HugeiconsIcon icon={Tick01Icon} aria-hidden size={14} />
 								) : null}
 							</button>
 						))}
@@ -563,9 +532,9 @@ function SortHeader({
 	const selected = sort === columnId;
 	const Icon = selected
 		? sortDirection === "asc"
-			? ArrowUp
-			: ArrowDown
-		: ChevronsUpDown;
+			? ArrowUp01Icon
+			: ArrowDown01Icon
+		: ArrowUpDownIcon;
 	return (
 		<button
 			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus dark:hover:text-white/70"
@@ -574,7 +543,8 @@ function SortHeader({
 			type="button"
 		>
 			<span className="truncate">{label}</span>
-			<Icon
+			<HugeiconsIcon
+				icon={Icon}
 				aria-hidden
 				className={
 					selected ? "shrink-0 opacity-80" : "shrink-0 opacity-30"
@@ -731,7 +701,7 @@ export function AdminItemTable({
 			{
 				cell: ({ row }) => (
 					<PlainCell
-						icon={UserRound}
+						icon={UserCircleIcon}
 						title={creatorLine(row.original)}
 					>
 						{creatorLine(row.original)}
@@ -763,7 +733,7 @@ export function AdminItemTable({
 			},
 			{
 				cell: ({ row }) => (
-					<PlainCell icon={CalendarDays}>
+					<PlainCell icon={Calendar01Icon}>
 						{formatDate(row.original.updatedAt)}
 					</PlainCell>
 				),
@@ -781,7 +751,7 @@ export function AdminItemTable({
 			},
 			{
 				cell: ({ row }) => (
-					<PlainCell icon={Database}>
+					<PlainCell icon={DatabaseIcon}>
 						{sourceLabels.get(row.original.sourceConnectionKey) ??
 							row.original.sourceConnectionKey}
 					</PlainCell>
@@ -803,7 +773,7 @@ export function AdminItemTable({
 							key: `${label}:${index}`,
 							label,
 						}))}
-						icon={Tag}
+						icon={Tag01Icon}
 					/>
 				),
 				id: "tags",
@@ -811,7 +781,7 @@ export function AdminItemTable({
 			},
 			{
 				cell: ({ row }) => (
-					<PlainCell icon={CalendarDays}>
+					<PlainCell icon={Calendar01Icon}>
 						{formatDate(row.original.dateAdded)}
 					</PlainCell>
 				),
@@ -1621,11 +1591,7 @@ export function AdminItemTable({
 										/>
 									) : error ? (
 										<div className="flex max-w-sm flex-col items-center gap-2 text-pretty">
-											<CircleAlert
-												aria-hidden
-												className="text-danger/70"
-												size={20}
-											/>
+											<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="text-danger/70" size={20} />
 											<p className="text-sm text-danger">
 												{error}
 											</p>
@@ -1658,7 +1624,7 @@ export function AdminItemTable({
 							isLoading={loading}
 							onPress={onLoadMore}
 							size="xs"
-							startContent={<ChevronDown aria-hidden size={14} />}
+							startContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden size={14} />}
 							variant="transparent"
 						>
 							Load more

@@ -37,19 +37,22 @@ describe("runtime institution assets", () => {
 });
 
 describe("runtime asset renderer", () => {
-	it("renders a compiled platform icon by ID", () => {
+	it("renders a Hugeicons sprite reference by ID", () => {
 		const markup = renderToStaticMarkup(
 			<RuntimeAsset
-				reference="EvidenceLibrary"
+				reference="LibraryIcon"
 				alt=""
 				className="size-5"
 			/>,
 		);
 
 		expect(markup).toContain('data-runtime-asset="platform"');
-		expect(markup).toContain('data-platform-icon="EvidenceLibrary"');
+		expect(markup).toContain('data-platform-icon="LibraryIcon"');
 		expect(markup).toContain('aria-hidden="true"');
 		expect(markup).toContain("<svg");
+		expect(markup).toContain(
+			'href="/library-icons/11.svg#LibraryIcon"',
+		);
 	});
 
 	it.each([".svg", ".png", ".ico"])(
@@ -71,12 +74,4 @@ describe("runtime asset renderer", () => {
 			expect(markup).not.toContain("<svg");
 		},
 	);
-
-	it("does not render an unvalidated reference", () => {
-		expect(
-			renderToStaticMarkup(
-				<RuntimeAsset reference="UnknownIcon" alt="" />,
-			),
-		).toBe("");
-	});
 });

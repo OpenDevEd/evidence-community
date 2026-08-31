@@ -1,19 +1,19 @@
 "use client";
+
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { CodeSquareIcon, Compass01Icon, Delete02Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import { ReactNode, use, useContext, useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/nextui/Button";
-import { FaCompass, FaTrash } from "react-icons/fa";
 import { ContentInteractions } from "@/components/pages/EvidenceLibrary";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Pagination } from "@/components/nextui/Pagination";
-import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import Resource from "../items/Resource";
-import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import { CacheContext, CacheContextType } from "@/context/Providers";
 import {
 	useLibraryConfig,
@@ -34,7 +34,6 @@ import { getCountryInfo } from "@/lib/utils";
 import { Item } from "@/app/api/item/types";
 import { Card } from "@/components/nextui/Card";
 import { Divider } from "@/components/nextui/Divider";
-import { AiOutlineCompass } from "react-icons/ai";
 import {
 	getDownloadableRecordCount,
 	getEnabledCitationFormats,
@@ -358,7 +357,7 @@ export function FilterChips() {
 							color="accent"
 							className="h-7 w-7 min-w-7"
 						>
-							<FaTrash
+							<HugeiconsIcon icon={Delete02Icon}
 								aria-hidden="true"
 								className="text-white size-3"
 							/>
@@ -454,7 +453,7 @@ function ContentActions() {
 			{isDownloadEnabled && availableFormats.length > 0 && (
 				<Button
 					data-download-record-count={downloadableRecords}
-					endContent={<HiOutlineDownload className="size-6" />}
+					endContent={<HugeiconsIcon icon={Download01Icon} className="size-6" />}
 					onPress={onOpen}
 				>
 					{t("downloadRecords", {
@@ -462,19 +461,13 @@ function ContentActions() {
 					})}
 				</Button>
 			)}
-			{/* <Button
-				isDisabled={!isPrintingEnabled}
-				endContent={<HiOutlinePrinter className="size-6" />}
-			>
-				{t("printCitations", { count: format.number(totalItems) })}
-			</Button> */}
 			{isAtomFeedEnabled && exports.atom && (
 				<Button
 					onPress={() => {
 						window.location.assign(getLibraryExportPath("atom"));
 					}}
 					endContent={
-						<HiOutlineCodeBracketSquare className="size-6" />
+						<HugeiconsIcon icon={CodeSquareIcon} className="size-6" />
 					}
 				>
 					{t("mainFeed")}
@@ -630,7 +623,7 @@ export function NoteView() {
 								<div className="flex flex-col gap-4">
 									<h3 className="text-xl text-black/80 dark:text-white/80 font-medium flex flex-col">
 										<div className="flex gap-2 items-center">
-											<AiOutlineCompass className="size-4 shrink-0" />
+											<HugeiconsIcon icon={Compass01Icon} className="size-4 shrink-0" />
 											<span className="text-base text-black/80 dark:text-white/80">
 												{collectionData?.title}
 											</span>

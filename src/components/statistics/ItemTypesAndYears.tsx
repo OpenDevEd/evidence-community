@@ -1,6 +1,6 @@
+import { BarChartIcon, Calendar01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { BsBarChart, BsCalendar } from "react-icons/bs";
 import {
 	BarChart,
 	Bar,
@@ -29,7 +29,7 @@ export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
 
 	return (
 		<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-			<SectionCard title={t("itemTypesDistribution")} icon={BsBarChart}>
+			<SectionCard title={t("itemTypesDistribution")} icon={BarChartIcon}>
 				<div className="space-y-4 h-96 overflow-y-auto">
 					{stats.itemTypes.map((type, index) => (
 						<div
@@ -52,7 +52,7 @@ export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
 				</div>
 			</SectionCard>
 
-			<SectionCard title={t("recentYears")} icon={BsCalendar}>
+			<SectionCard title={t("recentYears")} icon={Calendar01Icon}>
 				<div className="h-96">
 					<ResponsiveContainer width="100%" height="100%">
 						<BarChart

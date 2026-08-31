@@ -1,10 +1,10 @@
 "use client";
 
+import { Cancel01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { AnimatePresence, motion } from "framer-motion";
-import { GiHamburgerMenu } from "react-icons/gi";
-import { IoCloseSharp } from "react-icons/io5";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import NavLinks from "./NavLinks";
@@ -30,7 +30,7 @@ export default function MobileMenu({
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
 			<AnimatePresence mode="wait">
-				{(isOpen ? [IoCloseSharp] : [GiHamburgerMenu]).map((Icon) => (
+				{(isOpen ? [Cancel01Icon] : [Menu01Icon]).map((Icon) => (
 					<motion.div
 						key={isOpen ? "close" : "menu"}
 						initial={{ opacity: 0, scale: 0.8 }}
@@ -44,7 +44,7 @@ export default function MobileMenu({
 							aria-label={t("openMenuAriaLabel")}
 							onPress={toggleMenu}
 						>
-							<Icon className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0" />
+							<HugeiconsIcon icon={Icon} className="size-8 text-accent cursor-pointer transition-transform active:scale-80 delay-0" />
 						</Button>
 					</motion.div>
 				))}

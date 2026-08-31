@@ -1,7 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { ItemGetResponse } from "@/app/api/item/types";
-import { BsStars } from "react-icons/bs";
 import { Button } from "@/components/nextui/Button";
 import {
 	Dropdown,
@@ -196,7 +197,7 @@ function AiButton({
 							)}
 							size={variant === "inline" ? "sm" : "lg"}
 						>
-							<BsStars />
+							<HugeiconsIcon icon={SparklesIcon} />
 							{variant === "inline" && t("askAI")}
 						</Button>
 					</DropdownTrigger>

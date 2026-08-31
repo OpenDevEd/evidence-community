@@ -1,18 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, LockIcon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-	AlertCircle,
-	ArrowLeft,
-	Check,
-	ChevronRight,
-	Folder,
-	FolderOpen,
-	LoaderCircle,
-	Lock,
-	Search,
-	X,
-} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
@@ -71,11 +61,7 @@ function SelectionRow({
 }) {
 	return (
 		<div className="flex min-h-10 items-center gap-2 rounded-lg bg-black/[0.035] px-2.5 dark:bg-white/[0.045]">
-			<Folder
-				aria-hidden
-				className="shrink-0 text-black/35 dark:text-white/35"
-				size={14}
-			/>
+			<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={14} />
 			<div className="min-w-0 flex-1">
 				<div className="truncate text-xs font-medium text-black/75 dark:text-white/80">
 					{entry.name}
@@ -85,11 +71,7 @@ function SelectionRow({
 				</div>
 			</div>
 			{locked ? (
-				<Lock
-					aria-label={entry.deleted ? "Deleted" : "Read only"}
-					className="shrink-0 text-black/30 dark:text-white/30"
-					size={12}
-				/>
+				<HugeiconsIcon icon={LockIcon} aria-label={entry.deleted ? "Deleted" : "Read only"} className="shrink-0 text-black/30 dark:text-white/30" size={12} />
 			) : (
 				<button
 					aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
@@ -97,7 +79,7 @@ function SelectionRow({
 					onClick={() => onRemove(entry.key)}
 					type="button"
 				>
-					<X aria-hidden size={13} />
+					<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={13} />
 				</button>
 			)}
 		</div>
@@ -111,11 +93,7 @@ function CollectionLoadingStatus() {
 			className="inline-flex items-center gap-2 rounded-lg border border-black/[0.08] bg-card_light px-2.5 py-2 text-xs font-medium text-black/60 shadow-sm dark:border-white/[0.09] dark:bg-card dark:text-white/65"
 			role="status"
 		>
-			<LoaderCircle
-				aria-hidden
-				className="animate-spin motion-reduce:animate-none"
-				size={14}
-			/>
+			<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin motion-reduce:animate-none" size={14} />
 			Loading
 		</div>
 	);
@@ -138,7 +116,7 @@ function CollectionErrorStatus({
 }) {
 	return (
 		<div className="flex flex-col items-center justify-center gap-2 px-6 py-3 text-center">
-			<AlertCircle aria-hidden className="text-danger" size={17} />
+			<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="text-danger" size={17} />
 			<p className="text-xs text-black/55 dark:text-white/55">
 				{message}
 			</p>
@@ -159,7 +137,7 @@ function CollectionSelectionIndicator({ selected }: { selected: boolean }) {
 					: "border-default bg-transparent text-transparent"
 			}`}
 		>
-			{selected ? <Check size={11} strokeWidth={2.5} /> : null}
+			{selected ? <HugeiconsIcon icon={Tick01Icon} size={11} strokeWidth={2.5} /> : null}
 		</span>
 	);
 }
@@ -200,7 +178,7 @@ function CollectionResultRow({
 				type="button"
 			>
 				<CollectionSelectionIndicator selected={selected} />
-				<Folder aria-hidden className="shrink-0 opacity-45" size={14} />
+				<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 opacity-45" size={14} />
 				<CollectionResultLabel entry={entry} sources={sources} />
 			</button>
 		);
@@ -233,14 +211,10 @@ function CollectionResultRow({
 				}
 				type="button"
 			>
-				<Folder aria-hidden className="shrink-0 opacity-45" size={14} />
+				<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 opacity-45" size={14} />
 				<CollectionResultLabel entry={entry} sources={sources} />
 				{opensCollection ? (
-					<ChevronRight
-						aria-hidden
-						className="shrink-0 text-black/35 dark:text-white/35"
-						size={14}
-					/>
+					<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={14} />
 				) : null}
 			</button>
 		</div>
@@ -528,11 +502,7 @@ export function AdminCollectionPicker({
 				placeholder="Search collections"
 				isDisabled={loading}
 				startContent={
-					<Search
-						aria-hidden
-						className="text-black/35 dark:text-white/35"
-						size={14}
-					/>
+					<HugeiconsIcon icon={Search01Icon} aria-hidden className="text-black/35 dark:text-white/35" size={14} />
 				}
 				value={query}
 				onClear={() => setQuery("")}
@@ -568,7 +538,7 @@ export function AdminCollectionPicker({
 					className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger"
 					inert={loading ? true : undefined}
 				>
-					<AlertCircle aria-hidden className="shrink-0" size={13} />
+					<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="shrink-0" size={13} />
 					<span className="min-w-0 flex-1">
 						Some selected collections could not be loaded.
 					</span>
@@ -595,7 +565,7 @@ export function AdminCollectionPicker({
 							}}
 							type="button"
 						>
-							<ArrowLeft aria-hidden size={13} />
+							<HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={13} />
 						</button>
 					) : null}
 					{path.length > 0 ? (
@@ -622,11 +592,7 @@ export function AdminCollectionPicker({
 							key={entry.key}
 							className="flex min-w-0 items-center"
 						>
-							<ChevronRight
-								aria-hidden
-								className="shrink-0"
-								size={11}
-							/>
+							<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="shrink-0" size={11} />
 							{index === path.length - 1 ? (
 								<span
 									aria-current="page"
@@ -677,26 +643,14 @@ export function AdminCollectionPicker({
 									onClick={() => chooseSource(source.key)}
 									type="button"
 								>
-									<Folder
-										aria-hidden
-										className="shrink-0 opacity-45"
-										size={15}
-									/>
+									<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 opacity-45" size={15} />
 									<span className="min-w-0 flex-1 truncate">
 										{source.label}
 									</span>
 									{source.readOnly ? (
-										<Lock
-											aria-label="Read only"
-											className="opacity-35"
-											size={12}
-										/>
+										<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="opacity-35" size={12} />
 									) : null}
-									<ChevronRight
-										aria-hidden
-										className="opacity-35"
-										size={13}
-									/>
+									<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="opacity-35" size={13} />
 								</button>
 							))}
 						</div>
@@ -734,11 +688,7 @@ export function AdminCollectionPicker({
 									}
 									type="button"
 								>
-									<FolderOpen
-										aria-hidden
-										className="text-accent"
-										size={15}
-									/>
+									<HugeiconsIcon icon={FolderOpenIcon} aria-hidden className="text-accent" size={15} />
 									Top level
 								</button>
 							) : null}
@@ -778,12 +728,11 @@ export function AdminCollectionPicker({
 															size="xs"
 															startContent={
 																loadingMore ? (
-																	<LoaderCircle
+																	<HugeiconsIcon
+																		icon={Loading03Icon}
 																		aria-hidden
 																		className="animate-spin"
-																		size={
-																			14
-																		}
+																		size={14}
 																	/>
 																) : undefined
 															}

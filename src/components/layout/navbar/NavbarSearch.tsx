@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { ArchiveIcon, Compass01Icon, Search01Icon, Sorting01Icon } from "@hugeicons/core-free-icons";
 import {
 	useCallback,
 	useEffect,
@@ -14,10 +16,6 @@ import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import useSWR, { preload } from "swr";
 import { Spinner, Tooltip, useDisclosure } from "@nextui-org/react";
-import { IoSearch } from "react-icons/io5";
-import { FaSort } from "react-icons/fa";
-import { GiArchiveResearch } from "react-icons/gi";
-import { AiOutlineCompass } from "react-icons/ai";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -67,10 +65,10 @@ const NavbarFilterChips = dynamic(() => import("./NavbarFilterChips"), {
  * decided by the navbar.
  */
 
-function DropDownIcon({ Icon, label }: { Icon: any; label?: string }) {
+function DropDownIcon({ Icon, label }: { Icon: IconSvgElement; label?: string }) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon className="w-full h-full" aria-label={label} />
+			<HugeiconsIcon icon={Icon} className="w-full h-full" aria-label={label} />
 		</div>
 	);
 }
@@ -437,9 +435,9 @@ export default function NavbarSearch() {
 					}}
 					isClearable
 					startContent={
-						<IoSearch
+						<HugeiconsIcon icon={Search01Icon}
 							aria-label={t("searchIconAriaLabel")}
-							className="size-6 fill-current text-black/60 dark:text-white/40"
+							className="size-6 text-black/60 dark:text-white/40"
 						/>
 					}
 					endContent={
@@ -569,7 +567,7 @@ export default function NavbarSearch() {
 			<Select
 				aria-label="Search scope"
 				startContent={
-					<DropDownIcon Icon={GiArchiveResearch} label="Scope icon" />
+					<DropDownIcon Icon={ArchiveIcon} label="Scope icon" />
 				}
 				color="tertiary"
 				selectedKeys={[scope]}
@@ -590,7 +588,7 @@ export default function NavbarSearch() {
 			{/* Sort */}
 			<Select
 				aria-label="Sort by"
-				startContent={<DropDownIcon Icon={FaSort} label="Sort icon" />}
+				startContent={<DropDownIcon Icon={Sorting01Icon} label="Sort icon" />}
 				selectedKeys={[sort]}
 				onSelectionChange={handleSortChange}
 				items={SORT_OPTIONS}
@@ -608,7 +606,7 @@ export default function NavbarSearch() {
 
 			{/* Explore — opens the full filter panel wired to the same params */}
 			<Button
-				startContent={<AiOutlineCompass className="size-5 shrink-0" />}
+				startContent={<HugeiconsIcon icon={Compass01Icon} className="size-5 shrink-0" />}
 				onPress={onExploreOpen}
 				className="h-10 w-full shrink-0 lg:h-12 xl:w-auto"
 			>

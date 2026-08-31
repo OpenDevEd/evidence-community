@@ -1,8 +1,10 @@
 "use client";
 
-import { Cloud, HardDrive, type LucideProps } from "lucide-react";
-import { SiZotero } from "react-icons/si";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { CloudIcon, HardDriveIcon } from "@hugeicons/core-free-icons";
+import { siZotero } from "simple-icons";
 
+import BrandIcon from "@/components/icons/BrandIcon";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 /**
@@ -13,19 +15,21 @@ export function SourceProviderIcon({
 	provider,
 	size = 14,
 	...props
-}: { provider: string; size?: number } & Omit<LucideProps, "size">) {
+}: { provider: string; size?: number } & Omit<Omit<React.ComponentProps<typeof HugeiconsIcon>, "icon">, "size">) {
 	if (provider === NATIVE_SOURCE_CONNECTION_KEY) {
-		return <HardDrive aria-hidden size={size} {...props} />;
+		return <HugeiconsIcon icon={HardDriveIcon} aria-hidden size={size} {...props} />;
 	}
 	if (provider === "zotero") {
 		return (
-			<SiZotero
+			<BrandIcon
+				icon={siZotero}
 				aria-hidden
 				className={props.className}
-				size={size}
+				width={size}
+				height={size}
 				style={props.style}
 			/>
 		);
 	}
-	return <Cloud aria-hidden size={size} {...props} />;
+	return <HugeiconsIcon icon={CloudIcon} aria-hidden size={size} {...props} />;
 }

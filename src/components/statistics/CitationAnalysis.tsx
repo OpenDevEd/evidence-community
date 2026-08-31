@@ -1,5 +1,5 @@
+import { QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { BsQuote } from "react-icons/bs";
 import { SectionCard } from "./SectionCard";
 import { CitationStats } from "./types";
 
@@ -11,7 +11,7 @@ export function CitationAnalysis({ citationStats }: CitationAnalysisProps) {
 	const t = useTranslations("ui");
 
 	return (
-		<SectionCard title={t("citationAnalysis")} icon={BsQuote}>
+		<SectionCard title={t("citationAnalysis")} icon={QuoteUpIcon}>
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 				<div className="text-center p-6 rounded-xl bg-success/10">
 					<div className="text-3xl font-bold text-success mb-2">

@@ -1,7 +1,6 @@
 "use client";
-
-import { Link2, Lock, Plus, X } from "lucide-react";
-
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Add01Icon, Cancel01Icon, Link02Icon, LockIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
@@ -43,7 +42,7 @@ function LinkRowAction({
 	if (row.origin !== "manual") {
 		return (
 			<Tooltip content={`Comes from ${row.sourceLabel ?? "a source"}. Change it there.`}>
-				<Lock aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+				<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="shrink-0 opacity-40" size={11} />
 			</Tooltip>
 		);
 	}
@@ -55,7 +54,7 @@ function LinkRowAction({
 			onClick={onRemove}
 			type="button"
 		>
-			<X aria-hidden size={13} />
+			<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={13} />
 		</button>
 	);
 }
@@ -87,12 +86,7 @@ function LinkRow({
 			data-admin-link-kind={row.kind}
 			data-admin-link-origin={row.origin}
 		>
-			<Link2
-				aria-hidden
-				className="shrink-0 text-black/35 dark:text-white/35"
-				size={14}
-				strokeWidth={1.7}
-			/>
+			<HugeiconsIcon icon={Link02Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={14} strokeWidth={1.7} />
 			<span className="min-w-0 flex-1">
 				{onOpen ? (
 					<button
@@ -211,7 +205,7 @@ export function AdminLinksEditor({
 									data-admin-link-pick={kind}
 									onPress={() => (picking ? onStopPick?.() : onStartPick(kind))}
 									size="xs"
-									startContent={picking ? undefined : <Plus aria-hidden size={13} />}
+									startContent={picking ? undefined : <HugeiconsIcon icon={Add01Icon} aria-hidden size={13} />}
 									variant={picking ? "solid" : "transparent"}
 								>
 									{picking ? "Done picking" : `Add to ${OUTGOING_TITLES[kind]}`}

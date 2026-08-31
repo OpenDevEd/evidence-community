@@ -1,14 +1,10 @@
 "use client";
+
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { ArchiveIcon, BubbleChatIcon, Compass01Icon, GridViewIcon, HelpCircleIcon, ListViewIcon, Search01Icon, SentIcon, Sorting01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
-import {
-	IoChatboxOutline,
-	IoChatbubblesOutline,
-	IoGrid,
-	IoSearch,
-	IoSend,
-} from "react-icons/io5";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
@@ -37,19 +33,10 @@ import React, {
 } from "react";
 import { Tabs, Tab } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { AiOutlineCompass } from "react-icons/ai";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useTranslations } from "next-intl";
-import {
-	GiArchiveResearch,
-	GiConsoleController,
-	GiStarSwirl,
-} from "react-icons/gi";
-import { FaSort } from "react-icons/fa";
-import { HiOutlineViewList } from "react-icons/hi";
-import { BiHelpCircle, BiTrash } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
@@ -72,7 +59,6 @@ import { z } from "zod";
 import { Props } from "next/script";
 import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
-import { BsStars } from "react-icons/bs";
 import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
 import { LibraryTagline } from "@/components/library/LibraryTagline";
 import {
@@ -96,13 +82,14 @@ function DropDownIcon({
 	className,
 	label,
 }: {
-	Icon: any;
+	Icon: IconSvgElement;
 	className?: string;
 	label?: string;
 }) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon
+			<HugeiconsIcon
+				icon={Icon}
 				className={twMerge("w-full h-full", className)}
 				aria-label={label}
 			/>
@@ -129,7 +116,7 @@ function SortComponent({
 
 	return (
 		<Select
-			startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
+			startContent={<DropDownIcon label="Sort icon" Icon={Sorting01Icon} />}
 			selectedKeys={
 				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
 			}
@@ -191,7 +178,7 @@ function ScopeComponent({
 	return (
 		<Select
 			startContent={
-				<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
+				<DropDownIcon label="Scope icon" Icon={ArchiveIcon} />
 			}
 			color="tertiary"
 			selectedKeys={
@@ -258,7 +245,7 @@ function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
 			// there is no keyboard to show a shortcut for.
 			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 lg:h-9 lg:gap-1.5 lg:rounded-large lg:pl-3 lg:pr-1.5 lg:text-sm"
 		>
-			<BsStars className="size-3.5 shrink-0 lg:size-4" />
+			<HugeiconsIcon icon={SparklesIcon} className="size-3.5 shrink-0 lg:size-4" />
 			{tAI("askAI")}
 			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
 				{hint}
@@ -393,7 +380,7 @@ function SearchTabContent({
 					</div>
 					<Button
 						startContent={
-							<AiOutlineCompass className="size-6 shrink-0" />
+							<HugeiconsIcon icon={Compass01Icon} className="size-6 shrink-0" />
 						}
 						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
@@ -414,7 +401,7 @@ function SearchTabContent({
 								onPress={onHelpOpen}
 								aria-label={t("helpAriaLabel")}
 							>
-								<BiHelpCircle
+								<HugeiconsIcon icon={HelpCircleIcon}
 									aria-label={t("helpIconAriaLabel")}
 									className="size-6"
 								/>
@@ -509,7 +496,7 @@ function SearchTabContent({
 								onPress={() => setView("list")}
 								aria-label={t("viewAsListAriaLabel")}
 							>
-								<HiOutlineViewList
+								<HugeiconsIcon icon={ListViewIcon}
 									aria-label={t("viewAsListAriaLabel")}
 									className="size-6"
 								/>
@@ -523,7 +510,7 @@ function SearchTabContent({
 								onPress={() => setView("grid")}
 								aria-label={t("viewAsGridAriaLabel")}
 							>
-								<IoGrid
+								<HugeiconsIcon icon={GridViewIcon}
 									aria-label={t("viewAsGridAriaLabel")}
 									className="size-4"
 								/>
@@ -563,7 +550,7 @@ function AskBoxActions({
 						}
 						aria-label={tUI("researchMode")}
 					>
-						<GiArchiveResearch
+						<HugeiconsIcon icon={ArchiveIcon}
 							className={twMerge(
 								"size-4",
 								isResearch
@@ -581,7 +568,7 @@ function AskBoxActions({
 				className="shrink-0"
 				size="sm"
 			>
-				<IoSend className="size-4" />
+				<HugeiconsIcon icon={SentIcon} className="size-4" />
 			</Button>
 		</div>
 	);
@@ -696,7 +683,7 @@ function AITabContent({
 					<Tooltip content={t("openChatTooltip")}>
 						<Button
 							isIconOnly
-							startContent={<IoChatboxOutline />}
+							startContent={<HugeiconsIcon icon={BubbleChatIcon} />}
 							size="md"
 							className="!p-0"
 							onPress={handleOpenChat}
@@ -738,7 +725,7 @@ function AITabContent({
 					<Tooltip content={t("smartScreening")}>
 						<Button
 							isIconOnly
-							startContent={<GiStarSwirl />}
+							startContent={<HugeiconsIcon icon={SparklesIcon} />}
 							size="md"
 							className="!p-0"
 							onPress={onSmartScreeningOpen}
@@ -796,14 +783,14 @@ export function useSearchMode() {
 		search: {
 			text: t("search"),
 			tooltip: t("searchTooltip"),
-			icon: <IoSearch className="size-5" />,
+			icon: <HugeiconsIcon icon={Search01Icon} className="size-5" />,
 			action: () => setSelectedTab("search"),
 			disabled: false,
 		},
 		ai: {
 			text: t("quickAnswer"),
 			tooltip: t("quickAnswerTooltip"),
-			icon: <BsStars className="size-5" />,
+			icon: <HugeiconsIcon icon={SparklesIcon} className="size-5" />,
 			action: () => {
 				setMode("quick");
 				setSelectedTab("ai");
@@ -813,7 +800,7 @@ export function useSearchMode() {
 		research: {
 			text: t("deepResearch"),
 			tooltip: t("deepResearchTooltip"),
-			icon: <GiArchiveResearch className="size-5" />,
+			icon: <HugeiconsIcon icon={ArchiveIcon} className="size-5" />,
 			action: () => {
 				setMode("research");
 				setSelectedTab("ai");

@@ -9,7 +9,6 @@ import {
 	PLATFORM_AI_PROVIDERS,
 	PLATFORM_FONT_CATALOG,
 	PLATFORM_LOCALES,
-	PLATFORM_NAVBAR_ICON_IDS,
 	PLATFORM_PROMPT_SLOTS,
 	PLATFORM_PROMPT_VARIABLES,
 	PLATFORM_RULE_ACTIONS,
@@ -18,6 +17,7 @@ import {
 	PLATFORM_SOCIAL_PROVIDERS,
 	type PlatformSearchScope,
 } from "./catalogs";
+import { PLATFORM_NAVBAR_ICON_IDS } from "./generated/hugeicons";
 import {
 	addDuplicateIssues,
 	colorSchema,
@@ -633,8 +633,12 @@ const themeSchema = z
 		}
 	});
 
+const platformNavbarIconSchema = z
+	.enum(PLATFORM_NAVBAR_ICON_IDS)
+	.meta({ id: "PlatformNavbarIconId" });
+
 const iconReferenceSchema = z.union([
-	z.enum(PLATFORM_NAVBAR_ICON_IDS),
+	platformNavbarIconSchema,
 	stableIconUrlSchema,
 ]);
 

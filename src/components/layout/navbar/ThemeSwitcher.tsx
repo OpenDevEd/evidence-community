@@ -1,10 +1,10 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { HiOutlineMoon } from "react-icons/hi2";
-import { IoMdSunny } from "react-icons/io";
 import { DropdownItem } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
@@ -52,9 +52,9 @@ export default function ThemeSwitcher({
 				onPress={toggleTheme}
 				startContent={
 					isDark ? (
-						<IoMdSunny className="size-5 fill-accent" />
+						<HugeiconsIcon icon={Sun03Icon} className="size-5 text-accent" />
 					) : (
-						<HiOutlineMoon className="size-5 stroke-accent" />
+						<HugeiconsIcon icon={Moon02Icon} className="size-5 text-accent" />
 					)
 				}
 			>
@@ -78,17 +78,17 @@ export default function ThemeSwitcher({
 			size={toolbar ? "xs" : undefined}
 			variant={toolbar ? "transparent" : "invisible"}
 		>
-			<IoMdSunny
+			<HugeiconsIcon icon={Sun03Icon}
 				className={twMerge(
 					toolbar ? "size-4" : "size-5",
-					"fill-accent transition-all",
+					"text-accent transition-all",
 					"dark:block hidden"
 				)}
 			/>
-			<HiOutlineMoon
+			<HugeiconsIcon icon={Moon02Icon}
 				className={twMerge(
 					toolbar ? "size-4" : "size-5",
-					"stroke-accent transition-all",
+					"text-accent transition-all",
 					"dark:hidden block"
 				)}
 			/>

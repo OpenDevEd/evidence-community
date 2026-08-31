@@ -1,9 +1,9 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
 import { useMemo, memo } from "react";
-import { IoIosArrowDown } from "react-icons/io";
-
 interface CollectionHierarchyProps {
 	collectionData: Collection;
 	collections: Collection[];
@@ -105,7 +105,7 @@ function CollectionHierarchy({
 						)}
 						{hasChildren && (
 							<div className="dark:opacity-75 ltr:ml-2 rtl:mr-2 inline-block translate-y-0.5">
-								<IoIosArrowDown className="size-4" />
+								<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
 							</div>
 						)}
 					</div>

@@ -1,16 +1,8 @@
 "use client";
 
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { Add01Icon, Bookmark02Icon, CollectionsBookmarkIcon, Delete02Icon, MoreVerticalIcon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
-import {
-	BsBookmark,
-	BsBoxArrowRight,
-	BsCollection,
-	BsGear,
-	BsPen,
-	BsPencil,
-	BsPlus,
-	BsThreeDotsVertical,
-} from "react-icons/bs";
 import { Button } from "../nextui/Button";
 import { ReactNode, useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -44,11 +36,9 @@ import { COLLECTION_VISIBILITY_OPTIONS } from "@/constants/user";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
 import { ResourcesView } from "../features/resources/ResourcesView";
-import { IconType } from "react-icons/lib";
 import PageContainer from "../layout/PageContainer";
 import { Autocomplete } from "../nextui/Autocomplete";
 import DialogModal from "../nextui/DialogModal";
-import { BiTrash } from "react-icons/bi";
 import { Dropdown } from "../nextui/Dropdown";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
@@ -188,7 +178,7 @@ function CreateCollectionModal({
 
 type ProfileListItem = {
 	label: any;
-	icon: IconType;
+	icon: IconSvgElement;
 	className?: string;
 	index: number;
 	id?: string;
@@ -220,7 +210,7 @@ function ProfileListbox({
 			{listItems.map(
 				({
 					label,
-					icon: Icon,
+					icon,
 					className,
 					index,
 					textValue,
@@ -233,7 +223,7 @@ function ProfileListbox({
 						shouldHighlightOnFocus
 						textValue={textValue}
 						aria-label={textValue}
-						startContent={<Icon className="shrink-0" />}
+						startContent={<HugeiconsIcon icon={icon} className="shrink-0" />}
 						className={twMerge(
 							"text-xl gap-4",
 							props.selectionMode !== "none" &&
@@ -295,7 +285,7 @@ function useProfileCollectionsList(
 			textValue: t("likedItemsLabel"),
 			count: formatter.number(Object.keys(displayData.likes).length),
 			description: t("likedItemsDescription"),
-			icon: BsBookmark,
+			icon: Bookmark02Icon,
 			index: 0,
 		},
 		...displayData.collections.map(
@@ -317,7 +307,7 @@ function useProfileCollectionsList(
 					collectionsItems[collection.id]?.length || 0
 				),
 				description: collection.description,
-				icon: BsCollection,
+				icon: CollectionsBookmarkIcon,
 				id: collection.id,
 				index: 0,
 				createdAt: collection.createdAt,
@@ -382,7 +372,7 @@ function CollectionDropdown({
 					size="md"
 					className="!p-0"
 				>
-					<BsThreeDotsVertical />
+					<HugeiconsIcon icon={MoreVerticalIcon} />
 				</Button>
 			</DropdownTrigger>
 			<DropdownMenu
@@ -445,11 +435,11 @@ function CollectionDropdown({
 						)}
 					</DropdownItem>
 				</DropdownSection>
-				<DropdownItem key="editCollection" startContent={<BsPencil />}>
+				<DropdownItem key="editCollection" startContent={<HugeiconsIcon icon={PencilEdit01Icon} />}>
 					{t("editAction")}
 				</DropdownItem>
 				<DropdownItem
-					startContent={<BiTrash />}
+					startContent={<HugeiconsIcon icon={Delete02Icon} />}
 					key="deleteCollection"
 					color="danger"
 				>
@@ -515,7 +505,7 @@ function ProfileCollectionsList({
 				<div className="flex w-full mt-2 gap-2 px-6">
 					<Button
 						className="flex-1"
-						startContent={<BsPlus className="shrink-0" />}
+						startContent={<HugeiconsIcon icon={Add01Icon} className="shrink-0" />}
 						size="md"
 						onPress={onOpen}
 					>
@@ -731,30 +721,6 @@ export default function Profile({ data }: { data: any }) {
 								/>
 							</>
 						)}
-						{/* {isCurrentUser && (
-							<div className="px-6">
-								<Divider className="" />
-								<ProfileListbox
-									selectionMode="none"
-									data={displayData}
-									listItems={[
-										{
-											label: t("settings"),
-											icon: BsGear,
-										},
-										{
-											label: t("logout"),
-											icon: BsBoxArrowRight,
-											className:
-												"text-red-500 dark:text-red-500",
-										},
-									].map((item, index) => ({
-										...item,
-										index,
-									}))}
-								/>
-							</div>
-						)} */}
 					</div>
 				</div>
 			</div>
@@ -767,9 +733,9 @@ export default function Profile({ data }: { data: any }) {
 							<Autocomplete
 								startContent={
 									selectedKey === "0" ? (
-										<BsBookmark />
+										<HugeiconsIcon icon={Bookmark02Icon} />
 									) : (
-										<BsCollection />
+										<HugeiconsIcon icon={CollectionsBookmarkIcon} />
 									)
 								}
 								selectedKey={selectedKey}
@@ -794,7 +760,7 @@ export default function Profile({ data }: { data: any }) {
 												(onPress as () => void)();
 											}}
 											textValue={textValue}
-											startContent={<Icon />}
+											startContent={<HugeiconsIcon icon={Icon} />}
 											key={index}
 										>
 											{label}
@@ -808,7 +774,7 @@ export default function Profile({ data }: { data: any }) {
 								isIconOnly
 								className="h-full"
 							>
-								<BsPlus />
+								<HugeiconsIcon icon={Add01Icon} />
 							</Button>
 							{appendContent}
 						</div>

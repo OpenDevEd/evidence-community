@@ -1,9 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon, MapsIcon } from "@hugeicons/core-free-icons";
 import { Key, useMemo } from "react";
 import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
-import { BiChevronDown } from "react-icons/bi";
-import { BsMapFill } from "react-icons/bs";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
@@ -40,7 +40,7 @@ export default function GapMapAction({
 				size={size}
 				color={color}
 				onPress={() => openGapMap(gapmap.href)}
-				startContent={<BsMapFill className="size-4" />}
+				startContent={<HugeiconsIcon icon={MapsIcon} className="size-4" />}
 				aria-label={t("openGapMapAriaLabel", { label: gapmap.label })}
 			>
 				{t("openGapMap")}
@@ -58,8 +58,8 @@ export default function GapMapAction({
 				<Button
 					size={size}
 					color={color}
-					startContent={<BsMapFill className="size-4" />}
-					endContent={<BiChevronDown className="size-4" />}
+					startContent={<HugeiconsIcon icon={MapsIcon} className="size-4" />}
+					endContent={<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />}
 					aria-label={t("dropdownAriaLabel", { label: t("gapMaps") })}
 				>
 					{t("gapMaps")}

@@ -4,7 +4,6 @@ import {
 	PLATFORM_AI_MODEL_CATALOG,
 	PLATFORM_FONT_CATALOG,
 	PLATFORM_LOCALES,
-	PLATFORM_NAVBAR_ICON_IDS,
 	PLATFORM_PROMPT_DEFAULTS,
 	PLATFORM_PROMPT_SLOTS,
 	PLATFORM_PROMPT_VARIABLES,
@@ -13,6 +12,7 @@ import {
 	PLATFORM_SEARCH_SCOPE_OPTIONS,
 	PLATFORM_SOCIAL_PROVIDERS,
 } from "./catalogs";
+import { PLATFORM_NAVBAR_ICON_IDS } from "./generated/hugeicons";
 import { libraryConfigSchema } from "./schema";
 
 type JsonObject = Record<string, unknown>;

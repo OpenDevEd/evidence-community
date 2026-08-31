@@ -1,13 +1,15 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { DropdownMenu } from "@nextui-org/react";
-import { SiZotero } from "react-icons/si";
+import { siZotero } from "simple-icons";
 import { DropdownItem } from "@nextui-org/react";
 
+import BrandIcon from "@/components/icons/BrandIcon";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { DropdownTrigger } from "@nextui-org/react";
-import { BiChevronDown } from "react-icons/bi";
 import { Key } from "react";
 import { Item } from "@/app/api/item/types";
 import { useTranslations } from "next-intl";
@@ -35,16 +37,16 @@ export default function ZoteroDropdown({ item }: { item: Item | undefined }) {
 			<DropdownTrigger>
 				<Button
 					size="sm"
-					startContent={<SiZotero />}
-					endContent={<BiChevronDown className="size-4" />}
+					startContent={<BrandIcon icon={siZotero} className="size-4" aria-hidden />}
+					endContent={<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />}
 				>
 				</Button>
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction}>
-				<DropdownItem key="view" startContent={<SiZotero />} href="#">
+				<DropdownItem key="view" startContent={<BrandIcon icon={siZotero} className="size-4" aria-hidden />} href="#">
 					{t("viewOnZotero")}
 				</DropdownItem>
-				<DropdownItem key="open" startContent={<SiZotero />} href="#">
+				<DropdownItem key="open" startContent={<BrandIcon icon={siZotero} className="size-4" aria-hidden />} href="#">
 					{t("openInZotero")}
 				</DropdownItem>
 			</DropdownMenu>

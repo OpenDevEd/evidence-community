@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, CheckmarkBadge01Icon, DatabaseIcon } from "@hugeicons/core-free-icons";
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	ModalBody,
@@ -9,8 +11,6 @@ import {
 	Radio,
 	RadioGroup,
 } from "@nextui-org/react";
-import { BadgeCheck, CircleAlert, Database } from "lucide-react";
-
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
@@ -76,11 +76,7 @@ export function AdminCrossrefActivation({
 						<ModalBody className="gap-3 px-4 py-2">
 							<ActivationError error={error} fieldErrors={fieldErrors} />
 							<div className="flex items-start gap-3 rounded-xl bg-black/[0.035] p-3 dark:bg-white/[0.045]">
-								<BadgeCheck
-									aria-hidden
-									className="mt-0.5 shrink-0 text-accent"
-									size={16}
-								/>
+								<HugeiconsIcon icon={CheckmarkBadge01Icon} aria-hidden className="mt-0.5 shrink-0 text-accent" size={16} />
 								<div className="min-w-0">
 									<p className="text-xs font-medium text-black/50 dark:text-white/50">
 										{existingDoi ? "DOI to register" : "New DOI namespace"}
@@ -94,11 +90,7 @@ export function AdminCrossrefActivation({
 								</div>
 							</div>
 							<div className="flex items-start gap-2.5 text-xs leading-5 text-black/60 dark:text-white/60">
-								<CircleAlert
-									aria-hidden
-									className="mt-0.5 shrink-0"
-									size={14}
-								/>
+								<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="mt-0.5 shrink-0" size={14} />
 								<p>
 									Once reserved, this DOI stays assigned to this record. The DOI appears immediately while Crossref checks the publication.
 								</p>
@@ -231,7 +223,7 @@ export function AdminZenodoActivation({
 								</Radio>
 							</RadioGroup>
 							<div className="flex items-start gap-2.5 text-xs leading-5 text-black/50 dark:text-white/50">
-								<Database aria-hidden className="mt-0.5 shrink-0" size={14} />
+								<HugeiconsIcon icon={DatabaseIcon} aria-hidden className="mt-0.5 shrink-0" size={14} />
 								<p>The published record and PDF will be stored in Zenodo Sandbox.</p>
 							</div>
 						</ModalBody>

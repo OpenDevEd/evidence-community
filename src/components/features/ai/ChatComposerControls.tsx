@@ -1,15 +1,10 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BinocularsIcon, Loading03Icon, PlayIcon, SentIcon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { ButtonGroup } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { ImSpinner8 } from "react-icons/im";
-import {
-	PiBinocularsBold,
-	PiGearSixBold,
-	PiPaperPlaneTiltFill,
-	PiPlayFill,
-} from "react-icons/pi";
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
@@ -68,7 +63,7 @@ function ResearchModeButton({
 					transition={{ type: "spring", stiffness: 420, damping: 22 }}
 					className="grid place-items-center"
 				>
-					<PiBinocularsBold className="size-4 shrink-0" />
+					<HugeiconsIcon icon={BinocularsIcon} className="size-4 shrink-0" />
 				</motion.span>
 				<span className="hidden whitespace-nowrap xl:inline">
 					{tUI("researchMode")}
@@ -109,7 +104,7 @@ function ScreeningButtons({
 					aria-label={settingsLabel}
 					onPress={onScreeningSettings}
 				>
-					<PiGearSixBold className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
+					<HugeiconsIcon icon={Settings02Icon} className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
 					<span className="hidden whitespace-nowrap xl:inline">
 						{tUI("smartScreening")}
 					</span>
@@ -127,9 +122,9 @@ function ScreeningButtons({
 					onPress={onScreen}
 				>
 					{isScreening ? (
-						<ImSpinner8 className="size-3.5 animate-spin" />
+						<HugeiconsIcon icon={Loading03Icon} className="size-3.5 animate-spin" />
 					) : (
-						<PiPlayFill className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
+						<HugeiconsIcon icon={PlayIcon} className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
 					)}
 				</Button>
 			</Tooltip>
@@ -204,9 +199,9 @@ function SendButton({
 							className="grid place-items-center"
 						>
 							{isWaiting ? (
-								<ImSpinner8 className="size-4 animate-spin" />
+								<HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
 							) : (
-								<PiPaperPlaneTiltFill className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
+								<HugeiconsIcon icon={SentIcon} className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
 							)}
 						</motion.span>
 					</AnimatePresence>

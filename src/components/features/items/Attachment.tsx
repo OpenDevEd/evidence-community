@@ -1,13 +1,13 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
 import { Link, Skeleton, Spinner } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Image from "next/image";
-import { LuDownload } from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
-import { FaEye } from "react-icons/fa";
 import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
@@ -153,14 +153,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 							trackAttachment("view", "internal");
 							window.open(downloadURL, "_blank");
 						}}
-						startContent={<FaEye className="size-5" />}
+						startContent={<HugeiconsIcon icon={ViewIcon} className="size-5" />}
 					>
 						{t("viewAttachment")}
 					</Button>
 					<Button
 						size="sm"
 						color="accent"
-						startContent={<LuDownload className="size-5" />}
+						startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
 						onPress={() => {
 							trackAttachment("download", "internal");
 							downloadLink(data.url || "", data.filename || "");
@@ -173,7 +173,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 				<Button
 					size="sm"
 					color="accent"
-					startContent={<LuDownload className="size-5" />}
+					startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
 					onPress={() => {
 						trackAttachment("open", "external");
 						window.open(pdfUrl, "_blank");

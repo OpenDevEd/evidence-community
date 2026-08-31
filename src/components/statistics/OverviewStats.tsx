@@ -1,5 +1,5 @@
+import { Activity01Icon, Attachment01Icon, Building02Icon, File02Icon, QuoteUpIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { BsFileText, BsQuote, BsActivity, BsPeople, BsBuilding, BsPaperclip } from "react-icons/bs";
 import { StatCard } from "./StatCard";
 import { ComprehensiveStats } from "./types";
 
@@ -18,28 +18,28 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 					title={t("totalItems")}
 					value={stats.citationStats.totalItems}
 					subtitle={t("inDatabase")}
-					icon={BsFileText}
+					icon={File02Icon}
 					color="accent"
 				/>
 				<StatCard
 					title={t("totalCitations")}
 					value={stats.citationStats.totalCitations}
 					subtitle={`${stats.citationStats.citationPercentage}% ${t("haveCitations")}`}
-					icon={BsQuote}
+					icon={QuoteUpIcon}
 					color="success"
 				/>
 				<StatCard
 					title="H-Index"
 					value={stats.citationStats.hIndex}
 					subtitle={t("globalImpactMetric")}
-					icon={BsActivity}
+					icon={Activity01Icon}
 					color="tertiary"
 				/>
 				<StatCard
 					title={t("uniqueCreators")}
 					value={stats.creatorStats.uniqueCreators}
 					subtitle={`${t("avg")} ${stats.creatorStats.avgCreatorsPerItem.toFixed(1)} ${t("perItem")}`}
-					icon={BsPeople}
+					icon={UserGroupIcon}
 					color="card"
 				/>
 			</div>
@@ -50,14 +50,14 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 					title={t("institutions")}
 					value={stats.institutions.length}
 					subtitle={t("uniqueInstitutions")}
-					icon={BsBuilding}
+					icon={Building02Icon}
 					color="accent"
 				/>
 				<StatCard
 					title={t("attachments")}
 					value={stats.attachmentStats.totalAttachments}
 					subtitle={`${stats.attachmentStats.attachmentPercentage}% ${t("ofItemsHaveAttachments")}`}
-					icon={BsPaperclip}
+					icon={Attachment01Icon}
 					color="success"
 				/>
 			</div>

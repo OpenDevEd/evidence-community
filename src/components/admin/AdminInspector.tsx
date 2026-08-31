@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Add01Icon, AlertCircleIcon, ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, ArrowUp01Icon, AttachmentIcon, Building02Icon, Cancel01Icon, CheckmarkBadge01Icon, Copy01Icon, Delete02Icon, Download01Icon, FileAttachmentIcon, FilePenLineIcon, FilePlusIcon, Folder01Icon, Link02Icon, LinkSquare01Icon, LockIcon, PencilIcon, RotateLeft01Icon, SentIcon, Tag01Icon, Tick01Icon, Upload01Icon, UserCircleIcon, UserGroupIcon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
 import {
 	AutocompleteItem,
 	Chip,
@@ -12,38 +14,6 @@ import {
 	PopoverTrigger,
 	Spinner,
 } from "@nextui-org/react";
-import {
-	AlertCircle,
-	ArrowDown,
-	ArrowLeft,
-	ArrowUp,
-	BadgeCheck,
-	Building2,
-	Check,
-	ChevronRight,
-	Copy,
-	Download,
-	Eye,
-	ExternalLink,
-	FilePenLine,
-	FilePlus2,
-	FileText,
-	Folder,
-	History,
-	Link2,
-	Lock,
-	Paperclip,
-	Pencil,
-	Plus,
-	RotateCcw,
-	Send,
-	Tag,
-	Trash2,
-	Upload,
-	UserRound,
-	Users,
-	X,
-} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -189,7 +159,7 @@ function ChangedMarker({
 					title={`${label} differs from the published value`}
 					type="button"
 				>
-					<Pencil aria-hidden size={11} strokeWidth={2} />
+					<HugeiconsIcon icon={PencilIcon} aria-hidden size={11} strokeWidth={2} />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent className="w-64 rounded-xl border border-black/[0.08] bg-white p-3 shadow-lg dark:border-white/[0.09] dark:bg-card">
@@ -207,7 +177,7 @@ function ChangedMarker({
 							setOpen(false);
 						}}
 						size="xs"
-						startContent={<RotateCcw aria-hidden size={13} />}
+						startContent={<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={13} />}
 						variant="transparent"
 					>
 						Revert to published
@@ -240,7 +210,7 @@ function IconButton({
 }: {
 	buttonId?: string;
 	disabled?: boolean;
-	icon: typeof Plus;
+	icon: typeof Add01Icon;
 	label: string;
 	onPress: () => void;
 }) {
@@ -257,7 +227,7 @@ function IconButton({
 					size="xs"
 					variant="transparent"
 				>
-					<Icon aria-hidden size={14} />
+					<HugeiconsIcon icon={Icon} aria-hidden size={14} />
 				</Button>
 			</span>
 		</Tooltip>
@@ -273,14 +243,15 @@ function Section({
 }: {
 	actions?: React.ReactNode;
 	children: React.ReactNode;
-	icon: typeof Plus;
+	icon: typeof Add01Icon;
 	id?: string;
 	title: string;
 }) {
 	return (
 		<section className="scroll-mt-4 py-5 first:pt-0" id={id}>
 			<div className="mb-3 flex min-h-6 items-center gap-2.5">
-				<Icon
+				<HugeiconsIcon
+					icon={Icon}
 					aria-hidden
 					className="shrink-0 text-black/35 dark:text-white/35"
 					size={15}
@@ -333,9 +304,9 @@ function SaveIndicator({
 			{state === "saving" ? (
 				<Spinner size="sm" />
 			) : state === "saved" ? (
-				<Check aria-hidden size={12} />
+				<HugeiconsIcon icon={Tick01Icon} aria-hidden size={12} />
 			) : (
-				<X aria-hidden size={12} />
+				<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={12} />
 			)}
 			{message ??
 				(state === "saving"
@@ -347,7 +318,7 @@ function SaveIndicator({
 							: "Needs attention")}
 			{state === "conflict" ? (
 				<IconButton
-					icon={RotateCcw}
+					icon={RotateLeft01Icon}
 					label="Reload server draft"
 					onPress={onReload}
 				/>
@@ -392,9 +363,9 @@ function ValidationSummary({
 		>
 			<div className="flex items-center gap-2 font-medium">
 				{conflict ? (
-					<RotateCcw aria-hidden size={14} />
+					<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
 				) : (
-					<AlertCircle aria-hidden size={14} />
+					<HugeiconsIcon icon={AlertCircleIcon} aria-hidden size={14} />
 				)}
 				{fieldSummaryHeadline(entries.length, tone)}
 			</div>
@@ -709,7 +680,7 @@ function CreatorsEditor({
 							</Select>
 							<IconButton
 								disabled={readOnly}
-								icon={organization ? UserRound : Building2}
+								icon={organization ? UserCircleIcon : Building02Icon}
 								label={
 									organization
 										? "Use person name"
@@ -732,7 +703,7 @@ function CreatorsEditor({
 							<IconButton
 								buttonId={`admin-creator-${index}-move-up`}
 								disabled={readOnly || index === 0}
-								icon={ArrowUp}
+								icon={ArrowUp01Icon}
 								label="Move creator up"
 								onPress={() =>
 									moveCreator(index, index - 1, "up")
@@ -743,7 +714,7 @@ function CreatorsEditor({
 								disabled={
 									readOnly || index === creators.length - 1
 								}
-								icon={ArrowDown}
+								icon={ArrowDown01Icon}
 								label="Move creator down"
 								onPress={() =>
 									moveCreator(index, index + 1, "down")
@@ -751,7 +722,7 @@ function CreatorsEditor({
 							/>
 							<IconButton
 								disabled={readOnly}
-								icon={Trash2}
+								icon={Delete02Icon}
 								label="Remove creator"
 								onPress={() =>
 									updateCreators(
@@ -865,7 +836,7 @@ function CreatorsEditor({
 						])
 					}
 					size="xs"
-					startContent={<Plus aria-hidden size={14} />}
+					startContent={<HugeiconsIcon icon={Add01Icon} aria-hidden size={14} />}
 					variant="transparent"
 				>
 					Add creator
@@ -936,7 +907,7 @@ function TagsEditor({
 					endContent={
 						<IconButton
 							disabled={!value.trim()}
-							icon={Plus}
+							icon={Add01Icon}
 							label="Add tag"
 							onPress={addTag}
 						/>
@@ -1020,11 +991,7 @@ function CollectionsEditor({
 						className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger"
 						role="alert"
 					>
-						<AlertCircle
-							aria-hidden
-							className="shrink-0"
-							size={13}
-						/>
+						<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="shrink-0" size={13} />
 						<span className="min-w-0 flex-1">
 							Collections could not be loaded.
 						</span>
@@ -1053,12 +1020,7 @@ function CollectionsEditor({
 							className="flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75"
 							data-admin-collection-membership={entry.key}
 						>
-							<Folder
-								aria-hidden
-								className="shrink-0 text-black/35 dark:text-white/35"
-								size={14}
-								strokeWidth={1.7}
-							/>
+							<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={14} strokeWidth={1.7} />
 							<span className="min-w-0 flex-1">
 								<span className="block truncate font-medium">
 									{entry.name}
@@ -1069,11 +1031,7 @@ function CollectionsEditor({
 							</span>
 							{membershipChanged ? (
 								<Tooltip content="Added in this draft">
-									<Pencil
-										aria-label="Added in this draft"
-										className="shrink-0 text-accent"
-										size={11}
-									/>
+									<HugeiconsIcon icon={PencilIcon} aria-label="Added in this draft" className="shrink-0 text-accent" size={11} />
 								</Tooltip>
 							) : null}
 							{entry.deleted ? (
@@ -1082,11 +1040,7 @@ function CollectionsEditor({
 								</Chip>
 							) : null}
 							{locked ? (
-								<Lock
-									aria-label="Read only"
-									className="shrink-0 opacity-40"
-									size={11}
-								/>
+								<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="shrink-0 opacity-40" size={11} />
 							) : !readOnly ? (
 								<button
 									aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
@@ -1101,7 +1055,7 @@ function CollectionsEditor({
 									}
 									type="button"
 								>
-									<X aria-hidden size={13} />
+									<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={13} />
 								</button>
 							) : null}
 						</div>
@@ -1111,7 +1065,7 @@ function CollectionsEditor({
 					<Button
 						onPress={() => setPickerOpen(true)}
 						size="xs"
-						startContent={<Plus aria-hidden size={13} />}
+						startContent={<HugeiconsIcon icon={Add01Icon} aria-hidden size={13} />}
 						variant="transparent"
 					>
 						Add to collection
@@ -1196,7 +1150,7 @@ function PdfFileInput({
 				}`}
 				htmlFor={inputId}
 			>
-				<Upload aria-hidden size={14} />
+				<HugeiconsIcon icon={Upload01Icon} aria-hidden size={14} />
 				{label}
 			</label>
 		</>
@@ -1227,12 +1181,7 @@ function AttachmentList({
 						onClick={() => onSelectAttachment(attachment.key)}
 						type="button"
 					>
-						<FileText
-							aria-hidden
-							className="shrink-0 text-black/40 dark:text-white/40"
-							size={15}
-							strokeWidth={1.7}
-						/>
+						<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 text-black/40 dark:text-white/40" size={15} strokeWidth={1.7} />
 						<span className="min-w-0 flex-1 truncate text-sm font-medium text-black/75 dark:text-white/80">
 							{attachment.title}
 						</span>
@@ -1240,11 +1189,7 @@ function AttachmentList({
 							<RecordStateChip state={attachment.state} />
 							<FileStateChip state={attachment.fileState} />
 						</span>
-						<ChevronRight
-							aria-hidden
-							className="shrink-0 text-black/30 dark:text-white/30"
-							size={14}
-						/>
+						<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="shrink-0 text-black/30 dark:text-white/30" size={14} />
 					</button>
 				))}
 			</div>
@@ -1257,7 +1202,7 @@ function AttachmentList({
 					isDisabled={busy}
 					onPress={onCreateAttachment}
 					size="xs"
-					startContent={<FilePlus2 aria-hidden size={14} />}
+					startContent={<HugeiconsIcon icon={FilePlusIcon} aria-hidden size={14} />}
 					variant="transparent"
 				>
 					Add attachment
@@ -1311,7 +1256,7 @@ function AttachmentFilePanel({
 					onPublishFile(detail.key, detail.fileDraft!.uploadRevision)
 				}
 				size="xs"
-				startContent={<Send aria-hidden size={14} />}
+				startContent={<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />}
 				variant="transparent"
 			>
 				Publish PDF
@@ -1355,7 +1300,7 @@ function AttachmentFilePanel({
 							href={detail.filePublication.publicUrl}
 							rel="noreferrer"
 							size="xs"
-							startContent={<Download aria-hidden size={14} />}
+							startContent={<HugeiconsIcon icon={Download01Icon} aria-hidden size={14} />}
 							target="_blank"
 							variant="transparent"
 						>
@@ -1367,7 +1312,7 @@ function AttachmentFilePanel({
 								onPress={() => onUnpublishFile(detail.key)}
 								size="xs"
 								startContent={
-									<RotateCcw aria-hidden size={14} />
+									<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
 								}
 								variant="transparent"
 							>
@@ -1425,7 +1370,7 @@ function AttachmentFilePanel({
 								isDisabled={busy}
 								onPress={() => onDiscardFile(detail.key)}
 								size="xs"
-								startContent={<Trash2 aria-hidden size={14} />}
+								startContent={<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />}
 								variant="transparent"
 							>
 								{detail.fileDraft.readyAt
@@ -1452,7 +1397,7 @@ function AttachmentFilePanel({
 						href={detail.sourceFileUrl}
 						rel="noreferrer"
 						size="xs"
-						startContent={<Download aria-hidden size={14} />}
+						startContent={<HugeiconsIcon icon={Download01Icon} aria-hidden size={14} />}
 						target="_blank"
 						variant="transparent"
 					>
@@ -1699,7 +1644,7 @@ export function AdminInspector({
 						className="mb-2"
 						onPress={() => onBackToParent(detail.parentItem!)}
 						size="xs"
-						startContent={<ArrowLeft aria-hidden size={14} />}
+						startContent={<HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={14} />}
 						variant="transparent"
 					>
 						Parent record
@@ -1731,7 +1676,7 @@ export function AdminInspector({
 											target="_blank"
 											variant="transparent"
 										>
-											<ExternalLink aria-hidden size={14} />
+											<HugeiconsIcon icon={LinkSquare01Icon} aria-hidden size={14} />
 										</Button>
 									</Tooltip>
 									<Tooltip content="Copy public item link">
@@ -1751,7 +1696,7 @@ export function AdminInspector({
 											size="xs"
 											variant="transparent"
 										>
-											<Copy aria-hidden size={14} />
+											<HugeiconsIcon icon={Copy01Icon} aria-hidden size={14} />
 										</Button>
 									</Tooltip>
 								</>
@@ -1768,11 +1713,7 @@ export function AdminInspector({
 										]
 									}
 								>
-									<Lock
-										aria-label="Read only"
-										className="text-black/35 dark:text-white/35"
-										size={15}
-									/>
+									<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="text-black/35 dark:text-white/35" size={15} />
 								</Tooltip>
 							) : null}
 						</div>
@@ -1837,7 +1778,7 @@ export function AdminInspector({
 										size="xs"
 										variant="transparent"
 									>
-										<Link2 aria-hidden size={15} />
+										<HugeiconsIcon icon={Link02Icon} aria-hidden size={15} />
 									</Button>
 								</span>
 							</Tooltip>
@@ -1851,7 +1792,7 @@ export function AdminInspector({
 								}
 								onPress={onDuplicate}
 								size="xs"
-								startContent={<Copy aria-hidden size={14} />}
+								startContent={<HugeiconsIcon icon={Copy01Icon} aria-hidden size={14} />}
 								variant="solid"
 							>
 								Duplicate as native
@@ -1864,7 +1805,7 @@ export function AdminInspector({
 								onPress={onRestore}
 								size="xs"
 								startContent={
-									<RotateCcw aria-hidden size={14} />
+									<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
 								}
 								variant="solid"
 							>
@@ -1877,7 +1818,7 @@ export function AdminInspector({
 								isDisabled={busy}
 								onPress={onOpenDraft}
 								size="xs"
-								startContent={<Pencil aria-hidden size={14} />}
+								startContent={<HugeiconsIcon icon={PencilIcon} aria-hidden size={14} />}
 								variant="solid"
 							>
 								Edit
@@ -1896,7 +1837,7 @@ export function AdminInspector({
 									onPress={onPublish}
 									size="xs"
 									startContent={
-										<Send aria-hidden size={14} />
+										<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />
 									}
 									variant="solid"
 								>
@@ -1910,7 +1851,7 @@ export function AdminInspector({
 									onPress={onDiscardDraft}
 									size="xs"
 									startContent={
-										<Trash2 aria-hidden size={14} />
+										<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />
 									}
 									variant="transparent"
 								>
@@ -1935,7 +1876,7 @@ export function AdminInspector({
 										onPress={onUnpublish}
 										size="xs"
 										startContent={
-											<RotateCcw aria-hidden size={14} />
+											<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
 										}
 										variant="transparent"
 									>
@@ -1959,7 +1900,7 @@ export function AdminInspector({
 			>
 				{!detail.parentItem ? (
 					<Section
-						icon={BadgeCheck}
+						icon={CheckmarkBadge01Icon}
 						id="admin-doi-publishing"
 						title="Identifiers"
 					>
@@ -1980,7 +1921,7 @@ export function AdminInspector({
 						/>
 					</Section>
 				) : null}
-				<Section icon={FilePenLine} id="admin-metadata" title="Metadata">
+				<Section icon={FilePenLineIcon} id="admin-metadata" title="Metadata">
 					<MetadataEditor
 						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
 						definitions={definitions}
@@ -2027,7 +1968,7 @@ export function AdminInspector({
 								/>
 							) : undefined
 						}
-						icon={Users}
+						icon={UserGroupIcon}
 						title="Creators"
 					>
 						<CreatorsEditor
@@ -2054,7 +1995,7 @@ export function AdminInspector({
 							/>
 						) : undefined
 					}
-					icon={Tag}
+					icon={Tag01Icon}
 					title="Tags"
 				>
 					<TagsEditor
@@ -2091,7 +2032,7 @@ export function AdminInspector({
 							/>
 						) : undefined
 					}
-					icon={Link2}
+					icon={Link02Icon}
 					title="Links"
 				>
 					<AdminLinksEditor
@@ -2134,7 +2075,7 @@ export function AdminInspector({
 								/>
 							) : undefined
 						}
-						icon={Folder}
+						icon={Folder01Icon}
 						title="Collections"
 					>
 						<CollectionsEditor
@@ -2155,7 +2096,7 @@ export function AdminInspector({
 				) : null}
 				<Section
 					icon={
-						detail.itemType === "Attachment" ? FileText : Paperclip
+						detail.itemType === "Attachment" ? FileAttachmentIcon : AttachmentIcon
 					}
 					id="admin-attachments"
 					title={
@@ -2183,7 +2124,7 @@ export function AdminInspector({
 						/>
 					)}
 				</Section>
-				<Section icon={History} title="Revision">
+				<Section icon={WorkHistoryIcon} title="Revision">
 					<dl className="space-y-2 text-xs">
 						<div className="flex items-center justify-between gap-3">
 							<dt className="text-black/40 dark:text-white/40">

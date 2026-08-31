@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Add01Icon, ArrowRight01Icon, MapsIcon, QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { twMerge } from "tailwind-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { fetcher, firstNonNullOrEmpty, setter, transformItem } from "@/lib/utils";
@@ -19,9 +21,6 @@ import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
-import { BsMapFill, BsPlus, BsQuote } from "react-icons/bs";
-import { TbBlockquote } from "react-icons/tb";
-import { IoChevronForward } from "react-icons/io5";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
@@ -125,7 +124,7 @@ export function AddButton({
 					onPress={onOpen}
 					aria-label={t("addResourceAriaLabel")}
 				>
-					<BsPlus className="size-5" />
+					<HugeiconsIcon icon={Add01Icon} className="size-5" />
 				</Button>
 			</>
 		)
@@ -160,7 +159,7 @@ function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined })
 			{citedByCount > 0 && (
 				isOpenAlex ? (
 					<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium">
-						<BsQuote className="size-3.5" />
+						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
 						<span>{citedByCount}</span>
 						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
 					</span>
@@ -169,16 +168,16 @@ function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined })
 						href={resourceHref(itemData?.key ?? "", { base: "/citation" })}
 						className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
 					>
-						<BsQuote className="size-3.5" />
+						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
 						<span>{citedByCount}</span>
 						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
-						<IoChevronForward className="size-3 opacity-50 ml-0.5" />
+						<HugeiconsIcon icon={ArrowRight01Icon} className="size-3 opacity-50 ml-0.5" />
 					</Link>
 				)
 			)}
 			{citesCount > 0 && (
 				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">
-					<TbBlockquote className="size-3.5" />
+					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
 					<span>{citesCount}</span>
 					<span className="opacity-70 hidden @[480px]:inline">{t("references").toLowerCase()}</span>
 				</span>
@@ -215,7 +214,7 @@ function ResourceInteractions({
 								as={Link}
 								href={itemHref}
 								size="sm"
-								startContent={<IoChevronForward className="size-3.5" />}
+								startContent={<HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />}
 							>
 								{t("viewDetails")}
 							</Button>
@@ -287,7 +286,7 @@ function ResourceArticle({
 				<div className="flex w-full gap-1 items-center flex-wrap">
 					{gapMapHref && (
 						<span className="inline-flex items-center gap-1.5 text-accent font-medium">
-							<BsMapFill className="size-3.5 shrink-0" />
+							<HugeiconsIcon icon={MapsIcon} className="size-3.5 shrink-0" />
 							<span>{tNav("gapMap")}</span>
 						</span>
 					)}

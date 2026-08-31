@@ -1,11 +1,12 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { LockIcon, Mail01Icon } from "@hugeicons/core-free-icons";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
 import { ModalContent, ModalBody } from "@nextui-org/react";
-import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -14,6 +15,8 @@ import { Logo } from "./Logo";
 import { authenticate } from "@/lib/auth";
 import { useModalError } from "@/hooks/useModalError";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import BrandIcon from "@/components/icons/BrandIcon";
+import { siGoogle } from "simple-icons";
 
 interface LoginModalProps {
 	isOpen: boolean;
@@ -97,9 +100,9 @@ export default function LoginModal({
 							<form onSubmit={handleSubmit} className="flex flex-col gap-2">
 								<Input
 									startContent={
-										<FaEnvelope
+										<HugeiconsIcon icon={Mail01Icon}
 											aria-hidden="true"
-											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40"
+											className="size-5 ltr:mr-1 rtl:ml-1 text-black dark:text-white/40"
 										/>
 									}
 									name="email"
@@ -107,9 +110,9 @@ export default function LoginModal({
 								/>
 								<Input
 									startContent={
-										<FaLock
+										<HugeiconsIcon icon={LockIcon}
 											aria-hidden="true"
-											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40"
+											className="size-5 ltr:mr-1 rtl:ml-1 text-black dark:text-white/40"
 										/>
 									}
 									type="password"
@@ -154,7 +157,7 @@ export default function LoginModal({
 									color="secondary"
 									className="w-full dark:bg-white dark:text-black"
 									startContent={
-										<FaGoogle className="size-5" />
+										<BrandIcon icon={siGoogle} className="size-5" aria-hidden />
 									}
 								>
 									{t("continueWithGoogle")}

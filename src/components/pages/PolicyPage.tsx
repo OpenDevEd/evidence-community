@@ -1,12 +1,7 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowLeft01Icon, ArrowRight01Icon, Calendar01Icon, FileAttachmentIcon, Mail01Icon } from "@hugeicons/core-free-icons";
 import { Link } from "@/i18n/routing";
 import PolicyToc, { type PolicyTocSection } from "@/components/pages/PolicyToc";
-import {
-	ArrowLeft,
-	CalendarDays,
-	ChevronRight,
-	FileText,
-	Mail,
-} from "lucide-react";
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
@@ -266,7 +261,7 @@ export default function PolicyPage({
 						className="inline-flex items-center gap-2 rounded-full border border-black/15 bg-black px-2.5 py-2 text-white shadow-[0_16px_40px_-28px_rgba(0,0,0,0.6)] transition-all hover:-translate-y-0.5 hover:bg-black/90 dark:border-accent/25 dark:bg-accent/14 dark:text-white dark:hover:bg-accent/18"
 					>
 						<span className="inline-flex size-8 items-center justify-center rounded-full bg-white/12 text-white dark:bg-accent/20">
-							<ArrowLeft className="size-4" />
+							<HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
 						</span>
 						<span className="pr-2 font-medium tracking-tight">{homeLabel}</span>
 					</Link>
@@ -274,9 +269,9 @@ export default function PolicyPage({
 						href={otherPolicyLink.href}
 						className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/900 px-4 py-2 text-black/72 transition-all hover:-translate-y-0.5 hover:bg-background_light/800 dark:border-white/10 dark:bg-secondary/92 dark:text-white/75 dark:hover:bg-card/92"
 					>
-						<FileText className="size-4" />
+						<HugeiconsIcon icon={FileAttachmentIcon} className="size-4" />
 						{otherPolicyLink.label}
-						<ChevronRight className="size-4" />
+						<HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
 					</Link>
 				</nav>
 
@@ -285,7 +280,7 @@ export default function PolicyPage({
 					<div className="relative">
 						<div className="space-y-5">
 							<div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/800 px-4 py-2 text-xs font-medium text-black/65 dark:border-white/10 dark:bg-card/80 dark:text-white/65">
-								<CalendarDays className="size-4" />
+								<HugeiconsIcon icon={Calendar01Icon} className="size-4" />
 								{`Updated ${formatLastUpdated(lastUpdated)}`}
 							</div>
 
@@ -324,7 +319,7 @@ export default function PolicyPage({
 
 							<div className="shrink-0 rounded-[1.75rem] border border-black/10 bg-gradient-to-br from-background_light/800 to-accent/10 p-5 dark:border-white/10 dark:from-secondary dark:to-accent/12">
 								<div className="mb-3 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/45 dark:text-white/45">
-									<Mail className="size-4 text-accent" />
+									<HugeiconsIcon icon={Mail01Icon} className="size-4 text-accent" />
 									Questions
 								</div>
 								<p className="mb-4 text-sm leading-6 text-black/70 dark:text-white/70">
@@ -336,7 +331,7 @@ export default function PolicyPage({
 									className="inline-flex items-center gap-2 text-sm font-medium text-accent transition-transform hover:translate-x-0.5"
 								>
 									contact@opendeved.net
-									<ChevronRight className="size-4" />
+									<HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
 								</a>
 							</div>
 						</div>

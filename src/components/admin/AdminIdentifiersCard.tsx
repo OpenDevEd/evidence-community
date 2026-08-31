@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, ArchiveIcon, ArrowDown01Icon, Cancel01Icon, CheckmarkBadge01Icon, CheckmarkCircle01Icon, CircleIcon, Clock03Icon, Copy01Icon, FileAttachmentIcon, LinkSquare01Icon, Loading03Icon, Refresh01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { Button } from "@/components/nextui/Button";
 import type {
@@ -9,39 +11,23 @@ import type {
 	AdminIdentifiersView,
 	AdminPublicationProviderView,
 } from "@/lib/publication/admin-publication-view";
-import {
-	AlertCircle,
-	Archive,
-	BadgeCheck,
-	ChevronDown,
-	Circle,
-	CircleCheck,
-	Clock3,
-	Copy,
-	ExternalLink,
-	FileText,
-	LoaderCircle,
-	RefreshCw,
-	Wrench,
-	X,
-} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { validationTargetId } from "./admin-validation";
 
 const appearance = {
-	blocked: { icon: AlertCircle, className: "text-amber-600 dark:text-amber-300", spin: false },
-	external: { icon: CircleCheck, className: "text-black/50 dark:text-white/50", spin: false },
-	failed: { icon: AlertCircle, className: "text-danger", spin: false },
-	inactive: { icon: Circle, className: "text-black/35 dark:text-white/35", spin: false },
-	queued: { icon: Clock3, className: "text-accent", spin: false },
-	repair_pending: { icon: Wrench, className: "text-amber-600 dark:text-amber-300", spin: false },
-	retrying: { icon: RefreshCw, className: "text-accent", spin: true },
-	synced: { icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-300", spin: false },
-	verifying: { icon: LoaderCircle, className: "text-accent", spin: true },
-	waiting: { icon: Clock3, className: "text-amber-600 dark:text-amber-300", spin: false },
-	working: { icon: LoaderCircle, className: "text-accent", spin: true },
+	blocked: { icon: AlertCircleIcon, className: "text-amber-600 dark:text-amber-300", spin: false },
+	external: { icon: CheckmarkCircle01Icon, className: "text-black/50 dark:text-white/50", spin: false },
+	failed: { icon: AlertCircleIcon, className: "text-danger", spin: false },
+	inactive: { icon: CircleIcon, className: "text-black/35 dark:text-white/35", spin: false },
+	queued: { icon: Clock03Icon, className: "text-accent", spin: false },
+	repair_pending: { icon: Wrench01Icon, className: "text-amber-600 dark:text-amber-300", spin: false },
+	retrying: { icon: Refresh01Icon, className: "text-accent", spin: true },
+	synced: { icon: CheckmarkCircle01Icon, className: "text-emerald-600 dark:text-emerald-300", spin: false },
+	verifying: { icon: Loading03Icon, className: "text-accent", spin: true },
+	waiting: { icon: Clock03Icon, className: "text-amber-600 dark:text-amber-300", spin: false },
+	working: { icon: Loading03Icon, className: "text-accent", spin: true },
 } as const;
 
 const originLabel = {
@@ -108,7 +94,7 @@ function ActivityDetails({
 							</a>
 							<Tooltip content={`Copy ${link.label}`}>
 								<Button aria-label={`Copy ${link.label}`} isIconOnly onPress={() => copy(link.label, link.kind === "doi" ? link.value : link.url)} size="xs" variant="transparent">
-									<Copy aria-hidden size={13} />
+									<HugeiconsIcon icon={Copy01Icon} aria-hidden size={13} />
 								</Button>
 							</Tooltip>
 						</div>
@@ -134,12 +120,12 @@ function ActivityControls({
 	return (
 		<div className="mt-2 flex flex-wrap items-center gap-1.5">
 			{provider.capabilities.canRetry ? (
-				<Button isDisabled={busy} onPress={onRetry} size="xs" startContent={<RefreshCw aria-hidden size={13} />} variant="transparent">
+				<Button isDisabled={busy} onPress={onRetry} size="xs" startContent={<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={13} />} variant="transparent">
 					Retry now
 				</Button>
 			) : null}
 			{provider.waitingOn === "file" ? (
-				<Button onPress={onOpenAttachments} size="xs" startContent={<FileText aria-hidden size={13} />} variant="transparent">
+				<Button onPress={onOpenAttachments} size="xs" startContent={<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden size={13} />} variant="transparent">
 					Open attachments
 				</Button>
 			) : null}
@@ -181,7 +167,7 @@ function ActivityRow({
 			role={failed ? "alert" : undefined}
 		>
 			<span className={`mt-0.5 grid size-4 shrink-0 place-items-center ${look.className}`}>
-				<Icon aria-hidden className={look.spin ? "animate-spin" : undefined} size={16} strokeWidth={2} />
+				<HugeiconsIcon icon={Icon} aria-hidden className={look.spin ? "animate-spin" : undefined} size={16} strokeWidth={2} />
 			</span>
 			<div className="min-w-0 flex-1">
 				<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -223,7 +209,7 @@ function Readiness({
 					<p className="text-[11px] text-black/40 dark:text-white/40">Checks before sending</p>
 				</div>
 				<Button aria-label="Close checklist" isIconOnly onPress={onClose} size="xs" variant="transparent">
-					<X aria-hidden size={14} />
+					<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={14} />
 				</Button>
 			</div>
 			<ul aria-label={`Before ${verb}`} className="mt-2 space-y-1.5 text-xs">
@@ -232,9 +218,9 @@ function Readiness({
 					return (
 						<li key={item.label} className="flex items-start gap-2 text-black/70 dark:text-white/70">
 							{item.ok ? (
-								<CircleCheck aria-label="Done" className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300" size={14} />
+								<HugeiconsIcon icon={CheckmarkCircle01Icon} aria-label="Done" className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300" size={14} />
 							) : (
-								<Circle aria-label="To do" className="mt-0.5 shrink-0 text-black/35 dark:text-white/35" size={14} />
+								<HugeiconsIcon icon={CircleIcon} aria-label="To do" className="mt-0.5 shrink-0 text-black/35 dark:text-white/35" size={14} />
 							)}
 							<span className="min-w-0 flex-1">
 								{item.label}
@@ -297,10 +283,10 @@ function IdentifiersHeader({
 }) {
 	const glance = identifiersGlance(identifiers);
 	const GlanceIcon = identifiers.attention
-		? AlertCircle
+		? AlertCircleIcon
 		: identifiers.doi
-			? BadgeCheck
-			: Circle;
+			? CheckmarkBadge01Icon
+			: CircleIcon;
 	const iconColor = identifiers.attention
 		? "text-danger"
 		: identifiers.doi
@@ -316,7 +302,7 @@ function IdentifiersHeader({
 			type="button"
 		>
 			<span className={`grid size-4 shrink-0 place-items-center ${iconColor}`}>
-				<GlanceIcon aria-hidden size={16} strokeWidth={2} />
+				<HugeiconsIcon icon={GlanceIcon} aria-hidden size={16} strokeWidth={2} />
 			</span>
 			<span className="min-w-0 flex-1">
 				<span
@@ -330,11 +316,7 @@ function IdentifiersHeader({
 					{attentionLabel(identifiers)}
 				</span>
 			</span>
-			<ChevronDown
-				aria-hidden
-				className={`shrink-0 text-black/40 transition-transform dark:text-white/40 ${open ? "rotate-180" : ""}`}
-				size={16}
-			/>
+			<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={`shrink-0 text-black/40 transition-transform dark:text-white/40 ${open ? "rotate-180" : ""}`} size={16} />
 		</button>
 	);
 }
@@ -363,7 +345,7 @@ function IdentifierDoi({ doi }: { doi: NonNullable<AdminIdentifiersView["doi"]> 
 					size="xs"
 					variant="transparent"
 				>
-					<Copy aria-hidden size={13} />
+					<HugeiconsIcon icon={Copy01Icon} aria-hidden size={13} />
 				</Button>
 			</Tooltip>
 			<Tooltip content="Open DOI">
@@ -377,7 +359,7 @@ function IdentifierDoi({ doi }: { doi: NonNullable<AdminIdentifiersView["doi"]> 
 					target="_blank"
 					variant="transparent"
 				>
-					<ExternalLink aria-hidden size={13} />
+					<HugeiconsIcon icon={LinkSquare01Icon} aria-hidden size={13} />
 				</Button>
 			</Tooltip>
 		</div>
@@ -427,9 +409,9 @@ function IdentifierActions({
 					size="xs"
 					startContent={
 						action.id === "register-crossref" ? (
-							<BadgeCheck aria-hidden size={13} />
+							<HugeiconsIcon icon={CheckmarkBadge01Icon} aria-hidden size={13} />
 						) : (
-							<Archive aria-hidden size={13} />
+							<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={13} />
 						)
 					}
 					variant="flat"

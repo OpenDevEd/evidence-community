@@ -1,13 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, CheckmarkBadge01Icon, CircleIcon, FileAttachmentIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
-import {
-	AlertCircle,
-	BadgeCheck,
-	Circle,
-	FileText,
-	LoaderCircle,
-} from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
@@ -27,21 +22,21 @@ function headerPresentation(
 	changing: boolean,
 ) {
 	if (publication.identifiers.attention) {
-		return { Icon: AlertCircle, label: "DOI needs attention", color: "text-danger", spin: false };
+		return { Icon: AlertCircleIcon, label: "DOI needs attention", color: "text-danger", spin: false };
 	}
 	if (changing) {
-		return { Icon: LoaderCircle, label: "DOI publishing", color: "text-accent", spin: true };
+		return { Icon: Loading03Icon, label: "DOI publishing", color: "text-accent", spin: true };
 	}
 	if (publication.identifiers.doi) {
 		return {
-			Icon: BadgeCheck,
+			Icon: CheckmarkBadge01Icon,
 			label: "DOI",
 			color: "text-emerald-600 dark:text-emerald-300",
 			spin: false,
 		};
 	}
 	return {
-		Icon: Circle,
+		Icon: CircleIcon,
 		label: "No DOI",
 		color: "text-black/40 dark:text-white/40",
 		spin: false,
@@ -69,7 +64,7 @@ export function AdminPublicationHeaderStatus({
 			type="button"
 		>
 			<span className="grid size-3 shrink-0 place-items-center overflow-hidden">
-				<Icon aria-hidden className={spin ? "animate-spin" : undefined} size={12} />
+				<HugeiconsIcon icon={Icon} aria-hidden className={spin ? "animate-spin" : undefined} size={12} />
 			</span>
 			{label}
 		</button>
@@ -82,7 +77,7 @@ function UnpublishedPublicationNotice() {
 			className="flex items-center gap-3 rounded-xl bg-black/[0.025] p-3.5 text-xs text-black/45 dark:bg-white/[0.035] dark:text-white/45"
 			role="status"
 		>
-			<FileText aria-hidden className="shrink-0" size={16} />
+			<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0" size={16} />
 			<span>Publish this record before activating a DOI.</span>
 		</div>
 	);
@@ -96,7 +91,7 @@ function PublicationLoading({ state }: { state: PublicationHook }) {
 		>
 			{state.error ? (
 				<div className="flex items-center gap-2 px-3 text-danger">
-					<AlertCircle aria-hidden size={14} />
+					<HugeiconsIcon icon={AlertCircleIcon} aria-hidden size={14} />
 					<span>{state.error}</span>
 					<Button onPress={() => void state.refresh()} size="xs" variant="transparent">
 						Try again
@@ -105,7 +100,7 @@ function PublicationLoading({ state }: { state: PublicationHook }) {
 			) : (
 				<div className="flex items-center gap-2">
 					<span className="grid size-4 place-items-center overflow-hidden">
-						<LoaderCircle aria-hidden className="animate-spin" size={16} />
+						<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin" size={16} />
 					</span>
 					Loading DOI publishing
 				</div>

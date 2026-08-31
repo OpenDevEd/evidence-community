@@ -1,8 +1,9 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Bookmark02Icon, ChartIncreaseIcon, Layers01Icon, Search01Icon, TagsIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsTags, BsLayers, BsGraphUp, BsBookmark, BsSearch } from "react-icons/bs";
 import {
 	BarChart,
 	Bar,
@@ -201,7 +202,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 	const topicsPages = Math.ceil(filteredTopics.length / rowsPerPage);
 
 	return (
-		<SectionCard title={t("researchTopics")} icon={BsTags}>
+		<SectionCard title={t("researchTopics")} icon={TagsIcon}>
 			<div className="space-y-8">
 				{/* Topic Overview Stats */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -260,7 +261,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 					{/* Topic Distribution by Level */}
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsLayers className="text-accent" />
+							<HugeiconsIcon icon={Layers01Icon} className="text-accent" />
 							{t("topicDistributionByLevel")}
 						</h3>
 						<Card color="card" className="p-6">
@@ -309,7 +310,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 					{/* Top Topics by H-Index */}
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsGraphUp className="text-accent" />
+							<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
 							{t("topTopicsByImpact")}
 						</h3>
 						<Card color="card" className="p-6">
@@ -374,7 +375,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 				{/* Topic Hierarchy Visualization */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsBookmark className="text-accent" />
+						<HugeiconsIcon icon={Bookmark02Icon} className="text-accent" />
 						{t("topLevelResearchAreas")}
 					</h3>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -429,7 +430,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 				{/* Detailed Topics Table */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsTags className="text-accent" />
+						<HugeiconsIcon icon={TagsIcon} className="text-accent" />
 						{t("allResearchTopics")}
 					</h3>
 					<div className="space-y-4">
@@ -442,7 +443,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 									setTopicsPage(1);
 								}}
 								placeholder={t("searchByTopicNameOrPath")}
-								startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
+								startContent={<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />}
 							/>
 							{topicsByYear && availableYears.length > 0 && (
 								<Select

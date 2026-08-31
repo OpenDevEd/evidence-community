@@ -1,8 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Login01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { IoIosLogIn } from "react-icons/io";
 import { DropdownItem } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
@@ -27,7 +28,7 @@ export default function LoginButton({
 			<DropdownItem
 				key="login"
 				onPress={onAction}
-				startContent={<IoIosLogIn className="size-5" />}
+				startContent={<HugeiconsIcon icon={Login01Icon} className="size-5" />}
 			>
 				{t("login")}
 			</DropdownItem>
@@ -39,7 +40,7 @@ export default function LoginButton({
 
 	return (
 		<Button
-			startContent={<IoIosLogIn className="size-5 shrink-0" />}
+			startContent={<HugeiconsIcon icon={Login01Icon} className="size-5 shrink-0" />}
 			onPress={onAction}
 			isIconOnly={isSmall}
 			className={twMerge(
