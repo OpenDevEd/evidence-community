@@ -6,10 +6,19 @@
 #   Direct hostname:
 #     middlewares=gzip,ode-shield-rate-direct@file,ode-shield-inflight@file,ode-library-shield@file
 http:
+  services:
+    ode-shield-response:
+      loadBalancer:
+        servers:
+          - url: "http://library-shield:8080"
+
   middlewares:
     ode-library-shield:
       forwardAuth:
         address: "http://library-shield:8080/decide"
+    ode-shield-forbidden-response:
+      replacePath:
+        path: "/forbidden"
     # Cloudflare-proxied hostnames must only receive traffic from Cloudflare,
     # otherwise CF-Connecting-IP is forgeable and the rate limit is bypassable.
     ode-shield-cf-origin:
@@ -52,3 +61,25 @@ http:
     ode-shield-inflight:
       inFlightReq:
         amount: 40
+
+  routers:
+    # Cloudflare hides the original source IP from the host firewall. Match
+    # confirmed hostile CF-Connecting-IP values before any application router
+    # and send them to the shield's fixed 403 response.
+    ode-block-confirmed-cf-source-https:
+      entryPoints:
+        - https
+      rule: &confirmedCfSourceRule 'Header(`CF-Connecting-IP`, `158.23.18.78`)'
+      priority: 990000
+      middlewares:
+        - ode-shield-forbidden-response
+      service: ode-shield-response
+      tls: {}
+    ode-block-confirmed-cf-source-http:
+      entryPoints:
+        - http
+      rule: *confirmedCfSourceRule
+      priority: 990000
+      middlewares:
+        - ode-shield-forbidden-response
+      service: ode-shield-response

@@ -17,6 +17,8 @@ One Traefik `forwardAuth` middleware (`ode-library-shield@file`) asks the
 
 - source IPs in [forwardauth/banned-ips.conf](forwardauth/banned-ips.conf) →
   `403`
+- explicitly denied Cloudflare source IPs are intercepted by a high-priority
+  Traefik router and sent to the shield's fixed `403` response
 - training crawlers and known bulk scrapers → `403`
 - recognized search, assistant, and user-triggered crawlers → pass, sharing a
   3 req/s budget (burst 15) per hostname
@@ -86,6 +88,13 @@ same ordinary Chrome user agent throughout.
 Edit [forwardauth/banned-ips.conf](forwardauth/banned-ips.conf) only after
 confirming distributed, high-volume crawling across several addresses in the
 same network. Do not derive a permanent network ban from one request or one IP.
+
+The Traefik configuration also denies `158.23.18.78/32` before application
+routing. That source made 152 requests to `coolify.opendeved.net` in roughly 34
+seconds on 2026-08-31, probing 136 mostly PHP, web-shell, and WordPress paths.
+Because that hostname is Cloudflare-proxied, the rule matches Cloudflare's
+trusted `CF-Connecting-IP` header instead of the Cloudflare edge address seen by
+the host firewall.
 
 ## Components
 

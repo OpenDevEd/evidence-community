@@ -43,6 +43,13 @@ for _ in $(seq 1 50); do
 done
 curl -fsS "$base/healthz" >/dev/null
 
+last_code=$(curl -sS -o "$body_file" -w '%{http_code}' "$base/forbidden")
+if [ "$last_code" != 403 ]; then
+	printf 'FAIL %-42s got %s, expected 403\n' 'confirmed source response is forbidden' "$last_code"
+	exit 1
+fi
+printf 'ok   %-42s %s\n' 'confirmed source response is forbidden' "$last_code"
+
 browser_ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
 last_code=""
 
