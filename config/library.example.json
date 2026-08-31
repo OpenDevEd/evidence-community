@@ -18,6 +18,8 @@
 			"logoDark": "https://assets.example.org/library/logo-dark.svg",
 			"logoLight": "https://assets.example.org/library/logo-light.webp",
 			"favicon": "https://assets.example.org/library/favicon.png",
+			"faviconLight": "https://assets.example.org/library/favicon-light.svg",
+			"faviconDark": "https://assets.example.org/library/favicon-dark.svg",
 			"icons": [
 				"https://assets.example.org/library/icon.svg",
 				"https://assets.example.org/library/icon.ico"

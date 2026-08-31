@@ -19,7 +19,25 @@ export function buildLibraryMetadata(
 	identity: LibraryIdentityConfig,
 ): Metadata {
 	const { assets, baseUrl, description, name, shortName } = identity;
-	const icons = Array.from(new Set([assets.favicon, ...assets.icons]));
+	const icons = [
+		...Array.from(new Set([assets.favicon, ...assets.icons])),
+		...(assets.faviconLight
+			? [
+					{
+						url: assets.faviconLight,
+						media: "(prefers-color-scheme: light)",
+					},
+				]
+			: []),
+		...(assets.faviconDark
+			? [
+					{
+						url: assets.faviconDark,
+						media: "(prefers-color-scheme: dark)",
+					},
+				]
+			: []),
+	];
 	const pageDescription = description ?? name;
 	const shareImages = assets.shareImage ? [assets.shareImage] : undefined;
 

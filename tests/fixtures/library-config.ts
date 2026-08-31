@@ -86,6 +86,10 @@ export const maximalLibraryConfig = {
 			logoDark: "https://assets.example.org/maximal/logo-dark.svg",
 			logoLight: "https://assets.example.org/maximal/logo-light.webp",
 			favicon: "https://assets.example.org/maximal/favicon.png",
+			faviconLight:
+				"https://assets.example.org/maximal/favicon-light.svg",
+			faviconDark:
+				"https://assets.example.org/maximal/favicon-dark.svg",
 			icons: [
 				"https://assets.example.org/maximal/icon.svg",
 				"https://assets.example.org/maximal/icon.ico",

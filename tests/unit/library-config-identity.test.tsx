@@ -78,6 +78,14 @@ describe("runtime library identity", () => {
 					"https://assets.example.org/maximal/favicon.png",
 					"https://assets.example.org/maximal/icon.svg",
 					"https://assets.example.org/maximal/icon.ico",
+					{
+						url: "https://assets.example.org/maximal/favicon-light.svg",
+						media: "(prefers-color-scheme: light)",
+					},
+					{
+						url: "https://assets.example.org/maximal/favicon-dark.svg",
+						media: "(prefers-color-scheme: dark)",
+					},
 				],
 			},
 		},
@@ -189,6 +197,14 @@ describe("runtime library identity", () => {
 				"https://assets.example.org/maximal/favicon.png",
 				"https://assets.example.org/maximal/icon.svg",
 				"https://assets.example.org/maximal/icon.ico",
+				{
+					url: "https://assets.example.org/maximal/favicon-light.svg",
+					media: "(prefers-color-scheme: light)",
+				},
+				{
+					url: "https://assets.example.org/maximal/favicon-dark.svg",
+					media: "(prefers-color-scheme: dark)",
+				},
 			],
 			shortcut:
 				"https://assets.example.org/maximal/favicon.png",
