@@ -48,6 +48,18 @@ describe("library configuration artifacts", () => {
 				identity: { ...example.identity, name: "" },
 			}),
 		).toBe(false);
+		expect(
+			validate({
+				...example,
+				navigation: {
+					...example.navigation,
+					links: example.navigation.links.map(
+						(link: Record<string, unknown>, index: number) =>
+							index === 0 ? { ...link, icon: "EvidenceLibrary" } : link,
+					),
+				},
+			}),
+		).toBe(false);
 	});
 
 	it("exports closed choices, extensible choices, and write-only paths", () => {
@@ -65,13 +77,11 @@ describe("library configuration artifacts", () => {
 			allowCustom: true,
 			values: ["Montserrat", "Poppins", "Ubuntu"],
 		});
-		expect(enums.get("navigation.links[].icon")).toMatchObject({
-			allowCustom: true,
-			values: expect.arrayContaining([
-				"EvidenceLibrary",
-				"FaQuestionCircle",
-			]),
-		});
+		expect(catalog.options.navbarIconIds).toHaveLength(6_025);
+		expect(catalog.options.navbarIconIds).toEqual(
+			expect.arrayContaining(["AbacusIcon", "LibraryIcon", "ZoomIcon"]),
+		);
+		expect(catalog.options.navbarIconIds).not.toContain("EvidenceLibrary");
 		expect(enums.get("processing.structureRules[].action")).toEqual({
 			allowCustom: false,
 			path: "processing.structureRules[].action",

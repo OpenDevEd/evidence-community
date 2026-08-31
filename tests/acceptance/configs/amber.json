@@ -62,7 +62,7 @@
 				"id": "evidence",
 				"label": "Amber Evidence",
 				"href": "/lib",
-				"icon": "EvidenceLibrary",
+				"icon": "LibraryIcon",
 				"children": [
 					{
 						"id": "privacy",

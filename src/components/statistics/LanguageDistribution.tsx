@@ -1,5 +1,5 @@
+import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { BsGlobe } from "react-icons/bs";
 import { SectionCard } from "./SectionCard";
 
 type LanguageDistributionProps = {
@@ -10,7 +10,7 @@ export function LanguageDistribution({ languageDistribution }: LanguageDistribut
 	const t = useTranslations("ui");
 
 	return (
-		<SectionCard title={t("languageDistribution")} icon={BsGlobe}>
+		<SectionCard title={t("languageDistribution")} icon={Globe02Icon}>
 			<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
 				{languageDistribution.map((lang, index) => (
 					<div

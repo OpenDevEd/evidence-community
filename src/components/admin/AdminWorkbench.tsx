@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, Folder01Icon, FolderInputIcon, LibraryIcon, ListIcon, Logout01Icon, Menu01Icon, PanelRightIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
@@ -9,25 +11,6 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@nextui-org/react";
-import {
-	ArrowLeft,
-	Archive,
-	Check,
-	ChevronRight,
-	Folder,
-	FolderInput,
-	Library,
-	List,
-	LogOut,
-	Menu,
-	PanelRight,
-	Plus,
-	RefreshCw,
-	Search,
-	Send,
-	Trash2,
-	X,
-} from "lucide-react";
 import {
 	type FormEvent,
 	useCallback,
@@ -267,11 +250,7 @@ function CollectionLocationButton({
 				ref={buttonRef}
 				type="button"
 			>
-				<Folder
-					aria-hidden
-					className="shrink-0 text-accent"
-					size={15}
-				/>
+				<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-accent" size={15} />
 				<span className="min-w-0 flex-1">
 					<span className="block truncate text-sm font-medium text-black/75 dark:text-white/80">
 						{location?.name ?? "Top level"}
@@ -280,11 +259,7 @@ function CollectionLocationButton({
 						{location?.path ?? topLevelSource}
 					</span>
 				</span>
-				<ChevronRight
-					aria-hidden
-					className="shrink-0 text-black/30 dark:text-white/30"
-					size={14}
-				/>
+				<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="shrink-0 text-black/30 dark:text-white/30" size={14} />
 			</button>
 		</CollectionField>
 	);
@@ -2018,11 +1993,7 @@ export default function AdminWorkbench({
 						isClearable
 						placeholder="Search title, creator, date or tag"
 						startContent={
-							<Search
-								aria-hidden
-								className="text-black/35 dark:text-white/35"
-								size={15}
-							/>
+							<HugeiconsIcon icon={Search01Icon} aria-hidden className="text-black/35 dark:text-white/35" size={15} />
 						}
 						value={filters.query}
 						onClear={() =>
@@ -2056,17 +2027,17 @@ export default function AdminWorkbench({
 					<div className="flex rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]">
 						{[
 							{
-								icon: Menu,
+								icon: Menu01Icon,
 								key: "navigation" as const,
 								label: "Filters",
 							},
 							{
-								icon: List,
+								icon: ListIcon,
 								key: "list" as const,
 								label: "Records",
 							},
 							{
-								icon: PanelRight,
+								icon: PanelRightIcon,
 								key: "inspector" as const,
 								label: "Editor",
 							},
@@ -2087,7 +2058,7 @@ export default function AdminWorkbench({
 												: "transparent"
 										}
 									>
-										<Icon aria-hidden size={15} />
+										<HugeiconsIcon icon={Icon} aria-hidden size={15} />
 									</Button>
 								</Tooltip>
 							);
@@ -2114,7 +2085,7 @@ export default function AdminWorkbench({
 						size="xs"
 						variant="transparent"
 					>
-						<RefreshCw aria-hidden size={15} />
+						<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={15} />
 					</Button>
 				</Tooltip>
 				<div className="col-start-3 row-start-1 flex shrink-0 items-center gap-1">
@@ -2133,7 +2104,7 @@ export default function AdminWorkbench({
 							type="button"
 							variant="transparent"
 						>
-							<LogOut aria-hidden size={15} />
+							<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
 						</Button>
 					</Tooltip>
 					<Popover
@@ -2153,7 +2124,7 @@ export default function AdminWorkbench({
 								size="xs"
 								variant="solid"
 							>
-								<Plus aria-hidden size={15} />
+								<HugeiconsIcon icon={Add01Icon} aria-hidden size={15} />
 								<span className="hidden lg:inline">
 									New item
 								</span>
@@ -2170,7 +2141,7 @@ export default function AdminWorkbench({
 										autoFocus={finePointer}
 										placeholder="Find an item type"
 										startContent={
-											<Search aria-hidden size={15} />
+											<HugeiconsIcon icon={Search01Icon} aria-hidden size={15} />
 										}
 										value={newItemSearch}
 										onValueChange={setNewItemSearch}
@@ -2186,11 +2157,7 @@ export default function AdminWorkbench({
 											}
 											type="button"
 										>
-											<Library
-												aria-hidden
-												className="shrink-0 opacity-45"
-												size={16}
-											/>
+											<HugeiconsIcon icon={LibraryIcon} aria-hidden className="shrink-0 opacity-45" size={16} />
 											{humanizeAdminField(
 												definition.itemType,
 											)}
@@ -2228,7 +2195,7 @@ export default function AdminWorkbench({
 									size="xs"
 									variant="transparent"
 								>
-									<RefreshCw aria-hidden size={14} />
+									<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={14} />
 								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
@@ -2305,7 +2272,7 @@ export default function AdminWorkbench({
 												size="xs"
 												variant="transparent"
 											>
-												<Send aria-hidden size={14} />
+												<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />
 											</Button>
 										</Tooltip>
 										<Tooltip
@@ -2331,7 +2298,7 @@ export default function AdminWorkbench({
 												size="xs"
 												variant="transparent"
 											>
-												<FolderInput aria-hidden size={14} />
+												<HugeiconsIcon icon={FolderInputIcon} aria-hidden size={14} />
 											</Button>
 										</Tooltip>
 										<Tooltip content="Remove selected">
@@ -2344,7 +2311,7 @@ export default function AdminWorkbench({
 												size="xs"
 												variant="transparent"
 											>
-												<Trash2 aria-hidden size={14} />
+												<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />
 											</Button>
 										</Tooltip>
 										<Tooltip content="Clear selection">
@@ -2358,7 +2325,7 @@ export default function AdminWorkbench({
 												size="xs"
 												variant="transparent"
 											>
-												<X aria-hidden size={14} />
+												<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={14} />
 											</Button>
 										</Tooltip>
 									{bulkKeys.size ? (
@@ -2619,7 +2586,7 @@ export default function AdminWorkbench({
 											}
 											type="button"
 										>
-											<ArrowLeft aria-hidden size={14} />
+											<HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={14} />
 										</button>
 										Choose location
 									</span>
@@ -2885,7 +2852,8 @@ export default function AdminWorkbench({
 										isLoading={busy}
 										size="xs"
 										startContent={
-											<FolderInput
+											<HugeiconsIcon
+												icon={FolderInputIcon}
 												aria-hidden
 												size={14}
 											/>
@@ -2925,7 +2893,7 @@ export default function AdminWorkbench({
 											onClick={closeMoveParentPicker}
 											type="button"
 										>
-											<ArrowLeft aria-hidden size={14} />
+											<HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={14} />
 										</button>
 										Choose destination
 									</span>
@@ -3051,7 +3019,8 @@ export default function AdminWorkbench({
 										onPress={submitCollectionMove}
 										size="xs"
 										startContent={
-											<FolderInput
+											<HugeiconsIcon
+												icon={FolderInputIcon}
 												aria-hidden
 												size={14}
 											/>
@@ -3116,9 +3085,9 @@ export default function AdminWorkbench({
 									size="xs"
 									startContent={
 										confirmDialog?.danger ? (
-											<Archive aria-hidden size={14} />
+											<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />
 										) : (
-											<Check aria-hidden size={14} />
+											<HugeiconsIcon icon={Tick01Icon} aria-hidden size={14} />
 										)
 									}
 									variant="solid"

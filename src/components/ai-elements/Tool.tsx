@@ -1,13 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, ArrowDown01Icon, CheckmarkCircle01Icon, Loading03Icon } from "@hugeicons/core-free-icons";
 import * as CollapsiblePrimitive from "@radix-ui/react-collapsible";
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
-import {
-	PiCaretDownBold,
-	PiCheckCircleFill,
-	PiCircleNotchBold,
-	PiWarningCircleFill,
-} from "react-icons/pi";
 import type { ComponentProps, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
@@ -17,47 +13,47 @@ const statePresentation: Record<
 	ToolState,
 	{
 		label: string;
-		icon: typeof PiCircleNotchBold;
+		icon: typeof Loading03Icon;
 		className: string;
 		busy?: boolean;
 	}
 > = {
 	"input-streaming": {
 		label: "Preparing",
-		icon: PiCircleNotchBold,
+		icon: Loading03Icon,
 		className: "text-black/35 dark:text-white/35",
 		busy: true,
 	},
 	"input-available": {
 		label: "Running",
-		icon: PiCircleNotchBold,
+		icon: Loading03Icon,
 		className: "text-black/35 dark:text-white/35",
 		busy: true,
 	},
 	"approval-requested": {
 		label: "Needs approval",
-		icon: PiWarningCircleFill,
+		icon: AlertCircleIcon,
 		className: "text-amber-600 dark:text-amber-400",
 	},
 	"approval-responded": {
 		label: "Approved",
-		icon: PiCircleNotchBold,
+		icon: Loading03Icon,
 		className: "text-black/35 dark:text-white/35",
 		busy: true,
 	},
 	"output-available": {
 		label: "Completed",
-		icon: PiCheckCircleFill,
+		icon: CheckmarkCircle01Icon,
 		className: "text-black/30 dark:text-white/30",
 	},
 	"output-error": {
 		label: "Failed",
-		icon: PiWarningCircleFill,
+		icon: AlertCircleIcon,
 		className: "text-danger",
 	},
 	"output-denied": {
 		label: "Denied",
-		icon: PiWarningCircleFill,
+		icon: AlertCircleIcon,
 		className: "text-danger",
 	},
 };
@@ -101,7 +97,8 @@ export function ToolHeader({
 			</span>
 			<span className="min-w-0 truncate font-medium">{title}</span>
 			<span className="sr-only">{presentation.label}</span>
-			<StatusIcon
+			<HugeiconsIcon
+				icon={StatusIcon}
 				aria-hidden="true"
 				className={twMerge(
 					"ml-0.5 size-3 shrink-0",
@@ -109,7 +106,7 @@ export function ToolHeader({
 					presentation.busy && "animate-spin",
 				)}
 			/>
-			<PiCaretDownBold className="size-2.5 shrink-0 opacity-50 transition-transform group-data-[state=open]/tool:rotate-180" />
+			<HugeiconsIcon icon={ArrowDown01Icon} className="size-2.5 shrink-0 opacity-50 transition-transform group-data-[state=open]/tool:rotate-180" />
 		</CollapsiblePrimitive.Trigger>
 	);
 }

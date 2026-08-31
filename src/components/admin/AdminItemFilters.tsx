@@ -1,7 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Add01Icon, ArrowDown01Icon, Cancel01Icon, Delete02Icon, FilterIcon } from "@hugeicons/core-free-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import { ChevronDown, ListFilter, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ZodError } from "zod";
 
@@ -127,11 +128,7 @@ function CollectionFilterValueEditor({
 								.join(", ")
 						: "Choose collections"}
 				</span>
-				<ChevronDown
-					aria-hidden
-					className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-					size={13}
-				/>
+				<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`} size={13} />
 			</button>
 			{open ? (
 				<div className="mt-1.5 rounded-xl bg-black/[0.02] p-1.5 dark:bg-white/[0.025]">
@@ -223,11 +220,7 @@ function FilterValueEditor({
 							? selectedLabels.join(", ")
 							: "Choose values"}
 					</span>
-					<ChevronDown
-						aria-hidden
-						className={`shrink-0 transition-transform ${optionsOpen ? "rotate-180" : ""}`}
-						size={13}
-					/>
+					<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={`shrink-0 transition-transform ${optionsOpen ? "rotate-180" : ""}`} size={13} />
 				</button>
 				{optionsOpen ? (
 					<div className="mt-1.5 max-h-40 overflow-y-auto rounded-lg border border-black/[0.08] bg-black/[0.02] p-2 dark:border-white/[0.08] dark:bg-white/[0.025]">
@@ -429,13 +422,7 @@ export function AdminItemFilters({
 					}
 					type="button"
 				>
-					<ListFilter
-						aria-hidden
-						data-admin-filter-trigger-icon
-						data-admin-filter-trigger-glyph="list-filter"
-						size={17}
-						strokeWidth={2.1}
-					/>
+					<HugeiconsIcon icon={FilterIcon} aria-hidden data-admin-filter-trigger-icon data-admin-filter-trigger-glyph="list-filter" size={17} strokeWidth={2.1} />
 					{filters.length > 0 ? (
 						<span
 							className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white ring-2 ring-background_light dark:ring-background"
@@ -464,7 +451,7 @@ export function AdminItemFilters({
 						<Button
 							onPress={() => setDrafts([])}
 							size="xs"
-							startContent={<X aria-hidden size={13} />}
+							startContent={<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={13} />}
 							variant="transparent"
 						>
 							Clear
@@ -602,7 +589,7 @@ export function AdminItemFilters({
 										size="xs"
 										variant="transparent"
 									>
-										<Trash2 aria-hidden size={14} />
+										<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />
 									</Button>
 									{hasValueEditor ? (
 										<div className="col-span-full min-w-0">
@@ -643,7 +630,7 @@ export function AdminItemFilters({
 						placement="left"
 						selectedKeys={new Set()}
 						size="sm"
-						startContent={<Plus aria-hidden size={13} />}
+						startContent={<HugeiconsIcon icon={Add01Icon} aria-hidden size={13} />}
 						onSelectionChange={(keys) => {
 							const column = selectedKey(
 								keys as Set<React.Key>,

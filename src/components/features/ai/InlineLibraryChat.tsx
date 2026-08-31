@@ -1,12 +1,10 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon, Cancel01Icon, Loading03Icon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
 import { useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { ImSpinner8 } from "react-icons/im";
-import { IoChevronDown } from "react-icons/io5";
-import { LuX } from "react-icons/lu";
-import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 import type { ReactNode } from "react";
 
@@ -76,7 +74,7 @@ function InlineChatHeader({
 						size="sm"
 						variant="transparent"
 						aria-label={tUI("resetChat")}
-						startContent={<RiResetLeftFill className="size-3.5" />}
+						startContent={<HugeiconsIcon icon={RotateLeft01Icon} className="size-3.5" />}
 						// Icon only where the header is tight; the words come
 						// back on a wider screen.
 						className="h-7 w-7 min-w-0 gap-1 rounded-lg px-0 text-xs text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10 lg:w-auto lg:px-2"
@@ -105,7 +103,7 @@ function InlineChatHeader({
 						className="h-7 w-7 min-w-0 rounded-lg text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
 						onPress={closeChat}
 					>
-						<LuX className="size-4" />
+						<HugeiconsIcon icon={Cancel01Icon} className="size-4" />
 					</Button>
 				</Tooltip>
 			</div>
@@ -173,7 +171,7 @@ function InlineChatMessages({
 					{isWaitingForAssistant ? (
 						<div className="flex items-center gap-3 p-2">
 							<div className="flex w-fit items-center justify-center rounded-full bg-black p-2 opacity-60">
-								<ImSpinner8 className="size-4 animate-spin text-white" />
+								<HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin text-white" />
 							</div>
 						</div>
 					) : null}
@@ -218,7 +216,7 @@ function InlineChatMessages({
 							aria-label={t("jumpToLatest")}
 							onPress={() => void scrollToBottom()}
 						>
-							<IoChevronDown className="size-4" />
+							<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
 						</Button>
 					</motion.div>
 				)}

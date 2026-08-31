@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon, Cancel01Icon, FilterIcon, ListViewIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	Accordion,
 	AccordionItem,
@@ -23,8 +25,6 @@ import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { LuCheck, LuChevronDown, LuChevronRight, LuX } from "react-icons/lu";
-import { IoFilter } from "react-icons/io5";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { CacheContext } from "@/context/Providers";
@@ -43,7 +43,6 @@ import {
 	getCountryInfo,
 	localizeOrUseIfCapitalized,
 } from "@/lib/utils";
-import { BsList } from "react-icons/bs";
 import { Button } from "../../nextui/Button";
 import { InstitutionsData } from "@/app/api/institutions/types";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
@@ -233,7 +232,7 @@ function FacetPicker({
 								{allSectionNames.length > 1 && (
 									<AutocompleteItem
 										startContent={
-											<BsList className="size-8" />
+											<HugeiconsIcon icon={ListViewIcon} className="size-8" />
 										}
 										key={`section-${section}`}
 										className="opacity-100"
@@ -261,7 +260,7 @@ function FacetPicker({
 														: selectedKey.includes(
 																item.key
 														  )) ? (
-														<LuCheck />
+														<HugeiconsIcon icon={Tick01Icon} />
 													) : undefined
 												}
 											>
@@ -289,7 +288,7 @@ function FacetPicker({
 													</span>
 													{item.label}
 													{item.showArrow && (
-														<LuChevronDown />
+														<HugeiconsIcon icon={ArrowDown01Icon} />
 													)}
 												</span>
 											</AutocompleteItem>
@@ -404,7 +403,7 @@ export function InnerCollectionList({
 		</Accordion>
 	) : (
 		<div className="text-lg bg-card_light dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
-			<LuX className="stroke-current size-6" />
+			<HugeiconsIcon icon={Cancel01Icon} className="stroke-current size-6" />
 			<span>{t("noFacetsFound")}</span>
 		</div>
 	);
@@ -772,7 +771,7 @@ function FiltersList({
 						aria-controls="more-filters-content"
 						aria-labelledby="more-filters-heading"
 					>
-						<LuChevronDown aria-hidden="true" />
+						<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden="true" />
 						<span className="sr-only">
 							{isMoreFiltersOpen ? t("collapseFilters") : t("expandFilters")}
 						</span>
@@ -886,7 +885,7 @@ export default function CollectionsList({
 						/>
 					) : undefined
 				}
-				endContent={<IoFilter className="size-5 ml-auto" />}
+				endContent={<HugeiconsIcon icon={FilterIcon} className="size-5 ml-auto" />}
 			>
 				{t("filterBy")} {customFilterInstitution}
 			</Button>

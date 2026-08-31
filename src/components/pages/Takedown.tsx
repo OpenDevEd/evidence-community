@@ -1,8 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Link02Icon } from "@hugeicons/core-free-icons";
 import PageContainer from "@/components/layout/PageContainer";
 import EmailForm from "@/components/features/form/EmailForm";
-import { BiLink } from "react-icons/bi";
 import { useTranslations } from "next-intl";
 import { sendTakedownRequest } from "@/lib/email-actions";
 import { toast } from "../layout/Toast";
@@ -28,7 +29,7 @@ function Footer() {
 					className="inline-flex items-center gap-2 hover:underline"
 				>
 					{t("learnMorePolicies")}
-					<BiLink className="text-lg" />
+					<HugeiconsIcon icon={Link02Icon} className="text-lg" />
 				</Link>
 			</div>
 		</div>

@@ -1,14 +1,13 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Copy01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale } from "next-intl";
 import { Item, ListItem } from "@/app/api/item/types";
 import { useState, forwardRef } from "react";
 import { Button } from "@/components/nextui/Button";
-import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { FiCheck, FiCopy } from "react-icons/fi";
-
 const CopyButton = forwardRef<
 	any,
 	{
@@ -56,7 +55,7 @@ const CopyButton = forwardRef<
 		<Button
 			ref={ref}
 			color={"secondary"}
-			startContent={isCopied ? <FiCheck className={twMerge("text-success", classNames?.icon)} /> : <FiCopy className={twMerge(classNames?.icon)} />}
+			startContent={isCopied ? <HugeiconsIcon icon={Tick01Icon} className={twMerge("text-success", classNames?.icon)} /> : <HugeiconsIcon icon={Copy01Icon} className={twMerge(classNames?.icon)} />}
 			size="sm"
 			onPress={handleCopy}
 			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square lg:aspect-auto lg:px-3", classNames?.button, className)}

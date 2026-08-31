@@ -1,15 +1,10 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon, BookOpen01Icon, CodeIcon, Copy01Icon, Csv01Icon, TextIcon } from "@hugeicons/core-free-icons";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
 import { DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
-import { BiChevronDown, BiCopy, BiSolidBookContent } from "react-icons/bi";
 import { ReactNode } from "react";
 import { parsePageCitation } from "@/lib/ai/citations";
-import {
-	BsBodyText,
-	BsCodeSlash,
-	BsFiletypeCsv,
-	BsMarkdown,
-} from "react-icons/bs";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { trackContentAction } from "@/lib/analytics";
@@ -89,7 +84,7 @@ function AIControls({
 					}
 					startContent={buttonIcon}
 					endContent={
-						<BiChevronDown
+						<HugeiconsIcon icon={ArrowDown01Icon}
 							className={
 								appearance === "inline" ? "size-3.5 opacity-70" : undefined
 							}
@@ -147,39 +142,39 @@ export function AIGeneratedContentControls({
 	const copyControls: Control[] = [
 		{
 			label: t("copyAsPlainText"),
-			icon: <BsBodyText />,
+			icon: <HugeiconsIcon icon={TextIcon} />,
 			action: "plaintext",
 		},
 		{
 			label: t("copyAsMarkdown"),
-			icon: <BsMarkdown />,
+			icon: <HugeiconsIcon icon={TextIcon} />,
 			action: "markdown",
 		},
-		{ label: t("copyAsHTML"), icon: <BsCodeSlash />, action: "html" },
+		{ label: t("copyAsHTML"), icon: <HugeiconsIcon icon={CodeIcon} />, action: "html" },
 	];
 	const exportControls: Control[] = [
 		{
 			label: t("exportAsPlainText"),
-			icon: <BsBodyText />,
+			icon: <HugeiconsIcon icon={TextIcon} />,
 			action: "plaintext",
 		},
 		{
 			label: t("exportAsMarkdown"),
-			icon: <BsMarkdown />,
+			icon: <HugeiconsIcon icon={TextIcon} />,
 			action: "markdown",
 		},
-		{ label: t("exportAsHTML"), icon: <BsCodeSlash />, action: "html" },
+		{ label: t("exportAsHTML"), icon: <HugeiconsIcon icon={CodeIcon} />, action: "html" },
 	];
 
 	if (includeCsv) {
 		copyControls.push({
 			label: t("copyAsCSV"),
-			icon: <BsFiletypeCsv />,
+			icon: <HugeiconsIcon icon={Csv01Icon} />,
 			action: "csv",
 		});
 		exportControls.push({
 			label: t("exportAsCSV"),
-			icon: <BsFiletypeCsv />,
+			icon: <HugeiconsIcon icon={Csv01Icon} />,
 			action: "csv",
 		});
 	}
@@ -191,7 +186,7 @@ export function AIGeneratedContentControls({
 				getContent={getContent}
 				type="copy"
 				buttonLabel={t("copy")}
-				buttonIcon={<BiCopy />}
+				buttonIcon={<HugeiconsIcon icon={Copy01Icon} />}
 				isDisabled={isDisabled}
 				appearance={appearance}
 			/>
@@ -200,7 +195,7 @@ export function AIGeneratedContentControls({
 				getContent={getContent}
 				type="download"
 				buttonLabel={t("export")}
-				buttonIcon={<BiSolidBookContent />}
+				buttonIcon={<HugeiconsIcon icon={BookOpen01Icon} />}
 				downloadName={downloadName}
 				isDisabled={isDisabled}
 				appearance={appearance}

@@ -1,12 +1,13 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Home01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
 	ModalFooter,
 	ModalHeader,
 } from "@nextui-org/react";
-import { Home } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
@@ -110,7 +111,7 @@ function WritebackDialogForm({
 				>
 					<div className={rowClass} data-admin-writeback-here>
 						<span className="grid size-7 shrink-0 place-items-center text-black/70 dark:text-white/70">
-							<Home aria-hidden size={16} />
+							<HugeiconsIcon icon={Home01Icon} aria-hidden size={16} />
 						</span>
 						<div className="min-w-0 flex-1">
 							<p className="truncate text-sm font-medium">This library</p>

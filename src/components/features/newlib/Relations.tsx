@@ -1,11 +1,12 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { SearchRemoveIcon } from "@hugeicons/core-free-icons";
 import type { ItemLinks } from "@/app/api/item/types";
 import { RelationsType } from "@/types/item";
 import useSWR from "swr";
 import { fetcherPOST } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { MdSearchOff } from "react-icons/md";
 import { ListItem } from "@/app/api/item/types";
 import Resource from "../items/Resource";
 import { useTranslations } from "next-intl";
@@ -96,7 +97,7 @@ function RelationsList({
 				{!hasItems && (
 					<div className="col-span-2">
 						<div className="flex gap-2">
-							<MdSearchOff className="size-6" />
+							<HugeiconsIcon icon={SearchRemoveIcon} className="size-6" />
 							No items found
 						</div>
 					</div>

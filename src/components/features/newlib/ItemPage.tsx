@@ -1,22 +1,14 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Mortarboard01Icon } from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { Item, ItemGetResponse, Author } from "@/app/api/item/types";
 import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
-import { FaCalendar } from "react-icons/fa";
 import { RelationsType } from "@/types/item";
-import {
-	IoBook,
-	IoDocumentText,
-	IoDownloadOutline,
-	IoChevronBack,
-	IoDownload,
-} from "react-icons/io5";
-import { SiDoi, SiZenodo } from "react-icons/si";
-import { BsQuote } from "react-icons/bs";
+import { siDoi, siZenodo } from "simple-icons";
 import { Avatar } from "@nextui-org/avatar";
-import { HiAcademicCap } from "react-icons/hi2";
 import { useFormatter, useTranslations } from "next-intl";
 import { Divider, Spinner } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -45,8 +37,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
-import { BiDownload } from "react-icons/bi";
-import { LuDownload } from "react-icons/lu";
 import {
 	createContext,
 	use,
@@ -79,6 +69,7 @@ import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
 import { buildSiteUrl } from "@/lib/site-url";
+import BrandIcon from "@/components/icons/BrandIcon";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -432,7 +423,7 @@ function ItemInstitution({ institution }: { institution?: string }) {
 				icon={
 					<InstitutionLogo
 						alt=""
-						fallback={<HiAcademicCap />}
+						fallback={<HugeiconsIcon icon={Mortarboard01Icon} />}
 						logoUrl={configuredInstitution?.logoUrl}
 						size="row"
 					/>
@@ -891,12 +882,13 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 			) : link.provider === "crossref" ? (
 				<CrossrefLogo className="h-6 w-4" />
 			) : link.provider === "zenodo" ? (
-				<SiZenodo
+				<BrandIcon
+					icon={siZenodo}
 					className="size-5 text-[#1682D4]"
 					aria-label="Zenodo"
 				/>
 			) : (
-				<SiDoi className="size-5 text-doi" aria-label="DOI" />
+				<BrandIcon icon={siDoi} className="size-5 text-doi" aria-label="DOI" />
 			)}
 		</div>
 	);

@@ -1,6 +1,6 @@
 "use client";
-
-import { ChevronRight, ScrollText } from "lucide-react";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowRight01Icon, ScrollIcon } from "@hugeicons/core-free-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 
@@ -109,7 +109,7 @@ export default function PolicyToc({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col rounded-[1.75rem] border border-black/10 bg-background_light/900 p-5 shadow-[0_20px_55px_-40px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-card/78">
 			<div className="mb-4 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/45 dark:text-white/45">
-				<ScrollText className="size-4 text-accent" />
+				<HugeiconsIcon icon={ScrollIcon} className="size-4 text-accent" />
 				On this page
 			</div>
 
@@ -153,7 +153,8 @@ export default function PolicyToc({
 								)}
 							/>
 							<span className="min-w-0 flex-1">{section.title}</span>
-							<ChevronRight
+							<HugeiconsIcon
+								icon={ArrowRight01Icon}
 								className={twMerge(
 									"mt-1 size-4 shrink-0 transition-transform",
 									isActive

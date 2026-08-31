@@ -1,14 +1,15 @@
 "use client";
 
+import { Linkedin01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
-import { RiBlueskyFill } from "react-icons/ri";
-import type { IconType } from "react-icons";
+import { siBluesky, siGithub, siX, siYoutube, type SimpleIcon } from "simple-icons";
 
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
+import BrandIcon from "@/components/icons/BrandIcon";
 import {
 	FunderLogo,
 	FundingPartners,
@@ -31,13 +32,13 @@ import { localizeOrUseIfCapitalized } from "@/lib/utils";
 type SocialProvider =
 	LibraryPublicConfig["footer"]["socialLinks"][number]["provider"];
 
-const SOCIAL_ICONS = {
-	github: FaGithub,
-	twitter: FaTwitter,
-	linkedin: FaLinkedin,
-	youtube: FaYoutube,
-	bluesky: RiBlueskyFill,
-} satisfies Record<SocialProvider, IconType>;
+const SOCIAL_BRANDS = {
+	github: siGithub,
+	twitter: siX,
+	linkedin: null,
+	youtube: siYoutube,
+	bluesky: siBluesky,
+} satisfies Record<SocialProvider, SimpleIcon | null>;
 
 const SOCIAL_COLORS = {
 	github: "bg-black dark:bg-white text-white dark:text-black",
@@ -230,7 +231,7 @@ export default function Footer() {
 					<FooterColumn title={t("stayConnected")}>
 						<ul className="flex flex-wrap gap-4">
 							{footer.socialLinks.map((social) => {
-								const Icon = SOCIAL_ICONS[social.provider];
+								const brand = SOCIAL_BRANDS[social.provider];
 
 								return (
 									<li key={social.provider}>
@@ -241,10 +242,12 @@ export default function Footer() {
 											aria-label={social.provider}
 											className={`flex size-11 items-center justify-center rounded-full ${SOCIAL_COLORS[social.provider]}`}
 										>
-											<Icon
-												aria-hidden
-												className="size-5"
-											/>
+											{brand ? (
+												<BrandIcon icon={brand} aria-hidden className="size-5" />
+											) : (
+												// LinkedIn removed its mark from Simple Icons; its packaged brand glyph remains isolated here.
+												<HugeiconsIcon icon={Linkedin01Icon} aria-hidden className="size-5" />
+											)}
 										</Link>
 									</li>
 								);

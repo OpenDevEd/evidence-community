@@ -1,20 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, CheckmarkCircle01Icon, Clock03Icon, CloudLoadingIcon, CloudOffIcon, CloudUploadIcon, GitCompareIcon, Loading03Icon, LockIcon, PauseIcon, Refresh01Icon, UnplugIcon } from "@hugeicons/core-free-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { useState } from "react";
-import {
-	CircleAlert,
-	CircleCheck,
-	GitCompareArrows,
-	Clock3,
-	CloudOff,
-	CloudUpload,
-	LoaderCircle,
-	Lock,
-	Pause,
-	RefreshCw,
-	Unplug,
-} from "lucide-react";
 
 import { Button } from "@/components/nextui/Button";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
@@ -31,84 +20,84 @@ const appearance = {
 		className: "text-amber-600 dark:text-amber-300",
 		description:
 			"This source changed while updates were paused. Choose which version to keep before anything is sent.",
-		icon: GitCompareArrows,
+		icon: GitCompareIcon,
 		label: "Needs a decision",
 		spin: false,
 	},
 	disabled: {
 		className: "text-black/45 dark:text-white/45",
 		description: "Writeback is disabled for this source in the library configuration.",
-		icon: CloudOff,
+		icon: CloudOffIcon,
 		label: "Writeback off",
 		spin: false,
 	},
 	failed: {
 		className: "text-danger",
 		description: "The last writeback attempt failed and needs attention.",
-		icon: CircleAlert,
+		icon: AlertCircleIcon,
 		label: "Sync failed",
 		spin: false,
 	},
 	idle: {
 		className: "text-black/45 dark:text-white/45",
 		description: "Published edits will be written back to this source.",
-		icon: CloudUpload,
+		icon: CloudUploadIcon,
 		label: "Writeback ready",
 		spin: false,
 	},
 	locked: {
 		className: "text-black/45 dark:text-white/45",
 		description: "Writeback is locked for this record.",
-		icon: Lock,
+		icon: LockIcon,
 		label: "Writeback locked",
 		spin: false,
 	},
 	paused: {
 		className: "text-amber-700 dark:text-amber-300",
 		description: "This source is paused. Queued edits will wait.",
-		icon: Pause,
+		icon: PauseIcon,
 		label: "Source paused",
 		spin: false,
 	},
 	queued: {
 		className: "text-accent-700 dark:text-accent-300",
 		description: "The edit is queued for writeback.",
-		icon: Clock3,
+		icon: Clock03Icon,
 		label: "Waiting to sync",
 		spin: false,
 	},
 	removed: {
 		className: "text-danger",
 		description: "This record's source has been removed.",
-		icon: Unplug,
+		icon: UnplugIcon,
 		label: "Source removed",
 		spin: false,
 	},
 	retrying: {
 		className: "text-amber-700 dark:text-amber-300",
 		description: "Writeback hit a temporary error and will retry automatically.",
-		icon: RefreshCw,
+		icon: Refresh01Icon,
 		label: "Retrying sync",
 		spin: true,
 	},
 	sending: {
 		className: "text-accent-700 dark:text-accent-300",
 		description: "The edit is being written back now.",
-		icon: LoaderCircle,
+		icon: Loading03Icon,
 		label: "Syncing",
 		spin: true,
 	},
 	synced: {
 		className: "text-emerald-700 dark:text-emerald-300",
 		description: "The latest published edit was acknowledged by the source.",
-		icon: CircleCheck,
+		icon: CheckmarkCircle01Icon,
 		label: "Synced",
 		spin: false,
 	},
 	unsupported: {
 		className: "text-black/45 dark:text-white/45",
 		description: "This source type does not support writeback.",
-		icon: CloudOff,
+		icon: CloudLoadingIcon,
 		label: "No writeback",
 		spin: false,
 	},
@@ -161,7 +150,7 @@ export function AdminSourcesWritebackStatus({
 	const loaded = states.some((state) => state !== null);
 	const state = summarizeWritebackStates(states);
 	const config = appearance[state];
-	const Icon = !loaded && writeback.loading ? LoaderCircle : config.icon;
+	const Icon = !loaded && writeback.loading ? Loading03Icon : config.icon;
 	const spin = (!loaded && writeback.loading) || config.spin;
 	const label =
 		!loaded && writeback.loading
@@ -178,7 +167,8 @@ export function AdminSourcesWritebackStatus({
 					type="button"
 				>
 					<span className="grid size-3 shrink-0 place-items-center overflow-hidden">
-						<Icon
+						<HugeiconsIcon
+							icon={Icon}
 							aria-hidden
 							className={spin ? "animate-spin" : undefined}
 							size={12}
@@ -229,7 +219,8 @@ export function AdminSourcesWritebackStatus({
 											<p
 												className={`mt-0.5 inline-flex items-center gap-1 text-xs font-medium ${sourceConfig.className}`}
 											>
-												<SourceIcon
+												<HugeiconsIcon
+													icon={SourceIcon}
 													aria-hidden
 													className={sourceConfig.spin ? "animate-spin" : undefined}
 													size={12}
@@ -294,11 +285,7 @@ export function AdminSourcesWritebackStatus({
 											onPress={() => void writeback.retry(source.sourceKey)}
 											size="xs"
 											startContent={
-												<RefreshCw
-													aria-hidden
-													className={busy ? "animate-spin" : undefined}
-													size={14}
-												/>
+												<HugeiconsIcon icon={Refresh01Icon} aria-hidden className={busy ? "animate-spin" : undefined} size={14} />
 											}
 											variant="solid"
 										>
@@ -309,7 +296,7 @@ export function AdminSourcesWritebackStatus({
 											className="w-full"
 											onPress={() => void writeback.refresh()}
 											size="xs"
-											startContent={<RefreshCw aria-hidden size={14} />}
+											startContent={<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={14} />}
 										>
 											Check again
 										</Button>

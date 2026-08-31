@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BarChartIcon, Calendar01Icon, Globe02Icon, QuoteUpIcon, SearchRemoveIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { useQueryState, parseAsInteger } from "nuqs";
 import { Item } from "@/app/api/item/types";
 import { CitationsResponse } from "@/app/api/citations/[key]/route";
@@ -41,9 +43,6 @@ ChartJS.register(
 	Legend,
 	ArcElement
 );
-import { BsQuote, BsBarChart, BsGlobe } from "react-icons/bs";
-import { FaCalendar, FaUser, FaGlobeAmericas } from "react-icons/fa";
-import { MdSearchOff } from "react-icons/md";
 import { RelationsType } from "@/types/item";
 import { useState, useEffect, useRef, useMemo } from "react";
 
@@ -310,7 +309,7 @@ function CitationYearChart({
 
 			<div className="flex items-center gap-3 mb-6">
 				<div className="p-2 rounded-xl bg-accent/20">
-					<BsBarChart className="size-5 text-accent" />
+					<HugeiconsIcon icon={BarChartIcon} className="size-5 text-accent" />
 				</div>
 				<h2 className="text-xl font-semibold text-black dark:text-white">
 					{t("citationsByYear")}
@@ -323,7 +322,7 @@ function CitationYearChart({
 						{/* Y-Axis Label */}
 						<div className="flex items-center justify-center w-6 shrink-0">
 							<div className="-rotate-90 whitespace-nowrap flex items-center gap-2 text-tiny uppercase tracking-widest font-bold text-default-400">
-								<BsQuote className="rotate-90" />
+								<HugeiconsIcon icon={QuoteUpIcon} className="rotate-90" />
 								{t("citationsColumn")}
 							</div>
 						</div>
@@ -344,13 +343,13 @@ function CitationYearChart({
 									>
 										<div className="min-w-[140px] rounded-xl border border-default-200 bg-white p-3 shadow-xl dark:border-default-100 dark:bg-zinc-900">
 											<div className="flex items-center gap-2">
-												<FaCalendar className="text-default-400 text-tiny" />
+												<HugeiconsIcon icon={Calendar01Icon} className="text-default-400 text-tiny" />
 												<span className="text-tiny font-bold uppercase tracking-wider text-default-500">
 													{tooltipState.year}
 												</span>
 											</div>
 											<div className="flex items-center gap-2">
-												<BsQuote className="text-accent text-lg" />
+												<HugeiconsIcon icon={QuoteUpIcon} className="text-accent text-lg" />
 												<div className="flex items-baseline gap-1">
 													<span className="text-xl font-bold text-accent">
 														{tooltipState.count}
@@ -372,7 +371,7 @@ function CitationYearChart({
 							{/* X-Axis Label */}
 							<div className="h-6 shrink-0 flex items-center justify-center mt-2">
 								<div className="flex items-center gap-2 text-tiny uppercase tracking-widest font-bold text-default-400">
-									<FaCalendar className="text-default-300" />
+									<HugeiconsIcon icon={Calendar01Icon} className="text-default-300" />
 									{t("year")}
 								</div>
 							</div>
@@ -485,7 +484,7 @@ function CitationsCountryChart({
 		<div>
 			<div className="flex items-center gap-3 mb-6">
 				<div className="p-2 rounded-xl bg-accent/20">
-					<FaGlobeAmericas className="size-5 text-accent" />
+					<HugeiconsIcon icon={Globe02Icon} className="size-5 text-accent" />
 				</div>
 				<h2 className="text-xl font-semibold text-black dark:text-white">
 					{t("citationsByCountryFocus")}
@@ -521,7 +520,7 @@ function CitationsCountryChart({
 										<div className="min-w-[140px] rounded-xl border border-default-200 bg-white p-3 shadow-xl dark:border-default-100 dark:bg-zinc-900">
 											<div className="flex items-center gap-2 mb-1">
 												{tooltipState.country === "UNKNOWN" ? (
-													<FaGlobeAmericas className="w-4 h-3 text-gray-400" />
+													<HugeiconsIcon icon={Globe02Icon} className="w-4 h-3 text-gray-400" />
 												) : (
 													<CountryFlag countryCode={tooltipState.country} className="w-4 h-3 shadow-sm" />
 												)}
@@ -530,7 +529,7 @@ function CitationsCountryChart({
 												</span>
 											</div>
 											<div className="flex items-center gap-2">
-												<BsQuote className="text-accent text-lg" />
+												<HugeiconsIcon icon={QuoteUpIcon} className="text-accent text-lg" />
 												<div className="flex items-baseline gap-1">
 													<span className="text-xl font-bold text-accent">
 														{tooltipState.count}
@@ -566,7 +565,7 @@ function CitationsCountryChart({
 											<div className="flex flex-col">
 												<div className="flex items-center gap-2">
 													{isUnknown ? (
-														<FaGlobeAmericas className="w-4 h-3 text-gray-400" />
+														<HugeiconsIcon icon={Globe02Icon} className="w-4 h-3 text-gray-400" />
 													) : (
 														<CountryFlag countryCode={item.country} className="w-4 h-3 shadow-sm" />
 													)}
@@ -621,7 +620,7 @@ function CitingResourcesList({
 		<div ref={listRef} className="scroll-mt-20">
 				<div className="flex items-center gap-3 mb-6">
 					<div className="p-2 rounded-xl bg-accent/20">
-						<BsQuote className="size-5 text-accent" />
+						<HugeiconsIcon icon={QuoteUpIcon} className="size-5 text-accent" />
 					</div>
 					<h2 className="text-xl font-semibold text-black dark:text-white">
 						{t("citingResources")}
@@ -658,7 +657,7 @@ function CitingResourcesList({
 
 				{!isLoading && items.length === 0 && (
 					<div className="flex flex-col items-center justify-center py-12 text-black/60 dark:text-white/60">
-						<MdSearchOff className="size-12 mb-4" />
+						<HugeiconsIcon icon={SearchRemoveIcon} className="size-12 mb-4" />
 						<p className="text-lg">{t("noCitingResources")}</p>
 					</div>
 				)}
@@ -721,7 +720,7 @@ export default function CitationPageClient({
 						<ItemTitle item={sourceItem} loadingProp={false} />
 						{sourceItem.creators && sourceItem.creators.length > 0 && (
 							<div className="flex items-center gap-2 mt-2 text-base text-black/60 dark:text-white/60">
-								<FaUser className="" />
+								<HugeiconsIcon icon={UserIcon} className="" />
 								<ResourceAuthors itemData={sourceItem} />
 							</div>
 						)}

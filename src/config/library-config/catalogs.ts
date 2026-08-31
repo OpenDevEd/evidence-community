@@ -72,26 +72,6 @@ export const PLATFORM_SEARCH_SCOPES = PLATFORM_SEARCH_SCOPE_OPTIONS.map(
 	({ key }) => key,
 ) as [PlatformSearchScope, ...PlatformSearchScope[]];
 
-export const PLATFORM_NAVBAR_ICON_IDS = [
-	"AboutUs",
-	"EvidenceLibrary",
-	"Programs",
-	"Blog",
-	"Team",
-	"ContactUs",
-	"TeamFill",
-	"ToolsFill",
-	"BookOpenFill",
-	"Bookshelf",
-	"ChatRightDotsFill",
-	"BsMapFill",
-	"LuX",
-	"FaQuestionCircle",
-	"IoStatsChart",
-] as const;
-
-export type PlatformNavbarIconId = (typeof PLATFORM_NAVBAR_ICON_IDS)[number];
-
 export const PLATFORM_SOCIAL_PROVIDERS = [
 	"github",
 	"twitter",

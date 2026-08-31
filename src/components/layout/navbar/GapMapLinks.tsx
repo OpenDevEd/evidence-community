@@ -1,9 +1,10 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { MapsIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { useGapMaps } from "@/context/Providers";
-import { BsMapFill } from "react-icons/bs";
 import { Link } from "@/i18n/routing";
 import type { NavbarStyleVariant } from "@/types/navbar";
 
@@ -40,7 +41,7 @@ export default function GapMapLinks({
 					styleVariant === "wide" && "uppercase font-base"
 				)}
 			>
-				<BsMapFill className={twMerge("fill-current size-6 shrink-0", styleVariant === "wide" && "size-5")} />
+				<HugeiconsIcon icon={MapsIcon} className={twMerge("size-6 shrink-0", styleVariant === "wide" && "size-5")} />
 				<span className="line-clamp-1">{t("gapMaps")}</span>
 			</Link>
 		</li>

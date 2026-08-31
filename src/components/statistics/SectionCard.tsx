@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { Card } from "@/components/nextui/Card";
 
 type SectionCardProps = {
 	title: string;
-	icon: React.ElementType;
+	icon: IconSvgElement;
 	children: React.ReactNode;
 };
 
@@ -14,7 +15,7 @@ const itemVariants = {
 
 export function SectionCard({
 	title,
-	icon: Icon,
+	icon,
 	children,
 }: SectionCardProps) {
 	return (
@@ -22,7 +23,7 @@ export function SectionCard({
 			<Card color="card" className="p-6">
 				<div className="flex items-center gap-3 mb-6">
 					<div className="p-2 rounded-xl bg-accent/20">
-						<Icon className="size-5 text-accent" />
+						<HugeiconsIcon icon={icon} className="size-5 text-accent" />
 					</div>
 					<h2 className="text-xl font-semibold text-black dark:text-white">
 						{title}
@@ -32,4 +33,4 @@ export function SectionCard({
 			</Card>
 		</motion.div>
 	);
-} 
+}

@@ -1,7 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Copy01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@nextui-org/react";
-import { FiCopy, FiCheck } from "react-icons/fi";
 import { useState } from "react";
 import { ReactElement, cloneElement } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,7 +33,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
                         }}
                         className="absolute inset-0 flex items-center justify-center"
                     >
-                        <FiCheck className="text-success" />
+                        <HugeiconsIcon icon={Tick01Icon} className="text-success" />
                     </motion.div>
                 ) : (
                     <motion.div
@@ -47,7 +48,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
                         }}
                         className="absolute inset-0 flex items-center justify-center"
                     >
-                        <FiCopy />
+                        <HugeiconsIcon icon={Copy01Icon} />
                     </motion.div>
                 )}
             </AnimatePresence>

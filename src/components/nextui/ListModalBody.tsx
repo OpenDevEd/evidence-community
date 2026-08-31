@@ -1,5 +1,6 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Tick01Icon } from "@hugeicons/core-free-icons";
 import { ModalBody, ModalBodyProps, Listbox, ListboxItem, Spinner } from "@nextui-org/react";
-import { FaCheck } from "react-icons/fa";
 import { Key } from "react";
 
 export type ListModalBodyItem = {
@@ -55,7 +56,7 @@ export function ListModalBody({ description, onAction, highlightedIndexes, child
                     </div>
                     {item.description && <p className="text-sm text-default-500">{item.description}</p>}
                   </div>
-                  <FaCheck className="size-4 shrink-0 text-accent ltr:ml-auto rtl:mr-auto group-data-[selected=true]:opacity-100 group-data-[selected=true]:translate-x-0 transition-all opacity-0 ltr:-translate-x-10 rtl:translate-x-10" />
+                  <HugeiconsIcon icon={Tick01Icon} className="size-4 shrink-0 text-accent ltr:ml-auto rtl:mr-auto group-data-[selected=true]:opacity-100 group-data-[selected=true]:translate-x-0 transition-all opacity-0 ltr:-translate-x-10 rtl:translate-x-10" />
                 </div>
               </div>
             </ListboxItem>

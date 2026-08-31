@@ -1,8 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { useSession, signOut } from "next-auth/react";
-import { User, LogOut } from "lucide-react";
 import {
 	Avatar,
 	DropdownItem,
@@ -40,7 +41,7 @@ export default function UserMenu({ variant, styleVariant }: NavbarElementProps) 
 				<DropdownItem
 					key="profile"
 					onPress={() => router.push(`/profile/${session.user?.id}`)}
-					startContent={<User className="size-4" />}
+					startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}
 				>
 					{t("profileMenuItem")}
 				</DropdownItem>
@@ -48,7 +49,7 @@ export default function UserMenu({ variant, styleVariant }: NavbarElementProps) 
 					key="logout"
 					color="danger"
 					onPress={() => signOut({ redirect: false })}
-					startContent={<LogOut className="size-4" />}
+					startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
 					className="text-danger"
 				>
 					{t("logout")}
@@ -69,13 +70,13 @@ export default function UserMenu({ variant, styleVariant }: NavbarElementProps) 
 				/>
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction} aria-label={t("userMenuAriaLabel")}>
-				<DropdownItem key="profile" startContent={<User className="size-4" />}>
+				<DropdownItem key="profile" startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}>
 					{t("profileMenuItem")}
 				</DropdownItem>
 				<DropdownItem
 					key="logout"
 					color="danger"
-					startContent={<LogOut className="size-4" />}
+					startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
 					className="text-danger"
 				>
 					{t("logout")}

@@ -1,18 +1,7 @@
 "use client";
 
-import {
-	CircleCheck,
-	CloudUpload,
-	Database,
-	FileClock,
-	Folder,
-	FolderPlus,
-	Library,
-	Lock,
-	Pause,
-	Pencil,
-	Trash2,
-} from "lucide-react";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
 import { type ReactNode, useRef } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -45,15 +34,15 @@ export function focusAdminCollection(request: AdminCollectionFocusRequest) {
 }
 
 const stateOptions: Array<{
-	icon: typeof CircleCheck;
+	icon: typeof CheckmarkCircle01Icon;
 	key: AdminRecordState | "all";
 	label: string;
 }> = [
-	{ icon: Library, key: "all", label: "All records" },
-	{ icon: FileClock, key: "draft", label: "Drafts" },
-	{ icon: Pencil, key: "edited", label: "Edited" },
-	{ icon: CircleCheck, key: "published", label: "Published" },
-	{ icon: Trash2, key: "deleted", label: "Deleted" },
+	{ icon: LibraryIcon, key: "all", label: "All records" },
+	{ icon: FileClockIcon, key: "draft", label: "Drafts" },
+	{ icon: PencilIcon, key: "edited", label: "Edited" },
+	{ icon: CheckmarkCircle01Icon, key: "published", label: "Published" },
+	{ icon: Delete02Icon, key: "deleted", label: "Deleted" },
 ];
 
 function NavigationHeading({
@@ -62,12 +51,13 @@ function NavigationHeading({
 	title,
 }: {
 	action?: ReactNode;
-	icon: typeof Folder;
+	icon: typeof Folder01Icon;
 	title: string;
 }) {
 	return (
 		<div className="flex min-h-8 items-center gap-2 px-4 pb-2 pt-3 first:pt-2">
-			<Icon
+			<HugeiconsIcon
+				icon={Icon}
 				aria-hidden
 				className="text-black/30 dark:text-white/30"
 				size={13}
@@ -126,7 +116,7 @@ export function AdminNavigation({
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
 			<div className="shrink-0">
-				<NavigationHeading icon={Database} title="Sources" />
+				<NavigationHeading icon={DatabaseIcon} title="Sources" />
 				<div className={navigationListSurfaceClass}>
 					{sources.map((entry) => {
 						return (
@@ -155,25 +145,19 @@ export function AdminNavigation({
 									{entry.label}
 								</span>
 								{entry.status === "paused" ? (
-									<Pause aria-label="Paused" size={11} />
+									<HugeiconsIcon icon={PauseIcon} aria-label="Paused" size={11} />
 								) : entry.writeback?.enabled &&
 								  entry.writeback.supported ? (
-									<CloudUpload
-										aria-label="Writeback enabled"
-										size={11}
-									/>
+									<HugeiconsIcon icon={CloudUploadIcon} aria-label="Writeback enabled" size={11} />
 								) : entry.readOnly ? (
-									<Lock
-										aria-label="Writeback unavailable"
-										size={11}
-									/>
+									<HugeiconsIcon icon={LockIcon} aria-label="Writeback unavailable" size={11} />
 								) : null}
 							</button>
 						);
 					})}
 				</div>
 
-				<NavigationHeading icon={CircleCheck} title="Record state" />
+				<NavigationHeading icon={CheckmarkCircle01Icon} title="Record state" />
 				<div className={navigationListSurfaceClass}>
 					{stateOptions.map((entry) => {
 						const Icon = entry.icon;
@@ -189,7 +173,7 @@ export function AdminNavigation({
 								onClick={() => onSelectState(entry.key)}
 								type="button"
 							>
-								<Icon aria-hidden size={14} />
+								<HugeiconsIcon icon={Icon} aria-hidden size={14} />
 								{entry.label}
 							</button>
 						);
@@ -204,11 +188,11 @@ export function AdminNavigation({
 						onClick={() => onCreateCollection(null)}
 						type="button"
 					>
-						<FolderPlus aria-hidden size={13} />
+						<HugeiconsIcon icon={FolderAddIcon} aria-hidden size={13} />
 						New
 					</button>
 				}
-				icon={Folder}
+				icon={Folder01Icon}
 				title="Collections"
 			/>
 			<div

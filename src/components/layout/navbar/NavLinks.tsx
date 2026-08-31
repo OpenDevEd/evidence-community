@@ -73,7 +73,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 						reference={link.icon}
 						alt=""
 						className={twMerge(
-							"fill-current size-6 shrink-0",
+							"size-6 shrink-0",
 							styleVariant === "wide" && "size-5"
 						)}
 					/>

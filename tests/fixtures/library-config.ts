@@ -140,7 +140,7 @@ export const maximalLibraryConfig = {
 				id: "evidence",
 				label: "Evidence",
 				href: "/lib",
-				icon: "EvidenceLibrary",
+				icon: "LibraryIcon",
 				children: [
 					{
 						id: "privacy",

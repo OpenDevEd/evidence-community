@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { Activity01Icon, Attachment01Icon, BarChartIcon, Bookmark02Icon, Building02Icon, Calendar01Icon, ChartIncreaseIcon, CheckmarkCircle01Icon, File02Icon, Flag02Icon, Globe02Icon, HierarchyIcon, InformationCircleIcon, Layers01Icon, NotebookTextIcon, QuoteUpIcon, Search01Icon, Share01Icon, TagsIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { Card } from "@/components/nextui/Card";
 import { Table } from "@/components/nextui/Table";
 import {
@@ -20,28 +22,6 @@ import PageContainer from "./PageContainer";
 import { useMemo, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import {
-	BsBarChart,
-	BsCalendar,
-	BsPeople,
-	BsFileText,
-	BsGlobe,
-	BsBuilding,
-	BsJournalText,
-	BsActivity,
-	BsCheckCircle,
-	BsGraphUp,
-	BsQuote,
-	BsPaperclip,
-	BsFlag,
-	BsSearch,
-	BsDiagram3,
-	BsShare,
-	BsInfo,
-	BsBookmark,
-	BsLayers,
-	BsTags,
-} from "react-icons/bs";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import {
@@ -277,7 +257,7 @@ function CountryFlag({ countryCode, className = "w-6 h-4" }: { countryCode: stri
 	if (!countryCode || countryCode.trim() === '') {
 		return (
 			<div className={`${className} rounded-sm bg-black/10 dark:bg-white/10 flex items-center justify-center flex-shrink-0`}>
-				<BsGlobe className="w-3 h-3 text-black/40 dark:text-white/40" />
+				<HugeiconsIcon icon={Globe02Icon} className="w-3 h-3 text-black/40 dark:text-white/40" />
 			</div>
 		);
 	}
@@ -324,13 +304,13 @@ function StatCard({
 	title,
 	value,
 	subtitle,
-	icon: Icon,
+	icon,
 	color = "accent",
 }: {
 	title: string;
 	value: string | number;
 	subtitle?: string;
-	icon: React.ElementType;
+	icon: IconSvgElement;
 	color?: "accent" | "success" | "tertiary" | "card";
 }) {
 	return (
@@ -350,7 +330,8 @@ function StatCard({
 								: "bg-white/10 dark:bg-white/5"
 						}`}
 					>
-						<Icon
+						<HugeiconsIcon
+							icon={icon}
 							className={`size-6 ${color === "accent"
 									? "text-accent"
 									: color === "success"
@@ -384,11 +365,11 @@ function StatCard({
 
 function SectionCard({
 	title,
-	icon: Icon,
+	icon,
 	children,
 }: {
 	title: string;
-	icon: React.ElementType;
+	icon: IconSvgElement;
 	children: React.ReactNode;
 }) {
 	return (
@@ -396,7 +377,7 @@ function SectionCard({
 			<Card color="card" className="p-6">
 				<div className="flex items-center gap-3 mb-6">
 					<div className="p-2 rounded-xl bg-accent/20">
-						<Icon className="size-5 text-accent" />
+						<HugeiconsIcon icon={icon} className="size-5 text-accent" />
 					</div>
 					<h2 className="text-xl font-semibold text-black dark:text-white">
 						{title}
@@ -862,7 +843,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						title={t("totalItems")}
 						value={stats.citationStats.totalItems}
 						subtitle={t("inDatabase")}
-						icon={BsFileText}
+						icon={File02Icon}
 						color="accent"
 					/>
 					<StatCard
@@ -870,14 +851,14 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						value={stats.citationStats.totalCitations}
 							subtitle={`${stats.citationStats.citationPercentage
 						}% ${t("haveCitations")}`}
-						icon={BsQuote}
+						icon={QuoteUpIcon}
 						color="success"
 					/>
 						<StatCard
 							title="H-Index"
 							value={stats.citationStats.hIndex}
 							subtitle={t("globalImpactMetric")}
-							icon={BsActivity}
+							icon={Activity01Icon}
 							color="tertiary"
 						/>
 					<StatCard
@@ -888,7 +869,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						)} ${stats.creatorStats.avgCreatorsPerItem.toFixed(
 							1
 						)} ${t("perItem")}`}
-						icon={BsPeople}
+						icon={UserGroupIcon}
 							color="card"
 					/>
 					</div>
@@ -899,7 +880,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						title={t("institutions")}
 						value={stats.institutions.length}
 						subtitle={t("uniqueInstitutions")}
-						icon={BsBuilding}
+						icon={Building02Icon}
 							color="accent"
 					/>
 					<StatCard
@@ -907,14 +888,14 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						value={stats.attachmentStats.totalAttachments}
 							subtitle={`${stats.attachmentStats.attachmentPercentage
 						}% ${t("ofItemsHaveAttachments")}`}
-						icon={BsPaperclip}
+						icon={Attachment01Icon}
 							color="success"
 					/>
 					</div>
 				</div>
 
 				{/* Data Completeness */}
-				<SectionCard title={t("dataCompleteness")} icon={BsCheckCircle}>
+				<SectionCard title={t("dataCompleteness")} icon={CheckmarkCircle01Icon}>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 						{stats.fieldCompleteness.map((field, index) => (
 							<ProgressItem
@@ -932,7 +913,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 					<SectionCard
 						title={t("itemTypesDistribution")}
-						icon={BsBarChart}
+						icon={BarChartIcon}
 					>
 						<div className="space-y-4 h-96 overflow-y-auto">
 							{stats.itemTypes.map((type, index) => (
@@ -956,7 +937,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						</div>
 					</SectionCard>
 
-					<SectionCard title={t("recentYears")} icon={BsCalendar}>
+					<SectionCard title={t("recentYears")} icon={Calendar01Icon}>
 						<div className="h-96">
 							<ResponsiveContainer width="100%" height="100%">
 								<BarChart
@@ -1036,7 +1017,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</div>
 
 				{/* Citation Analysis */}
-				<SectionCard title={t("citationAnalysis")} icon={BsQuote}>
+				<SectionCard title={t("citationAnalysis")} icon={QuoteUpIcon}>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 						<div className="text-center p-6 rounded-xl bg-success/10">
 							<div className="text-3xl font-bold text-success mb-2">
@@ -1076,12 +1057,12 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* International Collaboration */}
-				<SectionCard title={t("internationalCollaboration")} icon={BsShare}>
+				<SectionCard title={t("internationalCollaboration")} icon={Share01Icon}>
 					<div className="space-y-8">
 						{/* Explanation */}
 						<motion.div variants={itemVariants} className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4">
 							<h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
-								<BsInfo className="w-4 h-4" />
+								<HugeiconsIcon icon={InformationCircleIcon} className="w-4 h-4" />
 								{t("understandingCollaborationTypes")}
 							</h4>
 							<div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
@@ -1142,7 +1123,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							{/* Collaboration Rates Chart */}
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsBarChart className="text-accent" />
+									<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 									{t("countryCollaborationRates")}
 								</h3>
 								<Card color="card" className="p-6">
@@ -1240,7 +1221,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							{/* Top Collaborations */}
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsDiagram3 className="text-accent" />
+									<HugeiconsIcon icon={HierarchyIcon} className="text-accent" />
 									{t("topCountryPairs")}
 								</h3>
 								<Card color="card" className="p-6">
@@ -1304,7 +1285,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						{/* Detailed Collaboration Table */}
 						<motion.div variants={itemVariants} className="space-y-4">
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsFlag className="text-accent" />
+								<HugeiconsIcon icon={Flag02Icon} className="text-accent" />
 								{t("countryCollaborationDetails")}
 							</h3>
 								<Table 
@@ -1378,7 +1359,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Institutions Table */}
-				<SectionCard title={t("allInstitutions")} icon={BsBuilding}>
+				<SectionCard title={t("allInstitutions")} icon={Building02Icon}>
 					<div className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<Input
@@ -1390,7 +1371,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								}}
 								placeholder={t("searchByInstitutionName")}
 								startContent={
-									<BsSearch className="text-black/40 dark:text-white/40" />
+									<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />
 								}
 							/>
 							<Select
@@ -1526,7 +1507,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Language Distribution */}
-				<SectionCard title={t("languageDistribution")} icon={BsGlobe}>
+				<SectionCard title={t("languageDistribution")} icon={Globe02Icon}>
 					<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
 						{stats.languageDistribution.map((lang, index) => (
 							<div
@@ -1545,7 +1526,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Author Countries */}
-				<SectionCard title={t("coauthorCountries")} icon={BsFlag}>
+				<SectionCard title={t("coauthorCountries")} icon={Flag02Icon}>
 					<div className="space-y-8">
 						{/* Hero Stats Row */}
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1610,7 +1591,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								className="space-y-4"
 							>
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsBarChart className="text-accent" />
+									<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 									{t("authorsVsItems")}
 								</h3>
 								<Card color="card" className="p-6">
@@ -1822,7 +1803,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								className="space-y-4"
 							>
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsGraphUp className="text-accent" />
+								<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
 								H-Index {t("distribution")} -{" "}
 								{t("topCountries")}
 							</h3>
@@ -2015,7 +1996,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							className="space-y-4"
 						>
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsFlag className="text-accent" />
+								<HugeiconsIcon icon={Flag02Icon} className="text-accent" />
 								{t("topCountriesLeaderboard")}
 							</h3>
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2077,7 +2058,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Author Countries Table */}
-				<SectionCard title={t("authorCountriesTable")} icon={BsFlag}>
+				<SectionCard title={t("authorCountriesTable")} icon={Flag02Icon}>
 					<div className="space-y-4">
 						<Table
 							color="statistics"
@@ -2162,7 +2143,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Author Analytics */}
-				<SectionCard title={t("authorAnalytics")} icon={BsPeople}>
+				<SectionCard title={t("authorAnalytics")} icon={UserGroupIcon}>
 					<div className="space-y-8">
 										{/* Author Overview Stats */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -2217,7 +2198,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							{/* REAL Author Productivity Distribution */}
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsBarChart className="text-accent" />
+									<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 																						{t("globalAuthorProductivityDistribution")}
 								</h3>
 								<Card color="card" className="p-6">
@@ -2268,7 +2249,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							{/* Top Authors by H-Index */}
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsGraphUp className="text-accent" />
+									<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
 									{t("topResearchers", { count: stats.authorStats.length })}
 								</h3>
 								<Card color="card" className="p-6">
@@ -2323,7 +2304,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						{/* Author Statistics Table */}
 						<motion.div variants={itemVariants} className="space-y-4">
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsPeople className="text-accent" />
+								<HugeiconsIcon icon={UserGroupIcon} className="text-accent" />
 								{t("detailedAuthorStatistics", { count: stats.authorStats.length })}
 							</h3>
 							<div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4 mb-4">
@@ -2341,7 +2322,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 										setAuthorsPage(1);
 									}}
 									placeholder={t("searchByAuthorName")}
-									startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
+									startContent={<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />}
 								/>
 								<Table
 									color="statistics"
@@ -2425,7 +2406,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Research Topics Analysis */}
-				<SectionCard title={t("researchTopics")} icon={BsTags}>
+				<SectionCard title={t("researchTopics")} icon={TagsIcon}>
 					<div className="space-y-8">
 						{/* Topic Overview Stats */}
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -2480,7 +2461,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							{/* Topic Distribution by Level */}
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsLayers className="text-accent" />
+									<HugeiconsIcon icon={Layers01Icon} className="text-accent" />
 									{t("topicDistributionByLevel")}
 								</h3>
 								<Card color="card" className="p-6">
@@ -2529,7 +2510,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							{/* Top Topics by H-Index */}
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-									<BsGraphUp className="text-accent" />
+									<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
 									{t("topTopicsByImpact")}
 								</h3>
 								<Card color="card" className="p-6">
@@ -2594,7 +2575,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						{/* Topic Hierarchy Visualization */}
 						<motion.div variants={itemVariants} className="space-y-4">
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsBookmark className="text-accent" />
+								<HugeiconsIcon icon={Bookmark02Icon} className="text-accent" />
 								{t("topLevelResearchAreas")}
 							</h3>
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2649,7 +2630,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						{/* Detailed Topics Table */}
 						<motion.div variants={itemVariants} className="space-y-4">
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsTags className="text-accent" />
+								<HugeiconsIcon icon={TagsIcon} className="text-accent" />
 								{t("allResearchTopics")}
 							</h3>
 							<div className="space-y-4">
@@ -2662,7 +2643,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 											setTopicsPage(1);
 										}}
 										placeholder={t("searchByTopicNameOrPath")}
-										startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
+										startContent={<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />}
 									/>
 									<Select
 										label={t("filterByLevel")}
@@ -2800,7 +2781,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 
 				{/* Top Journals Table */}
 				{stats.topJournals.length > 0 && (
-					<SectionCard title={t("topJournals")} icon={BsJournalText}>
+					<SectionCard title={t("topJournals")} icon={NotebookTextIcon}>
 						<div className="space-y-4">
 							<Table
 								color="statistics"
@@ -2848,7 +2829,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 
 				{/* Recent Activity */}
 				{stats.recentActivity.length > 0 && (
-					<SectionCard title={t("recentActivity")} icon={BsActivity}>
+					<SectionCard title={t("recentActivity")} icon={Activity01Icon}>
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 							{stats.recentActivity.map((activity, index) => (
 								<div

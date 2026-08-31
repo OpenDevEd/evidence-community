@@ -1,8 +1,10 @@
 "use client";
 
+import { Login01Icon, Menu01Icon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { GiHamburgerMenu } from "react-icons/gi";
 import {
 	Avatar,
 	DropdownItem,
@@ -17,9 +19,6 @@ import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
 import { useRouter } from "@/i18n/routing";
 import { signOut } from "next-auth/react";
-import { HiOutlineMoon } from "react-icons/hi2";
-import { IoMdSunny, IoIosLogIn } from "react-icons/io";
-import { User, LogOut } from "lucide-react";
 import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -132,7 +131,7 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 			className="flex items-center justify-center"
 			aria-label={t("actionsMenuAriaLabel")}
 		>
-			<GiHamburgerMenu className="size-5 fill-accent" />
+			<HugeiconsIcon icon={Menu01Icon} className="size-5 text-accent" />
 		</Button>
 	);
 
@@ -173,9 +172,9 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 							key="theme"
 							startContent={
 								isDark ? (
-									<IoMdSunny className="size-5 fill-accent" />
+									<HugeiconsIcon icon={Sun03Icon} className="size-5 text-accent" />
 								) : (
-									<HiOutlineMoon className="size-5 stroke-accent" />
+									<HugeiconsIcon icon={Moon02Icon} className="size-5 text-accent" />
 								)
 							}
 						>
@@ -191,7 +190,7 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					{hasLogin ? (
 						<DropdownItem
 							key="login"
-							startContent={<IoIosLogIn className="size-5" />}
+							startContent={<HugeiconsIcon icon={Login01Icon} className="size-5" />}
 						>
 							{t("login")}
 						</DropdownItem>
@@ -207,14 +206,14 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 						<>
 							<DropdownItem
 								key="profile"
-								startContent={<User className="size-4" />}
+								startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}
 							>
 								{t("profileMenuItem")}
 							</DropdownItem>
 							<DropdownItem
 								key="logout"
 								color="danger"
-								startContent={<LogOut className="size-4" />}
+								startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
 								className="text-danger"
 							>
 								{t("logout")}

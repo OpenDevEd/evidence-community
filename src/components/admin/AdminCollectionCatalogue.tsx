@@ -1,25 +1,10 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArchiveIcon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, DragDropVerticalIcon, Folder01Icon, FolderAddIcon, FolderInputIcon, FolderOpenIcon, Loading03Icon, LockIcon, PencilIcon, RotateLeft01Icon, Search01Icon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { useDraggable, useDroppable } from "@dnd-kit/react";
 import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import {
-	Archive,
-	ChevronRight,
-	Folder,
-	FolderInput,
-	FolderOpen,
-	FolderPlus,
-	GripVertical,
-	LoaderCircle,
-	Lock,
-	Pencil,
-	RotateCcw,
-	Search,
-	Settings2,
-	Trash2,
-	X,
-} from "lucide-react";
 import {
 	type KeyboardEvent,
 	type RefObject,
@@ -124,7 +109,7 @@ function RootDropZone({ active }: { active: boolean }) {
 			}`}
 			data-collection-drop="root"
 		>
-			<FolderInput aria-hidden size={13} />
+			<HugeiconsIcon icon={FolderInputIcon} aria-hidden size={13} />
 			Move to top level
 		</div>
 	);
@@ -191,7 +176,7 @@ function CollectionActions({
 					className="grid size-7 shrink-0 place-items-center rounded-md text-black/40 hover:bg-black/[0.06] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/40 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
 					type="button"
 				>
-					<Settings2 aria-hidden size={14} />
+					<HugeiconsIcon icon={Settings02Icon} aria-hidden size={14} />
 				</button>
 			</DropdownTrigger>
 			<DropdownMenu
@@ -205,26 +190,26 @@ function CollectionActions({
 			>
 				<DropdownItem
 					key="create"
-					startContent={<FolderPlus aria-hidden size={14} />}
+					startContent={<HugeiconsIcon icon={FolderAddIcon} aria-hidden size={14} />}
 				>
 					New inside
 				</DropdownItem>
 				<DropdownItem
 					key="rename"
-					startContent={<Pencil aria-hidden size={14} />}
+					startContent={<HugeiconsIcon icon={PencilIcon} aria-hidden size={14} />}
 				>
 					Rename
 				</DropdownItem>
 				<DropdownItem
 					key="move"
-					startContent={<FolderInput aria-hidden size={14} />}
+					startContent={<HugeiconsIcon icon={FolderInputIcon} aria-hidden size={14} />}
 				>
 					Move
 				</DropdownItem>
 				<DropdownItem
 					key="delete"
 					color="danger"
-					startContent={<Trash2 aria-hidden size={14} />}
+					startContent={<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />}
 				>
 					Delete
 				</DropdownItem>
@@ -344,7 +329,7 @@ function CollectionRow({
 		return () => window.clearTimeout(timeout);
 	}, [entry, expanded, hierarchyEnabled, isDropTarget, onToggle]);
 
-	const Icon = selected || expanded ? FolderOpen : Folder;
+	const Icon = selected || expanded ? FolderOpenIcon : Folder01Icon;
 	return (
 		<div
 			ref={hierarchyEnabled ? ref : undefined}
@@ -397,11 +382,7 @@ function CollectionRow({
 					onClick={() => onToggle(entry)}
 					type="button"
 				>
-					<ChevronRight
-						aria-hidden
-						className={expanded ? "rotate-90" : ""}
-						size={13}
-					/>
+					<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className={expanded ? "rotate-90" : ""} size={13} />
 				</button>
 			) : movesEnabled ? (
 				<button
@@ -411,7 +392,7 @@ function CollectionRow({
 					data-collection-drag-handle={entry.key}
 					type="button"
 				>
-					<GripVertical aria-hidden size={13} />
+					<HugeiconsIcon icon={DragDropVerticalIcon} aria-hidden size={13} />
 				</button>
 			) : (
 				<span className="size-6 shrink-0" />
@@ -437,7 +418,8 @@ function CollectionRow({
 				tabIndex={focused ? 0 : -1}
 				type="button"
 			>
-				<Icon
+				<HugeiconsIcon
+					icon={Icon}
 					aria-hidden
 					className={`shrink-0 ${
 						selected
@@ -455,11 +437,7 @@ function CollectionRow({
 					) : null}
 				</span>
 				{!editable ? (
-					<Lock
-						aria-label="Collection editing unavailable"
-						className="shrink-0 opacity-35"
-						size={11}
-					/>
+					<HugeiconsIcon icon={LockIcon} aria-label="Collection editing unavailable" className="shrink-0 opacity-35" size={11} />
 				) : null}
 			</button>
 			{view === "deleted" && editable ? (
@@ -470,7 +448,7 @@ function CollectionRow({
 						onClick={() => onRestore(entry)}
 						type="button"
 					>
-						<RotateCcw aria-hidden size={13} />
+						<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={13} />
 					</button>
 				</Tooltip>
 			) : view === "active" && editable ? (
@@ -483,7 +461,7 @@ function CollectionRow({
 							data-collection-drag-handle={entry.key}
 							type="button"
 						>
-							<GripVertical aria-hidden size={14} />
+							<HugeiconsIcon icon={DragDropVerticalIcon} aria-hidden size={14} />
 						</button>
 					) : null}
 					<CollectionActions
@@ -1252,7 +1230,7 @@ export function AdminCollectionCatalogue({
 		>
 			<div className="flex shrink-0 items-center gap-1.5 px-2 pb-2 pt-1">
 				<label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg bg-black/[0.045] px-2.5 text-black/45 focus-within:ring-2 focus-within:ring-focus/40 dark:bg-white/[0.055] dark:text-white/45">
-					<Search aria-hidden className="shrink-0" size={13} />
+					<HugeiconsIcon icon={Search01Icon} aria-hidden className="shrink-0" size={13} />
 					<input
 						aria-label="Search collections"
 						className="min-w-0 flex-1 bg-transparent text-xs text-black outline-none placeholder:text-black/35 dark:text-white dark:placeholder:text-white/35"
@@ -1271,7 +1249,7 @@ export function AdminCollectionCatalogue({
 							onClick={() => setQuery("")}
 							type="button"
 						>
-							<X aria-hidden size={12} />
+							<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={12} />
 						</button>
 					) : null}
 				</label>
@@ -1297,7 +1275,7 @@ export function AdminCollectionCatalogue({
 						}
 						type="button"
 					>
-						<Archive aria-hidden size={14} />
+						<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />
 					</button>
 				</Tooltip>
 			</div>
@@ -1392,7 +1370,8 @@ export function AdminCollectionCatalogue({
 											catalogueTreeState,
 											row.source,
 										) ? (
-											<ChevronRight
+											<HugeiconsIcon
+												icon={ArrowRight01Icon}
 												aria-hidden
 												className={`shrink-0 ${
 													expandedSources.has(row.source.key)
@@ -1408,7 +1387,7 @@ export function AdminCollectionCatalogue({
 											{row.source.key !==
 												NATIVE_SOURCE_CONNECTION_KEY &&
 											row.source.readOnly ? (
-												<Lock aria-hidden size={13} />
+												<HugeiconsIcon icon={LockIcon} aria-hidden size={13} />
 											) : (
 												<SourceProviderIcon
 													provider={row.source.provider}
@@ -1567,11 +1546,7 @@ export function AdminCollectionCatalogue({
 									>
 										{row.kind === "loading" ? (
 											<>
-												<LoaderCircle
-													aria-hidden
-													className="animate-spin"
-													size={13}
-												/>
+												<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin" size={13} />
 												Loading
 											</>
 										) : row.kind === "error" ? (

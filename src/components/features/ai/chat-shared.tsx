@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Alert02Icon, Refresh01Icon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
 import {
 	ReactNode,
 	useCallback,
@@ -8,11 +10,6 @@ import {
 	useState,
 } from "react";
 import { useTranslations } from "next-intl";
-import {
-	RiErrorWarningLine,
-	RiRefreshLine,
-	RiResetLeftFill,
-} from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 
@@ -92,7 +89,7 @@ export function ChatErrorCard({
 		>
 			<div className="flex items-start gap-3">
 				<span className="mt-px grid size-8 shrink-0 place-items-center rounded-full bg-danger/10 text-danger dark:bg-danger/15">
-					<RiErrorWarningLine className="size-icon-md" />
+					<HugeiconsIcon icon={Alert02Icon} className="size-icon-md" />
 				</span>
 				<div className="min-w-0 flex-1 pt-1">
 					<p className="text-sm font-semibold leading-snug text-black/80 dark:text-white/85">
@@ -109,9 +106,9 @@ export function ChatErrorCard({
 					variant="transparent"
 					startContent={
 						isContextTooLarge ? (
-							<RiResetLeftFill className="size-3.5" />
+							<HugeiconsIcon icon={RotateLeft01Icon} className="size-3.5" />
 						) : (
-							<RiRefreshLine className="size-3.5" />
+							<HugeiconsIcon icon={Refresh01Icon} className="size-3.5" />
 						)
 					}
 					className="h-8 shrink-0 gap-1.5 rounded-xl bg-danger/10 px-3 text-xs font-semibold text-danger hover:bg-danger/15 dark:bg-danger/15 dark:hover:bg-danger/20"

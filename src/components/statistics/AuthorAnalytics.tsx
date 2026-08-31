@@ -1,8 +1,9 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BarChartIcon, ChartIncreaseIcon, Search01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsPeople, BsBarChart, BsGraphUp, BsSearch } from "react-icons/bs";
 import {
 	BarChart,
 	Bar,
@@ -100,7 +101,7 @@ export function AuthorAnalytics({
 	const authorsPages = Math.ceil(filteredAuthors.length / rowsPerPage);
 
 	return (
-		<SectionCard title={t("authorAnalytics")} icon={BsPeople}>
+		<SectionCard title={t("authorAnalytics")} icon={UserGroupIcon}>
 			<div className="space-y-8">
 				{/* Author Overview Stats */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -155,7 +156,7 @@ export function AuthorAnalytics({
 					{/* Author Productivity Distribution */}
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsBarChart className="text-accent" />
+							<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 							{t("globalAuthorProductivityDistribution")}
 						</h3>
 						<Card color="card" className="p-6">
@@ -206,7 +207,7 @@ export function AuthorAnalytics({
 					{/* Top Authors by H-Index */}
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsGraphUp className="text-accent" />
+							<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
 							{t("topResearchers", { count: authorStats.length })}
 						</h3>
 						<Card color="card" className="p-6">
@@ -261,7 +262,7 @@ export function AuthorAnalytics({
 				{/* Author Statistics Table */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<BsPeople className="text-accent" />
+						<HugeiconsIcon icon={UserGroupIcon} className="text-accent" />
 						{t("detailedAuthorStatistics", { count: authorStats.length })}
 					</h3>
 					<div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4 mb-4">
@@ -279,7 +280,7 @@ export function AuthorAnalytics({
 								setAuthorsPage(1);
 							}}
 							placeholder={t("searchByAuthorName")}
-							startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
+							startContent={<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />}
 						/>
 						<Table
 							color="statistics"

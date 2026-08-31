@@ -1,6 +1,7 @@
-
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Link02Icon, Mail01Icon, Message01Icon, SentIcon } from "@hugeicons/core-free-icons";
 import { AnyFieldApi, FormApi, useForm } from "@tanstack/react-form";
 import { z, ZodError } from "zod";
 import { Input } from "@/components/nextui/Input";
@@ -9,12 +10,10 @@ import { Button } from "@/components/nextui/Button";
 import { Textarea } from "@/components/nextui/Textarea";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence, motion } from "framer-motion";
-import { BiLink, BiMessageSquare, BiSolidSend, BiUser } from "react-icons/bi";
 import { areLinksValid } from "@/lib/actions";
 import { Spinner } from "@nextui-org/react";
 import { toast } from "@/components/layout/Toast";
 import { takedownRequestSchema } from "@/lib/utils";
-import { MdEmail } from "react-icons/md";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -213,7 +212,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 				className="w-full max-w-2xl flex flex-col gap-6 items-center"
 			>
 				<div className="flex flex-col items-center gap-2 mb-4">
-					<BiMessageSquare className="w-12 h-12 text-accent" />
+					<HugeiconsIcon icon={Message01Icon} className="w-12 h-12 text-accent" />
 					<h1 className="text-3xl font-bold text-center">
 						{header || t("takedownRequest")}
 					</h1>
@@ -235,7 +234,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 							{(field) => (
 								<InputField
 									startContent={
-										<MdEmail className="text-accent/80" />
+										<HugeiconsIcon icon={Mail01Icon} className="text-accent/80" />
 									}
 									label={t("email")}
 									field={field}
@@ -353,7 +352,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 							{(field) => (
 								<TextareaField
 									startContent={
-										<BiLink className="text-accent/80" />
+										<HugeiconsIcon icon={Link02Icon} className="text-accent/80" />
 									}
 									label={t("linksPerLine")}
 									field={field}
@@ -375,7 +374,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 							{(field) => (
 								<TextareaField
 									startContent={
-										<BiMessageSquare className="text-accent/80" />
+										<HugeiconsIcon icon={Message01Icon} className="text-accent/80" />
 									}
 									label={t("description")}
 									field={field}
@@ -397,7 +396,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 								isSubmitting ? (
 									<Spinner size="sm" />
 								) : (
-									<BiSolidSend className="text-lg" />
+									<HugeiconsIcon icon={SentIcon} className="text-lg" />
 								)
 							}
 							type="submit"

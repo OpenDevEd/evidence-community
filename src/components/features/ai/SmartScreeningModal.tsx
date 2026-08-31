@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
@@ -9,7 +11,6 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { BiPlus, BiTrash } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import { useLocalStorage } from "usehooks-ts";
 
@@ -108,7 +109,7 @@ function ScreeningFieldRow({
 					onPress={onRemove}
 					className="!p-0"
 				>
-					<BiTrash className="size-4" />
+					<HugeiconsIcon icon={Delete02Icon} className="size-4" />
 				</Button>
 			</div>
 		</motion.div>

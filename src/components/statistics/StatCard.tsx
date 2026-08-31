@@ -1,11 +1,12 @@
 import { motion } from "framer-motion";
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { Card } from "@/components/nextui/Card";
 
 type StatCardProps = {
 	title: string;
 	value: string | number;
 	subtitle?: string;
-	icon: React.ElementType;
+	icon: IconSvgElement;
 	color?: "accent" | "success" | "tertiary" | "card";
 };
 
@@ -18,7 +19,7 @@ export function StatCard({
 	title,
 	value,
 	subtitle,
-	icon: Icon,
+	icon,
 	color = "accent",
 }: StatCardProps) {
 	return (
@@ -38,7 +39,8 @@ export function StatCard({
 								: "bg-white/10 dark:bg-white/5"
 						}`}
 					>
-						<Icon
+						<HugeiconsIcon
+							icon={icon}
 							className={`size-6 ${color === "accent"
 									? "text-accent"
 									: color === "success"
@@ -68,4 +70,4 @@ export function StatCard({
 			</Card>
 		</motion.div>
 	);
-} 
+}

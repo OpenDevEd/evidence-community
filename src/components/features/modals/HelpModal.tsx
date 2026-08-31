@@ -1,7 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/react";
-import { LuX } from "react-icons/lu";
 import { SectionTitle } from "../../typography/SectionTitle";
 import { Paragraph } from "../../typography/Paragraph";
 import { Highlight } from "../../typography/Highlight";
@@ -98,7 +99,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
             className="lg:px-0 px-0 translate-x-2"
             aria-label={t("closePopupAriaLabel")}
             startContent={
-              <LuX className="size-6 text-black dark:text-white/80" />
+              <HugeiconsIcon icon={Cancel01Icon} className="size-6 text-black dark:text-white/80" />
             }
           />
         </ModalHeader>

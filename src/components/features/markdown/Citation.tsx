@@ -1,11 +1,11 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BookOpen01Icon, Download01Icon, LinkSquare01Icon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { forwardRef, type ComponentProps, type ReactNode } from "react";
-import { BiBookOpen } from "react-icons/bi";
-import { LuDownload, LuExternalLink } from "react-icons/lu";
 import useSWR from "swr";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
@@ -80,7 +80,7 @@ function CitationChipContents({ children }: { children: ReactNode }) {
 				aria-hidden="true"
 				className="grid size-icon-md shrink-0 place-items-center rounded-full bg-accent/[0.12] text-accent transition-colors group-hover/chip:bg-accent group-hover/chip:text-white dark:bg-accent/20"
 			>
-				<BiBookOpen className="size-icon-xs" />
+				<HugeiconsIcon icon={BookOpen01Icon} className="size-icon-xs" />
 			</span>
 			{children}
 		</>
@@ -290,7 +290,7 @@ function PdfActions({
 				rel="noopener noreferrer"
 				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-black/[0.055] px-2 text-xs font-semibold text-black/65 no-underline transition-colors hover:bg-accent/[0.12] hover:text-accent dark:bg-white/[0.08] dark:text-white/70 dark:hover:bg-accent/[0.15] dark:hover:text-accent"
 			>
-				<LuExternalLink className="size-3.5" aria-hidden="true" />
+				<HugeiconsIcon icon={LinkSquare01Icon} className="size-3.5" aria-hidden="true" />
 				{t("openDocument")}
 			</a>
 			<button
@@ -302,7 +302,7 @@ function PdfActions({
 				}}
 				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-xs font-semibold text-white transition-colors hover:bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
 			>
-				<LuDownload className="size-3.5" aria-hidden="true" />
+				<HugeiconsIcon icon={Download01Icon} className="size-3.5" aria-hidden="true" />
 				{t("download")}
 			</button>
 		</div>
@@ -330,7 +330,7 @@ function PdfCover({
 				/>
 			) : (
 				<div className="flex h-full items-center justify-center text-accent/70">
-					<BiBookOpen className="size-6" aria-hidden="true" />
+					<HugeiconsIcon icon={BookOpen01Icon} className="size-6" aria-hidden="true" />
 				</div>
 			)}
 		</div>

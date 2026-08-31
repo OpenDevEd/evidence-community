@@ -1,8 +1,9 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useState } from "react";
-import { IoGlobeOutline } from "react-icons/io5";
 import { twMerge } from "tailwind-merge";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
@@ -211,7 +212,7 @@ const CountryCard = ({
 							className="text-sm text-black/60 dark:text-default-500"
 						>
 							<div className="flex items-center gap-1">
-								<IoGlobeOutline className="text-accent/80 dark:text-accent" />
+								<HugeiconsIcon icon={Globe02Icon} className="text-accent/80 dark:text-accent" />
 								{t("itemFilterByCountryAriaLabel")}
 							</div>
 						</motion.div>

@@ -1,5 +1,5 @@
+import { Activity01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations, useFormatter } from "next-intl";
-import { BsActivity } from "react-icons/bs";
 import { SectionCard } from "./SectionCard";
 
 type RecentActivityProps = {
@@ -15,7 +15,7 @@ export function RecentActivity({ recentActivity }: RecentActivityProps) {
 	}
 
 	return (
-		<SectionCard title={t("recentActivity")} icon={BsActivity}>
+		<SectionCard title={t("recentActivity")} icon={Activity01Icon}>
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 				{recentActivity.map((activity, index) => (
 					<div

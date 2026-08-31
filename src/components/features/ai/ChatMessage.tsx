@@ -1,9 +1,10 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Cancel01Icon, HashtagIcon, TextFontIcon, Tick01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { Spinner } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
 import React, { useMemo } from "react";
-import { LuCheck, LuHash, LuType, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
 
@@ -75,10 +76,10 @@ function ScreeningFieldIcon({
 	type: string;
 	value: unknown;
 }) {
-	if (type === "number") return <LuHash />;
-	if (type === "string") return <LuType />;
+	if (type === "number") return <HugeiconsIcon icon={HashtagIcon} />;
+	if (type === "string") return <HugeiconsIcon icon={TextFontIcon} />;
 
-	return value === true ? <LuCheck /> : <LuX />;
+	return value === true ? <HugeiconsIcon icon={Tick01Icon} /> : <HugeiconsIcon icon={Cancel01Icon} />;
 }
 
 /** What the screening run found for one publication. */
@@ -261,7 +262,7 @@ function MessageAvatar({
 			)}
 		>
 			{message.role === "user" ? (
-				<LuUser className="size-4 text-white" />
+				<HugeiconsIcon icon={UserIcon} className="size-4 text-white" />
 			) : (
 				React.createElement(getAIModelPresentation(modelId).icon, {
 					className: "size-4 invert shrink-0",

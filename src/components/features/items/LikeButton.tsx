@@ -1,12 +1,12 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Bookmark02Icon, BookmarkCheck01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { Item, ListItem } from "@/app/api/item/types";
-import { FaHeart, FaHeartBroken } from "react-icons/fa";
 import { useState, forwardRef } from "react";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
-import { BsBookmark, BsBookmarkCheck, BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
 import { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 
@@ -49,7 +49,7 @@ const LikeButton = forwardRef<
       className={twMerge(className)}
       aria-label={isLiked ? t("removeBookmarkAction") : t("bookmarkAction")}
     >
-      {!isLiked ? <BsBookmark /> : <BsBookmarkCheck />}
+      {!isLiked ? <HugeiconsIcon icon={Bookmark02Icon} /> : <HugeiconsIcon icon={BookmarkCheck01Icon} />}
     </Button>
   );
 });

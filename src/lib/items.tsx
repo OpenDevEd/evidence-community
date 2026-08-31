@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { SearchRemoveIcon } from "@hugeicons/core-free-icons";
 import { ReactNode, useRef, useMemo, memo, useState, useEffect } from "react";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
@@ -24,7 +26,6 @@ import Image from "next/image";
 import { RelationsType } from "@/types/item";
 import Resource from "@/components/features/items/Resource";
 import useSWR from "swr";
-import { MdSearchOff } from "react-icons/md";
 import { serializeSearchParams } from "./searchParams";
 import { COUNTRY_PARAMS } from "@/constants/misc";
 
@@ -439,7 +440,7 @@ function Relations({ value }: { value: RelationsType }) {
 				</AnimatePresence>
 				<div className="first:block hidden">
 					<div className="flex justify-center items-center gap-2 ">
-						<MdSearchOff className="size-6" />
+						<HugeiconsIcon icon={SearchRemoveIcon} className="size-6" />
 						There are no relations found for this item in this
 						database.
 					</div>

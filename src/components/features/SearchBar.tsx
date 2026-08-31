@@ -1,7 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Search01Icon } from "@hugeicons/core-free-icons";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { IoSearch } from "react-icons/io5";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { PropsOf } from "@nextui-org/react";
@@ -126,9 +127,9 @@ export function SearchBar({
 			}}
 			isClearable
 			startContent={
-				<IoSearch
+				<HugeiconsIcon icon={Search01Icon}
 					aria-label={t("searchIconAriaLabel")}
-					className="size-6 fill-current text-black/60 dark:text-white/40"
+					className="size-6 text-black/60 dark:text-white/40"
 				/>
 			}
 			endContent={endContent}

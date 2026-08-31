@@ -1,8 +1,9 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BarChartIcon, Building02Icon, Cancel01Icon, FilterIcon, Folder01Icon, QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState, memo, Fragment } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsBarChart, BsFilter, BsX, BsBuilding, BsFolder, BsFileText, BsCalculator, BsQuote } from "react-icons/bs";
 import {
 	LineChart,
 	Line,
@@ -183,13 +184,13 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 	const hasActiveFilters = selectedInstitution !== "all" || selectedTopic !== "all";
 
 	return (
-		<SectionCard title={t("citationsByYear")} icon={BsQuote}>
+		<SectionCard title={t("citationsByYear")} icon={QuoteUpIcon}>
 			<div className="space-y-8">
 				{/* Filter Controls */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<div className="flex items-center justify-between">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<BsFilter className="text-accent" />
+							<HugeiconsIcon icon={FilterIcon} className="text-accent" />
 							{t("filterOptions")}
 						</h3>
 						{hasActiveFilters && (
@@ -198,7 +199,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 								variant="flat"
 								color="default"
 								onPress={clearFilters}
-								startContent={<BsX />}
+								startContent={<HugeiconsIcon icon={Cancel01Icon} />}
 							>
 								{t("clearFilters")}
 							</Button>
@@ -226,7 +227,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							<Fragment>
 								<AutocompleteItem 
 									key="all"
-									startContent={<BsBuilding className="text-black/40 dark:text-white/40" />}
+									startContent={<HugeiconsIcon icon={Building02Icon} className="text-black/40 dark:text-white/40" />}
 								>
 									{t("allInstitutions")}
 								</AutocompleteItem>
@@ -243,7 +244,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 													{countryCode && (
 														<CountryFlag countryCode={countryCode} className="w-5 h-3" />
 													)}
-													<BsBuilding className="text-black/40 dark:text-white/40" />
+													<HugeiconsIcon icon={Building02Icon} className="text-black/40 dark:text-white/40" />
 												</div>
 											}
 											description={countryName ? `${countryName} • ${institution.count.toLocaleString()} items` : `${institution.count.toLocaleString()} items`}
@@ -275,7 +276,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							<Fragment>
 								<AutocompleteItem 
 									key="all"
-									startContent={<BsFolder className="text-black/40 dark:text-white/40" />}
+									startContent={<HugeiconsIcon icon={Folder01Icon} className="text-black/40 dark:text-white/40" />}
 								>
 									{t("allTopics")}
 								</AutocompleteItem>
@@ -289,7 +290,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 											key={topic.value}
 											startContent={
 												<div className="flex items-center gap-2">
-													<BsFolder className="text-black/40 dark:text-white/40" />
+													<HugeiconsIcon icon={Folder01Icon} className="text-black/40 dark:text-white/40" />
 													{level > 1 && (
 														<span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
 															L{level}
@@ -410,7 +411,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 												<div className="bg-card_light dark:bg-card border border-black/10 dark:border-white/10 rounded-2xl shadow-lg p-4 min-w-[200px] space-y-3">
 													{/* Header */}
 													<div className="flex items-center gap-2 pb-2 border-b border-black/10 dark:border-white/10">
-														<BsBarChart className="text-accent w-4 h-4" />
+														<HugeiconsIcon icon={BarChartIcon} className="text-accent w-4 h-4" />
 														<span className="font-semibold text-black dark:text-white">
 															{t("year")} {label}
 														</span>

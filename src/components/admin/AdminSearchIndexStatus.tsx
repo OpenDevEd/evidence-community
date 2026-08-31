@@ -1,15 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, CheckmarkCircle01Icon, Clock03Icon, Loading03Icon, Refresh01Icon, SearchCheckIcon, ServerOffIcon } from "@hugeicons/core-free-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import {
-	CircleAlert,
-	CircleCheck,
-	Clock3,
-	LoaderCircle,
-	RefreshCw,
-	SearchCheck,
-	ServerOff,
-} from "lucide-react";
 
 import { Button } from "@/components/nextui/Button";
 import { Progress } from "@/components/nextui/Progress";
@@ -19,47 +12,47 @@ import type { AdminSearchIndexView } from "./admin-search-index";
 const statusAppearance = {
 	checking: {
 		className: "text-black/45 dark:text-white/50",
-		icon: LoaderCircle,
+		icon: Loading03Icon,
 		spin: true,
 	},
 	failed: {
 		className: "text-danger",
-		icon: CircleAlert,
+		icon: AlertCircleIcon,
 		spin: false,
 	},
 	indexed: {
 		className: "text-emerald-700 dark:text-emerald-300",
-		icon: CircleCheck,
+		icon: CheckmarkCircle01Icon,
 		spin: false,
 	},
 	indexing: {
 		className: "text-accent-700 dark:text-accent-300",
-		icon: LoaderCircle,
+		icon: Loading03Icon,
 		spin: true,
 	},
 	offline: {
 		className: "text-amber-700 dark:text-amber-300",
-		icon: ServerOff,
+		icon: ServerOffIcon,
 		spin: false,
 	},
 	queued: {
 		className: "text-accent-700 dark:text-accent-300",
-		icon: Clock3,
+		icon: Clock03Icon,
 		spin: false,
 	},
 	ready: {
 		className: "text-emerald-700 dark:text-emerald-300",
-		icon: SearchCheck,
+		icon: SearchCheckIcon,
 		spin: false,
 	},
 	retrying: {
 		className: "text-accent-700 dark:text-accent-300",
-		icon: RefreshCw,
+		icon: Refresh01Icon,
 		spin: true,
 	},
 	unavailable: {
 		className: "text-black/45 dark:text-white/50",
-		icon: CircleAlert,
+		icon: AlertCircleIcon,
 		spin: false,
 	},
 } as const;
@@ -92,7 +85,8 @@ export function AdminSearchIndexStatus({
 					type="button"
 				>
 					<span className="grid size-3.5 shrink-0 place-items-center overflow-hidden">
-						<Icon
+						<HugeiconsIcon
+							icon={Icon}
 							aria-hidden
 							className={appearance.spin ? "animate-spin" : undefined}
 							size={14}
@@ -116,7 +110,8 @@ export function AdminSearchIndexStatus({
 						<span
 							className={`mt-0.5 grid size-[15px] shrink-0 place-items-center overflow-hidden ${appearance.className}`}
 						>
-							<Icon
+							<HugeiconsIcon
+								icon={Icon}
 								aria-hidden
 								className={appearance.spin ? "animate-spin" : undefined}
 								size={15}
@@ -153,7 +148,7 @@ export function AdminSearchIndexStatus({
 							color="accent"
 							onPress={onRetry}
 							size="xs"
-							startContent={<RefreshCw aria-hidden size={14} />}
+							startContent={<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={14} />}
 							variant="solid"
 						>
 							Retry indexing
@@ -163,7 +158,7 @@ export function AdminSearchIndexStatus({
 							className="w-full"
 							onPress={onRefresh}
 							size="xs"
-							startContent={<RefreshCw aria-hidden size={14} />}
+							startContent={<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={14} />}
 							variant="solid"
 						>
 							Check again

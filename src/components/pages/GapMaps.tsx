@@ -1,12 +1,11 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowRight01Icon, MapsIcon } from "@hugeicons/core-free-icons";
 import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
 import { useGapMaps } from "@/context/Providers";
 import { useTranslations } from "next-intl";
-import { BsMapFill } from "react-icons/bs";
-import { FaArrowRight } from "react-icons/fa";
-
 function GapMapCard({
 	label,
 	description,
@@ -32,7 +31,7 @@ function GapMapCard({
 				<div className="flex flex-col gap-5 p-5">
 					{/* Icon badge */}
 					<div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 group-hover:bg-accent/20 transition-colors duration-300">
-						<BsMapFill className="size-5 text-accent" />
+						<HugeiconsIcon icon={MapsIcon} className="size-5 text-accent" />
 					</div>
 
 					{/* Text content */}
@@ -50,7 +49,7 @@ function GapMapCard({
 					{/* CTA */}
 					<div className="flex items-center gap-2 text-sm font-medium text-accent/80 group-hover:text-accent transition-colors duration-300 pt-1">
 						<span>{t("openGapMap")}</span>
-						<FaArrowRight className="size-3 transition-transform duration-300 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 rtl:rotate-180" />
+						<HugeiconsIcon icon={ArrowRight01Icon} className="size-3 transition-transform duration-300 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 rtl:rotate-180" />
 					</div>
 				</div>
 			</Card>
@@ -74,7 +73,7 @@ export default function GapMaps() {
 						<div className="flex items-center gap-4">
 							<div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
 							<div className="flex items-center justify-center w-10 h-10 rounded-full bg-accent/10 shrink-0">
-								<BsMapFill className="size-4 text-accent" />
+								<HugeiconsIcon icon={MapsIcon} className="size-4 text-accent" />
 							</div>
 							<div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
 						</div>
@@ -99,7 +98,7 @@ export default function GapMaps() {
 				) : (
 					<div className="flex flex-col items-center justify-center py-20 gap-4">
 						<div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-black/[3%] dark:bg-white/[3%]">
-							<BsMapFill className="size-7 text-black/20 dark:text-white/20" />
+							<HugeiconsIcon icon={MapsIcon} className="size-7 text-black/20 dark:text-white/20" />
 						</div>
 						<p className="text-black/40 dark:text-white/40 text-lg">
 							{tPage("empty")}

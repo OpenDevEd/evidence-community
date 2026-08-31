@@ -1,12 +1,8 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { FilterIcon, Pdf01Icon, Search01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-import {
-	PiFilePdfBold,
-	PiFunnelSimpleBold,
-	PiMagnifyingGlassBold,
-	PiWrenchBold,
-} from "react-icons/pi";
 import { Tool, ToolContent, ToolHeader } from "@/components/ai-elements/Tool";
 import {
 	toolActivitySummary,
@@ -21,7 +17,7 @@ function SearchDetails({ part }: { part: ResearchToolPart }) {
 			{summary.currentResults && (
 				<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-black/45 dark:text-white/45">
 					<span className="inline-flex items-center gap-1.5 font-medium text-black/55 dark:text-white/55">
-						<PiFunnelSimpleBold
+						<HugeiconsIcon icon={FilterIcon}
 							className="size-3"
 							aria-hidden="true"
 						/>
@@ -92,11 +88,11 @@ export function ToolActivity({ part }: { part: ResearchToolPart }) {
 	const summary = toolActivitySummary(part);
 	const icon =
 		summary.toolName === "searchLibrary" ? (
-			<PiMagnifyingGlassBold className="size-3.5" aria-hidden="true" />
+			<HugeiconsIcon icon={Search01Icon} className="size-3.5" aria-hidden="true" />
 		) : summary.toolName === "readPublications" ? (
-			<PiFilePdfBold className="size-3.5" aria-hidden="true" />
+			<HugeiconsIcon icon={Pdf01Icon} className="size-3.5" aria-hidden="true" />
 		) : (
-			<PiWrenchBold className="size-3.5" aria-hidden="true" />
+			<HugeiconsIcon icon={Wrench01Icon} className="size-3.5" aria-hidden="true" />
 		);
 
 	return (

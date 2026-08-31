@@ -1,4 +1,5 @@
-import { BsStars } from "react-icons/bs";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { SparklesIcon } from "@hugeicons/core-free-icons";
 import GenericHeader from "../modals/GenericHeader";
 import { twMerge } from "tailwind-merge";
 
@@ -17,7 +18,7 @@ export default function AIHeader({
 	return (
 		<GenericHeader
 			onClose={onClose}
-			startContent={<BsStars className="text-accent" />}
+			startContent={<HugeiconsIcon icon={SparklesIcon} className="text-accent" />}
 			classNames={{
 				base: twMerge("flex items-center justify-between gap-2", className),
 				title: "flex items-center gap-2",

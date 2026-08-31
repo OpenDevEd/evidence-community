@@ -1,12 +1,12 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Add01Icon, BookBookmark01Icon } from "@hugeicons/core-free-icons";
 import { Session } from "next-auth";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { Tooltip } from "@nextui-org/react";
-import { BsPlus } from "react-icons/bs";
 import { Button } from "@/components/nextui/Button";
-import { BiSolidBookBookmark } from "react-icons/bi";
 import { useTranslations } from "next-intl";
 
 export default function UserCollection({
@@ -27,7 +27,7 @@ export default function UserCollection({
 			color={collection ? "secondary" : "card"}
 			startContent={
 				!collection &&
-				!isLoading && <BsPlus className="size-6 invert dark:invert-0" />
+				!isLoading && <HugeiconsIcon icon={Add01Icon} className="size-6 invert dark:invert-0" />
 			}
 			className={twMerge(
 				"flex items-center justify-center aspect-video min-h-0 max-h-auto h-full !p-3 whitespace-normal @container",
@@ -54,7 +54,7 @@ export default function UserCollection({
 						</span>
 					</div>
 					<span className="text-black/60 dark:text-white/60 font-medium text-xs truncate max-w-full flex items-center gap-1">
-						<BiSolidBookBookmark className="size-3" />{" "}
+						<HugeiconsIcon icon={BookBookmark01Icon} className="size-3" />{" "}
 						{collection?.numItems}
 					</span>
 				</div>

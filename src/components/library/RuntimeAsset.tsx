@@ -1,51 +1,6 @@
-import type { ComponentType, SVGProps } from "react";
-import { BsChatRightDotsFill, BsMapFill } from "react-icons/bs";
-import { FaQuestionCircle } from "react-icons/fa";
-import { GiBookshelf } from "react-icons/gi";
-import { IoStatsChart } from "react-icons/io5";
-import { LuX } from "react-icons/lu";
-import {
-	RiBookOpenFill,
-	RiTeamFill,
-	RiToolsFill,
-} from "react-icons/ri";
+import { hugeiconSpriteUrl } from "@/config/library-config/icon-assets";
 
-import AboutUs from "@/components/icons/AboutUs";
-import Blog from "@/components/icons/Blog";
-import ContactUs from "@/components/icons/ContactUs";
-import EvidenceLibrary from "@/components/icons/EvidenceLibrary";
-import Programs from "@/components/icons/Programs";
-import Team from "@/components/icons/Team";
-import {
-	PLATFORM_NAVBAR_ICON_IDS,
-	type PlatformNavbarIconId,
-} from "@/config/library-config/catalogs";
-
-type PlatformIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
-
-const PLATFORM_ICON_COMPONENTS = {
-	AboutUs,
-	EvidenceLibrary,
-	Programs,
-	Blog,
-	Team,
-	ContactUs,
-	TeamFill: RiTeamFill,
-	ToolsFill: RiToolsFill,
-	BookOpenFill: RiBookOpenFill,
-	Bookshelf: GiBookshelf,
-	ChatRightDotsFill: BsChatRightDotsFill,
-	BsMapFill,
-	LuX,
-	FaQuestionCircle,
-	IoStatsChart,
-} satisfies Record<PlatformNavbarIconId, PlatformIconComponent>;
-
-const platformIconIds = new Set<string>(PLATFORM_NAVBAR_ICON_IDS);
-
-function isPlatformIconId(reference: string): reference is PlatformNavbarIconId {
-	return platformIconIds.has(reference);
-}
+const HUGEICON_ID = /^[A-Za-z][A-Za-z0-9]*Icon$/u;
 
 export function RuntimeAsset({
 	reference,
@@ -60,18 +15,22 @@ export function RuntimeAsset({
 	width?: number;
 	height?: number;
 }) {
-	if (isPlatformIconId(reference)) {
-		const Icon = PLATFORM_ICON_COMPONENTS[reference];
-
+	if (HUGEICON_ID.test(reference)) {
 		return (
-			<Icon
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				width={width}
+				height={height}
 				aria-hidden={alt ? undefined : true}
 				aria-label={alt || undefined}
 				role={alt ? "img" : undefined}
 				className={className}
 				data-runtime-asset="platform"
 				data-platform-icon={reference}
-			/>
+			>
+				<use href={hugeiconSpriteUrl(reference)} />
+			</svg>
 		);
 	}
 

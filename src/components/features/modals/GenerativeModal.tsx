@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, Delete02Icon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
 import {
 	Listbox,
 	ListboxItem,
@@ -10,12 +12,6 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import AIHeader from "../ai/AIHeader";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { useMemo, useRef, useState } from "react";
-import {
-	BiCopy,
-	BiSolidBookBookmark,
-	BiSolidBookContent,
-	BiTrash,
-} from "react-icons/bi";
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
@@ -23,16 +19,9 @@ import { getAIModelPresentation } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
-import {
-	BsBodyText,
-	BsClockHistory,
-	BsCodeSlash,
-	BsMarkdown,
-} from "react-icons/bs";
 import { AIContentControls } from "./AIControls";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
-import { RiErrorWarningFill } from "react-icons/ri";
 import { clientAIError } from "@/lib/ai/client";
 
 export default function GenerativeModal({
@@ -192,7 +181,7 @@ export default function GenerativeModal({
 											<Button
 												size="sm"
 												startContent={
-													<BsClockHistory />
+													<HugeiconsIcon icon={WorkHistoryIcon} />
 												}
 												onPress={() =>
 													setIsHistoryOpen(true)
@@ -238,7 +227,7 @@ export default function GenerativeModal({
 											<Button
 												size="sm"
 												className="ltr:ml-auto rtl:mr-auto dark:hover:bg-red-600 min-w-0"
-												startContent={<BiTrash />}
+												startContent={<HugeiconsIcon icon={Delete02Icon} />}
 												onPress={() => {
 													if (selectedHistoryItem) {
 														setHistory(
@@ -300,7 +289,7 @@ export default function GenerativeModal({
 																	delay: 0.5,
 																}}
 															>
-																<RiErrorWarningFill className="mx-auto size-14 opacity-60" />
+																<HugeiconsIcon icon={AlertCircleIcon} className="mx-auto size-14 opacity-60" />
 																<p className="mt-4 max-w-2xl text-base font-medium sm:text-lg">
 																	{
 																		clientAIError(

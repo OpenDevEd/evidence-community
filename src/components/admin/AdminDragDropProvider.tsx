@@ -1,5 +1,7 @@
 "use client";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { FileAttachmentIcon, Folder01Icon } from "@hugeicons/core-free-icons";
 import {
 	DragDropProvider,
 	DragOverlay,
@@ -8,7 +10,6 @@ import {
 	type DragStartEvent,
 } from "@dnd-kit/react";
 import { Accessibility, defaultPreset } from "@dnd-kit/dom";
-import { FileText, Folder } from "lucide-react";
 import {
 	createContext,
 	type ReactNode,
@@ -361,18 +362,14 @@ export function AdminDragDropRoot({
 			<DragOverlay dropAnimation={null}>
 				{activeCollection ? (
 					<div className="flex min-h-8 w-[220px] items-center gap-2 rounded-lg bg-card_light px-3 text-xs text-black shadow-lg ring-1 ring-black/10 dark:bg-card dark:text-white dark:ring-white/10">
-						<Folder aria-hidden className="opacity-55" size={14} />
+						<HugeiconsIcon icon={Folder01Icon} aria-hidden className="opacity-55" size={14} />
 						<span className="truncate">
 							{activeCollection.name}
 						</span>
 					</div>
 				) : activeDrag?.kind === "records" ? (
 					<div className="flex min-h-9 max-w-[320px] items-center gap-2 rounded-lg bg-card_light px-3 text-xs text-black shadow-lg ring-1 ring-black/10 dark:bg-card dark:text-white dark:ring-white/10">
-						<FileText
-							aria-hidden
-							className="shrink-0 opacity-55"
-							size={14}
-						/>
+						<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 opacity-55" size={14} />
 						<span className="truncate">{activeDrag.label}</span>
 					</div>
 				) : null}
