@@ -1,0 +1,43 @@
+{
+	"training": {
+		"categories": ["AI_CRAWLER"],
+		"add": [],
+		"remove": ["Google-CloudVertexBot"]
+	},
+	"allowed": {
+		"categories": [
+			"AI_ASSISTANT",
+			"AI_SEARCH",
+			"SEARCH_ENGINE_CRAWLER"
+		],
+		"add": [
+			"Amzn-SearchBot",
+			"Amzn-User",
+			"BingPreview",
+			"facebookexternalhit",
+			"Google-Agent",
+			"Google-CloudVertexBot",
+			"Google-GeminiNotebook",
+			"Meta-ExternalFetcher",
+			"Meta-WebIndexer"
+		],
+		"remove": []
+	},
+	"blockedScraper": {
+		"categories": [],
+		"add": [
+			"AhrefsBot",
+			"AliyunSecBot",
+			"Baiduspider",
+			"DataForSeoBot",
+			"DotBot",
+			"MJ12bot",
+			"PetalBot",
+			"SemrushBot",
+			"SleepBot",
+			"YandexBot",
+			"YisouSpider"
+		],
+		"remove": []
+	}
+}

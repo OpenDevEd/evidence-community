@@ -1,0 +1,29 @@
+{
+	"success": true,
+	"result": {
+		"bots": [
+			{"category": "AI_CRAWLER", "name": "Amazonbot", "operator": "Amazon", "slug": "amazonbot", "userAgentPatterns": ["Amazonbot"]},
+			{"category": "AI_CRAWLER", "name": "Bytespider", "operator": "ByteDance", "slug": "bytespider", "userAgentPatterns": ["Bytespider"]},
+			{"category": "AI_CRAWLER", "name": "CCBot", "operator": "Common Crawl", "slug": "ccbot", "userAgentPatterns": ["CCBot"]},
+			{"category": "AI_CRAWLER", "name": "ClaudeBot", "operator": "Anthropic", "slug": "claudebot", "userAgentPatterns": ["ClaudeBot"]},
+			{"category": "AI_CRAWLER", "name": "FacebookBot", "operator": "Meta", "slug": "facebookbot", "userAgentPatterns": ["FacebookBot"]},
+			{"category": "AI_CRAWLER", "name": "Google-CloudVertexBot", "operator": "Google", "slug": "google-cloudvertexbot", "userAgentPatterns": ["Google-CloudVertexBot"]},
+			{"category": "AI_CRAWLER", "name": "GPTBot", "operator": "OpenAI", "slug": "gptbot", "userAgentPatterns": ["GPTBot"]},
+			{"category": "AI_CRAWLER", "name": "Meta-ExternalAgent", "operator": "Meta", "slug": "meta-externalagent", "userAgentPatterns": ["Meta-ExternalAgent"]},
+			{"category": "AI_ASSISTANT", "name": "ChatGPT-User", "operator": "OpenAI", "slug": "chatgpt-user", "userAgentPatterns": ["ChatGPT-User"]},
+			{"category": "AI_ASSISTANT", "name": "Claude-User", "operator": "Anthropic", "slug": "claude-user", "userAgentPatterns": ["Claude-User"]},
+			{"category": "AI_ASSISTANT", "name": "DuckAssistBot", "operator": "DuckDuckGo", "slug": "duckassistbot", "userAgentPatterns": ["DuckAssistBot"]},
+			{"category": "AI_ASSISTANT", "name": "Meta-ExternalFetcher", "operator": "Meta", "slug": "meta-externalfetcher", "userAgentPatterns": ["Meta-ExternalFetcher"]},
+			{"category": "AI_ASSISTANT", "name": "MistralAI-User", "operator": "Mistral AI", "slug": "mistralai-user", "userAgentPatterns": ["MistralAI-User"]},
+			{"category": "AI_ASSISTANT", "name": "Perplexity-User", "operator": "Perplexity", "slug": "perplexity-user", "userAgentPatterns": ["Perplexity-User"]},
+			{"category": "AI_SEARCH", "name": "Applebot", "operator": "Apple", "slug": "applebot", "userAgentPatterns": ["Applebot"]},
+			{"category": "AI_SEARCH", "name": "Claude-SearchBot", "operator": "Anthropic", "slug": "claude-searchbot", "userAgentPatterns": ["Claude-SearchBot"]},
+			{"category": "AI_SEARCH", "name": "OAI-SearchBot", "operator": "OpenAI", "slug": "oai-searchbot", "userAgentPatterns": ["OAI-SearchBot"]},
+			{"category": "AI_SEARCH", "name": "PerplexityBot", "operator": "Perplexity", "slug": "perplexitybot", "userAgentPatterns": ["PerplexityBot"]},
+			{"category": "SEARCH_ENGINE_CRAWLER", "name": "Bingbot", "operator": "Microsoft", "slug": "bingbot", "userAgentPatterns": ["bingbot"]},
+			{"category": "SEARCH_ENGINE_CRAWLER", "name": "DuckDuckBot", "operator": "DuckDuckGo", "slug": "duckduckbot", "userAgentPatterns": ["DuckDuckBot"]},
+			{"category": "SEARCH_ENGINE_CRAWLER", "name": "Googlebot", "operator": "Google", "slug": "googlebot", "userAgentPatterns": ["Googlebot"]},
+			{"category": "SEARCH_ENGINE_CRAWLER", "name": "Slurp", "operator": "Yahoo", "slug": "slurp", "userAgentPatterns": ["Slurp"]}
+		]
+	}
+}

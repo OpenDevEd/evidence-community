@@ -29,14 +29,29 @@ for host in "$@"; do
 	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A "$UA" -H 'Accept: text/html' -H 'Cookie: ode_browser_check=1' "$base/lib")
 	check "cookied HTML -> real page (200)" 200 "$code"
 
-	ct=$(curl -s -m 20 -o /dev/null -w '%{content_type}' -A "$UA" "$base/api/auth/session")
-	check "API without cookie -> JSON" "application/json" "${ct%%;*}"
+	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A "$UA" "$base/api/auth/session")
+	check "uncookied API -> forbidden" 403 "$code"
+
+	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A "$UA" -H 'Accept: text/x-component' -H 'Rsc: 1' "$base/lib?_rsc=shield-probe")
+	check "uncookied RSC -> forbidden" 403 "$code"
+
+	ct=$(curl -s -m 20 -o /dev/null -w '%{content_type}' -A "$UA" -H 'Cookie: ode_browser_check=1' "$base/api/auth/session")
+	check "cookied API -> JSON" "application/json" "${ct%%;*}"
 
 	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A "$UA" -H 'Accept: text/html' "$base/robots.txt")
 	check "robots.txt bypasses (200)" 200 "$code"
 
 	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A 'GPTBot/1.0' -H 'Accept: text/html' "$base/lib")
 	check "GPTBot blocked (403)" 403 "$code"
+
+	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A 'GPTBot/1.0' -H 'Accept: text/plain' "$base/robots.txt")
+	check "GPTBot can read robots.txt (200)" 200 "$code"
+
+	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A 'OAI-SearchBot/1.4' -H 'Accept: text/html' "$base/lib")
+	check "ChatGPT search allowed (200)" 200 "$code"
+
+	code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -A 'ChatGPT-User/1.0' -H 'Accept: text/html' "$base/lib")
+	check "ChatGPT user fetch allowed (200)" 200 "$code"
 done
 
 echo
