@@ -67,8 +67,6 @@ function generatedCatalog(iconIds: readonly string[]): string {
 		...iconIds.map((iconId) => `\t${JSON.stringify(iconId)},`),
 		"]);",
 		"",
-		"export type PlatformNavbarIconId = string;",
-		"",
 	].join("\n");
 }
 
@@ -100,21 +98,18 @@ async function expectedFiles() {
 	return files;
 }
 
-async function main() {
-	const check = process.argv.includes("--check");
-	const files = await expectedFiles();
-	if (check) {
-		for (const [filePath, expected] of files) {
-			const actual = await readFile(filePath, "utf8").catch(() => null);
-			assert.equal(
-				actual,
-				expected,
-				`${path.relative(projectRoot, filePath)} is out of date`,
-			);
-		}
-		return;
+async function checkGeneratedFiles(files: ReadonlyMap<string, string>) {
+	for (const [filePath, expected] of files) {
+		const actual = await readFile(filePath, "utf8").catch(() => null);
+		assert.equal(
+			actual,
+			expected,
+			`${path.relative(projectRoot, filePath)} is out of date`,
+		);
 	}
+}
 
+async function writeGeneratedFiles(files: ReadonlyMap<string, string>) {
 	await mkdir(spriteDirectory, { recursive: true });
 	await mkdir(path.dirname(generatedCatalogPath), { recursive: true });
 	const expectedNames = new Set(
@@ -127,6 +122,12 @@ async function main() {
 	}
 	for (const [filePath, content] of files) await writeFile(filePath, content);
 	console.log(`Generated ${files.size - 1} public icon files for 6,025 Hugeicons`);
+}
+
+async function main() {
+	const files = await expectedFiles();
+	if (process.argv.includes("--check")) return checkGeneratedFiles(files);
+	await writeGeneratedFiles(files);
 }
 
 void main();

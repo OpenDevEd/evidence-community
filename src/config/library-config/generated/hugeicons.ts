@@ -6026,5 +6026,3 @@ export const PLATFORM_NAVBAR_ICON_IDS: readonly string[] = Object.freeze([
 	"ZshIcon",
 	"ZzzIcon",
 ]);
-
-export type PlatformNavbarIconId = string;
