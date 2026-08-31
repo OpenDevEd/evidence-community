@@ -18,11 +18,8 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
-import { Switch } from "../../nextui/Switch";
 import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Input } from "../../nextui/Input";
-import { useDebounce } from "@/hooks/useDebounce";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { useTranslations } from "next-intl";
@@ -52,64 +49,7 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { getRuntimeYears } from "@/config/library-config/search";
-function YearPicker({
-	label,
-	selectedKey,
-	onSelectionChange,
-	years,
-}: {
-	label?: string;
-	selectedKey: string | null;
-	onSelectionChange: (value: any | null) => void;
-	years: readonly string[];
-}) {
-	const [debouncedOnSelectionChange, _] = useDebounce(onSelectionChange, 500);
-
-	const isYearsDropDownEnabled =
-		useLibraryFeature("yearsDropdown");
-
-	if (isYearsDropDownEnabled) {
-		return (
-			<Autocomplete
-				className="flex-1"
-				label={label}
-				key={label}
-				fullWidth={true}
-				selectedKey={selectedKey}
-				onSelectionChange={onSelectionChange}
-				inputProps={{
-					classNames: {
-						inputWrapper:
-							"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
-					},
-				}}
-				isVirtualized={true}
-			>
-				{years.map((year) => (
-					<AutocompleteItem aria-label={year} key={year}>
-						{year}
-					</AutocompleteItem>
-				))}
-			</Autocomplete>
-		);
-	}
-
-	return (
-		<Input
-			type="number"
-			label={label}
-			defaultValue={selectedKey || ""}
-			onChange={(e) => debouncedOnSelectionChange(e.target.value)}
-			classNames={{
-				inputWrapper:
-					"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-				input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
-				label: "text-black/80 dark:text-white/80",
-			}}
-		/>
-	);
-}
+import { YearFilter } from "./YearFilter";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -856,14 +796,6 @@ export default function CollectionsList({
 			? filters.institution.featuredValue
 			: undefined;
 
-	const [start, end, sameYear] = useMemo(() => {
-		const dashExists = range.includes("-");
-		const [start, end] = range.split("-");
-		const startNumber = start || "";
-		const endNumber = end || "";
-		return [startNumber, endNumber, !dashExists];
-	}, [range]);
-
 	const customFilter = useMemo(() => {
 		if (!customFilterInstitution) return null;
 		const isCustomFilterInstitutionSelected = queryParams.institution.includes(customFilterInstitution || "");
@@ -921,135 +853,12 @@ export default function CollectionsList({
 				)}
 				<section className="w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
 					{filters.years.enabled && (
-						<>
-							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-								<span>{t("publicationYear")}</span>
-								<div className="flex gap-4 items-center flex-1 justify-end">
-									<Switch
-										isSelected={!sameYear}
-										onValueChange={() =>
-											handleRangeChange(
-												start,
-												sameYear
-													? end
-													: null,
-											)
-										}
-										classNames={{
-											label: "text-sm font-normal",
-										}}
-									>
-										{t("yearRange")}
-									</Switch>
-								</div>
-							</div>
-							<div>
-								<AnimatePresence
-									mode="popLayout"
-									initial={false}
-								>
-									{sameYear ? (
-										<motion.div
-											initial={{
-												opacity: 0,
-												y: 10,
-											}}
-											animate={{
-												opacity: 1,
-												y: 0,
-											}}
-											exit={{
-												opacity: 0,
-												y: 10,
-											}}
-											key="same-year"
-											layout
-											className="w-full"
-										>
-											<YearPicker
-												label={t("year")}
-												selectedKey={start}
-												onSelectionChange={(
-													key,
-												) =>
-													handleRangeChange(
-														key,
-														null,
-													)
-												}
-												years={
-													configuredYears
-												}
-											/>
-										</motion.div>
-									) : (
-										<motion.div
-											initial={{
-												opacity: 0,
-												y: 10,
-											}}
-											animate={{
-												opacity: 1,
-												y: 0,
-											}}
-											exit={{
-												opacity: 0,
-												y: 10,
-											}}
-											key="year-range"
-											layout
-											className="flex gap-4 w-full"
-										>
-											{[
-												{
-													label: t("from"),
-												},
-												{
-													label: t("to"),
-												},
-											].map(
-												(
-													{ label },
-													index,
-												) => (
-													<YearPicker
-														key={label}
-														label={
-															label
-														}
-														selectedKey={
-															index ===
-															0
-																? start
-																: end
-														}
-														onSelectionChange={(
-															key,
-														) =>
-															handleRangeChange(
-																index ===
-																	0
-																	? key ||
-																			""
-																	: start,
-																index ===
-																	1
-																	? key ||
-																			""
-																	: end,
-															)
-														}
-														years={
-															configuredYears
-														}
-													/>
-												),
-											)}
-										</motion.div>
-									)}
-								</AnimatePresence>
-							</div>
-						</>
+						<YearFilter
+							key={range}
+							range={range}
+							onRangeChange={handleRangeChange}
+							years={configuredYears}
+						/>
 					)}
 					<FiltersList
 						queryParams={queryParams}
