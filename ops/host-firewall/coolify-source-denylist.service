@@ -1,0 +1,15 @@
+[Unit]
+Description=Drop confirmed hostile sources before Coolify containers
+Requires=docker.service
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Web-shell scan against coolify.opendeved.net on 2026-08-31.
+ExecStart=/bin/sh -ec '/usr/sbin/iptables -w -C DOCKER-USER -s 158.23.18.78/32 -j DROP 2>/dev/null || /usr/sbin/iptables -w -I DOCKER-USER 1 -s 158.23.18.78/32 -j DROP'
+ExecStop=/bin/sh -c 'while /usr/sbin/iptables -w -C DOCKER-USER -s 158.23.18.78/32 -j DROP 2>/dev/null; do /usr/sbin/iptables -w -D DOCKER-USER -s 158.23.18.78/32 -j DROP; done; exit 0'
+
+[Install]
+WantedBy=docker.service
