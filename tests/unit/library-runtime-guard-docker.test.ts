@@ -8,6 +8,7 @@ const containerId = "c".repeat(64);
 const guardId = "d".repeat(64);
 const commit = "a".repeat(40);
 const revision = "library-7";
+const privateNetwork = `${applicationUuid}_private`;
 const runtimeImage = `ghcr.io/opendeved/evidence-library-runtime@sha256:${"b".repeat(64)}`;
 const input = {
 	applicationUuid,
@@ -55,6 +56,7 @@ function applicationInspection(configJson: string) {
 			Networks: {
 				[applicationUuid]: { IPAddress: "172.18.0.9" },
 				coolify: { IPAddress: "172.19.0.9" },
+				[privateNetwork]: { IPAddress: "172.20.0.9" },
 			},
 		},
 		State: { Health: { Status: "healthy" }, Status: "running" },
@@ -79,6 +81,7 @@ function guardInspection() {
 			Networks: {
 				[applicationUuid]: { IPAddress: "172.18.0.10" },
 				coolify: { IPAddress: "172.19.0.10" },
+				[privateNetwork]: { IPAddress: "172.20.0.10" },
 			},
 		},
 		State: { Health: { Status: "starting" }, Status: "running" },
@@ -87,7 +90,7 @@ function guardInspection() {
 
 function dockerFetchFixture(configJson: string) {
 	let guardExists = false;
-	let coolifyConnected = false;
+	const connectedNetworks = new Set<string>();
 	let createBody: Record<string, unknown> | undefined;
 	const handlers = new Map<string, (init?: RequestInit) => Response>([
 		["/v1.41/containers/json", () => json([{ Id: containerId }])],
@@ -123,7 +126,14 @@ function dockerFetchFixture(configJson: string) {
 		[
 			"/v1.41/networks/coolify/connect",
 			() => {
-				coolifyConnected = true;
+				connectedNetworks.add("coolify");
+				return new Response(null, { status: 200 });
+			},
+		],
+		[
+			`/v1.41/networks/${privateNetwork}/connect`,
+			() => {
+				connectedNetworks.add(privateNetwork);
 				return new Response(null, { status: 200 });
 			},
 		],
@@ -150,8 +160,8 @@ function dockerFetchFixture(configJson: string) {
 	);
 	return {
 		fetchRequest,
-		get coolifyConnected() {
-			return coolifyConnected;
+		get connectedNetworks() {
+			return connectedNetworks;
 		},
 		get createBody() {
 			return createBody;
@@ -173,7 +183,7 @@ describe("Docker Evidence Library runtime guard", () => {
 		expect(source).toEqual({
 			configJson,
 			ipAddress: "172.19.0.9",
-			networks: [applicationUuid, "coolify"],
+			networks: [applicationUuid, privateNetwork, "coolify"],
 			port: 3000,
 		});
 		await expect(
@@ -197,7 +207,10 @@ describe("Docker Evidence Library runtime guard", () => {
 				},
 			},
 		});
-		expect(fixture.coolifyConnected).toBe(true);
+		expect([...fixture.connectedNetworks].sort()).toEqual([
+			privateNetwork,
+			"coolify",
+		]);
 		expect(fixture.createBody?.Labels).not.toHaveProperty(
 			"com.docker.compose.project",
 		);
