@@ -5,9 +5,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useDebounce } from "@/hooks/useDebounce";
 
 import { Autocomplete } from "../../nextui/Autocomplete";
+import { Input } from "../../nextui/Input";
 import { Switch } from "../../nextui/Switch";
 
 function YearPicker({
@@ -25,6 +27,28 @@ function YearPicker({
 		onSelectionChange,
 		500,
 	);
+	const isYearsDropDownEnabled = useLibraryFeature("yearsDropdown");
+
+	if (!isYearsDropDownEnabled) {
+		return (
+			<Input
+				type="number"
+				label={label}
+				defaultValue={selectedKey || ""}
+				onChange={(event) =>
+					debouncedOnSelectionChange(event.target.value)
+				}
+				classNames={{
+					inputWrapper:
+						"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+					input:
+						"[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
+					label: "text-black/80 dark:text-white/80",
+				}}
+			/>
+		);
+	}
+
 	return (
 		<Autocomplete
 			className="flex-1"

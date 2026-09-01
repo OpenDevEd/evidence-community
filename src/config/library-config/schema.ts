@@ -1075,6 +1075,7 @@ const featuresSchema = z
 		countryFocus: z.boolean().default(false),
 		authorFilter: z.boolean().default(true),
 		authorLocation: z.boolean().default(false),
+		yearsDropdown: z.boolean().default(false),
 		downloads: z.boolean().default(false),
 		atomFeed: z.boolean().default(false),
 	})
@@ -1923,6 +1924,15 @@ export function createLibraryConfigSchema(
 				"Author location requires author-country search",
 			);
 		}
+
+		if (config.features.yearsDropdown && !config.filters.years.enabled) {
+			addRequiredIssue(
+				context,
+				["features", "yearsDropdown"],
+				"Years dropdown requires the years filter",
+			);
+		}
+
 		if (config.features.atomFeed && !config.exports.atom) {
 			addRequiredIssue(
 				context,

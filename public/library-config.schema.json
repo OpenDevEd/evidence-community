@@ -1304,6 +1304,10 @@
 					"default": false,
 					"type": "boolean"
 				},
+				"yearsDropdown": {
+					"default": false,
+					"type": "boolean"
+				},
 				"downloads": {
 					"default": false,
 					"type": "boolean"

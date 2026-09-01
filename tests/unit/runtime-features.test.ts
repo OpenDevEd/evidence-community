@@ -28,6 +28,7 @@ const featureIds = [
 	"countryFocus",
 	"authorFilter",
 	"authorLocation",
+	"yearsDropdown",
 	"downloads",
 	"atomFeed",
 ] as const satisfies readonly LibraryFeatureId[];
