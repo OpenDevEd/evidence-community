@@ -13,6 +13,7 @@ const revisionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const guardStateDirectoryMode = 0o700;
 const guardConfigMode = 0o440;
 const routeMode = 0o600;
+const routeMarkerHeader = "X-OpenScholar-Route";
 
 export type LibraryRuntimeRouteInput = {
 	applicationUuid: string;
@@ -206,10 +207,12 @@ function router(rule: string, service: string, middlewares: readonly string[]) {
 
 export function renderLibraryRuntimeRoute(input: {
 	applicationUuid: string;
+	commit: string;
 	customOrigins: readonly string[];
 	maintenanceUrl: string;
 	fallbackTarget?: LibraryRuntimeRouteTarget;
 	platformOrigins: readonly string[];
+	revision: string;
 	target?: LibraryRuntimeRouteTarget;
 }) {
 	const suffix = input.applicationUuid;
@@ -229,6 +232,7 @@ export function renderLibraryRuntimeRoute(input: {
 			platformRule,
 			selectedService,
 			[
+				`${serviceName}-route-marker`,
 				"ode-shield-cf-origin@file",
 				"ode-shield-rate-cf@file",
 				"ode-shield-inflight@file",
@@ -248,6 +252,7 @@ export function renderLibraryRuntimeRoute(input: {
 			customRule,
 			selectedService,
 			[
+				`${serviceName}-route-marker`,
 				"ode-shield-rate-direct@file",
 				"ode-shield-inflight@file",
 				"ode-library-shield@file",
@@ -318,6 +323,13 @@ export function renderLibraryRuntimeRoute(input: {
 					[`${serviceName}-https-redirect`]: {
 						redirectScheme: { permanent: true, scheme: "https" },
 					},
+					[`${serviceName}-route-marker`]: {
+						headers: {
+							customResponseHeaders: {
+								[routeMarkerHeader]: `${input.commit}:${input.revision}`,
+							},
+						},
+					},
 				},
 				routers,
 				services,
@@ -360,9 +372,11 @@ export function createLibraryRuntimeGuardManager(
 		await replaceFileAtomically({
 			content: renderLibraryRuntimeRoute({
 				applicationUuid: input.applicationUuid,
+				commit: input.commit,
 				customOrigins: input.customOrigins,
 				maintenanceUrl,
 				platformOrigins: input.platformOrigins,
+				revision: input.revision,
 				...(fallbackTarget
 					? { fallbackTarget: requireRouteTarget(fallbackTarget) }
 					: {}),

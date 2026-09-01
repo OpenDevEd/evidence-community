@@ -209,21 +209,35 @@ describe("Evidence Library runtime guard", () => {
 		const route = JSON.parse(
 			renderLibraryRuntimeRoute({
 				applicationUuid,
+				commit,
 				customOrigins: input.customOrigins,
 				maintenanceUrl: "http://runtime-verifier:3001",
 				platformOrigins: input.platformOrigins,
+				revision: input.revision,
 				target: { ipAddress: "172.19.0.40", port: 3000 },
 			}),
 		);
+		const routeMarker = `ode-el-${applicationUuid}-route-marker`;
 
 		expect(
 			route.http.routers[`ode-el-${applicationUuid}-platform-https`]
 				.middlewares,
 		).toContain("ode-shield-cf-origin@file");
 		expect(
+			route.http.routers[`ode-el-${applicationUuid}-platform-https`]
+				.middlewares,
+		).toContain(routeMarker);
+		expect(
 			route.http.routers[`ode-el-${applicationUuid}-custom-https`]
 				.middlewares,
 		).not.toContain("ode-shield-cf-origin@file");
+		expect(
+			route.http.routers[`ode-el-${applicationUuid}-custom-https`]
+				.middlewares,
+		).toContain(routeMarker);
+		expect(
+			route.http.middlewares[routeMarker].headers.customResponseHeaders,
+		).toEqual({ "X-OpenScholar-Route": `${commit}:${input.revision}` });
 		expect(
 			route.http.services[`ode-el-${applicationUuid}-failover`],
 		).toEqual({
