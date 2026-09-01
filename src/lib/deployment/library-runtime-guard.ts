@@ -287,7 +287,6 @@ export function renderLibraryRuntimeRoute(input: {
 				fallback: input.fallbackTarget
 					? `${serviceName}-guard-failover`
 					: maintenanceService,
-				healthCheck: {},
 				service: `${serviceName}-upstream`,
 			},
 		};
@@ -310,7 +309,6 @@ export function renderLibraryRuntimeRoute(input: {
 			services[`${serviceName}-guard-failover`] = {
 				failover: {
 					fallback: maintenanceService,
-					healthCheck: {},
 					service: `${serviceName}-guard`,
 				},
 			};

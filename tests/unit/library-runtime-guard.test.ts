@@ -214,6 +214,7 @@ describe("Evidence Library runtime guard", () => {
 				maintenanceUrl: "http://runtime-verifier:3001",
 				platformOrigins: input.platformOrigins,
 				revision: input.revision,
+				fallbackTarget: { ipAddress: "172.19.0.41", port: 3000 },
 				target: { ipAddress: "172.19.0.40", port: 3000 },
 			}),
 		);
@@ -242,9 +243,16 @@ describe("Evidence Library runtime guard", () => {
 			route.http.services[`ode-el-${applicationUuid}-failover`],
 		).toEqual({
 			failover: {
-				fallback: `ode-el-${applicationUuid}-maintenance`,
-				healthCheck: {},
+				fallback: `ode-el-${applicationUuid}-guard-failover`,
 				service: `ode-el-${applicationUuid}-upstream`,
+			},
+		});
+		expect(
+			route.http.services[`ode-el-${applicationUuid}-guard-failover`],
+		).toEqual({
+			failover: {
+				fallback: `ode-el-${applicationUuid}-maintenance`,
+				service: `ode-el-${applicationUuid}-guard`,
 			},
 		});
 	});
