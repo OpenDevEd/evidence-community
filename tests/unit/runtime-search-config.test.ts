@@ -4,7 +4,6 @@ import {
 	getRuntimeSearchAttributes,
 	getRuntimeSearchFacets,
 	getRuntimeSearchScopeOptions,
-	getRuntimeYears,
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
@@ -85,21 +84,22 @@ describe("runtime search configuration", () => {
 					},
 				},
 			),
-		).toEqual(["collectionsAncestry"]);
+		).toEqual(["collectionsAncestry", "year"]);
 	});
 
-	it("generates and validates only the configured year range", () => {
+	it("accepts any four-digit year when the year filter is enabled", () => {
 		const { filters } = getPublicConfig();
 
-		expect(getRuntimeYears(filters)).toHaveLength(27);
-		expect(getRuntimeYears(filters).slice(0, 2)).toEqual([
-			"2026",
-			"2025",
-		]);
 		expect(normalizeRuntimeYearRange("2001-2024", filters)).toBe(
 			"2001-2024",
 		);
-		expect(normalizeRuntimeYearRange("1999", filters)).toBe("");
+		expect(normalizeRuntimeYearRange("1335", filters)).toBe("1335");
 		expect(normalizeRuntimeYearRange("2024-2001", filters)).toBe("");
+		expect(
+			normalizeRuntimeYearRange("1335", {
+				...filters,
+				years: { enabled: false },
+			}),
+		).toBe("");
 	});
 });

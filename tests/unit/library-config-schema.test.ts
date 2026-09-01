@@ -568,10 +568,9 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"maximum year below minimum",
+			"obsolete year bounds",
 			(config: any) => {
-				config.filters.years.minimum = 2020;
-				config.filters.years.maximum = 2019;
+				config.filters.years.minimum = 1900;
 			},
 		],
 		[

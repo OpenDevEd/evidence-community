@@ -48,7 +48,6 @@ import {
 	useLibraryConfig,
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
-import { getRuntimeYears } from "@/config/library-config/search";
 import { YearFilter } from "./YearFilter";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
@@ -787,8 +786,11 @@ export default function CollectionsList({
 		institutions: configuredInstitutions,
 	} = useLibraryConfig();
 	const configuredYears = useMemo(
-		() => getRuntimeYears(filters),
-		[filters],
+		() =>
+			Object.keys(facetDistribution?.year ?? {}).sort(
+				(left, right) => Number(right) - Number(left),
+			),
+		[facetDistribution],
 	);
 	const customFilterInstitution =
 		filters.institution.mode ===

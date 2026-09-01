@@ -61,6 +61,9 @@ export function getRuntimeSearchFacets(
 	if (filters.institution.mode !== "hidden") {
 		facets.push("institution");
 	}
+	if (filters.years.enabled) {
+		facets.push("year");
+	}
 	if (search.country) {
 		facets.push("country");
 	}
@@ -70,32 +73,9 @@ export function getRuntimeSearchFacets(
 	return facets;
 }
 
-export function getRuntimeYears(filters: RuntimeFilters) {
-	if (!filters.years.enabled) return [];
-
-	return Array.from(
-		{
-			length:
-				filters.years.maximum -
-				filters.years.minimum +
-				1,
-		},
-		(_, index) => String(filters.years.maximum - index),
-	);
-}
-
-function isYearWithinRuntimeRange(
-	value: string,
-	filters: RuntimeFilters,
-) {
+function isYear(value: string) {
 	if (!value) return true;
-	if (!/^\d{4}$/u.test(value)) return false;
-
-	const year = Number(value);
-	return (
-		year >= filters.years.minimum &&
-		year <= filters.years.maximum
-	);
+	return /^\d{4}$/u.test(value);
 }
 
 export function normalizeRuntimeYearRange(
@@ -105,15 +85,15 @@ export function normalizeRuntimeYearRange(
 	if (!filters.years.enabled || !value) return "";
 
 	if (!value.includes("-")) {
-		return isYearWithinRuntimeRange(value, filters) ? value : "";
+		return isYear(value) ? value : "";
 	}
 
 	const [start = "", end = "", ...extra] = value.split("-");
 	if (
 		extra.length > 0 ||
 		(!start && !end) ||
-		!isYearWithinRuntimeRange(start, filters) ||
-		!isYearWithinRuntimeRange(end, filters)
+		!isYear(start) ||
+		!isYear(end)
 	) {
 		return "";
 	}

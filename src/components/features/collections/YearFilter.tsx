@@ -35,7 +35,9 @@ function YearPicker({
 				className="flex-1"
 				label={label}
 				fullWidth
-				selectedKey={selectedKey}
+				defaultInputValue={selectedKey || ""}
+				allowsCustomValue
+				onInputChange={debouncedOnSelectionChange}
 				onSelectionChange={onSelectionChange}
 				inputProps={{
 					classNames: {
@@ -45,7 +47,6 @@ function YearPicker({
 							"placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 					},
 				}}
-				isVirtualized
 			>
 				{years.map((year) => (
 					<AutocompleteItem aria-label={year} key={year}>

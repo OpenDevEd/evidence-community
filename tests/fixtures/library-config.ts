@@ -235,8 +235,6 @@ export const maximalLibraryConfig = {
 		collectionsExpanded: false,
 		years: {
 			enabled: true,
-			minimum: 2000,
-			maximum: 2026,
 		},
 	},
 	content: {

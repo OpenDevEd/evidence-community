@@ -996,23 +996,6 @@ const filtersSchema = z
 		years: z
 			.object({
 				enabled: z.boolean().default(true),
-				minimum: z
-					.number()
-					.int()
-					.min(1900)
-					.refine((value) => value <= new Date().getUTCFullYear(), {
-						message: "Minimum year cannot be in the future",
-					})
-					.default(1900),
-				maximum: z
-					.number()
-					.int()
-					.min(1900)
-					.refine((value) => value <= new Date().getUTCFullYear(), {
-						message: "Maximum year cannot be in the future",
-					})
-					.default(() => new Date().getUTCFullYear())
-					.meta({ "x-dynamicDefault": "currentUtcYear" }),
 			})
 			.strict()
 			.prefault({}),
@@ -1028,14 +1011,6 @@ const filtersSchema = z
 				code: z.ZodIssueCode.custom,
 				message: "Featured institution mode requires a value",
 				path: ["institution", "featuredValue"],
-			});
-		}
-
-		if (filters.years.maximum < filters.years.minimum) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Maximum year cannot be lower than minimum year",
-				path: ["years", "maximum"],
 			});
 		}
 	});

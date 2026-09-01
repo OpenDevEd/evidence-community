@@ -155,9 +155,7 @@
     "countryLibrary": false,
     "collectionsExpanded": true,
     "years": {
-      "enabled": false,
-      "minimum": 2000,
-      "maximum": 2026
+      "enabled": false
     }
   },
   "content": {
