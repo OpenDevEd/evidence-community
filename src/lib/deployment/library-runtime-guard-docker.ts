@@ -320,6 +320,38 @@ function requireApplicationNetworks(networks: Record<string, unknown>) {
 	return names.sort();
 }
 
+function requireApplicationContainerId(value: unknown) {
+	if (!Array.isArray(value) || value.length !== 1) {
+		return guardError(
+			"runtime_web_not_ready",
+			"The Evidence Library must have one running web service.",
+		);
+	}
+	return requireContainerId(requireRecord(value[0]).Id);
+}
+
+function requireApplicationWebIdentity(
+	container: InspectedContainer,
+	input: LibraryRuntimeRouteInput,
+) {
+	const labels = requireLabels(container.config.Labels);
+	if (
+		labels[composeProjectLabel] !== input.applicationUuid ||
+		labels[composeServiceLabel] !== "web" ||
+		labels[managedLabel] !== "true" ||
+		labels[managedTypeLabel] !== "application" ||
+		labels[LIBRARY_COMPOSE_RELEASE_LABEL] !== input.commit ||
+		container.config.Image !== input.runtimeImage
+	) {
+		return guardError(
+			"runtime_web_mismatch",
+			"The running Evidence Library web service does not match its active release.",
+		);
+	}
+	requireRunning(container.state, true);
+	return container;
+}
+
 export function createDockerLibraryRuntimeGuard(
 	options: DockerGuardOptions,
 ): LibraryRuntimeGuardDocker {
@@ -394,15 +426,8 @@ export function createDockerLibraryRuntimeGuard(
 			{ headers: { Accept: "application/json" }, method: "GET" },
 			[200],
 		);
-		const summaries = await readJson(response);
-		if (!Array.isArray(summaries) || summaries.length !== 1) {
-			return guardError(
-				"runtime_web_not_ready",
-				"The Evidence Library must have one running web service.",
-			);
-		}
 		const container = await inspect(
-			requireContainerId(requireRecord(summaries[0]).Id),
+			requireApplicationContainerId(await readJson(response)),
 		);
 		if (!container) {
 			return guardError(
@@ -410,21 +435,7 @@ export function createDockerLibraryRuntimeGuard(
 				"The Evidence Library web service disappeared during inspection.",
 			);
 		}
-		const labels = requireLabels(container.config.Labels);
-		if (
-			labels[composeProjectLabel] !== input.applicationUuid ||
-			labels[composeServiceLabel] !== "web" ||
-			labels[managedLabel] !== "true" ||
-			labels[managedTypeLabel] !== "application" ||
-			labels[LIBRARY_COMPOSE_RELEASE_LABEL] !== input.commit ||
-			container.config.Image !== input.runtimeImage
-		) {
-			return guardError(
-				"runtime_web_mismatch",
-				"The running Evidence Library web service does not match its active release.",
-			);
-		}
-		requireRunning(container.state, true);
+		requireApplicationWebIdentity(container, input);
 		const archiveUrl = new URL(
 			`${dockerApiVersion}/containers/${container.id}/archive`,
 			baseUrl,

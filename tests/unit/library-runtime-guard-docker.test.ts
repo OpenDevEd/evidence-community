@@ -85,66 +85,87 @@ function guardInspection() {
 	};
 }
 
-describe("Docker Evidence Library runtime guard", () => {
-	it("copies the exact active config and starts one isolated web guard", async () => {
-		const configJson = JSON.stringify({ revision });
-		let guardExists = false;
-		let coolifyConnected = false;
-		let createBody: Record<string, unknown> | undefined;
-		const fetchRequest = vi.fn(
-			async (request: string | URL | Request, init?: RequestInit) => {
-				const url = new URL(request.toString());
-				if (url.hostname === "172.19.0.10") {
-					return json({ active: { revision }, state: "active" });
-				}
-				if (url.pathname.endsWith("/containers/json")) {
-					return json([{ Id: containerId }]);
-				}
-				if (url.pathname.endsWith(`/containers/${containerId}/json`)) {
-					return json(applicationInspection(configJson));
-				}
-				if (
-					url.pathname.endsWith(`/containers/${containerId}/archive`)
-				) {
-					return new Response(tarFile("library.json", configJson), {
-						headers: { "Content-Type": "application/x-tar" },
-					});
-				}
-				if (
-					url.pathname.endsWith(
-						`/containers/openscholar-library-guard-${applicationUuid}/json`,
-					)
-				) {
-					return guardExists
-						? json(guardInspection())
-						: json({ message: "missing" }, 404);
-				}
-				if (url.pathname.endsWith("/containers/create")) {
-					createBody = JSON.parse(init?.body as string) as Record<
-						string,
-						unknown
-					>;
-					guardExists = true;
-					return json({ Id: guardId, Warnings: [] }, 201);
-				}
-				if (url.pathname.endsWith("/networks/coolify/connect")) {
-					coolifyConnected = true;
-					return new Response(null, { status: 200 });
-				}
-				if (url.pathname.endsWith(`/containers/${guardId}/start`)) {
-					return new Response(null, { status: 204 });
-				}
-				if (url.pathname.endsWith(`/containers/${guardId}/json`)) {
-					return json(guardInspection());
-				}
+function dockerFetchFixture(configJson: string) {
+	let guardExists = false;
+	let coolifyConnected = false;
+	let createBody: Record<string, unknown> | undefined;
+	const handlers = new Map<string, (init?: RequestInit) => Response>([
+		["/v1.41/containers/json", () => json([{ Id: containerId }])],
+		[
+			`/v1.41/containers/${containerId}/json`,
+			() => json(applicationInspection(configJson)),
+		],
+		[
+			`/v1.41/containers/${containerId}/archive`,
+			() =>
+				new Response(tarFile("library.json", configJson), {
+					headers: { "Content-Type": "application/x-tar" },
+				}),
+		],
+		[
+			`/v1.41/containers/openscholar-library-guard-${applicationUuid}/json`,
+			() =>
+				guardExists
+					? json(guardInspection())
+					: json({ message: "missing" }, 404),
+		],
+		[
+			"/v1.41/containers/create",
+			(init) => {
+				createBody = JSON.parse(init?.body as string) as Record<
+					string,
+					unknown
+				>;
+				guardExists = true;
+				return json({ Id: guardId, Warnings: [] }, 201);
+			},
+		],
+		[
+			"/v1.41/networks/coolify/connect",
+			() => {
+				coolifyConnected = true;
+				return new Response(null, { status: 200 });
+			},
+		],
+		[
+			`/v1.41/containers/${guardId}/start`,
+			() => new Response(null, { status: 204 }),
+		],
+		[`/v1.41/containers/${guardId}/json`, () => json(guardInspection())],
+	]);
+	const fetchRequest = vi.fn(
+		async (request: string | URL | Request, init?: RequestInit) => {
+			const url = new URL(request.toString());
+			if (url.hostname === "172.19.0.10") {
+				return json({ active: { revision }, state: "active" });
+			}
+			const handler = handlers.get(url.pathname);
+			if (!handler) {
 				throw new Error(
 					`Unexpected request: ${init?.method ?? "GET"} ${url}`,
 				);
-			},
-		);
+			}
+			return handler(init);
+		},
+	);
+	return {
+		fetchRequest,
+		get coolifyConnected() {
+			return coolifyConnected;
+		},
+		get createBody() {
+			return createBody;
+		},
+	};
+}
+
+describe("Docker Evidence Library runtime guard", () => {
+	it("copies the exact active config and starts one isolated web guard", async () => {
+		const configJson = JSON.stringify({ revision });
+		const fixture = dockerFetchFixture(configJson);
 		const docker = createDockerLibraryRuntimeGuard({
 			dockerProxyUrl: "http://docker-proxy:2375",
-			fetch: fetchRequest as typeof fetch,
+			fetch: fixture.fetchRequest as typeof fetch,
 			sleep: async () => undefined,
 		});
 
@@ -162,7 +183,7 @@ describe("Docker Evidence Library runtime guard", () => {
 				source,
 			}),
 		).resolves.toEqual({ ipAddress: "172.19.0.10", port: 3000 });
-		expect(createBody).toMatchObject({
+		expect(fixture.createBody).toMatchObject({
 			Cmd: ["node_modules/.bin/next", "start"],
 			Env: ["LIBRARY_CONFIG_PATH=/runtime/config/library.json"],
 			HostConfig: {
@@ -176,11 +197,13 @@ describe("Docker Evidence Library runtime guard", () => {
 				},
 			},
 		});
-		expect(coolifyConnected).toBe(true);
-		expect(createBody?.Labels).not.toHaveProperty(
+		expect(fixture.coolifyConnected).toBe(true);
+		expect(fixture.createBody?.Labels).not.toHaveProperty(
 			"com.docker.compose.project",
 		);
-		expect(createBody?.Labels).not.toHaveProperty("coolify.managed");
+		expect(fixture.createBody?.Labels).not.toHaveProperty(
+			"coolify.managed",
+		);
 	});
 
 	it("refuses to preserve a web container with a different revision", async () => {

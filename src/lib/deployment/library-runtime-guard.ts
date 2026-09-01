@@ -111,9 +111,7 @@ function requireMaintenanceUrl(value: string) {
 	return url.origin;
 }
 
-export function requireLibraryRuntimeRouteInput(
-	input: LibraryRuntimeRouteInput,
-): LibraryRuntimeRouteInput {
+function requireRuntimeRouteIdentity(input: LibraryRuntimeRouteInput) {
 	if (!isCoolifyApplicationUuid(input.applicationUuid)) {
 		return invalidInput(
 			"applicationUuid must identify one Evidence Library.",
@@ -132,6 +130,10 @@ export function requireLibraryRuntimeRouteInput(
 			"revision must identify one configuration revision.",
 		);
 	}
+	return input;
+}
+
+function requireRuntimeRouteOrigins(input: LibraryRuntimeRouteInput) {
 	if (
 		!Array.isArray(input.customOrigins) ||
 		input.customOrigins.length > 20
@@ -155,7 +157,14 @@ export function requireLibraryRuntimeRouteInput(
 	if (new Set(origins).size !== origins.length) {
 		return invalidInput("Library origins must be unique.");
 	}
-	return { ...input, customOrigins, platformOrigins };
+	return { customOrigins, platformOrigins };
+}
+
+function requireLibraryRuntimeRouteInput(
+	input: LibraryRuntimeRouteInput,
+): LibraryRuntimeRouteInput {
+	requireRuntimeRouteIdentity(input);
+	return { ...input, ...requireRuntimeRouteOrigins(input) };
 }
 
 function requireRouteTarget(target: LibraryRuntimeRouteTarget) {

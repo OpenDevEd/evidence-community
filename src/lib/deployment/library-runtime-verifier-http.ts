@@ -78,19 +78,27 @@ function requireKnownPath(request: IncomingMessage) {
 
 type RuntimeOperation = ReturnType<typeof requireKnownPath>;
 
-function requireRequestRecord(body: unknown) {
-	const message = "Send only applicationUuid, commit and runtimeImage.";
+function requireExactRequestRecord(
+	body: unknown,
+	fields: readonly string[],
+	message: string,
+) {
 	if (!body || typeof body !== "object" || Array.isArray(body)) {
 		return invalidRequest(message);
 	}
 	const record = body as Record<string, unknown>;
-	if (
-		Object.keys(record).sort().join(",") !==
-		"applicationUuid,commit,runtimeImage"
-	) {
+	if (Object.keys(record).sort().join(",") !== fields.join(",")) {
 		return invalidRequest(message);
 	}
 	return record;
+}
+
+function requireRequestRecord(body: unknown) {
+	return requireExactRequestRecord(
+		body,
+		["applicationUuid", "commit", "runtimeImage"],
+		"Send only applicationUuid, commit and runtimeImage.",
+	);
 }
 
 function requireRuntimeImage(value: unknown) {
@@ -134,19 +142,18 @@ function parseReadinessRequest(serialized: string): ReadinessRequest {
 }
 
 function requireRouteRequestRecord(body: unknown) {
-	const message =
-		"Send only applicationUuid, commit, customOrigins, platformOrigins, revision and runtimeImage.";
-	if (!body || typeof body !== "object" || Array.isArray(body)) {
-		return invalidRequest(message);
-	}
-	const record = body as Record<string, unknown>;
-	if (
-		Object.keys(record).sort().join(",") !==
-		"applicationUuid,commit,customOrigins,platformOrigins,revision,runtimeImage"
-	) {
-		return invalidRequest(message);
-	}
-	return record;
+	return requireExactRequestRecord(
+		body,
+		[
+			"applicationUuid",
+			"commit",
+			"customOrigins",
+			"platformOrigins",
+			"revision",
+			"runtimeImage",
+		],
+		"Send only applicationUuid, commit, customOrigins, platformOrigins, revision and runtimeImage.",
+	);
 }
 
 function parseRouteRequest(serialized: string): LibraryRuntimeRouteInput {
