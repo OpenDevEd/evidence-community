@@ -40,7 +40,7 @@ function YearPicker({
 				inputProps={{
 					classNames: {
 						inputWrapper:
-							"!bg-transparent border-small border-black/10 dark:border-white/10 rounded-2xl",
+							"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 						input:
 							"placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 					},
@@ -66,7 +66,7 @@ function YearPicker({
 			}
 			classNames={{
 				inputWrapper:
-					"!bg-transparent border-small border-black/10 dark:border-white/10 rounded-2xl",
+					"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 				input:
 					"[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 				label: "text-black/80 dark:text-white/80",
