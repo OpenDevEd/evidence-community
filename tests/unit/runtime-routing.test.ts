@@ -48,6 +48,19 @@ describe("runtime route enforcement", () => {
 		);
 	});
 
+	it("lets the runtime health endpoint answer on an attached alias", () => {
+		expect(
+			getCanonicalLibraryRedirect(
+				new URL("http://internal:3000/api/library-config/health"),
+				new Headers({
+					host: "internal:3000",
+					"x-forwarded-host": "alias.example.org",
+				}),
+				"https://library.example.org",
+			),
+		).toBeNull();
+	});
+
 	it("leaves the canonical and local verification hosts untouched", () => {
 		expect(
 			getCanonicalLibraryRedirect(

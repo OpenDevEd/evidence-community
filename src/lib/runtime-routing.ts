@@ -170,11 +170,17 @@ export function buildAdminLoginPageUrl(
 	return url.toString();
 }
 
+const libraryConfigHealthPath = "/api/library-config/health";
+
 export function getCanonicalLibraryRedirect(
 	requestUrl: URL,
 	headers: Headers,
 	baseUrl: string,
 ) {
+	// OpenScholar probes this route through a newly attached host before that
+	// host can become canonical. The route must answer with the live revision.
+	if (requestUrl.pathname === libraryConfigHealthPath) return null;
+
 	const forwardedHost = firstForwardedValue(headers.get("x-forwarded-host"));
 	const requestHost =
 		forwardedHost ??
