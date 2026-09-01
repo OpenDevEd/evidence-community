@@ -198,7 +198,6 @@
     "countryFocus": false,
     "authorFilter": false,
     "authorLocation": false,
-    "yearsDropdown": false,
     "downloads": false,
     "atomFeed": false
   },

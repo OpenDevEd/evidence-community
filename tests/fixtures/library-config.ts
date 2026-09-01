@@ -265,7 +265,6 @@ export const maximalLibraryConfig = {
 		countryFocus: true,
 		authorFilter: true,
 		authorLocation: true,
-		yearsDropdown: true,
 		downloads: true,
 		atomFeed: true,
 	},

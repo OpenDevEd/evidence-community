@@ -498,9 +498,9 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"years dropdown without years filter",
+			"obsolete years dropdown feature",
 			(config: any) => {
-				config.filters.years.enabled = false;
+				config.features.yearsDropdown = true;
 			},
 		],
 		[
