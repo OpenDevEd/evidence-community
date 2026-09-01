@@ -329,5 +329,7 @@ export function createLibraryRuntimeVerifierServer(
 	return createFixedJsonHttpServer({
 		handleRequest: (request, response) =>
 			handleRequest(request, response, options),
+		onInternalError: (error) =>
+			console.error("Library runtime verifier request failed.", error),
 	});
 }
