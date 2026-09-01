@@ -6,8 +6,12 @@ services:
       dockerfile: Dockerfile
       target: runtime-verifier
     environment:
+      EVIDENCE_LIBRARY_MAINTENANCE_URL: http://runtime-verifier:3001
+      EVIDENCE_LIBRARY_RUNTIME_GUARD_STATE_PATH: /data/evidence-library-runtime-guards
       EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL: http://docker-socket-proxy:2375
       EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN: "${EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN:?runtime verifier token is required}"
+      EVIDENCE_LIBRARY_TRAEFIK_DYNAMIC_PATH: /runtime/traefik-dynamic
+      MAINTENANCE_PORT: "3001"
       PORT: "3000"
     depends_on:
       docker-socket-proxy:
@@ -19,7 +23,16 @@ services:
       - "traefik.docker.network=coolify"
     expose:
       - "3000"
-    user: "1001:1001"
+      - "3001"
+    entrypoint: []
+    user: "0:0"
+    volumes:
+      - type: bind
+        source: /data/coolify/proxy/dynamic
+        target: /runtime/traefik-dynamic
+      - type: bind
+        source: /data/evidence-library-runtime-guards
+        target: /data/evidence-library-runtime-guards
     read_only: true
     tmpfs:
       - /tmp
@@ -34,11 +47,12 @@ services:
     environment:
       CONTAINERS: "1"
       IMAGES: "1"
+      NETWORKS: "1"
       DISABLE_IPV6: "1"
       EVENTS: "0"
       LOG_LEVEL: warning
       PING: "0"
-      POST: "0"
+      POST: "1"
       VERSION: "0"
     networks:
       - verifier-private

@@ -3,6 +3,9 @@ import {
 	type LibraryRuntimeContainerFact,
 	type LibraryRuntimeContainerReader,
 } from "../src/lib/deployment/library-runtime-verifier-http";
+import { createLibraryMaintenanceServer } from "../src/lib/deployment/library-maintenance-http";
+import { createDockerLibraryRuntimeGuard } from "../src/lib/deployment/library-runtime-guard-docker";
+import { createLibraryRuntimeGuardManager } from "../src/lib/deployment/library-runtime-guard";
 import { isCoolifyApplicationUuid } from "../src/lib/deployment/coolify-application";
 import {
 	listenForFixedHttpService,
@@ -407,23 +410,51 @@ function readToken() {
 }
 
 async function main() {
-	const readContainers = createDockerLibraryRuntimeContainerReader(
-		readRequiredEnvironment(
-			"EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL",
-		),
+	const dockerProxyUrl = readRequiredEnvironment(
+		"EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL",
 	);
+	const readContainers =
+		createDockerLibraryRuntimeContainerReader(dockerProxyUrl);
+	const guard = createLibraryRuntimeGuardManager({
+		docker: createDockerLibraryRuntimeGuard({ dockerProxyUrl }),
+		maintenanceUrl: readRequiredEnvironment(
+			"EVIDENCE_LIBRARY_MAINTENANCE_URL",
+		),
+		routeDirectory: readRequiredEnvironment(
+			"EVIDENCE_LIBRARY_TRAEFIK_DYNAMIC_PATH",
+		),
+		stateDirectory: readRequiredEnvironment(
+			"EVIDENCE_LIBRARY_RUNTIME_GUARD_STATE_PATH",
+		),
+	});
 	const server = createLibraryRuntimeVerifierServer({
+		guard,
 		readContainers,
 		token: readToken(),
 	});
 	const port = readPort(process.env.PORT);
-	await listenForFixedHttpService({
-		listeningMessage: (activePort) =>
-			`Library runtime verifier is listening on port ${activePort}.`,
-		port,
-		server,
-		shutdownErrorMessage: "Runtime verifier shutdown failed.",
-	});
+	const maintenancePort = readPort(process.env.MAINTENANCE_PORT ?? "3001");
+	if (maintenancePort === port) {
+		throw new RuntimeVerifierStartupError(
+			"MAINTENANCE_PORT must differ from PORT.",
+		);
+	}
+	await Promise.all([
+		listenForFixedHttpService({
+			listeningMessage: (activePort) =>
+				`Library runtime verifier is listening on port ${activePort}.`,
+			port,
+			server,
+			shutdownErrorMessage: "Runtime verifier shutdown failed.",
+		}),
+		listenForFixedHttpService({
+			listeningMessage: (activePort) =>
+				`Library maintenance response is listening on port ${activePort}.`,
+			port: maintenancePort,
+			server: createLibraryMaintenanceServer(),
+			shutdownErrorMessage: "Maintenance response shutdown failed.",
+		}),
+	]);
 }
 
 runFixedHttpServiceMain({

@@ -9,7 +9,7 @@ JSON document.
 | Input           | Required contract                                                                                                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
-| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>`                               |
+| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>`                                |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
 | Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                               |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
@@ -81,29 +81,36 @@ Deploy one runtime verifier for the development server from
 - `runtime-verifier` is the only service on the external `coolify` network and
   the only service that receives a public HTTPS domain.
 - `docker-socket-proxy` mounts the host Docker socket and stays on an internal
-  network. The pinned Tecnativa proxy allows container reads and blocks POST,
-  events, ping, version, and every other Docker API section.
+  network. The pinned Tecnativa proxy allows the verifier to inspect images,
+  manage its guard containers, and attach them to the two required networks.
 
 The verifier container never mounts `/var/run/docker.sock`. It calls the proxy
-at `http://docker-socket-proxy:2375`. Set one Coolify environment value:
+at `http://docker-socket-proxy:2375`. It writes the per-library Traefik routes
+to `/data/coolify/proxy/dynamic` and copied guard configurations to
+`/data/evidence-library-runtime-guards`; both host paths are mounted by the
+Compose file. Set one environment value:
 
 | Variable                                  | Value                                    |
 | ----------------------------------------- | ---------------------------------------- |
 | `EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN` | Bearer token containing 32 to 1024 bytes |
 
-`PORT` defaults to `3000` and the Compose file sets the internal Docker proxy
-URL. Assign the public HTTPS domain to `runtime-verifier:3000`. Do not assign a
-domain or host port to `docker-socket-proxy`.
+`PORT` defaults to `3000`. Assign the verifier's public HTTPS domain to
+`runtime-verifier:3000`. Port `3001` serves the temporary maintenance response
+inside the shared proxy network and must not receive a public domain or host
+port. Do not assign a domain or host port to `docker-socket-proxy`.
 
 The executable is also available as a package command:
 
 ```bash
 EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN='<32-byte-or-longer token>' \
 EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL='http://127.0.0.1:2375' \
+EVIDENCE_LIBRARY_MAINTENANCE_URL='http://127.0.0.1:3001' \
+EVIDENCE_LIBRARY_TRAEFIK_DYNAMIC_PATH='/data/coolify/proxy/dynamic' \
+EVIDENCE_LIBRARY_RUNTIME_GUARD_STATE_PATH='/data/evidence-library-runtime-guards' \
   npm run runtime:verifier
 ```
 
-The verifier accepts one request:
+Readiness remains one fixed request:
 
 ```http
 POST /v1/library-runtime/readiness
@@ -116,7 +123,7 @@ Content-Type: application/json
 It asks Docker for containers whose `com.docker.compose.project` label exactly
 matches the requested application UUID. It checks the Coolify and project
 labels before inspecting a container, then checks them again in the inspect
-response. It returns ready only when the six expected services are running,
+response. It returns ready only when the seven expected services are running,
 the services with health checks are healthy, every release label matches the
 requested commit, and Meilisearch has no published host port. It also checks
 that the five Evidence Library services name the exact requested image, that
@@ -127,6 +134,34 @@ Docker calls time out after two seconds. Each response is capped at 512 KiB,
 and one application can return at most 24 containers. Bad Docker data and proxy
 errors return the fixed `runtime_inspection_failed` response. Docker error text
 never reaches the caller.
+
+OpenScholar also uses five fixed route operations:
+
+| Path                               | Effect                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/v1/library-runtime/maintenance`  | Routes a first activation to the maintenance response.                                                               |
+| `/v1/library-runtime/protection`   | Copies the active config, starts or reuses one temporary web guard, then routes all current and pending hosts to it. |
+| `/v1/library-runtime/activation`   | Tries the ready replacement while retaining the guard as its fallback.                                               |
+| `/v1/library-runtime/finalization` | Returns traffic to the deployment router, removes the guard, and deletes its copied config.                          |
+| `/v1/library-runtime/removal`      | Removes the route, guard, and copied config during teardown.                                                         |
+
+The first four receive `applicationUuid`, `commit`, `runtimeImage`, `revision`,
+one or two `platformOrigins`, and up to twenty transition `customOrigins`.
+Removal receives only `applicationUuid`. Callers cannot supply a container
+name, command, image outside the pinned runtime reference, file path, network,
+upstream address, or Traefik rule.
+
+The guard is only the current `web` image plus a copied active configuration.
+It joins the same private application network and the shared proxy network. It
+does not start duplicate workers, Redis, Meilisearch, or storage. A failed
+replacement therefore leaves the last public site serving; search and other
+private services may still be briefly unavailable while their containers are
+replaced. A first activation has no old site, so it serves the maintenance
+response until the replacement passes readiness.
+
+The verifier is a host control-plane service. Its bearer-protected endpoint
+must remain private to OpenScholar because its Docker proxy permissions can
+create and remove guard containers and connect them to networks.
 
 ## Delete a library search volume
 

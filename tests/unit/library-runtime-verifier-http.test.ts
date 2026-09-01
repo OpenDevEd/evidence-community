@@ -14,6 +14,11 @@ import {
 	type LibraryRuntimeContainerReader,
 } from "@/lib/deployment/library-runtime-verifier-http";
 
+import {
+	LibraryRuntimeGuardError,
+	type LibraryRuntimeGuardManager,
+} from "@/lib/deployment/library-runtime-guard";
+
 const token = "test-runtime-verifier-token-with-at-least-32-bytes";
 const applicationUuid = "a1b2c3d4e5f6g7h8i9j0k1l2";
 const commit = "a1b2c3d4e5f678901234567890abcdef12345678";
@@ -59,8 +64,10 @@ async function closeServer(server: Server) {
 async function withServer<T>(
 	readContainers: LibraryRuntimeContainerReader,
 	run: (baseUrl: string) => Promise<T>,
+	guard: LibraryRuntimeGuardManager = createGuard(),
 ) {
 	const server = createLibraryRuntimeVerifierServer({
+		guard,
 		readContainers,
 		token,
 	});
@@ -77,6 +84,19 @@ async function withServer<T>(
 	} finally {
 		await closeServer(server);
 	}
+}
+
+function createGuard(
+	overrides: Partial<LibraryRuntimeGuardManager> = {},
+): LibraryRuntimeGuardManager {
+	return {
+		activate: vi.fn(async () => ({ status: "active" as const })),
+		finalize: vi.fn(async () => ({ status: "finalized" as const })),
+		prepare: vi.fn(async () => ({ status: "maintenance" as const })),
+		protect: vi.fn(async () => ({ status: "protected" as const })),
+		remove: vi.fn(async () => ({ status: "removed" as const })),
+		...overrides,
+	};
 }
 
 function readinessUrl(baseUrl: string) {
@@ -98,6 +118,17 @@ function readinessBody() {
 	return { applicationUuid, commit, runtimeImage };
 }
 
+function routeBody() {
+	return {
+		applicationUuid,
+		commit,
+		customOrigins: ["https://library.example.org"],
+		platformOrigins: ["https://library.opendev.space"],
+		revision: "library-7",
+		runtimeImage,
+	};
+}
+
 function expectedServiceError(
 	code: string,
 	message: string,
@@ -107,6 +138,89 @@ function expectedServiceError(
 }
 
 describe("library runtime verifier HTTP contract", () => {
+	it.each([
+		{
+			method: "prepare" as const,
+			path: "maintenance",
+			result: { status: "maintenance" },
+		},
+		{
+			method: "protect" as const,
+			path: "protection",
+			result: { status: "protected" },
+		},
+		{
+			method: "activate" as const,
+			path: "activation",
+			result: { status: "active" },
+		},
+		{
+			method: "finalize" as const,
+			path: "finalization",
+			result: { status: "finalized" },
+		},
+	])("runs the fixed $path operation", async ({ method, path, result }) => {
+		const operation = vi.fn(async () => result);
+		const guard = createGuard({ [method]: operation });
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/${path}`,
+					authorizedJson(routeBody()),
+				);
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual(result);
+			},
+			guard,
+		);
+		expect(operation).toHaveBeenCalledWith(routeBody());
+	});
+
+	it("removes only the requested library guard", async () => {
+		const remove = vi.fn(async () => ({ status: "removed" as const }));
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/removal`,
+					authorizedJson({ applicationUuid }),
+				);
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual({ status: "removed" });
+			},
+			createGuard({ remove }),
+		);
+		expect(remove).toHaveBeenCalledWith(applicationUuid);
+	});
+
+	it("returns a bounded guard failure without changing its code", async () => {
+		const protect = vi.fn(async () => {
+			throw new LibraryRuntimeGuardError(
+				"runtime_guard_start_failed",
+				"The Evidence Library continuity guard did not become ready.",
+			);
+		});
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/protection`,
+					authorizedJson(routeBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual({
+					error: {
+						code: "runtime_guard_start_failed",
+						message:
+							"The Evidence Library continuity guard did not become ready.",
+					},
+				});
+			},
+			createGuard({ protect }),
+		);
+	});
+
 	it("returns validated container facts for the requested application", async () => {
 		let receivedApplicationUuid: string | undefined;
 		await withServer(
