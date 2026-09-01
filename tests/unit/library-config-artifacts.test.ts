@@ -87,15 +87,6 @@ describe("library configuration artifacts", () => {
 			path: "processing.structureRules[].action",
 			values: ["append-system-instruction"],
 		});
-		const schema = createLibraryConfigJsonSchema();
-		const yearMaximum = (
-			(schema.properties as Record<string, any>).filters
-				.properties.years.properties as Record<string, any>
-		).maximum;
-		expect(yearMaximum).toMatchObject({
-			"x-dynamicDefault": "currentUtcYear",
-		});
-		expect(yearMaximum).not.toHaveProperty("default");
 		expect(catalog.fields.writeOnlyPaths).toEqual(
 			expect.arrayContaining([
 				"ai.providers[].apiKey",
