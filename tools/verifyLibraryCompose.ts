@@ -8,6 +8,7 @@ type ComposeService = {
 	command?: string[];
 	configs?: Array<{ source: string; target: string }>;
 	depends_on?: Record<string, { condition?: string }>;
+	entrypoint?: string[];
 	environment?: Record<string, string>;
 	expose?: string[];
 	healthcheck?: { start_period?: string; test?: string[] };
@@ -15,6 +16,7 @@ type ComposeService = {
 	labels?: Record<string, string>;
 	networks?: Record<string, unknown>;
 	ports?: unknown[];
+	user?: string;
 	volumes?: Array<{ source: string; target: string }>;
 };
 
@@ -88,20 +90,63 @@ function renderLibraryCompose(root: string, libraryConfig: LibraryConfig) {
 	});
 }
 
-function requireVerifierDockerReads(model: ComposeModel) {
-	const environment = model.services?.["docker-socket-proxy"]?.environment;
+function requireComposeService(
+	model: ComposeModel,
+	name: string,
+	message: string,
+) {
+	const service = model.services?.[name];
+	requireCondition(service, message);
+	return service;
+}
+
+function requireProxyPermissions(environment: Record<string, string>) {
+	const permissions = {
+		CONTAINERS: "Runtime verifier must be able to read containers",
+		IMAGES: "Runtime verifier must be able to read image digests",
+		NETWORKS:
+			"Runtime verifier must be able to connect continuity guard networks",
+		POST: "Runtime verifier must be able to create and remove continuity guards",
+	};
+	for (const [permission, message] of Object.entries(permissions)) {
+		requireCondition(environment[permission] === "1", message);
+	}
+}
+
+function requireVerifierMounts(verifier: ComposeService) {
+	for (const target of [
+		"/data/evidence-library-runtime-guards",
+		"/runtime/traefik-dynamic",
+	]) {
+		requireCondition(
+			verifier.volumes?.some((volume) => volume.target === target),
+			`Runtime verifier mount is missing: ${target}`,
+		);
+	}
+}
+
+function requireVerifierDockerAccess(model: ComposeModel) {
+	const verifier = requireComposeService(
+		model,
+		"runtime-verifier",
+		"Runtime verifier is missing",
+	);
+	const proxy = requireComposeService(
+		model,
+		"docker-socket-proxy",
+		"Runtime verifier socket proxy is missing",
+	);
+	const environment = proxy.environment;
 	requireCondition(environment, "Runtime verifier socket proxy is missing");
+	requireProxyPermissions(environment);
 	requireCondition(
-		environment.CONTAINERS === "1",
-		"Runtime verifier must be able to read containers",
+		verifier.expose?.includes("3001"),
+		"Runtime verifier maintenance port is missing",
 	);
+	requireVerifierMounts(verifier);
 	requireCondition(
-		environment.IMAGES === "1",
-		"Runtime verifier must be able to read image digests",
-	);
-	requireCondition(
-		environment.POST === "0",
-		"Runtime verifier must not write through the Docker API",
+		verifier.user === "0:0" && verifier.entrypoint?.length === 0,
+		"Runtime verifier must retain host write access",
 	);
 }
 
@@ -370,7 +415,7 @@ function main() {
 	requireRenderedConfig(model);
 	requireNamedStorage(model);
 	requireCoolifyNetwork(model);
-	requireVerifierDockerReads(
+	requireVerifierDockerAccess(
 		renderComposeFile(root, "docker/compose.runtime-verifier.yaml", {
 			EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN: "compose-check",
 		}),

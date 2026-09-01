@@ -107,9 +107,9 @@ CMD ["node_modules/.bin/tsx", "tools/runLibraryDatabaseProvisioner.ts"]
 
 FROM worker-base AS runtime-verifier
 
-ENV PORT=3000
+ENV MAINTENANCE_PORT=3001 PORT=3000
 
-EXPOSE 3000
+EXPOSE 3000 3001
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
 	CMD ["node", "-e", "const socket=require('node:net').connect({host:'127.0.0.1',port:Number(process.env.PORT??3000)});socket.setTimeout(2000);socket.once('connect',()=>{socket.end();process.exit(0)});socket.once('error',()=>process.exit(1));socket.once('timeout',()=>process.exit(1))"]
