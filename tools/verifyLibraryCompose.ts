@@ -8,7 +8,7 @@ type ComposeService = {
 	command?: string[];
 	configs?: Array<{ source: string; target: string }>;
 	depends_on?: Record<string, { condition?: string }>;
-	entrypoint?: string[];
+	entrypoint?: string[] | null;
 	environment?: Record<string, string>;
 	expose?: string[];
 	healthcheck?: { start_period?: string; test?: string[] };
@@ -145,7 +145,7 @@ function requireVerifierDockerAccess(model: ComposeModel) {
 	);
 	requireVerifierMounts(verifier);
 	requireCondition(
-		verifier.user === "0:0" && verifier.entrypoint?.length === 0,
+		verifier.user === "0:0" && verifier.entrypoint === null,
 		"Runtime verifier must retain host write access",
 	);
 }

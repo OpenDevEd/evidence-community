@@ -109,6 +109,8 @@ FROM worker-base AS runtime-verifier
 
 ENV MAINTENANCE_PORT=3001 PORT=3000
 
+ENTRYPOINT []
+
 EXPOSE 3000 3001
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \

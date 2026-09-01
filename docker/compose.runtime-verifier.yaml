@@ -24,7 +24,6 @@ services:
     expose:
       - "3000"
       - "3001"
-    entrypoint: []
     user: "0:0"
     volumes:
       - type: bind
