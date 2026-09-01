@@ -33,6 +33,8 @@ type DockerGuardOptions = {
 	sleep?: (milliseconds: number) => Promise<void>;
 };
 
+type EnsureGuardInput = Parameters<LibraryRuntimeGuardDocker["ensureGuard"]>[0];
+
 type InspectedContainer = {
 	config: Record<string, unknown>;
 	id: string;
@@ -308,7 +310,8 @@ function requireNetworkIp(networks: Record<string, unknown>, network: string) {
 function requireApplicationNetworks(networks: Record<string, unknown>) {
 	const names = Object.keys(networks);
 	if (
-		names.length !== 2 ||
+		names.length < 2 ||
+		names.length > 4 ||
 		!names.includes("coolify") ||
 		names.some((name) => !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u.test(name))
 	) {
@@ -530,9 +533,9 @@ export function createDockerLibraryRuntimeGuard(
 		}
 	};
 
-	const connectToCoolify = async (containerId: string) => {
+	const connectToNetwork = async (containerId: string, network: string) => {
 		await request(
-			`${dockerApiVersion}/networks/coolify/connect`,
+			`${dockerApiVersion}/networks/${encodeURIComponent(network)}/connect`,
 			{
 				body: JSON.stringify({ Container: containerId }),
 				headers: { "Content-Type": "application/json" },
@@ -542,13 +545,100 @@ export function createDockerLibraryRuntimeGuard(
 		);
 	};
 
+	const connectGuardNetworks = async (
+		container: InspectedContainer,
+		input: EnsureGuardInput,
+	) => {
+		const connectedNetworks = container.networks;
+		const missingNetworks = input.source.networks.filter(
+			(network) => !(network in connectedNetworks),
+		);
+		for (const network of missingNetworks) {
+			await connectToNetwork(container.id, network);
+		}
+		if (missingNetworks.length === 0) return container;
+		const updated = await inspect(container.id);
+		if (!updated) {
+			return guardError(
+				"runtime_guard_start_failed",
+				"The Evidence Library continuity guard disappeared.",
+			);
+		}
+		return requireGuard(updated, input);
+	};
+
+	const createGuard = async (
+		name: string,
+		initialNetwork: string,
+		input: EnsureGuardInput,
+	) => {
+		const createUrl = new URL(
+			`${dockerApiVersion}/containers/create`,
+			baseUrl,
+		);
+		createUrl.searchParams.set("name", name);
+		const labels = {
+			[guardLabel]: "true",
+			[guardApplicationLabel]: input.applicationUuid,
+			[guardRevisionLabel]: input.revision,
+			[LIBRARY_COMPOSE_RELEASE_LABEL]: input.commit,
+		};
+		const response = await request(
+			`${createUrl.pathname}${createUrl.search}`,
+			{
+				body: JSON.stringify({
+					Cmd: ["node_modules/.bin/next", "start"],
+					Env: ["LIBRARY_CONFIG_PATH=/runtime/config/library.json"],
+					ExposedPorts: { [`${guardPort}/tcp`]: {} },
+					HostConfig: {
+						Binds: [
+							`${input.configPath}:/runtime/config/library.json`,
+						],
+						Init: true,
+						RestartPolicy: { Name: "unless-stopped" },
+						SecurityOpt: ["no-new-privileges:true"],
+					},
+					Image: input.runtimeImage,
+					Labels: labels,
+					NetworkingConfig: {
+						EndpointsConfig: { [initialNetwork]: {} },
+					},
+				}),
+				headers: {
+					Accept: "application/json",
+					"Content-Type": "application/json",
+				},
+				method: "POST",
+			},
+			[201],
+		);
+		const created = requireRecord(await readJson(response));
+		const id = requireContainerId(created.Id);
+		for (const network of input.source.networks) {
+			if (network !== initialNetwork) await connectToNetwork(id, network);
+		}
+		await request(
+			`${dockerApiVersion}/containers/${id}/start`,
+			{ method: "POST" },
+			[204, 304],
+		);
+		const container = await inspect(id);
+		if (!container) {
+			return guardError(
+				"runtime_guard_start_failed",
+				"The Evidence Library continuity guard did not start.",
+			);
+		}
+		return requireGuard(container, input);
+	};
+
 	return {
 		async ensureGuard(input) {
 			const name = guardName(input.applicationUuid);
-			const applicationNetwork = input.source.networks.find(
+			const initialNetwork = input.source.networks.find(
 				(network) => network !== "coolify",
 			);
-			if (!applicationNetwork) {
+			if (!initialNetwork) {
 				return guardError(
 					"runtime_network_invalid",
 					"The Evidence Library web networks are invalid.",
@@ -556,77 +646,12 @@ export function createDockerLibraryRuntimeGuard(
 			}
 			let container = await inspect(name, true);
 			if (container) {
-				requireGuard(container, input);
-				if (!("coolify" in container.networks)) {
-					await connectToCoolify(container.id);
-					container = await inspect(container.id);
-					if (!container) {
-						return guardError(
-							"runtime_guard_start_failed",
-							"The Evidence Library continuity guard disappeared.",
-						);
-					}
-					requireGuard(container, input);
-				}
+				container = await connectGuardNetworks(
+					requireGuard(container, input),
+					input,
+				);
 			} else {
-				const createUrl = new URL(
-					`${dockerApiVersion}/containers/create`,
-					baseUrl,
-				);
-				createUrl.searchParams.set("name", name);
-				const labels = {
-					[guardLabel]: "true",
-					[guardApplicationLabel]: input.applicationUuid,
-					[guardRevisionLabel]: input.revision,
-					[LIBRARY_COMPOSE_RELEASE_LABEL]: input.commit,
-				};
-				const response = await request(
-					`${createUrl.pathname}${createUrl.search}`,
-					{
-						body: JSON.stringify({
-							Cmd: ["node_modules/.bin/next", "start"],
-							Env: [
-								"LIBRARY_CONFIG_PATH=/runtime/config/library.json",
-							],
-							ExposedPorts: { [`${guardPort}/tcp`]: {} },
-							HostConfig: {
-								Binds: [
-									`${input.configPath}:/runtime/config/library.json`,
-								],
-								Init: true,
-								RestartPolicy: { Name: "unless-stopped" },
-								SecurityOpt: ["no-new-privileges:true"],
-							},
-							Image: input.runtimeImage,
-							Labels: labels,
-							NetworkingConfig: {
-								EndpointsConfig: { [applicationNetwork]: {} },
-							},
-						}),
-						headers: {
-							Accept: "application/json",
-							"Content-Type": "application/json",
-						},
-						method: "POST",
-					},
-					[201],
-				);
-				const created = requireRecord(await readJson(response));
-				const id = requireContainerId(created.Id);
-				await connectToCoolify(id);
-				await request(
-					`${dockerApiVersion}/containers/${id}/start`,
-					{ method: "POST" },
-					[204, 304],
-				);
-				container = await inspect(id);
-				if (!container) {
-					return guardError(
-						"runtime_guard_start_failed",
-						"The Evidence Library continuity guard did not start.",
-					);
-				}
-				requireGuard(container, input);
+				container = await createGuard(name, initialNetwork, input);
 			}
 
 			for (let attempt = 0; attempt < guardStartAttempts; attempt += 1) {
