@@ -79,7 +79,7 @@ export function AdminSearchIndexStatus({
 			<PopoverTrigger>
 				<button
 					aria-label={`Search indexing: ${view.label}`}
-					className={`inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.06] ${appearance.className}`}
+					className={`inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.06] ${appearance.className}`}
 					data-admin-search-index-status={view.kind}
 					title={view.label}
 					type="button"

@@ -2067,49 +2067,55 @@ export default function AdminWorkbench({
 							);
 						})}
 					</div>
-					<AdminSearchIndexStatus
-						error={searchIndex.error}
-						onRefresh={() => void searchIndex.refresh()}
-						onRetry={() => void searchIndex.retry()}
-						view={searchIndex.view}
-					/>
-					<ThemeSwitcher
-						styleVariant={theme.layout}
-						toolbar
-						variant="inline"
-					/>
-				</div>
-				<Tooltip content="Refresh">
-					<Button
-						aria-label="Refresh"
-						className="hidden h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
-						isIconOnly
-						onPress={() => void refreshCurrent()}
-						size="xs"
-						variant="transparent"
+					<div
+						aria-label="Library tools"
+						className="flex h-10 items-center gap-0.5 rounded-xl bg-black/[0.035] p-1 dark:bg-white/[0.035]"
+						role="group"
 					>
-						<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={15} />
-					</Button>
-				</Tooltip>
+						<AdminSearchIndexStatus
+							error={searchIndex.error}
+							onRefresh={() => void searchIndex.refresh()}
+							onRetry={() => void searchIndex.retry()}
+							view={searchIndex.view}
+						/>
+						<ThemeSwitcher
+							styleVariant={theme.layout}
+							toolbar
+							variant="inline"
+						/>
+						<Tooltip content="Refresh">
+							<Button
+								aria-label="Refresh"
+								className="hidden h-8 min-h-8 w-8 rounded-lg text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								isIconOnly
+								onPress={() => void refreshCurrent()}
+								size="xs"
+								variant="transparent"
+							>
+								<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={15} />
+							</Button>
+						</Tooltip>
+						<form
+							action="/api/admin/session/logout"
+							method="post"
+							ref={logoutFormRef}
+						/>
+						<Tooltip content="Log out">
+							<Button
+								aria-label="Log out"
+								className="h-8 min-h-8 w-8 rounded-lg text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								isIconOnly
+								onPress={() => logoutFormRef.current?.requestSubmit()}
+								size="xs"
+								type="button"
+								variant="transparent"
+							>
+								<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
+							</Button>
+						</Tooltip>
+					</div>
+				</div>
 				<div className="col-start-3 row-start-1 flex shrink-0 items-center gap-1">
-					<form
-						action="/api/admin/session/logout"
-						method="post"
-						ref={logoutFormRef}
-					/>
-					<Tooltip content="Log out">
-						<Button
-							aria-label="Log out"
-							className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
-							isIconOnly
-							onPress={() => logoutFormRef.current?.requestSubmit()}
-							size="xs"
-							type="button"
-							variant="transparent"
-						>
-							<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
-						</Button>
-					</Tooltip>
 					<div
 						aria-label="Add records"
 						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
