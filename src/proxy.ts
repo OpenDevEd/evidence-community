@@ -426,7 +426,7 @@ export default async function proxy(request: NextRequest) {
 		libraryConfig.identity.baseUrl,
 	);
 	if (canonicalRedirect) {
-		return NextResponse.redirect(canonicalRedirect, 308);
+		return NextResponse.redirect(canonicalRedirect, 307);
 	}
 
 	if (request.nextUrl.pathname === "/") {
