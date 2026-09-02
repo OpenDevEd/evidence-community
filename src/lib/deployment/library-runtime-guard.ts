@@ -227,6 +227,15 @@ export function renderLibraryRuntimeRoute(input: {
 		...input.platformOrigins,
 		...input.customOrigins,
 	]);
+	const healthCheck = {
+		headers: {
+			"X-Forwarded-Host": new URL(input.platformOrigins[0]).host,
+			"X-Forwarded-Proto": "https",
+		},
+		interval: "3s",
+		path: "/api/library-config/health",
+		timeout: "2s",
+	};
 	const routers: Record<string, unknown> = {
 		[`${serviceName}-platform-https`]: router(
 			platformRule,
@@ -269,11 +278,7 @@ export function renderLibraryRuntimeRoute(input: {
 	if (input.target) {
 		services[`${serviceName}-upstream`] = {
 			loadBalancer: {
-				healthCheck: {
-					interval: "3s",
-					path: "/api/library-config/health",
-					timeout: "2s",
-				},
+				healthCheck,
 				passHostHeader: true,
 				servers: [
 					{
@@ -293,11 +298,7 @@ export function renderLibraryRuntimeRoute(input: {
 		if (input.fallbackTarget) {
 			services[`${serviceName}-guard`] = {
 				loadBalancer: {
-					healthCheck: {
-						interval: "3s",
-						path: "/api/library-config/health",
-						timeout: "2s",
-					},
+					healthCheck,
 					passHostHeader: true,
 					servers: [
 						{

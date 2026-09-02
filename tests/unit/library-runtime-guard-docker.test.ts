@@ -147,6 +147,18 @@ function dockerFetchFixture(configJson: string) {
 		async (request: string | URL | Request, init?: RequestInit) => {
 			const url = new URL(request.toString());
 			if (url.hostname === "172.19.0.10") {
+				if (
+					new Headers(init?.headers).get("x-forwarded-host") !==
+					"library.opendev.space"
+				) {
+					return new Response(null, {
+						headers: {
+							Location:
+								"https://library.opendev.space/api/library-config/health",
+						},
+						status: 308,
+					});
+				}
 				return json({ active: { revision }, state: "active" });
 			}
 			const handler = handlers.get(url.pathname);
