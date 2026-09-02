@@ -296,7 +296,7 @@ export function itemCollectionBaselineKeys(
 	return [...new Set([...publishedCollectionKeys, ...draftCollectionKeys])];
 }
 
-async function assertValidItemCollectionMembershipsInDatabase(
+export async function assertValidItemCollectionMembershipsInDatabase(
 	db: Executor,
 	itemKey: string | null,
 	itemSourceConnectionKey: string,

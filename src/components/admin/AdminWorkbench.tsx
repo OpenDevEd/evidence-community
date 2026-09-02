@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, Folder01Icon, FolderInputIcon, LibraryIcon, ListIcon, Logout01Icon, Menu01Icon, PanelRightIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, ListIcon, Logout01Icon, Menu01Icon, PanelRightIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
@@ -51,6 +51,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
+import { AdminImportDialog } from "./AdminImportDialog";
 import { AdminInspector } from "./AdminInspector";
 import {
 	AdminWritebackSourcesDialog,
@@ -428,6 +429,7 @@ export default function AdminWorkbench({
 		"inspector" | "list" | "navigation"
 	>("list");
 	const [newItemOpen, setNewItemOpen] = useState(false);
+	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
 	const [collectionDialog, setCollectionDialog] =
 		useState<CollectionDialog | null>(null);
@@ -2107,6 +2109,19 @@ export default function AdminWorkbench({
 							<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
 						</Button>
 					</Tooltip>
+					<Tooltip content="Import records">
+						<Button
+							aria-label="Import records"
+							className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+							isDisabled={busy}
+							isIconOnly
+							onPress={() => setImportOpen(true)}
+							size="xs"
+							variant="transparent"
+						>
+							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} />
+						</Button>
+					</Tooltip>
 					<Popover
 						disableAnimation
 						isOpen={newItemOpen}
@@ -2498,6 +2513,16 @@ export default function AdminWorkbench({
 					</aside>
 				</div>
 			</AdminDragDropRoot>
+
+			<AdminImportDialog
+				isOpen={importOpen}
+				onClose={() => setImportOpen(false)}
+				onImported={async (itemKeys) => {
+					await loadItems();
+					setBulkKeys(new Set(itemKeys));
+				}}
+				sources={library.sources}
+			/>
 
 			<DialogModal
 				isOpen={Boolean(recordAssignment)}
