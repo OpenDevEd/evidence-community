@@ -30,6 +30,16 @@ function adminRequest(url: string, method = "GET") {
 	return new NextRequest(`http://localhost${url}`, { method });
 }
 
+function publicAliasRequest(url: string) {
+	return new NextRequest(`http://web:3000${url}`, {
+		headers: {
+			host: "web:3000",
+			"x-forwarded-host": "old-library.example.org",
+			"x-forwarded-proto": "https",
+		},
+	});
+}
+
 beforeEach(() => {
 	const config = libraryConfigSchema.parse(
 		structuredClone(minimalLibraryConfig),
@@ -89,6 +99,17 @@ describe("admin requests through the proxy", () => {
 
 		expect(response.headers.get("location")).toBe(
 			`${loginPageUrl}?return=%2Fen-GB%2Fadmin%2Fitems`,
+		);
+	});
+});
+
+describe("public domain requests through the proxy", () => {
+	it("temporarily redirects an alias because the selected main domain can change", async () => {
+		const response = await proxy(publicAliasRequest("/lib?search=proof"));
+
+		expect(response.status).toBe(307);
+		expect(response.headers.get("location")).toBe(
+			"https://minimal.example.org/lib?search=proof",
 		);
 	});
 });
