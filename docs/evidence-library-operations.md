@@ -142,7 +142,7 @@ OpenScholar also uses five fixed route operations:
 | `/v1/library-runtime/maintenance`  | Routes a first activation to the maintenance response.                                                               |
 | `/v1/library-runtime/protection`   | Copies the active config, starts or reuses one temporary web guard, then routes all current and pending hosts to it. |
 | `/v1/library-runtime/activation`   | Tries the ready replacement while retaining the guard as its fallback.                                               |
-| `/v1/library-runtime/finalization` | Returns traffic to the deployment router, removes the guard, and deletes its copied config.                          |
+| `/v1/library-runtime/finalization` | Removes the guard and copied config, then returns traffic to the deployment router.                                  |
 | `/v1/library-runtime/removal`      | Removes the route, guard, and copied config during teardown.                                                         |
 
 The first four receive `applicationUuid`, `commit`, `runtimeImage`, `revision`,
