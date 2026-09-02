@@ -3,6 +3,10 @@ import { isIP } from "node:net";
 import path from "node:path";
 
 import { replaceFileAtomically } from "@/lib/atomic-file";
+import {
+	getLibraryConfigProbeHeaders,
+	LIBRARY_CONFIG_HEALTH_PATH,
+} from "@/lib/runtime-routing";
 
 import { isCoolifyApplicationUuid } from "./coolify-application";
 
@@ -228,12 +232,9 @@ export function renderLibraryRuntimeRoute(input: {
 		...input.customOrigins,
 	]);
 	const healthCheck = {
-		headers: {
-			"X-Forwarded-Host": new URL(input.platformOrigins[0]).host,
-			"X-Forwarded-Proto": "https",
-		},
+		headers: getLibraryConfigProbeHeaders(input.platformOrigins[0]),
 		interval: "3s",
-		path: "/api/library-config/health",
+		path: LIBRARY_CONFIG_HEALTH_PATH,
 		timeout: "2s",
 	};
 	const routers: Record<string, unknown> = {
@@ -444,11 +445,6 @@ export function createLibraryRuntimeGuardManager(
 		async finalize(input: LibraryRuntimeRouteInput) {
 			const checked = requireLibraryRuntimeRouteInput(input);
 			await options.docker.readApplicationWeb(checked);
-			await unlink(paths(checked.applicationUuid).routePath).catch(
-				(error: NodeJS.ErrnoException) => {
-					if (error.code !== "ENOENT") throw error;
-				},
-			);
 			await options.docker.removeGuard(checked.applicationUuid);
 			await unlink(paths(checked.applicationUuid).configPath).catch(
 				(error: NodeJS.ErrnoException) => {
@@ -459,6 +455,11 @@ export function createLibraryRuntimeGuardManager(
 				(error: NodeJS.ErrnoException) => {
 					if (error.code !== "ENOENT" && error.code !== "ENOTEMPTY")
 						throw error;
+				},
+			);
+			await unlink(paths(checked.applicationUuid).routePath).catch(
+				(error: NodeJS.ErrnoException) => {
+					if (error.code !== "ENOENT") throw error;
 				},
 			);
 			return { status: "finalized" as const };

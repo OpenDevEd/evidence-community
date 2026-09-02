@@ -2,6 +2,10 @@ import { isIP } from "node:net";
 import path from "node:path";
 
 import { MAX_LIBRARY_CONFIG_BYTES } from "@/config/library-config/schema";
+import {
+	getLibraryConfigProbeHeaders,
+	LIBRARY_CONFIG_HEALTH_PATH,
+} from "@/lib/runtime-routing";
 
 import { isCoolifyApplicationUuid } from "./coolify-application";
 import {
@@ -511,13 +515,13 @@ export function createDockerLibraryRuntimeGuard(
 		}
 		try {
 			const response = await fetchRequest(
-				`http://${ipAddress}:${guardPort}/api/library-config/health`,
+				`http://${ipAddress}:${guardPort}${LIBRARY_CONFIG_HEALTH_PATH}`,
 				{
 					headers: {
 						Accept: "application/json",
-						"X-Forwarded-Host": new URL(input.platformOrigins[0])
-							.host,
-						"X-Forwarded-Proto": "https",
+						...getLibraryConfigProbeHeaders(
+							input.platformOrigins[0],
+						),
 					},
 					redirect: "error",
 					signal: AbortSignal.timeout(2_000),

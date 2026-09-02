@@ -158,20 +158,19 @@ describe("Evidence Library runtime guard", () => {
 		expect(docker.removeGuard).not.toHaveBeenCalled();
 	});
 
-	it("returns to the deployment route before deleting the old guard", async () => {
-		const events: string[] = [];
+	it("keeps the active route when deleting the old guard fails", async () => {
 		const docker = fakeDocker();
 		const { manager, routePath } = await fixture(docker);
 		docker.removeGuard = vi.fn(async () => {
-			await expect(readFile(routePath, "utf8")).rejects.toMatchObject({
-				code: "ENOENT",
-			});
-			events.push("route-returned-before-remove");
+			throw new Error("guard removal failed");
 		});
 		await manager.protect(input);
+		const protectedRoute = await readFile(routePath, "utf8");
 
-		await manager.finalize(input);
-		expect(events).toEqual(["route-returned-before-remove"]);
+		await expect(manager.finalize(input)).rejects.toThrow(
+			"guard removal failed",
+		);
+		expect(await readFile(routePath, "utf8")).toBe(protectedRoute);
 	});
 
 	it("keeps the existing guard and route when the replacement cannot be read", async () => {
