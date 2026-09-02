@@ -143,6 +143,9 @@ async function findExistingRecords(
 
 	const isbnExpression = (column: ReturnType<typeof sql>) =>
 		sql`upper(regexp_replace(${column}, '[^0-9Xx]', '', 'g'))`;
+	// Stored DOIs may carry a doi.org or "doi:" prefix; match what normalizeDoi keeps.
+	const doiExpression = (column: ReturnType<typeof sql>) =>
+		sql`regexp_replace(lower(trim(${column})), '^(https?://(dx\.)?doi\.org/|doi:\s*)', '')`;
 	const conditions = (
 		doi: ReturnType<typeof sql>,
 		pmid: ReturnType<typeof sql>,
@@ -150,7 +153,7 @@ async function findExistingRecords(
 	) =>
 		or(
 			...[
-				dois.length ? [inArray(sql`lower(${doi})`, dois)] : [],
+				dois.length ? [inArray(doiExpression(doi), dois)] : [],
 				pmids.length ? [inArray(sql`regexp_replace(${pmid}, '\\D', '', 'g')`, pmids)] : [],
 				isbns.length ? [inArray(isbnExpression(isbn), isbns)] : [],
 			].flat(),
@@ -409,6 +412,11 @@ export async function commitImportRecords(
 	});
 
 	return db.transaction(async (transaction) => {
+		// One import commits at a time, so a retried or concurrent commit sees
+		// the drafts the first one created instead of racing its duplicate check.
+		await transaction.execute(
+			sql`SELECT pg_advisory_xact_lock(hashtextextended('item-import', 0))`,
+		);
 		await assertValidItemCollectionMembershipsInDatabase(
 			transaction,
 			null,

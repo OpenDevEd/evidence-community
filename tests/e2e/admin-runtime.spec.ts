@@ -24,6 +24,7 @@ const protectedAdminRequests = [
 	["POST", "/api/admin/items/drafts"],
 	["GET", "/api/admin/items/ABCDEFGH"],
 	["POST", "/api/admin/items/batch"],
+	["POST", "/api/admin/items/import"],
 	["POST", "/api/admin/items/ABCDEFGH/unpublish"],
 	["GET", "/api/admin/items/ABCDEFGH/draft"],
 	["POST", "/api/admin/items/ABCDEFGH/draft"],

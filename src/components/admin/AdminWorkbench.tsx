@@ -124,6 +124,7 @@ import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
 import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
+	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
 } from "@/lib/admin/item-filter-state";
@@ -2518,6 +2519,8 @@ export default function AdminWorkbench({
 				isOpen={importOpen}
 				onClose={() => setImportOpen(false)}
 				onImported={async (itemKeys) => {
+					// Show the whole library, newest first, so the new drafts are visible.
+					setFilters(DEFAULT_ADMIN_ITEM_VIEW_FILTERS);
 					await loadItems();
 					setBulkKeys(new Set(itemKeys));
 				}}
