@@ -3,9 +3,7 @@ import { z } from "zod";
 import { PLATFORM_SEARCH_SCOPES } from "@/config/library-config/catalogs";
 import { SORT_OPTIONS } from "@/constants/items";
 
-const filterValuesSchema = z
-	.array(z.string().trim().min(1).max(300))
-	.max(100);
+const filterValuesSchema = z.array(z.string().trim().min(1).max(300)).max(100);
 
 const RANGE_PATTERN = /^(?:|\d{4}|\d{4}-\d{4}|\d{4}-|-\d{4})$/;
 
@@ -21,11 +19,9 @@ const scopeSchema = z
 		{ message: "Unsupported search scope" },
 	);
 
-const sortSchema = z
-	.string()
-	.refine((value) => SORT_KEYS.includes(value), {
-		message: "Unsupported search sort",
-	});
+const sortSchema = z.string().refine((value) => SORT_KEYS.includes(value), {
+	message: "Unsupported search sort",
+});
 
 export const librarySearchContextSchema = z
 	.object({
@@ -35,15 +31,12 @@ export const librarySearchContextSchema = z
 		range: z.string().max(20).regex(RANGE_PATTERN),
 		institution: filterValuesSchema,
 		country: filterValuesSchema,
-		author_country: filterValuesSchema,
 		author: z.string().trim().max(300),
 		collections: filterValuesSchema,
 	})
 	.strict();
 
-export type LibrarySearchContext = z.infer<
-	typeof librarySearchContextSchema
->;
+export type LibrarySearchContext = z.infer<typeof librarySearchContextSchema>;
 
 /**
  * Builds the AI search context from the library's URL-derived query params.
@@ -79,7 +72,6 @@ export function normalizeLibrarySearchContext(
 		range: RANGE_PATTERN.test(range) ? range : "",
 		institution: filterValues(value.institution),
 		country: filterValues(value.country),
-		author_country: filterValues(value.author_country),
 		author: (value.author ?? "").trim().slice(0, MAX_FILTER_VALUE_LENGTH),
 		collections: filterValues(value.collections),
 	});
@@ -95,7 +87,6 @@ export function librarySearchContextSummary(
 		yearRange: context.range || undefined,
 		institutions: context.institution,
 		publicationCountries: context.country,
-		authorCountries: context.author_country,
 		author: context.author || undefined,
 		collections: context.collections,
 	});

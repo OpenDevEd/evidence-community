@@ -140,7 +140,6 @@
 		"fullText": true,
 		"tags": true,
 		"country": true,
-		"authorCountry": true,
 		"embedder": {
 			"source": "openAi",
 			"model": "text-embedding-3-small",
@@ -155,7 +154,6 @@
 			"label": "institutions",
 			"featuredValue": "Institution One"
 		},
-		"countryLibrary": true,
 		"collectionsExpanded": false,
 		"years": {
 			"enabled": true
@@ -188,7 +186,6 @@
 		"collectionNotes": true,
 		"countryFocus": true,
 		"authorFilter": true,
-		"authorLocation": true,
 		"yearsDropdown": true,
 		"downloads": true,
 		"atomFeed": true

@@ -1,14 +1,16 @@
 "use client";
 
-import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
-import { ArchiveIcon, Compass01Icon, Search01Icon, Sorting01Icon } from "@hugeicons/core-free-icons";
 import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+	HugeiconsIcon,
+	type IconSvgElement,
+} from "@/components/icons/Hugeicon";
+import {
+	ArchiveIcon,
+	Compass01Icon,
+	Search01Icon,
+	Sorting01Icon,
+} from "@hugeicons/core-free-icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryStates } from "nuqs";
 import dynamic from "next/dynamic";
 import { useRouter, Link, usePathname } from "@/i18n/routing";
@@ -65,10 +67,20 @@ const NavbarFilterChips = dynamic(() => import("./NavbarFilterChips"), {
  * decided by the navbar.
  */
 
-function DropDownIcon({ Icon, label }: { Icon: IconSvgElement; label?: string }) {
+function DropDownIcon({
+	Icon,
+	label,
+}: {
+	Icon: IconSvgElement;
+	label?: string;
+}) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<HugeiconsIcon icon={Icon} className="w-full h-full" aria-label={label} />
+			<HugeiconsIcon
+				icon={Icon}
+				className="w-full h-full"
+				aria-label={label}
+			/>
 		</div>
 	);
 }
@@ -210,13 +222,8 @@ export default function NavbarSearch() {
 			scope,
 			range: normalizeRuntimeYearRange(params.range, filters),
 			institution:
-				filters.institution.mode === "hidden"
-					? []
-					: params.institution,
+				filters.institution.mode === "hidden" ? [] : params.institution,
 			country: search.country ? params.country : [],
-			author_country: search.authorCountry
-				? params.author_country
-				: [],
 		}),
 		[filters, params, scope, search],
 	);
@@ -230,9 +237,7 @@ export default function NavbarSearch() {
 		(runtimeParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) =>
-				acc +
-				((runtimeParams as any)[facet.queryParam]?.length ||
-					0),
+				acc + ((runtimeParams as any)[facet.queryParam]?.length || 0),
 			0,
 		);
 
@@ -275,21 +280,23 @@ export default function NavbarSearch() {
 	// An empty search is a valid query (it just browses everything matching the
 	// current scope/filters), so we gate the fetch on the dropdown being open
 	// rather than on there being search text — only fetching when it's shown.
-	const query = isOpen
-		? buildItemsQuery(runtimeParams, "/items")
-		: null;
+	const query = isOpen ? buildItemsQuery(runtimeParams, "/items") : null;
 
-	const { data, isLoading, isValidating } = useSWR<ItemsGetResponse>(query, fetcher, {
-		keepPreviousData: true,
-		revalidateOnFocus: false,
-		onSuccess: (d) => {
-			// Mirror the library: if the active page fell past the end (e.g. the
-			// result set shrank after a filter change), snap to the last page.
-			if (d.totalPages > 0 && params.page > d.totalPages) {
-				setParams({ page: d.totalPages });
-			}
+	const { data, isLoading, isValidating } = useSWR<ItemsGetResponse>(
+		query,
+		fetcher,
+		{
+			keepPreviousData: true,
+			revalidateOnFocus: false,
+			onSuccess: (d) => {
+				// Mirror the library: if the active page fell past the end (e.g. the
+				// result set shrank after a filter change), snap to the last page.
+				if (d.totalPages > 0 && params.page > d.totalPages) {
+					setParams({ page: d.totalPages });
+				}
+			},
 		},
-	});
+	);
 
 	const results = data?.items ?? [];
 	const totalItems = data?.totalItems ?? 0;
@@ -353,7 +360,9 @@ export default function NavbarSearch() {
 			setIsOpen(false);
 			// Open the item carrying the same params, so its navbar search picks
 			// up exactly where the user was.
-			router.push(`/lib/${key}` + serializeSearchParams(buildTargetParams()));
+			router.push(
+				`/lib/${key}` + serializeSearchParams(buildTargetParams()),
+			);
 		},
 		[router, buildTargetParams],
 	);
@@ -407,229 +416,296 @@ export default function NavbarSearch() {
 
 	return (
 		<>
-		<div
-			ref={barRef}
-			role="search"
-			className="bg-[#EAE9E5] dark:bg-card border border-black/5 dark:border-white/5 xl:rounded-2xl !rounded-t-none !border-t-0 p-4 xl:p-6 flex flex-col gap-4"
-		>
-			<div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-			{/* Search field + autocomplete dropdown */}
-			<div ref={containerRef} className="relative flex-1 min-w-0">
-				<Input
-					autoCorrect="off"
-					value={searchInput}
-					onChange={(e) => handleInput(e.target.value)}
-					onFocus={() => setIsOpen(true)}
-					onKeyDown={handleKeyDown}
-					onClear={() => {
-						setSearchDraft({ value: "", source: params.search });
-						setParams({ search: "", page: 1 });
-						// Clearing the text isn't the same as having nothing to
-						// show — keep the dropdown open on the now-unfiltered list.
-						setIsOpen(true);
-					}}
-					placeholder={t("search")}
-					size="lg"
-					classNames={{
-						inputWrapper: "h-10 lg:h-12 min-h-10 lg:min-h-12",
-					}}
-					isClearable
-					startContent={
-						<HugeiconsIcon icon={Search01Icon}
-							aria-label={t("searchIconAriaLabel")}
-							className="size-6 text-black/60 dark:text-white/40"
+			<div
+				ref={barRef}
+				role="search"
+				className="bg-[#EAE9E5] dark:bg-card border border-black/5 dark:border-white/5 xl:rounded-2xl !rounded-t-none !border-t-0 p-4 xl:p-6 flex flex-col gap-4"
+			>
+				<div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+					{/* Search field + autocomplete dropdown */}
+					<div ref={containerRef} className="relative flex-1 min-w-0">
+						<Input
+							autoCorrect="off"
+							value={searchInput}
+							onChange={(e) => handleInput(e.target.value)}
+							onFocus={() => setIsOpen(true)}
+							onKeyDown={handleKeyDown}
+							onClear={() => {
+								setSearchDraft({
+									value: "",
+									source: params.search,
+								});
+								setParams({ search: "", page: 1 });
+								// Clearing the text isn't the same as having nothing to
+								// show — keep the dropdown open on the now-unfiltered list.
+								setIsOpen(true);
+							}}
+							placeholder={t("search")}
+							size="lg"
+							classNames={{
+								inputWrapper:
+									"h-10 lg:h-12 min-h-10 lg:min-h-12",
+							}}
+							isClearable
+							startContent={
+								<HugeiconsIcon
+									icon={Search01Icon}
+									aria-label={t("searchIconAriaLabel")}
+									className="size-6 text-black/60 dark:text-white/40"
+								/>
+							}
+							endContent={
+								isSearching ? (
+									<Spinner
+										size="sm"
+										color="current"
+										className="text-black/60 dark:text-white/40"
+									/>
+								) : undefined
+							}
 						/>
-					}
-					endContent={
-						isSearching ? (
-							<Spinner
-								size="sm"
-								color="current"
-								className="text-black/60 dark:text-white/40"
-							/>
-						) : undefined
-					}
-				/>
 
-				{showDropdown && (
-					<div
-						role="listbox"
-						aria-label={t("search")}
-						className="absolute left-0 right-0 top-full mt-2 z-50 flex max-h-suggestions flex-col overflow-hidden rounded-2xl border border-black/5 bg-card_light shadow-xl dark:border-white/10 dark:bg-card"
-					>
-						<div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-2">
-							{results.length === 0 ? (
-								<div className="px-4 py-6 text-center text-sm text-black/50 dark:text-white/50">
-									{isSearching ? (
-										<Spinner
-											size="sm"
-											color="current"
-											className="text-black/60 dark:text-white/40"
-										/>
+						{showDropdown && (
+							<div
+								role="listbox"
+								aria-label={t("search")}
+								className="absolute left-0 right-0 top-full mt-2 z-50 flex max-h-suggestions flex-col overflow-hidden rounded-2xl border border-black/5 bg-card_light shadow-xl dark:border-white/10 dark:bg-card"
+							>
+								<div
+									ref={listRef}
+									className="min-h-0 flex-1 overflow-y-auto py-2"
+								>
+									{results.length === 0 ? (
+										<div className="px-4 py-6 text-center text-sm text-black/50 dark:text-white/50">
+											{isSearching ? (
+												<Spinner
+													size="sm"
+													color="current"
+													className="text-black/60 dark:text-white/40"
+												/>
+											) : (
+												t("noResourcesFound")
+											)}
+										</div>
 									) : (
-										t("noResourcesFound")
+										results.map(
+											(item: any, index: number) => {
+												const preview =
+													publicationPreviewData(
+														item,
+														{
+															contentTags:
+																content.tags,
+															etAl: t("etAl"),
+															formatter,
+															institutions:
+																configuredInstitutions,
+														},
+													);
+												const isCurrent =
+													!!currentItemKey &&
+													item.key === currentItemKey;
+												const row = (
+													<SuggestionRow
+														key={item.key}
+														href={
+															`/lib/${item.key}` +
+															serializeSearchParams(
+																buildTargetParams(),
+															)
+														}
+														isCurrent={isCurrent}
+														isHighlighted={
+															highlight === index
+														}
+														onOpenChange={setIsOpen}
+														onHighlight={() =>
+															setHighlight(index)
+														}
+														preview={preview}
+														title={item.title}
+														labels={{
+															comingSoon:
+																t("inProgress"),
+															institutionAlt: (
+																name,
+															) =>
+																t(
+																	"institutionLogoAlt",
+																	{ name },
+																),
+															internal:
+																t("internal"),
+														}}
+													/>
+												);
+
+												// Show the preview whenever there is anything to
+												// show; the abstract falls back to a placeholder.
+												if (!hasPreviewDetails(preview))
+													return row;
+
+												return (
+													<Tooltip
+														key={item.key}
+														placement="right"
+														delay={350}
+														closeDelay={0}
+														className="max-w-sm rounded-2xl border border-black/5 bg-card_light dark:border-white/10 dark:bg-card"
+														content={
+															<PublicationHoverPreview
+																preview={
+																	preview
+																}
+																comingSoonLabel={t(
+																	"inProgress",
+																)}
+																institutionAlt={(
+																	name,
+																) =>
+																	t(
+																		"institutionLogoAlt",
+																		{
+																			name,
+																		},
+																	)
+																}
+																internalLabel={t(
+																	"internal",
+																)}
+																noAbstractLabel={t(
+																	"noAbstract",
+																)}
+															/>
+														}
+													>
+														{row}
+													</Tooltip>
+												);
+											},
+										)
 									)}
 								</div>
-							) : (
-								results.map((item: any, index: number) => {
-									const preview = publicationPreviewData(item, {
-										contentTags: content.tags,
-										etAl: t("etAl"),
-										formatter,
-										institutions: configuredInstitutions,
-									});
-									const isCurrent =
-										!!currentItemKey &&
-										item.key === currentItemKey;
-									const row = (
-										<SuggestionRow
-											key={item.key}
-											href={
-												`/lib/${item.key}` +
-												serializeSearchParams(
-													buildTargetParams(),
-												)
-											}
-											isCurrent={isCurrent}
-											isHighlighted={highlight === index}
-											onOpenChange={setIsOpen}
-											onHighlight={() => setHighlight(index)}
-											preview={preview}
-											title={item.title}
-											labels={{
-												comingSoon: t("inProgress"),
-												institutionAlt: (name) =>
-													t("institutionLogoAlt", { name }),
-												internal: t("internal"),
-											}}
-										/>
-									);
 
-									// Show the preview whenever there is anything to
-									// show; the abstract falls back to a placeholder.
-									if (!hasPreviewDetails(preview)) return row;
-
-									return (
-										<Tooltip
-											key={item.key}
-											placement="right"
-											delay={350}
-											closeDelay={0}
-											className="max-w-sm rounded-2xl border border-black/5 bg-card_light dark:border-white/10 dark:bg-card"
-											content={
-												<PublicationHoverPreview
-													preview={preview}
-													comingSoonLabel={t("inProgress")}
-													institutionAlt={(name) =>
-														t("institutionLogoAlt", { name })
-													}
-													internalLabel={t("internal")}
-													noAbstractLabel={t("noAbstract")}
-												/>
-											}
-										>
-											{row}
-										</Tooltip>
-									);
-								})
-							)}
-						</div>
-
-						{/* Sticky footer: jump to the full library results on the left,
+								{/* Sticky footer: jump to the full library results on the left,
 						    page through the matches in place on the right. */}
-						{totalItems > 0 && (
-							<div className="flex shrink-0 items-center justify-between gap-2 border-t border-black/5 bg-card_light px-3 py-2 dark:border-white/10 dark:bg-card">
-								<button
-									type="button"
-									onClick={goToLibrary}
-									className="shrink-0 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-accent hover:bg-accent/5"
-								>
-									{t("seeMore")} ({formatter.number(totalItems)})
-								</button>
-								{totalPages > 1 && (
-									<Pagination
-										showControls
-										size="sm"
-										siblings={0}
-										page={params.page}
-										total={totalPages}
-										onChange={handlePreviewPageChange}
-										classNames={{ wrapper: "gap-0.5" }}
-									/>
+								{totalItems > 0 && (
+									<div className="flex shrink-0 items-center justify-between gap-2 border-t border-black/5 bg-card_light px-3 py-2 dark:border-white/10 dark:bg-card">
+										<button
+											type="button"
+											onClick={goToLibrary}
+											className="shrink-0 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-accent hover:bg-accent/5"
+										>
+											{t("seeMore")} (
+											{formatter.number(totalItems)})
+										</button>
+										{totalPages > 1 && (
+											<Pagination
+												showControls
+												size="sm"
+												siblings={0}
+												page={params.page}
+												total={totalPages}
+												onChange={
+													handlePreviewPageChange
+												}
+												classNames={{
+													wrapper: "gap-0.5",
+												}}
+											/>
+										)}
+									</div>
 								)}
 							</div>
 						)}
 					</div>
-				)}
-			</div>
 
-			{/* Scope */}
-			<Select
-				aria-label="Search scope"
-				startContent={
-					<DropDownIcon Icon={ArchiveIcon} label="Scope icon" />
-				}
-				color="tertiary"
-				selectedKeys={[scope]}
-				onSelectionChange={handleScopeChange}
-				items={scopeOptions}
-				selectorIcon={<div className="hidden"></div>}
-				classNames={scopeSelectClassNames}
-				label="Search scope"
-				labelPlacement="outside"
-			>
-				{(item: any) => (
-					<SelectItem aria-label={tScopes(item.key)} key={item.key}>
-						{tScopes(item.key)}
-					</SelectItem>
-				)}
-			</Select>
+					{/* Scope */}
+					<Select
+						aria-label="Search scope"
+						startContent={
+							<DropDownIcon
+								Icon={ArchiveIcon}
+								label="Scope icon"
+							/>
+						}
+						color="tertiary"
+						selectedKeys={[scope]}
+						onSelectionChange={handleScopeChange}
+						items={scopeOptions}
+						selectorIcon={<div className="hidden"></div>}
+						classNames={scopeSelectClassNames}
+						label="Search scope"
+						labelPlacement="outside"
+					>
+						{(item: any) => (
+							<SelectItem
+								aria-label={tScopes(item.key)}
+								key={item.key}
+							>
+								{tScopes(item.key)}
+							</SelectItem>
+						)}
+					</Select>
 
-			{/* Sort */}
-			<Select
-				aria-label="Sort by"
-				startContent={<DropDownIcon Icon={Sorting01Icon} label="Sort icon" />}
-				selectedKeys={[sort]}
-				onSelectionChange={handleSortChange}
-				items={SORT_OPTIONS}
-				selectorIcon={<div className="hidden"></div>}
-				classNames={selectClassNames}
-				label="Sort by"
-				labelPlacement="outside"
-			>
-				{(item: any) => (
-					<SelectItem aria-label={tSorts(item.key)} key={item.key}>
-						{tSorts(item.key)}
-					</SelectItem>
-				)}
-			</Select>
+					{/* Sort */}
+					<Select
+						aria-label="Sort by"
+						startContent={
+							<DropDownIcon
+								Icon={Sorting01Icon}
+								label="Sort icon"
+							/>
+						}
+						selectedKeys={[sort]}
+						onSelectionChange={handleSortChange}
+						items={SORT_OPTIONS}
+						selectorIcon={<div className="hidden"></div>}
+						classNames={selectClassNames}
+						label="Sort by"
+						labelPlacement="outside"
+					>
+						{(item: any) => (
+							<SelectItem
+								aria-label={tSorts(item.key)}
+								key={item.key}
+							>
+								{tSorts(item.key)}
+							</SelectItem>
+						)}
+					</Select>
 
-			{/* Explore — opens the full filter panel wired to the same params */}
-			<Button
-				startContent={<HugeiconsIcon icon={Compass01Icon} className="size-5 shrink-0" />}
-				onPress={onExploreOpen}
-				className="h-10 w-full shrink-0 lg:h-12 xl:w-auto"
-			>
-				{t("explore")}
-			</Button>
-			</div>
+					{/* Explore — opens the full filter panel wired to the same params */}
+					<Button
+						startContent={
+							<HugeiconsIcon
+								icon={Compass01Icon}
+								className="size-5 shrink-0"
+							/>
+						}
+						onPress={onExploreOpen}
+						className="h-10 w-full shrink-0 lg:h-12 xl:w-auto"
+					>
+						{t("explore")}
+					</Button>
+				</div>
 
-			{/* Active filter chips (collections / institutions / countries / author).
+				{/* Active filter chips (collections / institutions / countries / author).
 			    FilterChips carries a bottom margin meant for the library layout;
 			    drop it here so the bar's own padding controls the spacing. */}
-			{activeFilterCount > 0 && (
-				<div className="[&>div]:!mb-0">
-					<NavbarFilterChips />
-				</div>
-			)}
-		</div>
+				{activeFilterCount > 0 && (
+					<div className="[&>div]:!mb-0">
+						<NavbarFilterChips />
+					</div>
+				)}
+			</div>
 
-		{isExploreOpen && (
-			<NavbarExplore
-				isOpen={isExploreOpen}
-				onOpenChange={onExploreOpenChange}
-			/>
-		)}
+			{isExploreOpen && (
+				<NavbarExplore
+					isOpen={isExploreOpen}
+					onOpenChange={onExploreOpenChange}
+				/>
+			)}
 		</>
 	);
 }

@@ -237,10 +237,7 @@ function run(
 	}
 }
 
-function playwrightEnvironment(
-	label: string,
-	environment: NodeJS.ProcessEnv,
-) {
+function playwrightEnvironment(label: string, environment: NodeJS.ProcessEnv) {
 	if (!process.env.CI) return environment;
 	const suiteResultsDirectory = path.join(testResultsDirectory, label);
 	const outputFile = path.join(suiteResultsDirectory, "junit.xml");
@@ -255,7 +252,10 @@ function playwrightEnvironment(
 
 function verifyJunitReports() {
 	if (!process.env.CI) return;
-	assert.ok(junitReportFiles.size > 0, "No Playwright JUnit reports expected");
+	assert.ok(
+		junitReportFiles.size > 0,
+		"No Playwright JUnit reports expected",
+	);
 	for (const reportFile of junitReportFiles) {
 		assert.match(
 			readFileSync(reportFile, "utf8"),
@@ -523,7 +523,8 @@ async function waitForComposeServiceHealthy(
 	timeoutMs = 30_000,
 ) {
 	const containerId = captureCompose("ps", "--quiet", service).trim();
-	if (!containerId) throw new Error(`${service} does not have a running container`);
+	if (!containerId)
+		throw new Error(`${service} does not have a running container`);
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		const status = capture("docker", [
@@ -1323,9 +1324,6 @@ function publicExpectations(profile: Profile) {
 			config.search.embedder !== null && config.features.relatedResources,
 		),
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
-		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
-			config.search.authorCountry,
-		),
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FACET: String(
 			config.filters.institution.mode !== "hidden",
 		),
@@ -1679,9 +1677,12 @@ async function openScholarRead<T>(
 	pathname: string,
 	credential = profile.config.authentication.openScholar.machineCredential,
 ) {
-	const response = await fetch(`http://127.0.0.1:${profile.port}${pathname}`, {
-		headers: { Authorization: `Bearer ${credential}` },
-	});
+	const response = await fetch(
+		`http://127.0.0.1:${profile.port}${pathname}`,
+		{
+			headers: { Authorization: `Bearer ${credential}` },
+		},
+	);
 	return { body: (await response.json()) as T, response };
 }
 
@@ -1701,6 +1702,40 @@ type OpenScholarCollectionPage = {
 	nextCursor: string | null;
 };
 
+const COLLECTION_TREE_FIXTURE = {
+	child: "CHLDC3L2",
+	deleted: "D3LTC3L2",
+	item: "C3L7T3M2",
+	root: "R33TC3L2",
+} as const;
+
+function seedCollectionTree(profile: Profile) {
+	const { child, deleted, item: itemKey, root } = COLLECTION_TREE_FIXTURE;
+	postgresScalar(
+		profile.name,
+		[
+			`INSERT INTO "collectionIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${root}', 'native', '${root}'), ('${child}', 'native', '${child}'), ('${deleted}', 'native', '${deleted}')`,
+			`INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "deleted", "sortOrder", "parentCollection") VALUES ('${root}', 'native', '${root}', 'Tree root', 0, 3000, NULL), ('${child}', 'native', '${child}', 'Tree child', 0, 3001, '${root}'), ('${deleted}', 'native', '${deleted}', 'Deleted collection', 1, 3002, NULL)`,
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${itemKey}', 'native', '${itemKey}')`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "deleted") VALUES ('${itemKey}', 'native', '${itemKey}', 'JournalArticle', 'Collection tree evidence', 0)`,
+			`INSERT INTO "itemToCollection" ("itemKey", "collectionKey") VALUES ('${itemKey}', '${child}')`,
+		].join("; "),
+	);
+}
+
+function removeCollectionTree(profile: Profile) {
+	const { child, deleted, item: itemKey, root } = COLLECTION_TREE_FIXTURE;
+	postgresScalar(
+		profile.name,
+		[
+			`DELETE FROM "item" WHERE key = '${itemKey}'`,
+			`DELETE FROM "itemIdentity" WHERE key = '${itemKey}'`,
+			`DELETE FROM "collection" WHERE key IN ('${child}', '${deleted}', '${root}')`,
+			`DELETE FROM "collectionIdentity" WHERE key IN ('${child}', '${deleted}', '${root}')`,
+		].join("; "),
+	);
+}
+
 // Institutions the picker must page through. Zephyr is named by three records
 // and Borough by two, so the count order and the name order differ, while the
 // fixture's own Amber Institute and Indigo College keep one count tie.
@@ -1713,23 +1748,21 @@ const INSTITUTION_FIXTURES = [
 ] as const;
 
 const INSTITUTIONS_BY_COUNT = [
+	{ count: 3, name: "Amber Evidence Library" },
 	{ count: 3, name: "Zephyr University" },
 	{ count: 2, name: "Borough College" },
-	{ count: 1, name: "Amber Institute" },
-	{ count: 1, name: "Indigo College" },
 ];
 
 const INSTITUTIONS_BY_NAME = [
-	{ count: 1, name: "Amber Institute" },
+	{ count: 3, name: "Amber Evidence Library" },
 	{ count: 2, name: "Borough College" },
-	{ count: 1, name: "Indigo College" },
 	{ count: 3, name: "Zephyr University" },
 ];
 
 function seedInstitutionRecords(profile: Profile) {
 	const statements = INSTITUTION_FIXTURES.flatMap((fixture) => [
 		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${fixture.key}', 'native', '${fixture.key}')`,
-		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${fixture.key}', 'native', '${fixture.key}', 'JournalArticle', 'Institution paging evidence ${fixture.key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${fixture.institution}","country_code":"GB"}]}]'::jsonb)`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "publisher", "creators") VALUES ('${fixture.key}', 'native', '${fixture.key}', 'Report', 'Institution paging evidence ${fixture.key}', 1, '2026', now(), 0, NULL, '${fixture.institution}', '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"Unrelated author affiliation","country_code":"GB"}]}]'::jsonb)`,
 	]);
 	postgresScalar(profile.name, statements.join("; "));
 }
@@ -1850,7 +1883,7 @@ function insertInstitutionRecord(
 		profile.name,
 		[
 			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${key}', 'native', '${key}')`,
-			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${key}', 'native', '${key}', 'JournalArticle', 'Institution evidence ${key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${institution}"},"not-an-object"]},{"creatorType":"author","lastName":"Shape","institutions":{"display_name":"Object Institute"}}]'::jsonb)`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "publisher", "creators") VALUES ('${key}', 'native', '${key}', 'Report', 'Institution evidence ${key}', 1, '2026', now(), 0, NULL, '${institution}', '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"Unrelated author affiliation"}]}]'::jsonb)`,
 		].join("; "),
 	);
 }
@@ -1873,10 +1906,17 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 		const change = (statement: string) =>
 			postgresScalar(profile.name, statement);
 		const names = () => institutionNamesFor(profile, LIFECYCLE_KEY);
-		// The record also names a creator whose institutions are an object and
-		// one entry that is a bare string, so this proves both JSON guards: the
-		// write went through and neither shape reached the projection.
+		// The creator has a different affiliation. It must not leak into the
+		// record-level institution projection.
 		assert.equal(names(), LIFECYCLE_INSTITUTION, "a new record is listed");
+		change(
+			`UPDATE "item" SET creators = '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"Changed author affiliation"}]}]'::jsonb WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(
+			names(),
+			LIFECYCLE_INSTITUTION,
+			"author affiliations do not change a record institution",
+		);
 
 		change(
 			`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('${LIFECYCLE_KEY}', 'native', '{"parentItem": "AMBR2345"}'::jsonb)`,
@@ -1894,12 +1934,44 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 		change(
 			`UPDATE "item" SET "parentItem" = NULL WHERE key = '${LIFECYCLE_KEY}'`,
 		);
-		assert.equal(names(), LIFECYCLE_INSTITUTION, "a record that becomes top-level is listed again");
+		assert.equal(
+			names(),
+			LIFECYCLE_INSTITUTION,
+			"a record that becomes top-level is listed again",
+		);
 
 		change(`UPDATE "item" SET deleted = 1 WHERE key = '${LIFECYCLE_KEY}'`);
 		assert.equal(names(), "", "a deleted record is not listed");
 		change(`UPDATE "item" SET deleted = 0 WHERE key = '${LIFECYCLE_KEY}'`);
-		assert.equal(names(), LIFECYCLE_INSTITUTION, "a restored record is listed again");
+		assert.equal(
+			names(),
+			LIFECYCLE_INSTITUTION,
+			"a restored record is listed again",
+		);
+		change(
+			`UPDATE "item" SET publisher = 'Replacement Institute' WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(
+			names(),
+			"Replacement Institute",
+			"the Zotero institution field is canonical",
+		);
+		change(
+			`UPDATE "item" SET "itemType" = 'JournalArticle' WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(
+			names(),
+			"",
+			"a publisher field is not an institution on other item types",
+		);
+		change(
+			`UPDATE "item" SET "itemType" = 'Report', publisher = '${LIFECYCLE_INSTITUTION}' WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(
+			names(),
+			LIFECYCLE_INSTITUTION,
+			"a report institution is restored",
+		);
 
 		change(
 			`SELECT refresh_admin_item_list_projection('${LIFECYCLE_KEY}'); SELECT refresh_admin_item_list_projection('${LIFECYCLE_KEY}')`,
@@ -1920,29 +1992,6 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 		"",
 		"a record deleted for good takes its institutions with it",
 	);
-}
-
-/**
- * A record whose creators are not a list, or whose creator is not an object,
- * must be skipped rather than stopping the write with a JSON error.
- */
-function verifyMalformedCreatorsAreSkipped(profile: Profile) {
-	const key = "MALFRMD2";
-	insertInstitutionRecord(profile, key, "Malformed Institute");
-	try {
-		assert.equal(institutionNamesFor(profile, key), "Malformed Institute");
-		postgresScalar(
-			profile.name,
-			`UPDATE "item" SET creators = '{"creatorType": "author"}'::jsonb WHERE key = '${key}'`,
-		);
-		assert.equal(
-			institutionNamesFor(profile, key),
-			"",
-			"creators that are not a list must be skipped",
-		);
-	} finally {
-		removeInstitutionRecord(profile, key);
-	}
 }
 
 /**
@@ -1971,18 +2020,19 @@ async function verifyNonAsciiInstitutionSearch(profile: Profile) {
 
 /** The production query with its values written in, so EXPLAIN can read it. */
 function explainableInstitutionQuery(query: string) {
-	const request = parseOpenScholarInstitutionRequest(
-		query ? { query } : {},
-	);
+	const request = parseOpenScholarInstitutionRequest(query ? { query } : {});
 	const compiled = new PgDialect().sqlToQuery(
 		buildInstitutionCountsQuery(request, null),
 	);
-	return compiled.sql.replace(/\$(\d+)/gu, (_placeholder, position: string) => {
-		const value = compiled.params[Number(position) - 1];
-		return typeof value === "number"
-			? String(value)
-			: `'${String(value).replace(/'/gu, "''")}'`;
-	});
+	return compiled.sql.replace(
+		/\$(\d+)/gu,
+		(_placeholder, position: string) => {
+			const value = compiled.params[Number(position) - 1];
+			return typeof value === "number"
+				? String(value)
+				: `'${String(value).replace(/'/gu, "''")}'`;
+		},
+	);
 }
 
 /** The picker must never read the records themselves. */
@@ -2004,7 +2054,7 @@ function verifyInstitutionQueryPlans(profile: Profile) {
 	// second plan only shows that the search is eligible for the trigram index.
 	const searched = postgresScalar(
 		profile.name,
-		`SET LOCAL enable_seqscan = off; EXPLAIN ${explainableInstitutionQuery("zephyr")}`,
+		`SET LOCAL enable_seqscan = off; SET LOCAL enable_indexscan = off; SET LOCAL enable_indexonlyscan = off; EXPLAIN ${explainableInstitutionQuery("zephyr")}`,
 	);
 	assert.ok(
 		searched.includes("itemInstitution_name_search_idx"),
@@ -2051,11 +2101,13 @@ async function verifyOpenScholarInstitutions(profile: Profile) {
 	);
 	assert.deepEqual(
 		await pageThroughInstitutions(profile, "count", "asc"),
-		[...INSTITUTIONS_BY_COUNT].reverse().sort((first, second) =>
-			first.count === second.count
-				? first.name.localeCompare(second.name)
-				: first.count - second.count,
-		),
+		[...INSTITUTIONS_BY_COUNT]
+			.reverse()
+			.sort((first, second) =>
+				first.count === second.count
+					? first.name.localeCompare(second.name)
+					: first.count - second.count,
+			),
 		"paging by count upwards must keep the order and repeat nothing",
 	);
 	assert.deepEqual(
@@ -2066,10 +2118,10 @@ async function verifyOpenScholarInstitutions(profile: Profile) {
 
 	const searched = await openScholarRead<OpenScholarInstitutionPage>(
 		profile,
-		"/api/openscholar/institutions?query=INDIGO",
+		"/api/openscholar/institutions?query=AMBER%20EVIDENCE",
 	);
 	assert.deepEqual(searched.body, {
-		items: [{ count: 1, name: "Indigo College" }],
+		items: [{ count: 3, name: "Amber Evidence Library" }],
 		nextCursor: null,
 	});
 
@@ -2080,7 +2132,6 @@ async function verifyOpenScholarInstitutions(profile: Profile) {
 async function verifyOpenScholarReadApi(profile: Profile) {
 	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
 	verifyInstitutionProjectionLifecycle(profile);
-	verifyMalformedCreatorsAreSkipped(profile);
 	await verifyNonAsciiInstitutionSearch(profile);
 	seedInstitutionRecords(profile);
 	try {
@@ -2154,6 +2205,25 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		],
 		nextCursor: null,
 	});
+
+	seedCollectionTree(profile);
+	try {
+		const tree = await openScholarRead<OpenScholarCollectionPage>(
+			profile,
+			`/api/openscholar/collections?ids=${COLLECTION_TREE_FIXTURE.root},${COLLECTION_TREE_FIXTURE.child},${COLLECTION_TREE_FIXTURE.deleted}`,
+		);
+		assert.equal(tree.response.status, 200);
+		assert.deepEqual(
+			tree.body.items.map(({ count, id }) => ({ count, id })),
+			[
+				{ count: 1, id: COLLECTION_TREE_FIXTURE.root },
+				{ count: 1, id: COLLECTION_TREE_FIXTURE.child },
+			],
+			"collection reads exclude deleted rows and include descendant records",
+		);
+	} finally {
+		removeCollectionTree(profile);
+	}
 }
 
 async function verifyOwnerLegalText(profile: Profile) {
@@ -2587,7 +2657,10 @@ async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
 	const archive = providerState.zenodo.find(
 		(record) => record.doi === externalDoi,
 	);
-	assert.ok(archive, "The local Zenodo fake did not retain the external DOI record");
+	assert.ok(
+		archive,
+		"The local Zenodo fake did not retain the external DOI record",
+	);
 	assert.equal(archive.doi, externalDoi);
 	assert.deepEqual(archive.files, ["amber-external-doi-b.pdf"]);
 	assert.equal(archive.published, true);

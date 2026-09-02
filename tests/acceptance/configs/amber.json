@@ -131,7 +131,6 @@
 		"fullText": true,
 		"tags": true,
 		"country": true,
-		"authorCountry": true,
 		"embedder": {
 			"source": "rest",
 			"url": "http://fixture:5001/embeddings",
@@ -148,7 +147,6 @@
 			"label": "institutions",
 			"featuredValue": "Amber Institute"
 		},
-		"countryLibrary": true,
 		"collectionsExpanded": false,
 		"years": {
 			"enabled": true
@@ -181,7 +179,6 @@
 		"collectionNotes": true,
 		"countryFocus": true,
 		"authorFilter": true,
-		"authorLocation": true,
 		"yearsDropdown": true,
 		"downloads": true,
 		"atomFeed": true

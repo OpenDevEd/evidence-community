@@ -1,7 +1,21 @@
 "use client";
 
-import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
-import { ArchiveIcon, BubbleChatIcon, Compass01Icon, GridViewIcon, HelpCircleIcon, ListViewIcon, Search01Icon, SentIcon, Sorting01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
+import {
+	HugeiconsIcon,
+	type IconSvgElement,
+} from "@/components/icons/Hugeicon";
+import {
+	ArchiveIcon,
+	BubbleChatIcon,
+	Compass01Icon,
+	GridViewIcon,
+	HelpCircleIcon,
+	ListViewIcon,
+	Search01Icon,
+	SentIcon,
+	Sorting01Icon,
+	SparklesIcon,
+} from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
@@ -45,9 +59,7 @@ import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import ChatModal, {
-	type ChatWindowHandle,
-} from "../features/modals/ChatModal";
+import ChatModal, { type ChatWindowHandle } from "../features/modals/ChatModal";
 import type { ChatMode } from "@/types/ai";
 import ModelSelector from "../features/ai/ModelSelector";
 import DialogModal from "../nextui/DialogModal";
@@ -116,7 +128,9 @@ function SortComponent({
 
 	return (
 		<Select
-			startContent={<DropDownIcon label="Sort icon" Icon={Sorting01Icon} />}
+			startContent={
+				<DropDownIcon label="Sort icon" Icon={Sorting01Icon} />
+			}
 			selectedKeys={
 				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
 			}
@@ -245,7 +259,10 @@ function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
 			// there is no keyboard to show a shortcut for.
 			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 lg:h-9 lg:gap-1.5 lg:rounded-large lg:pl-3 lg:pr-1.5 lg:text-sm"
 		>
-			<HugeiconsIcon icon={SparklesIcon} className="size-3.5 shrink-0 lg:size-4" />
+			<HugeiconsIcon
+				icon={SparklesIcon}
+				className="size-3.5 shrink-0 lg:size-4"
+			/>
 			{tAI("askAI")}
 			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
 				{hint}
@@ -380,7 +397,10 @@ function SearchTabContent({
 					</div>
 					<Button
 						startContent={
-							<HugeiconsIcon icon={Compass01Icon} className="size-6 shrink-0" />
+							<HugeiconsIcon
+								icon={Compass01Icon}
+								className="size-6 shrink-0"
+							/>
 						}
 						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
@@ -401,7 +421,8 @@ function SearchTabContent({
 								onPress={onHelpOpen}
 								aria-label={t("helpAriaLabel")}
 							>
-								<HugeiconsIcon icon={HelpCircleIcon}
+								<HugeiconsIcon
+									icon={HelpCircleIcon}
 									aria-label={t("helpIconAriaLabel")}
 									className="size-6"
 								/>
@@ -496,7 +517,8 @@ function SearchTabContent({
 								onPress={() => setView("list")}
 								aria-label={t("viewAsListAriaLabel")}
 							>
-								<HugeiconsIcon icon={ListViewIcon}
+								<HugeiconsIcon
+									icon={ListViewIcon}
 									aria-label={t("viewAsListAriaLabel")}
 									className="size-6"
 								/>
@@ -510,7 +532,8 @@ function SearchTabContent({
 								onPress={() => setView("grid")}
 								aria-label={t("viewAsGridAriaLabel")}
 							>
-								<HugeiconsIcon icon={GridViewIcon}
+								<HugeiconsIcon
+									icon={GridViewIcon}
 									aria-label={t("viewAsGridAriaLabel")}
 									className="size-4"
 								/>
@@ -550,7 +573,8 @@ function AskBoxActions({
 						}
 						aria-label={tUI("researchMode")}
 					>
-						<HugeiconsIcon icon={ArchiveIcon}
+						<HugeiconsIcon
+							icon={ArchiveIcon}
 							className={twMerge(
 								"size-4",
 								isResearch
@@ -683,7 +707,9 @@ function AITabContent({
 					<Tooltip content={t("openChatTooltip")}>
 						<Button
 							isIconOnly
-							startContent={<HugeiconsIcon icon={BubbleChatIcon} />}
+							startContent={
+								<HugeiconsIcon icon={BubbleChatIcon} />
+							}
 							size="md"
 							className="!p-0"
 							onPress={handleOpenChat}
@@ -993,7 +1019,6 @@ function MainContent() {
 				queryParams={props.queryParams}
 				handleInstitutionSelect={props.handleInstitutionSelect}
 				handleCountrySelect={props.handleCountrySelect}
-				handleAuthorCountrySelect={props.handleAuthorCountrySelect}
 			/>
 			<ItemsList props={props} />
 		</>

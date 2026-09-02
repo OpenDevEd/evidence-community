@@ -5,7 +5,7 @@ import { inferParserType } from "nuqs/server";
 export const countryFacetOptions: {
 	key: string;
 	label: string;
-	action: "handleCountrySelect" | "handleAuthorCountrySelect";
+	action: "handleCountrySelect";
 	queryParam: keyof inferParserType<typeof searchParamsLoader>;
 }[] = [
 	{
@@ -13,12 +13,6 @@ export const countryFacetOptions: {
 		label: "countryFilter",
 		action: "handleCountrySelect",
 		queryParam: "country",
-	},
-	{
-		key: "creators.institutions.country_code",
-		label: "authorCountries",
-		action: "handleAuthorCountrySelect",
-		queryParam: "author_country",
 	},
 ];
 
@@ -1113,7 +1107,7 @@ export function getSafeReferrer(referrer: string | null | undefined): string {
 	if (!referrer) return DEFAULT_REFERRER;
 
 	const isAcceptable = ACCEPTABLE_REFERRERS.some((acceptable) =>
-		referrer.startsWith(acceptable)
+		referrer.startsWith(acceptable),
 	);
 
 	return isAcceptable ? referrer : DEFAULT_REFERRER;

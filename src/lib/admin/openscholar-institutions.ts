@@ -29,10 +29,10 @@ function containsPattern(value: string) {
  * records name each one. Unlike the public institutions page this is not
  * limited to the most common country: OpenScholar pickers need the full list.
  *
- * The rows come from the `itemInstitution` projection, which the same refresh
- * function that maintains `adminItemListProjection` keeps in step with the
- * records. Reading a projection means a search uses the trigram index and a
- * page never unpacks a record's creators JSON.
+ * The rows come from the `itemInstitution` projection, which the same trigger
+ * that maintains `adminItemListProjection` keeps in step with the records.
+ * Reading a projection means a search uses the trigram index and a page never
+ * scans or interprets the records themselves.
  *
  * Paging is keyset, not offset. The counts come from an aggregate, so the
  * "start after the last row" condition has to sit in HAVING.
@@ -95,12 +95,10 @@ export async function listInstitutionCounts(
 	const result = await database.execute<InstitutionCountRow>(
 		buildInstitutionCountsQuery(request, cursor),
 	);
-	const rows = result.rows.map(
-		(row): OpenScholarInstitution => ({
-			count: Number(row.count),
-			name: row.name,
-		}),
-	);
+	const rows = result.rows.map((row): OpenScholarInstitution => ({
+		count: Number(row.count),
+		name: row.name,
+	}));
 	const hasMore = rows.length > request.pageSize;
 	const items = hasMore ? rows.slice(0, request.pageSize) : rows;
 	const last = items.at(-1);

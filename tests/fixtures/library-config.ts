@@ -88,8 +88,7 @@ export const maximalLibraryConfig = {
 			favicon: "https://assets.example.org/maximal/favicon.png",
 			faviconLight:
 				"https://assets.example.org/maximal/favicon-light.svg",
-			faviconDark:
-				"https://assets.example.org/maximal/favicon-dark.svg",
+			faviconDark: "https://assets.example.org/maximal/favicon-dark.svg",
 			icons: [
 				"https://assets.example.org/maximal/icon.svg",
 				"https://assets.example.org/maximal/icon.ico",
@@ -215,7 +214,6 @@ export const maximalLibraryConfig = {
 		fullText: true,
 		tags: true,
 		country: true,
-		authorCountry: true,
 		embedder: {
 			source: "openAi",
 			model: "text-embedding-3-small",
@@ -231,7 +229,6 @@ export const maximalLibraryConfig = {
 			label: "institutions",
 			featuredValue: "Institution One",
 		},
-		countryLibrary: true,
 		collectionsExpanded: false,
 		years: {
 			enabled: true,
@@ -264,7 +261,6 @@ export const maximalLibraryConfig = {
 		collectionNotes: true,
 		countryFocus: true,
 		authorFilter: true,
-		authorLocation: true,
 		yearsDropdown: true,
 		downloads: true,
 		atomFeed: true,

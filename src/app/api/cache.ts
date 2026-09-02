@@ -25,16 +25,11 @@ export type CachedCollectionsResult =
 
 async function _getCollectionsCached(
 	configRevision: string,
-	countryLibrary: boolean,
 	config: LibraryServerConfig,
 ): Promise<CachedCollectionsResult> {
-	'use cache'
-	cacheLife({
-		revalidate: countryLibrary
-			? 60 * 60 * 24 * 30
-			: 300,
-	})
-	cacheTag('collections')
+	"use cache";
+	cacheLife({ revalidate: 300 });
+	cacheTag("collections");
 	try {
 		return {
 			ok: true,
@@ -52,20 +47,12 @@ async function _getCollectionsCached(
 	}
 }
 
-export async function getCachedCollectionsResult(
-	config?: LibraryServerConfig,
-) {
-	const libraryConfig = config ?? await getLibraryConfig();
-	return _getCollectionsCached(
-		libraryConfig.revision,
-		libraryConfig.filters.countryLibrary,
-		libraryConfig,
-	);
+export async function getCachedCollectionsResult(config?: LibraryServerConfig) {
+	const libraryConfig = config ?? (await getLibraryConfig());
+	return _getCollectionsCached(libraryConfig.revision, libraryConfig);
 }
 
-export async function getCachedCollections(
-	config?: LibraryServerConfig,
-) {
+export async function getCachedCollections(config?: LibraryServerConfig) {
 	const result = await getCachedCollectionsResult(config);
 	if (!result.ok) {
 		throw new RuntimeCollectionConfigurationError(result.missingIds);
@@ -76,7 +63,10 @@ export async function getCachedCollections(
 
 // --- Hydrate helper (unchanged) ---
 
-function hydrateCollections(item: NonNullable<Awaited<ReturnType<typeof getItemRaw>>["item"]>, collections: Collection[]) {
+function hydrateCollections(
+	item: NonNullable<Awaited<ReturnType<typeof getItemRaw>>["item"]>,
+	collections: Collection[],
+) {
 	item.collectionsData = item.collectionsAncestry
 		?.map((collection) => collections.find((c) => c.key === collection))
 		.filter((c) => c !== undefined) as Collection[];
@@ -88,16 +78,11 @@ function hydrateCollections(item: NonNullable<Awaited<ReturnType<typeof getItemR
 async function _getItemRawCached(
 	key: string,
 	configRevision: string,
-	countryLibrary: boolean,
 	config: LibraryServerConfig,
 ) {
-	'use cache'
-	cacheLife({
-		revalidate: countryLibrary
-			? 60 * 60 * 24 * 30
-			: 60,
-	})
-	cacheTag('item-' + key)
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	cacheTag("item-" + key);
 	return getItemRaw(key, "meilisearch", config);
 }
 
@@ -107,12 +92,7 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	}
 
 	const config = await getLibraryConfig();
-	const result = await _getItemRawCached(
-		key,
-		config.revision,
-		config.filters.countryLibrary,
-		config,
-	);
+	const result = await _getItemRawCached(key, config.revision, config);
 
 	if (!result || !result.item) {
 		return await getItem(key);
@@ -139,16 +119,11 @@ function stripNulls<T extends Record<string, unknown>>(obj: T): Partial<T> {
 async function _getItemSmallCached(
 	key: string,
 	configRevision: string,
-	countryLibrary: boolean,
 	config: LibraryServerConfig,
 ): Promise<ReturnType<typeof getItemRaw>> {
-	'use cache'
-	cacheLife({
-		revalidate: countryLibrary
-			? 60 * 60 * 24 * 30
-			: 60,
-	})
-	cacheTag('item-small-' + key)
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	cacheTag("item-small-" + key);
 	const item = await getItemRaw(key, "meilisearch", config);
 
 	if (!item.item) {
@@ -162,7 +137,10 @@ async function _getItemSmallCached(
 	};
 }
 
-export async function getCachedItemSmall(key: string, ignoreCache: boolean = false) {
+export async function getCachedItemSmall(
+	key: string,
+	ignoreCache: boolean = false,
+) {
 	if (ignoreCache) {
 		const item = await getItem(key);
 		if (!item.item) return item;
@@ -171,12 +149,7 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 	}
 
 	const config = await getLibraryConfig();
-	const result = await _getItemSmallCached(
-		key,
-		config.revision,
-		config.filters.countryLibrary,
-		config,
-	);
+	const result = await _getItemSmallCached(key, config.revision, config);
 
 	if (!result || !result.item) {
 		const item = await getItem(key);
@@ -199,19 +172,15 @@ async function _getCachedUserCollectionKeys(
 	configRevision: string,
 	config: LibraryServerConfig,
 ) {
-	'use cache'
-	cacheLife({ revalidate: 60 })
-	cacheTag('userCollectionKeys-' + collectionId)
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	cacheTag("userCollectionKeys-" + collectionId);
 	return getUserCollectionKeysDirect(collectionId, config);
 }
 
 export async function getCachedUserCollectionKeys(collectionId: string) {
 	const config = await getLibraryConfig();
-	return _getCachedUserCollectionKeys(
-		collectionId,
-		config.revision,
-		config,
-	);
+	return _getCachedUserCollectionKeys(collectionId, config.revision, config);
 }
 
 export async function getUserCollectionKeysDirect(
@@ -222,7 +191,10 @@ export async function getUserCollectionKeysDirect(
 		? await getDatabaseForConfig(config)
 		: await getDatabase();
 	const res = await db.query.itemToUserCollection.findMany({
-		where: and(eq(itemToUserCollection.userCollectionId, collectionId), eq(itemToUserCollection.deleted, false)),
+		where: and(
+			eq(itemToUserCollection.userCollectionId, collectionId),
+			eq(itemToUserCollection.deleted, false),
+		),
 		columns: {
 			itemKey: true,
 		},
@@ -231,15 +203,15 @@ export async function getUserCollectionKeysDirect(
 				columns: {
 					private: true,
 					userId: true,
-				}
-			}
-		}
+				},
+			},
+		},
 	});
 
 	return {
 		private: res[0]?.userCollection.private ?? false,
 		userId: res[0]?.userCollection.userId ?? null,
-		itemKeys: res.map(item => item.itemKey)
+		itemKeys: res.map((item) => item.itemKey),
 	};
 }
 
@@ -252,9 +224,9 @@ async function _getCachedUserLikes(
 	configRevision: string,
 	config: LibraryServerConfig,
 ) {
-	'use cache'
-	cacheLife({ revalidate: 60 })
-	cacheTag('userLikes-' + userId)
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	cacheTag("userLikes-" + userId);
 	return getUserLikesDirect(userId, config);
 }
 
@@ -271,7 +243,10 @@ export async function getUserLikesDirect(
 		? await getDatabaseForConfig(config)
 		: await getDatabase();
 	return db.query.usersToLikes.findMany({
-		where: and(eq(usersToLikes.userId, userId), eq(usersToLikes.deleted, false)),
+		where: and(
+			eq(usersToLikes.userId, userId),
+			eq(usersToLikes.deleted, false),
+		),
 	});
 }
 
@@ -279,13 +254,15 @@ async function _getCachedStatus(
 	configRevision: string,
 	config: LibraryServerConfig,
 ): Promise<InferSelectModel<typeof statusTable>> {
-	'use cache'
-	cacheLife({ revalidate: 60 })
-	cacheTag('status')
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	cacheTag("status");
 	return getStatusDirect(config);
 }
 
-export async function getCachedStatus(): Promise<InferSelectModel<typeof statusTable>> {
+export async function getCachedStatus(): Promise<
+	InferSelectModel<typeof statusTable>
+> {
 	const config = await getLibraryConfig();
 	return _getCachedStatus(config.revision, config);
 }
@@ -298,7 +275,9 @@ export async function getStatusDirect(
 		: await getDatabase();
 	const newStatus = await db.query.status.findFirst();
 	if (!newStatus) {
-		throw new Error('The status row is missing. Run npm run db:migrate to create it.');
+		throw new Error(
+			"The status row is missing. Run npm run db:migrate to create it.",
+		);
 	}
 	return newStatus;
 }

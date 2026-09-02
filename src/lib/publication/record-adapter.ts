@@ -83,8 +83,8 @@ function normalizeCreators(
 		);
 		const creatorType = normalizeText(creator.creatorType);
 		const affiliation = normalizeText(
-			creator.institutions?.find((entry) => entry.display_name)?.display_name ??
-				creator.institution,
+			creator.institutions?.find((entry) => entry.display_name)
+				?.display_name ?? creator.institution,
 		);
 
 		if (givenName && !familyName) {
@@ -116,22 +116,30 @@ function normalizeCreators(
 
 function normalizePublicationDate(value: string | null, fallback: Date) {
 	const normalized = normalizeText(value);
-	const match = normalized?.match(/\b(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?\b/u);
+	const match = normalized?.match(
+		/\b(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?\b/u,
+	);
 	if (!match?.[1]) return fallback.toISOString().slice(0, 10);
 	const month = (match[2] ?? "1").padStart(2, "0");
 	const day = (match[3] ?? "1").padStart(2, "0");
 	const candidate = `${match[1]}-${month}-${day}`;
 	const parsed = new Date(`${candidate}T00:00:00Z`);
-	return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== candidate
+	return Number.isNaN(parsed.getTime()) ||
+		parsed.toISOString().slice(0, 10) !== candidate
 		? fallback.toISOString().slice(0, 10)
 		: candidate;
 }
 
 function publicTags(tags: readonly string[]) {
-	return [...new Set(tags.map(normalizeText).filter((tag): tag is string => {
-		if (!tag || tag.startsWith("_") || tag.includes(":")) return false;
-		return !PRIVATE_TAGS.has(tag.toLowerCase());
-	}))].sort();
+	return [
+		...new Set(
+			tags.map(normalizeText).filter((tag): tag is string => {
+				if (!tag || tag.startsWith("_") || tag.includes(":"))
+					return false;
+				return !PRIVATE_TAGS.has(tag.toLowerCase());
+			}),
+		),
+	].sort();
 }
 
 function providerFields(record: EvidenceLibraryPublicationRecord): JsonObject {
@@ -139,16 +147,33 @@ function providerFields(record: EvidenceLibraryPublicationRecord): JsonObject {
 	const zoteroItemType =
 		record.itemType[0]!.toLowerCase() + record.itemType.slice(1);
 	for (const descriptor of describeZoteroItemTypeFields(zoteroItemType)) {
-		if (TOP_LEVEL_PUBLICATION_FIELDS.has(descriptor.semanticField)) continue;
+		if (TOP_LEVEL_PUBLICATION_FIELDS.has(descriptor.semanticField))
+			continue;
 		const value = record[descriptor.semanticField];
 		if (value === undefined || value === null) continue;
 		const parsed = jsonValueSchema.safeParse(value);
 		if (parsed.success) {
-			fields[descriptor.field === "versionNumber" ? "version" : descriptor.field] =
-				parsed.data;
+			fields[
+				descriptor.field === "versionNumber"
+					? "version"
+					: descriptor.field
+			] = parsed.data;
 		}
 	}
 	return fields;
+}
+
+function recordInstitution(record: EvidenceLibraryPublicationRecord) {
+	const zoteroItemType =
+		record.itemType[0]!.toLowerCase() + record.itemType.slice(1);
+	// The database projection migration uses the same schema-derived set of
+	// item types when it reads the shared publisher column.
+	const field = describeZoteroItemTypeFields(zoteroItemType).find(
+		(descriptor) => descriptor.semanticField === "publisher",
+	)?.field;
+	return field === "institution" || field === "university"
+		? normalizeText(record.publisher)
+		: null;
 }
 
 export function buildPublicationRecordSnapshot(input: {
@@ -171,23 +196,21 @@ function buildPublicationRecordSnapshotWithTitle(
 	},
 	title: string,
 ): PublicationRecordSnapshot {
-
 	const optional = {
 		abstract: normalizeText(input.record.abstractNote),
 		language: normalizeText(input.record.languageName),
 		publisher: normalizeText(input.record.publisher),
-		institution: ["Manuscript", "Report", "Standard", "Thesis"].includes(
-			input.record.itemType,
-		)
-			? normalizeText(input.record.publisher)
-			: null,
+		institution: recordInstitution(input.record),
 		rights: normalizeText(input.record.rights),
 		license: normalizeText(input.license),
 	};
 	return parsePublicationRecordSnapshot({
 		recordKey: input.record.key,
 		canonicalRevision: input.record.revision,
-		landingUrl: new URL(`/lib/${input.record.key}`, input.baseUrl).toString(),
+		landingUrl: new URL(
+			`/lib/${input.record.key}`,
+			input.baseUrl,
+		).toString(),
 		itemType: input.record.itemType,
 		title,
 		publicationDate: normalizePublicationDate(
@@ -198,7 +221,9 @@ function buildPublicationRecordSnapshotWithTitle(
 		tags: publicTags(input.tags),
 		fields: providerFields(input.record),
 		...Object.fromEntries(
-			Object.entries(optional).filter((entry): entry is [string, string] => Boolean(entry[1])),
+			Object.entries(optional).filter(
+				(entry): entry is [string, string] => Boolean(entry[1]),
+			),
 		),
 	});
 }
@@ -245,7 +270,9 @@ export function buildPublicationIdentifiers(input: {
 }): PublicationIdentifiers {
 	return parsePublicationIdentifiers(
 		Object.fromEntries(
-			Object.entries(input).filter((entry): entry is [string, string] => Boolean(entry[1])),
+			Object.entries(input).filter((entry): entry is [string, string] =>
+				Boolean(entry[1]),
+			),
 		),
 	);
 }

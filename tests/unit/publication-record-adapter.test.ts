@@ -100,6 +100,24 @@ describe("publication record adapter", () => {
 		expect(snapshot.fields).not.toHaveProperty("updatedAt");
 	});
 
+	it("uses the Zotero record institution field independently of author affiliations", () => {
+		const snapshot = (itemType: string) =>
+			buildPublicationRecordSnapshot({
+				record: record({ itemType, publisher: "Record Institute" }),
+				tags: [],
+				baseUrl: "https://library.example.org",
+				license: "cc-by-4.0",
+			});
+
+		expect(snapshot("Report").institution).toBe("Record Institute");
+		expect(snapshot("Thesis").institution).toBe("Record Institute");
+		expect(snapshot("JournalArticle")).not.toHaveProperty("institution");
+		expect(snapshot("Standard")).not.toHaveProperty("institution");
+		expect(snapshot("Report").creators[0]?.affiliation).toBe(
+			"Analytical Society",
+		);
+	});
+
 	it("rejects incomplete creators with a useful message", () => {
 		expect(() =>
 			buildPublicationRecordSnapshot({

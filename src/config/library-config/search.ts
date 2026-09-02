@@ -36,14 +36,10 @@ export function getRuntimeSearchAttributes(
 	search: RuntimeSearch,
 ) {
 	const scopeOption =
-		PLATFORM_SEARCH_SCOPE_OPTIONS.find(
-			(option) => option.key === scope,
-		) ?? PLATFORM_SEARCH_SCOPE_OPTIONS[0];
+		PLATFORM_SEARCH_SCOPE_OPTIONS.find((option) => option.key === scope) ??
+		PLATFORM_SEARCH_SCOPE_OPTIONS[0];
 	return scopeOption.attributesToSearchOn.filter((attribute) => {
-		if (
-			!search.fullText &&
-			attribute.startsWith("fullTextPDFs.")
-		) {
+		if (!search.fullText && attribute.startsWith("fullTextPDFs.")) {
 			return false;
 		}
 		if (!search.tags && attribute === "tags") {
@@ -66,9 +62,6 @@ export function getRuntimeSearchFacets(
 	}
 	if (search.country) {
 		facets.push("country");
-	}
-	if (search.authorCountry) {
-		facets.push("creators.institutions.country_code");
 	}
 	return facets;
 }

@@ -905,7 +905,6 @@ const searchOptionsShape = {
 	fullText: z.boolean().default(true),
 	tags: z.boolean().default(true),
 	country: z.boolean().default(true),
-	authorCountry: z.boolean().default(true),
 	scopes: z
 		.array(scopeSchema)
 		.min(1)
@@ -991,7 +990,6 @@ const filtersSchema = z
 			})
 			.strict()
 			.prefault({}),
-		countryLibrary: z.boolean().default(false),
 		collectionsExpanded: z.boolean().default(true),
 		years: z
 			.object({
@@ -1074,7 +1072,6 @@ const featuresSchema = z
 		collectionNotes: z.boolean().default(false),
 		countryFocus: z.boolean().default(false),
 		authorFilter: z.boolean().default(true),
-		authorLocation: z.boolean().default(false),
 		yearsDropdown: z.boolean().default(false),
 		downloads: z.boolean().default(false),
 		atomFeed: z.boolean().default(false),
@@ -1439,7 +1436,10 @@ function addAIProviderDefaultModelIssues(
 		return;
 	}
 
-	if (provider.defaultModel && !provider.models.includes(provider.defaultModel)) {
+	if (
+		provider.defaultModel &&
+		!provider.models.includes(provider.defaultModel)
+	) {
 		context.addIssue({
 			code: z.ZodIssueCode.custom,
 			message: "The default model must be in the configured model list",
@@ -1914,14 +1914,6 @@ export function createLibraryConfigSchema(
 				context,
 				["features", "countryFocus"],
 				"Country focus requires country search",
-			);
-		}
-
-		if (config.features.authorLocation && !config.search.authorCountry) {
-			addRequiredIssue(
-				context,
-				["features", "authorLocation"],
-				"Author location requires author-country search",
 			);
 		}
 

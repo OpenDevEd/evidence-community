@@ -140,7 +140,6 @@
     "fullText": false,
     "tags": false,
     "country": false,
-    "authorCountry": false,
     "embedder": null,
     "scopes": [
       "title"
@@ -152,7 +151,6 @@
       "mode": "hidden",
       "label": "institutions"
     },
-    "countryLibrary": false,
     "collectionsExpanded": true,
     "years": {
       "enabled": false
@@ -197,7 +195,6 @@
     "collectionNotes": false,
     "countryFocus": false,
     "authorFilter": false,
-    "authorLocation": false,
     "yearsDropdown": false,
     "downloads": false,
     "atomFeed": false

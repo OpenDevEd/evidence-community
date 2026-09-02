@@ -912,7 +912,6 @@ export async function ensureSearchIndex(
 				"tags",
 				"institution",
 				"country",
-				"creators.institutions.country_code",
 				"fullNames",
 				"collections",
 				"collectionsAncestry",

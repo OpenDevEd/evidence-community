@@ -23,11 +23,6 @@ export type FacetListItem = {
 
 type useFacetListReturn = [FacetListItem[], CategoriesDistribution]
 
-export function useMultipleFacetLists(...args: useFacetListReturn[]): useFacetListReturn {
-    const allItems = args.map((item) => item[0]).flat()
-    const allFacetCounts = Object.assign({}, ...args.map(item => item[1]))
-    return [allItems, allFacetCounts]
-}
 
 // Utility function to efficiently find max value in an object
 function getMaxValue(obj: Record<string, number>): number {

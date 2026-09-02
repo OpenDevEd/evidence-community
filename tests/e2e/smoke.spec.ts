@@ -98,8 +98,6 @@ const expectedEmbeddings =
 	process.env.PLAYWRIGHT_EXPECTED_EMBEDDINGS !== "false";
 const expectedCountryFacet =
 	process.env.PLAYWRIGHT_EXPECTED_COUNTRY_FACET !== "false";
-const expectedAuthorCountryFacet =
-	process.env.PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET !== "false";
 const expectedInstitutionFacet =
 	process.env.PLAYWRIGHT_EXPECTED_INSTITUTION_FACET !== "false";
 const expectedNavbarSearch =
@@ -342,7 +340,9 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 }) => {
 	const disabledResponse = await request.get(
 		`/${expectedDisabledLocale}/lib`,
-		{ maxRedirects: 0 },
+		{
+			maxRedirects: 0,
+		},
 	);
 	expect(disabledResponse.status()).toBe(307);
 	expect(
@@ -628,12 +628,6 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	expect(Object.hasOwn(facetDistribution, "country_uncategorized")).toBe(
 		expectedCountryFacet,
 	);
-	expect(
-		Object.hasOwn(
-			facetDistribution,
-			"creators.institutions.country_code_uncategorized",
-		),
-	).toBe(expectedAuthorCountryFacet);
 	if (!expectedInstitutionFacet) {
 		expect(Object.hasOwn(facetDistribution, "institution")).toBe(false);
 	}
@@ -666,14 +660,6 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 		expect(databaseItem?.key).toBe(expectedDatabaseItemKey);
 		expect(databaseItem?.title).toBe(expectedDatabaseItemTitle);
 	}
-
-	const institutionsResponse = await request.get("/api/institutions");
-	expect(institutionsResponse.status()).toBe(200);
-	const institutions = await institutionsResponse.json();
-	expect(typeof institutions.topCountryCode).toBe("string");
-	expect(institutions.totalInstitutions).toBe(
-		institutions.institutions.length,
-	);
 
 	const similarResponse = await request.get(`/api/similar/${firstItem.key}`);
 	expect(similarResponse.status()).toBe(200);
