@@ -23,6 +23,12 @@ import type {
 	AdminItemBatchResponse,
 	AdminItemBatchResult,
 } from "@/lib/admin/item-batch-contract";
+import type {
+	AdminImportCommitRequest,
+	AdminImportCommitResponse,
+	AdminImportPreviewRequest,
+	AdminImportPreviewResponse,
+} from "@/lib/admin/item-import-contract";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { ADMIN_ITEM_BATCH_SIZE } from "@/lib/admin/item-batch-contract";
 import type {
@@ -537,6 +543,26 @@ export async function mutateAdminItems(input: AdminItemBatchRequest) {
 			(result) => resultByKey.get(result.key) ?? result,
 		),
 	};
+}
+
+/** Resolves DOIs and bibliography files into import candidates. Creates nothing. */
+export function previewAdminImport(
+	input: Omit<AdminImportPreviewRequest, "action">,
+) {
+	return requestJson<AdminImportPreviewResponse>("/api/admin/items/import", {
+		body: JSON.stringify({ action: "preview", ...input }),
+		method: "POST",
+	});
+}
+
+/** Creates native drafts for the chosen import candidates in one server call. */
+export function commitAdminImport(
+	input: Omit<AdminImportCommitRequest, "action">,
+) {
+	return requestJson<AdminImportCommitResponse>("/api/admin/items/import", {
+		body: JSON.stringify({ action: "commit", ...input }),
+		method: "POST",
+	});
 }
 
 export function createAdminCollection(input: {

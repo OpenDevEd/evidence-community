@@ -158,6 +158,28 @@ function issueMessage(error: ZoteroAttachmentPermanentError) {
 	);
 }
 
+/**
+ * Turns Zotero item data into the canonical metadata the native draft
+ * validator accepts: technical fields dropped, type-specific field names
+ * replaced by their shared names, tags flattened to strings.
+ */
+export function zoteroDataToCanonicalMetadata(data: {
+	itemType: string;
+	tags?: readonly { tag: string }[] | null;
+	[field: string]: unknown;
+}) {
+	const metadata = Object.fromEntries(
+		Object.entries(data)
+			.filter(([field]) => !technicalItemFields.has(field))
+			.map(([field, value]) => [
+				canonicalZoteroFieldName(data.itemType, field) ?? field,
+				value,
+			]),
+	);
+	metadata.tags = (data.tags ?? []).map(({ tag }) => tag);
+	return metadata;
+}
+
 export function mapZoteroCollection(
 	collection: ZoteroCollectionResponse,
 ): SourceIngestionBatch["collections"][number] {
@@ -194,15 +216,7 @@ export async function mapZoteroItem(
 		};
 	}
 
-	const metadata = Object.fromEntries(
-		Object.entries(item.data)
-			.filter(([field]) => !technicalItemFields.has(field))
-			.map(([field, value]) => [
-				canonicalZoteroFieldName(item.data.itemType, field) ?? field,
-				value,
-			]),
-	);
-	metadata.tags = (item.data.tags ?? []).map(({ tag }) => tag);
+	const metadata = zoteroDataToCanonicalMetadata(item.data);
 	let file: ItemUpsert["file"] = null;
 	let processingIssue: ItemUpsert["processingIssue"] = null;
 	if (

@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, Folder01Icon, FolderInputIcon, LibraryIcon, ListIcon, Logout01Icon, Menu01Icon, PanelRightIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, ListIcon, Logout01Icon, Menu01Icon, PanelRightIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
@@ -51,6 +51,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
+import { AdminImportDialog } from "./AdminImportDialog";
 import { AdminInspector } from "./AdminInspector";
 import {
 	AdminWritebackSourcesDialog,
@@ -123,6 +124,7 @@ import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
 import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
+	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
 } from "@/lib/admin/item-filter-state";
@@ -428,6 +430,7 @@ export default function AdminWorkbench({
 		"inspector" | "list" | "navigation"
 	>("list");
 	const [newItemOpen, setNewItemOpen] = useState(false);
+	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
 	const [collectionDialog, setCollectionDialog] =
 		useState<CollectionDialog | null>(null);
@@ -2064,49 +2067,75 @@ export default function AdminWorkbench({
 							);
 						})}
 					</div>
-					<AdminSearchIndexStatus
-						error={searchIndex.error}
-						onRefresh={() => void searchIndex.refresh()}
-						onRetry={() => void searchIndex.retry()}
-						view={searchIndex.view}
-					/>
-					<ThemeSwitcher
-						styleVariant={theme.layout}
-						toolbar
-						variant="inline"
-					/>
-				</div>
-				<Tooltip content="Refresh">
-					<Button
-						aria-label="Refresh"
-						className="hidden h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
-						isIconOnly
-						onPress={() => void refreshCurrent()}
-						size="xs"
-						variant="transparent"
+					<div
+						aria-label="Library tools"
+						className="flex h-10 items-center rounded-xl bg-black/[0.035] dark:bg-white/[0.035]"
+						role="group"
 					>
-						<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={15} />
-					</Button>
-				</Tooltip>
+						<AdminSearchIndexStatus
+							error={searchIndex.error}
+							onRefresh={() => void searchIndex.refresh()}
+							onRetry={() => void searchIndex.retry()}
+							view={searchIndex.view}
+						/>
+						<ThemeSwitcher
+							styleVariant={theme.layout}
+							toolbar
+							variant="inline"
+						/>
+						<Tooltip content="Refresh">
+							<Button
+								aria-label="Refresh"
+								className="hidden h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								isIconOnly
+								onPress={() => void refreshCurrent()}
+								size="xs"
+								variant="transparent"
+							>
+								<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={15} />
+							</Button>
+						</Tooltip>
+						<form
+							action="/api/admin/session/logout"
+							method="post"
+							ref={logoutFormRef}
+						/>
+						<Tooltip content="Log out">
+							<Button
+								aria-label="Log out"
+								className="h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								isIconOnly
+								onPress={() => logoutFormRef.current?.requestSubmit()}
+								size="xs"
+								type="button"
+								variant="transparent"
+							>
+								<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
+							</Button>
+						</Tooltip>
+					</div>
+				</div>
 				<div className="col-start-3 row-start-1 flex shrink-0 items-center gap-1">
-					<form
-						action="/api/admin/session/logout"
-						method="post"
-						ref={logoutFormRef}
-					/>
-					<Tooltip content="Log out">
+					<div
+						aria-label="Add records"
+						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
+						role="group"
+					>
+					<Tooltip content="Import records">
 						<Button
-							aria-label="Log out"
-							className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+							aria-label="Import records"
+							className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0"
+							color="accent"
+							isDisabled={busy}
 							isIconOnly
-							onPress={() => logoutFormRef.current?.requestSubmit()}
+							onPress={() => setImportOpen(true)}
 							size="xs"
-							type="button"
-							variant="transparent"
+							variant="solid"
 						>
-							<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
+							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} />
 						</Button>
 					</Tooltip>
+					<span aria-hidden className="h-10 w-px shrink-0 bg-white/25" />
 					<Popover
 						disableAnimation
 						isOpen={newItemOpen}
@@ -2119,7 +2148,7 @@ export default function AdminWorkbench({
 						<PopoverTrigger>
 							<Button
 								aria-label="New item"
-								className="h-10 min-h-10 w-10 !min-w-10 rounded-xl px-0 font-semibold shadow-sm shadow-accent/10 lg:w-auto lg:!min-w-0 lg:px-3"
+								className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0 font-semibold lg:w-auto lg:!min-w-0 lg:px-3"
 								color="accent"
 								size="xs"
 								variant="solid"
@@ -2167,6 +2196,7 @@ export default function AdminWorkbench({
 							</div>
 						</PopoverContent>
 					</Popover>
+					</div>
 				</div>
 			</header>
 
@@ -2498,6 +2528,18 @@ export default function AdminWorkbench({
 					</aside>
 				</div>
 			</AdminDragDropRoot>
+
+			<AdminImportDialog
+				isOpen={importOpen}
+				onClose={() => setImportOpen(false)}
+				onImported={async (itemKeys) => {
+					// Show the whole library, newest first, so the new drafts are visible.
+					setFilters(DEFAULT_ADMIN_ITEM_VIEW_FILTERS);
+					await loadItems();
+					setBulkKeys(new Set(itemKeys));
+				}}
+				sources={library.sources}
+			/>
 
 			<DialogModal
 				isOpen={Boolean(recordAssignment)}
