@@ -219,6 +219,10 @@ describe("Evidence Library runtime guard", () => {
 			}),
 		);
 		const routeMarker = `ode-el-${applicationUuid}-route-marker`;
+		const expectedHealthHeaders = {
+			"X-Forwarded-Host": "library.opendev.space",
+			"X-Forwarded-Proto": "https",
+		};
 
 		expect(
 			route.http.routers[`ode-el-${applicationUuid}-platform-https`]
@@ -255,5 +259,13 @@ describe("Evidence Library runtime guard", () => {
 				service: `ode-el-${applicationUuid}-guard`,
 			},
 		});
+		expect(
+			route.http.services[`ode-el-${applicationUuid}-upstream`]
+				.loadBalancer.healthCheck.headers,
+		).toEqual(expectedHealthHeaders);
+		expect(
+			route.http.services[`ode-el-${applicationUuid}-guard`].loadBalancer
+				.healthCheck.headers,
+		).toEqual(expectedHealthHeaders);
 	});
 });
