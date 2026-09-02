@@ -18,8 +18,7 @@ printf 'base\n' > "$test_root/source/file.txt"
 git -C "$test_root/source" add file.txt
 git -C "$test_root/source" commit -m base >/dev/null
 stable_sha="$(git -C "$test_root/source" rev-parse HEAD)"
-git -C "$test_root/source" tag fallow-ci-baseline-2026-08-21
-git -C "$test_root/source" push origin main refs/tags/fallow-ci-baseline-2026-08-21 >/dev/null
+git -C "$test_root/source" push origin main >/dev/null
 
 git -C "$test_root/source" switch -c feature >/dev/null
 printf 'feature\n' >> "$test_root/source/file.txt"
@@ -37,10 +36,29 @@ git clone "$test_root/origin.git" "$test_root/runner" >/dev/null 2>&1
 git -C "$test_root/runner" checkout "$failed_push_sha" >/dev/null 2>&1
 resolved_push_sha="$(
   cd "$test_root/runner"
-  resolve_fallow_comparison push "" refs/tags/fallow-ci-baseline-2026-08-21
+  resolve_fallow_comparison push "" "$stable_sha"
 )"
 test "$resolved_push_sha" = "$stable_sha"
 test "$resolved_push_sha" != "$failed_push_sha"
+
+printf 'fixed push\n' >> "$test_root/source/file.txt"
+git -C "$test_root/source" commit -am fixed-push >/dev/null
+fixed_push_sha="$(git -C "$test_root/source" rev-parse HEAD)"
+git -C "$test_root/source" push origin main >/dev/null
+
+git -C "$test_root/runner" fetch origin main >/dev/null 2>&1
+git -C "$test_root/runner" checkout "$fixed_push_sha" >/dev/null 2>&1
+resolved_fixed_push_sha="$(
+  cd "$test_root/runner"
+  resolve_fallow_comparison push "" "$failed_push_sha"
+)"
+test "$resolved_fixed_push_sha" = "$failed_push_sha"
+
+resolved_dispatch_sha="$(
+  cd "$test_root/runner"
+  resolve_fallow_comparison workflow_dispatch "" ""
+)"
+test "$resolved_dispatch_sha" = "$failed_push_sha"
 
 git -C "$test_root/source" reset --hard "$stable_sha" >/dev/null
 printf 'rewritten base\n' > "$test_root/source/rewritten.txt"
@@ -51,7 +69,7 @@ git -C "$test_root/source" push --force origin main >/dev/null
 git -C "$test_root/runner" checkout "$feature_sha" >/dev/null 2>&1
 resolved_pr_sha="$(
   cd "$test_root/runner"
-  resolve_fallow_comparison pull_request main refs/tags/fallow-ci-baseline-2026-08-21
+  resolve_fallow_comparison pull_request main ""
 )"
 test "$resolved_pr_sha" = "$stable_sha"
 
