@@ -31,6 +31,7 @@ export type LibraryRuntimeRouteInput = {
 export type LibraryRuntimeRouteTarget = {
 	ipAddress: string;
 	port: number;
+	probeOrigin: string;
 };
 
 export type LibraryRuntimeGuardSource = LibraryRuntimeRouteTarget & {
@@ -189,7 +190,10 @@ function requireRouteTarget(target: LibraryRuntimeRouteTarget) {
 			"The Evidence Library web port is invalid.",
 		);
 	}
-	return target;
+	return {
+		...target,
+		probeOrigin: requireHttpsOrigin(target.probeOrigin),
+	};
 }
 
 function hostRule(origins: readonly string[]) {
@@ -231,12 +235,12 @@ export function renderLibraryRuntimeRoute(input: {
 		...input.platformOrigins,
 		...input.customOrigins,
 	]);
-	const healthCheck = {
-		headers: getLibraryConfigProbeHeaders(input.platformOrigins[0]),
+	const healthCheck = (probeOrigin: string) => ({
+		headers: getLibraryConfigProbeHeaders(probeOrigin),
 		interval: "3s",
 		path: LIBRARY_CONFIG_HEALTH_PATH,
 		timeout: "2s",
-	};
+	});
 	const routers: Record<string, unknown> = {
 		[`${serviceName}-platform-https`]: router(
 			platformRule,
@@ -279,7 +283,7 @@ export function renderLibraryRuntimeRoute(input: {
 	if (input.target) {
 		services[`${serviceName}-upstream`] = {
 			loadBalancer: {
-				healthCheck,
+				healthCheck: healthCheck(input.target.probeOrigin),
 				passHostHeader: true,
 				servers: [
 					{
@@ -299,7 +303,7 @@ export function renderLibraryRuntimeRoute(input: {
 		if (input.fallbackTarget) {
 			services[`${serviceName}-guard`] = {
 				loadBalancer: {
-					healthCheck,
+					healthCheck: healthCheck(input.fallbackTarget.probeOrigin),
 					passHostHeader: true,
 					servers: [
 						{
