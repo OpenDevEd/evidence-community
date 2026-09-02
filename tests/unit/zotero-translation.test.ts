@@ -53,7 +53,7 @@ describe("runtime Zotero translation", () => {
 		expect(String(fetchTranslation.mock.calls[0]?.[0])).toBe(
 			"http://translation-server:1969/export?format=csljson",
 		);
-		expect(fetchTranslation.mock.calls[0]?.[1]).toEqual(
+		expect(fetchTranslation.mock.calls[0]?.[1]).toMatchObject(
 			{
 				method: "POST",
 				headers: {

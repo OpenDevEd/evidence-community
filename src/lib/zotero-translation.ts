@@ -4,6 +4,8 @@ export type ZoteroTranslationErrorCode =
 	| "TRANSLATION_REQUEST_FAILED"
 	| "TRANSLATION_RESPONSE_INVALID";
 
+const TRANSLATION_TIMEOUT_MS = 30_000;
+
 export class ZoteroTranslationError extends Error {
 	readonly code: ZoteroTranslationErrorCode;
 	readonly status: number | null;
@@ -72,6 +74,7 @@ async function postZoteroTranslation(
 				"Content-Type": contentType,
 			},
 			body,
+			signal: AbortSignal.timeout(TRANSLATION_TIMEOUT_MS),
 		});
 	} catch (error) {
 		throw new ZoteroTranslationError(`Failed to translate ${subject}`, {

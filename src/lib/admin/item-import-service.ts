@@ -13,6 +13,7 @@ import {
 } from "@/lib/zotero-translation";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import { isTopLevelAdminItemType } from "./item-fields";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
 import {
 	ADMIN_IMPORT_MAX_RECORDS,
@@ -44,7 +45,6 @@ const importOnlyFields = new Set([
 	"relations",
 	"seeAlso",
 ]);
-const childItemTypes = new Set(["annotation", "attachment", "note"]);
 
 /**
  * Translators return dates in many shapes ("8/2013", "2013-08", "August
@@ -145,7 +145,7 @@ async function findExistingRecords(
 		sql`upper(regexp_replace(${column}, '[^0-9Xx]', '', 'g'))`;
 	// Stored DOIs may carry a doi.org or "doi:" prefix; match what normalizeDoi keeps.
 	const doiExpression = (column: ReturnType<typeof sql>) =>
-		sql`regexp_replace(lower(trim(${column})), '^(https?://(dx\.)?doi\.org/|doi:\s*)', '')`;
+		sql`regexp_replace(lower(trim(${column})), '^(https?://(dx\\.)?doi\\.org/|doi:\\s*)', '')`;
 	const conditions = (
 		doi: ReturnType<typeof sql>,
 		pmid: ReturnType<typeof sql>,
@@ -216,13 +216,14 @@ export function assignDuplicateStates<T extends DuplicateCandidate>(
 	return records.map((record) => {
 		const identifiers = record.identifiers;
 		if (record.state !== "ready" || !identifiers) return record;
-		for (const kind of kinds) {
-			const value = identifiers[kind];
-			const key = value ? existing[kind].get(value) : undefined;
-			if (key) return { ...record, existingKey: key, state: "existing" };
-		}
-		// A repeat still registers its identifiers, so a later record that
-		// shares any of them is caught too.
+		// Every record registers its identifiers, even when it is skipped, so a
+		// later record that shares any of them is caught too.
+		const existingKey = kinds
+			.map((kind) => {
+				const value = identifiers[kind];
+				return value ? existing[kind].get(value) : undefined;
+			})
+			.find(Boolean);
 		const repeated = kinds.some((kind) => {
 			const value = identifiers[kind];
 			return value ? seen[kind].has(value) : false;
@@ -231,6 +232,7 @@ export function assignDuplicateStates<T extends DuplicateCandidate>(
 			const value = identifiers[kind];
 			if (value) seen[kind].add(value);
 		}
+		if (existingKey) return { ...record, existingKey, state: "existing" };
 		return repeated ? { ...record, state: "repeated" } : record;
 	});
 }
@@ -325,10 +327,12 @@ export async function previewImportRecords(
 		translateDois(input.dois, translationUrl),
 		translateFiles(input.files, translationUrl),
 	]);
+	// Attachments, notes and annotations belong to a parent record and are
+	// out of scope for imports.
 	const entries = [...doiEntries.flat(), ...fileEntries.flat()].filter(
 		(entry) =>
 			!("zoteroItem" in entry) ||
-			!childItemTypes.has(String(entry.zoteroItem.itemType).toLowerCase()),
+			isTopLevelAdminItemType(String(entry.zoteroItem.itemType)),
 	);
 	if (entries.length > ADMIN_IMPORT_MAX_RECORDS) {
 		throw new AdminValidationError(
@@ -392,6 +396,12 @@ export async function commitImportRecords(
 				{ ...record.payload, collections: input.collections },
 				{ allowIncompleteCreators: true },
 			);
+			if (!isTopLevelAdminItemType(validated.item.itemType)) {
+				throw new NativeItemValidationError(
+					"Attachments, notes and annotations cannot be imported.",
+					{ itemType: "Choose a record type that can stand on its own." },
+				);
+			}
 			return {
 				id: record.id,
 				identifiers: importIdentifiers(validated.payload),

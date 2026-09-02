@@ -27,9 +27,9 @@ describe("DOI list parsing", () => {
 	it("normalizes doi.org links and plain DOIs and keeps the rest as invalid", () => {
 		expect(
 			parseDoiList(
-				"https://doi.org/10.1000/ABC, 10.1000/abc\n doi:10.5555/xyz\nnot-a-doi",
+				"https://doi.org/10.1000/ABC, 10.1000/abc\n doi:10.5555/xyz;part\nnot-a-doi",
 			),
-		).toEqual({ dois: ["10.1000/abc", "10.5555/xyz"], invalid: ["not-a-doi"] });
+		).toEqual({ dois: ["10.1000/abc", "10.5555/xyz;part"], invalid: ["not-a-doi"] });
 	});
 });
 
@@ -92,8 +92,9 @@ describe("duplicate detection", () => {
 		};
 		const states = assignDuplicateStates(
 			[
-				ready({ doi: "10.1000/abc" }),
+				ready({ doi: "10.1000/abc", isbn: "9780000000018" }),
 				ready({ pmid: "123" }),
+				ready({ isbn: "9780000000018" }),
 				ready({ doi: "10.1000/new" }),
 				ready({ doi: "10.1000/new", isbn: "9780000000001" }),
 				ready({ isbn: "9780000000001" }),
@@ -106,6 +107,7 @@ describe("duplicate detection", () => {
 		expect(states).toEqual([
 			{ existingKey: "EXIST001", state: "existing" },
 			{ existingKey: "EXIST002", state: "existing" },
+			{ existingKey: undefined, state: "repeated" },
 			{ existingKey: undefined, state: "ready" },
 			{ existingKey: undefined, state: "repeated" },
 			{ existingKey: undefined, state: "repeated" },

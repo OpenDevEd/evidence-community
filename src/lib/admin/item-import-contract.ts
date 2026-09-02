@@ -132,7 +132,7 @@ export type AdminImportCommitResponse = {
 export function parseDoiList(text: string) {
 	const dois: string[] = [];
 	const invalid: string[] = [];
-	for (const entry of text.split(/[\s,;]+/u)) {
+	for (const entry of text.split(/[\s,]+/u)) {
 		if (!entry) continue;
 		const doi = normalizeDoi(entry);
 		if (doi) dois.push(doi);
