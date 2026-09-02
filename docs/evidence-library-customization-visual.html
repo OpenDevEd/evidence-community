@@ -365,14 +365,12 @@
           ["search.fullText", "Toggle", "Boolean", "true"],
           ["search.tags", "Toggle", "Boolean", "true"],
           ["search.country", "Toggle", "Boolean", "true"],
-          ["search.authorCountry", "Toggle", "Boolean", "true"],
           ["search.embedder", "Object or null", "openAi or rest embedder with its own key", "null"],
           ["search.scopes", "Multi-select", "Approved scope catalog; at least one", "All supported"],
           ["search.defaultScope", "Select", "Must be enabled", "First scope"],
           ["filters.institution.mode", "Select", "hidden, facet, facet-with-featured-value", "facet"],
           ["filters.institution.label", "Text / key", "1–60 characters", "Platform key"],
           ["filters.institution.featuredValue", "Text", "1–120; must match indexed institution", "Conditional"],
-          ["filters.countryLibrary", "Toggle", "Boolean", "false"],
           ["filters.collectionsExpanded", "Toggle", "Boolean", "true"],
           ["filters.years.enabled", "Toggle", "Boolean", "true"]
         ]
@@ -409,7 +407,6 @@
           ["features.collectionNotes", "Toggle", "Requires collections", "false"],
           ["features.countryFocus", "Toggle", "Requires country search", "false"],
           ["features.authorFilter", "Toggle", "Boolean", "true"],
-          ["features.authorLocation", "Toggle", "Requires author-country search", "false"],
           ["features.yearsDropdown", "Toggle", "Requires year filter", "false"],
           ["features.downloads", "Toggle", "Requires exports.ris or exports.bibtex", "false"],
           ["features.atomFeed", "Toggle", "Requires exports.atom", "false"]

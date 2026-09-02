@@ -356,6 +356,52 @@ function openScholarCollection(row: CatalogRow): OpenScholarCollection {
 	};
 }
 
+async function withOpenScholarCounts(
+	database: Database,
+	rows: CatalogRow[],
+): Promise<CatalogRow[]> {
+	if (rows.length === 0) return rows;
+	const keys = sql.join(
+		rows.map(({ key }) => sql`${key}`),
+		sql`, `,
+	);
+	const result = await database.execute<{
+		count: number | string;
+		key: string;
+	}>(
+		sql`
+			WITH RECURSIVE descendants AS (
+				SELECT root.key AS "rootKey", root.key AS "collectionKey", ARRAY[root.key]::varchar[] AS visited
+				FROM ${collection} root
+				WHERE root.key IN (${keys})
+
+				UNION ALL
+
+				SELECT descendants."rootKey", child.key, descendants.visited || child.key
+				FROM descendants
+				JOIN ${collection} child ON child."parentCollection" = descendants."collectionKey"
+				WHERE NOT child.key = ANY(descendants.visited)
+			)
+			SELECT descendants."rootKey" AS key, count(DISTINCT ${item.key}) AS count
+			FROM descendants
+			LEFT JOIN ${itemToCollection}
+				ON ${itemToCollection.collectionKey} = descendants."collectionKey"
+			LEFT JOIN ${item}
+				ON ${item.key} = ${itemToCollection.itemKey}
+				AND ${item.deleted} = 0
+				AND coalesce(${item.parentItem}, '') = ''
+			GROUP BY descendants."rootKey"
+		`,
+	);
+	const counts = new Map(
+		result.rows.map((row) => [row.key, Number(row.count)]),
+	);
+	return rows.map((row) => ({
+		...row,
+		recordCount: counts.get(row.key) ?? 0,
+	}));
+}
+
 /**
  * The named collections, in the order they were asked for. Ids that no longer
  * exist are left out, so a saved link target that was deleted simply does not
@@ -365,8 +411,9 @@ async function openScholarCollectionsByIds(database: Database, ids: string[]) {
 	const rows = await database
 		.select(catalogSelection(database))
 		.from(collection)
-		.where(inArray(collection.key, ids));
-	const rowsByKey = new Map(rows.map((row) => [row.key, row]));
+		.where(and(inArray(collection.key, ids), eq(collection.deleted, 0)));
+	const countedRows = await withOpenScholarCounts(database, rows);
+	const rowsByKey = new Map(countedRows.map((row) => [row.key, row]));
 	return {
 		items: ids.flatMap((id) => {
 			const row = rowsByKey.get(id);
@@ -376,7 +423,7 @@ async function openScholarCollectionsByIds(database: Database, ids: string[]) {
 	};
 }
 
-/** The full catalogue for OpenScholar pickers: every source and every state. */
+/** Every active collection, with the same descendant counts as the public site. */
 export async function listOpenScholarCollections(
 	database: Database,
 	input: unknown,
@@ -386,14 +433,15 @@ export async function listOpenScholarCollections(
 	const request: AdminCollectionSearchRequest = {
 		...parsed,
 		sourceConnectionKey: null,
-		state: "all",
+		state: "active",
 	};
 	const { nextCursor, pageRows } = await searchCollectionRows(
 		database,
 		request,
 		decodeSearchCursor(request),
 	);
-	return { items: pageRows.map(openScholarCollection), nextCursor };
+	const countedRows = await withOpenScholarCounts(database, pageRows);
+	return { items: countedRows.map(openScholarCollection), nextCursor };
 }
 
 export async function resolveAdminCollections(

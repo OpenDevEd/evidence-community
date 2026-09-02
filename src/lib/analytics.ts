@@ -44,11 +44,7 @@ export type LibraryResultsAnalyticsPayload = {
 	sort: string;
 	categoricalFilters?: Partial<
 		Record<
-			| "author_country"
-			| "collection"
-			| "country"
-			| "institution"
-			| "year_range",
+			"collection" | "country" | "institution" | "year_range",
 			string | string[]
 		>
 	>;

@@ -440,7 +440,6 @@ describe("AI routes", () => {
 			range: "2019-2024",
 			institution: ["EdTech Hub"],
 			country: [],
-			author_country: [],
 			author: "",
 			collections: [],
 		};

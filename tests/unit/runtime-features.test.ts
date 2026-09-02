@@ -27,7 +27,6 @@ const featureIds = [
 	"collectionNotes",
 	"countryFocus",
 	"authorFilter",
-	"authorLocation",
 	"yearsDropdown",
 	"downloads",
 	"atomFeed",
@@ -60,6 +59,8 @@ describe("runtime library feature selector", () => {
 		};
 
 		expect(isLibraryFeatureEnabled(enabledFeatures, featureId)).toBe(true);
-		expect(isLibraryFeatureEnabled(disabledFeatures, featureId)).toBe(false);
+		expect(isLibraryFeatureEnabled(disabledFeatures, featureId)).toBe(
+			false,
+		);
 	});
 });

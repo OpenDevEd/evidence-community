@@ -51,16 +51,11 @@ import {
 import { useQueryState } from "nuqs";
 import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
-import {
-	COUNTRIES,
-	getSafeReferrer,
-} from "@/constants/misc";
+import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
-import {
-	type DoiDisplayLink,
-} from "@opendeved/doi-sync-core/display";
+import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
@@ -268,76 +263,54 @@ function ItemAuthor({ author }: { author?: Author }) {
 									Affiliations
 								</h4>
 								{author.institutions.map((institution, idx) => (
-									<LinkWithParams
+									<motion.div
 										key={idx}
-										href={
-											isAuthorFilterEnabled
-												? getSafeReferrer(referrer)
-												: undefined
-										}
-										params={{
-											institution: [
-												institution.display_name || "",
-											],
-											referrer: referrer ?? undefined,
+										className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5"
+										initial={{ opacity: 0, x: -20 }}
+										animate={{ opacity: 1, x: 0 }}
+										transition={{
+											delay: 0.4 + idx * 0.1,
+											type: "spring",
+											stiffness: 100,
 										}}
-										className="w-full"
 									>
-										<motion.div
-											key={idx}
-											className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-											initial={{ opacity: 0, x: -20 }}
-											animate={{ opacity: 1, x: 0 }}
-											transition={{
-												delay: 0.4 + idx * 0.1,
-												type: "spring",
-												stiffness: 100,
-											}}
-										>
-											<div className="flex-1">
-												<p className="text-sm text-black dark:text-white">
-													{institution.display_name}
-												</p>
-												{institution.country_code && (
-													<motion.div
-														className="flex items-center gap-1 mt-1"
-														initial={{
-															opacity: 0,
-														}}
-														animate={{
-															opacity: 1,
-														}}
-														transition={{
-															delay:
-																0.5 + idx * 0.1,
-														}}
-													>
-														<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-															<Image
-																src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
-																alt={
-																	institution.country_code
-																}
-																className="w-full h-full object-cover"
-																width={16}
-																height={12}
-															/>
-														</div>
-														<span className="text-xs text-black/60 dark:text-white/60">
-															{`${
-																COUNTRIES[
-																	institution
-																		.country_code
-																]
-															} (${
+										<div className="flex-1">
+											<p className="text-sm text-black dark:text-white">
+												{institution.display_name}
+											</p>
+											{institution.country_code && (
+												<motion.div
+													className="flex items-center gap-1 mt-1"
+													initial={{
+														opacity: 0,
+													}}
+													animate={{
+														opacity: 1,
+													}}
+													transition={{
+														delay: 0.5 + idx * 0.1,
+													}}
+												>
+													<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
+														<Image
+															src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
+															alt={
 																institution.country_code
-															})`}
-														</span>
-													</motion.div>
-												)}
-											</div>
-										</motion.div>
-									</LinkWithParams>
+															}
+															className="w-full h-full object-cover"
+															width={16}
+															height={12}
+														/>
+													</div>
+													<span className="text-xs text-black/60 dark:text-white/60">
+														{`${COUNTRIES[institution.country_code]} (${
+															institution.country_code
+														})`}
+													</span>
+												</motion.div>
+											)}
+										</div>
+									</motion.div>
 								))}
 							</motion.div>
 						)}
@@ -393,10 +366,10 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 }
 
 function ItemInstitution({ institution }: { institution?: string }) {
-	const [referrer, setReferrer] = useQueryState("referrer");
-	const isAuthorLocationEnabled =
-		useLibraryFeature("authorLocation");
-	const { institutions: configuredInstitutions } = useLibraryConfig();
+	const [referrer] = useQueryState("referrer");
+	const { filters, institutions: configuredInstitutions } =
+		useLibraryConfig();
+	const isInstitutionFilterEnabled = filters.institution.mode !== "hidden";
 	const configuredInstitution = findInstitutionWithLogo(
 		configuredInstitutions,
 		institution,
@@ -405,10 +378,12 @@ function ItemInstitution({ institution }: { institution?: string }) {
 	return (
 		<LinkWithParams
 			href={
-				isAuthorLocationEnabled ? getSafeReferrer(referrer) : undefined
+				isInstitutionFilterEnabled
+					? getSafeReferrer(referrer)
+					: undefined
 			}
 			params={
-				institution && isAuthorLocationEnabled
+				institution && isInstitutionFilterEnabled
 					? {
 							institution: [institution],
 							referrer: referrer ?? undefined,
@@ -442,10 +417,7 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard
-			title={localizeOrUseIfCapitalized(
-				filters.institution.label,
-				t,
-			)}
+			title={localizeOrUseIfCapitalized(filters.institution.label, t)}
 			count={item?.institution?.length}
 		>
 			{loading
@@ -470,10 +442,7 @@ function ItemFundingPartners() {
 	if (fundingPartners.length === 0) return null;
 
 	return (
-		<SidebarCard
-			title={t("fundingPartner")}
-			count={fundingPartners.length}
-		>
+		<SidebarCard title={t("fundingPartner")} count={fundingPartners.length}>
 			{fundingPartners.map((partner) => (
 				<ItemRow
 					key={partner.id}
@@ -585,9 +554,7 @@ export function ItemDetails({ item }: { item: Item | undefined }) {
 	const { identity } = useLibraryConfig();
 
 	if (!item && !loading) return null;
-	const details = item
-		? selectPublicItemDetails(item, identity.baseUrl)
-		: [];
+	const details = item ? selectPublicItemDetails(item, identity.baseUrl) : [];
 	if (!loading && details.length === 0) return null;
 
 	return (
@@ -597,11 +564,8 @@ export function ItemDetails({ item }: { item: Item | undefined }) {
 						<ItemDetailsRow key={index} detail={undefined} />
 					))
 				: details.map((detail) => (
-							<ItemDetailsRow
-								key={detail.label}
-								detail={detail}
-							/>
-						))}
+						<ItemDetailsRow key={detail.label} detail={detail} />
+					))}
 		</SidebarCard>
 	);
 }
@@ -680,7 +644,8 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 
 function ProcessHTML(html: string) {
 	// Single pass: match URLs or bare DOIs
-	const combined = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)|(10\.\d{4,9}\/[-._;():\w]+)/gi;
+	const combined =
+		/(https?:\/\/[^\s<>"{}|\\^`[\]]+)|(10\.\d{4,9}\/[-._;():\w]+)/gi;
 	const linkClass = "text-link hover:underline";
 
 	return html.replace(combined, (match, url, doi) => {
@@ -701,14 +666,17 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,
 			revalidateIfStale: false,
-		}
+		},
 	);
 	const resolvedCitation = isCitationFetching
 		? item?.citation || ""
 		: citationResponse?.citation || "";
 
 	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
-		if (isCitationFetching || resolvedCitation === "<div>Loading...</div>") {
+		if (
+			isCitationFetching ||
+			resolvedCitation === "<div>Loading...</div>"
+		) {
 			return { isLoading: true };
 		}
 
@@ -887,7 +855,11 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 					aria-label="Zenodo"
 				/>
 			) : (
-				<BrandIcon icon={siDoi} className="size-5 text-doi" aria-label="DOI" />
+				<BrandIcon
+					icon={siDoi}
+					className="size-5 text-doi"
+					aria-label="DOI"
+				/>
 			)}
 		</div>
 	);
@@ -1141,9 +1113,9 @@ export function ItemCollections({ item }: { item: Item | undefined }) {
 
 	if (!isCollectionsEnabled) return null;
 
-	const visibleCollections = ((item?.collectionsData as Collection[]) || []).filter(
-		(collection) => collection.originalFacet,
-	);
+	const visibleCollections = (
+		(item?.collectionsData as Collection[]) || []
+	).filter((collection) => collection.originalFacet);
 
 	const groupedCollections = visibleCollections.reduce(
 		(acc, collection) => {
@@ -1265,9 +1237,9 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	});
 	const hasLinks = Boolean(
 		item?.links &&
-			(item.links.cites.length > 0 ||
-				item.links.citedBy.length > 0 ||
-				item.links.related.length > 0),
+		(item.links.cites.length > 0 ||
+			item.links.citedBy.length > 0 ||
+			item.links.related.length > 0),
 	);
 
 	// OpenAlex records show provider relations elsewhere; only in-library links belong here.

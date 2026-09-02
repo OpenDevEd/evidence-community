@@ -1,8 +1,14 @@
-import { SORT_OPTIONS } from '@/constants/items';
-import { createLoader, parseAsArrayOf, parseAsString, parseAsInteger, createSerializer } from 'nuqs/server';
+import { SORT_OPTIONS } from "@/constants/items";
+import {
+	createLoader,
+	parseAsArrayOf,
+	parseAsString,
+	parseAsInteger,
+	createSerializer,
+} from "nuqs/server";
 
 export const searchParamsLoader = {
-    collections: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+	collections: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
 	referrer: parseAsString.withDefault("").withOptions({
@@ -24,15 +30,12 @@ export const searchParamsLoader = {
 	country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
-	author_country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
-		scroll: true,
-	}),
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
-}
+};
 
 export const serializeSearchParams = createSerializer(searchParamsLoader);
 

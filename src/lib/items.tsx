@@ -90,15 +90,13 @@ function formatAccessDate(props: FormatterProps) {
 function Citation({ value, loading, item }: FormatterProps) {
 	const contentRef = useRef(null);
 	const { citations } = useLibraryConfig();
-	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{ citation: string | null }>(
-		item?.key ? `/item/${item.key}/citation` : null,
-		fetcher,
-		{
-			revalidateOnFocus: false,
-			revalidateOnReconnect: false,
-			revalidateIfStale: false,
-		}
-	);
+	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
+		citation: string | null;
+	}>(item?.key ? `/item/${item.key}/citation` : null, fetcher, {
+		revalidateOnFocus: false,
+		revalidateOnReconnect: false,
+		revalidateIfStale: false,
+	});
 
 	const resolvedCitation = citationResponse?.citation || value || "";
 	const isLoading = loading || isCitationFetching;
@@ -111,7 +109,10 @@ function Citation({ value, loading, item }: FormatterProps) {
 		const link = ` Available at <a href="${finalURL}" target="_blank" rel="noopener noreferrer">${finalURL}</a>`;
 
 		if (/<\/div>\s*$/.test(sanitizedHtml)) {
-			sanitizedHtml = sanitizedHtml.replace(/(?:\.\s*)?<\/div>\s*$/, `.${link}</div>`);
+			sanitizedHtml = sanitizedHtml.replace(
+				/(?:\.\s*)?<\/div>\s*$/,
+				`.${link}</div>`,
+			);
 		} else {
 			sanitizedHtml = sanitizedHtml.replace(/(?:\.\s*)?$/, `.${link}`);
 		}
@@ -120,10 +121,7 @@ function Citation({ value, loading, item }: FormatterProps) {
 	sanitizedHtml = sanitizedHtml.replace(/<\/?div/g, "<p");
 
 	return (
-		<Skeleton
-			isLoaded={!isLoading}
-			className="w-full min-h-16 rounded-2xl"
-		>
+		<Skeleton isLoaded={!isLoading} className="w-full min-h-16 rounded-2xl">
 			<motion.div
 				initial={{ height: "5rem" }}
 				animate={isLoading ? { height: "5rem" } : { height: "auto" }}
@@ -144,7 +142,7 @@ function Citation({ value, loading, item }: FormatterProps) {
 
 function createRegexParser(wrappers: WrapperConfig[], tag: string = "p") {
 	const sortedWrappers = [...wrappers].sort(
-		(a, b) => (b.priority ?? 0) - (a.priority ?? 0)
+		(a, b) => (b.priority ?? 0) - (a.priority ?? 0),
 	);
 
 	return memo(function RegexParser({ value }: { value: string }) {
@@ -191,7 +189,7 @@ function createRegexParser(wrappers: WrapperConfig[], tag: string = "p") {
 			});
 
 			return Array.from(matchMap.values()).sort(
-				(a, b) => a.start - b.start
+				(a, b) => a.start - b.start,
 			);
 		}, [value]);
 
@@ -211,7 +209,7 @@ function createRegexParser(wrappers: WrapperConfig[], tag: string = "p") {
 						key={`${match[0]}-${idx}`}
 						match={match[0]}
 						index={idx}
-					/>
+					/>,
 				);
 
 				lastIndex = end;
@@ -280,9 +278,7 @@ function CollectionLevel({
 				className="text-collection text-lg"
 				underline="always"
 			>
-				<span className="text-collection">
-					{collection.name}
-				</span>
+				<span className="text-collection">{collection.name}</span>
 			</Link>
 			<ul className="ml-8">
 				{collection.children?.map((child) => (
@@ -329,7 +325,7 @@ function ObjectView({
 }) {
 	if (!(value instanceof Map)) {
 		value = new Map(
-			Object.entries(value).map(([key, value]) => [key, String(value)])
+			Object.entries(value).map(([key, value]) => [key, String(value)]),
 		);
 	}
 
@@ -340,7 +336,7 @@ function ObjectView({
 			{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
 			{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
 		],
-		"span"
+		"span",
 	);
 
 	if (filteredValues.length === 0) return false;
@@ -385,7 +381,7 @@ function Relation({ value }: { value: string }) {
 				revalidateIfStale: false,
 				revalidateOnReconnect: false,
 				shouldRetryOnError: false,
-			}
+			},
 		);
 
 	const hasData = !(!fetchedItemData?.item && !fetchedItemDataLoading);
@@ -435,12 +431,15 @@ function Relations({ value }: { value: RelationsType }) {
 							return valueArray.map((v, i) => (
 								<Relation key={key + "-" + i} value={v} />
 							));
-						}
+						},
 					)}
 				</AnimatePresence>
 				<div className="first:block hidden">
 					<div className="flex justify-center items-center gap-2 ">
-						<HugeiconsIcon icon={SearchRemoveIcon} className="size-6" />
+						<HugeiconsIcon
+							icon={SearchRemoveIcon}
+							className="size-6"
+						/>
 						There are no relations found for this item in this
 						database.
 					</div>
@@ -510,7 +509,7 @@ function ItemCreators({ value, t, pathname }: FormatterProps) {
 		<ul className="flex flex-col lg:gap-2">
 			{value.map((creator: Creator, index: number) => {
 				const creatorTypeLabel = t(
-					"creatorType." + creator.creatorType
+					"creatorType." + creator.creatorType,
 				);
 				const { creatorType, institutions, ...rest } = creator;
 				const fullName = creator.name
@@ -520,10 +519,11 @@ function ItemCreators({ value, t, pathname }: FormatterProps) {
 				const AuthorContent = () => {
 					return (
 						<p className="space-x-1">
-							<span className={twMerge(
-								"font-medium text-accent",
-								isAuthorFilterEnabled && "underline"
-							)}
+							<span
+								className={twMerge(
+									"font-medium text-accent",
+									isAuthorFilterEnabled && "underline",
+								)}
 							>
 								{Object.values(rest).filter(Boolean).join(", ")}
 							</span>
@@ -559,9 +559,9 @@ function ItemCreators({ value, t, pathname }: FormatterProps) {
 }
 
 function ItemInstitution({ value, t, pathname }: FormatterProps) {
-	const isAuthorLocationEnabled =
-		useLibraryFeature("authorLocation");
-	const { institutions: configuredInstitutions } = useLibraryConfig();
+	const { filters, institutions: configuredInstitutions } =
+		useLibraryConfig();
+	const isInstitutionFilterEnabled = filters.institution.mode !== "hidden";
 	if (!value) return false;
 
 	// Handle both string and array values
@@ -579,11 +579,14 @@ function ItemInstitution({ value, t, pathname }: FormatterProps) {
 
 				const InstitutionContent = () => {
 					return (
-						<Card className="max-w-fit p-2 rounded-2xl" color="accent">
+						<Card
+							className="max-w-fit p-2 rounded-2xl"
+							color="accent"
+						>
 							<div
 								className={twMerge(
 									"flex gap-2 items-center",
-									!configuredInstitution && "px-2"
+									!configuredInstitution && "px-2",
 								)}
 							>
 								{configuredInstitution?.logoUrl && (
@@ -598,7 +601,7 @@ function ItemInstitution({ value, t, pathname }: FormatterProps) {
 					);
 				};
 
-				return isAuthorLocationEnabled ? (
+				return isInstitutionFilterEnabled ? (
 					<LinkWithParams
 						key={index}
 						href={pathname}
@@ -666,7 +669,7 @@ export const valueFormatter: Record<
 	),
 	attachmentsData: ({ value, item }) => {
 		const filteredValue = value.filter(
-			(data: any) => data.PDFCoverPageImage
+			(data: any) => data.PDFCoverPageImage,
 		);
 
 		if (filteredValue.length === 0) return false;

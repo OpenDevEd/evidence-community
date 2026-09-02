@@ -22,7 +22,6 @@ function context(
 		range: "2019-2024",
 		institution: ["EdTech Hub"],
 		country: [],
-		author_country: [],
 		author: "",
 		collections: [],
 		...overrides,
@@ -38,7 +37,6 @@ describe("the library result set the assistant can see", () => {
 			range: "2019-2024",
 			institution: ["EdTech Hub"],
 			country: [],
-			author_country: [],
 			author: "",
 			collections: [],
 		});
@@ -62,10 +60,7 @@ describe("the library result set the assistant can see", () => {
 		});
 
 		expect(context.author).toHaveLength(300);
-		expect(context.institution).toEqual([
-			"b".repeat(300),
-			"EdTech Hub",
-		]);
+		expect(context.institution).toEqual(["b".repeat(300), "EdTech Hub"]);
 	});
 
 	it("rejects an unknown field rather than passing it to search", () => {

@@ -1,7 +1,12 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { CodeSquareIcon, Compass01Icon, Delete02Icon, Download01Icon } from "@hugeicons/core-free-icons";
+import {
+	CodeSquareIcon,
+	Compass01Icon,
+	Delete02Icon,
+	Download01Icon,
+} from "@hugeicons/core-free-icons";
 import { ReactNode, use, useContext, useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
@@ -95,7 +100,7 @@ function Chip({
 			<span
 				className={twMerge(
 					"block max-w-filter-chip truncate",
-					classNames.title
+					classNames.title,
 				)}
 			>
 				{title}
@@ -155,7 +160,7 @@ export function FilterChips() {
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				filtersCount > 0 && "max-h-filter-chips mb-4 opacity-100"
+				filtersCount > 0 && "max-h-filter-chips mb-4 opacity-100",
 			)}
 		>
 			{/* On mobile the chips scroll horizontally inside their own track so a
@@ -357,7 +362,8 @@ export function FilterChips() {
 							color="accent"
 							className="h-7 w-7 min-w-7"
 						>
-							<HugeiconsIcon icon={Delete02Icon}
+							<HugeiconsIcon
+								icon={Delete02Icon}
 								aria-hidden="true"
 								className="text-white size-3"
 							/>
@@ -453,7 +459,12 @@ function ContentActions() {
 			{isDownloadEnabled && availableFormats.length > 0 && (
 				<Button
 					data-download-record-count={downloadableRecords}
-					endContent={<HugeiconsIcon icon={Download01Icon} className="size-6" />}
+					endContent={
+						<HugeiconsIcon
+							icon={Download01Icon}
+							className="size-6"
+						/>
+					}
 					onPress={onOpen}
 				>
 					{t("downloadRecords", {
@@ -467,7 +478,10 @@ function ContentActions() {
 						window.location.assign(getLibraryExportPath("atom"));
 					}}
 					endContent={
-						<HugeiconsIcon icon={CodeSquareIcon} className="size-6" />
+						<HugeiconsIcon
+							icon={CodeSquareIcon}
+							className="size-6"
+						/>
 					}
 				>
 					{t("mainFeed")}
@@ -623,7 +637,10 @@ export function NoteView() {
 								<div className="flex flex-col gap-4">
 									<h3 className="text-xl text-black/80 dark:text-white/80 font-medium flex flex-col">
 										<div className="flex gap-2 items-center">
-											<HugeiconsIcon icon={Compass01Icon} className="size-4 shrink-0" />
+											<HugeiconsIcon
+												icon={Compass01Icon}
+												className="size-4 shrink-0"
+											/>
 											<span className="text-base text-black/80 dark:text-white/80">
 												{collectionData?.title}
 											</span>
@@ -683,7 +700,6 @@ export function ResourcesView({
 		const query = itemsContext.queryParams;
 		const { filtersCount } = getFilterChipState(query);
 		const categoricalFilters = {
-			author_country: query.author_country,
 			collection: query.collections,
 			country: query.country,
 			institution: query.institution,

@@ -19,7 +19,11 @@ import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
 import type { SmartScreeningField } from "@/types/ai";
 import { generateObject } from "ai";
-import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
+import {
+	COUNTRY_HIERARCHY,
+	countryFacetOptions,
+	Entry,
+} from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { addRegionsToFacetDistribution } from "./country";
 import { getMainAttributes, resolveSearchRequest } from "@/lib/search";
@@ -33,44 +37,43 @@ import { authorizeForConfig } from "@/lib/auth-service";
 import { meilisearchEquals, meilisearchIn } from "@/lib/meilisearch-filter";
 
 export async function areLinksValid(links: string[]) {
-	const validity = await Promise.allSettled(links.map(async (link: string) => {
-		const asURL = new URL(link);
-		const itemKey = asURL.pathname.split("/").pop();
+	const validity = await Promise.allSettled(
+		links.map(async (link: string) => {
+			const asURL = new URL(link);
+			const itemKey = asURL.pathname.split("/").pop();
 
-		if (!itemKey) {
-			return false;
-		}
+			if (!itemKey) {
+				return false;
+			}
 
-		const item = await getCachedItemSmall(itemKey);
-		if (!item || !item.item) {
-			return false;
-		}
+			const item = await getCachedItemSmall(itemKey);
+			if (!item || !item.item) {
+				return false;
+			}
 
-		return true;
-	}));
+			return true;
+		}),
+	);
 	return validity;
 }
 
 export async function authorize(
 	props: CredentialsInput,
 ): Promise<{ error: string } | { success: true }> {
-	const result = await authorizeForConfig(
-		props,
-		await getLibraryConfig(),
-	);
+	const result = await authorizeForConfig(props, await getLibraryConfig());
 	return "error" in result ? result : { success: true };
 }
 
 export async function getItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	userId: string | null = null
+	userId: string | null = null,
 ) {
 	const collections = searchParams.collections || [];
 	const libraryConfig = await getLibraryConfig();
 
 	const userFilters = await getProfileSearchFilter(
 		userId,
-		searchParams.collectionId || ""
+		searchParams.collectionId || "",
 	);
 
 	const facets = getRuntimeSearchFacets(
@@ -88,15 +91,14 @@ export async function getItems(
 				meilisearchEquals("collectionsAncestry", collection),
 			),
 			...(userFilters?.filter ? userFilters.filter : []),
-		]
+		],
 	);
 }
 
 export async function getProfileSearchFilter(
 	id: string | null,
-	collectionId: string | null
+	collectionId: string | null,
 ) {
-
 	if (!collectionId && !id) {
 		return { filter: null };
 	}
@@ -132,15 +134,18 @@ export async function getProfileSearchFilter(
 	if (likes) {
 		return {
 			filter: [
-				meilisearchIn("key", likes
-					.filter(
-						(like: InferSelectModel<typeof usersToLikes>) =>
-							!like.deleted
-					)
-					.map(
-						(like: InferSelectModel<typeof usersToLikes>) =>
-							like.itemKey,
-					)),
+				meilisearchIn(
+					"key",
+					likes
+						.filter(
+							(like: InferSelectModel<typeof usersToLikes>) =>
+								!like.deleted,
+						)
+						.map(
+							(like: InferSelectModel<typeof usersToLikes>) =>
+								like.itemKey,
+						),
+				),
 			],
 		};
 	}
@@ -150,7 +155,7 @@ export async function getProfileSearchFilter(
 
 export async function convertItem(
 	item: Item | Item[],
-	format: "ris" | "bibtex" | "citation"
+	format: "ris" | "bibtex" | "citation",
 ) {
 	const itemsList = Array.isArray(item) ? item : [item];
 	const texts: string[] = [];
@@ -173,8 +178,7 @@ export async function convertItem(
 				const ret = await BibTeX.toCitation();
 				texts.push(ret);
 			}
-		} catch (error) {
-		}
+		} catch (error) {}
 	});
 
 	await Promise.allSettled(promises);
@@ -187,7 +191,7 @@ export async function getLikedPosts(likes: Session["user"]["likes"]) {
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 	const res = await index.getDocuments({
 		filter: meilisearchIn("key", Object.keys(likes)),
-		});
+	});
 
 	return res.results;
 }
@@ -198,15 +202,16 @@ export async function searchIndex(
 	>[1] = {},
 	extraFilters: NonNullable<
 		Parameters<
-			Awaited<ReturnType<typeof getMeilisearchForConfig>>["index"]["search"]
+			Awaited<
+				ReturnType<typeof getMeilisearchForConfig>
+			>["index"]["search"]
 		>[1]
-	>["filter"] = []
+	>["filter"] = [],
 ) {
 	const items = async () => {
 		const libraryConfig = await getLibraryConfig();
 		const {
 			attributesToSearchOn,
-			author_country,
 			country,
 			finalFilters: baseFilters,
 			limitNum,
@@ -244,17 +249,19 @@ export async function searchIndex(
 				item.collectionsData = item.collectionsAncestry
 					?.map((collection: string) => {
 						const collectionData = collections.find(
-							(c: Collection) => c.key === collection
+							(c: Collection) => c.key === collection,
 						);
 						return collectionData;
 					})
 					.filter(
 						(collectionData: Collection | undefined) =>
-							collectionData !== undefined
+							collectionData !== undefined,
 					) as Collection[];
 			}
 
-			item.attachmentsData = item.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+			item.attachmentsData = item.attachmentsData?.filter(
+				(attachment: any) => attachment.deleted === 0,
+			);
 
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,
@@ -284,16 +291,12 @@ export async function searchIndex(
 						)
 						.reduce((acc, facet) => {
 							acc[facet.key + "_uncategorized"] =
-								searchResults.facetDistribution?.[
-									facet.key
-								] || {};
+								searchResults.facetDistribution?.[facet.key] ||
+								{};
 							return acc;
-						}, {} as FacetDistribution)
+						}, {} as FacetDistribution),
 				),
-				{
-					country: country,
-					author_country: author_country
-				}
+				{ country },
 			),
 		};
 	};

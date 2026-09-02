@@ -3,10 +3,10 @@ import { index, pgTable, primaryKey, text, varchar } from "drizzle-orm/pg-core";
 import { item } from "./item";
 
 /**
- * One row for every institution named on a live top-level record. The runtime
- * keeps it in step with `item` through the same refresh function that
- * maintains `adminItemListProjection`, so the OpenScholar institution picker
- * can search and page without unpacking every record's creators JSON.
+ * One row for every value in the Zotero institution field of a live top-level
+ * record. The runtime keeps it in step with `item` through the same trigger
+ * that maintains `adminItemListProjection`, so the OpenScholar picker and the
+ * public search index read the same projection.
  */
 export const itemInstitution = pgTable(
 	"itemInstitution",

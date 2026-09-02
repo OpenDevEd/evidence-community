@@ -16,9 +16,7 @@ import {
 
 function getPublicConfig() {
 	return projectPublicLibraryConfig(
-		libraryConfigSchema.parse(
-			cloneLibraryConfig(maximalLibraryConfig),
-		),
+		libraryConfigSchema.parse(cloneLibraryConfig(maximalLibraryConfig)),
 	);
 }
 
@@ -27,14 +25,8 @@ describe("runtime search configuration", () => {
 		const { search } = getPublicConfig();
 
 		expect(
-			getRuntimeSearchScopeOptions(search).map(
-				(option) => option.key,
-			),
-		).toEqual([
-			"title_abstract_author_and_keywords",
-			"title",
-			"authors",
-		]);
+			getRuntimeSearchScopeOptions(search).map((option) => option.key),
+		).toEqual(["title_abstract_author_and_keywords", "title", "authors"]);
 		expect(resolveRuntimeSearchScope("invalid", search)).toBe(
 			"title_abstract_author_and_keywords",
 		);
@@ -50,20 +42,16 @@ describe("runtime search configuration", () => {
 			defaultScope: "everywhere" as const,
 		};
 
-		expect(
-			getRuntimeSearchAttributes("everywhere", search),
-		).toEqual(["metadataSearch"]);
+		expect(getRuntimeSearchAttributes("everywhere", search)).toEqual([
+			"metadataSearch",
+		]);
 		expect(
 			getRuntimeSearchAttributes("everywhere", {
 				...search,
 				fullText: true,
 				tags: true,
 			}),
-		).toEqual([
-			"metadataSearch",
-			"tags",
-			"fullTextPDFs.fullTextPDF.text",
-		]);
+		).toEqual(["metadataSearch", "tags", "fullTextPDFs.fullTextPDF.text"]);
 	});
 
 	it("derives facets from enabled runtime filters and capabilities", () => {
@@ -74,7 +62,6 @@ describe("runtime search configuration", () => {
 				{
 					...config.search,
 					country: false,
-					authorCountry: false,
 				},
 				{
 					...config.filters,

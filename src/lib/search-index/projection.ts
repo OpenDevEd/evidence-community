@@ -1,5 +1,4 @@
 import { sourceConnection } from "@opendeved/evidence-library-core";
-import { itemTypeZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
 
 import { isPublicTopLevelItem } from "@/lib/admin/item-fields";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
@@ -15,6 +14,7 @@ import {
 	publicationSyncState,
 } from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
+import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
@@ -126,18 +126,6 @@ function creatorNames(creators: ItemRow["creators"]) {
 	);
 }
 
-function institutionValues(parent: ItemRow) {
-	const zoteroField = itemTypeZoteroFieldName(
-		parent.itemType[0]!.toLowerCase() + parent.itemType.slice(1),
-		"publisher",
-	);
-	return ["institution", "organization", "university"].includes(
-		zoteroField ?? "",
-	)
-		? splitValues(parent.publisher)
-		: [];
-}
-
 function fullTextPages(value: string | null) {
 	if (!value?.trim()) return [];
 	const pages: Array<{ page: number; text: string }> = [];
@@ -206,7 +194,9 @@ function searchableValues(value: unknown): string[] {
 function metadataSearchValues(row: ItemRow) {
 	return uniqueSorted(
 		Object.entries(cleanRow(row)).flatMap(([field, value]) =>
-			NON_METADATA_SEARCH_FIELDS.has(field) ? [] : searchableValues(value),
+			NON_METADATA_SEARCH_FIELDS.has(field)
+				? []
+				: searchableValues(value),
 		),
 	);
 }
@@ -305,7 +295,13 @@ async function buildSearchProjectionPlanForKeys(
 		...activeParentKeys,
 		...children.map((child) => child.key),
 	];
-	const [tagRows, membershipRows, identifierRows, zenodoStateRows] =
+	const [
+		tagRows,
+		membershipRows,
+		institutionRows,
+		identifierRows,
+		zenodoStateRows,
+	] =
 		allDocumentItemKeys.length > 0
 			? await Promise.all([
 					database
@@ -327,6 +323,16 @@ async function buildSearchProjectionPlanForKeys(
 							asc(itemToCollection.collectionKey),
 						),
 					database
+						.select()
+						.from(itemInstitution)
+						.where(
+							inArray(itemInstitution.itemKey, activeParentKeys),
+						)
+						.orderBy(
+							asc(itemInstitution.itemKey),
+							asc(itemInstitution.institutionName),
+						),
+					database
 						.select({
 							doi: publicationIdentifier.doi,
 							itemKey: publicationIdentifier.itemKey,
@@ -338,7 +344,10 @@ async function buildSearchProjectionPlanForKeys(
 						.from(publicationIdentifier)
 						.where(
 							and(
-								inArray(publicationIdentifier.itemKey, activeParentKeys),
+								inArray(
+									publicationIdentifier.itemKey,
+									activeParentKeys,
+								),
 								eq(publicationIdentifier.isCurrent, true),
 							),
 						)
@@ -356,13 +365,16 @@ async function buildSearchProjectionPlanForKeys(
 						.from(publicationSyncState)
 						.where(
 							and(
-								inArray(publicationSyncState.itemKey, activeParentKeys),
+								inArray(
+									publicationSyncState.itemKey,
+									activeParentKeys,
+								),
 								eq(publicationSyncState.provider, "zenodo"),
 								eq(publicationSyncState.environment, "sandbox"),
 							),
 						),
 				])
-			: [[], [], [], []];
+			: [[], [], [], [], []];
 
 	const tagsByItem = new Map<string, string[]>();
 	for (const row of tagRows) {
@@ -375,6 +387,12 @@ async function buildSearchProjectionPlanForKeys(
 		const keys = collectionsByItem.get(row.itemKey) ?? [];
 		keys.push(row.collectionKey);
 		collectionsByItem.set(row.itemKey, keys);
+	}
+	const institutionsByItem = new Map<string, string[]>();
+	for (const row of institutionRows) {
+		const names = institutionsByItem.get(row.itemKey) ?? [];
+		names.push(row.institutionName);
+		institutionsByItem.set(row.itemKey, names);
 	}
 	const identifiersByItem = new Map<
 		string,
@@ -389,7 +407,10 @@ async function buildSearchProjectionPlanForKeys(
 		zenodoStateRows.map((row) => [row.itemKey, row]),
 	);
 	// Record links are a projection here: the item API re-reads them from PostgreSQL.
-	const linksByItem = await getPublicItemLinksForKeys(database, activeParentKeys);
+	const linksByItem = await getPublicItemLinksForKeys(
+		database,
+		activeParentKeys,
+	);
 	const childrenByParent = new Map<string, ItemRow[]>();
 	for (const child of children) {
 		if (!child.parentItem) continue;
@@ -445,7 +466,7 @@ async function buildSearchProjectionPlanForKeys(
 				deleted: parent.deleted ?? 0,
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,
-				institution: institutionValues(parent),
+				institution: institutionsByItem.get(parent.key) ?? [],
 				links: linksByItem.get(parent.key) ?? {
 					cites: [],
 					citedBy: [],

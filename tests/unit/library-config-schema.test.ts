@@ -492,12 +492,6 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"author location without author-country search",
-			(config: any) => {
-				config.search.authorCountry = false;
-			},
-		],
-		[
 			"years dropdown without years filter",
 			(config: any) => {
 				config.filters.years.enabled = false;

@@ -57,13 +57,8 @@ export function useFilters() {
 			scope: resolveRuntimeSearchScope(params.scope, search),
 			range: normalizeRuntimeYearRange(params.range, filters),
 			institution:
-				filters.institution.mode === "hidden"
-					? []
-					: params.institution,
+				filters.institution.mode === "hidden" ? [] : params.institution,
 			country: search.country ? params.country : [],
-			author_country: search.authorCountry
-				? params.author_country
-				: [],
 		}),
 		[filters, params, search],
 	);
@@ -76,7 +71,7 @@ export function useFilters() {
 				string,
 				string
 			>,
-		[rawSearchParams]
+		[rawSearchParams],
 	);
 
 	const pathname = usePathname();
@@ -95,14 +90,14 @@ export function useFilters() {
 			runtimeParams.collections.length === 1
 				? `/collections/${runtimeParams.collections[0]}/note`
 				: null,
-			fetcher
+			fetcher,
 		);
 
 	const handlePageChange = useCallback(
 		(newPage: number) => {
 			setParams({ page: newPage });
 		},
-		[setParams]
+		[setParams],
 	);
 
 	const handleSortChange = useCallback(
@@ -110,7 +105,7 @@ export function useFilters() {
 			const value = sort.values().next().value;
 			if (value) setParams({ sort: value });
 		},
-		[setParams]
+		[setParams],
 	);
 
 	const handleScopeChange = useCallback(
@@ -118,19 +113,19 @@ export function useFilters() {
 			const value = scope.values().next().value;
 			if (value) setParams({ scope: value });
 		},
-		[setParams]
+		[setParams],
 	);
 
 	const handleSearchChange = useCallback(
 		(text: string) => setParams({ search: text, page: 1 }),
-		[setParams]
+		[setParams],
 	);
 
 	const handleRangeChange = useCallback(
 		(start: string | null, end: string | null) => {
 			setParams({ range: [start, end].join(end !== null ? "-" : "") });
 		},
-		[setParams]
+		[setParams],
 	);
 
 	const handleCollectionSelect = useCallback(
@@ -141,7 +136,7 @@ export function useFilters() {
 				setParams({ collectionId });
 			}
 		},
-		[params.collectionId, setParams]
+		[params.collectionId, setParams],
 	);
 
 	const handleAuthorSelect = useCallback(
@@ -152,7 +147,7 @@ export function useFilters() {
 				setParams({ author });
 			}
 		},
-		[params.author, setParams]
+		[params.author, setParams],
 	);
 
 	const handleInstitutionSelect = useCallback(
@@ -160,13 +155,13 @@ export function useFilters() {
 			if (Array.isArray(institution)) {
 				setParams({
 					institution: Array.from(
-						new Set([...params.institution, ...institution])
+						new Set([...params.institution, ...institution]),
 					),
 				});
 			} else if (params.institution.includes(institution)) {
 				setParams({
 					institution: params.institution.filter(
-						(i) => i !== institution
+						(i) => i !== institution,
 					),
 				});
 			} else {
@@ -175,30 +170,30 @@ export function useFilters() {
 				});
 			}
 		},
-		[params.institution, setParams]
+		[params.institution, setParams],
 	);
 
-	const genericCountrySelect = useCallback(
-		(country: string | string[], key: "country" | "author_country") => {
-			const currentValues = params[key];
+	const handleCountrySelect = useCallback(
+		(country: string | string[]) => {
+			const currentValues = params.country;
 			if (Array.isArray(country)) {
 				const lastOne = country[country.length - 1];
 				if (currentValues.includes(lastOne)) {
 					setParams({
-						[key]: currentValues.filter(
-							(c) => c !== lastOne && !c.startsWith(lastOne)
+						country: currentValues.filter(
+							(c) => c !== lastOne && !c.startsWith(lastOne),
 						),
 					});
 				} else {
 					setParams({
-						[key]: Array.from(
-							new Set([...currentValues, ...country])
+						country: Array.from(
+							new Set([...currentValues, ...country]),
 						),
 					});
 				}
 			} else if (currentValues.includes(country)) {
 				setParams({
-					[key]: currentValues.filter((c) => {
+					country: currentValues.filter((c) => {
 						const sameCountry = c === country;
 						const isDescendant =
 							!sameCountry && c.startsWith(country);
@@ -206,24 +201,10 @@ export function useFilters() {
 					}),
 				});
 			} else {
-				setParams({ [key]: [...currentValues, country] });
+				setParams({ country: [...currentValues, country] });
 			}
 		},
-		[params, setParams]
-	);
-
-	const handleCountrySelect = useCallback(
-		(country: string | string[]) => {
-			genericCountrySelect(country, "country");
-		},
-		[genericCountrySelect]
-	);
-
-	const handleAuthorCountrySelect = useCallback(
-		(country: string | string[]) => {
-			genericCountrySelect(country, "author_country");
-		},
-		[genericCountrySelect]
+		[params.country, setParams],
 	);
 
 	const handleClearFilters = useCallback(() => {
@@ -232,17 +213,14 @@ export function useFilters() {
 			institution: [],
 			country: [],
 			collections: [],
-			author_country: [],
 			range: "",
 		});
 	}, [setParams]);
 
 	const { data: facetsData } = useSWR<FacetsGetResponse>(
-		filterSurfaceEnabled
-			? buildFacetsQuery(runtimeParams)
-			: null,
+		filterSurfaceEnabled ? buildFacetsQuery(runtimeParams) : null,
 		fetcher,
-		SWR_OPTIONS
+		SWR_OPTIONS,
 	);
 
 	const {
@@ -273,8 +251,7 @@ export function useFilters() {
 						? getDescendantKeys(collectionToDeselect)
 						: [];
 					newSelectedCollections = selectedCollections.filter(
-						(k: string) =>
-							k !== key && !descendantKeys.includes(k)
+						(k: string) => k !== key && !descendantKeys.includes(k),
 					);
 				} else {
 					newSelectedCollections = [...selectedCollections, key];
@@ -283,7 +260,7 @@ export function useFilters() {
 
 			setParams({ collections: newSelectedCollections, page: 1 });
 		},
-		[selectedCollections, hierarchy, setParams]
+		[selectedCollections, hierarchy, setParams],
 	);
 
 	return {
@@ -299,7 +276,6 @@ export function useFilters() {
 		handleAuthorSelect,
 		handleInstitutionSelect,
 		handleCountrySelect,
-		handleAuthorCountrySelect,
 		handleClearFilters,
 		handleCheckboxChange,
 		collectionsData,
