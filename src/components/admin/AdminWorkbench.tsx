@@ -2069,7 +2069,7 @@ export default function AdminWorkbench({
 					</div>
 					<div
 						aria-label="Library tools"
-						className="flex h-10 items-center gap-0.5 rounded-xl bg-black/[0.035] p-1 dark:bg-white/[0.035]"
+						className="flex h-10 items-center rounded-xl bg-black/[0.035] dark:bg-white/[0.035]"
 						role="group"
 					>
 						<AdminSearchIndexStatus
@@ -2086,7 +2086,7 @@ export default function AdminWorkbench({
 						<Tooltip content="Refresh">
 							<Button
 								aria-label="Refresh"
-								className="hidden h-8 min-h-8 w-8 rounded-lg text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								className="hidden h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
 								isIconOnly
 								onPress={() => void refreshCurrent()}
 								size="xs"
@@ -2103,7 +2103,7 @@ export default function AdminWorkbench({
 						<Tooltip content="Log out">
 							<Button
 								aria-label="Log out"
-								className="h-8 min-h-8 w-8 rounded-lg text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								className="h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
 								isIconOnly
 								onPress={() => logoutFormRef.current?.requestSubmit()}
 								size="xs"

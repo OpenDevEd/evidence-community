@@ -70,7 +70,7 @@ export default function ThemeSwitcher({
 			className={twMerge(
 				"flex items-center justify-center gap-2",
 				toolbar &&
-					"h-8 min-h-8 w-8 rounded-lg text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80",
+					"h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80",
 			)}
 			disableRipple
 			isIconOnly={toolbar}
