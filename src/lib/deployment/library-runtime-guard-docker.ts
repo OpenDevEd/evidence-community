@@ -24,6 +24,7 @@ const guardPort = 3000;
 const guardLabel = "org.opendeved.evidence-library.guard";
 const guardApplicationLabel = `${guardLabel}.application`;
 const guardRevisionLabel = `${guardLabel}.revision`;
+const guardProbeOriginLabel = `${guardLabel}.probe-origin`;
 const composeProjectLabel = "com.docker.compose.project";
 const composeServiceLabel = "com.docker.compose.service";
 const managedLabel = "coolify.managed";
@@ -74,6 +75,24 @@ function requireString(value: unknown, maximumBytes = 8_192) {
 		);
 	}
 	return value;
+}
+
+function readHttpsOrigin(value: unknown) {
+	if (typeof value !== "string") return null;
+	try {
+		const url = new URL(value);
+		return url.protocol === "https:" &&
+			!url.username &&
+			!url.password &&
+			!url.port &&
+			url.pathname === "/" &&
+			!url.search &&
+			!url.hash
+			? url.origin
+			: null;
+	} catch {
+		return null;
+	}
 }
 
 function requireLabels(value: unknown) {
@@ -234,7 +253,10 @@ function readConfigFromTar(bytes: Buffer) {
 	);
 }
 
-function requireConfigRevision(configJson: string, expectedRevision: string) {
+function requireConfigProbeOrigin(
+	configJson: string,
+	expectedRevision: string,
+) {
 	try {
 		const config = requireRecord(JSON.parse(configJson));
 		if (config.revision !== expectedRevision) {
@@ -243,6 +265,19 @@ function requireConfigRevision(configJson: string, expectedRevision: string) {
 				"The active Evidence Library revision does not match the requested revision.",
 			);
 		}
+		const baseUrl = requireString(
+			requireRecord(config.identity).baseUrl,
+			2_048,
+		);
+		const probeOrigin = readHttpsOrigin(baseUrl);
+		if (!probeOrigin) {
+			return guardError(
+				"runtime_config_invalid",
+				"The active Evidence Library canonical origin is invalid.",
+				502,
+			);
+		}
+		return probeOrigin;
 	} catch (error: unknown) {
 		if (error instanceof LibraryRuntimeGuardError) throw error;
 		return guardError(
@@ -456,12 +491,16 @@ export function createDockerLibraryRuntimeGuard(
 		const configJson = readConfigFromTar(
 			await readBoundedBytes(archiveResponse, maximumDockerArchiveBytes),
 		);
-		requireConfigRevision(configJson, input.revision);
+		const probeOrigin = requireConfigProbeOrigin(
+			configJson,
+			input.revision,
+		);
 		return {
 			configJson,
 			ipAddress: requireNetworkIp(container.networks, "coolify"),
 			networks: requireApplicationNetworks(container.networks),
 			port: guardPort,
+			probeOrigin,
 		};
 	};
 
@@ -470,11 +509,19 @@ export function createDockerLibraryRuntimeGuard(
 		input: LibraryRuntimeRouteInput,
 	) => {
 		const labels = requireLabels(container.config.Labels);
+		const probeOrigin = readHttpsOrigin(labels[guardProbeOriginLabel]);
+		if (!probeOrigin) {
+			return guardError(
+				"runtime_guard_conflict",
+				"An unrelated container is using the Evidence Library guard name.",
+			);
+		}
 		if (
 			labels[guardLabel] !== "true" ||
 			labels[guardApplicationLabel] !== input.applicationUuid ||
 			labels[LIBRARY_COMPOSE_RELEASE_LABEL] !== input.commit ||
 			labels[guardRevisionLabel] !== input.revision ||
+			probeOrigin !== labels[guardProbeOriginLabel] ||
 			container.config.Image !== input.runtimeImage
 		) {
 			return guardError(
@@ -482,7 +529,7 @@ export function createDockerLibraryRuntimeGuard(
 				"An unrelated container is using the Evidence Library guard name.",
 			);
 		}
-		return container;
+		return { ...container, probeOrigin };
 	};
 
 	const requireOwnedGuard = (
@@ -490,16 +537,18 @@ export function createDockerLibraryRuntimeGuard(
 		applicationUuid: string,
 	) => {
 		const labels = requireLabels(container.config.Labels);
+		const probeOrigin = readHttpsOrigin(labels[guardProbeOriginLabel]);
 		if (
 			labels[guardLabel] !== "true" ||
-			labels[guardApplicationLabel] !== applicationUuid
+			labels[guardApplicationLabel] !== applicationUuid ||
+			probeOrigin !== labels[guardProbeOriginLabel]
 		) {
 			return guardError(
 				"runtime_guard_conflict",
 				"An unrelated container is using the Evidence Library guard name.",
 			);
 		}
-		return container;
+		return { ...container, probeOrigin };
 	};
 
 	const probeGuard = async (
@@ -514,14 +563,16 @@ export function createDockerLibraryRuntimeGuard(
 			return null;
 		}
 		try {
+			const probeOrigin = readHttpsOrigin(
+				requireLabels(container.config.Labels)[guardProbeOriginLabel],
+			);
+			if (!probeOrigin) return null;
 			const response = await fetchRequest(
 				`http://${ipAddress}:${guardPort}${LIBRARY_CONFIG_HEALTH_PATH}`,
 				{
 					headers: {
 						Accept: "application/json",
-						...getLibraryConfigProbeHeaders(
-							input.platformOrigins[0],
-						),
+						...getLibraryConfigProbeHeaders(probeOrigin),
 					},
 					redirect: "error",
 					signal: AbortSignal.timeout(2_000),
@@ -536,7 +587,11 @@ export function createDockerLibraryRuntimeGuard(
 			) {
 				return null;
 			}
-			return { ipAddress, port: guardPort };
+			return {
+				ipAddress,
+				port: guardPort,
+				probeOrigin,
+			};
 		} catch {
 			return null;
 		}
@@ -590,6 +645,7 @@ export function createDockerLibraryRuntimeGuard(
 			[guardLabel]: "true",
 			[guardApplicationLabel]: input.applicationUuid,
 			[guardRevisionLabel]: input.revision,
+			[guardProbeOriginLabel]: input.source.probeOrigin,
 			[LIBRARY_COMPOSE_RELEASE_LABEL]: input.commit,
 		};
 		const response = await request(
@@ -696,6 +752,7 @@ export function createDockerLibraryRuntimeGuard(
 			return {
 				ipAddress: requireNetworkIp(owned.networks, "coolify"),
 				port: guardPort,
+				probeOrigin: owned.probeOrigin,
 			};
 		},
 

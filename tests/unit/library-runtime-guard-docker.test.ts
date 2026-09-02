@@ -8,6 +8,7 @@ const containerId = "c".repeat(64);
 const guardId = "d".repeat(64);
 const commit = "a".repeat(40);
 const revision = "library-7";
+const canonicalOrigin = "https://evidence.example.org";
 const privateNetwork = `${applicationUuid}_private`;
 const runtimeImage = `ghcr.io/opendeved/evidence-library-runtime@sha256:${"b".repeat(64)}`;
 const input = {
@@ -73,6 +74,8 @@ function guardInspection() {
 				"org.opendeved.evidence-library.guard.application":
 					applicationUuid,
 				"org.opendeved.evidence-library.guard.revision": revision,
+				"org.opendeved.evidence-library.guard.probe-origin":
+					canonicalOrigin,
 				[LIBRARY_COMPOSE_RELEASE_LABEL]: commit,
 			},
 		},
@@ -149,7 +152,7 @@ function dockerFetchFixture(configJson: string) {
 			if (url.hostname === "172.19.0.10") {
 				if (
 					new Headers(init?.headers).get("x-forwarded-host") !==
-					"library.opendev.space"
+					new URL(canonicalOrigin).host
 				) {
 					return new Response(null, {
 						headers: {
@@ -183,7 +186,10 @@ function dockerFetchFixture(configJson: string) {
 
 describe("Docker Evidence Library runtime guard", () => {
 	it("copies the exact active config and starts one isolated web guard", async () => {
-		const configJson = JSON.stringify({ revision });
+		const configJson = JSON.stringify({
+			identity: { baseUrl: canonicalOrigin },
+			revision,
+		});
 		const fixture = dockerFetchFixture(configJson);
 		const docker = createDockerLibraryRuntimeGuard({
 			dockerProxyUrl: "http://docker-proxy:2375",
@@ -197,6 +203,7 @@ describe("Docker Evidence Library runtime guard", () => {
 			ipAddress: "172.19.0.9",
 			networks: [applicationUuid, privateNetwork, "coolify"],
 			port: 3000,
+			probeOrigin: canonicalOrigin,
 		});
 		await expect(
 			docker.ensureGuard({
@@ -204,7 +211,11 @@ describe("Docker Evidence Library runtime guard", () => {
 				configPath: `/runtime/guards/${applicationUuid}/library.json`,
 				source,
 			}),
-		).resolves.toEqual({ ipAddress: "172.19.0.10", port: 3000 });
+		).resolves.toEqual({
+			ipAddress: "172.19.0.10",
+			port: 3000,
+			probeOrigin: canonicalOrigin,
+		});
 		expect(fixture.createBody).toMatchObject({
 			Cmd: ["node_modules/.bin/next", "start"],
 			Env: ["LIBRARY_CONFIG_PATH=/runtime/config/library.json"],
@@ -226,6 +237,10 @@ describe("Docker Evidence Library runtime guard", () => {
 		expect(fixture.createBody?.Labels).not.toHaveProperty(
 			"com.docker.compose.project",
 		);
+		expect(fixture.createBody?.Labels).toMatchObject({
+			"org.opendeved.evidence-library.guard.probe-origin":
+				canonicalOrigin,
+		});
 		expect(fixture.createBody?.Labels).not.toHaveProperty(
 			"coolify.managed",
 		);

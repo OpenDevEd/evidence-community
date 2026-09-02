@@ -47,17 +47,20 @@ function fakeDocker(): LibraryRuntimeGuardDocker {
 		ensureGuard: vi.fn(async () => ({
 			ipAddress: "172.19.0.41",
 			port: 3000,
+			probeOrigin: "https://library.example.org",
 		})),
 		readApplicationWeb: vi.fn(async () => ({
 			configJson: '{"revision":"library-7"}\n',
 			ipAddress: "172.19.0.40",
 			networks: [applicationUuid, "coolify"],
 			port: 3000,
+			probeOrigin: "https://library.example.org",
 		})),
 		readGuard: vi.fn(async () => null),
 		readOwnedGuard: vi.fn(async () => ({
 			ipAddress: "172.19.0.41",
 			port: 3000,
+			probeOrigin: "https://old-library.example.org",
 		})),
 		removeGuard: vi.fn(async () => undefined),
 	};
@@ -134,6 +137,7 @@ describe("Evidence Library runtime guard", () => {
 		docker.readGuard = vi.fn(async () => ({
 			ipAddress: "172.19.0.41",
 			port: 3000,
+			probeOrigin: "https://library.example.org",
 		}));
 		const { manager, routePath } = await fixture(docker);
 
@@ -213,13 +217,25 @@ describe("Evidence Library runtime guard", () => {
 				maintenanceUrl: "http://runtime-verifier:3001",
 				platformOrigins: input.platformOrigins,
 				revision: input.revision,
-				fallbackTarget: { ipAddress: "172.19.0.41", port: 3000 },
-				target: { ipAddress: "172.19.0.40", port: 3000 },
+				fallbackTarget: {
+					ipAddress: "172.19.0.41",
+					port: 3000,
+					probeOrigin: "https://old-library.example.org",
+				},
+				target: {
+					ipAddress: "172.19.0.40",
+					port: 3000,
+					probeOrigin: "https://library.example.org",
+				},
 			}),
 		);
 		const routeMarker = `ode-el-${applicationUuid}-route-marker`;
-		const expectedHealthHeaders = {
-			"X-Forwarded-Host": "library.opendev.space",
+		const expectedTargetHealthHeaders = {
+			"X-Forwarded-Host": "library.example.org",
+			"X-Forwarded-Proto": "https",
+		};
+		const expectedGuardHealthHeaders = {
+			"X-Forwarded-Host": "old-library.example.org",
 			"X-Forwarded-Proto": "https",
 		};
 
@@ -261,10 +277,10 @@ describe("Evidence Library runtime guard", () => {
 		expect(
 			route.http.services[`ode-el-${applicationUuid}-upstream`]
 				.loadBalancer.healthCheck.headers,
-		).toEqual(expectedHealthHeaders);
+		).toEqual(expectedTargetHealthHeaders);
 		expect(
 			route.http.services[`ode-el-${applicationUuid}-guard`].loadBalancer
 				.healthCheck.headers,
-		).toEqual(expectedHealthHeaders);
+		).toEqual(expectedGuardHealthHeaders);
 	});
 });
