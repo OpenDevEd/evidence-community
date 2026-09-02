@@ -513,7 +513,12 @@ export function createDockerLibraryRuntimeGuard(
 			const response = await fetchRequest(
 				`http://${ipAddress}:${guardPort}/api/library-config/health`,
 				{
-					headers: { Accept: "application/json" },
+					headers: {
+						Accept: "application/json",
+						"X-Forwarded-Host": new URL(input.platformOrigins[0])
+							.host,
+						"X-Forwarded-Proto": "https",
+					},
 					redirect: "error",
 					signal: AbortSignal.timeout(2_000),
 				},
