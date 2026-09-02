@@ -2110,19 +2110,26 @@ export default function AdminWorkbench({
 							<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
 						</Button>
 					</Tooltip>
+					<div
+						aria-label="Add records"
+						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
+						role="group"
+					>
 					<Tooltip content="Import records">
 						<Button
 							aria-label="Import records"
-							className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+							className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0"
+							color="accent"
 							isDisabled={busy}
 							isIconOnly
 							onPress={() => setImportOpen(true)}
 							size="xs"
-							variant="transparent"
+							variant="solid"
 						>
 							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} />
 						</Button>
 					</Tooltip>
+					<span aria-hidden className="h-10 w-px shrink-0 bg-white/25" />
 					<Popover
 						disableAnimation
 						isOpen={newItemOpen}
@@ -2135,7 +2142,7 @@ export default function AdminWorkbench({
 						<PopoverTrigger>
 							<Button
 								aria-label="New item"
-								className="h-10 min-h-10 w-10 !min-w-10 rounded-xl px-0 font-semibold shadow-sm shadow-accent/10 lg:w-auto lg:!min-w-0 lg:px-3"
+								className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0 font-semibold lg:w-auto lg:!min-w-0 lg:px-3"
 								color="accent"
 								size="xs"
 								variant="solid"
@@ -2183,6 +2190,7 @@ export default function AdminWorkbench({
 							</div>
 						</PopoverContent>
 					</Popover>
+					</div>
 				</div>
 			</header>
 
