@@ -1,7 +1,7 @@
 import { hostname } from "node:os";
 
+import { openLibraryDatabaseProcess } from "../src/config/library-config/process";
 import { loadLibraryConfig } from "../src/config/library-config/source";
-import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import { parseSourceWritebackCommand } from "../src/lib/source-writeback/command";
 import type { SourceWritebackProcessResult } from "../src/lib/source-writeback/consumer";
@@ -29,23 +29,8 @@ async function main() {
 		process.argv.slice(2),
 		defaultWorkerId,
 	);
-	const config = await loadLibraryConfig();
-	const databaseResource = createPostgresDatabaseResource(
-		config.services.database.url,
-	);
-	const abortController = new AbortController();
-	let signalCount = 0;
-	const stop = () => {
-		signalCount += 1;
-		if (signalCount === 1) {
-			abortController.abort();
-			return;
-		}
-		process.exit(130);
-	};
-	process.on("SIGINT", stop);
-	process.on("SIGTERM", stop);
-
+	const runtimeProcess = await openLibraryDatabaseProcess();
+	const { abortController, config, databaseResource } = runtimeProcess;
 	try {
 		await reconcileConfiguredSources(
 			databaseResource.database,
@@ -85,9 +70,7 @@ async function main() {
 			process.exitCode = 1;
 		}
 	} finally {
-		process.off("SIGINT", stop);
-		process.off("SIGTERM", stop);
-		await databaseResource.dispose();
+		await runtimeProcess.close();
 	}
 }
 

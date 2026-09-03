@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { loadLibraryConfig } from "../src/config/library-config/source";
+import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { createSupabaseFileStorage } from "../src/lib/admin/file-storage";
 import {
@@ -61,20 +61,21 @@ function parseCommand(args: string[]) {
 }
 
 function errorMessage(error: unknown) {
-	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+	return error instanceof Error
+		? `${error.name}: ${error.message}`
+		: String(error);
 }
 
 async function main() {
 	const command = parseCommand(process.argv.slice(2));
-	const config = await loadLibraryConfig();
+	const configProcess = await openLibraryConfigProcess();
+	const { abortController, config } = configProcess;
 	const instanceId = randomUUID();
 	const instancePath = resolvePublicationWorkerInstancePath();
-	const resource = createPostgresDatabaseResource(config.services.database.url);
+	const resource = createPostgresDatabaseResource(
+		config.services.database.url,
+	);
 	const storage = createSupabaseFileStorage(config.services.storage);
-	const abortController = new AbortController();
-	const stop = () => abortController.abort();
-	process.once("SIGINT", stop);
-	process.once("SIGTERM", stop);
 	let ownershipLost = false;
 	let claimedJobs = 0;
 	let succeededJobs = 0;
@@ -88,16 +89,21 @@ async function main() {
 			leaseSeconds: PUBLICATION_WORKER_LEASE_SECONDS,
 		});
 	} catch (error) {
-		process.off("SIGINT", stop);
-		process.off("SIGTERM", stop);
 		await resource.dispose();
+		configProcess.close();
 		throw error;
 	}
-	const initialProgress = publicationWorkerProgressSchema.parse(registered.result);
+	const initialProgress = publicationWorkerProgressSchema.parse(
+		registered.result,
+	);
 	try {
 		await writePublicationWorkerInstance(instancePath, instanceId);
-		if ((await readPublicationWorkerInstance(instancePath)) !== instanceId) {
-			throw new Error("Publication worker instance file could not be verified");
+		if (
+			(await readPublicationWorkerInstance(instancePath)) !== instanceId
+		) {
+			throw new Error(
+				"Publication worker instance file could not be verified",
+			);
 		}
 	} catch (error) {
 		const failure = errorMessage(error);
@@ -108,11 +114,14 @@ async function main() {
 			succeededJobs,
 			failedJobs,
 			failure,
-			progress: { ...initialProgress, stage: "stopped", lastError: failure },
+			progress: {
+				...initialProgress,
+				stage: "stopped",
+				lastError: failure,
+			},
 		});
-		process.off("SIGINT", stop);
-		process.off("SIGTERM", stop);
 		await resource.dispose();
+		configProcess.close();
 		throw error;
 	}
 	const reporter = createWorkerStateReporter({
@@ -130,7 +139,10 @@ async function main() {
 			});
 		},
 	});
-	const report = async (progress: PublicationWorkerProgress, force = false) => {
+	const report = async (
+		progress: PublicationWorkerProgress,
+		force = false,
+	) => {
 		try {
 			await reporter.report(progress, force);
 		} catch (error) {
@@ -143,7 +155,9 @@ async function main() {
 	};
 	const heartbeatTimer = setInterval(() => {
 		void report(reporter.current(), true).catch((error) => {
-			console.error(`Publication worker heartbeat failed: ${errorMessage(error)}`);
+			console.error(
+				`Publication worker heartbeat failed: ${errorMessage(error)}`,
+			);
 		});
 	}, 5_000);
 	let fatalError: unknown = null;
@@ -166,7 +180,8 @@ async function main() {
 									...reporter.current(),
 									stage,
 									currentProvider:
-										stage === "crossref" || stage === "zenodo"
+										stage === "crossref" ||
+										stage === "zenodo"
 											? stage
 											: null,
 								},
@@ -244,8 +259,6 @@ async function main() {
 		throw error;
 	} finally {
 		clearInterval(heartbeatTimer);
-		process.off("SIGINT", stop);
-		process.off("SIGTERM", stop);
 		try {
 			await reporter.flush();
 			if (!ownershipLost) {
@@ -280,8 +293,11 @@ async function main() {
 			}
 		} catch (error) {
 			if (!fatalError) throw error;
-			console.error(`Publication worker cleanup failed: ${errorMessage(error)}`);
+			console.error(
+				`Publication worker cleanup failed: ${errorMessage(error)}`,
+			);
 		} finally {
+			configProcess.close();
 			await resource.dispose();
 		}
 	}

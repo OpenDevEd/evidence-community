@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -352,6 +353,29 @@ async function requireHttpSuccess(url: string, description: string) {
 	return response;
 }
 
+async function requireConfigurationWrite(
+	url: string,
+	machineCredential: string,
+	method: "DELETE" | "PUT",
+	body: unknown,
+) {
+	const response = await fetch(url, {
+		body: JSON.stringify(body),
+		headers: {
+			authorization: `Bearer ${machineCredential}`,
+			"content-type": "application/json",
+		},
+		method,
+	});
+	const responseBody = await response.text();
+	assert.equal(response.status, 200, responseBody);
+	return JSON.parse(responseBody) as {
+		revision: string;
+		sourceSha256?: string;
+		status: "active";
+	};
+}
+
 async function requireMethodNotAllowed(url: string, description: string) {
 	const response = await fetch(url, { method: "POST", redirect: "manual" });
 	await response.body?.cancel();
@@ -410,6 +434,22 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			libraryComposeArguments(libraryComposeProject, ...args),
 			environment,
 		);
+	const readComposeProcesses = () =>
+		capture(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"ps",
+				"--all",
+				"--format",
+				"{{json .}}",
+			),
+			environment,
+		)
+			.trim()
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => JSON.parse(line) as ComposeProcess);
 	captureCompose(
 		"exec",
 		"--no-TTY",
@@ -429,21 +469,7 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			"180",
 			"--no-build",
 		);
-		const processes = capture(
-			"docker",
-			libraryComposeArguments(
-				libraryComposeProject,
-				"ps",
-				"--all",
-				"--format",
-				"{{json .}}",
-			),
-			environment,
-		)
-			.trim()
-			.split("\n")
-			.map((line) => JSON.parse(line) as ComposeProcess);
-		requireRepositoryComposeServicesReady(processes);
+		requireRepositoryComposeServicesReady(readComposeProcesses());
 
 		const baseUrl = `http://127.0.0.1:${libraryComposePort}`;
 		const healthResponse = await requireHttpSuccess(
@@ -454,6 +480,102 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 		assert.equal(health.state, "active");
 		assert.equal(health.active?.revision, config.revision);
 		assert.equal(health.rejected, null);
+		const appServices = [
+			"web",
+			"search-indexer",
+			"source-sync",
+			"source-writeback",
+			"publication-worker",
+		] as const;
+		const containerState = (service: (typeof appServices)[number]) => {
+			const id = capture(
+				"docker",
+				libraryComposeArguments(
+					libraryComposeProject,
+					"ps",
+					"--quiet",
+					service,
+				),
+				environment,
+			).trim();
+			assert.ok(id, `${service} container is missing`);
+			const [inspection] = JSON.parse(
+				capture("docker", ["inspect", id], environment),
+			) as Array<{
+				Id: string;
+				RestartCount: number;
+				State: { Health?: { Status?: string }; Status: string };
+			}>;
+			assert.ok(inspection, `${service} container inspection is empty`);
+			return {
+				containerId: inspection.Id,
+				health: inspection.State.Health?.Status ?? "none",
+				restartCount: inspection.RestartCount,
+				status: inspection.State.Status,
+			};
+		};
+		const initialContainers = Object.fromEntries(
+			appServices.map((service) => [service, containerState(service)]),
+		) as Record<
+			(typeof appServices)[number],
+			ReturnType<typeof containerState>
+		>;
+		const activated = structuredClone(config);
+		activated.revision = `${config.revision}-http-activated`;
+		activated.updatedAt = timestampAfter(config.updatedAt, 60_000);
+		activated.identity.name = "Repository Compose Live Activation";
+		const serialized = JSON.stringify(activated);
+		const activation = await requireConfigurationWrite(
+			`${baseUrl}/api/openscholar/configuration`,
+			config.authentication.openScholar.machineCredential,
+			"PUT",
+			activated,
+		);
+		assert.deepEqual(activation, {
+			revision: activated.revision,
+			sourceSha256: createHash("sha256").update(serialized).digest("hex"),
+			status: "active",
+		});
+		await waitForRepositoryComposeRevision(baseUrl, activated.revision);
+		await waitForRepositoryComposeWorkerRestarts(
+			appServices.slice(1),
+			initialContainers,
+			containerState,
+		);
+		requireRepositoryComposeServicesReady(readComposeProcesses());
+		assert.deepEqual(containerState("web"), initialContainers.web);
+		const activatedPage = await requireHttpSuccess(
+			`${baseUrl}/${config.localization.defaultLocale}/lib`,
+			"Activated public library",
+		);
+		assert.ok(
+			(await activatedPage.text()).includes(activated.identity.name),
+		);
+
+		const beforeRestore = Object.fromEntries(
+			appServices.map((service) => [service, containerState(service)]),
+		) as Record<
+			(typeof appServices)[number],
+			ReturnType<typeof containerState>
+		>;
+		const restored = await requireConfigurationWrite(
+			`${baseUrl}/api/openscholar/configuration`,
+			config.authentication.openScholar.machineCredential,
+			"DELETE",
+			{ revision: config.revision },
+		);
+		assert.deepEqual(restored, {
+			revision: config.revision,
+			status: "active",
+		});
+		await waitForRepositoryComposeRevision(baseUrl, config.revision);
+		await waitForRepositoryComposeWorkerRestarts(
+			appServices.slice(1),
+			beforeRestore,
+			containerState,
+		);
+		requireRepositoryComposeServicesReady(readComposeProcesses());
+		assert.deepEqual(containerState("web"), initialContainers.web);
 		await requireHttpSuccess(
 			`${baseUrl}/${config.localization.defaultLocale}/lib`,
 			"Public library",
@@ -508,6 +630,56 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 	);
 	console.log(
 		`Repository Compose started revision ${config.revision} and stopped in ${((Date.now() - startedAt) / 1_000).toFixed(1)} seconds.`,
+	);
+}
+
+async function waitForRepositoryComposeRevision(
+	baseUrl: string,
+	revision: string,
+) {
+	const deadline = Date.now() + 30_000;
+	while (Date.now() < deadline) {
+		if ((await repositoryComposeRevision(baseUrl)) === revision) return;
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+	throw new Error(`Repository Compose did not serve revision ${revision}`);
+}
+
+async function repositoryComposeRevision(baseUrl: string) {
+	const response = await fetch(`${baseUrl}/api/library-config/health`);
+	if (!response.ok) return null;
+	const health = (await response.json()) as RuntimeConfigHealth;
+	return health.state === "active" ? health.active?.revision : null;
+}
+
+async function waitForRepositoryComposeWorkerRestarts<T extends string>(
+	services: readonly T[],
+	previous: Record<T | "web", { containerId: string; restartCount: number }>,
+	read: (service: T) => {
+		containerId: string;
+		health: string | undefined;
+		restartCount: number;
+		status: string;
+	},
+) {
+	const deadline = Date.now() + 30_000;
+	while (Date.now() < deadline) {
+		if (
+			services.every((service) => {
+				const current = read(service);
+				return (
+					current.containerId === previous[service].containerId &&
+					current.restartCount > previous[service].restartCount &&
+					current.status === "running" &&
+					(current.health === "none" || current.health === "healthy")
+				);
+			})
+		)
+			return;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(
+		"Repository Compose workers did not restart for the new configuration",
 	);
 }
 
@@ -1087,18 +1259,38 @@ async function waitForOutboxProcessed(
 	throw new Error(`Timed out waiting for ${description}`);
 }
 
-async function meilisearchHasDocument(profile: Profile, key: string) {
+async function readMeilisearchDocument(profile: Profile, key: string) {
 	const response = await fetch(
-		`http://127.0.0.1:${profile.meilisearchPort}/indexes/items/documents/${key}`,
+		`http://127.0.0.1:${profile.meilisearchPort}/indexes/${profile.config.services.search.index}/documents/${key}`,
 		{ headers: { Authorization: "Bearer acceptance-master-key" } },
 	);
-	if (response.status === 404) return false;
+	if (response.status === 404) return null;
 	if (!response.ok) {
 		throw new Error(
 			`${profile.name} Meilisearch document check failed: ${response.status} ${await response.text()}`,
 		);
 	}
-	return true;
+	return (await response.json()) as { title?: unknown };
+}
+
+async function meilisearchHasDocument(profile: Profile, key: string) {
+	return (await readMeilisearchDocument(profile, key)) !== null;
+}
+
+async function waitForIndexedItemTitle(
+	profile: Profile,
+	key: string,
+	title: string,
+) {
+	const deadline = Date.now() + 90_000;
+	while (Date.now() < deadline) {
+		if ((await readMeilisearchDocument(profile, key))?.title === title)
+			return;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(
+		`Timed out waiting for ${profile.name} search to index ${key} as ${title}`,
+	);
 }
 
 async function deleteMeilisearchDocument(profile: Profile, key: string) {
@@ -1605,6 +1797,11 @@ async function verifyPublicationAdminInterface(profile: Profile) {
 	runPublicationBrowserPhase(profile, "crossref-settle");
 	runPublicationBrowserPhase(profile, "edit");
 	await makeCrossrefVerificationDue("PUBUIA23");
+	await waitForIndexedItemTitle(
+		profile,
+		"PUBUIA23",
+		"Amber DOI admin interface report — Edited",
+	);
 	runPublicationBrowserPhase(profile, "edit-settle");
 	runPublicationBrowserPhase(profile, "zenodo");
 

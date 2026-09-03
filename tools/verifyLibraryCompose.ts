@@ -300,25 +300,36 @@ function requireSearchIndexer(services: Record<string, ComposeService>) {
 	);
 }
 
-function requireRuntimeService(name: string, service: ComposeService) {
-	requireCondition(service, `${name} service is missing`);
-	requireCondition(
-		service.image === runtimeImage,
-		`${name} must use the requested runtime image`,
-	);
+function requireRuntimeConfig(name: string, service: ComposeService) {
 	requireCondition(
 		service.environment?.LIBRARY_CONFIG_PATH ===
 			"/runtime/config/library.json",
 		`${name} must use the shared runtime configuration`,
 	);
 	requireCondition(
+		service.environment?.LIBRARY_CONFIG_SEED_PATH ===
+			"/runtime/config-seed/library.json",
+		`${name} must use the image configuration seed`,
+	);
+	requireCondition(
 		service.configs?.some(
 			(config) =>
 				config.source === "library-config" &&
-				config.target === "/runtime/config/library.json",
+				config.target === "/runtime/config-seed/library.json",
 		),
-		`${name} must mount the shared runtime configuration`,
+		`${name} must mount the runtime configuration seed`,
 	);
+	requireCondition(
+		service.volumes?.some(
+			(volume) =>
+				volume.source === "library-config-data" &&
+				volume.target === "/runtime/config",
+		),
+		`${name} must mount the writable runtime configuration`,
+	);
+}
+
+function requireRuntimeNetwork(name: string, service: ComposeService) {
 	requireCondition(
 		!service.ports?.length,
 		`${name} must not publish a host port`,
@@ -328,6 +339,16 @@ function requireRuntimeService(name: string, service: ComposeService) {
 			JSON.stringify(["coolify", "private"]),
 		`${name} must join the private and shared database networks`,
 	);
+}
+
+function requireRuntimeService(name: string, service: ComposeService) {
+	requireCondition(service, `${name} service is missing`);
+	requireCondition(
+		service.image === runtimeImage,
+		`${name} must use the requested runtime image`,
+	);
+	requireRuntimeConfig(name, service);
+	requireRuntimeNetwork(name, service);
 }
 
 function requireRuntimeServices(services: Record<string, ComposeService>) {
@@ -380,6 +401,10 @@ function requireRenderedConfig(model: ComposeModel) {
 }
 
 function requireNamedStorage(model: ComposeModel) {
+	requireCondition(
+		Boolean(model.volumes?.["library-config-data"]),
+		"Named runtime configuration volume is missing",
+	);
 	requireCondition(
 		Boolean(model.volumes?.["meilisearch-data"]),
 		"Named Meilisearch volume is missing",

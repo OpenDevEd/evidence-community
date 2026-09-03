@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { loadLibraryConfig } from "../src/config/library-config/source";
+import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
@@ -41,7 +41,8 @@ async function main() {
 		process.env.SEARCH_INDEX_WORKER_ID?.trim() ||
 			`${hostname()}:${process.pid}`,
 	);
-	const config = await loadLibraryConfig();
+	const configProcess = await openLibraryConfigProcess();
+	const { abortController, config } = configProcess;
 	const instanceId = randomUUID();
 	await writeSearchIndexWorkerInstance(
 		resolveSearchIndexWorkerInstancePath(),
@@ -50,11 +51,7 @@ async function main() {
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,
 	);
-	const abortController = new AbortController();
 	let ownershipLost = false;
-	const stop = () => abortController.abort();
-	process.once("SIGINT", stop);
-	process.once("SIGTERM", stop);
 	let registeredWorker;
 	try {
 		registeredWorker = await registerSearchIndexWorker(
@@ -63,9 +60,8 @@ async function main() {
 			instanceId,
 		);
 	} catch (error) {
-		process.off("SIGINT", stop);
-		process.off("SIGTERM", stop);
 		await databaseResource.dispose();
+		configProcess.close();
 		throw error;
 	}
 	const initialProgress: SearchIndexWorkerProgress = {
@@ -369,8 +365,6 @@ async function main() {
 	} finally {
 		restoreFetch();
 		clearInterval(heartbeatTimer);
-		process.off("SIGINT", stop);
-		process.off("SIGTERM", stop);
 		try {
 			await reporter.flush();
 			if (!ownershipLost) {
@@ -401,6 +395,7 @@ async function main() {
 				throw error;
 			}
 		} finally {
+			configProcess.close();
 			await databaseResource.dispose();
 		}
 	}

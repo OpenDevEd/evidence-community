@@ -1,8 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-	open,
-	type FileHandle,
-} from "node:fs/promises";
+import { open, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 import { z } from "zod";
@@ -94,9 +91,7 @@ export type LibraryConfigSourceOptions = {
 };
 
 function currentEnvironment(): LibraryConfigEnvironment {
-	return process.env.NODE_ENV === "production"
-		? "production"
-		: "development";
+	return process.env.NODE_ENV === "production" ? "production" : "development";
 }
 
 function emptyRejectedRevision(): RejectedLibraryConfigRevision {
@@ -107,7 +102,9 @@ function emptyRejectedRevision(): RejectedLibraryConfigRevision {
 	};
 }
 
-function extractRevisionMetadata(value: unknown): RejectedLibraryConfigRevision {
+function extractRevisionMetadata(
+	value: unknown,
+): RejectedLibraryConfigRevision {
 	const result = revisionMetadataSchema.safeParse(value);
 	if (!result.success) return emptyRejectedRevision();
 
@@ -118,9 +115,7 @@ function extractRevisionMetadata(value: unknown): RejectedLibraryConfigRevision 
 	};
 }
 
-function toActiveRevision(
-	config: LibraryServerConfig,
-): LibraryConfigRevision {
+function toActiveRevision(config: LibraryServerConfig): LibraryConfigRevision {
 	return {
 		schemaVersion: config.schemaVersion,
 		revision: config.revision,
@@ -129,7 +124,22 @@ function toActiveRevision(
 }
 
 export function digestLibraryConfig(config: LibraryServerConfig) {
-	return createHash("sha256").update(JSON.stringify(config)).digest("hex");
+	const revisionContent: Record<string, unknown> = { ...config };
+	delete revisionContent.updatedAt;
+	return createHash("sha256")
+		.update(JSON.stringify(sortJsonObjectKeys(revisionContent)))
+		.digest("hex");
+}
+
+function sortJsonObjectKeys(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(sortJsonObjectKeys);
+	if (!value || typeof value !== "object") return value;
+
+	return Object.fromEntries(
+		Object.entries(value)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, entry]) => [key, sortJsonObjectKeys(entry)]),
+	);
 }
 
 export function assertLibraryConfigRevisionAdvances(
@@ -244,16 +254,14 @@ export class LibraryConfigSource {
 
 	getHealth(): LibraryConfigHealth {
 		return {
-			state:
-				this.#rejected || !this.#active ? "rejected" : "active",
+			state: this.#rejected || !this.#active ? "rejected" : "active",
 			active: this.#active?.revision ?? null,
 			rejected: this.#rejected?.revision ?? null,
 		};
 	}
 
 	async #loadOnce(): Promise<LibraryServerConfig> {
-		const environment =
-			this.#options.environment ?? currentEnvironment();
+		const environment = this.#options.environment ?? currentEnvironment();
 		let sourcePath: string;
 
 		try {
@@ -273,10 +281,7 @@ export class LibraryConfigSource {
 		let file;
 		try {
 			const openFile = this.#options.openFile ?? open;
-			file = await openFile(
-				/* turbopackIgnore: true */ sourcePath,
-				"r",
-			);
+			file = await openFile(/* turbopackIgnore: true */ sourcePath, "r");
 		} catch (error) {
 			this.#checkedVersion = null;
 			return this.#reject(normalizeSourceError(error), environment);
@@ -390,6 +395,16 @@ export class LibraryConfigSource {
 				this.#active?.revision.revision === result.data.revision &&
 				this.#active.digest === digest
 			) {
+				if (
+					Date.parse(result.data.updatedAt) >
+					Date.parse(this.#active.revision.updatedAt)
+				) {
+					this.#active = {
+						config: result.data,
+						digest,
+						revision: toActiveRevision(result.data),
+					};
+				}
 				this.#rejected = null;
 				return this.#active.config;
 			}
@@ -408,10 +423,7 @@ export class LibraryConfigSource {
 			return result.data;
 		} catch (error) {
 			const sourceError = normalizeSourceError(error);
-			if (
-				!versionComputed ||
-				sourceError.code === "FILE_READ_FAILED"
-			) {
+			if (!versionComputed || sourceError.code === "FILE_READ_FAILED") {
 				this.#checkedVersion = null;
 			}
 			return this.#reject(sourceError, environment);
@@ -445,8 +457,7 @@ const defaultLibraryConfigSource =
 	libraryConfigGlobal.__evidenceLibraryConfigSource ??
 	new LibraryConfigSource();
 
-libraryConfigGlobal.__evidenceLibraryConfigSource =
-	defaultLibraryConfigSource;
+libraryConfigGlobal.__evidenceLibraryConfigSource = defaultLibraryConfigSource;
 
 export function loadLibraryConfig() {
 	return defaultLibraryConfigSource.load();

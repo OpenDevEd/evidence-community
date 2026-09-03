@@ -1,190 +1,226 @@
 x-runtime-environment: &runtime-environment
-  LIBRARY_CONFIG_PATH: /runtime/config/library.json
+    LIBRARY_CONFIG_PATH: /runtime/config/library.json
+    LIBRARY_CONFIG_SEED_PATH: /runtime/config-seed/library.json
 
 x-runtime-config: &runtime-config
-  source: library-config
-  target: /runtime/config/library.json
-  mode: 0444
+    source: library-config
+    target: /runtime/config-seed/library.json
+    mode: 0444
+
+x-runtime-volume: &runtime-volume
+    type: volume
+    source: library-config-data
+    target: /runtime/config
 
 x-runtime-labels: &runtime-labels
-  org.opendeved.evidence-library.release: "${SOURCE_COMMIT:?source commit is required}"
+    org.opendeved.evidence-library.release: "${SOURCE_COMMIT:?source commit is required}"
 
 x-runtime-networks: &runtime-networks
-  - private
-  - coolify
+    - private
+    - coolify
 
 services:
-  web:
-    init: true
-    image: "${RUNTIME_IMAGE:?runtime image digest is required}"
-    pull_policy: missing
-    command: ["node_modules/.bin/next", "start"]
-    environment: *runtime-environment
-    configs:
-      - *runtime-config
-    networks: *runtime-networks
-    depends_on:
-      publication-worker:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      search-indexer:
-        condition: service_healthy
-    labels:
-      <<: *runtime-labels
-      traefik.docker.network: coolify
-    restart: unless-stopped
-    expose:
-      - "3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/library-config/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      start_period: 30s
-      retries: 3
+    web:
+        init: true
+        image: "${RUNTIME_IMAGE:?runtime image digest is required}"
+        pull_policy: missing
+        command: ["node_modules/.bin/next", "start"]
+        environment: *runtime-environment
+        configs:
+            - *runtime-config
+        volumes:
+            - *runtime-volume
+        networks: *runtime-networks
+        depends_on:
+            publication-worker:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            search-indexer:
+                condition: service_healthy
+        labels:
+            <<: *runtime-labels
+            traefik.docker.network: coolify
+        restart: unless-stopped
+        expose:
+            - "3000"
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "node",
+                    "-e",
+                    "fetch('http://127.0.0.1:3000/api/library-config/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+                ]
+            interval: 30s
+            timeout: 5s
+            start_period: 30s
+            retries: 3
 
-  search-indexer:
-    init: true
-    image: "${RUNTIME_IMAGE:?runtime image digest is required}"
-    pull_policy: missing
-    command:
-      - /bin/sh
-      - -euc
-      - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --watch
-    environment:
-      <<: *runtime-environment
-      SEARCH_INDEX_WORKER_ID: search-indexer
-    configs:
-      - *runtime-config
-    networks: *runtime-networks
-    depends_on:
-      meilisearch:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
-      interval: 15s
-      timeout: 5s
-      start_period: 1h
-      retries: 3
-    labels: *runtime-labels
-    restart: unless-stopped
+    search-indexer:
+        init: true
+        image: "${RUNTIME_IMAGE:?runtime image digest is required}"
+        pull_policy: missing
+        command:
+            - /bin/sh
+            - -euc
+            - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --watch
+        environment:
+            <<: *runtime-environment
+            SEARCH_INDEX_WORKER_ID: search-indexer
+        configs:
+            - *runtime-config
+        volumes:
+            - *runtime-volume
+        networks: *runtime-networks
+        depends_on:
+            meilisearch:
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "node_modules/.bin/tsx",
+                    "tools/checkSearchIndexerHealth.ts",
+                ]
+            interval: 15s
+            timeout: 5s
+            start_period: 1h
+            retries: 3
+        labels: *runtime-labels
+        restart: unless-stopped
 
-  source-sync:
-    init: true
-    image: "${RUNTIME_IMAGE:?runtime image digest is required}"
-    pull_policy: missing
-    command: ["node_modules/.bin/tsx", "tools/runSourceSync.ts", "--watch"]
-    environment:
-      <<: *runtime-environment
-      SOURCE_SYNC_WORKER_ID: source-sync
-    configs:
-      - *runtime-config
-    networks: *runtime-networks
-    depends_on:
-      search-indexer:
-        condition: service_healthy
-    labels: *runtime-labels
-    restart: unless-stopped
+    source-sync:
+        init: true
+        image: "${RUNTIME_IMAGE:?runtime image digest is required}"
+        pull_policy: missing
+        command: ["node_modules/.bin/tsx", "tools/runSourceSync.ts", "--watch"]
+        environment:
+            <<: *runtime-environment
+            SOURCE_SYNC_WORKER_ID: source-sync
+        configs:
+            - *runtime-config
+        volumes:
+            - *runtime-volume
+        networks: *runtime-networks
+        depends_on:
+            search-indexer:
+                condition: service_healthy
+        labels: *runtime-labels
+        restart: unless-stopped
 
-  source-writeback:
-    init: true
-    image: "${RUNTIME_IMAGE:?runtime image digest is required}"
-    pull_policy: missing
-    command: ["node_modules/.bin/tsx", "tools/runSourceWriteback.ts", "--watch"]
-    environment:
-      <<: *runtime-environment
-      SOURCE_WRITEBACK_WORKER_ID: source-writeback
-    configs:
-      - *runtime-config
-    networks: *runtime-networks
-    depends_on:
-      search-indexer:
-        condition: service_healthy
-    labels: *runtime-labels
-    restart: unless-stopped
+    source-writeback:
+        init: true
+        image: "${RUNTIME_IMAGE:?runtime image digest is required}"
+        pull_policy: missing
+        command:
+            ["node_modules/.bin/tsx", "tools/runSourceWriteback.ts", "--watch"]
+        environment:
+            <<: *runtime-environment
+            SOURCE_WRITEBACK_WORKER_ID: source-writeback
+        configs:
+            - *runtime-config
+        volumes:
+            - *runtime-volume
+        networks: *runtime-networks
+        depends_on:
+            search-indexer:
+                condition: service_healthy
+        labels: *runtime-labels
+        restart: unless-stopped
 
-  publication-worker:
-    init: true
-    image: "${RUNTIME_IMAGE:?runtime image digest is required}"
-    pull_policy: missing
-    command: ["node", ".next/publication/worker.mjs", "--watch"]
-    environment:
-      <<: *runtime-environment
-      PUBLICATION_WORKER_ID: publication-worker
-    configs:
-      - *runtime-config
-    networks: *runtime-networks
-    depends_on:
-      search-indexer:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", ".next/publication/health.mjs"]
-      interval: 15s
-      timeout: 5s
-      start_period: 30s
-      retries: 3
-    labels: *runtime-labels
-    restart: unless-stopped
+    publication-worker:
+        init: true
+        image: "${RUNTIME_IMAGE:?runtime image digest is required}"
+        pull_policy: missing
+        command: ["node", ".next/publication/worker.mjs", "--watch"]
+        environment:
+            <<: *runtime-environment
+            PUBLICATION_WORKER_ID: publication-worker
+        configs:
+            - *runtime-config
+        volumes:
+            - *runtime-volume
+        networks: *runtime-networks
+        depends_on:
+            search-indexer:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD", "node", ".next/publication/health.mjs"]
+            interval: 15s
+            timeout: 5s
+            start_period: 30s
+            retries: 3
+        labels: *runtime-labels
+        restart: unless-stopped
 
-  meilisearch:
-    init: true
-    image: getmeili/meilisearch:v1.37
-    environment:
-      MEILI_ENV: production
-      MEILI_MASTER_KEY: "${MEILISEARCH_MASTER_KEY:?private Meilisearch key is required}"
-      MEILI_NO_ANALYTICS: "true"
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
-      interval: 5s
-      timeout: 5s
-      start_period: 10s
-      retries: 12
-    volumes:
-      - meilisearch-data:/meili_data
-    networks:
-      - private
-    labels: *runtime-labels
-    restart: unless-stopped
+    meilisearch:
+        init: true
+        image: getmeili/meilisearch:v1.37
+        environment:
+            MEILI_ENV: production
+            MEILI_MASTER_KEY: "${MEILISEARCH_MASTER_KEY:?private Meilisearch key is required}"
+            MEILI_NO_ANALYTICS: "true"
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "curl",
+                    "--fail",
+                    "--silent",
+                    "http://127.0.0.1:7700/health",
+                ]
+            interval: 5s
+            timeout: 5s
+            start_period: 10s
+            retries: 12
+        volumes:
+            - meilisearch-data:/meili_data
+        networks:
+            - private
+        labels: *runtime-labels
+        restart: unless-stopped
 
-  redis:
-    image: redis:7.2-alpine
-    init: true
-    # Redis is an ephemeral rate-limit store. Mask the image's declared /data
-    # volume so container recreation cannot leave empty anonymous volumes behind.
-    tmpfs:
-      - /data
-    command:
-      [
-        "redis-server",
-        "--save",
-        "",
-        "--appendonly",
-        "no",
-        "--maxmemory",
-        "128mb",
-        "--maxmemory-policy",
-        "noeviction",
-      ]
-    networks:
-      - private
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      start_period: 5s
-      retries: 12
-    labels: *runtime-labels
-    restart: unless-stopped
+    redis:
+        image: redis:7.2-alpine
+        init: true
+        # Redis is an ephemeral rate-limit store. Mask the image's declared /data
+        # volume so container recreation cannot leave empty anonymous volumes behind.
+        tmpfs:
+            - /data
+        command:
+            [
+                "redis-server",
+                "--save",
+                "",
+                "--appendonly",
+                "no",
+                "--maxmemory",
+                "128mb",
+                "--maxmemory-policy",
+                "noeviction",
+            ]
+        networks:
+            - private
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            start_period: 5s
+            retries: 12
+        labels: *runtime-labels
+        restart: unless-stopped
 
 configs:
-  library-config:
-    content: "${LIBRARY_CONFIG_JSON:?library config JSON is required}"
+    library-config:
+        content: "${LIBRARY_CONFIG_JSON:?library config JSON is required}"
 
 volumes:
-  meilisearch-data:
+    library-config-data:
+    meilisearch-data:
 
 networks:
-  private:
-  coolify:
-    name: coolify
-    external: true
+    private:
+    coolify:
+        name: coolify
+        external: true
