@@ -68,15 +68,28 @@ describe("library configuration activation", () => {
 	});
 
 	it("keeps a newer live configuration when a worker restarts from an older image seed", async () => {
-		const active = cloneLibraryConfig(minimalLibraryConfig);
-		active.revision = "minimal-2";
-		active.updatedAt = "2026-07-28T16:05:00Z";
-		await writeFile(targetPath, JSON.stringify(active, null, "\t"), "utf8");
 		await writeFile(
 			candidatePath,
 			JSON.stringify(minimalLibraryConfig, null, "\t"),
 			"utf8",
 		);
+		await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
+		const active = cloneLibraryConfig(minimalLibraryConfig);
+		active.revision = "minimal-2";
+		active.updatedAt = "2026-07-28T16:05:00Z";
+		const liveCandidatePath = path.join(tempDirectory, "live.json");
+		await writeFile(
+			liveCandidatePath,
+			JSON.stringify(active, null, "\t"),
+			"utf8",
+		);
+		await activateLibraryConfig({
+			candidatePath: liveCandidatePath,
+			targetPath,
+		});
 
 		const result = await initializeLibraryConfig({
 			seedPath: candidatePath,
@@ -87,6 +100,33 @@ describe("library configuration activation", () => {
 		expect(result.previous).toBeNull();
 		expect((await validateLibraryConfigFile(targetPath)).revision).toBe(
 			"minimal-2",
+		);
+	});
+
+	it("applies a changed deployment seed under the same owner revision", async () => {
+		await writeFile(
+			candidatePath,
+			JSON.stringify(minimalLibraryConfig, null, "\t"),
+			"utf8",
+		);
+		await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
+		const moved = cloneLibraryConfig(minimalLibraryConfig);
+		moved.identity.baseUrl = "https://moved.example.test";
+		await writeFile(candidatePath, JSON.stringify(moved, null, "\t"), "utf8");
+
+		const result = await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
+
+		expect(result.active.identity.baseUrl).toBe(
+			"https://moved.example.test",
+		);
+		expect(result.previous?.identity.baseUrl).toBe(
+			minimalLibraryConfig.identity.baseUrl,
 		);
 	});
 
@@ -383,10 +423,14 @@ describe("library configuration activation", () => {
 
 	it("restores the exact previous revision while advancing its timestamp", async () => {
 		await writeFile(
-			targetPath,
+			candidatePath,
 			JSON.stringify(minimalLibraryConfig, null, "\t"),
 			"utf8",
 		);
+		await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
 		const candidate = cloneLibraryConfig(minimalLibraryConfig);
 		candidate.revision = "minimal-2";
 		candidate.updatedAt = "2026-07-28T16:05:00Z";
