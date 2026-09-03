@@ -580,6 +580,29 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			`${baseUrl}/${config.localization.defaultLocale}/lib`,
 			"Public library",
 		);
+
+		const redeployed = structuredClone(config);
+		redeployed.identity.name = "Repository Compose Deployment Seed";
+		environment.LIBRARY_CONFIG_JSON = JSON.stringify(redeployed);
+		compose(
+			"up",
+			"--detach",
+			"--wait",
+			"--wait-timeout",
+			"180",
+			"--force-recreate",
+			"--no-build",
+		);
+		requireRepositoryComposeServicesReady(readComposeProcesses());
+		await waitForRepositoryComposeRevision(baseUrl, redeployed.revision);
+		const redeployedPage = await requireHttpSuccess(
+			`${baseUrl}/${config.localization.defaultLocale}/lib`,
+			"Redeployed public library",
+		);
+		assert.ok(
+			(await redeployedPage.text()).includes(redeployed.identity.name),
+			"A changed deployment seed must replace the persistent runtime configuration even when the owner revision is unchanged",
+		);
 		await requireHttpRedirect(
 			`${baseUrl}/admin`,
 			config.authentication.openScholar.loginPageUrl,
@@ -646,10 +669,15 @@ async function waitForRepositoryComposeRevision(
 }
 
 async function repositoryComposeRevision(baseUrl: string) {
-	const response = await fetch(`${baseUrl}/api/library-config/health`);
+	// Recreating the web container closes any in-flight socket. The bounded
+	// caller keeps polling and still fails if health does not return.
+	const response = await fetch(
+		`${baseUrl}/api/library-config/health`,
+	).catch(() => new Response(null, { status: 503 }));
 	if (!response.ok) return null;
 	const health = (await response.json()) as RuntimeConfigHealth;
-	return health.state === "active" ? health.active?.revision : null;
+	if (!health.active) return null;
+	return health.active.revision;
 }
 
 async function waitForRepositoryComposeWorkerRestarts<T extends string>(

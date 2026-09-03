@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { open, stat, unlink } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { open, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -64,6 +64,7 @@ const rejectedManifestCodes = new Set([
 	"INVALID_UTF8",
 ]);
 const ACTIVATION_LOCK_STALE_MS = 30_000;
+const SEED_FINGERPRINT = /^[a-f0-9]{64}$/u;
 
 async function existingFileMode(filePath: string) {
 	try {
@@ -72,6 +73,38 @@ async function existingFileMode(filePath: string) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
 		throw error;
 	}
+}
+
+function deploymentSeedFingerprint(config: LibraryServerConfig) {
+	return createHash("sha256")
+		.update(digestLibraryConfig(config))
+		.update("\0")
+		.update(config.updatedAt)
+		.digest("hex");
+}
+
+async function readDeploymentSeedFingerprint(seedStatePath: string) {
+	try {
+		const fingerprint = (await readFile(seedStatePath, "utf8")).trim();
+		if (!SEED_FINGERPRINT.test(fingerprint)) {
+			throw new Error(`Invalid deployment seed state at ${seedStatePath}`);
+		}
+		return fingerprint;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+		throw error;
+	}
+}
+
+async function writeDeploymentSeedFingerprint(
+	seedStatePath: string,
+	fingerprint: string,
+) {
+	await replaceFileAtomically({
+		content: `${fingerprint}\n`,
+		mode: (await existingFileMode(seedStatePath)) ?? 0o640,
+		targetPath: seedStatePath,
+	});
 }
 
 function serializeConfig(config: LibraryServerConfig) {
@@ -169,54 +202,59 @@ export async function initializeLibraryConfig({
 		configuredTargetPath,
 		configuredBackupPath,
 	);
+	const seedStatePath = `${targetPath}.deployment-seed.sha256`;
 
 	return withActivationLock(
 		targetPath,
 		backupPath,
 		async () => {
-			const [seed, existing, seedMode] = await Promise.all([
+			await removeAtomicTemporaryFiles(seedStatePath);
+			const [seed, existing, seedMode, recordedSeedFingerprint] =
+				await Promise.all([
 				validateLibraryConfigFile(seedPath),
 				inspectExistingConfig(targetPath),
 				existingFileMode(seedPath),
+				readDeploymentSeedFingerprint(seedStatePath),
 			]);
-			if (existing.config) {
-				if (existing.config.revision === seed.revision) {
-					if (
-						digestLibraryConfig(existing.config) !==
-						digestLibraryConfig(seed)
-					) {
-						throw new LibraryConfigSourceError(
-							"Configuration content changed without a new revision",
-							{ code: "REVISION_REUSED" },
-						);
-					}
-					return {
-						active: existing.config,
-						backupPath,
-						previous: null,
-						targetPath,
-					};
+			const seedFingerprint = deploymentSeedFingerprint(seed);
+			const activeMatchesSeed =
+				existing.config !== null &&
+				deploymentSeedFingerprint(existing.config) === seedFingerprint;
+
+			// The seed state distinguishes a worker restart from a new platform
+			// deployment. A restart keeps a newer live activation. A changed seed
+			// is authoritative even when managed values changed under the same
+			// owner revision, such as an address or credential update.
+			if (
+				existing.config &&
+				(recordedSeedFingerprint === seedFingerprint || activeMatchesSeed)
+			) {
+				if (recordedSeedFingerprint !== seedFingerprint) {
+					await writeDeploymentSeedFingerprint(
+						seedStatePath,
+						seedFingerprint,
+					);
 				}
-				if (
-					Date.parse(existing.config.updatedAt) >
-					Date.parse(seed.updatedAt)
-				) {
-					return {
-						active: existing.config,
-						backupPath,
-						previous: null,
-						targetPath,
-					};
-				}
+				return {
+					active: existing.config,
+					backupPath,
+					previous: null,
+					targetPath,
+				};
 			}
 
-			return activateValidatedConfig({
+			const result = await activateValidatedConfig({
 				active: seed,
 				backupPath,
 				candidateMode: seedMode,
 				existing,
 				targetPath,
 			});
+			await writeDeploymentSeedFingerprint(
+				seedStatePath,
+				seedFingerprint,
+			);
+			return result;
 		},
 		5_000,
 	);
