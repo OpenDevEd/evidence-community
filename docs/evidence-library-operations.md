@@ -6,34 +6,39 @@ JSON document.
 
 ## Deployment contract
 
-| Input           | Required contract                                                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
-| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>`                                |
-| Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
-| Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                               |
-| Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
-| Network         | Expose `PORT`, default `3000`, through the deployment proxy                                                                             |
-| Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly                                           |
-| Health          | Probe `GET /api/library-config/health`                                                                                                  |
-| Dependencies    | Make server-side services and upstreams reachable from the application; make public assets and browser analytics reachable from clients |
+| Input           | Required contract                                                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                      |
+| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>`                                 |
+| Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated seed document; Compose initializes the writable `LIBRARY_CONFIG_PATH` volume from it |
+| Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                                |
+| Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                   |
+| Network         | Expose `PORT`, default `3000`, through the deployment proxy                                                                              |
+| Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly                                            |
+| Health          | Probe `GET /api/library-config/health`                                                                                                   |
+| Dependencies    | Make server-side services and upstreams reachable from the application; make public assets and browser analytics reachable from clients  |
 
-The Compose file sets `LIBRARY_CONFIG_PATH`. Library values and secrets belong
-in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
+The Compose file seeds one named configuration volume from
+`LIBRARY_CONFIG_JSON`, then mounts the active file at `LIBRARY_CONFIG_PATH` in
+the web app and all four workers. Library values and secrets belong in this
+server-only document, not in `NEXT_PUBLIC_*` variables or customer image
 builds. `sources[]` lists every Zotero group the library can import from and,
 with `writebackEnabled: true`, write to; records choose their own sources at
-publish time and there is no default writeback source. The default deployment includes the search, source-sync, and
-source-writeback, and publication workers plus one private persistent
-Meilisearch service. A web-only deployment is incomplete.
+publish time and there is no default writeback source. The default deployment
+has seven services: the web app, four workers, private persistent Meilisearch,
+and private ephemeral Redis. A web-only deployment is incomplete.
 
 Set the Coolify application field `connect_to_docker_network` to `false` through
 the provisioning API. The checked-in Compose attaches only the five runtime
 containers to the external `coolify` network. Meilisearch stays on the private
 application network, so another library cannot share its service-name DNS.
 
-To change a Coolify deployment, update `LIBRARY_CONFIG_JSON` and redeploy the
-repository Compose file. The host-directory steps below are only for running
-the image directly with Docker. They do not apply to the Coolify Compose path.
+`LIBRARY_CONFIG_JSON` is the startup and software-update seed. An ordinary
+configuration publish uses the authenticated runtime API described below and
+does not redeploy the Compose application. A software update or routing change
+still updates the seed and replaces the application through the deployment
+platform. The host-directory steps below are only for running the image
+directly with Docker. They do not apply to the Compose path.
 
 Run Compose from the repository root with the immutable image reference:
 
@@ -456,10 +461,10 @@ platform supplies a root-owned writable file mount, the image grants group
 `1001` read access before dropping privileges. A read-only mount must already
 be readable by UID or GID `1001`.
 
-Mount the directory when configuration must change without a restart.
-Activation replaces the file atomically. A single-file bind mount can remain
-attached to the previous inode, so single-file mounts support restart-based
-configuration delivery only.
+Mount a writable directory owned by UID `1001` when configuration must change
+without a restart. Activation replaces the file atomically. A read-only mount
+or a single-file bind mount supports restart-based configuration delivery
+only because the runtime cannot replace the active file in place.
 
 The same image can serve another library by starting another container with a
 different configuration directory, port, PostgreSQL database, and private
@@ -546,6 +551,25 @@ curl --include --silent --output /dev/null --write-out '%{http_code} %{redirect_
 
 ## Activate a change without restarting
 
+OpenScholar normally activates a complete configuration through the running
+library. The request uses the machine credential from the currently active
+configuration:
+
+```http
+PUT /api/openscholar/configuration
+Authorization: Bearer <authentication.openScholar.machineCredential>
+Content-Type: application/json
+
+<complete runtime configuration document>
+```
+
+A successful response reports `status: "active"`, the exact requested
+`revision`, and the SHA-256 of the submitted bytes. The route validates the
+document, preserves the previous valid revision, and atomically replaces the
+active file. The web app observes the new file on its next request. Each worker
+finishes or aborts its current cycle, exits, and is restarted by Compose with
+the new revision.
+
 Validate and activate from a source checkout that can write the host directory:
 
 ```bash
@@ -605,9 +629,20 @@ npm run config:activate -- --rollback \
   --minimum-updated-at 2026-07-27T12:30:00.000Z
 ```
 
-Only one activation or rollback may run at a time. If an operation reports an
-existing `.activation.lock`, verify that no configuration operation is still
-running before removing a stale lock.
+OpenScholar can restore the immediately preserved revision without inventing a
+new revision identifier:
+
+```http
+DELETE /api/openscholar/configuration
+Authorization: Bearer <authentication.openScholar.machineCredential>
+Content-Type: application/json
+
+{"revision":"<previous-revision>"}
+```
+
+Only one activation or restore may run at a time. A live lock returns a
+conflict, and a lock left behind for more than 30 seconds is removed
+automatically before the next operation.
 
 ## Runtime URLs and assets
 
@@ -666,10 +701,9 @@ npm run test:acceptance
 ```
 
 `npm run test:acceptance` first starts the repository Compose deployment with
-all five required processes and its private Meilisearch. It checks real Compose
-state and health, the active revision, the public site, and the `/admin`
-redirect to OpenScholar. The rest
-of the suite starts two disposable libraries, PostgreSQL, Meilisearch, Mailpit,
+all seven services. It checks real Compose state and health, the active
+revision, the public site, and the `/admin` redirect to OpenScholar. The rest of
+the suite starts two disposable libraries, PostgreSQL, Meilisearch, Mailpit,
 workers, and local HTTPS fixtures for external services. It runs every desktop
 and mobile browser check, including the complete mocked Crossref and Zenodo
 publication flow. It also verifies independently enabled and disabled

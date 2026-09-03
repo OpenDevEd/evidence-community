@@ -128,27 +128,30 @@ and can be combined with either one-shot or watch mode.
 
 ## Production worker
 
-Deploy a library with `docker/compose.library.yaml`. It builds the web app and
-all current workers from the same commit, starts a private persistent
-Meilisearch service, mounts the same runtime config into the application
-containers, and makes the search worker apply database migrations before it
-starts. The web app waits until the worker is healthy.
+Deploy a library with `docker/compose.library.yaml`. It runs the web app and all
+four workers from the same immutable image, starts private persistent
+Meilisearch and private ephemeral Redis, mounts the same writable runtime
+configuration volume into the application containers, and makes the search
+worker apply database migrations before it starts. The web app waits until the
+required workers and Redis are healthy.
 
-Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document, then use
-the repository Compose file as the Coolify source of truth. Do not deploy the
-web target by itself and do not configure index settings with a separate
+Set `LIBRARY_CONFIG_JSON` to the complete validated seed document, then use the
+repository Compose file as the deployment source of truth. Ordinary
+configuration publishes replace the active file in the shared volume through
+the authenticated runtime API; they do not redeploy the stack. Do not deploy
+the web target by itself and do not configure index settings with a separate
 Meilisearch command. The worker creates and updates those settings at startup.
 
 `docker/compose.library.yaml` is the only application deployment. It runs the
-web app, search worker, source-sync worker, source-writeback worker, and one
-private Meilisearch service. The source workers remain idle when no source is
-configured.
+web app, search worker, source-sync worker, source-writeback worker,
+publication worker, private Meilisearch, and private Redis. The source workers
+remain idle when no source is configured.
 
 Use `http://meilisearch:7700` as the runtime search host and set the runtime
 search key and `MEILISEARCH_MASTER_KEY` to the same private value. Meilisearch
-has no public port and joins only the private application network. The four
-runtime containers also join the external `coolify` network to reach shared
-PostgreSQL. Coolify's automatic destination-network attachment must stay off.
+has no public port and joins only the private application network. The five
+runtime containers also join the external deployment network to reach shared
+PostgreSQL. Automatic destination-network attachment must stay off.
 If the named search volume is new, the worker records a pending rebuild in
 PostgreSQL before creating the index. It clears that marker only after the full
 rebuild succeeds. An interrupted rebuild resumes before health becomes ready.
