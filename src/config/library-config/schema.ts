@@ -531,7 +531,7 @@ const themeSchema = z
 	.object({
 		layout: z.enum(["small", "wide"]).default("small"),
 		colors: themeColorsSchema,
-		defaultMode: z.enum(["light", "dark", "system"]).default("dark"),
+		defaultMode: z.enum(["light", "dark", "system"]).default("light"),
 		forcedMode: z.enum(["light", "dark"]).nullable().default(null),
 		fonts: themeFontsInputSchema,
 	})

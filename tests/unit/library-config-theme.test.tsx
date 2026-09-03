@@ -98,9 +98,9 @@ describe("runtime theme tokens", () => {
 });
 
 describe("runtime theme assets", () => {
-	it("renders the small dark fixture with its supported Google font", () => {
+	it("renders the small light fixture with its supported Google font", () => {
 		expect(minimalTheme.layout).toBe("small");
-		expect(minimalTheme.defaultMode).toBe("dark");
+		expect(minimalTheme.defaultMode).toBe("light");
 		expect(minimalTheme.forcedMode).toBeNull();
 		expect(minimalTheme.fonts.heading).toEqual({
 			source: "google",
