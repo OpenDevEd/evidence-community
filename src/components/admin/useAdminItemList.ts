@@ -76,7 +76,7 @@ export function useAdminItemList(
 	const [bulkKeys, setBulkKeys] = useState<Set<string>>(new Set());
 	const requestId = useRef(0);
 	const requestController = useRef<AbortController | null>(null);
-	const selectionInitialized = useRef(false);
+	const selectionInitialized = useRef(selectedKey !== null);
 	const setSelectedKey = useCallback(
 		(key: string | null) => void setSelectedKeyInUrl(key),
 		[setSelectedKeyInUrl],
@@ -128,10 +128,11 @@ export function useAdminItemList(
 						);
 						return next.size === current.size ? current : next;
 					});
-					if (!selectionInitialized.current) {
+					const firstVisibleKey = page.items[0]?.key ?? null;
+					if (!selectionInitialized.current && firstVisibleKey) {
 						selectionInitialized.current = true;
 						void setSelectedKeyInUrl(
-							(current) => current ?? page.items[0]?.key ?? null,
+							(current) => current ?? firstVisibleKey,
 							{ history: "replace" },
 						);
 					}

@@ -2276,6 +2276,50 @@ test("keeps the URL-selected record open when filters hide its row", async ({
 	expect(new URL(page.url()).searchParams.get("item")).toBe(publishedItemKey);
 });
 
+test("selects the first record when an initially empty list gains results", async ({
+	page,
+}) => {
+	await mockPublishedBook(page);
+	await page.route("**/api/admin/items?**", async (route) => {
+		const request = route.request();
+		const url = new URL(request.url());
+		if (request.method() !== "GET" || url.pathname !== "/api/admin/items") {
+			await route.fallback();
+			return;
+		}
+		const filters = url.searchParams.get("filters") ?? "";
+		await route.fulfill({
+			json: {
+				hasMore: false,
+				items: filters.includes('"draft"')
+					? [
+							publishedListRow({
+								key: publishedItemKey,
+								state: "draft",
+							}),
+						]
+					: [],
+				nextCursor: null,
+			},
+		});
+	});
+
+	await page.goto("/admin");
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get("item"))
+		.toBeNull();
+
+	await page.getByRole("button", { name: "Drafts", exact: true }).click();
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get("item"))
+		.toBe(publishedItemKey);
+	await expect(
+		page
+			.locator("#admin-inspector-pane")
+			.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+});
+
 test("keeps the filter editor inside a narrow viewport", async ({ page }) => {
 	await mockPublishedBook(page);
 	await page.setViewportSize({ height: 844, width: 390 });
@@ -4847,11 +4891,14 @@ test("configures columns, density, sizing, and persists computed table geometry"
 	await expect(page.locator('thead th[data-column-id="tags"]')).toHaveCount(
 		1,
 	);
+	const reloadedRecordRow = page.locator(
+		`tr[data-record-key="${publishedItemKey}"]`,
+	);
+	await expect(reloadedRecordRow).toBeVisible();
 	expect(
-		await page
-			.locator("tbody tr")
-			.first()
-			.evaluate((row) => row.getBoundingClientRect().height),
+		await reloadedRecordRow.evaluate(
+			(row) => row.getBoundingClientRect().height,
+		),
 	).toBe(44);
 	expect(
 		await page
