@@ -1916,19 +1916,20 @@ export default function AdminWorkbench({
 			);
 		});
 
-	const bulkDelete = () =>
+	const bulkDelete = () => {
+		const keys = [...bulkKeys];
 		setConfirmDialog({
-			title: "Remove selected records?",
+			title: `Remove ${keys.length} ${keys.length === 1 ? "record" : "records"}?`,
 			message:
 				"Native drafts will be deleted. Published native records will be unpublished. Imported records are skipped.",
 			danger: true,
 			action: async () => {
-				for (const key of bulkKeys) {
+				for (const key of keys) {
 					abandonPendingDraft(key);
 				}
 				await saveQueue.current;
 				await executeBatchMutation(
-					{ action: "remove", keys: [...bulkKeys] },
+					{ action: "remove", keys },
 					{
 						changedLabels: ["record removed", "records removed"],
 						clearChangedInspector: true,
@@ -1937,6 +1938,7 @@ export default function AdminWorkbench({
 				);
 			},
 		});
+	};
 
 	const filteredDefinitions = useMemo(() => {
 		const query = newItemSearch.trim().toLowerCase();
