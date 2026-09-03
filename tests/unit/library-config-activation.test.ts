@@ -8,22 +8,18 @@ import {
 	rm,
 	stat,
 	unlink,
+	utimes,
 	writeFile,
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	activateLibraryConfig,
+	initializeLibraryConfig,
+	restorePreviousLibraryConfig,
 	rollbackLibraryConfig,
 } from "@/config/library-config/activation";
 import {
@@ -52,6 +48,48 @@ afterEach(async () => {
 });
 
 describe("library configuration activation", () => {
+	it("initializes an empty runtime from its image seed", async () => {
+		await writeFile(
+			candidatePath,
+			JSON.stringify(minimalLibraryConfig, null, "\t"),
+			"utf8",
+		);
+
+		const result = await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
+
+		expect(result.active.revision).toBe(minimalLibraryConfig.revision);
+		expect(result.previous).toBeNull();
+		expect((await validateLibraryConfigFile(targetPath)).revision).toBe(
+			minimalLibraryConfig.revision,
+		);
+	});
+
+	it("keeps a newer live configuration when a worker restarts from an older image seed", async () => {
+		const active = cloneLibraryConfig(minimalLibraryConfig);
+		active.revision = "minimal-2";
+		active.updatedAt = "2026-07-28T16:05:00Z";
+		await writeFile(targetPath, JSON.stringify(active, null, "\t"), "utf8");
+		await writeFile(
+			candidatePath,
+			JSON.stringify(minimalLibraryConfig, null, "\t"),
+			"utf8",
+		);
+
+		const result = await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
+
+		expect(result.active.revision).toBe("minimal-2");
+		expect(result.previous).toBeNull();
+		expect((await validateLibraryConfigFile(targetPath)).revision).toBe(
+			"minimal-2",
+		);
+	});
+
 	it("activates a validated candidate and preserves the previous revision for rollback", async () => {
 		await writeFile(
 			targetPath,
@@ -84,9 +122,8 @@ describe("library configuration activation", () => {
 			"minimal-2",
 		);
 		expect(
-			(
-				await validateLibraryConfigFile(`${targetPath}.previous`)
-			).revision,
+			(await validateLibraryConfigFile(`${targetPath}.previous`))
+				.revision,
 		).toBe("minimal-1");
 		expect(await readFile(targetPath, "utf8")).toContain(
 			'"name": "Activated Evidence Library"',
@@ -118,6 +155,36 @@ describe("library configuration activation", () => {
 		await expect(
 			activateLibraryConfig({ candidatePath, targetPath }),
 		).rejects.toThrow("Another library configuration operation");
+	});
+
+	it("recovers a stale activation lock left by a stopped process", async () => {
+		await writeFile(
+			targetPath,
+			JSON.stringify(minimalLibraryConfig, null, "\t"),
+			"utf8",
+		);
+		const candidate = cloneLibraryConfig(minimalLibraryConfig);
+		candidate.revision = "minimal-2";
+		candidate.updatedAt = "2026-07-28T16:05:00Z";
+		await writeFile(
+			candidatePath,
+			JSON.stringify(candidate, null, "\t"),
+			"utf8",
+		);
+		const lockPath = `${targetPath}.activation.lock`;
+		await writeFile(lockPath, JSON.stringify({ pid: 1 }), "utf8");
+		const stale = new Date(Date.now() - 60_000);
+		await utimes(lockPath, stale, stale);
+
+		const result = await activateLibraryConfig({
+			candidatePath,
+			targetPath,
+		});
+
+		expect(result.active.revision).toBe("minimal-2");
+		await expect(access(lockPath)).rejects.toMatchObject({
+			code: "ENOENT",
+		});
 	});
 
 	it("removes an exclusively created lock when lock initialization fails", async () => {
@@ -177,9 +244,7 @@ describe("library configuration activation", () => {
 			activateLibraryConfig({ candidatePath, targetPath }),
 		).rejects.toBeInstanceOf(LibraryConfigSourceError);
 		expect(await readFile(targetPath, "utf8")).toBe(target);
-		expect(await readFile(`${targetPath}.previous`, "utf8")).toBe(
-			rollback,
-		);
+		expect(await readFile(`${targetPath}.previous`, "utf8")).toBe(rollback);
 	});
 
 	it("rejects changed content that reuses the active revision", async () => {
@@ -252,9 +317,7 @@ describe("library configuration activation", () => {
 		expect((await validateLibraryConfigFile(targetPath)).revision).toBe(
 			"minimal-2",
 		);
-		expect(await readFile(`${targetPath}.previous`, "utf8")).toBe(
-			rollback,
-		);
+		expect(await readFile(`${targetPath}.previous`, "utf8")).toBe(rollback);
 	});
 
 	it("preserves the target mode regardless of the process umask", async () => {
@@ -313,10 +376,51 @@ describe("library configuration activation", () => {
 			result.active.revision,
 		);
 		expect(
-			(
-				await validateLibraryConfigFile(`${targetPath}.previous`)
-			).revision,
+			(await validateLibraryConfigFile(`${targetPath}.previous`))
+				.revision,
 		).toBe("minimal-2");
+	});
+
+	it("restores the exact previous revision while advancing its timestamp", async () => {
+		await writeFile(
+			targetPath,
+			JSON.stringify(minimalLibraryConfig, null, "\t"),
+			"utf8",
+		);
+		const candidate = cloneLibraryConfig(minimalLibraryConfig);
+		candidate.revision = "minimal-2";
+		candidate.updatedAt = "2026-07-28T16:05:00Z";
+		await writeFile(
+			candidatePath,
+			JSON.stringify(candidate, null, "\t"),
+			"utf8",
+		);
+		await activateLibraryConfig({ candidatePath, targetPath });
+
+		const result = await restorePreviousLibraryConfig({
+			revision: minimalLibraryConfig.revision,
+			targetPath,
+		});
+
+		expect(result.active.revision).toBe(minimalLibraryConfig.revision);
+		expect(Date.parse(result.active.updatedAt)).toBeGreaterThan(
+			Date.parse(candidate.updatedAt),
+		);
+		expect(result.previous?.revision).toBe("minimal-2");
+		expect((await validateLibraryConfigFile(targetPath)).revision).toBe(
+			minimalLibraryConfig.revision,
+		);
+
+		await writeFile(
+			candidatePath,
+			JSON.stringify(minimalLibraryConfig, null, "\t"),
+			"utf8",
+		);
+		const restarted = await initializeLibraryConfig({
+			seedPath: candidatePath,
+			targetPath,
+		});
+		expect(restarted.active).toEqual(result.active);
 	});
 
 	it("restores the last valid backup when the active file is rejected", async () => {
@@ -344,9 +448,9 @@ describe("library configuration activation", () => {
 			"utf8",
 		);
 
-		await expect(
-			rollbackLibraryConfig({ targetPath }),
-		).rejects.toThrow("minimumUpdatedAt");
+		await expect(rollbackLibraryConfig({ targetPath })).rejects.toThrow(
+			"minimumUpdatedAt",
+		);
 
 		const result = await rollbackLibraryConfig({
 			minimumUpdatedAt: candidate.updatedAt,
@@ -365,9 +469,8 @@ describe("library configuration activation", () => {
 			result.active.revision,
 		);
 		expect(
-			(
-				await validateLibraryConfigFile(`${targetPath}.previous`)
-			).revision,
+			(await validateLibraryConfigFile(`${targetPath}.previous`))
+				.revision,
 		).toBe("minimal-1");
 	});
 });

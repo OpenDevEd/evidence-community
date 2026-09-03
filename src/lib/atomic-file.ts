@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-	open,
-	readdir,
-	rename,
-	unlink,
-} from "node:fs/promises";
+import { open, readdir, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 
 async function syncDirectory(directory: string) {
@@ -48,9 +43,15 @@ export async function replaceFileAtomically({
 	}
 }
 
-export async function removeAtomicTemporaryFiles(targetPath: string) {
+export async function removeAtomicTemporaryFiles(
+	targetPath: string,
+	preservedPath?: string,
+) {
 	const directory = path.dirname(targetPath);
 	const prefix = `.${path.basename(targetPath)}.`;
+	const preservedName = preservedPath
+		? path.basename(path.resolve(preservedPath))
+		: null;
 	const entries = await readdir(directory, { withFileTypes: true });
 
 	await Promise.all(
@@ -59,7 +60,8 @@ export async function removeAtomicTemporaryFiles(targetPath: string) {
 				(entry) =>
 					entry.isFile() &&
 					entry.name.startsWith(prefix) &&
-					entry.name.endsWith(".tmp"),
+					entry.name.endsWith(".tmp") &&
+					entry.name !== preservedName,
 			)
 			.map((entry) =>
 				unlink(path.join(directory, entry.name)).catch(

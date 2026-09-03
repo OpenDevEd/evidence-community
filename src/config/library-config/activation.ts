@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-	open,
-	stat,
-	unlink,
-} from "node:fs/promises";
+import { open, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -43,6 +39,18 @@ export type RollbackLibraryConfigOptions = {
 	targetPath: string;
 };
 
+export type InitializeLibraryConfigOptions = {
+	backupPath?: string;
+	seedPath: string;
+	targetPath: string;
+};
+
+export type RestorePreviousLibraryConfigOptions = {
+	backupPath?: string;
+	revision: string;
+	targetPath: string;
+};
+
 type ExistingLibraryConfig = {
 	config: LibraryServerConfig | null;
 	mode: number | null;
@@ -55,6 +63,7 @@ const rejectedManifestCodes = new Set([
 	"INVALID_JSON",
 	"INVALID_UTF8",
 ]);
+const ACTIVATION_LOCK_STALE_MS = 30_000;
 
 async function existingFileMode(filePath: string) {
 	try {
@@ -80,32 +89,15 @@ async function withActivationLock<T>(
 	targetPath: string,
 	backupPath: string,
 	operation: () => Promise<T>,
+	waitMs = 0,
+	preservedTemporaryPath?: string,
 ) {
 	const lockPath = `${targetPath}.activation.lock`;
-	let handle;
-
-	try {
-		handle = await open(lockPath, "wx", 0o600);
-		await handle.chmod(0o600);
-		await handle.writeFile(
-			JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }),
-		);
-		await handle.sync();
-	} catch (error) {
-		await handle?.close().catch(() => undefined);
-		if (handle) await unlink(lockPath).catch(() => undefined);
-		if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-			throw new Error(
-				`Another library configuration operation holds ${lockPath}`,
-				{ cause: error },
-			);
-		}
-		throw error;
-	}
+	const handle = await acquireActivationLock(lockPath, waitMs);
 
 	try {
 		await Promise.all([
-			removeAtomicTemporaryFiles(targetPath),
+			removeAtomicTemporaryFiles(targetPath, preservedTemporaryPath),
 			removeAtomicTemporaryFiles(backupPath),
 		]);
 		return await operation();
@@ -113,6 +105,137 @@ async function withActivationLock<T>(
 		await handle.close().catch(() => undefined);
 		await unlink(lockPath).catch(() => undefined);
 	}
+}
+
+async function createActivationLock(lockPath: string) {
+	const handle = await open(lockPath, "wx", 0o600);
+	try {
+		await handle.chmod(0o600);
+		await handle.writeFile(
+			JSON.stringify({
+				pid: process.pid,
+				startedAt: new Date().toISOString(),
+			}),
+		);
+		await handle.sync();
+		return handle;
+	} catch (error) {
+		await handle.close().catch(() => undefined);
+		await unlink(lockPath).catch(() => undefined);
+		throw error;
+	}
+}
+
+async function acquireActivationLock(lockPath: string, waitMs: number) {
+	const deadline = Date.now() + waitMs;
+	while (true) {
+		try {
+			return await createActivationLock(lockPath);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			if (await removeStaleActivationLock(lockPath)) continue;
+			if (Date.now() >= deadline) {
+				throw new Error(
+					`Another library configuration operation holds ${lockPath}`,
+					{ cause: error },
+				);
+			}
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+	}
+}
+
+async function removeStaleActivationLock(lockPath: string) {
+	try {
+		const lock = await stat(lockPath);
+		if (Date.now() - lock.mtimeMs <= ACTIVATION_LOCK_STALE_MS) return false;
+		await unlink(lockPath);
+		return true;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+		throw error;
+	}
+}
+
+export async function initializeLibraryConfig({
+	backupPath: configuredBackupPath,
+	seedPath: configuredSeedPath,
+	targetPath: configuredTargetPath,
+}: InitializeLibraryConfigOptions): Promise<ActivateLibraryConfigResult> {
+	const seedPath = path.resolve(
+		/* turbopackIgnore: true */ configuredSeedPath,
+	);
+	const { backupPath, targetPath } = resolveActivationPaths(
+		configuredTargetPath,
+		configuredBackupPath,
+	);
+
+	return withActivationLock(
+		targetPath,
+		backupPath,
+		async () => {
+			const [seed, existing, seedMode] = await Promise.all([
+				validateLibraryConfigFile(seedPath),
+				inspectExistingConfig(targetPath),
+				existingFileMode(seedPath),
+			]);
+			if (existing.config) {
+				if (existing.config.revision === seed.revision) {
+					if (
+						digestLibraryConfig(existing.config) !==
+						digestLibraryConfig(seed)
+					) {
+						throw new LibraryConfigSourceError(
+							"Configuration content changed without a new revision",
+							{ code: "REVISION_REUSED" },
+						);
+					}
+					return {
+						active: existing.config,
+						backupPath,
+						previous: null,
+						targetPath,
+					};
+				}
+				if (
+					Date.parse(existing.config.updatedAt) >
+					Date.parse(seed.updatedAt)
+				) {
+					return {
+						active: existing.config,
+						backupPath,
+						previous: null,
+						targetPath,
+					};
+				}
+			}
+
+			return activateValidatedConfig({
+				active: seed,
+				backupPath,
+				candidateMode: seedMode,
+				existing,
+				targetPath,
+			});
+		},
+		5_000,
+	);
+}
+
+function resolveActivationPaths(targetPath: string, backupPath?: string) {
+	const resolvedTargetPath = path.resolve(
+		/* turbopackIgnore: true */ targetPath,
+	);
+	const resolvedBackupPath = path.resolve(
+		/* turbopackIgnore: true */ backupPath ??
+			`${resolvedTargetPath}.previous`,
+	);
+	if (resolvedBackupPath === resolvedTargetPath) {
+		throw new Error(
+			"Rollback path must differ from the active configuration path",
+		);
+	}
+	return { backupPath: resolvedBackupPath, targetPath: resolvedTargetPath };
 }
 
 async function inspectExistingConfig(
@@ -211,58 +334,63 @@ export async function activateLibraryConfig({
 	candidatePath: configuredCandidatePath,
 	targetPath: configuredTargetPath,
 }: ActivateLibraryConfigOptions): Promise<ActivateLibraryConfigResult> {
-	const candidatePath = path.resolve(configuredCandidatePath);
-	const targetPath = path.resolve(configuredTargetPath);
-	const backupPath = path.resolve(
-		configuredBackupPath ?? `${targetPath}.previous`,
+	const candidatePath = path.resolve(
+		/* turbopackIgnore: true */ configuredCandidatePath,
 	);
-	if (backupPath === targetPath) {
-		throw new Error("Rollback path must differ from the active configuration path");
-	}
-	return withActivationLock(targetPath, backupPath, async () => {
-		const active = await validateLibraryConfigFile(candidatePath);
-		const existing = await inspectExistingConfig(targetPath);
-		const candidateMode = await existingFileMode(candidatePath);
+	const { backupPath, targetPath } = resolveActivationPaths(
+		configuredTargetPath,
+		configuredBackupPath,
+	);
+	return withActivationLock(
+		targetPath,
+		backupPath,
+		async () => {
+			const active = await validateLibraryConfigFile(candidatePath);
+			const existing = await inspectExistingConfig(targetPath);
+			const candidateMode = await existingFileMode(candidatePath);
 
-		if (existing.config?.revision === active.revision) {
-			if (
-				digestLibraryConfig(existing.config) !==
-				digestLibraryConfig(active)
-			) {
-				throw new LibraryConfigSourceError(
-					"Configuration content changed without a new revision",
-					{
-						code: "REVISION_REUSED",
-						revision: {
-							revision: active.revision,
-							schemaVersion: active.schemaVersion,
-							updatedAt: active.updatedAt,
+			if (existing.config?.revision === active.revision) {
+				if (
+					digestLibraryConfig(existing.config) !==
+					digestLibraryConfig(active)
+				) {
+					throw new LibraryConfigSourceError(
+						"Configuration content changed without a new revision",
+						{
+							code: "REVISION_REUSED",
+							revision: {
+								revision: active.revision,
+								schemaVersion: active.schemaVersion,
+								updatedAt: active.updatedAt,
+							},
 						},
-					},
-				);
+					);
+				}
+
+				return {
+					active: existing.config,
+					backupPath,
+					previous: null,
+					targetPath,
+				};
 			}
 
-			return {
-				active: existing.config,
+			assertLibraryConfigRevisionAdvances(active, {
+				revision: existing.config?.revision ?? null,
+				updatedAt: existing.updatedAt,
+			});
+
+			return activateValidatedConfig({
+				active,
 				backupPath,
-				previous: null,
+				candidateMode,
+				existing,
 				targetPath,
-			};
-		}
-
-		assertLibraryConfigRevisionAdvances(active, {
-			revision: existing.config?.revision ?? null,
-			updatedAt: existing.updatedAt,
-		});
-
-		return activateValidatedConfig({
-			active,
-			backupPath,
-			candidateMode,
-			existing,
-			targetPath,
-		});
-	});
+			});
+		},
+		0,
+		candidatePath,
+	);
 }
 
 export async function rollbackLibraryConfig({
@@ -270,13 +398,8 @@ export async function rollbackLibraryConfig({
 	minimumUpdatedAt,
 	targetPath,
 }: RollbackLibraryConfigOptions) {
-	const resolvedTargetPath = path.resolve(targetPath);
-	const resolvedBackupPath = path.resolve(
-		backupPath ?? `${resolvedTargetPath}.previous`,
-	);
-	if (resolvedBackupPath === resolvedTargetPath) {
-		throw new Error("Rollback path must differ from the active configuration path");
-	}
+	const { backupPath: resolvedBackupPath, targetPath: resolvedTargetPath } =
+		resolveActivationPaths(targetPath, backupPath);
 	const validatedMinimumUpdatedAt = minimumUpdatedAt
 		? utcTimestampSchema.parse(minimumUpdatedAt)
 		: null;
@@ -305,6 +428,57 @@ export async function rollbackLibraryConfig({
 				),
 			});
 
+			return activateValidatedConfig({
+				active,
+				backupPath: resolvedBackupPath,
+				candidateMode: backupMode,
+				existing,
+				publishBackupAfterTarget: true,
+				targetPath: resolvedTargetPath,
+			});
+		},
+	);
+}
+
+export async function restorePreviousLibraryConfig({
+	backupPath,
+	revision,
+	targetPath,
+}: RestorePreviousLibraryConfigOptions) {
+	const { backupPath: resolvedBackupPath, targetPath: resolvedTargetPath } =
+		resolveActivationPaths(targetPath, backupPath);
+	const requestedRevision = revision.trim();
+	if (!requestedRevision) throw new Error("Previous revision is required");
+
+	return withActivationLock(
+		resolvedTargetPath,
+		resolvedBackupPath,
+		async () => {
+			const existing = await inspectExistingConfig(resolvedTargetPath);
+			if (existing.config?.revision === requestedRevision) {
+				return {
+					active: existing.config,
+					backupPath: resolvedBackupPath,
+					previous: null,
+					targetPath: resolvedTargetPath,
+				};
+			}
+			const [backup, backupMode] = await Promise.all([
+				validateLibraryConfigFile(resolvedBackupPath),
+				existingFileMode(resolvedBackupPath),
+			]);
+			if (backup.revision !== requestedRevision) {
+				throw new Error(
+					`The preserved configuration is revision ${backup.revision}, not ${requestedRevision}`,
+				);
+			}
+			const active = libraryConfigSchema.parse({
+				...backup,
+				updatedAt: nextRollbackUpdatedAt(
+					backup.updatedAt,
+					existing.updatedAt,
+				),
+			});
 			return activateValidatedConfig({
 				active,
 				backupPath: resolvedBackupPath,

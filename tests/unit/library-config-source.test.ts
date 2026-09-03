@@ -1,21 +1,8 @@
-import {
-	mkdtemp,
-	open,
-	rm,
-	utimes,
-	writeFile,
-} from "node:fs/promises";
+import { mkdtemp, open, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	LibraryConfigSource,
@@ -63,10 +50,7 @@ afterEach(async () => {
 
 describe("library configuration path", () => {
 	it("defaults to the ignored local file outside production", () => {
-		vi.stubEnv(
-			"LIBRARY_CONFIG_PATH",
-			"runtime/should-not-be-used.json",
-		);
+		vi.stubEnv("LIBRARY_CONFIG_PATH", "runtime/should-not-be-used.json");
 
 		expect(
 			resolveLibraryConfigPath({
@@ -99,10 +83,7 @@ describe("library configuration path", () => {
 	});
 
 	it("uses LIBRARY_CONFIG_PATH when no explicit path override is provided", () => {
-		vi.stubEnv(
-			"LIBRARY_CONFIG_PATH",
-			"runtime/from-environment.json",
-		);
+		vi.stubEnv("LIBRARY_CONFIG_PATH", "runtime/from-environment.json");
 
 		expect(
 			resolveLibraryConfigPath({
@@ -194,6 +175,28 @@ describe("library configuration source", () => {
 			state: "rejected",
 			active: { revision: "minimal-1" },
 			rejected: { revision: "minimal-1" },
+		});
+	});
+
+	it("accepts a newer timestamp for unchanged content under the same revision", async () => {
+		await writeConfig(minimalLibraryConfig);
+		const source = new LibraryConfigSource({
+			environment: "development",
+			path: configPath,
+		});
+		await source.load();
+
+		const touched = cloneLibraryConfig(minimalLibraryConfig);
+		touched.updatedAt = "2026-07-28T16:05:00Z";
+		await writeConfig(touched);
+
+		expect((await source.load()).updatedAt).toBe(touched.updatedAt);
+		expect(source.getHealth()).toMatchObject({
+			state: "active",
+			active: {
+				revision: minimalLibraryConfig.revision,
+				updatedAt: touched.updatedAt,
+			},
 		});
 	});
 
@@ -362,9 +365,12 @@ describe("library configuration source", () => {
 				return {
 					close: file.close.bind(file),
 					readFile: async () => {
-						throw Object.assign(new Error("Transient read failure"), {
-							code: "EIO",
-						});
+						throw Object.assign(
+							new Error("Transient read failure"),
+							{
+								code: "EIO",
+							},
+						);
 					},
 					stat: file.stat.bind(file),
 				} as unknown as typeof file;

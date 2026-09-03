@@ -38,7 +38,7 @@ x-search-indexer-service: &search-indexer-service
   image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
   init: true
   labels: *acceptance-labels
-  restart: "no"
+  restart: unless-stopped
   command: ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
   healthcheck:
     test: ["CMD", "node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
