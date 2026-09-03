@@ -6353,8 +6353,11 @@ test("tracks collection delete and restore mutations", async ({ page }) => {
 });
 
 test("tracks bulk remove mutations", async ({ page }) => {
+	const batchRequests: unknown[] = [];
 	const receipt = indexingReceipt(publishedItemKey, "item", 2);
 	await mockPublishedBook(page, {
+		itemCount: 2,
+		onBatchRequest: (body) => batchRequests.push(body),
 		batchResults: ({ keys }) =>
 			keys.map((key) => ({
 				indexingReceipts: [receipt],
@@ -6364,15 +6367,23 @@ test("tracks bulk remove mutations", async ({ page }) => {
 	});
 	const indexing = await mockCompletedIndexing(page);
 	await page.goto("/admin");
-	await page.getByRole("checkbox", { name: "Select Published book" }).check();
+	await page
+		.getByRole("checkbox", { name: "Select all loaded records" })
+		.check();
 	await page
 		.getByRole("toolbar", { name: "Bulk actions" })
 		.getByRole("button", { name: "Remove selected" })
 		.click();
-	await page
-		.getByRole("dialog", { name: "Remove selected records?" })
-		.getByRole("button", { name: "Confirm", exact: true })
-		.click();
+	const dialog = page.getByRole("dialog", { name: /Remove 2 records/u });
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+	await expect.poll(() => batchRequests.length).toBe(1);
+	expect(batchRequests).toEqual([
+		{
+			action: "remove",
+			keys: [publishedItemKey, "ROW00001"],
+		},
+	]);
 	await indexing.expectTracked(receipt);
 });
 
