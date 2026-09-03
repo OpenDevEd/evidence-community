@@ -50,7 +50,6 @@ ChartJS.register(
 	Legend,
 	ArcElement,
 );
-import { RelationsType } from "@/types/item";
 import { useState, useEffect, useRef, useMemo } from "react";
 
 function visibleExternalTooltip<T extends { visible: boolean }>(
@@ -66,7 +65,6 @@ function visibleExternalTooltip<T extends { visible: boolean }>(
 	}
 	return {
 		tooltipModel,
-		position: context.chart.canvas.getBoundingClientRect(),
 		dataPoint: tooltipModel.dataPoints[0],
 	};
 }
@@ -256,7 +254,7 @@ function CitationYearChart({
 					setTooltipState,
 				);
 				if (!tooltip) return;
-				const { dataPoint, position, tooltipModel } = tooltip;
+				const { dataPoint, tooltipModel } = tooltip;
 
 				setTooltipState((prev) => {
 					if (
@@ -510,7 +508,7 @@ function CitationsCountryChart({
 					setTooltipState,
 				);
 				if (!tooltip) return;
-				const { dataPoint, position, tooltipModel } = tooltip;
+				const { dataPoint, tooltipModel } = tooltip;
 				const rawValue = dataPoint.raw as number;
 				const total = (
 					context.chart.data.datasets[0].data as number[]

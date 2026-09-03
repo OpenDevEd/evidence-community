@@ -54,6 +54,7 @@ export const LIST_ITEM_FIELDS = [
 	"tags",
 	"collections",
 	"collectionsAncestry",
+	"citationMetrics",
 	"createdAt",
 	"updatedAt",
 	"year",

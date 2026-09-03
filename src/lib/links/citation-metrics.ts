@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { SourceProvider } from "@opendeved/evidence-library-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
@@ -17,12 +17,14 @@ export type SourceCitationMetric = {
 	observedAt: string;
 };
 
-export async function getSourceCitationMetrics(
-	db: Executor,
-	itemKey: string,
-): Promise<SourceCitationMetric[]> {
+export async function getSourceCitationMetricsForKeys(
+	db: Pick<Executor, "select">,
+	itemKeys: readonly string[],
+): Promise<Map<string, SourceCitationMetric[]>> {
+	if (itemKeys.length === 0) return new Map();
 	const rows = await db
 		.select({
+			itemKey: itemCitationMetric.itemKey,
 			sourceConnectionKey: itemCitationMetric.sourceConnectionKey,
 			provider: sourceConnection.provider,
 			displayName: sourceConnection.displayName,
@@ -36,20 +38,40 @@ export async function getSourceCitationMetrics(
 			sourceConnection,
 			eq(sourceConnection.key, itemCitationMetric.sourceConnectionKey),
 		)
-		.where(eq(itemCitationMetric.itemKey, itemKey))
-		.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key));
+		.where(inArray(itemCitationMetric.itemKey, [...itemKeys]))
+		.orderBy(
+			asc(itemCitationMetric.itemKey),
+			asc(sourceConnection.provider),
+			asc(sourceConnection.key),
+		);
 
-	return rows.map((row) => ({
-		sourceConnectionKey: row.sourceConnectionKey,
-		sourceLabel: sourceDisplayLabel({
-			key: row.sourceConnectionKey,
+	const metricsByItem = new Map<string, SourceCitationMetric[]>();
+	for (const row of rows) {
+		const metrics = metricsByItem.get(row.itemKey) ?? [];
+		metrics.push({
+			sourceConnectionKey: row.sourceConnectionKey,
+			sourceLabel: sourceDisplayLabel({
+				key: row.sourceConnectionKey,
+				provider: row.provider,
+				displayName: row.displayName,
+				externalScopeKey: row.externalScopeKey,
+			}),
 			provider: row.provider,
-			displayName: row.displayName,
-			externalScopeKey: row.externalScopeKey,
-		}),
-		provider: row.provider,
-		citedByCount: row.citedByCount,
-		referencedWorksCount: row.referencedWorksCount,
-		observedAt: row.observedAt.toISOString(),
-	}));
+			citedByCount: row.citedByCount,
+			referencedWorksCount: row.referencedWorksCount,
+			observedAt: row.observedAt.toISOString(),
+		});
+		metricsByItem.set(row.itemKey, metrics);
+	}
+	return metricsByItem;
+}
+
+export async function getSourceCitationMetrics(
+	db: Executor,
+	itemKey: string,
+): Promise<SourceCitationMetric[]> {
+	return (
+		(await getSourceCitationMetricsForKeys(db, [itemKey])).get(itemKey) ??
+		[]
+	);
 }

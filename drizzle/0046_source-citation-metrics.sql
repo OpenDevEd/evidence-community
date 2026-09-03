@@ -1,3 +1,33 @@
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM "item" i
+		LEFT JOIN "sourceConnection" source
+			ON source."key" = i."sourceConnectionKey"
+		LEFT JOIN "itemSourceLink" source_link
+			ON source_link."itemKey" = i."key"
+			AND source_link."sourceConnectionKey" = i."sourceConnectionKey"
+		WHERE (i."relations" ? 'cited_by' OR i."relations" ? 'referenced_works')
+			AND (
+				source."provider" IS DISTINCT FROM 'openalex'
+				OR source_link."itemKey" IS NULL
+				OR (
+					i."relations" ? 'cited_by'
+					AND (
+						jsonb_typeof(i."relations"->'cited_by') IS DISTINCT FROM 'number'
+						OR i."relations"->>'cited_by' !~ '^[0-9]+$'
+					)
+				)
+				OR (
+					i."relations" ? 'referenced_works'
+					AND jsonb_typeof(i."relations"->'referenced_works') IS DISTINCT FROM 'array'
+				)
+			)
+	) THEN
+		RAISE EXCEPTION 'Cannot migrate one or more legacy OpenAlex citation fields';
+	END IF;
+END $$;--> statement-breakpoint
 CREATE TABLE "itemCitationMetric" (
 	"itemKey" varchar(8) NOT NULL,
 	"sourceConnectionKey" varchar(64) NOT NULL,
@@ -10,7 +40,6 @@ CREATE TABLE "itemCitationMetric" (
 	CONSTRAINT "itemCitationMetric_references_nonnegative" CHECK ("itemCitationMetric"."referencedWorksCount" IS NULL OR "itemCitationMetric"."referencedWorksCount" >= 0)
 );
 --> statement-breakpoint
-DROP TABLE "embeddings" CASCADE;--> statement-breakpoint
 ALTER TABLE "itemCitationMetric" ADD CONSTRAINT "itemCitationMetric_item_source_link_fk" FOREIGN KEY ("itemKey","sourceConnectionKey") REFERENCES "public"."itemSourceLink"("itemKey","sourceConnectionKey") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "itemCitationMetric_source_idx" ON "itemCitationMetric" USING btree ("sourceConnectionKey","itemKey");--> statement-breakpoint
 INSERT INTO "itemCitationMetric" (
@@ -69,9 +98,14 @@ CROSS JOIN LATERAL jsonb_array_elements_text(
 ) referenced("sourceRecordKey")
 JOIN "itemSourceLink" target
 	ON target."sourceConnectionKey" = i."sourceConnectionKey"
-	AND target."sourceRecordKey" IN (
+	AND regexp_replace(
+		target."sourceRecordKey",
+		'^https?://openalex[.]org/',
+		''
+	) = regexp_replace(
 		referenced."sourceRecordKey",
-		regexp_replace(referenced."sourceRecordKey", '^https?://openalex.org/', '')
+		'^https?://openalex[.]org/',
+		''
 	)
 WHERE i."key" <> target."itemKey"
 ON CONFLICT DO NOTHING;--> statement-breakpoint

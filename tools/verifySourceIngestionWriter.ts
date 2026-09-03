@@ -47,6 +47,7 @@ import {
 	getTopicStatsByYear,
 } from "../src/app/[locale]/statistics/queries/topic-stats";
 import { getSourceCitationMetrics } from "../src/lib/links/citation-metrics";
+import { generateSearchProjectionPlans } from "../src/lib/search-index/projection";
 import {
 	SourceAliasConflictError,
 	SourceCursorConflictError,
@@ -2204,6 +2205,13 @@ async function verify() {
 				expectedCursor: {},
 				nextCursor: { page: 2 },
 			}),
+			collections: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "CITATION_TOPIC",
+					data: { name: "Citation research" },
+				},
+			],
 			items: [
 				{
 					operation: "upsert",
@@ -2226,6 +2234,7 @@ async function verify() {
 						citedByCount: 17,
 						referencedWorksCount: 2,
 					},
+					collections: [{ sourceRecordKey: "CITATION_TOPIC" }],
 					referencedSourceRecordKeys: ["W100000002", "W999999999"],
 				},
 				{
@@ -2245,11 +2254,30 @@ async function verify() {
 						citedByCount: 4,
 						referencedWorksCount: 0,
 					},
+					collections: [{ sourceRecordKey: "CITATION_TOPIC" }],
 				},
 			],
 		});
 		const openAlexA = openAlexBatchOne.itemKeys.W100000001!;
 		const openAlexB = openAlexBatchOne.itemKeys.W100000002!;
+		await db
+			.update(item)
+			.set({
+				creators: [
+					{
+						creatorType: "author",
+						firstName: "Citation",
+						lastName: "Researcher",
+						institutions: [
+							{
+								country_code: "GB",
+								display_name: "Citation Institute",
+							},
+						],
+					},
+				],
+			})
+			.where(inArray(item.key, [openAlexA, openAlexB]));
 		const [
 			openAlexMetrics,
 			openAlexLinks,
@@ -2320,6 +2348,27 @@ async function verify() {
 			),
 			"Unresolved OpenAlex references must remain in the raw source snapshot",
 		);
+		const projectionPlans = [];
+		for await (const plan of generateSearchProjectionPlans(db, [
+			{ entityKey: openAlexA, entityType: "item" },
+			{ entityKey: openAlexB, entityType: "item" },
+		])) {
+			projectionPlans.push(plan);
+		}
+		const projectedOpenAlexA = projectionPlans
+			.flatMap((plan) => plan.documents)
+			.find((document) => document.key === openAlexA);
+		assert(
+			Array.isArray(projectedOpenAlexA?.citationMetrics) &&
+				projectedOpenAlexA.citationMetrics.some(
+					(metric) =>
+						metric.sourceConnectionKey ===
+							"openalex-citations-writer" &&
+						metric.citedByCount === 17 &&
+						metric.referencedWorksCount === 2,
+				),
+			`Search projection omitted source citation metrics: ${JSON.stringify(projectedOpenAlexA)}`,
+		);
 
 		const sourceCitationMeasure = {
 			kind: "source" as const,
@@ -2345,22 +2394,46 @@ async function verify() {
 			getTopicStats(db, sourceCitationMeasure),
 			getTopicStatsByYear(db, sourceCitationMeasure),
 		]);
+		const citationTopicKey =
+			openAlexBatchOne.collectionKeys.CITATION_TOPIC!;
 		assert(
-			openAlexCitationStats.totalCitations >= 21 &&
+			openAlexCitationStats.totalCitations === 21 &&
 				openAlexCitationStats.maxCitations >= 17 &&
 				openAlexCitationsByYear.some(
-					(row) => row.year === "2026" && row.totalCitations >= 21,
+					(row) => row.year === "2026" && row.totalCitations === 21,
+				) &&
+				openAlexInstitutions.some(
+					(row) =>
+						row.institution === "Citation Institute" &&
+						row.totalCitations === 21,
+				) &&
+				openAlexInstitutionsByYear.some(
+					(row) =>
+						row.institution === "Citation Institute" &&
+						row.year === "2026" &&
+						row.totalCitations === 21,
+				) &&
+				openAlexAuthorCountries.some(
+					(row) => row.countryCode === "GB" && row.hIndex === 2,
+				) &&
+				openAlexAuthors.some(
+					(row) =>
+						row.authorName === "Citation Researcher" &&
+						row.totalCitations === 21,
+				) &&
+				openAlexTopics.topicStats.some(
+					(row) =>
+						row.fullPath === citationTopicKey &&
+						row.totalCitations === 21,
+				) &&
+				openAlexTopicsByYear.some(
+					(row) =>
+						row.fullPath === citationTopicKey &&
+						row.year === "2026" &&
+						row.totalCitations === 21,
 				),
-			`Source citation statistics did not use the selected metric: ${JSON.stringify({ citationStats: openAlexCitationStats, citationsByYear: openAlexCitationsByYear })}`,
+			`Source citation statistics did not use the selected metric: ${JSON.stringify({ citationStats: openAlexCitationStats, citationsByYear: openAlexCitationsByYear, institutions: openAlexInstitutions, institutionsByYear: openAlexInstitutionsByYear, authorCountries: openAlexAuthorCountries, authors: openAlexAuthors, topics: openAlexTopics, topicsByYear: openAlexTopicsByYear })}`,
 		);
-		void [
-			openAlexInstitutions,
-			openAlexInstitutionsByYear,
-			openAlexAuthorCountries,
-			openAlexAuthors,
-			openAlexTopics,
-			openAlexTopicsByYear,
-		];
 
 		const openAlexBeforeUpdate = await db
 			.select({ key: item.key, revision: item.revision })

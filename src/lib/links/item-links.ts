@@ -241,7 +241,7 @@ export async function replaceSourceLinks(
 		);
 	}
 	const pairId = (link: { fromKey: string; toKey: string }) =>
-		`${link.fromKey} ${link.toKey}`;
+		`${link.fromKey}\u0000${link.toKey}`;
 	const before = new Set(removedRows.map(pairId));
 	const after = new Set(candidates.map(pairId));
 	const changedItemKeys = new Set<string>();

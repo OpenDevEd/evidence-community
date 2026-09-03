@@ -18,6 +18,7 @@ import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
+import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { buildPublicationIdentifierSummary } from "@/lib/publication/publication-identifier-summary";
@@ -406,11 +407,12 @@ async function buildSearchProjectionPlanForKeys(
 	const zenodoStateByItem = new Map(
 		zenodoStateRows.map((row) => [row.itemKey, row]),
 	);
-	// Record links are a projection here: the item API re-reads them from PostgreSQL.
-	const linksByItem = await getPublicItemLinksForKeys(
-		database,
-		activeParentKeys,
-	);
+	// Links and source citation metrics are search projections. The item API
+	// re-reads both from PostgreSQL.
+	const [linksByItem, citationMetricsByItem] = await Promise.all([
+		getPublicItemLinksForKeys(database, activeParentKeys),
+		getSourceCitationMetricsForKeys(database, activeParentKeys),
+	]);
 	const childrenByParent = new Map<string, ItemRow[]>();
 	for (const child of children) {
 		if (!child.parentItem) continue;
@@ -457,6 +459,7 @@ async function buildSearchProjectionPlanForKeys(
 				...cleanRow(parent),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
+				citationMetrics: citationMetricsByItem.get(parent.key) ?? [],
 				collections: directCollections,
 				collectionsAncestry: collectionAncestry(
 					directCollections,

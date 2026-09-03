@@ -4738,6 +4738,115 @@
       },
       "isRLSEnabled": false
     },
+    "public.embeddings": {
+      "name": "embeddings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "itemKey": {
+          "name": "itemKey",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parentKey": {
+          "name": "parentKey",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page": {
+          "name": "page",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "embedding": {
+          "name": "embedding",
+          "type": "vector(1536)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "embeddingIndex": {
+          "name": "embeddingIndex",
+          "columns": [
+            {
+              "expression": "embedding",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "vector_cosine_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "hnsw",
+          "with": {}
+        },
+        "itemKeyIndex": {
+          "name": "itemKeyIndex",
+          "columns": [
+            {
+              "expression": "itemKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "embeddings_itemKey_item_key_fk": {
+          "name": "embeddings_itemKey_item_key_fk",
+          "tableFrom": "embeddings",
+          "tableTo": "item",
+          "columnsFrom": [
+            "itemKey"
+          ],
+          "columnsTo": [
+            "key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "embeddings_parentKey_item_key_fk": {
+          "name": "embeddings_parentKey_item_key_fk",
+          "tableFrom": "embeddings",
+          "tableTo": "item",
+          "columnsFrom": [
+            "parentKey"
+          ],
+          "columnsTo": [
+            "key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.item": {
       "name": "item",
       "schema": "",
