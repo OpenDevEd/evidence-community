@@ -12,6 +12,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
 import { getPublicItemLinks } from "@/lib/links/item-links";
+import { getSourceCitationMetrics } from "@/lib/links/citation-metrics";
 
 async function getMeilisearchItem(
 	key: string,
@@ -47,7 +48,7 @@ export async function getItemRaw(
 	source: "db" | "meilisearch" = "meilisearch",
 	config?: LibraryServerConfig,
 ) {
-	const libraryConfig = config ?? await getLibraryConfig();
+	const libraryConfig = config ?? (await getLibraryConfig());
 	const result =
 		source === "db"
 			? await getDatabaseItem(key, libraryConfig)
@@ -64,11 +65,16 @@ export async function getItemRaw(
 		};
 	}
 
-	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+	result.attachmentsData = result.attachmentsData?.filter(
+		(attachment: any) => attachment.deleted === 0,
+	);
 	const linksDb = await getDatabaseForConfig(libraryConfig);
-	result.links = await getPublicItemLinks(linksDb, key, {
-		hiddenTags: content.tags.hidden,
-	});
+	[result.links, result.citationMetrics] = await Promise.all([
+		getPublicItemLinks(linksDb, key, {
+			hiddenTags: content.tags.hidden,
+		}),
+		getSourceCitationMetrics(linksDb, key),
+	]);
 
 	return {
 		item: result,
@@ -77,7 +83,7 @@ export async function getItemRaw(
 
 export async function getItem(
 	key: string,
-	source: "db" | "meilisearch" = "meilisearch"
+	source: "db" | "meilisearch" = "meilisearch",
 ) {
 	const libraryConfig = await getLibraryConfig();
 	const [rawResult, collections] = await Promise.all([
@@ -95,12 +101,12 @@ export async function getItem(
 		result.collectionsData = result.collectionsAncestry
 			?.map((collection) => {
 				const collectionData = collections.find(
-					(c: Collection) => c.key === collection
+					(c: Collection) => c.key === collection,
 				);
 				return collectionData;
 			})
 			.filter(
-				(collectionData) => collectionData !== undefined
+				(collectionData) => collectionData !== undefined,
 			) as Collection[];
 	}
 
@@ -111,7 +117,7 @@ export async function getItem(
 
 export async function GET(
 	request: NextRequest,
-	props: { params: Promise<{ key: string; source: "db" | "meilisearch" }> }
+	props: { params: Promise<{ key: string; source: "db" | "meilisearch" }> },
 ) {
 	const params = await props.params;
 	const { searchParams } = new URL(request.url);

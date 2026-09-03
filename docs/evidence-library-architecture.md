@@ -46,7 +46,7 @@ flowchart LR
 ## Coolify Topology
 
 | Resource | Live value |
-|---|---|
+| --------------------------- | ----------------------------------------- |
 | Coolify project | `new-el` — `qetrlcifc1p6311k0axma9zc` |
 | Environment | `production` — `tyyrx6ddnnnrp9d5hko8outt` |
 | Server | `localhost` — `q6fxt8zzt8g9ghlh8zol4r9u` |
@@ -79,7 +79,7 @@ container.
 ## Tenant Deployment Map
 
 | Tenant | App UUID | Public domains | Source | PostgreSQL database | Meili index | Documents | Live sync state |
-|---|---|---|---|---|---|---:|---|
+| ---------------------- | -------------------------- | ----------------------------------------------------------------------- | ----------------- | ------------------- | -------------------- | --------: | --------------- |
 | AdaptDev | `pbn7ushvbgzoq54i05f3f4yf` | `docs.adaptdev.info`, `docs-adaptdev.opendev.space` | Zotero `1265281` | `adaptdev` | `itemsAdaptdev` | 2,243 | Active |
 | AIME | `wlwfykk1jb3rgp5v4q5td722` | `aievidencehub.org`, `www.aievidencehub.org`, `docs-aime.opendev.space` | Zotero `5515175` | `aime` | `itemsAime` | 992 | Active |
 | Climate | `v12eholkfcg1zfzswrpyp19z` | `climate.educationevidence.io`, `docs-climate.opendev.space` | Zotero `5072953` | `climate` | `itemsClimate` | 1,900 | Active |
@@ -129,20 +129,23 @@ At runtime:
   linked record once. "Cited by" and "related to this
   record" are read with a reverse query, never copied onto the other record.
   The public item page, `/api/item/[key]` (`item.links`) and
-  `/api/citations/[key]` read that table; the record's `relations` JSON keeps
-  provider data such as `owl:sameAs` and OpenAlex counts only.
+  `/api/citations/[key]` read that table. Source-reported citation counts live
+  in `itemCitationMetric`, keyed by item and source connection with an
+  observation time. They are exposed separately because they can include works
+  outside the library and overlap with library links. The record's `relations`
+  JSON keeps relationship metadata such as `owl:sameAs`, not citation counts.
 - Each tenant's application configuration controls branding, locale, analytics,
   feature flags, and public base URL.
 
 ### Relevant frontend source paths
 
 | Concern | Source path |
-|---|---|
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PostgreSQL connection pool | `src/db/index.ts` |
 | Meilisearch client | `src/lib/meilisearch.ts` |
 | Search and document filtering | `src/lib/search.ts`, `src/lib/actions.ts` |
 | Item API and attachment download | `src/app/api/item/` |
-| Record links (cites / related) | `src/lib/links/item-links.ts`, `src/db/schema/tables/itemLink.ts` |
+| Record links and source citation metrics      | `src/lib/links/item-links.ts`, `src/lib/links/citation-metrics.ts`, `src/db/schema/tables/itemLink.ts`, `src/db/schema/tables/itemCitationMetric.ts` |
 | Item page and attachment rendering | `src/app/[locale]/lib/[key]/page.tsx`, `src/components/features/newlib/ItemPage.tsx` |
 | Application RAG/page embeddings | `src/lib/ai.ts`, `src/app/api/ai/` |
 | Zotero translation-server client | `src/lib/citations.ts` |
@@ -152,7 +155,7 @@ At runtime:
 The producer implementation lives outside this repository:
 
 | Concern | Repository and path |
-|---|---|
+| ---------------------------------------------- | --------------------------------------------------------- |
 | Multi-tenant polling and orchestration | `OpenDevEd/zotero-meilisearch-sync/src/orchestrator.ts` |
 | Worker image composition | `OpenDevEd/zotero-meilisearch-sync/Dockerfile` |
 | Zotero incremental synchronization | `OpenDevEd/zotero-lib-synchronization/src/zotero-lib.ts` |
@@ -165,7 +168,7 @@ The producer implementation lives outside this repository:
 ### Deployed worker
 
 | Setting | Live value |
-|---|---|
+| --------------------- | -------------------------------------------------- |
 | Coolify UUID | `imrma9c9u8baudrcl8k3yumb` |
 | Repository | `OpenDevEd/zotero-meilisearch-sync` |
 | Branch | `main` |
@@ -182,7 +185,7 @@ The producer implementation lives outside this repository:
 The worker image contains two repositories cloned during its Docker build:
 
 | Dependency | Branch | Revision embedded in the live image |
-|---|---|---|
+| -------------------------------------- | --------- | ------------------------------------------ |
 | `OpenDevEd/zotero-lib-synchronization` | `coolify` | `593da3b273a097daf6b7c03dd9541b1ab74881e5` |
 | `OpenDevEd/kerko-meilisearch` | `coolify` | `b3936b77dfd52a48a5f7148de940c7a24e50421c` |
 
@@ -292,7 +295,7 @@ USAID Zotero group `5954985` was added to the worker's `SYNC_TARGETS` on
 rebuilt `itemsUSAID` without bootstrapping the other tenants.
 
 | Check | Before recovery | After recovery |
-|---|---:|---:|
+| ----------------------------------- | --------------: | -------------: |
 | PostgreSQL group version | 7 | 8 |
 | PostgreSQL items version | 5690 | 5694 |
 | Meilisearch documents | 1,400 | 1,400 |
@@ -308,7 +311,7 @@ Jimma/Ethiopia, Kenya, and Maths identify their database group as OpenAlex
 with `externalId=1` and `itemsVersion=0`. They are not Zotero libraries.
 
 | Dataset | Last source-data timestamp | Current state |
-|---|---|---|
+| -------------- | -------------------------- | --------------- |
 | Ethiopia/Jimma | 2025-09-08 | Static snapshot |
 | Maths | 2025-10-20 | Static snapshot |
 | Kenya | 2026-03-02 | Static snapshot |
@@ -320,7 +323,7 @@ Meilisearch dates are migration/rebuild dates rather than source freshness.
 ## Meilisearch
 
 | Setting | Live value |
-|---|---|
+| --------------------- | ----------------------------------------------------------- |
 | Coolify UUID | `j3obz2j62ime6k8ugcpz2z88` |
 | Internal endpoint | `http://meilisearch-j3obz2j62ime6k8ugcpz2z88:7700` |
 | Public endpoint | `https://meilisearch.opendev.space` |
@@ -336,7 +339,7 @@ Meilisearch dates are migration/rebuild dates rather than source freshness.
 There are 23 indexes: 17 tenant indexes plus:
 
 | Index | Documents | Purpose/state |
-|---|---:|---|
+| -------------- | --------: | ----------------------------------- |
 | `redirects` | 95,129 | Shared legacy/replacement redirects |
 | `cache` | 34 | Shared cache index |
 | `itemsSDG4` | 172,728 | No active frontend |
@@ -347,7 +350,7 @@ There are 23 indexes: 17 tenant indexes plus:
 Observed task history:
 
 | Result | Count | Explanation |
-|---|---:|---|
+| ----------------- | ----: | ------------------------------------ |
 | Succeeded | 9,068 | Normal document and settings updates |
 | Failed | 708 | See classification below |
 | Queued/processing | 0 | Idle at inspection time |
@@ -368,7 +371,7 @@ vary between older and newer indexes.
 ## PostgreSQL
 
 | Setting | Live value |
-|---|---|
+| ------------------- | ---------------------------------------- |
 | Coolify UUID | `h9z02h4m2swqsjykmjhrc0gj` |
 | Internal endpoint | `h9z02h4m2swqsjykmjhrc0gj:5432` |
 | Public TCP proxy | `178.63.162.33:5432` |
@@ -390,7 +393,7 @@ database belongs to an active tenant.
 Largest active tenant databases:
 
 | Database | Approximate size | Main size driver |
-|---|---:|---|
+| ----------- | ---------------: | -------------------------------------------------- |
 | `opendeved` | 15 GB | Approximately 1.14 million RAG embedding rows |
 | `fcdo` | 2.35 GB | Approximately 159,000 RAG embedding rows |
 | `ethiopia` | 1.83 GB | Item metadata plus approximately 14,000 embeddings |
@@ -407,7 +410,7 @@ flag synchronization also changes it.
 ### Zotero translation server
 
 | Setting | Live value |
-|---|---|
+| ----------------- | ------------------------------------------ |
 | Coolify UUID | `cca1kb1g0m10ag83x24o4lok` |
 | Repository | `zotero/translation-server` |
 | Branch | `master` |
@@ -426,7 +429,7 @@ or temporarily unavailable, only generated citation formatting is disabled.
 worker.
 
 | Setting | Live value |
-|---|---|
+| --------------- | ------------------------------------------ |
 | Coolify UUID | `f11716cgepj5vzaosjxp3sx8` |
 | Deployed commit | `778ef3ca1eaa07b3767d898c2f3da96fbd000227` |
 | Schedule | Daily at `00:00` |
@@ -474,7 +477,7 @@ These are verified current-state gaps, ordered roughly by operational impact:
 Observed on 2026-07-15:
 
 | Endpoint | Result | Comparison |
-|---|---|---|
+| --------------------------------- | --------------- | -------------------------------------------- |
 | `docs-adaptdev.opendev.space/lib` | `502` | `docs.adaptdev.info/lib` returns `200` |
 | `edu-works.org/lib` | `502` | USAID container is running |
 | `research-portal.ju.edu.et/lib` | `403` | `docs-jimma.opendev.space/lib` returns `200` |

@@ -39,6 +39,11 @@ function batch() {
 					},
 				],
 				aliases: [{ key: "zotero:ITEM0001", kind: "provider-uri" }],
+				citationMetric: {
+					citedByCount: 17,
+					referencedWorksCount: 4,
+				},
+				referencedSourceRecordKeys: ["WORK0002", "WORK0003"],
 				file: {
 					url: "https://storage.example.org/file.pdf",
 					contentType: "application/pdf",
@@ -57,9 +62,21 @@ describe("sourceIngestionBatchSchema", () => {
 		const parsed = sourceIngestionBatchSchema.parse(batch());
 		expect(parsed.items).toHaveLength(1);
 		expect(parsed.items[0]).toMatchObject({
+			citationMetric: {
+				citedByCount: 17,
+				referencedWorksCount: 4,
+			},
 			operation: "upsert",
+			referencedSourceRecordKeys: ["WORK0002", "WORK0003"],
 			sourceRecordKey: "ITEM0001",
 		});
+	});
+
+	it("rejects invalid source citation metrics", () => {
+		const input = batch();
+		input.items[0]!.citationMetric.citedByCount = -1;
+
+		expect(sourceIngestionBatchSchema.safeParse(input).success).toBe(false);
 	});
 
 	it("rejects duplicate source record keys", () => {
@@ -183,7 +200,8 @@ describe("sourceIngestionBatchSchema", () => {
 			expect(parsed.error.issues).toContainEqual(
 				expect.objectContaining({
 					path: ["items", 0, "file", "md5"],
-					message: "managedPublication requires a lowercase MD5 checksum",
+					message:
+						"managedPublication requires a lowercase MD5 checksum",
 				}),
 			);
 		}
@@ -197,11 +215,19 @@ describe("sourceItemFingerprint", () => {
 		const baseline = sourceItemFingerprint(record);
 		const variants: SourceItemUpsert[] = [
 			{ ...record, aliases: [] },
+			{
+				...record,
+				citationMetric: {
+					...record.citationMetric!,
+					citedByCount: 18,
+				},
+			},
 			{ ...record, collections: [] },
 			{ ...record, file: { ...record.file!, md5: "changed" } },
 			{ ...record, metadata: { ...record.metadata, title: "Changed" } },
 			{ ...record, parentSourceRecordKey: "PARENT02" },
 			{ ...record, raw: { ...record.raw, version: 2 } },
+			{ ...record, referencedSourceRecordKeys: ["WORK0004"] },
 			{
 				...record,
 				sourceDates: {

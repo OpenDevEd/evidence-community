@@ -36,8 +36,9 @@ import {
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
+import { itemCitationMetric } from "@/db/schema/tables/itemCitationMetric";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
-import { replaceSourceRelatedLinks } from "@/lib/links/item-links";
+import { replaceSourceLinks } from "@/lib/links/item-links";
 
 import { parseZoteroItemUri } from "./zotero/uri";
 import { tag } from "@/db/schema/tables/tag";
@@ -983,6 +984,26 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const sourceLinkByItemKey = new Map(
 			sourceLinks.map((row) => [row.itemKey, row]),
 		);
+		const existingCitationMetrics =
+			batchItemKeys.length === 0
+				? []
+				: await transaction
+						.select()
+						.from(itemCitationMetric)
+						.where(
+							and(
+								eq(
+									itemCitationMetric.sourceConnectionKey,
+									batch.sourceConnectionKey,
+								),
+								inArray(itemCitationMetric.itemKey, batchItemKeys),
+							),
+						)
+						.orderBy(itemCitationMetric.itemKey)
+						.for("update");
+		const citationMetricByItemKey = new Map(
+			existingCitationMetrics.map((row) => [row.itemKey, row]),
+		);
 		const collectionSourceLinks =
 			allCollectionKeys.length === 0
 				? []
@@ -1913,12 +1934,132 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				relatedLinkRows.push({ fromKey, toKey });
 			}
 		}
-		const relatedLinkChange = await replaceSourceRelatedLinks(transaction, {
+		const relatedLinkChange = await replaceSourceLinks(transaction, {
 			sourceConnectionKey: batch.sourceConnectionKey,
+			kind: "related",
 			fromKeys: [...relatedTargetsByRecordKey.keys()].map(
 				(sourceRecordKey) => itemKeys.get(sourceRecordKey)!,
 			),
 			links: relatedLinkRows,
+		});
+
+		// Source citation metrics are observations, not library-link totals. Keep
+		// them in their own table and replace this source's value for every record
+		// it sent. A null value means the source no longer reports the metric.
+		const citationMetricChangedItemKeys = new Set<string>();
+		const citationMetricUpserts = itemUpserts.flatMap((record) => {
+			const itemKey = itemKeys.get(record.sourceRecordKey)!;
+			const incoming = record.citationMetric;
+			const existing = citationMetricByItemKey.get(itemKey);
+			if (!incoming) {
+				if (existing) citationMetricChangedItemKeys.add(itemKey);
+				return [];
+			}
+			if (
+				!existing ||
+				existing.citedByCount !== incoming.citedByCount ||
+				existing.referencedWorksCount !== incoming.referencedWorksCount
+			) {
+				citationMetricChangedItemKeys.add(itemKey);
+			}
+			return [
+				{
+					itemKey,
+					sourceConnectionKey: batch.sourceConnectionKey,
+					citedByCount: incoming.citedByCount,
+					referencedWorksCount: incoming.referencedWorksCount,
+					observedAt: batch.fetchedAt,
+				},
+			];
+		});
+		const citationMetricDeleteKeys = batch.items.flatMap((record) => {
+			const itemKey = itemKeys.get(record.sourceRecordKey);
+			if (!itemKey || !citationMetricByItemKey.has(itemKey)) return [];
+			if (record.operation === "delete" || record.citationMetric === null) {
+				citationMetricChangedItemKeys.add(itemKey);
+				return [itemKey];
+			}
+			return [];
+		});
+		if (citationMetricDeleteKeys.length > 0) {
+			await transaction
+				.delete(itemCitationMetric)
+				.where(
+					and(
+						eq(
+							itemCitationMetric.sourceConnectionKey,
+							batch.sourceConnectionKey,
+						),
+						inArray(itemCitationMetric.itemKey, citationMetricDeleteKeys),
+					),
+				);
+		}
+		await insertInChunks(
+			citationMetricUpserts,
+			RELATION_CHUNK_SIZE,
+			(rowChunk) =>
+				transaction
+					.insert(itemCitationMetric)
+					.values(rowChunk)
+					.onConflictDoUpdate({
+						target: [
+							itemCitationMetric.itemKey,
+							itemCitationMetric.sourceConnectionKey,
+						],
+						set: {
+							citedByCount: sql.raw(`excluded."citedByCount"`),
+							referencedWorksCount: sql.raw(
+								`excluded."referencedWorksCount"`,
+							),
+							observedAt: sql.raw(`excluded."observedAt"`),
+						},
+					}),
+		);
+
+		// Provider references become source-owned citation links only when the
+		// target already resolves in this library. Unknown provider IDs stay only
+		// in the raw source snapshot and are retried by a later sync.
+		const citationTargetsByRecordKey = new Map(
+			itemUpserts
+				.filter((record) => !record.parentSourceRecordKey)
+				.map((record) => [
+					record.sourceRecordKey,
+					record.referencedSourceRecordKeys,
+				] as const),
+		);
+		const citationSourceKeys = [
+			...new Set([...citationTargetsByRecordKey.values()].flat()),
+		].filter((key) => !itemKeys.has(key));
+		const citationIdentity = await loadIdentityMap(
+			transaction,
+			"item",
+			batch.sourceConnectionKey,
+			citationSourceKeys,
+		);
+		let unresolvedCitations = 0;
+		const citationLinkRows: { fromKey: string; toKey: string }[] = [];
+		for (const [sourceRecordKey, targets] of citationTargetsByRecordKey) {
+			const fromKey = itemKeys.get(sourceRecordKey)!;
+			for (const target of targets) {
+				const toKey = itemKeys.get(target) ?? citationIdentity.get(target);
+				if (!toKey) {
+					unresolvedCitations += 1;
+					continue;
+				}
+				if (toKey !== fromKey) citationLinkRows.push({ fromKey, toKey });
+			}
+		}
+		const citationLinkChange = await replaceSourceLinks(transaction, {
+			sourceConnectionKey: batch.sourceConnectionKey,
+			kind: "cites",
+			fromKeys: [
+				...citationTargetsByRecordKey.keys(),
+				...itemDeletes.map((record) => record.sourceRecordKey),
+			].flatMap((sourceRecordKey) => {
+				const itemKey = itemKeys.get(sourceRecordKey);
+				return itemKey ? [itemKey] : [];
+			}),
+			links: citationLinkRows,
 		});
 
 		const aliasRows = itemUpserts.flatMap((record) =>
@@ -2198,9 +2339,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const oldParent = existingItemByKey.get(key)?.parentItem;
 			if (oldParent) affectedParentKeys.add(oldParent);
 		}
-		// A changed source link also changes what the other record shows as
-		// "related", so that record is reindexed like an affected parent.
-		for (const key of relatedLinkChange.changedTargets) {
+		// Citation sidecars and source-owned links change the public projection
+		// even when the canonical item fields did not change.
+		for (const key of [
+			...relatedLinkChange.changedItemKeys,
+			...citationLinkChange.changedItemKeys,
+			...citationMetricChangedItemKeys,
+		]) {
 			affectedParentKeys.add(key);
 		}
 		const parentKeysToBump = [...affectedParentKeys]
@@ -2358,6 +2503,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				collections: collectionEvents.size,
 				items: itemEvents.size,
 				outboxEvents: outboxRows.length,
+				unresolvedCitations,
 				unresolvedRelations,
 			},
 		};

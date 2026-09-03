@@ -49,7 +49,7 @@ export default defineConfig({
 		},
 		{
 			name: "mobile-chromium",
-			testMatch: /runtime-mobile\.spec\.ts$/u,
+			testMatch: /(?:runtime-mobile|admin-links)\.spec\.ts$/u,
 			use: { ...devices["Pixel 5"] },
 		},
 	],

@@ -18,11 +18,36 @@ describe("relatedLinkUris", () => {
 				["DDDD2345", "ZOTD2345"],
 			]),
 			rows: [
-				{ fromKey: "AAAA2345", kind: "related", origin: "manual", toKey: "BBBB2345" },
-				{ fromKey: "AAAA2345", kind: "related", origin: "source:zotero", toKey: "CCCC2345" },
-				{ fromKey: "DDDD2345", kind: "related", origin: "manual", toKey: "AAAA2345" },
-				{ fromKey: "EEEE2345", kind: "related", origin: "source:zotero", toKey: "AAAA2345" },
-				{ fromKey: "AAAA2345", kind: "cites", origin: "manual", toKey: "BBBB2345" },
+				{
+					fromKey: "AAAA2345",
+					kind: "related",
+					origin: "manual",
+					toKey: "BBBB2345",
+				},
+				{
+					fromKey: "AAAA2345",
+					kind: "related",
+					origin: "source:zotero",
+					toKey: "CCCC2345",
+				},
+				{
+					fromKey: "DDDD2345",
+					kind: "related",
+					origin: "manual",
+					toKey: "AAAA2345",
+				},
+				{
+					fromKey: "EEEE2345",
+					kind: "related",
+					origin: "source:zotero",
+					toKey: "AAAA2345",
+				},
+				{
+					fromKey: "AAAA2345",
+					kind: "cites",
+					origin: "manual",
+					toKey: "BBBB2345",
+				},
 			],
 		});
 		expect(uris).toEqual([
@@ -34,13 +59,31 @@ describe("relatedLinkUris", () => {
 
 	it("skips targets that are not linked to this source and de-duplicates", () => {
 		const uris = relatedLinkUris({
-			connection: { externalScopeKey: "77", scopeKind: "personal-library" },
+			connection: {
+				externalScopeKey: "77",
+				scopeKind: "personal-library",
+			},
 			itemKey: "AAAA2345",
 			remoteKeys: new Map([["BBBB2345", "ZOTB2345"]]),
 			rows: [
-				{ fromKey: "AAAA2345", kind: "related", origin: "manual", toKey: "BBBB2345" },
-				{ fromKey: "BBBB2345", kind: "related", origin: "manual", toKey: "AAAA2345" },
-				{ fromKey: "AAAA2345", kind: "related", origin: "manual", toKey: "NOTLNK23" },
+				{
+					fromKey: "AAAA2345",
+					kind: "related",
+					origin: "manual",
+					toKey: "BBBB2345",
+				},
+				{
+					fromKey: "BBBB2345",
+					kind: "related",
+					origin: "manual",
+					toKey: "AAAA2345",
+				},
+				{
+					fromKey: "AAAA2345",
+					kind: "related",
+					origin: "manual",
+					toKey: "NOTLNK23",
+				},
 			],
 		});
 		expect(uris).toEqual(["http://zotero.org/users/77/items/ZOTB2345"]);
@@ -54,14 +97,14 @@ describe("relationsForWriteback", () => {
 				{
 					"dc:relation": "http://zotero.org/groups/1/items/STALE234",
 					"owl:sameAs": "http://zotero.org/groups/1/items/SAME2345",
-					cited_by: 3,
+					"dc:replaces": "http://zotero.org/groups/1/items/OLDI2345",
 				},
 				["http://zotero.org/groups/1/items/NEWW2345"],
 			),
 		).toEqual({
 			"dc:relation": "http://zotero.org/groups/1/items/NEWW2345",
 			"owl:sameAs": "http://zotero.org/groups/1/items/SAME2345",
-			cited_by: 3,
+			"dc:replaces": "http://zotero.org/groups/1/items/OLDI2345",
 		});
 		expect(
 			relationsForWriteback({ "dc:relation": ["a", "b"] }, [

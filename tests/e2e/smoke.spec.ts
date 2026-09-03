@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { dismissConsent } from "./consent";
+import { verifySourceCitationMeasure } from "./citation-measure";
 
 const expectedConfigRevision =
 	process.env.PLAYWRIGHT_EXPECTED_CONFIG_REVISION ?? "example-1";
@@ -110,6 +111,28 @@ const expectedAiSearch = process.env.PLAYWRIGHT_EXPECTED_AI_SEARCH !== "false";
 const expectedDeepResearch =
 	process.env.PLAYWRIGHT_EXPECTED_DEEP_RESEARCH !== "false";
 const expectedContactPage = process.env.PLAYWRIGHT_EXPECTED_EMAIL !== "false";
+const expectedSourceCitationLabel =
+	process.env.PLAYWRIGHT_EXPECTED_SOURCE_CITATION_LABEL ?? "";
+const expectedSourceCitationCount =
+	process.env.PLAYWRIGHT_EXPECTED_SOURCE_CITATION_COUNT ?? "";
+const expectedLibraryCitationLabel =
+	process.env.PLAYWRIGHT_EXPECTED_LIBRARY_CITATION_LABEL ??
+	"Citations in this library";
+
+test("switches citation statistics between library links and source metrics", async ({
+	page,
+}) => {
+	test.skip(
+		!expectedSourceCitationLabel,
+		"profile has no source citation metric",
+	);
+	await verifySourceCitationMeasure(
+		page,
+		expectedLibraryCitationLabel,
+		expectedSourceCitationLabel,
+		expectedSourceCitationCount,
+	);
+});
 
 test("redirects the root route to the evidence library", async ({
 	request,

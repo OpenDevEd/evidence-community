@@ -13,6 +13,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { itemLink } from "../src/db/schema/tables/itemLink";
+import { itemCitationMetric } from "../src/db/schema/tables/itemCitationMetric";
 import {
 	publicationSyncJob,
 	publicationTarget,
@@ -30,6 +31,23 @@ import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
 import type { EvidenceFileStorage } from "../src/lib/admin/file-storage";
 import { removeNativeItem } from "../src/lib/admin/native-item-service";
+import { citationCountForItem } from "../src/app/[locale]/statistics/queries/citation-measure";
+import {
+	getAuthorCountries,
+	getDetailedAuthorStats,
+} from "../src/app/[locale]/statistics/queries/author-stats";
+import { getCitationsByYear } from "../src/app/[locale]/statistics/queries/basic-stats";
+import { getCitationStats } from "../src/app/[locale]/statistics/queries/citation-stats";
+import {
+	getInstitutionStats,
+	getInstitutionStatsByYear,
+} from "../src/app/[locale]/statistics/queries/institution-stats";
+import {
+	getTopicStats,
+	getTopicStatsByYear,
+} from "../src/app/[locale]/statistics/queries/topic-stats";
+import { getSourceCitationMetrics } from "../src/lib/links/citation-metrics";
+import { generateSearchProjectionPlans } from "../src/lib/search-index/projection";
 import {
 	SourceAliasConflictError,
 	SourceCursorConflictError,
@@ -52,6 +70,7 @@ const connectionKeys = [
 	"zotero-native-link-writer",
 	"zotero-native-file-writer",
 	"zotero-links-writer",
+	"openalex-citations-writer",
 ];
 const tagNames = [
 	"attachment-tag",
@@ -135,6 +154,12 @@ async function verify() {
 				provider: "zotero",
 				scopeKind: "group",
 				externalScopeKey: "999",
+			},
+			{
+				key: "openalex-citations-writer",
+				provider: "openalex",
+				scopeKind: "query",
+				config: { query: "education" },
 			},
 		]);
 
@@ -2172,6 +2197,348 @@ async function verify() {
 				relbOutbox.at(-1)!.revision === relbAfterRemoval.revision &&
 				linksBatchTwo.written.outboxEvents >= 2,
 			`Removing a source link must reindex the other record: ${JSON.stringify({ outbox: relbOutbox, revisionAfter: relbAfterRemoval.revision, written: linksBatchTwo.written })}`,
+		);
+
+		const openAlexBatchOne = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "openalex-citations-writer",
+				expectedCursor: {},
+				nextCursor: { page: 2 },
+			}),
+			collections: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "CITATION_TOPIC",
+					data: { name: "Citation research" },
+				},
+			],
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "W100000001",
+					remoteVersion: "2026-07-29",
+					raw: {
+						id: "https://openalex.org/W100000001",
+						cited_by_count: 17,
+						referenced_works: [
+							"https://openalex.org/W100000002",
+							"https://openalex.org/W999999999",
+						],
+					},
+					metadata: {
+						date: "2026-07-29",
+						itemType: "JournalArticle",
+						title: "Citing work",
+					},
+					citationMetric: {
+						citedByCount: 17,
+						referencedWorksCount: 2,
+					},
+					collections: [{ sourceRecordKey: "CITATION_TOPIC" }],
+					referencedSourceRecordKeys: ["W100000002", "W999999999"],
+				},
+				{
+					operation: "upsert",
+					sourceRecordKey: "W100000002",
+					remoteVersion: "2026-07-29",
+					raw: {
+						id: "https://openalex.org/W100000002",
+						cited_by_count: 4,
+					},
+					metadata: {
+						date: "2026-07-29",
+						itemType: "JournalArticle",
+						title: "Cited work",
+					},
+					citationMetric: {
+						citedByCount: 4,
+						referencedWorksCount: 0,
+					},
+					collections: [{ sourceRecordKey: "CITATION_TOPIC" }],
+				},
+			],
+		});
+		const openAlexA = openAlexBatchOne.itemKeys.W100000001!;
+		const openAlexB = openAlexBatchOne.itemKeys.W100000002!;
+		await db
+			.update(item)
+			.set({
+				creators: [
+					{
+						creatorType: "author",
+						firstName: "Citation",
+						lastName: "Researcher",
+						institutions: [
+							{
+								country_code: "GB",
+								display_name: "Citation Institute",
+							},
+						],
+					},
+				],
+			})
+			.where(inArray(item.key, [openAlexA, openAlexB]));
+		const [
+			openAlexMetrics,
+			openAlexLinks,
+			openAlexSnapshot,
+			openAlexPublicMetrics,
+			openAlexLibraryCount,
+		] = await Promise.all([
+			db
+				.select()
+				.from(itemCitationMetric)
+				.where(
+					eq(
+						itemCitationMetric.sourceConnectionKey,
+						"openalex-citations-writer",
+					),
+				)
+				.orderBy(itemCitationMetric.itemKey),
+			db
+				.select()
+				.from(itemLink)
+				.where(eq(itemLink.origin, "source:openalex-citations-writer")),
+			db
+				.select({ payload: sourceSnapshot.payload })
+				.from(sourceSnapshot)
+				.where(
+					and(
+						eq(sourceSnapshot.itemKey, openAlexA),
+						eq(
+							sourceSnapshot.sourceConnectionKey,
+							"openalex-citations-writer",
+						),
+					),
+				)
+				.then((rows) => rows[0]),
+			getSourceCitationMetrics(db, openAlexA),
+			db
+				.select({
+					count: citationCountForItem({
+						kind: "library",
+						key: "library",
+					}),
+				})
+				.from(item)
+				.where(eq(item.key, openAlexB))
+				.then((rows) => rows[0]?.count),
+		]);
+		assert(
+			openAlexMetrics.length === 2 &&
+				openAlexMetrics.some(
+					(row) =>
+						row.itemKey === openAlexA &&
+						row.citedByCount === 17 &&
+						row.referencedWorksCount === 2,
+				) &&
+				openAlexLinks.length === 1 &&
+				openAlexLinks[0]?.fromKey === openAlexA &&
+				openAlexLinks[0]?.toKey === openAlexB &&
+				openAlexLinks[0]?.kind === "cites" &&
+				openAlexPublicMetrics[0]?.citedByCount === 17 &&
+				Number(openAlexLibraryCount) === 1 &&
+				openAlexBatchOne.written.unresolvedCitations === 1,
+			`OpenAlex metrics and resolved citations were not stored separately: ${JSON.stringify({ metrics: openAlexMetrics, links: openAlexLinks, written: openAlexBatchOne.written })}`,
+		);
+		assert(
+			Array.isArray(
+				(openAlexSnapshot?.payload as { referenced_works?: unknown })
+					?.referenced_works,
+			),
+			"Unresolved OpenAlex references must remain in the raw source snapshot",
+		);
+		const projectionPlans = [];
+		for await (const plan of generateSearchProjectionPlans(db, [
+			{ entityKey: openAlexA, entityType: "item" },
+			{ entityKey: openAlexB, entityType: "item" },
+		])) {
+			projectionPlans.push(plan);
+		}
+		const projectedOpenAlexA = projectionPlans
+			.flatMap((plan) => plan.documents)
+			.find((document) => document.key === openAlexA);
+		assert(
+			Array.isArray(projectedOpenAlexA?.citationMetrics) &&
+				projectedOpenAlexA.citationMetrics.some(
+					(metric) =>
+						metric.sourceConnectionKey ===
+							"openalex-citations-writer" &&
+						metric.citedByCount === 17 &&
+						metric.referencedWorksCount === 2,
+				),
+			`Search projection omitted source citation metrics: ${JSON.stringify(projectedOpenAlexA)}`,
+		);
+
+		const sourceCitationMeasure = {
+			kind: "source" as const,
+			key: "source:openalex-citations-writer",
+			sourceConnectionKey: "openalex-citations-writer",
+		};
+		const [
+			openAlexCitationStats,
+			openAlexCitationsByYear,
+			openAlexInstitutions,
+			openAlexInstitutionsByYear,
+			openAlexAuthorCountries,
+			openAlexAuthors,
+			openAlexTopics,
+			openAlexTopicsByYear,
+		] = await Promise.all([
+			getCitationStats(db, sourceCitationMeasure),
+			getCitationsByYear(db, sourceCitationMeasure),
+			getInstitutionStats(db, sourceCitationMeasure),
+			getInstitutionStatsByYear(db, sourceCitationMeasure),
+			getAuthorCountries(db, sourceCitationMeasure),
+			getDetailedAuthorStats(db, sourceCitationMeasure),
+			getTopicStats(db, sourceCitationMeasure),
+			getTopicStatsByYear(db, sourceCitationMeasure),
+		]);
+		const citationTopicKey =
+			openAlexBatchOne.collectionKeys.CITATION_TOPIC!;
+		assert(
+			openAlexCitationStats.totalCitations === 21 &&
+				openAlexCitationStats.maxCitations >= 17 &&
+				openAlexCitationsByYear.some(
+					(row) => row.year === "2026" && row.totalCitations === 21,
+				) &&
+				openAlexInstitutions.some(
+					(row) =>
+						row.institution === "Citation Institute" &&
+						row.totalCitations === 21,
+				) &&
+				openAlexInstitutionsByYear.some(
+					(row) =>
+						row.institution === "Citation Institute" &&
+						row.year === "2026" &&
+						row.totalCitations === 21,
+				) &&
+				openAlexAuthorCountries.some(
+					(row) => row.countryCode === "GB" && row.hIndex === 2,
+				) &&
+				openAlexAuthors.some(
+					(row) =>
+						row.authorName === "Citation Researcher" &&
+						row.totalCitations === 21,
+				) &&
+				openAlexTopics.topicStats.some(
+					(row) =>
+						row.fullPath === citationTopicKey &&
+						row.totalCitations === 21,
+				) &&
+				openAlexTopicsByYear.some(
+					(row) =>
+						row.fullPath === citationTopicKey &&
+						row.year === "2026" &&
+						row.totalCitations === 21,
+				),
+			`Source citation statistics did not use the selected metric: ${JSON.stringify({ citationStats: openAlexCitationStats, citationsByYear: openAlexCitationsByYear, institutions: openAlexInstitutions, institutionsByYear: openAlexInstitutionsByYear, authorCountries: openAlexAuthorCountries, authors: openAlexAuthors, topics: openAlexTopics, topicsByYear: openAlexTopicsByYear })}`,
+		);
+
+		const openAlexBeforeUpdate = await db
+			.select({ key: item.key, revision: item.revision })
+			.from(item)
+			.where(inArray(item.key, [openAlexA, openAlexB]));
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "openalex-citations-writer",
+				expectedCursor: { page: 2 },
+				nextCursor: { page: 3 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "W100000001",
+					remoteVersion: "2026-07-30",
+					raw: {
+						id: "https://openalex.org/W100000001",
+						cited_by_count: 18,
+					},
+					metadata: {
+						itemType: "JournalArticle",
+						title: "Citing work",
+					},
+					citationMetric: {
+						citedByCount: 18,
+						referencedWorksCount: 0,
+					},
+					referencedSourceRecordKeys: [],
+				},
+			],
+		});
+		const [updatedMetric] = await db
+			.select()
+			.from(itemCitationMetric)
+			.where(
+				and(
+					eq(itemCitationMetric.itemKey, openAlexA),
+					eq(
+						itemCitationMetric.sourceConnectionKey,
+						"openalex-citations-writer",
+					),
+				),
+			);
+		const openAlexAfterUpdate = await db
+			.select({ key: item.key, revision: item.revision })
+			.from(item)
+			.where(inArray(item.key, [openAlexA, openAlexB]));
+		const beforeRevision = new Map(
+			openAlexBeforeUpdate.map((row) => [row.key, row.revision]),
+		);
+		assert(
+			updatedMetric?.citedByCount === 18 &&
+				(
+					await db
+						.select()
+						.from(itemLink)
+						.where(
+							eq(
+								itemLink.origin,
+								"source:openalex-citations-writer",
+							),
+						)
+				).length === 0 &&
+				openAlexAfterUpdate.every(
+					(row) => row.revision > (beforeRevision.get(row.key) ?? 0),
+				),
+			"Replacing source metrics and citations must update the metric, remove stale links, and reindex both records",
+		);
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "openalex-citations-writer",
+				expectedCursor: { page: 3 },
+				nextCursor: { page: 4 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "W100000001",
+					remoteVersion: "2026-07-31",
+					raw: { id: "https://openalex.org/W100000001" },
+					metadata: {
+						itemType: "JournalArticle",
+						title: "Citing work",
+					},
+					citationMetric: null,
+					referencedSourceRecordKeys: [],
+				},
+			],
+		});
+		const removedMetric = await db
+			.select()
+			.from(itemCitationMetric)
+			.where(
+				and(
+					eq(itemCitationMetric.itemKey, openAlexA),
+					eq(
+						itemCitationMetric.sourceConnectionKey,
+						"openalex-citations-writer",
+					),
+				),
+			);
+		assert(
+			removedMetric.length === 0,
+			"A source that stops reporting citation metrics must remove its stale metric row",
 		);
 
 		console.log(

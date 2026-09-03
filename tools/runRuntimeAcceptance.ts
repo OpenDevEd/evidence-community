@@ -671,9 +671,9 @@ async function waitForRepositoryComposeRevision(
 async function repositoryComposeRevision(baseUrl: string) {
 	// Recreating the web container closes any in-flight socket. The bounded
 	// caller keeps polling and still fails if health does not return.
-	const response = await fetch(
-		`${baseUrl}/api/library-config/health`,
-	).catch(() => new Response(null, { status: 503 }));
+	const response = await fetch(`${baseUrl}/api/library-config/health`).catch(
+		() => new Response(null, { status: 503 }),
+	);
 	if (!response.ok) return null;
 	const health = (await response.json()) as RuntimeConfigHealth;
 	if (!health.active) return null;
@@ -1491,6 +1491,12 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_TITLE: `${searchItemPrefix} runtime evidence`,
 		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY: databaseItemKey,
 		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE: `${searchItemPrefix} database evidence`,
+		PLAYWRIGHT_EXPECTED_SOURCE_CITATION_LABEL:
+			profile.name === "amber" ? "OpenAlex acceptance citations" : "",
+		PLAYWRIGHT_EXPECTED_SOURCE_CITATION_COUNT:
+			profile.name === "amber" ? "37" : "",
+		PLAYWRIGHT_EXPECTED_LIBRARY_CITATION_LABEL:
+			messages.ui.libraryCitations,
 		PLAYWRIGHT_EXPECTED_NAVIGATION_LABEL:
 			config.navigation.links[0]?.label ?? "",
 		PLAYWRIGHT_EXPECTED_EXTERNAL_NAVIGATION_LABEL:

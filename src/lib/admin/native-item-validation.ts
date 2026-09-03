@@ -102,10 +102,9 @@ const relationsSchema = z
 		"mendeleyDB:notebookUUID": stringOrStringsSchema.optional(),
 		"mendeleyDB:relatedDocumentUUID": stringOrStringsSchema.optional(),
 		"mendeleyDB:relatedFileHash": stringOrStringsSchema.optional(),
-		"mendeleyDB:relatedRemoteDocumentUUID": stringOrStringsSchema.optional(),
+		"mendeleyDB:relatedRemoteDocumentUUID":
+			stringOrStringsSchema.optional(),
 		"mendeleyDB:remoteDocumentUUID": stringOrStringsSchema.optional(),
-		cited_by: z.number().int().nonnegative().optional(),
-		referenced_works: z.array(z.string()).optional(),
 		related_works: stringOrStringsSchema.optional(),
 	})
 	.strict();
@@ -175,7 +174,8 @@ function parseItemLinks(value: unknown): ValidatedItemLinks {
 		new NativeItemValidationError("Choose valid linked records.", {
 			links: "One or more linked records are invalid.",
 		});
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw invalid();
 	const record = value as Record<string, unknown>;
 	for (const key of Object.keys(record)) {
 		if (!(ITEM_LINK_PAYLOAD_KINDS as readonly string[]).includes(key)) {
@@ -279,9 +279,9 @@ export function validateNativeItemDraft(
 		const { field, semanticField } = descriptor;
 		const databaseField = canonicalItemFieldToDatabaseField(semanticField);
 		const hasItemField = Object.hasOwn(payload, field);
-		const alternativeNames = [...new Set([semanticField, databaseField])].filter(
-			(name) => name !== field,
-		);
+		const alternativeNames = [
+			...new Set([semanticField, databaseField]),
+		].filter((name) => name !== field);
 		if (
 			hasItemField &&
 			alternativeNames.some((name) => Object.hasOwn(payload, name))

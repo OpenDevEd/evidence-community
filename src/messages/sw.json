@@ -242,6 +242,8 @@
     "totalItems": "Jumla ya Vitu",
     "inDatabase": "katika hifadhidata",
     "totalCitations": "Nukuu Zote",
+    "libraryCitations": "Nukuu katika maktaba hii",
+    "citationMeasure": "Kipimo cha nukuu",
     "haveCitations": "kuwa na nukuu",
     "uniqueCreators": "Waundaji wa Kipekee",
     "perItem": "kwa bidhaa",

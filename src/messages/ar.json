@@ -241,6 +241,8 @@
     "totalItems": "إجمالي العناصر",
     "inDatabase": "في قاعدة البيانات",
     "totalCitations": "إجمالي الاستشهادات",
+    "libraryCitations": "الاستشهادات في هذه المكتبة",
+    "citationMeasure": "مقياس الاستشهادات",
     "haveCitations": "لديه استشهادات",
     "uniqueCreators": "منشئو المحتوى الفريدون",
     "perItem": "لكل عنصر",

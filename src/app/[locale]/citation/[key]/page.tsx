@@ -19,10 +19,10 @@ async function getSourceItem(key: string) {
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
-	'use cache'
+	"use cache";
 	const params = await props.params;
-	cacheLife({ revalidate: 60 })
-	cacheTag('metadata-citation-' + params.key)
+	cacheLife({ revalidate: 60 });
+	cacheTag("metadata-citation-" + params.key);
 	const [data, libraryConfig] = await Promise.all([
 		getSourceItem(params.key),
 		getLibraryConfig(),
@@ -73,7 +73,7 @@ async function ServerComponent(props: { params: Promise<{ key: string }> }) {
 	const params = await props.params;
 	const data = await getSourceItem(params.key);
 	
-	if (!data || !data.item || data.item.provider === "openalex") {
+	if (!data || !data.item) {
 		return notFound();
 	}
 
@@ -89,4 +89,3 @@ export default async function CitationPage(props: {
 		</Suspense>
 	);
 }
-

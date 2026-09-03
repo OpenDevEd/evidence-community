@@ -241,6 +241,8 @@
     "totalItems": "Articles totaux",
     "inDatabase": "dans la base de données",
     "totalCitations": "Nombre total de citations",
+    "libraryCitations": "Citations dans cette bibliothèque",
+    "citationMeasure": "Mesure des citations",
     "haveCitations": "avoir des citations",
     "uniqueCreators": "Créateurs uniques",
     "perItem": "par article",

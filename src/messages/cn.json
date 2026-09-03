@@ -241,6 +241,8 @@
     "totalItems": "总项目",
     "inDatabase": "在数据库中",
     "totalCitations": "总引用量",
+    "libraryCitations": "本库中的引用",
+    "citationMeasure": "引用指标",
     "haveCitations": "有引用",
     "uniqueCreators": "独特的创作者",
     "perItem": "每个项目",

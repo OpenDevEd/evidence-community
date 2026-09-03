@@ -70,7 +70,10 @@ describe("native item draft validation", () => {
 
 	it("rejects an attachment without a parent record", () => {
 		try {
-			validateNativeItemDraft({ itemType: "Attachment", title: "Loose PDF" });
+			validateNativeItemDraft({
+				itemType: "Attachment",
+				title: "Loose PDF",
+			});
 			expect.unreachable("A parentless attachment must not validate");
 		} catch (error) {
 			expect(error).toMatchObject({
@@ -190,7 +193,9 @@ describe("native item draft validation", () => {
 			)) {
 				const expectedValue = expected.get(descriptor.field);
 				expect(editorPayload[descriptor.field]).toBe(expectedValue);
-				expect(editorDraft.payload[descriptor.field]).toBe(expectedValue);
+				expect(editorDraft.payload[descriptor.field]).toBe(
+					expectedValue,
+				);
 				checkedFields += 1;
 			}
 		}
@@ -274,7 +279,8 @@ describe("native item draft validation", () => {
 			} catch (error) {
 				expect(error).toMatchObject({
 					fields: {
-						[titleDescriptor.field]: "Enter a title before publishing.",
+						[titleDescriptor.field]:
+							"Enter a title before publishing.",
 					},
 				});
 			}
@@ -318,7 +324,9 @@ describe("native item draft validation", () => {
 				"annotationPosition",
 				{
 					...annotation,
-					annotationPosition: JSON.stringify({ value: "p".repeat(65_536) }),
+					annotationPosition: JSON.stringify({
+						value: "p".repeat(65_536),
+					}),
 				},
 				"Annotation Position is too long. Shorten it and try again.",
 			],
@@ -387,7 +395,10 @@ describe("native item draft validation", () => {
 			}),
 		).toThrow("Check the record relationships");
 
-		for (const legacyLinks of [{ cites: ["ABCD2345"] }, { citedBy: ["ABCD2345"] }]) {
+		for (const legacyLinks of [
+			{ cites: ["ABCD2345"] },
+			{ citedBy: ["ABCD2345"] },
+		]) {
 			expect(() =>
 				validateNativeItemDraft({
 					itemType: "Book",
@@ -396,21 +407,18 @@ describe("native item draft validation", () => {
 			).toThrow("Check the record relationships");
 		}
 
-		expect(
+		expect(() =>
 			validateNativeItemDraft({
 				itemType: "Book",
-				relations: {
-					"dc:relation":
-						"http://zotero.org/users/123/items/ABCD2345",
-					cited_by: 4,
-					referenced_works: ["WXYZ6789"],
-				},
-			}).item.relations,
-		).toEqual({
-			"dc:relation": "http://zotero.org/users/123/items/ABCD2345",
-			cited_by: 4,
-			referenced_works: ["WXYZ6789"],
-		});
+				relations: { cited_by: 4 },
+			}),
+		).toThrow("Check the record relationships");
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				relations: { referenced_works: ["WXYZ6789"] },
+			}),
+		).toThrow("Check the record relationships");
 	});
 
 	it("returns field errors for fields and creator roles that do not belong to the item type", () => {
@@ -546,12 +554,16 @@ describe("native item draft validation", () => {
 		expect(
 			validateNativeItemDraft({
 				itemType: "Book",
-				links: { cites: [" WXYZ6789 ", "QRST2345"], related: ["WXYZ6789"] },
+				links: {
+					cites: [" WXYZ6789 ", "QRST2345"],
+					related: ["WXYZ6789"],
+				},
 			}).links,
 		).toEqual({ cites: ["QRST2345", "WXYZ6789"], related: ["WXYZ6789"] });
-		expect(
-			validateNativeItemDraft({ itemType: "Book" }).links,
-		).toEqual({ cites: [], related: [] });
+		expect(validateNativeItemDraft({ itemType: "Book" }).links).toEqual({
+			cites: [],
+			related: [],
+		});
 		expect(() =>
 			validateNativeItemDraft({
 				itemType: "Book",

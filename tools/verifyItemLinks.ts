@@ -28,7 +28,7 @@ import {
 	getPublicItemLinks,
 	getPublicItemLinksForKeys,
 	replaceManualLinks,
-	replaceSourceRelatedLinks,
+	replaceSourceLinks,
 	sourceItemLinkOrigin,
 } from "../src/lib/links/item-links";
 
@@ -150,7 +150,12 @@ async function verify() {
 		);
 		await db
 			.delete(itemLink)
-			.where(and(eq(itemLink.fromKey, A), eq(itemLink.origin, sourceItemLinkOrigin(SOURCE))));
+			.where(
+				and(
+					eq(itemLink.fromKey, A),
+					eq(itemLink.origin, sourceItemLinkOrigin(SOURCE)),
+				),
+			);
 
 		// Manual replacement
 		const first = await replaceManualLinks(db, {
@@ -171,7 +176,11 @@ async function verify() {
 			second.removed.join() === B && second.added.length === 0,
 			"replaceManualLinks must remove keys that are no longer wanted",
 		);
-		await replaceManualLinks(db, { fromKey: A, kind: "related", toKeys: [D] });
+		await replaceManualLinks(db, {
+			fromKey: A,
+			kind: "related",
+			toKeys: [D],
+		});
 		const manual = await getManualLinkKeys(db, A);
 		assert(
 			manual.cites.join() === C && manual.related.join() === D,
@@ -201,11 +210,16 @@ async function verify() {
 				(await getManualLinkKeys(db, A)).related.length === 0,
 			"Removing a related link from the other side must delete the stored row",
 		);
-		await replaceManualLinks(db, { fromKey: A, kind: "related", toKeys: [D] });
+		await replaceManualLinks(db, {
+			fromKey: A,
+			kind: "related",
+			toKeys: [D],
+		});
 
 		// Source mirroring never touches manual rows; it may assert a pair the editor also owns
-		const mirror = await replaceSourceRelatedLinks(db, {
+		const mirror = await replaceSourceLinks(db, {
 			sourceConnectionKey: SOURCE,
+			kind: "related",
 			fromKeys: [A, B],
 			links: [
 				{ fromKey: A, toKey: D },
@@ -217,7 +231,7 @@ async function verify() {
 		assert(
 			mirror.inserted === 3 &&
 				mirror.removed === 0 &&
-				mirror.changedTargets.join() === [A, B, D].join(),
+				mirror.changedItemKeys.join() === [A, B, D].join(),
 			`Source mirroring must insert A→D, A→B and B→A, skip the self link, and report the other ends (got ${JSON.stringify(mirror)})`,
 		);
 		const manualAfterMirror = await getManualLinkKeys(db, A);
@@ -225,15 +239,16 @@ async function verify() {
 			manualAfterMirror.related.join() === D,
 			"Source mirroring must leave manual rows alone",
 		);
-		const secondMirror = await replaceSourceRelatedLinks(db, {
+		const secondMirror = await replaceSourceLinks(db, {
 			sourceConnectionKey: SOURCE,
+			kind: "related",
 			fromKeys: [A, B],
 			links: [{ fromKey: B, toKey: A }],
 		});
 		assert(
 			secondMirror.inserted === 1 &&
 				secondMirror.removed === 3 &&
-				secondMirror.changedTargets.join() === [B, D].join(),
+				secondMirror.changedItemKeys.join() === [A, B, D].join(),
 			`Second mirror keeps B→A and reports only the pairs that changed (got ${JSON.stringify(secondMirror)})`,
 		);
 		const aOutgoing = await getOutgoingLinks(db, A);
@@ -279,13 +294,19 @@ async function verify() {
 		await db.insert(tag).values({ name: HIDDEN_TAG }).onConflictDoNothing();
 		await db.insert(itemToTag).values({ itemKey: C, tagName: HIDDEN_TAG });
 		assert(
-			(await getPublicItemLinks(db, A, { hiddenTags: [HIDDEN_TAG] })).cites.length === 0 &&
-				(await getPublicItemLinks(db, C, { hiddenTags: [HIDDEN_TAG] })).citedBy.join() === A,
+			(await getPublicItemLinks(db, A, { hiddenTags: [HIDDEN_TAG] }))
+				.cites.length === 0 &&
+				(
+					await getPublicItemLinks(db, C, {
+						hiddenTags: [HIDDEN_TAG],
+					})
+				).citedBy.join() === A,
 			"Hidden-tag targets must be left out of public links",
 		);
 		const batched = await getPublicItemLinksForKeys(db, [A, C]);
 		assert(
-			batched.get(A)?.cites.join() === C && batched.get(C)?.citedBy.join() === A,
+			batched.get(A)?.cites.join() === C &&
+				batched.get(C)?.citedBy.join() === A,
 			`Batched public links must match the single read: ${JSON.stringify([...batched])}`,
 		);
 		await db.delete(itemToTag).where(eq(itemToTag.itemKey, C));
@@ -365,15 +386,22 @@ async function verify() {
 		const outboxRows = await db
 			.select({ entityKey: outbox.entityKey, revision: outbox.revision })
 			.from(outbox)
-			.where(inArray(outbox.entityKey, [draftA.itemKey, draftB.itemKey, B]))
+			.where(
+				inArray(outbox.entityKey, [draftA.itemKey, draftB.itemKey, B]),
+			)
 			.orderBy(outbox.id);
 		assert(
 			outboxRows.some(
-				(row) => row.entityKey === draftB.itemKey && row.revision === bAfter.revision,
+				(row) =>
+					row.entityKey === draftB.itemKey &&
+					row.revision === bAfter.revision,
 			) && outboxRows.some((row) => row.entityKey === B),
 			`Publish must enqueue outbox rows for both link targets: ${JSON.stringify(outboxRows)}`,
 		);
-		const draftPayloadAfterPublish = await openItemDraft(db, draftA.itemKey);
+		const draftPayloadAfterPublish = await openItemDraft(
+			db,
+			draftA.itemKey,
+		);
 		assert(
 			JSON.stringify(draftPayloadAfterPublish.payload.links) ===
 				JSON.stringify({ cites: [draftB.itemKey], related: [B] }) &&
@@ -381,13 +409,17 @@ async function verify() {
 			"Reopening the record must show published links with an empty patch",
 		);
 		// A save that leaves out `links` keeps the published links.
-		const { links: _omitted, ...payloadWithoutLinks } = draftPayloadAfterPublish.payload;
+		const { links: _omitted, ...payloadWithoutLinks } =
+			draftPayloadAfterPublish.payload;
 		const keptLinks = await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
 			expectedDraftGeneration: draftPayloadAfterPublish.generation,
 			expectedDraftRevision: draftPayloadAfterPublish.draftRevision,
 			expectedPayload: draftPayloadAfterPublish.payload,
-			payload: { ...payloadWithoutLinks, title: "Publish link source (edited)" },
+			payload: {
+				...payloadWithoutLinks,
+				title: "Publish link source (edited)",
+			},
 		});
 		assert(
 			JSON.stringify(keptLinks.payload.links) ===
@@ -443,7 +475,10 @@ async function verify() {
 				error instanceof NativeItemValidationError &&
 				/no longer exists/.test(error.message);
 		}
-		assert(missingRejected, "Publishing a link to a missing record must fail");
+		assert(
+			missingRejected,
+			"Publishing a link to a missing record must fail",
+		);
 		assert(
 			(await getManualLinkKeys(db, draftA.itemKey)).related.join() === B,
 			"A failed publish must not change link rows",
@@ -528,7 +563,9 @@ async function verify() {
 		);
 		assert(
 			newRelatedJobs.length === 1 &&
-				(newRelatedJobs[0]!.dirtyFields as string[]).includes("relations"),
+				(newRelatedJobs[0]!.dirtyFields as string[]).includes(
+					"relations",
+				),
 			`A related change must enqueue one writeback job with relations: ${JSON.stringify(newRelatedJobs)}`,
 		);
 		const citesDraft = await openItemDraft(db, draftA.itemKey);
@@ -539,7 +576,10 @@ async function verify() {
 			expectedPayload: citesDraft.payload,
 			payload: {
 				...citesDraft.payload,
-				links: { cites: [draftB.itemKey], related: [B, draftB.itemKey] },
+				links: {
+					cites: [draftB.itemKey],
+					related: [B, draftB.itemKey],
+				},
 			},
 		});
 		await publishItemDraft(db, draftA.itemKey);
@@ -580,7 +620,8 @@ async function verify() {
 		// Unpublishing/removing a record is a soft delete: rows stay, public reads hide them.
 		await removeNativeItem(db, draftB.itemKey);
 		assert(
-			(await getManualLinkKeys(db, draftA.itemKey)).cites.join() === draftB.itemKey,
+			(await getManualLinkKeys(db, draftA.itemKey)).cites.join() ===
+				draftB.itemKey,
 			"Unpublishing a record must keep the link rows",
 		);
 		assert(
@@ -595,12 +636,16 @@ async function verify() {
 	}
 }
 
-async function cleanup(db: ReturnType<typeof createPostgresDatabaseResource>["database"]) {
+async function cleanup(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+) {
 	const keys = [...KEYS, ...nativeKeys];
 	await db
 		.delete(sourceWritebackJob)
 		.where(inArray(sourceWritebackJob.itemKey, keys));
-	await db.delete(itemSourceLink).where(inArray(itemSourceLink.itemKey, keys));
+	await db
+		.delete(itemSourceLink)
+		.where(inArray(itemSourceLink.itemKey, keys));
 	await db.delete(outbox).where(inArray(outbox.entityKey, keys));
 	await db.delete(itemDraft).where(inArray(itemDraft.itemKey, keys));
 	await db.delete(item).where(inArray(item.key, keys));
@@ -613,7 +658,9 @@ async function cleanup(db: ReturnType<typeof createPostgresDatabaseResource>["da
 				eq(itemIdentity.sourceConnectionKey, "native"),
 			),
 		);
-	await db.delete(sourceConnection).where(eq(sourceConnection.key, WRITEBACK_SOURCE));
+	await db
+		.delete(sourceConnection)
+		.where(eq(sourceConnection.key, WRITEBACK_SOURCE));
 }
 
 verify().catch((error) => {
