@@ -2220,6 +2220,62 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 		.toBe("restored");
 });
 
+test("keeps the URL-selected record open when filters hide its row", async ({
+	page,
+}) => {
+	await mockPublishedBook(page, { itemCount: 2 });
+	await page.route("**/api/admin/items?**", async (route) => {
+		const request = route.request();
+		const url = new URL(request.url());
+		const filters = url.searchParams.get("filters") ?? "";
+		if (
+			request.method() !== "GET" ||
+			url.pathname !== "/api/admin/items" ||
+			!filters.includes('"draft"')
+		) {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			json: {
+				hasMore: false,
+				items: [
+					publishedListRow({
+						key: "OTHER001",
+						state: "draft",
+						title: "Another draft",
+					}),
+				],
+				nextCursor: null,
+			},
+		});
+	});
+
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await expect(
+		inspector.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get("item"))
+		.toBe(publishedItemKey);
+
+	await page.getByRole("button", { name: "Drafts", exact: true }).click();
+	await expect(
+		page.locator(`tr[data-record-key="${publishedItemKey}"]`),
+	).toHaveCount(0);
+	await expect(
+		inspector.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+	expect(new URL(page.url()).searchParams.get("item")).toBe(publishedItemKey);
+
+	await page.reload();
+	await expect(
+		inspector.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+	expect(new URL(page.url()).searchParams.get("item")).toBe(publishedItemKey);
+});
+
 test("keeps the filter editor inside a narrow viewport", async ({ page }) => {
 	await mockPublishedBook(page);
 	await page.setViewportSize({ height: 844, width: 390 });

@@ -409,9 +409,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(detail, requestedColumns, initialFilters, {
-		pinSelection: linkPick !== null && linkPick.forKey === detail?.key,
-	});
+	} = useAdminItemList(requestedColumns, initialFilters);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
