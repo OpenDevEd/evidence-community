@@ -1,13 +1,12 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { parseAsString, useQueryState } from "nuqs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { AdminItemColumnId } from "@/lib/admin/item-list-contract";
-import { resolveAdminSelection } from "@/lib/admin/selection";
 import type {
-	AdminItemDetail,
 	AdminItemListRow,
 	AdminItemViewFilters,
 } from "@/lib/admin/types";
@@ -58,10 +57,8 @@ function buildListSearchParams(
 }
 
 export function useAdminItemList(
-	detail: AdminItemDetail | null,
 	requestedColumns: readonly AdminItemColumnId[],
 	initialFilters: AdminItemViewFilters,
-	options: { pinSelection?: boolean } = {},
 ) {
 	const routeSearchParams = useSearchParams();
 	const routeSearch = routeSearchParams.toString();
@@ -72,14 +69,18 @@ export function useAdminItemList(
 	const [nextCursor, setNextCursor] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [selectedKey, setSelectedKey] = useState<string | null>(null);
+	const [selectedKey, setSelectedKeyInUrl] = useQueryState(
+		"item",
+		parseAsString.withOptions({ history: "push" }),
+	);
 	const [bulkKeys, setBulkKeys] = useState<Set<string>>(new Set());
 	const requestId = useRef(0);
 	const requestController = useRef<AbortController | null>(null);
-	const detailRef = useRef(detail);
-	detailRef.current = detail;
-	const pinSelectionRef = useRef(Boolean(options.pinSelection));
-	pinSelectionRef.current = Boolean(options.pinSelection);
+	const selectionInitialized = useRef(selectedKey !== null);
+	const setSelectedKey = useCallback(
+		(key: string | null) => void setSelectedKeyInUrl(key),
+		[setSelectedKeyInUrl],
+	);
 
 	useEffect(() => {
 		const next = writeAdminItemViewFilters(
@@ -127,15 +128,14 @@ export function useAdminItemList(
 						);
 						return next.size === current.size ? current : next;
 					});
-					setSelectedKey((current) =>
-						resolveAdminSelection(
-							current,
-							visibleKeys,
-							detailRef.current,
-							page.items[0]?.key ?? null,
-							{ pinned: pinSelectionRef.current },
-						),
-					);
+					const firstVisibleKey = page.items[0]?.key ?? null;
+					if (!selectionInitialized.current && firstVisibleKey) {
+						selectionInitialized.current = true;
+						void setSelectedKeyInUrl(
+							(current) => current ?? firstVisibleKey,
+							{ history: "replace" },
+						);
+					}
 				}
 				setHasMore(page.hasMore);
 				setNextCursor(page.nextCursor);
@@ -154,7 +154,7 @@ export function useAdminItemList(
 				if (currentRequest === requestId.current) setLoading(false);
 			}
 		},
-		[filters, requestedColumns],
+		[filters, requestedColumns, setSelectedKeyInUrl],
 	);
 
 	useEffect(() => {
