@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { Item } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { getDatabaseForConfig } from "@/db";
-import type { RelationsType } from "@/types/item";
 import { getPublicItemLinks } from "@/lib/links/item-links";
+import {
+	getSourceCitationMetrics,
+	type SourceCitationMetric,
+} from "@/lib/links/citation-metrics";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -17,7 +20,8 @@ export type CitationYearData = {
 export type CitationsResponse = {
 	sourceItem: Item | null;
 	citingItems: Item[];
-	totalCitations: number;
+	libraryCitationCount: number;
+	sourceCitationMetrics: SourceCitationMetric[];
 	yearDistribution: CitationYearData[];
 	countryDistribution: { country: string; count: number }[];
 	page: number;
@@ -34,11 +38,7 @@ async function getSourceItem(
 		const { index } = await getMeilisearchForConfig(libraryConfig);
 		const result = await index.getDocument(key);
 
-		if (
-			!result ||
-			result.deleted ||
-			hasAnyTag(result.tags, hiddenTags)
-		) {
+		if (!result || result.deleted || hasAnyTag(result.tags, hiddenTags)) {
 			return null;
 		}
 
@@ -84,9 +84,7 @@ async function getCitingItems(
 		});
 
 		const filteredItems = (result.hits as Item[]).filter(
-			(item) =>
-				!item.deleted &&
-				!hasAnyTag(item.tags, hiddenTags)
+			(item) => !item.deleted && !hasAnyTag(item.tags, hiddenTags),
 		);
 
 		return {
@@ -97,7 +95,10 @@ async function getCitingItems(
 		};
 	} catch (error: any) {
 		if (error?.response?.status !== 404) {
-			console.warn("Error fetching citing items from meilisearch:", error);
+			console.warn(
+				"Error fetching citing items from meilisearch:",
+				error,
+			);
 		}
 		return {
 			items: [],
@@ -110,7 +111,7 @@ async function getCitingItems(
 
 export async function GET(
 	request: NextRequest,
-	props: { params: Promise<{ key: string }> }
+	props: { params: Promise<{ key: string }> },
 ) {
 	const params = await props.params;
 	const { searchParams } = new URL(request.url);
@@ -122,17 +123,14 @@ export async function GET(
 	const hiddenTags = libraryConfig.content.tags.hidden;
 
 	// Get the source item first
-	const sourceItem = await getSourceItem(
-		key,
-		hiddenTags,
-		libraryConfig,
-	);
+	const sourceItem = await getSourceItem(key, hiddenTags, libraryConfig);
 
 	if (!sourceItem) {
 		return NextResponse.json<CitationsResponse>({
 			sourceItem: null,
 			citingItems: [],
-			totalCitations: 0,
+			libraryCitationCount: 0,
+			sourceCitationMetrics: [],
 			yearDistribution: [],
 			countryDistribution: [],
 			page,
@@ -141,14 +139,16 @@ export async function GET(
 		});
 	}
 
-	// Records that cite this one come from the link table in PostgreSQL. Provider
-	// data may still carry a larger citation count for works outside this library.
+	// Records listed on this page are library links. Source-reported totals are
+	// returned separately because the two sets overlap and cannot be combined.
 	const linksDb = await getDatabaseForConfig(libraryConfig);
-	const { citedBy: citedByKeys } = await getPublicItemLinks(linksDb, key, {
-		hiddenTags,
-	});
-	const providerCitedBy = (sourceItem.relations as RelationsType)?.cited_by ?? 0;
-	const totalCitations = Math.max(citedByKeys.length, providerCitedBy);
+	const [{ citedBy: citedByKeys }, sourceCitationMetrics] = await Promise.all(
+		[
+			getPublicItemLinks(linksDb, key, { hiddenTags }),
+			getSourceCitationMetrics(linksDb, key),
+		],
+	);
+	const libraryCitationCount = citedByKeys.length;
 
 	// Fetch citing items with pagination and facets
 	const {
@@ -174,18 +174,25 @@ export async function GET(
 		.sort((a, b) => b.count - a.count);
 
 	// Calculate items without country focus
-	const itemsWithCountry = Object.values(rawCountryDistribution).reduce((sum, count) => sum + count, 0);
-	const itemsWithoutCountry = totalCitations - itemsWithCountry;
+	const itemsWithCountry = Object.values(rawCountryDistribution).reduce(
+		(sum, count) => sum + count,
+		0,
+	);
+	const itemsWithoutCountry = libraryCitationCount - itemsWithCountry;
 	if (itemsWithoutCountry > 0) {
-		countryDistribution.push({ country: "UNKNOWN", count: itemsWithoutCountry });
+		countryDistribution.push({
+			country: "UNKNOWN",
+			count: itemsWithoutCountry,
+		});
 	}
 
-	const totalPages = Math.ceil(totalCitations / perPage);
+	const totalPages = Math.ceil(libraryCitationCount / perPage);
 
 	const response: CitationsResponse = {
 		sourceItem,
 		citingItems: paginatedItems,
-		totalCitations,
+		libraryCitationCount,
+		sourceCitationMetrics,
 		yearDistribution,
 		countryDistribution,
 		page,

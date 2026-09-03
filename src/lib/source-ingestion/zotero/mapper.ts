@@ -249,6 +249,8 @@ export async function mapZoteroItem(
 			)
 			.map((sourceRecordKey) => ({ sourceRecordKey })),
 		aliases: aliases(item),
+		citationMetric: null,
+		referencedSourceRecordKeys: [],
 		file,
 		processingIssue,
 		sourceDates: {

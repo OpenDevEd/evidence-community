@@ -1,20 +1,47 @@
 // Import types for the comprehensive stats type
-import type { InstitutionStats, InstitutionYearStats } from "./institution-stats";
-import type { ItemTypeStats, YearStats, FieldStats, AttachmentStats, CitationYearStats } from "./basic-stats";
+import type {
+	InstitutionStats,
+	InstitutionYearStats,
+} from "./institution-stats";
+import type {
+	ItemTypeStats,
+	YearStats,
+	FieldStats,
+	AttachmentStats,
+	CitationYearStats,
+} from "./basic-stats";
 import type { CitationStats, CreatorStats } from "./citation-stats";
-import type { AuthorCountryStats, AuthorStats, AuthorProductivityStats, AuthorCollaborationStats } from "./author-stats";
+import type {
+	AuthorCountryStats,
+	AuthorStats,
+	AuthorProductivityStats,
+	AuthorCollaborationStats,
+} from "./author-stats";
 import type { CollaborationStats } from "./collaboration-stats";
 import type { TopicStats, TopicOverview, TopicYearStats } from "./topic-stats";
+import type { CitationMeasureOption } from "./citation-measure";
 
 // Export utility functions
 export { calculateHIndex } from "./utils";
 
 // Export institution-related types and functions
-export type { InstitutionStats, InstitutionYearStats } from "./institution-stats";
-export { getInstitutionStats, getInstitutionStatsByYear } from "./institution-stats";
+export type {
+	InstitutionStats,
+	InstitutionYearStats,
+} from "./institution-stats";
+export {
+	getInstitutionStats,
+	getInstitutionStatsByYear,
+} from "./institution-stats";
 
 // Export basic statistics types and functions
-export type { ItemTypeStats, YearStats, FieldStats, AttachmentStats, CitationYearStats } from "./basic-stats";
+export type {
+	ItemTypeStats,
+	YearStats,
+	FieldStats,
+	AttachmentStats,
+	CitationYearStats,
+} from "./basic-stats";
 export { 
 	getTotalItems, 
 	getAvailableYears, 
@@ -24,7 +51,7 @@ export {
 	getAttachmentStats, 
 	getPublishersAndJournals, 
 	getRecentActivity,
-	getCitationsByYear 
+	getCitationsByYear,
 } from "./basic-stats";
 
 // Export citation-related types and functions
@@ -36,13 +63,13 @@ export type {
 	AuthorCountryStats, 
 	AuthorStats, 
 	AuthorProductivityStats, 
-	AuthorCollaborationStats 
+	AuthorCollaborationStats,
 } from "./author-stats";
 export { 
 	getAuthorCountries, 
 	getAuthorProductivityStats, 
 	getAuthorCollaborationStats, 
-	getDetailedAuthorStats 
+	getDetailedAuthorStats,
 } from "./author-stats";
 
 // Export collaboration types and functions
@@ -55,6 +82,10 @@ export { getTopicStats, getTopicStatsByYear } from "./topic-stats";
 
 // Comprehensive stats type that combines all statistics
 export type ComprehensiveStats = {
+	citationMeasure: {
+		selectedKey: string;
+		options: CitationMeasureOption[];
+	};
 	institutions: InstitutionStats[];
 	institutionsByYear: InstitutionYearStats[];
 	topicsByYear: TopicYearStats[];

@@ -16,7 +16,8 @@ describe("Zotero writeback mapping", () => {
 		expect(itemType.enumValues).toHaveLength(getZoteroItemTypes().size);
 		for (const canonicalItemType of itemType.enumValues) {
 			const childFields =
-				canonicalItemType === "Attachment" || canonicalItemType === "Note"
+				canonicalItemType === "Attachment" ||
+				canonicalItemType === "Note"
 					? { parentItem: "PARENT23" }
 					: canonicalItemType === "Annotation"
 						? {
@@ -76,8 +77,6 @@ describe("Zotero writeback mapping", () => {
 					relations: {
 						"dc:relation":
 							"http://zotero.org/users/123/items/ABCD2345",
-						cited_by: 7,
-						referenced_works: ["WXYZ6789"],
 					},
 					tags: ["evidence"],
 				},
@@ -165,16 +164,12 @@ describe("Zotero writeback mapping", () => {
 			),
 		).toMatchObject({ language: "en" });
 		expect(
-			createZoteroItemPatch(
-				{ itemType: "Report", languageName: "ar" },
-				["languageName"],
-			),
+			createZoteroItemPatch({ itemType: "Report", languageName: "ar" }, [
+				"languageName",
+			]),
 		).toEqual({ language: "ar" });
 		expect(
-			createZoteroItemPatch(
-				{ itemType: "Report" },
-				["languageName"],
-			),
+			createZoteroItemPatch({ itemType: "Report" }, ["languageName"]),
 		).toEqual({ language: "" });
 	});
 
@@ -252,10 +247,9 @@ describe("Zotero writeback mapping", () => {
 
 	it("permits only clear operations for old fields during item-type changes", () => {
 		expect(
-			createZoteroItemPatch({ itemType: "Book" }, [
-				"itemType",
-				"type",
-			], { previousItemType: "report" }),
+			createZoteroItemPatch({ itemType: "Book" }, ["itemType", "type"], {
+				previousItemType: "report",
+			}),
 		).toEqual({ itemType: "book", reportType: "" });
 		expect(() =>
 			createZoteroItemPatch(
@@ -268,7 +262,9 @@ describe("Zotero writeback mapping", () => {
 			{},
 		);
 		expect(() =>
-			createZoteroItemPatch({ itemType: "Book", type: "Present" }, ["type"]),
+			createZoteroItemPatch({ itemType: "Book", type: "Present" }, [
+				"type",
+			]),
 		).toThrow(ZoteroWritebackMappingError);
 	});
 

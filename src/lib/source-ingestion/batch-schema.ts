@@ -52,6 +52,24 @@ const sourceRecordAliasSchema = z
 	})
 	.strict();
 
+const sourceCitationMetricSchema = z
+	.object({
+		citedByCount: z.number().int().nonnegative().nullable().default(null),
+		referencedWorksCount: z
+			.number()
+			.int()
+			.nonnegative()
+			.nullable()
+			.default(null),
+	})
+	.strict()
+	.refine(
+		(metric) =>
+			metric.citedByCount !== null ||
+			metric.referencedWorksCount !== null,
+		"A source citation metric must contain at least one count",
+	);
+
 const collectionReferenceSchema = z
 	.object({
 		sourceConnectionKey: z
@@ -149,6 +167,11 @@ const itemUpsertSchema = z
 		parentSourceRecordKey: sourceRecordKeySchema.nullable().default(null),
 		collections: z.array(collectionReferenceSchema).max(1_000).default([]),
 		aliases: z.array(sourceRecordAliasSchema).max(1_000).default([]),
+		citationMetric: sourceCitationMetricSchema.nullable().default(null),
+		referencedSourceRecordKeys: z
+			.array(sourceRecordKeySchema)
+			.max(10_000)
+			.default([]),
 		file: attachmentFileSchema.nullable().default(null),
 		processingIssue: sourceRecordIssueSchema.nullable().default(null),
 		sourceDates: sourceDatesSchema.nullable().default(null),

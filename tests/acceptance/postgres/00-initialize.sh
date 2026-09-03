@@ -47,6 +47,24 @@ VALUES (
 	0
 );
 
+INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "config", "displayName")
+VALUES (
+	'openalex-acceptance',
+	'openalex',
+	'query',
+	'{"query":"education"}'::jsonb,
+	'OpenAlex acceptance'
+);
+
+INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey")
+VALUES ('AMBR2345', 'openalex-acceptance', 'W100000001');
+
+INSERT INTO "itemCitationMetric" (
+	"itemKey", "sourceConnectionKey", "citedByCount", "referencedWorksCount", "observedAt"
+) VALUES (
+	'AMBR2345', 'openalex-acceptance', 37, 12, '2026-07-29T12:00:00Z'
+);
+
 INSERT INTO "itemToCollection" ("itemKey", "collectionKey")
 VALUES ('AMBR2345', 'ZBJ4NBSL');
 

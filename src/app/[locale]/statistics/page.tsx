@@ -10,13 +10,16 @@ import {
 
 export const maxDuration = 300;
 
-export default async function Statistics() {
+export default async function Statistics({
+	searchParams,
+}: {
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
 	await connection();
 	const config = await getLibraryConfig();
-	const hasStatistics = hasRuntimeNavigationPath(
-		config.navigation.links,
-		"/statistics",
-	) || config.footer.sections.some((section) =>
+	const hasStatistics =
+		hasRuntimeNavigationPath(config.navigation.links, "/statistics") ||
+		config.footer.sections.some((section) =>
 		hasRuntimeLinkPath(section.links, "/statistics"),
 	);
 
@@ -24,7 +27,12 @@ export default async function Statistics() {
 		return notFound();
 	}
 
-	const stats = await getComprehensiveStats();
+	const requestedMeasure = (await searchParams).citation;
+	const stats = await getComprehensiveStats(
+		Array.isArray(requestedMeasure)
+			? requestedMeasure[0]
+			: requestedMeasure,
+	);
 
 	return <StatisticsPage stats={stats} />;
 }

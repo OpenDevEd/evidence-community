@@ -896,10 +896,14 @@ async function verify() {
 			expectedDraftRevision: conflictEdit.draftRevision,
 			expectedPayload: conflictEdit.payload,
 			itemKey: conflictDraft.itemKey,
-			payload: { ...conflictEdit.payload, title: "Edited during conflict" },
+			payload: {
+				...conflictEdit.payload,
+				title: "Edited during conflict",
+			},
 		});
 		await publishItemDraft(db, conflictDraft.itemKey);
-		const blockedSend = await processNextSourceWritebackJob(consumerOptions);
+		const blockedSend =
+			await processNextSourceWritebackJob(consumerOptions);
 		assert(
 			blockedSend.status === "superseded" &&
 				calls.length === callsBeforeConflict,
@@ -943,7 +947,8 @@ async function verify() {
 			[connectionKey],
 			conflictConfig,
 		);
-		const secondCheck = await processNextSourceWritebackJob(consumerOptions);
+		const secondCheck =
+			await processNextSourceWritebackJob(consumerOptions);
 		assert(
 			secondCheck.status === "conflict",
 			"The second remote change was not detected as a conflict",
@@ -952,6 +957,7 @@ async function verify() {
 			mappingProfileVersion: "fake-writeback-v1",
 			record: {
 				aliases: [],
+				citationMetric: null,
 				collections: [],
 				file: null,
 				metadata: {
@@ -963,6 +969,7 @@ async function verify() {
 				parentSourceRecordKey: null,
 				processingIssue: null,
 				raw: { key: conflictDraft.itemKey, version: 1000 },
+				referencedSourceRecordKeys: [],
 				remoteVersion: "1000",
 				sourceDates: null,
 				sourceRecordKey: conflictDraft.itemKey,
@@ -978,15 +985,25 @@ async function verify() {
 				itemKey: conflictDraft.itemKey,
 				mappingProfileVersion: "fake-writeback-v1",
 				payload: fakeRemote.record.record as Record<string, unknown>,
-				payloadHash: sourceItemFingerprint(fakeRemote.record.record as never),
+				payloadHash: sourceItemFingerprint(
+					fakeRemote.record.record as never,
+				),
 				remoteVersion: "1000",
 				sourceConnectionKey: connectionKey,
 			})
 			.onConflictDoUpdate({
-				target: [sourceSnapshot.itemKey, sourceSnapshot.sourceConnectionKey],
+				target: [
+					sourceSnapshot.itemKey,
+					sourceSnapshot.sourceConnectionKey,
+				],
 				set: {
-					payload: fakeRemote.record.record as Record<string, unknown>,
-					payloadHash: sourceItemFingerprint(fakeRemote.record.record as never),
+					payload: fakeRemote.record.record as Record<
+						string,
+						unknown
+					>,
+					payloadHash: sourceItemFingerprint(
+						fakeRemote.record.record as never,
+					),
 					remoteVersion: "1000",
 				},
 			});
@@ -1042,7 +1059,9 @@ async function verify() {
 			.from(itemSourceLink)
 			.where(eq(itemSourceLink.itemKey, twoSourceDraft.itemKey));
 		const twoJobs = await db
-			.select({ sourceConnectionKey: sourceWritebackJob.sourceConnectionKey })
+			.select({
+				sourceConnectionKey: sourceWritebackJob.sourceConnectionKey,
+			})
 			.from(sourceWritebackJob)
 			.where(
 				and(
@@ -1064,7 +1083,8 @@ async function verify() {
 			twoSourceConfig,
 		);
 		const firstOfTwo = await processNextSourceWritebackJob(consumerOptions);
-		const secondOfTwo = await processNextSourceWritebackJob(consumerOptions);
+		const secondOfTwo =
+			await processNextSourceWritebackJob(consumerOptions);
 		const statuses = [firstOfTwo.status, secondOfTwo.status].sort();
 		assert(
 			statuses.join(",") === "processed,superseded" &&
@@ -1091,7 +1111,8 @@ async function verify() {
 			[connectionKey, secondConnectionKey],
 			twoSourceConfig,
 		);
-		const resentSecond = await processNextSourceWritebackJob(consumerOptions);
+		const resentSecond =
+			await processNextSourceWritebackJob(consumerOptions);
 		assert(
 			resentSecond.status === "processed" &&
 				calls.at(-1)?.sourceConnection.key === secondConnectionKey,
@@ -1161,7 +1182,10 @@ async function verify() {
 		);
 		// Published without choosing a source, so it never gets a source link.
 		await publishItemDraft(db, unlinkedTarget.itemKey);
-		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
+		while (
+			(await processNextSourceWritebackJob(consumerOptions)).status !==
+			"idle"
+		) {
 			// drain creates
 		}
 		const relatedDraft = await openItemDraft(db, relatedSource.itemKey);
@@ -1180,11 +1204,11 @@ async function verify() {
 		});
 		await publishItemDraft(db, relatedSource.itemKey);
 		const callsBeforeRelated = calls.length;
-		const relatedResult = await processNextSourceWritebackJob(consumerOptions);
+		const relatedResult =
+			await processNextSourceWritebackJob(consumerOptions);
 		const relatedCall = calls.at(-1);
 		const sentRelations = relatedCall?.payload.relations as
-			| Record<string, unknown>
-			| undefined;
+			Record<string, unknown> | undefined;
 		assert(
 			relatedResult.status === "processed" &&
 				calls.length === callsBeforeRelated + 1 &&
@@ -1239,7 +1263,10 @@ async function verify() {
 		await db
 			.delete(sourceConnection)
 			.where(
-				inArray(sourceConnection.key, [connectionKey, secondConnectionKey]),
+				inArray(sourceConnection.key, [
+					connectionKey,
+					secondConnectionKey,
+				]),
 			);
 		await resource.dispose();
 	}

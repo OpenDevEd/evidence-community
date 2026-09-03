@@ -39,7 +39,10 @@ export async function getOutgoingLinks(
 		.from(itemLink)
 		.where(
 			options.kind
-				? and(eq(itemLink.fromKey, key), eq(itemLink.kind, options.kind))
+				? and(
+						eq(itemLink.fromKey, key),
+						eq(itemLink.kind, options.kind),
+					)
 				: eq(itemLink.fromKey, key),
 		)
 		.orderBy(asc(itemLink.createdAt), asc(itemLink.toKey));
@@ -73,7 +76,9 @@ export async function getPublicItemLinks(
 	options: { hiddenTags?: readonly string[] } = {},
 ): Promise<PublicItemLinks> {
 	const hiddenTags = [...(options.hiddenTags ?? [])];
-	const visible = (column: typeof itemLink.toKey | typeof itemLink.fromKey) =>
+	const visible = (
+		column: typeof itemLink.toKey | typeof itemLink.fromKey,
+	) =>
 		hiddenTags.length === 0
 			? eq(item.deleted, 0)
 			: and(
@@ -139,12 +144,22 @@ export async function getPublicItemLinksForKeys(
 		.innerJoin(
 			item,
 			or(
-				and(inArray(itemLink.fromKey, [...keys]), eq(item.key, itemLink.toKey)),
-				and(inArray(itemLink.toKey, [...keys]), eq(item.key, itemLink.fromKey)),
+				and(
+					inArray(itemLink.fromKey, [...keys]),
+					eq(item.key, itemLink.toKey),
+				),
+				and(
+					inArray(itemLink.toKey, [...keys]),
+					eq(item.key, itemLink.fromKey),
+				),
 			),
 		)
 		.where(eq(item.deleted, 0))
-		.orderBy(asc(itemLink.createdAt), asc(itemLink.fromKey), asc(itemLink.toKey));
+		.orderBy(
+			asc(itemLink.createdAt),
+			asc(itemLink.fromKey),
+			asc(itemLink.toKey),
+		);
 	const sets = new Map<
 		string,
 		{ cites: Set<string>; citedBy: Set<string>; related: Set<string> }
@@ -152,7 +167,11 @@ export async function getPublicItemLinksForKeys(
 	const bucket = (key: string) => {
 		let entry = sets.get(key);
 		if (!entry) {
-			entry = { cites: new Set(), citedBy: new Set(), related: new Set() };
+			entry = {
+				cites: new Set(),
+				citedBy: new Set(),
+				related: new Set(),
+			};
 			sets.set(key, entry);
 		}
 		return entry;
@@ -181,22 +200,21 @@ export async function getPublicItemLinksForKeys(
 }
 
 /**
- * Mirrors a source's "related" links for the given records.
- * Deletes that source's `related` rows for `fromKeys`, then inserts `links`.
- * Rows owned by the editor (`manual`) or by another source are never touched.
- * Returns the records on the other end of every row that actually changed, so
- * the caller can reindex them.
+ * Mirrors one kind of source-owned link for the given records.
+ * Rows owned by the editor or another source are never touched. Returns every
+ * record whose public link projection changed so the caller can reindex it.
  */
-export async function replaceSourceRelatedLinks(
+export async function replaceSourceLinks(
 	tx: Executor,
 	input: {
 		sourceConnectionKey: string;
+		kind: ItemLinkKind;
 		fromKeys: string[];
 		links: { fromKey: string; toKey: string }[];
 	},
-): Promise<{ changedTargets: string[]; inserted: number; removed: number }> {
+): Promise<{ changedItemKeys: string[]; inserted: number; removed: number }> {
 	if (input.fromKeys.length === 0) {
-		return { changedTargets: [], inserted: 0, removed: 0 };
+		return { changedItemKeys: [], inserted: 0, removed: 0 };
 	}
 	const origin = sourceItemLinkOrigin(input.sourceConnectionKey);
 	const removedRows = await tx
@@ -204,7 +222,7 @@ export async function replaceSourceRelatedLinks(
 		.where(
 			and(
 				eq(itemLink.origin, origin),
-				eq(itemLink.kind, "related"),
+				eq(itemLink.kind, input.kind),
 				inArray(itemLink.fromKey, input.fromKeys),
 			),
 		)
@@ -217,7 +235,7 @@ export async function replaceSourceRelatedLinks(
 			candidates.map((link) => ({
 				fromKey: link.fromKey,
 				toKey: link.toKey,
-				kind: "related" as const,
+				kind: input.kind,
 				origin,
 			})),
 		);
@@ -226,15 +244,21 @@ export async function replaceSourceRelatedLinks(
 		`${link.fromKey} ${link.toKey}`;
 	const before = new Set(removedRows.map(pairId));
 	const after = new Set(candidates.map(pairId));
-	const changedTargets = new Set<string>();
+	const changedItemKeys = new Set<string>();
 	for (const row of removedRows) {
-		if (!after.has(pairId(row))) changedTargets.add(row.toKey);
+		if (!after.has(pairId(row))) {
+			changedItemKeys.add(row.fromKey);
+			changedItemKeys.add(row.toKey);
+		}
 	}
 	for (const link of candidates) {
-		if (!before.has(pairId(link))) changedTargets.add(link.toKey);
+		if (!before.has(pairId(link))) {
+			changedItemKeys.add(link.fromKey);
+			changedItemKeys.add(link.toKey);
+		}
 	}
 	return {
-		changedTargets: [...changedTargets].sort((left, right) =>
+		changedItemKeys: [...changedItemKeys].sort((left, right) =>
 			left.localeCompare(right),
 		),
 		inserted: candidates.length,
@@ -253,13 +277,18 @@ export async function replaceManualLinks(
 	tx: Executor,
 	input: { fromKey: string; kind: ItemLinkKind; toKeys: string[] },
 ): Promise<{ added: string[]; removed: string[] }> {
-	const wanted = [...new Set(input.toKeys)].filter((key) => key !== input.fromKey);
+	const wanted = [...new Set(input.toKeys)].filter(
+		(key) => key !== input.fromKey,
+	);
 	const symmetric = input.kind === "related";
 	const ownRows = and(
 		eq(itemLink.kind, input.kind),
 		eq(itemLink.origin, MANUAL_ITEM_LINK_ORIGIN),
 		symmetric
-			? or(eq(itemLink.fromKey, input.fromKey), eq(itemLink.toKey, input.fromKey))
+			? or(
+					eq(itemLink.fromKey, input.fromKey),
+					eq(itemLink.toKey, input.fromKey),
+				)
 			: eq(itemLink.fromKey, input.fromKey),
 	);
 	const current = await tx
@@ -278,7 +307,10 @@ export async function replaceManualLinks(
 				and(
 					ownRows,
 					symmetric
-						? or(inArray(itemLink.toKey, removed), inArray(itemLink.fromKey, removed))
+						? or(
+								inArray(itemLink.toKey, removed),
+								inArray(itemLink.fromKey, removed),
+							)
 						: inArray(itemLink.toKey, removed),
 				),
 			);
@@ -305,25 +337,38 @@ export async function getManualLinkKeys(
 	fromKey: string,
 ): Promise<{ cites: string[]; related: string[] }> {
 	const rows = await db
-		.select({ fromKey: itemLink.fromKey, toKey: itemLink.toKey, kind: itemLink.kind })
+		.select({
+			fromKey: itemLink.fromKey,
+			toKey: itemLink.toKey,
+			kind: itemLink.kind,
+		})
 		.from(itemLink)
 		.where(
 			and(
 				eq(itemLink.origin, MANUAL_ITEM_LINK_ORIGIN),
 				or(
 					eq(itemLink.fromKey, fromKey),
-					and(eq(itemLink.toKey, fromKey), eq(itemLink.kind, "related")),
+					and(
+						eq(itemLink.toKey, fromKey),
+						eq(itemLink.kind, "related"),
+					),
 				),
 			),
 		)
-		.orderBy(asc(itemLink.createdAt), asc(itemLink.toKey), asc(itemLink.fromKey));
+		.orderBy(
+			asc(itemLink.createdAt),
+			asc(itemLink.toKey),
+			asc(itemLink.fromKey),
+		);
 	const related = new Set<string>();
 	for (const row of rows) {
 		if (row.kind !== "related") continue;
 		related.add(row.fromKey === fromKey ? row.toKey : row.fromKey);
 	}
 	return {
-		cites: rows.filter((row) => row.kind === "cites").map((row) => row.toKey),
+		cites: rows
+			.filter((row) => row.kind === "cites")
+			.map((row) => row.toKey),
 		related: [...related],
 	};
 }
@@ -344,7 +389,7 @@ export async function existingItemKeys(
 function uniquePairs(links: { fromKey: string; toKey: string }[]) {
 	const seen = new Set<string>();
 	return links.filter((link) => {
-		const id = `${link.fromKey} ${link.toKey}`;
+		const id = `${link.fromKey}\u0000${link.toKey}`;
 		if (seen.has(id)) return false;
 		seen.add(id);
 		return true;
@@ -360,9 +405,16 @@ function uniquePairs(links: { fromKey: string; toKey: string }[]) {
  */
 export async function removeMirroredSourceRelatedLinks(
 	tx: Executor,
-	input: { itemKey: string; sourceConnectionKeys: string[]; targetKeys: string[] },
+	input: {
+		itemKey: string;
+		sourceConnectionKeys: string[];
+		targetKeys: string[];
+	},
 ): Promise<number> {
-	if (input.targetKeys.length === 0 || input.sourceConnectionKeys.length === 0) {
+	if (
+		input.targetKeys.length === 0 ||
+		input.sourceConnectionKeys.length === 0
+	) {
 		return 0;
 	}
 	const origins = input.sourceConnectionKeys.map(sourceItemLinkOrigin);

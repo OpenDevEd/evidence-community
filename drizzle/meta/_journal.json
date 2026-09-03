@@ -323,6 +323,13 @@
       "when": 1788381447521,
       "tag": "0045_record-institution-projection",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1788448334533,
+      "tag": "0046_source-citation-metrics",
+      "breakpoints": true
     }
   ]
 }

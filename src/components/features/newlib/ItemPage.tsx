@@ -573,13 +573,28 @@ export function ItemDetails({ item }: { item: Item | undefined }) {
 function ItemTechnical({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	if ((!item || item.provider !== "openalex") && !loading) return null;
-	const relations = item?.relations as RelationsType;
-
-	const keyValues = {
-		citedBy: relations?.cited_by || 0,
-		cites: relations?.referenced_works?.length || 0,
-	};
+	const citationMetrics = item?.citationMetrics ?? [];
+	if (citationMetrics.length === 0 && !loading) return null;
+	const keyValues = citationMetrics.flatMap((metric) => [
+		...(metric.citedByCount === null
+			? []
+			: [
+					{
+						key: `${metric.sourceConnectionKey}:citedBy`,
+						label: `${metric.sourceLabel} ${t("citationsLowercase")}`,
+						value: metric.citedByCount,
+					},
+				]),
+		...(metric.referencedWorksCount === null
+			? []
+			: [
+					{
+						key: `${metric.sourceConnectionKey}:references`,
+						label: `${metric.sourceLabel} ${t("references").toLowerCase()}`,
+						value: metric.referencedWorksCount,
+					},
+				]),
+	]);
 
 	return (
 		<SidebarCard title={t("itemTechnicalDetailsTitle")} color="card">
@@ -587,12 +602,12 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 				? Array.from({ length: 3 }).map((_, index) => (
 						<ItemDetailsRow key={index} detail={undefined} />
 					))
-				: Object.entries(keyValues).map(([key, value]) => (
+				: keyValues.map(({ key, label, value }) => (
 						<ItemDetailsRow
 							key={key}
 							detail={{
-								label: key,
-								value: value,
+								label,
+								value,
 							}}
 						/>
 					))}

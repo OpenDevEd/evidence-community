@@ -90,6 +90,11 @@
 						"id": "library",
 						"label": "Amber Library",
 						"href": "/lib"
+					},
+					{
+						"id": "statistics",
+						"label": "Statistics",
+						"href": "/statistics"
 					}
 				]
 			}

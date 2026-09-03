@@ -1,15 +1,20 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, ArrowRight01Icon, MapsIcon, QuoteUpIcon } from "@hugeicons/core-free-icons";
+import {
+	Add01Icon,
+	ArrowRight01Icon,
+	MapsIcon,
+	QuoteUpIcon,
+} from "@hugeicons/core-free-icons";
 import { twMerge } from "tailwind-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
-import { fetcher, firstNonNullOrEmpty, setter, transformItem } from "@/lib/utils";
-import { Skeleton } from "@/components/nextui/Skeleton";
 import {
-	ModalBody,
-	ModalContent,
-	useDisclosure,
-} from "@nextui-org/react";
-import { RelationsType } from "@/types/item";
+	fetcher,
+	firstNonNullOrEmpty,
+	setter,
+	transformItem,
+} from "@/lib/utils";
+import { Skeleton } from "@/components/nextui/Skeleton";
+import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
@@ -56,11 +61,10 @@ export function AddButton({
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
 	const { data: session, update } = useSession();
-	const isUserCollectionsEnabled =
-		useLibraryFeature("userCollections");
+	const isUserCollectionsEnabled = useLibraryFeature("userCollections");
 	const t = useTranslations("ui");
 	const highlightedCollections = Object.keys(
-		itemData ? session?.user.itemsCollections[itemData.key] ?? {} : {}
+		itemData ? (session?.user.itemsCollections[itemData.key] ?? {}) : {},
 	);
 	const onCollectionSelect = async (pressedCollectionId: string) => {
 		setLoading(true);
@@ -139,48 +143,71 @@ function FixURL(url: string | null) {
 	return url;
 }
 
-function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined }) {
+function CitationCounts({
+	itemData,
+}: {
+	itemData: Item | ListItem | undefined;
+}) {
 	const t = useTranslations("ui");
 	const resourceHref = useResourceHref();
-	const relations = itemData?.relations as RelationsType;
-	const isOpenAlex = itemData?.provider === "openalex";
+	const citesCount = itemData?.links?.cites.length ?? 0;
+	const citedByCount = itemData?.links?.citedBy.length ?? 0;
+	const sourceMetrics = itemData?.citationMetrics ?? [];
 
-	const citesCount =
-		(Array.isArray(itemData?.links?.cites) ? itemData.links.cites.length : 0) +
-		(Array.isArray(relations?.referenced_works) ? relations.referenced_works.length : 0);
-	const citedByCount =
-		(relations?.cited_by || 0) +
-		(Array.isArray(itemData?.links?.citedBy) ? itemData.links.citedBy.length : 0);
-
-	if (citesCount === 0 && citedByCount === 0) return null;
+	if (citesCount === 0 && citedByCount === 0 && sourceMetrics.length === 0) {
+		return null;
+	}
 
 	return (
-		<div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+		<div
+			className="flex items-center gap-2"
+			onClick={(e) => e.stopPropagation()}
+		>
 			{citedByCount > 0 && (
-				isOpenAlex ? (
-					<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium">
-						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
-						<span>{citedByCount}</span>
-						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
+				<Link
+					href={resourceHref(itemData?.key ?? "", {
+						base: "/citation",
+					})}
+					className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
+				>
+					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
+					<span>{citedByCount}</span>
+					<span className="text-accent/70 hidden @[480px]:inline">
+						{t("libraryCitations")}
 					</span>
-				) : (
-					<Link
-						href={resourceHref(itemData?.key ?? "", { base: "/citation" })}
-						className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
-					>
-						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
-						<span>{citedByCount}</span>
-						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
-						<HugeiconsIcon icon={ArrowRight01Icon} className="size-3 opacity-50 ml-0.5" />
-					</Link>
-				)
+					<HugeiconsIcon
+						icon={ArrowRight01Icon}
+						className="size-3 opacity-50 ml-0.5"
+					/>
+				</Link>
 			)}
 			{citesCount > 0 && (
 				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">
 					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
 					<span>{citesCount}</span>
-					<span className="opacity-70 hidden @[480px]:inline">{t("references").toLowerCase()}</span>
+					<span className="opacity-70 hidden @[480px]:inline">
+						{t("references").toLowerCase()}
+					</span>
 				</span>
+			)}
+			{sourceMetrics.flatMap((metric) =>
+				metric.citedByCount === null
+					? []
+					: [
+							<span
+								key={metric.sourceConnectionKey}
+								className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 text-xs font-medium"
+							>
+								<HugeiconsIcon
+									icon={QuoteUpIcon}
+									className="size-3.5"
+								/>
+								<span>{metric.citedByCount}</span>
+								<span className="hidden @[480px]:inline">
+									{metric.sourceLabel}
+								</span>
+							</span>,
+						],
 			)}
 		</div>
 	);
@@ -214,7 +241,12 @@ function ResourceInteractions({
 								as={Link}
 								href={itemHref}
 								size="sm"
-								startContent={<HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />}
+								startContent={
+									<HugeiconsIcon
+										icon={ArrowRight01Icon}
+										className="size-3.5"
+									/>
+								}
 							>
 								{t("viewDetails")}
 							</Button>
@@ -286,7 +318,10 @@ function ResourceArticle({
 				<div className="flex w-full gap-1 items-center flex-wrap">
 					{gapMapHref && (
 						<span className="inline-flex items-center gap-1.5 text-accent font-medium">
-							<HugeiconsIcon icon={MapsIcon} className="size-3.5 shrink-0" />
+							<HugeiconsIcon
+								icon={MapsIcon}
+								className="size-3.5 shrink-0"
+							/>
 							<span>{tNav("gapMap")}</span>
 						</span>
 					)}
@@ -294,23 +329,19 @@ function ResourceArticle({
 					<ResourceDivider />
 					{finalItemData?.datePublished &&
 						!isNaN(
-							new Date(
-								finalItemData.datePublished
-							).getTime()
+							new Date(finalItemData.datePublished).getTime(),
 						) && (
 							<>
 								<ResourceData
 									element="time"
 									datetime={new Date(
-										finalItemData.datePublished
+										finalItemData.datePublished,
 									).toISOString()}
 									text={format.dateTime(
-										new Date(
-											finalItemData.datePublished
-										),
+										new Date(finalItemData.datePublished),
 										{
 											dateStyle: "medium",
-										}
+										},
 									)}
 									classNames={{
 										text: "text-black/60 dark:text-white/60 font-normal",
@@ -329,10 +360,7 @@ function ResourceArticle({
 						</span>
 					)}
 
-					{hasAnyTag(
-						finalItemData?.tags,
-						content.tags.internal,
-					) && (
+					{hasAnyTag(finalItemData?.tags, content.tags.internal) && (
 						<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
 							{t("internal")}
 						</span>
@@ -344,7 +372,7 @@ function ResourceArticle({
 					isLoaded={!finalIsLoading}
 					className={twMerge(
 						"w-full min-h-0 rounded-2xl ",
-						!finalItemData ? "min-h-20" : "min-h-0"
+						!finalItemData ? "min-h-20" : "min-h-0",
 					)}
 				>
 					<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">
@@ -418,17 +446,36 @@ export default function Resource({
 				},
 			})
 		: "";
+	const article = (
+		<ResourceArticle
+			finalItemData={finalItemData}
+			finalIsLoading={finalIsLoading}
+			gapMapHref={gapMapHref}
+			abstract={abstract}
+			abstractText={abstractText}
+			t={t}
+			tNav={tNav}
+			format={format}
+		/>
+	);
 
 	return (
 		<ResourceWrapper
 			as={as}
 			className={twMerge(
 				"@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col not-prose",
-				className
+				className,
 			)}
 		>
 			{/* add COINs here */}
-			{transformedItem && <div className="hidden" dangerouslySetInnerHTML={{ __html: generateCOinS(transformedItem) }} />}
+			{transformedItem && (
+				<div
+					className="hidden"
+					dangerouslySetInnerHTML={{
+						__html: generateCOinS(transformedItem),
+					}}
+				/>
+			)}
 			{/* unAPI id marker for Zotero */}
 			{finalItemData?.key && !hideUnapi && (
 				<abbr className="unapi-id" title={finalItemData.key}></abbr>
@@ -441,20 +488,11 @@ export default function Resource({
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 						!finalItemData?.key && "!pointer-events-none",
-						(!finalIsLoading && !finalItemData?.key) && "no-data",
-						(!finalIsLoading && finalItemData?.key) && "has-data",
+						!finalIsLoading && !finalItemData?.key && "no-data",
+						!finalIsLoading && finalItemData?.key && "has-data",
 					)}
 				>
-					<ResourceArticle
-						finalItemData={finalItemData}
-						finalIsLoading={finalIsLoading}
-						gapMapHref={gapMapHref}
-						abstract={abstract}
-						abstractText={abstractText}
-						t={t}
-						tNav={tNav}
-						format={format}
-					/>
+					{article}
 				</a>
 			) : (
 				<PrefetchLink
@@ -462,20 +500,11 @@ export default function Resource({
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 						!finalItemData?.key && "!pointer-events-none",
-						(!finalIsLoading && !finalItemData?.key) && "no-data",
-						(!finalIsLoading && finalItemData?.key) && "has-data",
+						!finalIsLoading && !finalItemData?.key && "no-data",
+						!finalIsLoading && finalItemData?.key && "has-data",
 					)}
 				>
-					<ResourceArticle
-						finalItemData={finalItemData}
-						finalIsLoading={finalIsLoading}
-						gapMapHref={gapMapHref}
-						abstract={abstract}
-						abstractText={abstractText}
-						t={t}
-						tNav={tNav}
-						format={format}
-					/>
+					{article}
 				</PrefetchLink>
 			)}
 			<ResourceInteractions

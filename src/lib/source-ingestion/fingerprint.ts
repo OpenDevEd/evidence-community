@@ -31,11 +31,13 @@ export function sourcePayloadHash(payload: JsonValue) {
 export function sourceItemFingerprint(record: SourceItemUpsert) {
 	return sourcePayloadHash({
 		aliases: record.aliases,
+		citationMetric: record.citationMetric,
 		collections: record.collections,
 		file: record.file,
 		metadata: record.metadata,
 		parentSourceRecordKey: record.parentSourceRecordKey,
 		raw: record.raw,
+		referencedSourceRecordKeys: record.referencedSourceRecordKeys,
 		sourceDates: record.sourceDates
 			? {
 					addedAt: record.sourceDates.addedAt?.toISOString() ?? null,

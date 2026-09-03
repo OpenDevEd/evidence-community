@@ -228,6 +228,16 @@ syncs. Rows owned by the editor (`origin = manual`) or by another source are
 never changed by a sync. The record on the other end of a changed source link is
 reindexed like an affected parent so its public "related" view updates.
 
+Citation metrics enter through `citationMetric` and replace that source
+connection's `itemCitationMetric` row for the record. The row records cited-by
+and reference counts plus the batch observation time. These values never enter
+the canonical record `relations` JSON and are never combined with citation
+links. `referencedSourceRecordKeys` are mirrored as source-owned `cites` links
+only when the target resolves through the same source connection. Unknown IDs
+stay in the raw source snapshot, increment `unresolvedCitations`, and never
+reserve a fake canonical record. Metric and link changes reindex every affected
+record even when no canonical metadata field changed.
+
 A remote deletion tombstones the canonical item only when that connection owns
 the canonical record. For linked native or differently owned items, it marks
 the source link as remotely deleted while preserving local metadata and files.

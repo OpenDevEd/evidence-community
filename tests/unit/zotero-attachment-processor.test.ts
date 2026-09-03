@@ -413,6 +413,8 @@ describe("Zotero attachment bounds", () => {
 			parentSourceRecordKey: null,
 			collections: [],
 			aliases: [],
+			citationMetric: null,
+			referencedSourceRecordKeys: [],
 			processingIssue: null,
 			file: {
 				url: null,
@@ -451,6 +453,8 @@ describe("Zotero attachment bounds", () => {
 			parentSourceRecordKey: null,
 			collections: [],
 			aliases: [],
+			citationMetric: null,
+			referencedSourceRecordKeys: [],
 			file: null,
 			processingIssue: null,
 			sourceDates: null,

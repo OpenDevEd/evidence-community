@@ -3,41 +3,51 @@ import type { SourceProvider } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
 import { Collection } from "../collections/types";
 import type { PublicationIdentifierSummary } from "@/lib/publication/publication-display-adapter";
+import type { SourceCitationMetric } from "@/lib/links/citation-metrics";
 
 interface Institution {
-  id?: string;
-  country_code?: string;
-  display_name?: string;
+	id?: string;
+	country_code?: string;
+	display_name?: string;
 }
 
 /** Links between library records, read from PostgreSQL. Only published records are listed. */
 export type ItemLinks = {
-  cites: string[];
-  citedBy: string[];
-  related: string[];
+	cites: string[];
+	citedBy: string[];
+	related: string[];
 };
 
 export type Item = InferSelectModel<typeof item> & {
-  provider?: SourceProvider;
-  links?: ItemLinks;
-  sourceExternalScopeKey?: string | null;
-  tags?: string[];
-  collections?: string[];
-  attachmentsData?: Item[];
-  collectionsData?: Collection[];
-  collectionsAncestry?: string[];
-  year?: string;
-  fullTextPDFs?: Array<{ key: string; fullTextPDF: Array<{ text: string, page: number }> }>;
-  institution?: string[];
-  fullNames?: string[];
-  dateSortKey?: number;
-  datePublished?: string;
-  publicationIdentifiers?: PublicationIdentifierSummary;
+	provider?: SourceProvider;
+	links?: ItemLinks;
+	citationMetrics?: SourceCitationMetric[];
+	sourceExternalScopeKey?: string | null;
+	tags?: string[];
+	collections?: string[];
+	attachmentsData?: Item[];
+	collectionsData?: Collection[];
+	collectionsAncestry?: string[];
+	year?: string;
+	fullTextPDFs?: Array<{
+		key: string;
+		fullTextPDF: Array<{ text: string; page: number }>;
+	}>;
+	institution?: string[];
+	fullNames?: string[];
+	dateSortKey?: number;
+	datePublished?: string;
+	publicationIdentifiers?: PublicationIdentifierSummary;
 };
 
 export type ListAttachment = Omit<
 	Item,
-	"attachmentsData" | "fullTextPDFs" | "fullTextPDF" | "PDFCoverPageImage" | "PDFCoverPageWidth" | "PDFCoverPageHeight"
+	| "attachmentsData"
+	| "fullTextPDFs"
+	| "fullTextPDF"
+	| "PDFCoverPageImage"
+	| "PDFCoverPageWidth"
+	| "PDFCoverPageHeight"
 >;
 
 export type ListItem = Omit<Item, "attachmentsData"> & {
@@ -45,7 +55,7 @@ export type ListItem = Omit<Item, "attachmentsData"> & {
 };
 
 export type ItemGetResponse = {
-  item: Item | undefined;
+	item: Item | undefined;
 };
 
 export type Author = {

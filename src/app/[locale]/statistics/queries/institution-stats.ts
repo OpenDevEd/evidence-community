@@ -2,6 +2,7 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { sql, desc } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
+import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type InstitutionStats = {
 	institution: string;
@@ -22,7 +23,27 @@ export type InstitutionYearStats = {
 	hIndex: number;
 };
 
-export async function getInstitutionStats(db: Database): Promise<InstitutionStats[]> {
+function citationSummary(stat: {
+	itemCount: number;
+	totalCitations: number;
+	avgCitationsPerItem: number;
+	citationCounts: number[];
+}) {
+	return {
+		itemCount: Number(stat.itemCount),
+		totalCitations: Number(stat.totalCitations),
+		avgCitationsPerItem: Number(stat.avgCitationsPerItem),
+		hIndex: calculateHIndex(
+			stat.citationCounts?.map((count) => Number(count)) || [],
+		),
+	};
+}
+
+export async function getInstitutionStats(
+	db: Database,
+	measure: CitationMeasure,
+): Promise<InstitutionStats[]> {
+	const citationCount = citationCountForItem(measure);
 	const institutionStatsResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -32,16 +53,13 @@ export async function getInstitutionStats(db: Database): Promise<InstitutionStat
 			avgCitationsPerItem: sql<number>`coalesce(avg(item_citations), 0)`,
 			citationCounts: sql<number[]>`array_agg(item_citations)`,
 		})
-		.from(sql`(
+		.from(
+			sql`(
 			SELECT DISTINCT
 				institution_data->>'display_name' as institution_name,
 				institution_data->>'country_code' as country_code,
 				${item.key} as item_key,
-				case 
-					when ${item.relations}::jsonb ? 'cited_by' 
-					then (${item.relations}::jsonb->>'cited_by')::int 
-					else 0 
-				end as item_citations
+				${citationCount} as item_citations
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
@@ -55,22 +73,24 @@ export async function getInstitutionStats(db: Database): Promise<InstitutionStat
 			AND institution_data ? 'display_name'
 			AND institution_data->>'display_name' IS NOT NULL
 			AND institution_data->>'display_name' != ''
-		) as institution_items`)
+		) as institution_items`,
+		)
 		.where(sql`institution_name IS NOT NULL AND institution_name != ''`)
 		.groupBy(sql`institution_name, country_code`)
 		.orderBy(desc(sql`count(*)`));
 	
-	return institutionStatsResult.map(stat => ({
-		institution: stat.institution?.trim() || '',
-		countryCode: stat.countryCode || '',
-		itemCount: Number(stat.itemCount),
-		totalCitations: Number(stat.totalCitations),
-		avgCitationsPerItem: Number(stat.avgCitationsPerItem),
-		hIndex: calculateHIndex(stat.citationCounts?.map(c => Number(c)) || [])
+	return institutionStatsResult.map((stat) => ({
+		institution: stat.institution?.trim() || "",
+		countryCode: stat.countryCode || "",
+		...citationSummary(stat),
 	}));
 }
 
-export async function getInstitutionStatsByYear(db: Database): Promise<InstitutionYearStats[]> {
+export async function getInstitutionStatsByYear(
+	db: Database,
+	measure: CitationMeasure,
+): Promise<InstitutionYearStats[]> {
+	const citationCount = citationCountForItem(measure);
 	const institutionsByYearResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -81,7 +101,8 @@ export async function getInstitutionStatsByYear(db: Database): Promise<Instituti
 			avgCitationsPerItem: sql<number>`coalesce(avg(item_citations), 0)`,
 			citationCounts: sql<number[]>`array_agg(item_citations)`,
 		})
-		.from(sql`(
+		.from(
+			sql`(
 			SELECT
 				institution_data->>'display_name' as institution_name,
 				institution_data->>'country_code' as country_code,
@@ -93,16 +114,12 @@ export async function getInstitutionStatsByYear(db: Database): Promise<Instituti
 					end
 				)::text as year_extracted,
 				item_key,
-				case 
-					when item_relations::jsonb ? 'cited_by' 
-					then (item_relations::jsonb->>'cited_by')::int 
-					else 0 
-				end as item_citations
+				item_citations
 			FROM (
 				SELECT DISTINCT
 					${item.key} as item_key,
 					${item.date} as item_date,
-					${item.relations} as item_relations,
+					${citationCount} as item_citations,
 					creator_data,
 					institution_data
 				FROM ${item},
@@ -122,18 +139,21 @@ export async function getInstitutionStatsByYear(db: Database): Promise<Instituti
 				AND ${item.date} != ''
 				AND ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 			) as items_with_institutions
-		) as institution_year_items`)
-		.where(sql`institution_name IS NOT NULL AND institution_name != '' AND year_extracted IS NOT NULL`)
+		) as institution_year_items`,
+		)
+		.where(
+			sql`institution_name IS NOT NULL AND institution_name != '' AND year_extracted IS NOT NULL`,
+		)
 		.groupBy(sql`institution_name, country_code, year_extracted`)
-		.orderBy(desc(sql`year_extracted::int`), desc(sql`count(distinct item_key)`));
+		.orderBy(
+			desc(sql`year_extracted::int`),
+			desc(sql`count(distinct item_key)`),
+		);
 	
-	return institutionsByYearResult.map(stat => ({
-		institution: stat.institution?.trim() || '',
-		countryCode: stat.countryCode || '',
-		year: stat.year || '',
-		itemCount: Number(stat.itemCount),
-		totalCitations: Number(stat.totalCitations),
-		avgCitationsPerItem: Number(stat.avgCitationsPerItem),
-		hIndex: calculateHIndex(stat.citationCounts?.map(c => Number(c)) || [])
+	return institutionsByYearResult.map((stat) => ({
+		institution: stat.institution?.trim() || "",
+		countryCode: stat.countryCode || "",
+		year: stat.year || "",
+		...citationSummary(stat),
 	}));
 }

@@ -1,5 +1,6 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
+import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
@@ -476,21 +477,15 @@ export async function getRecentActivity(
 
 export async function getCitationsByYear(
 	db: Database,
+	measure: CitationMeasure,
 ): Promise<CitationYearStats[]> {
+	const citationCount = citationCountForItem(measure);
 	const citationsByYearResult = await db
 		.select({
 			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
 			itemCount: sql<number>`count(*)`,
-			totalCitations: sql<number>`coalesce(sum(case 
-				when ${item.relations}::jsonb ? 'cited_by' 
-				then (${item.relations}::jsonb->>'cited_by')::int 
-				else 0 
-			end), 0)`,
-			avgCitationsPerItem: sql<number>`coalesce(avg(case 
-				when ${item.relations}::jsonb ? 'cited_by' 
-				then (${item.relations}::jsonb->>'cited_by')::int 
-				else 0 
-			end), 0)`,
+			totalCitations: sql<number>`coalesce(sum(${citationCount}), 0)`,
+			avgCitationsPerItem: sql<number>`coalesce(avg(${citationCount}), 0)`,
 		})
 		.from(item)
 		.where(
