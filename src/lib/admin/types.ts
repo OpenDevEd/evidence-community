@@ -183,6 +183,38 @@ export type AdminCollectionCatalogPage = {
 	nextCursor: string | null;
 };
 
+export type AdminSourceSyncStatus = "failed" | "idle" | "running" | "succeeded";
+
+/** Import state of an external source, read from the sync tables. */
+export type AdminSourceSync = {
+	/** Records with a saved import issue, such as a field that was left out. */
+	issueCount: number;
+	lastError: string | null;
+	lastFailureAt: string | null;
+	/** Records the last successful import wrote. */
+	lastRecords: number | null;
+	lastSuccessAt: string | null;
+	/** Records a running import has processed so far, when the source reports it. */
+	processed: number | null;
+	runningSince: string | null;
+	status: AdminSourceSyncStatus;
+};
+
+export type AdminSourceIssuesPage = {
+	issues: AdminSourceIssue[];
+	/** All saved issues for the source; `issues` holds the newest ones. */
+	total: number;
+};
+
+export type AdminSourceIssue = {
+	code: string;
+	itemKey: string | null;
+	message: string;
+	sourceRecordKey: string;
+	title: string | null;
+	updatedAt: string;
+};
+
 export type AdminSource = {
 	/** Active collections this source holds; tells the tree whether to offer a chevron. */
 	collectionCount: number;
@@ -191,6 +223,8 @@ export type AdminSource = {
 	provider: string;
 	readOnly: boolean;
 	status: string;
+	/** Null for the native source, which has nothing to import. */
+	sync: AdminSourceSync | null;
 	writeback: {
 		enabled: boolean;
 		supported: boolean;

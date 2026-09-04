@@ -5,10 +5,17 @@ import {
 	itemFileDraft,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { itemFilePublication } from "@/db/schema/source";
+import {
+	itemFilePublication,
+	itemSourceLink,
+	sourceRecordIssue,
+	sourceSyncRun,
+	sourceSyncState,
+} from "@/db/schema/source";
+import { sourceSyncSummary } from "./source-sync-summary";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
@@ -58,6 +65,8 @@ import type {
 	AdminLibrarySnapshot,
 	AdminLinkRow,
 	AdminRecordState,
+	AdminSourceIssue,
+	AdminSourceIssuesPage,
 } from "./types";
 
 function dateString(value: Date | string | null | undefined) {
@@ -500,24 +509,54 @@ export function toAdminCollection(
 export async function getAdminLibrarySnapshot(
 	db: Database,
 ): Promise<AdminLibrarySnapshot> {
-	const [sourceRows, config, collectionCounts] = await Promise.all([
-		db
-			.select()
-			.from(sourceConnection)
-			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
-		getLibraryConfig(),
-		db
-			.select({
-				count: sql<number>`count(*)::int`,
-				sourceConnectionKey: collection.sourceConnectionKey,
-			})
-			.from(collection)
-			.where(eq(collection.deleted, 0))
-			.groupBy(collection.sourceConnectionKey),
-	]);
+	const [sourceRows, config, collectionCounts, syncStates, issueCounts] =
+		await Promise.all([
+			db
+				.select()
+				.from(sourceConnection)
+				.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
+			getLibraryConfig(),
+			db
+				.select({
+					count: sql<number>`count(*)::int`,
+					sourceConnectionKey: collection.sourceConnectionKey,
+				})
+				.from(collection)
+				.where(eq(collection.deleted, 0))
+				.groupBy(collection.sourceConnectionKey),
+			db
+				.select({
+					activeRunStartedAt: sourceSyncRun.startedAt,
+					lastError: sourceSyncState.lastError,
+					lastFailureAt: sourceSyncState.lastFailureAt,
+					lastResult: sourceSyncState.lastResult,
+					lastSuccessAt: sourceSyncState.lastSuccessAt,
+					leaseExpiresAt: sourceSyncState.leaseExpiresAt,
+					sourceConnectionKey: sourceSyncState.sourceConnectionKey,
+				})
+				.from(sourceSyncState)
+				.leftJoin(
+					sourceSyncRun,
+					eq(sourceSyncState.activeRunId, sourceSyncRun.id),
+				),
+			db
+				.select({
+					count: sql<number>`count(*)::int`,
+					sourceConnectionKey: sourceRecordIssue.sourceConnectionKey,
+				})
+				.from(sourceRecordIssue)
+				.groupBy(sourceRecordIssue.sourceConnectionKey),
+		]);
 	const collectionCountBySource = new Map(
 		collectionCounts.map((row) => [row.sourceConnectionKey, row.count]),
 	);
+	const syncStateBySource = new Map(
+		syncStates.map((row) => [row.sourceConnectionKey, row]),
+	);
+	const issueCountBySource = new Map(
+		issueCounts.map((row) => [row.sourceConnectionKey, row.count]),
+	);
+	const now = new Date();
 	const sources = sourceRows.map((row) => {
 		const policy = evaluateSourceWritebackPolicy(
 			{
@@ -539,6 +578,21 @@ export async function getAdminLibrarySnapshot(
 				row.provider !== NATIVE_SOURCE_CONNECTION_KEY &&
 				!policy.effective,
 			status: row.status,
+			sync:
+				row.provider === NATIVE_SOURCE_CONNECTION_KEY
+					? null
+					: sourceSyncSummary({
+							activeRunStartedAt: null,
+							lastError: null,
+							lastFailureAt: null,
+							lastResult: null,
+							lastSuccessAt: null,
+							leaseExpiresAt: null,
+							...syncStateBySource.get(row.key),
+							issueCount: issueCountBySource.get(row.key) ?? 0,
+							now,
+							syncCursor: row.syncCursor,
+						}),
 			writeback: {
 				enabled: policy.sourceEnabled,
 				supported: policy.supported,
@@ -554,6 +608,7 @@ export async function getAdminLibrarySnapshot(
 			provider: NATIVE_SOURCE_CONNECTION_KEY,
 			readOnly: false,
 			status: "active",
+			sync: null,
 			writeback: {
 				enabled: false,
 				supported: false,
@@ -563,5 +618,51 @@ export async function getAdminLibrarySnapshot(
 
 	return {
 		sources,
+	};
+}
+
+const ADMIN_SOURCE_ISSUE_PAGE_SIZE = 200;
+
+/** Records of one source with a saved import issue, newest first. */
+export async function getAdminSourceIssues(
+	db: Database,
+	sourceConnectionKey: string,
+): Promise<AdminSourceIssuesPage> {
+	const [[totals], rows] = await Promise.all([
+		db
+			.select({ total: sql<number>`count(*)::int` })
+			.from(sourceRecordIssue)
+			.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey)),
+		db
+		.select({
+			code: sourceRecordIssue.code,
+			itemKey: itemSourceLink.itemKey,
+			message: sourceRecordIssue.message,
+			sourceRecordKey: sourceRecordIssue.sourceRecordKey,
+			title: item.title,
+			updatedAt: sourceRecordIssue.updatedAt,
+		})
+		.from(sourceRecordIssue)
+		.leftJoin(
+			itemSourceLink,
+			and(
+				eq(itemSourceLink.sourceConnectionKey, sourceRecordIssue.sourceConnectionKey),
+				eq(itemSourceLink.sourceRecordKey, sourceRecordIssue.sourceRecordKey),
+			),
+		)
+		.leftJoin(item, eq(item.key, itemSourceLink.itemKey))
+		.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey))
+		.orderBy(desc(sourceRecordIssue.updatedAt), asc(sourceRecordIssue.sourceRecordKey))
+		// ponytail: one page of the newest issues; the total tells the reader
+		// when older ones exist. Add a cursor if paging is ever needed.
+		.limit(ADMIN_SOURCE_ISSUE_PAGE_SIZE),
+	]);
+	return {
+		issues: rows.map((row) => ({
+			...row,
+			title: row.title?.trim() || null,
+			updatedAt: dateString(row.updatedAt) ?? "",
+		})),
+		total: totals?.total ?? 0,
 	};
 }

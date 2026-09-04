@@ -10,6 +10,7 @@ import type {
 	AdminItemListPage,
 	AdminItemWriteback,
 	AdminLibrarySnapshot,
+	AdminSourceIssuesPage,
 } from "@/lib/admin/types";
 import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
 import {
@@ -173,6 +174,12 @@ async function requestIndexingMutation<T extends object>(
 
 export function getAdminLibrary() {
 	return requestJson<AdminLibrarySnapshot>("/api/admin/library");
+}
+
+export function getAdminSourceIssues(sourceKey: string) {
+	return requestJson<AdminSourceIssuesPage>(
+		`/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues`,
+	);
 }
 
 export function getAdminItems(

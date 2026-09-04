@@ -53,6 +53,7 @@ import { Link } from "@/i18n/routing";
 
 import { AdminImportDialog } from "./AdminImportDialog";
 import { AdminInspector } from "./AdminInspector";
+import { AdminSourceSyncDialog } from "./AdminSourceSyncDialog";
 import {
 	AdminWritebackSourcesDialog,
 	type WritebackDialogRequest,
@@ -268,6 +269,8 @@ function CollectionLocationButton({
 }
 
 const ADMIN_DESKTOP_MEDIA_QUERY = "(min-width: 1280px)";
+const ADMIN_SOURCE_SYNC_POLL_MS = 10_000;
+const ADMIN_LIBRARY_POLL_MS = 60_000;
 
 function singleKey(keys: "all" | Set<React.Key>) {
 	if (keys === "all") return null;
@@ -380,6 +383,9 @@ export default function AdminWorkbench({
 	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
 		sources: [],
 	});
+	const [syncSourceKey, setSyncSourceKey] = useState<string | null>(null);
+	const syncSource =
+		library.sources.find(({ key }) => key === syncSourceKey) ?? null;
 	const [detail, setDetail] = useState<AdminItemDetail | null>(null);
 	// "Pick from the table" mode for record links: which kind, for which record.
 	// `kind: null` means picking is finished but the record stays pinned in the
@@ -581,6 +587,19 @@ export default function AdminWorkbench({
 	useEffect(() => {
 		void loadLibrary();
 	}, [loadLibrary]);
+
+	// The sync worker is an outside process: keep the sidebar import state
+	// fresh, quickly while an import runs or its dialog is open.
+	const watchingImport =
+		syncSourceKey !== null ||
+		library.sources.some(({ sync }) => sync?.status === "running");
+	useEffect(() => {
+		const timer = setInterval(
+			() => void loadLibrary(),
+			watchingImport ? ADMIN_SOURCE_SYNC_POLL_MS : ADMIN_LIBRARY_POLL_MS,
+		);
+		return () => clearInterval(timer);
+	}, [loadLibrary, watchingImport]);
 
 	const abandonPendingDraft = useCallback((key: string) => {
 		const timer = saveTimers.current.get(key);
@@ -2236,6 +2255,7 @@ export default function AdminWorkbench({
 									onDeleteCollection={removeCollection}
 									onEditCollection={openRenameCollection}
 									onMoveCollection={openMoveCollection}
+									onOpenSourceSync={setSyncSourceKey}
 									onRestoreCollection={restoreCollection}
 									onSelectCollection={(collection) =>
 										setFilters((current) => ({
@@ -2539,6 +2559,15 @@ export default function AdminWorkbench({
 					setBulkKeys(new Set(itemKeys));
 				}}
 				sources={library.sources}
+			/>
+
+			<AdminSourceSyncDialog
+				onClose={() => setSyncSourceKey(null)}
+				onOpenRecord={(itemKey) => {
+					setSyncSourceKey(null);
+					setSelectedKey(itemKey);
+				}}
+				source={syncSource}
 			/>
 
 			<DialogModal

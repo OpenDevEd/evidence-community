@@ -183,6 +183,7 @@ const importedSource: AdminSource = {
 	provider: "zotero",
 	readOnly: true,
 	status: "active",
+	sync: null,
 	writeback: { enabled: true, supported: true },
 };
 
@@ -1544,6 +1545,7 @@ test("uses the same collection traversal model for multi-select", async ({
 			provider: "zotero",
 			readOnly: true,
 			status: "active",
+			sync: null,
 			writeback: { enabled: true, supported: true },
 		}),
 	);
@@ -2399,6 +2401,7 @@ test("filters by searched native and imported collections without loading an opt
 			provider: "zotero",
 			readOnly: true,
 			status: "active",
+			sync: null,
 			writeback: { enabled: true, supported: true },
 		}),
 	);
@@ -3571,6 +3574,7 @@ test("restores branch focus when a collection retry finishes empty", async ({
 		provider: "zotero",
 		readOnly: true,
 		status: "active",
+		sync: null,
 		writeback: { enabled: true, supported: true },
 	};
 	await mockPublishedBook(page, { additionalSources: [emptySource] });
@@ -3632,6 +3636,7 @@ test("does not steal focus when a collection load finishes after the user leaves
 		provider: "zotero",
 		readOnly: true,
 		status: "active",
+		sync: null,
 		writeback: { enabled: true, supported: true },
 	};
 	await mockPublishedBook(page, { additionalSources: [slowSource] });
