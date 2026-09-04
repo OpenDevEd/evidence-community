@@ -3,6 +3,8 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Mortarboard01Icon } from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
+import { parseBibliographicDate } from "@/lib/bibliographic-date";
+import { escapeHtml } from "@/lib/escape-html";
 import { Item, ItemGetResponse, Author } from "@/app/api/item/types";
 import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
@@ -478,6 +480,24 @@ function formatDate(value: string, formatter: ReturnType<typeof useFormatter>) {
 	return returnedDate;
 }
 
+/** Shows a bibliographic date with the precision it was entered with. */
+function formatBibliographicDate(
+	value: string,
+	formatter: ReturnType<typeof useFormatter>,
+) {
+	const parsed = parseBibliographicDate(value);
+	if (parsed.kind !== "parsed") return value;
+	if (parsed.precision === "year") return String(parsed.year);
+	if (parsed.precision === "month") {
+		return formatter.dateTime(new Date(`${parsed.raw}-01T00:00:00Z`), {
+			month: "long",
+			timeZone: "UTC",
+			year: "numeric",
+		});
+	}
+	return formatDate(value, formatter);
+}
+
 function formatValue(
 	key: keyof Item,
 	value: any,
@@ -490,11 +510,12 @@ function formatValue(
 			? formatDate(value, formatter)
 			: false;
 	}
-	if (
-		key.toLowerCase().includes("date") ||
-		["createdAt", "updatedAt"].includes(key)
-	) {
+	if (["createdAt", "updatedAt"].includes(key)) {
 		return formatDate(value, formatter);
+	}
+	// Every other date field is bibliographic ("dateDecided", "filingDate").
+	if (key.toLowerCase().includes("date") && typeof value === "string") {
+		return formatBibliographicDate(value, formatter);
 	}
 
 	return value;
@@ -527,7 +548,7 @@ function ItemDetailsRow({
 									<span
 										dangerouslySetInnerHTML={{
 											__html: ProcessHTML(
-												String(formattedValue) || "",
+												escapeHtml(String(formattedValue)),
 											),
 										}}
 										className="text-black/80 dark:text-white/80 text-wrap-anywhere"

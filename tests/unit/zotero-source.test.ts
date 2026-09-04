@@ -4,10 +4,15 @@ import {
 	SourceCredentialNotFoundError,
 	createManifestSourceCredentialResolver,
 } from "@/lib/source-ingestion/credentials";
+import {
+	sourceRecordValidationOptions,
+	validateNativeItemDraft,
+} from "@/lib/admin/native-item-validation";
 import { sourceIngestionBatchSchema } from "@/lib/source-ingestion/batch-schema";
 import {
 	mapZoteroCollection,
 	mapZoteroItem,
+	ZoteroAttachmentPermanentError,
 } from "@/lib/source-ingestion/zotero/mapper";
 import {
 	ZoteroApiClient,
@@ -456,6 +461,93 @@ describe("Zotero source mapping", () => {
 			expect(mapped.metadata).not.toHaveProperty("court");
 			expect(mapped.metadata).not.toHaveProperty("dateDecided");
 		}
+	});
+
+	it("stores the date Zotero parsed when the typed date is not storable", async () => {
+		const mapDate = async (date: string, parsedDate?: string) => {
+			const mapped = await mapZoteroItem(
+				zoteroItemResponseSchema.parse({
+					key: "DATE2345",
+					version: 2,
+					...(parsedDate ? { meta: { parsedDate } } : {}),
+					data: { date, itemType: "document", title: "Dated" },
+				}),
+			);
+			return mapped.operation === "upsert" ? mapped.metadata.date : null;
+		};
+		await expect(mapDate("January 1, 2020", "2020-01-01")).resolves.toBe(
+			"2020-01-01",
+		);
+		await expect(mapDate("January 2020", "2020-01")).resolves.toBe("2020-01");
+		await expect(mapDate("2020", "2020")).resolves.toBe("2020");
+		await expect(mapDate("2020-01-01", "2020-01-01")).resolves.toBe(
+			"2020-01-01",
+		);
+		// Nothing parsed: keep the typed value instead of stopping the import.
+		await expect(mapDate("n.d.")).resolves.toBe("n.d.");
+	});
+
+	it("keeps importing a record the editor would reject", async () => {
+		const response = zoteroItemResponseSchema.parse({
+			key: "LOOS2345",
+			version: 5,
+			data: {
+				creators: [{ creatorType: "director", name: "Not a book role" }],
+				futureZoteroField: "unknown to this schema",
+				itemType: "book",
+				key: "LOOS2345",
+				url: "zotero://select/groups/1/items/AAAA2345",
+				version: 5,
+			},
+		});
+		const mapped = await mapZoteroItem(response);
+		expect(mapped).toMatchObject({
+			operation: "upsert",
+			metadata: {
+				itemType: "book",
+				url: "zotero://select/groups/1/items/AAAA2345",
+			},
+			processingIssue: {
+				code: "zotero_fields_dropped",
+				message: expect.stringContaining("creators"),
+			},
+			raw: { data: { creators: response.data.creators } },
+		});
+		if (mapped.operation !== "upsert") return;
+		expect(mapped.metadata).not.toHaveProperty("creators");
+		expect(mapped.metadata).not.toHaveProperty("title");
+		// The same check the transactional writer runs before saving.
+		expect(() =>
+			validateNativeItemDraft(mapped.metadata, sourceRecordValidationOptions),
+		).not.toThrow();
+	});
+
+	it("keeps the left-out-fields issue when the attachment also fails", async () => {
+		const mapped = await mapZoteroItem(
+			zoteroItemResponseSchema.parse({
+				key: "ATTX2345",
+				version: 6,
+				data: {
+					itemType: "attachment",
+					linkMode: "imported_file",
+					parentItem: "BBBB2345",
+					url: "x".repeat(70_000),
+				},
+			}),
+			async () => {
+				throw new ZoteroAttachmentPermanentError(
+					"zotero_attachment_missing",
+					"The file is missing in Zotero.",
+					null,
+				);
+			},
+		);
+		expect(mapped).toMatchObject({
+			processingIssue: {
+				code: "zotero_fields_dropped",
+				message: expect.stringMatching(/url[^]*The file is missing in Zotero/u),
+			},
+		});
 	});
 
 	it("maps Zotero annotation fields as canonical metadata", async () => {

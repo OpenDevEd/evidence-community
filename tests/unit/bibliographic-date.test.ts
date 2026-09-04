@@ -8,6 +8,7 @@ import {
 describe("bibliographic dates", () => {
 	it.each([
 		["2024", { precision: "year", year: 2024, sortKey: 20240000 }],
+		["2024-05", { precision: "month", year: 2024, sortKey: 20240500 }],
 		[
 			"2024-05-20",
 			{
@@ -26,7 +27,6 @@ describe("bibliographic dates", () => {
 	});
 
 	it.each([
-		"2024-05",
 		"Spring 2024",
 		"forthcoming",
 		"2024-13",
@@ -60,8 +60,11 @@ describe("bibliographic dates", () => {
 			dateSortKey: 20240520,
 			year: "2024",
 		});
+		expect(bibliographicDateSearchFields("2024-05")).toEqual({
+			dateSortKey: 20240500,
+			year: "2024",
+		});
 		expect(bibliographicDateSearchFields("forthcoming")).toEqual({});
-		expect(bibliographicDateSearchFields("2024-05")).toEqual({});
 		expect(bibliographicDateSearchFields("2024-13-99")).toEqual({});
 	});
 });

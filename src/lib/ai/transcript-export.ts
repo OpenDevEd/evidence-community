@@ -5,6 +5,7 @@ import {
 	type UIMessage,
 } from "ai";
 import { parsePageCitation } from "./citations";
+import { escapeHtml } from "@/lib/escape-html";
 import {
 	isScreeningResultsData,
 	screeningExportContent,
@@ -25,14 +26,6 @@ export type ChatTranscriptLabels = {
 	smartScreening: string;
 };
 
-function escapeHtml(value: string) {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("'", "&#039;");
-}
 
 function absoluteUrl(href: string, origin?: string) {
 	if (!origin || !href.startsWith("/")) return href;

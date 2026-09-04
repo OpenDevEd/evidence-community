@@ -167,6 +167,10 @@ export const zoteroItemResponseSchema = z
 		),
 		key: z.string().min(1).max(512),
 		links: zoteroLinksSchema,
+		meta: z
+			.object({ parsedDate: z.string().optional() })
+			.passthrough()
+			.optional(),
 		version: z.number().int().nonnegative(),
 	})
 	.passthrough();

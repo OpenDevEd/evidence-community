@@ -58,8 +58,8 @@ export function importDateValue(value: string) {
 		const iso = `${year}-${month!.padStart(2, "0")}-${day!.padStart(2, "0")}`;
 		if (parseBibliographicDate(iso).kind === "parsed") return iso;
 	}
-	// ponytail: month precision is dropped because the stored date format has
-	// none; keep the year so the record still imports.
+	// ponytail: only ISO month precision is kept ("2013-08"); other month
+	// formats fall back to the year so the record still imports.
 	return /[12]\d{3}/u.exec(value)?.[0] ?? value;
 }
 

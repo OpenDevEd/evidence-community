@@ -6,6 +6,12 @@ import {
 import type { ZoteroCollectionResponse, ZoteroItemResponse } from "./schema";
 import type { ZoteroApiClient } from "./client";
 import { canonicalZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
+import {
+	NativeItemValidationError,
+	sourceRecordValidationOptions,
+	validateNativeItemDraft,
+} from "@/lib/admin/native-item-validation";
+import { parseBibliographicDate } from "@/lib/bibliographic-date";
 
 type ItemUpsert = Extract<
 	SourceIngestionBatch["items"][number],
@@ -130,6 +136,7 @@ export function fitZoteroFullTextToRecordLimit(
 	if (recordBytes(fitted) <= MAX_SOURCE_RECORD_BYTES) return fitted;
 
 	const title = fitted.metadata.title;
+	const earlierIssue = fitted.processingIssue?.message;
 	return {
 		...fitted,
 		raw: {
@@ -145,8 +152,13 @@ export function fitZoteroFullTextToRecordLimit(
 		},
 		processingIssue: {
 			code: "zotero_record_too_large",
-			message:
+			message: [
 				"The Zotero record exceeded the ingestion limit; oversized raw data and metadata were omitted.",
+				earlierIssue,
+			]
+				.filter(Boolean)
+				.join(" ")
+				.slice(0, MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH),
 		},
 	};
 }
@@ -156,6 +168,45 @@ function issueMessage(error: ZoteroAttachmentPermanentError) {
 		error.message.trim().slice(0, MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH) ||
 		error.code
 	);
+}
+
+/**
+ * Removes the fields the library cannot store, so one bad value never stops
+ * the whole import. The full Zotero record stays in `raw`. Returns what was
+ * left out, for the saved record issue.
+ */
+function dropUnstorableFields(metadata: Record<string, unknown>) {
+	const dropped: string[] = [];
+	for (;;) {
+		try {
+			validateNativeItemDraft(metadata, sourceRecordValidationOptions);
+			return dropped;
+		} catch (error) {
+			if (!(error instanceof NativeItemValidationError)) throw error;
+			const fields = presentFieldsNamedBy(error, metadata);
+			// ponytail: an error that names no present field (for example a
+			// malformed annotation) still stops the batch.
+			if (fields.size === 0) throw error;
+			for (const [field, message] of fields) {
+				delete metadata[field];
+				dropped.push(`${field} (${message})`);
+			}
+		}
+	}
+}
+
+/** The top-level metadata fields a validation error points at, with one message each. */
+function presentFieldsNamedBy(
+	error: NativeItemValidationError,
+	metadata: Record<string, unknown>,
+) {
+	const fields = new Map<string, string>();
+	for (const [path, message] of Object.entries(error.fields)) {
+		const field = path.split(".")[0]!;
+		if (field === "itemType" || !Object.hasOwn(metadata, field)) continue;
+		if (!fields.has(field)) fields.set(field, message);
+	}
+	return fields;
 }
 
 /**
@@ -217,8 +268,27 @@ export async function mapZoteroItem(
 	}
 
 	const metadata = zoteroDataToCanonicalMetadata(item.data);
+	// Zotero keeps the date as typed ("January 1, 2020") and parses it
+	// separately. Store the parsed form when the typed one is not storable.
+	const parsedDate = item.meta?.parsedDate;
+	if (
+		typeof metadata.date === "string" &&
+		typeof parsedDate === "string" &&
+		parseBibliographicDate(metadata.date).kind === "invalid"
+	) {
+		metadata.date = parsedDate;
+	}
+	// Left-out fields are the record's main issue; an attachment problem
+	// is appended after it.
+	const issues: NonNullable<ItemUpsert["processingIssue"]>[] = [];
+	const dropped = dropUnstorableFields(metadata);
+	if (dropped.length > 0) {
+		issues.push({
+			code: "zotero_fields_dropped",
+			message: `Some fields could not be stored and were left out: ${dropped.join("; ")}.`,
+		});
+	}
 	let file: ItemUpsert["file"] = null;
-	let processingIssue: ItemUpsert["processingIssue"] = null;
 	if (
 		item.data.itemType.toLowerCase() === "attachment" &&
 		attachmentProcessor
@@ -228,12 +298,19 @@ export async function mapZoteroItem(
 		} catch (error) {
 			if (!(error instanceof ZoteroAttachmentPermanentError)) throw error;
 			file = error.file;
-			processingIssue = {
-				code: error.code,
-				message: issueMessage(error),
-			};
+			issues.push({ code: error.code, message: issueMessage(error) });
 		}
 	}
+	const processingIssue: ItemUpsert["processingIssue"] =
+		issues.length > 0
+			? {
+					code: issues[0]!.code,
+					message: issues
+						.map(({ message }) => message)
+						.join(" ")
+						.slice(0, MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH),
+				}
+			: null;
 
 	return fitZoteroFullTextToRecordLimit({
 		operation: "upsert",

@@ -104,6 +104,14 @@ export function utf8ByteLength(value: string) {
 export function normalizeAdminFieldValue(
 	descriptor: AdminFieldDescriptor,
 	input: string,
+	options: {
+		/**
+		 * Keep a date or address the editor cannot parse as text instead of
+		 * reporting it. Used for records copied from an external source; the
+		 * length limits still apply.
+		 */
+		keepUnparsed?: boolean;
+	} = {},
 ): { error?: string; value: string } {
 	const value = input.trim();
 	if (!value) return { value: "" };
@@ -123,9 +131,12 @@ export function normalizeAdminFieldValue(
 	}
 
 	if (kind === "bibliographic-date") {
-		if (parseBibliographicDate(value).kind === "invalid") {
+		if (
+			!options.keepUnparsed &&
+			parseBibliographicDate(value).kind === "invalid"
+		) {
 			return {
-				error: "Enter an exact date or a four-digit year.",
+				error: "Enter an exact date, a month, or a four-digit year.",
 				value,
 			};
 		}
@@ -145,6 +156,7 @@ export function normalizeAdminFieldValue(
 				return { value: url.toString() };
 			}
 		} catch {}
+		if (options.keepUnparsed) return { value };
 		return { error: "Enter a full HTTP or HTTPS address.", value };
 	}
 	if (

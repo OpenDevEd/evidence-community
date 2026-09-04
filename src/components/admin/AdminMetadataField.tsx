@@ -28,19 +28,23 @@ const selectClassNames = {
 	value: "text-sm",
 } as const;
 
-type DateMode = "day" | "year";
+type DateMode = "day" | "month" | "year";
 
 const DATE_MODES: Array<{ key: DateMode; label: string }> = [
 	{ key: "day", label: "Exact date" },
+	{ key: "month", label: "Month" },
 	{ key: "year", label: "Year" },
 ];
 
+const DATE_INPUT_TYPES: Record<DateMode, string> = {
+	day: "date",
+	month: "month",
+	year: "number",
+};
+
 function dateMode(value: string): DateMode {
 	const parsed = parseBibliographicDate(value);
-	if (parsed.kind === "parsed") {
-		if (parsed.precision === "year") return "year";
-	}
-	return "day";
+	return parsed.kind === "parsed" ? parsed.precision : "day";
 }
 
 function BibliographicDateField({
@@ -54,12 +58,8 @@ function BibliographicDateField({
 	const [mode, setMode] = useState<DateMode>(() => dateMode(value));
 	const parsedValue = parseBibliographicDate(value);
 	const displayedMode =
-		parsedValue.kind === "parsed" && parsedValue.precision === "day"
-			? "day"
-			: parsedValue.kind === "parsed" && parsedValue.precision === "year"
-				? "year"
-				: mode;
-	const inputType = displayedMode === "day" ? "date" : "number";
+		parsedValue.kind === "parsed" ? parsedValue.precision : mode;
+	const inputType = DATE_INPUT_TYPES[displayedMode];
 	return (
 		<div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
 			<select
