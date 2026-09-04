@@ -126,4 +126,28 @@ describe("OpenScholar configuration route", () => {
 
 		expect(response.status).toBe(413);
 	});
+
+	it("records unexpected activation failures before returning a masked error", async () => {
+		const blockedDirectory = path.join(tempDirectory, "blocked");
+		await writeFile(blockedDirectory, "not a directory", "utf8");
+		process.env.LIBRARY_CONFIG_PATH = path.join(
+			blockedDirectory,
+			"library.json",
+		);
+		const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		const response = await PUT(request("PUT", minimalLibraryConfig));
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			error: {
+				code: "internal_error",
+				message: "The library configuration could not be changed.",
+			},
+		});
+		expect(log).toHaveBeenCalledWith(
+			"OpenScholar configuration activate failed.",
+			expect.any(Error),
+		);
+	});
 });
