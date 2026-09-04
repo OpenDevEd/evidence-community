@@ -35,15 +35,35 @@ describe("admin library snapshot", () => {
 			.fn()
 			.mockResolvedValue([{ count: 3, sourceConnectionKey: "zotero-main" }]);
 		const where = vi.fn(() => ({ groupBy }));
-		const from = vi.fn(() => ({ orderBy, where }));
+		const leftJoin = vi.fn().mockResolvedValue([
+			{
+				activeRunStartedAt: null,
+				lastError: null,
+				lastFailureAt: null,
+				lastResult: { records: 12 },
+				lastSuccessAt: new Date("2026-09-04T10:00:00Z"),
+				leaseExpiresAt: null,
+				sourceConnectionKey: "zotero-main",
+			},
+		]);
+		const issueGroupBy = vi
+			.fn()
+			.mockResolvedValue([{ count: 2, sourceConnectionKey: "zotero-main" }]);
+		const from = vi.fn(() => ({
+			groupBy: issueGroupBy,
+			leftJoin,
+			orderBy,
+			where,
+		}));
 		const select = vi.fn(() => ({ from }));
 
 		const snapshot = await getAdminLibrarySnapshot({
 			select,
 		} as unknown as Database);
 
-		// One query for the sources, one grouped count over collections.
-		expect(select).toHaveBeenCalledTimes(2);
+		// Sources, collection counts, sync state, and issue counts. Never the
+		// catalogue itself.
+		expect(select).toHaveBeenCalledTimes(4);
 		expect(snapshot).toEqual({
 			sources: [
 				{
@@ -53,6 +73,7 @@ describe("admin library snapshot", () => {
 					provider: "native",
 					readOnly: false,
 					status: "active",
+					sync: null,
 					writeback: { enabled: false, supported: false },
 				},
 				{
@@ -62,6 +83,16 @@ describe("admin library snapshot", () => {
 					provider: "zotero",
 					readOnly: true,
 					status: "active",
+					sync: {
+						issueCount: 2,
+						lastError: null,
+						lastFailureAt: null,
+						lastRecords: 12,
+						lastSuccessAt: "2026-09-04T10:00:00.000Z",
+						processed: null,
+						runningSince: null,
+						status: "succeeded",
+					},
 					writeback: { enabled: false, supported: true },
 				},
 			],

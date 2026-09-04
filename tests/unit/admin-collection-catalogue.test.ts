@@ -36,6 +36,7 @@ const nativeSource: AdminSource = {
 	provider: "native",
 	readOnly: false,
 	status: "active",
+	sync: null,
 	writeback: { enabled: false, supported: false },
 };
 

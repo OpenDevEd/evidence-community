@@ -2,6 +2,8 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
+
+import { AdminSourceSyncBadge } from "./AdminSourceSyncDialog";
 import { type ReactNode, useRef } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -83,6 +85,7 @@ export function AdminNavigation({
 	onEditCollection,
 	isBusy,
 	onMoveCollection,
+	onOpenSourceSync,
 	onRestoreCollection,
 	onSelectCollection,
 	onSelectSource,
@@ -101,6 +104,7 @@ export function AdminNavigation({
 	onMoveCollection: (collection: AdminCollectionCatalogEntry) => void;
 	onRestoreCollection: (collection: AdminCollectionCatalogEntry) => void;
 	onSelectCollection: (key: string | null) => void;
+	onOpenSourceSync: (key: string) => void;
 	onSelectSource: (key: string) => void;
 	onSelectState: (state: AdminRecordState | "all") => void;
 	source: string | null;
@@ -120,10 +124,10 @@ export function AdminNavigation({
 				<div className={navigationListSurfaceClass}>
 					{sources.map((entry) => {
 						return (
+							<div className="flex items-center" key={entry.key}>
 							<button
-								key={entry.key}
 								aria-pressed={source === entry.key}
-								className={`${navigationItemClass} ${
+								className={`${navigationItemClass} min-w-0 flex-1 ${
 									source === entry.key
 										? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
 										: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
@@ -135,7 +139,7 @@ export function AdminNavigation({
 								}
 								type="button"
 							>
-								<span className="grid size-[14px] shrink-0 place-items-center">
+								<span className="grid size-3.5 shrink-0 place-items-center">
 									<SourceProviderIcon
 										provider={entry.provider}
 										size={14}
@@ -153,6 +157,14 @@ export function AdminNavigation({
 									<HugeiconsIcon icon={LockIcon} aria-label="Writeback unavailable" size={11} />
 								) : null}
 							</button>
+							{entry.sync ? (
+								<AdminSourceSyncBadge
+									label={entry.label}
+									onClick={() => onOpenSourceSync(entry.key)}
+									sync={entry.sync}
+								/>
+							) : null}
+							</div>
 						);
 					})}
 				</div>

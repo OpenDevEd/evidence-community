@@ -14,6 +14,7 @@ const protectedAdminRequests = [
 	["POST", "/api/admin/search-index/retry"],
 	["POST", "/api/admin/search-index/receipts"],
 	["GET", "/api/admin/library"],
+	["GET", "/api/admin/library/sources/zotero-main/issues"],
 	["GET", "/api/admin/collections"],
 	["POST", "/api/admin/collections"],
 	["GET", "/api/admin/search-index"],
