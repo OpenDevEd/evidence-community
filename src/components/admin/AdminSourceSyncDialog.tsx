@@ -13,6 +13,7 @@ import {
 	ModalFooter,
 	ModalHeader,
 } from "@nextui-org/react";
+import { useState } from "react";
 import useSWR from "swr";
 
 import { Button } from "@/components/nextui/Button";
@@ -25,7 +26,7 @@ import type {
 	AdminSourceSyncStatus,
 } from "@/lib/admin/types";
 
-import { getAdminSourceIssues } from "./admin-api";
+import { getAdminSourceIssues, setAdminSourceIssueDismissed } from "./admin-api";
 import { SourceProviderIcon } from "./SourceProviderIcon";
 
 const appearance: Record<
@@ -161,52 +162,194 @@ function issuesNotice({
 	data,
 	error,
 	isLoading,
+	showDismissed,
+	shown,
 }: {
 	data: AdminSourceIssuesPage | undefined;
 	error: unknown;
 	isLoading: boolean;
+	showDismissed: boolean;
+	shown: number;
 }) {
 	if (isLoading) return "Loading issues…";
 	if (error) return "Issues could not be loaded.";
-	if (!data || data.issues.length === 0) {
-		return "No record issues. Every record was stored in full.";
+	if (!data) return null;
+	const total = showDismissed ? data.dismissedTotal : data.total;
+	if (total === 0) {
+		return showDismissed
+			? "No dismissed issues."
+			: "No open record issues. Every record was stored in full.";
 	}
-	if (data.total > data.issues.length) {
-		return `Showing the newest ${data.issues.length.toLocaleString()} of ${data.total.toLocaleString()} issues.`;
+	return `Showing ${shown.toLocaleString()} of ${total.toLocaleString()} ${showDismissed ? "dismissed" : "open"} issues.`;
+}
+
+/** Loads the issue list page by page, per view (open or dismissed), with dismiss and restore. */
+function useSourceIssues(sourceKey: string, sync: AdminSourceSync) {
+	const [showDismissed, setShowDismissed] = useState(false);
+	// Pages after the first belong to one first-page result. A new first
+	// page, from a view change or a poll, starts the list over so a row can
+	// never show twice or linger after it was resolved.
+	const [more, setMore] = useState<{
+		after: AdminSourceIssuesPage | undefined;
+		pages: AdminSourceIssuesPage[];
+	}>({ after: undefined, pages: [] });
+	const [busyKey, setBusyKey] = useState<string | null>(null);
+	const [actionError, setActionError] = useState<string | null>(null);
+	// The key carries the polled status and count, and a running import
+	// refetches on an interval, so the list follows what the import writes.
+	const { data, error, isLoading, mutate } = useSWR(
+		["admin-source-issues", sourceKey, showDismissed, sync.status, sync.issueCount] as const,
+		([, key, dismissed]) => getAdminSourceIssues(key, { dismissed }),
+		{ refreshInterval: sync.status === "running" ? ISSUES_POLL_MS : 0 },
+	);
+	const pages = data !== undefined && more.after === data ? more.pages : [];
+	const last = pages.at(-1) ?? data;
+
+	async function run(key: string, action: () => Promise<void>, fallback: string) {
+		setBusyKey(key);
+		try {
+			await action();
+			setActionError(null);
+		} catch (caught) {
+			setActionError(caught instanceof Error ? caught.message : fallback);
+		} finally {
+			setBusyKey(null);
+		}
 	}
-	return null;
+
+	return {
+		actionError,
+		busyKey,
+		data,
+		error,
+		hasMore: Boolean(last?.hasMore),
+		isLoading,
+		issues: [...(data?.issues ?? []), ...pages.flatMap((page) => page.issues)],
+		loadMore: () =>
+			run(
+				"more",
+				async () => {
+					const cursor = last?.nextCursor;
+					if (!cursor) return;
+					const page = await getAdminSourceIssues(sourceKey, {
+						cursor,
+						dismissed: showDismissed,
+					});
+					setMore({ after: data, pages: [...pages, page] });
+				},
+				"More issues could not be loaded.",
+			),
+		setDismissed: (issue: AdminSourceIssue, dismissed: boolean) =>
+			run(
+				issue.sourceRecordKey,
+				async () => {
+					await setAdminSourceIssueDismissed(sourceKey, issue.sourceRecordKey, dismissed);
+					setMore({ after: undefined, pages: [] });
+					// The row leaves this view at once; the refresh only corrects
+					// the counts, so a failed refresh cannot bring it back.
+					await mutate(
+						(current) =>
+							current && {
+								...current,
+								dismissedTotal: current.dismissedTotal + (dismissed ? 1 : -1),
+								issues: current.issues.filter(
+									(entry) => entry.sourceRecordKey !== issue.sourceRecordKey,
+								),
+								total: current.total + (dismissed ? -1 : 1),
+							},
+						{ revalidate: true },
+					);
+				},
+				"The issue could not be updated.",
+			),
+		showDismissed,
+		toggleView: () => {
+			setMore({ after: undefined, pages: [] });
+			setShowDismissed((current) => !current);
+		},
+	};
+}
+
+/** Switches the list between open and dismissed issues once there is anything dismissed. */
+function ViewToggle({
+	data,
+	onToggle,
+	showDismissed,
+}: {
+	data: AdminSourceIssuesPage | undefined;
+	onToggle: () => void;
+	showDismissed: boolean;
+}) {
+	if (!data || (data.dismissedTotal === 0 && !showDismissed)) return null;
+	return (
+		<Button aria-pressed={showDismissed} onPress={onToggle} size="xs" variant="transparent">
+			{showDismissed
+				? `Show open (${data.total.toLocaleString()})`
+				: `Show dismissed (${data.dismissedTotal.toLocaleString()})`}
+		</Button>
+	);
 }
 
 function SyncIssues({
+	onIssuesChanged,
 	onOpenRecord,
 	sourceKey,
 	sync,
 }: {
+	onIssuesChanged: () => void;
 	onOpenRecord: (itemKey: string) => void;
 	sourceKey: string;
 	sync: AdminSourceSync;
 }) {
-	// The key carries the polled status and count, and a running import
-	// refetches on an interval, so the list follows what the import writes.
-	const { data, error, isLoading } = useSWR(
-		["admin-source-issues", sourceKey, sync.status, sync.issueCount] as const,
-		([, key]) => getAdminSourceIssues(key),
-		{
-			keepPreviousData: true,
-			refreshInterval: sync.status === "running" ? ISSUES_POLL_MS : 0,
-		},
-	);
-	const notice = issuesNotice({ data, error, isLoading });
+	const list = useSourceIssues(sourceKey, sync);
+	const notice = issuesNotice({
+		data: list.data,
+		error: list.error,
+		isLoading: list.isLoading,
+		showDismissed: list.showDismissed,
+		shown: list.issues.length,
+	});
 	return (
-		<div>
-			<p
-				aria-live="polite"
-				className={`text-xs ${error ? "text-danger" : "text-black/55 dark:text-white/55"}`}
-			>
-				{notice}
-			</p>
-			{data && data.issues.length > 0 ? (
-				<IssueList issues={data.issues} onOpenRecord={onOpenRecord} />
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-2">
+				<p
+					aria-live="polite"
+					className={`text-xs ${list.error ? "text-danger" : "text-black/55 dark:text-white/55"}`}
+				>
+					{notice}
+				</p>
+				<ViewToggle data={list.data} onToggle={list.toggleView} showDismissed={list.showDismissed} />
+			</div>
+			{list.actionError ? (
+				<p className="text-xs text-danger" role="alert">
+					{list.actionError}
+				</p>
+			) : null}
+			{list.issues.length > 0 ? (
+				<ul className="divide-y divide-black/[0.08] dark:divide-white/[0.09]" data-admin-source-issues>
+					{list.issues.map((issue) => (
+						<IssueRow
+							busy={list.busyKey !== null}
+							issue={issue}
+							key={issue.sourceRecordKey}
+							onOpenRecord={onOpenRecord}
+							onSetDismissed={async (dismissed) => {
+								await list.setDismissed(issue, dismissed);
+								onIssuesChanged();
+							}}
+						/>
+					))}
+				</ul>
+			) : null}
+			{list.hasMore ? (
+				<Button
+					isDisabled={list.busyKey !== null}
+					onPress={list.loadMore}
+					size="xs"
+					variant="transparent"
+				>
+					{list.busyKey === "more" ? "Loading…" : "Load more"}
+				</Button>
 			) : null}
 		</div>
 	);
@@ -277,59 +420,96 @@ function explainIssue(issue: AdminSourceIssue) {
 	};
 }
 
-function IssueList({
-	issues,
+function IssueName({
+	issue,
+	name,
 	onOpenRecord,
 }: {
-	issues: AdminSourceIssue[];
+	issue: AdminSourceIssue;
+	name: string;
 	onOpenRecord: (itemKey: string) => void;
 }) {
+	if (!issue.itemKey) {
+		return <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>;
+	}
+	const itemKey = issue.itemKey;
 	return (
-		<ul className="divide-y divide-black/[0.08] dark:divide-white/[0.09]" data-admin-source-issues>
-			{issues.map((issue) => {
-				const explanation = explainIssue(issue);
-				return (
-					<li className="flex flex-col gap-1 py-2.5" key={issue.sourceRecordKey}>
-						<div className="flex items-center gap-2">
-							{issue.itemKey ? (
-								<button
-									className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline"
-									onClick={() => onOpenRecord(issue.itemKey!)}
-									type="button"
-								>
-									{issue.title || "Untitled record"}
-								</button>
-							) : (
-								<span className="min-w-0 flex-1 truncate text-sm font-medium">
-									{issue.title || issue.sourceRecordKey}
-								</span>
-							)}
-							<span className="shrink-0 rounded border border-danger/40 px-1 text-xs text-danger">
-								{explanation.title}
-							</span>
-						</div>
-						{issue.attachmentFilename ? (
-							<p className="break-all text-xs text-black/60 dark:text-white/60">
-								File: {issue.attachmentFilename}
-							</p>
-						) : null}
-						<p className="text-xs text-black/80 dark:text-white/80">{explanation.next}</p>
-						<p className="text-xs text-black/60 dark:text-white/60">
-							Details: {issue.message}
-						</p>
-					</li>
-				);
-			})}
-		</ul>
+		<button
+			className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline"
+			onClick={() => onOpenRecord(itemKey)}
+			type="button"
+		>
+			{name}
+		</button>
+	);
+}
+
+function IssueDetails({ issue, next }: { issue: AdminSourceIssue; next: string }) {
+	return (
+		<>
+			{issue.attachmentFilename ? (
+				<p className="break-all text-xs text-black/60 dark:text-white/60">
+					File: {issue.attachmentFilename}
+				</p>
+			) : null}
+			<p className="text-xs text-black/80 dark:text-white/80">{next}</p>
+			<p className="text-xs text-black/60 dark:text-white/60">
+				Details: {issue.message}
+				{issue.dismissedAt ? ` · Dismissed ${formatTime(issue.dismissedAt)}` : ""}
+			</p>
+		</>
+	);
+}
+
+function IssueRow({
+	busy,
+	issue,
+	onOpenRecord,
+	onSetDismissed,
+}: {
+	busy: boolean;
+	issue: AdminSourceIssue;
+	onOpenRecord: (itemKey: string) => void;
+	onSetDismissed: (dismissed: boolean) => void;
+}) {
+	const explanation = explainIssue(issue);
+	const dismissed = issue.dismissedAt !== null;
+	const name = issue.title || (issue.itemKey ? "Untitled record" : issue.sourceRecordKey);
+	const action = dismissed ? "Restore" : "Dismiss";
+	return (
+		<li
+			className={`flex flex-col gap-1 py-2.5 ${dismissed ? "opacity-70" : ""}`}
+			data-admin-source-issue-dismissed={dismissed ? "true" : undefined}
+		>
+			<div className="flex items-center gap-2">
+				<IssueName issue={issue} name={name} onOpenRecord={onOpenRecord} />
+				<span className="shrink-0 rounded border border-danger/40 px-1 text-xs text-danger">
+					{explanation.title}
+				</span>
+				<Button
+					aria-label={`${action} issue: ${name}`}
+					isDisabled={busy}
+					onPress={() => onSetDismissed(!dismissed)}
+					size="xs"
+					variant="transparent"
+				>
+					{action}
+				</Button>
+			</div>
+			<IssueDetails issue={issue} next={explanation.next} />
+		</li>
 	);
 }
 
 /** The dialog body: import state, then the records with a saved issue. */
 export function AdminSourceSyncPanel({
+	onIssuesChanged,
 	onOpenRecord,
 	source,
 	sync,
 }: {
+	/** Called after an issue was dismissed or restored, so the sidebar count follows. */
+	onIssuesChanged: () => void;
 	onOpenRecord: (itemKey: string) => void;
 	source: AdminSource;
 	sync: AdminSourceSync;
@@ -341,7 +521,12 @@ export function AdminSourceSyncPanel({
 				<p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
 					Record issues
 				</p>
-				<SyncIssues onOpenRecord={onOpenRecord} sourceKey={source.key} sync={sync} />
+				<SyncIssues
+					onIssuesChanged={onIssuesChanged}
+					onOpenRecord={onOpenRecord}
+					sourceKey={source.key}
+					sync={sync}
+				/>
 			</div>
 		</>
 	);
@@ -350,10 +535,12 @@ export function AdminSourceSyncPanel({
 /** Import state and record issues of one external source. */
 export function AdminSourceSyncDialog({
 	onClose,
+	onIssuesChanged,
 	onOpenRecord,
 	source,
 }: {
 	onClose: () => void;
+	onIssuesChanged: () => void;
 	onOpenRecord: (itemKey: string) => void;
 	source: AdminSource | null;
 }) {
@@ -376,6 +563,7 @@ export function AdminSourceSyncDialog({
 							</ModalHeader>
 							<ModalBody className="gap-4">
 								<AdminSourceSyncPanel
+									onIssuesChanged={onIssuesChanged}
 									onOpenRecord={onOpenRecord}
 									source={source}
 									sync={source.sync}

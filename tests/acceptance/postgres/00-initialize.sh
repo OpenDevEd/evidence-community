@@ -59,6 +59,14 @@ VALUES (
 INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey")
 VALUES ('AMBR2345', 'openalex-acceptance', 'W100000001');
 
+INSERT INTO "sourceRecordIssue" ("sourceConnectionKey", "sourceRecordKey", "code", "message")
+VALUES (
+	'openalex-acceptance',
+	'W100000001',
+	'zotero_fields_dropped',
+	'Some fields could not be stored and were left out: creators (Choose a valid creator role.).'
+);
+
 INSERT INTO "itemCitationMetric" (
 	"itemKey", "sourceConnectionKey", "citedByCount", "referencedWorksCount", "observedAt"
 ) VALUES (

@@ -2563,6 +2563,7 @@ export default function AdminWorkbench({
 
 			<AdminSourceSyncDialog
 				onClose={() => setSyncSourceKey(null)}
+				onIssuesChanged={loadLibrary}
 				onOpenRecord={(itemKey) => {
 					setSyncSourceKey(null);
 					setSelectedKey(itemKey);
