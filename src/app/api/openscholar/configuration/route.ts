@@ -63,7 +63,10 @@ function isConfigurationConflict(error: unknown): error is Error {
 	);
 }
 
-function errorResponse(error: unknown) {
+function errorResponse(
+	error: unknown,
+	operation: "activate" | "restore",
+) {
 	if (isConfigurationConflict(error)) {
 		return jsonError("conflict", error.message, 409);
 	}
@@ -74,6 +77,7 @@ function errorResponse(error: unknown) {
 			error.code === "FILE_TOO_LARGE" ? 413 : 400,
 		);
 	}
+	console.error(`OpenScholar configuration ${operation} failed.`, error);
 	return jsonError(
 		"internal_error",
 		"The library configuration could not be changed.",
@@ -106,7 +110,7 @@ export async function PUT(request: NextRequest) {
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
-		return errorResponse(error);
+		return errorResponse(error, "activate");
 	} finally {
 		await unlink(candidatePath).catch(() => undefined);
 	}
@@ -133,6 +137,6 @@ export async function DELETE(request: NextRequest) {
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
-		return errorResponse(error);
+		return errorResponse(error, "restore");
 	}
 }
