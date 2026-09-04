@@ -680,7 +680,7 @@ function toAdminSourceIssue(row: {
 	return {
 		...row,
 		attachmentFilename: row.attachmentFilename?.trim() || null,
-		dismissedAt: dateString(row.dismissedAt),
+		dismissedAt: row.dismissedAt ? dateString(row.dismissedAt) : null,
 		title: row.title?.trim() || null,
 		updatedAt: dateString(row.updatedAt) ?? "",
 	};
@@ -704,7 +704,7 @@ export async function setAdminSourceIssueDismissed(
 		)
 		.returning({ dismissedAt: sourceRecordIssue.dismissedAt });
 	if (!row) throw new ItemNotFoundError(sourceRecordKey);
-	return { dismissedAt: dateString(row.dismissedAt) };
+	return { dismissedAt: row.dismissedAt ? dateString(row.dismissedAt) : null };
 }
 
 /** Records of one source with a saved import issue, newest first. */
