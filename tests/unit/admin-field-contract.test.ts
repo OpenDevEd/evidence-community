@@ -122,14 +122,17 @@ describe("admin metadata field contract", () => {
 		).toBe(kind);
 	});
 
-	it("accepts only exact dates and four-digit years", () => {
+	it("accepts only exact dates, months, and four-digit years", () => {
 		const descriptor = describeZoteroField({ field: "date" });
 		expect(normalizeAdminFieldValue(descriptor, "  2024  ")).toEqual({
 			value: "2024",
 		});
-		for (const value of ["2024-05", "Spring 2024", "forthcoming", "2024-02-31"]) {
+		expect(normalizeAdminFieldValue(descriptor, "2024-05")).toEqual({
+			value: "2024-05",
+		});
+		for (const value of ["Spring 2024", "forthcoming", "2024-02-31", "2024-13"]) {
 			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({
-				error: "Enter an exact date or a four-digit year.",
+				error: "Enter an exact date, a month, or a four-digit year.",
 				value,
 			});
 		}

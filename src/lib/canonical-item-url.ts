@@ -25,6 +25,9 @@ export function getCanonicalWebsiteItemUrl(
 	const itemUrl = parseUrl(item.url);
 	const canonicalBaseUrl = parseUrl(baseUrl);
 	if (!itemUrl || !canonicalBaseUrl) return null;
+	if (itemUrl.protocol !== "http:" && itemUrl.protocol !== "https:") {
+		return null;
+	}
 	if (canonicalHost(itemUrl.host) !== canonicalHost(canonicalBaseUrl.host)) {
 		return null;
 	}

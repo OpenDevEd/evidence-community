@@ -91,7 +91,7 @@ const zoteroItemUriOrUrisSchema = z.union([
 	zoteroItemUriSchema,
 	z.array(zoteroItemUriSchema),
 ]);
-const relationsSchema = z
+const relationsObjectSchema = z
 	.object({
 		"dc:relation": zoteroItemUriOrUrisSchema.optional(),
 		"dc:replaces": zoteroItemUriOrUrisSchema.optional(),
@@ -106,8 +106,23 @@ const relationsSchema = z
 			stringOrStringsSchema.optional(),
 		"mendeleyDB:remoteDocumentUUID": stringOrStringsSchema.optional(),
 		related_works: stringOrStringsSchema.optional(),
-	})
-	.strict();
+	});
+const relationsSchema = relationsObjectSchema.strict();
+// External sources may carry relation types the editor does not know. Keep
+// them so writeback returns them unchanged.
+const sourceRelationsSchema = relationsObjectSchema.passthrough();
+
+/**
+ * Validation policy for records copied from an external source such as
+ * Zotero. The source owns the data: unknown fields are dropped instead of
+ * rejected, dates and addresses the editor cannot parse are kept as text, and a
+ * title is not required.
+ */
+export const sourceRecordValidationOptions = {
+	requireChildParent: false,
+	requireTitle: false,
+	source: true,
+} as const;
 
 type ItemWrite = InferInsertModel<typeof item>;
 
@@ -235,6 +250,8 @@ export function validateNativeItemDraft(
 		allowIncompleteCreators?: boolean;
 		requireChildParent?: boolean;
 		requireTitle?: boolean;
+		/** Apply the external-source policy; see `sourceRecordValidationOptions`. */
+		source?: boolean;
 	} = {},
 ): ValidatedNativeItemDraft {
 	const payloadResult = payloadObjectSchema.safeParse(input);
@@ -260,6 +277,10 @@ export function validateNativeItemDraft(
 
 	for (const field of Object.keys(payload)) {
 		if (!allowedFields.has(field)) {
+			if (options.source) {
+				delete payload[field];
+				continue;
+			}
 			throw new NativeItemValidationError(
 				"Remove fields that are not available for this item type.",
 				{
@@ -304,7 +325,9 @@ export function validateNativeItemDraft(
 			);
 		}
 		if (typeof value === "string") {
-			const normalized = normalizeAdminFieldValue(descriptor, value);
+			const normalized = normalizeAdminFieldValue(descriptor, value, {
+				keepUnparsed: options.source,
+			});
 			if (normalized.error) {
 				throw new NativeItemValidationError(
 					`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
@@ -379,7 +402,9 @@ export function validateNativeItemDraft(
 	}
 
 	if (payload.relations !== undefined) {
-		const relationResult = relationsSchema.safeParse(payload.relations);
+		const relationResult = (
+			options.source ? sourceRelationsSchema : relationsSchema
+		).safeParse(payload.relations);
 		if (!relationResult.success) {
 			throw new NativeItemValidationError(
 				"Check the record relationships and try again.",

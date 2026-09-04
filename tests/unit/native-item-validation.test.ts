@@ -10,7 +10,10 @@ import {
 	adminCanonicalDraftToItemFields,
 	adminCanonicalPayloadToItemFields,
 } from "@/lib/admin/item-fields";
-import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
+import {
+	sourceRecordValidationOptions,
+	validateNativeItemDraft,
+} from "@/lib/admin/native-item-validation";
 
 function validFieldValue(field: { baseField?: string; field: string }) {
 	const descriptor = describeZoteroField(field);
@@ -202,6 +205,47 @@ describe("native item draft validation", () => {
 		expect(checkedFields).toBe(770);
 	});
 
+	it("keeps external source values the editor would reject", () => {
+		// The source owns the record: an unusual date or address is stored as
+		// text, an unknown field is left out, an unknown relation type and a
+		// missing title are fine. The editor still rejects all of them.
+		const sourceRecord = {
+			itemType: "book",
+			date: "Spring 2024",
+			url: "zotero://select/groups/1/items/AAAA2345",
+			futureZoteroField: "kept in raw only",
+			relations: { "dc:relation": "http://zotero.org/groups/1/items/BBBB2345", "future:relation": "x" },
+		};
+		const validated = validateNativeItemDraft(
+			sourceRecord,
+			sourceRecordValidationOptions,
+		);
+		expect(validated.item).toMatchObject({
+			date: "Spring 2024",
+			url: "zotero://select/groups/1/items/AAAA2345",
+			relations: { "future:relation": "x" },
+		});
+		expect(validated.item).not.toHaveProperty("futureZoteroField");
+		expect(validated.item).not.toHaveProperty("title");
+
+		expect(() =>
+			validateNativeItemDraft(sourceRecord, { requireTitle: true }),
+		).toThrow();
+		// Only the format check is relaxed; the length limit still applies.
+		expect(() =>
+			validateNativeItemDraft(
+				{ itemType: "book", url: "x".repeat(70_000) },
+				sourceRecordValidationOptions,
+			),
+		).toThrow("Check url");
+		expect(() =>
+			validateNativeItemDraft(
+				{ itemType: "book", creators: [{ creatorType: "director", name: "A" }] },
+				sourceRecordValidationOptions,
+			),
+		).toThrow("Choose a valid creator role.");
+	});
+
 	it("preserves text identifiers and reports typed fields that are wrong", () => {
 		expect(
 			validateNativeItemDraft({
@@ -217,9 +261,8 @@ describe("native item draft validation", () => {
 		});
 
 		for (const [field, value, message] of [
-			["date", "2024-02-31", "Enter an exact date or a four-digit year"],
-			["date", "2024-05", "Enter an exact date or a four-digit year"],
-			["date", "Spring 2024", "Enter an exact date or a four-digit year"],
+			["date", "2024-02-31", "Enter an exact date, a month, or a four-digit year"],
+			["date", "Spring 2024", "Enter an exact date, a month, or a four-digit year"],
 			["url", "example.com", "Enter a full HTTP or HTTPS address"],
 		] as const) {
 			try {
@@ -235,7 +278,7 @@ describe("native item draft validation", () => {
 		expect(() =>
 			validateNativeItemDraft({
 				itemType: "case",
-				dateDecided: "2024-05",
+				dateDecided: "Spring 2024",
 			}),
 		).toThrow("Check date decided");
 

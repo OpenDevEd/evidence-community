@@ -1,3 +1,5 @@
+import { escapeHtml } from "@/lib/escape-html";
+
 export type ScreeningFieldValue = string | number | boolean | null;
 
 export type ScreeningResultsData = {
@@ -55,14 +57,6 @@ function valueText(value: ScreeningFieldValue) {
 	return value === null ? "" : String(value);
 }
 
-function htmlEscape(value: string) {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("'", "&#039;");
-}
 
 function markdownCell(value: string) {
 	return value
@@ -147,16 +141,16 @@ export function screeningExportContent(
 		"<section>",
 		"<h1>Smart Screening Results</h1>",
 		"<table>",
-		`<thead><tr>${headers.map((header) => `<th>${htmlEscape(header)}</th>`).join("")}</tr></thead>`,
+		`<thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>`,
 		"<tbody>",
 		...rows.map(
 			(row) =>
-				`<tr><td><a href="${htmlEscape(row.url)}">${htmlEscape(row.title)}</a></td>${[
+				`<tr><td><a href="${escapeHtml(row.url)}">${escapeHtml(row.title)}</a></td>${[
 					row.resourceId,
 					row.url,
 					...row.values,
 				]
-					.map((value) => `<td>${htmlEscape(value)}</td>`)
+					.map((value) => `<td>${escapeHtml(value)}</td>`)
 					.join("")}</tr>`,
 		),
 		"</tbody>",

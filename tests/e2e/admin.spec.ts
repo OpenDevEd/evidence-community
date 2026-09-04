@@ -3055,6 +3055,7 @@ test("uses controls that preserve every supported metadata value", async ({
 	});
 	await expect(precision.locator("option")).toHaveText([
 		"Exact date",
+		"Month",
 		"Year",
 	]);
 	await precision.selectOption("year");

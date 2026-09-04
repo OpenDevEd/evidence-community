@@ -4,13 +4,14 @@ export type BibliographicDateResult =
 	| {
 			isoDate?: string;
 			kind: "parsed";
-			precision: "day" | "year";
+			precision: "day" | "month" | "year";
 			raw: string;
 			sortKey: number;
 			year: number;
 	  };
 
 const YEAR_PATTERN = /^[12]\d{3}$/u;
+const MONTH_PATTERN = /^([12]\d{3})-(\d{2})$/u;
 const EXACT_DATE_PATTERN = /^([12]\d{3})-(\d{2})-(\d{2})$/u;
 
 function validCalendarDate(year: number, month: number, day: number) {
@@ -33,6 +34,20 @@ export function parseBibliographicDate(value: string): BibliographicDateResult {
 			precision: "year",
 			raw,
 			sortKey: year * 10_000,
+			year,
+		};
+	}
+
+	const monthDate = MONTH_PATTERN.exec(raw);
+	if (monthDate) {
+		const year = Number(monthDate[1]);
+		const month = Number(monthDate[2]);
+		if (month < 1 || month > 12) return { kind: "invalid", raw };
+		return {
+			kind: "parsed",
+			precision: "month",
+			raw,
+			sortKey: year * 10_000 + month * 100,
 			year,
 		};
 	}

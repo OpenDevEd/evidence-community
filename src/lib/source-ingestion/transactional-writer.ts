@@ -44,6 +44,7 @@ import { parseZoteroItemUri } from "./zotero/uri";
 import { tag } from "@/db/schema/tables/tag";
 import {
 	NativeItemValidationError,
+	sourceRecordValidationOptions,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
 import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
@@ -179,10 +180,10 @@ function sourceItemValues(
 
 	let validated;
 	try {
-		validated = validateNativeItemDraft(record.metadata, {
-			requireChildParent: false,
-			requireTitle: true,
-		});
+		validated = validateNativeItemDraft(
+			record.metadata,
+			sourceRecordValidationOptions,
+		);
 	} catch (error) {
 		if (error instanceof NativeItemValidationError) {
 			throw new SourceIngestionValidationError(
