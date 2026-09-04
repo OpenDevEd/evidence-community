@@ -88,19 +88,24 @@ describe("source import state in the admin", () => {
 			data: {
 				issues: [
 					{
-						code: "zotero_fields_dropped",
+						attachmentFilename: "Hassler et al. - 2018.pdf",
+						code: "zotero_file_metadata_invalid",
 						itemKey: "ITEM0001",
-						message: "Some fields could not be stored and were left out: creators.",
-						sourceRecordKey: "AAAA2345",
-						title: "Paper with a bad creator",
+						message: "Zotero attachment 5HKK3TV9: a published PDF must have a valid filename and MD5",
+						sourceRecordKey: "5HKK3TV9",
+						title: "Sustaining and Scaling Pedagogic Innovation",
 						updatedAt: "2026-09-04T10:00:00.000Z",
 					},
 					{
-						code: "zotero_record_too_large",
-						itemKey: null,
-						message: "The Zotero record exceeded the ingestion limit.",
+						// One saved issue with two failures: a dropped field and a
+						// linked attachment without a URL.
+						attachmentFilename: "notes.pdf",
+						code: "zotero_fields_dropped",
+						itemKey: "ITEM0002",
+						message:
+							"Some fields could not be stored and were left out: url (This value is too long). Zotero attachment BBBB2345: a published linked URL must have a valid URL",
 						sourceRecordKey: "BBBB2345",
-						title: null,
+						title: "Report with a linked file",
 						updatedAt: "2026-09-04T09:00:00.000Z",
 					},
 				],
@@ -134,6 +139,18 @@ describe("source import state in the admin", () => {
 		expect(text).toContain("Showing the newest 2 of 250 issues.");
 		const rows = container.querySelectorAll("[data-admin-source-issues] li");
 		expect(rows).toHaveLength(2);
+		// The reader sees the parent record, the file, what happened, and what
+		// to do, not the worker's technical message alone.
+		const first = rows[0]!.textContent ?? "";
+		expect(first).toContain("Sustaining and Scaling Pedagogic Innovation");
+		expect(first).toContain("File: Hassler et al. - 2018.pdf");
+		expect(first).toContain("PDF not published");
+		expect(first).toContain("Zotero has no uploaded copy of this file");
+		expect(first).toContain("Details: Zotero attachment 5HKK3TV9");
+		const second = rows[1]!.textContent ?? "";
+		expect(second).toContain("Some fields were left out; PDF not published");
+		expect(second).toContain("add the URL to the attachment");
+		expect(second).not.toContain("group storage");
 		expect(rows[1]!.textContent).toContain("BBBB2345");
 		await act(async () => rows[0]!.querySelector("button")!.click());
 		expect(onOpenRecord).toHaveBeenCalledWith("ITEM0001");

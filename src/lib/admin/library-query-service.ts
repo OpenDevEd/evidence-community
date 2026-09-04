@@ -6,6 +6,7 @@ import {
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
 import {
@@ -628,6 +629,9 @@ export async function getAdminSourceIssues(
 	db: Database,
 	sourceConnectionKey: string,
 ): Promise<AdminSourceIssuesPage> {
+	// An attachment issue is shown on the record it belongs to, with the file
+	// named, because that is what the reader opens in Zotero.
+	const parent = alias(item, "parent");
 	const [[totals], rows] = await Promise.all([
 		db
 			.select({ total: sql<number>`count(*)::int` })
@@ -635,11 +639,12 @@ export async function getAdminSourceIssues(
 			.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey)),
 		db
 		.select({
+			attachmentFilename: sql<string | null>`case when ${item.itemType} = 'Attachment' then ${item.filename} end`,
 			code: sourceRecordIssue.code,
-			itemKey: itemSourceLink.itemKey,
+			itemKey: sql<string | null>`coalesce(${parent.key}, ${item.key})`,
 			message: sourceRecordIssue.message,
 			sourceRecordKey: sourceRecordIssue.sourceRecordKey,
-			title: item.title,
+			title: sql<string | null>`coalesce(${parent.title}, ${item.title})`,
 			updatedAt: sourceRecordIssue.updatedAt,
 		})
 		.from(sourceRecordIssue)
@@ -651,6 +656,7 @@ export async function getAdminSourceIssues(
 			),
 		)
 		.leftJoin(item, eq(item.key, itemSourceLink.itemKey))
+		.leftJoin(parent, eq(parent.key, item.parentItem))
 		.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey))
 		.orderBy(desc(sourceRecordIssue.updatedAt), asc(sourceRecordIssue.sourceRecordKey))
 		// ponytail: one page of the newest issues; the total tells the reader
@@ -660,6 +666,7 @@ export async function getAdminSourceIssues(
 	return {
 		issues: rows.map((row) => ({
 			...row,
+			attachmentFilename: row.attachmentFilename?.trim() || null,
 			title: row.title?.trim() || null,
 			updatedAt: dateString(row.updatedAt) ?? "",
 		})),
