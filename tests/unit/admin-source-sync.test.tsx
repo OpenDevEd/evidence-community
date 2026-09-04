@@ -199,7 +199,12 @@ describe("source import state in the admin", () => {
 			title: "Paper",
 			updatedAt: "2026-09-04T10:00:00.000Z",
 		};
-		const mutate = vi.fn();
+		// Applies the optimistic cache updater the way SWR does; the refresh
+		// that follows is not simulated, so the row must leave on the update
+		// alone.
+		const mutate = vi.fn(async (updater: (current: unknown) => unknown) => {
+			testState.swrResult.data = updater(testState.swrResult.data) as Record<string, unknown>;
+		});
 		testState.swrResult = {
 			data: { dismissedTotal: 0, hasMore: false, issues: [issue], nextCursor: null, total: 1 },
 			error: undefined,
@@ -229,6 +234,9 @@ describe("source import state in the admin", () => {
 		);
 		expect(mutate).toHaveBeenCalledTimes(1);
 		expect(onIssuesChanged).toHaveBeenCalledTimes(1);
+		expect(container.querySelector("[data-admin-source-issues]")).toBeNull();
+		expect(container.textContent).toContain("No open record issues");
+		expect(container.textContent).toContain("Show dismissed (1)");
 	});
 
 	it("loads the next page after the first and keeps the earlier rows", async () => {
