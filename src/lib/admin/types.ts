@@ -201,8 +201,12 @@ export type AdminSourceSync = {
 };
 
 export type AdminSourceIssuesPage = {
+	/** Dismissed issues for the source, whichever view this page shows. */
+	dismissedTotal: number;
+	hasMore: boolean;
 	issues: AdminSourceIssue[];
-	/** All saved issues for the source; `issues` holds the newest ones. */
+	nextCursor: string | null;
+	/** Open (not dismissed) issues for the source; the sidebar badge shows this. */
 	total: number;
 };
 
@@ -210,6 +214,8 @@ export type AdminSourceIssue = {
 	/** The attachment's filename when the issue is about a file under a record. */
 	attachmentFilename: string | null;
 	code: string;
+	/** When an admin dismissed the issue; null while it is open. */
+	dismissedAt: string | null;
 	/** The library record to open: the parent when the issue is about its attachment. */
 	itemKey: string | null;
 	/** The worker's technical message; the admin shows a plain explanation first. */

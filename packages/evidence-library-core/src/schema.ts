@@ -188,6 +188,8 @@ export const sourceRecordIssue = pgTable(
 		code: varchar("code", { length: 64 }).notNull(),
 		message: varchar("message", { length: 4096 }).notNull(),
 		remoteVersion: varchar("remoteVersion", { length: 255 }),
+		/** Set when an admin dismissed the issue; cleared when the record is imported again. */
+		dismissedAt: timestampWithTimezone("dismissedAt"),
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},

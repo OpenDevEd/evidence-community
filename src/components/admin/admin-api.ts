@@ -176,9 +176,27 @@ export function getAdminLibrary() {
 	return requestJson<AdminLibrarySnapshot>("/api/admin/library");
 }
 
-export function getAdminSourceIssues(sourceKey: string) {
+export function getAdminSourceIssues(
+	sourceKey: string,
+	options: { cursor?: string | null; dismissed?: boolean } = {},
+) {
+	const search = new URLSearchParams();
+	if (options.cursor) search.set("cursor", options.cursor);
+	if (options.dismissed) search.set("dismissed", "1");
+	const query = search.size > 0 ? `?${search}` : "";
 	return requestJson<AdminSourceIssuesPage>(
-		`/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues`,
+		`/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues${query}`,
+	);
+}
+
+export function setAdminSourceIssueDismissed(
+	sourceKey: string,
+	sourceRecordKey: string,
+	dismissed: boolean,
+) {
+	return requestJson<{ dismissedAt: string | null }>(
+		`/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues/${encodeURIComponent(sourceRecordKey)}`,
+		{ body: JSON.stringify({ dismissed }), method: "PATCH" },
 	);
 }
 

@@ -11,6 +11,7 @@ vi.mock("@/config/library-config/server", () => ({
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db";
+import { sourceRecordIssue } from "@/db/schema/source";
 import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
@@ -49,11 +50,13 @@ describe("admin library snapshot", () => {
 		const issueGroupBy = vi
 			.fn()
 			.mockResolvedValue([{ count: 2, sourceConnectionKey: "zotero-main" }]);
-		const from = vi.fn(() => ({
-			groupBy: issueGroupBy,
+		const from = vi.fn((table: unknown) => ({
 			leftJoin,
 			orderBy,
-			where,
+			where:
+				table === sourceRecordIssue
+					? () => ({ groupBy: issueGroupBy })
+					: where,
 		}));
 		const select = vi.fn(() => ({ from }));
 

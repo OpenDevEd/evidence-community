@@ -14,7 +14,11 @@ export async function GET(request: NextRequest, { params }: Context) {
 	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 	const { key } = await params;
-	return getAdminSourceIssues(await getDatabase(), key).then(
+	const search = request.nextUrl.searchParams;
+	return getAdminSourceIssues(await getDatabase(), key, {
+		cursor: search.get("cursor"),
+		dismissed: search.get("dismissed") === "1",
+	}).then(
 		(issues) =>
 			NextResponse.json(issues, { headers: ADMIN_RESPONSE_HEADERS }),
 		adminErrorResponse,

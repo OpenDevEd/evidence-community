@@ -5,7 +5,7 @@ import {
 	itemFileDraft,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
@@ -16,6 +16,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@/db/schema/source";
+import { AdminValidationError } from "./errors";
 import { sourceSyncSummary } from "./source-sync-summary";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
@@ -546,6 +547,7 @@ export async function getAdminLibrarySnapshot(
 					sourceConnectionKey: sourceRecordIssue.sourceConnectionKey,
 				})
 				.from(sourceRecordIssue)
+				.where(isNull(sourceRecordIssue.dismissedAt))
 				.groupBy(sourceRecordIssue.sourceConnectionKey),
 		]);
 	const collectionCountBySource = new Map(
@@ -622,25 +624,115 @@ export async function getAdminLibrarySnapshot(
 	};
 }
 
-const ADMIN_SOURCE_ISSUE_PAGE_SIZE = 200;
+const ADMIN_SOURCE_ISSUE_PAGE_SIZE = 50;
+
+type AdminSourceIssueCursor = { sourceRecordKey: string; updatedAt: string };
+
+function encodeSourceIssueCursor(cursor: AdminSourceIssueCursor) {
+	return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeSourceIssueCursor(encoded: string): AdminSourceIssueCursor {
+	try {
+		const parsed = JSON.parse(
+			Buffer.from(encoded, "base64url").toString("utf8"),
+		) as Partial<AdminSourceIssueCursor>;
+		// The encoder writes toISOString() output; anything else, including a
+		// date JavaScript would silently normalise, is rejected before SQL.
+		if (
+			typeof parsed.sourceRecordKey === "string" &&
+			typeof parsed.updatedAt === "string" &&
+			new Date(parsed.updatedAt).toISOString() === parsed.updatedAt
+		) {
+			return { sourceRecordKey: parsed.sourceRecordKey, updatedAt: parsed.updatedAt };
+		}
+	} catch {}
+	throw new AdminValidationError("The issue list cursor is not valid.", {
+		cursor: "Reload the list.",
+	});
+}
+
+function sourceIssueRowFilter(
+	sourceConnectionKey: string,
+	options: { cursor: AdminSourceIssueCursor | null; dismissed: boolean },
+) {
+	return and(
+		eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey),
+		options.dismissed
+			? isNotNull(sourceRecordIssue.dismissedAt)
+			: isNull(sourceRecordIssue.dismissedAt),
+		options.cursor
+			? sql`(${sourceRecordIssue.updatedAt}, ${sourceRecordIssue.sourceRecordKey}) < (${options.cursor.updatedAt}::timestamptz, ${options.cursor.sourceRecordKey})`
+			: undefined,
+	);
+}
+
+function toAdminSourceIssue(row: {
+	attachmentFilename: string | null;
+	code: string;
+	dismissedAt: Date | string | null;
+	itemKey: string | null;
+	message: string;
+	sourceRecordKey: string;
+	title: string | null;
+	updatedAt: Date | string;
+}): AdminSourceIssue {
+	return {
+		...row,
+		attachmentFilename: row.attachmentFilename?.trim() || null,
+		dismissedAt: row.dismissedAt ? dateString(row.dismissedAt) : null,
+		title: row.title?.trim() || null,
+		updatedAt: dateString(row.updatedAt) ?? "",
+	};
+}
+
+/** Marks one saved import issue as dismissed or open again. */
+export async function setAdminSourceIssueDismissed(
+	db: Database,
+	sourceConnectionKey: string,
+	sourceRecordKey: string,
+	dismissed: boolean,
+) {
+	const [row] = await db
+		.update(sourceRecordIssue)
+		.set({ dismissedAt: dismissed ? new Date() : null })
+		.where(
+			and(
+				eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey),
+				eq(sourceRecordIssue.sourceRecordKey, sourceRecordKey),
+			),
+		)
+		.returning({ dismissedAt: sourceRecordIssue.dismissedAt });
+	if (!row) throw new ItemNotFoundError(sourceRecordKey);
+	return { dismissedAt: row.dismissedAt ? dateString(row.dismissedAt) : null };
+}
 
 /** Records of one source with a saved import issue, newest first. */
 export async function getAdminSourceIssues(
 	db: Database,
 	sourceConnectionKey: string,
+	options: { cursor?: string | null; dismissed?: boolean } = {},
 ): Promise<AdminSourceIssuesPage> {
 	// An attachment issue is shown on the record it belongs to, with the file
 	// named, because that is what the reader opens in Zotero.
 	const parent = alias(item, "parent");
+	const filter = sourceIssueRowFilter(sourceConnectionKey, {
+		cursor: options.cursor ? decodeSourceIssueCursor(options.cursor) : null,
+		dismissed: Boolean(options.dismissed),
+	});
 	const [[totals], rows] = await Promise.all([
 		db
-			.select({ total: sql<number>`count(*)::int` })
+			.select({
+				dismissedTotal: sql<number>`count(*) filter (where ${sourceRecordIssue.dismissedAt} is not null)::int`,
+				total: sql<number>`count(*) filter (where ${sourceRecordIssue.dismissedAt} is null)::int`,
+			})
 			.from(sourceRecordIssue)
 			.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey)),
 		db
 		.select({
 			attachmentFilename: sql<string | null>`case when ${item.itemType} = 'Attachment' then ${item.filename} end`,
 			code: sourceRecordIssue.code,
+			dismissedAt: sourceRecordIssue.dismissedAt,
 			itemKey: sql<string | null>`coalesce(${parent.key}, ${item.key})`,
 			message: sourceRecordIssue.message,
 			sourceRecordKey: sourceRecordIssue.sourceRecordKey,
@@ -657,19 +749,24 @@ export async function getAdminSourceIssues(
 		)
 		.leftJoin(item, eq(item.key, itemSourceLink.itemKey))
 		.leftJoin(parent, eq(parent.key, item.parentItem))
-		.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey))
-		.orderBy(desc(sourceRecordIssue.updatedAt), asc(sourceRecordIssue.sourceRecordKey))
-		// ponytail: one page of the newest issues; the total tells the reader
-		// when older ones exist. Add a cursor if paging is ever needed.
-		.limit(ADMIN_SOURCE_ISSUE_PAGE_SIZE),
+		.where(filter)
+		// Newest first; the same order the keyset cursor compares against.
+		.orderBy(desc(sourceRecordIssue.updatedAt), desc(sourceRecordIssue.sourceRecordKey))
+		.limit(ADMIN_SOURCE_ISSUE_PAGE_SIZE + 1),
 	]);
+	const hasMore = rows.length > ADMIN_SOURCE_ISSUE_PAGE_SIZE;
+	const page = hasMore ? rows.slice(0, ADMIN_SOURCE_ISSUE_PAGE_SIZE) : rows;
+	const last = hasMore ? page.at(-1) : undefined;
 	return {
-		issues: rows.map((row) => ({
-			...row,
-			attachmentFilename: row.attachmentFilename?.trim() || null,
-			title: row.title?.trim() || null,
-			updatedAt: dateString(row.updatedAt) ?? "",
-		})),
+		dismissedTotal: totals?.dismissedTotal ?? 0,
+		hasMore,
+		issues: page.map(toAdminSourceIssue),
+		nextCursor: last
+			? encodeSourceIssueCursor({
+					sourceRecordKey: last.sourceRecordKey,
+					updatedAt: new Date(last.updatedAt).toISOString(),
+				})
+			: null,
 		total: totals?.total ?? 0,
 	};
 }
