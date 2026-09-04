@@ -207,8 +207,12 @@ export type AdminSourceIssuesPage = {
 };
 
 export type AdminSourceIssue = {
+	/** The attachment's filename when the issue is about a file under a record. */
+	attachmentFilename: string | null;
 	code: string;
+	/** The library record to open: the parent when the issue is about its attachment. */
 	itemKey: string | null;
+	/** The worker's technical message; the admin shows a plain explanation first. */
 	message: string;
 	sourceRecordKey: string;
 	title: string | null;

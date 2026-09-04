@@ -212,6 +212,71 @@ function SyncIssues({
 	);
 }
 
+/**
+ * What a saved issue means for the reader and what to do about it. One issue
+ * can hold several failures (a dropped field and an unpublished file), and one
+ * code can cover different causes, so the explanation reads the worker's
+ * message. That message stays visible as a detail line.
+ */
+const issueExplanations: { next: string; test: RegExp; title: string }[] = [
+	{
+		test: /left out/u,
+		title: "Some fields were left out",
+		next: "The rest of the record was imported. Fix the named field in Zotero and the next import brings it in.",
+	},
+	{
+		test: /exceeded the ingestion limit/u,
+		title: "Record too large to import in full",
+		next: "Only the type and title were kept. Shorten the record's text in Zotero.",
+	},
+	{
+		test: /valid filename and MD5/u,
+		title: "PDF not published",
+		next: "Zotero has no uploaded copy of this file, or its filename is empty or longer than 255 characters. In Zotero, sync so the file uploads to group storage, or rename or re-attach the PDF. The next import retries it.",
+	},
+	{
+		test: /linked URL must have a valid URL/u,
+		title: "PDF not published",
+		next: "The linked attachment has no web address. In Zotero, add the URL to the attachment.",
+	},
+	{
+		test: /must have a parent item/u,
+		title: "PDF not published",
+		next: "The file is not attached to a record. In Zotero, move it under its parent record.",
+	},
+	{
+		test: /linked_url, imported_file, or imported_url/u,
+		title: "PDF not published",
+		next: "The attachment is a linked local file. In Zotero, store the file in the group instead of linking to a path.",
+	},
+	{
+		test: /not a processable PDF/u,
+		title: "PDF not published",
+		next: "The file is not a readable PDF. Replace the attachment in Zotero.",
+	},
+	{
+		test: /\b413\b|too large|byte limit/u,
+		title: "PDF not published",
+		next: "The file is larger than the import allows. Reduce the PDF in Zotero, or remove the publish tag.",
+	},
+	{
+		test: /\b404\b|not found|unavailable/u,
+		title: "PDF not published",
+		next: "Zotero could not provide the file. Check that it is a stored file in Zotero, then let the next import retry.",
+	},
+];
+
+function explainIssue(issue: AdminSourceIssue) {
+	const matched = issueExplanations.filter(({ test }) => test.test(issue.message));
+	if (matched.length === 0) {
+		return { next: issue.message, title: "Record not imported in full" };
+	}
+	return {
+		next: matched.map(({ next }) => next).join(" "),
+		title: [...new Set(matched.map(({ title }) => title))].join("; "),
+	};
+}
+
 function IssueList({
 	issues,
 	onOpenRecord,
@@ -221,29 +286,40 @@ function IssueList({
 }) {
 	return (
 		<ul className="divide-y divide-black/[0.08] dark:divide-white/[0.09]" data-admin-source-issues>
-			{issues.map((issue) => (
-				<li className="flex flex-col gap-0.5 py-2" key={issue.sourceRecordKey}>
-					<div className="flex items-center gap-2">
-						{issue.itemKey ? (
-							<button
-								className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline"
-								onClick={() => onOpenRecord(issue.itemKey!)}
-								type="button"
-							>
-								{issue.title || "Untitled record"}
-							</button>
-						) : (
-							<span className="min-w-0 flex-1 truncate text-sm font-medium">
-								{issue.title || issue.sourceRecordKey}
+			{issues.map((issue) => {
+				const explanation = explainIssue(issue);
+				return (
+					<li className="flex flex-col gap-1 py-2.5" key={issue.sourceRecordKey}>
+						<div className="flex items-center gap-2">
+							{issue.itemKey ? (
+								<button
+									className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline"
+									onClick={() => onOpenRecord(issue.itemKey!)}
+									type="button"
+								>
+									{issue.title || "Untitled record"}
+								</button>
+							) : (
+								<span className="min-w-0 flex-1 truncate text-sm font-medium">
+									{issue.title || issue.sourceRecordKey}
+								</span>
+							)}
+							<span className="shrink-0 rounded border border-danger/40 px-1 text-xs text-danger">
+								{explanation.title}
 							</span>
-						)}
-						<span className="shrink-0 rounded border border-black/15 px-1 text-xs text-black/60 dark:border-white/15 dark:text-white/60">
-							{issue.code}
-						</span>
-					</div>
-					<p className="text-xs text-black/60 dark:text-white/60">{issue.message}</p>
-				</li>
-			))}
+						</div>
+						{issue.attachmentFilename ? (
+							<p className="break-all text-xs text-black/60 dark:text-white/60">
+								File: {issue.attachmentFilename}
+							</p>
+						) : null}
+						<p className="text-xs text-black/80 dark:text-white/80">{explanation.next}</p>
+						<p className="text-xs text-black/60 dark:text-white/60">
+							Details: {issue.message}
+						</p>
+					</li>
+				);
+			})}
 		</ul>
 	);
 }
