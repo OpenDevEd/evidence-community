@@ -1925,6 +1925,7 @@ type OpenScholarInstitutionPage = {
 type OpenScholarCollectionPage = {
 	items: {
 		count: number;
+		hasChildren: boolean;
 		id: string;
 		parentId: string | null;
 		source: string;
@@ -2428,6 +2429,7 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		items: [
 			{
 				count: 1,
+				hasChildren: false,
 				id: "ZBJ4NBSL",
 				parentId: null,
 				source: "native",
@@ -2445,12 +2447,24 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		);
 		assert.equal(tree.response.status, 200);
 		assert.deepEqual(
-			tree.body.items.map(({ count, id }) => ({ count, id })),
+			tree.body.items.map(({ count, hasChildren, id }) => ({
+				count,
+				hasChildren,
+				id,
+			})),
 			[
-				{ count: 1, id: COLLECTION_TREE_FIXTURE.root },
-				{ count: 1, id: COLLECTION_TREE_FIXTURE.child },
+				{
+					count: 1,
+					hasChildren: true,
+					id: COLLECTION_TREE_FIXTURE.root,
+				},
+				{
+					count: 1,
+					hasChildren: false,
+					id: COLLECTION_TREE_FIXTURE.child,
+				},
 			],
-			"collection reads exclude deleted rows and include descendant records",
+			"collection reads exclude deleted rows, include descendant records, and say which rows have a live child",
 		);
 	} finally {
 		removeCollectionTree(profile);

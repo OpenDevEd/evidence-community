@@ -340,6 +340,8 @@ export async function searchAdminCollections(
 
 export type OpenScholarCollection = {
 	count: number;
+	/** True when a live collection sits under this one. Only those render on the site. */
+	hasChildren: boolean;
 	id: string;
 	parentId: string | null;
 	source: string;
@@ -349,6 +351,7 @@ export type OpenScholarCollection = {
 function openScholarCollection(row: CatalogRow): OpenScholarCollection {
 	return {
 		count: row.recordCount,
+		hasChildren: row.hasChildren,
 		id: row.key,
 		parentId: row.parentCollection,
 		source: row.sourceConnectionKey,
