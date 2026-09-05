@@ -48,6 +48,7 @@ beforeEach(() => {
 			{
 				count: 3,
 				id: "ABCD1234",
+				hasChildren: true,
 				parentId: null,
 				source: "native",
 				title: "Teacher training",
@@ -78,6 +79,7 @@ describe("OpenScholar collections route", () => {
 				{
 					count: 3,
 					id: "ABCD1234",
+					hasChildren: true,
 					parentId: null,
 					source: "native",
 					title: "Teacher training",
