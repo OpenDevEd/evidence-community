@@ -67,16 +67,39 @@ and [Docker Compose build settings](https://coolify.io/docs/applications/build-p
 `.github/workflows/runtime-image.yml` publishes one private GHCR image after
 the complete `CI` workflow succeeds for an exact commit on `main`. Its release
 runner has a separate OS user, Docker daemon, BuildKit cache and GitHub runner
-group. The job receives `packages: write`; test jobs do not.
+group. The publish job receives `packages: write`; test jobs do not.
 
 The image tag is the 40-character source commit. Deployments use the digest
 reported in the workflow summary, never the tag. An existing tag is accepted
 only when its image revision label matches that commit, and the job does not
 rewrite it.
 
+The workflow has four jobs. `select` checks the commit and finds the previous
+release. `publish` builds the image on the release runner while `notes` writes
+the release notes on a light runner. `release` waits for both and creates the
+GitHub Release `runtime-<commit>`. OpenScholar offers only commits that have a
+release, so a failed build or failed notes never reach a library owner. Rerun
+the workflow to retry; an existing image is reused and the notes are written
+again.
+
+### Release notes
+
+`.github/scripts/release-notes.mjs` turns the first-parent commits since the
+previous release into notes for library owners. It reads each pull request's
+title and body with the workflow token, asks `openai/gpt-5.6-luna` through
+OpenRouter at maximum reasoning for a strict JSON answer, and prints the
+release body. The `OPENROUTER_API_KEY` repository secret is the only setup.
+
+The body has a fixed shape that OpenScholar parses: the first line is a
+one-sentence summary and every `- ` line is one note. Other lines, such as the
+image reference, are ignored. Edit the release body in GitHub to fix wording;
+OpenScholar picks the change up on its next check. When nothing is visible to
+owners the body says "Behind-the-scenes improvements and maintenance."
+
 For release recovery, run **Runtime image** from GitHub Actions and enter the
 exact commit. The workflow accepts only a commit in `main` with a successful
-`main` push run of `CI`.
+`main` push run of `CI`. A commit that already has a release keeps it; only the
+image is checked again.
 
 ## Run the library runtime verifier
 

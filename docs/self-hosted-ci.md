@@ -10,9 +10,9 @@ No hosted runner service is part of the workflow.
 
 | Count | Label | CPU boundary | Memory limit | Work |
 |---:|---|---:|---:|---|
-| 4 | `evidence-library-light` | 2 fixed guest CPUs each | 8 GiB each | lint, types, schemas, unit tests, Fallow and the final result |
+| 4 | `evidence-library-light` | 2 fixed guest CPUs each | 8 GiB each | lint, types, schemas, unit tests, Fallow, the final result and release notes |
 | 1 | `evidence-library-runtime` | guest CPUs 8 through 23 | 32 GiB | Docker build and runtime acceptance |
-| 1 | `evidence-library-release` | guest CPUs 8 through 23 | 32 GiB | publish the exact green runtime commit |
+| 1 | `evidence-library-release` | guest CPUs 8 through 23 | 32 GiB | select, publish and record the exact green runtime commit |
 
 The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk. The
 four light runners use guest CPUs 0 through 7. The runtime and release users

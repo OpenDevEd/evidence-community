@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish runtime image
+  select:
+    name: Select the green commit
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -32,11 +32,14 @@ jobs:
     runs-on:
       group: Evidence Library Release
       labels: evidence-library-release
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
-      packages: write
+    outputs:
+      commit: ${{ steps.release.outputs.commit }}
+      previous: ${{ steps.previous.outputs.commit }}
+      released: ${{ steps.previous.outputs.released }}
     steps:
       - name: Check out repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -82,9 +85,56 @@ jobs:
             fi
           fi
 
-          git checkout --detach "$runtime_commit"
-          test "$(git rev-parse HEAD)" = "$runtime_commit"
           echo "commit=$runtime_commit" >> "$GITHUB_OUTPUT"
+
+      # The previous release is the newest one whose commit comes before this
+      # one on main. The notes cover everything merged between the two.
+      - name: Find the previous release
+        id: previous
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUNTIME_COMMIT: ${{ steps.release.outputs.commit }}
+        run: |
+          set -euo pipefail
+          releases="$(curl --fail --silent --show-error \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          released=false
+          previous=""
+          for candidate in $(jq -r '.[].tag_name' <<< "$releases" \
+            | sed -n 's/^runtime-\([a-f0-9]\{40\}\)$/\1/p'); do
+            if [ "$candidate" = "$RUNTIME_COMMIT" ]; then
+              released=true
+              continue
+            fi
+            if [ -z "$previous" ] && git merge-base --is-ancestor "$candidate" "$RUNTIME_COMMIT"; then
+              previous="$candidate"
+            fi
+          done
+          echo "released=$released" >> "$GITHUB_OUTPUT"
+          echo "commit=$previous" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish runtime image
+    needs: select
+    runs-on:
+      group: Evidence Library Release
+      labels: evidence-library-release
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+      reference: ${{ steps.image.outputs.reference }}
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.select.outputs.commit }}
+          fetch-depth: 0
 
       - name: Log in to the private package registry
         env:
@@ -101,9 +151,10 @@ jobs:
       - name: Publish the immutable image
         id: image
         env:
-          RUNTIME_COMMIT: ${{ steps.release.outputs.commit }}
+          RUNTIME_COMMIT: ${{ needs.select.outputs.commit }}
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RUNTIME_COMMIT"
           image="ghcr.io/opendeved/evidence-library-runtime:$RUNTIME_COMMIT"
           inspection="$RUNNER_TEMP/runtime-image-inspection.json"
           metadata="$RUNNER_TEMP/runtime-image-metadata.json"
@@ -136,9 +187,9 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "reference=ghcr.io/opendeved/evidence-library-runtime@$digest" >> "$GITHUB_OUTPUT"
 
-      - name: Record the published release
+      - name: Record the published image
         env:
-          RUNTIME_COMMIT: ${{ steps.release.outputs.commit }}
+          RUNTIME_COMMIT: ${{ needs.select.outputs.commit }}
           RUNTIME_DIGEST: ${{ steps.image.outputs.digest }}
           RUNTIME_REFERENCE: ${{ steps.image.outputs.reference }}
         run: |
@@ -148,4 +199,100 @@ jobs:
             echo "- Commit: \`$RUNTIME_COMMIT\`"
             echo "- Digest: \`$RUNTIME_DIGEST\`"
             echo "- Pull: \`$RUNTIME_REFERENCE\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Runs beside the image build. The release below needs both to succeed, so
+  # an image without notes is never offered as an update.
+  notes:
+    name: Write the release notes
+    needs: select
+    if: needs.select.outputs.released != 'true'
+    runs-on:
+      - self-hosted
+      - evidence-library-light
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      body: ${{ steps.notes.outputs.body }}
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.select.outputs.commit }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Write the notes
+        id: notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PREVIOUS_COMMIT: ${{ needs.select.outputs.previous }}
+          RUNTIME_COMMIT: ${{ needs.select.outputs.commit }}
+        run: |
+          set -euo pipefail
+          if [ -n "$PREVIOUS_COMMIT" ]; then
+            range="$PREVIOUS_COMMIT..$RUNTIME_COMMIT"
+          else
+            range="$RUNTIME_COMMIT^!"
+          fi
+          git log --first-parent --format='%H%x1f%s%x1f%b%x1e' "$range" \
+            | node .github/scripts/release-notes.mjs > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+          {
+            echo 'body<<END_OF_RELEASE_NOTES'
+            cat "$RUNNER_TEMP/release-notes.md"
+            echo 'END_OF_RELEASE_NOTES'
+          } >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Record the release
+    needs:
+      - select
+      - publish
+      - notes
+    runs-on:
+      group: Evidence Library Release
+      labels: evidence-library-release
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ needs.notes.outputs.body }}
+          RUNTIME_COMMIT: ${{ needs.select.outputs.commit }}
+          RUNTIME_REFERENCE: ${{ needs.publish.outputs.reference }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_NOTES" ]; then
+            echo "The release notes are empty." >&2
+            exit 1
+          fi
+          body="$(printf '%s\n\nImage: `%s`\nCommit: `%s`\n' "$RELEASE_NOTES" "$RUNTIME_REFERENCE" "$RUNTIME_COMMIT")"
+          jq -n \
+            --arg tag "runtime-$RUNTIME_COMMIT" \
+            --arg commit "$RUNTIME_COMMIT" \
+            --arg name "Runtime ${RUNTIME_COMMIT:0:7}" \
+            --arg body "$body" \
+            '{tag_name: $tag, target_commitish: $commit, name: $name, body: $body}' \
+            | curl --fail --silent --show-error \
+              --request POST \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --data @- \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" \
+            | jq -r '.html_url'
+          {
+            echo '### Release notes'
+            echo
+            echo "$RELEASE_NOTES"
           } >> "$GITHUB_STEP_SUMMARY"
