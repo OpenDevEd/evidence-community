@@ -4,6 +4,7 @@ import { Client } from "pg";
 import type { Database } from "../src/db/database-schema";
 import {
 	getAdminCollectionChildrenPage,
+	listOpenScholarCollections,
 	resolveAdminCollections,
 	searchAdminCollections,
 } from "../src/lib/admin/collection-catalog-service";
@@ -44,7 +45,8 @@ async function createFixture(client: Client) {
 				"parentCollection", "createdAt", "updatedAt"
 			)
 			SELECT
-				'C' || lpad(value::text, 7, '0'),
+				-- Record keys never contain 0 or 1, so spell them A and B.
+				'C' || translate(lpad(value::text, 7, '0'), '01', 'AB'),
 				'native',
 				1,
 				CASE
@@ -55,7 +57,7 @@ async function createFixture(client: Client) {
 				value,
 				CASE
 					WHEN value <= 10000 THEN NULL
-					ELSE 'C' || lpad((((value - 10001) % 10000) + 1)::text, 7, '0')
+					ELSE 'C' || translate(lpad((((value - 10001) % 10000) + 1)::text, 7, '0'), '01', 'AB')
 				END,
 				now(),
 				now()
@@ -68,10 +70,15 @@ async function createFixture(client: Client) {
 			key, "sourceConnectionKey", revision, name, deleted, "sortOrder",
 			"parentCollection", "createdAt", "updatedAt"
 		) VALUES
-			('EDGE0001', 'edge', 1, NULL, 0, 1, NULL, now(), now()),
-			('EDGE0002', 'edge', 1, ' Aardvark', 0, 1, NULL, now(), now()),
-			('EDGE0003', 'edge', 1, ' Apple', 0, 1, NULL, now(), now()),
-			('EDGE0004', 'edge', 1, 'Beta', 0, 1, NULL, now(), now())
+			('EDGEAAAA', 'edge', 1, NULL, 0, 1, NULL, now(), now()),
+			('EDGEAAAB', 'edge', 1, ' Aardvark', 0, 1, NULL, now(), now()),
+			('EDGEAAAC', 'edge', 1, ' Apple', 0, 1, NULL, now(), now()),
+			('EDGEAAAD', 'edge', 1, 'Beta', 0, 1, NULL, now(), now()),
+			('PARENTAA', 'os', 1, 'Parent with a live child', 0, 1, NULL, now(), now()),
+			('CHILDAAA', 'os', 1, 'Live child', 0, 1, 'PARENTAA', now(), now()),
+			('DELPARAA', 'os', 1, 'Parent with a deleted child', 0, 2, NULL, now(), now()),
+			('DELCHAAA', 'os', 1, 'Deleted child', 1, 1, 'DELPARAA', now(), now()),
+			('LEAFAAAA', 'os', 1, 'Leaf', 0, 3, NULL, now(), now())
 	`);
 	await client.query(`
 		CREATE INDEX fixture_collection_tree_idx
@@ -148,7 +155,7 @@ async function verify() {
 			edgeChildCursor = page.nextCursor;
 		} while (edgeChildCursor);
 		assert(
-			edgeChildren.join(",") === "EDGE0001,EDGE0002,EDGE0003,EDGE0004",
+			edgeChildren.join(",") === "EDGEAAAA,EDGEAAAB,EDGEAAAC,EDGEAAAD",
 			"Child cursor skipped a null or whitespace-prefixed name",
 		);
 
@@ -205,23 +212,34 @@ async function verify() {
 			edgeSearchCursor = page.nextCursor;
 		} while (edgeSearchCursor);
 		assert(
-			edgeSearch.join(",") === "EDGE0002,EDGE0003,EDGE0004",
+			edgeSearch.join(",") === "EDGEAAAB,EDGEAAAC,EDGEAAAD",
 			"Search cursor skipped a whitespace-prefixed name",
 		);
 
 		const resolved = await resolveAdminCollections(database, [
-			"C0000001",
-			"C0010001",
-			"C0000997",
+			"CAAAAAAB",
+			"CAABAAAB",
+			"CAAAA997",
 		]);
 		assert(resolved.length === 3, "Selected-key resolution omitted a collection");
 		assert(
 			resolved.map(({ key }) => key).join(",") ===
-				"C0000001,C0010001,C0000997",
+				"CAAAAAAB,CAABAAAB,CAAAA997",
 			"Selected-key resolution did not preserve requested order",
 		);
 		assert(resolved[1]!.ancestors.length === 1, "Nested selection lacks its path");
 		assert(resolved[2]!.deleted, "Deleted selections must remain resolvable");
+		// OpenScholar hides collections without a live child, so the rows it
+		// reads must say which ones have one.
+		const openScholar = await listOpenScholarCollections(database, {
+			ids: "PARENTAA,DELPARAA,LEAFAAAA",
+		});
+		assert(
+			openScholar.items
+				.map(({ id, hasChildren }) => `${id}:${hasChildren}`)
+				.join(",") === "PARENTAA:true,DELPARAA:false,LEAFAAAA:false",
+			"OpenScholar rows must report a live child and nothing else",
+		);
 		const searchPlan = await client.query<{ "QUERY PLAN": unknown }>(
 			`EXPLAIN (FORMAT JSON)
 			 SELECT key FROM "collection"
