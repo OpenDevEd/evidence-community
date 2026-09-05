@@ -65,9 +65,13 @@ page.
 
 | Route | Parameters | Answer |
 | --- | --- | --- |
-| `GET /api/openscholar/collections` | `query`, `cursor`, `pageSize` (1 to 100, default 50) | `{ "items": [{ "count", "id", "parentId", "source", "title" }], "nextCursor" }` |
+| `GET /api/openscholar/collections` | `query`, `cursor`, `pageSize` (1 to 100, default 50) | `{ "items": [{ "count", "hasChildren", "id", "parentId", "source", "title" }], "nextCursor" }` |
 | `GET /api/openscholar/collections` | `ids`: up to 200 collection ids separated by commas | the same items for those ids only, `"nextCursor": null` |
 | `GET /api/openscholar/institutions` | `query`, `cursor`, `pageSize` (1 to 200, default 50, a larger number is reduced to 200), `sort` = `count` or `name`, `direction` = `desc` or `asc` | `{ "items": [{ "count", "name" }], "nextCursor" }` |
+
+`hasChildren` is true when a live collection sits under the row in the same
+source. The site shows a configured collection as a heading over its
+sub-collections, so OpenScholar offers only rows with `hasChildren`.
 
 `query` matches anywhere in the name and ignores case; PostgreSQL folds the
 case of the search and of the stored name together, so a name such as
