@@ -2453,8 +2453,16 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 				id,
 			})),
 			[
-				{ count: 1, hasChildren: true, id: COLLECTION_TREE_FIXTURE.root },
-				{ count: 1, hasChildren: false, id: COLLECTION_TREE_FIXTURE.child },
+				{
+					count: 1,
+					hasChildren: true,
+					id: COLLECTION_TREE_FIXTURE.root,
+				},
+				{
+					count: 1,
+					hasChildren: false,
+					id: COLLECTION_TREE_FIXTURE.child,
+				},
 			],
 			"collection reads exclude deleted rows, include descendant records, and say which rows have a live child",
 		);
