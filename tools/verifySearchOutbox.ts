@@ -1060,7 +1060,10 @@ async function verify() {
 				keptRow.lastError?.includes("search host went away"),
 			"A lost lease on one event stranded its batch sibling",
 		);
-		await new Promise((resolve) => setTimeout(resolve, 150));
+		await database
+			.update(outbox)
+			.set({ nextAttemptAt: new Date(Date.now() - 1_000) })
+			.where(eq(outbox.id, keptEvent.id));
 		await processNextSearchOutboxEvent({
 			database,
 			heartbeatIntervalMs: 100,

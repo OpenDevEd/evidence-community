@@ -604,6 +604,43 @@ function chunkDocumentsBySerializedBytes(
 
 type ValidatedConsumerOptions = ReturnType<typeof validateOptions>;
 
+/**
+ * Marks a failed batch for retry and returns the error to throw. When the
+ * batch itself failed, that failure is the cause worth recording, even if a
+ * heartbeat also lost the lease meanwhile. A lease lost on some events is
+ * reported after the others are marked, with the cause attached.
+ */
+async function markBatchFailed(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	workerId: string,
+	failure: {
+		error: unknown;
+		heartbeatFailure: unknown;
+		maxAttempts: number;
+		retryBaseMs: number;
+		retryMaxMs: number;
+	},
+): Promise<unknown> {
+	const { error, heartbeatFailure } = failure;
+	const batchFailed =
+		error !== heartbeatFailure &&
+		!(error instanceof SearchOutboxAbortError);
+	const cause = heartbeatFailure && !batchFailed ? heartbeatFailure : error;
+	const lost = await failEvents(
+		options,
+		events,
+		cause,
+		workerId,
+		failure.maxAttempts,
+		failure.retryBaseMs,
+		failure.retryMaxMs,
+	);
+	return lost.length > 0
+		? new SearchOutboxLeaseLostError(lost[0]!, cause)
+		: cause;
+}
+
 async function processClaimedEvents(
 	options: SearchOutboxConsumerOptions,
 	events: readonly ClaimedEvent[],
@@ -695,27 +732,13 @@ async function processClaimedEvents(
 		) {
 			throw failure;
 		}
-		// When the batch itself failed, that failure is the cause worth
-		// recording, even if a heartbeat also lost the lease meanwhile.
-		const cause =
-			heartbeatFailure &&
-			error !== heartbeatFailure &&
-			!(error instanceof SearchOutboxAbortError)
-				? error
-				: failure;
-		const lost = await failEvents(
-			options,
-			events,
-			cause,
-			workerId,
+		throw await markBatchFailed(options, events, workerId, {
+			error,
+			heartbeatFailure,
 			maxAttempts,
 			retryBaseMs,
 			retryMaxMs,
-		);
-		if (lost.length > 0) {
-			throw new SearchOutboxLeaseLostError(lost[0]!, cause);
-		}
-		throw cause;
+		});
 	} finally {
 		abortController.abort();
 		await loop;
