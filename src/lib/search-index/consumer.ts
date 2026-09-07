@@ -85,8 +85,13 @@ export type SearchOutboxProcessResult = {
 };
 
 export class SearchOutboxLeaseLostError extends Error {
-	constructor(eventId: number) {
-		super(`Search outbox lease was lost for event ${eventId}`);
+	constructor(eventId: number, cause?: unknown) {
+		super(
+			cause === undefined
+				? `Search outbox lease was lost for event ${eventId}`
+				: `Search outbox lease was lost for event ${eventId} while handling: ${errorMessage(cause)}`,
+			cause === undefined ? undefined : { cause },
+		);
 		this.name = "SearchOutboxLeaseLostError";
 	}
 }
@@ -400,38 +405,40 @@ async function failEvents(
 	retryBaseMs: number,
 	retryMaxMs: number,
 ) {
+	// Each event is marked on its own. A lease that was lost on one event
+	// must not stop the others from getting their retry time, or they stay
+	// leased until the lease expires and block every later event for the
+	// same entity.
 	const failedAt = now(options);
-	await options.database.transaction(async (transaction) => {
-		for (const event of events) {
-			const attempts = event.attempts + 1;
-			const retryDelay = Math.min(
-				retryMaxMs,
-				retryBaseMs * 2 ** Math.min(attempts - 1, 30),
-			);
-			const [failed] = await transaction
-				.update(outbox)
-				.set({
-					attempts,
-					deadLetteredAt: attempts >= maxAttempts ? failedAt : null,
-					lastError: errorMessage(error),
-					leaseExpiresAt: null,
-					leaseOwner: null,
-					nextAttemptAt: new Date(failedAt.getTime() + retryDelay),
-				})
-				.where(
-					and(
-						eq(outbox.id, event.id),
-						eq(outbox.leaseOwner, workerId),
-						isNull(outbox.processedAt),
-						isNull(outbox.deadLetteredAt),
-					),
-				)
-				.returning({ id: outbox.id });
-			if (!failed) {
-				throw new SearchOutboxLeaseLostError(event.id);
-			}
-		}
-	});
+	const lost: number[] = [];
+	for (const event of events) {
+		const attempts = event.attempts + 1;
+		const retryDelay = Math.min(
+			retryMaxMs,
+			retryBaseMs * 2 ** Math.min(attempts - 1, 30),
+		);
+		const [failed] = await options.database
+			.update(outbox)
+			.set({
+				attempts,
+				deadLetteredAt: attempts >= maxAttempts ? failedAt : null,
+				lastError: errorMessage(error),
+				leaseExpiresAt: null,
+				leaseOwner: null,
+				nextAttemptAt: new Date(failedAt.getTime() + retryDelay),
+			})
+			.where(
+				and(
+					eq(outbox.id, event.id),
+					eq(outbox.leaseOwner, workerId),
+					isNull(outbox.processedAt),
+					isNull(outbox.deadLetteredAt),
+				),
+			)
+			.returning({ id: outbox.id });
+		if (!failed) lost.push(event.id);
+	}
+	return lost;
 }
 
 async function waitForSuccessfulTask(
@@ -597,6 +604,43 @@ function chunkDocumentsBySerializedBytes(
 
 type ValidatedConsumerOptions = ReturnType<typeof validateOptions>;
 
+/**
+ * Marks a failed batch for retry and returns the error to throw. When the
+ * batch itself failed, that failure is the cause worth recording, even if a
+ * heartbeat also lost the lease meanwhile. A lease lost on some events is
+ * reported after the others are marked, with the cause attached.
+ */
+async function markBatchFailed(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	workerId: string,
+	failure: {
+		error: unknown;
+		heartbeatFailure: unknown;
+		maxAttempts: number;
+		retryBaseMs: number;
+		retryMaxMs: number;
+	},
+): Promise<unknown> {
+	const { error, heartbeatFailure } = failure;
+	const batchFailed =
+		error !== heartbeatFailure &&
+		!(error instanceof SearchOutboxAbortError);
+	const cause = heartbeatFailure && !batchFailed ? heartbeatFailure : error;
+	const lost = await failEvents(
+		options,
+		events,
+		cause,
+		workerId,
+		failure.maxAttempts,
+		failure.retryBaseMs,
+		failure.retryMaxMs,
+	);
+	return lost.length > 0
+		? new SearchOutboxLeaseLostError(lost[0]!, cause)
+		: cause;
+}
+
 async function processClaimedEvents(
 	options: SearchOutboxConsumerOptions,
 	events: readonly ClaimedEvent[],
@@ -688,16 +732,13 @@ async function processClaimedEvents(
 		) {
 			throw failure;
 		}
-		await failEvents(
-			options,
-			events,
-			failure,
-			workerId,
+		throw await markBatchFailed(options, events, workerId, {
+			error,
+			heartbeatFailure,
 			maxAttempts,
 			retryBaseMs,
 			retryMaxMs,
-		);
-		throw failure;
+		});
 	} finally {
 		abortController.abort();
 		await loop;

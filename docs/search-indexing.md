@@ -35,7 +35,10 @@ order. An expired claim is recoverable.
 Meilisearch mutations are asynchronous tasks. The consumer checks the terminal
 task result and writes `processedAt` only after `succeeded`. Request failures,
 timeouts, and terminal task failures increment `attempts`, clear the lease, and
-set an exponential `nextAttemptAt`. The default 15-attempt schedule starts at
+set an exponential `nextAttemptAt`. Each event in a failed batch is marked on
+its own, so a lease lost on one event does not leave its batch siblings leased
+until the lease expires; the error the worker logs names the failure that
+caused it. The default 15-attempt schedule starts at
 five seconds, caps each delay at one hour, and spans several hours before an
 event is dead-lettered. Operators can reset all dead letters through the
 explicit requeue command.

@@ -23,11 +23,13 @@ import {
 	applySearchProjectionPlan,
 	drainSearchOutbox,
 	ensureSearchIndex,
+	processNextSearchOutboxBatch,
 	processNextSearchOutboxEvent,
 	requeueSearchOutboxDeadLetters,
 	rebuildSearchIndex,
 	SearchIndexTaskError,
 	SearchOutboxAbortError,
+	SearchOutboxLeaseLostError,
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
 import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
@@ -40,6 +42,8 @@ const meilisearchHost =
 const meilisearchKey = process.env.MEILISEARCH_KEY ?? "local-search-key";
 
 const parentKey = "SRCH2345";
+const keptKey = "LEAS2345";
+const stolenKey = "STLN2345";
 const attachmentKey = "ATCH2345";
 const reparentedKey = "REPR2345";
 const firstRootKey = "FRTS2345";
@@ -47,6 +51,8 @@ const secondRootKey = "SCND2345";
 const childCollectionKey = "CHLD2345";
 const entityKeys = [
 	parentKey,
+	keptKey,
+	stolenKey,
 	attachmentKey,
 	reparentedKey,
 	firstRootKey,
@@ -954,6 +960,135 @@ async function verify() {
 		);
 		await goodService.index.getDocument(parentKey);
 
+		// A lease lost on one event must not strand the rest of its batch.
+		// Before this check, the failure path rolled back every mark when one
+		// row was gone, so siblings stayed leased until the lease expired.
+		await database.insert(itemIdentity).values(
+			[keptKey, stolenKey].map((key) => ({
+				key,
+				sourceConnectionKey: "native",
+				sourceRecordKey: key,
+			})),
+		);
+		await database.insert(item).values([
+			{
+				itemType: "Report",
+				key: keptKey,
+				sourceConnectionKey: "native",
+				sourceRecordKey: keptKey,
+				title: "Kept sibling report",
+			},
+			{
+				itemType: "Report",
+				key: stolenKey,
+				sourceConnectionKey: "native",
+				sourceRecordKey: stolenKey,
+				title: "Stolen lease report",
+			},
+		]);
+		const otherPending = await database
+			.select({ id: outbox.id })
+			.from(outbox)
+			.where(
+				and(
+					inArray(outbox.entityKey, entityKeys),
+					isNull(outbox.processedAt),
+					isNull(outbox.deadLetteredAt),
+				),
+			);
+		assert(
+			otherPending.length === 0,
+			"Earlier scenarios left pending events behind",
+		);
+		const [keptEvent, stolenEvent] = await database
+			.insert(outbox)
+			.values([
+				{
+					entityKey: keptKey,
+					entityType: "item",
+					operation: "upsert",
+					revision: 1,
+				},
+				{
+					entityKey: stolenKey,
+					entityType: "item",
+					operation: "upsert",
+					revision: 1,
+				},
+			])
+			.returning();
+		assert(keptEvent && stolenEvent, "The lease-loss events were not created");
+		const stealingIndex = new Proxy(goodService.index, {
+			get(target, property, receiver) {
+				if (property === "addDocuments") {
+					return async () => {
+						await database
+							.update(outbox)
+							.set({ leaseOwner: "search-e2e-thief" })
+							.where(eq(outbox.id, stolenEvent.id));
+						throw new Error("search host went away");
+					};
+				}
+				const value = Reflect.get(target, property, receiver);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
+		try {
+			await processNextSearchOutboxBatch({
+				database,
+				heartbeatIntervalMs: 30_000,
+				index: stealingIndex,
+				leaseDurationMs: 60_000,
+				retryBaseMs: 100,
+				workerId: "search-e2e-lease-loss",
+			});
+			throw new Error("The batch with a lost lease unexpectedly succeeded");
+		} catch (error) {
+			assert(
+				error instanceof SearchOutboxLeaseLostError &&
+					error.message.includes("search host went away"),
+				"The lease-loss error did not name the failure behind it",
+			);
+		}
+		const [keptRow] = await database
+			.select()
+			.from(outbox)
+			.where(eq(outbox.id, keptEvent.id));
+		assert(
+			keptRow?.attempts === 1 &&
+				keptRow.leaseOwner === null &&
+				keptRow.lastError?.includes("search host went away"),
+			"A lost lease on one event stranded its batch sibling",
+		);
+		await database
+			.update(outbox)
+			.set({ nextAttemptAt: new Date(Date.now() - 1_000) })
+			.where(eq(outbox.id, keptEvent.id));
+		await processNextSearchOutboxEvent({
+			database,
+			heartbeatIntervalMs: 100,
+			index: goodService.index,
+			leaseDurationMs: 1_000,
+			workerId: "search-e2e-lease-loss-retry",
+		});
+		const [keptAfterRetry] = await database
+			.select({ processedAt: outbox.processedAt })
+			.from(outbox)
+			.where(eq(outbox.id, keptEvent.id));
+		assert(
+			keptAfterRetry?.processedAt instanceof Date,
+			"The sibling event was not indexed on its retry",
+		);
+		const [stolenRow] = await database
+			.select()
+			.from(outbox)
+			.where(eq(outbox.id, stolenEvent.id));
+		assert(
+			stolenRow?.leaseOwner === "search-e2e-thief" &&
+				stolenRow.attempts === 0,
+			"The failure path touched an event another worker owns",
+		);
+
 		console.log(
 			JSON.stringify({
 				bulkEventCoalescing: true,
@@ -966,6 +1101,7 @@ async function verify() {
 				fullRebuild: true,
 				gracefulActiveShutdown: true,
 				index: goodIndexName,
+				leaseLossIsolation: true,
 				reparentCleanup: true,
 				retryAfterTaskFailure: true,
 				taskProgressWithoutBatchTelemetry: true,
