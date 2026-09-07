@@ -695,19 +695,27 @@ async function processClaimedEvents(
 		) {
 			throw failure;
 		}
+		// When the batch itself failed, that failure is the cause worth
+		// recording, even if a heartbeat also lost the lease meanwhile.
+		const cause =
+			heartbeatFailure &&
+			error !== heartbeatFailure &&
+			!(error instanceof SearchOutboxAbortError)
+				? error
+				: failure;
 		const lost = await failEvents(
 			options,
 			events,
-			failure,
+			cause,
 			workerId,
 			maxAttempts,
 			retryBaseMs,
 			retryMaxMs,
 		);
 		if (lost.length > 0) {
-			throw new SearchOutboxLeaseLostError(lost[0]!, failure);
+			throw new SearchOutboxLeaseLostError(lost[0]!, cause);
 		}
-		throw failure;
+		throw cause;
 	} finally {
 		abortController.abort();
 		await loop;

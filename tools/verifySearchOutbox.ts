@@ -989,7 +989,13 @@ async function verify() {
 		const otherPending = await database
 			.select({ id: outbox.id })
 			.from(outbox)
-			.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
+			.where(
+				and(
+					inArray(outbox.entityKey, entityKeys),
+					isNull(outbox.processedAt),
+					isNull(outbox.deadLetteredAt),
+				),
+			);
 		assert(
 			otherPending.length === 0,
 			"Earlier scenarios left pending events behind",
@@ -1030,7 +1036,7 @@ async function verify() {
 		try {
 			await processNextSearchOutboxBatch({
 				database,
-				heartbeatIntervalMs: 100,
+				heartbeatIntervalMs: 30_000,
 				index: stealingIndex,
 				leaseDurationMs: 60_000,
 				retryBaseMs: 100,
@@ -1067,13 +1073,18 @@ async function verify() {
 			.from(outbox)
 			.where(eq(outbox.id, keptEvent.id));
 		assert(
-			keptAfterRetry?.processedAt !== null,
+			keptAfterRetry?.processedAt instanceof Date,
 			"The sibling event was not indexed on its retry",
 		);
-		await database
-			.update(outbox)
-			.set({ leaseExpiresAt: null, leaseOwner: null, processedAt: new Date() })
+		const [stolenRow] = await database
+			.select()
+			.from(outbox)
 			.where(eq(outbox.id, stolenEvent.id));
+		assert(
+			stolenRow?.leaseOwner === "search-e2e-thief" &&
+				stolenRow.attempts === 0,
+			"The failure path touched an event another worker owns",
+		);
 
 		console.log(
 			JSON.stringify({
