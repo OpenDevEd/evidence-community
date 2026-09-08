@@ -809,8 +809,12 @@ export async function submitAdminReview(key: string) {
 	void mutate("admin-review-count").catch(() => undefined);
 	return review;
 }
+export async function approveAdminReview(id: string, expectedRevision: number, zenodoFileChange?: "minor_correction") {
+    const result = await requestIndexingMutation<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ action: "approve", expectedRevision, ...(zenodoFileChange ? { zenodoFileChange } : {}) }) });
+    void mutate("admin-review-count").catch(() => undefined);
+    return result;
+}
 export async function updateAdminReview(id: string, body:
-	| { action: "approve"; expectedRevision: number; zenodoFileChange?: "minor_correction" }
 	| { action: "correct"; expectedRevision: number; records: ReviewRecord[] }
 	| { action: "returned" | "withdrawn"; expectedRevision: number; note?: string }
 	| { action: "resolve-conflicts"; expectedRevision: number; drafts: { itemKey: string; generation: string | null; draftRevision: number | null }[] }

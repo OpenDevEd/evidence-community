@@ -2437,11 +2437,10 @@ export default function AdminWorkbench({
 									await Promise.all([loadDetail(recordKey), loadItems()]);
 								});
 							}}
-							onPublicationChanged={() =>
-								detail
-									? void refreshCurrent(detail.key)
-									: undefined
-							}
+							onPublicationChanged={(receipts = []) => {
+                                searchIndex.track(receipts);
+                                if (detail) void refreshCurrent(detail.key);
+                            }}
 							onReloadDraft={reloadConflictedDraft}
 							onRetry={() =>
 								selectedKey

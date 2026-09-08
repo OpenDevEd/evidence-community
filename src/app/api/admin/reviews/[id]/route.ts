@@ -1,3 +1,4 @@
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -72,24 +73,15 @@ export async function POST(
 			role: access.session.role,
 		};
 		const input = { ...body, reviewId };
-		const review =
-			input.action === "approve"
-				? await approveItemReview(
-						runtime.db,
-						runtime.storage,
-						{
-							...input,
-							publicationTags:
-								runtime.config.content.tags.publish,
-						},
-						actor,
-						runtime.config,
-					)
-				: input.action === "correct"
-					? await correctItemReview(runtime.db, input, actor)
-					: input.action === "resolve-conflicts"
-						? await acknowledgeReviewConflicts(runtime.db, input)
-						: await resolveItemReview(runtime.db, input, actor);
+        if (input.action === "approve") {
+            const approved = await approveItemReview(runtime.db, runtime.storage, { ...input, publicationTags: runtime.config.content.tags.publish }, actor, runtime.config);
+            return NextResponse.json({ review: approved.review, indexingReceipts: approved.indexingRecords.map(record => adminSearchIndexReceipt("item", record)) }, { headers: ADMIN_RESPONSE_HEADERS });
+        }
+        const review = input.action === "correct"
+            ? await correctItemReview(runtime.db, input, actor)
+            : input.action === "resolve-conflicts"
+                ? await acknowledgeReviewConflicts(runtime.db, input)
+                : await resolveItemReview(runtime.db, input, actor);
 		return NextResponse.json(
 			{ review },
 			{ headers: ADMIN_RESPONSE_HEADERS },

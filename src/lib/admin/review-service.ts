@@ -447,6 +447,7 @@ export async function approveItemReview(
 		fileResults: Awaited<ReturnType<(typeof prepared)[number]["commit"]>>[];
 		removals: Awaited<ReturnType<typeof unpublishNativePdfInTransaction>>[];
 		review: typeof itemReview.$inferSelect;
+		indexingRecords: { key: string; revision: number }[];
 	};
 	try {
 		for (const file of files) {
@@ -592,7 +593,8 @@ export async function approveItemReview(
 				})
 				.where(eq(itemReview.id, locked.id))
 				.returning();
-			return { fileResults, removals, review: published! };
+            const indexingRecords = await transaction.select({ key: item.key, revision: item.revision }).from(item).where(inArray(item.key, keys));
+            return { fileResults, removals, review: published!, indexingRecords };
 		});
 	} catch (error) {
 		await Promise.all(prepared.map((file) => file.rollback()));
@@ -606,7 +608,7 @@ export async function approveItemReview(
 			cleanupNativePdfRemoval(db, storage, removal),
 		),
 	]);
-	return committed.review;
+	return { review: committed.review, indexingRecords: committed.indexingRecords };
 }
 
 export async function acknowledgeReviewConflicts(

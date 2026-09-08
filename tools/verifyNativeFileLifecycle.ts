@@ -441,7 +441,10 @@ async function verify() {
 		catch (error) { creatorDenied = error instanceof AdminValidationError; }
 		assert(creatorDenied, "Creator could approve a review");
 		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" }, reviewConfig);
-		assert(noFileApproval.state === "published", "A PDF was required to publish a review");
+		assert(noFileApproval.review.state === "published", "A PDF was required to publish a review");
+        const [approvedPublic] = await db.select({ revision: item.revision }).from(item).where(eq(item.key, noFileDraft.itemKey));
+        assert(noFileApproval.indexingRecords.some(record => record.key === noFileDraft.itemKey && record.revision === approvedPublic?.revision), "Approval omitted the final public revision from indexing receipts");
+
         const activatedTargets = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, noFileDraft.itemKey));
         assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");
         const activationJobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, noFileDraft.itemKey));
@@ -482,7 +485,7 @@ async function verify() {
 		reviewStorage.privateFiles.set(reviewReplacement.upload.path, replacementPdf);
 		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewReplacement.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
 		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
-		assert(approvedReview.state === "published", "Review approval did not finish");
+		assert(approvedReview.review.state === "published", "Review approval did not finish");
 		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
 		const displayedFile = displayedSnapshot.frozenAttachments.find((attachment) => attachment.key === reviewAttachment.itemKey);
 		assert(displayedFile?.fileDraft?.actualSha256 === fileHash(reviewPdf), "Submitted-version data showed the newer PDF");

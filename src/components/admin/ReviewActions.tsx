@@ -1,4 +1,5 @@
 "use client";
+import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { useRef, useState } from "react";
 import { ModalBody, ModalContent, ModalFooter, ModalHeader } from "@nextui-org/react";
 import { SentIcon, Tick01Icon, Cancel01Icon, Comment01Icon, AlertCircleIcon } from "@hugeicons/core-free-icons";
@@ -8,8 +9,8 @@ import { Textarea } from "@/components/nextui/Textarea";
 import DialogModal from "@/components/nextui/DialogModal";
 import { toast } from "sonner";
 import { useAdminSession } from "./AdminSessionProvider";
-import { updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
-export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSnapshot; onUpdated: () => void }) {
+import { approveAdminReview, updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
+export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => void }) {
  const { role } = useAdminSession();
  const [dialog, setDialog] = useState<"publish" | "changes" | null>(null);
  const [feedback, setFeedback] = useState("");
@@ -21,8 +22,10 @@ export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSn
    if (pending.current) return;
    pending.current = true; setBusy(true); setError("");
    try {
-     await updateAdminReview(snapshot.reviewId, dialog === "publish" ? {action: "approve", expectedRevision: snapshot.reviewRevision} : {action: "returned", expectedRevision: snapshot.reviewRevision, note: feedback.trim()});
-     setDialog(null); setFeedback(""); onUpdated();
+     let receipts: readonly AdminSearchIndexReceipt[] = [];
+     if (dialog === "publish") receipts = (await approveAdminReview(snapshot.reviewId, snapshot.reviewRevision)).indexingReceipts;
+     else await updateAdminReview(snapshot.reviewId, {action: "returned", expectedRevision: snapshot.reviewRevision, note: feedback.trim()});
+     setDialog(null); setFeedback(""); onUpdated(receipts);
      toast.success(dialog === "publish" ? "Submitted version published" : "Changes requested");
    } catch (error) { setError(error instanceof Error ? error.message : "Could not update review"); }
    finally { pending.current = false; setBusy(false); }

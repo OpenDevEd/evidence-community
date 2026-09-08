@@ -1,4 +1,5 @@
 "use client";
+import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -1467,7 +1468,7 @@ export function AdminInspector({
 	onOpenDraft: () => void;
 	onManageSources: () => void;
 	onPublish: () => void;
-	onPublicationChanged: () => void;
+	onPublicationChanged: (receipts?: readonly AdminSearchIndexReceipt[]) => void;
 	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;

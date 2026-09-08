@@ -1,4 +1,5 @@
 "use client";
+import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { type ComponentProps, useState } from "react";
 import { SquareLock01Icon, PencilIcon, InboxIcon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -24,7 +25,7 @@ function ReviewInspector(props: Props) {
  const [withdrawing, setWithdrawing] = useState(false);
  const feedback = snapshot?.reviewState === "returned" ? snapshot.note : null;
  const canWithdraw = snapshot && (session.role !== "creator" || snapshot.submittedBy === session.userId);
- const changed = () => { void refresh(); props.onPublicationChanged(); };
+ const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { void refresh(); props.onPublicationChanged(receipts); };
 	const [attachmentKey, setAttachmentKey] = useState<string | null>(null);
 	const viewingSubmitted = submitted && Boolean(snapshot);
 	const frozenDetail =
