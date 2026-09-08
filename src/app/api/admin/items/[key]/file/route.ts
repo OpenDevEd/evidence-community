@@ -6,7 +6,6 @@ import {
 	adminErrorResponse,
 	readAdminJson,
 	requireAdminSession,
-	requireAdminPublisher,
 } from "@/lib/admin/http";
 import {
 	fileDraftJson,
@@ -16,9 +15,7 @@ import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
 	getNativeFileState,
 	stageNativePdfUpload,
-	unpublishNativePdfWithContext,
 } from "@/lib/admin/native-file-service";
-import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 type RouteContext = {
 	params: Promise<{ key: string }>;
@@ -32,11 +29,6 @@ const stageBodySchema = z
 	})
 	.strict();
 
-const unpublishBodySchema = z
-	.object({
-		zenodoFileChange: z.literal("minor_correction"),
-	})
-	.strict();
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
 	const denied = await requireAdminSession(request);
@@ -88,39 +80,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 				status: 201,
 				headers: ADMIN_RESPONSE_HEADERS,
 			},
-		);
-	} catch (error) {
-		return adminErrorResponse(error);
-	}
-}
-
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
-	const denied = await requireAdminPublisher(request);
-	if (denied) return denied;
-
-	try {
-		const [{ key }, body, runtime] = await Promise.all([
-			params,
-			readAdminJson(request).then((value) =>
-				unpublishBodySchema.parse(value),
-			),
-			getNativeFileRuntime(),
-		]);
-		const unpublished = await unpublishNativePdfWithContext(
-			runtime.db,
-			runtime.storage,
-			key,
-			body.zenodoFileChange,
-		);
-		const { item } = unpublished;
-		return NextResponse.json(
-			{
-				indexingReceipts: unpublished.indexingRecords.map((record) =>
-					adminSearchIndexReceipt("item", record),
-				),
-				item,
-			},
-			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
 		return adminErrorResponse(error);

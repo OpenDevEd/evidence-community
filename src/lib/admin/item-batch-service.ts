@@ -20,7 +20,6 @@ import {
 	ItemHasChildrenError,
 	ItemNotFoundError,
 	ItemParentUnavailableError,
-	publishItemDraftWithContext,
 	removeNativeItem,
 	type ItemWritebackPolicyOptions,
 } from "./native-item-service";
@@ -89,11 +88,9 @@ function skipped(key: string, message: string): AdminItemBatchResult {
 }
 
 export function orderBatchKeysByDependency(
-	action: AdminItemBatchRequest["action"],
 	keys: readonly string[],
 	parentByKey: ReadonlyMap<string, string | null>,
 ) {
-	if (action === "assignCollection") return [...keys];
 	const selectedKeys = new Set(keys);
 	const depths = new Map<string, number>();
 	const depthOf = (key: string, path: ReadonlySet<string>): number => {
@@ -112,10 +109,7 @@ export function orderBatchKeysByDependency(
 	return keys
 		.map((key, index) => ({ depth: depthOf(key, new Set()), index, key }))
 		.sort((left, right) => {
-			const depthDifference =
-				action === "publish"
-					? left.depth - right.depth
-					: right.depth - left.depth;
+			const depthDifference = right.depth - left.depth;
 			return depthDifference || left.index - right.index;
 		})
 		.map(({ key }) => key);
@@ -143,7 +137,6 @@ export async function runAdminItemBatch(
 		}),
 	);
 	const mutationOrder = orderBatchKeysByDependency(
-		request.action,
 		request.keys,
 		parentByKey,
 	);
@@ -163,35 +156,6 @@ export async function runAdminItemBatch(
 			continue;
 		}
 		try {
-			if (request.action === "publish") {
-				let publishedContext;
-				try {
-					publishedContext = await publishItemDraftWithContext(
-						db,
-						key,
-						writebackPolicyOptions,
-					);
-				} catch (error) {
-					if (error instanceof ItemNotFoundError) {
-						results.push(
-							skipped(
-								key,
-								"This record has no draft to publish.",
-							),
-						);
-						continue;
-					}
-					throw error;
-				}
-				results.push({
-					indexingReceipts: publishedContext.indexingRecords.map(
-						(record) => adminSearchIndexReceipt("item", record),
-					),
-					key,
-					outcome: "changed",
-				});
-				continue;
-			}
 
 			if (request.action === "remove") {
 				if (

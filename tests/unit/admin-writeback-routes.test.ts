@@ -82,30 +82,6 @@ describe("admin writeback request bodies", () => {
 		});
 	});
 
-	it("passes the chosen sources to publish, and keeps the stored choice when the body is empty", async () => {
-		const { POST } = await import("@/app/api/admin/items/[key]/publish/route");
-		expect((await POST(post("publish", { sourceKeys: ["zotero-a", "zotero-b"] }), params)).status).toBe(200);
-		expect(publishItemDraftWithContext).toHaveBeenLastCalledWith(
-			{},
-			"ABCD2345",
-			expect.objectContaining({ sourceKeys: ["zotero-a", "zotero-b"] }),
-		);
-
-		expect((await POST(post("publish"), params)).status).toBe(200);
-		expect(publishItemDraftWithContext).toHaveBeenLastCalledWith(
-			{},
-			"ABCD2345",
-			expect.objectContaining({ sourceKeys: undefined }),
-		);
-	});
-
-	it("rejects an unknown publish field", async () => {
-		const { POST } = await import("@/app/api/admin/items/[key]/publish/route");
-		const response = await POST(post("publish", { defaultWriteback: true }), params);
-		expect(response.status).toBe(400);
-		expect(publishItemDraftWithContext).not.toHaveBeenCalled();
-	});
-
 	it("passes the sources to remove from to unpublish", async () => {
 		const { POST } = await import("@/app/api/admin/items/[key]/unpublish/route");
 		expect((await POST(post("unpublish", { removeFromSourceKeys: ["zotero-a"] }), params)).status).toBe(200);

@@ -26,7 +26,6 @@ export const adminItemBatchRequestSchema = z.discriminatedUnion("action", [
 		collectionKey: canonicalKeySchema,
 		keys: itemKeysSchema,
 	}),
-	z.object({ action: z.literal("publish"), keys: itemKeysSchema }),
 	z.object({ action: z.literal("remove"), keys: itemKeysSchema }),
 ]);
 

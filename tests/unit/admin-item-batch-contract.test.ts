@@ -7,12 +7,7 @@ import { orderBatchKeysByDependency } from "@/lib/admin/item-batch-service";
 
 describe("admin item batch contract", () => {
 	it("accepts every supported batch mutation", () => {
-		expect(
-			adminItemBatchRequestSchema.parse({
-				action: "publish",
-				keys: ["ABCD2345"],
-			}),
-		).toEqual({ action: "publish", keys: ["ABCD2345"] });
+        expect(() => adminItemBatchRequestSchema.parse({ action: "publish", keys: ["ABCD2345"] })).toThrow();
 		expect(
 			adminItemBatchRequestSchema.parse({
 				action: "remove",
@@ -48,7 +43,7 @@ describe("admin item batch contract", () => {
 			oversizedSelection,
 		]) {
 			expect(() =>
-				adminItemBatchRequestSchema.parse({ action: "publish", keys }),
+				adminItemBatchRequestSchema.parse({ action: "remove", keys }),
 			).toThrow();
 		}
 	});
@@ -61,20 +56,9 @@ describe("batch item dependency order", () => {
 		["GRAND234", "CHILD234"],
 	]);
 
-	it("publishes parents before their attachments", () => {
-		expect(
-			orderBatchKeysByDependency(
-				"publish",
-				["GRAND234", "CHILD234", "PARENT23"],
-				parentByKey,
-			),
-		).toEqual(["PARENT23", "CHILD234", "GRAND234"]);
-	});
-
 	it("removes attachments before their parents", () => {
 		expect(
 			orderBatchKeysByDependency(
-				"remove",
 				["PARENT23", "CHILD234", "GRAND234"],
 				parentByKey,
 			),
@@ -84,7 +68,6 @@ describe("batch item dependency order", () => {
 	it("keeps unrelated records stable", () => {
 		expect(
 			orderBatchKeysByDependency(
-				"publish",
 				["FIRST234", "SECOND23"],
 				new Map(),
 			),

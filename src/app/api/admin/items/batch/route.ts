@@ -7,19 +7,19 @@ import {
 	adminErrorResponse,
 	readAdminJson,
 	requireAdminPublisher,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { adminItemBatchRequestSchema } from "@/lib/admin/item-batch-contract";
 import { runAdminItemBatch } from "@/lib/admin/item-batch-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
 export async function POST(request: NextRequest) {
-	const denied = await requireAdminPublisher(request);
-	if (denied) return denied;
-
 	try {
 		const input = adminItemBatchRequestSchema.parse(
 			await readAdminJson(request),
 		);
+        const denied = input.action === "remove" ? await requireAdminPublisher(request) : await requireAdminSession(request);
+        if (denied) return denied;
 		const [runtime, writebackConfig] = await Promise.all([
 			getNativeFileRuntime(),
 			getLibraryConfig(),

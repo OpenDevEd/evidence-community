@@ -87,7 +87,6 @@ import {
 	moveAdminCollection,
 	mutateAdminItems,
 	openAdminDraft,
-	publishAdminItem,
 	setAdminItemWritebackSources,
 	renameAdminCollection,
 	restoreAdminCollection,
@@ -466,7 +465,7 @@ export default function AdminWorkbench({
 	);
 	const [writebackDialog, setWritebackDialog] = useState<
 		| (WritebackDialogRequest & {
-				action: "manage" | "publish" | "restore" | "unpublish";
+				action: "manage" | "restore" | "unpublish";
 				recordKey: string;
 		  })
 		| null
@@ -1196,25 +1195,12 @@ export default function AdminWorkbench({
 		[searchIndex.trackAndWait],
 	);
 
-	const runPublish = (recordKey: string, sourceKeys?: string[]) =>
-		void runBusy(
-			async () => {
-				await flushDraft(recordKey, draftPayload);
-				const result = await publishAdminItem(recordKey, sourceKeys);
-				await waitForIndexing(result);
-				clearRecordErrors([recordKey]);
-				setValidationErrors({});
-				toast.success("Record published");
-				await Promise.all([loadDetail(recordKey), loadItems()]);
-			},
-			(error) => captureInspectorValidation(recordKey, error),
-		);
 
-	// Publish, restore and unpublish ask which sources to update first. When
+	// Restore and unpublish ask which sources to update first. When
 	// the library has no writeback source, or the record is an attachment or
 	// note (they follow their parent), the action runs at once.
 	const askWritebackSources = (
-		action: "manage" | "publish" | "restore" | "unpublish",
+		action: "manage" | "restore" | "unpublish",
 	) => {
 		if (!detail) return false;
 		const mode =
@@ -1252,8 +1238,7 @@ export default function AdminWorkbench({
 		if (!request) return;
 		setWritebackDialog(null);
 		const recordKey = request.recordKey;
-		if (request.action === "publish") runPublish(recordKey, sourceKeys);
-		else if (request.action === "restore") runRestore(recordKey, sourceKeys);
+		if (request.action === "restore") runRestore(recordKey, sourceKeys);
 		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys);
 		else {
 			void runBusy(async () => {
@@ -1275,11 +1260,12 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				await openAdminDraft(recordKey);
-				const result = await publishAdminItem(recordKey, sourceKeys);
-				await waitForIndexing(result);
+                if (sourceKeys) await setAdminItemWritebackSources(recordKey, sourceKeys);
+                await submitAdminReview(detail?.parentItem ?? recordKey);
+                await mutate(["admin-reviews", detail?.parentItem ?? recordKey]);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
-				toast.success("Record restored");
+				toast.success("Restoration submitted for review");
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 			},
 			(error) => captureInspectorValidation(recordKey, error),

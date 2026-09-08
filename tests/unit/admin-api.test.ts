@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+	unpublishAdminItem,
 	activateAdminCrossrefPublication,
 	activateAdminZenodoPublication,
 	getAdminPublication,
@@ -8,7 +9,6 @@ import {
 	getAdminSearchIndexOverview,
 	getAdminSearchIndexReceipts,
 	mutateAdminItems,
-	publishAdminItem,
 	retryAdminSearchIndex,
 	retryAdminZenodoPublication,
 } from "@/components/admin/admin-api";
@@ -79,7 +79,7 @@ describe("admin API client", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(
-			mutateAdminItems({ action: "publish", keys: ["ABCD2345"] }),
+			mutateAdminItems({ action: "remove", keys: ["ABCD2345"] }),
 		).resolves.toEqual({
 			results: [
 				{
@@ -94,7 +94,7 @@ describe("admin API client", () => {
 			"/api/admin/items/batch",
 			expect.objectContaining({
 				body: JSON.stringify({
-					action: "publish",
+					action: "remove",
 					keys: ["ABCD2345"],
 				}),
 				method: "POST",
@@ -123,7 +123,7 @@ describe("admin API client", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(
-			mutateAdminItems({ action: "publish", keys }),
+			mutateAdminItems({ action: "remove", keys }),
 		).resolves.toEqual({
 			results: keys.map((key) => ({
 				indexingReceipts: [],
@@ -210,7 +210,7 @@ describe("admin API client", () => {
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
-		const response = await mutateAdminItems({ action: "publish", keys });
+		const response = await mutateAdminItems({ action: "remove", keys });
 		expect(response.results).toEqual(
 			keys.map((key) => ({
 				indexingReceipts: [],
@@ -450,7 +450,7 @@ describe("admin API client", () => {
 			),
 		);
 
-		await expect(publishAdminItem("LIVEB22K")).rejects.toMatchObject({
+		await expect(unpublishAdminItem("LIVEB22K")).rejects.toMatchObject({
 			code: "internal_error",
 			message:
 				"The server returned an invalid search indexing response. Refresh and try again.",

@@ -383,18 +383,6 @@ export function discardAdminDraft(key: string) {
 	);
 }
 
-/** Publish a record. `sourceKeys` chooses its writeback sources; omit to keep the stored choice. */
-export function publishAdminItem(key: string, sourceKeys?: string[]) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(
-		`/api/admin/items/${encodeURIComponent(key)}/publish`,
-		{
-			body: sourceKeys ? JSON.stringify({ sourceKeys }) : undefined,
-			headers: sourceKeys ? { "content-type": "application/json" } : undefined,
-			method: "POST",
-		},
-	);
-}
-
 /** Unpublish a record. `removeFromSourceKeys` lists the sources that also delete their copy. */
 export function unpublishAdminItem(key: string, removeFromSourceKeys?: string[]) {
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
@@ -719,36 +707,6 @@ export function discardAdminPdfDraft(key: string) {
 	return requestJson<void>(
 		`/api/admin/items/${encodeURIComponent(key)}/file/draft`,
 		{ method: "DELETE" },
-	);
-}
-
-export function publishAdminPdf(
-	key: string,
-	expectedUploadRevision: number,
-	zenodoFileChange?: "minor_correction",
-) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(
-		`/api/admin/items/${encodeURIComponent(key)}/file/publish`,
-		{
-			method: "POST",
-			body: JSON.stringify({
-				expectedUploadRevision,
-				...(zenodoFileChange ? { zenodoFileChange } : {}),
-			}),
-		},
-	);
-}
-
-export function unpublishAdminPdf(
-	key: string,
-	zenodoFileChange: "minor_correction",
-) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(
-		`/api/admin/items/${encodeURIComponent(key)}/file`,
-		{
-			method: "DELETE",
-			body: JSON.stringify({ zenodoFileChange }),
-		},
 	);
 }
 

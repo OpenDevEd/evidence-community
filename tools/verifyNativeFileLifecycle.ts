@@ -447,6 +447,20 @@ async function verify() {
         const activationJobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, noFileDraft.itemKey));
         assert(activationJobs.length === 2 && activationJobs.every(job => job.processedAt === null), "Approval failed to queue both providers without files");
 
+        const imported = await createNativeItemDraft(db, { itemType: "Report", title: "Imported restoration" });
+        createdKeys.push(imported.itemKey);
+        await db.update(itemIdentity).set({ kind: "imported" }).where(eq(itemIdentity.key, imported.itemKey));
+        const importedSubmission = await submitItemReview(db, imported.itemKey, noFileActor);
+        const reviewer = { userId: "restoration-editor", role: "editor" } as const;
+        await approveItemReview(db, reviewStorage, { reviewId: importedSubmission.id, expectedRevision: importedSubmission.revision, publicationTags: PUBLICATION_TAGS }, reviewer, reviewConfig);
+        await unpublishNativeItem(db, imported.itemKey);
+        await openNativeItemDraft(db, imported.itemKey);
+        const restoration = await submitItemReview(db, imported.itemKey, noFileActor);
+        const [beforeRestore] = await db.select().from(item).where(eq(item.key, imported.itemKey));
+        assert(beforeRestore?.deleted === 1, "Submitting restoration made the item public without approval");
+        await approveItemReview(db, reviewStorage, { reviewId: restoration.id, expectedRevision: restoration.revision, publicationTags: PUBLICATION_TAGS }, reviewer, reviewConfig);
+        const [afterRestore] = await db.select().from(item).where(eq(item.key, imported.itemKey));
+        assert(afterRestore?.deleted === 0, "Approved restoration did not return the item to the public library");
 		const reviewParent = await createNativeItemDraft(db, { itemType: "Report", title: "Review file parent" });
 		createdKeys.push(reviewParent.itemKey);
 		const reviewAttachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: reviewParent.itemKey, title: "Submitted PDF" });
