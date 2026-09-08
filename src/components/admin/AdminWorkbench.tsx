@@ -52,7 +52,9 @@ import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
 import { AdminImportDialog } from "./AdminImportDialog";
-import { AdminInspector } from "./AdminInspector";
+import { EditorialInspector } from "./EditorialInspector";
+import { mutate } from "swr";
+import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
 import { AdminSourceSyncDialog } from "./AdminSourceSyncDialog";
 import {
 	AdminWritebackSourcesDialog,
@@ -87,14 +89,12 @@ import {
 	openAdminDraft,
 	publishAdminItem,
 	setAdminItemWritebackSources,
-	publishAdminPdf,
 	renameAdminCollection,
 	restoreAdminCollection,
 	saveAdminDraft,
 	sha256File,
 	stageAdminPdf,
 	unpublishAdminItem,
-	unpublishAdminPdf,
 	uploadAdminPdf,
 } from "./admin-api";
 import {
@@ -1232,10 +1232,16 @@ export default function AdminWorkbench({
 	};
 
 	const publishCurrent = () => {
-		if (!detail?.draft) return;
-		if (askWritebackSources("publish")) return;
-		runPublish(detail.key);
-	};
+        if (!detail?.draft || detail.parentItem) return;
+        const recordKey = detail.key;
+        setConfirmDialog({title: "Submit snapshot for review?", message: "The Editor reviews this version. Further edits stay in the working draft.", confirmLabel: "Submit snapshot", action: async () => {
+            await flushDraft(recordKey, draftPayload);
+            await submitAdminReview(recordKey);
+            await mutate(["admin-reviews", recordKey]);
+            await Promise.all([loadDetail(recordKey), loadItems()]);
+            toast.success("Snapshot submitted for review");
+        }});
+    };
 
 	const manageSources = () => {
 		askWritebackSources("manage");
@@ -1396,52 +1402,6 @@ export default function AdminWorkbench({
 				})),
 		);
 
-	const publishPdf = (key: string, uploadRevision: number) =>
-		void runBusy(
-			async () => {
-				setFileErrors((current) => withoutRecordError(current, key));
-				const finishPublication = async (
-					zenodoFileChange?: "minor_correction",
-				) => {
-					const result = await publishAdminPdf(
-						key,
-						uploadRevision,
-						zenodoFileChange,
-					);
-					await waitForIndexing(result);
-					if (detail) await loadDetail(detail.key);
-					await loadItems();
-					toast.success("PDF published");
-				};
-				try {
-					await finishPublication();
-				} catch (error) {
-					if (
-						!(error instanceof AdminApiError) ||
-						error.code !== "confirmation_required"
-					) {
-						throw error;
-					}
-					setConfirmDialog({
-						title: "Publish a PDF correction?",
-						message: error.message,
-						confirmLabel: "Publish correction",
-						action: () => finishPublication("minor_correction"),
-						onError: (confirmationError) =>
-							setFileErrors((current) => ({
-								...current,
-								[key]: fileErrorMessage(confirmationError),
-							})),
-					});
-				}
-			},
-			(error) =>
-				setFileErrors((current) => ({
-					...current,
-					[key]: fileErrorMessage(error),
-				})),
-		);
-
 	const discardPdfDraft = (key: string) => {
 		setConfirmDialog({
 			danger: true,
@@ -1463,29 +1423,16 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const unpublishPdf = (key: string) => {
-		setConfirmDialog({
-			title: "Unpublish PDF?",
-			message:
-				"The attachment metadata will stay published. If this record uses its Crossref DOI in Zenodo, this also confirms the removal as a minor correction.",
-			action: async () => {
-				const result = await unpublishAdminPdf(
-					key,
-					"minor_correction",
-				);
-				await waitForIndexing(result);
-				setFileErrors((current) => withoutRecordError(current, key));
-				if (detail) await loadDetail(detail.key);
-				await loadItems();
-				toast.success("PDF unpublished");
-			},
-			onError: (error) =>
-				setFileErrors((current) => ({
-					...current,
-					[key]: fileErrorMessage(error),
-				})),
-		});
-	};
+    const changePdfRemoval = (key: string) => void runBusy(async () => {
+        const record = detail?.key === key ? detail : detail?.attachments.find(attachment => attachment.key === key);
+        if (!record) return;
+        const remove = !record.fileRemovalPending;
+        await setAdminPdfRemoval(key, remove);
+        setFileErrors(current => withoutRecordError(current, key));
+        if (detail) await loadDetail(detail.key);
+        await loadItems();
+        toast.success(remove ? "PDF removal saved in draft" : "PDF removal undone");
+    }, error => setFileErrors(current => ({...current, [key]: fileErrorMessage(error)})));
 
 	const openCreateCollection = (
 		parentCollection: AdminCollectionCatalogEntry | null,
@@ -2492,7 +2439,8 @@ export default function AdminWorkbench({
 							mobilePane === "inspector" ? "block" : "hidden"
 						} xl:block`}
 					>
-						<AdminInspector
+						<EditorialInspector
+                            reviewQueue={filters.reviewQueue}
 							busy={busy}
 							definitions={definitions}
 							detail={detail}
@@ -2529,7 +2477,6 @@ export default function AdminWorkbench({
 									await Promise.all([loadDetail(recordKey), loadItems()]);
 								});
 							}}
-							onPublishFile={publishPdf}
 							onPublicationChanged={() =>
 								detail
 									? void refreshCurrent(detail.key)
@@ -2543,8 +2490,7 @@ export default function AdminWorkbench({
 							}
 							onRestore={restoreCurrent}
 							onSelectAttachment={(key) => setSelectedKey(key)}
-							onUnpublish={unpublishCurrent}
-							onUnpublishFile={unpublishPdf}
+							onChangePdfRemoval={changePdfRemoval}
 							onUpload={uploadPdf}
 							payload={draftPayload}
 							saveMessage={saveMessage}

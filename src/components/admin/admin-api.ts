@@ -871,3 +871,7 @@ export async function saveAdminPublishingChoice(key: string, choice: PublishingC
 export async function getAdminReviewCount() {
 	return (await requestJson<{ count: number }>("/api/admin/reviews")).count;
 }
+
+export function setAdminPdfRemoval(key: string, remove: boolean) {
+ return requestJson<void>(`/api/admin/items/${encodeURIComponent(key)}/file/removal`, {method: remove ? "POST" : "DELETE"});
+}
