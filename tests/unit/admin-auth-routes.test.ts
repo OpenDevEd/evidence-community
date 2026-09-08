@@ -289,6 +289,7 @@ describe("admin session routes", () => {
 });
 
 describe("signed-out admin page", () => {
+  afterEach(() => vi.unstubAllGlobals());
 	beforeEach(() => {
 		adminCookie.value = undefined;
 	});
@@ -321,6 +322,7 @@ describe("signed-out admin page", () => {
 	});
 
 	it("keeps a signed-in visitor on the admin page", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ role: "editor" })));
 		adminCookie.value = createAdminSessionToken(redeemedIdentity, {
 			libraryId,
 			secret,

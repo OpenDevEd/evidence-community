@@ -44,6 +44,7 @@ export default async function AdminPage({
 		ADMIN_CONTENT_PERMISSION,
 		adminConfig,
 	);
+	if (authorization.status === "unavailable") throw new Error("OpenScholar access verification is temporarily unavailable");
 	if (authorization.status !== "authorized") {
 		const { locale } = await params;
 		const { localization } = await getLibraryConfig();

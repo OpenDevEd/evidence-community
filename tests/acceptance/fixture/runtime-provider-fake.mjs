@@ -172,7 +172,7 @@ const server = createServer(async (request, response) => {
 	}
 
 	if (
-		url.pathname === "/api/v1/evidence-libraries/admin-login/redeem" &&
+		["/api/v1/evidence-libraries/admin-login/redeem", "/api/v1/evidence-libraries/admin-session/check"].includes(url.pathname) &&
 		method === "POST"
 	) {
 		const credential =
@@ -190,6 +190,10 @@ const server = createServer(async (request, response) => {
 		} catch {
 			return json(response, 400, { error: "invalid_request" });
 		}
+    if (url.pathname === "/api/v1/evidence-libraries/admin-session/check") {
+      if (body?.libraryId !== credentialLibraryId || body?.clerkUserId !== "user_acceptance_admin") return json(response, 403, { error: "access_revoked" });
+      return json(response, 200, { role: "editor" });
+    }
 		if (
 			body?.libraryId !== credentialLibraryId ||
 			typeof body?.code !== "string" ||

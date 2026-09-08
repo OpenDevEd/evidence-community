@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import {
 	ADMIN_CONTENT_PERMISSION,
+	ADMIN_PUBLISH_PERMISSION,
+	authorizeAdminSession,
 	ADMIN_LIBRARY_PERMISSION,
 	ADMIN_SESSION_COOKIE,
 	ADMIN_SESSION_TTL_MS,
@@ -41,6 +43,34 @@ describe("admin access", () => {
 			false,
 		);
 	});
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("lets Creators edit drafts but reserves publishing for Editors and Owners", () => {
+    expect(adminRoleHasPermission("creator", ADMIN_CONTENT_PERMISSION)).toBe(true);
+    expect(adminRoleHasPermission("creator", ADMIN_PUBLISH_PERMISSION)).toBe(false);
+    expect(adminRoleHasPermission("creator", ADMIN_LIBRARY_PERMISSION)).toBe(false);
+    expect(adminRoleHasPermission("editor", ADMIN_PUBLISH_PERMISSION)).toBe(true);
+    expect(adminRoleHasPermission("owner", ADMIN_PUBLISH_PERMISSION)).toBe(true);
+  });
+
+  it("uses the current role and rejects a revoked session before cookie expiry", async () => {
+    const config = { ...signingConfig, convexSiteUrl: "https://access.example.test", loginPageUrl: "https://app.example.test/login", machineCredential: "test-machine-credential" };
+    const token = createAdminSessionToken({ ...redeemedIdentity, role: "owner" }, config);
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(Response.json({ role: "creator" }))
+      .mockResolvedValueOnce(Response.json({ error: "access_revoked" }, { status: 403 }));
+    vi.stubGlobal("fetch", fetcher);
+    expect(await authorizeAdminSession(token, ADMIN_PUBLISH_PERMISSION, config)).toEqual({
+      status: "forbidden", session: expect.objectContaining({ role: "creator" }),
+    });
+    expect(await authorizeAdminSession(token, ADMIN_CONTENT_PERMISSION, config)).toEqual({ status: "unauthenticated" });
+    const [url, request] = fetcher.mock.calls[0];
+    expect(String(url)).toBe("https://access.example.test/api/v1/evidence-libraries/admin-session/check");
+    expect(JSON.parse(request.body)).toEqual({ libraryId: config.libraryId, clerkUserId: redeemedIdentity.clerkUserId });
+    expect(request.headers.Authorization).toBe("Bearer test-machine-credential");
+    expect(request.cache).toBe("no-store");
+  });
 
 	it("returns the identity and role from an unexpired signed session", () => {
 		const now = Date.UTC(2026, 7, 24, 12);

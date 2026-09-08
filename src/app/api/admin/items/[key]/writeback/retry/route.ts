@@ -5,7 +5,7 @@ import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
-	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { retryAdminSourceWriteback } from "@/lib/admin/source-writeback-service";
 
@@ -13,7 +13,7 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

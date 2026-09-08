@@ -5,7 +5,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readOptionalAdminJson,
-	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
@@ -15,7 +15,7 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

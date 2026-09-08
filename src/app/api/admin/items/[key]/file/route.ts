@@ -6,6 +6,7 @@ import {
 	adminErrorResponse,
 	readAdminJson,
 	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import {
 	fileDraftJson,
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

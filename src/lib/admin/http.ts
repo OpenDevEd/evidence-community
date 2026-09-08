@@ -22,6 +22,7 @@ import { EvidenceFileStorageError } from "./file-storage";
 import { InvalidPdfError } from "./pdf-processing";
 import {
 	ADMIN_CONTENT_PERMISSION,
+	ADMIN_PUBLISH_PERMISSION,
 	adminSessionCookieName,
 	authorizeAdminSession,
 	type AdminPermission,
@@ -124,10 +125,11 @@ export async function requireAdminPermission(
 		permission,
 	);
 	if (authorization.status === "authorized") return null;
+  if (authorization.status === "unavailable") return NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify library access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS });
 	if (authorization.status === "forbidden") {
 		return adminError({
 			code: "forbidden",
-			message: "Only a library Owner can do this.",
+			message: permission === ADMIN_PUBLISH_PERMISSION ? "An Editor or Owner must publish this change." : "Only a library Owner can do this.",
 			status: 403,
 		});
 	}
@@ -141,6 +143,10 @@ export async function requireAdminPermission(
 /** Shared content-permission guard for every current admin data route. */
 export function requireAdminSession(request: AdminRequest) {
 	return requireAdminPermission(request, ADMIN_CONTENT_PERMISSION);
+}
+
+export function requireAdminPublisher(request: AdminRequest) {
+  return requireAdminPermission(request, ADMIN_PUBLISH_PERMISSION);
 }
 
 export function adminErrorDetails(error: unknown): AdminErrorDetails {

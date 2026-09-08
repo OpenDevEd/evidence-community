@@ -1,5 +1,5 @@
 import { DrizzleQueryError } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 vi.mock("server-only", () => ({}));
@@ -90,6 +90,7 @@ function adminRequest(role?: "owner" | "editor") {
 }
 
 describe("admin API session gate", () => {
+  afterEach(() => vi.unstubAllGlobals());
 	it("returns 401 without a valid session", async () => {
 		const response = await requireAdminPermission(
 			adminRequest(),
@@ -109,6 +110,7 @@ describe("admin API session gate", () => {
 
 	it("allows Owners and Editors to manage content", async () => {
 		for (const role of ["owner", "editor"] as const) {
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json({ role })));
 			expect(
 				await requireAdminPermission(
 					adminRequest(role),
@@ -119,6 +121,7 @@ describe("admin API session gate", () => {
 	});
 
 	it("returns 403 when an Editor requests an Owner-only permission", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ role: "editor" })));
 		const response = await requireAdminPermission(
 			adminRequest("editor"),
 			ADMIN_LIBRARY_PERMISSION,
@@ -133,7 +136,15 @@ describe("admin API session gate", () => {
 		).toMatchObject({ error: { code: "forbidden" } });
 	});
 
+  it("returns 503 when current access cannot be verified", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
+    const response = await requireAdminPermission(adminRequest("owner"), ADMIN_CONTENT_PERMISSION);
+    expect(response?.status).toBe(503);
+    expect(await response?.json()).toMatchObject({ error: { code: "access_unavailable" } });
+  });
+
 	it("allows an Owner to manage the library", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ role: "owner" })));
 		expect(
 			await requireAdminPermission(
 				adminRequest("owner"),

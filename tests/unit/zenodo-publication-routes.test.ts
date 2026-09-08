@@ -31,6 +31,7 @@ vi.mock("@/lib/admin/http", async () => {
 			const text = await request.text();
 			return text ? JSON.parse(text) : {};
 		},
+		requireAdminPublisher: vi.fn(async () => null),
 		requireAdminSession: () => null,
 	};
 });

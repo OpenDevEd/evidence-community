@@ -7,6 +7,7 @@ import {
 	adminErrorResponse,
 	readAdminJson,
 	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
 import {
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {
