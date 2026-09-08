@@ -1,6 +1,6 @@
 "use client";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useRef, useState } from "react";
 import { SquareLock01Icon, PencilIcon, InboxIcon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -9,6 +9,7 @@ import { AdminInspector } from "./AdminInspector";
 import { useItemReview } from "./useItemReview";
 import { useAdminSession } from "./AdminSessionProvider";
 import { updateAdminReview } from "./admin-api";
+import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
 
 type Props = ComponentProps<typeof AdminInspector> & { reviewQueue: boolean };
@@ -19,13 +20,28 @@ export function EditorialInspector(props: Props) {
 
 function ReviewInspector(props: Props) {
 	const key = props.detail?.key ?? "";
- const { snapshot, pending, refresh, error } = useItemReview(props.detail?.parentItem ? undefined : props.detail?.key);
+ const { snapshot, pending, refresh, error } = useItemReview(props.detail?.parentItem ?? props.detail?.key);
  const session = useAdminSession();
  const [submitted, setSubmitted] = useState(props.reviewQueue);
  const [withdrawing, setWithdrawing] = useState(false);
  const feedback = snapshot?.reviewState === "returned" ? snapshot.note : null;
  const canWithdraw = snapshot && (session.role !== "creator" || snapshot.submittedBy === session.userId);
  const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { void refresh(); props.onPublicationChanged(receipts); };
+ const conflictRef = useRef<HTMLDivElement>(null);
+ const [resolving, setResolving] = useState(false);
+ const conflictFields = snapshot?.remainingConflicts[key] ?? [];
+ const hasConflict = conflictFields.length > 0;
+ const resolveConflicts = async (choices: Record<string, "draft" | "published">) => {
+  const draft = props.detail?.draft;
+  if (!snapshot || !draft) return;
+  setResolving(true);
+  try {
+   await updateAdminReview(snapshot.reviewId, {action: "resolve-conflicts", expectedRevision: snapshot.reviewRevision, itemKey: key, generation: draft.generation, draftRevision: draft.draftRevision, choices});
+   changed();
+   toast.success("Draft conflicts resolved");
+  } catch (error) { toast.error(error instanceof Error ? error.message : "Could not resolve conflicts"); }
+  finally { setResolving(false); }
+ };
 	const [attachmentKey, setAttachmentKey] = useState<string | null>(null);
 	const viewingSubmitted = submitted && Boolean(snapshot);
 	const frozenDetail =
@@ -109,6 +125,7 @@ function ReviewInspector(props: Props) {
 	const draftNotice = (
 		<>
 			{notice}
+ {hasConflict && <Button size="xs" variant="transparent" className="mt-3 h-8 w-full justify-between rounded-lg bg-amber-500/[0.07] px-3 text-amber-800 dark:text-amber-300" onPress={() => { conflictRef.current?.scrollIntoView({block: "start", behavior: "smooth"}); conflictRef.current?.focus({preventScroll: true}); }}><span>{conflictFields.length} conflicts</span><span>Resolve →</span></Button>}
 			{feedback && (
 				<div className="mt-3 rounded-xl bg-amber-500/[0.07] p-3">
 					<p className="text-xs font-medium text-amber-800 dark:text-amber-300">
@@ -128,6 +145,8 @@ function ReviewInspector(props: Props) {
 				error={error instanceof Error ? error.message : props.error}
                 versionControls={controls}
 				versionNotice={draftNotice}
+                editorNotice={hasConflict ? <div ref={conflictRef} tabIndex={-1} className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"><DraftConflict key={`${snapshot?.reviewRevision}:${props.detail?.draft?.draftRevision}`} payload={props.payload} published={props.detail?.published ?? {}} conflictFields={conflictFields} disabled={resolving || props.saveState === "saving"} onResolve={choices => { void resolveConflicts(choices); }} /></div> : undefined}
+                submissionBlocked={hasConflict}
 				reviewPending={pending}
 			/>
 		);

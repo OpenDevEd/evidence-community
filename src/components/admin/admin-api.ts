@@ -817,7 +817,7 @@ export async function approveAdminReview(id: string, expectedRevision: number, z
 export async function updateAdminReview(id: string, body:
 	| { action: "correct"; expectedRevision: number; records: ReviewRecord[] }
 	| { action: "returned" | "withdrawn"; expectedRevision: number; note?: string }
-	| { action: "resolve-conflicts"; expectedRevision: number; drafts: { itemKey: string; generation: string | null; draftRevision: number | null }[] }
+	| { action: "resolve-conflicts"; expectedRevision: number; itemKey: string; generation: string; draftRevision: number; choices: Record<string, "draft" | "published"> }
 ) {
 	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(body) } )).review;
 	void mutate("admin-review-count").catch(() => undefined);

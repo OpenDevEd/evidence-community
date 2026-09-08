@@ -5,7 +5,7 @@ import { parseAdminItemListRequest } from "../src/lib/admin/item-list-contract";
 import { getAdminReviewSnapshot } from "../src/lib/admin/review-query";
 import { AdminValidationError } from "../src/lib/admin/errors";
 import { itemReview, itemPublishingChoice } from "../src/db/schema/review";
-import { approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../src/lib/admin/review-service";
+import { correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../src/lib/admin/review-service";
 import { createHash } from "node:crypto";
 
 import {
@@ -440,10 +440,24 @@ async function verify() {
 		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor, reviewConfig); }
 		catch (error) { creatorDenied = error instanceof AdminValidationError; }
 		assert(creatorDenied, "Creator could approve a review");
-		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" }, reviewConfig);
+		const laterDraft = await saveNativeItemDraft(db, {itemKey: noFileDraft.itemKey, expectedDraftRevision: noFileDraft.draftRevision, expectedPayload: noFileDraft.payload, payload: {...noFileDraft.payload, title: "Creator's later title"}});
+		const corrected = await correctItemReview(db, {reviewId: noFileReview.id, expectedRevision: noFileReview.revision, records: noFileReview.snapshot.records.map(record => ({...record, payload: {...record.payload, title: "Editor's corrected title"}}))}, {userId: "no-file-editor", role: "editor"});
+		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: corrected.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" }, reviewConfig);
 		assert(noFileApproval.review.state === "published", "A PDF was required to publish a review");
         const [approvedPublic] = await db.select({ revision: item.revision }).from(item).where(eq(item.key, noFileDraft.itemKey));
         assert(noFileApproval.indexingRecords.some(record => record.key === noFileDraft.itemKey && record.revision === approvedPublic?.revision), "Approval omitted the final public revision from indexing receipts");
+
+        assert(noFileApproval.review.remainingConflicts[noFileDraft.itemKey]?.includes("title"), "Correction failed to preserve the conflicting working title");
+        const conflictDraft = await getNativeItemDraft(db, noFileDraft.itemKey);
+        assert(conflictDraft, "Conflicting draft disappeared");
+        const resolution = {reviewId: noFileReview.id, expectedRevision: noFileApproval.review.revision, itemKey: noFileDraft.itemKey, generation: conflictDraft.generation, draftRevision: conflictDraft.draftRevision, choices: {title: "published" as const}};
+        let staleResolutionDenied = false;
+        try { await resolveReviewConflicts(db, {...resolution, draftRevision: laterDraft.draftRevision - 1}, reviewConfig); }
+        catch { staleResolutionDenied = true; }
+        assert(staleResolutionDenied, "Conflict resolution accepted a stale draft revision");
+        const resolved = await resolveReviewConflicts(db, resolution, reviewConfig);
+        const resolvedDraft = await getNativeItemDraft(db, noFileDraft.itemKey);
+        assert(!resolved.remainingConflicts[noFileDraft.itemKey] && resolvedDraft?.payload.title === "Editor's corrected title", "Resolution did not atomically apply the published choice");
 
         const activatedTargets = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, noFileDraft.itemKey));
         assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");

@@ -709,7 +709,7 @@ async function assertLockedExternalDoiUnchanged(
 	);
 }
 
-async function saveItemDraftInTransaction(
+export async function saveItemDraftInTransaction(
 	transaction: Transaction,
 	{
 		expectedDraftGeneration,

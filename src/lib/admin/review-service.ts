@@ -26,6 +26,7 @@ import { item } from "@/db/schema/tables/item";
 import { AdminValidationError } from "./errors";
 import { applyItemDraftPatch } from "./item-draft-patch";
 import {
+	saveItemDraftInTransaction,
 	publishItemDraftWithContext,
 	loadPublishedItemPayload,
 	ItemDraftConflictError,
@@ -611,53 +612,45 @@ export async function approveItemReview(
 	return { review: committed.review, indexingRecords: committed.indexingRecords };
 }
 
-export async function acknowledgeReviewConflicts(
+export async function resolveReviewConflicts(
 	db: Database,
 	input: {
 		reviewId: string;
 		expectedRevision: number;
-		drafts: {
-			itemKey: string;
-			generation: string | null;
-			draftRevision: number | null;
-		}[];
+		itemKey: string;
+		generation: string;
+		draftRevision: number;
+		choices: Record<string, "draft" | "published">;
 	},
+	config: LibraryServerConfig,
 ) {
 	return db.transaction(async (transaction) => {
-		await lockItemMutations(
-			transaction,
-			input.drafts.map((draft) => draft.itemKey),
-		);
-		const [review] = await transaction
-			.select()
-			.from(itemReview)
-			.where(eq(itemReview.id, input.reviewId))
-			.for("update");
-		if (!review || review.revision !== input.expectedRevision)
-			throw new AdminValidationError(
-				"The review changed. Reload it and try again.",
-			);
-		for (const key of Object.keys(review.remainingConflicts)) {
-			const expected = input.drafts.find(
-				(draft) => draft.itemKey === key,
-			);
-			const [current] = await transaction
-				.select()
-				.from(itemDraft)
-				.where(eq(itemDraft.itemKey, key))
-				.for("update");
-			if (
-				!expected ||
-				(current?.generation ?? null) !== expected.generation ||
-				(current?.draftRevision ?? null) !== expected.draftRevision
-			)
-				throw new ItemDraftConflictError(key);
+		await lockItemMutations(transaction, [input.itemKey]);
+		const [review] = await transaction.select().from(itemReview).where(eq(itemReview.id, input.reviewId)).for("update");
+		if (!review || review.state !== "published" || review.revision !== input.expectedRevision)
+			throw new AdminValidationError("The review changed. Reload it and try again.");
+		const fields = review.remainingConflicts[input.itemKey];
+		if (!fields?.length || fields.length !== Object.keys(input.choices).length || fields.some(field => !input.choices[field]))
+			throw new AdminValidationError("Choose a value for every conflicting field.");
+		const [current] = await transaction.select().from(itemDraft).where(eq(itemDraft.itemKey, input.itemKey)).for("update");
+		if (!current || current.generation !== input.generation || current.draftRevision !== input.draftRevision)
+			throw new ItemDraftConflictError(input.itemKey);
+		const published = await loadPublishedItemPayload(transaction, input.itemKey);
+		const payload = applyItemDraftPatch(published, current.patch);
+		const resolved = {...payload};
+		for (const field of fields) {
+			if (input.choices[field] === "published") {
+				if (Object.hasOwn(published, field)) resolved[field] = published[field];
+				else delete resolved[field];
+			}
 		}
-		const [updated] = await transaction
-			.update(itemReview)
-			.set({ remainingConflicts: {}, revision: review.revision + 1 })
-			.where(eq(itemReview.id, review.id))
-			.returning();
+		await saveItemDraftInTransaction(transaction, {
+			itemKey: input.itemKey, expectedDraftGeneration: input.generation,
+			expectedDraftRevision: input.draftRevision, expectedPayload: payload, payload: resolved,
+		}, {writebackConfig: config});
+		const remainingConflicts = {...review.remainingConflicts};
+		delete remainingConflicts[input.itemKey];
+		const [updated] = await transaction.update(itemReview).set({remainingConflicts, revision: review.revision + 1}).where(eq(itemReview.id, review.id)).returning();
 		return updated!;
 	});
 }

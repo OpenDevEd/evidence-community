@@ -14,7 +14,7 @@ import {
 } from "@/lib/admin/http";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
-	acknowledgeReviewConflicts,
+	resolveReviewConflicts,
 	approveItemReview,
 	correctItemReview,
 	resolveItemReview,
@@ -41,13 +41,10 @@ const bodySchema = z.discriminatedUnion("action", [
 	z.object({
 		action: z.literal("resolve-conflicts"),
 		expectedRevision: revision,
-		drafts: z.array(
-			z.object({
-				itemKey: z.string().length(8),
-				generation: z.string().uuid().nullable(),
-				draftRevision: revision.nullable(),
-			}),
-		),
+		itemKey: z.string().length(8),
+		generation: z.string().uuid(),
+		draftRevision: revision,
+		choices: z.record(z.string(), z.enum(["draft", "published"])),
 	}),
 ]);
 export async function POST(
@@ -80,7 +77,7 @@ export async function POST(
         const review = input.action === "correct"
             ? await correctItemReview(runtime.db, input, actor)
             : input.action === "resolve-conflicts"
-                ? await acknowledgeReviewConflicts(runtime.db, input)
+                ? await resolveReviewConflicts(runtime.db, input, runtime.config)
                 : await resolveItemReview(runtime.db, input, actor);
 		return NextResponse.json(
 			{ review },
