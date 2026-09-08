@@ -1,3 +1,4 @@
+import { isNotNull } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -153,6 +154,7 @@ async function zenodoPdfCorrectionRequirement(
 				eq(publicationTarget.provider, "zenodo"),
 				eq(publicationTarget.environment, "sandbox"),
 				isNull(publicationTarget.deactivatedAt),
+                    isNotNull(publicationTarget.activatedAt),
 			),
 		)
 		.limit(1);

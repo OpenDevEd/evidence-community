@@ -1,3 +1,5 @@
+import { createNativeItemDraft, publishItemDraft } from "../src/lib/admin/native-item-service";
+import { setItemPublishingChoice } from "../src/lib/admin/review-service";
 import {
 	ProviderHttpError,
 	type CrossrefDepositor,
@@ -15,6 +17,7 @@ import type { Database } from "../src/db/database-schema";
 import { schema } from "../src/db/database-schema";
 import {
 	activateCrossrefPublication,
+    reserveCrossrefDoi,
 	CrossrefActivationValidationError,
 	ExternalCrossrefDoiError,
 	retryCrossrefPublication,
@@ -450,14 +453,18 @@ async function verify(database: Database, client: Client) {
 			rejectedType.rows[0]?.targets === "0",
 		"Unsupported metadata consumed a DOI or left activation state",
 	);
-	await seedItem(client, { key: "CRACTAAH", doi: "10.5555/existing" });
+	await seedItem(client, { key: "CRACTAAH" });
+    await client.query(`UPDATE "itemIdentity" SET kind = 'created' WHERE key = 'CRACTAAH'`);
+    await setItemPublishingChoice(database, "CRACTAAH", {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
+    const reservedExisting = await reserveCrossrefDoi(database, "CRACTAAH", config, "creator");
+    await client.query(`UPDATE item SET "DOI" = $1 WHERE key = 'CRACTAAH'`, [reservedExisting.doi]);
 	const existing = await activateCrossrefPublication(
 		database,
 		"CRACTAAH",
 		config,
 	);
 	assert(
-		existing.doi === "10.5555/existing" && existing.canonicalRevision === 1,
+		existing.doi === reservedExisting.doi && existing.canonicalRevision === 1,
 		"An existing managed-prefix DOI created a fake item revision",
 	);
 	const existingRows = await client.query<{
@@ -474,17 +481,12 @@ async function verify(database: Database, client: Client) {
 			existingRows.rows[0]?.outbox === "1",
 		"Existing DOI activation did not separate publication state from item edits",
 	);
-	await seedItem(client, { key: "CRACTAAL", doi: "10.5555/existing" });
+	await seedItem(client, { key: "CRACTAAL", doi: reservedExisting.doi });
 	try {
 		await activateCrossrefPublication(database, "CRACTAAL", config);
 		throw new Error("A DOI already managed by another record was accepted");
 	} catch (error) {
-		assert(
-			error instanceof Error &&
-				error.message ===
-					"DOI 10.5555/existing is already managed by record CRACTAAH.",
-			"The duplicate DOI error did not identify the existing record",
-		);
+        assert(error instanceof ExternalCrossrefDoiError, "An item claimed an identifier reserved by another item");
 	}
 
 	const successful = await runCrossrefPublicationJobsOnce(database, config, {
@@ -698,7 +700,7 @@ async function verify(database: Database, client: Client) {
 		config,
 	);
 	assert(
-		pendingActivation.doi === "10.5555/library.000003",
+		pendingActivation.doi === "10.5555/library.000004",
 		"A rejected activation consumed a DOI sequence",
 	);
 	const pendingAt = new Date("2030-08-13T13:00:00Z");
@@ -1132,6 +1134,22 @@ async function verify(database: Database, client: Client) {
 	);
 }
 
+async function verifyDraftReservation(database: Database, client: Client) {
+ const draft = await createNativeItemDraft(database, {itemType: "Report", title: "Draft DOI reservation", date: "2026-09-08", institution: "OpenDevEd", creators: [{creatorType: "author", firstName: "Ada", lastName: "Lovelace"}]});
+ await setItemPublishingChoice(database, draft.itemKey, {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
+ const reservations = await Promise.all(Array.from({length: 4}, () => reserveCrossrefDoi(database, draft.itemKey, config, "creator")));
+ assert(reservations.every(value => value.doi === reservations[0].doi), "Concurrent reservation allocated different DOIs");
+ const before = await client.query(`SELECT (SELECT count(*) FROM "item" WHERE key = $1)::int AS records, (SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = $1)::int AS jobs, (SELECT "activatedAt" FROM "publicationTarget" WHERE "itemKey" = $1 AND provider = 'crossref') AS activated`, [draft.itemKey]);
+ assert(before.rows[0].records === 0 && before.rows[0].jobs === 0 && before.rows[0].activated === null, "Reserving a draft enabled publication work");
+ await publishItemDraft(database, draft.itemKey);
+ const afterPublish = await client.query(`SELECT count(*)::int AS jobs FROM "publicationSyncJob" WHERE "itemKey" = $1`, [draft.itemKey]);
+ assert(afterPublish.rows[0].jobs === 0, "Publishing metadata activated a reservation without approval");
+ const activation = await activateCrossrefPublication(database, draft.itemKey, config, "editor");
+ assert(activation.doi === reservations[0].doi, "Activation replaced the reserved DOI");
+ const activated = await client.query(`SELECT t."activatedAt", i."DOI", (SELECT count(*)::int FROM "publicationIdentifier" WHERE "itemKey" = $1) AS identifiers FROM "publicationTarget" t JOIN item i ON i.key = t."itemKey" WHERE t."itemKey" = $1 AND t.provider = 'crossref'`, [draft.itemKey]);
+ assert(activated.rows[0].activatedAt && activated.rows[0].DOI === reservations[0].doi && activated.rows[0].identifiers === 1, "Activation did not enable the original identifier");
+}
+
 async function verifyIsolatedDatabase() {
 	const sourceUrl = new URL(verifiedDatabaseUrl);
 	const databaseName = `crossref_activation_${process.pid}_${Date.now()}`;
@@ -1154,6 +1172,7 @@ async function verifyIsolatedDatabase() {
 		client = new Client({ connectionString: temporaryUrl.toString() });
 		await client.connect();
 		await verify(database, client);
+        await verifyDraftReservation(database, client);
 	} finally {
 		await client?.end();
 		await pool?.end();

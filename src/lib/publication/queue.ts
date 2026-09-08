@@ -301,6 +301,7 @@ export async function enqueuePublicationJobsForItem(
 					and(
 						eq(publicationTarget.itemKey, input.itemKey),
 						isNull(publicationTarget.deactivatedAt),
+                    isNotNull(publicationTarget.activatedAt),
 					),
 				),
 			transaction

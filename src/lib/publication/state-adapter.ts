@@ -21,7 +21,7 @@ export function targetFor(
 		(target) =>
 			target.provider === provider &&
 			target.environment === environment &&
-			target.deactivatedAt === null,
+			target.deactivatedAt === null && target.activatedAt !== null,
 	);
 }
 

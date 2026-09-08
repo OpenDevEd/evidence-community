@@ -1,0 +1,1 @@
+ALTER TABLE "publicationTarget" ADD COLUMN "activatedAt" timestamp with time zone DEFAULT now();

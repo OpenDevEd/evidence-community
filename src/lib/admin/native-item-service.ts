@@ -1,3 +1,4 @@
+import { isNotNull } from "drizzle-orm";
 import {
 	itemDraft,
 	itemFileDraft,
@@ -692,6 +693,7 @@ async function assertLockedExternalDoiUnchanged(
 				eq(publicationTarget.environment, "sandbox"),
 				eq(publicationTarget.identifierPolicy, "reuse-external"),
 				isNull(publicationTarget.deactivatedAt),
+                    isNotNull(publicationTarget.activatedAt),
 			),
 		)
 		.limit(1);
@@ -1443,6 +1445,7 @@ async function unpublishNativeItemAttempt(
 				and(
 					eq(publicationTarget.itemKey, itemKey),
 					isNull(publicationTarget.deactivatedAt),
+                    isNotNull(publicationTarget.activatedAt),
 				),
 			)
 			.limit(1)

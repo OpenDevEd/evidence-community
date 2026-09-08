@@ -6,14 +6,16 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArchiveIcon, Link01Icon, Tick01Icon, ArrowRight01Icon, File01Icon, Add01Icon, FingerPrintIcon } from "@hugeicons/core-free-icons";
 import type { AdminItemDetail } from "@/lib/admin/types";
 import type { PublishingChoice } from "@/lib/admin/review-contract";
-import { getAdminPublishingChoice, saveAdminPublishingChoice } from "./admin-api";
-export function PublishingChoicePanel({ detail, readOnly = false, choice, reservedDoi, onReserve }: {
- detail: AdminItemDetail; readOnly?: boolean; choice?: PublishingChoice | null; reservedDoi?: string | null; onReserve?: () => void;
+import { getAdminCrossrefReservation, reserveAdminCrossrefDoi, getAdminPublishingChoice, saveAdminPublishingChoice } from "./admin-api";
+export function PublishingChoicePanel({ detail, readOnly = false, choice }: {
+ detail: AdminItemDetail; readOnly?: boolean; choice?: PublishingChoice | null;
 }) {
  const saved = useSWR(!readOnly && detail.kind === "created" ? ["admin-publishing-choice", detail.key] : null, ([, key]) => getAdminPublishingChoice(key));
  const value = readOnly ? choice : saved.data;
  const route = value?.route;
  const policy = value?.identifierPolicy;
+ const reservation = useSWR(detail.kind === "created" ? ["admin-crossref-reservation", detail.key] : null, ([, key]) => getAdminCrossrefReservation(key));
+ const reservedDoi = reservation.data?.doi;
  const reserved = Boolean(reservedDoi);
  const [saving, setSaving] = useState(false);
  const pending = useRef(false);
@@ -24,6 +26,11 @@ export function PublishingChoicePanel({ detail, readOnly = false, choice, reserv
    try { const stored = await saveAdminPublishingChoice(detail.key, next); await saved.mutate(stored, {revalidate: false}); }
    catch (error) { setError(error instanceof Error ? error.message : "Could not save identifier choice"); }
    finally { pending.current = false; setSaving(false); }
+ };
+ const onReserve = () => {
+   if (pending.current || readOnly) return;
+   pending.current = true; setSaving(true); setError(null);
+   void reserveAdminCrossrefDoi(detail.key).then(result => reservation.mutate(result, {revalidate: false})).catch(error => setError(error instanceof Error ? error.message : "Could not reserve DOI")).finally(() => {pending.current = false; setSaving(false);});
  };
  const setRoute = (route: string) => void save(route === "zenodo" ? {route, identifierPolicy: "mint-zenodo"} : {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
  const setPolicy = (identifierPolicy: "reuse-crossref" | "mint-zenodo") => void save({route: "crossref-zenodo", identifierPolicy});
@@ -52,7 +59,7 @@ export function PublishingChoicePanel({ detail, readOnly = false, choice, reserv
 	);
 	return (
 		<div className="overflow-hidden rounded-xl bg-black/[0.025] ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
-			{(error || saved.error) && <p role="alert" className="px-3 pt-3 text-xs text-danger">{error ?? (saved.error instanceof Error ? saved.error.message : "Could not load identifier choice")}</p>}
+			{(error || saved.error || reservation.error) && <p role="alert" className="px-3 pt-3 text-xs text-danger">{error ?? (saved.error instanceof Error ? saved.error.message : reservation.error instanceof Error ? reservation.error.message : "Could not load identifier choice")}</p>}
 			<div
 				role="group"
 				aria-label="DOI provider"
@@ -113,14 +120,14 @@ export function PublishingChoicePanel({ detail, readOnly = false, choice, reserv
 										icon={Tick01Icon}
 										size={12}
 									/>
-									Reserved
+									{reservation.data?.lifecycle === "verified" ? "Registered" : "Reserved"}
 								</span>
 							) : (
 								<Button
 									size="xs"
 									variant="flat"
 									color="accent"
-									isDisabled={readOnly || saving || !onReserve}
+									isDisabled={readOnly || saving}
 									onPress={onReserve}
 									className="h-8 min-w-0 shrink-0 rounded-lg px-2.5 text-[11px] font-semibold"
 									startContent={

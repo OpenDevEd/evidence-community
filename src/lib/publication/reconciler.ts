@@ -1,3 +1,4 @@
+import { isNotNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, gt, isNull, lte, sql } from "drizzle-orm";
@@ -188,6 +189,7 @@ async function loadTargetPage(
 		.where(
 			and(
 				isNull(publicationTarget.deactivatedAt),
+                    isNotNull(publicationTarget.activatedAt),
 				eq(item.deleted, 0),
 				isNull(item.parentItem),
 				cursorCondition,
@@ -220,6 +222,7 @@ async function reconcileTarget(
 					eq(publicationTarget.provider, target.provider),
 					eq(publicationTarget.environment, target.environment),
 					isNull(publicationTarget.deactivatedAt),
+                    isNotNull(publicationTarget.activatedAt),
 					eq(item.deleted, 0),
 					isNull(item.parentItem),
 				),

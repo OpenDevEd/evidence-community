@@ -135,6 +135,7 @@ export const publicationTarget = pgTable(
 		requestedAt: timestampWithTimezone("requestedAt")
 			.notNull()
 			.defaultNow(),
+		activatedAt: timestampWithTimezone("activatedAt").defaultNow(),
 		deactivatedAt: timestampWithTimezone("deactivatedAt"),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},

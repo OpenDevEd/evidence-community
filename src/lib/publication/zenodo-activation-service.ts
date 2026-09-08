@@ -630,7 +630,7 @@ export async function retryZenodoPublication(
 			(candidate) =>
 				candidate.provider === "zenodo" &&
 				candidate.environment === "sandbox" &&
-				candidate.deactivatedAt === null,
+				candidate.deactivatedAt === null && candidate.activatedAt !== null,
 		);
 		if (!target?.identifierPolicy) {
 			throw new Error("The saved Zenodo activation is incomplete");
