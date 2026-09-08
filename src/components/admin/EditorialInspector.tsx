@@ -9,6 +9,7 @@ import { AdminInspector } from "./AdminInspector";
 import { useItemReview } from "./useItemReview";
 import { useAdminSession } from "./AdminSessionProvider";
 import { updateAdminReview } from "./admin-api";
+import { useReviewCorrections } from "./useReviewCorrections";
 import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
 
@@ -22,6 +23,7 @@ function ReviewInspector(props: Props) {
 	const key = props.detail?.key ?? "";
  const { snapshot, pending, refresh, error } = useItemReview(props.detail?.parentItem ?? props.detail?.key);
  const session = useAdminSession();
+ const corrections = useReviewCorrections(snapshot, refresh);
  const [submitted, setSubmitted] = useState(props.reviewQueue);
  const [withdrawing, setWithdrawing] = useState(false);
  const feedback = snapshot?.reviewState === "returned" ? snapshot.note : null;
@@ -155,14 +157,16 @@ function ReviewInspector(props: Props) {
 			{...props}
 			detail={frozenDetail}
 			payload={
-				frozenDetail.draft?.payload ?? frozenDetail.published ?? {}
+				corrections.payloads[frozenDetail.key] ?? frozenDetail.draft?.payload ?? frozenDetail.published ?? {}
 			}
 			readOnlyVersion
+            allowReviewCorrections={pending && session.role !== "creator"}
             publishingChoice={snapshot.publishing}
-            onChange={() => undefined}
+            onChange={payload => corrections.change(frozenDetail.key, payload)}
 			versionActions={
 				<ReviewActions
 					snapshot={snapshot}
+                    disabled={corrections.saving || Boolean(corrections.error)}
 					onUpdated={changed}
 				/>
 			}
@@ -170,13 +174,15 @@ function ReviewInspector(props: Props) {
 			versionNotice={notice}
 			linkTargets={frozenDetail.links.targets}
 			linkPickKind={null}
+            onStartLinkPick={undefined}
+            onStopLinkPick={undefined}
 			fileErrors={{}}
 			validationErrors={{}}
 			validationRevision={0}
 			loading={false}
-			error={null}
-			saveMessage={null}
-			saveState="idle"
+			error={corrections.error}
+			saveMessage={corrections.error}
+			saveState={corrections.error ? "error" : corrections.saving ? "saving" : "saved"}
 			onSelectAttachment={setAttachmentKey}
 			onBackToParent={(target) => {
 				if (target === key) setAttachmentKey(null);

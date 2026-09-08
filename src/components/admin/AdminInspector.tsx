@@ -1400,6 +1400,7 @@ function AttachmentFilePanel({
 
 export function AdminInspector({
     readOnlyVersion = false,
+    allowReviewCorrections = false,
     versionControls,
     versionNotice,
     editorNotice,
@@ -1442,6 +1443,7 @@ export function AdminInspector({
 	validationRevision = 0,
 }: {
 	readOnlyVersion?: boolean;
+	allowReviewCorrections?: boolean;
     versionControls?: ReactNode;
     versionNotice?: ReactNode;
     editorNotice?: ReactNode;
@@ -1566,7 +1568,7 @@ export function AdminInspector({
 	}
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
-	const editable = !readOnlyVersion && detail.editable && Boolean(detail.draft) && !busy;
+	const editable = (allowReviewCorrections || (!readOnlyVersion && detail.editable)) && Boolean(detail.draft) && !busy;
 	const readOnly = !editable;
 	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
 	const showPublicLinkActions =

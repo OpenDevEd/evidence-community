@@ -10,7 +10,7 @@ import DialogModal from "@/components/nextui/DialogModal";
 import { toast } from "sonner";
 import { useAdminSession } from "./AdminSessionProvider";
 import { approveAdminReview, updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
-export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => void }) {
+export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disabled?: boolean; snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => void }) {
  const { role } = useAdminSession();
  const [dialog, setDialog] = useState<"publish" | "changes" | null>(null);
  const [feedback, setFeedback] = useState("");
@@ -19,7 +19,7 @@ export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSn
  const pending = useRef(false);
  const checks = [{label: "Submitted version", ready: snapshot.reviewState === "pending"}];
  const submit = async () => {
-   if (pending.current) return;
+   if (pending.current || disabled) return;
    pending.current = true; setBusy(true); setError("");
    try {
      let receipts: readonly AdminSearchIndexReceipt[] = [];
@@ -41,6 +41,7 @@ export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSn
 						startContent={
 							<HugeiconsIcon icon={SentIcon} size={14} />
 						}
+						isDisabled={disabled}
 						onPress={() => setDialog("publish")}
 					>
 						Publish version
@@ -52,6 +53,7 @@ export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSn
 						startContent={
 							<HugeiconsIcon icon={Comment01Icon} size={14} />
 						}
+						isDisabled={disabled}
 						onPress={() => {
 							setError("");
 							setDialog("changes");
@@ -161,6 +163,7 @@ export function ReviewActions({ snapshot, onUpdated }: { snapshot: AdminReviewSn
 							size="sm"
 							color="accent"
 							isDisabled={
+                                disabled ||
 								busy || (dialog === "publish" ? checks.some((c) => !c.ready) : !feedback.trim())
 							}
                             onPress={() => void submit()}
