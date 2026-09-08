@@ -403,14 +403,36 @@ async function verify(database: Database, client: Client) {
 		config,
 		"mint-zenodo",
 	);
+	let savedDraftTime = new Date();
+	const interruptedDraft = await runZenodoPublicationJobsOnce(
+		database, config,
+		memoryStorage(new Map([["public/ZENFILAA.pdf", draftBytes]])),
+		{now: () => savedDraftTime, provider: {
+			...emptyProvider,
+			prepareCreateRecord: async (request) => {
+				assert(request.draftDepositionId === "90001", "Upload lost the saved draft");
+				await request.onPreparedDraft?.({depositionId: "90001", draftRecordId: "90001"});
+				throw new Error("Simulated interrupted upload");
+			},
+		}},
+	);
+	assert(interruptedDraft[0]?.status === "retrying", "Upload failure was not retriable");
+	const retainedDraft = await client.query<{draft: string; status: string}>(
+		`SELECT s."unpublishedDraftDepositionId" AS draft, j.status FROM "publicationSyncState" s JOIN "zenodoPublishJournal" j ON j."itemKey" = s."itemKey" WHERE s."itemKey" = 'ZENACTAA'`,
+	);
+	assert(retainedDraft.rows[0]?.draft === "90001" && retainedDraft.rows[0]?.status === "preparing", "Upload failure lost the draft reference or journal");
+	savedDraftTime = new Date(savedDraftTime.getTime() + 61_000);
 	let continuedDraft: string | undefined;
 	const completed = await runZenodoPublicationJobsOnce(
 		database,
 		config,
 		memoryStorage(new Map([["public/ZENFILAA.pdf", draftBytes]])),
 		{
+			now: () => savedDraftTime,
 			provider: {
 				...emptyProvider,
+				prepareEmptyDraft: async () => { throw new Error("Retry must not create another draft"); },
+				discardPreparedDraft: async () => { throw new Error("Retry must preserve the saved draft"); },
 				prepareCreateRecord: async (request) => {
 					continuedDraft = request.draftDepositionId;
 					assert(
@@ -1736,10 +1758,6 @@ async function verifyIsolatedDatabase() {
 	} finally {
 		await client?.end();
 		await pool?.end();
-		await admin.query(
-			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-			[databaseName],
-		);
 		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
 		await admin.end();
 	}

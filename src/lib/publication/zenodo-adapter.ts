@@ -19,7 +19,7 @@ import {
 	type ZenodoRemoteStateVerification,
 	type ZenodoWriter,
 } from "@opendeved/doi-sync-core";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
@@ -405,6 +405,15 @@ function createZenodoJournal(
 				const fileCorrectionApprovalId = parseFileCorrectionApprovalId(
 					input.fileCorrectionApproval?.id,
 				);
+				const createOperation = plan.operations.find(operation => operation.type === "zenodo_create");
+				if (createOperation?.draftDepositionId && createOperation.draftDepositionId !== input.depositionId) {
+					await transaction.delete(zenodoPublishJournal).where(and(
+						eq(zenodoPublishJournal.itemKey, input.recordId),
+						eq(zenodoPublishJournal.environment, "sandbox"),
+						eq(zenodoPublishJournal.depositionId, createOperation.draftDepositionId),
+						eq(zenodoPublishJournal.status, "preparing"),
+					));
+				}
 				await transaction
 					.insert(zenodoPublishJournal)
 					.values({
@@ -460,16 +469,13 @@ function createZenodoJournal(
 					});
 				await transaction
 					.update(publicationSyncState)
-					.set({ unpublishedDraftDepositionId: null })
+					.set({ unpublishedDraftDepositionId: input.depositionId })
 					.where(
 						and(
 							eq(publicationSyncState.itemKey, input.recordId),
 							eq(publicationSyncState.provider, "zenodo"),
 							eq(publicationSyncState.environment, "sandbox"),
-							eq(
-								publicationSyncState.unpublishedDraftDepositionId,
-								input.depositionId,
-							),
+							isNotNull(publicationSyncState.unpublishedDraftDepositionId),
 						),
 					);
 			}),
@@ -562,6 +568,7 @@ function createZenodoJournal(
 						lastPayloadSnapshot: savedDraft.payloadSnapshot,
 						lastFileManifestHash,
 						lastFileManifestSnapshot,
+						unpublishedDraftDepositionId: null,
 						zenodoRecordId: input.identifiers.latestRecordId,
 						zenodoParentId: input.identifiers.parentId,
 						zenodoVersionDoi: input.identifiers.versionDoi ?? null,
@@ -583,7 +590,8 @@ function createZenodoJournal(
 							lastPayloadSnapshot: savedDraft.payloadSnapshot,
 							lastFileManifestHash,
 							lastFileManifestSnapshot,
-							zenodoRecordId: input.identifiers.latestRecordId,
+							unpublishedDraftDepositionId: null,
+						zenodoRecordId: input.identifiers.latestRecordId,
 							zenodoParentId: input.identifiers.parentId,
 							zenodoVersionDoi:
 								input.identifiers.versionDoi ?? null,
@@ -773,6 +781,7 @@ function zenodoPatchValues(
 						Record<string, unknown> | undefined)
 				: undefined) ??
 			null,
+		unpublishedDraftDepositionId: identifiers ? null : previousState?.zenodo?.unpublishedDraft?.depositionId ?? null,
 		zenodoRecordId: identifiers?.latestRecordId ?? null,
 		zenodoParentId: identifiers?.parentId ?? null,
 		zenodoVersionDoi: identifiers?.versionDoi ?? null,
