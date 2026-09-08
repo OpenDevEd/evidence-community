@@ -8,6 +8,7 @@ import { Button } from "@/components/nextui/Button";
 import { Textarea } from "@/components/nextui/Textarea";
 import DialogModal from "@/components/nextui/DialogModal";
 import { toast } from "sonner";
+import { ReviewPublicationProgress } from "./ReviewPublicationProgress";
 import { useAdminSession } from "./AdminSessionProvider";
 import { approveAdminReview, updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
 export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disabled?: boolean; snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => void }) {
@@ -30,6 +31,7 @@ export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disab
    } catch (error) { setError(error instanceof Error ? error.message : "Could not update review"); }
    finally { pending.current = false; setBusy(false); }
  };
+ if (snapshot.reviewState === "published") return <ReviewPublicationProgress snapshot={snapshot} />;
  if (snapshot.reviewState !== "pending") return null;
  return (<>
 			{role !== "creator" ? (
