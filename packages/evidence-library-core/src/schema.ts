@@ -311,44 +311,37 @@ export function sourceIdentityColumns() {
 	};
 }
 
-function createRecordIdentityTable(
-	tableName: "itemIdentity" | "collectionIdentity",
-) {
-	return pgTable(
-		tableName,
-		{
-			key: varchar("key", { length: 8 }).primaryKey(),
-			...sourceIdentityColumns(),
-			createdAt: timestampWithTimezone("createdAt")
-				.notNull()
-				.defaultNow(),
-		},
-		(table) => [
-			canonicalRecordKeyCheck(`${tableName}_key_format`, table.key),
-			check(
-				`${tableName}_native_source_key_match`,
-				sql`${table.sourceConnectionKey} <> 'native' OR ${table.sourceRecordKey} = ${table.key}`,
-			),
-			unique(`${tableName}_source_record_unique`).on(
-				table.sourceConnectionKey,
-				table.sourceRecordKey,
-			),
-			unique(`${tableName}_identity_unique`).on(
-				table.key,
-				table.sourceConnectionKey,
-				table.sourceRecordKey,
-			),
-			unique(`${tableName}_key_connection_unique`).on(
-				table.key,
-				table.sourceConnectionKey,
-			),
-		],
-	);
+function recordIdentityColumns() {
+  return {
+    key: varchar("key", { length: 8 }).primaryKey(),
+    ...sourceIdentityColumns(),
+    createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+  };
 }
 
-export const itemIdentity = createRecordIdentityTable("itemIdentity");
-export const collectionIdentity =
-	createRecordIdentityTable("collectionIdentity");
+function recordIdentityConstraints(tableName: string, table: {
+  key: AnyPgColumn; sourceConnectionKey: AnyPgColumn; sourceRecordKey: AnyPgColumn;
+}) {
+  return [
+    canonicalRecordKeyCheck(`${tableName}_key_format`, table.key),
+    check(`${tableName}_native_source_key_match`, sql`${table.sourceConnectionKey} <> 'native' OR ${table.sourceRecordKey} = ${table.key}`),
+    unique(`${tableName}_source_record_unique`).on(table.sourceConnectionKey, table.sourceRecordKey),
+    unique(`${tableName}_identity_unique`).on(table.key, table.sourceConnectionKey, table.sourceRecordKey),
+    unique(`${tableName}_key_connection_unique`).on(table.key, table.sourceConnectionKey),
+  ];
+}
+
+export const itemIdentity = pgTable("itemIdentity", {
+  ...recordIdentityColumns(),
+  kind: varchar("kind", { length: 16, enum: ["created", "imported"] }).notNull().default("imported"),
+  importMethod: varchar("importMethod", { length: 16, enum: ["doi", "file"] }),
+}, table => [
+  ...recordIdentityConstraints("itemIdentity", table),
+  check("itemIdentity_kind_valid", sql`${table.kind} IN ('created', 'imported')`),
+  check("itemIdentity_import_method_valid", sql`${table.importMethod} IS NULL OR (${table.kind} = 'imported' AND ${table.importMethod} IN ('doi', 'file'))`),
+]);
+
+export const collectionIdentity = pgTable("collectionIdentity", recordIdentityColumns(), table => recordIdentityConstraints("collectionIdentity", table));
 
 export const itemSourceLink = pgTable(
 	"itemSourceLink",

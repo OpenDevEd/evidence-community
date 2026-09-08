@@ -16,7 +16,7 @@ export async function createAdminItemListFixture(
 			"updatedAt", "dateAdded", collections, tags, "pageCount", "searchText"
 		)
 		SELECT
-			'b' || lpad(to_hex(value), 7, '0'),
+			'B' || translate(lpad(to_hex(value), 7, '0'), '0123456789abcdef', '23456789ABCDEFGH'),
 			CASE value % 4 WHEN 0 THEN 'Book' WHEN 1 THEN 'JournalArticle' WHEN 2 THEN 'Report' ELSE 'Document' END,
 			'Teacher evidence record ' || lpad(value::text, 7, '0'),
 			'teacher evidence record ' || lpad(value::text, 7, '0'),
@@ -37,5 +37,14 @@ export async function createAdminItemListFixture(
 		FROM generate_series(1, $1) value`,
 		[rowCount],
 	);
+	await client.query(`
+		CREATE TEMP TABLE "itemIdentity"
+		(LIKE public."itemIdentity" INCLUDING ALL) ON COMMIT DROP;
+		INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey", kind)
+		SELECT key, "sourceConnectionKey", key,
+			CASE WHEN "sourceConnectionKey" = 'native' THEN 'created' ELSE 'imported' END
+		FROM "adminItemListProjection";
+		ANALYZE "itemIdentity";
+	`);
 	await client.query('ANALYZE "adminItemListProjection"');
 }

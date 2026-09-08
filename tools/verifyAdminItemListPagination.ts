@@ -43,6 +43,18 @@ async function walkSort(
 }
 
 async function verifyRelationFilters(database: Database) {
+	const created = await getAdminItemListPage(database, {
+		filters: [{ column: "kind", operator: "anyOf", value: ["created"] }],
+		pageSize: 100,
+	});
+	assert(created.items.length === Math.floor(ROW_COUNT / 5), "Created filter lost records");
+	assert(created.items.every((row) => row.kind === "created" && row.sourceConnectionKey === "native"), "Created filter included imports");
+	const imported = await getAdminItemListPage(database, {
+		filters: [{ column: "kind", operator: "anyOf", value: ["imported"] }],
+		pageSize: 100,
+	});
+	assert(imported.items.length === 100 && imported.items.every((row) => row.kind === "imported"), "Imported filter returned the wrong records");
+
 	const collectionPage = await getAdminItemListPage(database, {
 		filters: [
 			{

@@ -1,3 +1,4 @@
+import { removeUnreferencedPrivateFiles } from "@/lib/admin/file-retention";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
 		]);
 		const execution = await runAdminItemBatch(input, {
 			db: runtime.db,
-			removePrivateFiles: (paths) => runtime.storage.removePrivate(paths),
+			removePrivateFiles: (paths) => removeUnreferencedPrivateFiles(runtime.db, runtime.storage, paths),
 			writebackPolicyOptions: { writebackConfig },
 		});
 		return NextResponse.json(

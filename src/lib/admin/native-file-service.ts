@@ -21,6 +21,7 @@ import {
 	type ZenodoIdentifierPolicy,
 	zenodoFileCorrectionApproval,
 } from "@/db/schema/publication";
+import { itemFileRemoval } from "@/db/schema/review";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
@@ -32,6 +33,8 @@ import {
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 import { buildPublicationFileManifest } from "@/lib/publication/record-adapter";
 
+import type { ReviewFile } from "./review-contract";
+import { removeUnreferencedPrivateFiles } from "./file-retention";
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
 import { processPdf } from "./pdf-processing";
@@ -423,6 +426,8 @@ export async function stageNativePdfUpload(
 ) {
 	const normalized = normalizeStageInput(input);
 	const staged = await db.transaction(async (transaction) => {
+		await lockItemMutations(transaction, [input.itemKey]);
+		await transaction.delete(itemFileRemoval).where(eq(itemFileRemoval.itemKey, input.itemKey));
 		const [metadataDraft] = await transaction
 			.select({ patch: itemDraft.patch })
 			.from(itemDraft)
@@ -528,7 +533,7 @@ export async function stageNativePdfUpload(
 
 	if (staged.stalePrivatePaths.length > 0) {
 		try {
-			await storage.removePrivate(staged.stalePrivatePaths);
+			await removeUnreferencedPrivateFiles(db, storage, staged.stalePrivatePaths);
 		} catch (error) {
 			console.error(
 				"Failed to remove replaced staged file objects",
@@ -588,7 +593,9 @@ export async function completeNativePdfUpload(
 	const coverObjectPath = stagedCoverPath(draft.objectPath);
 	await storage.uploadPrivate(coverObjectPath, processed.cover, "image/png");
 
-	const [ready] = await db
+	const [ready] = await db.transaction(async (transaction) => {
+		await lockItemMutations(transaction, [itemKey]);
+		return transaction
 		.update(itemFileDraft)
 		.set({
 			actualSizeBytes: bytes.byteLength,
@@ -609,9 +616,10 @@ export async function completeNativePdfUpload(
 			),
 		)
 		.returning();
+	});
 	if (!ready) {
 		try {
-			await storage.removePrivate([coverObjectPath]);
+			await removeUnreferencedPrivateFiles(db, storage, [coverObjectPath]);
 		} catch (error) {
 			console.error(
 				"Failed to remove cover after upload completion conflict",
@@ -623,12 +631,34 @@ export async function completeNativePdfUpload(
 	return ready;
 }
 
+/** Mark removal in the working draft; public and submitted objects stay intact. */
+export async function stageNativePdfRemoval(db: Database, storage: EvidenceFileStorage, itemKey: string) {
+	const paths = await db.transaction(async (transaction) => {
+		await lockItemMutations(transaction, [itemKey]);
+		const [publication] = await transaction.select().from(itemFilePublication)
+			.where(and(eq(itemFilePublication.itemKey, itemKey), eq(itemFilePublication.sourceConnectionKey, NATIVE_CONNECTION_KEY)));
+		if (!publication) throw new NativeFileNotFoundError(itemKey);
+		const [draft] = await transaction.delete(itemFileDraft).where(eq(itemFileDraft.itemKey, itemKey)).returning();
+		await transaction.insert(itemFileRemoval).values({ itemKey }).onConflictDoNothing();
+		return draft ? [draft.objectPath, draft.coverObjectPath].filter((value): value is string => Boolean(value)) : [];
+	});
+	await removeUnreferencedPrivateFiles(db, storage, paths);
+}
+
+export async function undoNativePdfRemoval(db: Database, itemKey: string) {
+	await db.transaction(async (transaction) => {
+		await lockItemMutations(transaction, [itemKey]);
+		await transaction.delete(itemFileRemoval).where(eq(itemFileRemoval.itemKey, itemKey));
+	});
+}
+
 export async function discardNativePdfDraft(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
 ) {
 	const privatePaths = await db.transaction(async (transaction) => {
+		await lockItemMutations(transaction, [itemKey]);
 		const [draft] = await transaction
 			.select()
 			.from(itemFileDraft)
@@ -654,13 +684,13 @@ export async function discardNativePdfDraft(
 	});
 
 	try {
-		await storage.removePrivate(privatePaths);
+		await removeUnreferencedPrivateFiles(db, storage, privatePaths);
 	} catch (error) {
 		console.error("Failed to remove discarded staged file objects", error);
 	}
 }
 
-export async function publishNativePdf(
+export async function prepareNativePdfPublication(
 	db: Database,
 	storage: EvidenceFileStorage,
 	{
@@ -668,15 +698,17 @@ export async function publishNativePdf(
 		itemKey,
 		publicationTags,
 		zenodoFileChange,
+		reviewFile,
 	}: {
 		expectedUploadRevision: number;
 		itemKey: string;
 		publicationTags: readonly string[];
 		zenodoFileChange?: "minor_correction";
+		reviewFile?: ReviewFile;
 	},
 ) {
 	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
-	const [draft] = await db
+	const [workingFile] = await db
 		.select()
 		.from(itemFileDraft)
 		.where(
@@ -687,6 +719,13 @@ export async function publishNativePdf(
 			),
 		)
 		.limit(1);
+	const draft = reviewFile ? {
+		...reviewFile,
+		actualSha256: reviewFile.sha256,
+		actualSizeBytes: reviewFile.sizeBytes,
+		readyAt: new Date(),
+	} : workingFile;
+	if (reviewFile && (reviewFile.itemKey !== itemKey || reviewFile.uploadRevision !== expectedUploadRevision)) throw new NativeFileConflictError(itemKey);
 	if (
 		!draft?.readyAt ||
 		!draft.actualSha256 ||
@@ -769,26 +808,32 @@ export async function publishNativePdf(
 	}
 
 	const publicPaths = publishedPaths(itemKey, draft.actualSha256);
-	await Promise.all([
+	const uploads = await Promise.allSettled([
 		storage.uploadPublic(publicPaths.pdf, pdfBytes, PDF_CONTENT_TYPE),
 		storage.uploadPublic(publicPaths.cover, coverBytes, "image/png"),
 	]);
+	const failedUpload = uploads.find((result) => result.status === "rejected");
+	if (failedUpload?.status === "rejected") {
+		try { await storage.removePublic([publicPaths.pdf, publicPaths.cover]); }
+		catch (error) { console.error("Failed to clean prepared public files", error); }
+		throw failedUpload.reason;
+	}
 	const publicUrl = storage.publicUrl(publicPaths.pdf);
 	const coverPublicUrl = storage.publicUrl(publicPaths.cover);
 	const md5 = createHash("md5").update(pdfBytes).digest("hex");
 
-	const commitPublication = () =>
-		db.transaction(async (transaction) => {
+	const commitPublication = async (transaction: DatabaseTransaction) => {
 			await lockItemMutations(transaction, [
 				itemKey,
 				draft.parentItemKey,
 			]);
-			const [lockedDraft] = await transaction
+			const [currentFileDraft] = await transaction
 				.select()
 				.from(itemFileDraft)
 				.where(eq(itemFileDraft.itemKey, itemKey))
 				.for("update")
 				.limit(1);
+			const lockedDraft = reviewFile ? draft : currentFileDraft;
 			if (
 				!lockedDraft?.readyAt ||
 				lockedDraft.uploadRevision !== expectedUploadRevision ||
@@ -999,7 +1044,7 @@ export async function publishNativePdf(
 			});
 			await transaction
 				.delete(itemFileDraft)
-				.where(eq(itemFileDraft.itemKey, itemKey));
+				.where(and(eq(itemFileDraft.itemKey, itemKey), eq(itemFileDraft.objectPath, draft.objectPath)));
 
 			return {
 				file: savedPublication!,
@@ -1021,11 +1066,8 @@ export async function publishNativePdf(
 						]
 					: [],
 			};
-		});
-	let transactionResult: Awaited<ReturnType<typeof commitPublication>>;
-	try {
-		transactionResult = await commitPublication();
-	} catch (error) {
+		};
+	const rollback = async () => {
 		try {
 			const [currentPublication, currentDraft] = await Promise.all([
 				db
@@ -1076,13 +1118,13 @@ export async function publishNativePdf(
 			const orphanedPrivatePaths = [
 				draft.objectPath,
 				draft.coverObjectPath,
-			].filter((objectPath) => !referencedPrivatePaths.has(objectPath));
+			].filter((objectPath): objectPath is string => Boolean(objectPath) && !referencedPrivatePaths.has(objectPath));
 			const cleanupTasks: Promise<void>[] = [];
 			if (orphanedPublicPaths.length > 0) {
 				cleanupTasks.push(storage.removePublic(orphanedPublicPaths));
 			}
 			if (orphanedPrivatePaths.length > 0) {
-				cleanupTasks.push(storage.removePrivate(orphanedPrivatePaths));
+				cleanupTasks.push(removeUnreferencedPrivateFiles(db, storage, orphanedPrivatePaths));
 			}
 			const cleanupResults = await Promise.allSettled(cleanupTasks);
 			for (const cleanup of cleanupResults) {
@@ -1099,9 +1141,8 @@ export async function publishNativePdf(
 				cleanupError,
 			);
 		}
-		throw error;
-	}
-
+	};
+	const cleanup = async (transactionResult: Awaited<ReturnType<typeof commitPublication>>) => {
 	const stalePrivatePaths = transactionResult.previousPrivatePaths.filter(
 		(path) =>
 			path !== transactionResult.file.sourceObjectPath &&
@@ -1109,7 +1150,7 @@ export async function publishNativePdf(
 	);
 	if (stalePrivatePaths.length > 0) {
 		try {
-			await storage.removePrivate(stalePrivatePaths);
+			await removeUnreferencedPrivateFiles(db, storage, stalePrivatePaths);
 		} catch (error) {
 			console.error(
 				"Failed to remove replaced private file objects",
@@ -1139,15 +1180,31 @@ export async function publishNativePdf(
 		indexingRecords: transactionResult.indexingRecords,
 		item: transactionResult.item,
 	};
+	};
+	return { commit: commitPublication, rollback, cleanup };
 }
 
-export async function unpublishNativePdfWithContext(
+export async function publishNativePdf(
 	db: Database,
 	storage: EvidenceFileStorage,
+	input: Omit<Parameters<typeof prepareNativePdfPublication>[2], "reviewFile">,
+) {
+	const prepared = await prepareNativePdfPublication(db, storage, input);
+	let result: Awaited<ReturnType<typeof prepared.commit>>;
+	try {
+		result = await db.transaction(prepared.commit);
+	} catch (error) {
+		await prepared.rollback();
+		throw error;
+	}
+	return prepared.cleanup(result);
+}
+
+export async function unpublishNativePdfInTransaction(
+	transaction: DatabaseTransaction,
 	itemKey: string,
 	zenodoFileChange?: "minor_correction",
 ) {
-	const result = await db.transaction(async (transaction) => {
 		const [initialPublication] = await transaction
 			.select()
 			.from(itemFilePublication)
@@ -1341,11 +1398,16 @@ export async function unpublishNativePdfWithContext(
 			],
 			publicPaths: [publication.objectPath, publication.coverObjectPath],
 		};
-	});
+}
 
+export async function cleanupNativePdfRemoval(
+	db: Database,
+	storage: EvidenceFileStorage,
+	result: Awaited<ReturnType<typeof unpublishNativePdfInTransaction>>,
+) {
 	const cleanupResults = await Promise.allSettled([
 		storage.removePublic(result.publicPaths),
-		storage.removePrivate(result.privatePaths),
+		removeUnreferencedPrivateFiles(db, storage, result.privatePaths),
 	]);
 	for (const cleanup of cleanupResults) {
 		if (cleanup.status === "rejected") {
@@ -1356,6 +1418,16 @@ export async function unpublishNativePdfWithContext(
 		}
 	}
 	return { indexingRecords: result.indexingRecords, item: result.item };
+}
+
+export async function unpublishNativePdfWithContext(
+	db: Database,
+	storage: EvidenceFileStorage,
+	itemKey: string,
+	zenodoFileChange?: "minor_correction",
+) {
+	const result = await db.transaction((transaction) => unpublishNativePdfInTransaction(transaction, itemKey, zenodoFileChange));
+	return cleanupNativePdfRemoval(db, storage, result);
 }
 
 export async function unpublishNativePdf(

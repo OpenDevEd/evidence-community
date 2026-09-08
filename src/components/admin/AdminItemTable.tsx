@@ -306,7 +306,7 @@ function RecordTitleCell({
 					{record.title}
 				</p>
 				<p className="truncate text-[11px] text-black/40 dark:text-white/40">
-					{humanizeAdminField(record.itemType)} · {record.key}
+					{humanizeAdminField(record.kind)} / {humanizeAdminField(record.itemType)}
 				</p>
 			</div>
 		</div>
@@ -750,10 +750,14 @@ export function AdminItemTable({
 				...ADMIN_ITEM_TABLE_COLUMN_SIZES.itemType,
 			},
 			{
+				cell: ({ row }) => <PlainCell>{humanizeAdminField(row.original.kind)}</PlainCell>,
+				id: "kind",
+				...ADMIN_ITEM_TABLE_COLUMN_SIZES.kind,
+			},
+			{
 				cell: ({ row }) => (
 					<PlainCell icon={DatabaseIcon}>
-						{sourceLabels.get(row.original.sourceConnectionKey) ??
-							row.original.sourceConnectionKey}
+						{row.original.importMethod === "doi" ? "DOI import" : row.original.importMethod === "file" ? "File import" : sourceLabels.get(row.original.sourceConnectionKey) ?? row.original.sourceConnectionKey}
 					</PlainCell>
 				),
 				id: "source",

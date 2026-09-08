@@ -78,8 +78,8 @@ export function selectedImportRecords(
 	records: readonly AdminImportPreviewRecord[],
 	selected: ReadonlySet<string>,
 ) {
-	return records.flatMap(({ id, payload }) =>
-		selected.has(id) && payload ? [{ id, payload }] : [],
+	return records.flatMap(({ id, method, payload }) =>
+		selected.has(id) && payload ? [{ id, method, payload }] : [],
 	);
 }
 

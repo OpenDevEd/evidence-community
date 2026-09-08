@@ -1,3 +1,4 @@
+import { removeUnreferencedPrivateFiles } from "@/lib/admin/file-retention";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -105,7 +106,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 		const discarded = await discardItemDraft(runtime.db, key);
 		if (discarded.stagedPrivatePaths.length > 0) {
 			try {
-				await runtime.storage.removePrivate(
+				await removeUnreferencedPrivateFiles(runtime.db, runtime.storage,
 					discarded.stagedPrivatePaths,
 				);
 			} catch (error) {

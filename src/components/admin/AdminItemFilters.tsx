@@ -70,6 +70,8 @@ function optionsForColumn(
 	sources: readonly AdminSource[],
 ): FilterOption[] {
 	switch (column) {
+		case "kind":
+			return ["created", "imported"].map((key) => ({ key, label: humanizeAdminField(key) }));
 		case "state":
 			return ["draft", "edited", "published", "deleted"].map((key) => ({
 				key,

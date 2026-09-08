@@ -23,6 +23,8 @@ import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemFilePublication } from "@/db/schema/source";
+import { itemReview } from "@/db/schema/review";
+import { AdminValidationError } from "./errors";
 import { publicationTarget } from "@/db/schema/publication";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
@@ -48,6 +50,8 @@ import {
 	materializeItemDraft,
 	publishedAdminItemPayload,
 } from "./item-draft-patch";
+import { rebaseWorkingDraftAfterReview } from "./review-draft-rebase";
+import type { ReviewRecord } from "./review-contract";
 import { effectiveItemParent } from "./item-draft-merge";
 import {
 	mergeConcurrentDraftEdits,
@@ -85,6 +89,8 @@ export type ItemWritebackPolicyOptions = {
 };
 
 export type ItemPublishOptions = ItemWritebackPolicyOptions & {
+	/** Internal review approval input, never accepted from a publication request. */
+	review?: { submitted: ReviewRecord; approved: ReviewRecord };
 	/**
 	 * The sources this record should write back to from now on. Omit to keep
 	 * the stored selection. Ignored for attachments and notes, which always
@@ -399,7 +405,7 @@ function publishedItemValues(
 	};
 }
 
-async function loadPublishedItemPayload(
+export async function loadPublishedItemPayload(
 	executor: Executor,
 	itemKey: string,
 	published?: typeof item.$inferSelect | null,
@@ -570,6 +576,7 @@ export async function createNativeItemDraft(db: Database, payload: unknown) {
 		const itemKey = await reserveItemIdentity(transaction, {
 			sourceConnectionKey: NATIVE_CONNECTION_KEY,
 		});
+    await transaction.update(itemIdentity).set({ kind: "created" }).where(eq(itemIdentity.key, itemKey));
 		const [draft] = await transaction
 			.insert(itemDraft)
 			.values({
@@ -899,7 +906,7 @@ export async function assignItemDraftToCollection(
 }
 
 export async function publishItemDraftWithContext(
-	db: Database,
+	db: Executor,
 	itemKey: string,
 	options: ItemPublishOptions = {},
 ) {
@@ -920,16 +927,17 @@ export async function publishItemDraftWithContext(
 			.limit(1)
 			.then((rows) => rows[0]),
 	]);
-	if (!lockDraft) throw new ItemNotFoundError(itemKey);
+	if (!lockDraft && !options.review) throw new ItemNotFoundError(itemKey);
+	const publicationPatch = options.review?.approved.payload ?? lockDraft!.patch;
 	const lockedParentItem = effectiveItemParent(
-		lockCandidate?.parentItem,
-		lockDraft.patch,
+		options.review ? null : lockCandidate?.parentItem,
+		publicationPatch,
 	);
 	// A top-level record also locks its attachments and notes: publishing
 	// may change which sources they follow, and their own publish must not
 	// copy a selection that is about to change.
 	const childKeys = lockedParentItem ? [] : await childItemKeys(db, itemKey);
-	const lockLinkTargets = await linkTargetKeys(db, itemKey, lockDraft.patch);
+	const lockLinkTargets = await linkTargetKeys(db, itemKey, publicationPatch);
 	const advisoryLockKeys = [
 		...new Set(
 			[
@@ -953,7 +961,7 @@ export async function publishItemDraftWithContext(
 			.from(itemDraft)
 			.where(eq(itemDraft.itemKey, itemKey))
 			.limit(1);
-		if (!initialDraft) {
+		if (!initialDraft && !options.review) {
 			throw new ItemNotFoundError(itemKey);
 		}
 		const [candidate] = await transaction
@@ -962,19 +970,19 @@ export async function publishItemDraftWithContext(
 			.where(eq(item.key, itemKey))
 			.limit(1);
 		if (
-			initialDraft.draftRevision !== lockDraft.draftRevision ||
+			initialDraft?.draftRevision !== lockDraft?.draftRevision ||
 			(candidate?.parentItem ?? null) !==
 				(lockCandidate?.parentItem ?? null) ||
-			effectiveItemParent(candidate?.parentItem, initialDraft.patch) !==
+			effectiveItemParent(options.review ? null : candidate?.parentItem, options.review?.approved.payload ?? initialDraft?.patch) !==
 				lockedParentItem
 		) {
 			throw new ItemDraftConflictError(itemKey);
 		}
 
 		const initialValidated = validateNativeItemDraft(
-			applyItemDraftPatch(
+			options.review?.approved.payload ?? applyItemDraftPatch(
 				await loadPublishedItemPayload(transaction, itemKey),
-				initialDraft.patch,
+				initialDraft!.patch,
 			),
 			{ requireTitle: true },
 		);
@@ -1001,23 +1009,19 @@ export async function publishItemDraftWithContext(
 		const draft = lockedDrafts.find(
 			(candidate) => candidate.itemKey === itemKey,
 		);
-		if (!draft || draft.draftRevision !== initialDraft.draftRevision) {
+		if ((!draft && !options.review) || draft?.draftRevision !== initialDraft?.draftRevision) {
 			throw new ItemDraftConflictError(itemKey);
 		}
 		const current = lockedItems.find(
 			(candidate) => candidate.key === itemKey,
 		);
+		const basePayload = await loadPublishedItemPayload(transaction, itemKey, current ?? null);
+		const workingPayload = draft ? applyItemDraftPatch(basePayload, draft.patch) : null;
 		const validated = validateNativeItemDraft(
-			applyItemDraftPatch(
-				await loadPublishedItemPayload(
-					transaction,
-					itemKey,
-					current ?? null,
-				),
-				draft.patch,
-			),
+			options.review?.approved.payload ?? workingPayload,
 			{ requireTitle: true },
 		);
+		await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
 		if (validated.item.parentItem !== parentItemKey) {
 			throw new ItemDraftConflictError(itemKey);
 		}
@@ -1043,6 +1047,11 @@ export async function publishItemDraftWithContext(
 					)
 				: undefined;
 		const currentRevision = current?.revision ?? 0;
+		if (options.review && (
+			options.review.submitted.itemKey !== itemKey ||
+			options.review.approved.itemKey !== itemKey ||
+			options.review.submitted.baseRevision !== currentRevision
+		)) throw new ItemDraftConflictError(itemKey);
 		if (
 			typeof parentItemKey === "string" &&
 			(parentItemKey === itemKey ||
@@ -1235,7 +1244,9 @@ export async function publishItemDraftWithContext(
 				revision: parentRevision,
 			});
 		}
-		const changedFields = Object.keys(draft.patch).filter(
+		const changedFields = Object.keys(options.review
+			? createItemDraftPatch(basePayload, options.review.approved.payload)
+			: draft!.patch).filter(
 			(field) => field !== "collections" && field !== "links",
 		);
 		// A changed "related" set changes what the source shows as Related, so the
@@ -1307,11 +1318,23 @@ export async function publishItemDraftWithContext(
 				now,
 			});
 		}
-		await transaction
-			.delete(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey));
+		const rebased = options.review && workingPayload
+			? rebaseWorkingDraftAfterReview({ submitted: options.review.submitted.payload, approved: validated.payload, working: workingPayload })
+			: null;
+		const remainingPatch = rebased ? createItemDraftPatch(validated.payload, rebased.payload) : {};
+		if (draft && Object.keys(remainingPatch).length > 0) {
+			await transaction.update(itemDraft).set({
+				baseRevision: nextRevision,
+				patch: remainingPatch,
+				draftRevision: sql`${itemDraft.draftRevision} + 1`,
+				updatedAt: now,
+			}).where(eq(itemDraft.itemKey, itemKey));
+		} else {
+			await transaction.delete(itemDraft).where(eq(itemDraft.itemKey, itemKey));
+		}
 
 		return {
+			draftConflicts: rebased?.conflicts ?? [],
 			indexingRecords,
 			item: published!,
 			previousParentItem: candidate?.parentItem ?? null,
@@ -1640,6 +1663,9 @@ async function discardItemDraftInTransaction(
 		.where(eq(item.key, itemKey))
 		.limit(1);
 	if (!published) {
+		const [pendingReview] = await transaction.select({ id: itemReview.id }).from(itemReview)
+			.where(and(eq(itemReview.state, "pending"), sql`${itemReview.snapshot}->'records' @> ${JSON.stringify([{ itemKey }])}::jsonb`)).limit(1);
+		if (pendingReview) throw new AdminValidationError("Withdraw or return the pending review before deleting this draft.");
 		const [childDraft] = await transaction
 			.select({ itemKey: itemDraft.itemKey })
 			.from(itemDraft)
@@ -1661,18 +1687,12 @@ async function discardItemDraftInTransaction(
 				.returning({ itemKey: itemDraft.itemKey })
 		: [null];
 	if (draft && !discarded) throw new ItemDraftConflictError(itemKey);
-	if (removeFileDraft && staged) {
+	if ((!published || removeFileDraft) && staged) {
 		await transaction
 			.delete(itemFileDraft)
 			.where(eq(itemFileDraft.itemKey, itemKey));
 	}
-	if (!published) {
-		await transaction
-			.delete(itemIdentity)
-			.where(eq(itemIdentity.key, itemKey));
-	}
 	return {
-		removedIdentity: !published,
 		stagedPrivatePaths:
 			(!published || removeFileDraft) && staged
 				? [staged.objectPath, staged.coverObjectPath].filter(

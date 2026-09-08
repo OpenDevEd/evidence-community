@@ -1,3 +1,5 @@
+import type { SavedReview, PublishingChoice, ReviewRecord } from "@/lib/admin/review-contract";
+import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 "use client";
 
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
@@ -832,4 +834,30 @@ export async function sha256File(file: File) {
 	return Array.from(new Uint8Array(digest), (byte) =>
 		byte.toString(16).padStart(2, "0"),
 	).join("");
+}
+
+export type AdminReviewSnapshot = Awaited<ReturnType<typeof getAdminReviewSnapshot>>;
+
+export async function getAdminItemReviews(key: string) {
+	return (await requestJson<{ reviews: SavedReview[] }>(`/api/admin/items/${encodeURIComponent(key)}/review`)).reviews;
+}
+export async function getAdminReview(id: string) {
+	return (await requestJson<{ snapshot: AdminReviewSnapshot }>(`/api/admin/reviews/${encodeURIComponent(id)}`)).snapshot;
+}
+export async function submitAdminReview(key: string) {
+	return (await requestJson<{ review: SavedReview }>(`/api/admin/items/${encodeURIComponent(key)}/review`, { method: "POST" })).review;
+}
+export async function updateAdminReview(id: string, body:
+	| { action: "approve"; expectedRevision: number; zenodoFileChange?: "minor_correction" }
+	| { action: "correct"; expectedRevision: number; records: ReviewRecord[] }
+	| { action: "returned" | "withdrawn"; expectedRevision: number; note?: string }
+	| { action: "resolve-conflicts"; expectedRevision: number; drafts: { itemKey: string; generation: string | null; draftRevision: number | null }[] }
+) {
+	return (await requestJson<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(body) })).review;
+}
+export async function getAdminPublishingChoice(key: string) {
+	return (await requestJson<{ choice: PublishingChoice | null }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`)).choice;
+}
+export async function saveAdminPublishingChoice(key: string, choice: PublishingChoice) {
+	return (await requestJson<{ choice: PublishingChoice }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`, { method: "PUT", body: JSON.stringify(choice) })).choice;
 }

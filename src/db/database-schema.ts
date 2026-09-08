@@ -27,7 +27,10 @@ import * as userToLikesTable from "./schema/tables/userToLikes";
 import * as sourceTables from "./schema/source";
 import * as publicationTables from "./schema/publication";
 
+import * as reviewTables from "./schema/review";
+
 export const schema = {
+	...reviewTables,
 	...adminItemListProjectionTable,
 	...itemTable,
 	...itemCitationMetricTable,

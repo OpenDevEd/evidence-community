@@ -53,6 +53,7 @@ const adminImportCommitRequestSchema = z.object({
 		.array(
 			z.object({
 				id: z.string().min(1).max(32),
+				method: z.enum(["doi", "file"]),
 				payload: z.record(z.string(), z.unknown()),
 			}),
 		)
@@ -101,6 +102,7 @@ export type AdminImportPreviewRecord = {
 	fields?: AdminFieldErrors;
 	id: string;
 	itemType: string | null;
+	method: "doi" | "file";
 	message?: string;
 	/** Validated draft payload, present only when the record is `ready`. */
 	payload: Record<string, unknown> | null;

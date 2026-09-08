@@ -79,6 +79,8 @@ const navigationListSurfaceClass =
 	"bg-black/[0.035] px-2 py-2 dark:bg-black/20";
 
 export function AdminNavigation({
+	kind,
+	onSelectKind,
 	collection,
 	onCreateCollection,
 	onDeleteCollection,
@@ -94,6 +96,8 @@ export function AdminNavigation({
 	sources,
 	state,
 }: {
+	kind: string | null;
+	onSelectKind: (kind: "all" | "created" | "imported") => void;
 	collection: string | null;
 	onCreateCollection: (
 		parentCollection: AdminCollectionCatalogEntry | null,
@@ -119,6 +123,7 @@ export function AdminNavigation({
 			aria-label="Admin filters and collections"
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
+			<div className="shrink-0"><NavigationHeading icon={FileClockIcon} title="Kind"/><div className={navigationListSurfaceClass}>{["All","Created","Imported"].map(value=><button key={value} aria-pressed={kind===value.toLowerCase()} className={`${navigationItemClass} ${kind===value.toLowerCase()?"bg-accent/[0.12] font-medium":"text-black/60 dark:text-white/60"}`} onClick={()=>onSelectKind(value.toLowerCase() as "all" | "created" | "imported")}><HugeiconsIcon icon={FileClockIcon} size={14}/>{value}</button>)}</div></div>
 			<div className="shrink-0">
 				<NavigationHeading icon={DatabaseIcon} title="Sources" />
 				<div className={navigationListSurfaceClass}>

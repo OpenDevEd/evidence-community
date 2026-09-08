@@ -98,6 +98,46 @@ async function verify() {
 	const verificationTags = [publishedTag, secondTag];
 
 	try {
+		const reviewDraft = await createNativeItemDraft(db, { itemType: "Book", title: "Submitted title" });
+		createdKeys.push(reviewDraft.itemKey);
+		const submitted = { itemKey: reviewDraft.itemKey, baseRevision: 0, payload: reviewDraft.payload };
+		await saveNativeItemDraft(db, {
+			itemKey: reviewDraft.itemKey,
+			expectedDraftGeneration: reviewDraft.generation,
+			expectedDraftRevision: reviewDraft.draftRevision,
+			expectedPayload: reviewDraft.payload,
+			payload: { ...reviewDraft.payload, title: "Newer working title" },
+		});
+		const approval = await publishNativeItemDraftWithContext(db, reviewDraft.itemKey, {
+			review: { submitted, approved: { ...submitted, payload: { ...submitted.payload, abstractNote: "Editor correction" } } },
+		});
+		assert(approval.item.title === "Submitted title", "Approval published later working edits");
+		assert(approval.item.abstractNote === "Editor correction", "Approval lost editor correction");
+		const rebasedDraft = await openNativeItemDraft(db, reviewDraft.itemKey);
+		assert(rebasedDraft.payload.title === "Newer working title", "Approval discarded later working edits");
+		assert(rebasedDraft.payload.abstractNote === "Editor correction", "Working draft did not inherit editor correction");
+		const nextSubmitted = { itemKey: reviewDraft.itemKey, baseRevision: approval.item.revision, payload: rebasedDraft.payload };
+		await saveNativeItemDraft(db, {
+			itemKey: reviewDraft.itemKey,
+			expectedDraftGeneration: rebasedDraft.generation,
+			expectedDraftRevision: rebasedDraft.draftRevision,
+			expectedPayload: rebasedDraft.payload,
+			payload: { ...rebasedDraft.payload, title: "Third working title" },
+		});
+		const conflictingApproval = await publishNativeItemDraftWithContext(db, reviewDraft.itemKey, {
+			review: { submitted: nextSubmitted, approved: { ...nextSubmitted, payload: { ...nextSubmitted.payload, title: "Editor title" } } },
+		});
+		assert(conflictingApproval.item.title === "Editor title", "Correction did not become public");
+		assert(conflictingApproval.draftConflicts.includes("title"), "Conflicting later edit was not reported");
+		assert((await openNativeItemDraft(db, reviewDraft.itemKey)).payload.title === "Third working title", "Conflicting working edit was lost");
+		let staleReviewRejected = false;
+		try {
+			await publishNativeItemDraftWithContext(db, reviewDraft.itemKey, { review: { submitted, approved: submitted } });
+		} catch (error) {
+			staleReviewRejected = error instanceof NativeDraftConflictError;
+		}
+		assert(staleReviewRejected, "An old review overwrote a newer publication");
+
 		const draft = await createNativeItemDraft(db, {
 			itemType: "book",
 			title: "Draft-only title",

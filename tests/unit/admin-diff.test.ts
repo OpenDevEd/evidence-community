@@ -19,6 +19,8 @@ const definition: AdminSchemaDefinition = {
 
 function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 	return {
+		kind: "created",
+		importMethod: null,
 		attachments: [],
 		collectionKeys: ["CURRENT"],
 		creators: [],
@@ -37,6 +39,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 		editable: true,
 		fileDraft: null,
 		filePublication: null,
+		fileRemovalPending: false,
 		links: {
 			fromSources: [],
 			citedBy: [],

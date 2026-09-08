@@ -1,3 +1,7 @@
+import { getAdminReviewSnapshot } from "../src/lib/admin/review-query";
+import { AdminValidationError } from "../src/lib/admin/errors";
+import { itemReview, itemPublishingChoice } from "../src/db/schema/review";
+import { approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../src/lib/admin/review-service";
 import { createHash } from "node:crypto";
 
 import {
@@ -35,6 +39,8 @@ import {
 	NativeFileConflictError,
 	publishNativePdf,
 	stageNativePdfUpload,
+	stageNativePdfRemoval,
+	undoNativePdfRemoval,
 	unpublishNativePdf,
 	ZenodoPdfCorrectionConfirmationRequiredError,
 } from "../src/lib/admin/native-file-service";
@@ -413,6 +419,73 @@ async function verify() {
 			provider: "zotero",
 			scopeKind: "group",
 		});
+
+		const reviewStorage = new MemoryFileStorage();
+		const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file" });
+		createdKeys.push(noFileDraft.itemKey);
+		const noFileActor = { userId: "no-file-creator", role: "creator" } as const;
+		let choiceRequired = false;
+		try { await submitItemReview(db, noFileDraft.itemKey, noFileActor); }
+		catch (error) { choiceRequired = error instanceof AdminValidationError; }
+		assert(choiceRequired, "Created item submission accepted a missing identifier choice");
+		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
+		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor);
+		let creatorDenied = false;
+		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor); }
+		catch (error) { creatorDenied = error instanceof AdminValidationError; }
+		assert(creatorDenied, "Creator could approve a review");
+		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" });
+		assert(noFileApproval.state === "published", "A PDF was required to publish a review");
+		const reviewParent = await createNativeItemDraft(db, { itemType: "Report", title: "Review file parent" });
+		createdKeys.push(reviewParent.itemKey);
+		const reviewAttachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: reviewParent.itemKey, title: "Submitted PDF" });
+		createdKeys.push(reviewAttachment.itemKey);
+		const reviewPdf = await createPdf("Submitted file stays private and available");
+		const reviewStage = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "submitted.pdf", expectedSizeBytes: reviewPdf.byteLength, expectedSha256: fileHash(reviewPdf), maxPdfBytes: 10_000_000 });
+		reviewStorage.privateFiles.set(reviewStage.upload.path, reviewPdf);
+		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewStage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
+		const actor = { userId: "review-test-creator", role: "creator" } as const;
+		const captured = await submitItemReview(db, reviewParent.itemKey, actor);
+		assert(captured.snapshot.records.length === 2, "Submission omitted an unpublished attachment");
+		const replacementPdf = await createPdf("A later working file");
+		const reviewReplacement = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "replacement.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
+		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Replacing a draft deleted the submitted PDF");
+		reviewStorage.privateFiles.set(reviewReplacement.upload.path, replacementPdf);
+		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewReplacement.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" });
+		assert(approvedReview.state === "published", "Review approval did not finish");
+		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
+		const displayedFile = displayedSnapshot.frozenAttachments.find((attachment) => attachment.key === reviewAttachment.itemKey);
+		assert(displayedFile?.fileDraft?.actualSha256 === fileHash(reviewPdf), "Submitted-version data showed the newer PDF");
+		assert(displayedFile.sourceFileUrl?.includes(captured.id), "Submitted PDF link was not bound to its review");
+		const [approvedFile] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
+		assert(approvedFile?.sourceObjectPath === reviewStage.upload.path, "Approval published the later working PDF");
+		const [remainingUpload] = await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, reviewAttachment.itemKey));
+		assert(remainingUpload?.objectPath === reviewReplacement.upload.path, "Approval discarded the later working PDF");
+		await discardNativePdfDraft(db, reviewStorage, reviewAttachment.itemKey);
+		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Discarding a later draft deleted the submitted PDF");
+		assert(!reviewStorage.privateFiles.has(reviewReplacement.upload.path), "Discarding an unreferenced working PDF leaked its object");
+		const nextReview = await submitItemReview(db, reviewParent.itemKey, actor);
+		const withdrawn = await resolveItemReview(db, { reviewId: nextReview.id, expectedRevision: nextReview.revision, action: "withdrawn" }, actor);
+		assert(withdrawn.state === "withdrawn", "Creator could not withdraw their review");
+		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
+		const [stillPublic] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
+		assert(stillPublic?.sha256 === fileHash(reviewPdf), "Staging removal changed the public file before approval");
+		assert(reviewStorage.publicFiles.has(stillPublic.objectPath), "Staging removal deleted the public PDF");
+		await undoNativePdfRemoval(db, reviewAttachment.itemKey);
+		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
+		const removalReview = await submitItemReview(db, reviewParent.itemKey, actor);
+		const laterUpload = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "after-removal.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
+		reviewStorage.privateFiles.set(laterUpload.upload.path, replacementPdf);
+		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: laterUpload.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		await approveItemReview(db, reviewStorage, { reviewId: removalReview.id, expectedRevision: removalReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" });
+		const [removedFile] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
+		const [preservedUpload] = await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, reviewAttachment.itemKey));
+		assert(!removedFile, "Approved removal left the old PDF published");
+		assert(preservedUpload?.objectPath === laterUpload.upload.path && reviewStorage.privateFiles.has(laterUpload.upload.path), "Approving a removal discarded a later working upload");
+		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Approving removal deleted an earlier submitted PDF");
+
 
 		const parentDraft = await createNativeItemDraft(db, {
 			itemType: "Report",
@@ -1144,6 +1217,8 @@ async function verify() {
 		);
 	} finally {
 		if (createdKeys.length > 0) {
+			await db.delete(itemReview).where(inArray(itemReview.itemKey, createdKeys));
+			await db.delete(itemPublishingChoice).where(inArray(itemPublishingChoice.itemKey, createdKeys));
 			await db
 				.delete(publicationSyncJob)
 				.where(inArray(publicationSyncJob.itemKey, createdKeys));

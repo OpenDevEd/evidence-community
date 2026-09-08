@@ -116,7 +116,7 @@ type AdminRequest = {
 	cookies: { get(name: string): { value: string } | undefined };
 };
 
-export async function requireAdminPermission(
+export async function readAdminPermission(
 	request: AdminRequest,
 	permission: AdminPermission,
 ) {
@@ -124,20 +124,24 @@ export async function requireAdminPermission(
 		request.cookies.get(adminSessionCookieName())?.value,
 		permission,
 	);
-	if (authorization.status === "authorized") return null;
-  if (authorization.status === "unavailable") return NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify library access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS });
+	if (authorization.status === "authorized") return { session: authorization.session, denied: null };
+  if (authorization.status === "unavailable") return { session: null, denied: NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify library access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS }) };
 	if (authorization.status === "forbidden") {
-		return adminError({
+		return { session: null, denied: adminError({
 			code: "forbidden",
 			message: permission === ADMIN_PUBLISH_PERMISSION ? "An Editor or Owner must publish this change." : "Only a library Owner can do this.",
 			status: 403,
-		});
+		}) };
 	}
-	return adminError({
+	return { session: null, denied: adminError({
 		code: "unauthorized",
 		message: "Open this library from OpenScholar to continue.",
 		status: 401,
-	});
+	}) };
+}
+
+export async function requireAdminPermission(request: AdminRequest, permission: AdminPermission) {
+	return (await readAdminPermission(request, permission)).denied;
 }
 
 /** Shared content-permission guard for every current admin data route. */

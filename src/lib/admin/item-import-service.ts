@@ -1,5 +1,5 @@
-import { itemDraft } from "@opendeved/evidence-library-core";
-import { inArray, or, sql } from "drizzle-orm";
+import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
+import { eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { reserveItemIdentity } from "@/db/record-identity";
@@ -329,7 +329,10 @@ export async function previewImportRecords(
 	]);
 	// Attachments, notes and annotations belong to a parent record and are
 	// out of scope for imports.
-	const entries = [...doiEntries.flat(), ...fileEntries.flat()].filter(
+	const entries = [
+		...doiEntries.flat().map((entry) => ({ ...entry, method: "doi" as const })),
+		...fileEntries.flat().map((entry) => ({ ...entry, method: "file" as const })),
+	].filter(
 		(entry) =>
 			!("zoteroItem" in entry) ||
 			isTopLevelAdminItemType(String(entry.zoteroItem.itemType)),
@@ -342,7 +345,7 @@ export async function previewImportRecords(
 
 	const records = entries.map((entry, index): AdminImportPreviewRecord & DuplicateCandidate => {
 		const id = String(index + 1);
-		const base = { creators: [], id, itemType: null, payload: null, source: entry.source, title: null, year: null };
+		const base = { creators: [], id, method: entry.method, itemType: null, payload: null, source: entry.source, title: null, year: null };
 		if (!("zoteroItem" in entry)) {
 			return { ...base, identifiers: null, message: entry.message, state: "unresolved" as const };
 		}
@@ -387,6 +390,7 @@ export async function commitImportRecords(
 	type PreparedRecord = DuplicateCandidate & {
 		fields?: AdminFieldErrors;
 		id: string;
+		method: "doi" | "file";
 		message?: string;
 		payload: Record<string, unknown> | null;
 	};
@@ -404,6 +408,7 @@ export async function commitImportRecords(
 			}
 			return {
 				id: record.id,
+				method: record.method,
 				identifiers: importIdentifiers(validated.payload),
 				payload: validated.payload,
 				state: "ready" as const,
@@ -413,6 +418,7 @@ export async function commitImportRecords(
 			return {
 				fields: error.fields,
 				id: record.id,
+				method: record.method,
 				identifiers: null,
 				message: error.message,
 				payload: null,
@@ -448,12 +454,13 @@ export async function commitImportRecords(
 		// its response was lost; a schema-level import id would close that.
 		const keys = new Map<string, string>();
 		for (const record of ready) {
-			keys.set(
-				record.id,
-				await reserveItemIdentity(transaction, {
-					sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
-				}),
-			);
+			const key = await reserveItemIdentity(transaction, {
+				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
+			});
+			await transaction.update(itemIdentity)
+				.set({ kind: "imported", importMethod: record.method })
+				.where(eq(itemIdentity.key, key));
+			keys.set(record.id, key);
 		}
 		if (ready.length) {
 			await transaction.insert(itemDraft).values(
