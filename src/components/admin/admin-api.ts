@@ -1,6 +1,8 @@
+"use client";
+
+import { mutate } from "swr";
 import type { SavedReview, PublishingChoice, ReviewRecord } from "@/lib/admin/review-contract";
 import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
-"use client";
 
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import type {
@@ -845,7 +847,9 @@ export async function getAdminReview(id: string) {
 	return (await requestJson<{ snapshot: AdminReviewSnapshot }>(`/api/admin/reviews/${encodeURIComponent(id)}`)).snapshot;
 }
 export async function submitAdminReview(key: string) {
-	return (await requestJson<{ review: SavedReview }>(`/api/admin/items/${encodeURIComponent(key)}/review`, { method: "POST" })).review;
+	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/items/${encodeURIComponent(key)}/review`, { method: "POST" } )).review;
+	void mutate("admin-review-count").catch(() => undefined);
+	return review;
 }
 export async function updateAdminReview(id: string, body:
 	| { action: "approve"; expectedRevision: number; zenodoFileChange?: "minor_correction" }
@@ -853,11 +857,17 @@ export async function updateAdminReview(id: string, body:
 	| { action: "returned" | "withdrawn"; expectedRevision: number; note?: string }
 	| { action: "resolve-conflicts"; expectedRevision: number; drafts: { itemKey: string; generation: string | null; draftRevision: number | null }[] }
 ) {
-	return (await requestJson<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(body) })).review;
+	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(body) } )).review;
+	void mutate("admin-review-count").catch(() => undefined);
+	return review;
 }
 export async function getAdminPublishingChoice(key: string) {
 	return (await requestJson<{ choice: PublishingChoice | null }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`)).choice;
 }
 export async function saveAdminPublishingChoice(key: string, choice: PublishingChoice) {
 	return (await requestJson<{ choice: PublishingChoice }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`, { method: "PUT", body: JSON.stringify(choice) })).choice;
+}
+
+export async function getAdminReviewCount() {
+	return (await requestJson<{ count: number }>("/api/admin/reviews")).count;
 }

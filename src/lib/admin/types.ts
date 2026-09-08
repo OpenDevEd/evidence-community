@@ -258,6 +258,7 @@ export type AdminItemListPage = {
 };
 
 export type AdminItemViewFilters = {
+	reviewQueue: boolean;
 	filters: import("./item-list-contract").AdminItemFilter[];
 	query: string;
 	sort: import("./item-list-contract").AdminItemSortColumnId;

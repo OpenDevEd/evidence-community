@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 		const { searchParams } = request.nextUrl;
 		const listRequest = parseAdminItemListRequest({
 			cursor: searchParams.get("cursor"),
+			reviewQueue: searchParams.get("review") === "pending",
 			filters: jsonParameter(searchParams, "filters"),
 			pageSize: searchParams.get("pageSize") ?? undefined,
 			requestedColumns: jsonParameter(searchParams, "requestedColumns"),

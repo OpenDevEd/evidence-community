@@ -47,6 +47,7 @@ function buildListSearchParams(
 ) {
 	return new URLSearchParams({
 		...(cursor ? { cursor } : {}),
+		...(filters.reviewQueue ? { review: "pending" } : {}),
 		filters: JSON.stringify(filters.filters),
 		requestedColumns: JSON.stringify(requestedColumns),
 		search: filters.query,
@@ -129,7 +130,9 @@ export function useAdminItemList(
 						return next.size === current.size ? current : next;
 					});
 					const firstVisibleKey = page.items[0]?.key ?? null;
-					if (!selectionInitialized.current && firstVisibleKey) {
+					if (filters.reviewQueue) {
+						void setSelectedKeyInUrl((current) => current && visibleKeys.has(current) ? current : firstVisibleKey, { history: "replace" });
+					} else if (!selectionInitialized.current && firstVisibleKey) {
 						selectionInitialized.current = true;
 						void setSelectedKeyInUrl(
 							(current) => current ?? firstVisibleKey,

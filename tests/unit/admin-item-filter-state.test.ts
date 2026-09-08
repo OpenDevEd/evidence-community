@@ -50,6 +50,7 @@ describe("admin item filter URL state", () => {
 		});
 
 		expect(parseAdminItemViewFilters(searchParams)).toEqual({
+			reviewQueue: false,
 			filters: [
 				{ column: "state", operator: "anyOf", value: ["draft"] },
 				{ column: "year", operator: "between", value: [2020, 2026] },
@@ -81,6 +82,7 @@ describe("admin item filter URL state", () => {
 			"locale=en&search=old&sort=title",
 		);
 		const next = writeAdminItemViewFilters(searchParams, {
+			reviewQueue: true,
 			filters: [
 				{
 					column: "fileState",
@@ -94,6 +96,8 @@ describe("admin item filter URL state", () => {
 		});
 
 		expect(next.get("locale")).toBe("en");
+		expect(next.get("review")).toBe("pending");
+		expect(parseAdminItemViewFilters(next).reviewQueue).toBe(true);
 		expect(next.get("search")).toBe("reading");
 		expect(next.get("sort")).toBeNull();
 		expect(next.get("direction")).toBe("asc");

@@ -2249,9 +2249,12 @@ export default function AdminWorkbench({
 							</div>
 							<div className="min-h-0 flex-1">
 								<AdminNavigation
-									kind={singleAdminItemFilterValue(filters.filters, "kind") ?? "all"}
+									reviewQueue={filters.reviewQueue}
+									onSelectReviewQueue={() => setFilters((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
+									kind={filters.reviewQueue ? null : singleAdminItemFilterValue(filters.filters, "kind") ?? "all"}
 									onSelectKind={(kind) => setFilters((current) => ({
 										...current,
+										reviewQueue: false,
 										filters: setSingleAdminItemFilter(current.filters, "kind", kind === "all" ? null : kind),
 									}))}
 									collection={collectionFilter}

@@ -1,3 +1,4 @@
+import { itemReview } from "@/db/schema/review";
 import { itemIdentity } from "@opendeved/evidence-library-core";
 import {
 	and,
@@ -342,6 +343,7 @@ export function buildAdminItemListQuery(
 	const conditions = request.filters
 		.map(listFilter)
 		.filter((condition): condition is SQL => Boolean(condition));
+	if (request.reviewQueue) conditions.push(sql`EXISTS (SELECT 1 FROM ${itemReview} WHERE ${itemReview.itemKey} = ${adminItemListProjection.key} AND ${itemReview.state} = 'pending')`);
 	if (request.search) {
 		conditions.push(
 			sql`${adminItemListProjection.searchText} ILIKE ${containsPattern(request.search)} ESCAPE '\\'`,

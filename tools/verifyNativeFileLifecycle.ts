@@ -1,3 +1,5 @@
+import { getAdminItemListPage } from "../src/lib/admin/item-list-query";
+import { parseAdminItemListRequest } from "../src/lib/admin/item-list-contract";
 import { getAdminReviewSnapshot } from "../src/lib/admin/review-query";
 import { AdminValidationError } from "../src/lib/admin/errors";
 import { itemReview, itemPublishingChoice } from "../src/db/schema/review";
@@ -447,6 +449,9 @@ async function verify() {
 		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
 		const actor = { userId: "review-test-creator", role: "creator" } as const;
 		const captured = await submitItemReview(db, reviewParent.itemKey, actor);
+		const queued = await getAdminItemListPage(db, parseAdminItemListRequest({ reviewQueue: true }));
+		assert(queued.items.some((entry) => entry.key === reviewParent.itemKey), "Submitted root is missing from review queue");
+		assert(!queued.items.some((entry) => entry.key === reviewAttachment.itemKey || entry.key === noFileReview.itemKey), "Review queue includes an attachment or resolved review");
 		assert(captured.snapshot.records.length === 2, "Submission omitted an unpublished attachment");
 		const replacementPdf = await createPdf("A later working file");
 		const reviewReplacement = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "replacement.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
