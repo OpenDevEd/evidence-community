@@ -19,6 +19,7 @@ describe("admin item table preferences", () => {
 			"fileState",
 			"updated",
 			"itemType",
+			"kind",
 			"source",
 			"collections",
 			"tags",
@@ -66,7 +67,7 @@ describe("admin item table preferences", () => {
 			"tags",
 			"year",
 		]);
-		expect(new Set(preferences.columnOrder).size).toBe(15);
+		expect(new Set(preferences.columnOrder).size).toBe(16);
 		expect(preferences.columnVisibility.select).toBe(true);
 		expect(preferences.columnVisibility.title).toBe(true);
 		expect(preferences.columnVisibility.creators).toBe(false);

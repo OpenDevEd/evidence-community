@@ -32,16 +32,6 @@ type AdminItemListColumnDefinitionShape = {
 
 export const ADMIN_ITEM_LIST_COLUMNS = [
 	{
-		defaultVisible: false,
-		filterable: true,
-		filterOperators: ["anyOf"],
-		id: "kind",
-		kind: "enum",
-		label: "Kind",
-		optional: true,
-		sortable: false,
-	},
-	{
 		defaultVisible: true,
 		filterable: false,
 		filterOperators: [],
@@ -120,6 +110,16 @@ export const ADMIN_ITEM_LIST_COLUMNS = [
 		label: "Item type",
 		optional: true,
 		sortable: true,
+	},
+	{
+		defaultVisible: false,
+		filterable: true,
+		filterOperators: ["anyOf"],
+		id: "kind",
+		kind: "enum",
+		label: "Kind",
+		optional: true,
+		sortable: false,
 	},
 	{
 		defaultVisible: false,

@@ -35,6 +35,7 @@ describe("admin item list contract", () => {
 
 	it("applies the default list request through the public parser", () => {
 		expect(parseAdminItemListRequest({})).toEqual({
+            reviewQueue: false,
 			cursor: null,
 			filters: [],
 			pageSize: 50,
