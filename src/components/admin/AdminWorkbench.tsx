@@ -1867,20 +1867,6 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const bulkPublish = () =>
-		void runBusy(async () => {
-			const { failures, readyKeys } = await flushBatchDrafts([
-				...bulkKeys,
-			]);
-			await executeBatchMutation(
-				{ action: "publish", keys: [...readyKeys] },
-				{
-					changedLabels: ["record published", "records published"],
-					emptyMessage: "No records were published",
-				},
-				failures,
-			);
-		});
 
 	const bulkDelete = () => {
 		const keys = [...bulkKeys];
@@ -2087,18 +2073,17 @@ export default function AdminWorkbench({
 						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
 						role="group"
 					>
-					<Tooltip content="Import records">
+					<Tooltip content="Import Item">
 						<Button
-							aria-label="Import records"
-							className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0"
-							color="accent"
+							aria-label="Import Item"
+							className="h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3"
+							color="secondary"
 							isDisabled={busy}
-							isIconOnly
 							onPress={() => setImportOpen(true)}
 							size="xs"
 							variant="solid"
 						>
-							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} />
+							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} /><span className="hidden lg:inline">Import Item</span>
 						</Button>
 					</Tooltip>
 					<span aria-hidden className="h-10 w-px shrink-0 bg-white/25" />
@@ -2113,7 +2098,7 @@ export default function AdminWorkbench({
 					>
 						<PopoverTrigger>
 							<Button
-								aria-label="New item"
+								aria-label="Create Item"
 								className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0 font-semibold lg:w-auto lg:!min-w-0 lg:px-3"
 								color="accent"
 								size="xs"
@@ -2121,12 +2106,12 @@ export default function AdminWorkbench({
 							>
 								<HugeiconsIcon icon={Add01Icon} aria-hidden size={15} />
 								<span className="hidden lg:inline">
-									New item
+									Create Item
 								</span>
 							</Button>
 						</PopoverTrigger>
 						<PopoverContent
-							aria-label="New item"
+							aria-label="Create Item"
 							className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 						>
 							<div className="w-full">
@@ -2268,18 +2253,7 @@ export default function AdminWorkbench({
 									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
 									role="toolbar"
 								>
-										<Tooltip content="Publish selected">
-											<Button
-												aria-label="Publish selected"
-												isDisabled={busy || bulkKeys.size === 0}
-												isIconOnly
-												onPress={bulkPublish}
-												size="xs"
-												variant="transparent"
-											>
-												<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />
-											</Button>
-										</Tooltip>
+
 										<Tooltip
 											content={
 												bulkAssignmentScope
