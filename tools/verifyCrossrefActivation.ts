@@ -22,7 +22,7 @@ import {
 	ExternalCrossrefDoiError,
 	retryCrossrefPublication,
 } from "../src/lib/publication/crossref-activation-service";
-import { runCrossrefPublicationJobsOnce } from "../src/lib/publication/crossref-adapter";
+import { buildCrossrefPlan, runCrossrefPublicationJobsOnce } from "../src/lib/publication/crossref-adapter";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -434,24 +434,6 @@ async function verify(database: Database, client: Client) {
 		externalRows.rows[0]?.revision === "1" &&
 			externalRows.rows[0]?.targets === "0",
 		"Rejected activation left committed publication state",
-	);
-	await seedItem(client, { key: "CRACTAAG", itemType: "Artwork" });
-	try {
-		await activateCrossrefPublication(database, "CRACTAAG", config);
-		throw new Error("An unsupported item type was accepted");
-	} catch (error) {
-		if (!(error instanceof CrossrefActivationValidationError)) throw error;
-	}
-	const rejectedType = await client.query<{
-		revision: string;
-		targets: string;
-	}>(
-		`SELECT i."revision", (SELECT count(*) FROM "publicationTarget" WHERE "itemKey" = i."key") AS targets FROM "item" i WHERE i."key" = 'CRACTAAG'`,
-	);
-	assert(
-		rejectedType.rows[0]?.revision === "1" &&
-			rejectedType.rows[0]?.targets === "0",
-		"Unsupported metadata consumed a DOI or left activation state",
 	);
 	await seedItem(client, { key: "CRACTAAH" });
     await client.query(`UPDATE "itemIdentity" SET kind = 'created' WHERE key = 'CRACTAAH'`);
@@ -1148,6 +1130,12 @@ async function verifyDraftReservation(database: Database, client: Client) {
  assert(activation.doi === reservations[0].doi, "Activation replaced the reserved DOI");
  const activated = await client.query(`SELECT t."activatedAt", i."DOI", (SELECT count(*)::int FROM "publicationIdentifier" WHERE "itemKey" = $1) AS identifiers FROM "publicationTarget" t JOIN item i ON i.key = t."itemKey" WHERE t."itemKey" = $1 AND t.provider = 'crossref'`, [draft.itemKey]);
  assert(activated.rows[0].activatedAt && activated.rows[0].DOI === reservations[0].doi && activated.rows[0].identifiers === 1, "Activation did not enable the original identifier");
+    await seedItem(client, { key: "CRACTAAG", itemType: "Artwork" });
+    const invalidActivation = await activateCrossrefPublication(database, "CRACTAAG", config);
+    assert(invalidActivation.job !== null, "Provider validation prevented saving the activation intent");
+    const invalidPlan = await buildCrossrefPlan(database, "CRACTAAG", config);
+    assert(invalidPlan.plan.status === "needs_attention", "Unsupported Crossref metadata was allowed to publish");
+
 }
 
 async function verifyIsolatedDatabase() {

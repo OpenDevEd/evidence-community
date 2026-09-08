@@ -1,3 +1,5 @@
+import { libraryConfigSchema } from "../src/config/library-config/schema";
+import { maximalLibraryConfig } from "../tests/fixtures/library-config";
 import { getAdminItemListPage } from "../src/lib/admin/item-list-query";
 import { parseAdminItemListRequest } from "../src/lib/admin/item-list-contract";
 import { getAdminReviewSnapshot } from "../src/lib/admin/review-query";
@@ -62,6 +64,7 @@ import {
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
+const reviewConfig = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] });
 const PUBLICATION_TAGS = ["publish-record"] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -432,12 +435,18 @@ async function verify() {
 		assert(choiceRequired, "Created item submission accepted a missing identifier choice");
 		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
 		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor);
+        await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
 		let creatorDenied = false;
-		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor); }
+		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor, reviewConfig); }
 		catch (error) { creatorDenied = error instanceof AdminValidationError; }
 		assert(creatorDenied, "Creator could approve a review");
-		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" });
+		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" }, reviewConfig);
 		assert(noFileApproval.state === "published", "A PDF was required to publish a review");
+        const activatedTargets = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, noFileDraft.itemKey));
+        assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");
+        const activationJobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, noFileDraft.itemKey));
+        assert(activationJobs.length === 2 && activationJobs.every(job => job.processedAt === null), "Approval failed to queue both providers without files");
+
 		const reviewParent = await createNativeItemDraft(db, { itemType: "Report", title: "Review file parent" });
 		createdKeys.push(reviewParent.itemKey);
 		const reviewAttachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: reviewParent.itemKey, title: "Submitted PDF" });
@@ -458,7 +467,7 @@ async function verify() {
 		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Replacing a draft deleted the submitted PDF");
 		reviewStorage.privateFiles.set(reviewReplacement.upload.path, replacementPdf);
 		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewReplacement.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" });
+		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
 		assert(approvedReview.state === "published", "Review approval did not finish");
 		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
 		const displayedFile = displayedSnapshot.frozenAttachments.find((attachment) => attachment.key === reviewAttachment.itemKey);
@@ -484,7 +493,7 @@ async function verify() {
 		const laterUpload = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "after-removal.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
 		reviewStorage.privateFiles.set(laterUpload.upload.path, replacementPdf);
 		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: laterUpload.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		await approveItemReview(db, reviewStorage, { reviewId: removalReview.id, expectedRevision: removalReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" });
+		await approveItemReview(db, reviewStorage, { reviewId: removalReview.id, expectedRevision: removalReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
 		const [removedFile] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
 		const [preservedUpload] = await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, reviewAttachment.itemKey));
 		assert(!removedFile, "Approved removal left the old PDF published");
@@ -876,16 +885,12 @@ async function verify() {
 					isNull(publicationSyncJob.supersededAt),
 				),
 			);
-		assert(
-			activePublicationJobsAfterFileUnpublish.length === 1 &&
-				activePublicationJobsAfterFileUnpublish[0]?.provider ===
-					"crossref" &&
-				activePublicationJobsAfterFileUnpublish[0].reason ===
-					"file_changed" &&
-				activePublicationJobsAfterFileUnpublish[0].canonicalRevision ===
-					parentAfterFileUnpublish?.revision,
-			"File unpublish did not leave Zenodo waiting for a file",
-		);
+        assert(
+            activePublicationJobsAfterFileUnpublish.length === 2 &&
+            activePublicationJobsAfterFileUnpublish.every(job => job.reason === "file_changed" && job.canonicalRevision === parentAfterFileUnpublish?.revision) &&
+            activePublicationJobsAfterFileUnpublish.some(job => job.provider === "zenodo" && job.fileRevision === null),
+            "File removal did not queue the updated archive state",
+        );
 		storage.publicUploadHook = async () => {
 			await db
 				.delete(itemFileDraft)

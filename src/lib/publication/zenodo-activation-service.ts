@@ -480,80 +480,100 @@ export async function activateZenodoPublication(
 	if (preflight.externalDoi) {
 		await assertDoiResolves(preflight.externalDoi, options.resolveDoi);
 	}
-	return database.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
-		const snapshot = await readPublicationRepositorySnapshot(
+	return database.transaction((transaction) =>
+		activateZenodoPublicationInTransaction(
 			transaction,
 			itemKey,
-			config.services.publication.crossref.environment,
-		);
-		const record = snapshot.record;
-		if (!record) throw new PublicationItemNotFoundError(itemKey);
-		const now = new Date();
-		const prepared = prepareZenodoActivation({
-			snapshot,
 			config,
-			zenodo,
-			now,
 			requestedPolicy,
-		});
-		const { externalDoi, fileRevision, policy, waitingOn } = prepared;
-		if (externalDoi !== preflight.externalDoi) {
+			requestedBy,
+			preflight.externalDoi,
+		),
+	);
+}
+
+/** External DOI adoption requires the caller's completed preflight. Created items use null. */
+export async function activateZenodoPublicationInTransaction(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	config: PublicationConfig,
+	requestedPolicy: ZenodoIdentifierPolicy | undefined,
+	requestedBy: string,
+	checkedExternalDoi: string | null,
+): Promise<ZenodoActivationReceipt> {
+	const zenodo = requireZenodoConfig(config);
+	await lockItemMutation(transaction, itemKey);
+	const snapshot = await readPublicationRepositorySnapshot(
+		transaction,
+		itemKey,
+		config.services.publication.crossref.environment,
+	);
+	const record = snapshot.record;
+	if (!record) throw new PublicationItemNotFoundError(itemKey);
+	const now = new Date();
+	const prepared = prepareZenodoActivation({
+		snapshot,
+		config,
+		zenodo,
+		now,
+		requestedPolicy,
+	});
+	const { externalDoi, fileRevision, policy, waitingOn } = prepared;
+	if (externalDoi !== checkedExternalDoi) {
+		throw new ZenodoActivationValidationError(
+			"The record DOI changed while it was being checked. Reload the record and try again.",
+			{ DOI: "Reload this record before activating Zenodo." },
+		);
+	}
+	if (externalDoi) {
+		const [collision] = await transaction
+			.select({ itemKey: publicationIdentifier.itemKey })
+			.from(publicationIdentifier)
+			.where(
+				and(
+					eq(publicationIdentifier.doi, externalDoi),
+					ne(publicationIdentifier.itemKey, itemKey),
+				),
+			)
+			.limit(1);
+		if (collision) {
 			throw new ZenodoActivationValidationError(
-				"The record DOI changed while it was being checked. Reload the record and try again.",
-				{ DOI: "Reload this record before activating Zenodo." },
+				`The DOI ${externalDoi} already belongs to record ${collision.itemKey}.`,
+				{ DOI: "Use the DOI on only one local record." },
 			);
 		}
-		if (externalDoi) {
-			const [collision] = await transaction
-				.select({ itemKey: publicationIdentifier.itemKey })
-				.from(publicationIdentifier)
-				.where(
-					and(
-						eq(publicationIdentifier.doi, externalDoi),
-						ne(publicationIdentifier.itemKey, itemKey),
-					),
-				)
-				.limit(1);
-			if (collision) {
-				throw new ZenodoActivationValidationError(
-					`The DOI ${externalDoi} already belongs to record ${collision.itemKey}.`,
-					{ DOI: "Use the DOI on only one local record." },
-				);
-			}
-		}
-		assertZenodoPolicyMayChange(snapshot, policy);
-		await saveZenodoActivationTarget(transaction, {
-			lockedExternalDoi: externalDoi,
-			itemKey,
-			policy,
-			requestedBy,
-			now,
-		});
-		const job = await selectZenodoActivationJob(transaction, {
-			itemKey,
-			policy,
-			canonicalRevision: record.revision,
-			fileRevision,
-			waitingOn,
-			jobs: snapshot.jobs,
-			now,
-		});
-		const providerRecordExists = snapshot.states.some(
-			(state) =>
-				state.provider === "zenodo" &&
-				state.environment === "sandbox" &&
-				Boolean(state.zenodoRecordId),
-		);
-		return receipt({
-			itemKey,
-			identifierPolicy: policy,
-			canonicalRevision: record.revision,
-			fileRevision,
-			waitingOn,
-			job,
-			providerRecordExists,
-		});
+	}
+	assertZenodoPolicyMayChange(snapshot, policy);
+	await saveZenodoActivationTarget(transaction, {
+		lockedExternalDoi: externalDoi,
+		itemKey,
+		policy,
+		requestedBy,
+		now,
+	});
+	const job = await selectZenodoActivationJob(transaction, {
+		itemKey,
+		policy,
+		canonicalRevision: record.revision,
+		fileRevision,
+		waitingOn,
+		jobs: snapshot.jobs,
+		now,
+	});
+	const providerRecordExists = snapshot.states.some(
+		(state) =>
+			state.provider === "zenodo" &&
+			state.environment === "sandbox" &&
+			Boolean(state.zenodoRecordId),
+	);
+	return receipt({
+		itemKey,
+		identifierPolicy: policy,
+		canonicalRevision: record.revision,
+		fileRevision,
+		waitingOn,
+		job,
+		providerRecordExists,
 	});
 }
 
