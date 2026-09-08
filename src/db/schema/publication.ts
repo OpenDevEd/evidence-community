@@ -281,6 +281,9 @@ export const publicationSyncState = pgTable(
 		pendingFilename: varchar("pendingFilename", { length: 255 }),
 		pendingSubmittedAt: timestampWithTimezone("pendingSubmittedAt"),
 		pendingReason: text("pendingReason"),
+		unpublishedDraftDepositionId: varchar("unpublishedDraftDepositionId", {
+			length: 255,
+		}),
 		zenodoRecordId: varchar("zenodoRecordId", { length: 255 }),
 		zenodoParentId: varchar("zenodoParentId", { length: 255 }),
 		zenodoVersionDoi: varchar("zenodoVersionDoi", { length: 255 }),
@@ -318,6 +321,7 @@ export const publicationSyncState = pgTable(
 					AND ${table.lastFileManifestHash} IS NULL
 					AND ${table.lastFileManifestSnapshot} IS NULL
 					AND ${table.zenodoRecordId} IS NULL
+                    AND ${table.unpublishedDraftDepositionId} IS NULL
 					AND ${table.zenodoParentId} IS NULL
 					AND ${table.zenodoVersionDoi} IS NULL
 					AND ${table.zenodoConceptDoi} IS NULL

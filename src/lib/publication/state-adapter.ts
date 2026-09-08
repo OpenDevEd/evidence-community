@@ -21,7 +21,8 @@ export function targetFor(
 		(target) =>
 			target.provider === provider &&
 			target.environment === environment &&
-			target.deactivatedAt === null && target.activatedAt !== null,
+			target.deactivatedAt === null &&
+			target.activatedAt !== null,
 	);
 }
 
@@ -139,6 +140,13 @@ export function providerState(
 		zenodo: {
 			environment: config.zenodo.environment,
 			identifierPolicy,
+			...(row?.unpublishedDraftDepositionId
+				? {
+						unpublishedDraft: {
+							depositionId: row.unpublishedDraftDepositionId,
+						},
+					}
+				: {}),
 			...(row?.zenodoFirstPublishedAt
 				? { firstPublishedAt: row.zenodoFirstPublishedAt }
 				: {}),

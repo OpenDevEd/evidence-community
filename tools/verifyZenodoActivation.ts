@@ -182,6 +182,11 @@ function successfulZenodoProvider(
 		return draft;
 	};
 	return {
+		prepareEmptyDraft: async (request) => {
+			const draft = { depositionId: "90001", draftRecordId: "90001" };
+			await request.onPreparedDraft?.(draft);
+			return draft;
+		},
 		verifyPublishedState: async () => ({ status: "matched" }),
 		findRecordByDoi: async () => ({ status: "not_found" }),
 		deleteUnpublishedDraft: async () => undefined,
@@ -203,7 +208,7 @@ function successfulZenodoProvider(
 	};
 }
 
-function failingAfterJournalProvider(): ZenodoWriter {
+function failingAfterJournalProvider(): ZenodoPublicationProvider {
 	const provider = successfulZenodoProvider();
 	return {
 		...provider,
@@ -219,7 +224,7 @@ function failingAfterJournalProvider(): ZenodoWriter {
 	};
 }
 
-function publishTimeoutProvider(): ZenodoWriter {
+function publishTimeoutProvider(): ZenodoPublicationProvider {
 	const provider = successfulZenodoProvider();
 	return {
 		...provider,
@@ -231,7 +236,7 @@ function publishTimeoutProvider(): ZenodoWriter {
 	};
 }
 
-function forbidPrepareProvider(): ZenodoWriter {
+function forbidPrepareProvider(): ZenodoPublicationProvider {
 	const provider = successfulZenodoProvider();
 	const unexpectedPrepare = async () => {
 		throw new Error("Recovery prepared a second Zenodo draft");
@@ -245,7 +250,7 @@ function forbidPrepareProvider(): ZenodoWriter {
 	};
 }
 
-function collisionProvider(doi: string): ZenodoWriter {
+function collisionProvider(doi: string): ZenodoPublicationProvider {
 	const provider = successfulZenodoProvider();
 	return {
 		...provider,
@@ -265,7 +270,7 @@ function metadataUpdateProvider(input: {
 	parentId: string;
 	versionDoi: string;
 	conceptDoi: string;
-}): ZenodoWriter {
+}): ZenodoPublicationProvider {
 	const provider = successfulZenodoProvider();
 	return {
 		...provider,
@@ -315,14 +320,20 @@ async function verify(database: Database, client: Client) {
 		fileless.state === "waiting_for_file",
 		"Fileless activation did not wait",
 	);
-	assert(fileless.job === null, "Fileless activation created a provider job");
+	assert(
+		fileless.job !== null,
+		"Fileless activation did not queue draft creation",
+	);
 	const repeated = await activateZenodoPublication(
 		database,
 		"ZENACTAA",
 		config,
 		"mint-zenodo",
 	);
-	assert(repeated.job === null, "Repeated fileless activation created a job");
+	assert(
+		repeated.job?.id === fileless.job.id,
+		"Repeated activation duplicated the draft job",
+	);
 	const filelessRows = await client.query<{ targets: string; jobs: string }>(
 		`SELECT
 			(SELECT count(*) FROM "publicationTarget" WHERE "itemKey" = 'ZENACTAA')::text AS targets,
@@ -330,8 +341,106 @@ async function verify(database: Database, client: Client) {
 	);
 	assert(
 		filelessRows.rows[0]?.targets === "1" &&
-			filelessRows.rows[0]?.jobs === "0",
+			filelessRows.rows[0]?.jobs === "1",
 		"Fileless activation was not idempotent",
+	);
+
+	await client.query(
+		`UPDATE "item" SET "abstractNote" = NULL WHERE "key" = 'ZENACTAA'`,
+	);
+	let emptyDraftCalls = 0;
+	const emptyProvider = successfulZenodoProvider();
+	const emptyOutcomes = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(new Map()),
+		{
+			provider: {
+				...emptyProvider,
+				prepareEmptyDraft: async (request) => {
+					emptyDraftCalls += 1;
+					return emptyProvider.prepareEmptyDraft(request);
+				},
+				publishDraft: async () => {
+					throw new Error("A fileless draft must not publish");
+				},
+			},
+		},
+	);
+	assert(
+		emptyOutcomes[0]?.status === "waiting" && emptyDraftCalls === 1,
+		"Missing PDF and abstract prevented draft creation",
+	);
+	const draftState = await client.query<{
+		draft: string;
+		identifiers: string;
+	}>(
+		`SELECT "unpublishedDraftDepositionId" AS draft, (SELECT count(*)::text FROM "publicationIdentifier" WHERE "itemKey" = 'ZENACTAA') AS identifiers FROM "publicationSyncState" WHERE "itemKey" = 'ZENACTAA'`,
+	);
+	assert(
+		draftState.rows[0]?.draft === "90001" &&
+			draftState.rows[0]?.identifiers === "0",
+		"Empty draft was not saved independently of registered identifiers",
+	);
+	const activatedAgain = await activateZenodoPublication(
+		database,
+		"ZENACTAA",
+		config,
+		"mint-zenodo",
+	);
+	assert(
+		activatedAgain.job?.id === fileless.job.id,
+		"Activation after draft creation duplicated the job",
+	);
+	const draftBytes = new TextEncoder().encode("Approved archive file");
+	await client.query(
+		`UPDATE "item" SET "abstractNote" = 'Ready for archive', "revision" = 2 WHERE "key" = 'ZENACTAA'`,
+	);
+	await seedPublishedFile(client, "ZENACTAA", "ZENFILAA", draftBytes);
+	await activateZenodoPublication(
+		database,
+		"ZENACTAA",
+		config,
+		"mint-zenodo",
+	);
+	let continuedDraft: string | undefined;
+	const completed = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(new Map([["public/ZENFILAA.pdf", draftBytes]])),
+		{
+			provider: {
+				...emptyProvider,
+				prepareCreateRecord: async (request) => {
+					continuedDraft = request.draftDepositionId;
+					assert(
+						continuedDraft === "90001",
+						"The saved draft was not passed to publication",
+					);
+					const draft = {
+						depositionId: continuedDraft,
+						draftRecordId: continuedDraft,
+					};
+					await request.onPreparedDraft?.(draft);
+					return draft;
+				},
+			},
+		},
+	);
+	assert(
+		completed[0]?.status === "succeeded" && continuedDraft === "90001",
+		"Approved files did not complete the saved draft",
+	);
+	const completedState = await client.query<{
+		draft: string | null;
+		record: string;
+	}>(
+		`SELECT "unpublishedDraftDepositionId" AS draft, "zenodoRecordId" AS record FROM "publicationSyncState" WHERE "itemKey" = 'ZENACTAA'`,
+	);
+	assert(
+		completedState.rows[0]?.draft === null &&
+			completedState.rows[0]?.record === "90001",
+		"Published draft reference was not transferred to the record",
 	);
 
 	await seedParent(client, { key: "ZENACTAB", doi: "10.5555/library.2" });
@@ -348,7 +457,7 @@ async function verify(database: Database, client: Client) {
 	);
 	assert(
 		crossrefWaiting.state === "waiting_for_crossref" &&
-			crossrefWaiting.job === null,
+			crossrefWaiting.job !== null,
 		"Reserved Crossref DOI did not wait locally",
 	);
 	await client.query(
@@ -439,7 +548,8 @@ async function verify(database: Database, client: Client) {
 	);
 	assert(
 		changedPolicy.state === "waiting_for_crossref" &&
-			changedPolicy.job === null,
+			changedPolicy.job !== null &&
+			changedPolicy.job.id !== oldPolicy.job?.id,
 		"A policy change returned its superseded job",
 	);
 	const oldPolicyJob = await client.query<{ supersededAt: Date | null }>(
@@ -470,7 +580,8 @@ async function verify(database: Database, client: Client) {
 	);
 	assert(
 		afterUnpublish.state === "waiting_for_file" &&
-			afterUnpublish.job === null,
+			afterUnpublish.job !== null &&
+			afterUnpublish.job.id !== beforeUnpublish.job?.id,
 		"File removal left a stale job in the activation receipt",
 	);
 	const unpublishedJob = await client.query<{ supersededAt: Date | null }>(
@@ -497,12 +608,16 @@ async function verify(database: Database, client: Client) {
 	await client.query(
 		`DELETE FROM "itemFilePublication" WHERE "parentItemKey" = 'ZENACTAH'`,
 	);
-	try {
-		await retryZenodoPublication(database, "ZENACTAH", config);
-		throw new Error("A fileless Zenodo job was retried");
-	} catch (error) {
-		if (!(error instanceof ZenodoActivationValidationError)) throw error;
-	}
+	const filelessRetry = await retryZenodoPublication(
+		database,
+		"ZENACTAH",
+		config,
+	);
+	assert(
+		filelessRetry.job !== null &&
+			filelessRetry.state === "waiting_for_file",
+		"Failed draft creation could not be retried without a file",
+	);
 
 	await seedParent(client, { key: "ZENACTAI" });
 	await seedPublishedFile(client, "ZENACTAI", "ZENFILAI");
@@ -576,13 +691,19 @@ async function verify(database: Database, client: Client) {
 			},
 		},
 	);
-	assert(externalActivation.state === "queued", "The outside DOI did not queue");
-	const lockedExternalTarget = await client.query<{ lockedExternalDoi: string | null }>(
+	assert(
+		externalActivation.state === "queued",
+		"The outside DOI did not queue",
+	);
+	const lockedExternalTarget = await client.query<{
+		lockedExternalDoi: string | null;
+	}>(
 		`SELECT "lockedExternalDoi" FROM "publicationTarget" WHERE "itemKey" = 'ZENACTAJ'`,
 	);
 	assert(
 		checkedDoiUrls.join(",") === "https://doi.org/10.9999%2Fexternal-ok" &&
-			lockedExternalTarget.rows[0]?.lockedExternalDoi === "10.9999/external-ok",
+			lockedExternalTarget.rows[0]?.lockedExternalDoi ===
+				"10.9999/external-ok",
 		"Activation did not check and lock the outside DOI",
 	);
 	await client.query(
@@ -607,7 +728,8 @@ async function verify(database: Database, client: Client) {
 	assert(
 		changedExternalOutcome.some(
 			(outcome) =>
-				outcome.jobId === externalActivation.job?.id && outcome.status === "failed",
+				outcome.jobId === externalActivation.job?.id &&
+				outcome.status === "failed",
 		),
 		"A changed outside DOI was retried instead of failing permanently",
 	);
@@ -623,7 +745,8 @@ async function verify(database: Database, client: Client) {
 	);
 	assert(
 		changedExternalFailure.rows[0]?.deadLetteredAt != null &&
-			changedExternalFailure.rows[0]?.failureClass === "ZENODO_EXTERNAL_DOI_CHANGED",
+			changedExternalFailure.rows[0]?.failureClass ===
+				"ZENODO_EXTERNAL_DOI_CHANGED",
 		"The changed outside DOI did not leave a permanent failure record",
 	);
 
@@ -645,7 +768,10 @@ async function verify(database: Database, client: Client) {
 	const collisionTarget = await client.query(
 		`SELECT 1 FROM "publicationTarget" WHERE "itemKey" = 'ZENACTAK'`,
 	);
-	assert(collisionTarget.rowCount === 0, "A DOI collision saved a Zenodo target");
+	assert(
+		collisionTarget.rowCount === 0,
+		"A DOI collision saved a Zenodo target",
+	);
 
 	await seedParent(client, { key: "ZENACTAE" });
 	try {
@@ -782,17 +908,18 @@ async function verify(database: Database, client: Client) {
 		"A new Zenodo version DOI did not queue its Crossref relation update",
 	);
 	const relationPlan = await buildCrossrefPlan(database, "ZENWRKAA", config);
-	const crossrefSnapshot = relationPlan.plan.status === "write_required"
-		? relationPlan.plan.snapshots.crossrefPayload
-		: null;
+	const crossrefSnapshot =
+		relationPlan.plan.status === "write_required"
+			? relationPlan.plan.snapshots.crossrefPayload
+			: null;
 	assert(
 		crossrefSnapshot &&
 			typeof crossrefSnapshot === "object" &&
 			!Array.isArray(crossrefSnapshot) &&
 			(crossrefSnapshot as Record<string, unknown>).relation &&
-			JSON.stringify((crossrefSnapshot as Record<string, unknown>).relation).includes(
-				publishedState.rows[0]?.versionDoi ?? "missing",
-			),
+			JSON.stringify(
+				(crossrefSnapshot as Record<string, unknown>).relation,
+			).includes(publishedState.rows[0]?.versionDoi ?? "missing"),
 		"The Crossref plan omitted the current Zenodo version relation",
 	);
 	await client.query(
@@ -870,7 +997,9 @@ async function verify(database: Database, client: Client) {
 	);
 	const baseline = auditBaseline.rows[0];
 	assert(
-		baseline?.payloadHash && baseline.payloadSnapshot && baseline.fileManifestHash,
+		baseline?.payloadHash &&
+			baseline.payloadSnapshot &&
+			baseline.fileManifestHash,
 		"The Zenodo audit fixture has no saved provider state",
 	);
 	const auditConfig = {
@@ -1023,7 +1152,8 @@ async function verify(database: Database, client: Client) {
 	);
 	assert(
 		driftSettlement.rows[0]?.payloadHash === null &&
-			driftSettlement.rows[0]?.fileManifestHash === baseline.fileManifestHash &&
+			driftSettlement.rows[0]?.fileManifestHash ===
+				baseline.fileManifestHash &&
 			driftSettlement.rows[0]?.repairKey?.endsWith(
 				`audit:${driftAudit.rows[0]?.id}`,
 			),

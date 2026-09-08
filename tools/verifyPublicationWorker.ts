@@ -200,6 +200,11 @@ function successfulZenodoProvider(
 		return draft;
 	};
 	return {
+		prepareEmptyDraft: async (request) => {
+			const draft = { depositionId: "90001", draftRecordId: "90001" };
+			await request.onPreparedDraft?.(draft);
+			return draft;
+		},
 		verifyPublishedState: async () => ({ status: "matched" }),
 		findRecordByDoi: async () => ({ status: "not_found" }),
 		deleteUnpublishedDraft: async () => undefined,
@@ -578,7 +583,7 @@ async function verifyWorkerCycle(database: Database, client: Client) {
 	);
 	assert(crossref.job !== null, "Crossref activation did not create a job");
 	assert(
-		zenodo.state === "waiting_for_crossref" && zenodo.job === null,
+		zenodo.state === "waiting_for_crossref" && zenodo.job !== null,
 		"Zenodo did not wait for Crossref verification",
 	);
 
