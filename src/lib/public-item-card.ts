@@ -1,4 +1,4 @@
-import { and, eq, inArray, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
@@ -9,28 +9,24 @@ export async function getPublicItemCard(
 	key: string,
 	hiddenTags: readonly string[],
 ) {
-	const record = await database.query.item.findFirst({
-		where: and(
-			eq(item.key, key),
-			hiddenTags.length
-				? notExists(
-						database
-							.select({ key: itemToTag.itemKey })
-							.from(itemToTag)
-							.where(
-								and(
-									eq(itemToTag.itemKey, item.key),
-									inArray(
-										sql`lower(${itemToTag.tagName})`,
-										hiddenTags.map((tag) =>
-											tag.toLowerCase(),
-										),
-									),
-								),
+	const visibleTags = hiddenTags.length
+		? notExists(
+				database
+					.select({ key: itemToTag.itemKey })
+					.from(itemToTag)
+					.where(
+						and(
+							eq(itemToTag.itemKey, item.key),
+							inArray(
+								sql`lower(${itemToTag.tagName})`,
+								hiddenTags.map((tag) => tag.toLowerCase()),
 							),
-					)
-				: undefined,
-		),
+						),
+					),
+			)
+		: undefined;
+	const record = await database.query.item.findFirst({
+		where: and(eq(item.key, key), visibleTags),
 		columns: {
 			key: true,
 			revision: true,
@@ -52,5 +48,22 @@ export async function getPublicItemCard(
 		return null;
 	}
 	const { deleted: _deleted, parentItem: _parent, ...card } = record;
+	if (!card.PDFCoverPageImage) {
+		const attachment = await database.query.item.findFirst({
+			where: and(
+				eq(item.parentItem, key),
+				eq(item.deleted, 0),
+				isNotNull(item.PDFCoverPageImage),
+				visibleTags,
+			),
+			orderBy: asc(item.key),
+			columns: {
+				PDFCoverPageImage: true,
+				PDFCoverPageWidth: true,
+				PDFCoverPageHeight: true,
+			},
+		});
+		if (attachment) Object.assign(card, attachment);
+	}
 	return card;
 }

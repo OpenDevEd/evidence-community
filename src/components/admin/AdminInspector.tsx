@@ -1,4 +1,5 @@
 "use client";
+import { AuthorProfileLink } from "./AuthorProfiles";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
@@ -807,6 +808,7 @@ function CreatorsEditor({
 								</div>
 							</div>
 						)}
+						<AuthorProfileLink creator={creator} readOnly={readOnly} onChange={next => replaceCreator(index, next)} />
 						{rowError ? (
 							<p
 								id={rowErrorId}

@@ -321,15 +321,18 @@ function ItemAuthor({ author }: { author?: Author }) {
 		>
 			<LinkWithParams
 				href={
-					isAuthorFilterEnabled
+					author?.authorProfileId
+						? `/api/author-profiles/${encodeURIComponent(author.authorProfileId)}`
+						: isAuthorFilterEnabled
 						? getSafeReferrer(referrer)
 						: undefined
 				}
 				params={
-					fullName && isAuthorFilterEnabled
+					author?.authorProfileId ? undefined : fullName && isAuthorFilterEnabled
 						? { author: fullName, referrer: referrer ?? undefined }
 						: {}
 				}
+				isExternal={Boolean(author?.authorProfileId)}
 				className="opacity-100"
 			>
 				<ItemRow

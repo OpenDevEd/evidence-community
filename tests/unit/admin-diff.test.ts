@@ -221,3 +221,9 @@ describe("computeAdminDraftDiff", () => {
 		expect(computeAdminDraftDiff(base, payload, definition).links).toBeNull();
 	});
 });
+
+it("recognizes a profile association change even when the bibliographic author is unchanged", () => {
+	const creators = [{creatorType: "author", firstName: "Caitlin", lastName: "Mills"}];
+	const record = detail({published: {creators}});
+	expect(computeAdminDraftDiff(record, {creators: [{...creators[0], authorProfileId: "profile-id"}]}, definition).creators).toEqual(creators);
+});

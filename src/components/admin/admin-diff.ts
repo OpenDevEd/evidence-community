@@ -70,6 +70,7 @@ function normalizeCreators(value: unknown) {
 		)
 		.map((creator) => ({
 			creatorType: textValue(creator.creatorType).trim(),
+			authorProfileId: textValue(creator.authorProfileId).trim(),
 			firstName: textValue(creator.firstName).trim(),
 			lastName: textValue(creator.lastName).trim(),
 			name: textValue(creator.name).trim(),
