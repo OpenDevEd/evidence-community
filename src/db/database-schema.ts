@@ -1,3 +1,4 @@
+import * as authorAssociationTables from "./schema/author-associations";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as collectionRelations from "./schema/relations/collection";
@@ -30,6 +31,7 @@ import * as publicationTables from "./schema/publication";
 import * as reviewTables from "./schema/review";
 
 export const schema = {
+	...authorAssociationTables,
 	...reviewTables,
 	...adminItemListProjectionTable,
 	...itemTable,

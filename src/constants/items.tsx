@@ -1,5 +1,3 @@
-import { item } from "@/db/schema/tables/item";
-import { getTableColumns } from "drizzle-orm";
 export {
 	PLATFORM_SEARCH_SCOPE_OPTIONS as SCOPE_OPTIONS,
 } from "@/config/library-config/catalogs";
@@ -19,7 +17,3 @@ export const SORT_OPTIONS = [
 	{ key: "titleAZ", legacyKey: "title_asc", name: "Title A-Z", sort: "title:asc" },
 	{ key: "titleZA", legacyKey: "title_desc", name: "Title Z-A", sort: "title:desc" },
 ];
-
-export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
-	(col: any) => col.name
-);

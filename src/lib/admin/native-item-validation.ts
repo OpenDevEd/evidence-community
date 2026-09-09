@@ -42,6 +42,7 @@ function creatorSchema(allowIncomplete: boolean) {
 	return z
 		.object({
 			creatorType: z.string().min(1),
+			authorProfileId: z.string().trim().min(1).max(128).optional(),
 			firstName: z.string().optional(),
 			lastName: z.string().optional(),
 			name: z.string().optional(),

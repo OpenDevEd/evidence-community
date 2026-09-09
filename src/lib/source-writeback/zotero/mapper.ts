@@ -91,7 +91,9 @@ function creatorPayload(value: unknown, definition: ZoteroItemTypeDefinition) {
 				`Canonical writeback payload has a creator role that is invalid for ${definition.itemType}`,
 			);
 		}
-		return creator;
+		const { authorProfileId: _authorProfileId, ...bibliographicCreator } =
+			creator as Record<string, unknown>;
+		return bibliographicCreator;
 	});
 }
 

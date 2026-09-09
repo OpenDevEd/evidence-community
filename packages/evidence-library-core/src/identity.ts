@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 export const CANONICAL_RECORD_KEY_ALPHABET =
 	"23456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
 export const CANONICAL_RECORD_KEY_LENGTH = 8;
@@ -37,7 +35,7 @@ export function generateCanonicalRecordKey(): string {
 	const output: string[] = [];
 
 	while (output.length < CANONICAL_RECORD_KEY_LENGTH) {
-		for (const byte of randomBytes(CANONICAL_RECORD_KEY_LENGTH)) {
+		for (const byte of crypto.getRandomValues(new Uint8Array(CANONICAL_RECORD_KEY_LENGTH))) {
 			const unbiasedLimit = 256 - (256 % alphabet.length);
 			if (byte >= unbiasedLimit) {
 				continue;

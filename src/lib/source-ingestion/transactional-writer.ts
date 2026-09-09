@@ -1,3 +1,4 @@
+import { preserveCreatorProfileLinks } from "@/lib/admin/creator-profile-links";
 import {
 	collectionIdentity,
 	collectionSourceLink,
@@ -1397,7 +1398,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 						dirtyFields,
 						item: preserveForeignOwnedFileFields(
 							maskDirtyItemFields(
-								normalized.item,
+								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators) },
 								existing,
 								dirtyFields,
 							),

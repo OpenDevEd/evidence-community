@@ -43,6 +43,7 @@ const colors = {
 	link: runtimePalette("link"),
 	collection: runtimePalette("collection"),
 	doi: runtimePalette("doi"),
+	zenodo: "#1682D4",
 	tertiary: runtimePalette("tertiary"),
 	card: runtimePalette("card"),
 	card_light: runtimePalette("card_light"),
@@ -87,6 +88,7 @@ const config: Config = {
 				chat: "minmax(0, 1fr) auto",
 			},
 			spacing: {
+				"collection-tooltip": "200px",
 				// Where the header sits once it has shrunk for the chat.
 				split: "1.625rem",
 				// The library's AI panel column.
@@ -96,11 +98,11 @@ const config: Config = {
 				// Small icon sizes shared by chat and citation controls.
 				"icon-md": "1.125rem",
 				"icon-xs": "0.6875rem",
-                "catalogue-icon": "13px",
+				"catalogue-icon": "13px",
 			},
 			fontSize: {
 				"inspector-title": "17px",
-                "catalogue-label": "12px",
+				"catalogue-label": "12px",
 				citation: "0.68rem",
 			},
 			borderRadius: {
@@ -109,7 +111,8 @@ const config: Config = {
 			transitionProperty: {
 				"background-text": "background-color, color",
 				"background-fill": "background-color",
-				"filter-control": "background-color, border-color, color, box-shadow",
+				"filter-control":
+					"background-color, border-color, color, box-shadow",
 				// What moves when the chat opens beside the results.
 				chrome: "transform, border-radius",
 				header: "height, padding",
@@ -188,7 +191,7 @@ const config: Config = {
 				shimmer: "200% 100%",
 			},
 			maxHeight: {
-                "column-picker": "420px",
+				"column-picker": "420px",
 				"admin-filter": "calc(100dvh - 72px)",
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",

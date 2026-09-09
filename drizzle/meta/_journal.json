@@ -393,6 +393,13 @@
       "when": 1788914038504,
       "tag": "0055_isolate_doi_namespaces",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1788919199215,
+      "tag": "0056_author_association_delivery",
+      "breakpoints": true
     }
   ]
 }

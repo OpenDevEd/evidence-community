@@ -12,6 +12,25 @@ import {
 } from "@/lib/source-writeback/zotero/mapper";
 
 describe("Zotero writeback mapping", () => {
+	it("omits library profile associations from Zotero creators without changing their names", () => {
+		const creator = {
+			creatorType: "author",
+			firstName: "Caitlin",
+			lastName: "Mills",
+			authorProfileId: "rs70m0zm30n946czwg6ek8z8j98e3j1p",
+		};
+		const result = createZoteroItemPayload(
+			{ itemType: "Report", creators: [creator] },
+			"ABCD2345",
+		);
+		expect(result.creators).toEqual([
+			{ creatorType: "author", firstName: "Caitlin", lastName: "Mills" },
+		]);
+		expect(creator.authorProfileId).toBe(
+			"rs70m0zm30n946czwg6ek8z8j98e3j1p",
+		);
+	});
+
 	it("maps every canonical item type to the vendored Zotero schema", () => {
 		expect(itemType.enumValues).toHaveLength(getZoteroItemTypes().size);
 		for (const canonicalItemType of itemType.enumValues) {

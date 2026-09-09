@@ -1,3 +1,4 @@
+import { runAuthorAssociationCycle } from "../src/lib/authors/association-delivery";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
@@ -167,6 +168,7 @@ async function main() {
 		await report({ ...initialProgress, stage: "idle" }, true);
 		do {
 			try {
+				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
 				const cycle = await runPublicationWorkerCycle(
 					resource.database,
 					config,

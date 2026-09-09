@@ -321,15 +321,18 @@ function ItemAuthor({ author }: { author?: Author }) {
 		>
 			<LinkWithParams
 				href={
-					isAuthorFilterEnabled
+					author?.authorProfileId
+						? `/api/author-profiles/${encodeURIComponent(author.authorProfileId)}`
+						: isAuthorFilterEnabled
 						? getSafeReferrer(referrer)
 						: undefined
 				}
 				params={
-					fullName && isAuthorFilterEnabled
+					author?.authorProfileId ? undefined : fullName && isAuthorFilterEnabled
 						? { author: fullName, referrer: referrer ?? undefined }
 						: {}
 				}
+				isExternal={Boolean(author?.authorProfileId)}
 				className="opacity-100"
 			>
 				<ItemRow
@@ -887,7 +890,7 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 			) : link.provider === "zenodo" ? (
 				<BrandIcon
 					icon={siZenodo}
-					className="size-5 text-[#1682D4]"
+					className="size-5 text-zenodo"
 					aria-label="Zenodo"
 				/>
 			) : (
@@ -1019,7 +1022,7 @@ function ItemCollection({
 			<Tooltip
 				content={
 					<motion.div
-						className="px-2 py-1 min-w-[200px]"
+						className="px-2 py-1 min-w-collection-tooltip"
 						initial={{ opacity: 0, scale: 0.95 }}
 						animate={{ opacity: 1, scale: 1 }}
 						transition={{

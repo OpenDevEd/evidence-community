@@ -1,3 +1,5 @@
+import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
+import { getPublicItemCard } from "@/lib/public-item-card";
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -123,6 +125,26 @@ export async function GET(
 	const { searchParams } = new URL(request.url);
 	const source = searchParams.get("source") || "meilisearch";
 	const { key } = params;
+
+	if (searchParams.get("view") === "card") {
+		if (!isCanonicalRecordKey(key)) {
+			return NextResponse.json({ error: "Invalid item key" }, { status: 400 });
+		}
+		try {
+			const config = await getLibraryConfig();
+			const database = await getDatabaseForConfig(config);
+			const card = await getPublicItemCard(database, key, config.content.tags.hidden);
+			return NextResponse.json({ item: card }, {
+				status: card ? 200 : 404,
+				headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
+			});
+		} catch (error) {
+			console.error("Public item card read failed", { key, error });
+			return NextResponse.json({ error: "Unable to load publication" }, {
+				status: 503, headers: { "Cache-Control": "no-store" },
+			});
+		}
+	}
 
 	const result = await getItem(key, source as "db" | "meilisearch");
 

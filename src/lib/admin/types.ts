@@ -3,6 +3,7 @@ export type AdminRecordState = "deleted" | "draft" | "edited" | "published";
 export type AdminFileState = "none" | "processing" | "staged" | "published";
 
 export type AdminCreator = {
+	authorProfileId?: string;
 	creatorType: string;
 	firstName?: string;
 	lastName?: string;

@@ -59,6 +59,7 @@ export type ItemGetResponse = {
 };
 
 export type Author = {
+	authorProfileId?: string;
 	firstName?: string;
 	lastName?: string;
 	institution?: string;
