@@ -96,9 +96,11 @@ const config: Config = {
 				// Small icon sizes shared by chat and citation controls.
 				"icon-md": "1.125rem",
 				"icon-xs": "0.6875rem",
+                "catalogue-icon": "13px",
 			},
 			fontSize: {
 				"inspector-title": "17px",
+                "catalogue-label": "12px",
 				citation: "0.68rem",
 			},
 			borderRadius: {
@@ -186,6 +188,7 @@ const config: Config = {
 				shimmer: "200% 100%",
 			},
 			maxHeight: {
+                "column-picker": "420px",
 				"admin-filter": "calc(100dvh - 72px)",
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",

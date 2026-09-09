@@ -380,7 +380,7 @@ function TableViewControls({
 						</Tooltip>
 					</div>
 					<div
-						className="max-h-[420px] w-full overflow-y-auto"
+						className="max-h-column-picker w-full overflow-y-auto"
 						data-admin-column-scroll
 					>
 						<div className="p-2" data-admin-column-list>
@@ -538,7 +538,7 @@ function SortHeader({
 		: ArrowUpDownIcon;
 	return (
 		<button
-			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus dark:hover:text-white/70"
+			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus dark:hover:text-white/70"
 			onClick={() => onSort(columnId)}
 			tabIndex={-1}
 			type="button"
