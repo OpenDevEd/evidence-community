@@ -43,7 +43,7 @@ FROM ${RUNTIME_IMAGE} AS library-runtime
 
 # Local fonts for publication previews, including Arabic, Indic and CJK scripts.
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-cjk \
+	&& apt-get install -y --no-install-recommends fontconfig fonts-noto-core fonts-noto-cjk \
 	&& rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
