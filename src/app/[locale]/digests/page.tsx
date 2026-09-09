@@ -4,6 +4,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import { getDigestPageData } from "@/lib/notifications/public";
 import DigestPages from "@/components/digests/DigestPages";
+import DigestLoading from "@/components/digests/DigestLoading";
 
 async function Archive({params}: {params: Promise<{locale: string}>}) {
   await connection();
@@ -13,5 +14,5 @@ async function Archive({params}: {params: Promise<{locale: string}>}) {
   return <DigestPages data={data} />;
 }
 export default function Page(props: {params: Promise<{locale: string}>}) {
-  return <Suspense><Archive {...props} /></Suspense>;
+  return <Suspense fallback={<DigestLoading />}><Archive {...props} /></Suspense>;
 }
