@@ -9,9 +9,8 @@ import {
 	buildZenodoWritePayload,
 	jsonValueSchema,
 } from "@opendeved/doi-sync-core";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import type { Client } from "pg";
+import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { describe, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -48,9 +47,6 @@ import { buildPublicationFileManifest } from "../src/lib/publication/record-adap
 import { readPublicationRepositorySnapshot } from "../src/lib/publication/repository";
 import { providerState } from "../src/lib/publication/state-adapter";
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
-const verifiedDatabaseUrl = databaseUrl;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -761,31 +757,10 @@ async function verifyWorkerCycle(database: Database, client: Client) {
 }
 
 async function verifyIsolatedDatabase() {
-	const sourceUrl = new URL(verifiedDatabaseUrl);
-	const databaseName = `publication_worker_${process.pid}_${Date.now()}`;
-	const adminUrl = new URL(sourceUrl);
-	adminUrl.pathname = "/postgres";
-	const temporaryUrl = new URL(sourceUrl);
-	temporaryUrl.pathname = `/${databaseName}`;
-	const admin = new Client({ connectionString: adminUrl.toString() });
-	let client: Client | null = null;
-	let pool: Pool | null = null;
-	await admin.connect();
-	try {
-		await admin.query(`CREATE DATABASE "${databaseName}"`);
-		pool = new Pool({ connectionString: temporaryUrl.toString(), max: 12 });
-		const database = drizzle({ client: pool, schema }) as unknown as Database;
-		await migrate(database, { migrationsFolder: "drizzle" });
-		client = new Client({ connectionString: temporaryUrl.toString() });
-		await client.connect();
+	await withIsolatedPublicationDatabase(async (database, client) => {
 		await verifyWorkerLease(database);
 		await verifyWorkerCycle(database, client);
-	} finally {
-		await client?.end();
-		await pool?.end();
-		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-		await admin.end();
-	}
+	});
 }
 
 describe("publication worker against an isolated database", () => {
