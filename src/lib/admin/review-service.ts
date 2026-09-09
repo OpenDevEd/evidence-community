@@ -29,6 +29,7 @@ import {
 	saveItemDraftInTransaction,
 	publishItemDraftWithContext,
 	loadPublishedItemPayload,
+	loadWorkingItemPayload,
 	ItemDraftConflictError,
 	ItemNotFoundError,
 } from "./native-item-service";
@@ -78,14 +79,7 @@ export async function setItemPublishingChoice(
 			throw new AdminValidationError(
 				"Identifier selection is for created items.",
 			);
-		const [draft] = await transaction
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey));
-		const payload = applyItemDraftPatch(
-			await loadPublishedItemPayload(transaction, itemKey),
-			draft?.patch ?? {},
-		);
+		const payload = await loadWorkingItemPayload(transaction, itemKey);
 		if (!payload.itemType) throw new ItemNotFoundError(itemKey);
 		if (payload.parentItem)
 			throw new AdminValidationError(
@@ -190,6 +184,23 @@ export async function submitItemReview(
 	});
 }
 
+async function lockPendingReview(transaction: DatabaseTransaction, reviewId: string, expectedRevision: number) {
+		const [review] = await transaction
+			.select()
+			.from(itemReview)
+			.where(eq(itemReview.id, reviewId))
+			.for("update");
+		if (
+			!review ||
+			review.state !== "pending" ||
+			review.revision !== expectedRevision
+		)
+			throw new AdminValidationError(
+				"The review changed. Reload it and try again.",
+			);
+	return review;
+}
+
 export async function resolveItemReview(
 	db: Database,
 	input: {
@@ -201,19 +212,7 @@ export async function resolveItemReview(
 	actor: ReviewActor,
 ) {
 	return db.transaction(async (transaction) => {
-		const [review] = await transaction
-			.select()
-			.from(itemReview)
-			.where(eq(itemReview.id, input.reviewId))
-			.for("update");
-		if (
-			!review ||
-			review.state !== "pending" ||
-			review.revision !== input.expectedRevision
-		)
-			throw new AdminValidationError(
-				"The review changed. Reload it and try again.",
-			);
+		const review = await lockPendingReview(transaction, input.reviewId, input.expectedRevision);
 		if (input.action === "returned" && actor.role === "creator")
 			throw new AdminValidationError(
 				"Only an Editor or Owner can return a review.",
@@ -264,19 +263,7 @@ export async function correctItemReview(
 			"Only an Editor or Owner can correct a review.",
 		);
 	return db.transaction(async (transaction) => {
-		const [review] = await transaction
-			.select()
-			.from(itemReview)
-			.where(eq(itemReview.id, input.reviewId))
-			.for("update");
-		if (
-			!review ||
-			review.state !== "pending" ||
-			review.revision !== input.expectedRevision
-		)
-			throw new AdminValidationError(
-				"The review changed. Reload it and try again.",
-			);
+		const review = await lockPendingReview(transaction, input.reviewId, input.expectedRevision);
 		if (
 			new Set(input.records.map((record) => record.itemKey)).size !==
 			input.records.length
@@ -389,19 +376,7 @@ export async function approveItemReview(
 				(record) => record.itemKey,
 			);
 			await lockItemMutations(transaction, keys);
-			const [locked] = await transaction
-				.select()
-				.from(itemReview)
-				.where(eq(itemReview.id, review.id))
-				.for("update");
-			if (
-				!locked ||
-				locked.state !== "pending" ||
-				locked.revision !== review.revision
-			)
-				throw new AdminValidationError(
-					"The review changed. Reload it and try again.",
-				);
+			const locked = await lockPendingReview(transaction, review.id, review.revision);
 			const current = await transaction
 				.select({ key: item.key, revision: item.revision })
 				.from(item)

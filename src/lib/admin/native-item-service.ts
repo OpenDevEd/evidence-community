@@ -591,6 +591,12 @@ export async function createNativeItemDraft(db: Database, payload: unknown) {
 	});
 }
 
+/** Materialize current metadata without creating or changing a draft. */
+export async function loadWorkingItemPayload(executor: Executor, itemKey: string) {
+	const [draft] = await executor.select().from(itemDraft).where(eq(itemDraft.itemKey, itemKey)).limit(1);
+	return applyItemDraftPatch(await loadPublishedItemPayload(executor, itemKey), draft?.patch ?? {});
+}
+
 export async function getItemDraft(db: Database, itemKey: string) {
 	const [draft] = await db
 		.select()

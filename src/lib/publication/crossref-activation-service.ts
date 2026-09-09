@@ -1,7 +1,6 @@
-import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
+import { itemIdentity } from "@opendeved/evidence-library-core";
 import { itemPublishingChoice } from "@/db/schema/review";
-import { applyItemDraftPatch } from "@/lib/admin/item-draft-patch";
-import { loadPublishedItemPayload } from "@/lib/admin/native-item-service";
+import { loadWorkingItemPayload } from "@/lib/admin/native-item-service";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -459,14 +458,7 @@ export async function reserveCrossrefDoi(
 			throw new CrossrefActivationValidationError(
 				"Choose Crossref + Zenodo before reserving a DOI.",
 			);
-		const [draft] = await transaction
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey));
-		const payload = applyItemDraftPatch(
-			await loadPublishedItemPayload(transaction, itemKey),
-			draft?.patch ?? {},
-		);
+		const payload = await loadWorkingItemPayload(transaction, itemKey);
 		if (!payload.itemType || payload.parentItem)
 			throw new CrossrefActivationValidationError(
 				"Reserve a DOI on the parent item.",
