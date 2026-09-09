@@ -2,6 +2,7 @@ import "server-only";
 import { itemIdentity, type itemDraft } from "@opendeved/evidence-library-core";
 import { eq, inArray } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
+import { item } from "@/db/schema/tables/item";
 import { itemReview, itemReviewFile } from "@/db/schema/review";
 import { adminItemLinks, draftJson, itemSummary, payloadLinkKeys } from "./library-query-service";
 import { ItemNotFoundError } from "./native-item-service";
@@ -12,9 +13,10 @@ export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
 	const [review] = await db.select().from(itemReview).where(eq(itemReview.id, reviewId));
 	if (!review) throw new ItemNotFoundError(reviewId);
 	const records = review.snapshot.records;
-	const [identities, files] = await Promise.all([
+	const [identities, files, publishedRevisions] = await Promise.all([
 		db.select().from(itemIdentity).where(inArray(itemIdentity.key, records.map((record) => record.itemKey))),
 		db.select().from(itemReviewFile).where(eq(itemReviewFile.reviewId, review.id)),
+		db.select({key: item.key, revision: item.revision}).from(item).where(inArray(item.key, records.map(record => record.itemKey))),
 	]);
 	const details = await Promise.all(records.map(async (submitted): Promise<AdminItemDetail> => {
 		const record = review.corrections.find((entry) => entry.itemKey === submitted.itemKey) ?? submitted;
@@ -31,6 +33,7 @@ export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
 		return {
 			...itemSummary(null, draft, null, null, payload),
 			kind: identity.kind, importMethod: identity.importMethod,
+			revision: publishedRevisions.find(published => published.key === record.itemKey)?.revision ?? 0,
 			attachments: [], collectionKeys: payloadStringList(payload, "collections"), draft: draftJson(draft, payload),
 			editable: false, fileState: file ? "staged" : "none",
 			fileDraft: file ? { actualSha256: file.sha256, actualSizeBytes: file.sizeBytes, expectedSha256: file.sha256, expectedSizeBytes: file.sizeBytes, coverHeight: file.coverHeight, coverWidth: file.coverWidth, filename: file.filename, itemKey: file.itemKey, pageCount: file.pageCount, readyAt: review.submittedAt.toISOString(), updatedAt: review.submittedAt.toISOString(), uploadRevision: file.uploadRevision } : null,

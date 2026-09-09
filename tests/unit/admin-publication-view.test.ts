@@ -934,7 +934,23 @@ describe("identifiers view", () => {
 			config,
 		});
 		expect(view.providers.crossref.displayState).toBe("failed");
+		expect(view.providers.crossref.capabilities.canRetry).toBe(true);
 		expect(view.identifiers.attention).toBe(true);
+	});
+
+
+	it("does not offer manual retry while the worker owns automatic retries", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				targets: [target("zenodo", "mint-zenodo")],
+				states: [syncState({lastFailureClass: "transient", lastFailureSummary: "Provider unavailable", consecutiveFailures: 1})],
+				jobs: [job({provider: "zenodo", environment: "sandbox", attempts: 1, lastError: "Provider unavailable"})],
+			}),
+			config,
+		});
+		expect(view.providers.zenodo.displayState).toBe("failed");
+		expect(view.providers.zenodo.capabilities.canRetry).toBe(false);
 	});
 
 	function archivedUnderOwnDoi(recordDoi: string) {
