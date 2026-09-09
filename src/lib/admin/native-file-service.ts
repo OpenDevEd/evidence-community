@@ -549,6 +549,21 @@ export async function stageNativePdfUpload(
 	return { fileDraft: staged.fileDraft, upload };
 }
 
+async function loadNativeFileDraft(db: Database, itemKey: string, expectedUploadRevision: number) {
+	const [draft] = await db
+		.select()
+		.from(itemFileDraft)
+		.where(
+			and(
+				eq(itemFileDraft.itemKey, itemKey),
+				eq(itemFileDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+				eq(itemFileDraft.uploadRevision, expectedUploadRevision),
+			),
+		)
+		.limit(1);
+	return draft;
+}
+
 export async function completeNativePdfUpload(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -562,17 +577,7 @@ export async function completeNativePdfUpload(
 		maxPdfBytes: number;
 	},
 ) {
-	const [draft] = await db
-		.select()
-		.from(itemFileDraft)
-		.where(
-			and(
-				eq(itemFileDraft.itemKey, itemKey),
-				eq(itemFileDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				eq(itemFileDraft.uploadRevision, expectedUploadRevision),
-			),
-		)
-		.limit(1);
+	const draft = await loadNativeFileDraft(db, itemKey, expectedUploadRevision);
 	if (!draft) throw new NativeFileConflictError(itemKey);
 
 	const bytes = await storage.downloadPrivate(draft.objectPath);
@@ -692,35 +697,13 @@ export async function discardNativePdfDraft(
 	}
 }
 
-export async function prepareNativePdfPublication(
+async function loadPublicationFile(
 	db: Database,
-	storage: EvidenceFileStorage,
-	{
-		expectedUploadRevision,
-		itemKey,
-		publicationTags,
-		zenodoFileChange,
-		reviewFile,
-	}: {
-		expectedUploadRevision: number;
-		itemKey: string;
-		publicationTags: readonly string[];
-		zenodoFileChange?: "minor_correction";
-		reviewFile?: ReviewFile;
-	},
+	itemKey: string,
+	expectedUploadRevision: number,
+	reviewFile?: ReviewFile,
 ) {
-	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
-	const [workingFile] = await db
-		.select()
-		.from(itemFileDraft)
-		.where(
-			and(
-				eq(itemFileDraft.itemKey, itemKey),
-				eq(itemFileDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				eq(itemFileDraft.uploadRevision, expectedUploadRevision),
-			),
-		)
-		.limit(1);
+	const workingFile = reviewFile ? undefined : await loadNativeFileDraft(db, itemKey, expectedUploadRevision);
 	const draft = reviewFile ? {
 		...reviewFile,
 		actualSha256: reviewFile.sha256,
@@ -740,6 +723,37 @@ export async function prepareNativePdfPublication(
 	) {
 		throw new NativeFileConflictError(itemKey);
 	}
+	return {
+		...draft,
+		actualSha256: draft.actualSha256,
+		actualSizeBytes: draft.actualSizeBytes,
+		coverObjectPath: draft.coverObjectPath,
+		coverWidth: draft.coverWidth,
+		coverHeight: draft.coverHeight,
+		pageCount: draft.pageCount,
+		extractedText: draft.extractedText,
+	};
+}
+
+export async function prepareNativePdfPublication(
+	db: Database,
+	storage: EvidenceFileStorage,
+	{
+		expectedUploadRevision,
+		itemKey,
+		publicationTags,
+		zenodoFileChange,
+		reviewFile,
+	}: {
+		expectedUploadRevision: number;
+		itemKey: string;
+		publicationTags: readonly string[];
+		zenodoFileChange?: "minor_correction";
+		reviewFile?: ReviewFile;
+	},
+) {
+	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
+	const draft = await loadPublicationFile(db, itemKey, expectedUploadRevision, reviewFile);
 	const [attachmentBeforePublish, previousPublication, currentFiles] =
 		await Promise.all([
 			db
