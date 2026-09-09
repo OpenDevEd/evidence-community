@@ -93,7 +93,7 @@
 		"@hugeicons/react": "^1.1.10",
 		"@napi-rs/canvas": "^1.0.3",
 		"@nextui-org/react": "^2.6.11",
-		"@opendeved/doi-sync-core": "github:OpenDevEd/doi-sync-core#b60ba63",
+		"@opendeved/doi-sync-core": "github:OpenDevEd/doi-sync-core#ab52d5ff9fc2d470dc1b49b602751eb198e25389",
 		"@opendeved/evidence-library-core": "file:packages/evidence-library-core",
 		"@openrouter/ai-sdk-provider": "^3.0.0",
 		"@radix-ui/react-collapsible": "^1.1.20",
