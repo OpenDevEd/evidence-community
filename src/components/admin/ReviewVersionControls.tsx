@@ -1,6 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
-import { SquareLock01Icon, PencilIcon, InboxIcon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
+import { SquareLock01Icon, PencilIcon, InboxIcon, RotateLeft01Icon, Tick01Icon, Comment01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import type { AdminReviewSnapshot } from "./admin-api";
@@ -34,18 +34,23 @@ export function ReviewVersionTabs({viewingSubmitted, onSelect}: {viewingSubmitte
 		</div>);
 }
 
-const reviewStateLabels = {pending: "Awaiting review", published: "Published version", returned: "Changes requested", withdrawn: "Withdrawn"};
+const reviewStates = {
+    pending: {label: "Awaiting review", icon: InboxIcon},
+    published: {label: "Published version", icon: Tick01Icon},
+    returned: {label: "Changes requested", icon: Comment01Icon},
+    withdrawn: {label: "Withdrawn", icon: RotateLeft01Icon},
+};
 export function ReviewVersionNotice({snapshot, pending, canWithdraw, withdrawing, onWithdraw}: {
   snapshot: AdminReviewSnapshot; pending: boolean; canWithdraw: boolean; withdrawing: boolean; onWithdraw: () => void;
 }) {
   return (
 		<div className="mt-4 flex items-center gap-2.5">
 			<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/[0.08] text-accent-700 dark:text-accent-300">
-				<HugeiconsIcon icon={InboxIcon} size={16} />
+				<HugeiconsIcon icon={reviewStates[snapshot.reviewState].icon} size={16} />
 			</span>
 			<div className="min-w-0 flex-1">
 				<p className="text-xs font-medium text-black/75 dark:text-white/80">
-					{reviewStateLabels[snapshot.reviewState]}
+					{reviewStates[snapshot.reviewState].label}
 				</p>
 				<p className="mt-0.5 text-[10px] text-black/45 dark:text-white/45">
 					Submitted{" "}
