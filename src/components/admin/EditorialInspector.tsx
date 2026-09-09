@@ -31,7 +31,7 @@ function ReviewInspector(props: Props) {
  const [withdrawing, setWithdrawing] = useState(false);
  const feedback = snapshot?.reviewState === "returned" ? snapshot.note : null;
  const canWithdraw = snapshot && (session.role !== "creator" || snapshot.submittedBy === session.userId);
- const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { props.onStopLinkPick?.(); void refresh(); props.onPublicationChanged(receipts); };
+ const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { props.onStopLinkPick?.(); void refresh(); return props.onPublicationChanged(receipts); };
  const conflictRef = useRef<HTMLDivElement>(null);
  const [resolving, setResolving] = useState(false);
  const conflictFields = snapshot?.remainingConflicts[key] ?? [];

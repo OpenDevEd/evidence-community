@@ -10,13 +10,15 @@ import DialogModal from "@/components/nextui/DialogModal";
 import { toast } from "sonner";
 import { ReviewPublicationProgress } from "./ReviewPublicationProgress";
 import { useAdminSession } from "./AdminSessionProvider";
-import { approveAdminReview, updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
-export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disabled?: boolean; snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => void }) {
+import { AdminApiError, approveAdminReview, updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
+export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disabled?: boolean; snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => Promise<void> }) {
  const { role } = useAdminSession();
  const [dialog, setDialog] = useState<"publish" | "changes" | null>(null);
  const [feedback, setFeedback] = useState("");
  const [error, setError] = useState("");
  const [busy, setBusy] = useState(false);
+ const [correctionRevision, setCorrectionRevision] = useState<number | null>(null);
+ const confirmCorrection = correctionRevision === snapshot.reviewRevision;
  const pending = useRef(false);
  const checks = [{label: "Submitted version", ready: snapshot.reviewState === "pending"}];
  const submit = async () => {
@@ -24,11 +26,19 @@ export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disab
    pending.current = true; setBusy(true); setError("");
    try {
      let receipts: readonly AdminSearchIndexReceipt[] = [];
-     if (dialog === "publish") receipts = (await approveAdminReview(snapshot.reviewId, snapshot.reviewRevision)).indexingReceipts;
+     if (dialog === "publish") receipts = (await approveAdminReview(snapshot.reviewId, snapshot.reviewRevision, confirmCorrection ? "minor_correction" : undefined)).indexingReceipts;
      else await updateAdminReview(snapshot.reviewId, {action: "returned", expectedRevision: snapshot.reviewRevision, note: feedback.trim()});
-     setDialog(null); setFeedback(""); onUpdated(receipts);
-     toast.success(dialog === "publish" ? "Submitted version published" : "Changes requested");
-   } catch (error) { setError(error instanceof Error ? error.message : "Could not update review"); }
+     setDialog(null); setFeedback(""); setCorrectionRevision(null);
+     try {
+       await onUpdated(receipts);
+       toast.success(dialog === "publish" ? "Submitted version published" : "Changes requested");
+     } catch (error) {
+       toast.error(error instanceof Error ? error.message : "Could not finish the public search update");
+     }
+   } catch (error) {
+     setCorrectionRevision(error instanceof AdminApiError && error.code === "confirmation_required" ? snapshot.reviewRevision : null);
+     setError(error instanceof Error ? error.message : "Could not update review");
+   }
    finally { pending.current = false; setBusy(false); }
  };
  if (snapshot.reviewState === "published") return <ReviewPublicationProgress snapshot={snapshot} />;
@@ -44,7 +54,7 @@ export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disab
 							<HugeiconsIcon icon={SentIcon} size={14} />
 						}
 						isDisabled={disabled}
-						onPress={() => setDialog("publish")}
+						onPress={() => { setError(""); setCorrectionRevision(null); setDialog("publish"); }}
 					>
 						Publish version
 					</Button>
@@ -171,7 +181,7 @@ export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disab
                             onPress={() => void submit()}
 						>
 							{dialog === "publish"
-								? "Publish version"
+								? (confirmCorrection ? "Publish correction" : "Publish version")
 								: "Send feedback"}
 						</Button>
 					</ModalFooter>

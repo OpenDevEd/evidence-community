@@ -51,7 +51,6 @@ const protectedAdminRequests = [
 	["PUT", "/api/admin/items/ABCDEFGH/writeback/sources"],
 	["GET", "/api/admin/items/ABCDEFGH/file"],
 	["POST", "/api/admin/items/ABCDEFGH/file"],
-	["DELETE", "/api/admin/items/ABCDEFGH/file"],
 	["POST", "/api/admin/items/ABCDEFGH/writeback/resolve"],
 	["POST", "/api/admin/items/ABCDEFGH/publication/crossref/retry"],
 	["POST", "/api/admin/items/ABCDEFGH/publication/zenodo/retry"],

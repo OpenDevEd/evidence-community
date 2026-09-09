@@ -1470,7 +1470,7 @@ export function AdminInspector({
 	onOpenDraft: () => void;
 	onManageSources: () => void;
 	onPublish: () => void;
-	onPublicationChanged: (receipts?: readonly AdminSearchIndexReceipt[]) => void;
+	onPublicationChanged: (receipts?: readonly AdminSearchIndexReceipt[]) => Promise<void>;
 	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;

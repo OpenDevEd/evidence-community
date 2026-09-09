@@ -175,10 +175,10 @@ INSERT INTO "itemFilePublication" (
 		100, 140, 1, '[]'::jsonb, now()
 	);
 
-INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
+INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey", "kind")
 VALUES
-	('PUBUIA23', 'native', 'PUBUIA23'),
-	('PUBUIPDF', 'native', 'PUBUIPDF');
+	('PUBUIA23', 'native', 'PUBUIA23', 'created'),
+	('PUBUIPDF', 'native', 'PUBUIPDF', 'created');
 
 INSERT INTO "item" (
 	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
