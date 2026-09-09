@@ -36,12 +36,13 @@ async function captureRecord(
     draft: typeof itemDraft.$inferSelect | undefined,
 ): Promise<ReviewRecord | null> {
     if (!draft && (!current || current.deleted)) return null;
-    if (draft && draft.baseRevision !== (current?.revision ?? 0)) throw new ItemDraftConflictError(key);
+    const baseRevision = current?.revision ?? 0;
+    if (draft && draft.baseRevision !== baseRevision) throw new ItemDraftConflictError(key);
     const payload = applyItemDraftPatch(await loadPublishedItemPayload(transaction, key, current ?? null), draft?.patch ?? {});
     const validated = validateNativeItemDraft(payload, {requireTitle: true});
     if (key === rootKey && validated.item.parentItem) throw new AdminValidationError("Submit the parent item for review.");
     if (key !== rootKey && validated.item.parentItem !== rootKey) return null;
-    return {itemKey: key, baseRevision: current?.revision ?? 0, payload: validated.payload};
+    return {itemKey: key, baseRevision, payload: validated.payload};
 }
 
 /** Capture metadata and private file references while the caller holds item mutation locks. */

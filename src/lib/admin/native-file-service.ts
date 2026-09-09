@@ -34,7 +34,7 @@ import {
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 import { buildPublicationFileManifest } from "@/lib/publication/record-adapter";
 
-import type { ReviewFile } from "./review-contract";
+import { reviewFileSchema, type ReviewFile } from "./review-contract";
 import { removeUnreferencedPrivateFiles } from "./file-retention";
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
@@ -711,27 +711,18 @@ async function loadPublicationFile(
 		readyAt: new Date(),
 	} : workingFile;
 	if (reviewFile && (reviewFile.itemKey !== itemKey || reviewFile.uploadRevision !== expectedUploadRevision)) throw new NativeFileConflictError(itemKey);
-	if (
-		!draft?.readyAt ||
-		!draft.actualSha256 ||
-		!draft.actualSizeBytes ||
-		!draft.coverObjectPath ||
-		!draft.coverWidth ||
-		!draft.coverHeight ||
-		!draft.pageCount ||
-		draft.extractedText === null
-	) {
-		throw new NativeFileConflictError(itemKey);
-	}
-	return {
+	if (!draft?.readyAt) throw new NativeFileConflictError(itemKey);
+	const parsed = reviewFileSchema.safeParse({
 		...draft,
-		actualSha256: draft.actualSha256,
-		actualSizeBytes: draft.actualSizeBytes,
-		coverObjectPath: draft.coverObjectPath,
-		coverWidth: draft.coverWidth,
-		coverHeight: draft.coverHeight,
-		pageCount: draft.pageCount,
-		extractedText: draft.extractedText,
+		sha256: draft.actualSha256,
+		sizeBytes: draft.actualSizeBytes,
+	});
+	if (!parsed.success) throw new NativeFileConflictError(itemKey);
+	return {
+		...parsed.data,
+		actualSha256: parsed.data.sha256,
+		actualSizeBytes: parsed.data.sizeBytes,
+		readyAt: draft.readyAt,
 	};
 }
 

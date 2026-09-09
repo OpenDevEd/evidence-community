@@ -1616,6 +1616,25 @@ export async function unpublishNativeItem(db: Database, itemKey: string) {
 	return (await unpublishNativeItemWithOutcome(db, itemKey)).item;
 }
 
+async function validateUnpublishedDraftRemoval(transaction: Transaction, itemKey: string) {
+	const [pendingReview] = await transaction.select({ id: itemReview.id }).from(itemReview)
+		.where(and(eq(itemReview.state, "pending"), sql`${itemReview.snapshot}->'records' @> ${JSON.stringify([{ itemKey }])}::jsonb`)).limit(1);
+	if (pendingReview) throw new AdminValidationError("Withdraw or return the pending review before deleting this draft.");
+	const [childDraft] = await transaction
+		.select({ itemKey: itemDraft.itemKey })
+		.from(itemDraft)
+		.where(sql`${itemDraft.patch} ->> 'parentItem' = ${itemKey}`)
+		.limit(1);
+	const [publishedChild] = await transaction
+		.select({ key: item.key })
+		.from(item)
+		.where(eq(item.parentItem, itemKey))
+		.limit(1);
+	if (childDraft || publishedChild) {
+		throw new ItemHasChildrenError(itemKey);
+	}
+}
+
 async function discardItemDraftInTransaction(
 	transaction: Transaction,
 	itemKey: string,
@@ -1671,24 +1690,7 @@ async function discardItemDraftInTransaction(
 		.from(item)
 		.where(eq(item.key, itemKey))
 		.limit(1);
-	if (!published) {
-		const [pendingReview] = await transaction.select({ id: itemReview.id }).from(itemReview)
-			.where(and(eq(itemReview.state, "pending"), sql`${itemReview.snapshot}->'records' @> ${JSON.stringify([{ itemKey }])}::jsonb`)).limit(1);
-		if (pendingReview) throw new AdminValidationError("Withdraw or return the pending review before deleting this draft.");
-		const [childDraft] = await transaction
-			.select({ itemKey: itemDraft.itemKey })
-			.from(itemDraft)
-			.where(sql`${itemDraft.patch} ->> 'parentItem' = ${itemKey}`)
-			.limit(1);
-		const [publishedChild] = await transaction
-			.select({ key: item.key })
-			.from(item)
-			.where(eq(item.parentItem, itemKey))
-			.limit(1);
-		if (childDraft || publishedChild) {
-			throw new ItemHasChildrenError(itemKey);
-		}
-	}
+	if (!published) await validateUnpublishedDraftRemoval(transaction, itemKey);
 	const [discarded] = draft
 		? await transaction
 				.delete(itemDraft)
@@ -1696,19 +1698,12 @@ async function discardItemDraftInTransaction(
 				.returning({ itemKey: itemDraft.itemKey })
 		: [null];
 	if (draft && !discarded) throw new ItemDraftConflictError(itemKey);
+	let stagedPrivatePaths: string[] = [];
 	if ((!published || removeFileDraft) && staged) {
-		await transaction
-			.delete(itemFileDraft)
-			.where(eq(itemFileDraft.itemKey, itemKey));
+		await transaction.delete(itemFileDraft).where(eq(itemFileDraft.itemKey, itemKey));
+		stagedPrivatePaths = [staged.objectPath, staged.coverObjectPath].filter((path): path is string => Boolean(path));
 	}
-	return {
-		stagedPrivatePaths:
-			(!published || removeFileDraft) && staged
-				? [staged.objectPath, staged.coverObjectPath].filter(
-						(path): path is string => Boolean(path),
-					)
-				: [],
-	};
+	return {stagedPrivatePaths};
 }
 
 async function discardNativeItemDraftIfPresentInTransaction(
