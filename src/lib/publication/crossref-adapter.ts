@@ -22,14 +22,10 @@ import {
 import { item } from "@/db/schema/tables/item";
 
 import { resolveBibliographicDoi } from "./bibliographic-doi";
-import {
-	buildPublicationFileManifest,
-	buildPublicationIdentifiers,
-	buildPublicationRecordSnapshot,
-} from "./record-adapter";
+
 import { readPublicationRepositorySnapshot } from "./repository";
 import { settlePublicationProviderAudit } from "./provider-audit";
-import { currentManagedDoi, providerState, targetFor } from "./state-adapter";
+import { currentManagedDoi, providerState, targetFor, publicationPlanData } from "./state-adapter";
 import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
@@ -54,7 +50,7 @@ function requireConfig(config: PublicationConfig) {
 		!crossref.email ||
 		!crossref.registrant
 	) {
-		throw new Error("Crossref test publishing is not fully configured");
+		throw new Error("Crossref publishing is not fully configured");
 	}
 	return {
 		loginId: crossref.loginId,
@@ -76,7 +72,7 @@ export async function buildCrossrefPlan(
 	const snapshot = await readPublicationRepositorySnapshot(
 		database,
 		itemKey,
-		"test",
+		publicationConfig.crossref.environment,
 	);
 	if (!snapshot.record)
 		throw new Error("The publication record no longer exists");
@@ -89,7 +85,7 @@ export async function buildCrossrefPlan(
 	const managedCrossrefDoi = currentManagedDoi(
 		snapshot,
 		"crossref",
-		"test",
+		publicationConfig.crossref.environment,
 		"primary",
 	);
 	if (!managedCrossrefDoi) {
@@ -113,36 +109,14 @@ export async function buildCrossrefPlan(
 			"The record DOI does not match its reserved Crossref DOI",
 		);
 	}
-	const record = buildPublicationRecordSnapshot({
-		record: snapshot.record,
-		tags: snapshot.tags,
-		baseUrl: config.identity.baseUrl,
-		license: publicationConfig.zenodo.license,
-	});
-	const files = buildPublicationFileManifest(snapshot.files);
-	const identifiers = buildPublicationIdentifiers({
-		bibliographicDoi: bibliographicDoi.doi,
-		managedCrossrefDoi,
-		zenodoVersionDoi: currentManagedDoi(
-			snapshot,
-			"zenodo",
-			"sandbox",
-			"version",
-		),
-		zenodoConceptDoi: currentManagedDoi(
-			snapshot,
-			"zenodo",
-			"sandbox",
-			"concept",
-		),
-	});
+	const { record, files, identifiers } = publicationPlanData(snapshot, snapshot.record, config, bibliographicDoi.doi, managedCrossrefDoi);
 	const crossrefState = providerState(
 		snapshot,
 		"crossref",
 		publicationConfig,
 	);
 	const zenodoState = providerState(snapshot, "zenodo", publicationConfig);
-	const zenodoTarget = targetFor(snapshot, "zenodo", "sandbox");
+	const zenodoTarget = targetFor(snapshot, "zenodo", publicationConfig.zenodo.environment);
 	const includeZenodoRelation =
 		zenodoTarget?.identifierPolicy === "mint-zenodo" &&
 		Boolean(
@@ -169,11 +143,11 @@ export async function buildCrossrefPlan(
 			files,
 			identifiers,
 			targets: {
-				crossref: { enabled: true, environment: "test" },
+				crossref: { enabled: true, environment: publicationConfig.crossref.environment },
 				zenodo: includeZenodoRelation
 					? {
 							enabled: true,
-							environment: "sandbox",
+							environment: publicationConfig.zenodo.environment,
 							identifierPolicy: "mint-zenodo",
 						}
 					: { enabled: false },
@@ -207,7 +181,7 @@ async function auditCrossrefPublishedState(
 			workerId: input.workerId,
 			itemKey: input.job.itemKey,
 			provider: "crossref",
-			environment: "test",
+			environment: config.services.publication.crossref.environment,
 			expectedPayloadHash: lastSuccess.payloadHash,
 			observation: {
 				status: "skipped",
@@ -248,7 +222,7 @@ async function auditCrossrefPublishedState(
 					poll: { maxAttempts: 1, delayMs: 0 },
 				});
 			return provider.verifyPublication({
-				environment: "test",
+				environment: config.services.publication.crossref.environment,
 				emailAddress: requireConfig(config).emailAddress,
 				record: plan.crossrefRecord!,
 				...(expectedRelation ? { relation: expectedRelation } : {}),
@@ -260,7 +234,7 @@ async function auditCrossrefPublishedState(
 		workerId: input.workerId,
 		itemKey: input.job.itemKey,
 		provider: "crossref",
-		environment: "test",
+		environment: config.services.publication.crossref.environment,
 		expectedPayloadHash: lastSuccess.payloadHash,
 		observation:
 			verification.status === "matched"
@@ -280,6 +254,7 @@ async function auditCrossrefPublishedState(
 async function recordCrossrefPending(
 	database: Database,
 	input: {
+		environment: "test" | "production";
 		jobId: number;
 		workerId: string;
 		recordId: string;
@@ -303,7 +278,7 @@ async function recordCrossrefPending(
 			.values({
 				itemKey: input.recordId,
 				provider: "crossref",
-				environment: "test",
+				environment: input.environment,
 				pendingStage: input.stage,
 				pendingPayloadHash: input.payloadHash,
 				pendingBatchId: input.batchId,
@@ -372,6 +347,7 @@ function patchValues(
 async function settleCrossrefState(
 	database: Database,
 	input: PublicationSettlement & {
+		environment: "test" | "production";
 		verified: boolean;
 	},
 ) {
@@ -392,7 +368,7 @@ async function settleCrossrefState(
 			.values({
 				itemKey: input.itemKey,
 				provider: "crossref",
-				environment: "test",
+				environment: input.environment,
 				...values,
 			})
 			.onConflictDoUpdate({
@@ -415,7 +391,7 @@ async function settleCrossrefState(
 					and(
 						eq(publicationIdentifier.itemKey, input.itemKey),
 						eq(publicationIdentifier.registrar, "crossref"),
-						eq(publicationIdentifier.environment, "test"),
+						eq(publicationIdentifier.environment, input.environment),
 						eq(publicationIdentifier.role, "primary"),
 						eq(publicationIdentifier.ownership, "managed"),
 						eq(publicationIdentifier.isCurrent, true),
@@ -447,6 +423,7 @@ async function settleCrossrefState(
 async function settleCrossrefWorkerFailure(
 	database: Database,
 	input: {
+		environment: "test" | "production";
 		jobId: number;
 		workerId: string;
 		itemKey: string;
@@ -463,7 +440,7 @@ async function settleCrossrefWorkerFailure(
 			.values({
 				itemKey: input.itemKey,
 				provider: "crossref",
-				environment: "test",
+				environment: input.environment,
 				lastFailureClass: "CROSSREF_WORKER_FAILED",
 				lastFailureSummary: input.error,
 				consecutiveFailures: 1,
@@ -541,7 +518,7 @@ export async function runCrossrefPublicationJobsOnce(
 	) {
 		const job = await claimNextPublicationJob(database, {
 			provider: "crossref",
-			environment: "test",
+			environment: config.services.publication.crossref.environment,
 			workerId,
 			leaseSeconds: workerConfig.leaseSeconds,
 			claimedAt: now(),
@@ -597,6 +574,7 @@ export async function runCrossrefPublicationJobsOnce(
 					observedAt: settledAt,
 				});
 				await settleCrossrefState(database, {
+					environment: config.services.publication.crossref.environment,
 					jobId: job.id,
 					workerId,
 					itemKey: job.itemKey,
@@ -718,11 +696,12 @@ export async function runCrossrefPublicationJobsOnce(
 							status: "finished" as const,
 							receipt: {
 								provider: "crossref",
-								environment: "test",
+								environment: config.services.publication.crossref.environment,
 								verified: true,
 							},
 						};
 			await settleCrossrefState(database, {
+				environment: config.services.publication.crossref.environment,
 				jobId: job.id,
 				workerId,
 				itemKey: job.itemKey,
@@ -755,6 +734,7 @@ export async function runCrossrefPublicationJobsOnce(
 					: "Crossref worker failed";
 			try {
 				const deadLetter = await settleCrossrefWorkerFailure(database, {
+					environment: config.services.publication.crossref.environment,
 					jobId: job.id,
 					workerId,
 					itemKey: job.itemKey,

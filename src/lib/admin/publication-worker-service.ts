@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
@@ -16,6 +16,11 @@ export async function getAdminPublicationWorkerOverview(
 	config: Pick<LibraryServerConfig, "services">,
 	now = new Date(),
 ) {
+	const configuredJobs = or(
+		and(eq(publicationSyncJob.provider, "crossref"), eq(publicationSyncJob.environment, config.services.publication.crossref.environment)),
+		and(eq(publicationSyncJob.provider, "zenodo"), eq(publicationSyncJob.environment, config.services.publication.zenodo.environment)),
+	);
+
 	const [runs, pending, failed, currentJobs] = await Promise.all([
 		database
 			.select()
@@ -34,6 +39,7 @@ export async function getAdminPublicationWorkerOverview(
 			.from(publicationSyncJob)
 			.where(
 				and(
+					configuredJobs,
 					isNull(publicationSyncJob.processedAt),
 					isNull(publicationSyncJob.deadLetteredAt),
 					isNull(publicationSyncJob.supersededAt),
@@ -46,6 +52,7 @@ export async function getAdminPublicationWorkerOverview(
 			.from(publicationSyncJob)
 			.where(
 				and(
+					configuredJobs,
 					isNull(publicationSyncJob.processedAt),
 					isNotNull(publicationSyncJob.deadLetteredAt),
 					isNull(publicationSyncJob.supersededAt),
@@ -63,6 +70,7 @@ export async function getAdminPublicationWorkerOverview(
 			.from(publicationSyncJob)
 			.where(
 				and(
+					configuredJobs,
 					isNull(publicationSyncJob.processedAt),
 					isNull(publicationSyncJob.deadLetteredAt),
 					isNull(publicationSyncJob.supersededAt),

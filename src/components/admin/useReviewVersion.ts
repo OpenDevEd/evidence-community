@@ -60,7 +60,7 @@ export function useReviewVersion(
 		viewingSubmitted: submitted && Boolean(snapshot),
 		frozenDetail:
 			snapshot?.frozenAttachments.find(
-				(attachment) => attachment.key === attachmentKey,
+				(attachment) => attachment.key === (attachmentKey ?? options.itemKey),
 			) ?? snapshot,
 		withdrawing,
 		withdraw,

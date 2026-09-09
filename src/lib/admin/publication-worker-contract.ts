@@ -19,7 +19,7 @@ export const adminPublicationWorkerOverviewSchema = z
 				id: z.number().int().positive(),
 				itemKey: z.string().min(1),
 				provider: z.enum(["crossref", "zenodo"]),
-				environment: z.enum(["test", "sandbox"]),
+				environment: z.enum(["test", "sandbox", "production"]),
 				leaseExpiresAt: z.string(),
 			})
 			.strict()

@@ -1,3 +1,4 @@
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { MemoryFileStorage, createPdf, fileHash } from "../tests/helpers/file-storage";
 import { describe, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
@@ -53,6 +54,8 @@ import {
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
 
+const filePublicationConfig = publicationTestConfig().services.publication;
+
 const PUBLICATION_TAGS = ["publish-record"] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -90,7 +93,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	});
 	await publishNativeItemDraft(db, parentDraft.itemKey);
 	await publishNativeItemDraft(db, attachmentDraft.itemKey);
-	const initialPublication = await publishNativePdf(db, storage, {
+	const initialPublication = await publishNativePdf(db, storage, filePublicationConfig, {
 		itemKey: attachmentDraft.itemKey,
 		expectedUploadRevision: initialReady.uploadRevision,
 		publicationTags: PUBLICATION_TAGS,
@@ -162,7 +165,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	const publicFileCount = storage.publicFiles.size;
 	let confirmationRequired = false;
 	try {
-		await publishNativePdf(db, storage, {
+		await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: attachmentDraft.itemKey,
 			expectedUploadRevision: correctionReady.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -182,7 +185,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 		"Crossref-backed PDF replacement did not stop before confirmation",
 	);
 
-	const correctedPublication = await publishNativePdf(db, storage, {
+	const correctedPublication = await publishNativePdf(db, storage, filePublicationConfig, {
 		itemKey: attachmentDraft.itemKey,
 		expectedUploadRevision: correctionReady.uploadRevision,
 		publicationTags: PUBLICATION_TAGS,
@@ -217,7 +220,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	const publicFilesBeforeUnpublish = storage.publicFiles.size;
 	let unpublishConfirmationRequired = false;
 	try {
-		await unpublishNativePdf(db, storage, attachmentDraft.itemKey);
+		await unpublishNativePdf(db, storage, filePublicationConfig, attachmentDraft.itemKey);
 	} catch (error) {
 		unpublishConfirmationRequired =
 			error instanceof ZenodoPdfCorrectionConfirmationRequiredError;
@@ -236,7 +239,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	);
 	await unpublishNativePdf(
 		db,
-		storage,
+		storage, filePublicationConfig,
 		attachmentDraft.itemKey,
 		"minor_correction",
 	);
@@ -299,7 +302,7 @@ async function verifyNonZenodoDuplicateFilenames(
 			maxPdfBytes: 10_000_000,
 		});
 		await publishNativeItemDraft(db, attachment.itemKey);
-		await publishNativePdf(db, storage, {
+		await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: attachment.itemKey,
 			expectedUploadRevision: ready.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -314,7 +317,7 @@ async function verifyNonZenodoDuplicateFilenames(
 		"Non-Zenodo PDF publishing ran Zenodo filename validation",
 	);
 	for (const attachment of attachments) {
-		await unpublishNativePdf(db, storage, attachment.itemKey);
+		await unpublishNativePdf(db, storage, filePublicationConfig, attachment.itemKey);
 	}
 }
 
@@ -454,7 +457,7 @@ async function verify(db: Database) {
 				title: "Attachment edit preserved across file publish",
 			},
 		});
-		const published = await publishNativePdf(db, storage, {
+		const published = await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: attachmentDraft.itemKey,
 			expectedUploadRevision: ready.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -584,7 +587,7 @@ async function verify(db: Database) {
 
 		let stalePublishRejected = false;
 		try {
-			await publishNativePdf(db, storage, {
+			await publishNativePdf(db, storage, filePublicationConfig, {
 				itemKey: attachmentDraft.itemKey,
 				expectedUploadRevision: ready.uploadRevision,
 				publicationTags: PUBLICATION_TAGS,
@@ -671,7 +674,7 @@ async function verify(db: Database) {
 
 		const fileUnpublished = await unpublishNativePdf(
 			db,
-			storage,
+			storage, filePublicationConfig,
 			attachmentDraft.itemKey,
 		);
 		const [[unpublishedJob], remainingPublicationTags] = await Promise.all([
@@ -730,7 +733,7 @@ async function verify(db: Database) {
 		};
 		let rolledBackPublicationRejected = false;
 		try {
-			await publishNativePdf(db, storage, {
+			await publishNativePdf(db, storage, filePublicationConfig, {
 				itemKey: attachmentDraft.itemKey,
 				expectedUploadRevision:
 					supersedingStage.fileDraft.uploadRevision,
@@ -836,7 +839,7 @@ async function verify(db: Database) {
 		);
 		await publishNativeItemDraft(db, concurrentParentDraft.itemKey);
 		await publishNativeItemDraft(db, concurrentAttachmentDraft.itemKey);
-		await publishNativePdf(db, storage, {
+		await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: concurrentAttachmentDraft.itemKey,
 			expectedUploadRevision: concurrentInitialReady.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -864,13 +867,13 @@ async function verify(db: Database) {
 			},
 		);
 		const concurrentFileMutations = await Promise.allSettled([
-			publishNativePdf(db, storage, {
+			publishNativePdf(db, storage, filePublicationConfig, {
 				itemKey: concurrentAttachmentDraft.itemKey,
 				expectedUploadRevision:
 					concurrentReplacementReady.uploadRevision,
 				publicationTags: PUBLICATION_TAGS,
 			}),
-			unpublishNativePdf(db, storage, concurrentAttachmentDraft.itemKey),
+			unpublishNativePdf(db, storage, filePublicationConfig, concurrentAttachmentDraft.itemKey),
 		]);
 		assert(
 			concurrentFileMutations.every(
@@ -890,7 +893,7 @@ async function verify(db: Database) {
 		if (remainingConcurrentPublication) {
 			await unpublishNativePdf(
 				db,
-				storage,
+				storage, filePublicationConfig,
 				concurrentAttachmentDraft.itemKey,
 			);
 		}

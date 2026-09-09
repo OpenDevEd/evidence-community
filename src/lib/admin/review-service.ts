@@ -386,6 +386,7 @@ async function publishReviewRecords(
 
 async function removeApprovedFiles(
 	transaction: DatabaseTransaction,
+	publication: LibraryServerConfig["services"]["publication"],
 	files: (typeof itemReviewFile.$inferSelect)[],
 	zenodoFileChange: "minor_correction" | undefined,
 ) {
@@ -399,6 +400,7 @@ async function removeApprovedFiles(
 			removals.push(
 				await unpublishNativePdfInTransaction(
 					transaction,
+					publication,
 					file.itemKey,
 					zenodoFileChange,
 				),
@@ -469,7 +471,7 @@ export async function approveItemReview(
 			)
 				continue;
 			prepared.push(
-				await prepareNativePdfPublication(db, storage, {
+				await prepareNativePdfPublication(db, storage, config.services.publication, {
 					itemKey: file.itemKey,
 					expectedUploadRevision: file.file.uploadRevision,
 					publicationTags: input.publicationTags,
@@ -509,6 +511,7 @@ export async function approveItemReview(
 				fileResults.push(await file.commit(transaction));
 			const removals = await removeApprovedFiles(
 				transaction,
+				config.services.publication,
 				files,
 				input.zenodoFileChange,
 			);

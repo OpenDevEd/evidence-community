@@ -39,7 +39,7 @@ import {
 } from "./state-adapter";
 
 type PublicationConfig = LibraryServerConfig["services"]["publication"];
-type PublicationEnvironment = "test" | "sandbox";
+type PublicationEnvironment = "test" | "sandbox" | "production";
 
 export type AdminPublicationPlanSummary = {
 	status:
@@ -79,7 +79,7 @@ export type AdminPublicationLink = DoiDisplayLink & {
 
 export type AdminPublicationProviderView = {
 	provider: PublicationProvider;
-	environment: "test" | "sandbox";
+	environment: "test" | "sandbox" | "production";
 	displayState: AdminPublicationProviderState;
 	status: AdminPublicationProviderStatus;
 	waitingOn: "crossref" | "file" | null;
@@ -749,12 +749,12 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	}
 
 	const zenodoJournals = snapshot.journals.filter(
-		(journal) => journal.provider === "zenodo",
+		(journal) => journal.provider === "zenodo" && journal.environment === publicationConfig.zenodo.environment,
 	);
 	const crossrefBlockers = unique([
 		...sharedBlockers,
 		!publicationConfig.crossref.enabled
-			? "Crossref test publishing is not configured for this library"
+			? "Crossref publishing is not configured for this library"
 			: null,
 		namespaceMismatch,
 		canonicalManagedMismatch,
@@ -768,7 +768,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		fileError,
 		archivedDoiMismatch,
 		!publicationConfig.zenodo.enabled
-			? "Zenodo Sandbox publishing is not configured for this library"
+			? "Zenodo publishing is not configured for this library"
 			: null,
 		zenodoJournals.length > 1
 			? "More than one unfinished Zenodo publication exists for this record"

@@ -13,13 +13,14 @@ export type PublicPublicationIdentifierRow = {
 };
 
 export type PublicZenodoStateRow = {
-	environment: "sandbox";
+	environment: "sandbox" | "production";
 	zenodoRecordId: string | null;
 	zenodoParentId: string | null;
 };
 
 const ZENODO_BASE_URL = {
 	sandbox: "https://sandbox.zenodo.org",
+	production: "https://zenodo.org",
 } as const;
 
 export function buildPublicationIdentifierSummary(input: {

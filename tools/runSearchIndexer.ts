@@ -202,6 +202,7 @@ async function main() {
 			const plan = await rebuildSearchIndex(
 				databaseResource.database,
 				service,
+				config.services.publication,
 				{
 					signal: abortController.signal,
 					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
@@ -240,6 +241,7 @@ async function main() {
 		do {
 			try {
 				const results = await drainSearchOutbox({
+			publication: config.services.publication,
 					batchClient: service.client.batches,
 					database: databaseResource.database,
 					index: service.index,

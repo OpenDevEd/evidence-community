@@ -201,6 +201,7 @@ async function verifyPipeline() {
 		});
 		await ensureSearchIndex(search);
 		const indexedBatches = await drainSearchOutbox({
+			publication: config.services.publication,
 			batchClient: search.client.batches,
 			database,
 			index: search.index,

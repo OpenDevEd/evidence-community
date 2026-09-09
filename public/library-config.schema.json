@@ -1628,9 +1628,12 @@
 									"type": "boolean"
 								},
 								"environment": {
-									"default": "test",
+									"default": "production",
 									"type": "string",
-									"const": "test"
+									"enum": [
+										"test",
+										"production"
+									]
 								},
 								"loginId": {
 									"type": "string",
@@ -1682,9 +1685,12 @@
 									"type": "boolean"
 								},
 								"environment": {
-									"default": "sandbox",
+									"default": "production",
 									"type": "string",
-									"const": "sandbox"
+									"enum": [
+										"sandbox",
+										"production"
+									]
 								},
 								"token": {
 									"type": "string",

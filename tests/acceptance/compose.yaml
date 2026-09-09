@@ -180,7 +180,7 @@ services:
       - ../../drizzle:/migrations:ro
       - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U library -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U library -d postgres"]
       interval: 2s
       timeout: 2s
       retries: 60

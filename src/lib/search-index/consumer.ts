@@ -1,3 +1,4 @@
+import type { PublicationProjectionConfig } from "./projection";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
@@ -53,6 +54,7 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
+	publication: PublicationProjectionConfig;
 	batchClient?: Meilisearch["batches"];
 	database: Database;
 	heartbeatIntervalMs?: number;
@@ -684,6 +686,7 @@ async function processClaimedEvents(
 		let documentCount = 0;
 		for await (const plan of generateSearchProjectionPlans(
 			options.database,
+			options.publication,
 			events,
 			500,
 			options.signal,
@@ -1014,6 +1017,7 @@ export async function applySearchIndexEmbedder(
 export async function rebuildSearchIndex(
 	database: Database,
 	service: MeilisearchService,
+	publication: PublicationProjectionConfig,
 	options: {
 		maxDocumentBatchBytes?: number;
 		signal?: AbortSignal;
@@ -1033,6 +1037,7 @@ export async function rebuildSearchIndex(
 	let indexed = 0;
 	for await (const plan of generateFullSearchProjectionPlans(
 		database,
+		publication,
 		500,
 		options.signal,
 	)) {

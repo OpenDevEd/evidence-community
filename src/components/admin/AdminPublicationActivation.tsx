@@ -224,7 +224,7 @@ export function AdminZenodoActivation({
 							</RadioGroup>
 							<div className="flex items-start gap-2.5 text-xs leading-5 text-black/50 dark:text-white/50">
 								<HugeiconsIcon icon={DatabaseIcon} aria-hidden className="mt-0.5 shrink-0" size={14} />
-								<p>The published record and PDF will be stored in Zenodo Sandbox.</p>
+								<p>The published record and PDF will be stored in Zenodo.</p>
 							</div>
 						</ModalBody>
 						<ModalFooter className="gap-2 px-4 pb-4 pt-2">

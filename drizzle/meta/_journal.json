@@ -379,6 +379,20 @@
       "when": 1788907995211,
       "tag": "0053_unpublished_zenodo_draft",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788913422737,
+      "tag": "0054_production_publication_environments",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788914038504,
+      "tag": "0055_isolate_doi_namespaces",
+      "breakpoints": true
     }
   ]
 }

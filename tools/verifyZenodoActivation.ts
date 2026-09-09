@@ -1,13 +1,12 @@
+import { getAdminPublicationWorkerOverview } from "../src/lib/admin/publication-worker-service";
+import { runNightlyPublicationReconciliation } from "../src/lib/publication/reconciler";
 import { successfulZenodoTestProvider } from "../tests/fixtures/zenodo-draft";
 import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
-import type {
-	ZenodoWriter,
-} from "@opendeved/doi-sync-core";
-import {
-} from "@opendeved/doi-sync-core";
+import type { ZenodoWriter } from "@opendeved/doi-sync-core";
+import {} from "@opendeved/doi-sync-core";
 import type { Client } from "pg";
 import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { describe, it, vi } from "vitest";
@@ -34,7 +33,6 @@ import {
 	finishPublicationJob,
 	PublicationJobLeaseLostError,
 } from "../src/lib/publication/queue";
-
 
 const config = publicationTestConfig();
 
@@ -129,10 +127,19 @@ let fakeZenodoRecordNumber = 1000;
 function successfulZenodoProvider(
 	input: { discardCount?: { value: number } } = {},
 ): ZenodoPublicationProvider {
- return successfulZenodoTestProvider(() => {
-  fakeZenodoRecordNumber += 1;
-  return {id: String(fakeZenodoRecordNumber), parentId: String(fakeZenodoRecordNumber + 10_000)};
- }, undefined, async () => {if (input.discardCount) input.discardCount.value += 1;});
+	return successfulZenodoTestProvider(
+		() => {
+			fakeZenodoRecordNumber += 1;
+			return {
+				id: String(fakeZenodoRecordNumber),
+				parentId: String(fakeZenodoRecordNumber + 10_000),
+			};
+		},
+		undefined,
+		async () => {
+			if (input.discardCount) input.discardCount.value += 1;
+		},
+	);
 }
 
 function failingAfterJournalProvider(): ZenodoPublicationProvider {
@@ -275,6 +282,9 @@ async function verify(database: Database, client: Client) {
 	await client.query(
 		`UPDATE "item" SET "abstractNote" = NULL WHERE "key" = 'ZENACTAA'`,
 	);
+	await client.query(
+		`INSERT INTO "publicationSyncState" ("itemKey", provider, environment, "identifierPolicy", "lastFailureClass", "lastFailureSummary", "consecutiveFailures") VALUES ('ZENACTAA', 'zenodo', 'sandbox', 'mint-zenodo', 'transient', 'Previous draft creation failed', 1)`,
+	);
 	let emptyDraftCalls = 0;
 	const emptyProvider = successfulZenodoProvider();
 	const emptyOutcomes = await runZenodoPublicationJobsOnce(
@@ -301,14 +311,16 @@ async function verify(database: Database, client: Client) {
 	const draftState = await client.query<{
 		draft: string;
 		identifiers: string;
+		failure: string | null;
 	}>(
-		`SELECT "unpublishedDraftDepositionId" AS draft, (SELECT count(*)::text FROM "publicationIdentifier" WHERE "itemKey" = 'ZENACTAA') AS identifiers FROM "publicationSyncState" WHERE "itemKey" = 'ZENACTAA'`,
+		`SELECT "lastFailureSummary" AS failure, "unpublishedDraftDepositionId" AS draft, (SELECT count(*)::text FROM "publicationIdentifier" WHERE "itemKey" = 'ZENACTAA') AS identifiers FROM "publicationSyncState" WHERE "itemKey" = 'ZENACTAA'`,
 	);
 	assert(
 		draftState.rows[0]?.draft === "90001" &&
 			draftState.rows[0]?.identifiers === "0",
 		"Empty draft was not saved independently of registered identifiers",
 	);
+	assert(draftState.rows[0]?.failure === null, "A recovered draft still reports the previous provider failure");
 	const activatedAgain = await activateZenodoPublication(
 		database,
 		"ZENACTAA",
@@ -332,22 +344,39 @@ async function verify(database: Database, client: Client) {
 	);
 	let savedDraftTime = new Date();
 	const interruptedDraft = await runZenodoPublicationJobsOnce(
-		database, config,
+		database,
+		config,
 		memoryStorage(new Map([["public/ZENFILAA.pdf", draftBytes]])),
-		{now: () => savedDraftTime, provider: {
-			...emptyProvider,
-			prepareCreateRecord: async (request) => {
-				assert(request.draftDepositionId === "90001", "Upload lost the saved draft");
-				await request.onPreparedDraft?.({depositionId: "90001", draftRecordId: "90001"});
-				throw new Error("Simulated interrupted upload");
+		{
+			now: () => savedDraftTime,
+			provider: {
+				...emptyProvider,
+				prepareCreateRecord: async (request) => {
+					assert(
+						request.draftDepositionId === "90001",
+						"Upload lost the saved draft",
+					);
+					await request.onPreparedDraft?.({
+						depositionId: "90001",
+						draftRecordId: "90001",
+					});
+					throw new Error("Simulated interrupted upload");
+				},
 			},
-		}},
+		},
 	);
-	assert(interruptedDraft[0]?.status === "retrying", "Upload failure was not retriable");
-	const retainedDraft = await client.query<{draft: string; status: string}>(
+	assert(
+		interruptedDraft[0]?.status === "retrying",
+		"Upload failure was not retriable",
+	);
+	const retainedDraft = await client.query<{ draft: string; status: string }>(
 		`SELECT s."unpublishedDraftDepositionId" AS draft, j.status FROM "publicationSyncState" s JOIN "zenodoPublishJournal" j ON j."itemKey" = s."itemKey" WHERE s."itemKey" = 'ZENACTAA'`,
 	);
-	assert(retainedDraft.rows[0]?.draft === "90001" && retainedDraft.rows[0]?.status === "preparing", "Upload failure lost the draft reference or journal");
+	assert(
+		retainedDraft.rows[0]?.draft === "90001" &&
+			retainedDraft.rows[0]?.status === "preparing",
+		"Upload failure lost the draft reference or journal",
+	);
 	savedDraftTime = new Date(savedDraftTime.getTime() + 61_000);
 	let continuedDraft: string | undefined;
 	const completed = await runZenodoPublicationJobsOnce(
@@ -358,8 +387,12 @@ async function verify(database: Database, client: Client) {
 			now: () => savedDraftTime,
 			provider: {
 				...emptyProvider,
-				prepareEmptyDraft: async () => { throw new Error("Retry must not create another draft"); },
-				discardPreparedDraft: async () => { throw new Error("Retry must preserve the saved draft"); },
+				prepareEmptyDraft: async () => {
+					throw new Error("Retry must not create another draft");
+				},
+				discardPreparedDraft: async () => {
+					throw new Error("Retry must preserve the saved draft");
+				},
 				prepareCreateRecord: async (request) => {
 					continuedDraft = request.draftDepositionId;
 					assert(
@@ -1671,3 +1704,176 @@ describe("Zenodo activation against an isolated database", () => {
 		await verifyIsolatedDatabase();
 	}, 120_000);
 });
+
+it("resumes production archive drafts without consuming Sandbox work", async () => {
+	await withIsolatedPublicationDatabase(async (database, client) => {
+		const production = structuredClone(config);
+		production.services.publication.crossref.environment = "production";
+		production.services.publication.zenodo.environment = "production";
+		await seedParent(client, { key: "ZENPRDAA" });
+		await activateZenodoPublication(
+			database,
+			"ZENPRDAA",
+			config,
+			"mint-zenodo",
+		);
+		const activated = await activateZenodoPublication(
+			database,
+			"ZENPRDAA",
+			production,
+			"mint-zenodo",
+		);
+		assert(
+			activated.environment === "production",
+			"Activation returned the wrong environment",
+		);
+		const requests: string[] = [];
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async (url, init) => {
+				requests.push(String(url));
+				assert(
+					String(url) ===
+						"https://zenodo.org/api/deposit/depositions",
+					"Production used a different endpoint",
+				);
+				assert.deepEqual(
+					{ method: init?.method, body: init?.body },
+					{ method: "POST", body: "{}" },
+					"Fileless activation sent publication metadata",
+				);
+				return Response.json({
+					id: "990001",
+					record_id: "990001",
+					conceptrecid: "990000",
+					submitted: false,
+					state: "unsubmitted",
+					metadata: {},
+					files: [],
+					links: {
+						self: "https://zenodo.org/api/deposit/depositions/990001",
+						html: "https://zenodo.org/deposit/990001",
+					},
+				});
+			});
+		try {
+			const result = await runZenodoPublicationJobsOnce(
+				database,
+				production,
+				memoryStorage(new Map()),
+			);
+			assert.deepEqual(
+				result.map((outcome) => outcome.status),
+				["waiting"],
+				"Production did not prepare its fileless draft",
+			);
+		} finally {
+			fetchSpy.mockRestore();
+		}
+		assert(requests.length === 1, "Production created duplicate drafts");
+		const states = await client.query(
+			`SELECT "environment", "unpublishedDraftDepositionId" FROM "publicationSyncState" WHERE "itemKey" = 'ZENPRDAA'`,
+		);
+		assert.deepEqual(
+			states.rows,
+			[
+				{
+					environment: "production",
+					unpublishedDraftDepositionId: "990001",
+				},
+			],
+			"Production draft state crossed environments",
+		);
+		const sandboxJob = await client.query(
+			`SELECT "attempts", "processedAt" FROM "publicationSyncJob" WHERE "itemKey" = 'ZENPRDAA' AND "environment" = 'sandbox'`,
+		);
+		assert.deepEqual(
+			sandboxJob.rows,
+			[{ attempts: 0, processedAt: null }],
+			"Production consumed the sandbox job",
+		);
+		const bytes = new TextEncoder().encode("Production archive file");
+		await seedPublishedFile(client, "ZENPRDAA", "ZENPRDFA", bytes);
+		await client.query(
+			`UPDATE "item" SET "revision" = 2 WHERE "key" = 'ZENPRDAA'`,
+		);
+		await activateZenodoPublication(
+			database,
+			"ZENPRDAA",
+			production,
+			"mint-zenodo",
+		);
+		const provider = successfulZenodoProvider();
+		const uploaded = await runZenodoPublicationJobsOnce(
+			database,
+			production,
+			memoryStorage(new Map([["public/ZENPRDFA.pdf", bytes]])),
+			{
+				provider: {
+					...provider,
+					prepareCreateRecord: async (request) => {
+						assert(
+							request.draftDepositionId === "990001",
+							"Production lost its saved draft",
+						);
+						return provider.prepareCreateRecord({
+							...request,
+							onPreparedDraft: async (draft) => {
+								await client.query(
+									`INSERT INTO "zenodoPublishJournal" ("itemKey", "environment", "operationType", "payloadHash", "payloadSnapshot", "depositionId", "draftRecordId", "status") VALUES ('ZENPRDAA', 'sandbox', 'zenodo_create', repeat('b',64), '{}'::jsonb, $1, $1, 'preparing')`,
+									[draft.depositionId],
+								);
+								await request.onPreparedDraft?.(draft);
+							},
+						});
+					},
+				},
+			},
+		);
+		assert(
+			uploaded[0]?.status === "succeeded",
+			"Production file upload did not settle",
+		);
+		const identifiers = await client.query(
+			`SELECT "environment" FROM "publicationIdentifier" WHERE "itemKey" = 'ZENPRDAA'`,
+		);
+		assert.deepEqual(
+			identifiers.rows,
+			[{ environment: "production" }, { environment: "production" }],
+			"Production identifiers were saved under Sandbox",
+		);
+		const sandboxJournal = await client.query(
+			`SELECT "status", "payloadHash" FROM "zenodoPublishJournal" WHERE "itemKey" = 'ZENPRDAA' AND "environment" = 'sandbox'`,
+		);
+		assert.deepEqual(
+			sandboxJournal.rows,
+			[{ status: "preparing", payloadHash: "b".repeat(64) }],
+			"Production settlement changed a colliding sandbox journal",
+		);
+		const overview = await getAdminPublicationWorkerOverview(
+			database,
+			production,
+		);
+		assert.deepEqual(
+			{
+				hasPending: overview.queue.hasPending,
+				hasFailed: overview.queue.hasFailed,
+			},
+			{ hasPending: false, hasFailed: false },
+			"Production worker status included sandbox work",
+		);
+		const beforeAudit = await client.query(
+			`SELECT count(*)::int AS count FROM "publicationSyncJob" WHERE "environment" = 'sandbox'`,
+		);
+		await runNightlyPublicationReconciliation(database, production, {
+			workerId: "production-reconciliation",
+		});
+		const afterAudit = await client.query(
+			`SELECT count(*)::int AS count FROM "publicationSyncJob" WHERE "environment" = 'sandbox'`,
+		);
+		assert(
+			afterAudit.rows[0].count === beforeAudit.rows[0].count,
+			"Production reconciliation queued sandbox work",
+		);
+	});
+}, 120_000);

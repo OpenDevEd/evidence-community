@@ -210,6 +210,7 @@ async function reconcileTarget(
 	runId: string,
 	now: Date,
 ) {
+	if (target.environment !== config.services.publication[target.provider].environment) return 0;
 	return database.transaction(async (transaction) => {
 		if (!(await tryLockItemMutation(transaction, target.itemKey))) return 0;
 		const [currentTarget] = await transaction
@@ -252,6 +253,7 @@ async function reconcileTarget(
 					: "nightly_reconciliation",
 			now,
 			providers: [target.provider],
+			environment: target.environment,
 			idempotencyDiscriminator: runId,
 		});
 		return jobs.length;

@@ -457,7 +457,7 @@ async function verifyLiveWriteback() {
 		privatePaths.add(ready.objectPath);
 		assert(ready.coverObjectPath, "PDF completion did not create a cover");
 		privatePaths.add(ready.coverObjectPath);
-		const published = await publishNativePdf(database, storage, {
+		const published = await publishNativePdf(database, storage, config.services.publication, {
 			expectedUploadRevision: ready.uploadRevision,
 			itemKey: attachmentDraft.itemKey,
 			publicationTags,
@@ -616,7 +616,7 @@ async function verifyLiveWriteback() {
 		);
 		await verifyNativeSeparation(database, itemKeys);
 
-		await unpublishNativePdf(database, storage, attachmentDraft.itemKey);
+		await unpublishNativePdf(database, storage, config.services.publication, attachmentDraft.itemKey);
 		await drainWriteback(database, config, itemKeys, "pdf-unpublish");
 		const unpublishedRemote = await remoteItem(
 			zotero.client,
