@@ -6,22 +6,62 @@ import { ADMIN_RESPONSE_HEADERS, handleAdminResponse } from "@/lib/admin/http";
 
 export async function POST(request: NextRequest) {
 	await connection();
-	if (!hasMatchingRequestOrigin(request.nextUrl, request.headers)) return NextResponse.json({error: "Invalid request origin"}, {status: 403, headers: ADMIN_RESPONSE_HEADERS});
-	return handleAdminResponse(request, ADMIN_CONTENT_PERMISSION, async session => {
-	const body: unknown = await request.json().catch(() => null);
-	if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error: "Invalid request"}, {status: 400, headers: ADMIN_RESPONSE_HEADERS});
+	if (!hasMatchingRequestOrigin(request.nextUrl, request.headers))
+		return NextResponse.json(
+			{ error: "Invalid request origin" },
+			{ status: 403, headers: ADMIN_RESPONSE_HEADERS },
+		);
+	return handleAdminResponse(
+		request,
+		ADMIN_CONTENT_PERMISSION,
+		async (session) => {
+			const body: unknown = await request.json().catch(() => null);
+			if (!body || typeof body !== "object" || Array.isArray(body))
+				return NextResponse.json(
+					{ error: "Invalid request" },
+					{ status: 400, headers: ADMIN_RESPONSE_HEADERS },
+				);
+			return forwardAuthorProfileRequest(body, session.clerkUserId);
+		},
+	);
+}
+
+async function forwardAuthorProfileRequest(body: object, clerkUserId: string) {
 	const service = (await getLibraryConfig()).authentication.openScholar;
 	try {
-		const response = await fetch(new URL("/api/v1/evidence-libraries/author-profiles", service.convexSiteUrl), {
-			method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}`},
-			body: JSON.stringify({...body, libraryId: service.libraryId, clerkUserId: session.clerkUserId}),
-			signal: AbortSignal.timeout(10000), cache: "no-store",
-		});
+		const response = await fetch(
+			new URL(
+				"/api/v1/evidence-libraries/author-profiles",
+				service.convexSiteUrl,
+			),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${service.machineCredential}`,
+				},
+				body: JSON.stringify({
+					...body,
+					libraryId: service.libraryId,
+					clerkUserId: clerkUserId,
+				}),
+				signal: AbortSignal.timeout(10000),
+				cache: "no-store",
+			},
+		);
 		const result = await response.json();
-		return NextResponse.json({...result, profileBaseUrl: new URL(service.loginPageUrl).origin}, {status: response.status, headers: ADMIN_RESPONSE_HEADERS});
+		return NextResponse.json(
+			{ ...result, profileBaseUrl: new URL(service.loginPageUrl).origin },
+			{ status: response.status, headers: ADMIN_RESPONSE_HEADERS },
+		);
 	} catch (error) {
-		console.error("Author profile catalog request failed", {libraryId: service.libraryId, error});
-		return NextResponse.json({error: "Author profiles are unavailable. Try again shortly."}, {status: 503, headers: ADMIN_RESPONSE_HEADERS});
+		console.error("Author profile catalog request failed", {
+			libraryId: service.libraryId,
+			error,
+		});
+		return NextResponse.json(
+			{ error: "Author profiles are unavailable. Try again shortly." },
+			{ status: 503, headers: ADMIN_RESPONSE_HEADERS },
+		);
 	}
-	});
 }
