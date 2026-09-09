@@ -211,3 +211,16 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 
  });
 }, 120_000);
+
+it('opens a reviewable parent draft when an attachment is added to a published record', async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    const parent = await createNativeItemDraft(db, {itemType: 'Report', title: 'Published report'});
+    await publishNativeItemDraft(db, parent.itemKey);
+    const attachment = await createNativeItemDraft(db, {itemType: 'Attachment', title: 'New PDF', parentItem: parent.itemKey});
+    const draft = await getNativeItemDraft(db, parent.itemKey);
+    assert.equal(draft.payload.title, 'Published report');
+    await setItemPublishingChoice(db, parent.itemKey, {route: 'zenodo', identifierPolicy: 'mint-zenodo'});
+    const review = await submitItemReview(db, parent.itemKey, noFileActor);
+    assert.deepEqual(review.snapshot.records.map(record => record.itemKey).sort(), [parent.itemKey, attachment.itemKey].sort());
+  });
+});

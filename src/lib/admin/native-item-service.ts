@@ -573,6 +573,7 @@ export async function createNativeItemDraft(db: Database, payload: unknown) {
 			if (!parentIdentity) {
 				throw new ItemParentUnavailableError(parentItemKey);
 			}
+			await openItemDraftInTransaction(transaction, parentItemKey);
 		}
 		const itemKey = await reserveItemIdentity(transaction, {
 			sourceConnectionKey: NATIVE_CONNECTION_KEY,
