@@ -885,7 +885,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			capabilities: {
 				canActivate:
 					!target && blockers.length === 0 && displayState !== "external",
-				canRetry: Boolean(target) && displayState === "failed",
+				canRetry: Boolean(target && job?.deadLetteredAt) && displayState === "failed",
 				actionLabel:
 					provider === "crossref"
 						? "Activate Crossref DOI"
