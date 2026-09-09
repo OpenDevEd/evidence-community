@@ -309,6 +309,51 @@ export async function correctItemReview(
 	});
 }
 
+async function publishReviewRecords(
+	transaction: DatabaseTransaction,
+	locked: typeof itemReview.$inferSelect,
+	config: LibraryServerConfig,
+) {
+	const remainingConflicts: Record<string, string[]> = {};
+	const indexingKeys = new Set(locked.snapshot.records.map(record => record.itemKey));
+	// Publish the root before its attachments, within this same transaction.
+	const records = [...locked.snapshot.records].sort(
+		(a, b) =>
+			Number(b.itemKey === locked.itemKey) -
+			Number(a.itemKey === locked.itemKey),
+	);
+	for (const submitted of records) {
+		const approved =
+			locked.corrections.find(
+				(record) => record.itemKey === submitted.itemKey,
+			) ?? submitted;
+		const [latest] = await transaction
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, submitted.itemKey));
+		const result = await publishItemDraftWithContext(
+			transaction,
+			submitted.itemKey,
+			{
+				writebackConfig: config,
+				review: {
+					submitted: {
+						...submitted,
+						baseRevision: latest?.revision ?? 0,
+					},
+					approved,
+				},
+			},
+		);
+		for (const record of result.indexingRecords) indexingKeys.add(record.key);
+		if (result.draftConflicts.length)
+			remainingConflicts[submitted.itemKey] = [
+				...result.draftConflicts,
+			];
+	}
+	return { remainingConflicts, indexingKeys };
+}
+
 export async function approveItemReview(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -389,43 +434,7 @@ export async function approveItemReview(
 				)
 					throw new ItemDraftConflictError(record.itemKey);
 			}
-			const remainingConflicts: Record<string, string[]> = {};
-            const indexingKeys = new Set(keys);
-			// Publish the root before its attachments, within this same transaction.
-			const records = [...locked.snapshot.records].sort(
-				(a, b) =>
-					Number(b.itemKey === locked.itemKey) -
-					Number(a.itemKey === locked.itemKey),
-			);
-			for (const submitted of records) {
-				const approved =
-					locked.corrections.find(
-						(record) => record.itemKey === submitted.itemKey,
-					) ?? submitted;
-				const [latest] = await transaction
-					.select({ revision: item.revision })
-					.from(item)
-					.where(eq(item.key, submitted.itemKey));
-				const result = await publishItemDraftWithContext(
-					transaction,
-					submitted.itemKey,
-					{
-						writebackConfig: config,
-						review: {
-							submitted: {
-								...submitted,
-								baseRevision: latest?.revision ?? 0,
-							},
-							approved,
-						},
-					},
-				);
-				for (const record of result.indexingRecords) indexingKeys.add(record.key);
-				if (result.draftConflicts.length)
-					remainingConflicts[submitted.itemKey] = [
-						...result.draftConflicts,
-					];
-			}
+			const { remainingConflicts, indexingKeys } = await publishReviewRecords(transaction, locked, config);
 			const fileResults = [];
 			for (const file of prepared)
 				fileResults.push(await file.commit(transaction));
