@@ -4,7 +4,36 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
 
-export function useReviewCorrections(snapshot: AdminReviewSnapshot | undefined, refresh: () => Promise<unknown>) {
+type CorrectionRecord = Pick<AdminReviewSnapshot, "key"> & {draft: {baseRevision: number} | null};
+type CorrectionSnapshot = Pick<AdminReviewSnapshot, "reviewId" | "reviewRevision"> & CorrectionRecord & {frozenAttachments: CorrectionRecord[]};
+
+function correctionRecords(review: CorrectionSnapshot, edits: Map<string, Record<string, unknown>>) {
+ const records = [review, ...review.frozenAttachments];
+ return [...edits].map(([itemKey, payload]) => {
+  const record = records.find(record => record.key === itemKey);
+  if (!record?.draft) throw new Error("The submitted item is no longer available.");
+  return {itemKey, baseRevision: record.draft.baseRevision, payload};
+ });
+}
+
+function restorePendingEdits(pending: Map<string, Record<string, unknown>>, edits: Map<string, Record<string, unknown>>) {
+ for (const [key, payload] of edits) if (!pending.has(key)) pending.set(key, payload);
+}
+
+function mayReplaceSnapshot(incoming: CorrectionSnapshot, current: CorrectionSnapshot | undefined) {
+ return !current || incoming.reviewId !== current.reviewId || incoming.reviewRevision >= current.reviewRevision;
+}
+
+function awaitingSnapshot(snapshot: CorrectionSnapshot | undefined, current: CorrectionSnapshot | undefined) {
+ if (!snapshot || !current) return false;
+ return snapshot.reviewId === current.reviewId && snapshot.reviewRevision < current.reviewRevision;
+}
+
+function correctionError(error: unknown) {
+ return error instanceof Error ? error.message : "Could not save review corrections";
+}
+
+export function useReviewCorrections(snapshot: CorrectionSnapshot | undefined, refresh: () => Promise<unknown>) {
  const [loadedRevision, setLoadedRevision] = useState<string | undefined>(undefined);
  const [payloads, setPayloads] = useState<Record<string, Record<string, unknown>>>({});
  const [saving, setSaving] = useState(false);
@@ -15,13 +44,12 @@ export function useReviewCorrections(snapshot: AdminReviewSnapshot | undefined, 
  const current = useRef(snapshot);
  const refreshRef = useRef(refresh);
  refreshRef.current = refresh;
- if (snapshot && !pending.current.size && !saving) {
-  const incoming = `${snapshot.reviewId}:${snapshot.reviewRevision}`;
-  if (incoming !== loadedRevision && (!current.current || snapshot.reviewId !== current.current.reviewId || snapshot.reviewRevision >= current.current.reviewRevision)) {
-   current.current = snapshot;
-   setLoadedRevision(incoming);
-   setPayloads({});
-  }
+ const incoming = snapshot ? `${snapshot.reviewId}:${snapshot.reviewRevision}` : undefined;
+ const canLoad = snapshot && mayReplaceSnapshot(snapshot, current.current);
+ if (canLoad && incoming !== loadedRevision && !(pending.current.size || saving)) {
+  current.current = snapshot;
+  setLoadedRevision(incoming);
+  setPayloads({});
  }
 
  const flush = () => {
@@ -32,21 +60,16 @@ export function useReviewCorrections(snapshot: AdminReviewSnapshot | undefined, 
    const edits = new Map(pending.current);
    pending.current.clear();
    try {
-    const records = [review, ...review.frozenAttachments];
     const saved = await updateAdminReview(review.reviewId, {
      action: "correct", expectedRevision: review.reviewRevision,
-     records: [...edits].map(([itemKey, payload]) => {
-      const record = records.find(record => record.key === itemKey);
-      if (!record?.draft) throw new Error("The submitted item is no longer available.");
-      return {itemKey, baseRevision: record.draft.baseRevision, payload};
-     }),
+     records: correctionRecords(review, edits),
     });
     current.current = {...review, reviewRevision: saved.revision};
     await refreshRef.current();
     setError(null);
    } catch (error) {
-    for (const [key, payload] of edits) if (!pending.current.has(key)) pending.current.set(key, payload);
-    const message = error instanceof Error ? error.message : "Could not save review corrections";
+    restorePendingEdits(pending.current, edits);
+    const message = correctionError(error);
     setError(message);
     toast.error(message);
    } finally { setSaving(pending.current.size > 0); }
@@ -59,7 +82,7 @@ export function useReviewCorrections(snapshot: AdminReviewSnapshot | undefined, 
  useEffect(() => () => { void flushRef.current(); }, []);
 
  return {
-  payloads, saving: saving || Boolean(snapshot && current.current && snapshot.reviewId === current.current.reviewId && snapshot.reviewRevision < current.current.reviewRevision), error,
+  payloads, saving: saving || awaitingSnapshot(snapshot, current.current), error,
   change: (key: string, payload: Record<string, unknown>) => {
    setPayloads(previous => ({...previous, [key]: payload}));
    pending.current.set(key, payload);
