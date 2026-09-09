@@ -505,6 +505,8 @@ async function verify() {
 		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
 		assert(approvedReview.review.state === "published", "Review approval did not finish");
 		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
+        const [publishedReviewRoot] = await db.select().from(item).where(eq(item.key, reviewParent.itemKey));
+        assert(publishedReviewRoot && displayedSnapshot.revision === publishedReviewRoot.revision && displayedSnapshot.revision > 0, "Submitted inspector lost the published revision");
 		const displayedFile = displayedSnapshot.frozenAttachments.find((attachment) => attachment.key === reviewAttachment.itemKey);
 		assert(displayedFile?.fileDraft?.actualSha256 === fileHash(reviewPdf), "Submitted-version data showed the newer PDF");
 		assert(displayedFile.sourceFileUrl?.includes(captured.id), "Submitted PDF link was not bound to its review");
