@@ -1,3 +1,5 @@
+import { describe, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { libraryConfigSchema } from "../src/config/library-config/schema";
 import { maximalLibraryConfig } from "../tests/fixtures/library-config";
 import { getAdminItemListPage } from "../src/lib/admin/item-list-query";
@@ -1362,7 +1364,6 @@ async function verify() {
 	}
 }
 
-verify().catch((error) => {
-	console.error(error);
-	process.exitCode = 1;
+describe("native files and submitted reviews", () => {
+	it("retains frozen files, protects drafts, and publishes approved changes transactionally", verify, 120_000);
 });

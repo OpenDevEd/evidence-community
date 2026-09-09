@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { savePublicationJob } from "../src/lib/publication/queue";
 import { createNativeItemDraft, publishItemDraft } from "../src/lib/admin/native-item-service";
@@ -24,10 +25,6 @@ import {
 } from "../src/lib/publication/crossref-activation-service";
 import { buildCrossrefPlan, runCrossrefPublicationJobsOnce } from "../src/lib/publication/crossref-adapter";
 
-
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
-}
 
 const config = publicationTestConfig({zenodoEnabled: false, retryLimit: 2});
 

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
@@ -36,10 +37,6 @@ import {
 	PublicationJobLeaseLostError,
 } from "../src/lib/publication/queue";
 
-
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
-}
 
 const config = publicationTestConfig();
 

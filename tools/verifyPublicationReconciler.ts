@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { eq } from "drizzle-orm";
 import type { Client } from "pg";
@@ -14,10 +15,6 @@ import {
 import { buildCrossrefPlan } from "../src/lib/publication/crossref-adapter";
 import { runNightlyPublicationReconciliation } from "../src/lib/publication/reconciler";
 
-
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
-}
 
 const config = publicationTestConfig();
 

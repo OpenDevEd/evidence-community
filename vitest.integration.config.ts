@@ -9,7 +9,13 @@ export default defineConfig({
 	},
 	test: {
 		environment: "node",
-		include: ["tools/verifyPublicationWorker.ts"],
+		include: [
+			"tools/verifyCrossrefActivation.ts",
+			"tools/verifyZenodoActivation.ts",
+			"tools/verifyPublicationWorker.ts",
+			"tools/verifyPublicationReconciler.ts",
+			"tools/verifyNativeFileLifecycle.ts",
+		],
 		maxWorkers: 1,
 	},
 });
