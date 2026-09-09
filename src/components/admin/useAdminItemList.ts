@@ -60,6 +60,8 @@ function buildListSearchParams(
 export function useAdminItemList(
 	requestedColumns: readonly AdminItemColumnId[],
 	initialFilters: AdminItemViewFilters,
+    linkPicking = false,
+    selectionPinned = false,
 ) {
 	const routeSearchParams = useSearchParams();
 	const routeSearch = routeSearchParams.toString();
@@ -111,7 +113,7 @@ export function useAdminItemList(
 			setLoading(true);
 			try {
 				const page = await getAdminItems(
-					buildListSearchParams(filters, cursor, requestedColumns),
+					buildListSearchParams(linkPicking ? {...filters, reviewQueue: false} : filters, cursor, requestedColumns),
 					controller.signal,
 				);
 				if (currentRequest !== requestId.current) return;
@@ -130,7 +132,7 @@ export function useAdminItemList(
 						return next.size === current.size ? current : next;
 					});
 					const firstVisibleKey = page.items[0]?.key ?? null;
-					if (filters.reviewQueue) {
+					if (filters.reviewQueue && !selectionPinned) {
 						void setSelectedKeyInUrl((current) => current && visibleKeys.has(current) ? current : firstVisibleKey, { history: "replace" });
 					} else if (!selectionInitialized.current && firstVisibleKey) {
 						selectionInitialized.current = true;
@@ -157,7 +159,7 @@ export function useAdminItemList(
 				if (currentRequest === requestId.current) setLoading(false);
 			}
 		},
-		[filters, requestedColumns, setSelectedKeyInUrl],
+		[filters, requestedColumns, setSelectedKeyInUrl, linkPicking, selectionPinned],
 	);
 
 	useEffect(() => {
