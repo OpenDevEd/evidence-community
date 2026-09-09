@@ -400,6 +400,13 @@
       "when": 1788919199215,
       "tag": "0056_author_association_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1788954171161,
+      "tag": "0057_library_notifications",
+      "breakpoints": true
     }
   ]
 }

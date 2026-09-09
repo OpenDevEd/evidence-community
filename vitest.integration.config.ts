@@ -16,6 +16,7 @@ export default defineConfig({
 			"tools/verifyPublicationReconciler.ts",
 			"tools/verifyNativeFileLifecycle.ts",
             "tests/integration/editorial-reviews.test.ts",
+            "tests/integration/notifications.test.ts",
 		],
 		maxWorkers: 1,
 	},

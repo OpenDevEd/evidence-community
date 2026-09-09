@@ -62,6 +62,7 @@ export function getUnlocalizedPathname(pathname: string) {
  * "page not found" screen.
  */
 const RESERVED_ROUTE_SEGMENTS = new Set([
+	"digests",
 	"404",
 	"about",
 	"admin",

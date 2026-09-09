@@ -1621,6 +1621,18 @@ const emailConfigurationSchema = z
 	.strict()
 	.prefault({});
 
+const notificationsSchema = z.object({
+	enabled: z.boolean().default(false),
+	weekly: z.object({
+		weekday: z.number().int().min(0).max(6).default(1),
+		time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u, "Use HH:mm").default("09:00"),
+		timezone: z.string().min(1).max(100).refine(value => {
+			try { new Intl.DateTimeFormat("en", {timeZone: value}); return true; }
+			catch { return false; }
+		}, "Use a valid timezone").default("UTC"),
+	}).strict().prefault({}),
+}).strict().prefault({});
+
 const generationSchema = z
 	.object({
 		sitemap: z.boolean().default(true),
@@ -1690,6 +1702,7 @@ const serverConfigShape = {
 	analytics: analyticsSchema,
 	authentication: authenticationSchema,
 	email: emailConfigurationSchema,
+	notifications: notificationsSchema,
 	generation: generationSchema,
 	processing: processingSchema,
 };
@@ -1852,11 +1865,11 @@ export function createLibraryConfigSchema(
 				"AI features require an enabled provider",
 			);
 		}
-		if (config.features.ai && !config.services.redis) {
+		if ((config.features.ai || config.notifications.enabled) && !config.services.redis) {
 			addRequiredIssue(
 				context,
 				["services", "redis"],
-				"AI features require the private Redis service",
+				"AI and email subscriptions require the private Redis service",
 			);
 		}
 
@@ -1972,7 +1985,7 @@ export function createLibraryConfigSchema(
 
 		const emailEnabled =
 			Boolean(config.email.contactRecipient) ||
-			Boolean(config.email.takedownRecipient);
+			Boolean(config.email.takedownRecipient) || config.notifications.enabled;
 		if (emailEnabled) {
 			if (!config.email.smtp.host) {
 				addRequiredIssue(
@@ -2044,6 +2057,7 @@ export const publicLibraryConfigSchema = z
 		exports: exportsSchema,
 		ai: publicAiSchema,
 		analytics: analyticsSchema,
+		notifications: notificationsSchema,
 		authentication: publicAuthenticationSchema,
 	})
 	.strict();

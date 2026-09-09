@@ -351,33 +351,29 @@ const redisForConfig =
 	new RevisionAwareAIRateLimitRedis();
 globalAIRateLimit.__evidenceLibraryAIRateLimitRedis = redisForConfig;
 
-export async function consumeAIRateLimit(
-	identity: AIRateLimitIdentity,
-	config: Pick<
-		LibraryServerConfig,
-		"authentication" | "revision" | "services" | "updatedAt"
-	>,
+export async function consumeConfiguredRateLimit(
+  identity: AIRateLimitIdentity,
+  config: Pick<LibraryServerConfig, "authentication" | "revision" | "services" | "updatedAt">,
+  policy: AIRateLimitPolicy,
 ) {
-	try {
-		const redis = await redisForConfig.get(config);
-		const policy: AIRateLimitPolicy = {
-			clientWindows: AI_RATE_LIMIT_CLIENT_WINDOWS,
-			networkWindow: AI_RATE_LIMIT_NETWORK_WINDOW,
-			keyPrefix: buildAIRateLimitKeyPrefix(
-				AI_RATE_LIMIT_DEPLOYMENT_NAMESPACE,
-				config.authentication.openScholar.libraryId,
-			),
-		};
-		return await createRedisAIRateLimitStore(redis, policy).consume(
-			identity,
-		);
-	} catch (error) {
-		if (error instanceof AIRateLimitUnavailableError) throw error;
-		throw new AIRateLimitUnavailableError(
-			"The AI rate-limit service is unavailable.",
-			{ cause: error },
-		);
-	}
+  try {
+    const redis = await redisForConfig.get(config);
+    return await createRedisAIRateLimitStore(redis, policy).consume(identity);
+  } catch (error) {
+    if (error instanceof AIRateLimitUnavailableError) throw error;
+    throw new AIRateLimitUnavailableError("The rate-limit service is unavailable.", { cause: error });
+  }
+}
+
+export async function consumeAIRateLimit(
+  identity: AIRateLimitIdentity,
+  config: Pick<LibraryServerConfig, "authentication" | "revision" | "services" | "updatedAt">,
+) {
+  return consumeConfiguredRateLimit(identity, config, {
+    clientWindows: AI_RATE_LIMIT_CLIENT_WINDOWS,
+    networkWindow: AI_RATE_LIMIT_NETWORK_WINDOW,
+    keyPrefix: buildAIRateLimitKeyPrefix(AI_RATE_LIMIT_DEPLOYMENT_NAMESPACE, config.authentication.openScholar.libraryId),
+  });
 }
 
 export function aiRateLimitHeaders(result: AIRateLimitResult) {

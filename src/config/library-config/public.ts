@@ -53,6 +53,7 @@ export function projectPublicLibraryConfig(
 			})),
 		},
 		analytics: config.analytics,
+		notifications: config.notifications,
 		authentication: {
 			google: {
 				enabled: config.authentication.google.enabled,

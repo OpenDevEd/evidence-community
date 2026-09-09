@@ -225,7 +225,7 @@ export default function Navbar() {
 		    header itself is a full-bleed colored band. Aligned to the navbar's
 		    content width. */}
 		{showNavbarSearch && (
-			<div className="w-full max-w-site px-0 xl:px-14">
+			<div className="relative z-40 w-full max-w-site px-0 xl:px-14">
 				<NavbarSearch />
 			</div>
 		)}

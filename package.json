@@ -112,6 +112,7 @@
 		"chart.js": "^4.5.1",
 		"citation-js": "^0.7.16",
 		"citeproc": "^2.4.63",
+		"cron-parser": "5.10.0",
 		"d3-color": "^3.1.0",
 		"d3-interpolate": "^3.0.1",
 		"d3-transition": "^3.0.1",

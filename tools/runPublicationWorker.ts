@@ -1,3 +1,4 @@
+import { runNotificationCycle } from "../src/lib/notifications/worker";
 import { runAuthorAssociationCycle } from "../src/lib/authors/association-delivery";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
@@ -169,6 +170,7 @@ async function main() {
 		do {
 			try {
 				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
+				const notificationError = await runNotificationCycle(resource.database, config, abortController.signal);
 				const cycle = await runPublicationWorkerCycle(
 					resource.database,
 					config,
@@ -208,7 +210,7 @@ async function main() {
 					? cycle.errors
 							.map(({ stage, message }) => `${stage}: ${message}`)
 							.join("; ")
-					: null;
+					: notificationError || null;
 				await report(
 					{
 						...reporter.current(),
@@ -248,9 +250,14 @@ async function main() {
 								3_600_000,
 							)
 						: command.pollMs;
-					await delay(retryDelayMs, undefined, {
-						signal: abortController.signal,
-					});
+					const resumeAt = Date.now() + retryDelayMs;
+                    do {
+                        await delay(Math.min(command.pollMs, Math.max(0, resumeAt - Date.now())), undefined, { signal: abortController.signal });
+                        if (Date.now() < resumeAt && config.notifications.enabled) {
+                            const notificationError = await runNotificationCycle(resource.database, config, abortController.signal);
+                            if (notificationError) await report({ ...reporter.current(), lastError: notificationError }, true);
+                        }
+                    } while (Date.now() < resumeAt && !abortController.signal.aborted);
 				} catch {
 					// The process was asked to stop.
 				}
