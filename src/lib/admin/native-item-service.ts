@@ -1635,6 +1635,17 @@ async function validateUnpublishedDraftRemoval(transaction: Transaction, itemKey
 	}
 }
 
+async function discardMetadataDraft(transaction: Transaction, itemKey: string) {
+ const [discarded] = await transaction.delete(itemDraft).where(eq(itemDraft.itemKey, itemKey)).returning({itemKey: itemDraft.itemKey});
+ if (!discarded) throw new ItemDraftConflictError(itemKey);
+ await transaction.update(itemReview).set({remainingConflicts: sql`${itemReview.remainingConflicts} - ${itemKey}`, revision: sql`${itemReview.revision} + 1`}).where(sql`${itemReview.remainingConflicts} ? ${itemKey}`);
+}
+
+async function discardStagedFileReferences(transaction: Transaction, itemKey: string, staged: {objectPath: string; coverObjectPath: string | null}) {
+ await transaction.delete(itemFileDraft).where(eq(itemFileDraft.itemKey, itemKey));
+ return [staged.objectPath, staged.coverObjectPath].filter((path): path is string => Boolean(path));
+}
+
 async function discardItemDraftInTransaction(
 	transaction: Transaction,
 	itemKey: string,
@@ -1691,24 +1702,9 @@ async function discardItemDraftInTransaction(
 		.where(eq(item.key, itemKey))
 		.limit(1);
 	if (!published) await validateUnpublishedDraftRemoval(transaction, itemKey);
-	const [discarded] = draft
-		? await transaction
-				.delete(itemDraft)
-				.where(eq(itemDraft.itemKey, itemKey))
-				.returning({ itemKey: itemDraft.itemKey })
-		: [null];
-	if (draft && !discarded) throw new ItemDraftConflictError(itemKey);
-	if (discarded) {
-		await transaction.update(itemReview).set({
-			remainingConflicts: sql`${itemReview.remainingConflicts} - ${itemKey}`,
-			revision: sql`${itemReview.revision} + 1`,
-		}).where(sql`${itemReview.remainingConflicts} ? ${itemKey}`);
-	}
-	let stagedPrivatePaths: string[] = [];
-	if ((!published || removeFileDraft) && staged) {
-		await transaction.delete(itemFileDraft).where(eq(itemFileDraft.itemKey, itemKey));
-		stagedPrivatePaths = [staged.objectPath, staged.coverObjectPath].filter((path): path is string => Boolean(path));
-	}
+	if (draft) await discardMetadataDraft(transaction, itemKey);
+ const stagedPrivatePaths = staged && (!published || removeFileDraft)
+  ? await discardStagedFileReferences(transaction, itemKey, staged) : [];
 	return {stagedPrivatePaths};
 }
 

@@ -96,6 +96,45 @@ export async function setItemPublishingChoice(
 	});
 }
 
+async function submissionPublishingChoice(transaction: DatabaseTransaction, itemKey: string, kind: string) {
+		const [pending] = await transaction
+			.select({ id: itemReview.id })
+			.from(itemReview)
+			.where(
+				and(
+					eq(itemReview.itemKey, itemKey),
+					eq(itemReview.state, "pending"),
+				),
+			);
+		if (pending)
+			throw new AdminValidationError(
+				"This item already has a pending review.",
+			);
+		const [unresolved] = await transaction
+			.select({ id: itemReview.id })
+			.from(itemReview)
+			.where(
+				and(
+					eq(itemReview.itemKey, itemKey),
+					sql`${itemReview.remainingConflicts} <> '{}'::jsonb`,
+				),
+			)
+			.limit(1);
+		if (unresolved)
+			throw new AdminValidationError(
+				"Resolve the working draft conflicts before submitting again.",
+			);
+		const [choiceRow] = await transaction
+			.select()
+			.from(itemPublishingChoice)
+			.where(eq(itemPublishingChoice.itemKey, itemKey));
+		if (kind === "created" && !choiceRow)
+			throw new AdminValidationError(
+				"Choose identifiers before submitting.",
+			);
+        return choiceRow?.choice ?? null;
+}
+
 export async function submitItemReview(
 	db: Database,
 	rootKey: string,
@@ -118,41 +157,7 @@ export async function submitItemReview(
 			JSON.stringify(await reviewChildKeys(transaction, rootKey))
 		)
 			throw new ItemDraftConflictError(rootKey);
-		const [pending] = await transaction
-			.select({ id: itemReview.id })
-			.from(itemReview)
-			.where(
-				and(
-					eq(itemReview.itemKey, rootKey),
-					eq(itemReview.state, "pending"),
-				),
-			);
-		if (pending)
-			throw new AdminValidationError(
-				"This item already has a pending review.",
-			);
-		const [unresolved] = await transaction
-			.select({ id: itemReview.id })
-			.from(itemReview)
-			.where(
-				and(
-					eq(itemReview.itemKey, rootKey),
-					sql`${itemReview.remainingConflicts} <> '{}'::jsonb`,
-				),
-			)
-			.limit(1);
-		if (unresolved)
-			throw new AdminValidationError(
-				"Resolve the working draft conflicts before submitting again.",
-			);
-		const [choiceRow] = await transaction
-			.select()
-			.from(itemPublishingChoice)
-			.where(eq(itemPublishingChoice.itemKey, rootKey));
-		if (identity.kind === "created" && !choiceRow)
-			throw new AdminValidationError(
-				"Choose identifiers before submitting.",
-			);
+		const publishingChoice = await submissionPublishingChoice(transaction, rootKey, identity.kind);
 		const {records, capturedFiles} = await captureItemReviewSnapshot(transaction, rootKey, keys);
 		if (!records.some((record) => record.itemKey === rootKey))
 			throw new ItemNotFoundError(rootKey);
@@ -163,7 +168,7 @@ export async function submitItemReview(
 				submittedBy: actor.userId,
 				snapshot: {
 					records,
-					publishingChoice: choiceRow?.choice ?? null,
+					publishingChoice,
 				},
 			})
 			.returning();
@@ -249,6 +254,28 @@ export async function getItemReviews(db: Database, itemKey: string) {
 		.limit(20);
 }
 
+function correctedReviewRecord(record: ReviewRecord, submitted: ReviewRecord[]) {
+
+			const original = submitted.find(
+				(entry) => entry.itemKey === record.itemKey,
+			);
+			if (!original)
+				throw new AdminValidationError(
+					"This item is not in the submitted review.",
+				);
+			const validated = validateNativeItemDraft(record.payload, {
+				requireTitle: true,
+			});
+			if (
+				(validated.item.parentItem ?? null) !==
+				(original.payload.parentItem ?? null)
+			)
+				throw new AdminValidationError(
+					"A review correction cannot move an attachment to another item.",
+				);
+			return { ...original, payload: validated.payload };
+}
+
 export async function correctItemReview(
 	db: Database,
 	input: {
@@ -271,26 +298,7 @@ export async function correctItemReview(
 			throw new AdminValidationError(
 				"Each corrected item must be unique.",
 			);
-		const updates = input.records.map((record) => {
-			const original = review.snapshot.records.find(
-				(entry) => entry.itemKey === record.itemKey,
-			);
-			if (!original)
-				throw new AdminValidationError(
-					"This item is not in the submitted review.",
-				);
-			const validated = validateNativeItemDraft(record.payload, {
-				requireTitle: true,
-			});
-			if (
-				(validated.item.parentItem ?? null) !==
-				(original.payload.parentItem ?? null)
-			)
-				throw new AdminValidationError(
-					"A review correction cannot move an attachment to another item.",
-				);
-			return { ...original, payload: validated.payload };
-		});
+		const updates = input.records.map(record => correctedReviewRecord(record, review.snapshot.records));
 		const corrections = [
 			...review.corrections.filter(
 				(record) =>
@@ -352,6 +360,34 @@ async function publishReviewRecords(
 			];
 	}
 	return { remainingConflicts, indexingKeys };
+}
+
+async function removeApprovedFiles(transaction: DatabaseTransaction, files: typeof itemReviewFile.$inferSelect[], zenodoFileChange: "minor_correction" | undefined) {
+			const removals = [];
+			for (const file of files.filter((entry) => entry.file === null)) {
+				const [currentFile] = await transaction
+					.select({ key: itemFilePublication.itemKey })
+					.from(itemFilePublication)
+					.where(eq(itemFilePublication.itemKey, file.itemKey));
+				if (currentFile)
+					removals.push(
+						await unpublishNativePdfInTransaction(
+							transaction,
+							file.itemKey,
+							zenodoFileChange,
+						),
+					);
+				if (file.removalId)
+					await transaction
+						.delete(itemFileRemoval)
+						.where(
+							and(
+								eq(itemFileRemoval.itemKey, file.itemKey),
+								eq(itemFileRemoval.id, file.removalId),
+							),
+						);
+			}
+ return removals;
 }
 
 export async function approveItemReview(
@@ -440,30 +476,7 @@ export async function approveItemReview(
 			const fileResults = [];
 			for (const file of prepared)
 				fileResults.push(await file.commit(transaction));
-			const removals = [];
-			for (const file of files.filter((entry) => entry.file === null)) {
-				const [currentFile] = await transaction
-					.select({ key: itemFilePublication.itemKey })
-					.from(itemFilePublication)
-					.where(eq(itemFilePublication.itemKey, file.itemKey));
-				if (currentFile)
-					removals.push(
-						await unpublishNativePdfInTransaction(
-							transaction,
-							file.itemKey,
-							input.zenodoFileChange,
-						),
-					);
-				if (file.removalId)
-					await transaction
-						.delete(itemFileRemoval)
-						.where(
-							and(
-								eq(itemFileRemoval.itemKey, file.itemKey),
-								eq(itemFileRemoval.id, file.removalId),
-							),
-						);
-			}
+			const removals = await removeApprovedFiles(transaction, files, input.zenodoFileChange);
 			const choice = locked.snapshot.publishingChoice;
 			if (choice) {
 				if (choice.route === "crossref-zenodo") {

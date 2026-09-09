@@ -1,3 +1,4 @@
+import type { PublicationSettlement } from "./queue";
 import {
 	CrossrefApiClient,
 	executeLivePublicationSyncPlan,
@@ -370,16 +371,8 @@ function patchValues(
 
 async function settleCrossrefState(
 	database: Database,
-	input: {
-		jobId: number;
-		workerId: string;
-		itemKey: string;
-		canonicalRevision: number;
-		patch: ProviderSyncStatePatch;
-		previousState: ProviderSyncState | undefined;
-		settledAt: Date;
+	input: PublicationSettlement & {
 		verified: boolean;
-		jobResult: PublicationJobResult;
 	},
 ) {
 	await database.transaction(async (transaction) => {

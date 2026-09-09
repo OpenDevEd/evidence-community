@@ -726,6 +726,23 @@ async function loadPublicationFile(
 	};
 }
 
+function assertLockedFileDraft(
+ itemKey: string,
+ lockedDraft: Awaited<ReturnType<typeof loadPublicationFile>> | typeof itemFileDraft.$inferSelect | undefined,
+ draft: Awaited<ReturnType<typeof loadPublicationFile>>,
+): asserts lockedDraft is NonNullable<typeof lockedDraft> {
+	if (
+		!lockedDraft?.readyAt ||
+		lockedDraft.uploadRevision !== draft.uploadRevision ||
+		lockedDraft.actualSha256 !== draft.actualSha256
+	) {
+		throw new NativeFileConflictError(itemKey);
+	}
+	if (lockedDraft.parentItemKey !== draft.parentItemKey) {
+		throw new NativeFileConflictError(itemKey);
+	}
+}
+
 async function lockFilePublicationRecords(
 	transaction: DatabaseTransaction,
 	itemKey: string,
@@ -743,16 +760,7 @@ async function lockFilePublicationRecords(
 		.for("update")
 		.limit(1);
 	const lockedDraft = reviewFile ? draft : currentFileDraft;
-	if (
-		!lockedDraft?.readyAt ||
-		lockedDraft.uploadRevision !== draft.uploadRevision ||
-		lockedDraft.actualSha256 !== draft.actualSha256
-	) {
-		throw new NativeFileConflictError(itemKey);
-	}
-	if (lockedDraft.parentItemKey !== draft.parentItemKey) {
-		throw new NativeFileConflictError(itemKey);
-	}
+	assertLockedFileDraft(itemKey, lockedDraft, draft);
 
 	const lockedItems = await transaction
 		.select()

@@ -1,3 +1,4 @@
+import type { ProviderSyncState, ProviderSyncStatePatch } from "@opendeved/doi-sync-core";
 import { outbox } from "@opendeved/evidence-library-core";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -576,3 +577,14 @@ export async function deferPublicationJob(
 	if (!job) throw new PublicationJobLeaseLostError();
 	return job;
 }
+
+export type PublicationSettlement = {
+ jobId: number;
+ workerId: string;
+ itemKey: string;
+ canonicalRevision: number;
+ patch: ProviderSyncStatePatch;
+ previousState: ProviderSyncState | undefined;
+ settledAt: Date;
+ jobResult: PublicationJobResult;
+};

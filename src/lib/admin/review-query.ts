@@ -9,6 +9,10 @@ import { ItemNotFoundError } from "./native-item-service";
 import { payloadStringList } from "./item-payload";
 import type { AdminItemDetail } from "./types";
 
+function snapshotFileDraft(file: typeof itemReviewFile.$inferSelect["file"] | undefined, submittedAt: Date) {
+ return file ? { actualSha256: file.sha256, actualSizeBytes: file.sizeBytes, expectedSha256: file.sha256, expectedSizeBytes: file.sizeBytes, coverHeight: file.coverHeight, coverWidth: file.coverWidth, filename: file.filename, itemKey: file.itemKey, pageCount: file.pageCount, readyAt: submittedAt.toISOString(), updatedAt: submittedAt.toISOString(), uploadRevision: file.uploadRevision } : null;
+}
+
 export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
 	const [review] = await db.select().from(itemReview).where(eq(itemReview.id, reviewId));
 	if (!review) throw new ItemNotFoundError(reviewId);
@@ -36,7 +40,7 @@ export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
 			revision: publishedRevisions.find(published => published.key === record.itemKey)?.revision ?? 0,
 			attachments: [], collectionKeys: payloadStringList(payload, "collections"), draft: draftJson(draft, payload),
 			editable: false, fileState: file ? "staged" : "none",
-			fileDraft: file ? { actualSha256: file.sha256, actualSizeBytes: file.sizeBytes, expectedSha256: file.sha256, expectedSizeBytes: file.sizeBytes, coverHeight: file.coverHeight, coverWidth: file.coverWidth, filename: file.filename, itemKey: file.itemKey, pageCount: file.pageCount, readyAt: review.submittedAt.toISOString(), updatedAt: review.submittedAt.toISOString(), uploadRevision: file.uploadRevision } : null,
+			fileDraft: snapshotFileDraft(file, review.submittedAt),
 			filePublication: null, fileRemovalPending: files.some((entry) => entry.itemKey === record.itemKey && entry.file === null),
 			links: await adminItemLinks(db, record.itemKey, { keys, publishedKeys: keys }),
 			parentItem: typeof payload.parentItem === "string" ? payload.parentItem : null,

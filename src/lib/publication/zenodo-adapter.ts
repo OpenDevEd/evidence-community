@@ -1,3 +1,4 @@
+import type { PublicationSettlement } from "./queue";
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	executeLivePublicationSyncPlan,
@@ -893,16 +894,8 @@ async function auditZenodoPublishedState(
 
 async function settleZenodoState(
 	database: Database,
-	input: {
-		jobId: number;
-		workerId: string;
-		itemKey: string;
-		canonicalRevision: number;
-		patch: ProviderSyncStatePatch;
-		previousState: ProviderSyncState | undefined;
+	input: PublicationSettlement & {
 		identifierPolicy: ZenodoIdentifierPolicy;
-		settledAt: Date;
-		jobResult: PublicationJobResult;
 	},
 ) {
 	await database.transaction(async (transaction) => {
@@ -971,6 +964,22 @@ async function settleZenodoState(
 	});
 }
 
+function zenodoDraftWaitReason(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>, identifierPolicy: ZenodoIdentifierPolicy) {
+	return identifierPolicy === "reuse-crossref" &&
+		!snapshot.identifiers.some(
+			(identifier) =>
+				identifier.registrar === "crossref" &&
+				identifier.environment === "test" &&
+				identifier.isCurrent &&
+				identifier.ownership === "managed" &&
+				identifier.lifecycle === "verified",
+		)
+			? "crossref"
+			: snapshot.files.length === 0
+				? "file"
+				: null;
+}
+
 async function prepareWaitingZenodoDraft(
 	database: Database,
 	config: PublicationConfig,
@@ -990,20 +999,7 @@ async function prepareWaitingZenodoDraft(
 	const target = targetFor(snapshot, "zenodo", "sandbox");
 	if (!target?.identifierPolicy)
 		throw new Error("The record does not have an active Zenodo target");
-	const waitingOn =
-		target.identifierPolicy === "reuse-crossref" &&
-		!snapshot.identifiers.some(
-			(identifier) =>
-				identifier.registrar === "crossref" &&
-				identifier.environment === "test" &&
-				identifier.isCurrent &&
-				identifier.ownership === "managed" &&
-				identifier.lifecycle === "verified",
-		)
-			? "crossref"
-			: snapshot.files.length === 0
-				? "file"
-				: null;
+	const waitingOn = zenodoDraftWaitReason(snapshot, target.identifierPolicy);
 	const state = snapshot.states.find(
 		(state) =>
 			state.provider === "zenodo" && state.environment === "sandbox",
