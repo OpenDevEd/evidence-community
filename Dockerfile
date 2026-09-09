@@ -41,6 +41,11 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM ${RUNTIME_IMAGE} AS library-runtime
 
+# Local fonts for publication previews, including Arabic, Indic and CJK scripts.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-cjk \
+	&& rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0

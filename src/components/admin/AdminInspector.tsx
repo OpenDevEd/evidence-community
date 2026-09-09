@@ -1,4 +1,6 @@
 "use client";
+
+import { creatorDisplayName } from "@/lib/creator-display-name";
 import { AuthorProfileLink } from "./AuthorProfiles";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
@@ -60,7 +62,6 @@ import {
 import {
 	adminFieldDescriptors,
 	type AdminSchemaDefinition,
-	creatorDisplayName,
 	definitionFor,
 	humanizeAdminField,
 } from "./admin-schema";

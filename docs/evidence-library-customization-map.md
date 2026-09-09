@@ -27,7 +27,7 @@ container image can be started repeatedly with different mounted documents.
 | --- | --- | --- |
 | `schemaVersion`, `revision`, `updatedAt` | Contract version and revision identity | Schema version `1`; bounded revision; UTC timestamp |
 | `identity` | Name, short name, tagline, description, canonical origin, funding partners | HTTPS origin; tagline is one line up to 160 characters; description up to 300 characters and used for page and social previews; bounded unique partner IDs |
-| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; logo CSS only from the allowed list below |
+| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; publication previews prefer their PDF cover, then this image, then a generated title card; logo CSS only from the allowed list below |
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
