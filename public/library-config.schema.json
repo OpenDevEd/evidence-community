@@ -2041,6 +2041,41 @@
 			},
 			"additionalProperties": false
 		},
+		"notifications": {
+			"default": {},
+			"type": "object",
+			"properties": {
+				"enabled": {
+					"default": false,
+					"type": "boolean"
+				},
+				"weekly": {
+					"default": {},
+					"type": "object",
+					"properties": {
+						"weekday": {
+							"default": 1,
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"time": {
+							"default": "09:00",
+							"type": "string",
+							"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+						},
+						"timezone": {
+							"default": "UTC",
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 100
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false
+		},
 		"generation": {
 			"default": {},
 			"type": "object",
