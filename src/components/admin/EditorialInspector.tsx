@@ -220,9 +220,13 @@ function SubmittedInspector({
 
 function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	const key = props.detail.key;
-	const { snapshot, pending, refresh, error } = useItemReview(
-		props.detail.parentItem ?? props.detail.key,
-	);
+	const review = useItemReview(props.detail.parentItem ?? props.detail.key);
+	const { refresh, error } = review;
+	const snapshot = review.snapshot && (
+		review.snapshot.key === key ||
+		review.snapshot.frozenAttachments.some(attachment => attachment.key === key)
+	) ? review.snapshot : undefined;
+	const pending = Boolean(snapshot && review.pending);
 	const session = useAdminSession();
 	const corrections = useReviewCorrections(snapshot, refresh);
 	const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => {
