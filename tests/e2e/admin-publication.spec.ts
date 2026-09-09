@@ -1,6 +1,7 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
-
+import { expect, test, type Page } from "@playwright/test";
+import type { AdminPublicationView } from "../../src/lib/publication/admin-publication-view";
 import { openAdmin } from "./admin-login";
+import { publishWorkingDraft } from "./admin-review";
 import { dismissConsent } from "./consent";
 
 const itemKey = process.env.PLAYWRIGHT_PUBLICATION_ITEM_KEY ?? "";
@@ -8,251 +9,102 @@ const expectedDoi = process.env.PLAYWRIGHT_PUBLICATION_EXPECTED_DOI ?? "";
 const editedTitle = process.env.PLAYWRIGHT_PUBLICATION_EDITED_TITLE ?? "";
 const phase = process.env.PLAYWRIGHT_PUBLICATION_PHASE ?? "";
 
-test.skip(!itemKey || !expectedDoi || !phase, "Real publication fixture is not configured");
+test.skip(!itemKey || !expectedDoi || !phase, "Publication fixture is not configured");
+test.beforeEach(({}, testInfo) => {
+    test.skip(!testInfo.title.includes(`[publication:${phase}]`), "Different publication phase");
+});
 
-async function openIdentifierDetails(publication: Locator) {
-	const toggle = publication.locator("button[aria-expanded]").first();
-	if ((await toggle.getAttribute("aria-expanded")) === "false") {
-		await toggle.click();
-	}
+async function readPublication(page: Page): Promise<AdminPublicationView> {
+    const response = await page.request.get(`/api/admin/items/${itemKey}/publication`);
+    expect(response.ok()).toBe(true);
+    return (await response.json()).publication;
 }
 
 async function openPublicationRecord(page: Page) {
-	await openAdmin(page);
-	const row = page.locator(`[data-record-key="${itemKey}"]`);
-	await expect(row).toBeVisible();
-	await row.click();
-	const inspector = page.locator("#admin-inspector-pane");
-	await expect(
-		inspector.getByRole("heading", { name: "Identifiers", exact: true }),
-	).toBeVisible();
-	// The identifiers card is closed by default; open it for the details.
-	await openIdentifierDetails(inspector.locator("#admin-doi-publishing"));
-	return inspector;
+    await openAdmin(page, `/admin?item=${itemKey}`);
+    const inspector = page.locator("#admin-inspector-pane");
+    await expect(inspector.getByRole("heading", {name: "Identifiers", exact: true})).toBeVisible();
+    return inspector;
 }
 
-async function expectCompactDialog(page: Page, dialog: Locator) {
-	await expect(dialog).toBeVisible();
-	await expect
-		.poll(() =>
-			dialog.evaluate((element) => ({
-				opacity: getComputedStyle(element).opacity,
-				width: Math.round(element.getBoundingClientRect().width),
-			})),
-		)
-		.toEqual({ opacity: "1", width: 384 });
-	const geometry = await dialog.evaluate((element) => {
-		const rect = element.getBoundingClientRect();
-		return {
-			documentOverflow: document.documentElement.scrollWidth - window.innerWidth,
-			left: rect.left,
-			maxWidth: getComputedStyle(element).maxWidth,
-			right: rect.right,
-		};
-	});
-	expect(geometry.documentOverflow).toBe(0);
-	expect(geometry.maxWidth).toBe("384px");
-	expect(geometry.left).toBeGreaterThanOrEqual(12);
-	expect(geometry.right).toBeLessThanOrEqual(
-		await page.evaluate(() => window.innerWidth - 12),
-	);
+async function expectCrossrefSynced(page: Page) {
+    await expect.poll(async () => (await readPublication(page)).providers.crossref.displayState).toBe("synced");
+    const inspector = page.locator("#admin-inspector-pane");
+    await expect(inspector.getByText(expectedDoi, {exact: true})).toBeVisible();
+    await expect(inspector.getByText("Registered", {exact: true})).toBeVisible();
+    return inspector;
 }
 
-test("[publication:reserve] reserves a Crossref DOI from the admin interface", async ({ page }, testInfo) => {
-	test.skip(phase !== "reserve", "Reservation phase only");
-	const inspector = await openPublicationRecord(page);
-	const publication = inspector.locator("#admin-doi-publishing");
-	const crossref = publication.locator(
-		'[data-admin-publication-provider="crossref"]',
-	);
+test("[publication:reserve] reserves internally, then activates both providers through approval", async ({page}, testInfo) => {
+    const inspector = await openPublicationRecord(page);
+    const route = inspector.getByRole("button", {name: "Crossref + Zenodo", exact: true});
+    await route.click();
+    await expect(route).toHaveAttribute("aria-pressed", "true");
+    await expect(inspector.getByRole("button", {name: "Use Crossref DOI", exact: true})).toHaveAttribute("aria-pressed", "true");
+    await inspector.getByRole("button", {name: "Reserve DOI", exact: true}).click();
+    await expect(inspector.getByText(expectedDoi, {exact: true})).toBeVisible();
+    await expect(inspector.getByText("Reserved", {exact: true})).toBeVisible();
+    const reserved = await readPublication(page);
+    expect(reserved.providers.crossref.exact.targetActive).toBe(false);
+    expect(reserved.providers.zenodo.exact.targetActive).toBe(false);
+    await page.screenshot({path: testInfo.outputPath("crossref-reserved.png"), fullPage: true});
 
-	await publication
-		.getByRole("button", { name: "Register a DOI with Crossref" })
-		.click();
-	await expect(
-		publication.getByRole("list", { name: "Before registering" }),
-	).toContainText("Record details");
-	await publication
-		.getByRole("button", { name: "Activate Crossref DOI" })
-		.click();
-	const dialog = page.getByRole("dialog", { name: "Activate Crossref DOI" });
-	await expectCompactDialog(page, dialog);
-	await expect(dialog.getByText("10.5555/acceptance.…")).toBeVisible();
-	await page.screenshot({ path: testInfo.outputPath("crossref-dialog.png"), fullPage: true });
-
-	await dialog.getByRole("button", { name: "Activate DOI" }).click();
-	await expect(dialog).toBeHidden();
-	await openIdentifierDetails(publication);
-	await expect(
-		publication.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-	await expect(crossref.getByText("Queued", { exact: true })).toBeVisible();
-	await page.screenshot({ path: testInfo.outputPath("crossref-queued.png"), fullPage: true });
+    await publishWorkingDraft(page);
+    const activated = await readPublication(page);
+    expect(activated.providers.crossref.exact.targetActive).toBe(true);
+    expect(activated.providers.zenodo.exact.targetActive).toBe(true);
+    await inspector.getByRole("button", {name: "Submitted version", exact: true}).click();
+    await expect(inspector.getByText("Register Crossref DOI", {exact: true})).toBeVisible();
+    await expect(inspector.getByText("Archive files on Zenodo", {exact: true})).toBeVisible();
+    await page.screenshot({path: testInfo.outputPath("publication-approved.png"), fullPage: true});
 });
 
-test("[publication:crossref-settle] shows the verified Crossref DOI before Zenodo activation", async ({
-	page,
-}, testInfo) => {
-	test.setTimeout(60_000);
-	test.skip(phase !== "crossref-settle", "Crossref settlement phase only");
-	const inspector = await openPublicationRecord(page);
-	const publication = inspector.locator("#admin-doi-publishing");
-	const crossref = publication.locator(
-		'[data-admin-publication-provider="crossref"]',
-	);
-
-	await expect(crossref.getByText("Synced", { exact: true })).toBeVisible();
-	await expect(
-		publication.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-	await expect(
-		publication.getByRole("button", { name: "Archive on Zenodo" }),
-	).toBeVisible();
-	await page.screenshot({
-		path: testInfo.outputPath("crossref-synced.png"),
-		fullPage: true,
-	});
+test("[publication:crossref-settle] shows the verified DOI with mandatory archiving active", async ({page}, testInfo) => {
+    test.setTimeout(60_000);
+    await openPublicationRecord(page);
+    await expectCrossrefSynced(page);
+    expect((await readPublication(page)).providers.zenodo.exact.targetActive).toBe(true);
+    await page.screenshot({path: testInfo.outputPath("crossref-synced.png"), fullPage: true});
 });
 
-test("[publication:edit] publishes a metadata edit under the same Crossref DOI", async ({
-	page,
-}, testInfo) => {
-	test.setTimeout(60_000);
-	test.skip(phase !== "edit", "Metadata edit phase only");
-	test.skip(!editedTitle, "Edited title is not configured");
-	const inspector = await openPublicationRecord(page);
-	const publication = inspector.locator("#admin-doi-publishing");
-	const crossref = publication.locator(
-		'[data-admin-publication-provider="crossref"]',
-	);
-
-	await expect(crossref.getByText("Synced", { exact: true })).toBeVisible();
-	await expect(
-		publication.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
-	await inspector.getByLabel("Title", { exact: true }).fill(editedTitle);
-	await expect(inspector.getByText("Saved", { exact: true })).toBeVisible();
-	await inspector
-		.getByRole("button", { name: "Publish", exact: true })
-		.click();
-
-	await expect(
-		inspector.getByRole("heading", { name: editedTitle, exact: true }),
-	).toBeVisible();
-	await openIdentifierDetails(publication);
-	await expect(
-		publication.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-	await expect(
-		crossref.getByText(/Queued|Checking Crossref|Synced/u, { exact: true }),
-	).toBeVisible();
-	await page.screenshot({
-		path: testInfo.outputPath("crossref-edit-queued.png"),
-		fullPage: true,
-	});
+test("[publication:edit] keeps edits private until an editor publishes their snapshot", async ({page}, testInfo) => {
+    test.setTimeout(60_000);
+    test.skip(!editedTitle, "Edited title is not configured");
+    const inspector = await openPublicationRecord(page);
+    await expectCrossrefSynced(page);
+    await inspector.getByRole("button", {name: "Edit", exact: true}).click();
+    await inspector.getByLabel("Title", {exact: true}).fill(editedTitle);
+    await expect(inspector.getByText("Saved", {exact: true})).toBeVisible();
+    const beforeApproval = await page.request.get(`/api/item/${itemKey}`);
+    expect((await beforeApproval.json()).item.title).not.toBe(editedTitle);
+    await publishWorkingDraft(page);
+    await expect(inspector.getByRole("heading", {name: editedTitle, exact: true})).toBeVisible();
+    await expect(inspector.getByText(expectedDoi, {exact: true})).toBeVisible();
+    await page.screenshot({path: testInfo.outputPath("crossref-edit-approved.png"), fullPage: true});
 });
 
-test("[publication:edit-settle] shows the edited metadata after Crossref verifies it", async ({
-	page,
-}, testInfo) => {
-	test.setTimeout(60_000);
-	test.skip(phase !== "edit-settle", "Metadata settlement phase only");
-	test.skip(!editedTitle, "Edited title is not configured");
-	const inspector = await openPublicationRecord(page);
-	const publication = inspector.locator("#admin-doi-publishing");
-	const crossref = publication.locator(
-		'[data-admin-publication-provider="crossref"]',
-	);
-
-	await expect(crossref.getByText("Synced", { exact: true })).toBeVisible();
-	await expect(
-		publication.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-	await expect(
-		inspector.getByRole("heading", { name: editedTitle, exact: true }),
-	).toBeVisible();
-
-	await page.goto(`/lib/${itemKey}`);
-	await dismissConsent(page);
-	await expect(
-		page.getByRole("heading", { name: editedTitle }),
-	).toBeVisible();
-	await expect(
-		page.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-	await page.screenshot({
-		path: testInfo.outputPath("crossref-edit-synced.png"),
-		fullPage: true,
-	});
+test("[publication:edit-settle] shows approved metadata after Crossref verifies it", async ({page}, testInfo) => {
+    test.setTimeout(60_000);
+    test.skip(!editedTitle, "Edited title is not configured");
+    await openPublicationRecord(page);
+    await expectCrossrefSynced(page);
+    await page.goto(`/lib/${itemKey}`);
+    await dismissConsent(page);
+    await expect(page.getByRole("heading", {name: editedTitle})).toBeVisible();
+    await expect(page.getByRole("link", {name: expectedDoi, exact: true}).first()).toBeVisible();
+    await page.screenshot({path: testInfo.outputPath("crossref-edit-synced.png"), fullPage: true});
 });
 
-test("[publication:zenodo] publishes to Zenodo and keeps both DOI states after reload", async ({
-	page,
-}, testInfo) => {
-	test.setTimeout(120_000);
-	test.skip(phase !== "zenodo", "Zenodo phase only");
-	let inspector = await openPublicationRecord(page);
-	let publication = inspector.locator("#admin-doi-publishing");
-	const crossref = publication.locator(
-		'[data-admin-publication-provider="crossref"]',
-	);
-	await expect(crossref.getByText("Synced", { exact: true })).toBeVisible({
-		timeout: 90_000,
-	});
-	await expect(
-		publication.getByRole("link", { name: expectedDoi, exact: true }).first(),
-	).toBeVisible();
-
-	await publication.getByRole("button", { name: "Archive on Zenodo" }).click();
-	await expect(
-		publication.getByRole("list", { name: "Before archiving" }),
-	).toBeVisible();
-	await publication.getByRole("button", { name: "Publish to Zenodo" }).click();
-	const dialog = page.getByRole("dialog", { name: "Publish to Zenodo" });
-	await expectCompactDialog(page, dialog);
-	const reuse = dialog.getByRole("radio", { name: /Use the Crossref DOI/u });
-	await expect(reuse).toBeChecked();
-	await page.screenshot({ path: testInfo.outputPath("zenodo-dialog.png"), fullPage: true });
-	await dialog.getByRole("button", { name: "Publish to Zenodo" }).click();
-	await expect(dialog).toBeHidden();
-	await openIdentifierDetails(publication);
-	const zenodo = publication.locator(
-		'[data-admin-publication-provider="zenodo"]',
-	);
-	await expect(zenodo.getByText("Synced", { exact: true })).toBeVisible({
-		timeout: 60_000,
-	});
-	await expect(zenodo.getByRole("link", { name: "Zenodo archive" })).toBeVisible();
-	await expect(zenodo.getByText("Uses the Crossref DOI", { exact: true })).toBeVisible();
-
-	await page.reload();
-	inspector = await openPublicationRecord(page);
-	publication = inspector.locator("#admin-doi-publishing");
-	await expect(
-		publication
-			.locator('[data-admin-publication-provider="crossref"]')
-			.getByText("Synced", { exact: true }),
-	).toBeVisible();
-	await expect(
-		publication
-			.locator('[data-admin-publication-provider="zenodo"]')
-			.getByText("Synced", { exact: true }),
-	).toBeVisible();
-	await expect(
-		publication
-			.locator('[data-admin-publication-provider="crossref"]')
-			.getByRole("link", { name: expectedDoi }),
-	).toBeVisible();
-	await expect(
-		publication
-			.locator('[data-admin-publication-provider="zenodo"]')
-			.getByRole("link", { name: "Zenodo archive" }),
-	).toBeVisible();
-	await expect(
-		publication.getByRole("button", { name: /Activate|Publish to Zenodo/u }),
-	).toHaveCount(0);
-
+test("[publication:zenodo] archives automatically and retains both providers after reload", async ({page}, testInfo) => {
+    test.setTimeout(120_000);
+    let inspector = await openPublicationRecord(page);
+    await expectCrossrefSynced(page);
+    await expect.poll(async () => (await readPublication(page)).providers.zenodo.displayState, {timeout: 90_000}).toBe("synced");
+    await page.reload();
+    inspector = await openPublicationRecord(page);
+    await expectCrossrefSynced(page);
+    await inspector.getByRole("button", {name: "Submitted version", exact: true}).click();
+    await expect(inspector.getByText("Submitted version published. Later draft edits stay private.", {exact: true})).toBeVisible();
 	await expect
 		.poll(
 			async () => {

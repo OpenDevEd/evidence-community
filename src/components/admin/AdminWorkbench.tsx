@@ -2455,9 +2455,10 @@ export default function AdminWorkbench({
 									await Promise.all([loadDetail(recordKey), loadItems()]);
 								});
 							}}
-							onPublicationChanged={(receipts = []) => {
-                                searchIndex.track(receipts);
+							onPublicationChanged={async (receipts = []) => {
+                                const completion = searchIndex.trackAndWait(receipts);
                                 if (detail) void refreshCurrent(detail.key);
+                                await completion;
                             }}
 							onReloadDraft={reloadConflictedDraft}
 							onRetry={() =>

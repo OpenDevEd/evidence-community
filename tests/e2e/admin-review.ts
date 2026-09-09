@@ -14,6 +14,8 @@ export async function publishWorkingDraft(page: Page) {
       await expect(zenodo).toHaveAttribute("aria-pressed", "true");
     }
   }
+  const edit = inspector.getByRole("button", {name: "Edit", exact: true});
+  if (await edit.isVisible()) await edit.click();
   await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();
   const submit = page.getByRole("dialog", {name: "Submit snapshot for review?"});
   await submit.getByRole("button", {name: "Submit snapshot", exact: true}).click();

@@ -14,11 +14,13 @@ import { runAdminItemBatch } from "@/lib/admin/item-batch-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
 export async function POST(request: NextRequest) {
+ const unauthorized = await requireAdminSession(request);
+ if (unauthorized) return unauthorized;
 	try {
 		const input = adminItemBatchRequestSchema.parse(
 			await readAdminJson(request),
 		);
-        const denied = input.action === "remove" ? await requireAdminPublisher(request) : await requireAdminSession(request);
+        const denied = input.action === "remove" ? await requireAdminPublisher(request) : null;
         if (denied) return denied;
 		const [runtime, writebackConfig] = await Promise.all([
 			getNativeFileRuntime(),
