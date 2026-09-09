@@ -24,7 +24,6 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
-import { Textarea } from "@/components/nextui/Textarea";
 import DialogModal from "@/components/nextui/DialogModal";
 const blankProfile = (name: string): AuthorProfile => ({
 	id: "",
@@ -53,8 +52,8 @@ export function AuthorProfileLink({
 		setSearch,
 		selected,
 		setSelected,
-		editing,
-		setEditing,
+		creating,
+		setCreating,
 		error,
 		setError,
 		saving,
@@ -64,7 +63,7 @@ export function AuthorProfileLink({
 		linked,
 		currentName,
 		link,
-		save,
+		create,
 	} = useAuthorProfileLink(creator, onChange);
 	if (readOnly && !creator.authorProfileId) return null;
 	return (
@@ -91,7 +90,7 @@ export function AuthorProfileLink({
 										) ?? linked)
 								: null,
 						);
-						setEditing(false);
+						setCreating(false);
 						setError("");
 						setSearch(linked ? "" : currentName);
 						if (creator.authorProfileId && !linked) {
@@ -144,7 +143,7 @@ export function AuthorProfileLink({
 								aria-label="Back to author search"
 								onPress={() => {
 									setSelected(null);
-									setEditing(false);
+									setCreating(false);
 									setError("");
 								}}
 							>
@@ -155,7 +154,7 @@ export function AuthorProfileLink({
 							</Button>
 						)}
 						<span className="flex-1">
-							{profileDialogTitle(editing, selected, profiles)}
+							{profileDialogTitle(creating, selected)}
 						</span>
 						<Button
 							isIconOnly
@@ -168,16 +167,15 @@ export function AuthorProfileLink({
 						</Button>
 					</ModalHeader>
 					<ModalBody className="gap-4">
-						{error && !editing && (
+						{error && !creating && (
 							<p role="alert" className="text-xs text-danger">
 								{error}
 							</p>
 						)}
-						{editing && selected ? (
-							<AuthorProfileFields
+						{creating && selected ? (
+							<CreateAuthorFields
 								selected={selected}
 								setSelected={setSelected}
-								profiles={profiles}
 								error={error}
 							/>
 						) : selected ? (
@@ -187,9 +185,9 @@ export function AuthorProfileLink({
 							/>
 						) : (
 							<AuthorProfileSearch
+                                profiles={profiles}
 								search={search}
 								setSearch={setSearch}
-								profiles={profiles}
 								setSelected={setSelected}
 								error={catalog.error}
 								isLoading={catalog.isLoading}
@@ -198,20 +196,20 @@ export function AuthorProfileLink({
 					</ModalBody>
 					<AuthorProfileActions
 						readOnly={readOnly}
-						editing={editing}
+						creating={creating}
 						selected={selected}
 						saving={saving}
 						onClose={() => setOpen(false)}
-						onEdit={() => {
+						onCreate={() => {
 							setSelected(
 								selected ?? blankProfile(search || currentName),
 							);
-							setEditing(true);
+							setCreating(true);
 						}}
 						onLink={() => {
 							if (selected) link(selected);
 						}}
-						onSave={save}
+						onSubmit={create}
 					/>
 				</ModalContent>
 			</DialogModal>
@@ -219,92 +217,16 @@ export function AuthorProfileLink({
 	);
 }
 
-function AuthorProfileFields({
-	selected,
-	setSelected,
-	profiles,
-	error,
-}: {
-	selected: AuthorProfile;
-	setSelected: (profile: AuthorProfile) => void;
-	profiles: AuthorProfile[];
-	error: string;
+function CreateAuthorFields({selected, setSelected, error}: {
+  selected: AuthorProfile;
+  setSelected: (profile: AuthorProfile) => void;
+  error: string;
 }) {
-	return (
-		<>
-			<p className="text-xs text-black/45 dark:text-white/45">
-				This OpenScholar profile can be linked from any Evidence
-				Library.
-			</p>
-			<Input
-				label="Full name"
-				value={selected.name}
-				onValueChange={(name) => setSelected({ ...selected, name })}
-				isRequired
-			/>
-			<Input
-				label="Affiliation"
-				value={selected.affiliation}
-				onValueChange={(affiliation) =>
-					setSelected({
-						...selected,
-						affiliation,
-					})
-				}
-				placeholder="Organisation or institution"
-			/>
-			<Textarea
-				label="Biography"
-				value={selected.bio}
-				onValueChange={(bio) => setSelected({ ...selected, bio })}
-				minRows={3}
-			/>
-			<div className="grid gap-3 sm:grid-cols-2">
-				<Input
-					label="ORCID"
-					value={selected.orcid}
-					onValueChange={(orcid) =>
-						setSelected({ ...selected, orcid })
-					}
-					placeholder="0000-0000-0000-0000"
-				/>
-				<div className="self-center text-xs text-black/50 dark:text-white/50">
-					OpenAlex: {selected.openalex || "Not linked"}
-				</div>
-			</div>
-			{profiles.some((p) => p.id === selected.id) ? (
-				<p className="text-xs text-black/50 dark:text-white/50">
-					<a
-						href={selected.url}
-						target="_blank"
-						rel="noreferrer"
-						className="underline"
-					>
-						Open full profile
-					</a>{" "}
-					to manage photos, profile access and OpenAlex matches.
-				</p>
-			) : (
-				<p className="text-xs text-black/50 dark:text-white/50">
-					Save this profile first, then open it in OpenScholar to add
-					a photo or match it to OpenAlex.
-				</p>
-			)}
-			<Input
-				label="Website"
-				value={selected.website}
-				onValueChange={(website) =>
-					setSelected({ ...selected, website })
-				}
-				placeholder="https://"
-			/>
-			{error && (
-				<p role="alert" className="text-xs text-danger">
-					{error}
-				</p>
-			)}
-		</>
-	);
+  return <>
+    <Input label="Name" value={selected.name}
+      onValueChange={(name) => setSelected({...selected, name})} isRequired />
+    {error && <p role="alert" className="text-xs text-danger">{error}</p>}
+  </>;
 }
 function AuthorProfileDetails({
 	selected,
@@ -437,7 +359,7 @@ function useAuthorProfileLink(
 	const [open, setOpen] = useState(false),
 		[search, setSearch] = useState("");
 	const [selected, setSelected] = useState<AuthorProfile | null>(null),
-		[editing, setEditing] = useState(false);
+		[creating, setCreating] = useState(false);
 	const [error, setError] = useState("");
 	const [saving, setSaving] = useState(false);
 	const catalog = useSWR(
@@ -467,7 +389,7 @@ function useAuthorProfileLink(
 		});
 		setOpen(false);
 	};
-	const save = async () => {
+	const create = async () => {
 		if (saving) return;
 		if (!selected?.name.trim()) {
 			setError("Enter the author’s name.");
@@ -477,30 +399,18 @@ function useAuthorProfileLink(
 		setError("");
 		try {
 			const result = await requestAuthorProfiles({
-				operation: "save",
-				...(selected.id
-					? {
-							profileId: selected.id,
-							expectedRevision: selected.revision,
-						}
-					: {}),
-				name: selected.name,
-				affiliation: selected.affiliation,
-				bio: selected.bio,
-				orcid: selected.orcid,
-				website: selected.website,
+				operation: "create",
+                name: selected.name,
 			});
 			const saved = result.profiles[0];
 			if (!saved) throw new Error("Author profile was not returned");
 			await catalog.mutate();
-			if (saved.id === creator.authorProfileId)
-				await linkedResult.mutate();
 			link(saved);
 		} catch (error) {
 			setError(
 				error instanceof Error
 					? error.message
-					: "Unable to save author profile",
+					: "Unable to create author profile",
 			);
 		} finally {
 			setSaving(false);
@@ -513,8 +423,8 @@ function useAuthorProfileLink(
 		setSearch,
 		selected,
 		setSelected,
-		editing,
-		setEditing,
+		creating,
+		setCreating,
 		error,
 		setError,
 		saving,
@@ -524,46 +434,40 @@ function useAuthorProfileLink(
 		linked,
 		currentName,
 		link,
-		save,
+		create,
 	};
 }
 
 function AuthorProfileActions({
 	readOnly,
-	editing,
+	creating,
 	selected,
 	saving,
 	onClose,
-	onEdit,
+	onCreate,
 	onLink,
-	onSave,
+	onSubmit,
 }: {
 	readOnly: boolean;
-	editing: boolean;
+	creating: boolean;
 	selected: AuthorProfile | null;
 	saving: boolean;
 	onClose: () => void;
-	onEdit: () => void;
+	onCreate: () => void;
 	onLink: () => void;
-	onSave: () => Promise<void>;
+	onSubmit: () => Promise<void>;
 }) {
 	return (
 		<ModalFooter className="justify-between">
-			{canEditProfile(readOnly, editing, selected) && (
-				<Button
-					size="sm"
-					variant="transparent"
-					startContent={
-						<HugeiconsIcon
-							icon={selected ? PencilIcon : Add01Icon}
-							size={14}
-						/>
-					}
-					onPress={onEdit}
-				>
-					{selected ? "Edit profile" : "Create profile"}
-				</Button>
-			)}
+            {!readOnly && !creating && (selected ? selected.canEdit && (
+              <Button as="a" role="link" href={`${selected.url}/configuration`} target="_blank" rel="noreferrer"
+                size="sm" variant="transparent" startContent={<HugeiconsIcon icon={PencilIcon} size={14} />}>
+                Configure profile
+              </Button>
+            ) : (
+              <Button size="sm" variant="transparent" startContent={<HugeiconsIcon icon={Add01Icon} size={14} />}
+                onPress={onCreate}>Create profile</Button>
+            ))}
 			{readOnly ? (
 				<Button size="sm" variant="transparent" onPress={onClose}>
 					Close
@@ -578,9 +482,9 @@ function AuthorProfileActions({
 						}
 						className="ml-auto"
 						isLoading={saving}
-						onPress={() => (editing ? void onSave() : onLink())}
+						onPress={() => (creating ? void onSubmit() : onLink())}
 					>
-						{editing ? "Save and link profile" : "Link this author"}
+						{creating ? "Create and link profile" : "Link this author"}
 					</Button>
 				)
 			)}
@@ -588,22 +492,7 @@ function AuthorProfileActions({
 	);
 }
 
-function profileDialogTitle(
-	editing: boolean,
-	selected: AuthorProfile | null,
-	profiles: AuthorProfile[],
-) {
-	if (editing)
-		return profiles.some((profile) => profile.id === selected?.id)
-			? "Edit author profile"
-			: "Create author profile";
-	return selected ? "Author profile" : "Link author profile";
-}
-
-function canEditProfile(
-	readOnly: boolean,
-	editing: boolean,
-	selected: AuthorProfile | null,
-) {
-	return !readOnly && !editing && (!selected || selected.canEdit);
+function profileDialogTitle(creating: boolean, selected: AuthorProfile | null) {
+  if (creating) return "Create author profile";
+  return selected ? "Author profile" : "Link author profile";
 }
