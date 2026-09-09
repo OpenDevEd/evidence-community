@@ -2647,20 +2647,20 @@ async function adminPublicationRequest<T>(
 	profile: Profile,
 	session: AdminTestSession,
 	pathname: string,
-	init?: RequestInit,
+	init: RequestInit = {},
 ) {
 	const response = await fetch(
 		`http://127.0.0.1:${profile.port}${pathname}`,
 		{
 			...init,
-			headers: withAdminTestSession(session, init?.headers),
+			headers: withAdminTestSession(session, init.headers),
 		},
 	);
 	const body = await response.text();
 	assert.equal(
 		response.ok,
 		true,
-		`${init?.method ?? "GET"} ${pathname} failed: ${response.status} ${body}`,
+		`${init.method ?? "GET"} ${pathname} failed: ${response.status} ${body}`,
 	);
 	return (response.status === 204 ? undefined : JSON.parse(body)) as T;
 }

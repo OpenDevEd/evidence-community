@@ -11,11 +11,8 @@ import type {
 	AdminItemViewFilters,
 } from "@/lib/admin/types";
 
-import { getAdminItems } from "./admin-api";
+import { adminErrorMessage, getAdminItems } from "./admin-api";
 
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : "Could not load records";
-}
 
 import {
 	parseAdminItemViewFilters,
@@ -55,6 +52,14 @@ function buildListSearchParams(
 			{ column: filters.sort, direction: filters.sortDirection },
 		]),
 	});
+}
+
+function keepVisibleSelection(current: string | null, visibleKeys: ReadonlySet<string>, fallback: string | null) {
+ return current && visibleKeys.has(current) ? current : fallback;
+}
+
+function selectingReviewQueue(filters: AdminItemViewFilters, pinned: boolean) {
+ return filters.reviewQueue && !pinned;
 }
 
 export function useAdminItemList(
@@ -132,8 +137,8 @@ export function useAdminItemList(
 						return next.size === current.size ? current : next;
 					});
 					const firstVisibleKey = page.items[0]?.key ?? null;
-					if (filters.reviewQueue && !selectionPinned) {
-						void setSelectedKeyInUrl((current) => current && visibleKeys.has(current) ? current : firstVisibleKey, { history: "replace" });
+					if (selectingReviewQueue(filters, selectionPinned)) {
+						void setSelectedKeyInUrl((current) => keepVisibleSelection(current, visibleKeys, firstVisibleKey), { history: "replace" });
 					} else if (!selectionInitialized.current && firstVisibleKey) {
 						selectionInitialized.current = true;
 						void setSelectedKeyInUrl(
@@ -152,7 +157,7 @@ export function useAdminItemList(
 					return;
 				}
 				if (currentRequest !== requestId.current) return;
-				const message = errorMessage(loadError);
+				const message = adminErrorMessage(loadError, "Could not load records");
 				setError(message);
 				toast.error(message);
 			} finally {

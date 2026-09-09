@@ -88,6 +88,8 @@ function groupRowsByItemKey<T extends { itemKey: string }>(rows: T[]) {
 	return grouped;
 }
 
+export function draftJson(row: typeof itemDraft.$inferSelect, payload: Record<string, unknown>): AdminItemDraft;
+export function draftJson(row: typeof itemDraft.$inferSelect | null | undefined, payload: Record<string, unknown>): AdminItemDraft | null;
 export function draftJson(
 	row: typeof itemDraft.$inferSelect | null | undefined,
 	payload: Record<string, unknown>,

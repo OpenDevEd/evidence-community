@@ -2,7 +2,11 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { AdminItemDetail } from "@/lib/admin/types";
-import { updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
+import {
+	adminErrorMessage,
+	updateAdminReview,
+	type AdminReviewSnapshot,
+} from "./admin-api";
 
 export function useReviewDraftConflicts(
 	snapshot: AdminReviewSnapshot | undefined,
@@ -29,9 +33,7 @@ export function useReviewDraftConflicts(
 			toast.success("Draft conflicts resolved");
 		} catch (error) {
 			toast.error(
-				error instanceof Error
-					? error.message
-					: "Could not resolve conflicts",
+				adminErrorMessage(error, "Could not resolve conflicts"),
 			);
 		} finally {
 			setResolving(false);

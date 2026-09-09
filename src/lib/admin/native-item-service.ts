@@ -1641,22 +1641,13 @@ async function discardMetadataDraft(transaction: Transaction, itemKey: string) {
  await transaction.update(itemReview).set({remainingConflicts: sql`${itemReview.remainingConflicts} - ${itemKey}`, revision: sql`${itemReview.revision} + 1`}).where(sql`${itemReview.remainingConflicts} ? ${itemKey}`);
 }
 
-async function discardStagedFileReferences(transaction: Transaction, itemKey: string, staged: {objectPath: string; coverObjectPath: string | null}) {
+async function discardStagedFileReferences(transaction: Transaction, itemKey: string, staged: {objectPath: string; coverObjectPath: string | null} | undefined, published: boolean, removeFileDraft: boolean) {
+ if (!staged || (published && !removeFileDraft)) return [];
  await transaction.delete(itemFileDraft).where(eq(itemFileDraft.itemKey, itemKey));
  return [staged.objectPath, staged.coverObjectPath].filter((path): path is string => Boolean(path));
 }
 
-async function discardItemDraftInTransaction(
-	transaction: Transaction,
-	itemKey: string,
-	{
-		removeFileDraft = false,
-		requireMetadataDraft = true,
-	}: {
-		removeFileDraft?: boolean;
-		requireMetadataDraft?: boolean;
-	} = {},
-) {
+async function loadDiscardableDraft(transaction: Transaction, itemKey: string, removeFileDraft: boolean, requireMetadataDraft: boolean) {
 	const [staged] = await transaction
 		.select({
 			coverObjectPath: itemFileDraft.coverObjectPath,
@@ -1679,6 +1670,23 @@ async function discardItemDraftInTransaction(
 		if (!requireMetadataDraft) return null;
 		throw new ItemNotFoundError(itemKey);
 	}
+ return {staged, draft, sourceConnectionKey: draft?.sourceConnectionKey ?? NATIVE_CONNECTION_KEY};
+}
+
+async function discardItemDraftInTransaction(
+	transaction: Transaction,
+	itemKey: string,
+	{
+		removeFileDraft = false,
+		requireMetadataDraft = true,
+	}: {
+		removeFileDraft?: boolean;
+		requireMetadataDraft?: boolean;
+	} = {},
+) {
+ const discardable = await loadDiscardableDraft(transaction, itemKey, removeFileDraft, requireMetadataDraft);
+ if (!discardable) return null;
+ const {staged, draft, sourceConnectionKey} = discardable;
 	const [identity] = await transaction
 		.select({ key: itemIdentity.key })
 		.from(itemIdentity)
@@ -1687,7 +1695,7 @@ async function discardItemDraftInTransaction(
 				eq(itemIdentity.key, itemKey),
 				eq(
 					itemIdentity.sourceConnectionKey,
-					draft?.sourceConnectionKey ?? NATIVE_CONNECTION_KEY,
+					sourceConnectionKey,
 				),
 			),
 		)
@@ -1703,8 +1711,7 @@ async function discardItemDraftInTransaction(
 		.limit(1);
 	if (!published) await validateUnpublishedDraftRemoval(transaction, itemKey);
 	if (draft) await discardMetadataDraft(transaction, itemKey);
- const stagedPrivatePaths = staged && (!published || removeFileDraft)
-  ? await discardStagedFileReferences(transaction, itemKey, staged) : [];
+ const stagedPrivatePaths = await discardStagedFileReferences(transaction, itemKey, staged, Boolean(published), removeFileDraft);
 	return {stagedPrivatePaths};
 }
 

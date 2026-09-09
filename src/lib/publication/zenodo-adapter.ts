@@ -980,6 +980,10 @@ function zenodoDraftWaitReason(snapshot: Awaited<ReturnType<typeof readPublicati
 				: null;
 }
 
+function hasZenodoDraft(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>, state: typeof publicationSyncState.$inferSelect | undefined) {
+ return Boolean(state?.zenodoRecordId || state?.unpublishedDraftDepositionId || snapshot.journals.length);
+}
+
 async function prepareWaitingZenodoDraft(
 	database: Database,
 	config: PublicationConfig,
@@ -1004,11 +1008,7 @@ async function prepareWaitingZenodoDraft(
 		(state) =>
 			state.provider === "zenodo" && state.environment === "sandbox",
 	);
-	if (
-		!state?.zenodoRecordId &&
-		!state?.unpublishedDraftDepositionId &&
-		snapshot.journals.length === 0
-	) {
+	if (!hasZenodoDraft(snapshot, state)) {
 		if (!waitingOn) {
 			// Validation belongs to publication, but must not prevent saving the archive draft.
 			try {

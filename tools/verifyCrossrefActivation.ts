@@ -1091,7 +1091,7 @@ async function verifyDraftReservation(database: Database, client: Client) {
  const reservations = await Promise.all(Array.from({length: 4}, () => reserveCrossrefDoi(database, draft.itemKey, config, "creator")));
  assert(reservations.every(value => value.doi === reservations[0].doi), "Concurrent reservation allocated different DOIs");
  const before = await client.query(`SELECT (SELECT count(*) FROM "item" WHERE key = $1)::int AS records, (SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = $1)::int AS jobs, (SELECT "activatedAt" FROM "publicationTarget" WHERE "itemKey" = $1 AND provider = 'crossref') AS activated`, [draft.itemKey]);
- assert(before.rows[0].records === 0 && before.rows[0].jobs === 0 && before.rows[0].activated === null, "Reserving a draft enabled publication work");
+ assert.deepEqual(before.rows[0], {records: 0, jobs: 0, activated: null}, "Reserving a draft enabled publication work");
  await publishItemDraft(database, draft.itemKey);
  const afterPublish = await client.query(`SELECT count(*)::int AS jobs FROM "publicationSyncJob" WHERE "itemKey" = $1`, [draft.itemKey]);
  assert(afterPublish.rows[0].jobs === 0, "Publishing metadata activated a reservation without approval");
