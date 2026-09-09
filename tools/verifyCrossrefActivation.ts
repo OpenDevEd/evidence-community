@@ -1,3 +1,4 @@
+import { savePublicationJob } from "../src/lib/publication/queue";
 import { createNativeItemDraft, publishItemDraft } from "../src/lib/admin/native-item-service";
 import { setItemPublishingChoice } from "../src/lib/admin/review-service";
 import {
@@ -935,6 +936,12 @@ async function verify(database: Database, client: Client) {
 		`INSERT INTO "publicationTarget" ("itemKey", "provider", "environment", "identifierPolicy", "requestedBy")
 		 VALUES ('CRACTAAR', 'zenodo', 'sandbox', 'reuse-crossref', 'crossref-wake-test')`,
 	);
+    const waitingJob = await database.transaction(transaction => savePublicationJob(transaction, {
+        itemKey: "CRACTAAR", provider: "zenodo", environment: "sandbox", identifierPolicy: "reuse-crossref",
+        canonicalRevision: wakeActivation.canonicalRevision, fileRevision: 1,
+        reason: "manual_activation", now: new Date("2030-08-19T08:00:00Z"),
+    }));
+    await client.query(`UPDATE "publicationSyncJob" SET "processedAt" = now(), "resultReceipt" = $2::jsonb WHERE id = $1`, [waitingJob.id, JSON.stringify({status: "waiting", waitingOn: "crossref"})]);
 	const wakeOutcomes = await runCrossrefPublicationJobsOnce(
 		database,
 		config,
@@ -959,7 +966,7 @@ async function verify(database: Database, client: Client) {
 	}>(
 		`SELECT "canonicalRevision", "fileRevision", "reason"
 		 FROM "publicationSyncJob"
-		 WHERE "itemKey" = 'CRACTAAR' AND "provider" = 'zenodo' AND "supersededAt" IS NULL`,
+		 WHERE "itemKey" = 'CRACTAAR' AND "provider" = 'zenodo' AND "supersededAt" IS NULL AND "processedAt" IS NULL`,
 	);
 	assert(
 		zenodoWakeJobs.rows.length === 1 &&
