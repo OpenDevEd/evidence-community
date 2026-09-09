@@ -838,7 +838,7 @@ export function setAdminPdfRemoval(key: string, remove: boolean) {
  return requestJson<void>(`/api/admin/items/${encodeURIComponent(key)}/file/removal`, {method: remove ? "POST" : "DELETE"});
 }
 
-export type CrossrefReservation = {doi: string; lifecycle: "reserved" | "verified"};
+type CrossrefReservation = {doi: string; lifecycle: "reserved" | "verified"};
 export async function getAdminCrossrefReservation(key: string) {
  return (await requestJson<{reservation: CrossrefReservation | null}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`)).reservation;
 }

@@ -1422,7 +1422,7 @@ export async function cleanupNativePdfRemoval(
 	return { indexingRecords: result.indexingRecords, item: result.item };
 }
 
-export async function unpublishNativePdfWithContext(
+async function unpublishNativePdfWithContext(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,

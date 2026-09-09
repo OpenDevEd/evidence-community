@@ -15,7 +15,7 @@ export const reviewRecordSchema = z.object({
 });
 export type ReviewRecord = z.infer<typeof reviewRecordSchema>;
 
-export const reviewSnapshotSchema = z.object({
+const reviewSnapshotSchema = z.object({
 	records: z.array(reviewRecordSchema).min(1),
 	publishingChoice: publishingChoiceSchema.nullable(),
 });
