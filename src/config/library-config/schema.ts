@@ -1865,11 +1865,11 @@ export function createLibraryConfigSchema(
 				"AI features require an enabled provider",
 			);
 		}
-		if (config.features.ai && !config.services.redis) {
+		if ((config.features.ai || config.notifications.enabled) && !config.services.redis) {
 			addRequiredIssue(
 				context,
 				["services", "redis"],
-				"AI features require the private Redis service",
+				"AI and email subscriptions require the private Redis service",
 			);
 		}
 

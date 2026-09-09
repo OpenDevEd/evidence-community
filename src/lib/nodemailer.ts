@@ -1,5 +1,3 @@
-import "server-only";
-
 import nodemailer, { type Transporter } from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 
@@ -63,6 +61,9 @@ export function buildSmtpTransportOptions(
 	return {
 		host,
 		port,
+		connectionTimeout: 15_000,
+		greetingTimeout: 15_000,
+		socketTimeout: 60_000,
 		secure: security === "tls",
 		...(security === "starttls" ? { requireTLS: true } : {}),
 		...(security === "none" ? { ignoreTLS: true } : {}),
@@ -88,8 +89,7 @@ function createEmailTransport(
 	email: EmailConfiguration,
 ) {
 	if (
-		!email.contactRecipient &&
-		!email.takedownRecipient
+		!email.smtp.host
 	) {
 		return { value: null };
 	}
@@ -151,11 +151,15 @@ export async function sendEmailForConfig(
 		);
 	}
 
-	return transporter.sendMail({
-		from,
-		to: recipient,
-		replyTo: message.replyTo,
-		subject: message.subject,
-		text: message.text,
-	});
+	return transporter.sendMail({ from, to: recipient, ...message });
+}
+
+/** Shared transport for library-owned subscription jobs. */
+export async function sendNotificationEmail(config: LibraryServerConfig, message: {
+  to: string; subject: string; text: string; html: string; messageId: string;
+  headers?: Record<string, string>;
+}) {
+  const transporter = await getEmailTransportForConfig(config);
+  if (!transporter || !config.email.smtp.from) throw new Error("Library email is not configured");
+  return transporter.sendMail({ from: config.email.smtp.from, ...message });
 }

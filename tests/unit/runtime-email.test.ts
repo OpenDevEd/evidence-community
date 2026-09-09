@@ -101,6 +101,9 @@ describe("runtime email", () => {
 			},
 			host: "smtp.example.org",
 			port: 587,
+			connectionTimeout: 15_000,
+			greetingTimeout: 15_000,
+			socketTimeout: 60_000,
 			...expected,
 		});
 	});
@@ -148,6 +151,9 @@ describe("runtime email", () => {
 			},
 			host: "smtp.example.org",
 			port: 587,
+			connectionTimeout: 15_000,
+			greetingTimeout: 15_000,
+			socketTimeout: 60_000,
 			requireTLS: true,
 			secure: false,
 			tls: {

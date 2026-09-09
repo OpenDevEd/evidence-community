@@ -33,6 +33,7 @@ describe("public library configuration", () => {
 				"legal",
 				"localization",
 				"navigation",
+				"notifications",
 				"revision",
 				"schemaVersion",
 				"search",

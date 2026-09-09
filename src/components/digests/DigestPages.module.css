@@ -1,0 +1,25 @@
+.hero {
+  clip-path: inset(-100vmax -100vmax 0);
+  animation: reveal-hero 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes reveal-hero {
+  from { transform: translateY(-48px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero { animation: none; }
+}
+
+.backSheet { transform: translate(12px, 9px) rotate(4deg); }
+.middleSheet { transform: translate(5px, 4px) rotate(1.5deg); }
+.frontSheet, .backSheet, .middleSheet {
+  transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cover:hover .frontSheet, .cover:focus-visible .frontSheet { transform: translateY(-5px) rotate(-1deg); }
+.cover:hover .backSheet, .cover:focus-visible .backSheet { transform: translate(14px, 10px) rotate(5deg); }
+@media (prefers-reduced-motion: reduce) {
+  .frontSheet, .backSheet, .middleSheet { transition: none; }
+  .cover:hover .frontSheet, .cover:focus-visible .frontSheet { transform: none; }
+}
