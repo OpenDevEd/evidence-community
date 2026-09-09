@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { savePublicationJob } from "../src/lib/publication/queue";
-import { createNativeItemDraft, publishItemDraft } from "../src/lib/admin/native-item-service";
+import {
+	createNativeItemDraft,
+	publishItemDraft,
+} from "../src/lib/admin/native-item-service";
 import { setItemPublishingChoice } from "../src/lib/admin/review-service";
 import {
 	ProviderHttpError,
@@ -18,15 +21,17 @@ import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import type { Database } from "../src/db/database-schema";
 import {
 	activateCrossrefPublication,
-    reserveCrossrefDoi,
+	reserveCrossrefDoi,
 	CrossrefActivationValidationError,
 	ExternalCrossrefDoiError,
 	retryCrossrefPublication,
 } from "../src/lib/publication/crossref-activation-service";
-import { buildCrossrefPlan, runCrossrefPublicationJobsOnce } from "../src/lib/publication/crossref-adapter";
+import {
+	buildCrossrefPlan,
+	runCrossrefPublicationJobsOnce,
+} from "../src/lib/publication/crossref-adapter";
 
-
-const config = publicationTestConfig({zenodoEnabled: false, retryLimit: 2});
+const config = publicationTestConfig({ zenodoEnabled: false, retryLimit: 2 });
 
 async function seedItem(
 	client: Client,
@@ -399,17 +404,30 @@ async function verify(database: Database, client: Client) {
 		"Rejected activation left committed publication state",
 	);
 	await seedItem(client, { key: "CRACTAAH" });
-    await client.query(`UPDATE "itemIdentity" SET kind = 'created' WHERE key = 'CRACTAAH'`);
-    await setItemPublishingChoice(database, "CRACTAAH", {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
-    const reservedExisting = await reserveCrossrefDoi(database, "CRACTAAH", config, "creator");
-    await client.query(`UPDATE item SET "DOI" = $1 WHERE key = 'CRACTAAH'`, [reservedExisting.doi]);
+	await client.query(
+		`UPDATE "itemIdentity" SET kind = 'created' WHERE key = 'CRACTAAH'`,
+	);
+	await setItemPublishingChoice(database, "CRACTAAH", {
+		route: "crossref-zenodo",
+		identifierPolicy: "reuse-crossref",
+	});
+	const reservedExisting = await reserveCrossrefDoi(
+		database,
+		"CRACTAAH",
+		config,
+		"creator",
+	);
+	await client.query(`UPDATE item SET "DOI" = $1 WHERE key = 'CRACTAAH'`, [
+		reservedExisting.doi,
+	]);
 	const existing = await activateCrossrefPublication(
 		database,
 		"CRACTAAH",
 		config,
 	);
 	assert(
-		existing.doi === reservedExisting.doi && existing.canonicalRevision === 1,
+		existing.doi === reservedExisting.doi &&
+			existing.canonicalRevision === 1,
 		"An existing managed-prefix DOI created a fake item revision",
 	);
 	const existingRows = await client.query<{
@@ -431,7 +449,10 @@ async function verify(database: Database, client: Client) {
 		await activateCrossrefPublication(database, "CRACTAAL", config);
 		throw new Error("A DOI already managed by another record was accepted");
 	} catch (error) {
-        assert(error instanceof ExternalCrossrefDoiError, "An item claimed an identifier reserved by another item");
+		assert(
+			error instanceof ExternalCrossrefDoiError,
+			"An item claimed an identifier reserved by another item",
+		);
 	}
 
 	const successful = await runCrossrefPublicationJobsOnce(database, config, {
@@ -702,7 +723,11 @@ async function verify(database: Database, client: Client) {
 		 ("itemKey", "provider", "environment", "canonicalRevision", "reason", "idempotencyKey", "nextAttemptAt", "supersededAt")
 		 VALUES ('CRACTAAF', 'crossref', 'test', 2, 'record_changed', 'publication:crossref:test:CRACTAAF:superseded', now(), now())`,
 	);
-	const retried = await retryCrossrefPublication(database, "CRACTAAF", config);
+	const retried = await retryCrossrefPublication(
+		database,
+		"CRACTAAF",
+		config,
+	);
 	assert(
 		retried.job.state === "retrying",
 		"Manual retry did not reopen the same job",
@@ -898,12 +923,25 @@ async function verify(database: Database, client: Client) {
 		`INSERT INTO "publicationTarget" ("itemKey", "provider", "environment", "identifierPolicy", "requestedBy")
 		 VALUES ('CRACTAAR', 'zenodo', 'sandbox', 'reuse-crossref', 'crossref-wake-test')`,
 	);
-    const waitingJob = await database.transaction(transaction => savePublicationJob(transaction, {
-        itemKey: "CRACTAAR", provider: "zenodo", environment: "sandbox", identifierPolicy: "reuse-crossref",
-        canonicalRevision: wakeActivation.canonicalRevision, fileRevision: 1,
-        reason: "manual_activation", now: new Date("2030-08-19T08:00:00Z"),
-    }));
-    await client.query(`UPDATE "publicationSyncJob" SET "processedAt" = now(), "resultReceipt" = $2::jsonb WHERE id = $1`, [waitingJob.id, JSON.stringify({status: "waiting", waitingOn: "crossref"})]);
+	const waitingJob = await database.transaction((transaction) =>
+		savePublicationJob(transaction, {
+			itemKey: "CRACTAAR",
+			provider: "zenodo",
+			environment: "sandbox",
+			identifierPolicy: "reuse-crossref",
+			canonicalRevision: wakeActivation.canonicalRevision,
+			fileRevision: 1,
+			reason: "manual_activation",
+			now: new Date("2030-08-19T08:00:00Z"),
+		}),
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "processedAt" = now(), "resultReceipt" = $2::jsonb WHERE id = $1`,
+		[
+			waitingJob.id,
+			JSON.stringify({ status: "waiting", waitingOn: "crossref" }),
+		],
+	);
 	const wakeOutcomes = await runCrossrefPublicationJobsOnce(
 		database,
 		config,
@@ -1086,63 +1124,87 @@ async function verify(database: Database, client: Client) {
 }
 
 async function verifyDraftReservation(database: Database, client: Client) {
- const draft = await createNativeItemDraft(database, {itemType: "Report", title: "Draft DOI reservation", date: "2026-09-08", institution: "OpenDevEd", creators: [{creatorType: "author", firstName: "Ada", lastName: "Lovelace"}]});
- await setItemPublishingChoice(database, draft.itemKey, {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
- const reservations = await Promise.all(Array.from({length: 4}, () => reserveCrossrefDoi(database, draft.itemKey, config, "creator")));
- assert(reservations.every(value => value.doi === reservations[0].doi), "Concurrent reservation allocated different DOIs");
- const before = await client.query(`SELECT (SELECT count(*) FROM "item" WHERE key = $1)::int AS records, (SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = $1)::int AS jobs, (SELECT "activatedAt" FROM "publicationTarget" WHERE "itemKey" = $1 AND provider = 'crossref') AS activated`, [draft.itemKey]);
- assert.deepEqual(before.rows[0], {records: 0, jobs: 0, activated: null}, "Reserving a draft enabled publication work");
- await publishItemDraft(database, draft.itemKey);
- const afterPublish = await client.query(`SELECT count(*)::int AS jobs FROM "publicationSyncJob" WHERE "itemKey" = $1`, [draft.itemKey]);
- assert(afterPublish.rows[0].jobs === 0, "Publishing metadata activated a reservation without approval");
- const activation = await activateCrossrefPublication(database, draft.itemKey, config, "editor");
- assert(activation.doi === reservations[0].doi, "Activation replaced the reserved DOI");
- const activated = await client.query(`SELECT t."activatedAt", i."DOI", (SELECT count(*)::int FROM "publicationIdentifier" WHERE "itemKey" = $1) AS identifiers FROM "publicationTarget" t JOIN item i ON i.key = t."itemKey" WHERE t."itemKey" = $1 AND t.provider = 'crossref'`, [draft.itemKey]);
- assert(activated.rows[0].activatedAt && activated.rows[0].DOI === reservations[0].doi && activated.rows[0].identifiers === 1, "Activation did not enable the original identifier");
-    await seedItem(client, { key: "CRACTAAG", itemType: "Artwork" });
-    const invalidActivation = await activateCrossrefPublication(database, "CRACTAAG", config);
-    assert(invalidActivation.job !== null, "Provider validation prevented saving the activation intent");
-    const invalidPlan = await buildCrossrefPlan(database, "CRACTAAG", config);
-    assert(invalidPlan.plan.status === "needs_attention", "Unsupported Crossref metadata was allowed to publish");
-
-}
-
-async function verifyProductionReservation(database: Database, client: Client) {
-	const production = structuredClone(config);
-	production.services.publication.crossref.environment = "production";
 	const draft = await createNativeItemDraft(database, {
-		itemType: "Report", title: "Production reservation", date: "2026-09-08", institution: "OpenDevEd",
-		creators: [{creatorType: "author", firstName: "Ada", lastName: "Lovelace"}],
+		itemType: "Report",
+		title: "Draft DOI reservation",
+		date: "2026-09-08",
+		institution: "OpenDevEd",
+		creators: [
+			{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" },
+		],
 	});
-	await setItemPublishingChoice(database, draft.itemKey, {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
-	const reserved = await reserveCrossrefDoi(database, draft.itemKey, production, "creator");
-	const privateState = await client.query(`SELECT "environment", "lifecycle" FROM "publicationIdentifier" WHERE "itemKey" = $1`, [draft.itemKey]);
-	assert(privateState.rows[0]?.environment === "production" && privateState.rows[0]?.lifecycle === "reserved", "Production reservation was stored in Test");
+	await setItemPublishingChoice(database, draft.itemKey, {
+		route: "crossref-zenodo",
+		identifierPolicy: "reuse-crossref",
+	});
+	const reservations = await Promise.all(
+		Array.from({ length: 4 }, () =>
+			reserveCrossrefDoi(database, draft.itemKey, config, "creator"),
+		),
+	);
+	assert(
+		reservations.every((value) => value.doi === reservations[0].doi),
+		"Concurrent reservation allocated different DOIs",
+	);
+	const before = await client.query(
+		`SELECT (SELECT count(*) FROM "item" WHERE key = $1)::int AS records, (SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = $1)::int AS jobs, (SELECT "activatedAt" FROM "publicationTarget" WHERE "itemKey" = $1 AND provider = 'crossref') AS activated`,
+		[draft.itemKey],
+	);
+	assert.deepEqual(
+		before.rows[0],
+		{ records: 0, jobs: 0, activated: null },
+		"Reserving a draft enabled publication work",
+	);
 	await publishItemDraft(database, draft.itemKey);
-	const activated = await activateCrossrefPublication(database, draft.itemKey, production, "editor");
-	assert(activated.environment === "production" && activated.doi === reserved.doi, "Production activation changed the reservation");
-	const collisions = await client.query(`SELECT "itemKey" FROM "publicationIdentifier" WHERE "doi" = $1 AND "itemKey" <> $2`, [reserved.doi, draft.itemKey]);
-	assert(collisions.rows.length === 0, "Production reused a DOI carried by another environment's record");
-	const provider = successfulProvider();
-	const outcomes = await runCrossrefPublicationJobsOnce(database, production, {
-		provider: {
-			...provider,
-			submitPublication: async input => {
-				assert(input.environment === "production", "Crossref deposit used the test environment");
-				return provider.submitPublication(input);
-			},
-		},
-	});
-	assert(outcomes.length === 1 && outcomes[0]?.status === "succeeded", "Production job did not settle independently");
-	const verified = await client.query(`SELECT "environment", "lifecycle" FROM "publicationIdentifier" WHERE "itemKey" = $1`, [draft.itemKey]);
-	assert(verified.rows[0]?.environment === "production" && verified.rows[0]?.lifecycle === "verified", "Production deposit did not verify the production DOI");
+	const afterPublish = await client.query(
+		`SELECT count(*)::int AS jobs FROM "publicationSyncJob" WHERE "itemKey" = $1`,
+		[draft.itemKey],
+	);
+	assert(
+		afterPublish.rows[0].jobs === 0,
+		"Publishing metadata activated a reservation without approval",
+	);
+	const activation = await activateCrossrefPublication(
+		database,
+		draft.itemKey,
+		config,
+		"editor",
+	);
+	assert(
+		activation.doi === reservations[0].doi,
+		"Activation replaced the reserved DOI",
+	);
+	const activated = await client.query(
+		`SELECT t."activatedAt", i."DOI", (SELECT count(*)::int FROM "publicationIdentifier" WHERE "itemKey" = $1) AS identifiers FROM "publicationTarget" t JOIN item i ON i.key = t."itemKey" WHERE t."itemKey" = $1 AND t.provider = 'crossref'`,
+		[draft.itemKey],
+	);
+	assert(
+		activated.rows[0].activatedAt &&
+			activated.rows[0].DOI === reservations[0].doi &&
+			activated.rows[0].identifiers === 1,
+		"Activation did not enable the original identifier",
+	);
+	await seedItem(client, { key: "CRACTAAG", itemType: "Artwork" });
+	const invalidActivation = await activateCrossrefPublication(
+		database,
+		"CRACTAAG",
+		config,
+	);
+	assert(
+		invalidActivation.job !== null,
+		"Provider validation prevented saving the activation intent",
+	);
+	const invalidPlan = await buildCrossrefPlan(database, "CRACTAAG", config);
+	assert(
+		invalidPlan.plan.status === "needs_attention",
+		"Unsupported Crossref metadata was allowed to publish",
+	);
 }
 
 async function verifyIsolatedDatabase() {
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		await verify(database, client);
 		await verifyDraftReservation(database, client);
-		await verifyProductionReservation(database, client);
 	});
 }
 
@@ -1151,3 +1213,108 @@ describe("Crossref activation against an isolated database", () => {
 		await verifyIsolatedDatabase();
 	}, 120_000);
 });
+
+it("keeps production reservations and settlement separate from Test", async () => {
+	await withIsolatedPublicationDatabase(async (database, client) => {
+		const testDraft = await createNativeItemDraft(database, {
+			itemType: "Report",
+			title: "Test environment reservation",
+		});
+		await setItemPublishingChoice(database, testDraft.itemKey, {
+			route: "crossref-zenodo",
+			identifierPolicy: "reuse-crossref",
+		});
+		await reserveCrossrefDoi(
+			database,
+			testDraft.itemKey,
+			config,
+			"creator",
+		);
+
+		const production = structuredClone(config);
+		production.services.publication.crossref.environment = "production";
+		const draft = await createNativeItemDraft(database, {
+			itemType: "Report",
+			title: "Production reservation",
+			date: "2026-09-08",
+			institution: "OpenDevEd",
+			creators: [
+				{
+					creatorType: "author",
+					firstName: "Ada",
+					lastName: "Lovelace",
+				},
+			],
+		});
+		await setItemPublishingChoice(database, draft.itemKey, {
+			route: "crossref-zenodo",
+			identifierPolicy: "reuse-crossref",
+		});
+		const reserved = await reserveCrossrefDoi(
+			database,
+			draft.itemKey,
+			production,
+			"creator",
+		);
+		const privateState = await client.query(
+			`SELECT "environment", "lifecycle" FROM "publicationIdentifier" WHERE "itemKey" = $1`,
+			[draft.itemKey],
+		);
+		assert.deepEqual(
+			privateState.rows,
+			[{ environment: "production", lifecycle: "reserved" }],
+			"Production reservation was stored in Test",
+		);
+		await publishItemDraft(database, draft.itemKey);
+		const activated = await activateCrossrefPublication(
+			database,
+			draft.itemKey,
+			production,
+			"editor",
+		);
+		assert.deepEqual(
+			{ environment: activated.environment, doi: activated.doi },
+			{ environment: "production", doi: reserved.doi },
+			"Production activation changed the reservation",
+		);
+		const collisions = await client.query(
+			`SELECT "itemKey" FROM "publicationIdentifier" WHERE "doi" = $1 AND "itemKey" <> $2`,
+			[reserved.doi, draft.itemKey],
+		);
+		assert(
+			collisions.rows.length === 0,
+			"Production reused a DOI carried by another environment's record",
+		);
+		const provider = successfulProvider();
+		const outcomes = await runCrossrefPublicationJobsOnce(
+			database,
+			production,
+			{
+				provider: {
+					...provider,
+					submitPublication: async (input) => {
+						assert(
+							input.environment === "production",
+							"Crossref deposit used the test environment",
+						);
+						return provider.submitPublication(input);
+					},
+				},
+			},
+		);
+		assert.deepEqual(
+			outcomes.map((outcome) => outcome.status),
+			["succeeded"],
+			"Production job did not settle independently",
+		);
+		const verified = await client.query(
+			`SELECT "environment", "lifecycle" FROM "publicationIdentifier" WHERE "itemKey" = $1`,
+			[draft.itemKey],
+		);
+		assert.deepEqual(
+			verified.rows,
+			[{ environment: "production", lifecycle: "verified" }],
+			"Production deposit did not verify the production DOI",
+		);
+	});
+}, 120_000);

@@ -3,9 +3,7 @@ import { ADMIN_PUBLISH_PERMISSION } from "@/lib/admin/access";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
-import {
-	handleAdminJson,
-} from "@/lib/admin/http";
+import { handleAdminJson } from "@/lib/admin/http";
 import { retryCrossrefPublication } from "@/lib/publication/crossref-activation-service";
 import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view-service";
 
@@ -16,7 +14,11 @@ export async function POST(
 	return handleAdminJson(request, ADMIN_PUBLISH_PERMISSION, async () => {
 		const { key } = await params;
 		const database = await getDatabase();
-		const activation = await retryCrossrefPublication(database, key, await getLibraryConfig());
+		const activation = await retryCrossrefPublication(
+			database,
+			key,
+			await getLibraryConfig(),
+		);
 		return {
 			activation,
 			publication: await buildAdminPublicationView(key),

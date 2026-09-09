@@ -1,7 +1,8 @@
+import { lockLatestPublicationJob } from "./queue";
 import { itemIdentity } from "@opendeved/evidence-library-core";
 import { itemPublishingChoice } from "@/db/schema/review";
 import { loadWorkingItemPayload } from "@/lib/admin/native-item-service";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
@@ -26,7 +27,10 @@ import {
 	savePublicationJob,
 	supersedeUnleasedPublicationJobs,
 } from "./queue";
-import { readPublicationRepositorySnapshot, type PublicationRepositorySnapshot } from "./repository";
+import {
+	readPublicationRepositorySnapshot,
+	type PublicationRepositorySnapshot,
+} from "./repository";
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
@@ -45,14 +49,24 @@ export {
 	PublicationItemNotFoundError,
 } from "./errors";
 
-async function readCurrentCrossrefIdentifier(transaction: DatabaseTransaction, itemKey: string, environment: "test" | "production") {
-	const [identifier] = await transaction.select().from(publicationIdentifier).where(and(
-		eq(publicationIdentifier.itemKey, itemKey),
-		eq(publicationIdentifier.registrar, "crossref"),
-		eq(publicationIdentifier.environment, environment),
-		eq(publicationIdentifier.role, "primary"),
-		eq(publicationIdentifier.isCurrent, true),
-	)).limit(1);
+async function readCurrentCrossrefIdentifier(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	environment: "test" | "production",
+) {
+	const [identifier] = await transaction
+		.select()
+		.from(publicationIdentifier)
+		.where(
+			and(
+				eq(publicationIdentifier.itemKey, itemKey),
+				eq(publicationIdentifier.registrar, "crossref"),
+				eq(publicationIdentifier.environment, environment),
+				eq(publicationIdentifier.role, "primary"),
+				eq(publicationIdentifier.isCurrent, true),
+			),
+		)
+		.limit(1);
 	return identifier;
 }
 
@@ -142,7 +156,8 @@ function receipt(input: {
 	return {
 		itemKey: input.itemKey,
 		provider: "crossref",
-		environment: input.job.environment === "production" ? "production" : "test",
+		environment:
+			input.job.environment === "production" ? "production" : "test",
 		doi: input.doi,
 		lifecycle: input.lifecycle,
 		canonicalRevision: input.canonicalRevision,
@@ -171,7 +186,12 @@ export async function activateCrossrefPublication(
 	);
 }
 
-function existingCrossrefActivation(snapshot: PublicationRepositorySnapshot, itemKey: string, managedIdentifier: (typeof publicationIdentifier.$inferSelect) | undefined, environment: "test" | "production") {
+function existingCrossrefActivation(
+	snapshot: PublicationRepositorySnapshot,
+	itemKey: string,
+	managedIdentifier: typeof publicationIdentifier.$inferSelect | undefined,
+	environment: "test" | "production",
+) {
 	const existingTarget = snapshot.targets.find(
 		(target) =>
 			target.provider === "crossref" &&
@@ -196,7 +216,6 @@ function existingCrossrefActivation(snapshot: PublicationRepositorySnapshot, ite
 		canonicalRevision: job.canonicalRevision,
 		job,
 	});
-
 }
 
 async function resolveActivationDoi(
@@ -272,7 +291,12 @@ export async function activateCrossrefPublicationInTransaction(
 			candidate.ownership === "managed",
 	);
 
-	const existing = existingCrossrefActivation(snapshot, itemKey, managedIdentifier, crossref.environment);
+	const existing = existingCrossrefActivation(
+		snapshot,
+		itemKey,
+		managedIdentifier,
+		crossref.environment,
+	);
 	if (existing) return existing;
 
 	if (record.deleted === 1) {
@@ -286,7 +310,13 @@ export async function activateCrossrefPublicationInTransaction(
 		);
 	}
 
-	const doi = await resolveActivationDoi(transaction, record, snapshot.attachments, crossref, managedIdentifier?.doi);
+	const doi = await resolveActivationDoi(
+		transaction,
+		record,
+		snapshot.attachments,
+		crossref,
+		managedIdentifier?.doi,
+	);
 
 	const now = new Date();
 	const doiChanged = record.DOI !== doi;
@@ -395,27 +425,16 @@ export async function activateCrossrefPublicationInTransaction(
 export async function retryCrossrefPublication(
 	database: Database,
 	itemKey: string,
-    config: PublicationConfig,
+	config: PublicationConfig,
 ): Promise<CrossrefActivationReceipt> {
 	return database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
-		const [job] = await transaction
-			.select()
-			.from(publicationSyncJob)
-			.where(
-				and(
-					eq(publicationSyncJob.itemKey, itemKey),
-					eq(publicationSyncJob.provider, "crossref"),
-					eq(publicationSyncJob.environment, config.services.publication.crossref.environment),
-					isNull(publicationSyncJob.supersededAt),
-				),
-			)
-			.orderBy(
-				desc(publicationSyncJob.createdAt),
-				desc(publicationSyncJob.id),
-			)
-			.limit(1)
-			.for("update");
+		const job = await lockLatestPublicationJob(
+			transaction,
+			itemKey,
+			"crossref",
+			config.services.publication.crossref.environment,
+		);
 		if (!job?.deadLetteredAt) {
 			throw new CrossrefActivationValidationError(
 				"This Crossref publication does not have a failed job to retry.",
@@ -435,7 +454,11 @@ export async function retryCrossrefPublication(
 			})
 			.where(eq(publicationSyncJob.id, job.id))
 			.returning();
-		const identifier = await readCurrentCrossrefIdentifier(transaction, itemKey, config.services.publication.crossref.environment);
+		const identifier = await readCurrentCrossrefIdentifier(
+			transaction,
+			itemKey,
+			config.services.publication.crossref.environment,
+		);
 		if (!retried || !identifier) {
 			throw new Error("The Crossref retry could not be saved");
 		}
@@ -481,7 +504,11 @@ export async function reserveCrossrefDoi(
 			throw new CrossrefActivationValidationError(
 				"Reserve a DOI on the parent item.",
 			);
-		const existing = await readCurrentCrossrefIdentifier(transaction, itemKey, crossref.environment);
+		const existing = await readCurrentCrossrefIdentifier(
+			transaction,
+			itemKey,
+			crossref.environment,
+		);
 		if (existing)
 			return { doi: existing.doi, lifecycle: existing.lifecycle };
 		classifyCrossrefActivationDoi({
@@ -493,26 +520,22 @@ export async function reserveCrossrefDoi(
 			prefix: crossref.prefix,
 			suffixNamespace: crossref.suffixNamespace,
 		});
-		await transaction
-			.insert(publicationTarget)
-			.values({
-				itemKey,
-				provider: "crossref",
-				environment: crossref.environment,
-				requestedBy,
-				activatedAt: null,
-			});
-		await transaction
-			.insert(publicationIdentifier)
-			.values({
-				itemKey,
-				registrar: "crossref",
-				environment: crossref.environment,
-				role: "primary",
-				doi,
-				ownership: "managed",
-				lifecycle: "reserved",
-			});
+		await transaction.insert(publicationTarget).values({
+			itemKey,
+			provider: "crossref",
+			environment: crossref.environment,
+			requestedBy,
+			activatedAt: null,
+		});
+		await transaction.insert(publicationIdentifier).values({
+			itemKey,
+			registrar: "crossref",
+			environment: crossref.environment,
+			role: "primary",
+			doi,
+			ownership: "managed",
+			lifecycle: "reserved",
+		});
 		return { doi, lifecycle: "reserved" as const };
 	});
 }

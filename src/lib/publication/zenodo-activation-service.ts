@@ -1,4 +1,6 @@
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { stateFor } from "./state-adapter";
+import { lockLatestPublicationJob } from "./queue";
+import { and, eq, isNull, ne } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
@@ -568,12 +570,7 @@ export async function activateZenodoPublicationInTransaction(
 		jobs: snapshot.jobs,
 		now,
 	});
-	const providerRecordExists = snapshot.states.some(
-		(state) =>
-			state.provider === "zenodo" &&
-			state.environment === zenodo.environment &&
-			Boolean(state.zenodoRecordId),
-	);
+	const providerRecordExists = Boolean(stateFor(snapshot, "zenodo", zenodo.environment)?.zenodoRecordId);
 	return receipt({
 		environment: zenodo.environment,
 		itemKey,
@@ -627,23 +624,7 @@ export async function retryZenodoPublication(
 				{ DOI: "Deactivate Zenodo before changing this DOI." },
 			);
 		}
-		const [job] = await transaction
-			.select()
-			.from(publicationSyncJob)
-			.where(
-				and(
-					eq(publicationSyncJob.itemKey, itemKey),
-					eq(publicationSyncJob.provider, "zenodo"),
-					eq(publicationSyncJob.environment, zenodo.environment),
-					isNull(publicationSyncJob.supersededAt),
-				),
-			)
-			.orderBy(
-				desc(publicationSyncJob.createdAt),
-				desc(publicationSyncJob.id),
-			)
-			.limit(1)
-			.for("update");
+		const job = await lockLatestPublicationJob(transaction, itemKey, "zenodo", zenodo.environment);
 		if (!job?.deadLetteredAt) {
 			throw new ZenodoActivationValidationError(
 				"This Zenodo publication does not have a failed job to retry.",
@@ -680,12 +661,7 @@ export async function retryZenodoPublication(
 			});
 		}
 		if (!retried) throw new Error("The Zenodo retry could not be saved");
-		const providerRecordExists = snapshot.states.some(
-			(state) =>
-				state.provider === "zenodo" &&
-				state.environment === zenodo.environment &&
-				Boolean(state.zenodoRecordId),
-		);
+		const providerRecordExists = Boolean(stateFor(snapshot, "zenodo", zenodo.environment)?.zenodoRecordId);
 		return receipt({
 			environment: zenodo.environment,
 			itemKey,

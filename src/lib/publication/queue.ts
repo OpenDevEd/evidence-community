@@ -3,6 +3,7 @@ import { outbox } from "@opendeved/evidence-library-core";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	and,
+	desc,
 	eq,
 	gt,
 	isNotNull,
@@ -314,16 +315,7 @@ export async function enqueuePublicationJobsForItem(
 		: null;
 	const jobs: Array<typeof publicationSyncJob.$inferSelect> = [];
 	for (const target of targets) {
-		if (input.environment && target.environment !== input.environment) continue;
-		if (input.providers && !input.providers.includes(target.provider))
-			continue;
-		if (
-			input.reason === "crossref_verified" &&
-			(target.provider !== "zenodo" ||
-				target.identifierPolicy !== "reuse-crossref")
-		) {
-			continue;
-		}
+		if (!matchesPublicationTarget(target, input)) continue;
 		if (input.reason !== "provider_audit") {
 			await supersedeUnleasedPublicationJobs(transaction, {
 				itemKey: input.itemKey,
@@ -590,3 +582,17 @@ export type PublicationSettlement = {
  settledAt: Date;
  jobResult: PublicationJobResult;
 };
+
+function matchesPublicationTarget(target: typeof publicationTarget.$inferSelect, input: {environment?: PublicationEnvironment; providers?: readonly PublicationProvider[]; reason: PublicationJobReason}) {
+ if (input.environment && target.environment !== input.environment) return false;
+ if (input.providers && !input.providers.includes(target.provider)) return false;
+ return input.reason !== "crossref_verified" || (target.provider === "zenodo" && target.identifierPolicy === "reuse-crossref");
+}
+
+export async function lockLatestPublicationJob(transaction: DatabaseTransaction, itemKey: string, provider: PublicationProvider, environment: PublicationEnvironment) {
+ const [job] = await transaction.select().from(publicationSyncJob).where(and(
+  eq(publicationSyncJob.itemKey, itemKey), eq(publicationSyncJob.provider, provider),
+  eq(publicationSyncJob.environment, environment), isNull(publicationSyncJob.supersededAt),
+ )).orderBy(desc(publicationSyncJob.createdAt), desc(publicationSyncJob.id)).limit(1).for("update");
+ return job;
+}
