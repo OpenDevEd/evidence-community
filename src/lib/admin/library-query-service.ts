@@ -2,6 +2,7 @@ import "server-only";
 
 import {
 	itemDraft,
+	itemIdentity,
 	itemFileDraft,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
@@ -16,6 +17,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@/db/schema/source";
+import { itemFileRemoval } from "@/db/schema/review";
 import { AdminValidationError } from "./errors";
 import { sourceSyncSummary } from "./source-sync-summary";
 import { collection } from "@/db/schema/tables/collection";
@@ -86,7 +88,9 @@ function groupRowsByItemKey<T extends { itemKey: string }>(rows: T[]) {
 	return grouped;
 }
 
-function draftJson(
+export function draftJson(row: typeof itemDraft.$inferSelect, payload: Record<string, unknown>): AdminItemDraft;
+export function draftJson(row: typeof itemDraft.$inferSelect | null | undefined, payload: Record<string, unknown>): AdminItemDraft | null;
+export function draftJson(
 	row: typeof itemDraft.$inferSelect | null | undefined,
 	payload: Record<string, unknown>,
 ): AdminItemDraft | null {
@@ -127,7 +131,16 @@ function itemFileState(
 	return "none";
 }
 
-function itemSummary(
+function summaryText(
+	payload: Record<string, unknown>,
+	published: typeof item.$inferSelect | null,
+	field: "date" | "itemType" | "title",
+) {
+	const value = payload[field];
+	return typeof value === "string" ? value : published?.[field];
+}
+
+export function itemSummary(
 	published: typeof item.$inferSelect | null,
 	draft: typeof itemDraft.$inferSelect | null,
 	fileDraft: typeof itemFileDraft.$inferSelect | null = null,
@@ -139,15 +152,9 @@ function itemSummary(
 		creators: (payload.creators ??
 			published?.creators ??
 			[]) as AdminCreator[],
-		date:
-			typeof payload.date === "string"
-				? payload.date
-				: (published?.date ?? null),
+		date: summaryText(payload, published, "date") ?? null,
 		fileState: itemFileState(fileDraft, filePublication, published),
-		itemType:
-			typeof payload.itemType === "string"
-				? payload.itemType
-				: (published?.itemType ?? "Document"),
+		itemType: summaryText(payload, published, "itemType") ?? "Document",
 		key: draft?.itemKey ?? published!.key,
 		revision: published?.revision ?? 0,
 		sourceConnectionKey:
@@ -155,11 +162,7 @@ function itemSummary(
 			published?.sourceConnectionKey ??
 			NATIVE_SOURCE_CONNECTION_KEY,
 		state: itemState(published, draft),
-		title:
-			(typeof payload.title === "string"
-				? payload.title
-				: published?.title
-			)?.trim() || "Untitled",
+		title: summaryText(payload, published, "title")?.trim() || "Untitled",
 		updatedAt: dateString(draft?.updatedAt ?? published?.updatedAt),
 	};
 }
@@ -195,7 +198,7 @@ async function getAdminAttachments(
 	];
 	if (keys.length === 0) return [];
 
-	const [fileDraftRows, filePublicationRows, tagRows, membershipRows] =
+	const [fileDraftRows, filePublicationRows, tagRows, membershipRows, removalRows] =
 		await Promise.all([
 			db
 				.select()
@@ -216,6 +219,7 @@ async function getAdminAttachments(
 				})
 				.from(itemToCollection)
 				.where(inArray(itemToCollection.itemKey, keys)),
+			db.select({ itemKey: itemFileRemoval.itemKey }).from(itemFileRemoval).where(inArray(itemFileRemoval.itemKey, keys)),
 		]);
 	const publishedByKey = new Map(publishedRows.map((row) => [row.key, row]));
 	const draftByKey = new Map(draftRows.map((row) => [row.itemKey, row]));
@@ -259,6 +263,7 @@ async function getAdminAttachments(
 				draft: draftJson(draft, effectivePayload),
 				fileDraft: fileDraftJson(fileDraft),
 				filePublication: filePublicationJson(filePublication),
+				fileRemovalPending: removalRows.some((row) => row.itemKey === key),
 				parentItem: effectiveParentItem,
 				sourceFileUrl:
 					!filePublication &&
@@ -272,7 +277,7 @@ async function getAdminAttachments(
 	});
 }
 
-function payloadLinkKeys(
+export function payloadLinkKeys(
 	payload: Record<string, unknown>,
 ): AdminItemLinkKeys | null {
 	const value = payload.links;
@@ -287,7 +292,7 @@ function payloadLinkKeys(
 	return { cites: list("cites"), related: list("related") };
 }
 
-async function adminItemLinks(
+export async function adminItemLinks(
 	db: Database,
 	itemKey: string,
 	keys: { keys: AdminItemLinkKeys; publishedKeys: AdminItemLinkKeys },
@@ -352,7 +357,7 @@ export async function getAdminItemDetail(
 	itemKey: string,
 ): Promise<AdminItemDetail> {
 	const config = await getLibraryConfig();
-	const [published, draft, fileDraft, filePublication, writeback] =
+	const [published, draft, fileDraft, filePublication, writeback, identity, removal] =
 		await Promise.all([
 			db
 				.select()
@@ -379,8 +384,10 @@ export async function getAdminItemDetail(
 				.limit(1)
 				.then((rows) => rows[0] ?? null),
 			resolveItemWritebackTargets(db, itemKey, config),
+			db.select().from(itemIdentity).where(eq(itemIdentity.key, itemKey)).limit(1).then((rows) => rows[0]),
+			db.select().from(itemFileRemoval).where(eq(itemFileRemoval.itemKey, itemKey)).limit(1).then((rows) => rows[0]),
 		]);
-	if (!published && !draft) throw new ItemNotFoundError(itemKey);
+	if (!identity || (!published && !draft)) throw new ItemNotFoundError(itemKey);
 
 	const [tagRows, membershipRows, attachments, publishedLinkKeys] =
 		await Promise.all([
@@ -460,6 +467,8 @@ export async function getAdminItemDetail(
 
 	return {
 		...summary,
+		kind: identity.kind,
+		importMethod: identity.importMethod,
 		fileState:
 			summary.itemType === "Attachment"
 				? summary.fileState
@@ -473,6 +482,7 @@ export async function getAdminItemDetail(
 			importedItemEditBlockReason(writeback) === null,
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
+		fileRemovalPending: Boolean(removal),
 		links,
 		parentItem,
 		parentState:

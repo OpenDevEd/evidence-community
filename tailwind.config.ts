@@ -96,14 +96,20 @@ const config: Config = {
 				// Small icon sizes shared by chat and citation controls.
 				"icon-md": "1.125rem",
 				"icon-xs": "0.6875rem",
+                "catalogue-icon": "13px",
 			},
 			fontSize: {
+				"inspector-title": "17px",
+                "catalogue-label": "12px",
 				citation: "0.68rem",
 			},
 			borderRadius: {
 				favicon: "0.2rem",
 			},
 			transitionProperty: {
+				"background-text": "background-color, color",
+				"background-fill": "background-color",
+				"filter-control": "background-color, border-color, color, box-shadow",
 				// What moves when the chat opens beside the results.
 				chrome: "transform, border-radius",
 				header: "height, padding",
@@ -162,6 +168,7 @@ const config: Config = {
 				"workbench-field": "260px",
 			},
 			width: {
+				"admin-filter": "min(420px, calc(100vw - 24px))",
 				dialog: "calc(100% - 2rem)",
 				// While a logo picture loads its box holds the widest that
 				// logo may ever be, so the bar does not jump when it lands.
@@ -171,6 +178,7 @@ const config: Config = {
 				"workbench-list": "150px",
 			},
 			gridTemplateColumns: {
+				"filter-rule": "minmax(0,1fr) minmax(0,1fr) 2rem",
 				// The workbench row: what changed, then its two controls.
 				"workbench-row": "minmax(0,1fr) auto auto",
 				// The workbench itself: records, the record, its details.
@@ -180,6 +188,8 @@ const config: Config = {
 				shimmer: "200% 100%",
 			},
 			maxHeight: {
+                "column-picker": "420px",
+				"admin-filter": "calc(100dvh - 72px)",
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",
 				"results-note": "32rem",
@@ -214,6 +224,8 @@ const config: Config = {
 				"bounce-custom": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
 			},
 			boxShadow: {
+				"filter-control": "inset 0 1px 0 rgba(255,255,255,0.45)",
+				"filter-control-dark": "inset 0 1px 0 rgba(255,255,255,0.05)",
 				"card-soft": "0 4px 20px rgba(0, 0, 0, 0.05)",
 				"card-flat": "0 4px 20px rgba(0, 0, 0, 0.04)",
 				"card-hairline": "0 1px 0 rgba(0, 0, 0, 0.035)",

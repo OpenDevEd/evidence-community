@@ -23,6 +23,8 @@ const sources: AdminSource[] = [
 
 function detail(): AdminItemDetail {
 	return {
+		kind: "created",
+		importMethod: null,
 		attachments: [],
 		collectionKeys: [],
 		creators: [],
@@ -31,6 +33,7 @@ function detail(): AdminItemDetail {
 		editable: true,
 		fileDraft: null,
 		filePublication: null,
+		fileRemovalPending: false,
 		fileState: "none",
 		itemType: "Book",
 		key: "SELF2345",

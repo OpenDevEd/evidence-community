@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openAdmin } from "./admin-login";
+import { publishWorkingDraft } from "./admin-review";
 
 const runtimeE2e = process.env.PLAYWRIGHT_RUNTIME_E2E === "true";
 const expectedTitle =
@@ -10,6 +11,18 @@ const expectedKey =
 	process.env.PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY ?? "AMBR2345";
 
 const protectedAdminRequests = [
+  ["GET", "/api/admin/reviews"],
+  ["GET", "/api/admin/reviews/review-id"],
+  ["POST", "/api/admin/reviews/review-id"],
+  ["GET", "/api/admin/reviews/review-id/files/ABCDEFGH"],
+  ["GET", "/api/admin/items/ABCDEFGH/review"],
+  ["POST", "/api/admin/items/ABCDEFGH/review"],
+  ["GET", "/api/admin/items/ABCDEFGH/publishing-choice"],
+  ["PUT", "/api/admin/items/ABCDEFGH/publishing-choice"],
+  ["GET", "/api/admin/items/ABCDEFGH/publication/crossref/reserve"],
+  ["POST", "/api/admin/items/ABCDEFGH/publication/crossref/reserve"],
+  ["POST", "/api/admin/items/ABCDEFGH/file/removal"],
+  ["DELETE", "/api/admin/items/ABCDEFGH/file/removal"],
 	["GET", "/api/admin/publication"],
 	["POST", "/api/admin/search-index/retry"],
 	["POST", "/api/admin/search-index/receipts"],
@@ -38,13 +51,10 @@ const protectedAdminRequests = [
 	["PUT", "/api/admin/items/ABCDEFGH/writeback/sources"],
 	["GET", "/api/admin/items/ABCDEFGH/file"],
 	["POST", "/api/admin/items/ABCDEFGH/file"],
-	["DELETE", "/api/admin/items/ABCDEFGH/file"],
 	["POST", "/api/admin/items/ABCDEFGH/writeback/resolve"],
 	["POST", "/api/admin/items/ABCDEFGH/publication/crossref/retry"],
 	["POST", "/api/admin/items/ABCDEFGH/publication/zenodo/retry"],
 	["GET", "/api/admin/items/ABCDEFGH/writeback/status"],
-	["POST", "/api/admin/items/ABCDEFGH/publish"],
-	["POST", "/api/admin/items/ABCDEFGH/file/publish"],
 	["POST", "/api/admin/items/ABCDEFGH/writeback/retry"],
 	["POST", "/api/admin/items/ABCDEFGH/file/complete"],
 	["DELETE", "/api/admin/items/ABCDEFGH/file/draft"],
@@ -151,24 +161,40 @@ test("lets an Editor create and publish a native record through the real stack",
 }, testInfo) => {
 	const title = `Runtime published book ${testInfo.workerIndex}-${testInfo.retry}-${Date.now()}`;
 	await openAdmin(page);
+  await page.locator(`[data-record-key="${expectedKey}"]`).click();
+  const previousTitle = page.locator("#admin-inspector-pane").getByRole("textbox", {name: "Title", exact: true});
+  await expect(previousTitle).toHaveValue(expectedTitle);
+  let releaseDetail!: () => void;
+  let detailRequested!: () => void;
+  const heldDetail = new Promise<void>(resolve => {releaseDetail = resolve;});
+  const requestedDetail = new Promise<void>(resolve => {detailRequested = resolve;});
+  const detailPath = /\/api\/admin\/items\/[A-Z0-9]{8}$/;
+  await page.route(detailPath, async route => {
+    if (route.request().url().endsWith(`/${expectedKey}`)) return route.continue();
+    detailRequested();
+    await heldDetail;
+    await route.continue();
+  });
 
-	await page.getByRole("button", { name: "New item" }).click();
-	const newItem = page.getByRole("dialog", { name: "New item" });
+	await page.getByRole("button", { name: "Create Item" }).click();
+	const newItem = page.getByRole("dialog", { name: "Create Item" });
 	await newItem.getByRole("button", { name: "Book", exact: true }).click();
+  await requestedDetail;
+  try {
+    await expect(previousTitle).toHaveCount(0);
+  } finally {
+    releaseDetail();
+    await page.unrouteAll({behavior: "wait"});
+  }
 
 	const inspector = page.locator("#admin-inspector-pane");
 	const titleInput = inspector.getByRole("textbox", {
 		name: "Title",
 		exact: true,
 	});
+	await expect(titleInput).toHaveValue("");
 	await titleInput.fill(title);
-	await inspector
-		.getByRole("button", { name: "Publish", exact: true })
-		.click();
-
-	await expect(
-		page.getByText("Record published", { exact: true }),
-	).toBeVisible({ timeout: 60_000 });
+	await publishWorkingDraft(page);
 	await expect(titleInput).toHaveValue(title);
 	await expect(
 		inspector.getByText("Published", { exact: true }).first(),

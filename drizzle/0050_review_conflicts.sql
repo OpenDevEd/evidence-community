@@ -1,0 +1,1 @@
+ALTER TABLE "itemReview" ADD COLUMN "remainingConflicts" jsonb DEFAULT '{}'::jsonb NOT NULL;

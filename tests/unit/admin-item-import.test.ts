@@ -126,6 +126,7 @@ describe("import commit contract", () => {
 	it("rejects more than 500 records before anything is created", () => {
 		const records = Array.from({ length: 501 }, (_, index) => ({
 			id: String(index),
+			method: "file",
 			payload: { itemType: "book" },
 		}));
 		expect(

@@ -1,3 +1,5 @@
+import { itemReview } from "@/db/schema/review";
+import { itemIdentity } from "@opendeved/evidence-library-core";
 import {
 	and,
 	arrayOverlaps,
@@ -159,6 +161,8 @@ function listFilter(
 				return adminItemListProjection.updatedAt;
 			case "itemType":
 				return adminItemListProjection.itemType;
+			case "kind":
+				return itemIdentity.kind;
 			case "source":
 				return adminItemListProjection.sourceConnectionKey;
 			case "dateAdded":
@@ -339,6 +343,7 @@ export function buildAdminItemListQuery(
 	const conditions = request.filters
 		.map(listFilter)
 		.filter((condition): condition is SQL => Boolean(condition));
+	if (request.reviewQueue) conditions.push(sql`EXISTS (SELECT 1 FROM ${itemReview} WHERE ${itemReview.itemKey} = ${adminItemListProjection.key} AND ${itemReview.state} = 'pending')`);
 	if (request.search) {
 		conditions.push(
 			sql`${adminItemListProjection.searchText} ILIKE ${containsPattern(request.search)} ESCAPE '\\'`,
@@ -356,6 +361,8 @@ export function buildAdminItemListQuery(
 			fileState: adminItemListProjection.fileState,
 			itemType: adminItemListProjection.itemType,
 			key: adminItemListProjection.key,
+			kind: itemIdentity.kind,
+			importMethod: itemIdentity.importMethod,
 			pageCount: adminItemListProjection.pageCount,
 			revision: adminItemListProjection.revision,
 			sourceConnectionKey:
@@ -368,6 +375,7 @@ export function buildAdminItemListQuery(
 			year: adminItemListProjection.year,
 		})
 		.from(adminItemListProjection)
+		.innerJoin(itemIdentity, eq(itemIdentity.key, adminItemListProjection.key))
 		.where(conditions.length > 0 ? and(...conditions) : undefined)
 		.orderBy(
 			sorting.direction === "asc"

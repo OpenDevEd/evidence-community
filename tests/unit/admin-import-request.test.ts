@@ -15,6 +15,7 @@ const record = (
 ): AdminImportPreviewRecord => ({
 	creators: [],
 	itemType: null,
+	method: "file",
 	payload: null,
 	source: "sample.ris",
 	state: "ready",
@@ -50,11 +51,11 @@ describe("import preview selection", () => {
 		const records = [
 			record({ id: "1", payload: { itemType: "Book" } }),
 			record({ id: "2", payload: null, state: "attention" }),
-			record({ id: "3", payload: { itemType: "Book" } }),
+			record({ id: "3", method: "doi", payload: { itemType: "Book" } }),
 		];
 		const selected = toggleImportSelection(new Set(["1", "2"]), "3", true);
 		expect(selectedImportRecords(records, toggleImportSelection(selected, "1", false))).toEqual([
-			{ id: "3", payload: { itemType: "Book" } },
+			{ id: "3", method: "doi", payload: { itemType: "Book" } },
 		]);
 	});
 

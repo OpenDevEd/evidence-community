@@ -1,3 +1,4 @@
+import { removeUnreferencedPrivateFiles } from "@/lib/admin/file-retention";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -6,26 +7,28 @@ import {
 	adminErrorResponse,
 	readAdminJson,
 	requireAdminPublisher,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { adminItemBatchRequestSchema } from "@/lib/admin/item-batch-contract";
 import { runAdminItemBatch } from "@/lib/admin/item-batch-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
 export async function POST(request: NextRequest) {
-	const denied = await requireAdminPublisher(request);
-	if (denied) return denied;
-
+ const unauthorized = await requireAdminSession(request);
+ if (unauthorized) return unauthorized;
 	try {
 		const input = adminItemBatchRequestSchema.parse(
 			await readAdminJson(request),
 		);
+        const denied = input.action === "remove" ? await requireAdminPublisher(request) : null;
+        if (denied) return denied;
 		const [runtime, writebackConfig] = await Promise.all([
 			getNativeFileRuntime(),
 			getLibraryConfig(),
 		]);
 		const execution = await runAdminItemBatch(input, {
 			db: runtime.db,
-			removePrivateFiles: (paths) => runtime.storage.removePrivate(paths),
+			removePrivateFiles: (paths) => removeUnreferencedPrivateFiles(runtime.db, runtime.storage, paths),
 			writebackPolicyOptions: { writebackConfig },
 		});
 		return NextResponse.json(

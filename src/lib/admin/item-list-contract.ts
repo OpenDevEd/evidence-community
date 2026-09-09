@@ -115,6 +115,16 @@ export const ADMIN_ITEM_LIST_COLUMNS = [
 		defaultVisible: false,
 		filterable: true,
 		filterOperators: ["anyOf"],
+		id: "kind",
+		kind: "enum",
+		label: "Kind",
+		optional: true,
+		sortable: false,
+	},
+	{
+		defaultVisible: false,
+		filterable: true,
+		filterOperators: ["anyOf"],
 		id: "source",
 		kind: "relation",
 		label: "Source",
@@ -317,6 +327,7 @@ export function parseAdminItemFilters(value: unknown): AdminItemFilter[] {
 const adminItemSortColumnSchema = z.enum(ADMIN_ITEM_SORT_COLUMN_IDS);
 
 const adminItemListRequestSchema = z.object({
+	reviewQueue: z.boolean().default(false),
 	cursor: z.string().min(1).nullable().default(null),
 	filters: adminItemFiltersSchema.default([]),
 	pageSize: z.coerce

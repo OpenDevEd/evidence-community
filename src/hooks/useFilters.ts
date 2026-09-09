@@ -16,7 +16,7 @@ import {
 	getDescendantKeys,
 	recursiveFind,
 } from "@/lib/collections";
-import { normalizePathname } from "@/lib/path";
+import { isAdminPath, normalizePathname } from "@/lib/path";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import {
@@ -76,18 +76,19 @@ export function useFilters() {
 
 	const pathname = usePathname();
 	const normalizedPathname = normalizePathname(pathname);
+	const admin = isAdminPath(normalizedPathname, "");
 	// Facets are only meaningful where a filtering surface exists: the library
 	// and map listings, or anywhere the navbar search (with its Explore button)
 	// is shown. Everywhere else we skip the request so lifting this provider to
 	// the whole app doesn't fan facet queries out across every page.
-	const filterSurfaceEnabled =
+	const filterSurfaceEnabled = !admin && (
 		normalizedPathname === "/lib" ||
 		normalizedPathname.startsWith("/map") ||
-		isLibraryFeatureEnabled(features, "navbarSearch");
+		isLibraryFeatureEnabled(features, "navbarSearch"));
 
 	const { data: noteData, isLoading: isNoteLoading } =
 		useSWR<CollectionNoteGetResponse>(
-			runtimeParams.collections.length === 1
+			!admin && runtimeParams.collections.length === 1
 				? `/collections/${runtimeParams.collections[0]}/note`
 				: null,
 			fetcher,
@@ -227,7 +228,7 @@ export function useFilters() {
 		data: collectionsData,
 		error: collectionsError,
 		isLoading: isCollectionsLoading,
-	} = useSWR<CollectionsGetResponse>("/collections", fetcher, SWR_OPTIONS);
+	} = useSWR<CollectionsGetResponse>(admin ? null : "/collections", fetcher, SWR_OPTIONS);
 
 	const selectedCollections = runtimeParams.collections;
 

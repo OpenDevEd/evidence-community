@@ -1,5 +1,9 @@
 "use client";
 
+import { mutate } from "swr";
+import type { SavedReview, PublishingChoice, ReviewRecord } from "@/lib/admin/review-contract";
+import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
+
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import type {
 	AdminCollection,
@@ -379,18 +383,6 @@ export function discardAdminDraft(key: string) {
 	);
 }
 
-/** Publish a record. `sourceKeys` chooses its writeback sources; omit to keep the stored choice. */
-export function publishAdminItem(key: string, sourceKeys?: string[]) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(
-		`/api/admin/items/${encodeURIComponent(key)}/publish`,
-		{
-			body: sourceKeys ? JSON.stringify({ sourceKeys }) : undefined,
-			headers: sourceKeys ? { "content-type": "application/json" } : undefined,
-			method: "POST",
-		},
-	);
-}
-
 /** Unpublish a record. `removeFromSourceKeys` lists the sources that also delete their copy. */
 export function unpublishAdminItem(key: string, removeFromSourceKeys?: string[]) {
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
@@ -718,36 +710,6 @@ export function discardAdminPdfDraft(key: string) {
 	);
 }
 
-export function publishAdminPdf(
-	key: string,
-	expectedUploadRevision: number,
-	zenodoFileChange?: "minor_correction",
-) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(
-		`/api/admin/items/${encodeURIComponent(key)}/file/publish`,
-		{
-			method: "POST",
-			body: JSON.stringify({
-				expectedUploadRevision,
-				...(zenodoFileChange ? { zenodoFileChange } : {}),
-			}),
-		},
-	);
-}
-
-export function unpublishAdminPdf(
-	key: string,
-	zenodoFileChange: "minor_correction",
-) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(
-		`/api/admin/items/${encodeURIComponent(key)}/file`,
-		{
-			method: "DELETE",
-			body: JSON.stringify({ zenodoFileChange }),
-		},
-	);
-}
-
 export async function getAdminSearchIndexOverview(signal?: AbortSignal) {
 	const response = await requestJson<unknown>("/api/admin/search-index", {
 		signal,
@@ -832,4 +794,58 @@ export async function sha256File(file: File) {
 	return Array.from(new Uint8Array(digest), (byte) =>
 		byte.toString(16).padStart(2, "0"),
 	).join("");
+}
+
+export type AdminReviewSnapshot = Awaited<ReturnType<typeof getAdminReviewSnapshot>>;
+
+export async function getAdminItemReviews(key: string) {
+	return (await requestJson<{ reviews: SavedReview[] }>(`/api/admin/items/${encodeURIComponent(key)}/review`)).reviews;
+}
+export async function getAdminReview(id: string) {
+	return (await requestJson<{ snapshot: AdminReviewSnapshot }>(`/api/admin/reviews/${encodeURIComponent(id)}`)).snapshot;
+}
+export async function submitAdminReview(key: string) {
+	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/items/${encodeURIComponent(key)}/review`, { method: "POST" } )).review;
+	void mutate("admin-review-count").catch(() => undefined);
+	return review;
+}
+export async function approveAdminReview(id: string, expectedRevision: number, zenodoFileChange?: "minor_correction") {
+    const result = await requestIndexingMutation<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ action: "approve", expectedRevision, ...(zenodoFileChange ? { zenodoFileChange } : {}) }) });
+    void mutate("admin-review-count").catch(() => undefined);
+    return result;
+}
+export async function updateAdminReview(id: string, body:
+	| { action: "correct"; expectedRevision: number; records: ReviewRecord[] }
+	| { action: "returned" | "withdrawn"; expectedRevision: number; note?: string }
+	| { action: "resolve-conflicts"; expectedRevision: number; itemKey: string; generation: string; draftRevision: number; choices: Record<string, "draft" | "published"> }
+) {
+	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(body) } )).review;
+	void mutate("admin-review-count").catch(() => undefined);
+	return review;
+}
+export async function getAdminPublishingChoice(key: string) {
+	return (await requestJson<{ choice: PublishingChoice | null }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`)).choice;
+}
+export async function saveAdminPublishingChoice(key: string, choice: PublishingChoice) {
+	return (await requestJson<{ choice: PublishingChoice }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`, { method: "PUT", body: JSON.stringify(choice) })).choice;
+}
+
+export async function getAdminReviewCount() {
+	return (await requestJson<{ count: number }>("/api/admin/reviews")).count;
+}
+
+export function setAdminPdfRemoval(key: string, remove: boolean) {
+ return requestJson<void>(`/api/admin/items/${encodeURIComponent(key)}/file/removal`, {method: remove ? "POST" : "DELETE"});
+}
+
+type CrossrefReservation = {doi: string; lifecycle: "reserved" | "verified"};
+export async function getAdminCrossrefReservation(key: string) {
+ return (await requestJson<{reservation: CrossrefReservation | null}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`)).reservation;
+}
+export async function reserveAdminCrossrefDoi(key: string) {
+ return (await requestJson<{reservation: CrossrefReservation}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`, {method: "POST"})).reservation;
+}
+
+export function adminErrorMessage(error: unknown, fallback: string) {
+ return error instanceof Error ? error.message : fallback;
 }

@@ -1,3 +1,4 @@
+import type { PublicationSettlement } from "./queue";
 import {
 	CrossrefApiClient,
 	executeLivePublicationSyncPlan,
@@ -33,9 +34,10 @@ import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
 	deferPublicationJob,
+	settlePublicationJob,
+	type PublicationJobResult,
 	enqueueItemSearchReprojection,
 	enqueuePublicationJobsForItem,
-	finishPublicationJob,
 	PublicationJobLeaseLostError,
 	withPublicationJobHeartbeat,
 } from "./queue";
@@ -369,23 +371,8 @@ function patchValues(
 
 async function settleCrossrefState(
 	database: Database,
-	input: {
-		jobId: number;
-		workerId: string;
-		itemKey: string;
-		canonicalRevision: number;
-		patch: ProviderSyncStatePatch;
-		previousState: ProviderSyncState | undefined;
-		settledAt: Date;
+	input: PublicationSettlement & {
 		verified: boolean;
-		jobResult:
-			| { status: "finished"; receipt: Record<string, unknown> }
-			| {
-					status: "deferred";
-					delayMs: number;
-					error: string;
-					deadLetter: boolean;
-			  };
 	},
 ) {
 	await database.transaction(async (transaction) => {
@@ -448,27 +435,12 @@ async function settleCrossrefState(
 				itemKey: input.itemKey,
 				canonicalRevision: current?.revision ?? input.canonicalRevision,
 				reason: "crossref_verified",
+				idempotencyDiscriminator: "crossref-verified",
 				now: input.settledAt,
 				providers: ["zenodo"],
 			});
 		}
-		if (input.jobResult.status === "finished") {
-			await finishPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				finishedAt: input.settledAt,
-				receipt: input.jobResult.receipt,
-			});
-		} else {
-			await deferPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				deferredAt: input.settledAt,
-				delayMs: input.jobResult.delayMs,
-				error: input.jobResult.error,
-				deadLetter: input.jobResult.deadLetter,
-			});
-		}
+		await settlePublicationJob(transaction, input);
 	});
 }
 

@@ -494,6 +494,11 @@ describe("admin publication view", () => {
 		expect(view.providers.zenodo.exact.pendingSubmission).toBeNull();
 	});
 
+	it("prepares the first archive draft without requiring archive metadata", () => {
+        const view = buildAdminPublicationViewFromSnapshot({itemKey: "ABCDEFGH", config, snapshot: snapshot({record: record({abstractNote: null, creators: []}), targets: [target("zenodo", "mint-zenodo")]})});
+        expect(view.providers.zenodo).toMatchObject({displayState: "waiting", waitingOn: "file", blockers: [], exact: {plan: {status: "waiting_for_file"}}});
+    });
+
 	it("waits locally for a published file before minting a Zenodo DOI", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",
@@ -929,7 +934,23 @@ describe("identifiers view", () => {
 			config,
 		});
 		expect(view.providers.crossref.displayState).toBe("failed");
+		expect(view.providers.crossref.capabilities.canRetry).toBe(true);
 		expect(view.identifiers.attention).toBe(true);
+	});
+
+
+	it("does not offer manual retry while the worker owns automatic retries", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				targets: [target("zenodo", "mint-zenodo")],
+				states: [syncState({lastFailureClass: "transient", lastFailureSummary: "Provider unavailable", consecutiveFailures: 1})],
+				jobs: [job({provider: "zenodo", environment: "sandbox", attempts: 1, lastError: "Provider unavailable"})],
+			}),
+			config,
+		});
+		expect(view.providers.zenodo.displayState).toBe("failed");
+		expect(view.providers.zenodo.capabilities.canRetry).toBe(false);
 	});
 
 	function archivedUnderOwnDoi(recordDoi: string) {

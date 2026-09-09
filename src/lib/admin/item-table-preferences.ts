@@ -35,6 +35,7 @@ export const ADMIN_ITEM_TABLE_COLUMN_SIZES: Record<
 	dateAdded: { minSize: 120, size: 140 },
 	fileState: { minSize: 92, size: 104 },
 	itemType: { minSize: 120, size: 150 },
+	kind: { minSize: 100, size: 112 },
 	key: { minSize: 100, size: 112 },
 	pageCount: { minSize: 88, size: 100 },
 	revision: { minSize: 76, size: 88 },

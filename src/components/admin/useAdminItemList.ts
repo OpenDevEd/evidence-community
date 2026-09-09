@@ -11,11 +11,8 @@ import type {
 	AdminItemViewFilters,
 } from "@/lib/admin/types";
 
-import { getAdminItems } from "./admin-api";
+import { adminErrorMessage, getAdminItems } from "./admin-api";
 
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : "Could not load records";
-}
 
 import {
 	parseAdminItemViewFilters,
@@ -47,6 +44,7 @@ function buildListSearchParams(
 ) {
 	return new URLSearchParams({
 		...(cursor ? { cursor } : {}),
+		...(filters.reviewQueue ? { review: "pending" } : {}),
 		filters: JSON.stringify(filters.filters),
 		requestedColumns: JSON.stringify(requestedColumns),
 		search: filters.query,
@@ -56,9 +54,19 @@ function buildListSearchParams(
 	});
 }
 
+function keepVisibleSelection(current: string | null, visibleKeys: ReadonlySet<string>, fallback: string | null) {
+ return current && visibleKeys.has(current) ? current : fallback;
+}
+
+function selectingReviewQueue(filters: AdminItemViewFilters, pinned: boolean) {
+ return filters.reviewQueue && !pinned;
+}
+
 export function useAdminItemList(
 	requestedColumns: readonly AdminItemColumnId[],
 	initialFilters: AdminItemViewFilters,
+    linkPicking = false,
+    selectionPinned = false,
 ) {
 	const routeSearchParams = useSearchParams();
 	const routeSearch = routeSearchParams.toString();
@@ -110,7 +118,7 @@ export function useAdminItemList(
 			setLoading(true);
 			try {
 				const page = await getAdminItems(
-					buildListSearchParams(filters, cursor, requestedColumns),
+					buildListSearchParams(linkPicking ? {...filters, reviewQueue: false} : filters, cursor, requestedColumns),
 					controller.signal,
 				);
 				if (currentRequest !== requestId.current) return;
@@ -129,7 +137,9 @@ export function useAdminItemList(
 						return next.size === current.size ? current : next;
 					});
 					const firstVisibleKey = page.items[0]?.key ?? null;
-					if (!selectionInitialized.current && firstVisibleKey) {
+					if (selectingReviewQueue(filters, selectionPinned)) {
+						void setSelectedKeyInUrl((current) => keepVisibleSelection(current, visibleKeys, firstVisibleKey), { history: "replace" });
+					} else if (!selectionInitialized.current && firstVisibleKey) {
 						selectionInitialized.current = true;
 						void setSelectedKeyInUrl(
 							(current) => current ?? firstVisibleKey,
@@ -147,14 +157,14 @@ export function useAdminItemList(
 					return;
 				}
 				if (currentRequest !== requestId.current) return;
-				const message = errorMessage(loadError);
+				const message = adminErrorMessage(loadError, "Could not load records");
 				setError(message);
 				toast.error(message);
 			} finally {
 				if (currentRequest === requestId.current) setLoading(false);
 			}
 		},
-		[filters, requestedColumns, setSelectedKeyInUrl],
+		[filters, requestedColumns, setSelectedKeyInUrl, linkPicking, selectionPinned],
 	);
 
 	useEffect(() => {

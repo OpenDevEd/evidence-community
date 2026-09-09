@@ -1,3 +1,4 @@
+import type { PublicationSettlement } from "./queue";
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	executeLivePublicationSyncPlan,
@@ -19,7 +20,7 @@ import {
 	type ZenodoRemoteStateVerification,
 	type ZenodoWriter,
 } from "@opendeved/doi-sync-core";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
@@ -41,6 +42,8 @@ import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
 	deferPublicationJob,
+	settlePublicationJob,
+	type PublicationJobResult,
 	enqueueItemSearchReprojection,
 	enqueuePublicationJobsForItem,
 	finishPublicationJob,
@@ -82,6 +85,7 @@ function parseFileCorrectionApprovalId(value: string | undefined) {
 }
 
 export type ZenodoPublicationProvider = ZenodoWriter &
+	Pick<ZenodoApiClient, "prepareEmptyDraft"> &
 	Partial<Pick<ZenodoApiClient, "verifyPublishedState">>;
 
 function requireConfig(config: PublicationConfig) {
@@ -92,7 +96,9 @@ function requireConfig(config: PublicationConfig) {
 	return { ...zenodo, token: zenodo.token };
 }
 
-function requireZenodoPlanningRecord(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>) {
+function requireZenodoPlanningRecord(
+	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+) {
 	const record = snapshot.record;
 	if (!record) throw new Error("The publication record no longer exists");
 	if (record.deleted === 1) {
@@ -132,7 +138,11 @@ function assertArchivedExternalDoiMatches(input: {
 	bibliographicDoi: string | null;
 }) {
 	if (input.identifierPolicy !== "reuse-external") return;
-	if (input.lockedExternalDoi && input.bibliographicDoi === input.lockedExternalDoi) return;
+	if (
+		input.lockedExternalDoi &&
+		input.bibliographicDoi === input.lockedExternalDoi
+	)
+		return;
 	throw new ZenodoExternalDoiChangedError(
 		`The record DOI no longer matches the DOI selected for Zenodo (${input.lockedExternalDoi ?? "missing"})`,
 	);
@@ -224,9 +234,7 @@ async function buildZenodoPlan(
 			...(correctionApproval
 				? {
 						zenodoFileChangeApproval:
-							fileCorrectionApprovalFromRow(
-								correctionApproval,
-							),
+							fileCorrectionApprovalFromRow(correctionApproval),
 					}
 				: {}),
 		}),
@@ -397,8 +405,18 @@ function createZenodoJournal(
 	return {
 		recordZenodoPublishDraft: (input: RecordZenodoPublishDraftInput) =>
 			withLease(input.observedAt, async (transaction) => {
-				const fileCorrectionApprovalId =
-					parseFileCorrectionApprovalId(input.fileCorrectionApproval?.id);
+				const fileCorrectionApprovalId = parseFileCorrectionApprovalId(
+					input.fileCorrectionApproval?.id,
+				);
+				const createOperation = plan.operations.find(operation => operation.type === "zenodo_create");
+				if (createOperation?.draftDepositionId && createOperation.draftDepositionId !== input.depositionId) {
+					await transaction.delete(zenodoPublishJournal).where(and(
+						eq(zenodoPublishJournal.itemKey, input.recordId),
+						eq(zenodoPublishJournal.environment, "sandbox"),
+						eq(zenodoPublishJournal.depositionId, createOperation.draftDepositionId),
+						eq(zenodoPublishJournal.status, "preparing"),
+					));
+				}
 				await transaction
 					.insert(zenodoPublishJournal)
 					.values({
@@ -452,6 +470,17 @@ function createZenodoJournal(
 							updatedAt: input.observedAt,
 						},
 					});
+				await transaction
+					.update(publicationSyncState)
+					.set({ unpublishedDraftDepositionId: input.depositionId })
+					.where(
+						and(
+							eq(publicationSyncState.itemKey, input.recordId),
+							eq(publicationSyncState.provider, "zenodo"),
+							eq(publicationSyncState.environment, "sandbox"),
+							isNotNull(publicationSyncState.unpublishedDraftDepositionId),
+						),
+					);
 			}),
 		markZenodoPublishDraftPublished: (
 			input: MarkZenodoPublishDraftPublishedInput,
@@ -542,6 +571,7 @@ function createZenodoJournal(
 						lastPayloadSnapshot: savedDraft.payloadSnapshot,
 						lastFileManifestHash,
 						lastFileManifestSnapshot,
+						unpublishedDraftDepositionId: null,
 						zenodoRecordId: input.identifiers.latestRecordId,
 						zenodoParentId: input.identifiers.parentId,
 						zenodoVersionDoi: input.identifiers.versionDoi ?? null,
@@ -563,7 +593,8 @@ function createZenodoJournal(
 							lastPayloadSnapshot: savedDraft.payloadSnapshot,
 							lastFileManifestHash,
 							lastFileManifestSnapshot,
-							zenodoRecordId: input.identifiers.latestRecordId,
+							unpublishedDraftDepositionId: null,
+						zenodoRecordId: input.identifiers.latestRecordId,
 							zenodoParentId: input.identifiers.parentId,
 							zenodoVersionDoi:
 								input.identifiers.versionDoi ?? null,
@@ -621,7 +652,9 @@ function createZenodoJournal(
 									input.recordId,
 								),
 								isNull(zenodoFileCorrectionApproval.consumedAt),
-								isNull(zenodoFileCorrectionApproval.supersededAt),
+								isNull(
+									zenodoFileCorrectionApproval.supersededAt,
+								),
 							),
 						)
 						.returning({ id: zenodoFileCorrectionApproval.id });
@@ -751,6 +784,7 @@ function zenodoPatchValues(
 						Record<string, unknown> | undefined)
 				: undefined) ??
 			null,
+		unpublishedDraftDepositionId: identifiers ? null : previousState?.zenodo?.unpublishedDraft?.depositionId ?? null,
 		zenodoRecordId: identifiers?.latestRecordId ?? null,
 		zenodoParentId: identifiers?.parentId ?? null,
 		zenodoVersionDoi: identifiers?.versionDoi ?? null,
@@ -860,23 +894,8 @@ async function auditZenodoPublishedState(
 
 async function settleZenodoState(
 	database: Database,
-	input: {
-		jobId: number;
-		workerId: string;
-		itemKey: string;
-		canonicalRevision: number;
-		patch: ProviderSyncStatePatch;
-		previousState: ProviderSyncState | undefined;
+	input: PublicationSettlement & {
 		identifierPolicy: ZenodoIdentifierPolicy;
-		settledAt: Date;
-		jobResult:
-			| { status: "finished"; receipt: Record<string, unknown> }
-			| {
-					status: "deferred";
-					delayMs: number;
-					error: string;
-					deadLetter: boolean;
-			  };
 	},
 ) {
 	await database.transaction(async (transaction) => {
@@ -941,24 +960,106 @@ async function settleZenodoState(
 				queuedAt: input.settledAt,
 			});
 		}
-		if (input.jobResult.status === "finished") {
-			await finishPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				finishedAt: input.settledAt,
-				receipt: input.jobResult.receipt,
-			});
-		} else {
-			await deferPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				deferredAt: input.settledAt,
-				delayMs: input.jobResult.delayMs,
-				error: input.jobResult.error,
-				deadLetter: input.jobResult.deadLetter,
-			});
-		}
+		await settlePublicationJob(transaction, input);
 	});
+}
+
+function zenodoDraftWaitReason(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>, identifierPolicy: ZenodoIdentifierPolicy) {
+	return identifierPolicy === "reuse-crossref" &&
+		!snapshot.identifiers.some(
+			(identifier) =>
+				identifier.registrar === "crossref" &&
+				identifier.environment === "test" &&
+				identifier.isCurrent &&
+				identifier.ownership === "managed" &&
+				identifier.lifecycle === "verified",
+		)
+			? "crossref"
+			: snapshot.files.length === 0
+				? "file"
+				: null;
+}
+
+function hasZenodoDraft(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>, state: typeof publicationSyncState.$inferSelect | undefined) {
+ return Boolean(state?.zenodoRecordId || state?.unpublishedDraftDepositionId || snapshot.journals.length);
+}
+
+async function prepareWaitingZenodoDraft(
+	database: Database,
+	config: PublicationConfig,
+	input: {
+		job: { id: number; itemKey: string };
+		workerId: string;
+		provider: ZenodoPublicationProvider;
+		now: () => Date;
+	},
+) {
+	const snapshot = await readPublicationRepositorySnapshot(
+		database,
+		input.job.itemKey,
+		config.services.publication.crossref.environment,
+	);
+	requireZenodoPlanningRecord(snapshot);
+	const target = targetFor(snapshot, "zenodo", "sandbox");
+	if (!target?.identifierPolicy)
+		throw new Error("The record does not have an active Zenodo target");
+	const waitingOn = zenodoDraftWaitReason(snapshot, target.identifierPolicy);
+	const state = snapshot.states.find(
+		(state) =>
+			state.provider === "zenodo" && state.environment === "sandbox",
+	);
+	if (!hasZenodoDraft(snapshot, state)) {
+		if (!waitingOn) {
+			// Validation belongs to publication, but must not prevent saving the archive draft.
+			try {
+				const built = await buildZenodoPlan(
+					database,
+					input.job.itemKey,
+					config,
+					input.now(),
+				);
+				if (built.plan.status !== "needs_attention") return null;
+			} catch {
+				// The normal planning pass below records the validation failure after draft creation.
+			}
+		}
+		await input.provider.prepareEmptyDraft({
+			token: requireConfig(config).token,
+			onPreparedDraft: async (draft) => {
+				await database.transaction(async (transaction) => {
+					await lockItemMutation(transaction, input.job.itemKey);
+					await assertPublicationJobLease(transaction, {
+						jobId: input.job.id,
+						workerId: input.workerId,
+						observedAt: input.now(),
+					});
+					await transaction
+						.insert(publicationSyncState)
+						.values({
+							itemKey: input.job.itemKey,
+							provider: "zenodo",
+							environment: "sandbox",
+							identifierPolicy: target.identifierPolicy,
+							unpublishedDraftDepositionId: draft.depositionId,
+							updatedAt: input.now(),
+						})
+						.onConflictDoUpdate({
+							target: [
+								publicationSyncState.itemKey,
+								publicationSyncState.provider,
+								publicationSyncState.environment,
+							],
+							set: {
+								unpublishedDraftDepositionId:
+									draft.depositionId,
+								updatedAt: input.now(),
+							},
+						});
+				});
+			},
+		});
+	}
+	return waitingOn;
 }
 
 export async function runZenodoPublicationJobsOnce(
@@ -992,7 +1093,48 @@ export async function runZenodoPublicationJobsOnce(
 		});
 		if (!job) break;
 		try {
-			const built = await buildZenodoPlan(database, job.itemKey, config, now());
+			if (job.reason !== "provider_audit") {
+				const waiting = await withPublicationJobHeartbeat(
+					database,
+					{
+						jobId: job.id,
+						workerId,
+						leaseSeconds: workerConfig.leaseSeconds,
+						heartbeatIntervalMs: options.heartbeatIntervalMs,
+						now,
+						signal: options.signal,
+					},
+					(signal) =>
+						prepareWaitingZenodoDraft(database, config, {
+							job,
+							workerId,
+							now,
+							provider:
+								options.provider ??
+								new ZenodoApiClient({
+									endpoint: ZENODO_SANDBOX_ENDPOINT,
+									fetch: (url, init) =>
+										fetch(url, { ...init, signal }),
+								}),
+						}),
+				);
+				if (waiting) {
+					await finishPublicationJob(database, {
+						jobId: job.id,
+						workerId,
+						finishedAt: now(),
+						receipt: { status: "waiting", waitingOn: waiting },
+					});
+					outcomes.push({ jobId: job.id, status: "waiting" });
+					continue;
+				}
+			}
+			const built = await buildZenodoPlan(
+				database,
+				job.itemKey,
+				config,
+				now(),
+			);
 			if (job.reason === "provider_audit") {
 				const audit = await auditZenodoPublishedState(
 					database,

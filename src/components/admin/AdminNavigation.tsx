@@ -1,7 +1,8 @@
 "use client";
 
+import { ReviewQueueEntry } from "./ReviewQueueEntry";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
 
 import { AdminSourceSyncBadge } from "./AdminSourceSyncDialog";
 import { type ReactNode, useRef } from "react";
@@ -34,6 +35,12 @@ export function invalidateAdminCollectionCatalogue() {
 export function focusAdminCollection(request: AdminCollectionFocusRequest) {
 	requestAdminCollectionFocus(request);
 }
+
+const kindOptions = [
+	{ icon: LibraryIcon, key: "all", label: "All" },
+	{ icon: FilePlusIcon, key: "created", label: "Created" },
+	{ icon: FileImportIcon, key: "imported", label: "Imported" },
+] as const;
 
 const stateOptions: Array<{
 	icon: typeof CheckmarkCircle01Icon;
@@ -79,6 +86,10 @@ const navigationListSurfaceClass =
 	"bg-black/[0.035] px-2 py-2 dark:bg-black/20";
 
 export function AdminNavigation({
+	kind,
+	onSelectKind,
+	reviewQueue,
+	onSelectReviewQueue,
 	collection,
 	onCreateCollection,
 	onDeleteCollection,
@@ -94,6 +105,10 @@ export function AdminNavigation({
 	sources,
 	state,
 }: {
+	reviewQueue: boolean;
+	onSelectReviewQueue: () => void;
+	kind: string | null;
+	onSelectKind: (kind: "all" | "created" | "imported") => void;
 	collection: string | null;
 	onCreateCollection: (
 		parentCollection: AdminCollectionCatalogEntry | null,
@@ -119,6 +134,24 @@ export function AdminNavigation({
 			aria-label="Admin filters and collections"
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
+			<ReviewQueueEntry selected={reviewQueue} onPress={onSelectReviewQueue} />
+			<div className="shrink-0">
+				<NavigationHeading icon={ListIcon} title="Kind" />
+				<div className={navigationListSurfaceClass}>
+					{kindOptions.map(({ key, label, icon }) => (
+						<button
+							key={key}
+							type="button"
+							aria-pressed={kind === key}
+							className={`${navigationItemClass} ${kind === key ? "bg-accent/[0.12] font-medium" : "text-black/60 dark:text-white/60"}`}
+							onClick={() => onSelectKind(key)}
+						>
+							<HugeiconsIcon icon={icon} aria-hidden size={14} />
+							{label}
+						</button>
+					))}
+				</div>
+			</div>
 			<div className="shrink-0">
 				<NavigationHeading icon={DatabaseIcon} title="Sources" />
 				<div className={navigationListSurfaceClass}>

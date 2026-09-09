@@ -1,4 +1,7 @@
-import { createHash } from "node:crypto";
+import { MemoryFileStorage, createPdf, fileHash } from "../tests/helpers/file-storage";
+import { describe, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
+import { itemReview, itemPublishingChoice } from "../src/db/schema/review";
 
 import {
 	itemDraft,
@@ -10,10 +13,10 @@ import {
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { buildPublicationFileManifestHash } from "@opendeved/doi-sync-core";
-import { PDFDocument, StandardFonts } from "pdf-lib";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { createPostgresDatabaseResource } from "../src/db/postgres";
+import type { Database } from "../src/db/database-schema";
+import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { itemFilePublication } from "../src/db/schema/source";
 import {
 	publicationIdentifier,
@@ -24,10 +27,6 @@ import {
 } from "../src/db/schema/publication";
 import { item } from "../src/db/schema/tables/item";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
-import type {
-	EvidenceFileStorage,
-	SignedFileUpload,
-} from "../src/lib/admin/file-storage";
 import {
 	completeNativePdfUpload,
 	discardNativePdfDraft,
@@ -35,12 +34,15 @@ import {
 	NativeFileConflictError,
 	publishNativePdf,
 	stageNativePdfUpload,
+	stageNativePdfRemoval,
+	undoNativePdfRemoval,
 	unpublishNativePdf,
 	ZenodoPdfCorrectionConfirmationRequiredError,
 } from "../src/lib/admin/native-file-service";
 import { buildPublicationFileManifest } from "../src/lib/publication/record-adapter";
 import {
 	createNativeItemDraft,
+	discardItemDraft,
 	getItemDraft as getNativeItemDraft,
 	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
 	openItemDraft as openNativeItemDraft,
@@ -51,97 +53,14 @@ import {
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
-const verifiedDatabaseUrl = databaseUrl;
 const PUBLICATION_TAGS = ["publish-record"] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-class MemoryFileStorage implements EvidenceFileStorage {
-	readonly privateFiles = new Map<string, Uint8Array>();
-	readonly publicFiles = new Map<string, Uint8Array>();
-	privateUploadHook: ((path: string) => Promise<void>) | null = null;
-	publicUploadHook: (() => Promise<void>) | null = null;
-	private publicUploadsAfterHook = 0;
-
-	async createSignedUpload(path: string): Promise<SignedFileUpload> {
-		return {
-			path,
-			signedUrl: `http://storage.local/upload/${path}`,
-			token: `token-${path}`,
-		};
-	}
-
-	async downloadPrivate(path: string) {
-		const data = this.privateFiles.get(path);
-		if (!data) throw new Error(`Missing private object: ${path}`);
-		return data.slice();
-	}
-
-	async downloadPublic(path: string) {
-		const bytes = this.publicFiles.get(path);
-		if (!bytes) throw new Error(`Missing public object ${path}`);
-		return bytes.slice();
-	}
-
-	async uploadPrivate(path: string, data: Uint8Array, _contentType: string) {
-		this.privateFiles.set(path, data.slice());
-		if (this.privateUploadHook) {
-			const hook = this.privateUploadHook;
-			this.privateUploadHook = null;
-			await hook(path);
-		}
-	}
-
-	async uploadPublic(path: string, data: Uint8Array, _contentType: string) {
-		this.publicFiles.set(path, data.slice());
-		if (this.publicUploadHook) {
-			this.publicUploadsAfterHook += 1;
-			if (this.publicUploadsAfterHook === 2) {
-				const hook = this.publicUploadHook;
-				this.publicUploadHook = null;
-				this.publicUploadsAfterHook = 0;
-				await hook();
-			}
-		}
-	}
-
-	publicUrl(path: string) {
-		return `http://storage.local/public/${path}`;
-	}
-
-	async removePrivate(paths: string[]) {
-		for (const path of paths) this.privateFiles.delete(path);
-	}
-
-	async removePublic(paths: string[]) {
-		for (const path of paths) this.publicFiles.delete(path);
-	}
-}
-
-async function createPdf(title: string) {
-	const document = await PDFDocument.create();
-	const font = await document.embedFont(StandardFonts.Helvetica);
-	const page = document.addPage([612, 792]);
-	page.drawText(title, { x: 72, y: 700, size: 24, font });
-	page.drawText("Evidence Library file lifecycle verification.", {
-		x: 72,
-		y: 660,
-		size: 12,
-		font,
-	});
-	return new Uint8Array(await document.save());
-}
-
-function fileHash(bytes: Uint8Array) {
-	return createHash("sha256").update(bytes).digest("hex");
-}
-
 async function verifyCrossrefBackedPdfCorrectionApproval(
-	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	db: Database,
 	storage: MemoryFileStorage,
 	createdKeys: string[],
 ) {
@@ -342,7 +261,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 }
 
 async function verifyNonZenodoDuplicateFilenames(
-	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	db: Database,
 	storage: MemoryFileStorage,
 	createdKeys: string[],
 ) {
@@ -399,9 +318,7 @@ async function verifyNonZenodoDuplicateFilenames(
 	}
 }
 
-async function verify() {
-	const resource = createPostgresDatabaseResource(verifiedDatabaseUrl);
-	const db = resource.database;
+async function verify(db: Database) {
 	const storage = new MemoryFileStorage();
 	const createdKeys: string[] = [];
 	const connectionKey = `native-file-writeback-${process.pid}-${Date.now()}`;
@@ -413,6 +330,8 @@ async function verify() {
 			provider: "zotero",
 			scopeKind: "group",
 		});
+
+
 
 		const parentDraft = await createNativeItemDraft(db, {
 			itemType: "Report",
@@ -798,16 +717,12 @@ async function verify() {
 					isNull(publicationSyncJob.supersededAt),
 				),
 			);
-		assert(
-			activePublicationJobsAfterFileUnpublish.length === 1 &&
-				activePublicationJobsAfterFileUnpublish[0]?.provider ===
-					"crossref" &&
-				activePublicationJobsAfterFileUnpublish[0].reason ===
-					"file_changed" &&
-				activePublicationJobsAfterFileUnpublish[0].canonicalRevision ===
-					parentAfterFileUnpublish?.revision,
-			"File unpublish did not leave Zenodo waiting for a file",
-		);
+        assert(
+            activePublicationJobsAfterFileUnpublish.length === 2 &&
+            activePublicationJobsAfterFileUnpublish.every(job => job.reason === "file_changed" && job.canonicalRevision === parentAfterFileUnpublish?.revision) &&
+            activePublicationJobsAfterFileUnpublish.some(job => job.provider === "zenodo" && job.fileRevision === null),
+            "File removal did not queue the updated archive state",
+        );
 		storage.publicUploadHook = async () => {
 			await db
 				.delete(itemFileDraft)
@@ -1144,6 +1059,8 @@ async function verify() {
 		);
 	} finally {
 		if (createdKeys.length > 0) {
+			await db.delete(itemReview).where(inArray(itemReview.itemKey, createdKeys));
+			await db.delete(itemPublishingChoice).where(inArray(itemPublishingChoice.itemKey, createdKeys));
 			await db
 				.delete(publicationSyncJob)
 				.where(inArray(publicationSyncJob.itemKey, createdKeys));
@@ -1192,11 +1109,9 @@ async function verify() {
 		await db
 			.delete(sourceConnection)
 			.where(eq(sourceConnection.key, connectionKey));
-		await resource.dispose();
 	}
 }
 
-verify().catch((error) => {
-	console.error(error);
-	process.exitCode = 1;
+describe("native files and submitted reviews", () => {
+	it("retains frozen files, protects drafts, and publishes approved changes transactionally", () => withIsolatedPublicationDatabase(verify), 120_000);
 });

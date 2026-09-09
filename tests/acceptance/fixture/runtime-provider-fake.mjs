@@ -53,8 +53,8 @@ function depositionJson(deposition) {
 		id: Number(deposition.id),
 		record_id: Number(deposition.id),
 		conceptrecid: Number(deposition.parentId),
-		submitted: deposition.published,
-		state: deposition.published ? "done" : "unsubmitted",
+		submitted: deposition.published && !deposition.editing,
+		state: deposition.editing ? "inprogress" : deposition.published ? "done" : "unsubmitted",
 		metadata: deposition.metadata,
 		links: {
 			self: `https://sandbox.zenodo.org/api/deposit/depositions/${deposition.id}`,
@@ -286,6 +286,13 @@ const server = createServer(async (request, response) => {
 		return json(response, 200, { key: decodeURIComponent(bucketMatch[2]) });
 	}
 
+    const depositionFilesMatch = url.pathname.match(/^\/api\/deposit\/depositions\/(\d+)\/files$/u);
+    if (depositionFilesMatch && method === "GET") {
+        const deposition = depositions.get(depositionFilesMatch[1]);
+        if (!deposition) return json(response, 404, {message: "missing deposition"});
+        return json(response, 200, depositionJson(deposition).files);
+    }
+
 	const depositionMatch = url.pathname.match(
 		/^\/api\/deposit\/depositions\/(\d+)$/u,
 	);
@@ -396,6 +403,14 @@ const server = createServer(async (request, response) => {
 		return json(response, 202, publishedRecord(deposition));
 	}
 
+    const editDepositionMatch = url.pathname.match(/^\/api\/deposit\/depositions\/(\d+)\/actions\/edit$/u);
+    if (editDepositionMatch && method === "POST") {
+        const deposition = depositions.get(editDepositionMatch[1]);
+        if (!deposition?.published) return json(response, 404, {message: "missing published deposition"});
+        deposition.editing = true;
+        return json(response, 201, depositionJson(deposition));
+    }
+
 	const publishMatch = url.pathname.match(
 		/^\/api\/deposit\/depositions\/(\d+)\/actions\/publish$/u,
 	);
@@ -404,6 +419,7 @@ const server = createServer(async (request, response) => {
 		if (!deposition)
 			return json(response, 404, { message: "missing deposition" });
 		deposition.published = true;
+		deposition.editing = false;
 		deposition.publishedAt = new Date().toISOString();
 		return json(response, 202, depositionJson(deposition));
 	}

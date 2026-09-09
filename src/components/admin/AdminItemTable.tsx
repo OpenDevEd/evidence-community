@@ -1,4 +1,5 @@
 "use client";
+import { editableCollectionSourceKeys } from "@/lib/admin/item-collection-policy";
 
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, ArrowDown01Icon, ArrowUp01Icon, ArrowUpDownIcon, Calendar01Icon, DatabaseIcon, DragDropVerticalIcon, FileAttachmentIcon, Folder01Icon, LayoutThreeColumnIcon, LayoutThreeRowIcon, LockIcon, RotateLeft01Icon, Tag01Icon, Tick01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
@@ -306,7 +307,7 @@ function RecordTitleCell({
 					{record.title}
 				</p>
 				<p className="truncate text-[11px] text-black/40 dark:text-white/40">
-					{humanizeAdminField(record.itemType)} · {record.key}
+					{humanizeAdminField(record.kind)} / {humanizeAdminField(record.itemType)}
 				</p>
 			</div>
 		</div>
@@ -379,7 +380,7 @@ function TableViewControls({
 						</Tooltip>
 					</div>
 					<div
-						className="max-h-[420px] w-full overflow-y-auto"
+						className="max-h-column-picker w-full overflow-y-auto"
 						data-admin-column-scroll
 					>
 						<div className="p-2" data-admin-column-list>
@@ -537,7 +538,7 @@ function SortHeader({
 		: ArrowUpDownIcon;
 	return (
 		<button
-			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus dark:hover:text-white/70"
+			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus dark:hover:text-white/70"
 			onClick={() => onSort(columnId)}
 			tabIndex={-1}
 			type="button"
@@ -635,16 +636,7 @@ export function AdminItemTable({
 		() => new Map(sources.map(({ key, label }) => [key, label])),
 		[sources],
 	);
-	const editableSourceKeys = useMemo(
-		() =>
-			new Set(
-				sources
-					.filter(({ readOnly }) => !readOnly)
-					.map(({ key }) => key),
-			),
-		[sources],
-	);
-
+	const editableSourceKeys = useMemo(() => editableCollectionSourceKeys(sources), [sources]);
 	const columns = useMemo<ColumnDef<AdminTableItem>[]>(
 		() => [
 			{
@@ -750,10 +742,14 @@ export function AdminItemTable({
 				...ADMIN_ITEM_TABLE_COLUMN_SIZES.itemType,
 			},
 			{
+				cell: ({ row }) => <PlainCell>{humanizeAdminField(row.original.kind)}</PlainCell>,
+				id: "kind",
+				...ADMIN_ITEM_TABLE_COLUMN_SIZES.kind,
+			},
+			{
 				cell: ({ row }) => (
 					<PlainCell icon={DatabaseIcon}>
-						{sourceLabels.get(row.original.sourceConnectionKey) ??
-							row.original.sourceConnectionKey}
+						{row.original.importMethod === "doi" ? "DOI import" : row.original.importMethod === "file" ? "File import" : sourceLabels.get(row.original.sourceConnectionKey) ?? row.original.sourceConnectionKey}
 					</PlainCell>
 				),
 				id: "source",

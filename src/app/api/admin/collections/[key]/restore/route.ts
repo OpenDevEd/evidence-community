@@ -1,12 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { ADMIN_PUBLISH_PERMISSION } from "@/lib/admin/access";
 
 import { getDatabase } from "@/db";
 import { loadLibraryConfig } from "@/config/library-config/source";
 import {
-	ADMIN_RESPONSE_HEADERS,
-	adminErrorResponse,
+	handleAdminJson,
 	readAdminJson,
-	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
 import { restoreAdminCollection } from "@/lib/admin/collection-mutation-service";
@@ -16,10 +15,7 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = await requireAdminPublisher(request);
-	if (denied) return denied;
-
-	try {
+	return handleAdminJson(request, ADMIN_PUBLISH_PERMISSION, async () => {
 		const { key } = await params;
 		const result = await restoreAdminCollection(
 			await getDatabase(),
@@ -27,22 +23,17 @@ export async function POST(
 			await readAdminJson(request),
 			{ writebackConfig: await loadLibraryConfig() },
 		);
-		return NextResponse.json(
-			{
-				collection: toAdminCollection(result.collection),
-				collections: result.collections.map(toAdminCollection),
-				indexingReceipts: [
-					...result.collections.map((collection) =>
-						adminSearchIndexReceipt("collection", collection),
-					),
-					...result.indexingItems.map((item) =>
-						adminSearchIndexReceipt("item", item),
-					),
-				],
-			},
-			{ headers: ADMIN_RESPONSE_HEADERS },
-		);
-	} catch (error) {
-		return adminErrorResponse(error);
-	}
+		return {
+			collection: toAdminCollection(result.collection),
+			collections: result.collections.map(toAdminCollection),
+			indexingReceipts: [
+				...result.collections.map((collection) =>
+					adminSearchIndexReceipt("collection", collection),
+				),
+				...result.indexingItems.map((item) =>
+					adminSearchIndexReceipt("item", item),
+				),
+			],
+		};
+	});
 }

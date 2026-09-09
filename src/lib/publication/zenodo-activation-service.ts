@@ -1,4 +1,3 @@
-import { planPublicationSync } from "@opendeved/doi-sync-core";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -25,11 +24,7 @@ import {
 	savePublicationJob,
 	supersedeUnleasedPublicationJobs,
 } from "./queue";
-import {
-	buildPublicationFileManifest,
-	buildPublicationIdentifiers,
-	buildPublicationRecordSnapshot,
-} from "./record-adapter";
+import { buildPublicationFileManifest } from "./record-adapter";
 import {
 	readPublicationRepositorySnapshot,
 	type PublicationRepositorySnapshot,
@@ -88,7 +83,7 @@ export function resolveZenodoActivationPolicy(
 		if (!ownDoi) {
 			throw new ZenodoActivationValidationError(
 				input.bibliographicDoi
-					? "This record's DOI was registered here through Crossref. Choose \"Use the Crossref DOI\" instead."
+					? 'This record\'s DOI was registered here through Crossref. Choose "Use the Crossref DOI" instead.'
 					: "Add the record's DOI before archiving it on Zenodo under that DOI.",
 				{ DOI: "Enter the DOI this record already has." },
 			);
@@ -99,7 +94,10 @@ export function resolveZenodoActivationPolicy(
 		if (input.requestedPolicy) {
 			throw new ZenodoActivationValidationError(
 				`This record already has the DOI ${ownDoi}. Zenodo can archive it under that DOI, but cannot assign another one.`,
-				{ identifierPolicy: "Choose \"Use the record's existing DOI\"." },
+				{
+					identifierPolicy:
+						'Choose "Use the record\'s existing DOI".',
+				},
 			);
 		}
 		return "reuse-external";
@@ -232,7 +230,11 @@ function zenodoHasStarted(snapshot: PublicationRepositorySnapshot) {
 			(state) =>
 				state.provider === "zenodo" &&
 				state.environment === "sandbox" &&
-				Boolean(state.lastPayloadHash || state.zenodoRecordId),
+				Boolean(
+					state.lastPayloadHash ||
+					state.zenodoRecordId ||
+					state.unpublishedDraftDepositionId,
+				),
 		) ||
 		snapshot.journals.some(
 			(journal) =>
@@ -310,7 +312,10 @@ function prepareZenodoActivation(input: {
 				lifecycle: managedCrossrefRow.lifecycle,
 			}
 		: null;
-	const bibliographicResolution = resolveZenodoActivationDoi(snapshot, record);
+	const bibliographicResolution = resolveZenodoActivationDoi(
+		snapshot,
+		record,
+	);
 	const policy = resolveZenodoActivationPolicy({
 		configuredDefault: input.zenodo.defaultIdentifierPolicy,
 		requestedPolicy: input.requestedPolicy,
@@ -318,51 +323,7 @@ function prepareZenodoActivation(input: {
 		managedCrossref,
 	});
 
-	let publicationRecord;
-	let files;
-	try {
-		publicationRecord = buildPublicationRecordSnapshot({
-			record,
-			tags: snapshot.tags,
-			baseUrl: input.config.identity.baseUrl,
-			license: input.zenodo.license,
-		});
-		files = buildPublicationFileManifest(snapshot.files);
-	} catch (error) {
-		throw new ZenodoActivationValidationError(
-			error instanceof Error
-				? error.message
-				: "This record is not ready for Zenodo.",
-		);
-	}
-	const validationPlan = planPublicationSync({
-		observedAt: input.now,
-		record: publicationRecord,
-		files,
-		identifiers: buildPublicationIdentifiers({
-			bibliographicDoi: bibliographicResolution.doi,
-			managedCrossrefDoi: managedCrossref?.doi,
-		}),
-		targets: {
-			crossref: { enabled: false },
-			zenodo: {
-				enabled: true,
-				environment: "sandbox",
-				identifierPolicy: policy,
-			},
-		},
-	});
-	if (validationPlan.status === "needs_attention") {
-		throw new ZenodoActivationValidationError(
-			"Complete the required Zenodo fields and try again.",
-			Object.fromEntries(
-				(validationPlan.issues ?? []).map((issue) => [
-					issue.path,
-					issue.message,
-				]),
-			),
-		);
-	}
+	const files = buildPublicationFileManifest(snapshot.files);
 	const fileRevision =
 		files.files.length === 0
 			? null
@@ -374,7 +335,8 @@ function prepareZenodoActivation(input: {
 				? ("file" as const)
 				: null;
 	return {
-		externalDoi: policy === "reuse-external" ? bibliographicResolution.doi : null,
+		externalDoi:
+			policy === "reuse-external" ? bibliographicResolution.doi : null,
 		fileRevision,
 		managedCrossref,
 		policy,
@@ -462,24 +424,7 @@ async function selectZenodoActivationJob(
 ) {
 	const activeJobs = activeZenodoJobs(input.jobs);
 	const leasedJob = activeJobs.find((job) => job.leaseOwner !== null) ?? null;
-	if (input.waitingOn && leasedJob) {
-		throw new ZenodoActivationValidationError(
-			"Zenodo publication is already running. Wait for it to finish, then reload this record.",
-		);
-	}
-	if (input.waitingOn) {
-		await supersedeUnleasedPublicationJobs(transaction, {
-			itemKey: input.itemKey,
-			provider: "zenodo",
-			environment: "sandbox",
-			now: input.now,
-		});
-		return null;
-	}
 	if (leasedJob) return leasedJob;
-	if (input.fileRevision === null) {
-		throw new Error("A ready Zenodo job must have a published file");
-	}
 	const nextJob = {
 		itemKey: input.itemKey,
 		identifierPolicy: input.policy,
@@ -535,80 +480,100 @@ export async function activateZenodoPublication(
 	if (preflight.externalDoi) {
 		await assertDoiResolves(preflight.externalDoi, options.resolveDoi);
 	}
-	return database.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
-		const snapshot = await readPublicationRepositorySnapshot(
+	return database.transaction((transaction) =>
+		activateZenodoPublicationInTransaction(
 			transaction,
 			itemKey,
-			config.services.publication.crossref.environment,
-		);
-		const record = snapshot.record;
-		if (!record) throw new PublicationItemNotFoundError(itemKey);
-		const now = new Date();
-		const prepared = prepareZenodoActivation({
-			snapshot,
 			config,
-			zenodo,
-			now,
 			requestedPolicy,
-		});
-		const { externalDoi, fileRevision, policy, waitingOn } = prepared;
-		if (externalDoi !== preflight.externalDoi) {
+			requestedBy,
+			preflight.externalDoi,
+		),
+	);
+}
+
+/** External DOI adoption requires the caller's completed preflight. Created items use null. */
+export async function activateZenodoPublicationInTransaction(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	config: PublicationConfig,
+	requestedPolicy: ZenodoIdentifierPolicy | undefined,
+	requestedBy: string,
+	checkedExternalDoi: string | null,
+): Promise<ZenodoActivationReceipt> {
+	const zenodo = requireZenodoConfig(config);
+	await lockItemMutation(transaction, itemKey);
+	const snapshot = await readPublicationRepositorySnapshot(
+		transaction,
+		itemKey,
+		config.services.publication.crossref.environment,
+	);
+	const record = snapshot.record;
+	if (!record) throw new PublicationItemNotFoundError(itemKey);
+	const now = new Date();
+	const prepared = prepareZenodoActivation({
+		snapshot,
+		config,
+		zenodo,
+		now,
+		requestedPolicy,
+	});
+	const { externalDoi, fileRevision, policy, waitingOn } = prepared;
+	if (externalDoi !== checkedExternalDoi) {
+		throw new ZenodoActivationValidationError(
+			"The record DOI changed while it was being checked. Reload the record and try again.",
+			{ DOI: "Reload this record before activating Zenodo." },
+		);
+	}
+	if (externalDoi) {
+		const [collision] = await transaction
+			.select({ itemKey: publicationIdentifier.itemKey })
+			.from(publicationIdentifier)
+			.where(
+				and(
+					eq(publicationIdentifier.doi, externalDoi),
+					ne(publicationIdentifier.itemKey, itemKey),
+				),
+			)
+			.limit(1);
+		if (collision) {
 			throw new ZenodoActivationValidationError(
-				"The record DOI changed while it was being checked. Reload the record and try again.",
-				{ DOI: "Reload this record before activating Zenodo." },
+				`The DOI ${externalDoi} already belongs to record ${collision.itemKey}.`,
+				{ DOI: "Use the DOI on only one local record." },
 			);
 		}
-		if (externalDoi) {
-			const [collision] = await transaction
-				.select({ itemKey: publicationIdentifier.itemKey })
-				.from(publicationIdentifier)
-				.where(
-					and(
-						eq(publicationIdentifier.doi, externalDoi),
-						ne(publicationIdentifier.itemKey, itemKey),
-					),
-				)
-				.limit(1);
-			if (collision) {
-				throw new ZenodoActivationValidationError(
-					`The DOI ${externalDoi} already belongs to record ${collision.itemKey}.`,
-					{ DOI: "Use the DOI on only one local record." },
-				);
-			}
-		}
-		assertZenodoPolicyMayChange(snapshot, policy);
-		await saveZenodoActivationTarget(transaction, {
-			lockedExternalDoi: externalDoi,
-			itemKey,
-			policy,
-			requestedBy,
-			now,
-		});
-		const job = await selectZenodoActivationJob(transaction, {
-			itemKey,
-			policy,
-			canonicalRevision: record.revision,
-			fileRevision,
-			waitingOn,
-			jobs: snapshot.jobs,
-			now,
-		});
-		const providerRecordExists = snapshot.states.some(
-			(state) =>
-				state.provider === "zenodo" &&
-				state.environment === "sandbox" &&
-				Boolean(state.zenodoRecordId),
-		);
-		return receipt({
-			itemKey,
-			identifierPolicy: policy,
-			canonicalRevision: record.revision,
-			fileRevision,
-			waitingOn,
-			job,
-			providerRecordExists,
-		});
+	}
+	assertZenodoPolicyMayChange(snapshot, policy);
+	await saveZenodoActivationTarget(transaction, {
+		lockedExternalDoi: externalDoi,
+		itemKey,
+		policy,
+		requestedBy,
+		now,
+	});
+	const job = await selectZenodoActivationJob(transaction, {
+		itemKey,
+		policy,
+		canonicalRevision: record.revision,
+		fileRevision,
+		waitingOn,
+		jobs: snapshot.jobs,
+		now,
+	});
+	const providerRecordExists = snapshot.states.some(
+		(state) =>
+			state.provider === "zenodo" &&
+			state.environment === "sandbox" &&
+			Boolean(state.zenodoRecordId),
+	);
+	return receipt({
+		itemKey,
+		identifierPolicy: policy,
+		canonicalRevision: record.revision,
+		fileRevision,
+		waitingOn,
+		job,
+		providerRecordExists,
 	});
 }
 
@@ -630,7 +595,8 @@ export async function retryZenodoPublication(
 			(candidate) =>
 				candidate.provider === "zenodo" &&
 				candidate.environment === "sandbox" &&
-				candidate.deactivatedAt === null,
+				candidate.deactivatedAt === null &&
+				candidate.activatedAt !== null,
 		);
 		if (!target?.identifierPolicy) {
 			throw new Error("The saved Zenodo activation is incomplete");
@@ -650,13 +616,6 @@ export async function retryZenodoPublication(
 			throw new ZenodoActivationValidationError(
 				"The record DOI no longer matches the DOI selected for Zenodo.",
 				{ DOI: "Deactivate Zenodo before changing this DOI." },
-			);
-		}
-		if (prepared.waitingOn) {
-			throw new ZenodoActivationValidationError(
-				prepared.waitingOn === "file"
-					? "Publish a PDF before retrying Zenodo."
-					: "Wait for the Crossref DOI to become active before retrying Zenodo.",
 			);
 		}
 		const [job] = await transaction
@@ -680,9 +639,6 @@ export async function retryZenodoPublication(
 			throw new ZenodoActivationValidationError(
 				"This Zenodo publication does not have a failed job to retry.",
 			);
-		}
-		if (prepared.fileRevision === null) {
-			throw new Error("A ready Zenodo retry must have a published file");
 		}
 		let retried: typeof publicationSyncJob.$inferSelect | undefined;
 		if (
@@ -726,7 +682,7 @@ export async function retryZenodoPublication(
 			identifierPolicy: target.identifierPolicy,
 			canonicalRevision: retried.canonicalRevision,
 			fileRevision: retried.fileRevision,
-			waitingOn: null,
+			waitingOn: prepared.waitingOn,
 			job: retried,
 			providerRecordExists,
 		});

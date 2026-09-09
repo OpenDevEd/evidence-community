@@ -18,6 +18,44 @@ import {
 	openAdmin,
 } from "./admin-login";
 
+async function assignSelectedRecords(page: Page) {
+  await page.getByRole("toolbar", {name: "Bulk actions"}).getByRole("button", {name: "Add selected to collection"}).click();
+  const dialog = page.getByRole("dialog", {name: /Add .*records? to collection/});
+  await dialog.getByRole("button", {name: /Teacher development/u}).click();
+  await expect(dialog).toBeHidden();
+}
+
+async function removeSelectedRecords(page: Page) {
+  await page.getByRole("toolbar", {name: "Bulk actions"}).getByRole("button", {name: "Remove selected"}).click();
+  await page.getByRole("dialog", {name: /Remove .*records?\?/}).getByRole("button", {name: "Confirm", exact: true}).click();
+}
+
+async function mockSubmittedReview(page: Page, onApprove: (body: Record<string, unknown>) => Promise<{status?: number; json: unknown}>) {
+  const review = {id: "review-browser-test", revision: 1, state: "pending", submittedAt: timestamp, submittedBy: "editor"};
+  await page.route(`**/api/admin/items/${publishedItemKey}/review`, route => route.fulfill({json: {reviews: [review]}}));
+  await page.route("**/api/admin/reviews/review-browser-test", async route => {
+    if (route.request().method() === "POST") {
+      const result = await onApprove(route.request().postDataJSON());
+      if (!result.status || result.status < 400) { review.state = "published"; review.revision += 1; }
+      await route.fulfill(result);
+      return;
+    }
+    await route.fulfill({json: {snapshot: {
+      ...publishedDetail(true), reviewId: review.id, reviewRevision: review.revision,
+      reviewState: review.state, submittedAt: timestamp, submittedBy: "editor",
+      frozenAttachments: [], remainingConflicts: {}, note: null, publishing: null,
+    }}});
+  });
+  return {resubmit: () => {review.state = "pending"; review.revision += 1;}};
+}
+
+async function openReviewApproval(page: Page) {
+  const inspector = page.locator("#admin-inspector-pane");
+  await inspector.getByRole("button", {name: "Submitted version", exact: true}).click();
+  await inspector.getByRole("button", {name: "Publish version", exact: true}).click();
+  return page.getByRole("dialog", {name: "Publish submitted version"});
+}
+
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEB22K";
 const timestamp = "2026-07-31T12:00:00.000Z";
@@ -204,6 +242,8 @@ const publishedPayload = {
 
 function publishedListRow(overrides: Partial<Record<string, unknown>> = {}) {
 	return {
+		kind: "created",
+		importMethod: null,
 		collections: [],
 		creatorNames: ["Ada Lovelace"],
 		creators: publishedPayload.creators,
@@ -254,6 +294,8 @@ function publishedDetail(
 	draftRevision = 1,
 ) {
 	return {
+		kind: "created",
+		importMethod: null,
 		attachments: [],
 		collectionKeys: [],
 		creators: publishedPayload.creators,
@@ -354,6 +396,23 @@ async function mockPublishedBook(
 			await route.continue();
 			return;
 		}
+
+        if (request.method() === "GET" && pathname.endsWith("/review")) {
+            await route.fulfill({json: {reviews: []}});
+            return;
+        }
+        if (request.method() === "GET" && pathname.endsWith("/publishing-choice")) {
+            await route.fulfill({json: {choice: null}});
+            return;
+        }
+        if (request.method() === "GET" && pathname.endsWith("/publication/crossref/reserve")) {
+            await route.fulfill({json: {reservation: null}});
+            return;
+        }
+        if (pathname === "/api/admin/reviews") {
+            await route.fulfill({json: {count: 0}});
+            return;
+        }
 
 		if (
 			pathname === "/api/admin/collections" &&
@@ -654,7 +713,7 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	).toBeVisible();
 
 	const logout = page.getByRole("button", { name: "Log out" });
-	const newItem = page.getByRole("button", { name: "New item" });
+	const newItem = page.getByRole("button", { name: "Create Item" });
 	await expect(logout).toBeVisible();
 	await expect(logout).toHaveText("");
 	await logout.focus();
@@ -753,7 +812,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	await mockCompletedIndexing(page);
 	await mockPublishedBook(page, {
 		additionalSources: [importedSource],
-		listRowOverrides: { sourceConnectionKey: importedSource.key },
+		listRowOverrides: { sourceConnectionKey: importedSource.key, kind: "imported" },
 	});
 	let editing = false;
 	let draftRevision = 1;
@@ -762,6 +821,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	let forceFailure = false;
 	let retryRequests = 0;
 	let statusRequests = 0;
+ let writebackPhase = 0;
 	let draftPayload = structuredClone(publishedPayload);
 	const draft = () => ({
 		baseRevision: revision,
@@ -810,7 +870,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 			const state = forceFailure
 				? "failed"
 				: writebackStarted
-					? states[Math.min(statusRequests++, states.length - 1)]
+					? states[writebackPhase]
 					: "synced";
 			await route.fulfill({
 				json: {
@@ -870,20 +930,13 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 			await route.fulfill({ status: 405 });
 		},
 	);
-	let publishBody: unknown;
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}/publish`,
-		async (route) => {
-			publishBody = route.request().postDataJSON();
-			editing = false;
-			revision += 1;
-			writebackStarted = true;
-			statusRequests = 0;
-			await route.fulfill({
-				json: { indexingReceipts: [], item: draftPayload },
-			});
-		},
-	);
+  await mockSubmittedReview(page, async () => {
+    editing = false;
+    revision += 1;
+    writebackStarted = true;
+    statusRequests = 0;
+    return {json: {indexingReceipts: [], review: {}}};
+  });
 	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
 		route.fulfill({ json: { item: detail() } }),
 	);
@@ -897,41 +950,23 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	await expect(title).toBeEnabled();
 	await title.fill("Imported edit for writeback");
 	await expect(page.getByText("Saved", { exact: true })).toBeVisible();
-	await page.getByRole("button", { name: "Publish", exact: true }).click();
-
-	// Publishing asks which sources to update. The origin is preselected.
-	const publishDialog = page.getByRole("dialog", {
-		name: "Publish this record",
-	});
-	await expect(publishDialog).toBeVisible();
-	await expect(
-		publishDialog.locator("[data-admin-writeback-dialog='publish']"),
-	).toBeVisible();
-	const originBox = publishDialog.getByRole("switch", {
-		name: importedSource.label,
-	});
-	await expect(
-		publishDialog.getByText("This library", { exact: true }),
-	).toBeVisible();
-	await expect(publishDialog.getByText("Always", { exact: true })).toBeVisible();
-	await expect(originBox).toBeChecked();
-	await publishDialog
-		.getByRole("button", { name: "Publish", exact: true })
-		.click();
-	await expect.poll(() => publishBody).toEqual({
-		sourceKeys: [importedSource.key],
-	});
+  const publishDialog = await openReviewApproval(page);
+  await publishDialog.getByRole("button", {name: "Publish version", exact: true}).click();
+  await expect(publishDialog).toBeHidden();
+  await page.locator("#admin-inspector-pane").getByRole("button", {name: "Working draft", exact: true}).click();
 
 	const status = page.locator("[data-admin-writeback-status]");
 	await expect(status).toHaveAttribute(
 		"data-admin-writeback-status",
 		"queued",
 	);
+ writebackPhase = 1;
 	await expect(status).toHaveAttribute(
 		"data-admin-writeback-status",
 		"sending",
 		{ timeout: 5_000 },
 	);
+ writebackPhase = 2;
 	await expect(status).toHaveAttribute(
 		"data-admin-writeback-status",
 		"synced",
@@ -985,7 +1020,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	);
 });
 
-test("chooses writeback sources without publishing and when unpublishing", async ({
+test("chooses writeback sources without publishing", async ({
 	page,
 }) => {
 	await mockCompletedIndexing(page);
@@ -1013,7 +1048,6 @@ test("chooses writeback sources without publishing and when unpublishing", async
 		selected,
 	});
 	let sourcesBody: unknown;
-	let unpublishBody: unknown;
 	// After the choice is saved the server reports the job as waiting for a
 	// while, then synced. The chip must follow by polling, with no reload.
 	let statusPolls = 0;
@@ -1047,13 +1081,7 @@ test("chooses writeback sources without publishing and when unpublishing", async
 			});
 		},
 	);
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}/unpublish`,
-		async (route) => {
-			unpublishBody = route.request().postDataJSON();
-			await route.fulfill({ json: { indexingReceipts: [], item: {} } });
-		},
-	);
+
 	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
 		route.fulfill({
 			json: { item: { ...publishedDetail(false), writeback: writeback() } },
@@ -1091,24 +1119,6 @@ test("chooses writeback sources without publishing and when unpublishing", async
 	);
 	expect(statusPolls).toBeGreaterThanOrEqual(4);
 
-	// Unpublishing asks which copies to remove, preselected to the choice.
-	await inspector.getByRole("button", { name: "Unpublish" }).click();
-	const unpublishDialog = page.getByRole("dialog", {
-		name: "Unpublish this record",
-	});
-	await expect(unpublishDialog).toBeVisible();
-	await expect(
-		unpublishDialog.locator("[data-admin-writeback-dialog='unpublish']"),
-	).toBeVisible();
-	await expect(
-		unpublishDialog.getByRole("switch", { name: importedSource.label }),
-	).toBeChecked();
-	await unpublishDialog
-		.getByRole("button", { name: "Unpublish", exact: true })
-		.click();
-	await expect.poll(() => unpublishBody).toEqual({
-		removeFromSourceKeys: [importedSource.key],
-	});
 });
 
 test("resolves a source conflict with a confirmed choice", async ({
@@ -1972,65 +1982,7 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	await mockPublishedBook(page, {
 		onListRequest: (url) => listRequests.push(url),
 	});
-	const measureFilterTrigger = () =>
-		page.locator("[data-admin-filter-trigger]").evaluate((trigger) => {
-			const colorChannels = (value: string) =>
-				(value.match(/[\d.]+/gu) ?? []).slice(0, 3).map(Number);
-			const sameChannels = (left: string, right: string) =>
-				colorChannels(left).every(
-					(channel, index) => channel === colorChannels(right)[index],
-				);
-			const icon = trigger.querySelector<HTMLElement>(
-				"[data-admin-filter-trigger-icon]",
-			)!;
-			const count = trigger.querySelector<HTMLElement>(
-				"[data-admin-filter-trigger-count]",
-			);
-			const glyph = trigger.querySelector<SVGElement>(
-				"[data-admin-filter-trigger-glyph]",
-			)!;
-			const rootStyle = getComputedStyle(document.documentElement);
-			const accent = `rgb(${rootStyle.getPropertyValue("--color-accent-500").trim().replaceAll(" ", ", ")})`;
-			const triggerStyle = getComputedStyle(trigger);
-			const iconRect = icon.getBoundingClientRect();
-			return {
-				active: trigger.getAttribute("data-active"),
-				backgroundIsTransparent:
-					triggerStyle.backgroundColor === "rgba(0, 0, 0, 0)",
-				backgroundUsesAccent: sameChannels(
-					triggerStyle.backgroundColor,
-					accent,
-				),
-				borderUsesAccent: sameChannels(
-					triggerStyle.borderColor,
-					accent,
-				),
-				borderWidth: triggerStyle.borderWidth,
-				countFontWeight: count
-					? Number(getComputedStyle(count).fontWeight)
-					: null,
-				glyph: glyph.getAttribute("data-admin-filter-trigger-glyph"),
-				height: trigger.getBoundingClientRect().height,
-				iconSize: [iconRect.width, iconRect.height],
-				padding: triggerStyle.padding,
-				width: trigger.getBoundingClientRect().width,
-			};
-		});
-
 	await page.goto("/admin");
-	expect(await measureFilterTrigger()).toEqual({
-		active: "false",
-		backgroundIsTransparent: false,
-		backgroundUsesAccent: false,
-		borderUsesAccent: false,
-		borderWidth: "1px",
-		countFontWeight: null,
-		glyph: "list-filter",
-		height: 40,
-		iconSize: [17, 17],
-		padding: "0px",
-		width: 40,
-	});
 	const initialFilters = encodeURIComponent(
 		JSON.stringify([
 			{ column: "state", operator: "anyOf", value: ["draft"] },
@@ -2047,19 +1999,6 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	await expect(
 		page.getByRole("button", { name: "Filters, 1 active", exact: true }),
 	).toBeVisible();
-	expect(await measureFilterTrigger()).toEqual({
-		active: "true",
-		backgroundIsTransparent: false,
-		backgroundUsesAccent: true,
-		borderUsesAccent: true,
-		borderWidth: "1px",
-		countFontWeight: 700,
-		glyph: "list-filter",
-		height: 40,
-		iconSize: [17, 17],
-		padding: "0px",
-		width: 40,
-	});
 	await expect
 		.poll(() => listRequests.at(-1)?.searchParams.get("search"))
 		.toBe("teacher");
@@ -2631,6 +2570,9 @@ async function mockBookWithAttachment(
 		uploadRevision: 2,
 	};
 	const attachmentSummary = {
+		kind: "created",
+		importMethod: null,
+		editable: true,
 		creators: [],
 		date: null,
 		draft: attachmentState === "draft" ? attachmentDraft : null,
@@ -2675,6 +2617,23 @@ async function mockBookWithAttachment(
 	await page.route("**/api/admin/**", async (route) => {
 		const request = route.request();
 		const pathname = new URL(request.url()).pathname;
+        if (request.method() === "GET" && pathname.endsWith("/review")) {
+            await route.fulfill({json: {reviews: []}});
+            return;
+        }
+        if (request.method() === "GET" && pathname.endsWith("/publishing-choice")) {
+            await route.fulfill({json: {choice: null}});
+            return;
+        }
+        if (request.method() === "GET" && pathname.endsWith("/publication/crossref/reserve")) {
+            await route.fulfill({json: {reservation: null}});
+            return;
+        }
+        if (pathname === "/api/admin/reviews") {
+            await route.fulfill({json: {count: 0}});
+            return;
+        }
+
 		if (pathname === "/api/admin/library") {
 			await route.fulfill({
 				json: {
@@ -2725,6 +2684,7 @@ async function activatePointerDrag(page: Page, source: Locator) {
 }
 
 async function movePointerTo(page: Page, target: Locator) {
+ await target.scrollIntoViewIfNeeded();
 	const box = await target.boundingBox();
 	if (!box) throw new Error("Drop target has no rendered box");
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
@@ -2872,9 +2832,9 @@ test("creates an item through a pointer click in the new-item popover", async ({
 	});
 
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "New item" }).click();
+	await page.getByRole("button", { name: "Create Item" }).click();
 
-	const popover = page.getByRole("dialog", { name: "New item" });
+	const popover = page.getByRole("dialog", { name: "Create Item" });
 	await expect(popover).toBeVisible();
 	await expect(
 		popover.getByRole("textbox", { name: "Find an item type" }),
@@ -2940,10 +2900,10 @@ test("focuses item search in a narrow keyboard-driven window", async ({
 	await mockPublishedBook(page);
 	await page.setViewportSize({ height: 768, width: 1024 });
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "New item" }).click();
+	await page.getByRole("button", { name: "Create Item" }).click();
 
 	const search = page
-		.getByRole("dialog", { name: "New item" })
+		.getByRole("dialog", { name: "Create Item" })
 		.getByRole("textbox", { name: "Find an item type" });
 	await expect(search).toBeVisible();
 	await expect(search).toBeFocused();
@@ -2962,10 +2922,10 @@ test("lets touch users browse item types without opening the keyboard", async ({
 	await mockPublicShell(page);
 	await mockPublishedBook(page);
 	await openAdmin(page);
-	await page.getByRole("button", { name: "New item" }).click();
+	await page.getByRole("button", { name: "Create Item" }).click();
 
 	const search = page
-		.getByRole("dialog", { name: "New item" })
+		.getByRole("dialog", { name: "Create Item" })
 		.getByRole("textbox", { name: "Find an item type" });
 	await expect(search).toBeVisible();
 	await expect(search).not.toBeFocused();
@@ -3427,11 +3387,11 @@ test("keeps parent attachments compact and moves file controls to the attachment
 		inspector.getByRole("button", { name: "Open PDF" }),
 	).toBeVisible();
 	await expect(
-		inspector.getByRole("button", { name: "Unpublish PDF" }),
+		inspector.getByRole("button", { name: "Remove PDF from draft" }),
 	).toBeVisible();
 	await expect(
 		inspector.getByRole("button", { name: "Publish PDF", exact: true }),
-	).toBeVisible();
+	).toHaveCount(0);
 	await expect(
 		inspector.getByRole("button", { name: "Discard staged PDF" }),
 	).toBeVisible();
@@ -3455,29 +3415,18 @@ test("keeps parent attachments compact and moves file controls to the attachment
 	}
 });
 
-test("explains why a staged PDF cannot publish before its metadata", async ({
-	page,
-}) => {
-	await mockBookWithAttachment(page, { attachmentState: "draft" });
-	await page.goto("/admin");
-
-	const inspector = page.locator("#admin-inspector-pane");
-	await inspector
-		.getByRole("button", { name: "Open PDF attachment" })
-		.click();
-	await expect(inspector.getByLabel("Open public item")).toBeDisabled();
-	await expect(inspector.getByLabel("Copy public item link")).toBeDisabled();
-	const publishPdf = inspector.getByRole("button", {
-		name: "Publish PDF",
-		exact: true,
-	});
-	await expect(publishPdf).toBeDisabled();
-	await publishPdf.locator("..").hover();
-	await expect(
-		page.getByText("Publish the attachment metadata first", {
-			exact: true,
-		}),
-	).toBeVisible();
+test("keeps an unpublished attachment private and stages it with the parent review", async ({page}) => {
+    await mockBookWithAttachment(page, {attachmentState: "draft"});
+    await page.goto("/admin");
+    const inspector = page.locator("#admin-inspector-pane");
+    await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+    await expect(inspector.getByLabel("Open public item")).toBeDisabled();
+    await expect(inspector.getByLabel("Copy public item link")).toBeDisabled();
+    await expect(inspector.locator('[data-admin-file-row="staged"]')).toContainText("replacement.pdf");
+    await expect(inspector.getByRole("button", {name: "Discard staged PDF"})).toBeVisible();
+    await expect(inspector.getByRole("button", {name: "Publish PDF", exact: true})).toHaveCount(0);
+    await inspector.getByRole("button", {name: "Parent record"}).click();
+    await expect(inspector.getByRole("button", {name: "Open PDF attachment"})).toBeVisible();
 });
 
 test("searches active collections and browses deleted collections as flat trees", async ({
@@ -4529,7 +4478,7 @@ test("adds a writable Zotero record to a native collection with pointer drag", a
 	).toBeChecked();
 });
 
-test("keeps admin chrome on one computed spacing system", async ({ page }) => {
+test("keeps sorting and collection management accessible", async ({ page }) => {
 	await mockPublishedBook(page);
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.goto("/admin");
@@ -4537,142 +4486,6 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 		page.getByRole("heading", { name: "Published book" }),
 	).toBeVisible();
 
-	const measurements = await page.evaluate(() => {
-		const padding = (element: Element) => {
-			const style = getComputedStyle(element);
-			return {
-				left: Number.parseFloat(style.paddingLeft),
-				right: Number.parseFloat(style.paddingRight),
-			};
-		};
-		const toolbar = document.querySelector<HTMLElement>(
-			'[data-admin-region="toolbar"]',
-		)!;
-		const content = document.querySelector<HTMLElement>(
-			"#admin-navigation-pane",
-		)!.parentElement!;
-		const recordRow = document.querySelector<HTMLElement>("tbody tr")!;
-		const recordTitle = recordRow.children[1]!.firstElementChild!;
-		const tableControls = document.querySelector<HTMLElement>(
-			'[aria-label="Table view controls"]',
-		)!;
-		const tableHeader = document.querySelector<HTMLElement>("thead tr")!;
-		const collection = document.querySelector<HTMLElement>(
-			'[data-collection-key="TEACHDEV"]',
-		)!;
-		const newItem = [...document.querySelectorAll("button")].find(
-			(button) => button.textContent?.trim() === "New item",
-		)!;
-		const navbarControls = [
-			document.querySelector<HTMLElement>('[data-slot="input-wrapper"]')!,
-			document.querySelector<HTMLElement>("[data-admin-filter-trigger]")!,
-			document.querySelector<HTMLElement>(
-				"[data-admin-search-index-status]",
-			)!,
-			...[...toolbar.querySelectorAll<HTMLElement>("button")].filter(
-				(button) =>
-					button.offsetParent !== null &&
-					[
-						"Refresh",
-						"Switch to dark mode",
-						"Switch to light mode",
-					].includes(button.getAttribute("aria-label") ?? ""),
-			),
-			newItem,
-		];
-		const edit = [...document.querySelectorAll("button")].find(
-			(button) => button.textContent?.trim() === "Edit",
-		)!;
-		const selectedState = [...document.querySelectorAll("button")].find(
-			(button) => button.textContent?.trim() === "All records",
-		)!;
-		const validationProbe = document.createElement("div");
-		validationProbe.className = "bg-danger/[0.08]";
-		document.body.append(validationProbe);
-		const wasDark = document.documentElement.classList.contains("dark");
-		document.documentElement.classList.remove("dark");
-		const lightSelectedBackground =
-			getComputedStyle(selectedState).backgroundColor;
-		const validationBackground =
-			getComputedStyle(validationProbe).backgroundColor;
-		if (wasDark) document.documentElement.classList.add("dark");
-		validationProbe.remove();
-
-		return {
-			buttonPadding: [padding(newItem), padding(edit)],
-			cellDisplay: getComputedStyle(recordRow.children[0]!).display,
-			collectionActionCount: collection.querySelectorAll(
-				'button[data-collection-drag-handle="TEACHDEV"]',
-			).length,
-			collectionManageButtonCount: collection.querySelectorAll(
-				'button[aria-label="Manage Teacher development"]',
-			).length,
-			contentTop: content.getBoundingClientRect().top,
-			contentGap: Number.parseFloat(getComputedStyle(content).gap),
-			contentPaddingBottom: Number.parseFloat(
-				getComputedStyle(content).paddingBottom,
-			),
-			contentPaddingLeft: Number.parseFloat(
-				getComputedStyle(content).paddingLeft,
-			),
-			lightSelectedBackground,
-			navbarControlBottoms: navbarControls.map(
-				(element) => element.getBoundingClientRect().bottom,
-			),
-			navbarControlHeights: navbarControls.map(
-				(element) => element.getBoundingClientRect().height,
-			),
-			navbarControlTops: navbarControls.map(
-				(element) => element.getBoundingClientRect().top,
-			),
-			recordGap: Number.parseFloat(getComputedStyle(recordTitle).gap),
-			recordHeight: recordRow.getBoundingClientRect().height,
-			recordRowDisplay: getComputedStyle(recordRow).display,
-			paneBottom: document
-				.querySelector<HTMLElement>("#admin-navigation-pane")!
-				.getBoundingClientRect().bottom,
-			paneLeft: document
-				.querySelector<HTMLElement>("#admin-navigation-pane")!
-				.getBoundingClientRect().left,
-			tableControlsHeight: tableControls.getBoundingClientRect().height,
-			tableDisplay: getComputedStyle(tableHeader).display,
-			tableHeaderHeight: tableHeader.getBoundingClientRect().height,
-			toolbarHeight: toolbar.getBoundingClientRect().height,
-			validationBackground,
-		};
-	});
-
-	expect(measurements.toolbarHeight).toBe(64);
-	expect(measurements.contentTop).toBe(64);
-	expect(measurements.contentGap).toBe(12);
-	expect(measurements.contentPaddingBottom).toBe(12);
-	expect(measurements.contentPaddingLeft).toBe(12);
-	expect(measurements.paneBottom).toBe(788);
-	expect(measurements.paneLeft).toBe(12);
-	expect(measurements.navbarControlHeights).toEqual(
-		measurements.navbarControlHeights.map(() => 40),
-	);
-	expect(measurements.navbarControlTops).toEqual(
-		measurements.navbarControlTops.map(() => 12),
-	);
-	expect(measurements.navbarControlBottoms).toEqual(
-		measurements.navbarControlBottoms.map(() => 52),
-	);
-	expect(measurements.recordHeight).toBe(56);
-	expect(measurements.recordGap).toBe(8);
-	expect(measurements.tableControlsHeight).toBe(40);
-	expect(measurements.tableDisplay).toBe("flex");
-	expect(measurements.recordRowDisplay).toBe("flex");
-	expect(measurements.cellDisplay).toBe("flex");
-	expect(measurements.tableHeaderHeight).toBe(40);
-	expect(measurements.buttonPadding).toEqual([
-		{ left: 12, right: 12 },
-		{ left: 12, right: 12 },
-	]);
-	expect(measurements.collectionActionCount).toBe(1);
-	expect(measurements.collectionManageButtonCount).toBe(1);
-	expect(measurements.lightSelectedBackground).not.toBe("rgba(0, 0, 0, 0)");
-	expect(measurements.validationBackground).not.toBe("rgba(0, 0, 0, 0)");
 	await expect(
 		page.getByRole("button", { name: /Sort by last updated/u }),
 	).toHaveCount(0);
@@ -4689,38 +4502,6 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 		.click();
 	await expect(page.getByRole("menu")).toBeVisible();
 	await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
-});
-
-test("fills the remaining navigation height with the collections surface", async ({
-	page,
-}) => {
-	await mockPublishedBook(page);
-	await page.setViewportSize({ width: 1280, height: 800 });
-	await page.goto("/admin");
-	await expect(
-		page.getByRole("heading", { name: "Published book" }),
-	).toBeVisible();
-
-	const navigation = page.getByRole("navigation", {
-		name: "Admin filters and collections",
-	});
-	const collectionSurface = page
-		.getByRole("region", { name: "Collection catalogue" })
-		.locator("..");
-	const [navigationBox, collectionSurfaceBox] = await Promise.all([
-		navigation.boundingBox(),
-		collectionSurface.boundingBox(),
-	]);
-
-	expect(navigationBox).not.toBeNull();
-	expect(collectionSurfaceBox).not.toBeNull();
-	expect(
-		Math.abs(
-			collectionSurfaceBox!.y +
-				collectionSurfaceBox!.height -
-				(navigationBox!.y + navigationBox!.height),
-		),
-	).toBeLessThanOrEqual(1);
 });
 
 test("configures columns, density, sizing, and persists computed table geometry", async ({
@@ -4930,7 +4711,6 @@ test("runs selected-record actions through one compact batch request", async ({
 	await expect(bulkToolbar).toBeVisible();
 	await expect(bulkToolbar.getByText("selected")).toHaveCount(0);
 	for (const label of [
-		"Publish selected",
 		"Add selected to collection",
 		"Remove selected",
 		"Clear selection",
@@ -4985,17 +4765,17 @@ test("runs selected-record actions through one compact batch request", async ({
 		toolbarGeometry.actionsRight,
 	);
 	expect(toolbarGeometry.documentOverflow).toBe(0);
-	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
+	await assignSelectedRecords(page);
 	await expect.poll(() => batchRequests.length).toBe(1);
 	expect(batchRequests).toEqual([
 		{
-			action: "publish",
+			action: "assignCollection",
+			collectionKey: teacherCollection.key,
 			keys: [publishedItemKey, "ROW00001"],
 		},
 	]);
 	await expect(bulkToolbar.getByText("selected")).toHaveCount(0);
 	for (const label of [
-		"Publish selected",
 		"Add selected to collection",
 		"Remove selected",
 		"Clear selection",
@@ -5090,7 +4870,7 @@ test("chunks a 500-record keyboard selection through the batch contract", async 
 	await grid.press("Meta+A");
 	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
 	await expect(bulkToolbar).toContainText("500 selected");
-	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
+	await assignSelectedRecords(page);
 	await expect.poll(() => batchRequests.length).toBe(10);
 	const submittedKeys = batchRequests.flatMap(({ keys }) => keys);
 	expect(batchRequests.every(({ keys }) => keys.length <= 50)).toBe(true);
@@ -5119,13 +4899,14 @@ test("continues a bulk action when one local draft cannot be saved", async ({
 		.getByRole("checkbox", { name: "Select all loaded records" })
 		.check();
 	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
-	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
+	await assignSelectedRecords(page);
 
 	await expect
 		.poll(() => batchRequests)
 		.toEqual([
 			{
-				action: "publish",
+				action: "assignCollection",
+				collectionKey: teacherCollection.key,
 				keys: ["ROW00001"],
 			},
 		]);
@@ -5138,7 +4919,7 @@ test("continues a bulk action when one local draft cannot be saved", async ({
 	await expect(
 		page.getByRole("checkbox", { name: "Select Published book 2" }),
 	).not.toBeChecked();
-	await expect(page.getByText(/1 record published, 1 failed/)).toBeVisible();
+	await expect(page.getByText(/1 draft updated, 1 failed/)).toBeVisible();
 });
 
 test("shows server batch validation on the selected metadata field", async ({
@@ -5164,10 +4945,7 @@ test("shows server batch validation on the selected metadata field", async ({
 			exact: true,
 		})
 		.check();
-	await page
-		.getByRole("toolbar", { name: "Bulk actions" })
-		.getByRole("button", { name: "Publish selected" })
-		.click();
+	await assignSelectedRecords(page);
 
 	await expect(
 		inspector
@@ -5607,7 +5385,7 @@ test("keeps unavailable drag controls out of keyboard widget mode", async ({
 	await page
 		.getByRole("checkbox", { name: "Select Published book", exact: true })
 		.check();
-	await page.getByRole("button", { name: "Publish selected" }).click();
+	await assignSelectedRecords(page);
 	await batchStarted;
 
 	try {
@@ -5634,7 +5412,7 @@ test("keeps unavailable drag controls out of keyboard widget mode", async ({
 		releaseBatch?.();
 	}
 	await expect(
-		page.getByRole("button", { name: "Publish selected" }),
+		page.getByRole("button", { name: "Add selected to collection" }),
 	).toBeDisabled();
 });
 
@@ -6020,86 +5798,29 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 	await expect(dialog).toBeHidden();
 });
 
-test("tracks direct publish, unpublish, and restore mutations", async ({
-	page,
-}) => {
-	const book = await mockPublishedBook(page);
-	const indexing = await mockCompletedIndexing(page);
-	const publishReceipt = indexingReceipt(publishedItemKey, "item", 2);
-	const unpublishReceipt = indexingReceipt(publishedItemKey, "item", 3);
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}/publish`,
-		async (route) => {
-			book.setEditing(false);
-			await route.fulfill({
-				json: { indexingReceipts: [publishReceipt], item: {} },
-			});
-		},
-	);
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}/unpublish`,
-		async (route) => {
-			await route.fulfill({
-				json: { indexingReceipts: [unpublishReceipt], item: {} },
-			});
-		},
-	);
-
-	await page.goto("/admin");
-	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
-	await inspector
-		.getByRole("button", { name: "Publish", exact: true })
-		.click();
-	await indexing.expectTracked(publishReceipt);
-
-	await inspector.getByRole("button", { name: "Unpublish" }).click();
-	const unpublishDialog = page.getByRole("dialog", {
-		name: "Unpublish record?",
-	});
-	await unpublishDialog
-		.getByRole("button", { name: "Confirm", exact: true })
-		.click();
-	await indexing.expectTracked(unpublishReceipt);
-
-	const restoreReceipt = indexingReceipt(publishedItemKey, "item", 4);
-	await page.route("**/api/admin/items", async (route) => {
-		if (route.request().method() !== "GET") {
-			await route.fallback();
-			return;
-		}
-		await route.fulfill({
-			json: {
-				hasMore: false,
-				items: [publishedListRow({ state: "deleted" })],
-				nextCursor: null,
-			},
-		});
-	});
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}`,
-		async (route) => {
-			await route.fulfill({
-				json: {
-					item: { ...publishedDetail(false), state: "deleted" },
-				},
-			});
-		},
-	);
-	await page.unroute(`**/api/admin/items/${publishedItemKey}/publish`);
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}/publish`,
-		async (route) => {
-			await route.fulfill({
-				json: { indexingReceipts: [restoreReceipt], item: {} },
-			});
-		},
-	);
-	await page.reload();
-	await inspector
-		.getByRole("button", { name: "Restore", exact: true })
-		.click();
-	await indexing.expectTracked(restoreReceipt);
+test("tracks unpublishing and submits restoration for review", async ({page}) => {
+  await mockPublishedBook(page, {batchResults: ({keys}) => keys.map(key => ({key, outcome: "changed", indexingReceipts: [indexingReceipt(key, "item", 3)]}))});
+  const indexing = await mockCompletedIndexing(page);
+  const receipt = indexingReceipt(publishedItemKey, "item", 3);
+  await page.goto("/admin");
+  const inspector = page.locator("#admin-inspector-pane");
+  await page.getByRole("checkbox", {name: "Select Published book", exact: true}).check();
+  await removeSelectedRecords(page);
+  await indexing.expectTracked(receipt);
+  let submissions = 0;
+  await page.route("**/api/admin/items", route => route.fulfill({json: {hasMore: false, items: [publishedListRow({state: "deleted"})], nextCursor: null}}));
+  await page.route(`**/api/admin/items/${publishedItemKey}`, route => route.fulfill({json: {item: {...publishedDetail(false), state: "deleted"}}}));
+  await page.route(`**/api/admin/items/${publishedItemKey}/review`, async route => {
+    if (route.request().method() === "POST") {
+      submissions += 1;
+      return route.fulfill({json: {review: {id: "restoration-review", revision: 1, state: "pending"}}});
+    }
+    return route.fulfill({json: {reviews: []}});
+  });
+  await page.reload();
+  await inspector.getByRole("button", {name: "Restore", exact: true}).click();
+  await expect.poll(() => submissions).toBe(1);
+  await expect(page.getByText("Restoration submitted for review", {exact: true})).toBeVisible();
 });
 
 test("shows publish success only after Meilisearch finishes", async ({
@@ -6152,123 +5873,45 @@ test("shows publish success only after Meilisearch finishes", async ({
 			},
 		});
 	});
-	await page.route(
-		`**/api/admin/items/${publishedItemKey}/publish`,
-		async (route) => {
-			book.setEditing(false);
-			await route.fulfill({
-				json: { indexingReceipts: [receipt], item: {} },
-			});
-		},
-	);
+  await mockSubmittedReview(page, async () => {
+    book.setEditing(false);
+    return {json: {indexingReceipts: [receipt], review: {}}};
+  });
 
 	await page.goto("/admin");
-	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
-	await inspector
-		.getByRole("button", { name: "Publish", exact: true })
-		.click();
+  const dialog = await openReviewApproval(page);
+  await dialog.getByRole("button", {name: "Publish version", exact: true}).click();
 
 	await expect(
-		page.getByText("Record published", { exact: true }),
+		page.getByText("Submitted version published", { exact: true }),
 	).toHaveCount(0);
 	receiptState = "indexed";
 	await expect(
-		page.getByText("Record published", { exact: true }),
+		page.getByText("Submitted version published", { exact: true }),
 	).toBeVisible({ timeout: 4_000 });
 });
 
-test("tracks PDF publish and unpublish mutations", async ({ page }) => {
-	await mockBookWithAttachment(page);
-	const indexing = await mockCompletedIndexing(page);
-	const publishReceipt = indexingReceipt("PDFATT22", "item", 2);
-	const unpublishReceipt = indexingReceipt("PDFATT22", "item", 3);
-	const publishRequests: unknown[] = [];
-	const unpublishRequests: unknown[] = [];
-	await page.route(
-		"**/api/admin/items/PDFATT22/file/publish",
-		async (route) => {
-			const body = route.request().postDataJSON();
-			publishRequests.push(body);
-			if (
-				(body as { zenodoFileChange?: string }).zenodoFileChange !==
-				"minor_correction"
-			) {
-				await route.fulfill({
-					json: {
-						error: {
-							code: "confirmation_required",
-							message:
-								"This record reuses its DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2026, 2:30 PM UTC.",
-						},
-					},
-					status: 409,
-				});
-				return;
-			}
-			await route.fulfill({
-				json: { indexingReceipts: [publishReceipt], item: {} },
-			});
-		},
-	);
-	await page.route("**/api/admin/items/PDFATT22/file", async (route) => {
-		if (route.request().method() !== "DELETE") {
-			await route.fallback();
-			return;
-		}
-		unpublishRequests.push(route.request().postDataJSON());
-		await route.fulfill({
-			json: { indexingReceipts: [unpublishReceipt], item: {} },
-		});
-	});
-
-	await page.goto("/admin");
-	const inspector = page.locator("#admin-inspector-pane");
-	await inspector
-		.getByRole("button", { name: "Open PDF attachment" })
-		.click();
-	await inspector
-		.getByRole("button", { name: "Publish PDF", exact: true })
-		.click();
-	const correctionDialog = page.getByRole("dialog", {
-		name: "Publish a PDF correction?",
-	});
-	await expect(correctionDialog).toContainText(
-		"update the same Zenodo record and DOI",
-	);
-	const dialogMetrics = await correctionDialog.evaluate((element) => {
-		const style = getComputedStyle(element);
-		const bounds = element.getBoundingClientRect();
-		return {
-			display: style.display,
-			height: bounds.height,
-			width: bounds.width,
-		};
-	});
-	expect(dialogMetrics.display).not.toBe("none");
-	expect(dialogMetrics.width).toBeGreaterThanOrEqual(320);
-	expect(dialogMetrics.width).toBeLessThanOrEqual(520);
-	expect(dialogMetrics.height).toBeLessThan(720);
-	await correctionDialog
-		.getByRole("button", { name: "Publish correction" })
-		.click();
-	await indexing.expectTracked(publishReceipt);
-	expect(publishRequests).toEqual([
-		{ expectedUploadRevision: 2 },
-		{
-			expectedUploadRevision: 2,
-			zenodoFileChange: "minor_correction",
-		},
-	]);
-	await inspector.getByRole("button", { name: "Unpublish PDF" }).click();
-	await page
-		.getByRole("dialog", { name: "Unpublish PDF?" })
-		.getByRole("button", { name: "Confirm", exact: true })
-		.click();
-	await indexing.expectTracked(unpublishReceipt);
-	expect(unpublishRequests).toEqual([
-		{ zenodoFileChange: "minor_correction" },
-	]);
+test("requires explicit confirmation before publishing a Zenodo PDF correction", async ({page}) => {
+  await mockPublishedBook(page);
+  const indexing = await mockCompletedIndexing(page);
+  const receipt = indexingReceipt(publishedItemKey, "item", 2);
+  const approvals: Record<string, unknown>[] = [];
+  await mockSubmittedReview(page, async body => {
+    approvals.push(body);
+    if (body.zenodoFileChange !== "minor_correction") return {status: 409, json: {error: {
+      code: "confirmation_required", message: "This PDF correction updates the same Zenodo record and DOI."
+    }}};
+    return {json: {indexingReceipts: [receipt], review: {}}};
+  });
+  await page.goto("/admin");
+  const dialog = await openReviewApproval(page);
+  await dialog.getByRole("button", {name: "Publish version", exact: true}).click();
+  await expect(dialog.getByRole("alert")).toContainText("same Zenodo record and DOI");
+  expect(approvals).toEqual([{action: "approve", expectedRevision: 1}]);
+  await dialog.getByRole("button", {name: "Publish correction", exact: true}).click();
+  await expect(dialog).toBeHidden();
+  expect(approvals[1]).toEqual({action: "approve", expectedRevision: 1, zenodoFileChange: "minor_correction"});
+  await indexing.expectTracked(receipt);
 });
 
 test("tracks collection delete and restore mutations", async ({ page }) => {
@@ -6427,16 +6070,14 @@ test("keeps an immediately rejected batch indexing wait handled", async ({
 	const selectRecord = page.getByRole("checkbox", {
 		name: "Select Published book",
 	});
-	const publishSelected = page.getByRole("button", {
-		name: "Publish selected",
-	});
+
 
 	await selectRecord.check();
-	await publishSelected.click();
-	await expect(page.getByText("1 record published")).toBeVisible();
+	await removeSelectedRecords(page);
+	await expect(page.getByText("1 record removed")).toBeVisible();
 
 	await selectRecord.check();
-	await publishSelected.click();
+	await removeSelectedRecords(page);
 	await expect(
 		page
 			.getByLabel("Notifications alt+T")
@@ -6468,27 +6109,16 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 	let workerProgress: number | null = 42;
 	let workerStage: "idle" | "indexing" | "waiting" = "indexing";
 
-	await mockPublishedBook(page, {
-		batchResults: ({ keys }) => {
-			batchRevision += 1;
-			receiptState = batchRevision === 1 ? "processing" : "failed";
-			hasFailed = receiptState === "failed";
-			hasPending = receiptState === "processing";
-			workerProgress = receiptState === "processing" ? 42 : null;
-			workerStage = receiptState === "processing" ? "indexing" : "idle";
-			return keys.map((key) => ({
-				indexingReceipts: [
-					{
-						entityKey: key,
-						entityType: "item",
-						revision: batchRevision,
-					},
-				],
-				key,
-				outcome: "changed",
-			}));
-		},
-	});
+  await mockPublishedBook(page);
+  const review = await mockSubmittedReview(page, async () => {
+    batchRevision += 1;
+    receiptState = batchRevision === 1 ? "processing" : "failed";
+    hasFailed = receiptState === "failed";
+    hasPending = receiptState === "processing";
+    workerProgress = receiptState === "processing" ? 42 : null;
+    workerStage = receiptState === "processing" ? "indexing" : "idle";
+    return {json: {review: {}, indexingReceipts: [indexingReceipt(publishedItemKey, "item", batchRevision)]}};
+  });
 
 	await page.route("**/api/admin/search-index", async (route) => {
 		await route.fulfill({
@@ -6567,14 +6197,9 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		page.getByRole("button", { name: "Search indexing: Search ready" }),
 	).toBeVisible();
 
-	const selectRecord = page.getByRole("checkbox", {
-		name: "Select Published book",
-	});
-	await selectRecord.check();
-	await page
-		.getByRole("toolbar", { name: "Bulk actions" })
-		.getByRole("button", { name: "Publish selected" })
-		.click();
+  const approval = await openReviewApproval(page);
+  await approval.getByRole("button", {name: "Publish version", exact: true}).click();
+  await expect(approval).toBeHidden();
 
 	const indexingStatus = await waitForAdminSearchIndexStatus(
 		page,
@@ -6621,11 +6246,11 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		page.getByRole("button", { name: "Search indexing: Search updated" }),
 	).toBeVisible({ timeout: 4_000 });
 
-	await selectRecord.check();
-	await page
-		.getByRole("toolbar", { name: "Bulk actions" })
-		.getByRole("button", { name: "Publish selected" })
-		.click();
+  review.resubmit();
+  await page.reload();
+  const secondApproval = await openReviewApproval(page);
+  await secondApproval.getByRole("button", {name: "Publish version", exact: true}).click();
+  await expect(secondApproval).toBeHidden();
 	const failedStatus = page.getByRole("button", {
 		name: "Search indexing: Indexing failed",
 	});

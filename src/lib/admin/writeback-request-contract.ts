@@ -1,14 +1,11 @@
 import { z } from "zod";
 
-const sourceKeyList = z.array(z.string().trim().min(1).max(64)).max(100);
+const sourceKey = z.string().trim().min(1).max(64);
+const sourceKeyList = z.array(sourceKey).max(100);
 
-/** Body of `POST /api/admin/items/[key]/publish`. */
-export const adminPublishRequestSchema = z
-	.object({
-		/** Sources this record should write to from now on. Omit to keep the stored choice. */
-		sourceKeys: sourceKeyList.optional(),
-	})
-	.strict();
+export function readAdminSourceKey(searchParams: URLSearchParams) {
+	return sourceKey.parse(searchParams.get("source"));
+}
 
 /** Body of `POST /api/admin/items/[key]/unpublish`. */
 export const adminUnpublishRequestSchema = z
@@ -35,7 +32,6 @@ export const adminWritebackResolveRequestSchema = z
 export type AdminWritebackResolveRequest = z.infer<
 	typeof adminWritebackResolveRequestSchema
 >;
-export type AdminPublishRequest = z.infer<typeof adminPublishRequestSchema>;
 export type AdminUnpublishRequest = z.infer<typeof adminUnpublishRequestSchema>;
 export type AdminWritebackSourcesRequest = z.infer<
 	typeof adminWritebackSourcesRequestSchema

@@ -23,6 +23,8 @@ export type AdminItemSummary = {
 };
 
 export type AdminItemListRow = AdminItemSummary & {
+	kind: "created" | "imported";
+	importMethod: "doi" | "file" | null;
 	collections: string[];
 	creatorNames: string[];
 	dateAdded: string | null;
@@ -74,6 +76,7 @@ export type AdminAttachment = AdminItemSummary & {
 	draft: AdminItemDraft | null;
 	fileDraft: AdminFileDraft | null;
 	filePublication: AdminFilePublication | null;
+	fileRemovalPending: boolean;
 	parentItem: string;
 	sourceFileUrl: string | null;
 };
@@ -111,12 +114,15 @@ export type AdminItemLinks = {
 };
 
 export type AdminItemDetail = AdminItemSummary & {
+	kind: "created" | "imported";
+	importMethod: "doi" | "file" | null;
 	attachments: AdminAttachment[];
 	collectionKeys: string[];
 	draft: AdminItemDraft | null;
 	editable: boolean;
 	fileDraft: AdminFileDraft | null;
 	filePublication: AdminFilePublication | null;
+	fileRemovalPending: boolean;
 	links: AdminItemLinks;
 	parentItem: string | null;
 	parentState: AdminRecordState | null;
@@ -252,6 +258,7 @@ export type AdminItemListPage = {
 };
 
 export type AdminItemViewFilters = {
+	reviewQueue: boolean;
 	filters: import("./item-list-contract").AdminItemFilter[];
 	query: string;
 	sort: import("./item-list-contract").AdminItemSortColumnId;

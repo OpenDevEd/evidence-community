@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { AdminSessionProvider } from "@/components/admin/AdminSessionProvider";
 import AdminWorkbench from "@/components/admin/AdminWorkbench";
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
@@ -69,9 +70,11 @@ export default async function AdminPage({
 	}));
 
 	return (
+		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId }}>
 		<AdminWorkbench
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
 		/>
+		</AdminSessionProvider>
 	);
 }

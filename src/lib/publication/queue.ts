@@ -1,3 +1,4 @@
+import type { ProviderSyncState, ProviderSyncStatePatch } from "@opendeved/doi-sync-core";
 import { outbox } from "@opendeved/evidence-library-core";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -17,7 +18,6 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { tryLockItemMutation } from "@/db/canonical-mutation-lock";
 import {
-	publicationIdentifier,
 	publicationSyncJob,
 	publicationTarget,
 	type PublicationEnvironment,
@@ -292,41 +292,25 @@ export async function enqueuePublicationJobsForItem(
 	if (input.reason === "provider_audit" && !input.idempotencyDiscriminator) {
 		throw new Error("Provider audit jobs require a stable audit id");
 	}
-	const [targets, publishedFiles, managedCrossrefIdentifiers] =
-		await Promise.all([
-			transaction
-				.select()
-				.from(publicationTarget)
-				.where(
-					and(
-						eq(publicationTarget.itemKey, input.itemKey),
-						isNull(publicationTarget.deactivatedAt),
-					),
+	const [targets, publishedFiles] = await Promise.all([
+		transaction
+			.select()
+			.from(publicationTarget)
+			.where(
+				and(
+					eq(publicationTarget.itemKey, input.itemKey),
+					isNull(publicationTarget.deactivatedAt),
+					isNotNull(publicationTarget.activatedAt),
 				),
-			transaction
-				.select({ revision: itemFilePublication.revision })
-				.from(itemFilePublication)
-				.where(eq(itemFilePublication.parentItemKey, input.itemKey)),
-			transaction
-				.select({ lifecycle: publicationIdentifier.lifecycle })
-				.from(publicationIdentifier)
-				.where(
-					and(
-						eq(publicationIdentifier.itemKey, input.itemKey),
-						eq(publicationIdentifier.registrar, "crossref"),
-						eq(publicationIdentifier.environment, "test"),
-						eq(publicationIdentifier.role, "primary"),
-						eq(publicationIdentifier.ownership, "managed"),
-						eq(publicationIdentifier.isCurrent, true),
-					),
-				),
-		]);
+			),
+		transaction
+			.select({ revision: itemFilePublication.revision })
+			.from(itemFilePublication)
+			.where(eq(itemFilePublication.parentItemKey, input.itemKey)),
+	]);
 	const fileRevision = publishedFiles.length
 		? Math.max(...publishedFiles.map(({ revision }) => revision))
 		: null;
-	const crossrefVerified = managedCrossrefIdentifiers.some(
-		({ lifecycle }) => lifecycle === "verified",
-	);
 	const jobs: Array<typeof publicationSyncJob.$inferSelect> = [];
 	for (const target of targets) {
 		if (input.providers && !input.providers.includes(target.provider))
@@ -345,14 +329,6 @@ export async function enqueuePublicationJobsForItem(
 				environment: target.environment,
 				now: input.now,
 			});
-		}
-		if (
-			target.provider === "zenodo" &&
-			(fileRevision === null ||
-				(target.identifierPolicy === "reuse-crossref" &&
-					!crossrefVerified))
-		) {
-			continue;
 		}
 		const job = await savePublicationJob(transaction, {
 			itemKey: input.itemKey,
@@ -518,6 +494,26 @@ export async function claimNextPublicationJob(
 	return null;
 }
 
+export type PublicationJobResult =
+	| { status: "finished"; receipt: Record<string, unknown> }
+	| { status: "deferred"; delayMs: number; error: string; deadLetter: boolean };
+
+export function settlePublicationJob(
+	database: Executor,
+	input: { jobId: number; workerId: string; settledAt: Date; jobResult: PublicationJobResult },
+) {
+	const { jobId, workerId, settledAt, jobResult } = input;
+	if (jobResult.status === "finished") {
+		return finishPublicationJob(database, {
+			jobId, workerId, finishedAt: settledAt, receipt: jobResult.receipt,
+		});
+	}
+	return deferPublicationJob(database, {
+		jobId, workerId, deferredAt: settledAt,
+		delayMs: jobResult.delayMs, error: jobResult.error, deadLetter: jobResult.deadLetter,
+	});
+}
+
 export async function finishPublicationJob(
 	database: Executor,
 	input: {
@@ -581,3 +577,14 @@ export async function deferPublicationJob(
 	if (!job) throw new PublicationJobLeaseLostError();
 	return job;
 }
+
+export type PublicationSettlement = {
+ jobId: number;
+ workerId: string;
+ itemKey: string;
+ canonicalRevision: number;
+ patch: ProviderSyncStatePatch;
+ previousState: ProviderSyncState | undefined;
+ settledAt: Date;
+ jobResult: PublicationJobResult;
+};

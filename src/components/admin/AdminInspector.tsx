@@ -1,4 +1,6 @@
 "use client";
+import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
+import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Add01Icon, AlertCircleIcon, ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, ArrowUp01Icon, AttachmentIcon, Building02Icon, Cancel01Icon, CheckmarkBadge01Icon, Copy01Icon, Delete02Icon, Download01Icon, FileAttachmentIcon, FilePenLineIcon, FilePlusIcon, Folder01Icon, Link02Icon, LinkSquare01Icon, LockIcon, PencilIcon, RotateLeft01Icon, SentIcon, Tag01Icon, Tick01Icon, Upload01Icon, UserCircleIcon, UserGroupIcon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
@@ -14,7 +16,7 @@ import {
 	PopoverTrigger,
 	Spinner,
 } from "@nextui-org/react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
@@ -67,7 +69,6 @@ import { AdminLinksEditor } from "./AdminLinksEditor";
 import { AdminMetadataField } from "./AdminMetadataField";
 import {
 	AdminPublicationHeaderStatus,
-	AdminPublicationStatus,
 } from "./AdminPublicationStatus";
 import { useAdminPublication } from "./useAdminPublication";
 
@@ -1217,8 +1218,7 @@ function AttachmentFilePanel({
 	detail,
 	fileError,
 	onDiscardFile,
-	onPublishFile,
-	onUnpublishFile,
+	onChangePdfRemoval,
 	onUpload,
 	readOnly,
 }: {
@@ -1226,42 +1226,15 @@ function AttachmentFilePanel({
 	detail: AdminItemDetail;
 	fileError?: string;
 	onDiscardFile: (key: string) => void;
-	onPublishFile: (key: string, uploadRevision: number) => void;
-	onUnpublishFile: (key: string) => void;
+	onChangePdfRemoval: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
 	readOnly: boolean;
 }) {
-	const attachmentMetadataPublished =
-		detail.state === "published" || detail.state === "edited";
-	const parentMetadataPublished =
-		detail.parentState === "published" || detail.parentState === "edited";
-	const canPublishPdf =
-		attachmentMetadataPublished && parentMetadataPublished;
-	const publishPdfDisabledReason = canPublishPdf
-		? null
-		: !attachmentMetadataPublished && !parentMetadataPublished
-			? "Publish the parent record and attachment metadata first"
-			: !parentMetadataPublished
-				? "Publish the parent record first"
-				: "Publish the attachment metadata first";
 	const formatFileSize = (bytes: number) =>
 		bytes < 1024 * 102.4
 			? `${Math.max(1, Math.round(bytes / 1024))} KB`
 			: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-	const publishPdfButton =
-		!readOnly && detail.fileDraft?.readyAt ? (
-			<Button
-				isDisabled={busy || Boolean(publishPdfDisabledReason)}
-				onPress={() =>
-					onPublishFile(detail.key, detail.fileDraft!.uploadRevision)
-				}
-				size="xs"
-				startContent={<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />}
-				variant="transparent"
-			>
-				Publish PDF
-			</Button>
-		) : null;
+
 	return (
 		<div className="space-y-3">
 			{fileError ? (
@@ -1309,14 +1282,14 @@ function AttachmentFilePanel({
 						{!readOnly ? (
 							<Button
 								isDisabled={busy}
-								onPress={() => onUnpublishFile(detail.key)}
+								onPress={() => onChangePdfRemoval(detail.key)}
 								size="xs"
 								startContent={
-									<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
+									<HugeiconsIcon icon={detail.fileRemovalPending ? RotateLeft01Icon : Delete02Icon} aria-hidden size={14} />
 								}
 								variant="transparent"
 							>
-								Unpublish PDF
+								{detail.fileRemovalPending ? "Undo removal" : "Remove PDF from draft"}
 							</Button>
 						) : null}
 					</div>
@@ -1355,17 +1328,12 @@ function AttachmentFilePanel({
 						{detail.fileDraft.actualSha256 ??
 							detail.fileDraft.expectedSha256}
 					</p>
+                    {readOnly && detail.fileDraft.readyAt && detail.sourceFileUrl ? (
+                        <Button as="a" href={detail.sourceFileUrl} target="_blank" rel="noreferrer" size="xs" variant="transparent" className="mt-2" startContent={<HugeiconsIcon icon={LinkSquare01Icon} size={14} />}>Open PDF</Button>
+                    ) : null}
 					{!readOnly ? (
 						<div className="mt-2 flex flex-wrap gap-1">
-							{publishPdfButton && publishPdfDisabledReason ? (
-								<Tooltip content={publishPdfDisabledReason}>
-									<span className="inline-flex">
-										{publishPdfButton}
-									</span>
-								</Tooltip>
-							) : (
-								publishPdfButton
-							)}
+
 							<Button
 								isDisabled={busy}
 								onPress={() => onDiscardFile(detail.key)}
@@ -1431,6 +1399,15 @@ function AttachmentFilePanel({
 }
 
 export function AdminInspector({
+    readOnlyVersion = false,
+    allowReviewCorrections = false,
+    versionControls,
+    versionNotice,
+    editorNotice,
+    versionActions,
+    publishingChoice,
+    submissionBlocked = false,
+    reviewPending = false,
 	busy,
 	definitions,
 	detail,
@@ -1448,7 +1425,6 @@ export function AdminInspector({
 	onOpenDraft,
 	onManageSources,
 	onPublish,
-	onPublishFile,
 	onPublicationChanged,
 	onWritebackResolved,
 	onReloadDraft,
@@ -1457,8 +1433,7 @@ export function AdminInspector({
 	onSelectAttachment,
 	onStartLinkPick,
 	onStopLinkPick,
-	onUnpublish,
-	onUnpublishFile,
+	onChangePdfRemoval,
 	onUpload,
 	payload,
 	saveMessage,
@@ -1467,6 +1442,15 @@ export function AdminInspector({
 	validationErrors = {},
 	validationRevision = 0,
 }: {
+	readOnlyVersion?: boolean;
+	allowReviewCorrections?: boolean;
+    versionControls?: ReactNode;
+    versionNotice?: ReactNode;
+    editorNotice?: ReactNode;
+    versionActions?: ReactNode;
+    publishingChoice?: import("@/lib/admin/review-contract").PublishingChoice | null;
+    reviewPending?: boolean;
+    submissionBlocked?: boolean;
 	busy: boolean;
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail | null;
@@ -1486,8 +1470,7 @@ export function AdminInspector({
 	onOpenDraft: () => void;
 	onManageSources: () => void;
 	onPublish: () => void;
-	onPublishFile: (key: string, uploadRevision: number) => void;
-	onPublicationChanged: () => void;
+	onPublicationChanged: (receipts?: readonly AdminSearchIndexReceipt[]) => Promise<void>;
 	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;
@@ -1495,8 +1478,7 @@ export function AdminInspector({
 	onSelectAttachment: (key: string) => void;
 	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
 	onStopLinkPick?: () => void;
-	onUnpublish: () => void;
-	onUnpublishFile: (key: string) => void;
+	onChangePdfRemoval: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
 	payload: Record<string, unknown>;
 	saveMessage: string | null;
@@ -1520,18 +1502,17 @@ export function AdminInspector({
 	const diff = useMemo(
 		() =>
 			detail
-				? computeAdminDraftDiff(detail, payload, definition)
+				? readOnlyVersion ? EMPTY_ADMIN_DRAFT_DIFF : computeAdminDraftDiff(detail, payload, definition)
 				: EMPTY_ADMIN_DRAFT_DIFF,
-		[definition, detail, payload],
+		[definition, detail, payload, readOnlyVersion],
 	);
 	const { entries: publishedCollectionEntries } = useResolvedAdminCollections(
 		diff.collections ?? [],
 	);
 	const publication = useAdminPublication(
-		detail && !detail.parentItem && detail.published ? detail.key : null,
+		!readOnlyVersion && detail && !detail.parentItem && detail.published ? detail.key : null,
 		detail ? publicationInputVersion(detail) : null,
 	);
-	const [pendingPublicationField, setPendingPublicationField] = useState<string | null>(null);
 	const publishedCollectionNames = useMemo(
 		() =>
 			new Map(
@@ -1564,16 +1545,7 @@ export function AdminInspector({
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [detailKey, validationRevision]);
-	useEffect(() => {
-		if (!detailKey || !detail?.draft || !pendingPublicationField) return;
-		const targetId = validationTargetId(detailKey, pendingPublicationField);
-		if (!targetId) return;
-		const frame = requestAnimationFrame(() => {
-			document.getElementById(targetId)?.focus();
-			setPendingPublicationField(null);
-		});
-		return () => cancelAnimationFrame(frame);
-	}, [detail?.draft, detailKey, pendingPublicationField]);
+
 
 	if (loading && !detail) {
 		return (
@@ -1596,25 +1568,19 @@ export function AdminInspector({
 	}
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
-	const editable = detail.editable && Boolean(detail.draft) && !busy;
+	const editable = (allowReviewCorrections || (!readOnlyVersion && detail.editable)) && Boolean(detail.draft) && !busy;
 	const readOnly = !editable;
-	const hasPublishedChild = detail.attachments.some(
-		(attachment) =>
-			attachment.state === "published" || attachment.state === "edited",
-	);
 	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
 	const showPublicLinkActions =
-		detail.itemType === "Attachment" || Boolean(itemUrl);
-	const goToPublicationField = (field: string) => {
-		setPendingPublicationField(field);
-		if (!detail.draft) onOpenDraft();
-	};
+		!readOnlyVersion && (detail.itemType === "Attachment" || Boolean(itemUrl));
+
 
 	return (
 		<div
 			className="flex h-full min-h-0 flex-col"
 			data-admin-region="inspector"
 		>
+			{versionControls}
 			<div className="shrink-0 border-b border-black/[0.06] px-4 pb-4 pt-4 dark:border-white/[0.06]">
 				{error ? (
 					<div
@@ -1653,12 +1619,12 @@ export function AdminInspector({
 				<div>
 					<div className="flex items-start gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="text-lg font-semibold leading-snug tracking-tight text-black/90 dark:text-white/95">
+							<h2 className="text-inspector-title font-semibold leading-6 tracking-tight text-black/90 dark:text-white/95">
 								{detail.title}
 							</h2>
-							<p className="mt-1 text-xs text-black/40 dark:text-white/40">
-								{humanizeAdminField(detail.itemType)} ·{" "}
-								{detail.key}
+							<p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/40 dark:text-white/40">
+                                <span>{humanizeAdminField(detail.itemType)}</span>
+                                <span className="font-mono text-[10px] tracking-wide text-black/30 dark:text-white/30">{detail.key}</span>
 							</p>
 						</div>
 						<div className="flex shrink-0 items-center gap-1">
@@ -1701,7 +1667,7 @@ export function AdminInspector({
 									</Tooltip>
 								</>
 							) : null}
-							{!detail.editable ? (
+							{!readOnlyVersion && !detail.editable ? (
 								<Tooltip
 									content={
 										writebackUnavailableMessage[
@@ -1718,7 +1684,8 @@ export function AdminInspector({
 							) : null}
 						</div>
 					</div>
-					<div className="mt-2 flex flex-wrap items-center gap-1.5">
+					{versionNotice}
+                    {!readOnlyVersion && <><div className="mt-2 flex flex-wrap items-center gap-1.5">
 						<RecordStateChip state={detail.state} />
 						<FileStateChip state={detail.fileState} />
 						{detail.writeback.selected.length > 0 ? (
@@ -1824,14 +1791,14 @@ export function AdminInspector({
 								Edit
 							</Button>
 						) : null}
-						{detail.draft ? (
+						{detail.draft && !detail.parentItem ? (
 							<>
 								<Button
 									color="accent"
 									className="h-9 rounded-xl px-3 font-semibold"
 									isDisabled={
 										busy ||
-										saveState === "conflict" ||
+										saveState === "conflict" || reviewPending || submissionBlocked ||
 										saveState === "error"
 									}
 									onPress={onPublish}
@@ -1843,11 +1810,11 @@ export function AdminInspector({
 								>
 									{detail.state === "deleted"
 										? "Restore and publish"
-										: "Publish"}
+										: reviewPending ? "Awaiting review" : "Submit for review"}
 								</Button>
 								<Button
 									className="h-9 rounded-xl px-3 font-medium text-danger hover:bg-danger/10"
-									isDisabled={busy}
+									isDisabled={busy || (reviewPending && !detail.published)}
 									onPress={onDiscardDraft}
 									size="xs"
 									startContent={
@@ -1861,31 +1828,10 @@ export function AdminInspector({
 								</Button>
 							</>
 						) : null}
-						{native && detail.state === "published" ? (
-							<Tooltip
-								content={
-									hasPublishedChild
-										? "Unpublish child attachments first"
-										: "Remove this record from the public library"
-								}
-							>
-								<span>
-									<Button
-										className="h-9 rounded-xl px-3 font-medium text-danger hover:bg-danger/10"
-										isDisabled={busy || hasPublishedChild}
-										onPress={onUnpublish}
-										size="xs"
-										startContent={
-											<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
-										}
-										variant="transparent"
-									>
-										Unpublish
-									</Button>
-								</span>
-							</Tooltip>
-						) : null}
+
 					</div>
+					</>}
+                    {versionActions}
 					<ValidationSummary
 						errors={validationErrors}
 						recordKey={detail.key}
@@ -1898,30 +1844,17 @@ export function AdminInspector({
 				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
 				data-admin-region="inspector-scroll"
 			>
+                {editorNotice}
 				{!detail.parentItem ? (
 					<Section
 						icon={CheckmarkBadge01Icon}
 						id="admin-doi-publishing"
 						title="Identifiers"
 					>
-						<AdminPublicationStatus
-							itemKey={detail.key}
-							onGoToField={goToPublicationField}
-							onOpenAttachments={() =>
-								document
-									.getElementById("admin-attachments")
-									?.scrollIntoView({
-										behavior: "smooth",
-										block: "start",
-									})
-							}
-							onRecordChanged={onPublicationChanged}
-							published={Boolean(detail.published)}
-							state={publication}
-						/>
+						<PublishingChoicePanel key={detail.key} detail={detail} readOnly={readOnlyVersion} choice={publishingChoice} />
 					</Section>
 				) : null}
-				<Section icon={FilePenLineIcon} id="admin-metadata" title="Metadata">
+<Section icon={FilePenLineIcon} id="admin-metadata" title="Metadata">
 					<MetadataEditor
 						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
 						definitions={definitions}
@@ -2109,10 +2042,9 @@ export function AdminInspector({
 							detail={detail}
 							fileError={fileErrors[detail.key]}
 							onDiscardFile={onDiscardFile}
-							onPublishFile={onPublishFile}
-							onUnpublishFile={onUnpublishFile}
+							onChangePdfRemoval={onChangePdfRemoval}
 							onUpload={onUpload}
-							readOnly={!native}
+							readOnly={readOnlyVersion || !native}
 						/>
 					) : (
 						<AttachmentList
@@ -2120,7 +2052,7 @@ export function AdminInspector({
 							detail={detail}
 							onCreateAttachment={onCreateAttachment}
 							onSelectAttachment={onSelectAttachment}
-							readOnly={!native}
+							readOnly={readOnlyVersion || !native}
 						/>
 					)}
 				</Section>

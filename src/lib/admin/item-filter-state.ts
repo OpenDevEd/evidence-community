@@ -8,6 +8,7 @@ import {
 import type { AdminItemViewFilters } from "./types";
 
 export const DEFAULT_ADMIN_ITEM_VIEW_FILTERS: AdminItemViewFilters = {
+	reviewQueue: false,
 	filters: [],
 	query: "",
 	sort: "updated",
@@ -40,6 +41,7 @@ export function parseAdminItemViewFilters(
 		: DEFAULT_ADMIN_ITEM_VIEW_FILTERS.sort;
 	const requestedDirection = searchParams.get("direction");
 	return {
+		reviewQueue: searchParams.get("review") === "pending",
 		filters,
 		query: (searchParams.get("search") ?? "").trim().slice(0, 500),
 		sort,
@@ -55,9 +57,10 @@ export function writeAdminItemViewFilters(
 	view: AdminItemViewFilters,
 ) {
 	const next = new URLSearchParams(searchParams);
-	for (const key of ["direction", "filters", "search", "sort"]) {
+	for (const key of ["direction", "filters", "search", "sort", "review"]) {
 		next.delete(key);
 	}
+	if (view.reviewQueue) next.set("review", "pending");
 	if (view.query) next.set("search", view.query);
 	if (view.filters.length > 0) {
 		next.set("filters", JSON.stringify(view.filters));

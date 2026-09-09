@@ -2647,22 +2647,22 @@ async function adminPublicationRequest<T>(
 	profile: Profile,
 	session: AdminTestSession,
 	pathname: string,
-	init?: RequestInit,
+	init: RequestInit = {},
 ) {
 	const response = await fetch(
 		`http://127.0.0.1:${profile.port}${pathname}`,
 		{
 			...init,
-			headers: withAdminTestSession(session, init?.headers),
+			headers: withAdminTestSession(session, init.headers),
 		},
 	);
 	const body = await response.text();
 	assert.equal(
 		response.ok,
 		true,
-		`${init?.method ?? "GET"} ${pathname} failed: ${response.status} ${body}`,
+		`${init.method ?? "GET"} ${pathname} failed: ${response.status} ${body}`,
 	);
-	return JSON.parse(body) as T;
+	return (response.status === 204 ? undefined : JSON.parse(body)) as T;
 }
 
 async function waitForPublicationState(
@@ -2830,16 +2830,13 @@ async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
 		"external DOI Zenodo publication settlement",
 	);
 
-	await adminPublicationRequest(
-		profile,
-		session,
-		`/api/admin/items/${removedFileKey}/file`,
-		{
-			method: "DELETE",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ zenodoFileChange: "minor_correction" }),
-		},
-	);
+    await adminPublicationRequest(profile, session, `/api/admin/items/${removedFileKey}/file/removal`, {method: "POST"});
+    assert.equal(postgresScalar("amber", `SELECT count(*) FROM "itemFilePublication" WHERE "parentItemKey" = '${itemKey}'`), "2", "Staging removal must leave the published PDFs available");
+    const {review} = await adminPublicationRequest<{review: {id: string; revision: number}}>(profile, session, `/api/admin/items/${itemKey}/review`, {method: "POST"});
+    await adminPublicationRequest(profile, session, `/api/admin/reviews/${review.id}`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action: "approve", expectedRevision: review.revision, zenodoFileChange: "minor_correction"}),
+    });
 	await waitForPublicationState(
 		() =>
 			postgresScalar(

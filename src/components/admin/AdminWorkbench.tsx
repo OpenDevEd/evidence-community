@@ -52,7 +52,10 @@ import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
 import { AdminImportDialog } from "./AdminImportDialog";
-import { AdminInspector } from "./AdminInspector";
+import { EditorialInspector } from "./EditorialInspector";
+import type { ReviewLinkPicker } from "./useReviewLinkPicker";
+import { mutate } from "swr";
+import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
 import { AdminSourceSyncDialog } from "./AdminSourceSyncDialog";
 import {
 	AdminWritebackSourcesDialog,
@@ -85,16 +88,13 @@ import {
 	moveAdminCollection,
 	mutateAdminItems,
 	openAdminDraft,
-	publishAdminItem,
 	setAdminItemWritebackSources,
-	publishAdminPdf,
 	renameAdminCollection,
 	restoreAdminCollection,
 	saveAdminDraft,
 	sha256File,
 	stageAdminPdf,
 	unpublishAdminItem,
-	unpublishAdminPdf,
 	uploadAdminPdf,
 } from "./admin-api";
 import {
@@ -175,6 +175,10 @@ type RecordAssignment = {
 	itemKeys: string[];
 	itemSourceConnectionKeys: string[];
 };
+
+function pickedItemTarget(row: Pick<AdminLinkTarget, "key" | "itemType" | "title"> & {state: string}): AdminLinkTarget {
+ return {key: row.key, itemType: row.itemType, title: row.title?.trim() || "Untitled record", deleted: row.state === "deleted"};
+}
 
 function collectionLocationFromCatalog(
 	entry: AdminCollectionCatalogEntry,
@@ -394,6 +398,7 @@ export default function AdminWorkbench({
 	const [linkPick, setLinkPick] = useState<{
 		forKey: string;
 		kind: AdminItemLinkKind | null;
+        review?: ReviewLinkPicker;
 	} | null>(null);
 	const {
 		preferences: itemTablePreferences,
@@ -415,7 +420,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(requestedColumns, initialFilters);
+	} = useAdminItemList(requestedColumns, initialFilters, Boolean(linkPick?.kind), Boolean(linkPick));
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
@@ -466,7 +471,7 @@ export default function AdminWorkbench({
 	);
 	const [writebackDialog, setWritebackDialog] = useState<
 		| (WritebackDialogRequest & {
-				action: "manage" | "publish" | "restore" | "unpublish";
+				action: "manage" | "restore" | "unpublish";
 				recordKey: string;
 		  })
 		| null
@@ -988,7 +993,7 @@ export default function AdminWorkbench({
 
 	const updatePayload = useCallback(
 		(next: Record<string, unknown>) => {
-			if (!detail?.draft) return;
+			if (!detail?.draft || detail.key !== selectedKeyRef.current) return;
 			let normalized = next;
 			const currentType = String(
 				draftPayload.itemType ?? detail.itemType,
@@ -1049,30 +1054,28 @@ export default function AdminWorkbench({
 
 	// Pick mode is only live while the same record is still open as a draft.
 	const activeLinkPick =
-		linkPick?.kind && detail?.draft && linkPick.forKey === detail.key
+		linkPick?.kind && (detail?.draft || linkPick.review) && linkPick.forKey === detail?.key
 			? linkPick.kind
 			: null;
 	// Titles of rows picked so far, kept even after a search scrolls them out of the list.
 	const [pickedLinkTargets, setPickedLinkTargets] = useState<
 		ReadonlyMap<string, AdminLinkTarget>
 	>(new Map());
-	const addLinkKeys = useCallback(
-		(kind: AdminItemLinkKind, keys: readonly string[]) => {
-			if (!detail?.draft) return;
+	const rememberLinkTargets = useCallback((keys: readonly string[]) => {
 			setPickedLinkTargets((current) => {
 				const next = new Map(current);
 				for (const row of items) {
 					if (keys.includes(row.key)) {
-						next.set(row.key, {
-							deleted: row.state === "deleted",
-							itemType: row.itemType,
-							key: row.key,
-							title: row.title?.trim() || "Untitled record",
-						});
+						next.set(row.key, pickedItemTarget(row));
 					}
 				}
 				return next;
 			});
+	}, [items]);
+	const addDraftLinkKeys = useCallback(
+		(kind: AdminItemLinkKind, keys: readonly string[]) => {
+			if (!detail?.draft) return;
+            rememberLinkTargets(keys);
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
 			// Links a source owns are already there; the editor does not add a second one.
@@ -1090,11 +1093,11 @@ export default function AdminWorkbench({
 			if (next.length === current[kind].length) return;
 			updatePayload({ ...payload, links: { ...current, [kind]: next } });
 		},
-		[detail, items, updatePayload],
+		[detail, rememberLinkTargets, updatePayload],
 	);
-	const removeLinkKeys = useCallback(
+	const removeDraftLinkKeys = useCallback(
 		(kind: AdminItemLinkKind, keys: readonly string[]) => {
-			if (!detail?.draft) return;
+            if (!detail?.draft) return;
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
 			const next = current[kind].filter((key) => !keys.includes(key));
@@ -1105,7 +1108,7 @@ export default function AdminWorkbench({
 	);
 	// In pick mode the table's checkboxes show and change the linked records.
 	// Source-owned links show as ticked too; unticking them changes nothing here.
-	const pickedLinkKeys = useMemo(
+	const draftPickedLinkKeys = useMemo(
 		() =>
 			activeLinkPick && detail
 				? new Set([
@@ -1119,6 +1122,17 @@ export default function AdminWorkbench({
 				: null,
 		[activeLinkPick, detail, draftPayload],
 	);
+ const changePickedLinks = (kind: AdminItemLinkKind, keys: readonly string[], selected: boolean) => {
+  if (linkPick?.review) {
+   rememberLinkTargets(keys);
+   const picked = linkPick.review.change(keys, selected);
+   setLinkPick({...linkPick, review: {...linkPick.review, keys: picked}});
+  } else if (selected) addDraftLinkKeys(kind, keys);
+  else removeDraftLinkKeys(kind, keys);
+ };
+ const addLinkKeys = (kind: AdminItemLinkKind, keys: readonly string[]) => changePickedLinks(kind, keys, true);
+ const removeLinkKeys = (kind: AdminItemLinkKind, keys: readonly string[]) => changePickedLinks(kind, keys, false);
+ const pickedLinkKeys = activeLinkPick ? linkPick?.review?.keys ?? draftPickedLinkKeys : null;
 	const linkTargets = useMemo<AdminLinkTarget[]>(
 		() => [
 			...pickedLinkTargets.values(),
@@ -1196,25 +1210,12 @@ export default function AdminWorkbench({
 		[searchIndex.trackAndWait],
 	);
 
-	const runPublish = (recordKey: string, sourceKeys?: string[]) =>
-		void runBusy(
-			async () => {
-				await flushDraft(recordKey, draftPayload);
-				const result = await publishAdminItem(recordKey, sourceKeys);
-				await waitForIndexing(result);
-				clearRecordErrors([recordKey]);
-				setValidationErrors({});
-				toast.success("Record published");
-				await Promise.all([loadDetail(recordKey), loadItems()]);
-			},
-			(error) => captureInspectorValidation(recordKey, error),
-		);
 
-	// Publish, restore and unpublish ask which sources to update first. When
+	// Restore and unpublish ask which sources to update first. When
 	// the library has no writeback source, or the record is an attachment or
 	// note (they follow their parent), the action runs at once.
 	const askWritebackSources = (
-		action: "manage" | "publish" | "restore" | "unpublish",
+		action: "manage" | "restore" | "unpublish",
 	) => {
 		if (!detail) return false;
 		const mode =
@@ -1232,10 +1233,16 @@ export default function AdminWorkbench({
 	};
 
 	const publishCurrent = () => {
-		if (!detail?.draft) return;
-		if (askWritebackSources("publish")) return;
-		runPublish(detail.key);
-	};
+        if (!detail?.draft || detail.parentItem) return;
+        const recordKey = detail.key;
+        setConfirmDialog({title: "Submit snapshot for review?", message: "The Editor reviews this version. Further edits stay in the working draft.", confirmLabel: "Submit snapshot", action: async () => {
+            await flushDraft(recordKey, draftPayload);
+            await submitAdminReview(recordKey);
+            await mutate(["admin-reviews", recordKey]);
+            await Promise.all([loadDetail(recordKey), loadItems()]);
+            toast.success("Snapshot submitted for review");
+        }});
+    };
 
 	const manageSources = () => {
 		askWritebackSources("manage");
@@ -1246,8 +1253,7 @@ export default function AdminWorkbench({
 		if (!request) return;
 		setWritebackDialog(null);
 		const recordKey = request.recordKey;
-		if (request.action === "publish") runPublish(recordKey, sourceKeys);
-		else if (request.action === "restore") runRestore(recordKey, sourceKeys);
+		if (request.action === "restore") runRestore(recordKey, sourceKeys);
 		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys);
 		else {
 			void runBusy(async () => {
@@ -1269,11 +1275,12 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				await openAdminDraft(recordKey);
-				const result = await publishAdminItem(recordKey, sourceKeys);
-				await waitForIndexing(result);
+                if (sourceKeys) await setAdminItemWritebackSources(recordKey, sourceKeys);
+                await submitAdminReview(detail?.parentItem ?? recordKey);
+                await mutate(["admin-reviews", detail?.parentItem ?? recordKey]);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
-				toast.success("Record restored");
+				toast.success("Restoration submitted for review");
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 			},
 			(error) => captureInspectorValidation(recordKey, error),
@@ -1310,6 +1317,7 @@ export default function AdminWorkbench({
 				abandonPendingDraft(detail.key);
 				await saveQueue.current;
 				await discardAdminDraft(detail.key);
+				await mutate(["admin-reviews", detail.parentItem ?? detail.key]);
 				if (detail.published) {
 					await loadDetail(detail.key);
 				} else {
@@ -1396,52 +1404,6 @@ export default function AdminWorkbench({
 				})),
 		);
 
-	const publishPdf = (key: string, uploadRevision: number) =>
-		void runBusy(
-			async () => {
-				setFileErrors((current) => withoutRecordError(current, key));
-				const finishPublication = async (
-					zenodoFileChange?: "minor_correction",
-				) => {
-					const result = await publishAdminPdf(
-						key,
-						uploadRevision,
-						zenodoFileChange,
-					);
-					await waitForIndexing(result);
-					if (detail) await loadDetail(detail.key);
-					await loadItems();
-					toast.success("PDF published");
-				};
-				try {
-					await finishPublication();
-				} catch (error) {
-					if (
-						!(error instanceof AdminApiError) ||
-						error.code !== "confirmation_required"
-					) {
-						throw error;
-					}
-					setConfirmDialog({
-						title: "Publish a PDF correction?",
-						message: error.message,
-						confirmLabel: "Publish correction",
-						action: () => finishPublication("minor_correction"),
-						onError: (confirmationError) =>
-							setFileErrors((current) => ({
-								...current,
-								[key]: fileErrorMessage(confirmationError),
-							})),
-					});
-				}
-			},
-			(error) =>
-				setFileErrors((current) => ({
-					...current,
-					[key]: fileErrorMessage(error),
-				})),
-		);
-
 	const discardPdfDraft = (key: string) => {
 		setConfirmDialog({
 			danger: true,
@@ -1463,29 +1425,16 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const unpublishPdf = (key: string) => {
-		setConfirmDialog({
-			title: "Unpublish PDF?",
-			message:
-				"The attachment metadata will stay published. If this record uses its Crossref DOI in Zenodo, this also confirms the removal as a minor correction.",
-			action: async () => {
-				const result = await unpublishAdminPdf(
-					key,
-					"minor_correction",
-				);
-				await waitForIndexing(result);
-				setFileErrors((current) => withoutRecordError(current, key));
-				if (detail) await loadDetail(detail.key);
-				await loadItems();
-				toast.success("PDF unpublished");
-			},
-			onError: (error) =>
-				setFileErrors((current) => ({
-					...current,
-					[key]: fileErrorMessage(error),
-				})),
-		});
-	};
+    const changePdfRemoval = (key: string) => void runBusy(async () => {
+        const record = detail?.key === key ? detail : detail?.attachments.find(attachment => attachment.key === key);
+        if (!record) return;
+        const remove = !record.fileRemovalPending;
+        await setAdminPdfRemoval(key, remove);
+        setFileErrors(current => withoutRecordError(current, key));
+        if (detail) await loadDetail(detail.key);
+        await loadItems();
+        toast.success(remove ? "PDF removal saved in draft" : "PDF removal undone");
+    }, error => setFileErrors(current => ({...current, [key]: fileErrorMessage(error)})));
 
 	const openCreateCollection = (
 		parentCollection: AdminCollectionCatalogEntry | null,
@@ -1809,6 +1758,9 @@ export default function AdminWorkbench({
 			request.keys.length > 0
 				? (await mutateAdminItems(request)).results
 				: [];
+		if (request.action === "remove") {
+			await mutate(key => Array.isArray(key) && key[0] === "admin-reviews");
+		}
 		const results = [...localResults, ...remoteResults];
 		const indexingCompletion = searchIndex.trackAndWait(
 			remoteResults.flatMap(({ indexingReceipts }) => indexingReceipts),
@@ -1920,20 +1872,6 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const bulkPublish = () =>
-		void runBusy(async () => {
-			const { failures, readyKeys } = await flushBatchDrafts([
-				...bulkKeys,
-			]);
-			await executeBatchMutation(
-				{ action: "publish", keys: [...readyKeys] },
-				{
-					changedLabels: ["record published", "records published"],
-					emptyMessage: "No records were published",
-				},
-				failures,
-			);
-		});
 
 	const bulkDelete = () => {
 		const keys = [...bulkKeys];
@@ -2140,18 +2078,17 @@ export default function AdminWorkbench({
 						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
 						role="group"
 					>
-					<Tooltip content="Import records">
+					<Tooltip content="Import Item">
 						<Button
-							aria-label="Import records"
-							className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0"
-							color="accent"
+							aria-label="Import Item"
+							className="h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3"
+							color="secondary"
 							isDisabled={busy}
-							isIconOnly
 							onPress={() => setImportOpen(true)}
 							size="xs"
 							variant="solid"
 						>
-							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} />
+							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} /><span className="hidden lg:inline">Import Item</span>
 						</Button>
 					</Tooltip>
 					<span aria-hidden className="h-10 w-px shrink-0 bg-white/25" />
@@ -2166,7 +2103,7 @@ export default function AdminWorkbench({
 					>
 						<PopoverTrigger>
 							<Button
-								aria-label="New item"
+								aria-label="Create Item"
 								className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0 font-semibold lg:w-auto lg:!min-w-0 lg:px-3"
 								color="accent"
 								size="xs"
@@ -2174,12 +2111,12 @@ export default function AdminWorkbench({
 							>
 								<HugeiconsIcon icon={Add01Icon} aria-hidden size={15} />
 								<span className="hidden lg:inline">
-									New item
+									Create Item
 								</span>
 							</Button>
 						</PopoverTrigger>
 						<PopoverContent
-							aria-label="New item"
+							aria-label="Create Item"
 							className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 						>
 							<div className="w-full">
@@ -2249,6 +2186,14 @@ export default function AdminWorkbench({
 							</div>
 							<div className="min-h-0 flex-1">
 								<AdminNavigation
+									reviewQueue={filters.reviewQueue}
+									onSelectReviewQueue={() => setFilters((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
+									kind={filters.reviewQueue ? null : singleAdminItemFilterValue(filters.filters, "kind") ?? "all"}
+									onSelectKind={(kind) => setFilters((current) => ({
+										...current,
+										reviewQueue: false,
+										filters: setSingleAdminItemFilter(current.filters, "kind", kind === "all" ? null : kind),
+									}))}
 									collection={collectionFilter}
 									isBusy={busy}
 									onCreateCollection={openCreateCollection}
@@ -2313,18 +2258,7 @@ export default function AdminWorkbench({
 									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
 									role="toolbar"
 								>
-										<Tooltip content="Publish selected">
-											<Button
-												aria-label="Publish selected"
-												isDisabled={busy || bulkKeys.size === 0}
-												isIconOnly
-												onPress={bulkPublish}
-												size="xs"
-												variant="transparent"
-											>
-												<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />
-											</Button>
-										</Tooltip>
+
 										<Tooltip
 											content={
 												bulkAssignmentScope
@@ -2484,13 +2418,19 @@ export default function AdminWorkbench({
 							mobilePane === "inspector" ? "block" : "hidden"
 						} xl:block`}
 					>
-						<AdminInspector
+						<EditorialInspector
+                            reviewQueue={filters.reviewQueue}
+                            onStartReviewLinkPick={(kind, review) => {
+                                if (!detail) return;
+                                setLinkPick({forKey: detail.key, kind, review});
+                                setMobilePane("list");
+                            }}
 							busy={busy}
 							definitions={definitions}
-							detail={detail}
+							detail={detail?.key === selectedKey ? detail : null}
 							error={detailError}
 							fileErrors={fileErrors}
-							loading={detailLoading}
+							loading={detailLoading || Boolean(selectedKey && detail?.key !== selectedKey && !detailError)}
 							linkPickKind={activeLinkPick}
 							linkTargets={linkTargets}
 							onBackToParent={(key) => setSelectedKey(key)}
@@ -2521,12 +2461,11 @@ export default function AdminWorkbench({
 									await Promise.all([loadDetail(recordKey), loadItems()]);
 								});
 							}}
-							onPublishFile={publishPdf}
-							onPublicationChanged={() =>
-								detail
-									? void refreshCurrent(detail.key)
-									: undefined
-							}
+							onPublicationChanged={async (receipts = []) => {
+                                const completion = searchIndex.trackAndWait(receipts);
+                                if (detail) void refreshCurrent(detail.key);
+                                await completion;
+                            }}
 							onReloadDraft={reloadConflictedDraft}
 							onRetry={() =>
 								selectedKey
@@ -2535,8 +2474,7 @@ export default function AdminWorkbench({
 							}
 							onRestore={restoreCurrent}
 							onSelectAttachment={(key) => setSelectedKey(key)}
-							onUnpublish={unpublishCurrent}
-							onUnpublishFile={unpublishPdf}
+							onChangePdfRemoval={changePdfRemoval}
 							onUpload={uploadPdf}
 							payload={draftPayload}
 							saveMessage={saveMessage}

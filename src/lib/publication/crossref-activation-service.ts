@@ -1,9 +1,11 @@
-import { mapCrossrefRecord } from "@opendeved/doi-sync-core";
+import { itemIdentity } from "@opendeved/evidence-library-core";
+import { itemPublishingChoice } from "@/db/schema/review";
+import { loadWorkingItemPayload } from "@/lib/admin/native-item-service";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	publicationIdentifier,
 	publicationSyncJob,
@@ -24,8 +26,7 @@ import {
 	savePublicationJob,
 	supersedeUnleasedPublicationJobs,
 } from "./queue";
-import { buildPublicationRecordSnapshot } from "./record-adapter";
-import { readPublicationRepositorySnapshot } from "./repository";
+import { readPublicationRepositorySnapshot, type PublicationRepositorySnapshot } from "./repository";
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
@@ -43,6 +44,17 @@ export {
 	ExternalCrossrefDoiError,
 	PublicationItemNotFoundError,
 } from "./errors";
+
+async function readCurrentCrossrefIdentifier(transaction: DatabaseTransaction, itemKey: string) {
+	const [identifier] = await transaction.select().from(publicationIdentifier).where(and(
+		eq(publicationIdentifier.itemKey, itemKey),
+		eq(publicationIdentifier.registrar, "crossref"),
+		eq(publicationIdentifier.environment, "test"),
+		eq(publicationIdentifier.role, "primary"),
+		eq(publicationIdentifier.isCurrent, true),
+	)).limit(1);
+	return identifier;
+}
 
 type PublicationConfig = Pick<
 	LibraryServerConfig,
@@ -149,125 +161,139 @@ export async function activateCrossrefPublication(
 	config: PublicationConfig,
 	requestedBy = "admin-bypass",
 ): Promise<CrossrefActivationReceipt> {
-	const crossref = requireCrossrefConfig(config);
-	return database.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
-		const snapshot = await readPublicationRepositorySnapshot(
+	return database.transaction((transaction) =>
+		activateCrossrefPublicationInTransaction(
 			transaction,
 			itemKey,
-			"test",
-		);
-		const record = snapshot.record;
-		if (!record) throw new PublicationItemNotFoundError(itemKey);
-		const managedIdentifier = snapshot.identifiers.find(
-			(candidate) =>
-				candidate.registrar === "crossref" &&
-				candidate.environment === "test" &&
-				candidate.role === "primary" &&
-				candidate.ownership === "managed",
-		);
+			config,
+			requestedBy,
+		),
+	);
+}
 
-		const existingTarget = snapshot.targets.find(
-			(target) =>
-				target.provider === "crossref" &&
-				target.environment === "test" &&
-				target.deactivatedAt === null,
-		);
-		if (existingTarget) {
-			const job = snapshot.jobs.find(
-				(candidate) =>
-					candidate.provider === "crossref" &&
-					candidate.environment === "test" &&
-					candidate.supersededAt === null,
-			);
-			if (!managedIdentifier || !job) {
-				throw new Error("The saved Crossref activation is incomplete");
-			}
-			return receipt({
-				itemKey,
-				doi: managedIdentifier.doi,
-				lifecycle: managedIdentifier.lifecycle,
-				canonicalRevision: job.canonicalRevision,
-				job,
-			});
-		}
+function existingCrossrefActivation(snapshot: PublicationRepositorySnapshot, itemKey: string, managedIdentifier: (typeof publicationIdentifier.$inferSelect) | undefined) {
+	const existingTarget = snapshot.targets.find(
+		(target) =>
+			target.provider === "crossref" &&
+			target.environment === "test" &&
+			target.deactivatedAt === null &&
+			target.activatedAt !== null,
+	);
+	if (!existingTarget) return null;
+	const job = snapshot.jobs.find(
+		(candidate) =>
+			candidate.provider === "crossref" &&
+			candidate.environment === "test" &&
+			candidate.supersededAt === null,
+	);
+	if (!managedIdentifier || !job) {
+		throw new Error("The saved Crossref activation is incomplete");
+	}
+	return receipt({
+		itemKey,
+		doi: managedIdentifier.doi,
+		lifecycle: managedIdentifier.lifecycle,
+		canonicalRevision: job.canonicalRevision,
+		job,
+	});
 
-		if (record.deleted === 1) {
-			throw new CrossrefActivationValidationError(
-				"Restore this record before publishing it.",
-			);
-		}
-		if (record.parentItem) {
-			throw new CrossrefActivationValidationError(
-				"Only parent records can receive a Crossref DOI.",
-			);
-		}
+}
 
-		const classification = classifyCrossrefActivationDoi(
-			{
-				DOI: record.DOI,
-				extra: record.extra,
-				attachments: snapshot.attachments,
-			},
-			managedIdentifier?.doi ?? null,
+async function resolveActivationDoi(
+	transaction: DatabaseTransaction,
+	record: typeof item.$inferSelect,
+	attachments: PublicationRepositorySnapshot["attachments"],
+	crossref: ReturnType<typeof requireCrossrefConfig>,
+	managedDoi: string | undefined,
+) {
+	const itemKey = record.key;
+	const classification = classifyCrossrefActivationDoi(
+		{
+			DOI: record.DOI,
+			extra: record.extra,
+			attachments: attachments,
+		},
+		managedDoi ?? null,
+	);
+	const doi =
+		managedDoi ??
+		(classification.kind === "reuse"
+			? classification.doi
+			: await allocateManagedCrossrefDoi(transaction, {
+					environment: "test",
+					prefix: crossref.prefix,
+					suffixNamespace: crossref.suffixNamespace,
+				}));
+	await transaction.execute(
+		sql`SELECT pg_advisory_xact_lock(hashtextextended('publication:crossref-doi:' || ${doi}, 0))`,
+	);
+	const [existingIdentifier] = await transaction
+		.select({ itemKey: publicationIdentifier.itemKey })
+		.from(publicationIdentifier)
+		.where(
+			and(
+				eq(publicationIdentifier.registrar, "crossref"),
+				eq(publicationIdentifier.environment, "test"),
+				eq(publicationIdentifier.doi, doi),
+			),
+		)
+		.limit(1);
+	if (existingIdentifier && existingIdentifier.itemKey !== itemKey) {
+		throw new CrossrefDoiAlreadyManagedError(
+			doi,
+			existingIdentifier.itemKey,
 		);
-		const doi =
-			classification.kind === "reuse"
-				? classification.doi
-				: await allocateManagedCrossrefDoi(transaction, {
-						environment: "test",
-						prefix: crossref.prefix,
-						suffixNamespace: crossref.suffixNamespace,
-					});
-		await transaction.execute(
-			sql`SELECT pg_advisory_xact_lock(hashtextextended('publication:crossref-doi:' || ${doi}, 0))`,
-		);
-		const [existingIdentifier] = await transaction
-			.select({ itemKey: publicationIdentifier.itemKey })
-			.from(publicationIdentifier)
-			.where(
-				and(
-					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, "test"),
-					eq(publicationIdentifier.doi, doi),
-				),
-			)
-			.limit(1);
-		if (existingIdentifier && existingIdentifier.itemKey !== itemKey) {
-			throw new CrossrefDoiAlreadyManagedError(
-				doi,
-				existingIdentifier.itemKey,
-			);
-		}
-		let publicationRecord;
-		try {
-			publicationRecord = buildPublicationRecordSnapshot({
-				record,
-				tags: snapshot.tags,
-				baseUrl: config.identity.baseUrl,
-				license: config.services.publication.zenodo.license,
-			});
-		} catch (error) {
-			throw new CrossrefActivationValidationError(
-				error instanceof Error
-					? error.message
-					: "This record is not ready for Crossref.",
-			);
-		}
-		const mapped = mapCrossrefRecord(publicationRecord, doi);
-		if (!mapped.ok) {
-			throw new CrossrefActivationValidationError(
-				"Complete the required Crossref fields and try again.",
-				Object.fromEntries(
-					mapped.issues.map((issue) => [issue.path, issue.message]),
-				),
-			);
-		}
+	}
 
-		const now = new Date();
-		const doiChanged = record.DOI !== doi;
-		const nextRevision = record.revision + (doiChanged ? 1 : 0);
-		await transaction.insert(publicationTarget).values({
+	return doi;
+}
+
+/** Saves activation and its job alongside the approved public records. No provider calls. */
+export async function activateCrossrefPublicationInTransaction(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	config: PublicationConfig,
+	requestedBy: string,
+): Promise<CrossrefActivationReceipt> {
+	const crossref = requireCrossrefConfig(config);
+	await lockItemMutation(transaction, itemKey);
+	const snapshot = await readPublicationRepositorySnapshot(
+		transaction,
+		itemKey,
+		"test",
+	);
+	const record = snapshot.record;
+	if (!record) throw new PublicationItemNotFoundError(itemKey);
+	const managedIdentifier = snapshot.identifiers.find(
+		(candidate) =>
+			candidate.registrar === "crossref" &&
+			candidate.environment === "test" &&
+			candidate.role === "primary" &&
+			candidate.ownership === "managed",
+	);
+
+	const existing = existingCrossrefActivation(snapshot, itemKey, managedIdentifier);
+	if (existing) return existing;
+
+	if (record.deleted === 1) {
+		throw new CrossrefActivationValidationError(
+			"Restore this record before publishing it.",
+		);
+	}
+	if (record.parentItem) {
+		throw new CrossrefActivationValidationError(
+			"Only parent records can receive a Crossref DOI.",
+		);
+	}
+
+	const doi = await resolveActivationDoi(transaction, record, snapshot.attachments, crossref, managedIdentifier?.doi);
+
+	const now = new Date();
+	const doiChanged = record.DOI !== doi;
+	const nextRevision = record.revision + (doiChanged ? 1 : 0);
+	await transaction
+		.insert(publicationTarget)
+		.values({
 			itemKey,
 			provider: "crossref",
 			environment: "test",
@@ -275,77 +301,94 @@ export async function activateCrossrefPublication(
 			requestedBy,
 			requestedAt: now,
 			updatedAt: now,
-		});
-		const [identifier] = await transaction
-			.insert(publicationIdentifier)
-			.values({
-				itemKey,
-				registrar: "crossref",
-				environment: "test",
-				role: "primary",
-				doi,
-				ownership: "managed",
-				lifecycle: "reserved",
-				reservedAt: now,
-				createdAt: now,
+			activatedAt: now,
+		})
+		.onConflictDoUpdate({
+			target: [
+				publicationTarget.itemKey,
+				publicationTarget.provider,
+				publicationTarget.environment,
+			],
+			set: {
+				activatedAt: now,
+				deactivatedAt: null,
+				requestedBy,
 				updatedAt: now,
-			})
-			.returning();
-		if (doiChanged) {
+			},
+		});
+	const identifier =
+		managedIdentifier ??
+		(
 			await transaction
-				.update(item)
-				.set({
-					DOI: doi,
-					revision: nextRevision,
-					dateModified: now,
+				.insert(publicationIdentifier)
+				.values({
+					itemKey,
+					registrar: "crossref",
+					environment: "test",
+					role: "primary",
+					doi,
+					ownership: "managed",
+					lifecycle: "reserved",
+					reservedAt: now,
+					createdAt: now,
 					updatedAt: now,
 				})
-				.where(eq(item.key, itemKey));
-			await advanceOpenItemDraftBaseRevision(
-				transaction,
-				itemKey,
-				record.revision,
-				nextRevision,
-			);
-			await markItemWritebackDirty(transaction, {
-				canonicalRevision: nextRevision,
-				dirtyFields: ["DOI"],
-				itemKey,
+				.returning()
+		)[0];
+	if (doiChanged) {
+		await transaction
+			.update(item)
+			.set({
+				DOI: doi,
+				revision: nextRevision,
+				dateModified: now,
 				updatedAt: now,
-			});
-		}
-		await enqueueItemSearchReprojection(transaction, {
+			})
+			.where(eq(item.key, itemKey));
+		await advanceOpenItemDraftBaseRevision(
+			transaction,
 			itemKey,
-			revision: nextRevision,
-			queuedAt: now,
-		});
-		await supersedeUnleasedPublicationJobs(transaction, {
-			itemKey,
-			provider: "crossref",
-			environment: "test",
-			now,
-		});
-		const job = await savePublicationJob(transaction, {
-			itemKey,
-			provider: "crossref",
-			environment: "test",
-			identifierPolicy: null,
+			record.revision,
+			nextRevision,
+		);
+		await markItemWritebackDirty(transaction, {
 			canonicalRevision: nextRevision,
-			fileRevision: null,
-			reason: "manual_activation",
-			now,
+			dirtyFields: ["DOI"],
+			itemKey,
+			updatedAt: now,
 		});
-		if (!identifier || !job) {
-			throw new Error("Crossref activation could not be saved");
-		}
+	}
+	await enqueueItemSearchReprojection(transaction, {
+		itemKey,
+		revision: nextRevision,
+		queuedAt: now,
+	});
+	await supersedeUnleasedPublicationJobs(transaction, {
+		itemKey,
+		provider: "crossref",
+		environment: "test",
+		now,
+	});
+	const job = await savePublicationJob(transaction, {
+		itemKey,
+		provider: "crossref",
+		environment: "test",
+		identifierPolicy: null,
+		canonicalRevision: nextRevision,
+		fileRevision: null,
+		reason: "manual_activation",
+		now,
+	});
+	if (!identifier || !job) {
+		throw new Error("Crossref activation could not be saved");
+	}
 
-		return receipt({
-			itemKey,
-			doi: identifier.doi,
-			lifecycle: identifier.lifecycle,
-			canonicalRevision: nextRevision,
-			job,
-		});
+	return receipt({
+		itemKey,
+		doi: identifier.doi,
+		lifecycle: identifier.lifecycle,
+		canonicalRevision: nextRevision,
+		job,
 	});
 }
 
@@ -391,19 +434,7 @@ export async function retryCrossrefPublication(
 			})
 			.where(eq(publicationSyncJob.id, job.id))
 			.returning();
-		const [identifier] = await transaction
-			.select()
-			.from(publicationIdentifier)
-			.where(
-				and(
-					eq(publicationIdentifier.itemKey, itemKey),
-					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, "test"),
-					eq(publicationIdentifier.role, "primary"),
-					eq(publicationIdentifier.isCurrent, true),
-				),
-			)
-			.limit(1);
+		const identifier = await readCurrentCrossrefIdentifier(transaction, itemKey);
 		if (!retried || !identifier) {
 			throw new Error("The Crossref retry could not be saved");
 		}
@@ -414,5 +445,73 @@ export async function retryCrossrefPublication(
 			canonicalRevision: retried.canonicalRevision,
 			job: retried,
 		});
+	});
+}
+
+/** Allocate an identifier without publishing metadata or enabling provider jobs. */
+export async function reserveCrossrefDoi(
+	database: Database,
+	itemKey: string,
+	config: PublicationConfig,
+	requestedBy: string,
+) {
+	const crossref = requireCrossrefConfig(config);
+	return database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, itemKey);
+		const [identity] = await transaction
+			.select()
+			.from(itemIdentity)
+			.where(eq(itemIdentity.key, itemKey));
+		if (!identity) throw new PublicationItemNotFoundError(itemKey);
+		if (identity.kind !== "created")
+			throw new CrossrefActivationValidationError(
+				"Only created items can reserve a DOI.",
+			);
+		const [choice] = await transaction
+			.select()
+			.from(itemPublishingChoice)
+			.where(eq(itemPublishingChoice.itemKey, itemKey));
+		if (choice?.choice.route !== "crossref-zenodo")
+			throw new CrossrefActivationValidationError(
+				"Choose Crossref + Zenodo before reserving a DOI.",
+			);
+		const payload = await loadWorkingItemPayload(transaction, itemKey);
+		if (!payload.itemType || payload.parentItem)
+			throw new CrossrefActivationValidationError(
+				"Reserve a DOI on the parent item.",
+			);
+		const existing = await readCurrentCrossrefIdentifier(transaction, itemKey);
+		if (existing)
+			return { doi: existing.doi, lifecycle: existing.lifecycle };
+		classifyCrossrefActivationDoi({
+			DOI: typeof payload.DOI === "string" ? payload.DOI : null,
+			extra: typeof payload.extra === "string" ? payload.extra : null,
+		});
+		const doi = await allocateManagedCrossrefDoi(transaction, {
+			environment: "test",
+			prefix: crossref.prefix,
+			suffixNamespace: crossref.suffixNamespace,
+		});
+		await transaction
+			.insert(publicationTarget)
+			.values({
+				itemKey,
+				provider: "crossref",
+				environment: "test",
+				requestedBy,
+				activatedAt: null,
+			});
+		await transaction
+			.insert(publicationIdentifier)
+			.values({
+				itemKey,
+				registrar: "crossref",
+				environment: "test",
+				role: "primary",
+				doi,
+				ownership: "managed",
+				lifecycle: "reserved",
+			});
+		return { doi, lifecycle: "reserved" as const };
 	});
 }
