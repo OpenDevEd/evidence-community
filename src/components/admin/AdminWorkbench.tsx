@@ -160,6 +160,7 @@ type CollectionLocation = {
 };
 
 type ConfirmDialog = {
+	error?: string;
 	action: () => Promise<void>;
 	confirmLabel?: string;
 	danger?: boolean;
@@ -3056,6 +3057,7 @@ export default function AdminWorkbench({
 						<>
 							<ModalHeader>{confirmDialog?.title}</ModalHeader>
 							<ModalBody>
+								{confirmDialog?.error && <p role="alert" className="text-sm text-danger">{confirmDialog.error}</p>}
 								<p className="text-sm text-black/60 dark:text-white/60">
 									{confirmDialog?.message}
 								</p>
@@ -3076,12 +3078,16 @@ export default function AdminWorkbench({
 									}
 									isLoading={busy}
 									onPress={() => {
-										const action = confirmDialog?.action;
+										const request = confirmDialog;
+										const action = request?.action;
 										if (!action) return;
 										void runBusy(async () => {
 											await action();
 											setConfirmDialog(null);
-										}, confirmDialog?.onError);
+										}, (error) => {
+											request?.onError?.(error);
+											setConfirmDialog(current => current === request ? {...current, error: errorMessage(error)} : current);
+										});
 									}}
 									size="xs"
 									startContent={
