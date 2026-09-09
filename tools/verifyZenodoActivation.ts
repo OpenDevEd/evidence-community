@@ -282,6 +282,9 @@ async function verify(database: Database, client: Client) {
 	await client.query(
 		`UPDATE "item" SET "abstractNote" = NULL WHERE "key" = 'ZENACTAA'`,
 	);
+	await client.query(
+		`INSERT INTO "publicationSyncState" ("itemKey", provider, environment, "identifierPolicy", "lastFailureClass", "lastFailureSummary", "consecutiveFailures") VALUES ('ZENACTAA', 'zenodo', 'sandbox', 'mint-zenodo', 'transient', 'Previous draft creation failed', 1)`,
+	);
 	let emptyDraftCalls = 0;
 	const emptyProvider = successfulZenodoProvider();
 	const emptyOutcomes = await runZenodoPublicationJobsOnce(
@@ -308,14 +311,16 @@ async function verify(database: Database, client: Client) {
 	const draftState = await client.query<{
 		draft: string;
 		identifiers: string;
+		failure: string | null;
 	}>(
-		`SELECT "unpublishedDraftDepositionId" AS draft, (SELECT count(*)::text FROM "publicationIdentifier" WHERE "itemKey" = 'ZENACTAA') AS identifiers FROM "publicationSyncState" WHERE "itemKey" = 'ZENACTAA'`,
+		`SELECT "lastFailureSummary" AS failure, "unpublishedDraftDepositionId" AS draft, (SELECT count(*)::text FROM "publicationIdentifier" WHERE "itemKey" = 'ZENACTAA') AS identifiers FROM "publicationSyncState" WHERE "itemKey" = 'ZENACTAA'`,
 	);
 	assert(
 		draftState.rows[0]?.draft === "90001" &&
 			draftState.rows[0]?.identifiers === "0",
 		"Empty draft was not saved independently of registered identifiers",
 	);
+	assert(draftState.rows[0]?.failure === null, "A recovered draft still reports the previous provider failure");
 	const activatedAgain = await activateZenodoPublication(
 		database,
 		"ZENACTAA",
