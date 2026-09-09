@@ -1197,11 +1197,24 @@ export async function runZenodoPublicationJobsOnce(
 						}),
 				);
 				if (waiting) {
-					await finishPublicationJob(database, {
-						jobId: job.id,
-						workerId,
-						finishedAt: now(),
-						receipt: { status: "waiting", waitingOn: waiting },
+					await database.transaction(async (transaction) => {
+						await lockItemMutation(transaction, job.itemKey);
+						await finishPublicationJob(transaction, {
+							jobId: job.id,
+							workerId,
+							finishedAt: now(),
+							receipt: { status: "waiting", waitingOn: waiting },
+						});
+						await transaction.update(publicationSyncState).set({
+							lastFailureClass: null,
+							lastFailureSummary: null,
+							consecutiveFailures: 0,
+							updatedAt: now(),
+						}).where(and(
+							eq(publicationSyncState.itemKey, job.itemKey),
+							eq(publicationSyncState.provider, "zenodo"),
+							eq(publicationSyncState.environment, config.services.publication.zenodo.environment),
+						));
 					});
 					outcomes.push({ jobId: job.id, status: "waiting" });
 					continue;
