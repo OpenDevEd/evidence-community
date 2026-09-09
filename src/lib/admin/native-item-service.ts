@@ -1698,6 +1698,12 @@ async function discardItemDraftInTransaction(
 				.returning({ itemKey: itemDraft.itemKey })
 		: [null];
 	if (draft && !discarded) throw new ItemDraftConflictError(itemKey);
+	if (discarded) {
+		await transaction.update(itemReview).set({
+			remainingConflicts: sql`${itemReview.remainingConflicts} - ${itemKey}`,
+			revision: sql`${itemReview.revision} + 1`,
+		}).where(sql`${itemReview.remainingConflicts} ? ${itemKey}`);
+	}
 	let stagedPrivatePaths: string[] = [];
 	if ((!published || removeFileDraft) && staged) {
 		await transaction.delete(itemFileDraft).where(eq(itemFileDraft.itemKey, itemKey));

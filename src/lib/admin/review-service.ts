@@ -432,7 +432,9 @@ export async function approveItemReview(
 					(current.find(({ key }) => key === record.itemKey)
 						?.revision ?? 0) !== record.baseRevision
 				)
-					throw new ItemDraftConflictError(record.itemKey);
+					throw new AdminValidationError(
+						`${record.itemKey} changed after submission. Withdraw or return this review, then submit it again.`,
+					);
 			}
 			const { remainingConflicts, indexingKeys } = await publishReviewRecords(transaction, locked, config);
 			const fileResults = [];

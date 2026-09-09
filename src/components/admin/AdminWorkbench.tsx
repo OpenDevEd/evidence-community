@@ -1314,6 +1314,7 @@ export default function AdminWorkbench({
 				abandonPendingDraft(detail.key);
 				await saveQueue.current;
 				await discardAdminDraft(detail.key);
+				await mutate(["admin-reviews", detail.parentItem ?? detail.key]);
 				if (detail.published) {
 					await loadDetail(detail.key);
 				} else {
@@ -1754,6 +1755,9 @@ export default function AdminWorkbench({
 			request.keys.length > 0
 				? (await mutateAdminItems(request)).results
 				: [];
+		if (request.action === "remove") {
+			await mutate(key => Array.isArray(key) && key[0] === "admin-reviews");
+		}
 		const results = [...localResults, ...remoteResults];
 		const indexingCompletion = searchIndex.trackAndWait(
 			remoteResults.flatMap(({ indexingReceipts }) => indexingReceipts),

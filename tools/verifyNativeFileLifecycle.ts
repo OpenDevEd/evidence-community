@@ -51,6 +51,7 @@ import {
 import { buildPublicationFileManifest } from "../src/lib/publication/record-adapter";
 import {
 	createNativeItemDraft,
+	discardItemDraft,
 	getItemDraft as getNativeItemDraft,
 	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
 	openItemDraft as openNativeItemDraft,
@@ -467,6 +468,49 @@ async function verify() {
         assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");
         const activationJobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, noFileDraft.itemKey));
         assert(activationJobs.length === 2 && activationJobs.every(job => job.processedAt === null), "Approval failed to queue both providers without files");
+
+        for (const removeChild of [false, true]) {
+            const root = await createNativeItemDraft(db, {itemType: "Report", title: "Conflict recovery"});
+            createdKeys.push(root.itemKey);
+            await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, root.itemKey));
+            await publishNativeItemDraft(db, root.itemKey);
+            let target = root;
+            if (removeChild) {
+                target = await createNativeItemDraft(db, {itemType: "Note", note: "Initial note", parentItem: root.itemKey});
+                createdKeys.push(target.itemKey);
+                await publishNativeItemDraft(db, target.itemKey);
+            }
+            const field = removeChild ? "note" : "title";
+            const opened = await openNativeItemDraft(db, target.itemKey);
+            const submission = await submitItemReview(db, root.itemKey, noFileActor);
+            await saveNativeItemDraft(db, {itemKey: target.itemKey, expectedDraftGeneration: opened.generation, expectedDraftRevision: opened.draftRevision, expectedPayload: opened.payload, payload: {...opened.payload, [field]: "Later working value"}});
+            const correctedSubmission = await correctItemReview(db, {reviewId: submission.id, expectedRevision: submission.revision, records: submission.snapshot.records.filter(record => record.itemKey === target.itemKey).map(record => ({...record, payload: {...record.payload, [field]: "Approved correction"}}))}, {userId: "recovery-editor", role: "editor"});
+            const approval = await approveItemReview(db, reviewStorage, {reviewId: submission.id, expectedRevision: correctedSubmission.revision, publicationTags: PUBLICATION_TAGS}, {userId: "recovery-editor", role: "editor"}, reviewConfig);
+            assert(approval.review.remainingConflicts[target.itemKey]?.includes(field), "Recovery fixture did not create a conflict");
+            if (removeChild) await removeNativeItem(db, target.itemKey);
+            else await discardItemDraft(db, target.itemKey);
+            const [cleared] = await db.select().from(itemReview).where(eq(itemReview.id, submission.id));
+            assert(!cleared?.remainingConflicts[target.itemKey], "Discarded edits left a conflict blocking resubmission");
+            assert(cleared.revision === approval.review.revision + 1, "Conflict removal did not invalidate the old review revision");
+            const resubmission = await submitItemReview(db, root.itemKey, noFileActor);
+            await resolveItemReview(db, {reviewId: resubmission.id, expectedRevision: resubmission.revision, action: "withdrawn"}, noFileActor);
+        }
+
+        const staleRoot = await createNativeItemDraft(db, {itemType: "Report", title: "Stale review recovery"});
+        createdKeys.push(staleRoot.itemKey);
+        await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, staleRoot.itemKey));
+        await publishNativeItemDraft(db, staleRoot.itemKey);
+        const staleSubmission = await submitItemReview(db, staleRoot.itemKey, noFileActor);
+        const citing = await createNativeItemDraft(db, {itemType: "Report", title: "New citation", links: {cites: [staleRoot.itemKey], related: []}});
+        createdKeys.push(citing.itemKey);
+        await publishNativeItemDraft(db, citing.itemKey);
+        let staleReviewRejected = false;
+        try { await approveItemReview(db, reviewStorage, {reviewId: staleSubmission.id, expectedRevision: staleSubmission.revision, publicationTags: PUBLICATION_TAGS}, {userId: "recovery-editor", role: "editor"}, reviewConfig); }
+        catch (error) { staleReviewRejected = error instanceof AdminValidationError; }
+        assert(staleReviewRejected, "Stale approval did not return the review recovery error");
+        const [stillPending] = await db.select().from(itemReview).where(eq(itemReview.id, staleSubmission.id));
+        assert(stillPending?.state === "pending", "Rejected stale approval changed the submitted version");
+        await resolveItemReview(db, {reviewId: staleSubmission.id, expectedRevision: staleSubmission.revision, action: "withdrawn"}, noFileActor);
 
         const imported = await createNativeItemDraft(db, { itemType: "Report", title: "Imported restoration" });
         createdKeys.push(imported.itemKey);
