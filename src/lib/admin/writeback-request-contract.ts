@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const sourceKeyList = z.array(z.string().trim().min(1).max(64)).max(100);
+const sourceKey = z.string().trim().min(1).max(64);
+const sourceKeyList = z.array(sourceKey).max(100);
+
+export function readAdminSourceKey(searchParams: URLSearchParams) {
+	return sourceKey.parse(searchParams.get("source"));
+}
 
 /** Body of `POST /api/admin/items/[key]/unpublish`. */
 export const adminUnpublishRequestSchema = z

@@ -147,10 +147,24 @@ async function removeBatchItem(
 	}
 }
 
+async function mutateBatchItem(
+	request: AdminItemBatchRequest,
+	key: string,
+	sourceConnectionKey: string,
+	dependencies: BatchDependencies,
+): Promise<AdminItemBatchResult> {
+	if (request.action === "remove") return removeBatchItem(key, sourceConnectionKey, dependencies);
+	const assignment = await assignItemDraftToCollection(
+		dependencies.db, key, request.collectionKey, dependencies.writebackPolicyOptions ?? {},
+	);
+	return {indexingReceipts: [], key, outcome: assignment.changed ? "changed" : "unchanged"};
+}
+
 export async function runAdminItemBatch(
 	request: AdminItemBatchRequest,
-	{ db, removePrivateFiles, writebackPolicyOptions = {} }: BatchDependencies,
+	dependencies: BatchDependencies,
 ): Promise<AdminItemBatchExecution> {
+	const { db } = dependencies;
 	if (request.action === "assignCollection") {
 		await assertAssignableCollection(db, request.collectionKey);
 	}
@@ -189,25 +203,7 @@ export async function runAdminItemBatch(
 		}
 		try {
 
-			if (request.action === "remove") {
-				results.push(await removeBatchItem(key, identity.sourceConnectionKey, {
-					db,
-					removePrivateFiles,
-				}));
-				continue;
-			}
-
-			const assignment = await assignItemDraftToCollection(
-				db,
-				key,
-				request.collectionKey,
-				writebackPolicyOptions,
-			);
-			results.push({
-				indexingReceipts: [],
-				key,
-				outcome: assignment.changed ? "changed" : "unchanged",
-			});
+			results.push(await mutateBatchItem(request, key, identity.sourceConnectionKey, dependencies));
 		} catch (error) {
 			const retryableDependencyFailure =
 				error instanceof ItemHasChildrenError ||

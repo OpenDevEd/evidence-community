@@ -1,3 +1,4 @@
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
 import type {
@@ -40,28 +41,7 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-const config = {
-	identity: { baseUrl: "https://library.example.org" },
-	services: {
-		publication: {
-			crossref: { enabled: true, environment: "test" },
-			zenodo: {
-				enabled: true,
-				environment: "sandbox",
-				token: "sandbox-token",
-				defaultIdentifierPolicy: "reuse-crossref",
-				accessRight: "open",
-				license: "cc-by-4.0",
-			},
-			worker: {
-				batchSize: 25,
-				leaseSeconds: 900,
-				retryLimit: 8,
-				nightlyUtcTime: "02:00",
-			},
-		},
-	},
-} as unknown as LibraryServerConfig;
+const config = publicationTestConfig();
 
 async function seedParent(
 	client: Client,

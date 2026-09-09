@@ -1,3 +1,4 @@
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { savePublicationJob } from "../src/lib/publication/queue";
 import { createNativeItemDraft, publishItemDraft } from "../src/lib/admin/native-item-service";
 import { setItemPublishingChoice } from "../src/lib/admin/review-service";
@@ -28,38 +29,7 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-const config = {
-	identity: { baseUrl: "https://library.example.org" },
-	services: {
-		publication: {
-			crossref: {
-				enabled: true,
-				environment: "test",
-				loginId: "test-login",
-				depositorName: "Evidence Library",
-				email: "doi@example.org",
-				password: "test-password",
-				registrant: "Evidence Library",
-				prefix: "10.5555",
-				suffixNamespace: "library.",
-			},
-			zenodo: {
-				enabled: false,
-				environment: "sandbox",
-				defaultIdentifierPolicy: "reuse-crossref",
-				accessRight: "open",
-				license: "cc-by-4.0",
-			},
-			worker: {
-				batchSize: 25,
-				leaseSeconds: 900,
-				retryLimit: 2,
-				nightlyUtcTime: "02:00",
-			},
-		},
-	},
-	sources: [],
-} as unknown as LibraryServerConfig;
+const config = publicationTestConfig({zenodoEnabled: false, retryLimit: 2});
 
 async function seedItem(
 	client: Client,

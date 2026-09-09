@@ -26,7 +26,7 @@ import {
 	savePublicationJob,
 	supersedeUnleasedPublicationJobs,
 } from "./queue";
-import { readPublicationRepositorySnapshot } from "./repository";
+import { readPublicationRepositorySnapshot, type PublicationRepositorySnapshot } from "./repository";
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
@@ -171,30 +171,7 @@ export async function activateCrossrefPublication(
 	);
 }
 
-/** Saves activation and its job alongside the approved public records. No provider calls. */
-export async function activateCrossrefPublicationInTransaction(
-	transaction: DatabaseTransaction,
-	itemKey: string,
-	config: PublicationConfig,
-	requestedBy: string,
-): Promise<CrossrefActivationReceipt> {
-	const crossref = requireCrossrefConfig(config);
-	await lockItemMutation(transaction, itemKey);
-	const snapshot = await readPublicationRepositorySnapshot(
-		transaction,
-		itemKey,
-		"test",
-	);
-	const record = snapshot.record;
-	if (!record) throw new PublicationItemNotFoundError(itemKey);
-	const managedIdentifier = snapshot.identifiers.find(
-		(candidate) =>
-			candidate.registrar === "crossref" &&
-			candidate.environment === "test" &&
-			candidate.role === "primary" &&
-			candidate.ownership === "managed",
-	);
-
+function existingCrossrefActivation(snapshot: PublicationRepositorySnapshot, itemKey: string, managedIdentifier: (typeof publicationIdentifier.$inferSelect) | undefined) {
 	const existingTarget = snapshot.targets.find(
 		(target) =>
 			target.provider === "crossref" &&
@@ -202,46 +179,44 @@ export async function activateCrossrefPublicationInTransaction(
 			target.deactivatedAt === null &&
 			target.activatedAt !== null,
 	);
-	if (existingTarget) {
-		const job = snapshot.jobs.find(
-			(candidate) =>
-				candidate.provider === "crossref" &&
-				candidate.environment === "test" &&
-				candidate.supersededAt === null,
-		);
-		if (!managedIdentifier || !job) {
-			throw new Error("The saved Crossref activation is incomplete");
-		}
-		return receipt({
-			itemKey,
-			doi: managedIdentifier.doi,
-			lifecycle: managedIdentifier.lifecycle,
-			canonicalRevision: job.canonicalRevision,
-			job,
-		});
+	if (!existingTarget) return null;
+	const job = snapshot.jobs.find(
+		(candidate) =>
+			candidate.provider === "crossref" &&
+			candidate.environment === "test" &&
+			candidate.supersededAt === null,
+	);
+	if (!managedIdentifier || !job) {
+		throw new Error("The saved Crossref activation is incomplete");
 	}
+	return receipt({
+		itemKey,
+		doi: managedIdentifier.doi,
+		lifecycle: managedIdentifier.lifecycle,
+		canonicalRevision: job.canonicalRevision,
+		job,
+	});
 
-	if (record.deleted === 1) {
-		throw new CrossrefActivationValidationError(
-			"Restore this record before publishing it.",
-		);
-	}
-	if (record.parentItem) {
-		throw new CrossrefActivationValidationError(
-			"Only parent records can receive a Crossref DOI.",
-		);
-	}
+}
 
+async function resolveActivationDoi(
+	transaction: DatabaseTransaction,
+	record: typeof item.$inferSelect,
+	attachments: PublicationRepositorySnapshot["attachments"],
+	crossref: ReturnType<typeof requireCrossrefConfig>,
+	managedDoi: string | undefined,
+) {
+	const itemKey = record.key;
 	const classification = classifyCrossrefActivationDoi(
 		{
 			DOI: record.DOI,
 			extra: record.extra,
-			attachments: snapshot.attachments,
+			attachments: attachments,
 		},
-		managedIdentifier?.doi ?? null,
+		managedDoi ?? null,
 	);
 	const doi =
-		managedIdentifier?.doi ??
+		managedDoi ??
 		(classification.kind === "reuse"
 			? classification.doi
 			: await allocateManagedCrossrefDoi(transaction, {
@@ -269,6 +244,49 @@ export async function activateCrossrefPublicationInTransaction(
 			existingIdentifier.itemKey,
 		);
 	}
+
+	return doi;
+}
+
+/** Saves activation and its job alongside the approved public records. No provider calls. */
+export async function activateCrossrefPublicationInTransaction(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	config: PublicationConfig,
+	requestedBy: string,
+): Promise<CrossrefActivationReceipt> {
+	const crossref = requireCrossrefConfig(config);
+	await lockItemMutation(transaction, itemKey);
+	const snapshot = await readPublicationRepositorySnapshot(
+		transaction,
+		itemKey,
+		"test",
+	);
+	const record = snapshot.record;
+	if (!record) throw new PublicationItemNotFoundError(itemKey);
+	const managedIdentifier = snapshot.identifiers.find(
+		(candidate) =>
+			candidate.registrar === "crossref" &&
+			candidate.environment === "test" &&
+			candidate.role === "primary" &&
+			candidate.ownership === "managed",
+	);
+
+	const existing = existingCrossrefActivation(snapshot, itemKey, managedIdentifier);
+	if (existing) return existing;
+
+	if (record.deleted === 1) {
+		throw new CrossrefActivationValidationError(
+			"Restore this record before publishing it.",
+		);
+	}
+	if (record.parentItem) {
+		throw new CrossrefActivationValidationError(
+			"Only parent records can receive a Crossref DOI.",
+		);
+	}
+
+	const doi = await resolveActivationDoi(transaction, record, snapshot.attachments, crossref, managedIdentifier?.doi);
 
 	const now = new Date();
 	const doiChanged = record.DOI !== doi;

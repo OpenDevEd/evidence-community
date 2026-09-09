@@ -1,4 +1,5 @@
 "use client";
+import { editableCollectionSourceKeys } from "@/lib/admin/item-collection-policy";
 
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, ArrowDown01Icon, ArrowUp01Icon, ArrowUpDownIcon, Calendar01Icon, DatabaseIcon, DragDropVerticalIcon, FileAttachmentIcon, Folder01Icon, LayoutThreeColumnIcon, LayoutThreeRowIcon, LockIcon, RotateLeft01Icon, Tag01Icon, Tick01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
@@ -635,16 +636,7 @@ export function AdminItemTable({
 		() => new Map(sources.map(({ key, label }) => [key, label])),
 		[sources],
 	);
-	const editableSourceKeys = useMemo(
-		() =>
-			new Set(
-				sources
-					.filter(({ readOnly }) => !readOnly)
-					.map(({ key }) => key),
-			),
-		[sources],
-	);
-
+	const editableSourceKeys = useMemo(() => editableCollectionSourceKeys(sources), [sources]);
 	const columns = useMemo<ColumnDef<AdminTableItem>[]>(
 		() => [
 			{

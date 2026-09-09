@@ -10,30 +10,18 @@ vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: vi.fn(async () => ({ sources: [] })),
 }));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(async () => ({})) }));
-vi.mock("@/lib/admin/http", async () => {
-	const { ZodError } = await import("zod");
-	return {
-		ADMIN_RESPONSE_HEADERS: { "Cache-Control": "no-store" },
-		adminErrorResponse: vi.fn(
-			(error: unknown) =>
-				new Response(JSON.stringify({ error: String(error) }), {
-					status: error instanceof ZodError ? 400 : 500,
-				}),
-		),
-		readAdminJson: vi.fn(async (request: NextRequest) => request.json()),
-		readOptionalAdminJson: vi.fn(async (request: NextRequest) => {
-			const text = await request.text();
-			return text.trim() ? JSON.parse(text) : {};
-		}),
-		requireAdminPublisher: vi.fn(async () => null),
-		requireAdminSession: vi.fn(async () => null),
-	};
-});
-vi.mock("@/lib/admin/native-item-service", () => ({
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/admin/access", async importOriginal => ({
+	...await importOriginal(),
+	authorizeAdminSession: vi.fn(async () => ({status: "authorized", session: {role: "owner", userId: "owner"}})),
+}));
+vi.mock("@/lib/admin/native-item-service", async importOriginal => ({
+	...await importOriginal(),
 	publishItemDraftWithContext,
 	unpublishNativeItemWithOutcome,
 }));
-vi.mock("@/lib/admin/source-writeback-service", () => ({
+vi.mock("@/lib/admin/source-writeback-service", async importOriginal => ({
+	...await importOriginal(),
 	resolveAdminSourceWritebackConflict,
 	setAdminItemWritebackSources,
 }));

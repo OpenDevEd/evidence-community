@@ -35,3 +35,7 @@ export function editableItemCollectionSourceKeysForItems(
 			: [],
 	);
 }
+
+export function editableCollectionSourceKeys(sources: readonly { key: string; readOnly: boolean }[]) {
+	return new Set(sources.filter(({ readOnly }) => !readOnly).map(({ key }) => key));
+}

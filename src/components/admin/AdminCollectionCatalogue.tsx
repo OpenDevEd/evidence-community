@@ -22,7 +22,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 import { SourceProviderIcon } from "./SourceProviderIcon";
-import { itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
+import { editableCollectionSourceKeys, itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
@@ -536,16 +536,7 @@ export function AdminCollectionCatalogue({
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query.trim(), 250);
 	const [view, setView] = useState<"active" | "deleted">("active");
-	const editableSourceKeys = useMemo(
-		() =>
-			new Set(
-				sources
-					.filter(({ readOnly }) => !readOnly)
-					.map(({ key }) => key),
-			),
-		[sources],
-	);
-	const [expandedSources, setExpandedSources] = useState(
+	const editableSourceKeys = useMemo(() => editableCollectionSourceKeys(sources), [sources]);	const [expandedSources, setExpandedSources] = useState(
 		() => new Set([NATIVE_SOURCE_CONNECTION_KEY]),
 	);
 	const [expandedCollections, setExpandedCollections] = useState<Set<string>>(

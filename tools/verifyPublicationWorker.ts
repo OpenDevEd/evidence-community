@@ -1,3 +1,4 @@
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
 import type {
@@ -52,39 +53,7 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-const config = {
-	identity: { baseUrl: "https://library.example.org" },
-	services: {
-		publication: {
-			crossref: {
-				enabled: true,
-				environment: "test",
-				loginId: "test-login",
-				depositorName: "Evidence Library",
-				email: "doi@example.org",
-				password: "test-password",
-				registrant: "Evidence Library",
-				prefix: "10.5555",
-				suffixNamespace: "library.",
-			},
-			zenodo: {
-				enabled: true,
-				environment: "sandbox",
-				token: "sandbox-token",
-				defaultIdentifierPolicy: "reuse-crossref",
-				accessRight: "open",
-				license: "cc-by-4.0",
-			},
-			worker: {
-				batchSize: 25,
-				leaseSeconds: 900,
-				retryLimit: 8,
-				nightlyUtcTime: "23:59",
-			},
-		},
-	},
-	sources: [],
-} as unknown as LibraryServerConfig;
+const config = publicationTestConfig({nightlyUtcTime: "23:59"});
 
 async function seedRecord(client: Client) {
 	await client.query(
