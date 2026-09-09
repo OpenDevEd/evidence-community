@@ -6,7 +6,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { filePublicationJson } from "@/lib/admin/file-projection";
 import { publishNativePdf } from "@/lib/admin/native-file-service";
@@ -23,7 +23,7 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

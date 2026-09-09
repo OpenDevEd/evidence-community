@@ -5,14 +5,14 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { adminItemBatchRequestSchema } from "@/lib/admin/item-batch-contract";
 import { runAdminItemBatch } from "@/lib/admin/item-batch-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
 export async function POST(request: NextRequest) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

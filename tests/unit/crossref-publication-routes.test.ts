@@ -23,6 +23,7 @@ vi.mock("@/lib/admin/http", async () => {
 		ADMIN_RESPONSE_HEADERS: { "Cache-Control": "private, no-store" },
 		adminErrorResponse: (error: unknown) =>
 			NextResponse.json({ error: String(error) }, { status: 500 }),
+		requireAdminPublisher: vi.fn(async () => null),
 		requireAdminSession: () => null,
 	};
 });

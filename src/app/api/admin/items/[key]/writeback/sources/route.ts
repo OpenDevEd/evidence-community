@@ -6,7 +6,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { setAdminItemWritebackSources } from "@/lib/admin/source-writeback-service";
 import { adminWritebackSourcesRequestSchema } from "@/lib/admin/writeback-request-contract";
@@ -15,7 +15,7 @@ export async function PUT(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

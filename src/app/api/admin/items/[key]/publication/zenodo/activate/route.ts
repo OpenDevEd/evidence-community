@@ -9,7 +9,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readOptionalAdminJson,
-	requireAdminSession,
+	requireAdminPublisher,
 } from "@/lib/admin/http";
 import { activateZenodoPublication } from "@/lib/publication/zenodo-activation-service";
 import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view-service";
@@ -22,7 +22,7 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = await requireAdminSession(request);
+	const denied = await requireAdminPublisher(request);
 	if (denied) return denied;
 
 	try {

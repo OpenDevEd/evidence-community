@@ -10,12 +10,14 @@ export const ADMIN_SESSION_COOKIE = "__Host-evidence_library_admin";
 export const ADMIN_DEVELOPMENT_SESSION_COOKIE = "evidence_library_admin";
 export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
 
-const adminRoleSchema = z.enum(["owner", "editor"]);
+const adminRoleSchema = z.enum(["owner", "editor", "creator"]);
 
 export const ADMIN_CONTENT_PERMISSION = "content:manage";
+export const ADMIN_PUBLISH_PERMISSION = "content:publish";
 export const ADMIN_LIBRARY_PERMISSION = "library:manage";
 
 export type AdminPermission =
+	| typeof ADMIN_PUBLISH_PERMISSION
 	| typeof ADMIN_CONTENT_PERMISSION
 	| typeof ADMIN_LIBRARY_PERMISSION;
 export type AdminRole = z.infer<typeof adminRoleSchema>;
@@ -45,7 +47,8 @@ export type AdminSession = AdminSessionIdentity & { expiresAt: number };
 export type AdminSessionAuthorization =
 	| { session: AdminSession; status: "authorized" }
 	| { session: AdminSession; status: "forbidden" }
-	| { status: "unauthenticated" };
+	| { status: "unauthenticated" }
+	| { status: "unavailable" };
 
 export type AdminAccessConfig = {
 	convexSiteUrl: string;
@@ -64,7 +67,8 @@ export function adminRoleHasPermission(
 	role: AdminRole,
 	permission: AdminPermission,
 ) {
-	return permission === ADMIN_CONTENT_PERMISSION || role === "owner";
+	return permission === ADMIN_CONTENT_PERMISSION || role === "owner" ||
+		(permission === ADMIN_PUBLISH_PERMISSION && role === "editor");
 }
 
 export function adminSessionCookieOptions(environment = process.env.NODE_ENV) {
@@ -149,23 +153,34 @@ export function verifyAdminSessionToken(
 	}
 }
 
-async function getAdminSession(
-	token: string | undefined,
-	config?: AdminSessionSigningConfig,
-) {
-	config ??= await getAdminAccessConfig();
-	return verifyAdminSessionToken(token, config);
-}
-
 export async function authorizeAdminSession(
-	token: string | undefined,
-	permission: AdminPermission,
-	config?: AdminSessionSigningConfig,
+  token: string | undefined,
+  permission: AdminPermission,
+  config?: AdminAccessConfig,
 ): Promise<AdminSessionAuthorization> {
-	const session = await getAdminSession(token, config);
-	if (!session) return { status: "unauthenticated" };
-	if (!adminRoleHasPermission(session.role, permission)) {
-		return { session, status: "forbidden" };
-	}
-	return { session, status: "authorized" };
+  config ??= await getAdminAccessConfig();
+  const signedSession = verifyAdminSessionToken(token, config);
+  if (!signedSession) return { status: "unauthenticated" };
+  let response: Response;
+  try {
+    response = await fetch(new URL("/api/v1/evidence-libraries/admin-session/check", config.convexSiteUrl), {
+      method: "POST", cache: "no-store", signal: AbortSignal.timeout(5_000),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.machineCredential}` },
+      body: JSON.stringify({ libraryId: config.libraryId, clerkUserId: signedSession.clerkUserId }),
+    });
+  } catch (error) {
+    console.error("Admin access check unavailable", { libraryId: config.libraryId, error });
+    return { status: "unavailable" };
+  }
+  if (!response.ok) {
+    if (response.status !== 403) console.error("Admin access check rejected", { libraryId: config.libraryId, status: response.status });
+    return { status: response.status === 403 ? "unauthenticated" : "unavailable" };
+  }
+  const result = z.object({ role: adminRoleSchema }).safeParse(await response.json().catch(() => null));
+  if (!result.success) {
+    console.error("Invalid admin access response", { libraryId: config.libraryId });
+    return { status: "unavailable" };
+  }
+  const session = { ...signedSession, role: result.data.role };
+  return { session, status: adminRoleHasPermission(session.role, permission) ? "authorized" : "forbidden" };
 }
