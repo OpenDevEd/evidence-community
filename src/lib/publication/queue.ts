@@ -493,6 +493,26 @@ export async function claimNextPublicationJob(
 	return null;
 }
 
+export type PublicationJobResult =
+	| { status: "finished"; receipt: Record<string, unknown> }
+	| { status: "deferred"; delayMs: number; error: string; deadLetter: boolean };
+
+export function settlePublicationJob(
+	database: Executor,
+	input: { jobId: number; workerId: string; settledAt: Date; jobResult: PublicationJobResult },
+) {
+	const { jobId, workerId, settledAt, jobResult } = input;
+	if (jobResult.status === "finished") {
+		return finishPublicationJob(database, {
+			jobId, workerId, finishedAt: settledAt, receipt: jobResult.receipt,
+		});
+	}
+	return deferPublicationJob(database, {
+		jobId, workerId, deferredAt: settledAt,
+		delayMs: jobResult.delayMs, error: jobResult.error, deadLetter: jobResult.deadLetter,
+	});
+}
+
 export async function finishPublicationJob(
 	database: Executor,
 	input: {

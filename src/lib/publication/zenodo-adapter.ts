@@ -41,6 +41,8 @@ import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
 	deferPublicationJob,
+	settlePublicationJob,
+	type PublicationJobResult,
 	enqueueItemSearchReprojection,
 	enqueuePublicationJobsForItem,
 	finishPublicationJob,
@@ -900,14 +902,7 @@ async function settleZenodoState(
 		previousState: ProviderSyncState | undefined;
 		identifierPolicy: ZenodoIdentifierPolicy;
 		settledAt: Date;
-		jobResult:
-			| { status: "finished"; receipt: Record<string, unknown> }
-			| {
-					status: "deferred";
-					delayMs: number;
-					error: string;
-					deadLetter: boolean;
-			  };
+		jobResult: PublicationJobResult;
 	},
 ) {
 	await database.transaction(async (transaction) => {
@@ -972,23 +967,7 @@ async function settleZenodoState(
 				queuedAt: input.settledAt,
 			});
 		}
-		if (input.jobResult.status === "finished") {
-			await finishPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				finishedAt: input.settledAt,
-				receipt: input.jobResult.receipt,
-			});
-		} else {
-			await deferPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				deferredAt: input.settledAt,
-				delayMs: input.jobResult.delayMs,
-				error: input.jobResult.error,
-				deadLetter: input.jobResult.deadLetter,
-			});
-		}
+		await settlePublicationJob(transaction, input);
 	});
 }
 
