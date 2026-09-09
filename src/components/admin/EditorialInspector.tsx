@@ -1,18 +1,17 @@
 "use client";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
-import { type ComponentProps, useRef, useState } from "react";
-import { toast } from "sonner";
+import type { ComponentProps } from "react";
 import { AdminInspector } from "./AdminInspector";
 import { useItemReview } from "./useItemReview";
 import { useReviewVersion } from "./useReviewVersion";
+import { useReviewDraftConflicts } from "./useReviewDraftConflicts";
 import { useAdminSession } from "./AdminSessionProvider";
-import { updateAdminReview } from "./admin-api";
 import { useReviewCorrections } from "./useReviewCorrections";
 import {
 	useReviewLinkPicker,
 	type ReviewLinkPicker,
 } from "./useReviewLinkPicker";
-import type { AdminItemLinkKind } from "@/lib/admin/types";
+import type { AdminItemDetail, AdminItemLinkKind } from "@/lib/admin/types";
 import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
 import {
@@ -30,18 +29,20 @@ type Props = ComponentProps<typeof AdminInspector> & {
 };
 
 export function EditorialInspector(props: Props) {
+	if (!props.detail) return <AdminInspector {...props} />;
 	return (
 		<ReviewInspector
-			key={`${props.detail?.key ?? "empty"}:${props.reviewQueue}`}
+			key={`${props.detail.key}:${props.reviewQueue}`}
 			{...props}
+			detail={props.detail}
 		/>
 	);
 }
 
-function ReviewInspector(props: Props) {
-	const key = props.detail?.key ?? "";
+function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
+	const key = props.detail.key;
 	const { snapshot, pending, refresh, error } = useItemReview(
-		props.detail?.parentItem ?? props.detail?.key,
+		props.detail.parentItem ?? props.detail.key,
 	);
 	const session = useAdminSession();
 	const corrections = useReviewCorrections(snapshot, refresh);
@@ -55,37 +56,8 @@ function ReviewInspector(props: Props) {
 		void refresh();
 		return props.onPublicationChanged(receipts);
 	};
-	const conflictRef = useRef<HTMLDivElement>(null);
-	const [resolving, setResolving] = useState(false);
-	const conflictFields = snapshot?.remainingConflicts[key] ?? [];
-	const hasConflict = conflictFields.length > 0;
-	const resolveConflicts = async (
-		choices: Record<string, "draft" | "published">,
-	) => {
-		const draft = props.detail?.draft;
-		if (!snapshot || !draft) return;
-		setResolving(true);
-		try {
-			await updateAdminReview(snapshot.reviewId, {
-				action: "resolve-conflicts",
-				expectedRevision: snapshot.reviewRevision,
-				itemKey: key,
-				generation: draft.generation,
-				draftRevision: draft.draftRevision,
-				choices,
-			});
-			changed();
-			toast.success("Draft conflicts resolved");
-		} catch (error) {
-			toast.error(
-				error instanceof Error
-					? error.message
-					: "Could not resolve conflicts",
-			);
-		} finally {
-			setResolving(false);
-		}
-	};
+	const {ref: conflictRef, ...conflicts} = useReviewDraftConflicts(snapshot, props.detail, changed);
+	const hasConflict = conflicts.fields.length > 0;
 	const version = useReviewVersion(snapshot, {
 		initialSubmitted: props.reviewQueue,
 		itemKey: key,
@@ -124,15 +96,9 @@ function ReviewInspector(props: Props) {
 	const draftNotice = (
 		<ReviewDraftNotice
 			notice={notice}
-			conflictCount={conflictFields.length}
+			conflictCount={conflicts.fields.length}
 			feedback={feedback}
-			onConflicts={() => {
-				conflictRef.current?.scrollIntoView({
-					block: "start",
-					behavior: "smooth",
-				});
-				conflictRef.current?.focus({ preventScroll: true });
-			}}
+			onConflicts={conflicts.focus}
 		/>
 	);
 
@@ -151,15 +117,16 @@ function ReviewInspector(props: Props) {
 							className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
 						>
 							<DraftConflict
-								key={`${snapshot?.reviewRevision}:${props.detail?.draft?.draftRevision}`}
+								key={`${snapshot?.reviewRevision}:${props.detail.draft?.draftRevision}`}
 								payload={props.payload}
-								published={props.detail?.published ?? {}}
-								conflictFields={conflictFields}
+								published={props.detail.published ?? {}}
+								conflictFields={conflicts.fields}
 								disabled={
-									resolving || props.saveState === "saving"
+									conflicts.resolving ||
+									props.saveState === "saving"
 								}
 								onResolve={(choices) => {
-									void resolveConflicts(choices);
+									void conflicts.resolve(choices);
 								}}
 							/>
 						</div>
