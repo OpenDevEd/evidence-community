@@ -54,7 +54,7 @@ type PublicationConfig = Pick<
 export type CrossrefActivationReceipt = {
 	itemKey: string;
 	provider: "crossref";
-	environment: "test";
+	environment: "test" | "production";
 	doi: string;
 	lifecycle: "reserved" | "verified";
 	canonicalRevision: number;
@@ -94,7 +94,7 @@ function requireCrossrefConfig(config: PublicationConfig) {
 	const crossref = config.services.publication.crossref;
 	if (!crossref.enabled) {
 		throw new CrossrefActivationConfigurationError(
-			"Crossref test publishing is not configured for this library.",
+			"Crossref publishing is not configured for this library.",
 		);
 	}
 	if (
@@ -107,7 +107,7 @@ function requireCrossrefConfig(config: PublicationConfig) {
 		!crossref.suffixNamespace
 	) {
 		throw new CrossrefActivationConfigurationError(
-			"Crossref test publishing is missing required account settings.",
+			"Crossref publishing is missing required account settings.",
 		);
 	}
 	return {
@@ -132,7 +132,7 @@ function receipt(input: {
 	return {
 		itemKey: input.itemKey,
 		provider: "crossref",
-		environment: "test",
+		environment: input.job.environment === "production" ? "production" : "test",
 		doi: input.doi,
 		lifecycle: input.lifecycle,
 		canonicalRevision: input.canonicalRevision,
@@ -173,14 +173,14 @@ export async function activateCrossrefPublicationInTransaction(
 	const snapshot = await readPublicationRepositorySnapshot(
 		transaction,
 		itemKey,
-		"test",
+		crossref.environment,
 	);
 	const record = snapshot.record;
 	if (!record) throw new PublicationItemNotFoundError(itemKey);
 	const managedIdentifier = snapshot.identifiers.find(
 		(candidate) =>
 			candidate.registrar === "crossref" &&
-			candidate.environment === "test" &&
+			candidate.environment === crossref.environment &&
 			candidate.role === "primary" &&
 			candidate.ownership === "managed",
 	);
@@ -188,7 +188,7 @@ export async function activateCrossrefPublicationInTransaction(
 	const existingTarget = snapshot.targets.find(
 		(target) =>
 			target.provider === "crossref" &&
-			target.environment === "test" &&
+			target.environment === crossref.environment &&
 			target.deactivatedAt === null &&
 			target.activatedAt !== null,
 	);
@@ -196,7 +196,7 @@ export async function activateCrossrefPublicationInTransaction(
 		const job = snapshot.jobs.find(
 			(candidate) =>
 				candidate.provider === "crossref" &&
-				candidate.environment === "test" &&
+				candidate.environment === crossref.environment &&
 				candidate.supersededAt === null,
 		);
 		if (!managedIdentifier || !job) {
@@ -235,7 +235,7 @@ export async function activateCrossrefPublicationInTransaction(
 		(classification.kind === "reuse"
 			? classification.doi
 			: await allocateManagedCrossrefDoi(transaction, {
-					environment: "test",
+					environment: crossref.environment,
 					prefix: crossref.prefix,
 					suffixNamespace: crossref.suffixNamespace,
 				}));
@@ -248,7 +248,7 @@ export async function activateCrossrefPublicationInTransaction(
 		.where(
 			and(
 				eq(publicationIdentifier.registrar, "crossref"),
-				eq(publicationIdentifier.environment, "test"),
+				eq(publicationIdentifier.environment, crossref.environment),
 				eq(publicationIdentifier.doi, doi),
 			),
 		)
@@ -268,7 +268,7 @@ export async function activateCrossrefPublicationInTransaction(
 		.values({
 			itemKey,
 			provider: "crossref",
-			environment: "test",
+			environment: crossref.environment,
 			identifierPolicy: null,
 			requestedBy,
 			requestedAt: now,
@@ -296,7 +296,7 @@ export async function activateCrossrefPublicationInTransaction(
 				.values({
 					itemKey,
 					registrar: "crossref",
-					environment: "test",
+					environment: crossref.environment,
 					role: "primary",
 					doi,
 					ownership: "managed",
@@ -338,13 +338,13 @@ export async function activateCrossrefPublicationInTransaction(
 	await supersedeUnleasedPublicationJobs(transaction, {
 		itemKey,
 		provider: "crossref",
-		environment: "test",
+		environment: crossref.environment,
 		now,
 	});
 	const job = await savePublicationJob(transaction, {
 		itemKey,
 		provider: "crossref",
-		environment: "test",
+		environment: crossref.environment,
 		identifierPolicy: null,
 		canonicalRevision: nextRevision,
 		fileRevision: null,
@@ -367,6 +367,7 @@ export async function activateCrossrefPublicationInTransaction(
 export async function retryCrossrefPublication(
 	database: Database,
 	itemKey: string,
+    config: PublicationConfig,
 ): Promise<CrossrefActivationReceipt> {
 	return database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
@@ -377,7 +378,7 @@ export async function retryCrossrefPublication(
 				and(
 					eq(publicationSyncJob.itemKey, itemKey),
 					eq(publicationSyncJob.provider, "crossref"),
-					eq(publicationSyncJob.environment, "test"),
+					eq(publicationSyncJob.environment, config.services.publication.crossref.environment),
 					isNull(publicationSyncJob.supersededAt),
 				),
 			)
@@ -413,7 +414,7 @@ export async function retryCrossrefPublication(
 				and(
 					eq(publicationIdentifier.itemKey, itemKey),
 					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, "test"),
+					eq(publicationIdentifier.environment, config.services.publication.crossref.environment),
 					eq(publicationIdentifier.role, "primary"),
 					eq(publicationIdentifier.isCurrent, true),
 				),
@@ -478,7 +479,7 @@ export async function reserveCrossrefDoi(
 				and(
 					eq(publicationIdentifier.itemKey, itemKey),
 					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, "test"),
+					eq(publicationIdentifier.environment, crossref.environment),
 					eq(publicationIdentifier.role, "primary"),
 					eq(publicationIdentifier.isCurrent, true),
 				),
@@ -490,7 +491,7 @@ export async function reserveCrossrefDoi(
 			extra: typeof payload.extra === "string" ? payload.extra : null,
 		});
 		const doi = await allocateManagedCrossrefDoi(transaction, {
-			environment: "test",
+			environment: crossref.environment,
 			prefix: crossref.prefix,
 			suffixNamespace: crossref.suffixNamespace,
 		});
@@ -499,7 +500,7 @@ export async function reserveCrossrefDoi(
 			.values({
 				itemKey,
 				provider: "crossref",
-				environment: "test",
+				environment: crossref.environment,
 				requestedBy,
 				activatedAt: null,
 			});
@@ -508,7 +509,7 @@ export async function reserveCrossrefDoi(
 			.values({
 				itemKey,
 				registrar: "crossref",
-				environment: "test",
+				environment: crossref.environment,
 				role: "primary",
 				doi,
 				ownership: "managed",

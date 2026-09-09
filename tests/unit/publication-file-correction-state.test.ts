@@ -1,3 +1,5 @@
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import { maximalLibraryConfig } from "../fixtures/library-config";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -8,19 +10,19 @@ import { zenodoPdfCorrectionIdentifier } from "@/lib/admin/native-file-service";
 
 describe("Zenodo PDF correction state", () => {
 	it("uses the DOI that each reuse policy actually archived", () => {
-		expect(zenodoPdfCorrectionIdentifier("reuse-crossref")).toEqual({
+		expect(zenodoPdfCorrectionIdentifier("reuse-crossref", libraryConfigSchema.parse(maximalLibraryConfig).services.publication)).toEqual({
 			environment: "test",
 			ownership: "managed",
 			registrar: "crossref",
 			role: "primary",
 		});
-		expect(zenodoPdfCorrectionIdentifier("reuse-external")).toEqual({
+		expect(zenodoPdfCorrectionIdentifier("reuse-external", libraryConfigSchema.parse(maximalLibraryConfig).services.publication)).toEqual({
 			environment: "sandbox",
 			ownership: "external",
 			registrar: "zenodo",
 			role: "version",
 		});
-		expect(zenodoPdfCorrectionIdentifier("mint-zenodo")).toBeNull();
+		expect(zenodoPdfCorrectionIdentifier("mint-zenodo", libraryConfigSchema.parse(maximalLibraryConfig).services.publication)).toBeNull();
 	});
 
 	it("marks a superseded journal approval unavailable before remote publish", () => {

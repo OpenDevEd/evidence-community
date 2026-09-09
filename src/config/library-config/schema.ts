@@ -1148,7 +1148,7 @@ const exportsSchema = z
 const crossrefPublicationSchema = z
 	.object({
 		enabled: z.boolean().default(false),
-		environment: z.literal("test").default("test"),
+		environment: z.enum(["test", "production"]).default("production"),
 		loginId: secretSchema(1, 255).optional(),
 		depositorName: singleLineStringSchema(255).optional(),
 		email: emailSchema.optional(),
@@ -1209,7 +1209,7 @@ const crossrefPublicationSchema = z
 const zenodoPublicationSchema = z
 	.object({
 		enabled: z.boolean().default(false),
-		environment: z.literal("sandbox").default("sandbox"),
+		environment: z.enum(["sandbox", "production"]).default("production"),
 		token: secretSchema(1, 2048).optional(),
 		defaultIdentifierPolicy: z
 			.enum(["reuse-crossref", "mint-zenodo"])
@@ -1233,7 +1233,7 @@ const zenodoPublicationSchema = z
 		if (zenodo.enabled && !zenodo.token) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "Enabled Zenodo publication requires a Sandbox token",
+				message: "Enabled Zenodo publication requires a token",
 				path: ["token"],
 			});
 		}

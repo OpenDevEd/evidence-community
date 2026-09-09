@@ -761,9 +761,19 @@ describe("publication services", () => {
 		expect(parsed.services.publication.zenodo.enabled).toBe(false);
 	});
 
+	it("accepts production publication services", () => {
+		const config = catalogSchema.parse(publicationConfig());
+		config.services.publication.crossref.environment = "production";
+		config.services.publication.zenodo.environment = "production";
+		expect(catalogSchema.parse(config).services.publication).toMatchObject({
+			crossref: { environment: "production" },
+			zenodo: { environment: "production" },
+		});
+	});
+
 	it.each([
-		["Crossref production", ["crossref", "environment"], "production"],
-		["Zenodo production", ["zenodo", "environment"], "production"],
+		["invalid Crossref environment", ["crossref", "environment"], "sandbox"],
+		["invalid Zenodo environment", ["zenodo", "environment"], "test"],
 		["invalid prefix", ["crossref", "prefix"], "11.1234"],
 		["unsafe namespace", ["crossref", "suffixNamespace"], "library/item"],
 		["invalid nightly time", ["worker", "nightlyUtcTime"], "25:00"],

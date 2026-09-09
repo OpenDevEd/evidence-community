@@ -4,7 +4,7 @@ import type { DatabaseTransaction } from "@/db/database-schema";
 import { doiNamespace } from "@/db/schema/publication";
 
 export type AllocateManagedCrossrefDoiInput = {
-	environment: "test";
+	environment: "test" | "production";
 	prefix: string;
 	suffixNamespace: string;
 };

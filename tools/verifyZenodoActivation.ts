@@ -1733,6 +1733,55 @@ async function verify(database: Database, client: Client) {
 	);
 }
 
+async function verifyProductionIsolation(database: Database, client: Client) {
+	const production = structuredClone(config);
+	production.services.publication.crossref.environment = "production";
+	production.services.publication.zenodo.environment = "production";
+	await seedParent(client, { key: "ZENPRDAA" });
+	await activateZenodoPublication(database, "ZENPRDAA", config, "mint-zenodo");
+	const activated = await activateZenodoPublication(database, "ZENPRDAA", production, "mint-zenodo");
+	assert(activated.environment === "production", "Activation returned the wrong environment");
+	const requests: string[] = [];
+	const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+		requests.push(String(url));
+		assert(String(url) === "https://zenodo.org/api/deposit/depositions", "Production used a different endpoint");
+		assert(init?.method === "POST" && init.body === "{}", "Fileless activation sent publication metadata");
+		return Response.json({
+			id: "990001", record_id: "990001", conceptrecid: "990000",
+			submitted: false, state: "unsubmitted", metadata: {}, files: [],
+			links: { self: "https://zenodo.org/api/deposit/depositions/990001", html: "https://zenodo.org/deposit/990001" },
+		});
+	});
+	try {
+		const result = await runZenodoPublicationJobsOnce(database, production, memoryStorage(new Map()));
+		assert(result.length === 1 && result[0]?.status === "waiting", "Production did not prepare its fileless draft");
+	} finally {
+		fetchSpy.mockRestore();
+	}
+	assert(requests.length === 1, "Production created duplicate drafts");
+	const states = await client.query(`SELECT "environment", "unpublishedDraftDepositionId" FROM "publicationSyncState" WHERE "itemKey" = 'ZENPRDAA'`);
+	assert(states.rows.length === 1 && states.rows[0].environment === "production" && states.rows[0].unpublishedDraftDepositionId === "990001", "Production draft state crossed environments");
+	const sandboxJob = await client.query(`SELECT "attempts", "processedAt" FROM "publicationSyncJob" WHERE "itemKey" = 'ZENPRDAA' AND "environment" = 'sandbox'`);
+	assert(sandboxJob.rows[0]?.attempts === 0 && sandboxJob.rows[0]?.processedAt === null, "Production consumed the sandbox job");
+	const bytes = new TextEncoder().encode("Production archive file");
+	await seedPublishedFile(client, "ZENPRDAA", "ZENPRDFA", bytes);
+	await client.query(`UPDATE "item" SET "revision" = 2 WHERE "key" = 'ZENPRDAA'`);
+	await activateZenodoPublication(database, "ZENPRDAA", production, "mint-zenodo");
+	const provider = successfulZenodoProvider();
+	const uploaded = await runZenodoPublicationJobsOnce(database, production, memoryStorage(new Map([["public/ZENPRDFA.pdf", bytes]])), {
+		provider: {
+			...provider,
+			prepareCreateRecord: async request => {
+				assert(request.draftDepositionId === "990001", "Production lost its saved draft");
+				return provider.prepareCreateRecord(request);
+			},
+		},
+	});
+	assert(uploaded[0]?.status === "succeeded", "Production file upload did not settle");
+	const identifiers = await client.query(`SELECT "environment" FROM "publicationIdentifier" WHERE "itemKey" = 'ZENPRDAA'`);
+	assert(identifiers.rows.length === 2 && identifiers.rows.every(row => row.environment === "production"), "Production identifiers were saved under Sandbox");
+}
+
 async function verifyIsolatedDatabase() {
 	const sourceUrl = new URL(verifiedDatabaseUrl);
 	const databaseName = `zenodo_activation_${process.pid}_${Date.now()}`;
@@ -1755,6 +1804,7 @@ async function verifyIsolatedDatabase() {
 		client = new Client({ connectionString: temporaryUrl.toString() });
 		await client.connect();
 		await verify(database, client);
+		await verifyProductionIsolation(database, client);
 	} finally {
 		await client?.end();
 		await pool?.end();

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
@@ -19,7 +20,7 @@ export async function POST(
 	try {
 		const { key } = await params;
 		const database = await getDatabase();
-		const activation = await retryCrossrefPublication(database, key);
+		const activation = await retryCrossrefPublication(database, key, await getLibraryConfig());
 		return NextResponse.json(
 			{
 				activation,

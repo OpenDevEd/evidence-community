@@ -1,3 +1,5 @@
+import { libraryConfigSchema } from "../src/config/library-config/schema";
+import { maximalLibraryConfig } from "../tests/fixtures/library-config";
 import {
 	collectionIdentity,
 	collectionSourceLink,
@@ -57,6 +59,8 @@ import {
 	writeSourceIngestionBatch,
 } from "../src/lib/source-ingestion/transactional-writer";
 import { flushSourceFileCleanup } from "../src/lib/source-ingestion/zotero/attachment-processor";
+
+const publicationConfig = libraryConfigSchema.parse(maximalLibraryConfig).services.publication;
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -2349,7 +2353,7 @@ async function verify() {
 			"Unresolved OpenAlex references must remain in the raw source snapshot",
 		);
 		const projectionPlans = [];
-		for await (const plan of generateSearchProjectionPlans(db, [
+		for await (const plan of generateSearchProjectionPlans(db, publicationConfig, [
 			{ entityKey: openAlexA, entityType: "item" },
 			{ entityKey: openAlexB, entityType: "item" },
 		])) {

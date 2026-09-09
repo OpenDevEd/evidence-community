@@ -38,7 +38,7 @@ export type PublicationRepositorySnapshot = {
 export async function readPublicationRepositorySnapshot(
 	database: Executor,
 	itemKey: string,
-	crossrefEnvironment: "test",
+	crossrefEnvironment: "test" | "production",
 ): Promise<PublicationRepositorySnapshot> {
 	const [
 		record,

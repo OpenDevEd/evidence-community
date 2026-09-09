@@ -99,6 +99,6 @@ describe("Crossref publication admin routes", () => {
 			activation: { job: { id: 1, state: "retrying" } },
 			publication: { itemKey: "ABCDEFGH" },
 		});
-		expect(mocks.retry).toHaveBeenCalledWith(mocks.database, "ABCDEFGH");
+		expect(mocks.retry).toHaveBeenCalledWith(mocks.database, "ABCDEFGH", mocks.config);
 	});
 });

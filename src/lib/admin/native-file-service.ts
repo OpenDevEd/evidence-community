@@ -1,3 +1,4 @@
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { isNotNull } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
@@ -82,14 +83,17 @@ export class ZenodoPdfCorrectionConfirmationRequiredError extends Error {
 	}
 }
 
+type PublicationConfig = LibraryServerConfig["services"]["publication"];
+
 type PdfCorrectionRequirement = {
+	environment: PublicationConfig["zenodo"]["environment"];
 	doi: string;
 	fileManifestHash: string;
 	approveBy: Date;
 };
 
 type PdfCorrectionIdentifier = {
-	environment: "test" | "sandbox";
+	environment: "test" | "sandbox" | "production";
 	ownership: "managed" | "external";
 	registrar: "crossref" | "zenodo";
 	role: "primary" | "version";
@@ -97,10 +101,11 @@ type PdfCorrectionIdentifier = {
 
 export function zenodoPdfCorrectionIdentifier(
 	identifierPolicy: ZenodoIdentifierPolicy | null,
+	config: PublicationConfig,
 ): PdfCorrectionIdentifier | null {
 	if (identifierPolicy === "reuse-crossref") {
 		return {
-			environment: "test",
+			environment: config.crossref.environment,
 			ownership: "managed",
 			registrar: "crossref",
 			role: "primary",
@@ -108,7 +113,7 @@ export function zenodoPdfCorrectionIdentifier(
 	}
 	if (identifierPolicy === "reuse-external") {
 		return {
-			environment: "sandbox",
+			environment: config.zenodo.environment,
 			ownership: "external",
 			registrar: "zenodo",
 			role: "version",
@@ -139,6 +144,7 @@ function publicationFileManifestHash(
 
 async function zenodoPdfCorrectionRequirement(
 	database: Database | DatabaseTransaction,
+	config: PublicationConfig,
 	input: {
 		fileManifestHash: () => string;
 		now: Date;
@@ -152,7 +158,7 @@ async function zenodoPdfCorrectionRequirement(
 			and(
 				eq(publicationTarget.itemKey, input.parentItemKey),
 				eq(publicationTarget.provider, "zenodo"),
-				eq(publicationTarget.environment, "sandbox"),
+				eq(publicationTarget.environment, config.zenodo.environment),
 				isNull(publicationTarget.deactivatedAt),
                     isNotNull(publicationTarget.activatedAt),
 			),
@@ -160,6 +166,7 @@ async function zenodoPdfCorrectionRequirement(
 		.limit(1);
 	const identifierLookup = zenodoPdfCorrectionIdentifier(
 		target?.identifierPolicy ?? null,
+		config,
 	);
 	if (!identifierLookup) return null;
 
@@ -174,7 +181,7 @@ async function zenodoPdfCorrectionRequirement(
 			and(
 				eq(publicationSyncState.itemKey, input.parentItemKey),
 				eq(publicationSyncState.provider, "zenodo"),
-				eq(publicationSyncState.environment, "sandbox"),
+				eq(publicationSyncState.environment, config.zenodo.environment),
 			),
 		)
 		.limit(1);
@@ -227,6 +234,7 @@ async function zenodoPdfCorrectionRequirement(
 		);
 	}
 	return {
+		environment: config.zenodo.environment,
 		doi: identifier.doi,
 		fileManifestHash,
 		approveBy,
@@ -243,11 +251,13 @@ async function saveZenodoPdfCorrectionApproval(
 		.where(
 			and(
 				eq(zenodoFileCorrectionApproval.itemKey, input.itemKey),
+				eq(zenodoFileCorrectionApproval.environment, input.environment),
 				isNull(zenodoFileCorrectionApproval.consumedAt),
 				isNull(zenodoFileCorrectionApproval.supersededAt),
 			),
 		);
 	await transaction.insert(zenodoFileCorrectionApproval).values({
+		environment: input.environment,
 		itemKey: input.itemKey,
 		doi: input.doi,
 		fileManifestHash: input.fileManifestHash,
@@ -695,6 +705,7 @@ export async function discardNativePdfDraft(
 export async function prepareNativePdfPublication(
 	db: Database,
 	storage: EvidenceFileStorage,
+	config: PublicationConfig,
 	{
 		expectedUploadRevision,
 		itemKey,
@@ -780,7 +791,7 @@ export async function prepareNativePdfPublication(
 					file.itemKey === itemKey ? prospectiveFile : file,
 				)
 			: [...currentFiles, prospectiveFile];
-		const requirement = await zenodoPdfCorrectionRequirement(db, {
+		const requirement = await zenodoPdfCorrectionRequirement(db, config, {
 			fileManifestHash: () =>
 				publicationFileManifestHash(prospectiveFiles),
 			now: new Date(),
@@ -993,7 +1004,7 @@ export async function prepareNativePdfPublication(
 					eq(itemFilePublication.parentItemKey, parent.key),
 				);
 			const correctionRequirement =
-				await zenodoPdfCorrectionRequirement(transaction, {
+				await zenodoPdfCorrectionRequirement(transaction, config, {
 					fileManifestHash: () =>
 						publicationFileManifestHash(parentFiles),
 					now,
@@ -1189,9 +1200,10 @@ export async function prepareNativePdfPublication(
 export async function publishNativePdf(
 	db: Database,
 	storage: EvidenceFileStorage,
-	input: Omit<Parameters<typeof prepareNativePdfPublication>[2], "reviewFile">,
+	config: PublicationConfig,
+	input: Omit<Parameters<typeof prepareNativePdfPublication>[3], "reviewFile">,
 ) {
-	const prepared = await prepareNativePdfPublication(db, storage, input);
+	const prepared = await prepareNativePdfPublication(db, storage, config, input);
 	let result: Awaited<ReturnType<typeof prepared.commit>>;
 	try {
 		result = await db.transaction(prepared.commit);
@@ -1204,6 +1216,7 @@ export async function publishNativePdf(
 
 export async function unpublishNativePdfInTransaction(
 	transaction: DatabaseTransaction,
+	config: PublicationConfig,
 	itemKey: string,
 	zenodoFileChange?: "minor_correction",
 ) {
@@ -1336,7 +1349,7 @@ export async function unpublishNativePdfInTransaction(
 			.from(itemFilePublication)
 			.where(eq(itemFilePublication.parentItemKey, parent.key));
 		const correctionRequirement =
-			await zenodoPdfCorrectionRequirement(transaction, {
+			await zenodoPdfCorrectionRequirement(transaction, config, {
 				fileManifestHash: () =>
 					publicationFileManifestHash(remainingFiles),
 				now,
@@ -1422,19 +1435,21 @@ export async function cleanupNativePdfRemoval(
 	return { indexingRecords: result.indexingRecords, item: result.item };
 }
 
-export async function unpublishNativePdfWithContext(
+async function unpublishNativePdfWithContext(
 	db: Database,
 	storage: EvidenceFileStorage,
+	config: PublicationConfig,
 	itemKey: string,
 	zenodoFileChange?: "minor_correction",
 ) {
-	const result = await db.transaction((transaction) => unpublishNativePdfInTransaction(transaction, itemKey, zenodoFileChange));
+	const result = await db.transaction((transaction) => unpublishNativePdfInTransaction(transaction, config, itemKey, zenodoFileChange));
 	return cleanupNativePdfRemoval(db, storage, result);
 }
 
 export async function unpublishNativePdf(
 	db: Database,
 	storage: EvidenceFileStorage,
+	config: PublicationConfig,
 	itemKey: string,
 	zenodoFileChange?: "minor_correction",
 ) {
@@ -1442,6 +1457,7 @@ export async function unpublishNativePdf(
 		await unpublishNativePdfWithContext(
 			db,
 			storage,
+			config,
 			itemKey,
 			zenodoFileChange,
 		)

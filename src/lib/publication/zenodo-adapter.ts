@@ -1,4 +1,4 @@
-import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
+import type { ZenodoIdentifierPolicy, ZenodoPublicationEnvironment } from "@/db/schema/publication";
 import {
 	executeLivePublicationSyncPlan,
 	planPublicationSync,
@@ -57,7 +57,11 @@ import { settlePublicationProviderAudit } from "./provider-audit";
 import { currentManagedDoi, providerState, targetFor } from "./state-adapter";
 
 type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
-const ZENODO_SANDBOX_ENDPOINT = "https://sandbox.zenodo.org";
+function zenodoEndpoint(config: PublicationConfig) {
+	return config.services.publication.zenodo.environment === "production"
+		? "https://zenodo.org"
+		: "https://sandbox.zenodo.org";
+}
 const PERMANENT_ZENODO_FAILURES = new Set([
 	"ZENODO_FIRST_PUBLICATION_TIME_REQUIRED",
 	"ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED",
@@ -88,7 +92,7 @@ export type ZenodoPublicationProvider = ZenodoWriter &
 function requireConfig(config: PublicationConfig) {
 	const zenodo = config.services.publication.zenodo;
 	if (!zenodo.enabled || !zenodo.token) {
-		throw new Error("Zenodo Sandbox publishing is not fully configured");
+		throw new Error("Zenodo publishing is not fully configured");
 	}
 	return { ...zenodo, token: zenodo.token };
 }
@@ -109,12 +113,13 @@ function requireZenodoPlanningRecord(
 
 function managedZenodoDoiValues(
 	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+	environment: ZenodoPublicationEnvironment,
 ) {
 	return snapshot.identifiers
 		.filter(
 			(identifier) =>
 				identifier.registrar === "zenodo" &&
-				identifier.environment === "sandbox" &&
+				identifier.environment === environment &&
 				identifier.ownership === "managed",
 		)
 		.map((identifier) => identifier.doi);
@@ -122,10 +127,11 @@ function managedZenodoDoiValues(
 
 function activeFileCorrectionApproval(
 	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+	environment: ZenodoPublicationEnvironment,
 ) {
 	return snapshot.fileCorrectionApprovals.find(
 		(approval) =>
-			approval.consumedAt === null && approval.supersededAt === null,
+			approval.environment === environment && approval.consumedAt === null && approval.supersededAt === null,
 	);
 }
 
@@ -158,17 +164,17 @@ async function buildZenodoPlan(
 		publicationConfig.crossref.environment,
 	);
 	const record = requireZenodoPlanningRecord(snapshot);
-	const target = targetFor(snapshot, "zenodo", "sandbox");
+	const target = targetFor(snapshot, "zenodo", publicationConfig.zenodo.environment);
 	if (!target?.identifierPolicy) {
 		throw new Error("The record does not have an active Zenodo target");
 	}
 	const managedCrossrefDoi = currentManagedDoi(
 		snapshot,
 		"crossref",
-		"test",
+		publicationConfig.crossref.environment,
 		"primary",
 	);
-	const managedZenodoDois = managedZenodoDoiValues(snapshot);
+	const managedZenodoDois = managedZenodoDoiValues(snapshot, publicationConfig.zenodo.environment);
 	const bibliographicDoi = resolveBibliographicDoi(
 		{
 			DOI: record.DOI,
@@ -195,13 +201,13 @@ async function buildZenodoPlan(
 		zenodoVersionDoi: currentManagedDoi(
 			snapshot,
 			"zenodo",
-			"sandbox",
+			publicationConfig.zenodo.environment,
 			"version",
 		),
 		zenodoConceptDoi: currentManagedDoi(
 			snapshot,
 			"zenodo",
-			"sandbox",
+			publicationConfig.zenodo.environment,
 			"concept",
 		),
 	});
@@ -211,7 +217,7 @@ async function buildZenodoPlan(
 		lockedExternalDoi: target.lockedExternalDoi,
 		bibliographicDoi: bibliographicDoi.doi,
 	});
-	const correctionApproval = activeFileCorrectionApproval(snapshot);
+	const correctionApproval = activeFileCorrectionApproval(snapshot, publicationConfig.zenodo.environment);
 	return {
 		identifierPolicy: target.identifierPolicy,
 		plan: planPublicationSync({
@@ -223,7 +229,7 @@ async function buildZenodoPlan(
 				crossref: { enabled: false },
 				zenodo: {
 					enabled: true,
-					environment: "sandbox",
+					environment: publicationConfig.zenodo.environment,
 					identifierPolicy: target.identifierPolicy,
 				},
 			},
@@ -244,6 +250,7 @@ async function assertNoIdentifierCollision(
 	transaction: DatabaseTransaction,
 	itemKey: string,
 	dois: readonly string[],
+	environment: ZenodoPublicationEnvironment,
 ) {
 	if (dois.length === 0) return;
 	for (const doi of [...dois].sort()) {
@@ -260,7 +267,7 @@ async function assertNoIdentifierCollision(
 		.where(
 			and(
 				eq(publicationIdentifier.registrar, "zenodo"),
-				eq(publicationIdentifier.environment, "sandbox"),
+				eq(publicationIdentifier.environment, environment),
 				inArray(publicationIdentifier.doi, [...dois]),
 			),
 		);
@@ -275,6 +282,7 @@ async function assertNoIdentifierCollision(
 async function saveZenodoIdentifiers(
 	transaction: DatabaseTransaction,
 	input: {
+		environment: ZenodoPublicationEnvironment;
 		itemKey: string;
 		identifiers: ZenodoRecordIdentifiers;
 		observedAt: Date;
@@ -288,7 +296,7 @@ async function saveZenodoIdentifiers(
 			and(
 				eq(publicationIdentifier.itemKey, input.itemKey),
 				eq(publicationIdentifier.registrar, "zenodo"),
-				eq(publicationIdentifier.environment, "sandbox"),
+				eq(publicationIdentifier.environment, input.environment),
 				eq(publicationIdentifier.role, "version"),
 				eq(publicationIdentifier.isCurrent, true),
 			),
@@ -325,6 +333,7 @@ async function saveZenodoIdentifiers(
 		transaction,
 		input.itemKey,
 		values.map(({ doi }) => doi),
+		input.environment,
 	);
 	for (const value of values) {
 		await transaction
@@ -334,7 +343,7 @@ async function saveZenodoIdentifiers(
 				and(
 					eq(publicationIdentifier.itemKey, input.itemKey),
 					eq(publicationIdentifier.registrar, "zenodo"),
-					eq(publicationIdentifier.environment, "sandbox"),
+					eq(publicationIdentifier.environment, input.environment),
 					eq(publicationIdentifier.role, value.role),
 					eq(publicationIdentifier.isCurrent, true),
 				),
@@ -344,7 +353,7 @@ async function saveZenodoIdentifiers(
 			.values({
 				itemKey: input.itemKey,
 				registrar: "zenodo",
-				environment: "sandbox",
+				environment: input.environment,
 				role: value.role,
 				doi: value.doi,
 				ownership: value.ownership,
@@ -382,6 +391,7 @@ function createZenodoJournal(
 	database: Database,
 	job: { id: number; itemKey: string },
 	workerId: string,
+	environment: ZenodoPublicationEnvironment,
 	plan: Extract<PublicationSyncPlan, { status: "write_required" }>,
 ): ZenodoPublishJournalWriter {
 	const withLease = async (
@@ -409,7 +419,7 @@ function createZenodoJournal(
 				if (createOperation?.draftDepositionId && createOperation.draftDepositionId !== input.depositionId) {
 					await transaction.delete(zenodoPublishJournal).where(and(
 						eq(zenodoPublishJournal.itemKey, input.recordId),
-						eq(zenodoPublishJournal.environment, "sandbox"),
+						eq(zenodoPublishJournal.environment, environment),
 						eq(zenodoPublishJournal.depositionId, createOperation.draftDepositionId),
 						eq(zenodoPublishJournal.status, "preparing"),
 					));
@@ -417,6 +427,7 @@ function createZenodoJournal(
 				await transaction
 					.insert(zenodoPublishJournal)
 					.values({
+						environment,
 						itemKey: input.recordId,
 						operationType: input.operationType,
 						payloadHash: input.zenodoPayloadHash,
@@ -474,7 +485,7 @@ function createZenodoJournal(
 						and(
 							eq(publicationSyncState.itemKey, input.recordId),
 							eq(publicationSyncState.provider, "zenodo"),
-							eq(publicationSyncState.environment, "sandbox"),
+							eq(publicationSyncState.environment, environment),
 							isNotNull(publicationSyncState.unpublishedDraftDepositionId),
 						),
 					);
@@ -517,7 +528,7 @@ function createZenodoJournal(
 						and(
 							eq(publicationTarget.itemKey, input.recordId),
 							eq(publicationTarget.provider, "zenodo"),
-							eq(publicationTarget.environment, "sandbox"),
+							eq(publicationTarget.environment, environment),
 						),
 					)
 					.limit(1);
@@ -527,6 +538,7 @@ function createZenodoJournal(
 				const zenodoVersionChanged = await saveZenodoIdentifiers(
 					transaction,
 					{
+						environment,
 						itemKey: input.recordId,
 						identifiers: input.identifiers,
 						observedAt: input.observedAt,
@@ -545,7 +557,7 @@ function createZenodoJournal(
 						and(
 							eq(publicationSyncState.itemKey, input.recordId),
 							eq(publicationSyncState.provider, "zenodo"),
-							eq(publicationSyncState.environment, "sandbox"),
+							eq(publicationSyncState.environment, environment),
 						),
 					)
 					.limit(1);
@@ -562,7 +574,7 @@ function createZenodoJournal(
 					.values({
 						itemKey: input.recordId,
 						provider: "zenodo",
-						environment: "sandbox",
+						environment: environment,
 						identifierPolicy: target.identifierPolicy,
 						lastPayloadHash: savedDraft.payloadHash,
 						lastPayloadSnapshot: savedDraft.payloadSnapshot,
@@ -715,7 +727,7 @@ function createZenodoJournal(
 						and(
 							eq(publicationSyncState.itemKey, input.recordId),
 							eq(publicationSyncState.provider, "zenodo"),
-							eq(publicationSyncState.environment, "sandbox"),
+							eq(publicationSyncState.environment, environment),
 							eq(
 								publicationSyncState.orphanDraftDepositionId,
 								input.depositionId,
@@ -826,7 +838,7 @@ async function auditZenodoPublishedState(
 			workerId: input.workerId,
 			itemKey: input.job.itemKey,
 			provider: "zenodo",
-			environment: "sandbox",
+			environment: config.services.publication.zenodo.environment,
 			expectedPayloadHash: lastSuccess.payloadHash,
 			expectedFileManifestHash: lastSuccess.fileManifestHash,
 			observation: {
@@ -851,7 +863,7 @@ async function auditZenodoPublishedState(
 			const provider =
 				input.provider ??
 				new ZenodoApiClient({
-					endpoint: ZENODO_SANDBOX_ENDPOINT,
+					endpoint: zenodoEndpoint(config),
 					fetch: (url, init) => fetch(url, { ...init, signal }),
 				});
 			if (!provider.verifyPublishedState) {
@@ -874,14 +886,14 @@ async function auditZenodoPublishedState(
 		},
 	);
 	if (verification.status === "missing") {
-		throw new Error("The published Zenodo Sandbox record no longer exists");
+		throw new Error("The published Zenodo record no longer exists");
 	}
 	return settlePublicationProviderAudit(database, {
 		jobId: input.job.id,
 		workerId: input.workerId,
 		itemKey: input.job.itemKey,
 		provider: "zenodo",
-		environment: "sandbox",
+		environment: config.services.publication.zenodo.environment,
 		expectedPayloadHash: lastSuccess.payloadHash,
 		expectedFileManifestHash: lastSuccess.fileManifestHash,
 		observation: verification,
@@ -892,6 +904,7 @@ async function auditZenodoPublishedState(
 async function settleZenodoState(
 	database: Database,
 	input: {
+		environment: ZenodoPublicationEnvironment;
 		jobId: number;
 		workerId: string;
 		itemKey: string;
@@ -928,7 +941,7 @@ async function settleZenodoState(
 			.values({
 				itemKey: input.itemKey,
 				provider: "zenodo",
-				environment: "sandbox",
+				environment: input.environment,
 				...values,
 			})
 			.onConflictDoUpdate({
@@ -945,6 +958,7 @@ async function settleZenodoState(
 			values.zenodoFirstPublishedAt
 		) {
 			await saveZenodoIdentifiers(transaction, {
+				environment: input.environment,
 				itemKey: input.itemKey,
 				identifierPolicy: input.identifierPolicy,
 				identifiers: {
@@ -1008,7 +1022,7 @@ async function prepareWaitingZenodoDraft(
 		config.services.publication.crossref.environment,
 	);
 	requireZenodoPlanningRecord(snapshot);
-	const target = targetFor(snapshot, "zenodo", "sandbox");
+	const target = targetFor(snapshot, "zenodo", config.services.publication.zenodo.environment);
 	if (!target?.identifierPolicy)
 		throw new Error("The record does not have an active Zenodo target");
 	const waitingOn =
@@ -1016,7 +1030,7 @@ async function prepareWaitingZenodoDraft(
 		!snapshot.identifiers.some(
 			(identifier) =>
 				identifier.registrar === "crossref" &&
-				identifier.environment === "test" &&
+				identifier.environment === config.services.publication.crossref.environment &&
 				identifier.isCurrent &&
 				identifier.ownership === "managed" &&
 				identifier.lifecycle === "verified",
@@ -1027,12 +1041,12 @@ async function prepareWaitingZenodoDraft(
 				: null;
 	const state = snapshot.states.find(
 		(state) =>
-			state.provider === "zenodo" && state.environment === "sandbox",
+			state.provider === "zenodo" && state.environment === config.services.publication.zenodo.environment,
 	);
 	if (
 		!state?.zenodoRecordId &&
 		!state?.unpublishedDraftDepositionId &&
-		snapshot.journals.length === 0
+		!snapshot.journals.some(journal => journal.environment === config.services.publication.zenodo.environment)
 	) {
 		if (!waitingOn) {
 			// Validation belongs to publication, but must not prevent saving the archive draft.
@@ -1063,7 +1077,7 @@ async function prepareWaitingZenodoDraft(
 						.values({
 							itemKey: input.job.itemKey,
 							provider: "zenodo",
-							environment: "sandbox",
+							environment: config.services.publication.zenodo.environment,
 							identifierPolicy: target.identifierPolicy,
 							unpublishedDraftDepositionId: draft.depositionId,
 							updatedAt: input.now(),
@@ -1111,7 +1125,7 @@ export async function runZenodoPublicationJobsOnce(
 	) {
 		const job = await claimNextPublicationJob(database, {
 			provider: "zenodo",
-			environment: "sandbox",
+			environment: zenodo.environment,
 			workerId,
 			leaseSeconds: workerConfig.leaseSeconds,
 			claimedAt: now(),
@@ -1137,7 +1151,7 @@ export async function runZenodoPublicationJobsOnce(
 							provider:
 								options.provider ??
 								new ZenodoApiClient({
-									endpoint: ZENODO_SANDBOX_ENDPOINT,
+									endpoint: zenodoEndpoint(config),
 									fetch: (url, init) =>
 										fetch(url, { ...init, signal }),
 								}),
@@ -1216,7 +1230,7 @@ export async function runZenodoPublicationJobsOnce(
 								zenodo:
 									options.provider ??
 									new ZenodoApiClient({
-										endpoint: ZENODO_SANDBOX_ENDPOINT,
+										endpoint: zenodoEndpoint(config),
 										fetch: (url, init) =>
 											fetch(url, { ...init, signal }),
 									}),
@@ -1229,6 +1243,7 @@ export async function runZenodoPublicationJobsOnce(
 								database,
 								job,
 								workerId,
+								zenodo.environment,
 								runnablePlan,
 							),
 							now,
@@ -1299,6 +1314,7 @@ export async function runZenodoPublicationJobsOnce(
 					failure.consecutiveCount >= workerConfig.retryLimit
 				: false;
 			await settleZenodoState(database, {
+				environment: zenodo.environment,
 				jobId: job.id,
 				workerId,
 				itemKey: job.itemKey,
@@ -1333,7 +1349,7 @@ export async function runZenodoPublicationJobsOnce(
 								status: "finished",
 								receipt: {
 									provider: "zenodo",
-									environment: "sandbox",
+									environment: zenodo.environment,
 									published: true,
 								},
 							},
@@ -1358,7 +1374,7 @@ export async function runZenodoPublicationJobsOnce(
 				await readPublicationRepositorySnapshot(
 					database,
 					job.itemKey,
-					"test",
+					config.services.publication.crossref.environment,
 				),
 				"zenodo",
 				config.services.publication,
@@ -1372,7 +1388,7 @@ export async function runZenodoPublicationJobsOnce(
 					and(
 						eq(publicationTarget.itemKey, job.itemKey),
 						eq(publicationTarget.provider, "zenodo"),
-						eq(publicationTarget.environment, "sandbox"),
+						eq(publicationTarget.environment, zenodo.environment),
 					),
 				)
 				.limit(1);
@@ -1403,6 +1419,7 @@ export async function runZenodoPublicationJobsOnce(
 				) || count >= workerConfig.retryLimit;
 			try {
 				await settleZenodoState(database, {
+				environment: zenodo.environment,
 					jobId: job.id,
 					workerId,
 					itemKey: job.itemKey,

@@ -683,26 +683,24 @@ async function assertLockedExternalDoiUnchanged(
 	itemKey: string,
 	payload: Record<string, unknown>,
 ) {
-	const [target] = await transaction
+	const targets = await transaction
 		.select({ lockedExternalDoi: publicationTarget.lockedExternalDoi })
 		.from(publicationTarget)
 		.where(
 			and(
 				eq(publicationTarget.itemKey, itemKey),
 				eq(publicationTarget.provider, "zenodo"),
-				eq(publicationTarget.environment, "sandbox"),
 				eq(publicationTarget.identifierPolicy, "reuse-external"),
 				isNull(publicationTarget.deactivatedAt),
                     isNotNull(publicationTarget.activatedAt),
 			),
-		)
-		.limit(1);
-	if (!target?.lockedExternalDoi) return;
+		);
+	if (!targets.some(target => target.lockedExternalDoi)) return;
 	const doi = resolveBibliographicDoi({
 		DOI: typeof payload.DOI === "string" ? payload.DOI : null,
 		extra: typeof payload.extra === "string" ? payload.extra : null,
 	});
-	if (doi.status === "resolved" && doi.doi === target.lockedExternalDoi) return;
+	if (doi.status === "resolved" && targets.every(target => !target.lockedExternalDoi || doi.doi === target.lockedExternalDoi)) return;
 	throw new NativeItemValidationError(
 		"The DOI cannot change after Zenodo is activated under that DOI.",
 		{ DOI: "Deactivate Zenodo before changing this DOI." },

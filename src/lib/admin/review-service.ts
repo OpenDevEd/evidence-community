@@ -463,7 +463,7 @@ export async function approveItemReview(
 			)
 				continue;
 			prepared.push(
-				await prepareNativePdfPublication(db, storage, {
+				await prepareNativePdfPublication(db, storage, config.services.publication, {
 					itemKey: file.itemKey,
 					expectedUploadRevision: file.file.uploadRevision,
 					publicationTags: input.publicationTags,
@@ -552,6 +552,7 @@ export async function approveItemReview(
 					removals.push(
 						await unpublishNativePdfInTransaction(
 							transaction,
+							config.services.publication,
 							file.itemKey,
 							input.zenodoFileChange,
 						),

@@ -10,7 +10,7 @@ import { fileCorrectionApprovalFromRow } from "./file-correction-approval";
 import type { PublicationRepositorySnapshot } from "./repository";
 
 type PublicationConfig = LibraryServerConfig["services"]["publication"];
-type PublicationEnvironment = "test" | "sandbox";
+type PublicationEnvironment = "test" | "sandbox" | "production";
 
 export function targetFor(
 	snapshot: PublicationRepositorySnapshot,
@@ -124,7 +124,7 @@ export function providerState(
 	}
 
 	const journals = snapshot.journals.filter(
-		(journal) => journal.provider === "zenodo",
+		(journal) => journal.provider === "zenodo" && journal.environment === config.zenodo.environment,
 	);
 	const journal = journals.length === 1 ? journals[0] : null;
 	const journalApproval = journal?.fileCorrectionApprovalId

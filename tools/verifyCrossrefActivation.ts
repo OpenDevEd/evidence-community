@@ -368,7 +368,7 @@ async function verify(database: Database, client: Client) {
 		"Repeated activation created another job",
 	);
 	try {
-		await retryCrossrefPublication(database, "CRACTAAB");
+		await retryCrossrefPublication(database, "CRACTAAB", config);
 		throw new Error("A healthy Crossref job was opened for manual retry");
 	} catch (error) {
 		assert(
@@ -739,7 +739,7 @@ async function verify(database: Database, client: Client) {
 		 ("itemKey", "provider", "environment", "canonicalRevision", "reason", "idempotencyKey", "nextAttemptAt", "supersededAt")
 		 VALUES ('CRACTAAF', 'crossref', 'test', 2, 'record_changed', 'publication:crossref:test:CRACTAAF:superseded', now(), now())`,
 	);
-	const retried = await retryCrossrefPublication(database, "CRACTAAF");
+	const retried = await retryCrossrefPublication(database, "CRACTAAF", config);
 	assert(
 		retried.job.state === "retrying",
 		"Manual retry did not reopen the same job",
@@ -1138,6 +1138,35 @@ async function verifyDraftReservation(database: Database, client: Client) {
 
 }
 
+async function verifyProductionReservation(database: Database, client: Client) {
+	const production = structuredClone(config);
+	production.services.publication.crossref.environment = "production";
+	const draft = await createNativeItemDraft(database, {
+		itemType: "Report", title: "Production reservation", date: "2026-09-08", institution: "OpenDevEd",
+		creators: [{creatorType: "author", firstName: "Ada", lastName: "Lovelace"}],
+	});
+	await setItemPublishingChoice(database, draft.itemKey, {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
+	const reserved = await reserveCrossrefDoi(database, draft.itemKey, production, "creator");
+	const privateState = await client.query(`SELECT "environment", "lifecycle" FROM "publicationIdentifier" WHERE "itemKey" = $1`, [draft.itemKey]);
+	assert(privateState.rows[0]?.environment === "production" && privateState.rows[0]?.lifecycle === "reserved", "Production reservation was stored in Test");
+	await publishItemDraft(database, draft.itemKey);
+	const activated = await activateCrossrefPublication(database, draft.itemKey, production, "editor");
+	assert(activated.environment === "production" && activated.doi === reserved.doi, "Production activation changed the reservation");
+	const provider = successfulProvider();
+	const outcomes = await runCrossrefPublicationJobsOnce(database, production, {
+		provider: {
+			...provider,
+			submitPublication: async input => {
+				assert(input.environment === "production", "Crossref deposit used the test environment");
+				return provider.submitPublication(input);
+			},
+		},
+	});
+	assert(outcomes.length === 1 && outcomes[0]?.status === "succeeded", "Production job did not settle independently");
+	const verified = await client.query(`SELECT "environment", "lifecycle" FROM "publicationIdentifier" WHERE "itemKey" = $1`, [draft.itemKey]);
+	assert(verified.rows[0]?.environment === "production" && verified.rows[0]?.lifecycle === "verified", "Production deposit did not verify the production DOI");
+}
+
 async function verifyIsolatedDatabase() {
 	const sourceUrl = new URL(verifiedDatabaseUrl);
 	const databaseName = `crossref_activation_${process.pid}_${Date.now()}`;
@@ -1161,6 +1190,7 @@ async function verifyIsolatedDatabase() {
 		await client.connect();
 		await verify(database, client);
         await verifyDraftReservation(database, client);
+		await verifyProductionReservation(database, client);
 	} finally {
 		await client?.end();
 		await pool?.end();

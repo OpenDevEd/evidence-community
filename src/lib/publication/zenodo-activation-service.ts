@@ -9,6 +9,7 @@ import {
 	publicationIdentifier,
 	publicationTarget,
 	type ZenodoIdentifierPolicy,
+	type ZenodoPublicationEnvironment,
 } from "@/db/schema/publication";
 
 import { resolveBibliographicDoi } from "./bibliographic-doi";
@@ -52,7 +53,7 @@ export type ZenodoActivationPolicyInput = {
 export type ZenodoActivationReceipt = {
 	itemKey: string;
 	provider: "zenodo";
-	environment: "sandbox";
+	environment: ZenodoPublicationEnvironment;
 	identifierPolicy: ZenodoIdentifierPolicy;
 	canonicalRevision: number;
 	fileRevision: number | null;
@@ -161,12 +162,12 @@ function requireZenodoConfig(config: PublicationConfig) {
 	const zenodo = config.services.publication.zenodo;
 	if (!zenodo.enabled) {
 		throw new ZenodoActivationConfigurationError(
-			"Zenodo Sandbox publishing is not configured for this library.",
+			"Zenodo publishing is not configured for this library.",
 		);
 	}
 	if (!zenodo.token) {
 		throw new ZenodoActivationConfigurationError(
-			"Zenodo Sandbox publishing is missing its account token.",
+			"Zenodo publishing is missing its account token.",
 		);
 	}
 	return { ...zenodo, token: zenodo.token };
@@ -174,11 +175,12 @@ function requireZenodoConfig(config: PublicationConfig) {
 
 function activeZenodoJobs(
 	jobs: readonly (typeof publicationSyncJob.$inferSelect)[],
+environment: ZenodoPublicationEnvironment,
 ) {
 	return jobs.filter(
 		(job) =>
 			job.provider === "zenodo" &&
-			job.environment === "sandbox" &&
+			job.environment === environment &&
 			job.processedAt === null &&
 			job.deadLetteredAt === null &&
 			job.supersededAt === null,
@@ -186,6 +188,7 @@ function activeZenodoJobs(
 }
 
 function receipt(input: {
+	environment: ZenodoPublicationEnvironment;
 	itemKey: string;
 	identifierPolicy: ZenodoIdentifierPolicy;
 	canonicalRevision: number;
@@ -208,7 +211,7 @@ function receipt(input: {
 	return {
 		itemKey: input.itemKey,
 		provider: "zenodo",
-		environment: "sandbox",
+		environment: input.environment,
 		identifierPolicy: input.identifierPolicy,
 		canonicalRevision: input.canonicalRevision,
 		fileRevision: input.fileRevision,
@@ -219,17 +222,17 @@ function receipt(input: {
 	};
 }
 
-function zenodoHasStarted(snapshot: PublicationRepositorySnapshot) {
+function zenodoHasStarted(snapshot: PublicationRepositorySnapshot, environment: ZenodoPublicationEnvironment) {
 	return (
 		snapshot.identifiers.some(
 			(identifier) =>
 				identifier.registrar === "zenodo" &&
-				identifier.environment === "sandbox",
+				identifier.environment === environment,
 		) ||
 		snapshot.states.some(
 			(state) =>
 				state.provider === "zenodo" &&
-				state.environment === "sandbox" &&
+				state.environment === environment &&
 				Boolean(
 					state.lastPayloadHash ||
 					state.zenodoRecordId ||
@@ -239,12 +242,12 @@ function zenodoHasStarted(snapshot: PublicationRepositorySnapshot) {
 		snapshot.journals.some(
 			(journal) =>
 				journal.provider === "zenodo" &&
-				journal.environment === "sandbox",
+				journal.environment === environment,
 		) ||
 		snapshot.jobs.some(
 			(job) =>
 				job.provider === "zenodo" &&
-				job.environment === "sandbox" &&
+				job.environment === environment &&
 				Boolean(job.processedAt || job.leaseOwner),
 		)
 	);
@@ -301,7 +304,7 @@ function prepareZenodoActivation(input: {
 	const managedCrossrefRow = snapshot.identifiers.find(
 		(identifier) =>
 			identifier.registrar === "crossref" &&
-			identifier.environment === "test" &&
+			identifier.environment === input.config.services.publication.crossref.environment &&
 			identifier.role === "primary" &&
 			identifier.ownership === "managed" &&
 			identifier.isCurrent,
@@ -348,15 +351,16 @@ function prepareZenodoActivation(input: {
 function assertZenodoPolicyMayChange(
 	snapshot: PublicationRepositorySnapshot,
 	policy: ZenodoIdentifierPolicy,
+environment: ZenodoPublicationEnvironment,
 ) {
 	const existingTarget = snapshot.targets.find(
 		(target) =>
-			target.provider === "zenodo" && target.environment === "sandbox",
+			target.provider === "zenodo" && target.environment === environment,
 	);
 	if (
 		existingTarget?.identifierPolicy &&
 		existingTarget.identifierPolicy !== policy &&
-		zenodoHasStarted(snapshot)
+		zenodoHasStarted(snapshot, environment)
 	) {
 		throw new ZenodoIdentifierPolicyLockedError();
 	}
@@ -365,6 +369,7 @@ function assertZenodoPolicyMayChange(
 async function saveZenodoActivationTarget(
 	transaction: DatabaseTransaction,
 	input: {
+		environment: ZenodoPublicationEnvironment,
 		lockedExternalDoi: string | null;
 		itemKey: string;
 		policy: ZenodoIdentifierPolicy;
@@ -377,7 +382,7 @@ async function saveZenodoActivationTarget(
 		.values({
 			itemKey: input.itemKey,
 			provider: "zenodo",
-			environment: "sandbox",
+			environment: input.environment,
 			identifierPolicy: input.policy,
 			lockedExternalDoi: input.lockedExternalDoi,
 			requestedBy: input.requestedBy,
@@ -405,7 +410,7 @@ async function saveZenodoActivationTarget(
 			and(
 				eq(publicationSyncState.itemKey, input.itemKey),
 				eq(publicationSyncState.provider, "zenodo"),
-				eq(publicationSyncState.environment, "sandbox"),
+				eq(publicationSyncState.environment, input.environment),
 			),
 		);
 }
@@ -413,6 +418,7 @@ async function saveZenodoActivationTarget(
 async function selectZenodoActivationJob(
 	transaction: DatabaseTransaction,
 	input: {
+		environment: ZenodoPublicationEnvironment,
 		itemKey: string;
 		policy: ZenodoIdentifierPolicy;
 		canonicalRevision: number;
@@ -422,7 +428,7 @@ async function selectZenodoActivationJob(
 		now: Date;
 	},
 ) {
-	const activeJobs = activeZenodoJobs(input.jobs);
+	const activeJobs = activeZenodoJobs(input.jobs, input.environment);
 	const leasedJob = activeJobs.find((job) => job.leaseOwner !== null) ?? null;
 	if (leasedJob) return leasedJob;
 	const nextJob = {
@@ -435,7 +441,7 @@ async function selectZenodoActivationJob(
 	const expectedIdempotencyKey = publicationJobIdempotencyKey({
 		...nextJob,
 		provider: "zenodo",
-		environment: "sandbox",
+		environment: input.environment,
 	});
 	const matchingJob =
 		activeJobs.find(
@@ -445,13 +451,13 @@ async function selectZenodoActivationJob(
 	await supersedeUnleasedPublicationJobs(transaction, {
 		itemKey: input.itemKey,
 		provider: "zenodo",
-		environment: "sandbox",
+		environment: input.environment,
 		now: input.now,
 	});
 	return savePublicationJob(transaction, {
 		...nextJob,
 		provider: "zenodo",
-		environment: "sandbox",
+		environment: input.environment,
 		reason: "manual_activation",
 	});
 }
@@ -543,8 +549,9 @@ export async function activateZenodoPublicationInTransaction(
 			);
 		}
 	}
-	assertZenodoPolicyMayChange(snapshot, policy);
+	assertZenodoPolicyMayChange(snapshot, policy, zenodo.environment);
 	await saveZenodoActivationTarget(transaction, {
+		environment: zenodo.environment,
 		lockedExternalDoi: externalDoi,
 		itemKey,
 		policy,
@@ -552,6 +559,7 @@ export async function activateZenodoPublicationInTransaction(
 		now,
 	});
 	const job = await selectZenodoActivationJob(transaction, {
+		environment: zenodo.environment,
 		itemKey,
 		policy,
 		canonicalRevision: record.revision,
@@ -563,10 +571,11 @@ export async function activateZenodoPublicationInTransaction(
 	const providerRecordExists = snapshot.states.some(
 		(state) =>
 			state.provider === "zenodo" &&
-			state.environment === "sandbox" &&
+			state.environment === zenodo.environment &&
 			Boolean(state.zenodoRecordId),
 	);
 	return receipt({
+		environment: zenodo.environment,
 		itemKey,
 		identifierPolicy: policy,
 		canonicalRevision: record.revision,
@@ -594,7 +603,7 @@ export async function retryZenodoPublication(
 		const target = snapshot.targets.find(
 			(candidate) =>
 				candidate.provider === "zenodo" &&
-				candidate.environment === "sandbox" &&
+				candidate.environment === zenodo.environment &&
 				candidate.deactivatedAt === null &&
 				candidate.activatedAt !== null,
 		);
@@ -625,7 +634,7 @@ export async function retryZenodoPublication(
 				and(
 					eq(publicationSyncJob.itemKey, itemKey),
 					eq(publicationSyncJob.provider, "zenodo"),
-					eq(publicationSyncJob.environment, "sandbox"),
+					eq(publicationSyncJob.environment, zenodo.environment),
 					isNull(publicationSyncJob.supersededAt),
 				),
 			)
@@ -662,7 +671,7 @@ export async function retryZenodoPublication(
 			retried = await savePublicationJob(transaction, {
 				itemKey,
 				provider: "zenodo",
-				environment: "sandbox",
+				environment: zenodo.environment,
 				identifierPolicy: target.identifierPolicy,
 				canonicalRevision: prepared.record.revision,
 				fileRevision: prepared.fileRevision,
@@ -674,10 +683,11 @@ export async function retryZenodoPublication(
 		const providerRecordExists = snapshot.states.some(
 			(state) =>
 				state.provider === "zenodo" &&
-				state.environment === "sandbox" &&
+				state.environment === zenodo.environment &&
 				Boolean(state.zenodoRecordId),
 		);
 		return receipt({
+			environment: zenodo.environment,
 			itemKey,
 			identifierPolicy: target.identifierPolicy,
 			canonicalRevision: retried.canonicalRevision,

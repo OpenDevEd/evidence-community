@@ -377,7 +377,7 @@ export async function claimNextPublicationJob(
 	database: Database,
 	input: {
 		provider: PublicationProvider;
-		environment: "test" | "sandbox";
+		environment: "test" | "sandbox" | "production";
 		workerId: string;
 		leaseSeconds: number;
 		claimedAt: Date;

@@ -271,8 +271,8 @@ async function verifyCrossrefBackedPdfCorrection(
 	assert(identifier, "The PDF correction had no active Crossref DOI");
 	await client.query(
 		`INSERT INTO "zenodoFileCorrectionApproval"
-			("itemKey", "doi", "fileManifestHash", "approvedAt")
-		 VALUES ('PUBWRKAA', $1, $2, $3)`,
+			("environment", "itemKey", "doi", "fileManifestHash", "approvedAt")
+		 VALUES ('sandbox', 'PUBWRKAA', $1, $2, $3)`,
 		[identifier.doi, fileManifestHash, approvedAt],
 	);
 	await database.transaction((transaction) =>
@@ -369,8 +369,8 @@ async function verifyMismatchedPdfCorrectionApprovalIsBlocked(
 	);
 	await client.query(
 		`INSERT INTO "zenodoFileCorrectionApproval"
-			("itemKey", "doi", "fileManifestHash", "approvedAt")
-		 VALUES ('PUBWRKAA', '10.5555/library.000001', repeat('a', 64), $1)`,
+			("environment", "itemKey", "doi", "fileManifestHash", "approvedAt")
+		 VALUES ('sandbox', 'PUBWRKAA', '10.5555/library.000001', repeat('a', 64), $1)`,
 		[changedAt],
 	);
 	await database.transaction((transaction) =>

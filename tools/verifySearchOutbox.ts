@@ -1,3 +1,5 @@
+import { libraryConfigSchema } from "../src/config/library-config/schema";
+import { maximalLibraryConfig } from "../tests/fixtures/library-config";
 import {
 	collectionIdentity,
 	itemIdentity,
@@ -33,6 +35,8 @@ import {
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
 import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
+
+const publicationConfig = libraryConfigSchema.parse(maximalLibraryConfig).services.publication;
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -341,6 +345,7 @@ async function verify() {
 
 		const observedProgress: SearchOutboxProgress[] = [];
 		const initialBatch = await drainSearchOutbox({
+ publication: publicationConfig,
 			batchClient: client.batches,
 			database,
 			heartbeatIntervalMs: 100,
@@ -463,6 +468,7 @@ async function verify() {
 			revision: 1,
 		});
 		const standaloneResult = await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -496,6 +502,7 @@ async function verify() {
 			revision: 2,
 		});
 		const reparentResult = await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -577,6 +584,7 @@ async function verify() {
 		assert(retryEvent, "The retry event was not created");
 		try {
 			await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 				database,
 				heartbeatIntervalMs: 100,
 				index: badService.index,
@@ -611,6 +619,7 @@ async function verify() {
 			.set({ nextAttemptAt: new Date() })
 			.where(eq(outbox.id, retryEvent.id));
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -641,6 +650,7 @@ async function verify() {
 		assert(deadLetterEvent, "The dead-letter event was not created");
 		try {
 			await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 				database,
 				heartbeatIntervalMs: 100,
 				index: badService.index,
@@ -679,6 +689,7 @@ async function verify() {
 			"The requeued dead letter retained terminal state",
 		);
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -700,6 +711,7 @@ async function verify() {
 			revision: 2,
 		});
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -730,6 +742,7 @@ async function verify() {
 			revision: 4,
 		});
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -763,6 +776,7 @@ async function verify() {
 			revision: 5,
 		});
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -807,6 +821,7 @@ async function verify() {
 			"The same-entity follower event was not created",
 		);
 		const unavailable = await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -819,6 +834,7 @@ async function verify() {
 			.set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
 			.where(eq(outbox.id, leasedEvent.id));
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -826,6 +842,7 @@ async function verify() {
 			workerId: "search-e2e-replacement",
 		});
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -866,6 +883,7 @@ async function verify() {
 			reportWaitingReached = resolve;
 		});
 		const interruptedProcessing = processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			batchClient: client.batches,
 			database,
 			heartbeatIntervalMs: 100,
@@ -882,6 +900,7 @@ async function verify() {
 		});
 		await waitingReached;
 		const replacementWhileLeased = await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
@@ -918,6 +937,7 @@ async function verify() {
 		const progressWithoutBatchTelemetry: SearchOutboxProgress[] = [];
 		let unavailableBatchTelemetryCalls = 0;
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			batchClient: {
 				getBatch: async () => {
 					unavailableBatchTelemetryCalls += 1;
@@ -951,7 +971,7 @@ async function verify() {
 			"The event released during shutdown was not retryable",
 		);
 
-		const rebuilt = await rebuildSearchIndex(database, goodService, {
+		const rebuilt = await rebuildSearchIndex(database, goodService, publicationConfig, {
 			taskTimeoutMs: 60_000,
 		});
 		assert(
@@ -1035,6 +1055,7 @@ async function verify() {
 		});
 		try {
 			await processNextSearchOutboxBatch({
+ publication: publicationConfig,
 				database,
 				heartbeatIntervalMs: 30_000,
 				index: stealingIndex,
@@ -1065,6 +1086,7 @@ async function verify() {
 			.set({ nextAttemptAt: new Date(Date.now() - 1_000) })
 			.where(eq(outbox.id, keptEvent.id));
 		await processNextSearchOutboxEvent({
+ publication: publicationConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,

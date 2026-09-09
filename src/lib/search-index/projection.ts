@@ -1,7 +1,8 @@
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { sourceConnection } from "@opendeved/evidence-library-core";
 
 import { isPublicTopLevelItem } from "@/lib/admin/item-fields";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
@@ -48,6 +49,8 @@ export type SearchProjectionPlan = {
 
 type CollectionRow = typeof collection.$inferSelect;
 type ItemRow = typeof item.$inferSelect;
+export type PublicationProjectionConfig = LibraryServerConfig["services"]["publication"];
+
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
 function uniqueSorted(values: Iterable<string>) {
@@ -260,6 +263,7 @@ async function resolveTopLevelItemKeys(
 
 async function buildSearchProjectionPlanForKeys(
 	database: SearchProjectionDatabase,
+	publication: PublicationProjectionConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 ): Promise<SearchProjectionPlan> {
@@ -350,6 +354,10 @@ async function buildSearchProjectionPlanForKeys(
 									activeParentKeys,
 								),
 								eq(publicationIdentifier.isCurrent, true),
+								or(
+									and(eq(publicationIdentifier.registrar, "crossref"), eq(publicationIdentifier.environment, publication.crossref.environment)),
+									and(eq(publicationIdentifier.registrar, "zenodo"), eq(publicationIdentifier.environment, publication.zenodo.environment)),
+								),
 							),
 						)
 						.orderBy(
@@ -371,7 +379,7 @@ async function buildSearchProjectionPlanForKeys(
 									activeParentKeys,
 								),
 								eq(publicationSyncState.provider, "zenodo"),
-								eq(publicationSyncState.environment, "sandbox"),
+								eq(publicationSyncState.environment, publication.zenodo.environment),
 							),
 						),
 				])
@@ -448,7 +456,7 @@ async function buildSearchProjectionPlanForKeys(
 				identifiers: identifiersByItem.get(parent.key) ?? [],
 				zenodoState: zenodoState
 					? {
-							environment: "sandbox",
+							environment: publication.zenodo.environment,
 							zenodoParentId: zenodoState.zenodoParentId,
 							zenodoRecordId: zenodoState.zenodoRecordId,
 						}
@@ -496,6 +504,7 @@ async function buildSearchProjectionPlanForKeys(
 
 async function* plansForKeys(
 	database: Database,
+	publication: PublicationProjectionConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 	batchSize: number,
@@ -508,6 +517,7 @@ async function* plansForKeys(
 			(transaction) =>
 				buildSearchProjectionPlanForKeys(
 					transaction,
+					publication,
 					keyChunk,
 					collections,
 				),
@@ -517,6 +527,7 @@ async function* plansForKeys(
 
 export async function* generateSearchProjectionPlans(
 	database: Database,
+	publication: PublicationProjectionConfig,
 	events: readonly SearchProjectionEvent[],
 	batchSize = 500,
 	signal?: AbortSignal,
@@ -549,11 +560,12 @@ export async function* generateSearchProjectionPlans(
 				};
 			},
 		);
-	yield* plansForKeys(database, topLevelKeys, collections, batchSize, signal);
+	yield* plansForKeys(database, publication, topLevelKeys, collections, batchSize, signal);
 }
 
 export async function* generateFullSearchProjectionPlans(
 	database: Database,
+	publication: PublicationProjectionConfig,
 	batchSize = 500,
 	signal?: AbortSignal,
 ) {
@@ -575,6 +587,7 @@ export async function* generateFullSearchProjectionPlans(
 		);
 	yield* plansForKeys(
 		database,
+		publication,
 		topLevelRows.map(({ key }) => key),
 		collections,
 		batchSize,

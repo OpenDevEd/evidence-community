@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const PUBLICATION_PROVIDERS = ["crossref", "zenodo"] as const;
-export const PUBLICATION_ENVIRONMENTS = ["test", "sandbox"] as const;
+export const PUBLICATION_ENVIRONMENTS = ["test", "sandbox", "production"] as const;
 export const ZENODO_IDENTIFIER_POLICIES = [
 	"reuse-crossref",
 	"reuse-external",
@@ -68,6 +68,8 @@ export const PUBLICATION_RUN_STATUSES = [
 	"failed",
 ] as const;
 
+export type CrossrefPublicationEnvironment = "test" | "production";
+export type ZenodoPublicationEnvironment = "sandbox" | "production";
 export type PublicationProvider = (typeof PUBLICATION_PROVIDERS)[number];
 export type PublicationEnvironment = (typeof PUBLICATION_ENVIRONMENTS)[number];
 export type PublicationJobReason = (typeof PUBLICATION_JOB_REASONS)[number];
@@ -83,7 +85,7 @@ export const doiNamespace = pgTable(
 	"doiNamespace",
 	{
 		environment: text("environment", {
-			enum: ["test"],
+			enum: ["test", "production"],
 		}).primaryKey(),
 		prefix: varchar("prefix", { length: 12 }).notNull(),
 		suffixNamespace: varchar("suffixNamespace", { length: 64 }).notNull(),
@@ -96,7 +98,7 @@ export const doiNamespace = pgTable(
 	(table) => [
 		check(
 			"doiNamespace_environment_valid",
-			sql`${table.environment} = 'test'`,
+			sql`${table.environment} IN ('test', 'production')`,
 		),
 		check(
 			"doiNamespace_prefix_valid",
@@ -109,10 +111,6 @@ export const doiNamespace = pgTable(
 		check(
 			"doiNamespace_next_sequence_positive",
 			sql`${table.nextSequence} >= 1`,
-		),
-		unique("doiNamespace_prefix_suffix_unique").on(
-			table.prefix,
-			table.suffixNamespace,
 		),
 	],
 );
@@ -146,8 +144,8 @@ export const publicationTarget = pgTable(
 		check(
 			"publicationTarget_provider_environment_valid",
 			sql`(
-				(${table.provider} = 'crossref' AND ${table.environment} = 'test')
-				OR (${table.provider} = 'zenodo' AND ${table.environment} = 'sandbox')
+				(${table.provider} = 'crossref' AND ${table.environment} IN ('test', 'production'))
+				OR (${table.provider} = 'zenodo' AND ${table.environment} IN ('sandbox', 'production'))
 			)`,
 		),
 		check(
@@ -214,8 +212,8 @@ export const publicationIdentifier = pgTable(
 		check(
 			"publicationIdentifier_provider_shape_valid",
 			sql`(
-				(${table.registrar} = 'crossref' AND ${table.environment} = 'test' AND ${table.role} = 'primary')
-				OR (${table.registrar} = 'zenodo' AND ${table.environment} = 'sandbox' AND ${table.role} IN ('primary', 'version', 'concept'))
+				(${table.registrar} = 'crossref' AND ${table.environment} IN ('test', 'production') AND ${table.role} = 'primary')
+				OR (${table.registrar} = 'zenodo' AND ${table.environment} IN ('sandbox', 'production') AND ${table.role} IN ('primary', 'version', 'concept'))
 			)`,
 		),
 		check(
@@ -316,7 +314,7 @@ export const publicationSyncState = pgTable(
 			"publicationSyncState_provider_fields_valid",
 			sql`(
 				(${table.provider} = 'crossref'
-					AND ${table.environment} = 'test'
+					AND ${table.environment} IN ('test', 'production')
 					AND ${table.identifierPolicy} IS NULL
 					AND ${table.lastFileManifestHash} IS NULL
 					AND ${table.lastFileManifestSnapshot} IS NULL
@@ -328,7 +326,7 @@ export const publicationSyncState = pgTable(
 					AND ${table.zenodoFirstPublishedAt} IS NULL
 					AND ${table.orphanDraftDepositionId} IS NULL)
 				OR (${table.provider} = 'zenodo'
-					AND ${table.environment} = 'sandbox'
+					AND ${table.environment} IN ('sandbox', 'production')
 					AND ${table.identifierPolicy} IS NOT NULL
 					AND ${table.identifierPolicy} IN ('reuse-crossref', 'reuse-external', 'mint-zenodo')
 					AND ${table.pendingStage} IS NULL
@@ -483,9 +481,8 @@ export const zenodoFileCorrectionApproval = pgTable(
 		provider: text("provider", { enum: ["zenodo"] })
 			.notNull()
 			.default("zenodo"),
-		environment: text("environment", { enum: ["sandbox"] })
-			.notNull()
-			.default("sandbox"),
+		environment: text("environment", { enum: ["sandbox", "production"] })
+			.notNull(),
 		doi: varchar("doi", { length: 255 }).notNull(),
 		fileManifestHash: varchar("fileManifestHash", { length: 64 }).notNull(),
 		approvedAt: timestampWithTimezone("approvedAt").notNull(),
@@ -506,7 +503,7 @@ export const zenodoFileCorrectionApproval = pgTable(
 		}).onDelete("cascade"),
 		check(
 			"zenodoFileCorrectionApproval_provider_environment_valid",
-			sql`${table.provider} = 'zenodo' AND ${table.environment} = 'sandbox'`,
+			sql`${table.provider} = 'zenodo' AND ${table.environment} IN ('sandbox', 'production')`,
 		),
 		check(
 			"zenodoFileCorrectionApproval_doi_valid",
@@ -548,9 +545,8 @@ export const zenodoPublishJournal = pgTable(
 		provider: text("provider", { enum: ["zenodo"] })
 			.notNull()
 			.default("zenodo"),
-		environment: text("environment", { enum: ["sandbox"] })
-			.notNull()
-			.default("sandbox"),
+		environment: text("environment", { enum: ["sandbox", "production"] })
+			.notNull(),
 		operationType: text("operationType", {
 			enum: ZENODO_JOURNAL_OPERATIONS,
 		}).notNull(),
@@ -595,7 +591,7 @@ export const zenodoPublishJournal = pgTable(
 		}),
 		check(
 			"zenodoPublishJournal_provider_environment_valid",
-			sql`${table.provider} = 'zenodo' AND ${table.environment} = 'sandbox'`,
+			sql`${table.provider} = 'zenodo' AND ${table.environment} IN ('sandbox', 'production')`,
 		),
 		check(
 			"zenodoPublishJournal_hashes_valid",
