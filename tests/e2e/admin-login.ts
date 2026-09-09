@@ -77,6 +77,6 @@ export async function openAdmin(page: Page, returnPath = "/admin") {
 	// so do not wait for the load event before looking for them.
 	await page.goto(destination, { waitUntil: "domcontentloaded" });
 	await page
-		.getByRole("button", { name: "New item" })
+		.getByRole("button", { name: "Create Item" })
 		.waitFor({ state: "visible" });
 }

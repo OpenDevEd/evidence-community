@@ -988,7 +988,7 @@ export default function AdminWorkbench({
 
 	const updatePayload = useCallback(
 		(next: Record<string, unknown>) => {
-			if (!detail?.draft) return;
+			if (!detail?.draft || detail.key !== selectedKeyRef.current) return;
 			let normalized = next;
 			const currentType = String(
 				draftPayload.itemType ?? detail.itemType,
@@ -2419,10 +2419,10 @@ export default function AdminWorkbench({
                             }}
 							busy={busy}
 							definitions={definitions}
-							detail={detail}
+							detail={detail?.key === selectedKey ? detail : null}
 							error={detailError}
 							fileErrors={fileErrors}
-							loading={detailLoading}
+							loading={detailLoading || Boolean(selectedKey && detail?.key !== selectedKey && !detailError)}
 							linkPickKind={activeLinkPick}
 							linkTargets={linkTargets}
 							onBackToParent={(key) => setSelectedKey(key)}
