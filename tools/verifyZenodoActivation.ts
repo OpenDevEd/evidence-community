@@ -1,14 +1,12 @@
+import { successfulZenodoTestProvider } from "../tests/fixtures/zenodo-draft";
 import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
 import type {
-	ZenodoPreparedDraft,
 	ZenodoWriter,
 } from "@opendeved/doi-sync-core";
 import {
-	buildZenodoWritePayload,
-	jsonValueSchema,
 } from "@opendeved/doi-sync-core";
 import type { Client } from "pg";
 import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
@@ -131,53 +129,10 @@ let fakeZenodoRecordNumber = 1000;
 function successfulZenodoProvider(
 	input: { discardCount?: { value: number } } = {},
 ): ZenodoPublicationProvider {
-	const prepared = async (
-		request: Pick<
-			Parameters<ZenodoWriter["prepareUpdateRecordMetadata"]>[0],
-			"doiPolicy" | "metadata" | "resourceUrl" | "onPreparedDraft"
-		>,
-	) => {
-		fakeZenodoRecordNumber += 1;
-		const draft = {
-			depositionId: String(fakeZenodoRecordNumber),
-			draftRecordId: String(fakeZenodoRecordNumber),
-			parentId: String(fakeZenodoRecordNumber + 10_000),
-			payloadSnapshot: jsonValueSchema.parse(
-				buildZenodoWritePayload({
-					doiPolicy: request.doiPolicy,
-					metadata: request.metadata,
-					resourceUrl: request.resourceUrl,
-				}),
-			),
-		};
-		await request.onPreparedDraft?.(draft);
-		return draft;
-	};
-	return {
-		prepareEmptyDraft: async (request) => {
-			const draft = { depositionId: "90001", draftRecordId: "90001" };
-			await request.onPreparedDraft?.(draft);
-			return draft;
-		},
-		verifyPublishedState: async () => ({ status: "matched" }),
-		findRecordByDoi: async () => ({ status: "not_found" }),
-		deleteUnpublishedDraft: async () => undefined,
-		discardPreparedDraft: async () => {
-			if (input.discardCount) input.discardCount.value += 1;
-		},
-		prepareCreateRecord: prepared,
-		prepareUpdateRecordMetadata: prepared,
-		prepareUpdateRecordFiles: prepared,
-		prepareNewVersion: prepared,
-		publishDraft: async ({ draft }) => ({
-			latestRecordId: draft.draftRecordId,
-			parentId: draft.parentId ?? draft.draftRecordId,
-			publishedAt: new Date("2030-08-13T12:00:00.000Z"),
-			versionDoi: `10.5072/zenodo.${draft.draftRecordId}`,
-			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
-			links: {},
-		}),
-	};
+ return successfulZenodoTestProvider(() => {
+  fakeZenodoRecordNumber += 1;
+  return {id: String(fakeZenodoRecordNumber), parentId: String(fakeZenodoRecordNumber + 10_000)};
+ }, undefined, async () => {if (input.discardCount) input.discardCount.value += 1;});
 }
 
 function failingAfterJournalProvider(): ZenodoPublicationProvider {

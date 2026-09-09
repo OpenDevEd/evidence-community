@@ -1,15 +1,13 @@
+import { successfulZenodoTestProvider } from "../tests/fixtures/zenodo-draft";
 import assert from "node:assert/strict";
 import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
 import type {
 	CrossrefDepositor,
-	ZenodoPreparedDraft,
 } from "@opendeved/doi-sync-core";
 import {
 	buildPublicationFileManifestHash,
-	buildZenodoWritePayload,
-	jsonValueSchema,
 } from "@opendeved/doi-sync-core";
 import type { Client } from "pg";
 import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
@@ -138,52 +136,7 @@ function successfulCrossrefProvider(gate?: {
 function successfulZenodoProvider(
 	publishedAt = new Date("2030-08-13T12:00:00.000Z"),
 ): ZenodoPublicationProvider {
-	const prepared = async (
-		request: {
-			doiPolicy: Parameters<typeof buildZenodoWritePayload>[0]["doiPolicy"];
-			metadata: Parameters<typeof buildZenodoWritePayload>[0]["metadata"];
-			resourceUrl: string;
-			onPreparedDraft?: (draft: ZenodoPreparedDraft) => Promise<void>;
-		},
-	) => {
-		const draft = {
-			depositionId: "7001",
-			draftRecordId: "7001",
-			parentId: "7000",
-			payloadSnapshot: jsonValueSchema.parse(
-				buildZenodoWritePayload({
-					doiPolicy: request.doiPolicy,
-					metadata: request.metadata,
-					resourceUrl: request.resourceUrl,
-				}),
-			),
-		};
-		await request.onPreparedDraft?.(draft);
-		return draft;
-	};
-	return {
-		prepareEmptyDraft: async (request) => {
-			const draft = { depositionId: "90001", draftRecordId: "90001" };
-			await request.onPreparedDraft?.(draft);
-			return draft;
-		},
-		verifyPublishedState: async () => ({ status: "matched" }),
-		findRecordByDoi: async () => ({ status: "not_found" }),
-		deleteUnpublishedDraft: async () => undefined,
-		discardPreparedDraft: async () => undefined,
-		prepareCreateRecord: prepared,
-		prepareUpdateRecordMetadata: prepared,
-		prepareUpdateRecordFiles: prepared,
-		prepareNewVersion: prepared,
-		publishDraft: async ({ draft }) => ({
-			latestRecordId: draft.draftRecordId,
-			parentId: draft.parentId ?? draft.draftRecordId,
-			publishedAt,
-			versionDoi: `10.5072/zenodo.${draft.draftRecordId}`,
-			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
-			links: {},
-		}),
-	};
+ return successfulZenodoTestProvider(() => ({id: "7001", parentId: "7000"}), publishedAt);
 }
 
 async function verifyCrossrefBackedPdfCorrection(
