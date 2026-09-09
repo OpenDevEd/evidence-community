@@ -20,7 +20,7 @@ export function PublicationArchiveFiles({
 	return (
 		<button
 			type="button"
-			className="group flex w-full items-center gap-3 border-t border-black/[0.05] p-3 text-left transition-[background-color] hover:bg-black/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.04]"
+			className="group flex w-full items-center gap-3 border-t border-black/[0.05] p-3 text-left transition-background-fill hover:bg-black/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.04]"
 			onClick={() =>
 				document.getElementById("admin-attachments")?.scrollIntoView({
 					behavior: "smooth",

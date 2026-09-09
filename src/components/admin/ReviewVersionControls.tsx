@@ -19,7 +19,7 @@ export function ReviewVersionTabs({viewingSubmitted, onSelect}: {viewingSubmitte
 						type="button"
 						aria-pressed={viewingSubmitted === value}
 						onClick={() => onSelect(value)}
-						className={`relative flex min-h-11 flex-1 items-center justify-center gap-1.5 px-3 py-3 text-xs font-medium transition-[background-color,color] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${viewingSubmitted === value ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/45 hover:text-black/70 dark:text-white/45"}`}
+						className={`relative flex min-h-11 flex-1 items-center justify-center gap-1.5 px-3 py-3 text-xs font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${viewingSubmitted === value ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/45 hover:text-black/70 dark:text-white/45"}`}
 					>
 						<HugeiconsIcon
 							icon={value ? SquareLock01Icon : PencilIcon}

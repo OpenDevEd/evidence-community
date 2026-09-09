@@ -81,7 +81,7 @@ export function PublishingChoicePanel({
 						disabled={readOnly || saving || saved.isLoading}
 						aria-pressed={route === option.key}
 						onClick={() => setRoute(option.key)}
-						className={`relative flex min-w-0 flex-1 items-center justify-center gap-2 px-2 py-3 text-[11px] font-medium transition-[background-color,color] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${route === option.key ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"}`}
+						className={`relative flex min-w-0 flex-1 items-center justify-center gap-2 px-2 py-3 text-[11px] font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${route === option.key ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"}`}
 					>
 						<HugeiconsIcon
 							icon={option.icon}
