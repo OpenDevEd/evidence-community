@@ -654,7 +654,7 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	).toBeVisible();
 
 	const logout = page.getByRole("button", { name: "Log out" });
-	const newItem = page.getByRole("button", { name: "New item" });
+	const newItem = page.getByRole("button", { name: "Create Item" });
 	await expect(logout).toBeVisible();
 	await expect(logout).toHaveText("");
 	await logout.focus();
@@ -2872,9 +2872,9 @@ test("creates an item through a pointer click in the new-item popover", async ({
 	});
 
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "New item" }).click();
+	await page.getByRole("button", { name: "Create Item" }).click();
 
-	const popover = page.getByRole("dialog", { name: "New item" });
+	const popover = page.getByRole("dialog", { name: "Create Item" });
 	await expect(popover).toBeVisible();
 	await expect(
 		popover.getByRole("textbox", { name: "Find an item type" }),
@@ -2940,10 +2940,10 @@ test("focuses item search in a narrow keyboard-driven window", async ({
 	await mockPublishedBook(page);
 	await page.setViewportSize({ height: 768, width: 1024 });
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "New item" }).click();
+	await page.getByRole("button", { name: "Create Item" }).click();
 
 	const search = page
-		.getByRole("dialog", { name: "New item" })
+		.getByRole("dialog", { name: "Create Item" })
 		.getByRole("textbox", { name: "Find an item type" });
 	await expect(search).toBeVisible();
 	await expect(search).toBeFocused();
@@ -2962,10 +2962,10 @@ test("lets touch users browse item types without opening the keyboard", async ({
 	await mockPublicShell(page);
 	await mockPublishedBook(page);
 	await openAdmin(page);
-	await page.getByRole("button", { name: "New item" }).click();
+	await page.getByRole("button", { name: "Create Item" }).click();
 
 	const search = page
-		.getByRole("dialog", { name: "New item" })
+		.getByRole("dialog", { name: "Create Item" })
 		.getByRole("textbox", { name: "Find an item type" });
 	await expect(search).toBeVisible();
 	await expect(search).not.toBeFocused();

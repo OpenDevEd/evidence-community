@@ -1287,7 +1287,7 @@ function AttachmentFilePanel({
 								onPress={() => onChangePdfRemoval(detail.key)}
 								size="xs"
 								startContent={
-									<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
+									<HugeiconsIcon icon={detail.fileRemovalPending ? RotateLeft01Icon : Delete02Icon} aria-hidden size={14} />
 								}
 								variant="transparent"
 							>
