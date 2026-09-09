@@ -1,10 +1,9 @@
-import { getItem } from "@/app/api/item/[key]/route";
 import {
-	getCachedItem,
 	getCachedItemSmall,
 } from "@/app/api/cache";
-import { Item, ItemGetResponse } from "@/app/api/item/types";
+import { Item } from "@/app/api/item/types";
 import { Metadata } from "next";
+import { creatorDisplayName } from "@/lib/creator-display-name";
 import { buildLanguageAlternates } from "@/lib/language-alternates";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRecordCitationLinks } from "@/config/library-config/exports";
@@ -54,24 +53,20 @@ export async function generateMetadata(props: {
 			title: "404 - Not Found",
 			description: "404 - Not Found",
 			generator: "new-el",
+			robots: { index: false, follow: false },
 		};
 	}
 
 	const item: Item = data.item;
+	const authors = (item.creators ?? []).filter(creator => creator.creatorType === "author").map(creatorDisplayName).filter(Boolean);
 	const extraValues = getExtraValues(item.extra ?? "");
-	const attachmentExists = item.attachmentsData?.find(
-		(a: any) => a.PDFCoverPageImage
-	);
-
-	const fullTextPDFs = item.fullTextPDFs ?? [];
-
-	const institution = Array.isArray(item.institution)
-		? item.institution.join(", ")
-		: item.institution;
-
 	const pdfWithImage = item.attachmentsData?.find(
 		(a: any) => a.PDFCoverPageImage
 	);
+
+	const shareImage = pdfWithImage?.PDFCoverPageImage
+		? { url: convertToImageURL(pdfWithImage.PDFCoverPageImage), width: pdfWithImage.PDFCoverPageWidth ?? undefined, height: pdfWithImage.PDFCoverPageHeight ?? undefined, alt: item.title ?? "" }
+		: { url: libraryConfig.identity.assets.shareImage ?? buildSiteUrl(`/lib/${item.key}/share-image`, baseUrl), alt: item.title ?? "" };
 
 	return {
 		title: item.title,
@@ -110,15 +105,7 @@ export async function generateMetadata(props: {
 			citation_date: item.date ?? "",
 			citation_year: item.year ?? "",
 
-			citation_author:
-				item.creators
-					?.filter((creator: any) => creator.creatorType === "author")
-					.map((creator: any) =>
-						Object.entries(creator)
-							.filter(([key]) => key !== "creatorType")
-							.map(([_, value]) => value)
-							.join(", ")
-					) ?? [],
+			citation_author: authors,
 
 			citation_volume: item.volume ?? "",
 			citation_issue: item.issue ?? "",
@@ -145,34 +132,23 @@ export async function generateMetadata(props: {
 				? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`, baseUrl)
 				: "",
 		},
+		twitter: {
+			card: "summary_large_image",
+			title: item.title ?? "",
+			description: item.abstractNote ?? "",
+			images: [shareImage],
+		},
 		openGraph: {
 			title: item.title ?? "",
 			description: item.abstractNote ?? "",
 			url: buildSiteUrl(`/lib/${item.key}`, baseUrl),
 			siteName: libraryConfig.identity.name,
-			images: [
-				{
-					url: pdfWithImage
-						? convertToImageURL(
-								pdfWithImage.PDFCoverPageImage ?? ""
-						  )
-						: "",
-					width: pdfWithImage?.PDFCoverPageWidth ?? 1200,
-					height: pdfWithImage?.PDFCoverPageHeight ?? 630,
-					alt: item.title ?? "",
-				},
-			],
-			locale: "en_GB",
+			images: [shareImage],
+			locale: libraryConfig.localization.defaultLocale.includes("-")
+				? libraryConfig.localization.defaultLocale.replaceAll("-", "_")
+				: undefined,
 			type: "article",
-			authors:
-				item.creators
-					?.filter((creator: any) => creator.creatorType === "author")
-					.map((creator: any) =>
-						Object.entries(creator)
-							.filter(([key]) => key !== "creatorType")
-							.map(([_, value]) => value)
-							.join(", ")
-					) ?? [],
+			authors,
 			publishedTime: item.date && !isNaN(new Date(item.date).getTime())
 				? new Date(item.date).toISOString()
 				: undefined,
