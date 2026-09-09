@@ -8,6 +8,12 @@ export async function createAdminTestSession(
 	baseUrl: string,
 	code = process.env.EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE,
 ): Promise<AdminTestSession> {
+	const existingCookie = process.env.EVIDENCE_LIBRARY_ADMIN_SESSION_COOKIE;
+	if (existingCookie) {
+		const separator = existingCookie.indexOf("=");
+		if (separator < 1 || existingCookie.includes(";")) throw new Error("Expected a single admin session cookie");
+		return {cookieHeader: existingCookie, name: existingCookie.slice(0, separator), value: existingCookie.slice(separator + 1)};
+	}
 	if (!code) {
 		throw new Error("EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE is required");
 	}

@@ -426,7 +426,10 @@ async function verify() {
 		});
 
 		const reviewStorage = new MemoryFileStorage();
-		const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file" });
+		const citationTarget = await createNativeItemDraft(db, {itemType: "Report", title: "Referenced publication"});
+        createdKeys.push(citationTarget.itemKey);
+        await publishNativeItemDraft(db, citationTarget.itemKey);
+        const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file", links: {cites: [citationTarget.itemKey], related: []} });
 		createdKeys.push(noFileDraft.itemKey);
 		const noFileActor = { userId: "no-file-creator", role: "creator" } as const;
 		let choiceRequired = false;
@@ -446,6 +449,7 @@ async function verify() {
 		assert(noFileApproval.review.state === "published", "A PDF was required to publish a review");
         const [approvedPublic] = await db.select({ revision: item.revision }).from(item).where(eq(item.key, noFileDraft.itemKey));
         assert(noFileApproval.indexingRecords.some(record => record.key === noFileDraft.itemKey && record.revision === approvedPublic?.revision), "Approval omitted the final public revision from indexing receipts");
+        assert(noFileApproval.indexingRecords.some(record => record.key === citationTarget.itemKey), "Approval omitted the changed citation target from indexing receipts");
 
         assert(noFileApproval.review.remainingConflicts[noFileDraft.itemKey]?.includes("title"), "Correction failed to preserve the conflicting working title");
         const conflictDraft = await getNativeItemDraft(db, noFileDraft.itemKey);

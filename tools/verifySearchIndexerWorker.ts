@@ -214,37 +214,31 @@ async function waitForReceiptsIndexed(
 	}, message);
 }
 
+async function publishReviewThroughApi(baseUrl: string, itemKey: string) {
+ const {item: detail} = await requestJson<{item: {parentItem: string | null}}>(baseUrl, `/api/admin/items/${itemKey}`);
+ const rootKey = detail.parentItem ?? itemKey;
+ await requestJson(baseUrl, `/api/admin/items/${rootKey}/draft`, {method: "POST"});
+ const {review} = await requestJson<{review: {id: string; revision: number}}>(baseUrl, `/api/admin/items/${rootKey}/review`, {method: "POST"});
+ return requestJson<{indexingReceipts: IndexReceipt[]}>(baseUrl, `/api/admin/reviews/${review.id}`, {method: "POST", body: JSON.stringify({action: "approve", expectedRevision: review.revision})});
+}
+
 async function publishDraftThroughAdmin(page: Page, title: string) {
-	const checkbox = page.getByRole("checkbox", { name: `Select ${title}` });
-	await checkbox.waitFor({ state: "visible", timeout: timeoutMs });
-	await checkbox.check();
-	const mutationResponse = page.waitForResponse((response) => {
-		const request = response.request();
-		return (
-			new URL(response.url()).pathname === "/api/admin/items/batch" &&
-			request.method() === "POST"
-		);
-	});
-	await page
-		.getByRole("toolbar", { name: "Bulk actions" })
-		.getByRole("button", { name: "Publish selected" })
-		.click();
-	const response = await mutationResponse;
-	assert(
-		response.ok(),
-		`The admin publish request failed (${response.status()})`,
-	);
-	const body = (await response.json()) as {
-		results?: Array<{ indexingReceipts?: IndexReceipt[] }>;
-	};
-	const receipts = body.results?.flatMap(
-		({ indexingReceipts }) => indexingReceipts ?? [],
-	);
-	assert(
-		receipts?.length,
-		"The admin publish response did not include an indexing receipt",
-	);
-	return receipts;
+ const row = page.getByRole("row").filter({has: page.getByRole("checkbox", {name: `Select ${title}`, exact: true})});
+ await row.click();
+ await page.getByRole("button", {name: "Submit for review", exact: true}).click();
+ await page.getByRole("button", {name: "Submit snapshot", exact: true}).click();
+ await page.getByRole("button", {name: "Submitted version", exact: true}).click();
+ await page.getByRole("button", {name: "Publish version", exact: true}).click();
+ const mutationResponse = page.waitForResponse(response => {
+  const request = response.request();
+  return new URL(response.url()).pathname.startsWith("/api/admin/reviews/") && request.method() === "POST" && request.postDataJSON()?.action === "approve";
+ });
+ await page.getByRole("dialog").getByRole("button", {name: "Publish version", exact: true}).click();
+ const response = await mutationResponse;
+ assert(response.ok(), `The review approval failed (${response.status()})`);
+ const body = await response.json() as {indexingReceipts?: IndexReceipt[]};
+ assert(body.indexingReceipts?.length, "Review approval did not include indexing receipts");
+ return body.indexingReceipts;
 }
 
 function outboxReceiptPredicate(receipt: IndexReceipt) {
@@ -326,6 +320,7 @@ async function main() {
 		isolatedDatabaseUrl.pathname = `/${isolatedDatabaseName}`;
 		isolatedConfig.services.database.url = isolatedDatabaseUrl.toString();
 		isolatedConfig.services.search.index = isolatedIndexName;
+
 		const isolatedConfigPath = `${temporaryDirectory}/library.json`;
 		await writeFile(isolatedConfigPath, JSON.stringify(isolatedConfig));
 		await adminResource.pool.query(
@@ -734,11 +729,9 @@ async function main() {
 			}),
 			method: "POST",
 		});
-		const published = await requestJson<{
-			indexingReceipts: IndexReceipt[];
-		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/publish`, {
-			method: "POST",
-		});
+        // Search lifecycle fixtures are imported items: they can be removed without withdrawing a managed DOI.
+        await database.update(itemIdentity).set({kind: "imported", importMethod: "file"}).where(eq(itemIdentity.key, created.draft.itemKey));
+		const published = await publishReviewThroughApi(baseUrl, created.draft.itemKey);
 		assert(
 			published.indexingReceipts[0]?.entityKey ===
 				created.draft.itemKey &&
@@ -777,7 +770,7 @@ async function main() {
 			"The worker reported completion before the document was searchable",
 		);
 		const opened = await requestJson<{
-			draft: { draftRevision: number; payload: Record<string, unknown> };
+			draft: { generation: string; draftRevision: number; payload: Record<string, unknown> };
 		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/draft`, {
 			method: "POST",
 		});
@@ -787,6 +780,7 @@ async function main() {
 			{
 				body: JSON.stringify({
 					expectedDraftRevision: opened.draft.draftRevision,
+                    expectedDraftGeneration: opened.draft.generation,
 					expectedPayload: opened.draft.payload,
 					payload: {
 						...opened.draft.payload,
@@ -797,11 +791,7 @@ async function main() {
 				method: "PUT",
 			},
 		);
-		const republished = await requestJson<{
-			indexingReceipts: IndexReceipt[];
-		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/publish`, {
-			method: "POST",
-		});
+		const republished = await publishReviewThroughApi(baseUrl, created.draft.itemKey);
 		assert(
 			republished.indexingReceipts[0]?.revision === 2,
 			"The edited publication did not return revision 2",
@@ -841,15 +831,11 @@ async function main() {
 			);
 		}
 
-		const createDraft = (payload: Record<string, unknown>) =>
-			requestJson<{ draft: { itemKey: string } }>(
-				baseUrl,
-				"/api/admin/items/drafts",
-				{
-					body: JSON.stringify(payload),
-					method: "POST",
-				},
-			);
+		const createDraft = async (payload: Record<string, unknown>) => {
+            const result = await requestJson<{draft: {itemKey: string}}>(baseUrl, "/api/admin/items/drafts", {body: JSON.stringify(payload), method: "POST"});
+            await database.update(itemIdentity).set({kind: "imported", importMethod: "file"}).where(eq(itemIdentity.key, result.draft.itemKey));
+            return result;
+        };
 		const oldParent = await createDraft({
 			collections: [],
 			creators: [],
@@ -865,11 +851,7 @@ async function main() {
 			title: "New receipt parent",
 		});
 		for (const parent of [oldParent, newParent]) {
-			const result = await requestJson<{
-				indexingReceipts: IndexReceipt[];
-			}>(baseUrl, `/api/admin/items/${parent.draft.itemKey}/publish`, {
-				method: "POST",
-			});
+			const result = await publishReviewThroughApi(baseUrl, parent.draft.itemKey);
 			await waitForReceiptsIndexed(
 				baseUrl,
 				result.indexingReceipts,
@@ -882,18 +864,14 @@ async function main() {
 			tags: [],
 			title: "Receipt reparent child",
 		});
-		const childPublished = await requestJson<{
-			indexingReceipts: IndexReceipt[];
-		}>(baseUrl, `/api/admin/items/${child.draft.itemKey}/publish`, {
-			method: "POST",
-		});
+		const childPublished = await publishReviewThroughApi(baseUrl, child.draft.itemKey);
 		await waitForReceiptsIndexed(
 			baseUrl,
 			childPublished.indexingReceipts,
 			"The initial child publication was not indexed",
 		);
 		const childDraft = await requestJson<{
-			draft: { draftRevision: number; payload: Record<string, unknown> };
+			draft: { generation: string; draftRevision: number; payload: Record<string, unknown> };
 		}>(baseUrl, `/api/admin/items/${child.draft.itemKey}/draft`, {
 			method: "POST",
 		});
@@ -903,6 +881,7 @@ async function main() {
 			{
 				body: JSON.stringify({
 					expectedDraftRevision: childDraft.draft.draftRevision,
+                    expectedDraftGeneration: childDraft.draft.generation,
 					expectedPayload: childDraft.draft.payload,
 					payload: {
 						...childDraft.draft.payload,
@@ -912,11 +891,7 @@ async function main() {
 				method: "PUT",
 			},
 		);
-		const reparented = await requestJson<{
-			indexingReceipts: IndexReceipt[];
-		}>(baseUrl, `/api/admin/items/${child.draft.itemKey}/publish`, {
-			method: "POST",
-		});
+		const reparented = await publishReviewThroughApi(baseUrl, child.draft.itemKey);
 		const reparentReceiptKeys = new Set(
 			reparented.indexingReceipts.map(({ entityKey }) => entityKey),
 		);
@@ -1178,26 +1153,10 @@ async function main() {
 				...fixtures.map(({ draft }) => draft.itemKey),
 			);
 		}
-		for (const keyChunk of chunkValues(progressFixtureKeys, 50)) {
-			const result = await requestJson<{
-				results: Array<{
-					indexingReceipts: IndexReceipt[];
-					outcome: string;
-				}>;
-			}>(baseUrl, "/api/admin/items/batch", {
-				body: JSON.stringify({ action: "publish", keys: keyChunk }),
-				method: "POST",
-			});
-			assert(
-				result.results.length === keyChunk.length &&
-					result.results.every(
-						({ indexingReceipts, outcome }) =>
-							outcome === "changed" &&
-							indexingReceipts.length === 1,
-					),
-				"The real progress workload did not queue every fixture",
-			);
-		}
+		for (const keyChunk of chunkValues(progressFixtureKeys, 10)) {
+            const results = await Promise.all(keyChunk.map(key => publishReviewThroughApi(baseUrl, key)));
+            assert(results.every(result => result.indexingReceipts.length > 0), "The real progress workload did not queue every fixture");
+        }
 		await waitForAdminSearchIndexStatus(
 			chromiumPage,
 			"Search paused",

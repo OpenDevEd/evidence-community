@@ -503,6 +503,7 @@ export async function approveItemReview(
 					throw new ItemDraftConflictError(record.itemKey);
 			}
 			const remainingConflicts: Record<string, string[]> = {};
+            const indexingKeys = new Set(keys);
 			// Publish the root before its attachments, within this same transaction.
 			const records = [...locked.snapshot.records].sort(
 				(a, b) =>
@@ -532,6 +533,7 @@ export async function approveItemReview(
 						},
 					},
 				);
+				for (const record of result.indexingRecords) indexingKeys.add(record.key);
 				if (result.draftConflicts.length)
 					remainingConflicts[submitted.itemKey] = [
 						...result.draftConflicts,
@@ -594,7 +596,7 @@ export async function approveItemReview(
 				})
 				.where(eq(itemReview.id, locked.id))
 				.returning();
-            const indexingRecords = await transaction.select({ key: item.key, revision: item.revision }).from(item).where(inArray(item.key, keys));
+            const indexingRecords = await transaction.select({ key: item.key, revision: item.revision }).from(item).where(inArray(item.key, [...indexingKeys]));
             return { fileResults, removals, review: published!, indexingRecords };
 		});
 	} catch (error) {
