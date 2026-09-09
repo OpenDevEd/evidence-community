@@ -26,6 +26,7 @@ import {
 	adminSessionCookieName,
 	authorizeAdminSession,
 	type AdminPermission,
+  type AdminSession,
 } from "./access";
 import {
 	CollectionConflictError,
@@ -127,17 +128,32 @@ export async function readAdminPermission(
 	if (authorization.status === "authorized") return { session: authorization.session, denied: null };
   if (authorization.status === "unavailable") return { session: null, denied: NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify library access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS }) };
 	if (authorization.status === "forbidden") {
-		return { session: null, denied: adminError({
-			code: "forbidden",
-			message: permission === ADMIN_PUBLISH_PERMISSION ? "An Editor or Owner must publish this change." : "Only a library Owner can do this.",
-			status: 403,
-		}) };
+		return { session: null, denied: adminForbiddenResponse(permission) };
 	}
 	return { session: null, denied: adminError({
 		code: "unauthorized",
 		message: "Open this library from OpenScholar to continue.",
 		status: 401,
 	}) };
+}
+
+export function adminForbiddenResponse(permission: AdminPermission) {
+  return adminError({code: "forbidden", status: 403,
+    message: permission === ADMIN_PUBLISH_PERMISSION ? "An Editor or Owner must publish this change." : "Only a library Owner can do this."});
+}
+
+export async function handleAdminJson(
+  request: AdminRequest,
+  permission: AdminPermission,
+  action: (session: AdminSession) => Promise<Record<string, unknown>>,
+) {
+  const access = await readAdminPermission(request, permission);
+  if (access.denied) return access.denied;
+  try {
+    return NextResponse.json(await action(access.session), {headers: ADMIN_RESPONSE_HEADERS});
+  } catch (error) {
+    return adminErrorResponse(error);
+  }
 }
 
 export async function requireAdminPermission(request: AdminRequest, permission: AdminPermission) {

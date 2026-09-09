@@ -450,6 +450,7 @@ async function settleCrossrefState(
 				itemKey: input.itemKey,
 				canonicalRevision: current?.revision ?? input.canonicalRevision,
 				reason: "crossref_verified",
+				idempotencyDiscriminator: "crossref-verified",
 				now: input.settledAt,
 				providers: ["zenodo"],
 			});

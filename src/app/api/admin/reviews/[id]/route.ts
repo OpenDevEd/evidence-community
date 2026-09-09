@@ -5,10 +5,12 @@ import { z } from "zod";
 import {
 	ADMIN_CONTENT_PERMISSION,
 	ADMIN_PUBLISH_PERMISSION,
+  adminRoleHasPermission,
 } from "@/lib/admin/access";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+  adminForbiddenResponse,
 	readAdminJson,
 	readAdminPermission,
 } from "@/lib/admin/http";
@@ -51,6 +53,8 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
+  const access = await readAdminPermission(request, ADMIN_CONTENT_PERMISSION);
+  if (access.denied) return access.denied;
 	try {
 		const body = bodySchema.parse(await readAdminJson(request));
 		const permission = ["approve", "correct", "returned"].includes(
@@ -58,8 +62,7 @@ export async function POST(
 		)
 			? ADMIN_PUBLISH_PERMISSION
 			: ADMIN_CONTENT_PERMISSION;
-		const access = await readAdminPermission(request, permission);
-		if (access.denied) return access.denied;
+		if (!adminRoleHasPermission(access.session.role, permission)) return adminForbiddenResponse(permission);
 		const [{ id }, runtime] = await Promise.all([
 			params,
 			getNativeFileRuntime(),

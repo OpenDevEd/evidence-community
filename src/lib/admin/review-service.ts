@@ -1,3 +1,4 @@
+import { captureItemReviewSnapshot } from "./review-snapshot";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { activateCrossrefPublicationInTransaction } from "@/lib/publication/crossref-activation-service";
 import { activateZenodoPublicationInTransaction } from "@/lib/publication/zenodo-activation-service";
@@ -9,7 +10,6 @@ import {
 import type { EvidenceFileStorage } from "./file-storage";
 import {
 	itemDraft,
-	itemFileDraft,
 	itemIdentity,
 } from "@opendeved/evidence-library-core";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -36,7 +36,6 @@ import { validateNativeItemDraft } from "./native-item-validation";
 import {
 	publishingChoiceSchema,
 	reviewFileSchema,
-	type ReviewFile,
 	type ReviewRecord,
 } from "./review-contract";
 
@@ -160,94 +159,7 @@ export async function submitItemReview(
 			throw new AdminValidationError(
 				"Choose identifiers before submitting.",
 			);
-		const [published, drafts, fileDrafts, files, removals] =
-			await Promise.all([
-				transaction.select().from(item).where(inArray(item.key, keys)),
-				transaction
-					.select()
-					.from(itemDraft)
-					.where(inArray(itemDraft.itemKey, keys)),
-				transaction
-					.select()
-					.from(itemFileDraft)
-					.where(inArray(itemFileDraft.itemKey, keys)),
-				transaction
-					.select()
-					.from(itemFilePublication)
-					.where(inArray(itemFilePublication.itemKey, keys)),
-				transaction
-					.select()
-					.from(itemFileRemoval)
-					.where(inArray(itemFileRemoval.itemKey, keys)),
-			]);
-		const records: ReviewRecord[] = [];
-		const capturedFiles: {
-			itemKey: string;
-			file: ReviewFile | null;
-			removalId?: string;
-		}[] = [];
-		for (const key of keys) {
-			const current = published.find((record) => record.key === key);
-			const draft = drafts.find((record) => record.itemKey === key);
-			if (!draft && (!current || current.deleted)) continue;
-			if (draft && draft.baseRevision !== (current?.revision ?? 0))
-				throw new ItemDraftConflictError(key);
-			const payload = applyItemDraftPatch(
-				await loadPublishedItemPayload(
-					transaction,
-					key,
-					current ?? null,
-				),
-				draft?.patch ?? {},
-			);
-			const validated = validateNativeItemDraft(payload, {
-				requireTitle: true,
-			});
-			if (key === rootKey && validated.item.parentItem)
-				throw new AdminValidationError(
-					"Submit the parent item for review.",
-				);
-			if (key !== rootKey && validated.item.parentItem !== rootKey)
-				continue;
-			records.push({
-				itemKey: key,
-				baseRevision: current?.revision ?? 0,
-				payload: validated.payload,
-			});
-			const upload = fileDrafts.find((record) => record.itemKey === key);
-			const file = files.find((record) => record.itemKey === key);
-			const removal = removals.find((record) => record.itemKey === key);
-			if (removal) {
-				capturedFiles.push({
-					itemKey: key,
-					file: null,
-					removalId: removal.id,
-				});
-			} else if (upload) {
-				if (!upload.readyAt)
-					throw new AdminValidationError(
-						"Wait for the PDF upload to finish or remove it before submitting.",
-					);
-				capturedFiles.push({
-					itemKey: key,
-					file: reviewFileSchema.parse({
-						...upload,
-						sha256: upload.actualSha256,
-						sizeBytes: upload.actualSizeBytes,
-					}),
-				});
-			} else if (file) {
-				capturedFiles.push({
-					itemKey: key,
-					file: reviewFileSchema.parse({
-						...file,
-						objectPath: file.sourceObjectPath,
-						coverObjectPath: file.sourceCoverObjectPath,
-						extractedText: current?.fullTextPDF ?? "",
-					}),
-				});
-			}
-		}
+		const {records, capturedFiles} = await captureItemReviewSnapshot(transaction, rootKey, keys);
 		if (!records.some((record) => record.itemKey === rootKey))
 			throw new ItemNotFoundError(rootKey);
 		const [review] = await transaction

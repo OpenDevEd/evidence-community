@@ -1,28 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { openAdmin } from "./admin-login";
+import { publishWorkingDraft } from "./admin-review";
 
 const runtimeE2e = process.env.PLAYWRIGHT_RUNTIME_E2E === "true";
 
 test.skip(!runtimeE2e, "requires the disposable Evidence Library runtime");
 
 async function createPublishedBook(page: Page, title: string) {
-	await page.getByRole("button", { name: "New item" }).click();
-	const newItem = page.getByRole("dialog", { name: "New item" });
+	await page.getByRole("button", { name: "Create Item" }).click();
+	const newItem = page.getByRole("dialog", { name: "Create Item" });
 	await newItem.getByRole("button", { name: "Book", exact: true }).click();
 	const inspector = page.locator("#admin-inspector-pane");
 	const titleInput = inspector.getByRole("textbox", { name: "Title", exact: true });
 	await expect(titleInput).toBeEnabled({ timeout: 30_000 });
 	await expect(titleInput).toHaveValue("");
 	await titleInput.fill(title);
-	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await publishWorkingDraft(page);
 	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
 		timeout: 60_000,
 	});
-	const key = await inspector
-		.locator("h2 + p")
-		.first()
-		.evaluate((node) => node.textContent?.trim().split("·").pop()?.trim() ?? "");
+	const key = new URL(page.url()).searchParams.get("item") ?? "";
 	expect(key).toMatch(/^[23456789A-NP-Z]{8}$/);
 	return key;
 }
@@ -122,7 +120,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 		inspector.getByRole("button", { name: "Changed: show published links" }),
 	).toBeVisible();
 
-	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await publishWorkingDraft(page);
 	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
 		timeout: 60_000,
 	});
@@ -157,7 +155,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await inspector.getByRole("button", { name: "Edit" }).click();
 	await inspector.getByRole("button", { name: `Remove ${citingTitle} from Related` }).click();
 	await expect(otherSideRelated).toHaveAttribute("data-admin-link-change", "removed");
-	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await publishWorkingDraft(page);
 	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
 		timeout: 60_000,
 	});
@@ -190,7 +188,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 
 	await removeButton.click();
 	await expect(removedRow).toHaveAttribute("data-admin-link-change", "removed");
-	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await publishWorkingDraft(page);
 	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
 		timeout: 60_000,
 	});
