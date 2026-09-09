@@ -31,7 +31,7 @@ import {
 	runCrossrefPublicationJobsOnce,
 } from "../src/lib/publication/crossref-adapter";
 
-const config = publicationTestConfig({ zenodoEnabled: false, retryLimit: 2 });
+const config = publicationTestConfig({ retryLimit: 2 });
 
 async function seedItem(
 	client: Client,

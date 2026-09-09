@@ -1265,19 +1265,20 @@ const publicationServicesSchema = z
 	.strict()
 	.prefault({})
 	.superRefine((publication, context) => {
-		if (publication.crossref.enabled && !publication.zenodo.enabled) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Crossref publication requires Zenodo archiving",
-				path: ["zenodo", "enabled"],
-			});
-		}
-		if (publication.crossref.enabled && publication.crossref.environment === "production" && publication.zenodo.enabled && publication.zenodo.environment === "sandbox") {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Production Crossref requires production Zenodo",
-				path: ["zenodo", "environment"],
-			});
+		if (publication.crossref.enabled) {
+			if (!publication.zenodo.enabled) {
+				context.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Crossref publication requires Zenodo archiving",
+					path: ["zenodo", "enabled"],
+				});
+			} else if (publication.crossref.environment === "production" && publication.zenodo.environment === "sandbox") {
+				context.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Production Crossref requires production Zenodo",
+					path: ["zenodo", "environment"],
+				});
+			}
 		}
 		if (
 			publication.zenodo.enabled &&
