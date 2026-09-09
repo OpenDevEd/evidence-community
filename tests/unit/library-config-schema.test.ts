@@ -807,10 +807,23 @@ describe("publication services", () => {
 		expect(catalogSchema.safeParse(config).success).toBe(false);
 	});
 
+	it("rejects production Crossref with a disposable Zenodo sandbox archive", () => {
+		const config = publicationConfig();
+		(config.services as any).publication.crossref.environment = "production";
+		(config.services as any).publication.zenodo.environment = "sandbox";
+		expect(() => catalogSchema.parse(config)).toThrow("Production Crossref requires production Zenodo");
+	});
+
 	it("requires Crossref when Zenodo reuses a Crossref DOI", () => {
 		const config = publicationConfig();
 		(config.services as any).publication.crossref.enabled = false;
 
+		expect(catalogSchema.safeParse(config).success).toBe(false);
+	});
+
+	it("requires Zenodo archiving when Crossref is enabled", () => {
+		const config = catalogSchema.parse(publicationConfig());
+		config.services.publication.zenodo.enabled = false;
 		expect(catalogSchema.safeParse(config).success).toBe(false);
 	});
 
