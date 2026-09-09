@@ -115,6 +115,38 @@ export function orderBatchKeysByDependency(
 		.map(({ key }) => key);
 }
 
+async function removeBatchItem(
+	key: string,
+	sourceConnectionKey: string,
+	{ db, removePrivateFiles }: BatchDependencies,
+): Promise<AdminItemBatchResult> {
+	if (sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY) {
+		return skipped(key, "Remote record removal is not available yet.");
+	}
+	try {
+		const removed = await removeNativeItem(db, key);
+		if (removed.stagedPrivatePaths.length > 0) {
+			try {
+				await removePrivateFiles(removed.stagedPrivatePaths);
+			} catch (error) {
+				console.error("Failed to remove discarded private file objects", error);
+			}
+		}
+		return {
+			indexingReceipts: removed.changed && removed.item
+				? removed.indexingRecords.map((record) => adminSearchIndexReceipt("item", record))
+				: [],
+			key,
+			outcome: removed.changed ? "changed" : "unchanged",
+		};
+	} catch (error) {
+		if (error instanceof ItemNotFoundError) {
+			return skipped(key, "This record is already removed.");
+		}
+		throw error;
+	}
+}
+
 export async function runAdminItemBatch(
 	request: AdminItemBatchRequest,
 	{ db, removePrivateFiles, writebackPolicyOptions = {} }: BatchDependencies,
@@ -158,52 +190,11 @@ export async function runAdminItemBatch(
 		try {
 
 			if (request.action === "remove") {
-				if (
-					identity.sourceConnectionKey !==
-					NATIVE_SOURCE_CONNECTION_KEY
-				) {
-					results.push(
-						skipped(
-							key,
-							"Remote record removal is not available yet.",
-						),
-					);
-					continue;
-				}
-				try {
-					const removed = await removeNativeItem(db, key);
-					results.push({
-						indexingReceipts:
-							removed.changed && removed.item
-								? removed.indexingRecords.map((record) =>
-										adminSearchIndexReceipt("item", record),
-									)
-								: [],
-						key,
-						outcome: removed.changed ? "changed" : "unchanged",
-					});
-					if (removed.stagedPrivatePaths.length > 0) {
-						try {
-							await removePrivateFiles(
-								removed.stagedPrivatePaths,
-							);
-						} catch (error) {
-							console.error(
-								"Failed to remove discarded private file objects",
-								error,
-							);
-						}
-					}
-					continue;
-				} catch (error) {
-					if (error instanceof ItemNotFoundError) {
-						results.push(
-							skipped(key, "This record is already removed."),
-						);
-						continue;
-					}
-					throw error;
-				}
+				results.push(await removeBatchItem(key, identity.sourceConnectionKey, {
+					db,
+					removePrivateFiles,
+				}));
+				continue;
 			}
 
 			const assignment = await assignItemDraftToCollection(

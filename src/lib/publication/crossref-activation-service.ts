@@ -45,6 +45,17 @@ export {
 	PublicationItemNotFoundError,
 } from "./errors";
 
+async function readCurrentCrossrefIdentifier(transaction: DatabaseTransaction, itemKey: string) {
+	const [identifier] = await transaction.select().from(publicationIdentifier).where(and(
+		eq(publicationIdentifier.itemKey, itemKey),
+		eq(publicationIdentifier.registrar, "crossref"),
+		eq(publicationIdentifier.environment, "test"),
+		eq(publicationIdentifier.role, "primary"),
+		eq(publicationIdentifier.isCurrent, true),
+	)).limit(1);
+	return identifier;
+}
+
 type PublicationConfig = Pick<
 	LibraryServerConfig,
 	"identity" | "services" | "sources"
@@ -405,19 +416,7 @@ export async function retryCrossrefPublication(
 			})
 			.where(eq(publicationSyncJob.id, job.id))
 			.returning();
-		const [identifier] = await transaction
-			.select()
-			.from(publicationIdentifier)
-			.where(
-				and(
-					eq(publicationIdentifier.itemKey, itemKey),
-					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, "test"),
-					eq(publicationIdentifier.role, "primary"),
-					eq(publicationIdentifier.isCurrent, true),
-				),
-			)
-			.limit(1);
+		const identifier = await readCurrentCrossrefIdentifier(transaction, itemKey);
 		if (!retried || !identifier) {
 			throw new Error("The Crossref retry could not be saved");
 		}
@@ -463,18 +462,7 @@ export async function reserveCrossrefDoi(
 			throw new CrossrefActivationValidationError(
 				"Reserve a DOI on the parent item.",
 			);
-		const [existing] = await transaction
-			.select()
-			.from(publicationIdentifier)
-			.where(
-				and(
-					eq(publicationIdentifier.itemKey, itemKey),
-					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, "test"),
-					eq(publicationIdentifier.role, "primary"),
-					eq(publicationIdentifier.isCurrent, true),
-				),
-			);
+		const existing = await readCurrentCrossrefIdentifier(transaction, itemKey);
 		if (existing)
 			return { doi: existing.doi, lifecycle: existing.lifecycle };
 		classifyCrossrefActivationDoi({
