@@ -18,6 +18,7 @@ import { itemType } from "../enums/itemType";
 import { creatorType } from "../enums/creatorType";
 
 type Creator = {
+	authorProfileId?: string;
 	creatorType: (typeof creatorType.enumValues)[number];
 	firstName?: string;
 	lastName?: string;

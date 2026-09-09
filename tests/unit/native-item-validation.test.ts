@@ -17,7 +17,7 @@ import {
 
 function validFieldValue(field: { baseField?: string; field: string }) {
 	const descriptor = describeZoteroField(field);
-		switch (adminFieldContract(descriptor).kind) {
+	switch (adminFieldContract(descriptor).kind) {
 		case "access-date":
 			return "2024-05-20";
 		case "bibliographic-date":
@@ -30,6 +30,25 @@ function validFieldValue(field: { baseField?: string; field: string }) {
 }
 
 describe("native item draft validation", () => {
+	it("preserves profile associations without changing bibliographic names or order", () => {
+		const creators = [
+			{
+				creatorType: "author",
+				firstName: "Caitlin",
+				lastName: "Mills",
+				authorProfileId: "rs70m0zm30n946czwg6ek8z8j98e3j1p",
+			},
+			{ creatorType: "author", name: "Research team" },
+		];
+		const result = validateNativeItemDraft({
+			itemType: "report",
+			title: "Attention",
+			creators,
+		});
+		expect(result.payload.creators).toEqual(creators);
+		expect(result.item.creators).toEqual(creators);
+	});
+
 	it("stores item-specific Zotero fields under one canonical name", () => {
 		expect(
 			validateNativeItemDraft({
@@ -214,7 +233,10 @@ describe("native item draft validation", () => {
 			date: "Spring 2024",
 			url: "zotero://select/groups/1/items/AAAA2345",
 			futureZoteroField: "kept in raw only",
-			relations: { "dc:relation": "http://zotero.org/groups/1/items/BBBB2345", "future:relation": "x" },
+			relations: {
+				"dc:relation": "http://zotero.org/groups/1/items/BBBB2345",
+				"future:relation": "x",
+			},
 		};
 		const validated = validateNativeItemDraft(
 			sourceRecord,
@@ -240,7 +262,10 @@ describe("native item draft validation", () => {
 		).toThrow("Check url");
 		expect(() =>
 			validateNativeItemDraft(
-				{ itemType: "book", creators: [{ creatorType: "director", name: "A" }] },
+				{
+					itemType: "book",
+					creators: [{ creatorType: "director", name: "A" }],
+				},
 				sourceRecordValidationOptions,
 			),
 		).toThrow("Choose a valid creator role.");
@@ -261,8 +286,16 @@ describe("native item draft validation", () => {
 		});
 
 		for (const [field, value, message] of [
-			["date", "2024-02-31", "Enter an exact date, a month, or a four-digit year"],
-			["date", "Spring 2024", "Enter an exact date, a month, or a four-digit year"],
+			[
+				"date",
+				"2024-02-31",
+				"Enter an exact date, a month, or a four-digit year",
+			],
+			[
+				"date",
+				"Spring 2024",
+				"Enter an exact date, a month, or a four-digit year",
+			],
 			["url", "example.com", "Enter a full HTTP or HTTPS address"],
 		] as const) {
 			try {
