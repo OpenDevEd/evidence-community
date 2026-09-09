@@ -1,14 +1,13 @@
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { drizzle } from "drizzle-orm/node-postgres";
+import assert from "node:assert/strict";
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { eq } from "drizzle-orm";
-import { Client, Pool } from "pg";
+import type { Client } from "pg";
+import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { describe, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import type { Database } from "../src/db/database-schema";
-import { schema } from "../src/db/database-schema";
 import {
 	publicationSyncRun,
 	publicationSyncState,
@@ -16,45 +15,8 @@ import {
 import { buildCrossrefPlan } from "../src/lib/publication/crossref-adapter";
 import { runNightlyPublicationReconciliation } from "../src/lib/publication/reconciler";
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
-}
-
-const config = {
-	identity: { baseUrl: "https://library.example.org" },
-	services: {
-		publication: {
-			crossref: {
-				enabled: true,
-				environment: "test",
-				loginId: "test-login",
-				depositorName: "Evidence Library",
-				email: "doi@example.org",
-				password: "test-password",
-				registrant: "Evidence Library",
-				prefix: "10.5555",
-				suffixNamespace: "library.",
-			},
-			zenodo: {
-				enabled: true,
-				environment: "sandbox",
-				token: "sandbox-token",
-				defaultIdentifierPolicy: "reuse-crossref",
-				accessRight: "open",
-				license: "cc-by-4.0",
-			},
-			worker: {
-				batchSize: 25,
-				leaseSeconds: 900,
-				retryLimit: 8,
-				nightlyUtcTime: "02:00",
-			},
-		},
-	},
-} as unknown as LibraryServerConfig;
+const config = publicationTestConfig();
 
 async function seedRecord(
 	client: Client,
@@ -349,40 +311,9 @@ async function verify(database: Database, client: Client) {
 }
 
 async function main() {
-	const sourceUrl = new URL(databaseUrl!);
-	const databaseName = `publication_reconciler_${process.pid}_${Date.now()}`;
-	const adminUrl = new URL(sourceUrl);
-	adminUrl.pathname = "/postgres";
-	const temporaryUrl = new URL(sourceUrl);
-	temporaryUrl.pathname = `/${databaseName}`;
-	const admin = new Client({ connectionString: adminUrl.toString() });
-	let client: Client | null = null;
-	let pool: Pool | null = null;
-	await admin.connect();
-	try {
-		await admin.query(`CREATE DATABASE "${databaseName}"`);
-		pool = new Pool({ connectionString: temporaryUrl.toString(), max: 12 });
-		const database = drizzle({
-			client: pool,
-			schema,
-		}) as unknown as Database;
-		await migrate(database, { migrationsFolder: "drizzle" });
-		client = new Client({ connectionString: temporaryUrl.toString() });
-		await client.connect();
+	await withIsolatedPublicationDatabase(async (database, client) => {
 		await verify(database, client);
-	} finally {
-		await client?.end();
-		await pool?.end();
-		await admin.query(
-			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-			[databaseName],
-		);
-		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-		await admin.end();
-	}
-	console.log(
-		"Nightly publication reconciliation passed in an isolated database.",
-	);
+	});
 }
 
 describe("nightly publication reconciliation against an isolated database", () => {

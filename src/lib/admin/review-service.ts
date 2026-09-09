@@ -8,10 +8,7 @@ import {
 	cleanupNativePdfRemoval,
 } from "./native-file-service";
 import type { EvidenceFileStorage } from "./file-storage";
-import {
-	itemDraft,
-	itemIdentity,
-} from "@opendeved/evidence-library-core";
+import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { lockItemMutations } from "@/db/canonical-mutation-lock";
@@ -29,6 +26,7 @@ import {
 	saveItemDraftInTransaction,
 	publishItemDraftWithContext,
 	loadPublishedItemPayload,
+	loadWorkingItemPayload,
 	ItemDraftConflictError,
 	ItemNotFoundError,
 } from "./native-item-service";
@@ -78,14 +76,7 @@ export async function setItemPublishingChoice(
 			throw new AdminValidationError(
 				"Identifier selection is for created items.",
 			);
-		const [draft] = await transaction
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey));
-		const payload = applyItemDraftPatch(
-			await loadPublishedItemPayload(transaction, itemKey),
-			draft?.patch ?? {},
-		);
+		const payload = await loadWorkingItemPayload(transaction, itemKey);
 		if (!payload.itemType) throw new ItemNotFoundError(itemKey);
 		if (payload.parentItem)
 			throw new AdminValidationError(
@@ -100,6 +91,47 @@ export async function setItemPublishingChoice(
 			});
 		return choice;
 	});
+}
+
+async function submissionPublishingChoice(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	kind: string,
+) {
+	const [pending] = await transaction
+		.select({ id: itemReview.id })
+		.from(itemReview)
+		.where(
+			and(
+				eq(itemReview.itemKey, itemKey),
+				eq(itemReview.state, "pending"),
+			),
+		);
+	if (pending)
+		throw new AdminValidationError(
+			"This item already has a pending review.",
+		);
+	const [unresolved] = await transaction
+		.select({ id: itemReview.id })
+		.from(itemReview)
+		.where(
+			and(
+				eq(itemReview.itemKey, itemKey),
+				sql`${itemReview.remainingConflicts} <> '{}'::jsonb`,
+			),
+		)
+		.limit(1);
+	if (unresolved)
+		throw new AdminValidationError(
+			"Resolve the working draft conflicts before submitting again.",
+		);
+	const [choiceRow] = await transaction
+		.select()
+		.from(itemPublishingChoice)
+		.where(eq(itemPublishingChoice.itemKey, itemKey));
+	if (kind === "created" && !choiceRow)
+		throw new AdminValidationError("Choose identifiers before submitting.");
+	return choiceRow?.choice ?? null;
 }
 
 export async function submitItemReview(
@@ -124,42 +156,16 @@ export async function submitItemReview(
 			JSON.stringify(await reviewChildKeys(transaction, rootKey))
 		)
 			throw new ItemDraftConflictError(rootKey);
-		const [pending] = await transaction
-			.select({ id: itemReview.id })
-			.from(itemReview)
-			.where(
-				and(
-					eq(itemReview.itemKey, rootKey),
-					eq(itemReview.state, "pending"),
-				),
-			);
-		if (pending)
-			throw new AdminValidationError(
-				"This item already has a pending review.",
-			);
-		const [unresolved] = await transaction
-			.select({ id: itemReview.id })
-			.from(itemReview)
-			.where(
-				and(
-					eq(itemReview.itemKey, rootKey),
-					sql`${itemReview.remainingConflicts} <> '{}'::jsonb`,
-				),
-			)
-			.limit(1);
-		if (unresolved)
-			throw new AdminValidationError(
-				"Resolve the working draft conflicts before submitting again.",
-			);
-		const [choiceRow] = await transaction
-			.select()
-			.from(itemPublishingChoice)
-			.where(eq(itemPublishingChoice.itemKey, rootKey));
-		if (identity.kind === "created" && !choiceRow)
-			throw new AdminValidationError(
-				"Choose identifiers before submitting.",
-			);
-		const {records, capturedFiles} = await captureItemReviewSnapshot(transaction, rootKey, keys);
+		const publishingChoice = await submissionPublishingChoice(
+			transaction,
+			rootKey,
+			identity.kind,
+		);
+		const { records, capturedFiles } = await captureItemReviewSnapshot(
+			transaction,
+			rootKey,
+			keys,
+		);
 		if (!records.some((record) => record.itemKey === rootKey))
 			throw new ItemNotFoundError(rootKey);
 		const [review] = await transaction
@@ -169,25 +175,44 @@ export async function submitItemReview(
 				submittedBy: actor.userId,
 				snapshot: {
 					records,
-					publishingChoice: choiceRow?.choice ?? null,
+					publishingChoice,
 				},
 			})
 			.returning();
 		if (capturedFiles.length)
-			await transaction
-				.insert(itemReviewFile)
-				.values(
-					capturedFiles.map(({ itemKey, file, removalId }) => ({
-						reviewId: review!.id,
-						itemKey,
-						file,
-						removalId,
-						objectPath: file?.objectPath ?? null,
-						coverObjectPath: file?.coverObjectPath ?? null,
-					})),
-				);
+			await transaction.insert(itemReviewFile).values(
+				capturedFiles.map(({ itemKey, file, removalId }) => ({
+					reviewId: review!.id,
+					itemKey,
+					file,
+					removalId,
+					objectPath: file?.objectPath ?? null,
+					coverObjectPath: file?.coverObjectPath ?? null,
+				})),
+			);
 		return review!;
 	});
+}
+
+async function lockPendingReview(
+	transaction: DatabaseTransaction,
+	reviewId: string,
+	expectedRevision: number,
+) {
+	const [review] = await transaction
+		.select()
+		.from(itemReview)
+		.where(eq(itemReview.id, reviewId))
+		.for("update");
+	if (
+		!review ||
+		review.state !== "pending" ||
+		review.revision !== expectedRevision
+	)
+		throw new AdminValidationError(
+			"The review changed. Reload it and try again.",
+		);
+	return review;
 }
 
 export async function resolveItemReview(
@@ -201,19 +226,11 @@ export async function resolveItemReview(
 	actor: ReviewActor,
 ) {
 	return db.transaction(async (transaction) => {
-		const [review] = await transaction
-			.select()
-			.from(itemReview)
-			.where(eq(itemReview.id, input.reviewId))
-			.for("update");
-		if (
-			!review ||
-			review.state !== "pending" ||
-			review.revision !== input.expectedRevision
-		)
-			throw new AdminValidationError(
-				"The review changed. Reload it and try again.",
-			);
+		const review = await lockPendingReview(
+			transaction,
+			input.reviewId,
+			input.expectedRevision,
+		);
 		if (input.action === "returned" && actor.role === "creator")
 			throw new AdminValidationError(
 				"Only an Editor or Owner can return a review.",
@@ -250,6 +267,30 @@ export async function getItemReviews(db: Database, itemKey: string) {
 		.limit(20);
 }
 
+function correctedReviewRecord(
+	record: ReviewRecord,
+	submitted: ReviewRecord[],
+) {
+	const original = submitted.find(
+		(entry) => entry.itemKey === record.itemKey,
+	);
+	if (!original)
+		throw new AdminValidationError(
+			"This item is not in the submitted review.",
+		);
+	const validated = validateNativeItemDraft(record.payload, {
+		requireTitle: true,
+	});
+	if (
+		(validated.item.parentItem ?? null) !==
+		(original.payload.parentItem ?? null)
+	)
+		throw new AdminValidationError(
+			"A review correction cannot move an attachment to another item.",
+		);
+	return { ...original, payload: validated.payload };
+}
+
 export async function correctItemReview(
 	db: Database,
 	input: {
@@ -264,19 +305,11 @@ export async function correctItemReview(
 			"Only an Editor or Owner can correct a review.",
 		);
 	return db.transaction(async (transaction) => {
-		const [review] = await transaction
-			.select()
-			.from(itemReview)
-			.where(eq(itemReview.id, input.reviewId))
-			.for("update");
-		if (
-			!review ||
-			review.state !== "pending" ||
-			review.revision !== input.expectedRevision
-		)
-			throw new AdminValidationError(
-				"The review changed. Reload it and try again.",
-			);
+		const review = await lockPendingReview(
+			transaction,
+			input.reviewId,
+			input.expectedRevision,
+		);
 		if (
 			new Set(input.records.map((record) => record.itemKey)).size !==
 			input.records.length
@@ -284,26 +317,9 @@ export async function correctItemReview(
 			throw new AdminValidationError(
 				"Each corrected item must be unique.",
 			);
-		const updates = input.records.map((record) => {
-			const original = review.snapshot.records.find(
-				(entry) => entry.itemKey === record.itemKey,
-			);
-			if (!original)
-				throw new AdminValidationError(
-					"This item is not in the submitted review.",
-				);
-			const validated = validateNativeItemDraft(record.payload, {
-				requireTitle: true,
-			});
-			if (
-				(validated.item.parentItem ?? null) !==
-				(original.payload.parentItem ?? null)
-			)
-				throw new AdminValidationError(
-					"A review correction cannot move an attachment to another item.",
-				);
-			return { ...original, payload: validated.payload };
-		});
+		const updates = input.records.map((record) =>
+			correctedReviewRecord(record, review.snapshot.records),
+		);
 		const corrections = [
 			...review.corrections.filter(
 				(record) =>
@@ -320,6 +336,86 @@ export async function correctItemReview(
 			.returning();
 		return updated!;
 	});
+}
+
+async function publishReviewRecords(
+	transaction: DatabaseTransaction,
+	locked: typeof itemReview.$inferSelect,
+	config: LibraryServerConfig,
+) {
+	const remainingConflicts: Record<string, string[]> = {};
+	const indexingKeys = new Set(
+		locked.snapshot.records.map((record) => record.itemKey),
+	);
+	// Publish the root before its attachments, within this same transaction.
+	const records = [...locked.snapshot.records].sort(
+		(a, b) =>
+			Number(b.itemKey === locked.itemKey) -
+			Number(a.itemKey === locked.itemKey),
+	);
+	for (const submitted of records) {
+		const approved =
+			locked.corrections.find(
+				(record) => record.itemKey === submitted.itemKey,
+			) ?? submitted;
+		const [latest] = await transaction
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, submitted.itemKey));
+		const result = await publishItemDraftWithContext(
+			transaction,
+			submitted.itemKey,
+			{
+				writebackConfig: config,
+				review: {
+					submitted: {
+						...submitted,
+						baseRevision: latest?.revision ?? 0,
+					},
+					approved,
+				},
+			},
+		);
+		for (const record of result.indexingRecords)
+			indexingKeys.add(record.key);
+		if (result.draftConflicts.length)
+			remainingConflicts[submitted.itemKey] = [...result.draftConflicts];
+	}
+	return { remainingConflicts, indexingKeys };
+}
+
+async function removeApprovedFiles(
+	transaction: DatabaseTransaction,
+	publication: LibraryServerConfig["services"]["publication"],
+	files: (typeof itemReviewFile.$inferSelect)[],
+	zenodoFileChange: "minor_correction" | undefined,
+) {
+	const removals = [];
+	for (const file of files.filter((entry) => entry.file === null)) {
+		const [currentFile] = await transaction
+			.select({ key: itemFilePublication.itemKey })
+			.from(itemFilePublication)
+			.where(eq(itemFilePublication.itemKey, file.itemKey));
+		if (currentFile)
+			removals.push(
+				await unpublishNativePdfInTransaction(
+					transaction,
+					publication,
+					file.itemKey,
+					zenodoFileChange,
+				),
+			);
+		if (file.removalId)
+			await transaction
+				.delete(itemFileRemoval)
+				.where(
+					and(
+						eq(itemFileRemoval.itemKey, file.itemKey),
+						eq(itemFileRemoval.id, file.removalId),
+					),
+				);
+	}
+	return removals;
 }
 
 export async function approveItemReview(
@@ -389,19 +485,11 @@ export async function approveItemReview(
 				(record) => record.itemKey,
 			);
 			await lockItemMutations(transaction, keys);
-			const [locked] = await transaction
-				.select()
-				.from(itemReview)
-				.where(eq(itemReview.id, review.id))
-				.for("update");
-			if (
-				!locked ||
-				locked.state !== "pending" ||
-				locked.revision !== review.revision
-			)
-				throw new AdminValidationError(
-					"The review changed. Reload it and try again.",
-				);
+			const locked = await lockPendingReview(
+				transaction,
+				review.id,
+				review.revision,
+			);
 			const current = await transaction
 				.select({ key: item.key, revision: item.revision })
 				.from(item)
@@ -412,73 +500,21 @@ export async function approveItemReview(
 					(current.find(({ key }) => key === record.itemKey)
 						?.revision ?? 0) !== record.baseRevision
 				)
-					throw new ItemDraftConflictError(record.itemKey);
+					throw new AdminValidationError(
+						`${record.itemKey} changed after submission. Withdraw or return this review, then submit it again.`,
+					);
 			}
-			const remainingConflicts: Record<string, string[]> = {};
-            const indexingKeys = new Set(keys);
-			// Publish the root before its attachments, within this same transaction.
-			const records = [...locked.snapshot.records].sort(
-				(a, b) =>
-					Number(b.itemKey === locked.itemKey) -
-					Number(a.itemKey === locked.itemKey),
-			);
-			for (const submitted of records) {
-				const approved =
-					locked.corrections.find(
-						(record) => record.itemKey === submitted.itemKey,
-					) ?? submitted;
-				const [latest] = await transaction
-					.select({ revision: item.revision })
-					.from(item)
-					.where(eq(item.key, submitted.itemKey));
-				const result = await publishItemDraftWithContext(
-					transaction,
-					submitted.itemKey,
-					{
-						writebackConfig: config,
-						review: {
-							submitted: {
-								...submitted,
-								baseRevision: latest?.revision ?? 0,
-							},
-							approved,
-						},
-					},
-				);
-				for (const record of result.indexingRecords) indexingKeys.add(record.key);
-				if (result.draftConflicts.length)
-					remainingConflicts[submitted.itemKey] = [
-						...result.draftConflicts,
-					];
-			}
+			const { remainingConflicts, indexingKeys } =
+				await publishReviewRecords(transaction, locked, config);
 			const fileResults = [];
 			for (const file of prepared)
 				fileResults.push(await file.commit(transaction));
-			const removals = [];
-			for (const file of files.filter((entry) => entry.file === null)) {
-				const [currentFile] = await transaction
-					.select({ key: itemFilePublication.itemKey })
-					.from(itemFilePublication)
-					.where(eq(itemFilePublication.itemKey, file.itemKey));
-				if (currentFile)
-					removals.push(
-						await unpublishNativePdfInTransaction(
-							transaction,
-							config.services.publication,
-							file.itemKey,
-							input.zenodoFileChange,
-						),
-					);
-				if (file.removalId)
-					await transaction
-						.delete(itemFileRemoval)
-						.where(
-							and(
-								eq(itemFileRemoval.itemKey, file.itemKey),
-								eq(itemFileRemoval.id, file.removalId),
-							),
-						);
-			}
+			const removals = await removeApprovedFiles(
+				transaction,
+				config.services.publication,
+				files,
+				input.zenodoFileChange,
+			);
 			const choice = locked.snapshot.publishingChoice;
 			if (choice) {
 				if (choice.route === "crossref-zenodo") {
@@ -509,8 +545,16 @@ export async function approveItemReview(
 				})
 				.where(eq(itemReview.id, locked.id))
 				.returning();
-            const indexingRecords = await transaction.select({ key: item.key, revision: item.revision }).from(item).where(inArray(item.key, [...indexingKeys]));
-            return { fileResults, removals, review: published!, indexingRecords };
+			const indexingRecords = await transaction
+				.select({ key: item.key, revision: item.revision })
+				.from(item)
+				.where(inArray(item.key, [...indexingKeys]));
+			return {
+				fileResults,
+				removals,
+				review: published!,
+				indexingRecords,
+			};
 		});
 	} catch (error) {
 		await Promise.all(prepared.map((file) => file.rollback()));
@@ -524,7 +568,44 @@ export async function approveItemReview(
 			cleanupNativePdfRemoval(db, storage, removal),
 		),
 	]);
-	return { review: committed.review, indexingRecords: committed.indexingRecords };
+	return {
+		review: committed.review,
+		indexingRecords: committed.indexingRecords,
+	};
+}
+
+function requiredConflictFields(
+	review: typeof itemReview.$inferSelect,
+	itemKey: string,
+	choices: Record<string, "draft" | "published">,
+) {
+	const fields = review.remainingConflicts[itemKey];
+	if (
+		!fields?.length ||
+		fields.length !== Object.keys(choices).length ||
+		fields.some((field) => !choices[field])
+	)
+		throw new AdminValidationError(
+			"Choose a value for every conflicting field.",
+		);
+	return fields;
+}
+
+function resolveConflictPayload(
+	payload: Record<string, unknown>,
+	published: Record<string, unknown>,
+	fields: string[],
+	choices: Record<string, "draft" | "published">,
+) {
+	const resolved = { ...payload };
+	for (const field of fields) {
+		if (choices[field] === "published") {
+			if (Object.hasOwn(published, field))
+				resolved[field] = published[field];
+			else delete resolved[field];
+		}
+	}
+	return resolved;
 }
 
 export async function resolveReviewConflicts(
@@ -541,31 +622,64 @@ export async function resolveReviewConflicts(
 ) {
 	return db.transaction(async (transaction) => {
 		await lockItemMutations(transaction, [input.itemKey]);
-		const [review] = await transaction.select().from(itemReview).where(eq(itemReview.id, input.reviewId)).for("update");
-		if (!review || review.state !== "published" || review.revision !== input.expectedRevision)
-			throw new AdminValidationError("The review changed. Reload it and try again.");
-		const fields = review.remainingConflicts[input.itemKey];
-		if (!fields?.length || fields.length !== Object.keys(input.choices).length || fields.some(field => !input.choices[field]))
-			throw new AdminValidationError("Choose a value for every conflicting field.");
-		const [current] = await transaction.select().from(itemDraft).where(eq(itemDraft.itemKey, input.itemKey)).for("update");
-		if (!current || current.generation !== input.generation || current.draftRevision !== input.draftRevision)
+		const [review] = await transaction
+			.select()
+			.from(itemReview)
+			.where(eq(itemReview.id, input.reviewId))
+			.for("update");
+		if (
+			!review ||
+			review.state !== "published" ||
+			review.revision !== input.expectedRevision
+		)
+			throw new AdminValidationError(
+				"The review changed. Reload it and try again.",
+			);
+		const fields = requiredConflictFields(
+			review,
+			input.itemKey,
+			input.choices,
+		);
+		const [current] = await transaction
+			.select()
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, input.itemKey))
+			.for("update");
+		if (
+			!current ||
+			current.generation !== input.generation ||
+			current.draftRevision !== input.draftRevision
+		)
 			throw new ItemDraftConflictError(input.itemKey);
-		const published = await loadPublishedItemPayload(transaction, input.itemKey);
+		const published = await loadPublishedItemPayload(
+			transaction,
+			input.itemKey,
+		);
 		const payload = applyItemDraftPatch(published, current.patch);
-		const resolved = {...payload};
-		for (const field of fields) {
-			if (input.choices[field] === "published") {
-				if (Object.hasOwn(published, field)) resolved[field] = published[field];
-				else delete resolved[field];
-			}
-		}
-		await saveItemDraftInTransaction(transaction, {
-			itemKey: input.itemKey, expectedDraftGeneration: input.generation,
-			expectedDraftRevision: input.draftRevision, expectedPayload: payload, payload: resolved,
-		}, {writebackConfig: config});
-		const remainingConflicts = {...review.remainingConflicts};
+		const resolved = resolveConflictPayload(
+			payload,
+			published,
+			fields,
+			input.choices,
+		);
+		await saveItemDraftInTransaction(
+			transaction,
+			{
+				itemKey: input.itemKey,
+				expectedDraftGeneration: input.generation,
+				expectedDraftRevision: input.draftRevision,
+				expectedPayload: payload,
+				payload: resolved,
+			},
+			{ writebackConfig: config },
+		);
+		const remainingConflicts = { ...review.remainingConflicts };
 		delete remainingConflicts[input.itemKey];
-		const [updated] = await transaction.update(itemReview).set({remainingConflicts, revision: review.revision + 1}).where(eq(itemReview.id, review.id)).returning();
+		const [updated] = await transaction
+			.update(itemReview)
+			.set({ remainingConflicts, revision: review.revision + 1 })
+			.where(eq(itemReview.id, review.id))
+			.returning();
 		return updated!;
 	});
 }

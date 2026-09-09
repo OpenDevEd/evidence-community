@@ -1,3 +1,4 @@
+import { deepStrictEqual } from "node:assert";
 import {
 	collectionIdentity,
 	itemDraft,
@@ -283,6 +284,7 @@ async function verify() {
 				provider: "crossref",
 				environment: "test",
 				requestedBy: "native-lifecycle-test",
+				activatedAt: new Date(),
 			},
 			{
 				itemKey: draft.itemKey,
@@ -290,6 +292,7 @@ async function verify() {
 				environment: "sandbox",
 				identifierPolicy: "mint-zenodo",
 				requestedBy: "native-lifecycle-test",
+				activatedAt: new Date(),
 			},
 		]);
 
@@ -306,6 +309,7 @@ async function verify() {
 			provider: "crossref",
 			environment: "test",
 			requestedBy: "native-lifecycle-test",
+				activatedAt: new Date(),
 			deactivatedAt: new Date(),
 		});
 		const patchMergeEdit = await openNativeItemDraft(
@@ -458,12 +462,13 @@ async function verify() {
 			.select()
 			.from(publicationSyncJob)
 			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
-		assert(
-			publicationJobsAfterEdit.length === 1 &&
-				publicationJobsAfterEdit[0]?.provider === "crossref" &&
-				publicationJobsAfterEdit[0].reason === "record_changed" &&
-				publicationJobsAfterEdit[0].canonicalRevision === 2,
-			"Record publication did not queue only the ready active target",
+		deepStrictEqual(
+			publicationJobsAfterEdit.map(({provider, reason, canonicalRevision, fileRevision}) => ({provider, reason, canonicalRevision, fileRevision})).sort((a, b) => a.provider.localeCompare(b.provider)),
+			[
+				{provider: "crossref", reason: "record_changed", canonicalRevision: 2, fileRevision: null},
+				{provider: "zenodo", reason: "record_changed", canonicalRevision: 2, fileRevision: null},
+			],
+			"Approved targets must queue Crossref registration and a Zenodo draft without a PDF",
 		);
 		const retainedMemberships = await db
 			.select({ key: itemToCollection.collectionKey })
@@ -526,7 +531,7 @@ async function verify() {
 			.from(publicationSyncJob)
 			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
 		assert(
-			publicationJobsAfterUnpublish.length === 1,
+			publicationJobsAfterUnpublish.length === publicationJobsAfterEdit.length,
 			"Record unpublication queued an unsupported DOI withdrawal",
 		);
 		const restored = await publishNativeItemDraft(db, draft.itemKey);
@@ -549,7 +554,7 @@ async function verify() {
 			.from(publicationSyncJob)
 			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
 		assert(
-			publicationJobsAfterSecondUnpublish.length === 1,
+			publicationJobsAfterSecondUnpublish.length === publicationJobsAfterEdit.length,
 			"A deactivated DOI target or record unpublish queued extra publication work",
 		);
 		const [deletedProjection] = await db

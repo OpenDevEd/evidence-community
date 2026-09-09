@@ -1,25 +1,23 @@
 import { getAdminPublicationWorkerOverview } from "../src/lib/admin/publication-worker-service";
 import { runNightlyPublicationReconciliation } from "../src/lib/publication/reconciler";
+import { successfulZenodoTestProvider } from "../tests/fixtures/zenodo-draft";
+import assert from "node:assert/strict";
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { createHash } from "node:crypto";
 
 import type {
-	ZenodoPreparedDraft,
 	ZenodoWriter,
 } from "@opendeved/doi-sync-core";
 import {
-	buildZenodoWritePayload,
-	jsonValueSchema,
 } from "@opendeved/doi-sync-core";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import type { Client } from "pg";
+import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { describe, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import type { Database } from "../src/db/database-schema";
-import { schema } from "../src/db/database-schema";
 import type { EvidenceFileStorage } from "../src/lib/admin/file-storage";
 import {
 	activateZenodoPublication,
@@ -39,36 +37,8 @@ import {
 	PublicationJobLeaseLostError,
 } from "../src/lib/publication/queue";
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
-const verifiedDatabaseUrl = databaseUrl;
 
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
-}
-
-const config = {
-	identity: { baseUrl: "https://library.example.org" },
-	services: {
-		publication: {
-			crossref: { enabled: true, environment: "test" },
-			zenodo: {
-				enabled: true,
-				environment: "sandbox",
-				token: "sandbox-token",
-				defaultIdentifierPolicy: "reuse-crossref",
-				accessRight: "open",
-				license: "cc-by-4.0",
-			},
-			worker: {
-				batchSize: 25,
-				leaseSeconds: 900,
-				retryLimit: 8,
-				nightlyUtcTime: "02:00",
-			},
-		},
-	},
-} as unknown as LibraryServerConfig;
+const config = publicationTestConfig();
 
 async function seedParent(
 	client: Client,
@@ -161,53 +131,10 @@ let fakeZenodoRecordNumber = 1000;
 function successfulZenodoProvider(
 	input: { discardCount?: { value: number } } = {},
 ): ZenodoPublicationProvider {
-	const prepared = async (
-		request: Pick<
-			Parameters<ZenodoWriter["prepareUpdateRecordMetadata"]>[0],
-			"doiPolicy" | "metadata" | "resourceUrl" | "onPreparedDraft"
-		>,
-	) => {
-		fakeZenodoRecordNumber += 1;
-		const draft = {
-			depositionId: String(fakeZenodoRecordNumber),
-			draftRecordId: String(fakeZenodoRecordNumber),
-			parentId: String(fakeZenodoRecordNumber + 10_000),
-			payloadSnapshot: jsonValueSchema.parse(
-				buildZenodoWritePayload({
-					doiPolicy: request.doiPolicy,
-					metadata: request.metadata,
-					resourceUrl: request.resourceUrl,
-				}),
-			),
-		};
-		await request.onPreparedDraft?.(draft);
-		return draft;
-	};
-	return {
-		prepareEmptyDraft: async (request) => {
-			const draft = { depositionId: "90001", draftRecordId: "90001" };
-			await request.onPreparedDraft?.(draft);
-			return draft;
-		},
-		verifyPublishedState: async () => ({ status: "matched" }),
-		findRecordByDoi: async () => ({ status: "not_found" }),
-		deleteUnpublishedDraft: async () => undefined,
-		discardPreparedDraft: async () => {
-			if (input.discardCount) input.discardCount.value += 1;
-		},
-		prepareCreateRecord: prepared,
-		prepareUpdateRecordMetadata: prepared,
-		prepareUpdateRecordFiles: prepared,
-		prepareNewVersion: prepared,
-		publishDraft: async ({ draft }) => ({
-			latestRecordId: draft.draftRecordId,
-			parentId: draft.parentId ?? draft.draftRecordId,
-			publishedAt: new Date("2030-08-13T12:00:00.000Z"),
-			versionDoi: `10.5072/zenodo.${draft.draftRecordId}`,
-			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
-			links: {},
-		}),
-	};
+ return successfulZenodoTestProvider(() => {
+  fakeZenodoRecordNumber += 1;
+  return {id: String(fakeZenodoRecordNumber), parentId: String(fakeZenodoRecordNumber + 10_000)};
+ }, undefined, async () => {if (input.discardCount) input.discardCount.value += 1;});
 }
 
 function failingAfterJournalProvider(): ZenodoPublicationProvider {
@@ -1796,34 +1723,10 @@ async function verifyProductionIsolation(database: Database, client: Client) {
 }
 
 async function verifyIsolatedDatabase() {
-	const sourceUrl = new URL(verifiedDatabaseUrl);
-	const databaseName = `zenodo_activation_${process.pid}_${Date.now()}`;
-	const adminUrl = new URL(sourceUrl);
-	adminUrl.pathname = "/postgres";
-	const temporaryUrl = new URL(sourceUrl);
-	temporaryUrl.pathname = `/${databaseName}`;
-	const admin = new Client({ connectionString: adminUrl.toString() });
-	let client: Client | null = null;
-	let pool: Pool | null = null;
-	await admin.connect();
-	try {
-		await admin.query(`CREATE DATABASE "${databaseName}"`);
-		pool = new Pool({ connectionString: temporaryUrl.toString(), max: 12 });
-		const database = drizzle({
-			client: pool,
-			schema,
-		}) as unknown as Database;
-		await migrate(database, { migrationsFolder: "drizzle" });
-		client = new Client({ connectionString: temporaryUrl.toString() });
-		await client.connect();
+	await withIsolatedPublicationDatabase(async (database, client) => {
 		await verify(database, client);
 		await verifyProductionIsolation(database, client);
-	} finally {
-		await client?.end();
-		await pool?.end();
-		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-		await admin.end();
-	}
+	});
 }
 
 describe("Zenodo activation against an isolated database", () => {

@@ -176,6 +176,10 @@ type RecordAssignment = {
 	itemSourceConnectionKeys: string[];
 };
 
+function pickedItemTarget(row: Pick<AdminLinkTarget, "key" | "itemType" | "title"> & {state: string}): AdminLinkTarget {
+ return {key: row.key, itemType: row.itemType, title: row.title?.trim() || "Untitled record", deleted: row.state === "deleted"};
+}
+
 function collectionLocationFromCatalog(
 	entry: AdminCollectionCatalogEntry,
 	sources: AdminLibrarySnapshot["sources"],
@@ -1057,28 +1061,21 @@ export default function AdminWorkbench({
 	const [pickedLinkTargets, setPickedLinkTargets] = useState<
 		ReadonlyMap<string, AdminLinkTarget>
 	>(new Map());
-	const addLinkKeys = useCallback(
-		(kind: AdminItemLinkKind, keys: readonly string[]) => {
-			if (!detail || (!detail.draft && !linkPick?.review)) return;
+	const rememberLinkTargets = useCallback((keys: readonly string[]) => {
 			setPickedLinkTargets((current) => {
 				const next = new Map(current);
 				for (const row of items) {
 					if (keys.includes(row.key)) {
-						next.set(row.key, {
-							deleted: row.state === "deleted",
-							itemType: row.itemType,
-							key: row.key,
-							title: row.title?.trim() || "Untitled record",
-						});
+						next.set(row.key, pickedItemTarget(row));
 					}
 				}
 				return next;
 			});
-            if (linkPick?.review) {
-                const selected = linkPick.review.change(keys, true);
-                setLinkPick({...linkPick, review: {...linkPick.review, keys: selected}});
-                return;
-            }
+	}, [items]);
+	const addDraftLinkKeys = useCallback(
+		(kind: AdminItemLinkKind, keys: readonly string[]) => {
+			if (!detail?.draft) return;
+            rememberLinkTargets(keys);
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
 			// Links a source owns are already there; the editor does not add a second one.
@@ -1096,15 +1093,10 @@ export default function AdminWorkbench({
 			if (next.length === current[kind].length) return;
 			updatePayload({ ...payload, links: { ...current, [kind]: next } });
 		},
-		[detail, items, updatePayload, linkPick],
+		[detail, rememberLinkTargets, updatePayload],
 	);
-	const removeLinkKeys = useCallback(
+	const removeDraftLinkKeys = useCallback(
 		(kind: AdminItemLinkKind, keys: readonly string[]) => {
-			if (linkPick?.review) {
-                const selected = linkPick.review.change(keys, false);
-                setLinkPick({...linkPick, review: {...linkPick.review, keys: selected}});
-                return;
-            }
             if (!detail?.draft) return;
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
@@ -1112,14 +1104,14 @@ export default function AdminWorkbench({
 			if (next.length === current[kind].length) return;
 			updatePayload({ ...payload, links: { ...current, [kind]: next } });
 		},
-		[detail, updatePayload, linkPick],
+		[detail, updatePayload],
 	);
 	// In pick mode the table's checkboxes show and change the linked records.
 	// Source-owned links show as ticked too; unticking them changes nothing here.
-	const pickedLinkKeys = useMemo(
+	const draftPickedLinkKeys = useMemo(
 		() =>
 			activeLinkPick && detail
-				? linkPick?.review?.keys ?? new Set([
+				? new Set([
 						...linkKeysFromPayload(draftPayload, detail.links.publishedKeys)[
 							activeLinkPick
 						],
@@ -1128,8 +1120,19 @@ export default function AdminWorkbench({
 							.map((row) => row.key),
 					])
 				: null,
-		[activeLinkPick, detail, draftPayload, linkPick],
+		[activeLinkPick, detail, draftPayload],
 	);
+ const changePickedLinks = (kind: AdminItemLinkKind, keys: readonly string[], selected: boolean) => {
+  if (linkPick?.review) {
+   rememberLinkTargets(keys);
+   const picked = linkPick.review.change(keys, selected);
+   setLinkPick({...linkPick, review: {...linkPick.review, keys: picked}});
+  } else if (selected) addDraftLinkKeys(kind, keys);
+  else removeDraftLinkKeys(kind, keys);
+ };
+ const addLinkKeys = (kind: AdminItemLinkKind, keys: readonly string[]) => changePickedLinks(kind, keys, true);
+ const removeLinkKeys = (kind: AdminItemLinkKind, keys: readonly string[]) => changePickedLinks(kind, keys, false);
+ const pickedLinkKeys = activeLinkPick ? linkPick?.review?.keys ?? draftPickedLinkKeys : null;
 	const linkTargets = useMemo<AdminLinkTarget[]>(
 		() => [
 			...pickedLinkTargets.values(),
@@ -1314,6 +1317,7 @@ export default function AdminWorkbench({
 				abandonPendingDraft(detail.key);
 				await saveQueue.current;
 				await discardAdminDraft(detail.key);
+				await mutate(["admin-reviews", detail.parentItem ?? detail.key]);
 				if (detail.published) {
 					await loadDetail(detail.key);
 				} else {
@@ -1754,6 +1758,9 @@ export default function AdminWorkbench({
 			request.keys.length > 0
 				? (await mutateAdminItems(request)).results
 				: [];
+		if (request.action === "remove") {
+			await mutate(key => Array.isArray(key) && key[0] === "admin-reviews");
+		}
 		const results = [...localResults, ...remoteResults];
 		const indexingCompletion = searchIndex.trackAndWait(
 			remoteResults.flatMap(({ indexingReceipts }) => indexingReceipts),

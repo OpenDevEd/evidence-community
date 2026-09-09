@@ -35,7 +35,7 @@ import {
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 import { buildPublicationFileManifest } from "@/lib/publication/record-adapter";
 
-import type { ReviewFile } from "./review-contract";
+import { reviewFileSchema, type ReviewFile } from "./review-contract";
 import { removeUnreferencedPrivateFiles } from "./file-retention";
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
@@ -559,6 +559,21 @@ export async function stageNativePdfUpload(
 	return { fileDraft: staged.fileDraft, upload };
 }
 
+async function loadNativeFileDraft(db: Database, itemKey: string, expectedUploadRevision: number) {
+	const [draft] = await db
+		.select()
+		.from(itemFileDraft)
+		.where(
+			and(
+				eq(itemFileDraft.itemKey, itemKey),
+				eq(itemFileDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+				eq(itemFileDraft.uploadRevision, expectedUploadRevision),
+			),
+		)
+		.limit(1);
+	return draft;
+}
+
 export async function completeNativePdfUpload(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -572,17 +587,7 @@ export async function completeNativePdfUpload(
 		maxPdfBytes: number;
 	},
 ) {
-	const [draft] = await db
-		.select()
-		.from(itemFileDraft)
-		.where(
-			and(
-				eq(itemFileDraft.itemKey, itemKey),
-				eq(itemFileDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				eq(itemFileDraft.uploadRevision, expectedUploadRevision),
-			),
-		)
-		.limit(1);
+	const draft = await loadNativeFileDraft(db, itemKey, expectedUploadRevision);
 	if (!draft) throw new NativeFileConflictError(itemKey);
 
 	const bytes = await storage.downloadPrivate(draft.objectPath);
@@ -702,6 +707,113 @@ export async function discardNativePdfDraft(
 	}
 }
 
+async function loadPublicationFile(
+	db: Database,
+	itemKey: string,
+	expectedUploadRevision: number,
+	reviewFile?: ReviewFile,
+) {
+	const workingFile = reviewFile ? undefined : await loadNativeFileDraft(db, itemKey, expectedUploadRevision);
+	const draft = reviewFile ? {
+		...reviewFile,
+		actualSha256: reviewFile.sha256,
+		actualSizeBytes: reviewFile.sizeBytes,
+		readyAt: new Date(),
+	} : workingFile;
+	if (reviewFile && (reviewFile.itemKey !== itemKey || reviewFile.uploadRevision !== expectedUploadRevision)) throw new NativeFileConflictError(itemKey);
+	if (!draft?.readyAt) throw new NativeFileConflictError(itemKey);
+	const parsed = reviewFileSchema.safeParse({
+		...draft,
+		sha256: draft.actualSha256,
+		sizeBytes: draft.actualSizeBytes,
+	});
+	if (!parsed.success) throw new NativeFileConflictError(itemKey);
+	return {
+		...parsed.data,
+		actualSha256: parsed.data.sha256,
+		actualSizeBytes: parsed.data.sizeBytes,
+		readyAt: draft.readyAt,
+	};
+}
+
+function assertLockedFileDraft(
+ itemKey: string,
+ lockedDraft: Awaited<ReturnType<typeof loadPublicationFile>> | typeof itemFileDraft.$inferSelect | undefined,
+ draft: Awaited<ReturnType<typeof loadPublicationFile>>,
+): asserts lockedDraft is NonNullable<typeof lockedDraft> {
+	if (
+		!lockedDraft?.readyAt ||
+		lockedDraft.uploadRevision !== draft.uploadRevision ||
+		lockedDraft.actualSha256 !== draft.actualSha256
+	) {
+		throw new NativeFileConflictError(itemKey);
+	}
+	if (lockedDraft.parentItemKey !== draft.parentItemKey) {
+		throw new NativeFileConflictError(itemKey);
+	}
+}
+
+async function lockFilePublicationRecords(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	draft: Awaited<ReturnType<typeof loadPublicationFile>>,
+	reviewFile: ReviewFile | undefined,
+) {
+	await lockItemMutations(transaction, [
+		itemKey,
+		draft.parentItemKey,
+	]);
+	const [currentFileDraft] = await transaction
+		.select()
+		.from(itemFileDraft)
+		.where(eq(itemFileDraft.itemKey, itemKey))
+		.for("update")
+		.limit(1);
+	const lockedDraft = reviewFile ? draft : currentFileDraft;
+	assertLockedFileDraft(itemKey, lockedDraft, draft);
+
+	const lockedItems = await transaction
+		.select()
+		.from(item)
+		.where(
+			and(
+				inArray(item.key, [itemKey, lockedDraft.parentItemKey]),
+				eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.orderBy(item.key)
+		.for("update");
+	const attachment = lockedItems.find(
+		(candidate) => candidate.key === itemKey,
+	);
+	const parent = lockedItems.find(
+		(candidate) => candidate.key === lockedDraft.parentItemKey,
+	);
+	if (
+		!attachment ||
+		attachment.itemType !== "Attachment" ||
+		attachment.parentItem !== lockedDraft.parentItemKey ||
+		attachment.deleted === 1
+	) {
+		throw new NativeFileValidationError(
+			"Publish the attachment details before publishing its PDF.",
+			{
+				file: "The staged PDF no longer matches this attachment. Publish the attachment details, then upload the PDF again.",
+			},
+		);
+	}
+
+	if (!parent || parent.deleted === 1) {
+		throw new NativeFileValidationError(
+			"Publish the parent record first.",
+			{
+				file: "A PDF cannot be published until its parent record is published.",
+			},
+		);
+	}
+	return { lockedDraft, attachment, parent };
+}
+
 export async function prepareNativePdfPublication(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -721,36 +833,7 @@ export async function prepareNativePdfPublication(
 	},
 ) {
 	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
-	const [workingFile] = await db
-		.select()
-		.from(itemFileDraft)
-		.where(
-			and(
-				eq(itemFileDraft.itemKey, itemKey),
-				eq(itemFileDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				eq(itemFileDraft.uploadRevision, expectedUploadRevision),
-			),
-		)
-		.limit(1);
-	const draft = reviewFile ? {
-		...reviewFile,
-		actualSha256: reviewFile.sha256,
-		actualSizeBytes: reviewFile.sizeBytes,
-		readyAt: new Date(),
-	} : workingFile;
-	if (reviewFile && (reviewFile.itemKey !== itemKey || reviewFile.uploadRevision !== expectedUploadRevision)) throw new NativeFileConflictError(itemKey);
-	if (
-		!draft?.readyAt ||
-		!draft.actualSha256 ||
-		!draft.actualSizeBytes ||
-		!draft.coverObjectPath ||
-		!draft.coverWidth ||
-		!draft.coverHeight ||
-		!draft.pageCount ||
-		draft.extractedText === null
-	) {
-		throw new NativeFileConflictError(itemKey);
-	}
+	const draft = await loadPublicationFile(db, itemKey, expectedUploadRevision, reviewFile);
 	const [attachmentBeforePublish, previousPublication, currentFiles] =
 		await Promise.all([
 			db
@@ -836,68 +919,9 @@ export async function prepareNativePdfPublication(
 	const md5 = createHash("md5").update(pdfBytes).digest("hex");
 
 	const commitPublication = async (transaction: DatabaseTransaction) => {
-			await lockItemMutations(transaction, [
-				itemKey,
-				draft.parentItemKey,
-			]);
-			const [currentFileDraft] = await transaction
-				.select()
-				.from(itemFileDraft)
-				.where(eq(itemFileDraft.itemKey, itemKey))
-				.for("update")
-				.limit(1);
-			const lockedDraft = reviewFile ? draft : currentFileDraft;
-			if (
-				!lockedDraft?.readyAt ||
-				lockedDraft.uploadRevision !== expectedUploadRevision ||
-				lockedDraft.actualSha256 !== draft.actualSha256
-			) {
-				throw new NativeFileConflictError(itemKey);
-			}
-			if (lockedDraft.parentItemKey !== draft.parentItemKey) {
-				throw new NativeFileConflictError(itemKey);
-			}
-
-			const lockedItems = await transaction
-				.select()
-				.from(item)
-				.where(
-					and(
-						inArray(item.key, [itemKey, lockedDraft.parentItemKey]),
-						eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-					),
-				)
-				.orderBy(item.key)
-				.for("update");
-			const attachment = lockedItems.find(
-				(candidate) => candidate.key === itemKey,
+			const { lockedDraft, attachment, parent } = await lockFilePublicationRecords(
+				transaction, itemKey, draft, reviewFile,
 			);
-			const parent = lockedItems.find(
-				(candidate) => candidate.key === lockedDraft.parentItemKey,
-			);
-			if (
-				!attachment ||
-				attachment.itemType !== "Attachment" ||
-				attachment.parentItem !== lockedDraft.parentItemKey ||
-				attachment.deleted === 1
-			) {
-				throw new NativeFileValidationError(
-					"Publish the attachment details before publishing its PDF.",
-					{
-						file: "The staged PDF no longer matches this attachment. Publish the attachment details, then upload the PDF again.",
-					},
-				);
-			}
-
-			if (!parent || parent.deleted === 1) {
-				throw new NativeFileValidationError(
-					"Publish the parent record first.",
-					{
-						file: "A PDF cannot be published until its parent record is published.",
-					},
-				);
-			}
-
 			const now = new Date();
 			const nextRevision = attachment.revision + 1;
 			const parentNextRevision = parent.revision + 1;

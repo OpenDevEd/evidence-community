@@ -88,6 +88,33 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  integration:
+    name: Database and publication integration
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on:
+      - self-hosted
+      - evidence-library-runtime
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: integration
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-project
+      - name: Verify transactions, files, reviews and provider retries
+        env:
+          DATABASE_URL_POST: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports[5432] }}/postgres
+        run: npm run test:integration
+
   code-quality:
     name: Fallow code quality
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -139,15 +166,18 @@ jobs:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs:
       - code-quality
+      - integration
       - static-checks
       - runtime
     steps:
       - name: Require every CI lane to pass
         env:
           CODE_QUALITY: ${{ needs.code-quality.result }}
+          INTEGRATION: ${{ needs.integration.result }}
           STATIC_CHECKS: ${{ needs.static-checks.result }}
           RUNTIME: ${{ needs.runtime.result }}
         run: |
           test "$CODE_QUALITY" = success
+          test "$INTEGRATION" = success
           test "$STATIC_CHECKS" = success
           test "$RUNTIME" = success

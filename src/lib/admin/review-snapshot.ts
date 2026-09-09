@@ -28,6 +28,16 @@ function captureFile(
     return {itemKey: key, file: reviewFileSchema.parse({...file, objectPath: file.sourceObjectPath, coverObjectPath: file.sourceCoverObjectPath, extractedText: current?.fullTextPDF ?? ""})};
 }
 
+function reviewBaseRevision(key: string, current: typeof item.$inferSelect | undefined, draft: typeof itemDraft.$inferSelect | undefined) {
+ const revision = current?.revision ?? 0;
+ if (draft && draft.baseRevision !== revision) throw new ItemDraftConflictError(key);
+ return revision;
+}
+
+async function reviewRecordPayload(transaction: DatabaseTransaction, key: string, current: typeof item.$inferSelect | undefined, draft: typeof itemDraft.$inferSelect | undefined) {
+ return applyItemDraftPatch(await loadPublishedItemPayload(transaction, key, current ?? null), draft?.patch ?? {});
+}
+
 async function captureRecord(
     transaction: DatabaseTransaction,
     rootKey: string,
@@ -36,12 +46,12 @@ async function captureRecord(
     draft: typeof itemDraft.$inferSelect | undefined,
 ): Promise<ReviewRecord | null> {
     if (!draft && (!current || current.deleted)) return null;
-    if (draft && draft.baseRevision !== (current?.revision ?? 0)) throw new ItemDraftConflictError(key);
-    const payload = applyItemDraftPatch(await loadPublishedItemPayload(transaction, key, current ?? null), draft?.patch ?? {});
+    const baseRevision = reviewBaseRevision(key, current, draft);
+    const payload = await reviewRecordPayload(transaction, key, current, draft);
     const validated = validateNativeItemDraft(payload, {requireTitle: true});
     if (key === rootKey && validated.item.parentItem) throw new AdminValidationError("Submit the parent item for review.");
     if (key !== rootKey && validated.item.parentItem !== rootKey) return null;
-    return {itemKey: key, baseRevision: current?.revision ?? 0, payload: validated.payload};
+    return {itemKey: key, baseRevision, payload: validated.payload};
 }
 
 /** Capture metadata and private file references while the caller holds item mutation locks. */

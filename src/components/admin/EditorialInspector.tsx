@@ -1,127 +1,271 @@
 "use client";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
-import { type ComponentProps, useRef, useState } from "react";
-import { toast } from "sonner";
+import type { ComponentProps, ReactNode } from "react";
+import type { AdminReviewSnapshot } from "./admin-api";
 import { AdminInspector } from "./AdminInspector";
 import { useItemReview } from "./useItemReview";
+import { useReviewVersion } from "./useReviewVersion";
+import { useReviewDraftConflicts } from "./useReviewDraftConflicts";
 import { useAdminSession } from "./AdminSessionProvider";
-import { updateAdminReview } from "./admin-api";
 import { useReviewCorrections } from "./useReviewCorrections";
-import { useReviewLinkPicker, type ReviewLinkPicker } from "./useReviewLinkPicker";
-import type { AdminItemLinkKind } from "@/lib/admin/types";
+import {
+	useReviewLinkPicker,
+	type ReviewLinkPicker,
+} from "./useReviewLinkPicker";
+import type { AdminItemDetail, AdminItemLinkKind } from "@/lib/admin/types";
 import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
-import { ReviewVersionTabs, ReviewVersionNotice, ReviewDraftNotice } from "./ReviewVersionControls";
+import {
+	ReviewVersionTabs,
+	ReviewVersionNotice,
+	ReviewDraftNotice,
+} from "./ReviewVersionControls";
 
 type Props = ComponentProps<typeof AdminInspector> & {
- reviewQueue: boolean;
- onStartReviewLinkPick: (kind: AdminItemLinkKind, picker: ReviewLinkPicker) => void;
+	reviewQueue: boolean;
+	onStartReviewLinkPick: (
+		kind: AdminItemLinkKind,
+		picker: ReviewLinkPicker,
+	) => void;
 };
 
 export function EditorialInspector(props: Props) {
-	return <ReviewInspector key={`${props.detail?.key ?? "empty"}:${props.reviewQueue}`} {...props} />;
+	if (!props.detail) return <AdminInspector {...props} />;
+	return (
+		<ReviewInspector
+			key={`${props.detail.key}:${props.reviewQueue}`}
+			{...props}
+			detail={props.detail}
+		/>
+	);
 }
 
-function ReviewInspector(props: Props) {
-	const key = props.detail?.key ?? "";
- const { snapshot, pending, refresh, error } = useItemReview(props.detail?.parentItem ?? props.detail?.key);
- const session = useAdminSession();
- const corrections = useReviewCorrections(snapshot, refresh);
- const [submitted, setSubmitted] = useState(props.reviewQueue);
- const [withdrawing, setWithdrawing] = useState(false);
- const feedback = snapshot?.reviewState === "returned" ? snapshot.note : null;
- const canWithdraw = snapshot && (session.role !== "creator" || snapshot.submittedBy === session.userId);
- const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { props.onStopLinkPick?.(); void refresh(); return props.onPublicationChanged(receipts); };
- const conflictRef = useRef<HTMLDivElement>(null);
- const [resolving, setResolving] = useState(false);
- const conflictFields = snapshot?.remainingConflicts[key] ?? [];
- const hasConflict = conflictFields.length > 0;
- const resolveConflicts = async (choices: Record<string, "draft" | "published">) => {
-  const draft = props.detail?.draft;
-  if (!snapshot || !draft) return;
-  setResolving(true);
-  try {
-   await updateAdminReview(snapshot.reviewId, {action: "resolve-conflicts", expectedRevision: snapshot.reviewRevision, itemKey: key, generation: draft.generation, draftRevision: draft.draftRevision, choices});
-   changed();
-   toast.success("Draft conflicts resolved");
-  } catch (error) { toast.error(error instanceof Error ? error.message : "Could not resolve conflicts"); }
-  finally { setResolving(false); }
- };
-	const [attachmentKey, setAttachmentKey] = useState<string | null>(null);
-	const viewingSubmitted = submitted && Boolean(snapshot);
-	const frozenDetail =
-		snapshot?.frozenAttachments.find((a) => a.key === attachmentKey) ??
-		snapshot;
-	const reviewPayload = corrections.payloads[frozenDetail?.key ?? ""] ?? frozenDetail?.draft?.payload ?? frozenDetail?.published ?? {};
- const startReviewLinkPick = useReviewLinkPicker({
-  detail: frozenDetail, payload: reviewPayload, change: corrections.change,
-  enabled: Boolean(pending) && session.role !== "creator", onStart: props.onStartReviewLinkPick,
- });
- const controls = snapshot ? <ReviewVersionTabs viewingSubmitted={viewingSubmitted} onSelect={value => {
-  props.onStopLinkPick?.(); setSubmitted(value); setAttachmentKey(null);
- }} /> : undefined;
- const withdraw = () => {
-  if (!snapshot) return;
-  setWithdrawing(true);
-  void updateAdminReview(snapshot.reviewId, {action: "withdrawn", expectedRevision: snapshot.reviewRevision}).then(() => {
-   setSubmitted(false); setAttachmentKey(null); changed();
-  }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not withdraw review")).finally(() => setWithdrawing(false));
- };
- const notice = snapshot ? <ReviewVersionNotice snapshot={snapshot} pending={pending} canWithdraw={Boolean(canWithdraw)} withdrawing={withdrawing} onWithdraw={withdraw} /> : undefined;
- const draftNotice = <ReviewDraftNotice notice={notice} conflictCount={conflictFields.length} feedback={feedback} onConflicts={() => {
-  conflictRef.current?.scrollIntoView({block: "start", behavior: "smooth"}); conflictRef.current?.focus({preventScroll: true});
- }} />;
-
-	if (!viewingSubmitted || !frozenDetail || !snapshot)
+function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
+	const model = useReviewInspector(props);
+	const {
+		snapshot,
+		pending,
+		session,
+		version,
+		viewingSubmitted,
+		frozenDetail,
+	} = model;
+	const controls = snapshot ? (
+		<ReviewVersionTabs
+			viewingSubmitted={viewingSubmitted}
+			onSelect={version.selectVersion}
+		/>
+	) : undefined;
+	const notice = snapshot ? (
+		<ReviewVersionNotice
+			snapshot={snapshot}
+			pending={pending}
+			canWithdraw={
+				session.role !== "creator" ||
+				snapshot.submittedBy === session.userId
+			}
+			withdrawing={version.withdrawing}
+			onWithdraw={version.withdraw}
+		/>
+	) : undefined;
+	if (!viewingSubmitted || !frozenDetail || !snapshot) {
 		return (
-			<AdminInspector
+			<WorkingDraftInspector
 				{...props}
-				error={error instanceof Error ? error.message : props.error}
-                versionControls={controls}
-				versionNotice={draftNotice}
-                editorNotice={hasConflict ? <div ref={conflictRef} tabIndex={-1} className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"><DraftConflict key={`${snapshot?.reviewRevision}:${props.detail?.draft?.draftRevision}`} payload={props.payload} published={props.detail?.published ?? {}} conflictFields={conflictFields} disabled={resolving || props.saveState === "saving"} onResolve={choices => { void resolveConflicts(choices); }} /></div> : undefined}
-                submissionBlocked={hasConflict}
-				reviewPending={pending}
+				model={model}
+				controls={controls}
+				notice={notice}
 			/>
 		);
+	}
+	return (
+		<SubmittedInspector
+			{...props}
+			model={model}
+			snapshot={snapshot}
+			frozenDetail={frozenDetail}
+			controls={controls}
+			notice={notice}
+		/>
+	);
+}
+
+type VersionInspectorProps = Props & {
+	detail: AdminItemDetail;
+	model: ReturnType<typeof useReviewInspector>;
+	controls: ReactNode;
+	notice: ReactNode;
+};
+
+function WorkingDraftInspector({
+	model,
+	controls,
+	notice,
+	...props
+}: VersionInspectorProps) {
+	const { snapshot, pending, error, conflicts, conflictRef } = model;
+	const hasConflict = conflicts.fields.length > 0;
+	const draftNotice = (
+		<ReviewDraftNotice
+			notice={notice}
+			conflictCount={conflicts.fields.length}
+			feedback={
+				snapshot?.reviewState === "returned" ? snapshot.note : null
+			}
+			onConflicts={conflicts.focus}
+		/>
+	);
+
+	return (
+		<AdminInspector
+			{...props}
+			error={error instanceof Error ? error.message : props.error}
+			versionControls={controls}
+			versionNotice={draftNotice}
+			editorNotice={
+				hasConflict ? (
+					<div
+						ref={conflictRef}
+						tabIndex={-1}
+						className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
+					>
+						<DraftConflict
+							key={`${snapshot?.reviewRevision}:${props.detail.draft?.draftRevision}`}
+							payload={props.payload}
+							published={props.detail.published ?? {}}
+							conflictFields={conflicts.fields}
+							disabled={
+								conflicts.resolving ||
+								props.saveState === "saving"
+							}
+							onResolve={(choices) => {
+								void conflicts.resolve(choices);
+							}}
+						/>
+					</div>
+				) : undefined
+			}
+			submissionBlocked={hasConflict}
+			reviewPending={pending}
+		/>
+	);
+}
+
+function SubmittedInspector({
+	model,
+	controls,
+	notice,
+	snapshot,
+	frozenDetail,
+	...props
+}: VersionInspectorProps & {
+	snapshot: AdminReviewSnapshot;
+	frozenDetail: NonNullable<
+		ReturnType<typeof useReviewVersion>["frozenDetail"]
+	>;
+}) {
+	const {
+		pending,
+		session,
+		corrections,
+		changed,
+		reviewPayload,
+		startReviewLinkPick,
+		version,
+	} = model;
+
 	return (
 		<AdminInspector
 			{...props}
 			detail={frozenDetail}
-			payload={
-				corrections.payloads[frozenDetail.key] ?? frozenDetail.draft?.payload ?? frozenDetail.published ?? {}
-			}
+			payload={reviewPayload}
 			readOnlyVersion
-            allowReviewCorrections={pending && session.role !== "creator"}
-            publishingChoice={snapshot.publishing}
-            onChange={payload => corrections.change(frozenDetail.key, payload)}
+			allowReviewCorrections={pending && session.role !== "creator"}
+			publishingChoice={snapshot.publishing}
+			onChange={(payload) =>
+				corrections.change(frozenDetail.key, payload)
+			}
 			versionActions={
 				<ReviewActions
 					snapshot={snapshot}
-                    disabled={corrections.saving || Boolean(corrections.error)}
+					disabled={corrections.saving || Boolean(corrections.error)}
 					onUpdated={changed}
 				/>
 			}
 			versionControls={controls}
 			versionNotice={notice}
-			linkTargets={[...(props.linkTargets ?? []), ...frozenDetail.links.targets]}
-            onStartLinkPick={startReviewLinkPick}
+			linkTargets={[
+				...(props.linkTargets ?? []),
+				...frozenDetail.links.targets,
+			]}
+			onStartLinkPick={startReviewLinkPick}
 			fileErrors={{}}
 			validationErrors={{}}
 			validationRevision={0}
 			loading={false}
 			error={corrections.error}
 			saveMessage={corrections.error}
-			saveState={corrections.error ? "error" : corrections.saving ? "saving" : "saved"}
-			onSelectAttachment={(key) => { props.onStopLinkPick?.(); setAttachmentKey(key); }}
-			onBackToParent={(target) => {
-                props.onStopLinkPick?.();
-				if (target === key) setAttachmentKey(null);
-				else {
-					setSubmitted(false);
-					props.onBackToParent(target);
-				}
-			}}
+			saveState={
+				corrections.error
+					? "error"
+					: corrections.saving
+						? "saving"
+						: "saved"
+			}
+			onSelectAttachment={version.selectAttachment}
+			onBackToParent={version.backToParent}
 		/>
 	);
+}
+
+function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
+	const key = props.detail.key;
+	const { snapshot, pending, refresh, error } = useItemReview(
+		props.detail.parentItem ?? props.detail.key,
+	);
+	const session = useAdminSession();
+	const corrections = useReviewCorrections(snapshot, refresh);
+	const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => {
+		props.onStopLinkPick?.();
+		void refresh();
+		return props.onPublicationChanged(receipts);
+	};
+	const { ref: conflictRef, ...conflicts } = useReviewDraftConflicts(
+		snapshot,
+		props.detail,
+		changed,
+	);
+	const version = useReviewVersion(snapshot, {
+		initialSubmitted: props.reviewQueue,
+		itemKey: key,
+		onChanged: changed,
+		onStopLinkPick: props.onStopLinkPick,
+		onBackToParent: props.onBackToParent,
+	});
+	const { viewingSubmitted, frozenDetail } = version;
+	const reviewPayload = frozenDetail
+		? (corrections.payloads[frozenDetail.key] ?? frozenDetail.draft.payload)
+		: {};
+	const startReviewLinkPick = useReviewLinkPicker({
+		detail: frozenDetail,
+		payload: reviewPayload,
+		change: corrections.change,
+		enabled: Boolean(pending) && session.role !== "creator",
+		onStart: props.onStartReviewLinkPick,
+	});
+	return {
+		snapshot,
+		pending,
+		error,
+		session,
+		corrections,
+		changed,
+		conflictRef,
+		conflicts,
+		version,
+		viewingSubmitted,
+		frozenDetail,
+		reviewPayload,
+		startReviewLinkPick,
+	};
 }

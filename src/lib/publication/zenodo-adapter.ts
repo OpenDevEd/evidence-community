@@ -1,3 +1,4 @@
+import type { PublicationSettlement } from "./queue";
 import type { ZenodoIdentifierPolicy, ZenodoPublicationEnvironment } from "@/db/schema/publication";
 import {
 	executeLivePublicationSyncPlan,
@@ -41,6 +42,8 @@ import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
 	deferPublicationJob,
+	settlePublicationJob,
+	type PublicationJobResult,
 	enqueueItemSearchReprojection,
 	enqueuePublicationJobsForItem,
 	finishPublicationJob,
@@ -905,24 +908,9 @@ async function auditZenodoPublishedState(
 
 async function settleZenodoState(
 	database: Database,
-	input: {
+	input: PublicationSettlement & {
 		environment: ZenodoPublicationEnvironment;
-		jobId: number;
-		workerId: string;
-		itemKey: string;
-		canonicalRevision: number;
-		patch: ProviderSyncStatePatch;
-		previousState: ProviderSyncState | undefined;
 		identifierPolicy: ZenodoIdentifierPolicy;
-		settledAt: Date;
-		jobResult:
-			| { status: "finished"; receipt: Record<string, unknown> }
-			| {
-					status: "deferred";
-					delayMs: number;
-					error: string;
-					deadLetter: boolean;
-			  };
 	},
 ) {
 	await database.transaction(async (transaction) => {
@@ -988,24 +976,28 @@ async function settleZenodoState(
 				queuedAt: input.settledAt,
 			});
 		}
-		if (input.jobResult.status === "finished") {
-			await finishPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				finishedAt: input.settledAt,
-				receipt: input.jobResult.receipt,
-			});
-		} else {
-			await deferPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				deferredAt: input.settledAt,
-				delayMs: input.jobResult.delayMs,
-				error: input.jobResult.error,
-				deadLetter: input.jobResult.deadLetter,
-			});
-		}
+		await settlePublicationJob(transaction, input);
 	});
+}
+
+function zenodoDraftWaitReason(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>, identifierPolicy: ZenodoIdentifierPolicy, crossrefEnvironment: "test" | "production") {
+	return identifierPolicy === "reuse-crossref" &&
+		!snapshot.identifiers.some(
+			(identifier) =>
+				identifier.registrar === "crossref" &&
+				identifier.environment === crossrefEnvironment &&
+				identifier.isCurrent &&
+				identifier.ownership === "managed" &&
+				identifier.lifecycle === "verified",
+		)
+			? "crossref"
+			: snapshot.files.length === 0
+				? "file"
+				: null;
+}
+
+function hasZenodoDraft(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>, state: typeof publicationSyncState.$inferSelect | undefined, environment: ZenodoPublicationEnvironment) {
+ return Boolean(state?.zenodoRecordId || state?.unpublishedDraftDepositionId || snapshot.journals.some(journal => journal.environment === environment));
 }
 
 async function prepareWaitingZenodoDraft(
@@ -1027,29 +1019,12 @@ async function prepareWaitingZenodoDraft(
 	const target = targetFor(snapshot, "zenodo", config.services.publication.zenodo.environment);
 	if (!target?.identifierPolicy)
 		throw new Error("The record does not have an active Zenodo target");
-	const waitingOn =
-		target.identifierPolicy === "reuse-crossref" &&
-		!snapshot.identifiers.some(
-			(identifier) =>
-				identifier.registrar === "crossref" &&
-				identifier.environment === config.services.publication.crossref.environment &&
-				identifier.isCurrent &&
-				identifier.ownership === "managed" &&
-				identifier.lifecycle === "verified",
-		)
-			? "crossref"
-			: snapshot.files.length === 0
-				? "file"
-				: null;
+	const waitingOn = zenodoDraftWaitReason(snapshot, target.identifierPolicy, config.services.publication.crossref.environment);
 	const state = snapshot.states.find(
 		(state) =>
 			state.provider === "zenodo" && state.environment === config.services.publication.zenodo.environment,
 	);
-	if (
-		!state?.zenodoRecordId &&
-		!state?.unpublishedDraftDepositionId &&
-		!snapshot.journals.some(journal => journal.environment === config.services.publication.zenodo.environment)
-	) {
+	if (!hasZenodoDraft(snapshot, state, config.services.publication.zenodo.environment)) {
 		if (!waitingOn) {
 			// Validation belongs to publication, but must not prevent saving the archive draft.
 			try {

@@ -1,12 +1,8 @@
-import { libraryConfigSchema } from "../src/config/library-config/schema";
-import { maximalLibraryConfig } from "../tests/fixtures/library-config";
-import { getAdminItemListPage } from "../src/lib/admin/item-list-query";
-import { parseAdminItemListRequest } from "../src/lib/admin/item-list-contract";
-import { getAdminReviewSnapshot } from "../src/lib/admin/review-query";
-import { AdminValidationError } from "../src/lib/admin/errors";
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
+import { MemoryFileStorage, createPdf, fileHash } from "../tests/helpers/file-storage";
+import { describe, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { itemReview, itemPublishingChoice } from "../src/db/schema/review";
-import { correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../src/lib/admin/review-service";
-import { createHash } from "node:crypto";
 
 import {
 	itemDraft,
@@ -18,10 +14,10 @@ import {
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { buildPublicationFileManifestHash } from "@opendeved/doi-sync-core";
-import { PDFDocument, StandardFonts } from "pdf-lib";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { createPostgresDatabaseResource } from "../src/db/postgres";
+import type { Database } from "../src/db/database-schema";
+import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { itemFilePublication } from "../src/db/schema/source";
 import {
 	publicationIdentifier,
@@ -32,10 +28,6 @@ import {
 } from "../src/db/schema/publication";
 import { item } from "../src/db/schema/tables/item";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
-import type {
-	EvidenceFileStorage,
-	SignedFileUpload,
-} from "../src/lib/admin/file-storage";
 import {
 	completeNativePdfUpload,
 	discardNativePdfDraft,
@@ -51,6 +43,7 @@ import {
 import { buildPublicationFileManifest } from "../src/lib/publication/record-adapter";
 import {
 	createNativeItemDraft,
+	discardItemDraft,
 	getItemDraft as getNativeItemDraft,
 	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
 	openItemDraft as openNativeItemDraft,
@@ -61,98 +54,16 @@ import {
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
-const verifiedDatabaseUrl = databaseUrl;
-const reviewConfig = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] });
+const filePublicationConfig = publicationTestConfig().services.publication;
+
 const PUBLICATION_TAGS = ["publish-record"] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-class MemoryFileStorage implements EvidenceFileStorage {
-	readonly privateFiles = new Map<string, Uint8Array>();
-	readonly publicFiles = new Map<string, Uint8Array>();
-	privateUploadHook: ((path: string) => Promise<void>) | null = null;
-	publicUploadHook: (() => Promise<void>) | null = null;
-	private publicUploadsAfterHook = 0;
-
-	async createSignedUpload(path: string): Promise<SignedFileUpload> {
-		return {
-			path,
-			signedUrl: `http://storage.local/upload/${path}`,
-			token: `token-${path}`,
-		};
-	}
-
-	async downloadPrivate(path: string) {
-		const data = this.privateFiles.get(path);
-		if (!data) throw new Error(`Missing private object: ${path}`);
-		return data.slice();
-	}
-
-	async downloadPublic(path: string) {
-		const bytes = this.publicFiles.get(path);
-		if (!bytes) throw new Error(`Missing public object ${path}`);
-		return bytes.slice();
-	}
-
-	async uploadPrivate(path: string, data: Uint8Array, _contentType: string) {
-		this.privateFiles.set(path, data.slice());
-		if (this.privateUploadHook) {
-			const hook = this.privateUploadHook;
-			this.privateUploadHook = null;
-			await hook(path);
-		}
-	}
-
-	async uploadPublic(path: string, data: Uint8Array, _contentType: string) {
-		this.publicFiles.set(path, data.slice());
-		if (this.publicUploadHook) {
-			this.publicUploadsAfterHook += 1;
-			if (this.publicUploadsAfterHook === 2) {
-				const hook = this.publicUploadHook;
-				this.publicUploadHook = null;
-				this.publicUploadsAfterHook = 0;
-				await hook();
-			}
-		}
-	}
-
-	publicUrl(path: string) {
-		return `http://storage.local/public/${path}`;
-	}
-
-	async removePrivate(paths: string[]) {
-		for (const path of paths) this.privateFiles.delete(path);
-	}
-
-	async removePublic(paths: string[]) {
-		for (const path of paths) this.publicFiles.delete(path);
-	}
-}
-
-async function createPdf(title: string) {
-	const document = await PDFDocument.create();
-	const font = await document.embedFont(StandardFonts.Helvetica);
-	const page = document.addPage([612, 792]);
-	page.drawText(title, { x: 72, y: 700, size: 24, font });
-	page.drawText("Evidence Library file lifecycle verification.", {
-		x: 72,
-		y: 660,
-		size: 12,
-		font,
-	});
-	return new Uint8Array(await document.save());
-}
-
-function fileHash(bytes: Uint8Array) {
-	return createHash("sha256").update(bytes).digest("hex");
-}
-
 async function verifyCrossrefBackedPdfCorrectionApproval(
-	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	db: Database,
 	storage: MemoryFileStorage,
 	createdKeys: string[],
 ) {
@@ -182,7 +93,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	});
 	await publishNativeItemDraft(db, parentDraft.itemKey);
 	await publishNativeItemDraft(db, attachmentDraft.itemKey);
-	const initialPublication = await publishNativePdf(db, storage, reviewConfig.services.publication, {
+	const initialPublication = await publishNativePdf(db, storage, filePublicationConfig, {
 		itemKey: attachmentDraft.itemKey,
 		expectedUploadRevision: initialReady.uploadRevision,
 		publicationTags: PUBLICATION_TAGS,
@@ -254,7 +165,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	const publicFileCount = storage.publicFiles.size;
 	let confirmationRequired = false;
 	try {
-		await publishNativePdf(db, storage, reviewConfig.services.publication, {
+		await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: attachmentDraft.itemKey,
 			expectedUploadRevision: correctionReady.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -274,7 +185,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 		"Crossref-backed PDF replacement did not stop before confirmation",
 	);
 
-	const correctedPublication = await publishNativePdf(db, storage, reviewConfig.services.publication, {
+	const correctedPublication = await publishNativePdf(db, storage, filePublicationConfig, {
 		itemKey: attachmentDraft.itemKey,
 		expectedUploadRevision: correctionReady.uploadRevision,
 		publicationTags: PUBLICATION_TAGS,
@@ -309,7 +220,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	const publicFilesBeforeUnpublish = storage.publicFiles.size;
 	let unpublishConfirmationRequired = false;
 	try {
-		await unpublishNativePdf(db, storage, reviewConfig.services.publication, attachmentDraft.itemKey);
+		await unpublishNativePdf(db, storage, filePublicationConfig, attachmentDraft.itemKey);
 	} catch (error) {
 		unpublishConfirmationRequired =
 			error instanceof ZenodoPdfCorrectionConfirmationRequiredError;
@@ -328,7 +239,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 	);
 	await unpublishNativePdf(
 		db,
-		storage, reviewConfig.services.publication,
+		storage, filePublicationConfig,
 		attachmentDraft.itemKey,
 		"minor_correction",
 	);
@@ -353,7 +264,7 @@ async function verifyCrossrefBackedPdfCorrectionApproval(
 }
 
 async function verifyNonZenodoDuplicateFilenames(
-	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	db: Database,
 	storage: MemoryFileStorage,
 	createdKeys: string[],
 ) {
@@ -391,7 +302,7 @@ async function verifyNonZenodoDuplicateFilenames(
 			maxPdfBytes: 10_000_000,
 		});
 		await publishNativeItemDraft(db, attachment.itemKey);
-		await publishNativePdf(db, storage, reviewConfig.services.publication, {
+		await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: attachment.itemKey,
 			expectedUploadRevision: ready.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -406,13 +317,11 @@ async function verifyNonZenodoDuplicateFilenames(
 		"Non-Zenodo PDF publishing ran Zenodo filename validation",
 	);
 	for (const attachment of attachments) {
-		await unpublishNativePdf(db, storage, reviewConfig.services.publication, attachment.itemKey);
+		await unpublishNativePdf(db, storage, filePublicationConfig, attachment.itemKey);
 	}
 }
 
-async function verify() {
-	const resource = createPostgresDatabaseResource(verifiedDatabaseUrl);
-	const db = resource.database;
+async function verify(db: Database) {
 	const storage = new MemoryFileStorage();
 	const createdKeys: string[] = [];
 	const connectionKey = `native-file-writeback-${process.pid}-${Date.now()}`;
@@ -425,117 +334,6 @@ async function verify() {
 			scopeKind: "group",
 		});
 
-		const reviewStorage = new MemoryFileStorage();
-		const citationTarget = await createNativeItemDraft(db, {itemType: "Report", title: "Referenced publication"});
-        createdKeys.push(citationTarget.itemKey);
-        await publishNativeItemDraft(db, citationTarget.itemKey);
-        const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file", links: {cites: [citationTarget.itemKey], related: []} });
-		createdKeys.push(noFileDraft.itemKey);
-		const noFileActor = { userId: "no-file-creator", role: "creator" } as const;
-		let choiceRequired = false;
-		try { await submitItemReview(db, noFileDraft.itemKey, noFileActor); }
-		catch (error) { choiceRequired = error instanceof AdminValidationError; }
-		assert(choiceRequired, "Created item submission accepted a missing identifier choice");
-		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
-		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor);
-        await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
-		let creatorDenied = false;
-		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor, reviewConfig); }
-		catch (error) { creatorDenied = error instanceof AdminValidationError; }
-		assert(creatorDenied, "Creator could approve a review");
-		const laterDraft = await saveNativeItemDraft(db, {itemKey: noFileDraft.itemKey, expectedDraftRevision: noFileDraft.draftRevision, expectedPayload: noFileDraft.payload, payload: {...noFileDraft.payload, title: "Creator's later title"}});
-		const corrected = await correctItemReview(db, {reviewId: noFileReview.id, expectedRevision: noFileReview.revision, records: noFileReview.snapshot.records.map(record => ({...record, payload: {...record.payload, title: "Editor's corrected title"}}))}, {userId: "no-file-editor", role: "editor"});
-		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: corrected.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" }, reviewConfig);
-		assert(noFileApproval.review.state === "published", "A PDF was required to publish a review");
-        const [approvedPublic] = await db.select({ revision: item.revision }).from(item).where(eq(item.key, noFileDraft.itemKey));
-        assert(noFileApproval.indexingRecords.some(record => record.key === noFileDraft.itemKey && record.revision === approvedPublic?.revision), "Approval omitted the final public revision from indexing receipts");
-        assert(noFileApproval.indexingRecords.some(record => record.key === citationTarget.itemKey), "Approval omitted the changed citation target from indexing receipts");
-
-        assert(noFileApproval.review.remainingConflicts[noFileDraft.itemKey]?.includes("title"), "Correction failed to preserve the conflicting working title");
-        const conflictDraft = await getNativeItemDraft(db, noFileDraft.itemKey);
-        assert(conflictDraft, "Conflicting draft disappeared");
-        const resolution = {reviewId: noFileReview.id, expectedRevision: noFileApproval.review.revision, itemKey: noFileDraft.itemKey, generation: conflictDraft.generation, draftRevision: conflictDraft.draftRevision, choices: {title: "published" as const}};
-        let staleResolutionDenied = false;
-        try { await resolveReviewConflicts(db, {...resolution, draftRevision: laterDraft.draftRevision - 1}, reviewConfig); }
-        catch { staleResolutionDenied = true; }
-        assert(staleResolutionDenied, "Conflict resolution accepted a stale draft revision");
-        const resolved = await resolveReviewConflicts(db, resolution, reviewConfig);
-        const resolvedDraft = await getNativeItemDraft(db, noFileDraft.itemKey);
-        assert(!resolved.remainingConflicts[noFileDraft.itemKey] && resolvedDraft?.payload.title === "Editor's corrected title", "Resolution did not atomically apply the published choice");
-
-        const activatedTargets = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, noFileDraft.itemKey));
-        assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");
-        const activationJobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, noFileDraft.itemKey));
-        assert(activationJobs.length === 2 && activationJobs.every(job => job.processedAt === null), "Approval failed to queue both providers without files");
-
-        const imported = await createNativeItemDraft(db, { itemType: "Report", title: "Imported restoration" });
-        createdKeys.push(imported.itemKey);
-        await db.update(itemIdentity).set({ kind: "imported" }).where(eq(itemIdentity.key, imported.itemKey));
-        const importedSubmission = await submitItemReview(db, imported.itemKey, noFileActor);
-        const reviewer = { userId: "restoration-editor", role: "editor" } as const;
-        await approveItemReview(db, reviewStorage, { reviewId: importedSubmission.id, expectedRevision: importedSubmission.revision, publicationTags: PUBLICATION_TAGS }, reviewer, reviewConfig);
-        await unpublishNativeItem(db, imported.itemKey);
-        await openNativeItemDraft(db, imported.itemKey);
-        const restoration = await submitItemReview(db, imported.itemKey, noFileActor);
-        const [beforeRestore] = await db.select().from(item).where(eq(item.key, imported.itemKey));
-        assert(beforeRestore?.deleted === 1, "Submitting restoration made the item public without approval");
-        await approveItemReview(db, reviewStorage, { reviewId: restoration.id, expectedRevision: restoration.revision, publicationTags: PUBLICATION_TAGS }, reviewer, reviewConfig);
-        const [afterRestore] = await db.select().from(item).where(eq(item.key, imported.itemKey));
-        assert(afterRestore?.deleted === 0, "Approved restoration did not return the item to the public library");
-		const reviewParent = await createNativeItemDraft(db, { itemType: "Report", title: "Review file parent" });
-		createdKeys.push(reviewParent.itemKey);
-		const reviewAttachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: reviewParent.itemKey, title: "Submitted PDF" });
-		createdKeys.push(reviewAttachment.itemKey);
-		const reviewPdf = await createPdf("Submitted file stays private and available");
-		const reviewStage = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "submitted.pdf", expectedSizeBytes: reviewPdf.byteLength, expectedSha256: fileHash(reviewPdf), maxPdfBytes: 10_000_000 });
-		reviewStorage.privateFiles.set(reviewStage.upload.path, reviewPdf);
-		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewStage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
-		const actor = { userId: "review-test-creator", role: "creator" } as const;
-		const captured = await submitItemReview(db, reviewParent.itemKey, actor);
-		const queued = await getAdminItemListPage(db, parseAdminItemListRequest({ reviewQueue: true }));
-		assert(queued.items.some((entry) => entry.key === reviewParent.itemKey), "Submitted root is missing from review queue");
-		assert(!queued.items.some((entry) => entry.key === reviewAttachment.itemKey || entry.key === noFileReview.itemKey), "Review queue includes an attachment or resolved review");
-		assert(captured.snapshot.records.length === 2, "Submission omitted an unpublished attachment");
-		const replacementPdf = await createPdf("A later working file");
-		const reviewReplacement = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "replacement.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
-		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Replacing a draft deleted the submitted PDF");
-		reviewStorage.privateFiles.set(reviewReplacement.upload.path, replacementPdf);
-		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewReplacement.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
-		assert(approvedReview.review.state === "published", "Review approval did not finish");
-		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
-        const [publishedReviewRoot] = await db.select().from(item).where(eq(item.key, reviewParent.itemKey));
-        assert(publishedReviewRoot && displayedSnapshot.revision === publishedReviewRoot.revision && displayedSnapshot.revision > 0, "Submitted inspector lost the published revision");
-		const displayedFile = displayedSnapshot.frozenAttachments.find((attachment) => attachment.key === reviewAttachment.itemKey);
-		assert(displayedFile?.fileDraft?.actualSha256 === fileHash(reviewPdf), "Submitted-version data showed the newer PDF");
-		assert(displayedFile.sourceFileUrl?.includes(captured.id), "Submitted PDF link was not bound to its review");
-		const [approvedFile] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
-		assert(approvedFile?.sourceObjectPath === reviewStage.upload.path, "Approval published the later working PDF");
-		const [remainingUpload] = await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, reviewAttachment.itemKey));
-		assert(remainingUpload?.objectPath === reviewReplacement.upload.path, "Approval discarded the later working PDF");
-		await discardNativePdfDraft(db, reviewStorage, reviewAttachment.itemKey);
-		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Discarding a later draft deleted the submitted PDF");
-		assert(!reviewStorage.privateFiles.has(reviewReplacement.upload.path), "Discarding an unreferenced working PDF leaked its object");
-		const nextReview = await submitItemReview(db, reviewParent.itemKey, actor);
-		const withdrawn = await resolveItemReview(db, { reviewId: nextReview.id, expectedRevision: nextReview.revision, action: "withdrawn" }, actor);
-		assert(withdrawn.state === "withdrawn", "Creator could not withdraw their review");
-		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
-		const [stillPublic] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
-		assert(stillPublic?.sha256 === fileHash(reviewPdf), "Staging removal changed the public file before approval");
-		assert(reviewStorage.publicFiles.has(stillPublic.objectPath), "Staging removal deleted the public PDF");
-		await undoNativePdfRemoval(db, reviewAttachment.itemKey);
-		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
-		const removalReview = await submitItemReview(db, reviewParent.itemKey, actor);
-		const laterUpload = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "after-removal.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
-		reviewStorage.privateFiles.set(laterUpload.upload.path, replacementPdf);
-		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: laterUpload.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		await approveItemReview(db, reviewStorage, { reviewId: removalReview.id, expectedRevision: removalReview.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
-		const [removedFile] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
-		const [preservedUpload] = await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, reviewAttachment.itemKey));
-		assert(!removedFile, "Approved removal left the old PDF published");
-		assert(preservedUpload?.objectPath === laterUpload.upload.path && reviewStorage.privateFiles.has(laterUpload.upload.path), "Approving a removal discarded a later working upload");
-		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Approving removal deleted an earlier submitted PDF");
 
 
 		const parentDraft = await createNativeItemDraft(db, {
@@ -659,7 +457,7 @@ async function verify() {
 				title: "Attachment edit preserved across file publish",
 			},
 		});
-		const published = await publishNativePdf(db, storage, reviewConfig.services.publication, {
+		const published = await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: attachmentDraft.itemKey,
 			expectedUploadRevision: ready.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -789,7 +587,7 @@ async function verify() {
 
 		let stalePublishRejected = false;
 		try {
-			await publishNativePdf(db, storage, reviewConfig.services.publication, {
+			await publishNativePdf(db, storage, filePublicationConfig, {
 				itemKey: attachmentDraft.itemKey,
 				expectedUploadRevision: ready.uploadRevision,
 				publicationTags: PUBLICATION_TAGS,
@@ -876,7 +674,7 @@ async function verify() {
 
 		const fileUnpublished = await unpublishNativePdf(
 			db,
-			storage, reviewConfig.services.publication,
+			storage, filePublicationConfig,
 			attachmentDraft.itemKey,
 		);
 		const [[unpublishedJob], remainingPublicationTags] = await Promise.all([
@@ -935,7 +733,7 @@ async function verify() {
 		};
 		let rolledBackPublicationRejected = false;
 		try {
-			await publishNativePdf(db, storage, reviewConfig.services.publication, {
+			await publishNativePdf(db, storage, filePublicationConfig, {
 				itemKey: attachmentDraft.itemKey,
 				expectedUploadRevision:
 					supersedingStage.fileDraft.uploadRevision,
@@ -1041,7 +839,7 @@ async function verify() {
 		);
 		await publishNativeItemDraft(db, concurrentParentDraft.itemKey);
 		await publishNativeItemDraft(db, concurrentAttachmentDraft.itemKey);
-		await publishNativePdf(db, storage, reviewConfig.services.publication, {
+		await publishNativePdf(db, storage, filePublicationConfig, {
 			itemKey: concurrentAttachmentDraft.itemKey,
 			expectedUploadRevision: concurrentInitialReady.uploadRevision,
 			publicationTags: PUBLICATION_TAGS,
@@ -1069,13 +867,13 @@ async function verify() {
 			},
 		);
 		const concurrentFileMutations = await Promise.allSettled([
-			publishNativePdf(db, storage, reviewConfig.services.publication, {
+			publishNativePdf(db, storage, filePublicationConfig, {
 				itemKey: concurrentAttachmentDraft.itemKey,
 				expectedUploadRevision:
 					concurrentReplacementReady.uploadRevision,
 				publicationTags: PUBLICATION_TAGS,
 			}),
-			unpublishNativePdf(db, storage, reviewConfig.services.publication, concurrentAttachmentDraft.itemKey),
+			unpublishNativePdf(db, storage, filePublicationConfig, concurrentAttachmentDraft.itemKey),
 		]);
 		assert(
 			concurrentFileMutations.every(
@@ -1095,7 +893,7 @@ async function verify() {
 		if (remainingConcurrentPublication) {
 			await unpublishNativePdf(
 				db,
-				storage, reviewConfig.services.publication,
+				storage, filePublicationConfig,
 				concurrentAttachmentDraft.itemKey,
 			);
 		}
@@ -1314,11 +1112,9 @@ async function verify() {
 		await db
 			.delete(sourceConnection)
 			.where(eq(sourceConnection.key, connectionKey));
-		await resource.dispose();
 	}
 }
 
-verify().catch((error) => {
-	console.error(error);
-	process.exitCode = 1;
+describe("native files and submitted reviews", () => {
+	it("retains frozen files, protects drafts, and publishes approved changes transactionally", () => withIsolatedPublicationDatabase(verify), 120_000);
 });

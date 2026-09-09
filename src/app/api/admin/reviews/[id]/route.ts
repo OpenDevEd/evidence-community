@@ -5,14 +5,14 @@ import { z } from "zod";
 import {
 	ADMIN_CONTENT_PERMISSION,
 	ADMIN_PUBLISH_PERMISSION,
-  adminRoleHasPermission,
+	adminRoleHasPermission,
 } from "@/lib/admin/access";
 import {
 	ADMIN_RESPONSE_HEADERS,
-	adminErrorResponse,
-  adminForbiddenResponse,
+	handleAdminResponse,
+	handleAdminJson,
+	adminForbiddenResponse,
 	readAdminJson,
-	readAdminPermission,
 } from "@/lib/admin/http";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
@@ -53,65 +53,88 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
-  const access = await readAdminPermission(request, ADMIN_CONTENT_PERMISSION);
-  if (access.denied) return access.denied;
-	try {
-		const body = bodySchema.parse(await readAdminJson(request));
-		const permission = ["approve", "correct", "returned"].includes(
-			body.action,
-		)
-			? ADMIN_PUBLISH_PERMISSION
-			: ADMIN_CONTENT_PERMISSION;
-		if (!adminRoleHasPermission(access.session.role, permission)) return adminForbiddenResponse(permission);
-		const [{ id }, runtime] = await Promise.all([
-			params,
-			getNativeFileRuntime(),
-		]);
-		const reviewId = z.string().uuid().parse(id);
-		const actor = {
-			userId: access.session.clerkUserId,
-			role: access.session.role,
-		};
-		const input = { ...body, reviewId };
-        if (input.action === "approve") {
-            const approved = await approveItemReview(runtime.db, runtime.storage, { ...input, publicationTags: runtime.config.content.tags.publish }, actor, runtime.config);
-            return NextResponse.json({ review: approved.review, indexingReceipts: approved.indexingRecords.map(record => adminSearchIndexReceipt("item", record)) }, { headers: ADMIN_RESPONSE_HEADERS });
-        }
-        const review = input.action === "correct"
-            ? await correctItemReview(runtime.db, input, actor)
-            : input.action === "resolve-conflicts"
-                ? await resolveReviewConflicts(runtime.db, input, runtime.config)
-                : await resolveItemReview(runtime.db, input, actor);
-		return NextResponse.json(
-			{ review },
-			{ headers: ADMIN_RESPONSE_HEADERS },
-		);
-	} catch (error) {
-		return adminErrorResponse(error);
-	}
+	return handleAdminResponse(
+		request,
+		ADMIN_CONTENT_PERMISSION,
+		async (session) => {
+			const body = bodySchema.parse(await readAdminJson(request));
+			const permission = ["approve", "correct", "returned"].includes(
+				body.action,
+			)
+				? ADMIN_PUBLISH_PERMISSION
+				: ADMIN_CONTENT_PERMISSION;
+			if (!adminRoleHasPermission(session.role, permission))
+				return adminForbiddenResponse(permission);
+			const [{ id }, runtime] = await Promise.all([
+				params,
+				getNativeFileRuntime(),
+			]);
+			const reviewId = z.string().uuid().parse(id);
+			const actor = {
+				userId: session.clerkUserId,
+				role: session.role,
+			};
+			const input = { ...body, reviewId };
+			if (input.action === "approve") {
+				const approved = await approveItemReview(
+					runtime.db,
+					runtime.storage,
+					{
+						...input,
+						publicationTags: runtime.config.content.tags.publish,
+					},
+					actor,
+					runtime.config,
+				);
+				return NextResponse.json(
+					{
+						review: approved.review,
+						indexingReceipts: approved.indexingRecords.map(
+							(record) => adminSearchIndexReceipt("item", record),
+						),
+					},
+					{ headers: ADMIN_RESPONSE_HEADERS },
+				);
+			}
+			const review = await resolveSubmittedReview(runtime, input, actor);
+			return NextResponse.json(
+				{ review },
+				{ headers: ADMIN_RESPONSE_HEADERS },
+			);
+		},
+	);
+}
+
+type ReviewResolution = Exclude<
+	z.infer<typeof bodySchema>,
+	{ action: "approve" }
+> & { reviewId: string };
+function resolveSubmittedReview(
+	runtime: Awaited<ReturnType<typeof getNativeFileRuntime>>,
+	input: ReviewResolution,
+	actor: import("@/lib/admin/review-service").ReviewActor,
+) {
+	if (input.action === "correct")
+		return correctItemReview(runtime.db, input, actor);
+	if (input.action === "resolve-conflicts")
+		return resolveReviewConflicts(runtime.db, input, runtime.config);
+	return resolveItemReview(runtime.db, input, actor);
 }
 
 export async function GET(
 	request: NextRequest,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
-	const access = await readAdminPermission(request, ADMIN_CONTENT_PERMISSION);
-	if (access.denied) return access.denied;
-	try {
+	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () => {
 		const [{ id }, runtime] = await Promise.all([
 			params,
 			getNativeFileRuntime(),
 		]);
-		return NextResponse.json(
-			{
-				snapshot: await getAdminReviewSnapshot(
-					runtime.db,
-					z.string().uuid().parse(id),
-				),
-			},
-			{ headers: ADMIN_RESPONSE_HEADERS },
-		);
-	} catch (error) {
-		return adminErrorResponse(error);
-	}
+		return {
+			snapshot: await getAdminReviewSnapshot(
+				runtime.db,
+				z.string().uuid().parse(id),
+			),
+		};
+	});
 }

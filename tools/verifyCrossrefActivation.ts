@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { publicationTestConfig } from "../tests/fixtures/publication-config";
 import { savePublicationJob } from "../src/lib/publication/queue";
 import { createNativeItemDraft, publishItemDraft } from "../src/lib/admin/native-item-service";
 import { setItemPublishingChoice } from "../src/lib/admin/review-service";
@@ -6,16 +8,14 @@ import {
 	type CrossrefDepositor,
 } from "@opendeved/doi-sync-core";
 import { setTimeout as delay } from "node:timers/promises";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import type { Client } from "pg";
+import { withIsolatedPublicationDatabase } from "../tests/helpers/isolated-publication-database";
 import { describe, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import type { Database } from "../src/db/database-schema";
-import { schema } from "../src/db/database-schema";
 import {
 	activateCrossrefPublication,
     reserveCrossrefDoi,
@@ -25,46 +25,8 @@ import {
 } from "../src/lib/publication/crossref-activation-service";
 import { buildCrossrefPlan, runCrossrefPublicationJobsOnce } from "../src/lib/publication/crossref-adapter";
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
-const verifiedDatabaseUrl = databaseUrl;
 
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
-}
-
-const config = {
-	identity: { baseUrl: "https://library.example.org" },
-	services: {
-		publication: {
-			crossref: {
-				enabled: true,
-				environment: "test",
-				loginId: "test-login",
-				depositorName: "Evidence Library",
-				email: "doi@example.org",
-				password: "test-password",
-				registrant: "Evidence Library",
-				prefix: "10.5555",
-				suffixNamespace: "library.",
-			},
-			zenodo: {
-				enabled: false,
-				environment: "sandbox",
-				defaultIdentifierPolicy: "reuse-crossref",
-				accessRight: "open",
-				license: "cc-by-4.0",
-			},
-			worker: {
-				batchSize: 25,
-				leaseSeconds: 900,
-				retryLimit: 2,
-				nightlyUtcTime: "02:00",
-			},
-		},
-	},
-	sources: [],
-} as unknown as LibraryServerConfig;
+const config = publicationTestConfig({zenodoEnabled: false, retryLimit: 2});
 
 async function seedItem(
 	client: Client,
@@ -1129,7 +1091,7 @@ async function verifyDraftReservation(database: Database, client: Client) {
  const reservations = await Promise.all(Array.from({length: 4}, () => reserveCrossrefDoi(database, draft.itemKey, config, "creator")));
  assert(reservations.every(value => value.doi === reservations[0].doi), "Concurrent reservation allocated different DOIs");
  const before = await client.query(`SELECT (SELECT count(*) FROM "item" WHERE key = $1)::int AS records, (SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = $1)::int AS jobs, (SELECT "activatedAt" FROM "publicationTarget" WHERE "itemKey" = $1 AND provider = 'crossref') AS activated`, [draft.itemKey]);
- assert(before.rows[0].records === 0 && before.rows[0].jobs === 0 && before.rows[0].activated === null, "Reserving a draft enabled publication work");
+ assert.deepEqual(before.rows[0], {records: 0, jobs: 0, activated: null}, "Reserving a draft enabled publication work");
  await publishItemDraft(database, draft.itemKey);
  const afterPublish = await client.query(`SELECT count(*)::int AS jobs FROM "publicationSyncJob" WHERE "itemKey" = $1`, [draft.itemKey]);
  assert(afterPublish.rows[0].jobs === 0, "Publishing metadata activated a reservation without approval");
@@ -1177,42 +1139,11 @@ async function verifyProductionReservation(database: Database, client: Client) {
 }
 
 async function verifyIsolatedDatabase() {
-	const sourceUrl = new URL(verifiedDatabaseUrl);
-	const databaseName = `crossref_activation_${process.pid}_${Date.now()}`;
-	const adminUrl = new URL(sourceUrl);
-	adminUrl.pathname = "/postgres";
-	const temporaryUrl = new URL(sourceUrl);
-	temporaryUrl.pathname = `/${databaseName}`;
-	const admin = new Client({ connectionString: adminUrl.toString() });
-	let client: Client | null = null;
-	let pool: Pool | null = null;
-	await admin.connect();
-	try {
-		await admin.query(`CREATE DATABASE "${databaseName}"`);
-		pool = new Pool({ connectionString: temporaryUrl.toString(), max: 12 });
-		const database = drizzle({
-			client: pool,
-			schema,
-		}) as unknown as Database;
-		await migrate(database, { migrationsFolder: "drizzle" });
-		client = new Client({ connectionString: temporaryUrl.toString() });
-		await client.connect();
+	await withIsolatedPublicationDatabase(async (database, client) => {
 		await verify(database, client);
-        await verifyDraftReservation(database, client);
+		await verifyDraftReservation(database, client);
 		await verifyProductionReservation(database, client);
-	} finally {
-		await client?.end();
-		await pool?.end();
-		await admin.query(
-			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-			[databaseName],
-		);
-		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-		await admin.end();
-	}
-	console.log(
-		"Crossref activation, idempotency, writeback, pending recovery, settlement, and retry passed in an isolated database.",
-	);
+	});
 }
 
 describe("Crossref activation against an isolated database", () => {

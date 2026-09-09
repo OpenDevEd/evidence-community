@@ -410,7 +410,7 @@ export function AdminItemFilters({
 							? `Filters, ${filters.length} active`
 							: "Filters"
 					}
-					className={`relative grid size-10 shrink-0 place-items-center rounded-xl border text-black/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[background-color,border-color,color,box-shadow] hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/55 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] dark:hover:text-white/85 ${
+					className={`relative grid size-10 shrink-0 place-items-center rounded-xl border text-black/55 shadow-filter-control transition-filter-control hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/55 dark:shadow-filter-control-dark dark:hover:text-white/85 ${
 						filters.length > 0
 							? "border-accent/40 bg-accent/[0.09] text-black/75 hover:border-accent/55 hover:bg-accent/[0.14] dark:border-accent/45 dark:bg-accent/[0.16] dark:text-white/85 dark:hover:bg-accent/[0.22]"
 							: "border-black/[0.08] bg-black/[0.025] hover:border-black/[0.12] hover:bg-black/[0.05] dark:border-white/[0.09] dark:bg-white/[0.045] dark:hover:border-white/[0.14] dark:hover:bg-white/[0.07]"
@@ -438,7 +438,8 @@ export function AdminItemFilters({
 			<PopoverContent
 				aria-label="Filter records"
 				as="form"
-				className="box-border flex max-h-[calc(100dvh-72px)] w-[min(420px,calc(100vw-24px))] min-w-0 max-w-none flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				// fallow-ignore-next-line css-token-drift -- Uses the shared width token; theme() lets NextUI replace its default w-full.
+				className="box-border flex max-h-admin-filter w-[theme(width.admin-filter)] min-w-0 max-w-none flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 				data-admin-filter-popover
 				onSubmit={(event) => {
 					event.preventDefault();
@@ -492,7 +493,7 @@ export function AdminItemFilters({
 							return (
 								<div
 									key={`${filter.column}:${index}`}
-									className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] items-start gap-2 rounded-lg border border-black/[0.06] bg-black/[0.02] p-2 dark:border-white/[0.07] dark:bg-white/[0.025]"
+									className="grid grid-cols-filter-rule items-start gap-2 rounded-lg border border-black/[0.06] bg-black/[0.02] p-2 dark:border-white/[0.07] dark:bg-white/[0.025]"
 									data-admin-filter-row
 								>
 									<Select

@@ -11,36 +11,12 @@ import { toast } from "sonner";
 import { ReviewPublicationProgress } from "./ReviewPublicationProgress";
 import { useAdminSession } from "./AdminSessionProvider";
 import { AdminApiError, approveAdminReview, updateAdminReview, type AdminReviewSnapshot } from "./admin-api";
-export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disabled?: boolean; snapshot: AdminReviewSnapshot; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => Promise<void> }) {
+type ReviewActionProps = { disabled?: boolean; snapshot: Pick<AdminReviewSnapshot, "key" | "reviewId" | "reviewRevision" | "reviewState" | "title" | "submittedAt" | "publishing">; onUpdated: (receipts?: readonly AdminSearchIndexReceipt[]) => Promise<void> };
+
+export function ReviewActions({ snapshot, onUpdated, disabled = false }: ReviewActionProps) {
  const { role } = useAdminSession();
- const [dialog, setDialog] = useState<"publish" | "changes" | null>(null);
- const [feedback, setFeedback] = useState("");
- const [error, setError] = useState("");
- const [busy, setBusy] = useState(false);
- const [correctionRevision, setCorrectionRevision] = useState<number | null>(null);
- const confirmCorrection = correctionRevision === snapshot.reviewRevision;
- const pending = useRef(false);
- const checks = [{label: "Submitted version", ready: snapshot.reviewState === "pending"}];
- const submit = async () => {
-   if (pending.current || disabled) return;
-   pending.current = true; setBusy(true); setError("");
-   try {
-     let receipts: readonly AdminSearchIndexReceipt[] = [];
-     if (dialog === "publish") receipts = (await approveAdminReview(snapshot.reviewId, snapshot.reviewRevision, confirmCorrection ? "minor_correction" : undefined)).indexingReceipts;
-     else await updateAdminReview(snapshot.reviewId, {action: "returned", expectedRevision: snapshot.reviewRevision, note: feedback.trim()});
-     setDialog(null); setFeedback(""); setCorrectionRevision(null);
-     try {
-       await onUpdated(receipts);
-       toast.success(dialog === "publish" ? "Submitted version published" : "Changes requested");
-     } catch (error) {
-       toast.error(error instanceof Error ? error.message : "Could not finish the public search update");
-     }
-   } catch (error) {
-     setCorrectionRevision(error instanceof AdminApiError && error.code === "confirmation_required" ? snapshot.reviewRevision : null);
-     setError(error instanceof Error ? error.message : "Could not update review");
-   }
-   finally { pending.current = false; setBusy(false); }
- };
+ const state = useReviewAction(snapshot, onUpdated, disabled);
+ const {setDialog, setError, setCorrectionRevision} = state;
  if (snapshot.reviewState === "published") return <ReviewPublicationProgress snapshot={snapshot} />;
  if (snapshot.reviewState !== "pending") return null;
  return (<>
@@ -79,6 +55,14 @@ export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disab
 					An editor will review this version before publishing.
 				</p>
 			)}
+			<ReviewDialog snapshot={snapshot} disabled={disabled} state={state} />
+		</>
+	);
+}
+
+function ReviewDialog({snapshot, disabled, state}: Pick<ReviewActionProps, "snapshot" | "disabled"> & {state: ReturnType<typeof useReviewAction>}) {
+ const {dialog, feedback, error, busy, checks, confirmCorrection, setDialog, setFeedback, submit} = state;
+ return (
 			<DialogModal
 				isOpen={Boolean(dialog)}
 				onOpenChange={(open) => {
@@ -187,6 +171,42 @@ export function ReviewActions({ snapshot, onUpdated, disabled = false }: { disab
 					</ModalFooter>
 				</ModalContent>
 			</DialogModal>
-		</>
-	);
+ );
+}
+
+function useReviewAction(snapshot: ReviewActionProps["snapshot"], onUpdated: ReviewActionProps["onUpdated"], disabled: boolean) {
+ const [dialog, setDialog] = useState<"publish" | "changes" | null>(null);
+ const [feedback, setFeedback] = useState("");
+ const [error, setError] = useState("");
+ const [busy, setBusy] = useState(false);
+ const [correctionRevision, setCorrectionRevision] = useState<number | null>(null);
+ const confirmCorrection = correctionRevision === snapshot.reviewRevision;
+ const pending = useRef(false);
+ const checks = [{label: "Submitted version", ready: snapshot.reviewState === "pending"}];
+ const submit = async () => {
+   if (pending.current || disabled) return;
+   pending.current = true; setBusy(true); setError("");
+   try {
+     let receipts: readonly AdminSearchIndexReceipt[] = [];
+     if (dialog === "publish") receipts = (await approveAdminReview(snapshot.reviewId, snapshot.reviewRevision, confirmCorrection ? "minor_correction" : undefined)).indexingReceipts;
+     else await updateAdminReview(snapshot.reviewId, {action: "returned", expectedRevision: snapshot.reviewRevision, note: feedback.trim()});
+     setDialog(null); setFeedback(""); setCorrectionRevision(null);
+     await finishReviewUpdate(onUpdated, receipts, dialog);
+   } catch (error) {
+     setCorrectionRevision(error instanceof AdminApiError && error.code === "confirmation_required" ? snapshot.reviewRevision : null);
+     setError(error instanceof Error ? error.message : "Could not update review");
+   }
+   finally { pending.current = false; setBusy(false); }
+ };
+
+ return {dialog, feedback, error, busy, checks, confirmCorrection, setDialog, setFeedback, setError, setCorrectionRevision, submit};
+}
+
+async function finishReviewUpdate(onUpdated: ReviewActionProps["onUpdated"], receipts: readonly AdminSearchIndexReceipt[], dialog: "publish" | "changes" | null) {
+ try {
+  await onUpdated(receipts);
+  toast.success(dialog === "publish" ? "Submitted version published" : "Changes requested");
+ } catch (error) {
+  toast.error(error instanceof Error ? error.message : "Could not finish the public search update");
+ }
 }

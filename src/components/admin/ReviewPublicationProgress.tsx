@@ -7,7 +7,23 @@ import { useAdminPublication } from "./useAdminPublication";
 import { useAdminSession } from "./AdminSessionProvider";
 import type { AdminReviewSnapshot } from "./admin-api";
 
-export function ReviewPublicationProgress({snapshot}: {snapshot: AdminReviewSnapshot}) {
+type ProgressStep = { label: string; done: boolean; running: boolean; failed: boolean; status: string };
+
+function StepIcon({step}: {step: ProgressStep}) {
+ if (step.done) return <HugeiconsIcon icon={Tick01Icon} size={15} className="text-emerald-600 dark:text-emerald-400" />;
+ if (step.running) return <Spinner size="sm" classNames={{ wrapper: "h-4 w-4" }} />;
+ return <span className={`size-3.5 rounded-full border ${step.failed ? "border-danger" : "border-black/15 dark:border-white/15"}`} />;
+}
+
+function PublicationStep({step}: {step: ProgressStep}) {
+ return <div className="flex items-center gap-2.5 text-[11px]">
+  <StepIcon step={step} />
+  <span className="text-black/80 dark:text-white/80">{step.label}</span>
+  {step.status && <span className="ml-auto text-black/35 dark:text-white/35">{step.status}</span>}
+ </div>;
+}
+
+export function ReviewPublicationProgress({snapshot}: {snapshot: Pick<AdminReviewSnapshot, "key" | "reviewRevision" | "publishing">}) {
  const {role} = useAdminSession();
  const state = useAdminPublication(snapshot.key, String(snapshot.reviewRevision));
  const providers = state.publication ? [state.publication.providers.crossref, state.publication.providers.zenodo].filter(provider => provider.exact.targetActive) : [];
@@ -32,48 +48,7 @@ export function ReviewPublicationProgress({snapshot}: {snapshot: AdminReviewSnap
  if (snapshot.publishing && !state.publication && !failure) return null;
  return (
 				<div className="mt-4 space-y-2.5" aria-live="polite">
-					{steps.map((step) => {
-                        const done = step.done;
-                        const active = !done;
-
-						return (
-							<div
-								key={step.label}
-								className="flex items-center gap-2.5 text-[11px]"
-							>
-								{done ? (
-									<HugeiconsIcon
-										icon={Tick01Icon}
-										size={15}
-										className="text-emerald-600 dark:text-emerald-400"
-									/>
-								) : step.running ? (
-									<Spinner
-										size="sm"
-										classNames={{ wrapper: "h-4 w-4" }}
-									/>
-								) : (
-									<span
-										className={`size-3.5 rounded-full border ${step.failed ? "border-danger" : "border-black/15 dark:border-white/15"}`}
-									/>
-								)}
-								<span
-									className={
-										done || active
-											? "text-black/80 dark:text-white/80"
-											: "text-black/40 dark:text-white/40"
-									}
-								>
-									{step.label}
-								</span>
-								{step.status && (
-									<span className="ml-auto text-black/35 dark:text-white/35">
-                                        {step.status}
-									</span>
-								)}
-							</div>
-						);
-					})}
+					{steps.map(step => <PublicationStep key={step.label} step={step} />)}
 					{Boolean(failure) && (
 						<div className="pt-1">
 							<p
