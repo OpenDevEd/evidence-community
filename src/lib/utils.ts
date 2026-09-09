@@ -83,9 +83,10 @@ export function formatRange(range: string | null) {
 
 // Non-JSON here means the request never reached the API route (proxy or CDN
 // error page, browser-check challenge, rate limit) — surface a controlled
-// error instead of letting res.json() crash on HTML. JSON error payloads on
-// non-2xx responses still parse as before.
+// error instead of letting res.json() crash on HTML. Failed responses must
+// reject so SWR retains prior data and exposes its error state.
 const parseJsonResponse = (res: Response) => {
+	if (!res.ok) throw new Error(`Request failed with status ${res.status} for ${res.url}`);
 	const contentType = res.headers.get("content-type") ?? "";
 	if (!contentType.includes("application/json")) {
 		throw new Error(
