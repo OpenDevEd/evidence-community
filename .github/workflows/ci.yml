@@ -107,12 +107,12 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      DATABASE_URL_POST: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports[5432] }}/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-project
       - name: Verify transactions, files, reviews and provider retries
+        env:
+          DATABASE_URL_POST: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports[5432] }}/postgres
         run: npm run test:integration
 
   code-quality:
