@@ -494,6 +494,11 @@ describe("admin publication view", () => {
 		expect(view.providers.zenodo.exact.pendingSubmission).toBeNull();
 	});
 
+	it("prepares the first archive draft without requiring archive metadata", () => {
+        const view = buildAdminPublicationViewFromSnapshot({itemKey: "ABCDEFGH", config, snapshot: snapshot({record: record({abstractNote: null, creators: []}), targets: [target("zenodo", "mint-zenodo")]})});
+        expect(view.providers.zenodo).toMatchObject({displayState: "waiting", waitingOn: "file", blockers: [], exact: {plan: {status: "waiting_for_file"}}});
+    });
+
 	it("waits locally for a published file before minting a Zenodo DOI", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",

@@ -762,6 +762,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		...crossrefValidation,
 		...planIssues(crossrefPlan),
 	]);
+	const preparingFirstDraft = Boolean(zenodoTarget && files.files.length === 0 && zenodoJournals.length === 0 && !zenodoVersionDoi && !zenodoState?.zenodoRecordId);
 	const zenodoBlockers = unique([
 		...sharedBlockers,
 		fileError,
@@ -773,8 +774,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			? "More than one unfinished Zenodo publication exists for this record"
 			: null,
 		stateErrors.zenodo,
-		...zenodoValidation,
-		...planIssues(zenodoPlan),
+		...(preparingFirstDraft ? [] : zenodoValidation),
+		...(preparingFirstDraft ? [] : planIssues(zenodoPlan)),
 	]);
 
 	const waitingOn =
@@ -808,7 +809,9 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		const state = provider === "crossref" ? crossrefState : zenodoState;
 		const providerEnvironment = environment(publicationConfig, provider);
 		const job = latestJobFor(snapshot, provider, providerEnvironment);
-		const planState = planSummary(
+		const planState: AdminPublicationPlanSummary = provider === "zenodo" && preparingFirstDraft
+            ? {status: "waiting_for_file", reason: "WAITING_FOR_APPROVED_FILE", operations: []}
+            : planSummary(
 			plan,
 			provider,
 			provider === "crossref" && crossrefRelationWaiting
