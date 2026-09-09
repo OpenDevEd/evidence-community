@@ -10,10 +10,20 @@ import { useItemReview } from "./useItemReview";
 import { useAdminSession } from "./AdminSessionProvider";
 import { updateAdminReview } from "./admin-api";
 import { useReviewCorrections } from "./useReviewCorrections";
+import { linkKeysFromPayload } from "./admin-diff";
+import type { AdminItemLinkKind } from "@/lib/admin/types";
 import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
 
-type Props = ComponentProps<typeof AdminInspector> & { reviewQueue: boolean };
+export type ReviewLinkPicker = {
+ itemKey: string;
+ keys: ReadonlySet<string>;
+ change: (keys: readonly string[], selected: boolean) => ReadonlySet<string>;
+};
+type Props = ComponentProps<typeof AdminInspector> & {
+ reviewQueue: boolean;
+ onStartReviewLinkPick: (kind: AdminItemLinkKind, picker: ReviewLinkPicker) => void;
+};
 
 export function EditorialInspector(props: Props) {
 	return <ReviewInspector key={`${props.detail?.key ?? "empty"}:${props.reviewQueue}`} {...props} />;
@@ -28,7 +38,7 @@ function ReviewInspector(props: Props) {
  const [withdrawing, setWithdrawing] = useState(false);
  const feedback = snapshot?.reviewState === "returned" ? snapshot.note : null;
  const canWithdraw = snapshot && (session.role !== "creator" || snapshot.submittedBy === session.userId);
- const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { void refresh(); props.onPublicationChanged(receipts); };
+ const changed = (receipts?: readonly AdminSearchIndexReceipt[]) => { props.onStopLinkPick?.(); void refresh(); props.onPublicationChanged(receipts); };
  const conflictRef = useRef<HTMLDivElement>(null);
  const [resolving, setResolving] = useState(false);
  const conflictFields = snapshot?.remainingConflicts[key] ?? [];
@@ -49,7 +59,30 @@ function ReviewInspector(props: Props) {
 	const frozenDetail =
 		snapshot?.frozenAttachments.find((a) => a.key === attachmentKey) ??
 		snapshot;
-	const controls = snapshot ? (
+	const reviewPayload = corrections.payloads[frozenDetail?.key ?? ""] ?? frozenDetail?.draft?.payload ?? frozenDetail?.published ?? {};
+ const reviewEdit = useRef({detail: frozenDetail, payload: reviewPayload, change: corrections.change});
+ reviewEdit.current = {detail: frozenDetail, payload: reviewPayload, change: corrections.change};
+ const startReviewLinkPick = (kind: AdminItemLinkKind) => {
+  if (!frozenDetail || !pending || session.role === "creator") return;
+  const sourceKeys = frozenDetail.links.fromSources.filter(link => link.kind === kind).map(link => link.key);
+  props.onStartReviewLinkPick(kind, {
+   itemKey: frozenDetail.key,
+   keys: new Set([...linkKeysFromPayload(reviewPayload, frozenDetail.links.publishedKeys)[kind], ...sourceKeys]),
+   change: (keys, selected) => {
+    const edit = reviewEdit.current;
+    if (!edit.detail) return new Set<string>();
+    const links = linkKeysFromPayload(edit.payload, edit.detail.links.publishedKeys);
+    const next = selected
+     ? [...new Set([...links[kind], ...keys.filter(key => key !== edit.detail?.key && !sourceKeys.includes(key))])]
+     : links[kind].filter(key => !keys.includes(key));
+    const payload = {...edit.payload, links: {...links, [kind]: next}};
+    reviewEdit.current = {...edit, payload};
+    edit.change(edit.detail.key, payload);
+    return new Set([...next, ...sourceKeys]);
+   },
+  });
+ };
+ const controls = snapshot ? (
 		<div className="shrink-0">
 			<div
 				role="group"
@@ -62,6 +95,7 @@ function ReviewInspector(props: Props) {
 						type="button"
 						aria-pressed={viewingSubmitted === value}
 						onClick={() => {
+							props.onStopLinkPick?.();
 							setSubmitted(value);
 							setAttachmentKey(null);
 						}}
@@ -172,10 +206,8 @@ function ReviewInspector(props: Props) {
 			}
 			versionControls={controls}
 			versionNotice={notice}
-			linkTargets={frozenDetail.links.targets}
-			linkPickKind={null}
-            onStartLinkPick={undefined}
-            onStopLinkPick={undefined}
+			linkTargets={[...(props.linkTargets ?? []), ...frozenDetail.links.targets]}
+            onStartLinkPick={startReviewLinkPick}
 			fileErrors={{}}
 			validationErrors={{}}
 			validationRevision={0}
@@ -183,8 +215,9 @@ function ReviewInspector(props: Props) {
 			error={corrections.error}
 			saveMessage={corrections.error}
 			saveState={corrections.error ? "error" : corrections.saving ? "saving" : "saved"}
-			onSelectAttachment={setAttachmentKey}
+			onSelectAttachment={(key) => { props.onStopLinkPick?.(); setAttachmentKey(key); }}
 			onBackToParent={(target) => {
+                props.onStopLinkPick?.();
 				if (target === key) setAttachmentKey(null);
 				else {
 					setSubmitted(false);

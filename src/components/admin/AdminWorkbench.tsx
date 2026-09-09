@@ -52,7 +52,7 @@ import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
 import { AdminImportDialog } from "./AdminImportDialog";
-import { EditorialInspector } from "./EditorialInspector";
+import { EditorialInspector, type ReviewLinkPicker } from "./EditorialInspector";
 import { mutate } from "swr";
 import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
 import { AdminSourceSyncDialog } from "./AdminSourceSyncDialog";
@@ -393,6 +393,7 @@ export default function AdminWorkbench({
 	const [linkPick, setLinkPick] = useState<{
 		forKey: string;
 		kind: AdminItemLinkKind | null;
+        review?: ReviewLinkPicker;
 	} | null>(null);
 	const {
 		preferences: itemTablePreferences,
@@ -414,7 +415,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(requestedColumns, initialFilters);
+	} = useAdminItemList(requestedColumns, initialFilters, Boolean(linkPick?.kind), Boolean(linkPick));
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
@@ -1048,7 +1049,7 @@ export default function AdminWorkbench({
 
 	// Pick mode is only live while the same record is still open as a draft.
 	const activeLinkPick =
-		linkPick?.kind && detail?.draft && linkPick.forKey === detail.key
+		linkPick?.kind && (detail?.draft || linkPick.review) && linkPick.forKey === detail?.key
 			? linkPick.kind
 			: null;
 	// Titles of rows picked so far, kept even after a search scrolls them out of the list.
@@ -1057,7 +1058,7 @@ export default function AdminWorkbench({
 	>(new Map());
 	const addLinkKeys = useCallback(
 		(kind: AdminItemLinkKind, keys: readonly string[]) => {
-			if (!detail?.draft) return;
+			if (!detail || (!detail.draft && !linkPick?.review)) return;
 			setPickedLinkTargets((current) => {
 				const next = new Map(current);
 				for (const row of items) {
@@ -1072,6 +1073,11 @@ export default function AdminWorkbench({
 				}
 				return next;
 			});
+            if (linkPick?.review) {
+                const selected = linkPick.review.change(keys, true);
+                setLinkPick({...linkPick, review: {...linkPick.review, keys: selected}});
+                return;
+            }
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
 			// Links a source owns are already there; the editor does not add a second one.
@@ -1089,25 +1095,30 @@ export default function AdminWorkbench({
 			if (next.length === current[kind].length) return;
 			updatePayload({ ...payload, links: { ...current, [kind]: next } });
 		},
-		[detail, items, updatePayload],
+		[detail, items, updatePayload, linkPick],
 	);
 	const removeLinkKeys = useCallback(
 		(kind: AdminItemLinkKind, keys: readonly string[]) => {
-			if (!detail?.draft) return;
+			if (linkPick?.review) {
+                const selected = linkPick.review.change(keys, false);
+                setLinkPick({...linkPick, review: {...linkPick.review, keys: selected}});
+                return;
+            }
+            if (!detail?.draft) return;
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
 			const next = current[kind].filter((key) => !keys.includes(key));
 			if (next.length === current[kind].length) return;
 			updatePayload({ ...payload, links: { ...current, [kind]: next } });
 		},
-		[detail, updatePayload],
+		[detail, updatePayload, linkPick],
 	);
 	// In pick mode the table's checkboxes show and change the linked records.
 	// Source-owned links show as ticked too; unticking them changes nothing here.
 	const pickedLinkKeys = useMemo(
 		() =>
 			activeLinkPick && detail
-				? new Set([
+				? linkPick?.review?.keys ?? new Set([
 						...linkKeysFromPayload(draftPayload, detail.links.publishedKeys)[
 							activeLinkPick
 						],
@@ -1116,7 +1127,7 @@ export default function AdminWorkbench({
 							.map((row) => row.key),
 					])
 				: null,
-		[activeLinkPick, detail, draftPayload],
+		[activeLinkPick, detail, draftPayload, linkPick],
 	);
 	const linkTargets = useMemo<AdminLinkTarget[]>(
 		() => [
@@ -2401,6 +2412,11 @@ export default function AdminWorkbench({
 					>
 						<EditorialInspector
                             reviewQueue={filters.reviewQueue}
+                            onStartReviewLinkPick={(kind, review) => {
+                                if (!detail) return;
+                                setLinkPick({forKey: detail.key, kind, review});
+                                setMobilePane("list");
+                            }}
 							busy={busy}
 							definitions={definitions}
 							detail={detail}

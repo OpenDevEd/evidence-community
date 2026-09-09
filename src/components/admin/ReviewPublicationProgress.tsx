@@ -29,7 +29,7 @@ export function ReviewPublicationProgress({snapshot}: {snapshot: AdminReviewSnap
    if (!success) break;
   }
  };
- if (snapshot.publishing && !state.publication) return null;
+ if (snapshot.publishing && !state.publication && !failure) return null;
  return (
 				<div className="mt-4 space-y-2.5" aria-live="polite">
 					{steps.map((step) => {
@@ -101,7 +101,7 @@ export function ReviewPublicationProgress({snapshot}: {snapshot: AdminReviewSnap
 							)}
 						</div>
 					)}
-					{steps.every(step => step.done) && (
+					{!failure && (!snapshot.publishing || Boolean(state.publication)) && steps.every(step => step.done) && (
 						<p className="text-[11px] text-emerald-700 dark:text-emerald-400">
 							Submitted version published. Later draft edits stay
 							private.
