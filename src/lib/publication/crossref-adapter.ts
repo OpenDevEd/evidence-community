@@ -1,3 +1,4 @@
+import type { PublicationSettlement } from "./queue";
 import {
 	CrossrefApiClient,
 	executeLivePublicationSyncPlan,
@@ -21,21 +22,18 @@ import {
 import { item } from "@/db/schema/tables/item";
 
 import { resolveBibliographicDoi } from "./bibliographic-doi";
-import {
-	buildPublicationFileManifest,
-	buildPublicationIdentifiers,
-	buildPublicationRecordSnapshot,
-} from "./record-adapter";
+
 import { readPublicationRepositorySnapshot } from "./repository";
 import { settlePublicationProviderAudit } from "./provider-audit";
-import { currentManagedDoi, providerState, targetFor } from "./state-adapter";
+import { currentManagedDoi, providerState, targetFor, publicationPlanData } from "./state-adapter";
 import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
 	deferPublicationJob,
+	settlePublicationJob,
+	type PublicationJobResult,
 	enqueueItemSearchReprojection,
 	enqueuePublicationJobsForItem,
-	finishPublicationJob,
 	PublicationJobLeaseLostError,
 	withPublicationJobHeartbeat,
 } from "./queue";
@@ -111,29 +109,7 @@ export async function buildCrossrefPlan(
 			"The record DOI does not match its reserved Crossref DOI",
 		);
 	}
-	const record = buildPublicationRecordSnapshot({
-		record: snapshot.record,
-		tags: snapshot.tags,
-		baseUrl: config.identity.baseUrl,
-		license: publicationConfig.zenodo.license,
-	});
-	const files = buildPublicationFileManifest(snapshot.files);
-	const identifiers = buildPublicationIdentifiers({
-		bibliographicDoi: bibliographicDoi.doi,
-		managedCrossrefDoi,
-		zenodoVersionDoi: currentManagedDoi(
-			snapshot,
-			"zenodo",
-			publicationConfig.zenodo.environment,
-			"version",
-		),
-		zenodoConceptDoi: currentManagedDoi(
-			snapshot,
-			"zenodo",
-			publicationConfig.zenodo.environment,
-			"concept",
-		),
-	});
+	const { record, files, identifiers } = publicationPlanData(snapshot, snapshot.record, config, bibliographicDoi.doi, managedCrossrefDoi);
 	const crossrefState = providerState(
 		snapshot,
 		"crossref",
@@ -370,24 +346,9 @@ function patchValues(
 
 async function settleCrossrefState(
 	database: Database,
-	input: {
+	input: PublicationSettlement & {
 		environment: "test" | "production";
-		jobId: number;
-		workerId: string;
-		itemKey: string;
-		canonicalRevision: number;
-		patch: ProviderSyncStatePatch;
-		previousState: ProviderSyncState | undefined;
-		settledAt: Date;
 		verified: boolean;
-		jobResult:
-			| { status: "finished"; receipt: Record<string, unknown> }
-			| {
-					status: "deferred";
-					delayMs: number;
-					error: string;
-					deadLetter: boolean;
-			  };
 	},
 ) {
 	await database.transaction(async (transaction) => {
@@ -455,23 +416,7 @@ async function settleCrossrefState(
 				providers: ["zenodo"],
 			});
 		}
-		if (input.jobResult.status === "finished") {
-			await finishPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				finishedAt: input.settledAt,
-				receipt: input.jobResult.receipt,
-			});
-		} else {
-			await deferPublicationJob(transaction, {
-				jobId: input.jobId,
-				workerId: input.workerId,
-				deferredAt: input.settledAt,
-				delayMs: input.jobResult.delayMs,
-				error: input.jobResult.error,
-				deadLetter: input.jobResult.deadLetter,
-			});
-		}
+		await settlePublicationJob(transaction, input);
 	});
 }
 

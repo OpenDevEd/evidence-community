@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { ZodError } from "zod";
 
 const mocks = vi.hoisted(() => ({
 	activate: vi.fn(),
@@ -18,23 +17,13 @@ vi.mock("@/db", () => ({
 	getDatabase: vi.fn(async () => mocks.database),
 	getDatabaseForConfig: vi.fn(async () => mocks.database),
 }));
-vi.mock("@/lib/admin/http", async () => {
-	const { NextResponse } = await import("next/server");
-	return {
-		ADMIN_RESPONSE_HEADERS: { "Cache-Control": "private, no-store" },
-		adminErrorResponse: (error: unknown) =>
-			NextResponse.json(
-				{ error: String(error) },
-				{ status: error instanceof ZodError ? 400 : 500 },
-			),
-		readOptionalAdminJson: async (request: Request) => {
-			const text = await request.text();
-			return text ? JSON.parse(text) : {};
-		},
-		requireAdminPublisher: vi.fn(async () => null),
-		requireAdminSession: () => null,
-	};
-});
+vi.mock("@/lib/admin/access", async (importOriginal) => ({
+	...await importOriginal<typeof import("@/lib/admin/access")>(),
+	authorizeAdminSession: vi.fn(async () => ({
+		status: "authorized",
+		session: { clerkUserId: "editor", role: "editor" },
+	})),
+}));
 vi.mock("@/lib/publication/zenodo-activation-service", () => ({
 	activateZenodoPublication: mocks.activate,
 	retryZenodoPublication: mocks.retry,

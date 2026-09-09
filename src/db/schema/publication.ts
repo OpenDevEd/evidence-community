@@ -477,12 +477,7 @@ export const zenodoFileCorrectionApproval = pgTable(
 		id: bigint("id", { mode: "number" })
 			.primaryKey()
 			.generatedAlwaysAsIdentity(),
-		itemKey: varchar("itemKey", { length: 8 }).notNull(),
-		provider: text("provider", { enum: ["zenodo"] })
-			.notNull()
-			.default("zenodo"),
-		environment: text("environment", { enum: ["sandbox", "production"] })
-			.notNull(),
+		...zenodoTargetColumns(),
 		doi: varchar("doi", { length: 255 }).notNull(),
 		fileManifestHash: varchar("fileManifestHash", { length: 64 }).notNull(),
 		approvedAt: timestampWithTimezone("approvedAt").notNull(),
@@ -541,12 +536,7 @@ export const zenodoPublishJournal = pgTable(
 		id: bigint("id", { mode: "number" })
 			.primaryKey()
 			.generatedAlwaysAsIdentity(),
-		itemKey: varchar("itemKey", { length: 8 }).notNull(),
-		provider: text("provider", { enum: ["zenodo"] })
-			.notNull()
-			.default("zenodo"),
-		environment: text("environment", { enum: ["sandbox", "production"] })
-			.notNull(),
+		...zenodoTargetColumns(),
 		operationType: text("operationType", {
 			enum: ZENODO_JOURNAL_OPERATIONS,
 		}).notNull(),
@@ -691,3 +681,11 @@ export const publicationSyncRun = pgTable(
 		),
 	],
 );
+
+function zenodoTargetColumns() {
+ return {
+  itemKey: varchar("itemKey", {length: 8}).notNull(),
+  provider: text("provider", {enum: ["zenodo"]}).notNull().default("zenodo"),
+  environment: text("environment", {enum: ["sandbox", "production"]}).notNull(),
+ };
+}

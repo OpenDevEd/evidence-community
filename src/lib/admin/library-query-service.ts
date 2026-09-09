@@ -88,6 +88,8 @@ function groupRowsByItemKey<T extends { itemKey: string }>(rows: T[]) {
 	return grouped;
 }
 
+export function draftJson(row: typeof itemDraft.$inferSelect, payload: Record<string, unknown>): AdminItemDraft;
+export function draftJson(row: typeof itemDraft.$inferSelect | null | undefined, payload: Record<string, unknown>): AdminItemDraft | null;
 export function draftJson(
 	row: typeof itemDraft.$inferSelect | null | undefined,
 	payload: Record<string, unknown>,
@@ -129,6 +131,15 @@ function itemFileState(
 	return "none";
 }
 
+function summaryText(
+	payload: Record<string, unknown>,
+	published: typeof item.$inferSelect | null,
+	field: "date" | "itemType" | "title",
+) {
+	const value = payload[field];
+	return typeof value === "string" ? value : published?.[field];
+}
+
 export function itemSummary(
 	published: typeof item.$inferSelect | null,
 	draft: typeof itemDraft.$inferSelect | null,
@@ -141,15 +152,9 @@ export function itemSummary(
 		creators: (payload.creators ??
 			published?.creators ??
 			[]) as AdminCreator[],
-		date:
-			typeof payload.date === "string"
-				? payload.date
-				: (published?.date ?? null),
+		date: summaryText(payload, published, "date") ?? null,
 		fileState: itemFileState(fileDraft, filePublication, published),
-		itemType:
-			typeof payload.itemType === "string"
-				? payload.itemType
-				: (published?.itemType ?? "Document"),
+		itemType: summaryText(payload, published, "itemType") ?? "Document",
 		key: draft?.itemKey ?? published!.key,
 		revision: published?.revision ?? 0,
 		sourceConnectionKey:
@@ -157,11 +162,7 @@ export function itemSummary(
 			published?.sourceConnectionKey ??
 			NATIVE_SOURCE_CONNECTION_KEY,
 		state: itemState(published, draft),
-		title:
-			(typeof payload.title === "string"
-				? payload.title
-				: published?.title
-			)?.trim() || "Untitled",
+		title: summaryText(payload, published, "title")?.trim() || "Untitled",
 		updatedAt: dateString(draft?.updatedAt ?? published?.updatedAt),
 	};
 }

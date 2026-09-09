@@ -132,6 +132,7 @@ async function openDraft(key: string) {
 		await requestJson<{
 			draft: {
 				draftRevision: number;
+				generation: string;
 				payload: Record<string, unknown>;
 			};
 		}>(`/api/admin/items/${key}/draft`, { method: "POST" })
@@ -141,12 +142,14 @@ async function openDraft(key: string) {
 async function saveDraft(
 	key: string,
 	expectedDraftRevision: number,
+	expectedDraftGeneration: string,
 	expectedPayload: Record<string, unknown>,
 	payload: Record<string, unknown>,
 ) {
 	await requestJson(`/api/admin/items/${key}/draft`, {
 		body: JSON.stringify({
 			expectedDraftRevision,
+			expectedDraftGeneration,
 			expectedPayload,
 			payload,
 		}),
@@ -332,6 +335,7 @@ async function verify() {
 		await saveDraft(
 			reparentedChildKey,
 			reparentedChildDraft.draftRevision,
+			reparentedChildDraft.generation,
 			reparentedChildDraft.payload,
 			{
 				...reparentedChildDraft.payload,

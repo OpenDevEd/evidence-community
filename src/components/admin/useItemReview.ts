@@ -4,14 +4,18 @@ import useSWR from "swr";
 import { getAdminItemReviews, getAdminReview } from "./admin-api";
 
 export function useItemReview(itemKey: string | undefined) {
-	const reviews = useSWR(itemKey ? ["admin-reviews", itemKey] : null, ([, key]) => getAdminItemReviews(key));
-	const latest = reviews.data?.[0];
-	const snapshot = useSWR(latest ? ["admin-review", latest.id, latest.revision] : null, ([, id]) => getAdminReview(String(id)));
+	const review = useSWR(
+		itemKey ? ["admin-reviews", itemKey] : null,
+		async ([, key]) => {
+			const [latest] = await getAdminItemReviews(key);
+			return latest ? getAdminReview(latest.id) : null;
+		},
+	);
 	return {
-		snapshot: snapshot.data,
-		pending: latest?.state === "pending",
-		loading: reviews.isLoading || snapshot.isLoading,
-		error: reviews.error ?? snapshot.error,
-		refresh: () => reviews.mutate(),
+		snapshot: review.data ?? undefined,
+		pending: review.data?.reviewState === "pending",
+		loading: review.isLoading,
+		error: review.error,
+		refresh: () => review.mutate(),
 	};
 }

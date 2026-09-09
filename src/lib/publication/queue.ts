@@ -1,7 +1,9 @@
+import type { ProviderSyncState, ProviderSyncStatePatch } from "@opendeved/doi-sync-core";
 import { outbox } from "@opendeved/evidence-library-core";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	and,
+	desc,
 	eq,
 	gt,
 	isNotNull,
@@ -313,16 +315,7 @@ export async function enqueuePublicationJobsForItem(
 		: null;
 	const jobs: Array<typeof publicationSyncJob.$inferSelect> = [];
 	for (const target of targets) {
-		if (input.environment && target.environment !== input.environment) continue;
-		if (input.providers && !input.providers.includes(target.provider))
-			continue;
-		if (
-			input.reason === "crossref_verified" &&
-			(target.provider !== "zenodo" ||
-				target.identifierPolicy !== "reuse-crossref")
-		) {
-			continue;
-		}
+		if (!matchesPublicationTarget(target, input)) continue;
 		if (input.reason !== "provider_audit") {
 			await supersedeUnleasedPublicationJobs(transaction, {
 				itemKey: input.itemKey,
@@ -495,6 +488,26 @@ export async function claimNextPublicationJob(
 	return null;
 }
 
+export type PublicationJobResult =
+	| { status: "finished"; receipt: Record<string, unknown> }
+	| { status: "deferred"; delayMs: number; error: string; deadLetter: boolean };
+
+export function settlePublicationJob(
+	database: Executor,
+	input: { jobId: number; workerId: string; settledAt: Date; jobResult: PublicationJobResult },
+) {
+	const { jobId, workerId, settledAt, jobResult } = input;
+	if (jobResult.status === "finished") {
+		return finishPublicationJob(database, {
+			jobId, workerId, finishedAt: settledAt, receipt: jobResult.receipt,
+		});
+	}
+	return deferPublicationJob(database, {
+		jobId, workerId, deferredAt: settledAt,
+		delayMs: jobResult.delayMs, error: jobResult.error, deadLetter: jobResult.deadLetter,
+	});
+}
+
 export async function finishPublicationJob(
 	database: Executor,
 	input: {
@@ -557,4 +570,29 @@ export async function deferPublicationJob(
 		.returning();
 	if (!job) throw new PublicationJobLeaseLostError();
 	return job;
+}
+
+export type PublicationSettlement = {
+ jobId: number;
+ workerId: string;
+ itemKey: string;
+ canonicalRevision: number;
+ patch: ProviderSyncStatePatch;
+ previousState: ProviderSyncState | undefined;
+ settledAt: Date;
+ jobResult: PublicationJobResult;
+};
+
+function matchesPublicationTarget(target: typeof publicationTarget.$inferSelect, input: {environment?: PublicationEnvironment; providers?: readonly PublicationProvider[]; reason: PublicationJobReason}) {
+ if (input.environment && target.environment !== input.environment) return false;
+ if (input.providers && !input.providers.includes(target.provider)) return false;
+ return input.reason !== "crossref_verified" || (target.provider === "zenodo" && target.identifierPolicy === "reuse-crossref");
+}
+
+export async function lockLatestPublicationJob(transaction: DatabaseTransaction, itemKey: string, provider: PublicationProvider, environment: PublicationEnvironment) {
+ const [job] = await transaction.select().from(publicationSyncJob).where(and(
+  eq(publicationSyncJob.itemKey, itemKey), eq(publicationSyncJob.provider, provider),
+  eq(publicationSyncJob.environment, environment), isNull(publicationSyncJob.supersededAt),
+ )).orderBy(desc(publicationSyncJob.createdAt), desc(publicationSyncJob.id)).limit(1).for("update");
+ return job;
 }

@@ -87,6 +87,20 @@ function skipped(key: string, message: string): AdminItemBatchResult {
 	return { indexingReceipts: [], key, message, outcome: "skipped" };
 }
 
+function failedBatchItem(key: string, error: unknown): AdminItemBatchResult {
+	const details = adminErrorDetails(error);
+	const retryable = error instanceof ItemHasChildrenError || error instanceof ItemParentUnavailableError;
+	return {
+		code: details.code,
+		...(details.fields ? { fields: details.fields } : {}),
+		key,
+		indexingReceipts: [],
+		message: details.message,
+		outcome: "failed",
+		...(retryable ? { retryable: true } : {}),
+	};
+}
+
 export function orderBatchKeysByDependency(
 	keys: readonly string[],
 	parentByKey: ReadonlyMap<string, string | null>,
@@ -115,10 +129,56 @@ export function orderBatchKeysByDependency(
 		.map(({ key }) => key);
 }
 
+async function removeBatchItem(
+	key: string,
+	sourceConnectionKey: string,
+	{ db, removePrivateFiles }: BatchDependencies,
+): Promise<AdminItemBatchResult> {
+	if (sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY) {
+		return skipped(key, "Remote record removal is not available yet.");
+	}
+	try {
+		const removed = await removeNativeItem(db, key);
+		if (removed.stagedPrivatePaths.length > 0) {
+			try {
+				await removePrivateFiles(removed.stagedPrivatePaths);
+			} catch (error) {
+				console.error("Failed to remove discarded private file objects", error);
+			}
+		}
+		return {
+			indexingReceipts: removed.changed && removed.item
+				? removed.indexingRecords.map((record) => adminSearchIndexReceipt("item", record))
+				: [],
+			key,
+			outcome: removed.changed ? "changed" : "unchanged",
+		};
+	} catch (error) {
+		if (error instanceof ItemNotFoundError) {
+			return skipped(key, "This record is already removed.");
+		}
+		throw error;
+	}
+}
+
+async function mutateBatchItem(
+	request: AdminItemBatchRequest,
+	key: string,
+	sourceConnectionKey: string,
+	dependencies: BatchDependencies,
+): Promise<AdminItemBatchResult> {
+	if (request.action === "remove") return removeBatchItem(key, sourceConnectionKey, dependencies);
+	const assignment = await assignItemDraftToCollection(
+		dependencies.db, key, request.collectionKey, dependencies.writebackPolicyOptions ?? {},
+	);
+	return {indexingReceipts: [], key, outcome: assignment.changed ? "changed" : "unchanged"};
+}
+
 export async function runAdminItemBatch(
 	request: AdminItemBatchRequest,
-	{ db, removePrivateFiles, writebackPolicyOptions = {} }: BatchDependencies,
+	dependencies: BatchDependencies,
 ): Promise<AdminItemBatchExecution> {
+	const { db } = dependencies;
 	if (request.action === "assignCollection") {
 		await assertAssignableCollection(db, request.collectionKey);
 	}
@@ -156,85 +216,14 @@ export async function runAdminItemBatch(
 			continue;
 		}
 		try {
-
-			if (request.action === "remove") {
-				if (
-					identity.sourceConnectionKey !==
-					NATIVE_SOURCE_CONNECTION_KEY
-				) {
-					results.push(
-						skipped(
-							key,
-							"Remote record removal is not available yet.",
-						),
-					);
-					continue;
-				}
-				try {
-					const removed = await removeNativeItem(db, key);
-					results.push({
-						indexingReceipts:
-							removed.changed && removed.item
-								? removed.indexingRecords.map((record) =>
-										adminSearchIndexReceipt("item", record),
-									)
-								: [],
-						key,
-						outcome: removed.changed ? "changed" : "unchanged",
-					});
-					if (removed.stagedPrivatePaths.length > 0) {
-						try {
-							await removePrivateFiles(
-								removed.stagedPrivatePaths,
-							);
-						} catch (error) {
-							console.error(
-								"Failed to remove discarded private file objects",
-								error,
-							);
-						}
-					}
-					continue;
-				} catch (error) {
-					if (error instanceof ItemNotFoundError) {
-						results.push(
-							skipped(key, "This record is already removed."),
-						);
-						continue;
-					}
-					throw error;
-				}
-			}
-
-			const assignment = await assignItemDraftToCollection(
-				db,
-				key,
-				request.collectionKey,
-				writebackPolicyOptions,
-			);
-			results.push({
-				indexingReceipts: [],
-				key,
-				outcome: assignment.changed ? "changed" : "unchanged",
-			});
+			results.push(await mutateBatchItem(request, key, identity.sourceConnectionKey, dependencies));
 		} catch (error) {
-			const retryableDependencyFailure =
-				error instanceof ItemHasChildrenError ||
-				error instanceof ItemParentUnavailableError;
-			if (allowDependencyRetry && retryableDependencyFailure) {
+			const failure = failedBatchItem(key, error);
+			if (allowDependencyRetry && failure.retryable) {
 				mutationAttempts.push({ allowDependencyRetry: false, key });
 				continue;
 			}
-			const details = adminErrorDetails(error);
-			results.push({
-				code: details.code,
-				...(details.fields ? { fields: details.fields } : {}),
-				key,
-				indexingReceipts: [],
-				message: details.message,
-				outcome: "failed",
-				...(retryableDependencyFailure ? { retryable: true } : {}),
-			});
+			results.push(failure);
 		}
 	}
 

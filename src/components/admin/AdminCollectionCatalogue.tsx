@@ -22,7 +22,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 import { SourceProviderIcon } from "./SourceProviderIcon";
-import { itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
+import { editableCollectionSourceKeys, itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
@@ -536,16 +536,7 @@ export function AdminCollectionCatalogue({
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query.trim(), 250);
 	const [view, setView] = useState<"active" | "deleted">("active");
-	const editableSourceKeys = useMemo(
-		() =>
-			new Set(
-				sources
-					.filter(({ readOnly }) => !readOnly)
-					.map(({ key }) => key),
-			),
-		[sources],
-	);
-	const [expandedSources, setExpandedSources] = useState(
+	const editableSourceKeys = useMemo(() => editableCollectionSourceKeys(sources), [sources]);	const [expandedSources, setExpandedSources] = useState(
 		() => new Set([NATIVE_SOURCE_CONNECTION_KEY]),
 	);
 	const [expandedCollections, setExpandedCollections] = useState<Set<string>>(
@@ -1314,7 +1305,7 @@ export function AdminCollectionCatalogue({
 										aria-posinset={row.positionInSet}
 										aria-selected={false}
 										aria-setsize={row.setSize}
-										className="flex h-full w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] font-medium text-black/50 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/50 dark:hover:bg-white/[0.04]"
+										className="flex h-full w-full items-center gap-2 rounded-lg px-2 text-left text-catalogue-label font-medium text-black/50 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/50 dark:hover:bg-white/[0.04]"
 										id={`admin-catalogue-${id}`}
 										onClick={() =>
 											toggleSource(row.source.key)
@@ -1381,9 +1372,9 @@ export function AdminCollectionCatalogue({
 												size={13}
 											/>
 										) : (
-											<span aria-hidden className="size-[13px] shrink-0" />
+											<span aria-hidden className="size-catalogue-icon shrink-0" />
 										)}
-										<span className="grid size-[13px] shrink-0 place-items-center">
+										<span className="grid size-catalogue-icon shrink-0 place-items-center">
 											{row.source.key !==
 												NATIVE_SOURCE_CONNECTION_KEY &&
 											row.source.readOnly ? (

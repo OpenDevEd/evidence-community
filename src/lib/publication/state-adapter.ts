@@ -1,4 +1,9 @@
 import {
+	buildPublicationIdentifiers,
+	buildPublicationRecordSnapshot,
+	buildPublicationFileManifest,
+} from "./record-adapter";
+import {
 	parseProviderSyncState,
 	type ProviderSyncState,
 } from "@opendeved/doi-sync-core";
@@ -124,7 +129,9 @@ export function providerState(
 	}
 
 	const journals = snapshot.journals.filter(
-		(journal) => journal.provider === "zenodo" && journal.environment === config.zenodo.environment,
+		(journal) =>
+			journal.provider === "zenodo" &&
+			journal.environment === config.zenodo.environment,
 	);
 	const journal = journals.length === 1 ? journals[0] : null;
 	const journalApproval = journal?.fileCorrectionApprovalId
@@ -232,4 +239,38 @@ export function providerState(
 		},
 		...(failure ? { failure } : {}),
 	});
+}
+
+export function publicationPlanData(
+	snapshot: PublicationRepositorySnapshot,
+	record: NonNullable<PublicationRepositorySnapshot["record"]>,
+	config: Pick<LibraryServerConfig, "identity" | "services">,
+	bibliographicDoi: string | null,
+	managedCrossrefDoi: string | undefined,
+) {
+	return {
+		record: buildPublicationRecordSnapshot({
+			record,
+			tags: snapshot.tags,
+			baseUrl: config.identity.baseUrl,
+			license: config.services.publication.zenodo.license,
+		}),
+		files: buildPublicationFileManifest(snapshot.files),
+		identifiers: buildPublicationIdentifiers({
+			bibliographicDoi,
+			managedCrossrefDoi,
+			zenodoVersionDoi: currentManagedDoi(
+				snapshot,
+				"zenodo",
+				config.services.publication.zenodo.environment,
+				"version",
+			),
+			zenodoConceptDoi: currentManagedDoi(
+				snapshot,
+				"zenodo",
+				config.services.publication.zenodo.environment,
+				"concept",
+			),
+		}),
+	};
 }

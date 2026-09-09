@@ -845,3 +845,7 @@ export async function getAdminCrossrefReservation(key: string) {
 export async function reserveAdminCrossrefDoi(key: string) {
  return (await requestJson<{reservation: CrossrefReservation}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`, {method: "POST"})).reservation;
 }
+
+export function adminErrorMessage(error: unknown, fallback: string) {
+ return error instanceof Error ? error.message : fallback;
+}

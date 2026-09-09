@@ -1,8 +1,8 @@
-import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
+import { lockLatestPublicationJob } from "./queue";
+import { itemIdentity } from "@opendeved/evidence-library-core";
 import { itemPublishingChoice } from "@/db/schema/review";
-import { applyItemDraftPatch } from "@/lib/admin/item-draft-patch";
-import { loadPublishedItemPayload } from "@/lib/admin/native-item-service";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { loadWorkingItemPayload } from "@/lib/admin/native-item-service";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
@@ -27,7 +27,10 @@ import {
 	savePublicationJob,
 	supersedeUnleasedPublicationJobs,
 } from "./queue";
-import { readPublicationRepositorySnapshot } from "./repository";
+import {
+	readPublicationRepositorySnapshot,
+	type PublicationRepositorySnapshot,
+} from "./repository";
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
@@ -45,6 +48,27 @@ export {
 	ExternalCrossrefDoiError,
 	PublicationItemNotFoundError,
 } from "./errors";
+
+async function readCurrentCrossrefIdentifier(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	environment: "test" | "production",
+) {
+	const [identifier] = await transaction
+		.select()
+		.from(publicationIdentifier)
+		.where(
+			and(
+				eq(publicationIdentifier.itemKey, itemKey),
+				eq(publicationIdentifier.registrar, "crossref"),
+				eq(publicationIdentifier.environment, environment),
+				eq(publicationIdentifier.role, "primary"),
+				eq(publicationIdentifier.isCurrent, true),
+			),
+		)
+		.limit(1);
+	return identifier;
+}
 
 type PublicationConfig = Pick<
 	LibraryServerConfig,
@@ -132,7 +156,8 @@ function receipt(input: {
 	return {
 		itemKey: input.itemKey,
 		provider: "crossref",
-		environment: input.job.environment === "production" ? "production" : "test",
+		environment:
+			input.job.environment === "production" ? "production" : "test",
 		doi: input.doi,
 		lifecycle: input.lifecycle,
 		canonicalRevision: input.canonicalRevision,
@@ -161,77 +186,56 @@ export async function activateCrossrefPublication(
 	);
 }
 
-/** Saves activation and its job alongside the approved public records. No provider calls. */
-export async function activateCrossrefPublicationInTransaction(
-	transaction: DatabaseTransaction,
+function existingCrossrefActivation(
+	snapshot: PublicationRepositorySnapshot,
 	itemKey: string,
-	config: PublicationConfig,
-	requestedBy: string,
-): Promise<CrossrefActivationReceipt> {
-	const crossref = requireCrossrefConfig(config);
-	await lockItemMutation(transaction, itemKey);
-	const snapshot = await readPublicationRepositorySnapshot(
-		transaction,
-		itemKey,
-		crossref.environment,
-	);
-	const record = snapshot.record;
-	if (!record) throw new PublicationItemNotFoundError(itemKey);
-	const managedIdentifier = snapshot.identifiers.find(
-		(candidate) =>
-			candidate.registrar === "crossref" &&
-			candidate.environment === crossref.environment &&
-			candidate.role === "primary" &&
-			candidate.ownership === "managed",
-	);
-
+	managedIdentifier: typeof publicationIdentifier.$inferSelect | undefined,
+	environment: "test" | "production",
+) {
 	const existingTarget = snapshot.targets.find(
 		(target) =>
 			target.provider === "crossref" &&
-			target.environment === crossref.environment &&
+			target.environment === environment &&
 			target.deactivatedAt === null &&
 			target.activatedAt !== null,
 	);
-	if (existingTarget) {
-		const job = snapshot.jobs.find(
-			(candidate) =>
-				candidate.provider === "crossref" &&
-				candidate.environment === crossref.environment &&
-				candidate.supersededAt === null,
-		);
-		if (!managedIdentifier || !job) {
-			throw new Error("The saved Crossref activation is incomplete");
-		}
-		return receipt({
-			itemKey,
-			doi: managedIdentifier.doi,
-			lifecycle: managedIdentifier.lifecycle,
-			canonicalRevision: job.canonicalRevision,
-			job,
-		});
+	if (!existingTarget) return null;
+	const job = snapshot.jobs.find(
+		(candidate) =>
+			candidate.provider === "crossref" &&
+			candidate.environment === environment &&
+			candidate.supersededAt === null,
+	);
+	if (!managedIdentifier || !job) {
+		throw new Error("The saved Crossref activation is incomplete");
 	}
+	return receipt({
+		itemKey,
+		doi: managedIdentifier.doi,
+		lifecycle: managedIdentifier.lifecycle,
+		canonicalRevision: job.canonicalRevision,
+		job,
+	});
+}
 
-	if (record.deleted === 1) {
-		throw new CrossrefActivationValidationError(
-			"Restore this record before publishing it.",
-		);
-	}
-	if (record.parentItem) {
-		throw new CrossrefActivationValidationError(
-			"Only parent records can receive a Crossref DOI.",
-		);
-	}
-
+async function resolveActivationDoi(
+	transaction: DatabaseTransaction,
+	record: typeof item.$inferSelect,
+	attachments: PublicationRepositorySnapshot["attachments"],
+	crossref: ReturnType<typeof requireCrossrefConfig>,
+	managedDoi: string | undefined,
+) {
+	const itemKey = record.key;
 	const classification = classifyCrossrefActivationDoi(
 		{
 			DOI: record.DOI,
 			extra: record.extra,
-			attachments: snapshot.attachments,
+			attachments: attachments,
 		},
-		managedIdentifier?.doi ?? null,
+		managedDoi ?? null,
 	);
 	const doi =
-		managedIdentifier?.doi ??
+		managedDoi ??
 		(classification.kind === "reuse"
 			? classification.doi
 			: await allocateManagedCrossrefDoi(transaction, {
@@ -259,6 +263,60 @@ export async function activateCrossrefPublicationInTransaction(
 			existingIdentifier.itemKey,
 		);
 	}
+
+	return doi;
+}
+
+/** Saves activation and its job alongside the approved public records. No provider calls. */
+export async function activateCrossrefPublicationInTransaction(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	config: PublicationConfig,
+	requestedBy: string,
+): Promise<CrossrefActivationReceipt> {
+	const crossref = requireCrossrefConfig(config);
+	await lockItemMutation(transaction, itemKey);
+	const snapshot = await readPublicationRepositorySnapshot(
+		transaction,
+		itemKey,
+		crossref.environment,
+	);
+	const record = snapshot.record;
+	if (!record) throw new PublicationItemNotFoundError(itemKey);
+	const managedIdentifier = snapshot.identifiers.find(
+		(candidate) =>
+			candidate.registrar === "crossref" &&
+			candidate.environment === crossref.environment &&
+			candidate.role === "primary" &&
+			candidate.ownership === "managed",
+	);
+
+	const existing = existingCrossrefActivation(
+		snapshot,
+		itemKey,
+		managedIdentifier,
+		crossref.environment,
+	);
+	if (existing) return existing;
+
+	if (record.deleted === 1) {
+		throw new CrossrefActivationValidationError(
+			"Restore this record before publishing it.",
+		);
+	}
+	if (record.parentItem) {
+		throw new CrossrefActivationValidationError(
+			"Only parent records can receive a Crossref DOI.",
+		);
+	}
+
+	const doi = await resolveActivationDoi(
+		transaction,
+		record,
+		snapshot.attachments,
+		crossref,
+		managedIdentifier?.doi,
+	);
 
 	const now = new Date();
 	const doiChanged = record.DOI !== doi;
@@ -367,27 +425,16 @@ export async function activateCrossrefPublicationInTransaction(
 export async function retryCrossrefPublication(
 	database: Database,
 	itemKey: string,
-    config: PublicationConfig,
+	config: PublicationConfig,
 ): Promise<CrossrefActivationReceipt> {
 	return database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
-		const [job] = await transaction
-			.select()
-			.from(publicationSyncJob)
-			.where(
-				and(
-					eq(publicationSyncJob.itemKey, itemKey),
-					eq(publicationSyncJob.provider, "crossref"),
-					eq(publicationSyncJob.environment, config.services.publication.crossref.environment),
-					isNull(publicationSyncJob.supersededAt),
-				),
-			)
-			.orderBy(
-				desc(publicationSyncJob.createdAt),
-				desc(publicationSyncJob.id),
-			)
-			.limit(1)
-			.for("update");
+		const job = await lockLatestPublicationJob(
+			transaction,
+			itemKey,
+			"crossref",
+			config.services.publication.crossref.environment,
+		);
 		if (!job?.deadLetteredAt) {
 			throw new CrossrefActivationValidationError(
 				"This Crossref publication does not have a failed job to retry.",
@@ -407,19 +454,11 @@ export async function retryCrossrefPublication(
 			})
 			.where(eq(publicationSyncJob.id, job.id))
 			.returning();
-		const [identifier] = await transaction
-			.select()
-			.from(publicationIdentifier)
-			.where(
-				and(
-					eq(publicationIdentifier.itemKey, itemKey),
-					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, config.services.publication.crossref.environment),
-					eq(publicationIdentifier.role, "primary"),
-					eq(publicationIdentifier.isCurrent, true),
-				),
-			)
-			.limit(1);
+		const identifier = await readCurrentCrossrefIdentifier(
+			transaction,
+			itemKey,
+			config.services.publication.crossref.environment,
+		);
 		if (!retried || !identifier) {
 			throw new Error("The Crossref retry could not be saved");
 		}
@@ -460,30 +499,16 @@ export async function reserveCrossrefDoi(
 			throw new CrossrefActivationValidationError(
 				"Choose Crossref + Zenodo before reserving a DOI.",
 			);
-		const [draft] = await transaction
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey));
-		const payload = applyItemDraftPatch(
-			await loadPublishedItemPayload(transaction, itemKey),
-			draft?.patch ?? {},
-		);
+		const payload = await loadWorkingItemPayload(transaction, itemKey);
 		if (!payload.itemType || payload.parentItem)
 			throw new CrossrefActivationValidationError(
 				"Reserve a DOI on the parent item.",
 			);
-		const [existing] = await transaction
-			.select()
-			.from(publicationIdentifier)
-			.where(
-				and(
-					eq(publicationIdentifier.itemKey, itemKey),
-					eq(publicationIdentifier.registrar, "crossref"),
-					eq(publicationIdentifier.environment, crossref.environment),
-					eq(publicationIdentifier.role, "primary"),
-					eq(publicationIdentifier.isCurrent, true),
-				),
-			);
+		const existing = await readCurrentCrossrefIdentifier(
+			transaction,
+			itemKey,
+			crossref.environment,
+		);
 		if (existing)
 			return { doi: existing.doi, lifecycle: existing.lifecycle };
 		classifyCrossrefActivationDoi({
@@ -495,26 +520,22 @@ export async function reserveCrossrefDoi(
 			prefix: crossref.prefix,
 			suffixNamespace: crossref.suffixNamespace,
 		});
-		await transaction
-			.insert(publicationTarget)
-			.values({
-				itemKey,
-				provider: "crossref",
-				environment: crossref.environment,
-				requestedBy,
-				activatedAt: null,
-			});
-		await transaction
-			.insert(publicationIdentifier)
-			.values({
-				itemKey,
-				registrar: "crossref",
-				environment: crossref.environment,
-				role: "primary",
-				doi,
-				ownership: "managed",
-				lifecycle: "reserved",
-			});
+		await transaction.insert(publicationTarget).values({
+			itemKey,
+			provider: "crossref",
+			environment: crossref.environment,
+			requestedBy,
+			activatedAt: null,
+		});
+		await transaction.insert(publicationIdentifier).values({
+			itemKey,
+			registrar: "crossref",
+			environment: crossref.environment,
+			role: "primary",
+			doi,
+			ownership: "managed",
+			lifecycle: "reserved",
+		});
 		return { doi, lifecycle: "reserved" as const };
 	});
 }

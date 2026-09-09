@@ -1621,7 +1621,7 @@ export function AdminInspector({
 				<div>
 					<div className="flex items-start gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="text-[17px] font-semibold leading-6 tracking-tight text-black/90 dark:text-white/95">
+							<h2 className="text-inspector-title font-semibold leading-6 tracking-tight text-black/90 dark:text-white/95">
 								{detail.title}
 							</h2>
 							<p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/40 dark:text-white/40">
