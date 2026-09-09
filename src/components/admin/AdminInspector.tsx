@@ -1329,7 +1329,7 @@ function AttachmentFilePanel({
 							detail.fileDraft.expectedSha256}
 					</p>
                     {readOnly && detail.fileDraft.readyAt && detail.sourceFileUrl ? (
-                        <Button as="a" href={detail.sourceFileUrl} target="_blank" rel="noreferrer" size="xs" variant="transparent" className="mt-2" startContent={<HugeiconsIcon icon={Download01Icon} size={14} />}>Open PDF</Button>
+                        <Button as="a" href={detail.sourceFileUrl} target="_blank" rel="noreferrer" size="xs" variant="transparent" className="mt-2" startContent={<HugeiconsIcon icon={LinkSquare01Icon} size={14} />}>Open PDF</Button>
                     ) : null}
 					{!readOnly ? (
 						<div className="mt-2 flex flex-wrap gap-1">

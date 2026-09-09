@@ -2,7 +2,7 @@
 
 import { ReviewQueueEntry } from "./ReviewQueueEntry";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
 
 import { AdminSourceSyncBadge } from "./AdminSourceSyncDialog";
 import { type ReactNode, useRef } from "react";
@@ -35,6 +35,12 @@ export function invalidateAdminCollectionCatalogue() {
 export function focusAdminCollection(request: AdminCollectionFocusRequest) {
 	requestAdminCollectionFocus(request);
 }
+
+const kindOptions = [
+	{ icon: LibraryIcon, key: "all", label: "All" },
+	{ icon: FilePlusIcon, key: "created", label: "Created" },
+	{ icon: FileImportIcon, key: "imported", label: "Imported" },
+] as const;
 
 const stateOptions: Array<{
 	icon: typeof CheckmarkCircle01Icon;
@@ -129,7 +135,23 @@ export function AdminNavigation({
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
 			<ReviewQueueEntry selected={reviewQueue} onPress={onSelectReviewQueue} />
-			<div className="shrink-0"><NavigationHeading icon={FileClockIcon} title="Kind"/><div className={navigationListSurfaceClass}>{["All","Created","Imported"].map(value=><button key={value} aria-pressed={kind===value.toLowerCase()} className={`${navigationItemClass} ${kind===value.toLowerCase()?"bg-accent/[0.12] font-medium":"text-black/60 dark:text-white/60"}`} onClick={()=>onSelectKind(value.toLowerCase() as "all" | "created" | "imported")}><HugeiconsIcon icon={FileClockIcon} size={14}/>{value}</button>)}</div></div>
+			<div className="shrink-0">
+				<NavigationHeading icon={ListIcon} title="Kind" />
+				<div className={navigationListSurfaceClass}>
+					{kindOptions.map(({ key, label, icon }) => (
+						<button
+							key={key}
+							type="button"
+							aria-pressed={kind === key}
+							className={`${navigationItemClass} ${kind === key ? "bg-accent/[0.12] font-medium" : "text-black/60 dark:text-white/60"}`}
+							onClick={() => onSelectKind(key)}
+						>
+							<HugeiconsIcon icon={icon} aria-hidden size={14} />
+							{label}
+						</button>
+					))}
+				</div>
+			</div>
 			<div className="shrink-0">
 				<NavigationHeading icon={DatabaseIcon} title="Sources" />
 				<div className={navigationListSurfaceClass}>
