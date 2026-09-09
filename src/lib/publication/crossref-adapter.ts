@@ -52,7 +52,7 @@ function requireConfig(config: PublicationConfig) {
 		!crossref.email ||
 		!crossref.registrant
 	) {
-		throw new Error("Crossref test publishing is not fully configured");
+		throw new Error("Crossref publishing is not fully configured");
 	}
 	return {
 		loginId: crossref.loginId,

@@ -1152,6 +1152,8 @@ async function verifyProductionReservation(database: Database, client: Client) {
 	await publishItemDraft(database, draft.itemKey);
 	const activated = await activateCrossrefPublication(database, draft.itemKey, production, "editor");
 	assert(activated.environment === "production" && activated.doi === reserved.doi, "Production activation changed the reservation");
+	const collisions = await client.query(`SELECT "itemKey" FROM "publicationIdentifier" WHERE "doi" = $1 AND "itemKey" <> $2`, [reserved.doi, draft.itemKey]);
+	assert(collisions.rows.length === 0, "Production reused a DOI carried by another environment's record");
 	const provider = successfulProvider();
 	const outcomes = await runCrossrefPublicationJobsOnce(database, production, {
 		provider: {

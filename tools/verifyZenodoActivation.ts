@@ -1,3 +1,5 @@
+import { getAdminPublicationWorkerOverview } from "../src/lib/admin/publication-worker-service";
+import { runNightlyPublicationReconciliation } from "../src/lib/publication/reconciler";
 import { createHash } from "node:crypto";
 
 import type {
@@ -1773,13 +1775,24 @@ async function verifyProductionIsolation(database: Database, client: Client) {
 			...provider,
 			prepareCreateRecord: async request => {
 				assert(request.draftDepositionId === "990001", "Production lost its saved draft");
-				return provider.prepareCreateRecord(request);
+				return provider.prepareCreateRecord({...request, onPreparedDraft: async draft => {
+					await client.query(`INSERT INTO "zenodoPublishJournal" ("itemKey", "environment", "operationType", "payloadHash", "payloadSnapshot", "depositionId", "draftRecordId", "status") VALUES ('ZENPRDAA', 'sandbox', 'zenodo_create', repeat('b',64), '{}'::jsonb, $1, $1, 'preparing')`, [draft.depositionId]);
+					await request.onPreparedDraft?.(draft);
+				}});
 			},
 		},
 	});
 	assert(uploaded[0]?.status === "succeeded", "Production file upload did not settle");
 	const identifiers = await client.query(`SELECT "environment" FROM "publicationIdentifier" WHERE "itemKey" = 'ZENPRDAA'`);
 	assert(identifiers.rows.length === 2 && identifiers.rows.every(row => row.environment === "production"), "Production identifiers were saved under Sandbox");
+	const sandboxJournal = await client.query(`SELECT "status", "payloadHash" FROM "zenodoPublishJournal" WHERE "itemKey" = 'ZENPRDAA' AND "environment" = 'sandbox'`);
+	assert(sandboxJournal.rows.length === 1 && sandboxJournal.rows[0].status === "preparing" && sandboxJournal.rows[0].payloadHash === "b".repeat(64), "Production settlement changed a colliding sandbox journal");
+	const overview = await getAdminPublicationWorkerOverview(database, production);
+	assert(!overview.queue.hasPending && !overview.queue.hasFailed, "Production worker status included sandbox work");
+	const beforeAudit = await client.query(`SELECT count(*)::int AS count FROM "publicationSyncJob" WHERE "environment" = 'sandbox'`);
+	await runNightlyPublicationReconciliation(database, production, {workerId: "production-reconciliation"});
+	const afterAudit = await client.query(`SELECT count(*)::int AS count FROM "publicationSyncJob" WHERE "environment" = 'sandbox'`);
+	assert(afterAudit.rows[0].count === beforeAudit.rows[0].count, "Production reconciliation queued sandbox work");
 }
 
 async function verifyIsolatedDatabase() {

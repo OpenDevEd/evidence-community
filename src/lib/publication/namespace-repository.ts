@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { DatabaseTransaction } from "@/db/database-schema";
-import { doiNamespace } from "@/db/schema/publication";
+import { doiNamespace, publicationIdentifier } from "@/db/schema/publication";
 
 export type AllocateManagedCrossrefDoiInput = {
 	environment: "test" | "production";
@@ -34,6 +34,7 @@ export async function allocateManagedCrossrefDoi(
 	input: AllocateManagedCrossrefDoiInput,
 ) {
 	validateInput(input);
+	await transaction.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`doi-namespace:${input.prefix}/${input.suffixNamespace}`}, 0))`);
 
 	await transaction
 		.insert(doiNamespace)
@@ -74,14 +75,16 @@ export async function allocateManagedCrossrefDoi(
 			.where(eq(doiNamespace.environment, input.environment));
 	}
 
-	await transaction
-		.update(doiNamespace)
-		.set({
-			nextSequence: stored.nextSequence + 1,
-			updatedAt: new Date(),
-		})
+	let sequence = stored.nextSequence;
+	let doi: string;
+	while (true) {
+		doi = `${input.prefix}/${input.suffixNamespace}${String(sequence).padStart(6, "0")}`;
+		const [existing] = await transaction.select({ id: publicationIdentifier.id })
+			.from(publicationIdentifier).where(eq(publicationIdentifier.doi, doi)).limit(1);
+		if (!existing) break;
+		sequence += 1;
+	}
+	await transaction.update(doiNamespace).set({nextSequence: sequence + 1, updatedAt: new Date()})
 		.where(eq(doiNamespace.environment, input.environment));
-
-	const sequence = String(stored.nextSequence).padStart(6, "0");
-	return `${input.prefix}/${input.suffixNamespace}${sequence}`;
+	return doi;
 }

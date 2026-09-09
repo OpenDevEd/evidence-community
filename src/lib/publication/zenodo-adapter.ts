@@ -508,6 +508,7 @@ function createZenodoJournal(
 					.where(
 						and(
 							eq(zenodoPublishJournal.itemKey, input.recordId),
+							eq(zenodoPublishJournal.environment, environment),
 							eq(
 								zenodoPublishJournal.depositionId,
 								input.depositionId,
@@ -632,6 +633,7 @@ function createZenodoJournal(
 					.where(
 						and(
 							eq(zenodoPublishJournal.itemKey, input.recordId),
+							eq(zenodoPublishJournal.environment, environment),
 							eq(
 								zenodoPublishJournal.depositionId,
 								input.depositionId,
@@ -706,6 +708,7 @@ function createZenodoJournal(
 					.where(
 						and(
 							eq(zenodoPublishJournal.itemKey, input.recordId),
+							eq(zenodoPublishJournal.environment, environment),
 							eq(
 								zenodoPublishJournal.depositionId,
 								input.depositionId,
@@ -740,12 +743,11 @@ function createZenodoJournal(
 						orphanDraftCleanupDepositionId: null,
 						updatedAt: input.observedAt,
 					})
-					.where(
-						eq(
-							zenodoPublishJournal.orphanDraftCleanupDepositionId,
-							input.depositionId,
-						),
-					);
+					.where(and(
+						eq(zenodoPublishJournal.itemKey, input.recordId),
+						eq(zenodoPublishJournal.environment, environment),
+						eq(zenodoPublishJournal.orphanDraftCleanupDepositionId, input.depositionId),
+					));
 			}),
 	};
 }

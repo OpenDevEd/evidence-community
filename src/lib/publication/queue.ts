@@ -285,6 +285,7 @@ export async function enqueuePublicationJobsForItem(
 		>;
 		now: Date;
 		providers?: readonly PublicationProvider[];
+		environment?: PublicationEnvironment;
 		idempotencyDiscriminator?: string;
 	},
 ) {
@@ -312,6 +313,7 @@ export async function enqueuePublicationJobsForItem(
 		: null;
 	const jobs: Array<typeof publicationSyncJob.$inferSelect> = [];
 	for (const target of targets) {
+		if (input.environment && target.environment !== input.environment) continue;
 		if (input.providers && !input.providers.includes(target.provider))
 			continue;
 		if (
