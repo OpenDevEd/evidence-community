@@ -6,6 +6,7 @@ import { getDatabaseForConfig } from "@/db";
 import { getDigestPageData } from "@/lib/notifications/public";
 import { readSubscription } from "@/lib/notifications/subscriptions";
 import DigestPages from "@/components/digests/DigestPages";
+import DigestLoading from "@/components/digests/DigestLoading";
 import SubscriptionAction from "@/components/digests/SubscriptionAction";
 
 type Props = {params: Promise<{locale: string; slug: string}>; searchParams: Promise<{token?: string}>};
@@ -25,7 +26,7 @@ async function Digest({params, searchParams}: Props) {
   }
   return <PublishedEdition data={data} slug={slug} />;
 }
-export default function Page(props: Props) {return <Suspense><Digest {...props} /></Suspense>;}
+export default function Page(props: Props) {return <Suspense fallback={<DigestLoading />}><Digest {...props} /></Suspense>;}
 
 function PublishedEdition({data, slug}: {data: Awaited<ReturnType<typeof getDigestPageData>>; slug: string}) {
   if (!data.edition) notFound();
