@@ -87,6 +87,20 @@ function skipped(key: string, message: string): AdminItemBatchResult {
 	return { indexingReceipts: [], key, message, outcome: "skipped" };
 }
 
+function failedBatchItem(key: string, error: unknown): AdminItemBatchResult {
+	const details = adminErrorDetails(error);
+	const retryable = error instanceof ItemHasChildrenError || error instanceof ItemParentUnavailableError;
+	return {
+		code: details.code,
+		...(details.fields ? { fields: details.fields } : {}),
+		key,
+		indexingReceipts: [],
+		message: details.message,
+		outcome: "failed",
+		...(retryable ? { retryable: true } : {}),
+	};
+}
+
 export function orderBatchKeysByDependency(
 	keys: readonly string[],
 	parentByKey: ReadonlyMap<string, string | null>,
@@ -202,26 +216,14 @@ export async function runAdminItemBatch(
 			continue;
 		}
 		try {
-
 			results.push(await mutateBatchItem(request, key, identity.sourceConnectionKey, dependencies));
 		} catch (error) {
-			const retryableDependencyFailure =
-				error instanceof ItemHasChildrenError ||
-				error instanceof ItemParentUnavailableError;
-			if (allowDependencyRetry && retryableDependencyFailure) {
+			const failure = failedBatchItem(key, error);
+			if (allowDependencyRetry && failure.retryable) {
 				mutationAttempts.push({ allowDependencyRetry: false, key });
 				continue;
 			}
-			const details = adminErrorDetails(error);
-			results.push({
-				code: details.code,
-				...(details.fields ? { fields: details.fields } : {}),
-				key,
-				indexingReceipts: [],
-				message: details.message,
-				outcome: "failed",
-				...(retryableDependencyFailure ? { retryable: true } : {}),
-			});
+			results.push(failure);
 		}
 	}
 

@@ -129,8 +129,13 @@ function itemFileState(
 	return "none";
 }
 
-function summaryText(value: unknown, fallback: string | null | undefined) {
-	return typeof value === "string" ? value : fallback;
+function summaryText(
+	payload: Record<string, unknown>,
+	published: typeof item.$inferSelect | null,
+	field: "date" | "itemType" | "title",
+) {
+	const value = payload[field];
+	return typeof value === "string" ? value : published?.[field];
 }
 
 export function itemSummary(
@@ -145,9 +150,9 @@ export function itemSummary(
 		creators: (payload.creators ??
 			published?.creators ??
 			[]) as AdminCreator[],
-		date: summaryText(payload.date, published?.date) ?? null,
+		date: summaryText(payload, published, "date") ?? null,
 		fileState: itemFileState(fileDraft, filePublication, published),
-		itemType: summaryText(payload.itemType, published?.itemType) ?? "Document",
+		itemType: summaryText(payload, published, "itemType") ?? "Document",
 		key: draft?.itemKey ?? published!.key,
 		revision: published?.revision ?? 0,
 		sourceConnectionKey:
@@ -155,7 +160,7 @@ export function itemSummary(
 			published?.sourceConnectionKey ??
 			NATIVE_SOURCE_CONNECTION_KEY,
 		state: itemState(published, draft),
-		title: summaryText(payload.title, published?.title)?.trim() || "Untitled",
+		title: summaryText(payload, published, "title")?.trim() || "Untitled",
 		updatedAt: dateString(draft?.updatedAt ?? published?.updatedAt),
 	};
 }
