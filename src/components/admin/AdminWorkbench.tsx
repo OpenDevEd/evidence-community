@@ -52,7 +52,8 @@ import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
 import { AdminImportDialog } from "./AdminImportDialog";
-import { EditorialInspector, type ReviewLinkPicker } from "./EditorialInspector";
+import { EditorialInspector } from "./EditorialInspector";
+import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
 import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
 import { AdminSourceSyncDialog } from "./AdminSourceSyncDialog";

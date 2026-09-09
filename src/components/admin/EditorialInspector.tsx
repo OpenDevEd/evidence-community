@@ -7,17 +7,12 @@ import { useItemReview } from "./useItemReview";
 import { useAdminSession } from "./AdminSessionProvider";
 import { updateAdminReview } from "./admin-api";
 import { useReviewCorrections } from "./useReviewCorrections";
-import { linkKeysFromPayload } from "./admin-diff";
+import { useReviewLinkPicker, type ReviewLinkPicker } from "./useReviewLinkPicker";
 import type { AdminItemLinkKind } from "@/lib/admin/types";
 import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
 import { ReviewVersionTabs, ReviewVersionNotice, ReviewDraftNotice } from "./ReviewVersionControls";
 
-export type ReviewLinkPicker = {
- itemKey: string;
- keys: ReadonlySet<string>;
- change: (keys: readonly string[], selected: boolean) => ReadonlySet<string>;
-};
 type Props = ComponentProps<typeof AdminInspector> & {
  reviewQueue: boolean;
  onStartReviewLinkPick: (kind: AdminItemLinkKind, picker: ReviewLinkPicker) => void;
@@ -58,28 +53,10 @@ function ReviewInspector(props: Props) {
 		snapshot?.frozenAttachments.find((a) => a.key === attachmentKey) ??
 		snapshot;
 	const reviewPayload = corrections.payloads[frozenDetail?.key ?? ""] ?? frozenDetail?.draft?.payload ?? frozenDetail?.published ?? {};
- const reviewEdit = useRef({detail: frozenDetail, payload: reviewPayload, change: corrections.change});
- reviewEdit.current = {detail: frozenDetail, payload: reviewPayload, change: corrections.change};
- const startReviewLinkPick = (kind: AdminItemLinkKind) => {
-  if (!frozenDetail || !pending || session.role === "creator") return;
-  const sourceKeys = frozenDetail.links.fromSources.filter(link => link.kind === kind).map(link => link.key);
-  props.onStartReviewLinkPick(kind, {
-   itemKey: frozenDetail.key,
-   keys: new Set([...linkKeysFromPayload(reviewPayload, frozenDetail.links.publishedKeys)[kind], ...sourceKeys]),
-   change: (keys, selected) => {
-    const edit = reviewEdit.current;
-    if (!edit.detail) return new Set<string>();
-    const links = linkKeysFromPayload(edit.payload, edit.detail.links.publishedKeys);
-    const next = selected
-     ? [...new Set([...links[kind], ...keys.filter(key => key !== edit.detail?.key && !sourceKeys.includes(key))])]
-     : links[kind].filter(key => !keys.includes(key));
-    const payload = {...edit.payload, links: {...links, [kind]: next}};
-    reviewEdit.current = {...edit, payload};
-    edit.change(edit.detail.key, payload);
-    return new Set([...next, ...sourceKeys]);
-   },
-  });
- };
+ const startReviewLinkPick = useReviewLinkPicker({
+  detail: frozenDetail, payload: reviewPayload, change: corrections.change,
+  enabled: Boolean(pending) && session.role !== "creator", onStart: props.onStartReviewLinkPick,
+ });
  const controls = snapshot ? <ReviewVersionTabs viewingSubmitted={viewingSubmitted} onSelect={value => {
   props.onStopLinkPick?.(); setSubmitted(value); setAttachmentKey(null);
  }} /> : undefined;
