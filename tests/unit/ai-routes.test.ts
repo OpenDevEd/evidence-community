@@ -424,6 +424,8 @@ describe("AI routes", () => {
 		vi.mocked(getCachedItem).mockResolvedValueOnce({...publication, item: {...publication.item, attachmentsData: []}});
 		const response = await chat(chatRequest({ itemKey: "ITEM0001" }));
 		expect(response.status).toBe(200);
+		const { getAISystemPrompt } = await import("@/lib/ai-prompts");
+		expect(vi.mocked(getAISystemPrompt).mock.calls.at(-1)?.[2]).toMatchObject({hasPdf: false});
 
 		const validated = mocks.validateMessages.mock.results[0];
 		expect(validated).toBeDefined();

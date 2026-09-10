@@ -1,3 +1,4 @@
+import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import {
 	convertToModelMessages,
 	createUIMessageStreamResponse,
@@ -80,7 +81,10 @@ async function currentPublication(itemKey?: string) {
 	}
 
 
-	return { key: item.key, title: item.title || "Untitled publication" };
+	return {
+		reference: {key: item.key, title: item.title || "Untitled publication"},
+		hasPdf: hasVisiblePdfAttachment(item),
+	};
 }
 
 function ensureLatestRequestContext(
@@ -134,7 +138,7 @@ export async function POST(request: Request) {
 			locale,
 			companyName: config.identity.name,
 			libraryInstructions: getAISystemPrompt(config, "chat", {
-				hasPdf: Boolean(publication),
+				hasPdf: publication?.hasPdf ?? false,
 				locale,
 			}),
 			distinctId,
@@ -158,7 +162,7 @@ export async function POST(request: Request) {
 		ensureLatestRequestContext(
 			validation.data,
 			createResearchRequestContextSnapshot({
-				currentPublication: publication,
+				currentPublication: publication?.reference,
 				searchContext,
 			}),
 		);

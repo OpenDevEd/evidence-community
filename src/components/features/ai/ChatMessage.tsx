@@ -8,6 +8,7 @@ import React, { useMemo } from "react";
 import { twMerge } from "tailwind-merge";
 import { isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
 
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { getAIModelPresentation } from "@/constants/ai";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { uiMessageText } from "@/lib/ai/client";
@@ -254,6 +255,7 @@ function MessageAvatar({
 	message: Message;
 	modelId: AIModelId;
 }) {
+	const { ai } = useLibraryConfig();
 	return (
 		<div
 			className={twMerge(
@@ -264,7 +266,7 @@ function MessageAvatar({
 			{message.role === "user" ? (
 				<HugeiconsIcon icon={UserIcon} className="size-4 text-white" />
 			) : (
-				React.createElement(getAIModelPresentation(modelId).icon, {
+				React.createElement(getAIModelPresentation(modelId, ai.providers).icon, {
 					className: "size-4 invert shrink-0",
 				})
 			)}
