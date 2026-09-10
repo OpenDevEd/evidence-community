@@ -123,13 +123,10 @@ async function editionContent(
 	const identity = libraryEmailIdentity(config);
 	const button = (label: string, href: string) =>
 		emailButton(label, href, identity.accent);
-	let subject: string,
-		text: string,
-		content: string,
-		title: string,
+	let content: string,
 		detail: { dateRange: string; publicationCount: number } | undefined;
-	title = edition.title ?? `${edition.publications.length} new publications`;
-	subject = `${config.identity.shortName}: ${title}`;
+	const title = edition.title ?? `${edition.publications.length} new publications`;
+	const subject = `${config.identity.shortName}: ${title}`;
 	const editionUrl = new URL(
 		`/${config.localization.defaultLocale}/digests/${edition.id}`,
 		identity.baseUrl,
@@ -176,6 +173,6 @@ async function editionContent(
 							`${publication.title}\n${publication.creators.join(", ")}\n\n${publication.abstract ?? ""}\n${publicationUrl(publication.key)}`,
 					)
 					.join("\n\n");
-	text = `${title}\n\n${body}${edition.stream === "weekly" ? `\n\nRead online: ${editionUrl}` : ""}`;
+	const text = `${title}\n\n${body}${edition.stream === "weekly" ? `\n\nRead online: ${editionUrl}` : ""}`;
 	return { subject, text, content, title, detail };
 }

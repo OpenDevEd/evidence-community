@@ -31,4 +31,3 @@ export function CrossrefIcon({ className }: { className?: string }) {
 		</svg>
 	);
 }
-
