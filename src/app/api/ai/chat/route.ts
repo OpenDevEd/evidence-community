@@ -1,3 +1,4 @@
+import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import {
 	convertToModelMessages,
 	createUIMessageStreamResponse,
@@ -33,7 +34,6 @@ import {
 } from "@/lib/ai/request-context";
 import { chatRequestSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
-import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { getCachedItem } from "../../cache";
 
 export const maxDuration = 240;
@@ -79,15 +79,12 @@ async function currentPublication(itemKey?: string) {
 	if (!item) {
 		throw new AIError("ITEM_NOT_FOUND", "Item not found.", 404);
 	}
-	if (!hasVisiblePdfAttachment(item)) {
-		throw new AIError(
-			"INVALID_REQUEST",
-			"This publication has no readable PDF.",
-			403,
-		);
-	}
 
-	return { key: item.key, title: item.title || "Untitled publication" };
+
+	return {
+		reference: {key: item.key, title: item.title || "Untitled publication"},
+		hasPdf: hasVisiblePdfAttachment(item),
+	};
 }
 
 function ensureLatestRequestContext(
@@ -141,7 +138,7 @@ export async function POST(request: Request) {
 			locale,
 			companyName: config.identity.name,
 			libraryInstructions: getAISystemPrompt(config, "chat", {
-				hasPdf: Boolean(publication),
+				hasPdf: publication?.hasPdf ?? false,
 				locale,
 			}),
 			distinctId,
@@ -165,7 +162,7 @@ export async function POST(request: Request) {
 		ensureLatestRequestContext(
 			validation.data,
 			createResearchRequestContextSnapshot({
-				currentPublication: publication,
+				currentPublication: publication?.reference,
 				searchContext,
 			}),
 		);

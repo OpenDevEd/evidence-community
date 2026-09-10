@@ -49,6 +49,7 @@ export function projectPublicLibraryConfig(
 				provider: provider.provider,
 				enabled: provider.enabled,
 				models: provider.models,
+				modelMetadata: provider.modelMetadata,
 				defaultModel: provider.defaultModel,
 			})),
 		},

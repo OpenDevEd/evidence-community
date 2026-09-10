@@ -16,7 +16,6 @@ import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST } from "@/lib/utils";
-import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
@@ -40,6 +39,15 @@ function randomUUID() {
 	);
 }
 
+function saveHistoryEntry(previous: Record<string, AIHistory[]>, feature: string, entry: AIHistory) {
+	const history = previous[feature] ?? [];
+	const exists = history.some(({id}) => id === entry.id);
+	const next = exists
+		? history.map((item) => item.id === entry.id ? {...item, content: entry.content} : item)
+		: [entry, ...history];
+	return {...previous, [feature]: next};
+}
+
 function AiButton({
 	data,
 	variant,
@@ -47,7 +55,7 @@ function AiButton({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const { selectedModelId, setSelectedModelId } = useSelectedModel();
+	const { selectedModelId, setSelectedModelId, modelPresentation } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
 		...analyticsIdField(getAnalyticsDistinctId()),
@@ -87,23 +95,14 @@ function AiButton({
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
 		if (!selectedModelId) return;
-		setHistories((prev) => {
-			const newHistory = prev[prompt] || [];
-			const obj = newHistory.find((item) => item.id === id);
-			if (obj) {
-				obj.content = completion;
-			} else {
-				newHistory.unshift({
-					id,
-					content: completion,
-					date: new Date(),
-					title: data!.item!.title!,
-					key: data!.item!.key!,
-					modelId: selectedModelId,
-				});
-			}
-			return { ...prev, [prompt]: newHistory };
-		});
+		setHistories((previous) => saveHistoryEntry(previous, prompt, {
+			id,
+			content: completion,
+			date: new Date(),
+			title: data!.item!.title!,
+			key: data!.item!.key!,
+			modelId: selectedModelId,
+		}));
 	};
 
 	const summaryFeature = useAIFeature(
@@ -204,7 +203,7 @@ function AiButton({
 					<DropdownMenu
 						items={AI_DROPDOWN_ITEMS(
 							t,
-							selectedModelId,
+							modelPresentation,
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,
@@ -239,10 +238,9 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const aiAllowed = hasVisiblePdfAttachment(data?.item);
 	const isAIEnabled = useLibraryFeature("ai");
 
-	if (!isAIEnabled || !aiAllowed) return null;
+	if (!isAIEnabled || !data?.item) return null;
 
 	return <AiButton data={data} variant={variant} />;
 }

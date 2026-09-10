@@ -8,6 +8,7 @@ import {
 	ListModalBody,
 	type ListModalBodyItem,
 } from "@/components/nextui/ListModalBody";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { getAIModelPresentation } from "@/constants/ai";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import AIHeader from "./AIHeader";
@@ -32,6 +33,7 @@ export default function ModelSelector({
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 	const { models } = useSelectedModel();
+	const { ai } = useLibraryConfig();
 	const [pendingModelId, setPendingModelId] = useState<string | null>(null);
 	const selectedIndex = models.findIndex(
 		(model) => model.id === selectedModelId,
@@ -69,7 +71,7 @@ export default function ModelSelector({
 						}
 						list={models.map((model): ListModalBodyItem => {
 							const presentation = getAIModelPresentation(
-								model.id,
+								model.id, ai.providers,
 							);
 							return {
 								name: presentation.name,

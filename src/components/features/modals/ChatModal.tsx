@@ -1,4 +1,5 @@
 "use client";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon, Cancel01Icon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
@@ -508,17 +509,7 @@ function ChatWindowTopBar({
 	);
 }
 
-export default function ChatModal({
-	isOpen,
-	onOpenChange,
-	data,
-	modelId,
-	questions,
-	ref,
-	searchContext,
-	onModelChange,
-	onConversationStateChange,
-}: {
+type ChatModalProps = {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
@@ -529,13 +520,30 @@ export default function ChatModal({
 	searchContext?: LibrarySearchContext;
 	onModelChange?: (modelId: string) => void;
 	onConversationStateChange?: (hasConversation: boolean) => void;
-}) {
+};
+
+export default function ChatModal(props: Omit<ChatModalProps, "modelId"> & {modelId: AIModelId | null}) {
+	return props.modelId ? <ChatModalContent {...props} modelId={props.modelId} /> : null;
+}
+
+function ChatModalContent({
+	isOpen,
+	onOpenChange,
+	data,
+	modelId,
+	questions,
+	ref,
+	searchContext,
+	onModelChange,
+	onConversationStateChange,
+}: ChatModalProps) {
 	const {
 		isOpen: isModelOpen,
 		onOpen: onModelOpen,
 		onOpenChange: onModelOpenChange,
 	} = useDisclosure();
-	const modelPresentation = getAIModelPresentation(modelId);
+	const { ai } = useLibraryConfig();
+	const modelPresentation = getAIModelPresentation(modelId, ai.providers);
 	const chat = useChatWindow({
 		data,
 		modelId,

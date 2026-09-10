@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import {
-	PLATFORM_AI_MODEL_CATALOG,
+	PLATFORM_AI_PROVIDERS,
 	PLATFORM_FONT_CATALOG,
 	PLATFORM_LOCALES,
 	PLATFORM_PROMPT_DEFAULTS,
@@ -173,12 +173,7 @@ export function createLibraryConfigCatalog(
 					weights: [...details.weights],
 				}),
 			),
-			aiProviders: Object.entries(PLATFORM_AI_MODEL_CATALOG).map(
-				([provider, models]) => ({
-					provider,
-					active: [...models.active],
-				}),
-			),
+			aiProviders: PLATFORM_AI_PROVIDERS.map((provider) => ({ provider })),
 			promptSlots: PLATFORM_PROMPT_SLOTS.map((slot) => ({
 				slot,
 				defaultValue: PLATFORM_PROMPT_DEFAULTS[slot],

@@ -2,7 +2,7 @@ import { useLocalStorage } from "usehooks-ts";
 
 import { getAIModelPresentation } from "@/constants/ai";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { selectableAIModels } from "@/lib/ai/models";
+import { selectableAIModels, defaultAIModelId } from "@/lib/ai/models";
 
 /**
  * The model this reader picked. Libraries offer the models they configured,
@@ -12,13 +12,14 @@ import { selectableAIModels } from "@/lib/ai/models";
 export function useSelectedModel() {
 	const { ai } = useLibraryConfig();
 	const models = selectableAIModels(ai.providers);
-	const [storedModelId, setSelectedModelId] = useLocalStorage<
-		string | null
-	>("ai-model", null);
+	const [storedModelId, setSelectedModelId] = useLocalStorage<string | null>(
+		"ai-model",
+		null,
+	);
 
 	const selectedModel =
 		models.find((model) => model.id === storedModelId) ??
-		models[0] ??
+		models.find((model) => model.id === defaultAIModelId(ai.providers)) ??
 		null;
 	const selectedModelId = selectedModel?.id ?? null;
 
@@ -27,6 +28,9 @@ export function useSelectedModel() {
 		selectedModel,
 		selectedModelId,
 		setSelectedModelId,
-		modelPresentation: getAIModelPresentation(selectedModelId),
+		modelPresentation: getAIModelPresentation(
+			selectedModelId,
+			ai.providers,
+		),
 	};
 }

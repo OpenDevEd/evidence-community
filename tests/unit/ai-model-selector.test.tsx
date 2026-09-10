@@ -18,9 +18,12 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 					models: [
 						"openai/gpt-5.6-luna",
 						"x-ai/grok-4.6",
-						"google/gemini-3.7-flash",
+						"google/gemini-3.8-flash",
 					],
 					defaultModel: "openai/gpt-5.6-luna",
+					modelMetadata: {
+						"google/gemini-3.8-flash": {name: "Gemini 3.8 Flash", company: "Google"},
+					},
 				},
 			],
 		},
@@ -79,7 +82,7 @@ describe("the AI model picker", () => {
 			);
 		});
 
-		await pressText("Gemini 3.7 Flash");
+		await pressText("Gemini 3.8 Flash");
 
 		expect(document.body.textContent).toContain("changeModelWarning");
 		expect(onModelChange).not.toHaveBeenCalled();
@@ -88,6 +91,6 @@ describe("the AI model picker", () => {
 		await pressText("changeAndReset");
 
 		expect(onResetConversation).toHaveBeenCalledOnce();
-		expect(onModelChange).toHaveBeenCalledWith("google/gemini-3.7-flash");
+		expect(onModelChange).toHaveBeenCalledWith("google/gemini-3.8-flash");
 	});
 });

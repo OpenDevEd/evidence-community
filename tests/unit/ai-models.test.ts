@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { PLATFORM_AI_MODEL_CATALOG } from "@/config/library-config/catalogs";
 import {
-	AI_MODELS,
 	CONTRACT_STARTER_QUESTIONS_MODEL_ID,
 	defaultAIModelId,
-	getAIModel,
-	isAIModelId,
-	isSelectableAIModelId,
-	maximumReasoningEffort,
 	selectableAIModels,
 	starterQuestionsModelId,
 	type ConfiguredAIProvider,
@@ -24,6 +18,14 @@ const openRouterLibrary: ConfiguredAIProvider[] = [
 			"openai/gpt-5.6-luna",
 		],
 		defaultModel: "google/gemini-3.7-flash",
+		modelMetadata: {
+			"x-ai/grok-4.6": { name: "Grok 4.6", company: "xAI" },
+			"google/gemini-3.7-flash": {
+				name: "Gemini 3.7 Flash",
+				company: "Google",
+			},
+			"openai/gpt-5.6-luna": { name: "GPT-5.6 Luna", company: "OpenAI" },
+		},
 	},
 	{
 		provider: "openai",
@@ -41,51 +43,6 @@ const directProviderLibrary: ConfiguredAIProvider[] = [
 		defaultModel: "gemini-2.5-pro",
 	},
 ];
-
-describe("AI model registry", () => {
-	it("describes every model the manifest catalog can select", () => {
-		const catalogModels = Object.values(PLATFORM_AI_MODEL_CATALOG).flatMap(
-			(provider) => [...provider.active],
-		);
-
-		for (const modelId of catalogModels) {
-			expect(isAIModelId(modelId)).toBe(true);
-			expect(isSelectableAIModelId(modelId)).toBe(true);
-			expect(getAIModel(modelId).name.length).toBeGreaterThan(0);
-		}
-
-		expect(Object.keys(AI_MODELS)).toHaveLength(
-			new Set(catalogModels).size + 2,
-		);
-	});
-
-	it("keeps the two Claude models valid but never selectable", () => {
-		for (const modelId of [
-			"anthropic/claude-sonnet-5",
-			"anthropic/claude-opus-5",
-		] as const) {
-			expect(isAIModelId(modelId)).toBe(true);
-			expect(isSelectableAIModelId(modelId)).toBe(false);
-			expect(getAIModel(modelId).hidden).toBe(true);
-		}
-	});
-
-	it("rejects inherited object properties as model identifiers", () => {
-		expect(isAIModelId("toString")).toBe(false);
-	});
-
-	it("carries the contract's verified reasoning effort per model", () => {
-		expect(maximumReasoningEffort("openai/gpt-5.6-luna")).toBe("max");
-		expect(maximumReasoningEffort("x-ai/grok-4.6")).toBe("xhigh");
-		expect(maximumReasoningEffort("google/gemini-3.7-flash")).toBe("high");
-		expect(maximumReasoningEffort("anthropic/claude-opus-5")).toBe("max");
-	});
-
-	it("leaves reasoning effort unset for models nobody verified", () => {
-		expect(maximumReasoningEffort("gpt-5.4")).toBeUndefined();
-		expect(maximumReasoningEffort("mistral-large-latest")).toBeUndefined();
-	});
-});
 
 describe("models a library can offer", () => {
 	it("keeps the configured order for enabled providers only", () => {
@@ -111,7 +68,7 @@ describe("models a library can offer", () => {
 		]);
 	});
 
-	it("drops repeated and hidden models", () => {
+	it("shows each configured model once", () => {
 		const models = selectableAIModels([
 			{
 				provider: "openrouter",
@@ -125,7 +82,10 @@ describe("models a library can offer", () => {
 			},
 		]);
 
-		expect(models.map(({ id }) => id)).toEqual(["openai/gpt-5.6-luna"]);
+		expect(models.map(({ id }) => id)).toEqual([
+			"openai/gpt-5.6-luna",
+			"anthropic/claude-sonnet-5",
+		]);
 	});
 
 	it("has nothing to offer when no provider is enabled", () => {

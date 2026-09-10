@@ -15,6 +15,7 @@ import { useMemo, useRef, useState } from "react";
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { getAIModelPresentation } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
@@ -44,6 +45,7 @@ export default function GenerativeModal({
 	id: string;
 }) {
 	const t = useTranslations("ai");
+	const { ai } = useLibraryConfig();
 	const tUI = useTranslations("ui");
 
 	const format = useFormatter();
@@ -131,7 +133,7 @@ export default function GenerativeModal({
 															<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
 																{React.createElement(
 																	getAIModelPresentation(
-																		item.modelId,
+																		item.modelId, ai.providers,
 																	).icon,
 																	{
 																		className:

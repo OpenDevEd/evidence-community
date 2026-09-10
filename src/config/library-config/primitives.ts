@@ -411,7 +411,7 @@ export const modelIdSchema = z
 	.trim()
 	.min(1)
 	.max(128)
-	.regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u, {
+	.regex(/^~?[A-Za-z0-9][A-Za-z0-9._:/-]*$/u, {
 		message: "Invalid model ID",
 	})
 	.refine(
@@ -422,6 +422,17 @@ export const modelIdSchema = z
 			message: "Control characters and line breaks are not allowed",
 		},
 	);
+
+/** OpenRouter IDs include the model publisher; availability belongs to the library configuration. */
+export function isOpenRouterModelId(value: unknown): value is string {
+	const parsed = modelIdSchema.safeParse(value);
+	return (
+		parsed.success &&
+		parsed.data === value &&
+		value.includes("/") &&
+		!value.endsWith("/")
+	);
+}
 
 export function addDuplicateIssues<T>(
 	values: readonly T[],
