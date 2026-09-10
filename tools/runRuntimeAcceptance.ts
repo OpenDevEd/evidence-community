@@ -1607,7 +1607,8 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_DISABLED_GAP_MAP_LABEL: disabledGapMap?.label ?? "",
 		PLAYWRIGHT_GAP_MAP_MARKER: "AMBER_GAP_MAP_FIXTURE",
 		PLAYWRIGHT_CONTACT_RECIPIENT: config.email.contactRecipient ?? "",
-		PLAYWRIGHT_EMAIL_SENDER: config.email.smtp.from ?? "",
+		PLAYWRIGHT_EMAIL_SENDER: config.contact.email ?? config.email.smtp.from ?? "",
+		PLAYWRIGHT_EMAIL_SENDER_NAME: config.identity.name,
 	};
 }
 
