@@ -30,9 +30,13 @@ describe("admin metadata field contract", () => {
 							? "access-date"
 							: descriptor.field === "url"
 								? "url"
-								: multiline.has(descriptor.field)
-									? "multiline"
-									: "text";
+								: ["institution", "university"].includes(
+											descriptor.field,
+									  )
+									? "institution-list"
+									: multiline.has(descriptor.field)
+										? "multiline"
+										: "text";
 				expect(adminFieldContract(descriptor).kind).toBe(expected);
 				distinctFields.add(descriptor.field);
 				checked += 1;
@@ -78,7 +82,11 @@ describe("admin metadata field contract", () => {
 		];
 		for (const field of fields) {
 			expect(
-				adminFieldContract({ field, semanticField: field, type: "text" }).kind,
+				adminFieldContract({
+					field,
+					semanticField: field,
+					type: "text",
+				}).kind,
 			).toBe("text");
 		}
 		expect(fields).toHaveLength(31);
@@ -94,9 +102,8 @@ describe("admin metadata field contract", () => {
 			).kind,
 		).toBe("bibliographic-date");
 		expect(
-			adminFieldContract(
-				describeZoteroField({ field: "filingDate" }),
-			).kind,
+			adminFieldContract(describeZoteroField({ field: "filingDate" }))
+				.kind,
 		).toBe("bibliographic-date");
 	});
 
@@ -130,7 +137,12 @@ describe("admin metadata field contract", () => {
 		expect(normalizeAdminFieldValue(descriptor, "2024-05")).toEqual({
 			value: "2024-05",
 		});
-		for (const value of ["Spring 2024", "forthcoming", "2024-02-31", "2024-13"]) {
+		for (const value of [
+			"Spring 2024",
+			"forthcoming",
+			"2024-02-31",
+			"2024-13",
+		]) {
 			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({
 				error: "Enter an exact date, a month, or a four-digit year.",
 				value,

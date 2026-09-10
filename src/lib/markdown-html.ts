@@ -12,9 +12,13 @@ function safeLinkHref(href: string, origin?: string) {
 	}
 }
 
-export async function createSafeMarkdownRenderer(origin?: string) {
+export async function createSafeMarkdownRenderer(origin?: string, styles?: {paragraph: string; heading: string; link: string}) {
 	const { Marked, Renderer } = await import("marked");
 	const renderer = new Renderer();
+  if (styles) {
+    renderer.paragraph = function ({tokens}) { return `<p style="${escapeHtml(styles.paragraph)}">${this.parser.parseInline(tokens)}</p>`; };
+    renderer.heading = function ({tokens, depth}) { return `<h${depth} style="${escapeHtml(styles.heading)}">${this.parser.parseInline(tokens)}</h${depth}>`; };
+  }
 
 	renderer.html = ({ text }) => escapeHtml(text);
 	renderer.image = ({ text }) => escapeHtml(text);
@@ -23,7 +27,7 @@ export async function createSafeMarkdownRenderer(origin?: string) {
 		const safeHref = safeLinkHref(href, origin);
 		if (!safeHref) return label;
 		const titleAttribute = title ? ` title="${escapeHtml(title)}"` : "";
-		return `<a href="${escapeHtml(safeHref)}"${titleAttribute}>${label}</a>`;
+		return `<a href="${escapeHtml(safeHref)}"${titleAttribute}${styles ? ` style="${escapeHtml(styles.link)}"` : ""}>${label}</a>`;
 	};
 
 	const marked = new Marked({ gfm: true, renderer });

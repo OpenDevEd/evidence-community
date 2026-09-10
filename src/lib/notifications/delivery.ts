@@ -1,41 +1,10 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationDelivery, notificationEdition, notificationSubscriber } from "@/db/schema/notifications";
 import { sendNotificationEmail } from "@/lib/nodemailer";
-import { escapeHtml } from "@/lib/escape-html";
-import { createSafeMarkdownRenderer } from "@/lib/markdown-html";
-
-function subscriptionUrl(config: LibraryServerConfig, token: string, action = "preferences") {
-  return new URL(`/${config.localization.defaultLocale}/digests/${action}?token=${token}`, config.identity.baseUrl).toString();
-}
-
-async function notificationMessage(config: LibraryServerConfig, subscriber: typeof notificationSubscriber.$inferSelect, edition: typeof notificationEdition.$inferSelect | null, messageKey: string) {
-  const preferences = subscriptionUrl(config, subscriber.token);
-  const unsubscribe = subscriptionUrl(config, subscriber.token, "unsubscribe");
-  let subject: string, text: string, content: string;
-  if (!edition && subscriber.confirmedAt) {
-    subject = `Email preferences for ${config.identity.name}`;
-    text = `Manage your email updates: ${preferences}`;
-    content = `<h1>Email preferences</h1><p><a href="${escapeHtml(preferences)}">Manage email updates from ${escapeHtml(config.identity.name)}</a></p>`;
-  } else if (!edition) {
-    const confirm = subscriptionUrl(config, subscriber.token, "confirm");
-    subject = `Confirm email updates from ${config.identity.name}`;
-    text = `Confirm your email updates: ${confirm}\n\nThis link expires after 24 hours. If you did not subscribe, ignore this email.`;
-    content = `<h1>Confirm your email</h1><p>Receive updates from ${escapeHtml(config.identity.name)}.</p><p><a href="${escapeHtml(confirm)}">Confirm email updates</a></p><p>This link expires after 24 hours. If you did not subscribe, ignore this email.</p>`;
-  } else {
-    subject = `${config.identity.shortName}: ${edition.title}`;
-    const editionUrl = new URL(`/${config.localization.defaultLocale}/digests/${edition.id}`, config.identity.baseUrl).toString();
-    const markdown = edition.stream === "weekly" ? edition.markdown! : edition.publications.map(publication => `## ${publication.title}\n\n${publication.creators.join(", ")}\n\n${publication.abstract ?? ""}\n\n[Read publication](/lib/${publication.key})`).join("\n\n");
-    const render = await createSafeMarkdownRenderer(config.identity.baseUrl);
-    content = `<h1>${escapeHtml(edition.title!)}</h1>${await render(markdown)}${edition.stream === "weekly" ? `<p><a href="${escapeHtml(editionUrl)}">Read this edition online</a></p>` : ""}`;
-    text = `${edition.title}\n\n${markdown.replace(/\]\((\/lib\/[A-Z0-9]{8})\)/g, (_, href: string) => `](${new URL(href, config.identity.baseUrl)})`)}${edition.stream === "weekly" ? `\n\nRead online: ${editionUrl}` : ""}`;
-  }
-  const identity = `<p><a href="${escapeHtml(config.identity.baseUrl)}"><strong>${escapeHtml(config.identity.name)}</strong></a><br>${escapeHtml(new URL(config.identity.baseUrl).hostname)}</p>`;
-  const footer = `<p><a href="${escapeHtml(preferences)}">Email preferences</a> &nbsp; <a href="${escapeHtml(unsubscribe)}">Unsubscribe</a></p>`;
-  return { to: subscriber.email, subject, text: `${config.identity.name}\n${config.identity.baseUrl}\n\n${text}\n\nEmail preferences: ${preferences}\nUnsubscribe: ${unsubscribe}`, html: `<!doctype html><html><body><main style="max-width:680px;margin:32px auto;font-family:Arial,sans-serif;line-height:1.65;color:#242424">${identity}${content}${footer}</main></body></html>`, messageId: `<${createHash("sha256").update(messageKey).digest("hex")}@${new URL(config.identity.baseUrl).hostname}>`, headers: { "List-Unsubscribe": `<${unsubscribe}>` } };
-}
+import { notificationMessage } from "./message";
 
 type Subscriber = typeof notificationSubscriber.$inferSelect;
 type Edition = typeof notificationEdition.$inferSelect;

@@ -44,10 +44,20 @@ export function usePublishingChoice(
 			setSaving(false);
 		}
 	};
-	const save = (next: PublishingChoice) =>
+	const save = (next: PublishingChoice | null) =>
 		run(async () => {
-			const stored = await saveAdminPublishingChoice(detail.key, next);
-			await saved.mutate(stored, { revalidate: false });
+			await saved.mutate(
+				() => saveAdminPublishingChoice(detail.key, next),
+				{
+					optimisticData: (current) => ({
+						choice: next,
+						canClear: current?.canClear ?? true,
+					}),
+					rollbackOnError: true,
+					populateCache: true,
+					revalidate: false,
+				},
+			);
 		}, "Could not save identifier choice");
 	const onReserve = () => {
 		void run(async () => {

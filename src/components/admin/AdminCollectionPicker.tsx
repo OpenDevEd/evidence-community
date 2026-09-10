@@ -493,6 +493,7 @@ export function AdminCollectionPicker({
 			data-admin-collection-picker
 		>
 			<Input
+				color="filled"
 				aria-label="Search collections"
 				autoFocus={autoFocus}
 				classNames={{

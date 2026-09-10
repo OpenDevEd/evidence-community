@@ -87,7 +87,8 @@ function snapshot(changes: Partial<Snapshot> = {}): Snapshot {
 
 function target(
 	provider: "crossref" | "zenodo",
-	identifierPolicy: "reuse-crossref" | "reuse-external" | "mint-zenodo" | null = null,
+	identifierPolicy:
+		"reuse-crossref" | "reuse-external" | "mint-zenodo" | null = null,
 ) {
 	return {
 		itemKey: "ABCDEFGH",
@@ -495,9 +496,21 @@ describe("admin publication view", () => {
 	});
 
 	it("prepares the first archive draft without requiring archive metadata", () => {
-        const view = buildAdminPublicationViewFromSnapshot({itemKey: "ABCDEFGH", config, snapshot: snapshot({record: record({abstractNote: null, creators: []}), targets: [target("zenodo", "mint-zenodo")]})});
-        expect(view.providers.zenodo).toMatchObject({displayState: "waiting", waitingOn: "file", blockers: [], exact: {plan: {status: "waiting_for_file"}}});
-    });
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			config,
+			snapshot: snapshot({
+				record: record({ abstractNote: null, creators: [] }),
+				targets: [target("zenodo", "mint-zenodo")],
+			}),
+		});
+		expect(view.providers.zenodo).toMatchObject({
+			displayState: "waiting",
+			waitingOn: "file",
+			blockers: [],
+			exact: { plan: { status: "waiting_for_file" } },
+		});
+	});
 
 	it("waits locally for a published file before minting a Zenodo DOI", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
@@ -678,7 +691,7 @@ describe("admin publication view", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
-				record: record({ DOI: crossref.doi, abstractNote: null }),
+				record: record({ DOI: crossref.doi, title: "AI" }),
 				targets: [target("crossref"), target("zenodo", "mint-zenodo")],
 				identifiers: [crossref, zenodoVersion],
 				states: [syncState()],
@@ -687,10 +700,10 @@ describe("admin publication view", () => {
 		});
 
 		expect(view.providers.zenodo.blockers).toContain(
-			"Zenodo requires an abstract or description",
+			"Zenodo requires a title with at least 3 characters",
 		);
 		expect(view.providers.crossref.blockers).not.toContain(
-			"Zenodo requires an abstract or description",
+			"Zenodo requires a title with at least 3 characters",
 		);
 		expect(view.providers.crossref).toMatchObject({
 			displayState: "repair_pending",
@@ -727,7 +740,7 @@ describe("admin publication view", () => {
 		expect(view.providers.zenodo.blockers).toEqual(
 			expect.arrayContaining([
 				"Add a title before activating publication",
-				"Zenodo requires an abstract or description",
+				"Zenodo requires a title with at least 3 characters",
 				"Zenodo requires at least one creator",
 			]),
 		);
@@ -826,12 +839,8 @@ describe("identifiers view", () => {
 		]);
 		const zenodo = identifiers.actions.find((a) => a.id === "mint-zenodo")!;
 		expect(zenodo.available).toBe(true);
-		expect(zenodo.ready).toBe(false);
-		expect(zenodo.readiness).toContainEqual({
-			label: "Zenodo requires an abstract or description",
-			ok: false,
-			field: "abstractNote",
-		});
+		expect(zenodo.ready).toBe(true);
+		expect(zenodo.readiness.every((check) => check.ok)).toBe(true);
 	});
 
 	it("reports a ready action with one positive line instead of an empty list", () => {
@@ -861,7 +870,9 @@ describe("identifiers view", () => {
 			origin: "record",
 			url: "https://doi.org/10.9999/external",
 		});
-		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
+		expect(identifiers.actions.map((a) => a.id)).toEqual([
+			"archive-zenodo",
+		]);
 		const archive = identifiers.actions[0]!;
 		expect(archive.available).toBe(true);
 		expect(
@@ -908,7 +919,9 @@ describe("identifiers view", () => {
 			state: "active",
 			provider: "crossref",
 		});
-		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
+		expect(identifiers.actions.map((a) => a.id)).toEqual([
+			"archive-zenodo",
+		]);
 	});
 
 	it("asks for attention only when something activated has failed", () => {
@@ -938,14 +951,26 @@ describe("identifiers view", () => {
 		expect(view.identifiers.attention).toBe(true);
 	});
 
-
 	it("does not offer manual retry while the worker owns automatic retries", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				targets: [target("zenodo", "mint-zenodo")],
-				states: [syncState({lastFailureClass: "transient", lastFailureSummary: "Provider unavailable", consecutiveFailures: 1})],
-				jobs: [job({provider: "zenodo", environment: "sandbox", attempts: 1, lastError: "Provider unavailable"})],
+				states: [
+					syncState({
+						lastFailureClass: "transient",
+						lastFailureSummary: "Provider unavailable",
+						consecutiveFailures: 1,
+					}),
+				],
+				jobs: [
+					job({
+						provider: "zenodo",
+						environment: "sandbox",
+						attempts: 1,
+						lastError: "Provider unavailable",
+					}),
+				],
 			}),
 			config,
 		});
@@ -1000,7 +1025,9 @@ describe("identifiers view", () => {
 			config,
 		});
 		expect(view.providers.zenodo.blockers).toContainEqual(
-			expect.stringContaining("no longer matches the DOI archived on Zenodo"),
+			expect.stringContaining(
+				"no longer matches the DOI archived on Zenodo",
+			),
 		);
 	});
 });

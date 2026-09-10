@@ -3,6 +3,7 @@ import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract"
 import type { ComponentProps, ReactNode } from "react";
 import type { AdminReviewSnapshot } from "./admin-api";
 import { AdminInspector } from "./AdminInspector";
+import { usePublishingChoice } from "./usePublishingChoice";
 import { useItemReview } from "./useItemReview";
 import { useReviewVersion } from "./useReviewVersion";
 import { useReviewDraftConflicts } from "./useReviewDraftConflicts";
@@ -15,6 +16,7 @@ import {
 import type { AdminItemDetail, AdminItemLinkKind } from "@/lib/admin/types";
 import { DraftConflict } from "./DraftConflict";
 import { ReviewActions } from "./ReviewActions";
+import { ReviewReadiness, useReviewReadiness } from "./ReviewReadiness";
 import {
 	ReviewVersionTabs,
 	ReviewVersionNotice,
@@ -50,24 +52,26 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		viewingSubmitted,
 		frozenDetail,
 	} = model;
-	const controls = snapshot ? (
+	const controls = (
 		<ReviewVersionTabs
 			viewingSubmitted={viewingSubmitted}
+			hasSubmitted={Boolean(snapshot)}
 			onSelect={version.selectVersion}
 		/>
-	) : undefined;
-	const notice = snapshot ? (
+	);
+	const notice = (
 		<ReviewVersionNotice
 			snapshot={snapshot}
+			updatedAt={props.detail.draft?.updatedAt ?? props.detail.updatedAt}
 			pending={pending}
 			canWithdraw={
 				session.role !== "creator" ||
-				snapshot.submittedBy === session.userId
+				snapshot?.submittedBy === session.userId
 			}
 			withdrawing={version.withdrawing}
 			onWithdraw={version.withdraw}
 		/>
-	) : undefined;
+	);
 	if (!viewingSubmitted || !frozenDetail || !snapshot) {
 		return (
 			<WorkingDraftInspector
@@ -103,8 +107,13 @@ function WorkingDraftInspector({
 	notice,
 	...props
 }: VersionInspectorProps) {
-	const { snapshot, pending, error, conflicts, conflictRef } = model;
+	const { snapshot, pending, error, conflicts } = model;
 	const hasConflict = conflicts.fields.length > 0;
+	const readiness = useReviewReadiness(
+		props.detail,
+		props.payload,
+		model.publishing,
+	);
 	const draftNotice = (
 		<ReviewDraftNotice
 			notice={notice}
@@ -119,33 +128,23 @@ function WorkingDraftInspector({
 	return (
 		<AdminInspector
 			{...props}
+			publishing={model.publishing}
 			error={error instanceof Error ? error.message : props.error}
 			versionControls={controls}
 			versionNotice={draftNotice}
 			editorNotice={
-				hasConflict ? (
-					<div
-						ref={conflictRef}
-						tabIndex={-1}
-						className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
-					>
-						<DraftConflict
-							key={`${snapshot?.reviewRevision}:${props.detail.draft?.draftRevision}`}
-							payload={props.payload}
-							published={props.detail.published ?? {}}
-							conflictFields={conflicts.fields}
-							disabled={
-								conflicts.resolving ||
-								props.saveState === "saving"
-							}
-							onResolve={(choices) => {
-								void conflicts.resolve(choices);
-							}}
-						/>
-					</div>
-				) : undefined
+				<WorkingDraftNotices
+					model={model}
+					props={props}
+					readiness={readiness}
+				/>
 			}
-			submissionBlocked={hasConflict}
+			submissionBlocked={
+				hasConflict ||
+				readiness.loading ||
+				readiness.saving ||
+				readiness.missing > 0
+			}
 			reviewPending={pending}
 		/>
 	);
@@ -174,9 +173,25 @@ function SubmittedInspector({
 		version,
 	} = model;
 
+	const readiness = useReviewReadiness(
+		frozenDetail,
+		reviewPayload,
+		model.publishing,
+		snapshot.publishing,
+	);
+	const saveState = corrections.saving ? "saving" : "saved";
+	const reviewActions = (
+		<ReviewActions
+			snapshot={snapshot}
+			disabled={corrections.saving || Boolean(corrections.error)}
+			publishBlocked={!frozenDetail.parentItem && readiness.missing > 0}
+			onUpdated={changed}
+		/>
+	);
 	return (
 		<AdminInspector
 			{...props}
+			publishing={model.publishing}
 			detail={frozenDetail}
 			payload={reviewPayload}
 			readOnlyVersion
@@ -185,11 +200,13 @@ function SubmittedInspector({
 			onChange={(payload) =>
 				corrections.change(frozenDetail.key, payload)
 			}
-			versionActions={
-				<ReviewActions
-					snapshot={snapshot}
-					disabled={corrections.saving || Boolean(corrections.error)}
-					onUpdated={changed}
+			versionActions={pending ? reviewActions : undefined}
+			editorNotice={
+				<SubmittedNotice
+					pending={pending}
+					frozenDetail={frozenDetail}
+					readiness={readiness}
+					reviewActions={reviewActions}
 				/>
 			}
 			versionControls={controls}
@@ -205,13 +222,7 @@ function SubmittedInspector({
 			loading={false}
 			error={corrections.error}
 			saveMessage={corrections.error}
-			saveState={
-				corrections.error
-					? "error"
-					: corrections.saving
-						? "saving"
-						: "saved"
-			}
+			saveState={corrections.error ? "error" : saveState}
 			onSelectAttachment={version.selectAttachment}
 			onBackToParent={version.backToParent}
 		/>
@@ -219,13 +230,18 @@ function SubmittedInspector({
 }
 
 function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
+	const publishing = usePublishingChoice(props.detail, false);
 	const key = props.detail.key;
 	const review = useItemReview(props.detail.parentItem ?? props.detail.key);
 	const { refresh, error } = review;
-	const snapshot = review.snapshot && (
-		review.snapshot.key === key ||
-		review.snapshot.frozenAttachments.some(attachment => attachment.key === key)
-	) ? review.snapshot : undefined;
+	const snapshot =
+		review.snapshot &&
+		(review.snapshot.key === key ||
+			review.snapshot.frozenAttachments.some(
+				(attachment) => attachment.key === key,
+			))
+			? review.snapshot
+			: undefined;
 	const pending = Boolean(snapshot && review.pending);
 	const session = useAdminSession();
 	const corrections = useReviewCorrections(snapshot, refresh);
@@ -258,6 +274,7 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		onStart: props.onStartReviewLinkPick,
 	});
 	return {
+		publishing,
 		snapshot,
 		pending,
 		error,
@@ -272,4 +289,72 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		reviewPayload,
 		startReviewLinkPick,
 	};
+}
+
+function WorkingDraftNotices({
+	model,
+	props,
+	readiness,
+}: {
+	model: VersionInspectorProps["model"];
+	props: Omit<VersionInspectorProps, "model" | "controls" | "notice">;
+	readiness: ReturnType<typeof useReviewReadiness>;
+}) {
+	const { snapshot, conflicts, conflictRef } = model;
+	const hasConflict = conflicts.fields.length > 0;
+	return (
+		<>
+			{!props.detail.parentItem && props.detail.draft && (
+				<ReviewReadiness
+					recordKey={props.detail.key}
+					readiness={readiness}
+				/>
+			)}
+			{hasConflict ? (
+				<div
+					ref={conflictRef}
+					tabIndex={-1}
+					className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
+				>
+					<DraftConflict
+						key={`${snapshot?.reviewRevision}:${props.detail.draft?.draftRevision}`}
+						payload={props.payload}
+						published={props.detail.published ?? {}}
+						conflictFields={conflicts.fields}
+						disabled={
+							conflicts.resolving || props.saveState === "saving"
+						}
+						onResolve={(choices) => {
+							void conflicts.resolve(choices);
+						}}
+					/>
+				</div>
+			) : undefined}
+		</>
+	);
+}
+
+function SubmittedNotice({
+	pending,
+	frozenDetail,
+	readiness,
+	reviewActions,
+}: {
+	pending: boolean;
+	frozenDetail: AdminItemDetail;
+	readiness: ReturnType<typeof useReviewReadiness>;
+	reviewActions: ReactNode;
+}) {
+	return (
+		<>
+			{pending && !frozenDetail.parentItem ? (
+				<ReviewReadiness
+					recordKey={frozenDetail.key}
+					readiness={readiness}
+				/>
+			) : !pending ? (
+				reviewActions
+			) : undefined}
+		</>
+	);
 }

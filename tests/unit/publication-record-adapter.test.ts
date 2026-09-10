@@ -77,17 +77,13 @@ describe("publication record adapter", () => {
 		});
 	});
 
-	it("uses the stable creation date when the record has no publication date", () => {
-		const withoutDate = record({ date: null, dateAdded: null });
-		expect(
-			buildPublicationRecordSnapshot({
-				record: withoutDate,
-				tags: [],
-				baseUrl: "https://library.example.org",
-				license: "cc-by-4.0",
-			}).publicationDate,
-		).toBe("2020-05-06");
-	});
+    it.each([null, "not-a-date"])("never invents a publication date from record creation for %s", date => {
+        if (date === null) {
+            expect(() => buildPublicationRecordSnapshot({record: record({date}), tags: [], baseUrl: "https://library.example.org", license: "cc-by-4.0"})).toThrow();
+        } else {
+            expect(buildPublicationRecordSnapshot({record: record({date}), tags: [], baseUrl: "https://library.example.org", license: "cc-by-4.0"}).publicationDate).toBe(date);
+        }
+    });
 
 	it("does not leak database or source bookkeeping into provider fields", () => {
 		const snapshot = buildPublicationRecordSnapshot({

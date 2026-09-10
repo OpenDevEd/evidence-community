@@ -1,4 +1,7 @@
 "use client";
+import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+import type { AuthorProfile } from "@/lib/authors/profiles";
+import { creatorDisplayName } from "@/lib/creator-display-name";
 import { editableCollectionSourceKeys } from "@/lib/admin/item-collection-policy";
 
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
@@ -96,8 +99,10 @@ function formatDate(value: string | null) {
 	return Number.isFinite(date.getTime()) ? dateFormatter.format(date) : "—";
 }
 
-function creatorLine(item: AdminItemListRow) {
-	return item.creatorNames.slice(0, 3).join(", ") || "—";
+function creatorLine(item: AdminItemListRow, profiles: ReadonlyMap<string, AuthorProfile>) {
+	return item.creators.slice(0, 3).map(creator =>
+		(creator.authorProfileId ? profiles.get(creator.authorProfileId)?.name : undefined) ?? creatorDisplayName(creator)
+	).join(", ") || "—";
 }
 
 function PlainCell({
@@ -612,6 +617,7 @@ export function AdminItemTable({
 	sortDirection: "asc" | "desc";
 }) {
 	"use no memo";
+	const {profiles} = useAuthorProfiles(items.flatMap(item => item.creators));
 
 	const [activeResizeColumn, setActiveResizeColumn] =
 		useState<AdminItemColumnId | null>(null);
@@ -694,9 +700,9 @@ export function AdminItemTable({
 				cell: ({ row }) => (
 					<PlainCell
 						icon={UserCircleIcon}
-						title={creatorLine(row.original)}
+						title={creatorLine(row.original, profiles)}
 					>
-						{creatorLine(row.original)}
+						{creatorLine(row.original, profiles)}
 					</PlainCell>
 				),
 				id: "creators",
@@ -816,6 +822,7 @@ export function AdminItemTable({
 			onToggleVisible,
 			someVisibleSelected,
 			sourceLabels,
+			profiles,
 		],
 	);
 
@@ -1582,7 +1589,7 @@ export function AdminItemTable({
 								>
 									{loading ? (
 										<Spinner
-											label="Loading records…"
+											aria-label="Loading records"
 											size="sm"
 										/>
 									) : error ? (

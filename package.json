@@ -73,7 +73,8 @@
 		"schema:generate:library-config": "tsx ./tools/generateLibraryConfigArtifacts.ts",
 		"schema:generate:zotero": "tsx ./tools/generateZoteroSchema.ts",
 		"schema:check": "tsx ./tools/generateLibraryConfigArtifacts.ts --check && tsx ./tools/generateZoteroSchema.ts --check && npm run icons:check",
-		"test:admin-zotero-live": "tsx ./tools/verifyAdminZoteroWriteback.ts"
+		"test:admin-zotero-live": "tsx ./tools/verifyAdminZoteroWriteback.ts",
+		"postinstall": "patch-package"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.103",
@@ -93,7 +94,7 @@
 		"@hugeicons/react": "^1.1.10",
 		"@napi-rs/canvas": "^1.0.3",
 		"@nextui-org/react": "^2.6.11",
-		"@opendeved/doi-sync-core": "github:OpenDevEd/doi-sync-core#26ad9ab4cdcc9055844af057e8b10ee5576693d2",
+		"@opendeved/doi-sync-core": "github:OpenDevEd/doi-sync-core#0a3f8a1279bd6efbff61cc79edb6f5a9cf75868f",
 		"@opendeved/evidence-library-core": "file:packages/evidence-library-core",
 		"@openrouter/ai-sdk-provider": "^3.0.0",
 		"@radix-ui/react-collapsible": "^1.1.20",
@@ -131,6 +132,7 @@
 		"node-cache": "^5.1.2",
 		"nodemailer": "^7.0.12",
 		"nuqs": "^2.3.2",
+		"patch-package": "^8.0.1",
 		"pdf-lib": "^1.17.1",
 		"pdfjs-dist": "^6.2.108",
 		"pg": "^8.13.1",

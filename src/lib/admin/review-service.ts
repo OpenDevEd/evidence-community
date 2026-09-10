@@ -20,6 +20,7 @@ import {
 } from "@/db/schema/review";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
+import { publicationTarget } from "@/db/schema/publication";
 import { AdminValidationError } from "./errors";
 import { applyItemDraftPatch } from "./item-draft-patch";
 import {
@@ -30,11 +31,13 @@ import {
 	ItemDraftConflictError,
 	ItemNotFoundError,
 } from "./native-item-service";
+import { validateReviewPayload } from "./review-validation";
 import { validateNativeItemDraft } from "./native-item-validation";
 import {
 	publishingChoiceSchema,
 	reviewFileSchema,
 	type ReviewRecord,
+	type PublishingChoiceState,
 } from "./review-contract";
 
 export type ReviewActor = {
@@ -59,12 +62,31 @@ async function reviewChildKeys(
 	return [...new Set([...published, ...drafts].map(({ key }) => key))].sort();
 }
 
+export async function getItemPublishingChoice(
+	db: Database | DatabaseTransaction,
+	itemKey: string,
+): Promise<PublishingChoiceState> {
+	const [record] = await db
+		.select({
+			choice: itemPublishingChoice.choice,
+			canClear: sql<boolean>`not exists (select 1 from ${publicationTarget} where ${publicationTarget.itemKey} = ${itemIdentity.key} and ${publicationTarget.activatedAt} is not null)`,
+		})
+		.from(itemIdentity)
+		.leftJoin(
+			itemPublishingChoice,
+			eq(itemPublishingChoice.itemKey, itemIdentity.key),
+		)
+		.where(eq(itemIdentity.key, itemKey));
+	if (!record) throw new ItemNotFoundError(itemKey);
+	return record;
+}
+
 export async function setItemPublishingChoice(
 	db: Database,
 	itemKey: string,
 	input: unknown,
 ) {
-	const choice = publishingChoiceSchema.parse(input);
+	const choice = publishingChoiceSchema.nullable().parse(input);
 	return db.transaction(async (transaction) => {
 		await lockItemMutations(transaction, [itemKey]);
 		const [identity] = await transaction
@@ -82,6 +104,16 @@ export async function setItemPublishingChoice(
 			throw new AdminValidationError(
 				"Choose identifiers on the parent item.",
 			);
+		if (choice === null) {
+			if (!(await getItemPublishingChoice(transaction, itemKey)).canClear)
+				throw new AdminValidationError(
+					"Identifiers have already been activated for this item and cannot be removed.",
+				);
+			await transaction
+				.delete(itemPublishingChoice)
+				.where(eq(itemPublishingChoice.itemKey, itemKey));
+			return null;
+		}
 		await transaction
 			.insert(itemPublishingChoice)
 			.values({ itemKey, choice })
@@ -96,7 +128,6 @@ export async function setItemPublishingChoice(
 async function submissionPublishingChoice(
 	transaction: DatabaseTransaction,
 	itemKey: string,
-	kind: string,
 ) {
 	const [pending] = await transaction
 		.select({ id: itemReview.id })
@@ -129,8 +160,6 @@ async function submissionPublishingChoice(
 		.select()
 		.from(itemPublishingChoice)
 		.where(eq(itemPublishingChoice.itemKey, itemKey));
-	if (kind === "created" && !choiceRow)
-		throw new AdminValidationError("Choose identifiers before submitting.");
 	return choiceRow?.choice ?? null;
 }
 
@@ -159,12 +188,12 @@ export async function submitItemReview(
 		const publishingChoice = await submissionPublishingChoice(
 			transaction,
 			rootKey,
-			identity.kind,
 		);
 		const { records, capturedFiles } = await captureItemReviewSnapshot(
 			transaction,
 			rootKey,
 			keys,
+			publishingChoice,
 		);
 		if (!records.some((record) => record.itemKey === rootKey))
 			throw new ItemNotFoundError(rootKey);
@@ -338,6 +367,17 @@ export async function correctItemReview(
 	});
 }
 
+function effectiveReviewRecord(
+	review: typeof itemReview.$inferSelect,
+	submitted: ReviewRecord,
+) {
+	return (
+		review.corrections.find(
+			(record) => record.itemKey === submitted.itemKey,
+		) ?? submitted
+	);
+}
+
 async function publishReviewRecords(
 	transaction: DatabaseTransaction,
 	locked: typeof itemReview.$inferSelect,
@@ -354,10 +394,7 @@ async function publishReviewRecords(
 			Number(a.itemKey === locked.itemKey),
 	);
 	for (const submitted of records) {
-		const approved =
-			locked.corrections.find(
-				(record) => record.itemKey === submitted.itemKey,
-			) ?? submitted;
+		const approved = effectiveReviewRecord(locked, submitted);
 		const [latest] = await transaction
 			.select({ revision: item.revision })
 			.from(item)
@@ -446,6 +483,14 @@ export async function approveItemReview(
 		throw new AdminValidationError(
 			"The review changed. Reload it and try again.",
 		);
+	for (const record of review.snapshot.records) {
+		validateReviewPayload(
+			effectiveReviewRecord(review, record).payload,
+			record.itemKey === review.itemKey
+				? review.snapshot.publishingChoice
+				: null,
+		);
+	}
 	const files = await db
 		.select()
 		.from(itemReviewFile)
@@ -471,13 +516,18 @@ export async function approveItemReview(
 			)
 				continue;
 			prepared.push(
-				await prepareNativePdfPublication(db, storage, config.services.publication, {
-					itemKey: file.itemKey,
-					expectedUploadRevision: file.file.uploadRevision,
-					publicationTags: input.publicationTags,
-					reviewFile: reviewFileSchema.parse(file.file),
-					zenodoFileChange: input.zenodoFileChange,
-				}),
+				await prepareNativePdfPublication(
+					db,
+					storage,
+					config.services.publication,
+					{
+						itemKey: file.itemKey,
+						expectedUploadRevision: file.file.uploadRevision,
+						publicationTags: input.publicationTags,
+						reviewFile: reviewFileSchema.parse(file.file),
+						zenodoFileChange: input.zenodoFileChange,
+					},
+				),
 			);
 		}
 		committed = await db.transaction(async (transaction) => {

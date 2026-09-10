@@ -1,6 +1,6 @@
 "use client";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, Cancel01Icon, Link02Icon, LockIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon, Link02Icon, LockIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
@@ -205,8 +205,8 @@ export function AdminLinksEditor({
 									data-admin-link-pick={kind}
 									onPress={() => (picking ? onStopPick?.() : onStartPick(kind))}
 									size="xs"
-									startContent={picking ? undefined : <HugeiconsIcon icon={Add01Icon} aria-hidden size={13} />}
-									variant={picking ? "solid" : "transparent"}
+									startContent={<HugeiconsIcon icon={picking ? Tick02Icon : Add01Icon} aria-hidden size={15} />}
+									variant="muted"
 								>
 									{picking ? "Done picking" : `Add to ${OUTGOING_TITLES[kind]}`}
 								</Button>

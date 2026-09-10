@@ -1,7 +1,9 @@
 "use client";
 
+import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
+import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { AlertCircleIcon, ArchiveIcon, ArrowDown01Icon, Cancel01Icon, CheckmarkBadge01Icon, CheckmarkCircle01Icon, CircleIcon, Clock03Icon, Copy01Icon, FileAttachmentIcon, LinkSquare01Icon, Loading03Icon, Refresh01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
+import { CheckmarkBadge01Icon, AlertCircleIcon, ArrowDown01Icon, Cancel01Icon, CheckmarkCircle01Icon, CircleIcon, Clock03Icon, Copy01Icon, FileAttachmentIcon, LinkSquare01Icon, Loading03Icon, Refresh01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { Button } from "@/components/nextui/Button";
 import type {
@@ -409,9 +411,9 @@ function IdentifierActions({
 					size="xs"
 					startContent={
 						action.id === "register-crossref" ? (
-							<HugeiconsIcon icon={CheckmarkBadge01Icon} aria-hidden size={13} />
+							<CrossrefIcon className="h-4 w-3" />
 						) : (
-							<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={13} />
+							<ZenodoIcon className="h-3 w-9" aria-hidden />
 						)
 					}
 					variant="flat"

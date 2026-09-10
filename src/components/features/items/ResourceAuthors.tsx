@@ -25,7 +25,7 @@ function formatAPAAuthor(authors: Author[], t: ReturnType<typeof useTranslations
 			.join(' & ');
 	}
 	
-	const firstAuthor = authors.find(author => author.lastName);
+	const firstAuthor = authors.find(author => author.lastName || author.name);
 	if (!firstAuthor) return '';
 	return authorString(firstAuthor) + " " + t("etAl");
 }

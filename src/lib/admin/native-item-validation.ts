@@ -92,22 +92,20 @@ const zoteroItemUriOrUrisSchema = z.union([
 	zoteroItemUriSchema,
 	z.array(zoteroItemUriSchema),
 ]);
-const relationsObjectSchema = z
-	.object({
-		"dc:relation": zoteroItemUriOrUrisSchema.optional(),
-		"dc:replaces": zoteroItemUriOrUrisSchema.optional(),
-		"owl:sameAs": zoteroItemUriOrUrisSchema.optional(),
-		"mendeleyDB:annotationUUID": stringOrStringsSchema.optional(),
-		"mendeleyDB:documentUUID": stringOrStringsSchema.optional(),
-		"mendeleyDB:fileHash": stringOrStringsSchema.optional(),
-		"mendeleyDB:notebookUUID": stringOrStringsSchema.optional(),
-		"mendeleyDB:relatedDocumentUUID": stringOrStringsSchema.optional(),
-		"mendeleyDB:relatedFileHash": stringOrStringsSchema.optional(),
-		"mendeleyDB:relatedRemoteDocumentUUID":
-			stringOrStringsSchema.optional(),
-		"mendeleyDB:remoteDocumentUUID": stringOrStringsSchema.optional(),
-		related_works: stringOrStringsSchema.optional(),
-	});
+const relationsObjectSchema = z.object({
+	"dc:relation": zoteroItemUriOrUrisSchema.optional(),
+	"dc:replaces": zoteroItemUriOrUrisSchema.optional(),
+	"owl:sameAs": zoteroItemUriOrUrisSchema.optional(),
+	"mendeleyDB:annotationUUID": stringOrStringsSchema.optional(),
+	"mendeleyDB:documentUUID": stringOrStringsSchema.optional(),
+	"mendeleyDB:fileHash": stringOrStringsSchema.optional(),
+	"mendeleyDB:notebookUUID": stringOrStringsSchema.optional(),
+	"mendeleyDB:relatedDocumentUUID": stringOrStringsSchema.optional(),
+	"mendeleyDB:relatedFileHash": stringOrStringsSchema.optional(),
+	"mendeleyDB:relatedRemoteDocumentUUID": stringOrStringsSchema.optional(),
+	"mendeleyDB:remoteDocumentUUID": stringOrStringsSchema.optional(),
+	related_works: stringOrStringsSchema.optional(),
+});
 const relationsSchema = relationsObjectSchema.strict();
 // External sources may carry relation types the editor does not know. Keep
 // them so writeback returns them unchanged.
@@ -245,15 +243,47 @@ function parseUniqueStrings(value: unknown, field: string, maxLength: number) {
 	return normalized.sort();
 }
 
+type NativeItemValidationOptions = {
+	allowIncompleteCreators?: boolean;
+	requireChildParent?: boolean;
+	requireTitle?: boolean;
+	/** Apply the external-source policy; see sourceRecordValidationOptions. */
+	source?: boolean;
+};
+
+export function inspectNativeItemDraft(
+	input: unknown,
+	options: NativeItemValidationOptions = {},
+) {
+	const fields: AdminFieldErrors = {};
+	try {
+		return {
+			value: parseNativeItemDraft(input, options, fields),
+			fields,
+			message: "Check the record details and try again.",
+		};
+	} catch (error) {
+		if (!(error instanceof AdminValidationError)) throw error;
+		Object.assign(fields, error.fields);
+		if (!Object.keys(fields).length) fields._form = error.message;
+		return { value: null, fields, message: error.message };
+	}
+}
+
 export function validateNativeItemDraft(
 	input: unknown,
-	options: {
-		allowIncompleteCreators?: boolean;
-		requireChildParent?: boolean;
-		requireTitle?: boolean;
-		/** Apply the external-source policy; see `sourceRecordValidationOptions`. */
-		source?: boolean;
-	} = {},
+	options: NativeItemValidationOptions = {},
+): ValidatedNativeItemDraft {
+	const result = inspectNativeItemDraft(input, options);
+	if (!result.value || Object.keys(result.fields).length)
+		throw new NativeItemValidationError(result.message, result.fields);
+	return result.value;
+}
+
+function parseNativeItemDraft(
+	input: unknown,
+	options: NativeItemValidationOptions,
+	fields: AdminFieldErrors,
 ): ValidatedNativeItemDraft {
 	const payloadResult = payloadObjectSchema.safeParse(input);
 	if (!payloadResult.success) {
@@ -265,6 +295,185 @@ export function validateNativeItemDraft(
 	const payload = payloadResult.data;
 	const normalizedItemType = normalizeItemType(payload.itemType);
 	const definition = zoteroDefinitionFor(normalizedItemType);
+	const fieldDescriptors = describeZoteroItemTypeFields(definition.itemType);
+	validateAllowedDraftFields(payload, definition, options);
+
+	const itemValues: Record<string, unknown> = {
+		itemType: normalizedItemType,
+		...normalizeDraftFields(
+			payload,
+			[
+				...fieldDescriptors,
+				...[
+					...adminSpecialFieldsForZoteroItemType(definition.itemType),
+				].map((field) => ({
+					field,
+					semanticField: field,
+					type: "text" as const,
+				})),
+			],
+			options,
+			fields,
+		),
+	};
+	const normalizedPayload = { ...itemValues };
+
+	if (payload.creators !== undefined) {
+		const creators = parseDraftCreators(
+			payload.creators,
+			definition,
+			options,
+		);
+		itemValues.creators = creators;
+		normalizedPayload.creators = creators;
+	}
+
+	const relationships = parseDraftRelationships(payload, options);
+	Object.assign(itemValues, relationships);
+	Object.assign(normalizedPayload, relationships);
+	const structuralErrors = zoteroStructuralFieldErrors(
+		normalizedPayload,
+		definition.itemType,
+		{
+			requireChildParent: options.requireChildParent,
+		},
+	);
+	if (structuralErrors.length > 0) {
+		throw new NativeItemValidationError(
+			"Complete the required record details and try again.",
+			Object.fromEntries(
+				structuralErrors.map(({ field, message }) => [field, message]),
+			),
+		);
+	}
+	const titleDescriptor = fieldDescriptors.find(
+		({ semanticField }) => semanticField === "title",
+	);
+	if (
+		options.requireTitle &&
+		titleDescriptor &&
+		(typeof normalizedPayload.title !== "string" ||
+			normalizedPayload.title.trim().length === 0)
+	) {
+		fields[titleDescriptor.field] = "Enter a title before publishing.";
+	}
+
+	const collectionKeys = parseDraftCollections(
+		payload.collections,
+		Boolean(normalizedPayload.parentItem),
+	);
+	const tags = parseUniqueStrings(payload.tags, "tags", 255);
+	const links = parseItemLinks(payload.links);
+	normalizedPayload.collections = collectionKeys;
+	normalizedPayload.tags = tags;
+	if (payload.links !== undefined) normalizedPayload.links = links;
+
+	return {
+		collectionKeys,
+		item: itemValues as ValidatedNativeItemDraft["item"],
+		links,
+		payload: normalizedPayload,
+		tags,
+	};
+}
+
+function draftFieldValue(
+	payload: Record<string, unknown>,
+	field: string,
+	semanticField: string,
+) {
+	const databaseField = canonicalItemFieldToDatabaseField(semanticField);
+	const alternatives = [...new Set([semanticField, databaseField])].filter(
+		(name) => name !== field,
+	);
+	if (
+		Object.hasOwn(payload, field) &&
+		alternatives.some((name) => Object.hasOwn(payload, name))
+	) {
+		throw new NativeItemValidationError(
+			`Use only one name for ${adminFieldLabel(field)}.`,
+			{ [field]: `Use only one name for ${adminFieldLabel(field)}.` },
+		);
+	}
+	return Object.hasOwn(payload, field)
+		? payload[field]
+		: (payload[databaseField] ?? payload[semanticField]);
+}
+
+function normalizeDraftFields(
+	payload: Record<string, unknown>,
+	descriptors: Parameters<typeof normalizeAdminFieldValue>[0][],
+	options: NativeItemValidationOptions,
+	fields: AdminFieldErrors,
+) {
+	const result: Record<string, unknown> = {};
+	for (const descriptor of descriptors) {
+		const value = draftFieldValue(
+			payload,
+			descriptor.field,
+			descriptor.semanticField,
+		);
+		if (value === undefined) continue;
+		const databaseField = canonicalItemFieldToDatabaseField(
+			descriptor.semanticField,
+		);
+		if (value === null) {
+			result[databaseField] = null;
+			continue;
+		}
+		if (typeof value !== "string")
+			throw new NativeItemValidationError(
+				`Check ${adminFieldLabel(descriptor.field).toLowerCase()} and try again.`,
+				{
+					[descriptor.field]: `${adminFieldLabel(descriptor.field)} must be text.`,
+				},
+			);
+		const normalized = normalizeAdminFieldValue(descriptor, value, {
+			keepUnparsed: options.source,
+		});
+		if (normalized.error) fields[descriptor.field] = normalized.error;
+		result[databaseField] = normalized.value;
+	}
+	return result;
+}
+
+function parseDraftCreators(
+	value: unknown,
+	definition: ReturnType<typeof zoteroDefinitionFor>,
+	options: NativeItemValidationOptions,
+) {
+	const creatorResult = z
+		.array(creatorSchema(options.allowIncompleteCreators ?? false))
+		.safeParse(value);
+	if (!creatorResult.success) {
+		throw new NativeItemValidationError(
+			"Check the creator details and try again.",
+			fieldErrorsFromZod(creatorResult.error, ["creators"]),
+		);
+	}
+	const creators = creatorResult.data;
+	const allowedCreatorTypes = new Set(
+		definition.creatorTypes.map(({ creatorType }) => creatorType),
+	);
+	for (const [index, creator] of creators.entries()) {
+		if (!allowedCreatorTypes.has(creator.creatorType)) {
+			throw new NativeItemValidationError(
+				"Choose a valid creator role.",
+				{
+					[`creators.${index}.creatorType`]:
+						"This creator role is not available for the selected item type.",
+				},
+			);
+		}
+	}
+	return creators;
+}
+
+function validateAllowedDraftFields(
+	payload: Record<string, unknown>,
+	definition: ReturnType<typeof zoteroDefinitionFor>,
+	options: NativeItemValidationOptions,
+) {
 	const fieldDescriptors = describeZoteroItemTypeFields(definition.itemType);
 	const allowedFields = new Set([
 		...adminSharedPayloadFieldsForZoteroItemType(definition),
@@ -290,118 +499,32 @@ export function validateNativeItemDraft(
 			);
 		}
 	}
+}
 
-	const itemValues: Record<string, unknown> = {
-		itemType: normalizedItemType,
-	};
-	const normalizedPayload: Record<string, unknown> = {
-		itemType: normalizedItemType,
-	};
-	for (const descriptor of fieldDescriptors) {
-		const { field, semanticField } = descriptor;
-		const databaseField = canonicalItemFieldToDatabaseField(semanticField);
-		const hasItemField = Object.hasOwn(payload, field);
-		const alternativeNames = [
-			...new Set([semanticField, databaseField]),
-		].filter((name) => name !== field);
-		if (
-			hasItemField &&
-			alternativeNames.some((name) => Object.hasOwn(payload, name))
-		) {
-			throw new NativeItemValidationError(
-				`Use only one name for ${adminFieldLabel(field)}.`,
-				{
-					[field]: `Use only one name for ${adminFieldLabel(field)}.`,
-				},
-			);
-		}
-		const value = hasItemField
-			? payload[field]
-			: (payload[databaseField] ?? payload[semanticField]);
-		if (value === undefined) continue;
-		if (value !== null && typeof value !== "string") {
-			throw new NativeItemValidationError(
-				`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
-				{ [field]: `${adminFieldLabel(field)} must be text.` },
-			);
-		}
-		if (typeof value === "string") {
-			const normalized = normalizeAdminFieldValue(descriptor, value, {
-				keepUnparsed: options.source,
-			});
-			if (normalized.error) {
-				throw new NativeItemValidationError(
-					`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
-					{ [field]: normalized.error },
-				);
-			}
-			itemValues[databaseField] = normalized.value;
-			normalizedPayload[databaseField] = normalized.value;
-		} else {
-			itemValues[databaseField] = value;
-			normalizedPayload[databaseField] = value;
-		}
+function parseDraftCollections(value: unknown, child: boolean) {
+	const collectionKeys = parseUniqueStrings(value, "collections", 8);
+	if (collectionKeys.some((key) => !isCanonicalRecordKey(key))) {
+		throw new NativeItemValidationError("Choose valid collections.", {
+			collections: "One or more selected collections are invalid.",
+		});
 	}
-
-	for (const field of adminSpecialFieldsForZoteroItemType(
-		definition.itemType,
-	)) {
-		const value = payload[field];
-		if (value === undefined) continue;
-		if (value !== null && typeof value !== "string") {
-			throw new NativeItemValidationError(
-				`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
-				{ [field]: `${adminFieldLabel(field)} must be text.` },
-			);
-		}
-		if (typeof value === "string") {
-			const normalized = normalizeAdminFieldValue(
-				{ field, semanticField: field, type: "text" },
-				value,
-			);
-			if (normalized.error) {
-				throw new NativeItemValidationError(
-					`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
-					{ [field]: normalized.error },
-				);
-			}
-			itemValues[field] = normalized.value;
-			normalizedPayload[field] = normalized.value;
-		} else {
-			itemValues[field] = value;
-			normalizedPayload[field] = value;
-		}
-	}
-
-	if (payload.creators !== undefined) {
-		const creatorResult = z
-			.array(creatorSchema(options.allowIncompleteCreators ?? false))
-			.safeParse(payload.creators);
-		if (!creatorResult.success) {
-			throw new NativeItemValidationError(
-				"Check the creator details and try again.",
-				fieldErrorsFromZod(creatorResult.error, ["creators"]),
-			);
-		}
-		const creators = creatorResult.data;
-		const allowedCreatorTypes = new Set(
-			definition.creatorTypes.map(({ creatorType }) => creatorType),
+	if (child && collectionKeys.length > 0) {
+		throw new NativeItemValidationError(
+			"Child records inherit collections from their parent.",
+			{
+				collections:
+					"Child records inherit collections from their parent. Remove the direct collection.",
+			},
 		);
-		for (const [index, creator] of creators.entries()) {
-			if (!allowedCreatorTypes.has(creator.creatorType)) {
-				throw new NativeItemValidationError(
-					"Choose a valid creator role.",
-					{
-						[`creators.${index}.creatorType`]:
-							"This creator role is not available for the selected item type.",
-					},
-				);
-			}
-		}
-		itemValues.creators = creators;
-		normalizedPayload.creators = creators;
 	}
+	return collectionKeys;
+}
 
+function parseDraftRelationships(
+	payload: Record<string, unknown>,
+	options: NativeItemValidationOptions,
+) {
+	const result: Record<string, unknown> = {};
 	if (payload.relations !== undefined) {
 		const relationResult = (
 			options.source ? sourceRelationsSchema : relationsSchema
@@ -413,8 +536,7 @@ export function validateNativeItemDraft(
 			);
 		}
 		const relations = relationResult.data;
-		itemValues.relations = relations;
-		normalizedPayload.relations = relations;
+		result.relations = relations;
 	}
 
 	if (payload.parentItem !== undefined) {
@@ -432,69 +554,7 @@ export function validateNativeItemDraft(
 			);
 		}
 		const parentItem = parentResult.data;
-		itemValues.parentItem = parentItem;
-		normalizedPayload.parentItem = parentItem;
+		result.parentItem = parentItem;
 	}
-	const structuralErrors = zoteroStructuralFieldErrors(
-		normalizedPayload,
-		definition.itemType,
-		{
-			requireChildParent: options.requireChildParent,
-		},
-	);
-	if (structuralErrors.length > 0) {
-		throw new NativeItemValidationError(
-			"Complete the required record details and try again.",
-			Object.fromEntries(
-				structuralErrors.map(({ field, message }) => [field, message]),
-			),
-		);
-	}
-	const titleDescriptor = fieldDescriptors.find(
-		({ semanticField }) => semanticField === "title",
-	);
-	if (
-		options.requireTitle &&
-		titleDescriptor &&
-		(typeof normalizedPayload.title !== "string" ||
-			normalizedPayload.title.trim().length === 0)
-	) {
-		throw new NativeItemValidationError(
-			"Enter a title before publishing.",
-			{ [titleDescriptor.field]: "Enter a title before publishing." },
-		);
-	}
-
-	const collectionKeys = parseUniqueStrings(
-		payload.collections,
-		"collections",
-		8,
-	);
-	if (collectionKeys.some((key) => !isCanonicalRecordKey(key))) {
-		throw new NativeItemValidationError("Choose valid collections.", {
-			collections: "One or more selected collections are invalid.",
-		});
-	}
-	if (normalizedPayload.parentItem && collectionKeys.length > 0) {
-		throw new NativeItemValidationError(
-			"Child records inherit collections from their parent.",
-			{
-				collections:
-					"Child records inherit collections from their parent. Remove the direct collection.",
-			},
-		);
-	}
-	const tags = parseUniqueStrings(payload.tags, "tags", 255);
-	const links = parseItemLinks(payload.links);
-	normalizedPayload.collections = collectionKeys;
-	normalizedPayload.tags = tags;
-	if (payload.links !== undefined) normalizedPayload.links = links;
-
-	return {
-		collectionKeys,
-		item: itemValues as ValidatedNativeItemDraft["item"],
-		links,
-		payload: normalizedPayload,
-		tags,
-	};
+	return result;
 }

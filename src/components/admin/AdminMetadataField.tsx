@@ -12,6 +12,8 @@ import {
 	adminFieldContract,
 } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
+import { filledFieldSurface } from "@/components/nextui/field-styles";
+import { InstitutionInput } from "./InstitutionInput";
 
 const inputClassNames = {
 	input: "text-sm",
@@ -64,7 +66,7 @@ function BibliographicDateField({
 		<div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
 			<select
 				aria-label={`${label} precision`}
-				className="h-10 rounded-xl border-small border-black/10 bg-white px-3 text-sm text-black/80 outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 dark:border-white/10 dark:bg-secondary dark:text-white/80"
+				className={`h-10 rounded-xl px-3 text-sm text-black/80 outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 dark:text-white/80 ${filledFieldSurface}`}
 				disabled={disabled}
 				value={displayedMode}
 				onChange={(event) => {
@@ -81,6 +83,7 @@ function BibliographicDateField({
 				))}
 			</select>
 			<Input
+				color="filled"
 				aria-label={label}
 				classNames={inputClassNames}
 				errorMessage={error}
@@ -114,6 +117,7 @@ export function AdminMetadataField({
 	...props
 }: CommonFieldProps & { descriptor: ZoteroFieldDescriptor }) {
 	const { kind } = adminFieldContract(descriptor);
+	if (kind === "institution-list") return <InstitutionInput {...props} />;
 	if (kind === "bibliographic-date") {
 		return (
 			<div data-field-kind={kind}>
@@ -124,6 +128,7 @@ export function AdminMetadataField({
 	if (kind === "access-date") {
 		return (
 			<Input
+				color="filled"
 				aria-label={props.label}
 				classNames={inputClassNames}
 				data-field-kind={kind}
@@ -140,6 +145,7 @@ export function AdminMetadataField({
 	if (kind === "multiline") {
 		return (
 			<Textarea
+				color="filled"
 				aria-label={props.label}
 				classNames={textareaClassNames}
 				data-field-kind={kind}
@@ -154,36 +160,14 @@ export function AdminMetadataField({
 			/>
 		);
 	}
-	if (kind === "annotation-type") {
-		return (
-			<Select
-				aria-label={props.label}
-				classNames={selectClassNames}
-				data-field-kind={kind}
-				errorMessage={props.error}
-				id={props.id}
-				isDisabled={props.disabled}
-				isInvalid={Boolean(props.error)}
-				selectedKeys={props.value ? [props.value] : []}
-				onSelectionChange={(selection) => {
-					const selected = selection === "all" ? null : [...selection][0];
-					if (typeof selected === "string") props.onValueChange(selected);
-				}}
-			>
-				{ADMIN_ANNOTATION_TYPES.map((type) => (
-					<SelectItem key={type}>
-						{type[0]!.toUpperCase() + type.slice(1)}
-					</SelectItem>
-				))}
-			</Select>
-		);
-	}
+	if (kind === "annotation-type") return <AnnotationTypeField {...props} />;
 	if (kind === "color") {
 		const pickerValue = /^#[\da-f]{6}$/iu.test(props.value)
 			? props.value
 			: "#ffd400";
 		return (
 			<Input
+				color="filled"
 				aria-label={props.label}
 				classNames={inputClassNames}
 				data-field-kind={kind}
@@ -214,6 +198,7 @@ export function AdminMetadataField({
 	const inputMode = kind === "url" ? "url" : undefined;
 	return (
 		<Input
+			color="filled"
 			aria-label={props.label}
 			autoCapitalize={kind === "url" ? "none" : undefined}
 			classNames={inputClassNames}
@@ -228,5 +213,32 @@ export function AdminMetadataField({
 			value={props.value}
 			onValueChange={props.onValueChange}
 		/>
+	);
+}
+
+function AnnotationTypeField(props: CommonFieldProps) {
+	const kind = "annotation-type";
+	return (
+		<Select
+			color="filled"
+			aria-label={props.label}
+			classNames={selectClassNames}
+			data-field-kind={kind}
+			errorMessage={props.error}
+			id={props.id}
+			isDisabled={props.disabled}
+			isInvalid={Boolean(props.error)}
+			selectedKeys={props.value ? [props.value] : []}
+			onSelectionChange={(selection) => {
+				const selected = selection === "all" ? null : [...selection][0];
+				if (typeof selected === "string") props.onValueChange(selected);
+			}}
+		>
+			{ADMIN_ANNOTATION_TYPES.map((type) => (
+				<SelectItem key={type}>
+					{type[0]!.toUpperCase() + type.slice(1)}
+				</SelectItem>
+			))}
+		</Select>
 	);
 }

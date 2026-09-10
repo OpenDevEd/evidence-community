@@ -1,12 +1,38 @@
 "use client";
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
-import { AuthorProfileLink } from "./AuthorProfiles";
+import { CreatorsEditor } from "./CreatorsEditor";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, AlertCircleIcon, ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, ArrowUp01Icon, AttachmentIcon, Building02Icon, Cancel01Icon, CheckmarkBadge01Icon, Copy01Icon, Delete02Icon, Download01Icon, FileAttachmentIcon, FilePenLineIcon, FilePlusIcon, Folder01Icon, Link02Icon, LinkSquare01Icon, LockIcon, PencilIcon, RotateLeft01Icon, SentIcon, Tag01Icon, Tick01Icon, Upload01Icon, UserCircleIcon, UserGroupIcon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
+import {
+	Add01Icon,
+	AlertCircleIcon,
+	ArrowLeft01Icon,
+	ArrowRight01Icon,
+	AttachmentIcon,
+	Cancel01Icon,
+	CheckmarkBadge01Icon,
+	Copy01Icon,
+	Delete02Icon,
+	Download01Icon,
+	FileAttachmentIcon,
+	FilePenLineIcon,
+	FilePlusIcon,
+	Folder01Icon,
+	Link02Icon,
+	LinkSquare01Icon,
+	LockIcon,
+	PencilIcon,
+	RotateLeft01Icon,
+	SentIcon,
+	Tag01Icon,
+	Tick01Icon,
+	Upload01Icon,
+	UserGroupIcon,
+	WorkHistoryIcon,
+} from "@hugeicons/core-free-icons";
 import {
 	AutocompleteItem,
 	Chip,
@@ -19,13 +45,14 @@ import {
 	PopoverTrigger,
 	Spinner,
 } from "@nextui-org/react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
 import { Autocomplete } from "@/components/nextui/Autocomplete";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
@@ -69,9 +96,7 @@ import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 import { AdminLinksEditor } from "./AdminLinksEditor";
 import { AdminMetadataField } from "./AdminMetadataField";
-import {
-	AdminPublicationHeaderStatus,
-} from "./AdminPublicationStatus";
+import { AdminPublicationHeaderStatus } from "./AdminPublicationStatus";
 import { useAdminPublication } from "./useAdminPublication";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
@@ -88,7 +113,7 @@ const writebackUnavailableMessage = {
 
 const inspectorInputClassNames = {
 	input: "text-sm",
-	inputWrapper: "h-10 min-h-10 rounded-xl",
+	inputWrapper: `h-10 min-h-10 rounded-xl ${filledInputSlots.inputWrapper}`,
 } as const;
 
 const inspectorTextareaClassNames = {
@@ -162,7 +187,12 @@ function ChangedMarker({
 					title={`${label} differs from the published value`}
 					type="button"
 				>
-					<HugeiconsIcon icon={PencilIcon} aria-hidden size={11} strokeWidth={2} />
+					<HugeiconsIcon
+						icon={PencilIcon}
+						aria-hidden
+						size={11}
+						strokeWidth={2}
+					/>
 				</button>
 			</PopoverTrigger>
 			<PopoverContent className="w-64 rounded-xl border border-black/[0.08] bg-white p-3 shadow-lg dark:border-white/[0.09] dark:bg-card">
@@ -180,7 +210,13 @@ function ChangedMarker({
 							setOpen(false);
 						}}
 						size="xs"
-						startContent={<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={13} />}
+						startContent={
+							<HugeiconsIcon
+								icon={RotateLeft01Icon}
+								aria-hidden
+								size={13}
+							/>
+						}
 						variant="transparent"
 					>
 						Revert to published
@@ -334,7 +370,10 @@ function SaveIndicator({
  * Headline for the field summary. A conflict is not a mistake the editor made,
  * so it must not read like a validation error.
  */
-export function fieldSummaryHeadline(count: number, tone: "conflict" | "validation") {
+export function fieldSummaryHeadline(
+	count: number,
+	tone: "conflict" | "validation",
+) {
 	const fields = count === 1 ? "field" : "fields";
 	return tone === "conflict"
 		? `${count} ${fields} changed in another session. Reload to see the new ${count === 1 ? "value" : "values"}.`
@@ -366,9 +405,17 @@ function ValidationSummary({
 		>
 			<div className="flex items-center gap-2 font-medium">
 				{conflict ? (
-					<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
+					<HugeiconsIcon
+						icon={RotateLeft01Icon}
+						aria-hidden
+						size={14}
+					/>
 				) : (
-					<HugeiconsIcon icon={AlertCircleIcon} aria-hidden size={14} />
+					<HugeiconsIcon
+						icon={AlertCircleIcon}
+						aria-hidden
+						size={14}
+					/>
 				)}
 				{fieldSummaryHeadline(entries.length, tone)}
 			</div>
@@ -503,349 +550,68 @@ function MetadataEditor({
 						field !== "annotationSortIndex",
 				)
 				.map((descriptor) => {
-				const { field } = descriptor;
-				const value =
-					typeof payload[field] === "string"
-						? String(payload[field])
-						: "";
-				const fieldId = `admin-${detail.key}-${field}`;
-				const label = humanizeAdminField(field);
-				const changed = Object.prototype.hasOwnProperty.call(
-					diff.fields,
-					field,
-				);
-				const original = diff.fields[field] ?? "";
-				return (
-					<div key={field} className="space-y-1.5">
-						<FieldLabel
-							action={
-								changed ? (
-									<ChangedMarker
-										label={label.toLowerCase()}
-										onRevert={() =>
-											updateField(field, original)
-										}
-										publishedValue={
-											original || (
-												<span className="text-black/40 dark:text-white/40">
-													Empty
-												</span>
-											)
-										}
-									/>
-								) : undefined
-							}
-							htmlFor={fieldId}
-						>
-							{label}
-						</FieldLabel>
-						<AdminMetadataField
-							descriptor={descriptor}
-							disabled={
-								readOnly ||
-								(field === "DOI" && Boolean(lockedDoi)) ||
-								(field === "annotationType" &&
-									String(
-										detail.published?.itemType ?? "",
-									).toLowerCase() === "annotation")
-							}
-							error={errors[field]}
-							id={fieldId}
-							label={label}
-							value={value}
-							onValueChange={(next) =>
-								updateField(field, next)
-							}
-						/>
-						{field === "DOI" && lockedDoi ? (
-							<p className="text-xs text-black/45 dark:text-white/45">
-								Deactivate Zenodo before changing this DOI.
-							</p>
-						) : null}
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-function CreatorsEditor({
-	definition,
-	errors,
-	onChange,
-	payload,
-	readOnly,
-	recordKey,
-}: {
-	definition: AdminSchemaDefinition | undefined;
-	errors: AdminFieldErrors;
-	onChange: (payload: Record<string, unknown>) => void;
-	payload: Record<string, unknown>;
-	readOnly: boolean;
-	recordKey: string;
-}) {
-	const creators = Array.isArray(payload.creators)
-		? (payload.creators as AdminCreator[])
-		: [];
-	const updateCreators = (next: AdminCreator[]) =>
-		onChange({ ...payload, creators: next });
-	const patchCreator = (index: number, patch: Partial<AdminCreator>) =>
-		updateCreators(
-			creators.map((creator, creatorIndex) =>
-				creatorIndex === index ? { ...creator, ...patch } : creator,
-			),
-		);
-	const replaceCreator = (index: number, replacement: AdminCreator) =>
-		updateCreators(
-			creators.map((creator, creatorIndex) =>
-				creatorIndex === index ? replacement : creator,
-			),
-		);
-	const moveCreator = (
-		index: number,
-		targetIndex: number,
-		direction: "down" | "up",
-	) => {
-		const next = [...creators];
-		[next[targetIndex], next[index]] = [next[index]!, next[targetIndex]!];
-		updateCreators(next);
-		requestAnimationFrame(() => {
-			const action = document.getElementById(
-				`admin-creator-${targetIndex}-move-${direction}`,
-			);
-			if (
-				action instanceof HTMLButtonElement &&
-				!action.disabled &&
-				action.getAttribute("aria-disabled") !== "true"
-			) {
-				action.focus();
-				return;
-			}
-			document.getElementById(`admin-creator-${targetIndex}`)?.focus();
-		});
-	};
-
-	return (
-		<div className="space-y-3">
-			{creators.length === 0 ? (
-				<EmptyValue label="No creators" />
-			) : null}
-			{creators.map((creator, index) => {
-				const organization = typeof creator.name === "string";
-				const rowError = errors[`creators.${index}`];
-				const roleError = errors[`creators.${index}.creatorType`];
-				const organizationError = errors[`creators.${index}.name`];
-				const firstNameError = errors[`creators.${index}.firstName`];
-				const lastNameError = errors[`creators.${index}.lastName`];
-				const rowErrorId = `admin-creator-${index}-error`;
-				return (
-					<div
-						key={index}
-						aria-describedby={rowError ? rowErrorId : undefined}
-						aria-label={`Creator ${index + 1}`}
-						id={`admin-creator-${index}`}
-						role="group"
-						tabIndex={-1}
-						className={`rounded-xl bg-black/[0.03] p-3 outline-none focus-visible:ring-2 focus-visible:ring-focus dark:bg-white/[0.04] ${
-							rowError ? "ring-1 ring-danger/60" : ""
-						}`}
-					>
-						<div className="mb-2 flex items-center gap-2">
-							<Select
-								aria-label={`Creator ${index + 1} role`}
-								className="max-w-none flex-1"
-								classNames={inspectorSelectClassNames}
-								errorMessage={roleError}
-								id={`admin-creator-${index}-role`}
-								isDisabled={readOnly}
-								isInvalid={Boolean(roleError)}
-								placement="left"
-								selectedKeys={new Set([creator.creatorType])}
-								size="sm"
-								onSelectionChange={(keys) => {
-									const value = [...keys][0];
-									if (typeof value === "string") {
-										patchCreator(index, {
-											creatorType: value,
-										});
-									}
-								}}
+					const { field } = descriptor;
+					const value =
+						typeof payload[field] === "string"
+							? String(payload[field])
+							: "";
+					const fieldId = `admin-${detail.key}-${field}`;
+					const label = humanizeAdminField(field);
+					const changed = Object.prototype.hasOwnProperty.call(
+						diff.fields,
+						field,
+					);
+					const original = diff.fields[field] ?? "";
+					return (
+						<div key={field} className="space-y-1.5">
+							<FieldLabel
+								action={
+									changed ? (
+										<ChangedMarker
+											label={label.toLowerCase()}
+											onRevert={() =>
+												updateField(field, original)
+											}
+											publishedValue={
+												original || (
+													<span className="text-black/40 dark:text-white/40">
+														Empty
+													</span>
+												)
+											}
+										/>
+									) : undefined
+								}
+								htmlFor={fieldId}
 							>
-								{(definition?.creatorTypes ?? []).map(
-									(role) => (
-										<SelectItem key={role.creatorType}>
-											{humanizeAdminField(
-												role.creatorType,
-											)}
-										</SelectItem>
-									),
-								)}
-							</Select>
-							<IconButton
-								disabled={readOnly}
-								icon={organization ? UserCircleIcon : Building02Icon}
-								label={
-									organization
-										? "Use person name"
-										: "Use organisation name"
-								}
-								onPress={() => {
-									const next = { ...creator };
-									if (organization) {
-										delete next.name;
-										next.firstName = "";
-										next.lastName = creator.name ?? "";
-									} else {
-										next.name = creatorDisplayName(creator);
-										delete next.firstName;
-										delete next.lastName;
-									}
-									replaceCreator(index, next);
-								}}
-							/>
-							<IconButton
-								buttonId={`admin-creator-${index}-move-up`}
-								disabled={readOnly || index === 0}
-								icon={ArrowUp01Icon}
-								label="Move creator up"
-								onPress={() =>
-									moveCreator(index, index - 1, "up")
-								}
-							/>
-							<IconButton
-								buttonId={`admin-creator-${index}-move-down`}
+								{label}
+							</FieldLabel>
+							<AdminMetadataField
+								descriptor={descriptor}
 								disabled={
-									readOnly || index === creators.length - 1
+									readOnly ||
+									(field === "DOI" && Boolean(lockedDoi)) ||
+									(field === "annotationType" &&
+										String(
+											detail.published?.itemType ?? "",
+										).toLowerCase() === "annotation")
 								}
-								icon={ArrowDown01Icon}
-								label="Move creator down"
-								onPress={() =>
-									moveCreator(index, index + 1, "down")
-								}
-							/>
-							<IconButton
-								disabled={readOnly}
-								icon={Delete02Icon}
-								label="Remove creator"
-								onPress={() =>
-									updateCreators(
-										creators.filter(
-											(_, creatorIndex) =>
-												creatorIndex !== index,
-										),
-									)
+								error={errors[field]}
+								id={fieldId}
+								label={label}
+								value={value}
+								onValueChange={(next) =>
+									updateField(field, next)
 								}
 							/>
+							{field === "DOI" && lockedDoi ? (
+								<p className="text-xs text-black/45 dark:text-white/45">
+									Deactivate Zenodo before changing this DOI.
+								</p>
+							) : null}
 						</div>
-						{organization ? (
-							<div className="space-y-1.5">
-								<FieldLabel
-									htmlFor={`admin-creator-${index}-organisation`}
-								>
-									Organisation
-								</FieldLabel>
-								<Input
-									aria-label="Organisation"
-									classNames={inspectorInputClassNames}
-									errorMessage={organizationError}
-									id={`admin-creator-${index}-organisation`}
-									isInvalid={Boolean(
-										rowError || organizationError,
-									)}
-									isDisabled={readOnly}
-									value={creator.name ?? ""}
-									onValueChange={(name) =>
-										patchCreator(index, { name })
-									}
-								/>
-							</div>
-						) : (
-							<div className="grid grid-cols-2 gap-2">
-								<div className="space-y-1.5">
-									<FieldLabel
-										htmlFor={`admin-creator-${index}-first-name`}
-									>
-										First name
-									</FieldLabel>
-									<Input
-										aria-label="First name"
-										classNames={inspectorInputClassNames}
-										errorMessage={firstNameError}
-										id={`admin-creator-${index}-first-name`}
-										isInvalid={Boolean(
-											rowError || firstNameError,
-										)}
-										isDisabled={readOnly}
-										value={creator.firstName ?? ""}
-										onValueChange={(firstName) =>
-											patchCreator(index, {
-												firstName,
-											})
-										}
-									/>
-								</div>
-								<div className="space-y-1.5">
-									<FieldLabel
-										htmlFor={`admin-creator-${index}-last-name`}
-									>
-										Last name
-									</FieldLabel>
-									<Input
-										aria-label="Last name"
-										classNames={inspectorInputClassNames}
-										errorMessage={lastNameError}
-										id={`admin-creator-${index}-last-name`}
-										isInvalid={Boolean(
-											rowError || lastNameError,
-										)}
-										isDisabled={readOnly}
-										value={creator.lastName ?? ""}
-										onValueChange={(lastName) =>
-											patchCreator(index, {
-												lastName,
-											})
-										}
-									/>
-								</div>
-							</div>
-						)}
-						<AuthorProfileLink creator={creator} readOnly={readOnly} onChange={next => replaceCreator(index, next)} />
-						{rowError ? (
-							<p
-								id={rowErrorId}
-								className="mt-2 text-xs text-danger"
-							>
-								{rowError}
-							</p>
-						) : null}
-					</div>
-				);
-			})}
-			{!readOnly && definition?.creatorTypes.length ? (
-				<Button
-					className="bg-black/[0.035] font-medium hover:bg-black/[0.06] dark:bg-white/[0.045] dark:hover:bg-white/[0.08]"
-					id={`admin-${recordKey}-creators`}
-					onPress={() =>
-						updateCreators([
-							...creators,
-							{
-								creatorType:
-									definition.creatorTypes.find(
-										(role) => role.primary,
-									)?.creatorType ??
-									definition.creatorTypes[0]!.creatorType,
-								firstName: "",
-								lastName: "",
-							},
-						])
-					}
-					size="xs"
-					startContent={<HugeiconsIcon icon={Add01Icon} aria-hidden size={14} />}
-					variant="transparent"
-				>
-					Add creator
-				</Button>
-			) : null}
+					);
+				})}
 		</div>
 	);
 }
@@ -906,6 +672,7 @@ function TagsEditor({
 			</div>
 			{!readOnly ? (
 				<Input
+					color="filled"
 					id={`admin-${recordKey}-tags`}
 					classNames={inspectorInputClassNames}
 					endContent={
@@ -995,7 +762,12 @@ function CollectionsEditor({
 						className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger"
 						role="alert"
 					>
-						<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="shrink-0" size={13} />
+						<HugeiconsIcon
+							icon={AlertCircleIcon}
+							aria-hidden
+							className="shrink-0"
+							size={13}
+						/>
 						<span className="min-w-0 flex-1">
 							Collections could not be loaded.
 						</span>
@@ -1006,7 +778,7 @@ function CollectionsEditor({
 				) : null}
 				{loading && entries.length === 0 ? (
 					<div className="grid min-h-10 place-items-center">
-						<Spinner label="Loading collections" size="sm" />
+						<Spinner aria-label="Loading collections" size="sm" />
 					</div>
 				) : !resolveError && entries.length === 0 ? (
 					<EmptyValue label="No collections" />
@@ -1024,7 +796,13 @@ function CollectionsEditor({
 							className="flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75"
 							data-admin-collection-membership={entry.key}
 						>
-							<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={14} strokeWidth={1.7} />
+							<HugeiconsIcon
+								icon={Folder01Icon}
+								aria-hidden
+								className="shrink-0 text-black/35 dark:text-white/35"
+								size={14}
+								strokeWidth={1.7}
+							/>
 							<span className="min-w-0 flex-1">
 								<span className="block truncate font-medium">
 									{entry.name}
@@ -1035,7 +813,12 @@ function CollectionsEditor({
 							</span>
 							{membershipChanged ? (
 								<Tooltip content="Added in this draft">
-									<HugeiconsIcon icon={PencilIcon} aria-label="Added in this draft" className="shrink-0 text-accent" size={11} />
+									<HugeiconsIcon
+										icon={PencilIcon}
+										aria-label="Added in this draft"
+										className="shrink-0 text-accent"
+										size={11}
+									/>
 								</Tooltip>
 							) : null}
 							{entry.deleted ? (
@@ -1044,7 +827,12 @@ function CollectionsEditor({
 								</Chip>
 							) : null}
 							{locked ? (
-								<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+								<HugeiconsIcon
+									icon={LockIcon}
+									aria-label="Read only"
+									className="shrink-0 opacity-40"
+									size={11}
+								/>
 							) : !readOnly ? (
 								<button
 									aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
@@ -1059,7 +847,11 @@ function CollectionsEditor({
 									}
 									type="button"
 								>
-									<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={13} />
+									<HugeiconsIcon
+										icon={Cancel01Icon}
+										aria-hidden
+										size={13}
+									/>
 								</button>
 							) : null}
 						</div>
@@ -1069,8 +861,14 @@ function CollectionsEditor({
 					<Button
 						onPress={() => setPickerOpen(true)}
 						size="xs"
-						startContent={<HugeiconsIcon icon={Add01Icon} aria-hidden size={13} />}
-						variant="transparent"
+						startContent={
+							<HugeiconsIcon
+								icon={Add01Icon}
+								aria-hidden
+								size={15}
+							/>
+						}
+						variant="muted"
 					>
 						Add to collection
 					</Button>
@@ -1131,10 +929,12 @@ function PdfFileInput({
 	onUpload: (attachmentKey: string, file: File) => void;
 }) {
 	const inputId = `pdf-${attachmentKey}`;
+	const inputRef = useRef<HTMLInputElement>(null);
 	return (
 		<>
 			<input
 				id={inputId}
+				ref={inputRef}
 				accept="application/pdf,.pdf"
 				className="sr-only"
 				disabled={disabled}
@@ -1145,18 +945,17 @@ function PdfFileInput({
 					event.currentTarget.value = "";
 				}}
 			/>
-			<label
-				aria-disabled={disabled}
-				className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-black/[0.035] px-3 text-xs font-medium text-black/65 transition-colors dark:bg-white/[0.045] dark:text-white/70 ${
-					disabled
-						? "pointer-events-none opacity-50"
-						: "hover:bg-black/[0.07] dark:hover:bg-white/[0.08]"
-				}`}
-				htmlFor={inputId}
+			<Button
+				isDisabled={disabled}
+				onPress={() => inputRef.current?.click()}
+				size="xs"
+				variant="muted"
+				startContent={
+					<HugeiconsIcon icon={Upload01Icon} aria-hidden size={15} />
+				}
 			>
-				<HugeiconsIcon icon={Upload01Icon} aria-hidden size={14} />
 				{label}
-			</label>
+			</Button>
 		</>
 	);
 }
@@ -1185,7 +984,13 @@ function AttachmentList({
 						onClick={() => onSelectAttachment(attachment.key)}
 						type="button"
 					>
-						<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 text-black/40 dark:text-white/40" size={15} strokeWidth={1.7} />
+						<HugeiconsIcon
+							icon={FileAttachmentIcon}
+							aria-hidden
+							className="shrink-0 text-black/40 dark:text-white/40"
+							size={15}
+							strokeWidth={1.7}
+						/>
 						<span className="min-w-0 flex-1 truncate text-sm font-medium text-black/75 dark:text-white/80">
 							{attachment.title}
 						</span>
@@ -1193,7 +998,12 @@ function AttachmentList({
 							<RecordStateChip state={attachment.state} />
 							<FileStateChip state={attachment.fileState} />
 						</span>
-						<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="shrink-0 text-black/30 dark:text-white/30" size={14} />
+						<HugeiconsIcon
+							icon={ArrowRight01Icon}
+							aria-hidden
+							className="shrink-0 text-black/30 dark:text-white/30"
+							size={14}
+						/>
 					</button>
 				))}
 			</div>
@@ -1202,12 +1012,17 @@ function AttachmentList({
 			) : null}
 			{!readOnly ? (
 				<Button
-					className="bg-black/[0.035] font-medium hover:bg-black/[0.06] dark:bg-white/[0.045] dark:hover:bg-white/[0.08]"
 					isDisabled={busy}
 					onPress={onCreateAttachment}
 					size="xs"
-					startContent={<HugeiconsIcon icon={FilePlusIcon} aria-hidden size={14} />}
-					variant="transparent"
+					startContent={
+						<HugeiconsIcon
+							icon={FilePlusIcon}
+							aria-hidden
+							size={15}
+						/>
+					}
+					variant="muted"
 				>
 					Add attachment
 				</Button>
@@ -1276,7 +1091,13 @@ function AttachmentFilePanel({
 							href={detail.filePublication.publicUrl}
 							rel="noreferrer"
 							size="xs"
-							startContent={<HugeiconsIcon icon={Download01Icon} aria-hidden size={14} />}
+							startContent={
+								<HugeiconsIcon
+									icon={Download01Icon}
+									aria-hidden
+									size={14}
+								/>
+							}
 							target="_blank"
 							variant="transparent"
 						>
@@ -1288,11 +1109,21 @@ function AttachmentFilePanel({
 								onPress={() => onChangePdfRemoval(detail.key)}
 								size="xs"
 								startContent={
-									<HugeiconsIcon icon={detail.fileRemovalPending ? RotateLeft01Icon : Delete02Icon} aria-hidden size={14} />
+									<HugeiconsIcon
+										icon={
+											detail.fileRemovalPending
+												? RotateLeft01Icon
+												: Delete02Icon
+										}
+										aria-hidden
+										size={14}
+									/>
 								}
 								variant="transparent"
 							>
-								{detail.fileRemovalPending ? "Undo removal" : "Remove PDF from draft"}
+								{detail.fileRemovalPending
+									? "Undo removal"
+									: "Remove PDF from draft"}
 							</Button>
 						) : null}
 					</div>
@@ -1331,17 +1162,40 @@ function AttachmentFilePanel({
 						{detail.fileDraft.actualSha256 ??
 							detail.fileDraft.expectedSha256}
 					</p>
-                    {readOnly && detail.fileDraft.readyAt && detail.sourceFileUrl ? (
-                        <Button as="a" href={detail.sourceFileUrl} target="_blank" rel="noreferrer" size="xs" variant="transparent" className="mt-2" startContent={<HugeiconsIcon icon={LinkSquare01Icon} size={14} />}>Open PDF</Button>
-                    ) : null}
+					{readOnly &&
+					detail.fileDraft.readyAt &&
+					detail.sourceFileUrl ? (
+						<Button
+							as="a"
+							href={detail.sourceFileUrl}
+							target="_blank"
+							rel="noreferrer"
+							size="xs"
+							variant="transparent"
+							className="mt-2"
+							startContent={
+								<HugeiconsIcon
+									icon={LinkSquare01Icon}
+									size={14}
+								/>
+							}
+						>
+							Open PDF
+						</Button>
+					) : null}
 					{!readOnly ? (
 						<div className="mt-2 flex flex-wrap gap-1">
-
 							<Button
 								isDisabled={busy}
 								onPress={() => onDiscardFile(detail.key)}
 								size="xs"
-								startContent={<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />}
+								startContent={
+									<HugeiconsIcon
+										icon={Delete02Icon}
+										aria-hidden
+										size={14}
+									/>
+								}
 								variant="transparent"
 							>
 								{detail.fileDraft.readyAt
@@ -1368,7 +1222,13 @@ function AttachmentFilePanel({
 						href={detail.sourceFileUrl}
 						rel="noreferrer"
 						size="xs"
-						startContent={<HugeiconsIcon icon={Download01Icon} aria-hidden size={14} />}
+						startContent={
+							<HugeiconsIcon
+								icon={Download01Icon}
+								aria-hidden
+								size={14}
+							/>
+						}
 						target="_blank"
 						variant="transparent"
 					>
@@ -1402,15 +1262,16 @@ function AttachmentFilePanel({
 }
 
 export function AdminInspector({
-    readOnlyVersion = false,
-    allowReviewCorrections = false,
-    versionControls,
-    versionNotice,
-    editorNotice,
-    versionActions,
-    publishingChoice,
-    submissionBlocked = false,
-    reviewPending = false,
+	readOnlyVersion = false,
+	allowReviewCorrections = false,
+	versionControls,
+	versionNotice,
+	editorNotice,
+	versionActions,
+	publishingChoice,
+	publishing,
+	submissionBlocked = false,
+	reviewPending = false,
 	busy,
 	definitions,
 	detail,
@@ -1447,13 +1308,17 @@ export function AdminInspector({
 }: {
 	readOnlyVersion?: boolean;
 	allowReviewCorrections?: boolean;
-    versionControls?: ReactNode;
-    versionNotice?: ReactNode;
-    editorNotice?: ReactNode;
-    versionActions?: ReactNode;
-    publishingChoice?: import("@/lib/admin/review-contract").PublishingChoice | null;
-    reviewPending?: boolean;
-    submissionBlocked?: boolean;
+	versionControls?: ReactNode;
+	versionNotice?: ReactNode;
+	editorNotice?: ReactNode;
+	versionActions?: ReactNode;
+	publishingChoice?:
+		import("@/lib/admin/review-contract").PublishingChoice | null;
+	publishing?: ReturnType<
+		typeof import("./usePublishingChoice").usePublishingChoice
+	>;
+	reviewPending?: boolean;
+	submissionBlocked?: boolean;
 	busy: boolean;
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail | null;
@@ -1473,7 +1338,9 @@ export function AdminInspector({
 	onOpenDraft: () => void;
 	onManageSources: () => void;
 	onPublish: () => void;
-	onPublicationChanged: (receipts?: readonly AdminSearchIndexReceipt[]) => Promise<void>;
+	onPublicationChanged: (
+		receipts?: readonly AdminSearchIndexReceipt[],
+	) => Promise<void>;
 	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;
@@ -1505,7 +1372,9 @@ export function AdminInspector({
 	const diff = useMemo(
 		() =>
 			detail
-				? readOnlyVersion ? EMPTY_ADMIN_DRAFT_DIFF : computeAdminDraftDiff(detail, payload, definition)
+				? readOnlyVersion
+					? EMPTY_ADMIN_DRAFT_DIFF
+					: computeAdminDraftDiff(detail, payload, definition)
 				: EMPTY_ADMIN_DRAFT_DIFF,
 		[definition, detail, payload, readOnlyVersion],
 	);
@@ -1513,7 +1382,9 @@ export function AdminInspector({
 		diff.collections ?? [],
 	);
 	const publication = useAdminPublication(
-		!readOnlyVersion && detail && !detail.parentItem && detail.published ? detail.key : null,
+		!readOnlyVersion && detail && !detail.parentItem && detail.published
+			? detail.key
+			: null,
 		detail ? publicationInputVersion(detail) : null,
 	);
 	const publishedCollectionNames = useMemo(
@@ -1549,11 +1420,10 @@ export function AdminInspector({
 		return () => cancelAnimationFrame(frame);
 	}, [detailKey, validationRevision]);
 
-
 	if (loading && !detail) {
 		return (
 			<div className="flex h-full items-center justify-center">
-				<Spinner label="Loading record" />
+				<Spinner aria-label="Loading record" />
 			</div>
 		);
 	}
@@ -1571,12 +1441,15 @@ export function AdminInspector({
 	}
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
-	const editable = (allowReviewCorrections || (!readOnlyVersion && detail.editable)) && Boolean(detail.draft) && !busy;
+	const editable =
+		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
+		Boolean(detail.draft) &&
+		!busy;
 	const readOnly = !editable;
 	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
 	const showPublicLinkActions =
-		!readOnlyVersion && (detail.itemType === "Attachment" || Boolean(itemUrl));
-
+		!readOnlyVersion &&
+		(detail.itemType === "Attachment" || Boolean(itemUrl));
 
 	return (
 		<div
@@ -1613,7 +1486,13 @@ export function AdminInspector({
 						className="mb-2"
 						onPress={() => onBackToParent(detail.parentItem!)}
 						size="xs"
-						startContent={<HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={14} />}
+						startContent={
+							<HugeiconsIcon
+								icon={ArrowLeft01Icon}
+								aria-hidden
+								size={14}
+							/>
+						}
 						variant="transparent"
 					>
 						Parent record
@@ -1626,8 +1505,12 @@ export function AdminInspector({
 								{detail.title}
 							</h2>
 							<p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/40 dark:text-white/40">
-                                <span>{humanizeAdminField(detail.itemType)}</span>
-                                <span className="font-mono text-[10px] tracking-wide text-black/30 dark:text-white/30">{detail.key}</span>
+								<span>
+									{humanizeAdminField(detail.itemType)}
+								</span>
+								<span className="font-mono text-[10px] tracking-wide text-black/30 dark:text-white/30">
+									{detail.key}
+								</span>
 							</p>
 						</div>
 						<div className="flex shrink-0 items-center gap-1">
@@ -1645,7 +1528,11 @@ export function AdminInspector({
 											target="_blank"
 											variant="transparent"
 										>
-											<HugeiconsIcon icon={LinkSquare01Icon} aria-hidden size={14} />
+											<HugeiconsIcon
+												icon={LinkSquare01Icon}
+												aria-hidden
+												size={14}
+											/>
 										</Button>
 									</Tooltip>
 									<Tooltip content="Copy public item link">
@@ -1657,15 +1544,25 @@ export function AdminInspector({
 												if (!itemUrl) return;
 												void navigator.clipboard
 													.writeText(itemUrl)
-													.then(() => toast.success("Item link copied"))
+													.then(() =>
+														toast.success(
+															"Item link copied",
+														),
+													)
 													.catch(() =>
-														toast.error("Could not copy item link"),
+														toast.error(
+															"Could not copy item link",
+														),
 													);
 											}}
 											size="xs"
 											variant="transparent"
 										>
-											<HugeiconsIcon icon={Copy01Icon} aria-hidden size={14} />
+											<HugeiconsIcon
+												icon={Copy01Icon}
+												aria-hidden
+												size={14}
+											/>
 										</Button>
 									</Tooltip>
 								</>
@@ -1677,168 +1574,238 @@ export function AdminInspector({
 											detail.writeback.available.find(
 												(target) =>
 													target.sourceKey ===
-													detail.writeback.originSourceKey,
+													detail.writeback
+														.originSourceKey,
 											)?.reason ?? "not-linked"
 										]
 									}
 								>
-									<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="text-black/35 dark:text-white/35" size={15} />
+									<HugeiconsIcon
+										icon={LockIcon}
+										aria-label="Read only"
+										className="text-black/35 dark:text-white/35"
+										size={15}
+									/>
 								</Tooltip>
 							) : null}
 						</div>
 					</div>
 					{versionNotice}
-                    {!readOnlyVersion && <><div className="mt-2 flex flex-wrap items-center gap-1.5">
-						<RecordStateChip state={detail.state} />
-						<FileStateChip state={detail.fileState} />
-						{detail.writeback.selected.length > 0 ? (
-							<AdminSourcesWritebackStatus
-								canLoadRemote={!detail.parentItem}
-								itemKey={detail.key}
-								key={detail.key}
-								onResolved={onWritebackResolved}
-								revision={detail.revision}
-								sources={detail.writeback.selected.map((sourceKey) => {
-									const target = detail.writeback.available.find(
-										(candidate) => candidate.sourceKey === sourceKey,
-									);
-									return {
-										provider: target?.provider ?? "zotero",
-										sourceKey,
-										sourceLabel: target?.sourceLabel ?? sourceKey,
-									};
-								})}
-							/>
-						) : null}
-						{!detail.parentItem ? (
-							<AdminPublicationHeaderStatus
-								onPress={() => {
-									const toggle = document.getElementById(
-										`admin-${detail.key}-identifiers-toggle`,
-									);
-									if (toggle?.getAttribute("aria-expanded") !== "true") {
-										toggle?.click();
-									}
-									document.getElementById("admin-doi-publishing")?.scrollIntoView({
-											behavior: "smooth",
-											block: "start",
-										});
-								}}
-								state={publication}
-							/>
-						) : null}
-						<SaveIndicator
-							message={saveMessage}
-							onReload={onReloadDraft}
-							state={saveState}
-						/>
-					</div>
-					<div className="mt-4 flex flex-wrap items-center gap-2">
-						{!detail.parentItem &&
-						detail.writeback.available.length > 0 ? (
-							<Tooltip content="Choose which sources receive this record's updates">
-								<span>
-									<Button
-										aria-label="Sources"
-										className="h-9 rounded-xl px-2"
-										data-admin-writeback-sources-button
-										isDisabled={busy}
-										isIconOnly
-										onPress={onManageSources}
-										size="xs"
-										variant="transparent"
-									>
-										<HugeiconsIcon icon={Link02Icon} aria-hidden size={15} />
-									</Button>
-								</span>
-							</Tooltip>
-						) : null}
-						{!detail.editable ? (
-							<Button
-								className="h-9 rounded-xl px-3 font-semibold"
-								color="accent"
-								isDisabled={
-									busy || detail.itemType === "Attachment"
-								}
-								onPress={onDuplicate}
-								size="xs"
-								startContent={<HugeiconsIcon icon={Copy01Icon} aria-hidden size={14} />}
-								variant="solid"
-							>
-								Duplicate as native
-							</Button>
-						) : detail.state === "deleted" && !detail.draft ? (
-							<Button
-								className="h-9 rounded-xl px-3 font-semibold"
-								color="accent"
-								isDisabled={busy}
-								onPress={onRestore}
-								size="xs"
-								startContent={
-									<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
-								}
-								variant="solid"
-							>
-								Restore
-							</Button>
-						) : !detail.draft ? (
-							<Button
-								className="h-9 rounded-xl px-3 font-semibold"
-								color="accent"
-								isDisabled={busy}
-								onPress={onOpenDraft}
-								size="xs"
-								startContent={<HugeiconsIcon icon={PencilIcon} aria-hidden size={14} />}
-								variant="solid"
-							>
-								Edit
-							</Button>
-						) : null}
-						{detail.draft && !detail.parentItem ? (
-							<>
-								<Button
-									color="accent"
-									className="h-9 rounded-xl px-3 font-semibold"
-									isDisabled={
-										busy ||
-										saveState === "conflict" || reviewPending || submissionBlocked ||
-										saveState === "error"
-									}
-									onPress={onPublish}
-									size="xs"
-									startContent={
-										<HugeiconsIcon icon={SentIcon} aria-hidden size={14} />
-									}
-									variant="solid"
-								>
-									{detail.state === "deleted"
-										? "Restore and publish"
-										: reviewPending ? "Awaiting review" : "Submit for review"}
-								</Button>
-								<Button
-									className="h-9 rounded-xl px-3 font-medium text-danger hover:bg-danger/10"
-									isDisabled={busy || (reviewPending && !detail.published)}
-									onPress={onDiscardDraft}
-									size="xs"
-									startContent={
-										<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />
-									}
-									variant="transparent"
-								>
-									{detail.published
-										? "Discard changes"
-										: "Delete draft"}
-								</Button>
-							</>
-						) : null}
-
-					</div>
-					</>}
-                    {versionActions}
+					{
+						<>
+							<div className="mt-2 flex flex-wrap items-center gap-1.5">
+								<RecordStateChip state={detail.state} />
+								<FileStateChip state={detail.fileState} />
+								{detail.writeback.selected.length > 0 ? (
+									<AdminSourcesWritebackStatus
+										canLoadRemote={!detail.parentItem}
+										itemKey={detail.key}
+										key={detail.key}
+										onResolved={onWritebackResolved}
+										revision={detail.revision}
+										sources={detail.writeback.selected.map(
+											(sourceKey) => {
+												const target =
+													detail.writeback.available.find(
+														(candidate) =>
+															candidate.sourceKey ===
+															sourceKey,
+													);
+												return {
+													provider:
+														target?.provider ??
+														"zotero",
+													sourceKey,
+													sourceLabel:
+														target?.sourceLabel ??
+														sourceKey,
+												};
+											},
+										)}
+									/>
+								) : null}
+								{!detail.parentItem ? (
+									<AdminPublicationHeaderStatus
+										onPress={() => {
+											const toggle =
+												document.getElementById(
+													`admin-${detail.key}-identifiers-toggle`,
+												);
+											if (
+												toggle?.getAttribute(
+													"aria-expanded",
+												) !== "true"
+											) {
+												toggle?.click();
+											}
+											document
+												.getElementById(
+													"admin-doi-publishing",
+												)
+												?.scrollIntoView({
+													behavior: "smooth",
+													block: "start",
+												});
+										}}
+										state={publication}
+									/>
+								) : null}
+								<SaveIndicator
+									message={saveMessage}
+									onReload={onReloadDraft}
+									state={saveState}
+								/>
+							</div>
+							{versionActions ?? (
+								<div className="mt-4 flex min-h-9 flex-wrap items-center gap-2">
+									{!detail.parentItem &&
+									detail.writeback.available.length > 0 ? (
+										<Tooltip content="Choose which sources receive this record's updates">
+											<span>
+												<Button
+													aria-label="Sources"
+													className="h-9 rounded-xl px-2"
+													data-admin-writeback-sources-button
+													isDisabled={busy}
+													isIconOnly
+													onPress={onManageSources}
+													size="xs"
+													variant="transparent"
+												>
+													<HugeiconsIcon
+														icon={Link02Icon}
+														aria-hidden
+														size={15}
+													/>
+												</Button>
+											</span>
+										</Tooltip>
+									) : null}
+									{!detail.editable ? (
+										<Button
+											className="h-9 rounded-xl px-3 font-semibold"
+											color="accent"
+											isDisabled={
+												busy ||
+												detail.itemType === "Attachment"
+											}
+											onPress={onDuplicate}
+											size="xs"
+											startContent={
+												<HugeiconsIcon
+													icon={Copy01Icon}
+													aria-hidden
+													size={14}
+												/>
+											}
+											variant="solid"
+										>
+											Duplicate as native
+										</Button>
+									) : detail.state === "deleted" &&
+									  !detail.draft ? (
+										<Button
+											className="h-9 rounded-xl px-3 font-semibold"
+											color="accent"
+											isDisabled={busy}
+											onPress={onRestore}
+											size="xs"
+											startContent={
+												<HugeiconsIcon
+													icon={RotateLeft01Icon}
+													aria-hidden
+													size={14}
+												/>
+											}
+											variant="solid"
+										>
+											Restore
+										</Button>
+									) : !detail.draft ? (
+										<Button
+											className="h-9 rounded-xl px-3 font-semibold"
+											color="accent"
+											isDisabled={busy}
+											onPress={onOpenDraft}
+											size="xs"
+											startContent={
+												<HugeiconsIcon
+													icon={PencilIcon}
+													aria-hidden
+													size={14}
+												/>
+											}
+											variant="solid"
+										>
+											Edit
+										</Button>
+									) : null}
+									{detail.draft && !detail.parentItem ? (
+										<>
+											<Button
+												color="accent"
+												className="h-9 rounded-xl px-3 font-semibold"
+												isDisabled={
+													busy ||
+													readOnlyVersion ||
+													saveState === "saving" ||
+													saveState === "conflict" ||
+													reviewPending ||
+													submissionBlocked ||
+													saveState === "error"
+												}
+												onPress={onPublish}
+												size="xs"
+												startContent={
+													<HugeiconsIcon
+														icon={SentIcon}
+														aria-hidden
+														size={14}
+													/>
+												}
+												variant="solid"
+											>
+												{detail.state === "deleted"
+													? "Restore and publish"
+													: reviewPending
+														? "Awaiting review"
+														: "Submit for review"}
+											</Button>
+											<Button
+												className="h-9 rounded-xl px-3 font-medium text-danger hover:bg-danger/10"
+												isDisabled={
+													busy ||
+													readOnlyVersion ||
+													(reviewPending &&
+														!detail.published)
+												}
+												onPress={onDiscardDraft}
+												size="xs"
+												startContent={
+													<HugeiconsIcon
+														icon={Delete02Icon}
+														aria-hidden
+														size={14}
+													/>
+												}
+												variant="transparent"
+											>
+												{detail.published
+													? "Discard changes"
+													: "Delete draft"}
+											</Button>
+										</>
+									) : null}
+								</div>
+							)}
+						</>
+					}
 					<ValidationSummary
 						errors={validationErrors}
 						recordKey={detail.key}
-						tone={saveState === "conflict" ? "conflict" : "validation"}
+						tone={
+							saveState === "conflict" ? "conflict" : "validation"
+						}
 					/>
 				</div>
 			</div>
@@ -1847,17 +1814,28 @@ export function AdminInspector({
 				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
 				data-admin-region="inspector-scroll"
 			>
-                {editorNotice}
+				{editorNotice}
 				{!detail.parentItem ? (
 					<Section
 						icon={CheckmarkBadge01Icon}
 						id="admin-doi-publishing"
 						title="Identifiers"
 					>
-						<PublishingChoicePanel key={detail.key} detail={detail} readOnly={readOnlyVersion} choice={publishingChoice} />
+						{publishing && (
+							<PublishingChoicePanel
+								detail={detail}
+								readOnly={readOnlyVersion}
+								choice={publishingChoice}
+								model={publishing}
+							/>
+						)}
 					</Section>
 				) : null}
-<Section icon={FilePenLineIcon} id="admin-metadata" title="Metadata">
+				<Section
+					icon={FilePenLineIcon}
+					id="admin-metadata"
+					title="Metadata"
+				>
 					<MetadataEditor
 						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
 						definitions={definitions}
@@ -1868,10 +1846,12 @@ export function AdminInspector({
 						payload={payload}
 						readOnly={readOnly}
 						lockedDoi={
-							publication.publication?.providers.zenodo.exact.targetActive &&
-							publication.publication.providers.zenodo.exact.identifierPolicy ===
-								"reuse-external"
-								? publication.publication.identifiers.doi?.value ?? null
+							publication.publication?.providers.zenodo.exact
+								.targetActive &&
+							publication.publication.providers.zenodo.exact
+								.identifierPolicy === "reuse-external"
+								? (publication.publication.identifiers.doi
+										?.value ?? null)
 								: null
 						}
 					/>
@@ -1908,6 +1888,7 @@ export function AdminInspector({
 						title="Creators"
 					>
 						<CreatorsEditor
+							key={detail.key}
 							definition={definition}
 							errors={validationErrors}
 							onChange={onChange}
@@ -1943,48 +1924,51 @@ export function AdminInspector({
 					/>
 				</Section>
 				{!detail.parentItem ? (
-				<Section
-					actions={
-						diff.links ? (
-							<ChangedMarker
-								label="links"
-								onRevert={() =>
-									onChange({ ...payload, links: diff.links })
-								}
-								publishedValue={
-									<PublishedList
-										values={[
-											...diff.links.cites.map(
-												(key) =>
-													`Cites: ${linkTitles.get(key) ?? key}`,
-											),
-											...diff.links.related.map(
-												(key) =>
-													`Related: ${linkTitles.get(key) ?? key}`,
-											),
-										]}
-									/>
-								}
-							/>
-						) : undefined
-					}
-					icon={Link02Icon}
-					title="Links"
-				>
-					<AdminLinksEditor
-						detail={detail}
-						errors={validationErrors}
-						knownTargets={linkTargets}
-						onChange={onChange}
-						onOpenRecord={onBackToParent}
-						onStartPick={onStartLinkPick}
-						onStopPick={onStopLinkPick}
-						payload={payload}
-						pickingKind={linkPickKind}
-						readOnly={readOnly}
-						sources={sources}
-					/>
-				</Section>
+					<Section
+						actions={
+							diff.links ? (
+								<ChangedMarker
+									label="links"
+									onRevert={() =>
+										onChange({
+											...payload,
+											links: diff.links,
+										})
+									}
+									publishedValue={
+										<PublishedList
+											values={[
+												...diff.links.cites.map(
+													(key) =>
+														`Cites: ${linkTitles.get(key) ?? key}`,
+												),
+												...diff.links.related.map(
+													(key) =>
+														`Related: ${linkTitles.get(key) ?? key}`,
+												),
+											]}
+										/>
+									}
+								/>
+							) : undefined
+						}
+						icon={Link02Icon}
+						title="Links"
+					>
+						<AdminLinksEditor
+							detail={detail}
+							errors={validationErrors}
+							knownTargets={linkTargets}
+							onChange={onChange}
+							onOpenRecord={onBackToParent}
+							onStartPick={onStartLinkPick}
+							onStopPick={onStopLinkPick}
+							payload={payload}
+							pickingKind={linkPickKind}
+							readOnly={readOnly}
+							sources={sources}
+						/>
+					</Section>
 				) : null}
 				{!detail.parentItem ? (
 					<Section
@@ -2032,7 +2016,9 @@ export function AdminInspector({
 				) : null}
 				<Section
 					icon={
-						detail.itemType === "Attachment" ? FileAttachmentIcon : AttachmentIcon
+						detail.itemType === "Attachment"
+							? FileAttachmentIcon
+							: AttachmentIcon
 					}
 					id="admin-attachments"
 					title={

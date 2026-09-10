@@ -1,12 +1,17 @@
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
 
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
+import {
+	formatInstitutionNames,
+	parseInstitutionNames,
+} from "@/config/library-config/institutions";
 
 export type AdminFieldKind =
 	| "access-date"
 	| "annotation-type"
 	| "bibliographic-date"
 	| "color"
+	| "institution-list"
 	| "multiline"
 	| "text"
 	| "url";
@@ -38,6 +43,8 @@ const MULTILINE_FIELDS = new Set([
 export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 	kind: AdminFieldKind;
 } {
+	if (descriptor.field === "institution" || descriptor.field === "university")
+		return { kind: "institution-list" };
 	if (descriptor.type === "date") return { kind: "bibliographic-date" };
 	if (descriptor.field === "accessDate") return { kind: "access-date" };
 	if (descriptor.field === "url") return { kind: "url" };
@@ -76,9 +83,10 @@ function isCalendarDate(value: string) {
 
 /** Returns the calendar date of an access date, or null when it is not one. */
 export function normalizeAccessDate(value: string) {
-	const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/u.exec(
-		value,
-	);
+	const match =
+		/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/u.exec(
+			value,
+		);
 	if (!match || !isCalendarDate(match[1]!)) return null;
 	if (match[2] === undefined) return match[1]!;
 	const hour = Number(match[2]);
@@ -88,11 +96,9 @@ export function normalizeAccessDate(value: string) {
 	if (match[6] === undefined) return match[1]!;
 	const offsetHour = Number(match[6]);
 	const offsetMinute = Number(match[7]);
-	return (
-		offsetHour <= 14 &&
+	return offsetHour <= 14 &&
 		offsetMinute <= 59 &&
 		(offsetHour < 14 || offsetMinute === 0)
-	)
 		? match[1]!
 		: null;
 }
@@ -113,22 +119,14 @@ export function normalizeAdminFieldValue(
 		keepUnparsed?: boolean;
 	} = {},
 ): { error?: string; value: string } {
-	const value = input.trim();
-	if (!value) return { value: "" };
 	const { kind } = adminFieldContract(descriptor);
-	if (descriptor.field === "note") {
-		if ([...value].length > 500_000) {
-			return { error: "Shorten this note to 500,000 characters or fewer.", value };
-		}
-	} else if (
-		!descriptor.field.startsWith("annotation") &&
-		utf8ByteLength(value) > 65_535
-	) {
-		return {
-			error: "This value is too long. Shorten it and try again.",
-			value,
-		};
-	}
+	const value =
+		kind === "institution-list"
+			? formatInstitutionNames(parseInstitutionNames(input))
+			: input.trim();
+	if (!value) return { value: "" };
+	const lengthError = fieldLengthError(descriptor, value);
+	if (lengthError) return lengthError;
 
 	if (kind === "bibliographic-date") {
 		if (
@@ -149,16 +147,8 @@ export function normalizeAdminFieldValue(
 		// save, so the next save repairs the record.
 		return { value: normalizeAccessDate(value) ?? "" };
 	}
-	if (kind === "url") {
-		try {
-			const url = new URL(value);
-			if (url.protocol === "http:" || url.protocol === "https:") {
-				return { value: url.toString() };
-			}
-		} catch {}
-		if (options.keepUnparsed) return { value };
-		return { error: "Enter a full HTTP or HTTPS address.", value };
-	}
+	if (kind === "url") return normalizeFieldUrl(value, options.keepUnparsed);
+
 	if (
 		kind === "annotation-type" &&
 		!ADMIN_ANNOTATION_TYPES.includes(
@@ -171,4 +161,36 @@ export function normalizeAdminFieldValue(
 		return { error: "Choose a six-digit colour.", value };
 	}
 	return { value };
+}
+
+function fieldLengthError(descriptor: AdminFieldDescriptor, value: string) {
+	if (descriptor.field === "note") {
+		if ([...value].length > 500_000) {
+			return {
+				error: "Shorten this note to 500,000 characters or fewer.",
+				value,
+			};
+		}
+	} else if (
+		!descriptor.field.startsWith("annotation") &&
+		utf8ByteLength(value) > 65_535
+	) {
+		return {
+			error: "This value is too long. Shorten it and try again.",
+			value,
+		};
+	}
+
+	return null;
+}
+
+function normalizeFieldUrl(value: string, keepUnparsed = false) {
+	try {
+		const url = new URL(value);
+		if (url.protocol === "http:" || url.protocol === "https:") {
+			return { value: url.toString() };
+		}
+	} catch {}
+	if (keepUnparsed) return { value };
+	return { error: "Enter a full HTTP or HTTPS address.", value };
 }

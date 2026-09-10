@@ -16,6 +16,7 @@ RUN apt-get update \
 FROM npm-deps-base AS deps
 
 COPY package.json package-lock.json ./
+COPY patches ./patches
 RUN --mount=type=cache,target=/root/.npm \
 	npm install --no-audit --no-fund
 
@@ -36,6 +37,7 @@ RUN npm run publication:worker:build
 FROM npm-deps-base AS prod-deps
 
 COPY package.json package-lock.json ./
+COPY patches ./patches
 RUN --mount=type=cache,target=/root/.npm \
 	npm install --omit=dev --no-audit --no-fund
 

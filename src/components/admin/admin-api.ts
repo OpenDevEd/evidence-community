@@ -1,7 +1,8 @@
 "use client";
 
 import { mutate } from "swr";
-import type { SavedReview, PublishingChoice, ReviewRecord } from "@/lib/admin/review-contract";
+import type { OpenScholarInstitutionPage } from "@/lib/admin/openscholar-institutions";
+import type { SavedReview, PublishingChoice, PublishingChoiceState, ReviewRecord } from "@/lib/admin/review-contract";
 import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 
 import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
@@ -152,6 +153,12 @@ function invalidSearchIndexResponse() {
 		},
 		502,
 	);
+}
+
+export function fetchAdminInstitutions(query: string, cursor: string | null) {
+	const params = new URLSearchParams({ query, pageSize: "20", sort: "name" });
+	if (cursor) params.set("cursor", cursor);
+	return requestJson<OpenScholarInstitutionPage>(`/api/admin/institutions?${params}`);
 }
 
 function invalidSourceWritebackResponse() {
@@ -824,10 +831,10 @@ export async function updateAdminReview(id: string, body:
 	return review;
 }
 export async function getAdminPublishingChoice(key: string) {
-	return (await requestJson<{ choice: PublishingChoice | null }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`)).choice;
+	return requestJson<PublishingChoiceState>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`);
 }
-export async function saveAdminPublishingChoice(key: string, choice: PublishingChoice) {
-	return (await requestJson<{ choice: PublishingChoice }>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`, { method: "PUT", body: JSON.stringify(choice) })).choice;
+export async function saveAdminPublishingChoice(key: string, choice: PublishingChoice | null) {
+	return requestJson<PublishingChoiceState>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`, { method: "PUT", body: JSON.stringify(choice) });
 }
 
 export async function getAdminReviewCount() {
