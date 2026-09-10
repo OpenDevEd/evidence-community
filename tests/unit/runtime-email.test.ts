@@ -19,6 +19,7 @@ import {
 	buildSmtpTransportOptions,
 	isEmailChannelEnabled,
 	sendEmailForConfig,
+	sendNotificationEmail,
 } from "@/lib/nodemailer";
 import { RevisionResourceConflictError } from "@/lib/revision-aware-resource";
 import {
@@ -161,14 +162,14 @@ describe("runtime email", () => {
 			},
 		});
 		expect(harness.sendMail).toHaveBeenNthCalledWith(1, {
-			from: "library@example.org",
+			from: { name: "Maximal Evidence Library", address: "hello@example.org" },
 			replyTo: "reader@example.org",
 			subject: "Maximal Library - Feedback",
 			text: "Runtime email proof",
 			to: "contact@example.org",
 		});
 		expect(harness.sendMail).toHaveBeenNthCalledWith(2, {
-			from: "library@example.org",
+			from: { name: "Maximal Evidence Library", address: "hello@example.org" },
 			replyTo: "rights-holder@example.org",
 			subject: "Maximal Library - Takedown Request",
 			text: "Runtime takedown proof",
@@ -198,6 +199,14 @@ describe("runtime email", () => {
 			}),
 		);
 		expect(harness.close).toHaveBeenCalledOnce();
+
+		await sendNotificationEmail({ ...nextConfig, contact: {}, identity: { ...nextConfig.identity, name: "Renamed library" } }, {
+			to: "subscriber@example.org", subject: "Updates", text: "Updates", html: "<p>Updates</p>", messageId: "<updates@example.org>",
+		});
+		expect(harness.sendMail).toHaveBeenLastCalledWith(expect.objectContaining({
+			from: { name: "Renamed library", address: "library@example.org" },
+			to: "subscriber@example.org", replyTo: "library@example.org",
+		}));
 
 		const conflictingInput = cloneLibraryConfig(nextInput);
 		if (!conflictingInput.email?.smtp) {

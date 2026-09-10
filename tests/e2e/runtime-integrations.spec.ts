@@ -62,7 +62,8 @@ const contactRecipient =
 	"contact-amber@example.org";
 const emailSender =
 	process.env.PLAYWRIGHT_EMAIL_SENDER ??
-	"runtime-amber@example.org";
+	"amber@example.org";
+const emailSenderName = process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ?? "Amber Evidence Library";
 const identityShortName =
 	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME ??
 	"Evidence Library";
@@ -501,10 +502,12 @@ test("delivers configured contact mail through SMTP only when enabled", async ({
 		`${mailpitOrigin}/api/v1/message/latest`,
 	);
 	expect(latest.ok()).toBe(true);
-	const message = JSON.stringify(await latest.json());
-	expect(message).toContain(contactRecipient);
-	expect(message).toContain(emailSender);
-	expect(message).toContain(replyTo);
-	expect(message).toContain(`${identityShortName} - Feedback`);
-	expect(message).toContain(description);
+	const message = await latest.json();
+  expect(message).toMatchObject({
+    From: {Name: emailSenderName, Address: emailSender},
+    To: [{Address: contactRecipient}],
+    ReplyTo: [{Address: replyTo}],
+    Subject: `${identityShortName} - Feedback`,
+    Text: expect.stringContaining(description),
+  });
 });
