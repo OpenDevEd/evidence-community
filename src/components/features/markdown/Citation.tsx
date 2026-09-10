@@ -5,7 +5,7 @@ import { BookOpen01Icon, Download01Icon, LinkSquare01Icon } from "@hugeicons/cor
 import Image from "next/image";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
-import { forwardRef, type ComponentProps, type ReactNode } from "react";
+import { forwardRef, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import useSWR from "swr";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
@@ -65,10 +65,13 @@ function SiteFavicon({ className }: { className?: string }) {
 		<span
 			aria-hidden="true"
 			className={twMerge(
-				"inline-block shrink-0 bg-contain bg-center bg-no-repeat",
+				"inline-block shrink-0 bg-contain bg-center bg-no-repeat bg-[image:var(--citation-icon-light)] dark:bg-[image:var(--citation-icon-dark)]",
 				className,
 			)}
-			style={{ backgroundImage: `url("${identity.assets.favicon}")` }}
+			style={{
+				"--citation-icon-light": `url("${identity.assets.faviconLight ?? identity.assets.favicon}")`,
+				"--citation-icon-dark": `url("${identity.assets.faviconDark ?? identity.assets.favicon}")`,
+			} as CSSProperties}
 		/>
 	);
 }
