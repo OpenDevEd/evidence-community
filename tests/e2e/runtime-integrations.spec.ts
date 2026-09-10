@@ -63,7 +63,7 @@ const contactRecipient =
 const emailSender =
 	process.env.PLAYWRIGHT_EMAIL_SENDER ??
 	"amber@example.org";
-const emailSenderName = process.env.PLAYWRIGHT_EMAIL_SENDER_NAME ?? "Amber Evidence Library";
+const emailSenderName = process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ?? "Amber Evidence Library";
 const identityShortName =
 	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME ??
 	"Evidence Library";
