@@ -138,7 +138,7 @@ async function editionContent(
 			identity.baseUrl,
 			emailStyles,
 		);
-		content = `${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this week’s digest", editionUrl)}</div><p style="font-size:12px;line-height:1.6;color:#82837e;margin:20px 0 0">Prepared from publication metadata. The full edition includes links to every source.</p>`;
+		content = `${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this week’s digest", editionUrl)}</div>`;
 		const date = new Intl.DateTimeFormat(
 			config.localization.defaultLocale,
 			{

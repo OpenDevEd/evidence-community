@@ -30,7 +30,6 @@ import { fetcher } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
 
 const pdfHrefPattern = /^\/lib\/([^/?#]+)\/download\/([^/?#]+)(?:[?#].*)?$/;
-const SITE_FAVICON_URL = "/favicon.ico";
 
 const copyLinkClassNames = {
 	button:
@@ -61,6 +60,7 @@ function CitationCopyLink({ href }: { href: string }) {
 }
 
 function SiteFavicon({ className }: { className?: string }) {
+	const { identity } = useLibraryConfig();
 	return (
 		<span
 			aria-hidden="true"
@@ -68,7 +68,7 @@ function SiteFavicon({ className }: { className?: string }) {
 				"inline-block shrink-0 bg-contain bg-center bg-no-repeat",
 				className,
 			)}
-			style={{ backgroundImage: `url('${SITE_FAVICON_URL}')` }}
+			style={{ backgroundImage: `url("${identity.assets.favicon}")` }}
 		/>
 	);
 }
