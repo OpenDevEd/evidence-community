@@ -7,7 +7,7 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { createNativeItemDraft, publishItemDraft, openItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
-import { notificationDelivery, notificationEdition, notificationItem, notificationSubscriber } from "@/db/schema/notifications";
+import { notificationDelivery, notificationEdition, notificationItem, notificationState, notificationSubscriber } from "@/db/schema/notifications";
 import { prepareNotificationEditions, generateNotificationEdition } from "@/lib/notifications/editions";
 import { getDigestPageData } from "@/lib/notifications/public";
 import { runNotificationCycle } from "@/lib/notifications/worker";
@@ -15,6 +15,46 @@ import { deliverNotification } from "@/lib/notifications/delivery";
 import { requestSubscription, confirmSubscription, updateSubscription } from "@/lib/notifications/subscriptions";
 
 const config = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], notifications: {enabled: true, weekly: {weekday: 1, time: "09:00", timezone: "UTC"}}, updatedAt: "2026-09-09T00:00:00Z"});
+
+it("shares manual and scheduled digest windows without duplicate or empty editions", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const start = new Date("2026-09-09T00:00:00Z");
+    const manualAt = new Date("2026-09-10T12:00:00Z");
+    await prepareNotificationEditions(db, config, start);
+    const first = await createNativeItemDraft(db, {itemType: "Report", title: "Before the manual cutoff"});
+    await publishItemDraft(db, first.itemKey);
+    await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-09-10T10:00:00Z", first.itemKey]);
+
+    const results = await Promise.all([
+      prepareNotificationEditions(db, config, manualAt, {manualWeekly: true}),
+      prepareNotificationEditions(db, config, manualAt, {manualWeekly: true}),
+    ]);
+    expect(results.map(result => result.status).sort()).toEqual(["empty", "queued"]);
+    const [manual] = await db.select().from(notificationEdition);
+    expect(manual).toMatchObject({stream: "weekly", windowStart: start, windowEnd: manualAt, publishedAt: null});
+    expect(manual.publications.map(item => item.key)).toEqual([first.itemKey]);
+    expect((await db.select().from(notificationState))[0]).toMatchObject({weeklyThrough: manualAt, hourlyThrough: start, nextWeeklyAt: new Date("2026-09-14T09:00:00Z")});
+
+    await prepareNotificationEditions(db, config, new Date("2026-09-11T12:00:00Z"), {manualWeekly: true});
+    expect((await db.select().from(notificationState))[0].weeklyThrough).toEqual(manualAt);
+    const second = await createNativeItemDraft(db, {itemType: "Report", title: "After the manual cutoff"});
+    await publishItemDraft(db, second.itemKey);
+    await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-09-12T10:00:00Z", second.itemKey]);
+    const scheduledAt = new Date("2026-09-14T09:00:00Z");
+    await Promise.all([
+      prepareNotificationEditions(db, config, scheduledAt),
+      prepareNotificationEditions(db, config, scheduledAt, {manualWeekly: true}),
+    ]);
+    const weekly = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "weekly"));
+    expect(weekly).toHaveLength(2);
+    const next = weekly.find(edition => edition.id !== manual.id)!;
+    expect(next).toMatchObject({windowStart: manualAt, windowEnd: scheduledAt});
+    expect(next.publications.map(item => item.key)).toEqual([second.itemKey]);
+    const disabled = {...config, notifications: {...config.notifications, enabled: false}};
+    expect(await prepareNotificationEditions(db, disabled, scheduledAt, {manualWeekly: true})).toEqual({status: "disabled"});
+    expect(await db.select().from(notificationDelivery)).toHaveLength(0);
+  });
+}, 120_000);
 // These assertions exercise persisted windows, jobs and publication transitions, independent of UI copy.
 it("keeps drafts private, batches first publications once and honors queued unsubscribe", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {

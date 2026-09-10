@@ -15,14 +15,15 @@ function bearerMatches(authorization: string | null, credential: string) {
 /**
  * Lets a request through only when it carries the library's OpenScholar
  * machine credential as a bearer token. Cookies are ignored on purpose: these
- * routes are for OpenScholar, not for a signed-in admin.
+ * routes are for OpenScholar, not for a signed-in admin. Pass a credential from
+ * an already-loaded config to keep authorization and execution on one revision.
  */
-export async function requireOpenScholarBearer(request: Request) {
-	const config = await getLibraryConfig();
+export async function requireOpenScholarBearer(request: Request, machineCredential?: string) {
+	const credential = machineCredential ?? (await getLibraryConfig()).authentication.openScholar.machineCredential;
 	if (
 		bearerMatches(
 			request.headers.get("authorization"),
-			config.authentication.openScholar.machineCredential,
+			credential,
 		)
 	) {
 		return null;

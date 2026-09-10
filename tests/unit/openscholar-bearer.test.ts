@@ -39,6 +39,17 @@ describe("OpenScholar bearer guard", () => {
 		).resolves.toBeNull();
 	});
 
+	it("uses the request's pinned credential when the active config has another key", async () => {
+		const pinnedCredential = `els_${"c".repeat(43)}`;
+		await expect(requireOpenScholarBearer(
+			request({ authorization: `Bearer ${pinnedCredential}` }), pinnedCredential,
+		)).resolves.toBeNull();
+		const denied = await requireOpenScholarBearer(
+			request({ authorization: `Bearer ${machineCredential}` }), pinnedCredential,
+		);
+		expect(denied?.status).toBe(401);
+	});
+
 	it.each([
 		["a missing header", {}],
 		["a wrong credential", { authorization: `Bearer els_${"b".repeat(43)}` }],

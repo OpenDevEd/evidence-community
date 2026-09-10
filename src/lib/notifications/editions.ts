@@ -31,37 +31,72 @@ async function collectPublications(db: DatabaseTransaction, config: LibraryServe
   return publications;
 }
 
+export type DigestPreparation =
+  | { status: "queued"; editionId: string; publicationCount: number }
+  | { status: "empty" | "disabled" };
+
+type NotificationWindow = { stream: NotificationStream; start: Date; end: Date };
+
+function notificationWindows(state: typeof notificationState.$inferSelect, weeklyAt: Date, now: Date, manualWeekly: boolean): NotificationWindow[] {
+  const windows: NotificationWindow[] = [];
+  const hourlyEnd = completedHourlyWindow(now);
+  // A restart combines overdue additions instead of sending one email per missed hour.
+  const hourlyNext = new Date(completedHourlyWindow(state.hourlyThrough!).getTime() + 3_600_000);
+  if (!manualWeekly && hourlyNext <= hourlyEnd) windows.push({ stream: "hourly", start: state.hourlyThrough!, end: hourlyEnd });
+  if (manualWeekly || weeklyAt <= now) windows.push({ stream: "weekly", start: state.weeklyThrough!, end: manualWeekly ? now : weeklyAt });
+  return windows;
+}
+
+async function prepareWindow(
+  tx: DatabaseTransaction,
+  config: LibraryServerConfig,
+  enabledAt: Date,
+  window: NotificationWindow,
+  manualWeekly: boolean,
+): Promise<DigestPreparation> {
+  if (window.end <= window.start) return { status: "empty" };
+  const publications = await collectPublications(tx, config, enabledAt, window.end, window.stream);
+  if (!publications.length && manualWeekly) return { status: "empty" };
+  let result: DigestPreparation = { status: "empty" };
+  if (publications.length) {
+    const [edition] = await tx.insert(notificationEdition).values({ stream: window.stream, windowStart: window.start, windowEnd: window.end, publications }).returning({ id: notificationEdition.id });
+    if (window.stream === "weekly") result = { status: "queued", editionId: edition.id, publicationCount: publications.length };
+  }
+  await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { weeklyThrough: window.end, nextWeeklyAt: nextDigestDate(config.notifications.weekly, window.end) });
+  return result;
+}
+
 /** Each window and its metadata snapshot are saved together before any provider call. */
-export async function prepareNotificationEditions(db: Database, config: LibraryServerConfig, now = new Date()) {
+export async function prepareNotificationEditions(
+  db: Database,
+  config: LibraryServerConfig,
+  now = new Date(),
+  { manualWeekly = false } = {},
+): Promise<DigestPreparation> {
   const schedule = JSON.stringify(config.notifications.weekly);
   return db.transaction(async tx => {
     await tx.insert(notificationState).values({ schedule }).onConflictDoNothing();
-    const [state] = await tx.select().from(notificationState).for("update");
+    let [state] = await tx.select().from(notificationState).for("update");
     if (!config.notifications.enabled) {
       await tx.update(notificationState).set({ enabled: false });
-      return;
+      return { status: "disabled" };
     }
     if (!state.enabled) {
       const enabledAt = new Date(Math.min(now.getTime(), new Date(config.updatedAt).getTime()));
-      await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, weeklyThrough: enabledAt, nextWeeklyAt: nextDigestDate(config.notifications.weekly, enabledAt), schedule });
-      return;
+      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, weeklyThrough: enabledAt, nextWeeklyAt: nextDigestDate(config.notifications.weekly, enabledAt), schedule }).returning();
+      if (!manualWeekly) return { status: "empty" };
     }
     let weeklyAt = state.nextWeeklyAt!;
     if (state.schedule !== schedule) {
       weeklyAt = nextDigestDate(config.notifications.weekly, now);
       await tx.update(notificationState).set({ schedule, nextWeeklyAt: weeklyAt });
     }
-    const hourlyEnd = completedHourlyWindow(now);
-    const windows: { stream: NotificationStream; start: Date; end: Date }[] = [];
-    // A restart collects overdue additions together, without sending one email per missed hour.
-    const hourlyNext = new Date(completedHourlyWindow(state.hourlyThrough!).getTime() + 3_600_000);
-    if (hourlyNext <= hourlyEnd) windows.push({ stream: "hourly", start: state.hourlyThrough!, end: hourlyEnd });
-    if (weeklyAt <= now) windows.push({ stream: "weekly", start: state.weeklyThrough!, end: weeklyAt });
-    for (const window of windows) {
-      const publications = await collectPublications(tx, config, state.enabledAt!, window.end, window.stream);
-      if (publications.length) await tx.insert(notificationEdition).values({ stream: window.stream, windowStart: window.start, windowEnd: window.end, publications }).onConflictDoNothing();
-      await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { weeklyThrough: window.end, nextWeeklyAt: nextDigestDate(config.notifications.weekly, window.end) });
+    let result: DigestPreparation = { status: "empty" };
+    for (const window of notificationWindows(state, weeklyAt, now, manualWeekly)) {
+      const prepared = await prepareWindow(tx, config, state.enabledAt!, window, manualWeekly);
+      if (prepared.status === "queued") result = prepared;
     }
+    return result;
   });
 }
 
