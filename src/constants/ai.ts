@@ -6,8 +6,13 @@ import Claude from "@/components/icons/Claude";
 import DeepSeek from "@/components/icons/DeepSeek";
 import Gemini from "@/components/icons/Gemini";
 import Grok from "@/components/icons/Grok";
+import Zai from "@/components/icons/Zai";
 import Mistral from "@/components/icons/Mistral";
-import { getAIModel, isAIModelId } from "@/lib/ai/models";
+import {
+	getAIModel,
+	isAIModelId,
+	type ConfiguredAIProvider,
+} from "@/lib/ai/models";
 
 export type AIModelPresentation = {
 	name: string;
@@ -15,16 +20,14 @@ export type AIModelPresentation = {
 	icon: ComponentType<{ className?: string }>;
 };
 
-const COMPANY_ICONS: Record<
-	string,
-	ComponentType<{ className?: string }>
-> = {
+const COMPANY_ICONS: Record<string, ComponentType<{ className?: string }>> = {
 	Anthropic: Claude,
 	DeepSeek: DeepSeek,
 	Google: Gemini,
 	Mistral: Mistral,
 	OpenAI: ChatGPT,
 	xAI: Grok,
+	"Z.ai": Zai,
 };
 
 function SparklesModelIcon({ className }: { className?: string }) {
@@ -40,10 +43,11 @@ export const AI_FALLBACK_PRESENTATION: AIModelPresentation = {
 /** How a model is named and pictured for the reader. */
 export function getAIModelPresentation(
 	modelId: unknown,
+	providers: readonly ConfiguredAIProvider[] = [],
 ): AIModelPresentation {
 	if (!isAIModelId(modelId)) return AI_FALLBACK_PRESENTATION;
 
-	const model = getAIModel(modelId);
+	const model = getAIModel(modelId, providers);
 	return {
 		name: model.name,
 		company: model.company,

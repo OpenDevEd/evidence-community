@@ -7,7 +7,7 @@ import type { LanguageModelFactory } from "@/lib/ai-provider-factory";
 import { getAIProviderForConfig } from "@/lib/ai-provider";
 import { AIError } from "./errors";
 import {
-	isSelectableAIModelId,
+	isAIModelId,
 	starterQuestionsModelId,
 	type AIModelId,
 	type AIProvider,
@@ -41,7 +41,7 @@ export async function resolveAIModel(
 	config: AIModelConfig,
 	requestedModelId: unknown,
 ): Promise<ResolvedAIModel> {
-	if (!isSelectableAIModelId(requestedModelId)) {
+	if (!isAIModelId(requestedModelId)) {
 		throw unavailable(requestedModelId);
 	}
 

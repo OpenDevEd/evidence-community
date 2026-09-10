@@ -6,6 +6,9 @@ import {
 	libraryConfigSchema,
 	type LibraryConfigInput,
 } from "@/config/library-config/schema";
+import { projectPublicLibraryConfig } from "@/config/library-config/public";
+import { selectableAIModels } from "@/lib/ai/models";
+import { chatRequestSchema } from "@/lib/ai/schemas";
 import { AIError } from "@/lib/ai/errors";
 import {
 	resolveAIModel,
@@ -39,6 +42,50 @@ describe("choosing the model a request runs on", () => {
 		expect(resolved.provider).toBe("google");
 		expect(resolved.modelId).toBe("gemini-2.5-pro");
 		expect(resolved.model).toBeDefined();
+	});
+
+	it("runs a newly configured OpenRouter model through the picker and request boundary", async () => {
+		const modelId = "deepseek/deepseek-v4.1-flash";
+		const libraryConfig = config([
+			{
+				provider: "openrouter",
+				enabled: true,
+				apiKey: "openrouter-api-key",
+				models: [modelId],
+				modelMetadata: {
+					[modelId]: {
+						name: "DeepSeek V4.1 Flash",
+						company: "DeepSeek",
+					},
+				},
+				defaultModel: modelId,
+			},
+		]);
+		expect(selectableAIModels(projectPublicLibraryConfig(libraryConfig).ai.providers)).toEqual([
+			{
+				id: modelId,
+				provider: "openrouter",
+				name: "DeepSeek V4.1 Flash",
+				company: "DeepSeek",
+			},
+		]);
+		const request = chatRequestSchema.parse({
+			id: "new-model-chat",
+			messages: [
+				{
+					role: "user",
+					parts: [{ type: "text", text: "What was added?" }],
+				},
+			],
+			trigger: "submit-message",
+			modelId,
+			mode: "quick",
+		});
+		const resolved = await resolveAIModel(libraryConfig, request.modelId);
+		expect(resolved.model).toMatchObject({ modelId });
+		await expect(
+			resolveAIModel(libraryConfig, "openai/gpt-5.6-luna"),
+		).rejects.toMatchObject({ code: "MODEL_UNAVAILABLE" });
 	});
 
 	it("refuses a real model this library never configured", async () => {

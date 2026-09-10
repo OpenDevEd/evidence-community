@@ -49,11 +49,11 @@ describe("what a chat request may contain", () => {
 		).toThrow();
 	});
 
-	it("refuses a model identifier that is not in the registry", () => {
+	it("refuses malformed model identifiers", () => {
 		expect(() =>
 			chatRequestSchema.parse({
 				...chatRequest,
-				modelId: "openai/gpt-5.6-luna-unlimited",
+				modelId: "openai/invalid model",
 			}),
 		).toThrow(/Unsupported AI model/);
 	});

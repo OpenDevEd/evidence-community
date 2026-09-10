@@ -47,30 +47,16 @@ OpenScholar already has a credits-billed OpenAI-compatible gateway (`/api/wallet
 - The existing wallet-key gateway remains for its current consumers but is not used by Evidence Libraries. Once the shared-secret mode exists, it is the only supported way libraries use OpenScholar credits.
 - Implementation is split across repositories: the shared-secret endpoint and library→owner resolution live in `openalex-count`; the client lives here. Paths 1 and 2 must not wait on it.
 
-Selectable models:
+Model selection, revised by the user on 2026-09-11:
 
-| UI name          | Target model     |
-| ---------------- | ---------------- |
-| Gemini 3.7 Flash | Gemini 3.7 Flash |
-| GPT-5.6 Luna     | GPT-5.6 Luna     |
-| Grok 4.6         | Grok 4.6         |
+- OpenScholar's synced OpenRouter catalog supplies available model ids and names. Do not keep a code-defined list of selectable or hidden models.
+- Owners choose the models their library offers. Assembly includes the selected models' display metadata in runtime configuration. The public projection includes names, never credentials.
+- Runtime schema and request parsing validate model-id syntax. Request resolution also requires an enabled provider with that exact model in the library's selection.
+- Hand-written runtime configurations can use provider model ids directly and omit display metadata.
+- OpenRouter routes newly configured models using its current provider defaults. Anthropic models retain explicit one-hour cache breakpoints. Luna retains its verified regional endpoint preference.
+- Generated starter questions and weekly digests keep the fixed `openai/gpt-5.6-luna` contract. Digest generation uses `max` reasoning.
 
-Hidden configured models, confirmed by the user on 2026-08-18:
-
-| Code name       | Current OpenRouter ID       | User selectable |
-| --------------- | --------------------------- | --------------- |
-| Claude Sonnet 5 | `anthropic/claude-sonnet-5` | No              |
-| Claude Opus 5   | `anthropic/claude-opus-5`   | No              |
-
-- Keep these Claude models in the central typed model registry with display metadata and provider configuration, but mark them hidden so they never appear in model lists or selection controls.
-- Hidden models may be used programmatically and must remain valid server-side model identifiers.
-- While OpenRouter is the active development gateway, both hidden Claude models use Anthropic automatic prompt caching and explicit large-context breakpoints with a one-hour TTL.
-
-Resolve each target to its current provider or OpenRouter model ID from the stored OpenScholar model list during implementation, and verify direct PDF input, streaming, and tool calling before enabling it. Do not guess or preserve stale IDs.
-
-`openai/gpt-5.6-luna` is the default and the fixed cheap model for generated starter questions. GPT-5.6 Sol, Terra, Pro/batch variants, and Claude models other than the two hidden entries above are excluded.
-
-The user's selected model handles Summary, Explain, chat, Quick Answer, Deep Research, and Smart Screening. Starter-question generation is the only fixed-model exception.
+The user's selected model handles Summary, Explain, chat, Quick Answer, Deep Research, and Smart Screening. Starter questions and weekly digests are fixed-model exceptions.
 
 ## Current audited feature behavior
 
@@ -208,8 +194,7 @@ Conceptual input:
 - Deep Research searches default to full-text-only. If those results are missing or insufficient, the model may retry without the filter, but metadata-only results remain discovery leads and must not be presented as page-verified evidence.
 - If search produces no results, the agent may return a clear no-results answer without a PDF read.
 - Let the model choose search queries and publications. Do not recreate a bespoke planner/relevance/synthesis pipeline or separate orchestration service.
-- Keep provider-default reasoning for the initial search-query step. Use each model's verified maximum reasoning effort when selecting publications to read and for subsequent synthesis after a PDF read: `max` for GPT-5.6 Luna, `xhigh` for Grok 4.6, and `high` for Gemini 3.7 Flash. Reverify these values when the gateway or model IDs change.
-- If invoked programmatically, hidden Claude Sonnet 5 and Claude Opus 5 use verified `max` reasoning effort for those same Deep Research steps.
+- Keep provider-default reasoning for dynamic catalog models. Luna uses its verified `max` setting when selecting publications to read and synthesizing after a read. Do not guess unsupported reasoning levels for new models.
 - In publication context, begin with the current publication and keep the research focused on it unless wider evidence is required.
 
 ### Smart Screening
@@ -251,7 +236,7 @@ Conceptual input:
 ## Validation, errors, and telemetry
 
 - Validate every AI route request and every tool input with typed schemas.
-- Keep model and feature identifiers as closed code-defined values.
+- Keep feature identifiers closed. Model identifiers come from the library configuration, with syntax validation and server-side selection enforcement.
 - Stream controlled errors that the existing UI can display. Missing key, provider failure, invalid input, unavailable PDF, oversize provider rejection, tool failure, and exhausted step limit must not crash the app.
 - When no AI credential path is configured, disable AI features cleanly in the UI and reject direct API calls cleanly. Similar Resources remains available.
 - Send PostHog metadata only: feature, selected model, token usage, cost, duration, tool counts, success/failure, and a safe error category.

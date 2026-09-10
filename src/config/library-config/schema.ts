@@ -5,7 +5,6 @@ import { z } from "zod";
 import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
 
 import {
-	PLATFORM_AI_MODEL_CATALOG,
 	PLATFORM_AI_PROVIDERS,
 	PLATFORM_FONT_CATALOG,
 	PLATFORM_LOCALES,
@@ -27,6 +26,7 @@ import {
 	internalLinkSchema,
 	linkSchema,
 	modelIdSchema,
+	isOpenRouterModelId,
 	nonEmptyStringSchema,
 	plainTextSchema,
 	postgresUrlSchema,
@@ -1415,15 +1415,15 @@ function addAIProviderModelIssues(
 	provider: AIProviderConfiguration,
 	context: z.RefinementCtx,
 ) {
-	const activeModels = PLATFORM_AI_MODEL_CATALOG[provider.provider]
-		.active as readonly string[];
 	const seenModels = new Set<string>();
 
 	for (const [index, model] of provider.models.entries()) {
-		if (!activeModels.includes(model)) {
+		const validModel =
+			provider.provider !== "openrouter" || isOpenRouterModelId(model);
+		if (!validModel) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: `${model} is not an approved ${provider.provider} model`,
+				message: `${model} is not a valid ${provider.provider} model identifier`,
 				path: ["models", index],
 			});
 		}
@@ -1463,12 +1463,28 @@ function addAIProviderDefaultModelIssues(
 	}
 }
 
+const aiModelMetadataSchema = z
+	.record(
+		modelIdSchema,
+		z
+			.object({
+				name: singleLineStringSchema(256),
+				company: singleLineStringSchema(128),
+			})
+			.strict(),
+	)
+	.refine((metadata) => Object.keys(metadata).length <= 20, {
+		message: "At most 20 model descriptions are allowed",
+	})
+	.optional();
+
 const aiProviderSchema = z
 	.object({
 		provider: z.enum(PLATFORM_AI_PROVIDERS),
 		enabled: z.boolean().default(false),
 		apiKey: secretSchema(1, 512).optional(),
 		models: z.array(modelIdSchema).max(20).default([]),
+		modelMetadata: aiModelMetadataSchema,
 		defaultModel: modelIdSchema.optional(),
 	})
 	.strict()
@@ -1476,6 +1492,15 @@ const aiProviderSchema = z
 		addAIProviderRequirementIssues(provider, context);
 		addAIProviderModelIssues(provider, context);
 		addAIProviderDefaultModelIssues(provider, context);
+		for (const id of Object.keys(provider.modelMetadata ?? {})) {
+			if (!provider.models.includes(id))
+				context.addIssue({
+					code: "custom",
+					path: ["modelMetadata", id],
+					message:
+						"Model descriptions must belong to configured models",
+				});
+		}
 	});
 
 function promptValueSchema(slot: (typeof PLATFORM_PROMPT_SLOTS)[number]) {
@@ -2029,6 +2054,7 @@ const publicAiProviderSchema = z
 		provider: z.enum(PLATFORM_AI_PROVIDERS),
 		enabled: z.boolean(),
 		models: z.array(modelIdSchema).max(20),
+		modelMetadata: aiModelMetadataSchema,
 		defaultModel: modelIdSchema.optional(),
 	})
 	.strict();
@@ -2089,6 +2115,7 @@ export {
 	internalLinkSchema,
 	linkSchema,
 	modelIdSchema,
+	isOpenRouterModelId,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
 	revisionSchema,

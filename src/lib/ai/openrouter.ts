@@ -2,8 +2,7 @@ import { createHash } from "node:crypto";
 import type { OpenRouterChatSettings } from "@openrouter/ai-sdk-provider";
 
 import {
-	getAIModel,
-	maximumReasoningEffort,
+	CONTRACT_STARTER_QUESTIONS_MODEL_ID,
 	type AIModelId,
 	type AIProvider,
 } from "./models";
@@ -28,12 +27,6 @@ export function openRouterSessionId(scope: string, ...parts: string[]) {
 	return `${scope}:${digest}`;
 }
 
-function openRouterModel(provider: AIProvider, modelId: AIModelId) {
-	return provider === "openrouter"
-		? getAIModel(modelId).openRouter
-		: undefined;
-}
-
 /**
  * The explicit cache breakpoint to place after the largest stable part of a
  * prompt. Only models that need one (Anthropic) have it; the rest cache
@@ -43,10 +36,13 @@ export function openRouterCacheBreakpoint(
 	provider: AIProvider,
 	modelId: AIModelId,
 ) {
-	const promptCache = openRouterModel(provider, modelId)?.promptCache;
-	if (promptCache?.mode !== "anthropic-explicit") return undefined;
-
-	return { openrouter: { cacheControl: promptCache.breakpoint } };
+	if (provider !== "openrouter" || !modelId.startsWith("anthropic/"))
+		return undefined;
+	return {
+		openrouter: {
+			cacheControl: { type: "ephemeral" as const, ttl: "1h" as const },
+		},
+	};
 }
 
 /**
@@ -59,23 +55,18 @@ export function openRouterModelSettings(
 	modelId: AIModelId,
 	options: { sessionId?: string } = {},
 ): OpenRouterChatSettings {
-	const model = openRouterModel(provider, modelId);
-	if (!model) return {};
-
-	const breakpoint =
-		model.promptCache.mode === "anthropic-explicit"
-			? model.promptCache.breakpoint
-			: undefined;
+	if (provider !== "openrouter") return {};
+	const breakpoint = openRouterCacheBreakpoint(provider, modelId)?.openrouter
+		.cacheControl;
 
 	return {
 		usage: { include: true as const },
-		// Preferred OpenRouter hosts for this model (Bedrock for Luna, AI
-		// Studio for Gemini). Fallbacks stay on, so a host outage degrades to
-		// another host of the same model, never to a different model.
-		...(model.providerOrder.length > 0
+		// Luna's verified endpoint needs its regional tag. Other models use
+		// OpenRouter's current routing rather than a baked-in host list.
+		...(modelId === CONTRACT_STARTER_QUESTIONS_MODEL_ID
 			? {
 					provider: {
-						order: [...model.providerOrder],
+						order: ["amazon-bedrock/us-east-1"],
 						allow_fallbacks: true,
 					},
 				}
@@ -99,9 +90,8 @@ export function openRouterResponseCacheHeaders(
 }
 
 /**
- * Raises a model to the reasoning level the contract verified for it. Deep
- * Research uses this when it chooses which publications to read and when it
- * writes the answer. A model with no verified level keeps its default.
+ * Luna uses the fixed contract effort. Other models keep their provider
+ * default, which avoids sending unsupported reasoning levels to new models.
  */
 export function openRouterMaximumReasoningSettings(
 	provider: AIProvider,
@@ -109,11 +99,10 @@ export function openRouterMaximumReasoningSettings(
 	settings: OpenRouterChatSettings,
 ): OpenRouterChatSettings | undefined {
 	if (provider !== "openrouter") return undefined;
-	const effort = maximumReasoningEffort(modelId);
-	if (!effort) return undefined;
+	if (modelId !== CONTRACT_STARTER_QUESTIONS_MODEL_ID) return undefined;
 
 	return {
 		...settings,
-		extraBody: { ...settings.extraBody, reasoning: { effort } },
+		extraBody: { ...settings.extraBody, reasoning: { effort: "max" } },
 	};
 }

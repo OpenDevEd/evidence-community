@@ -33,7 +33,6 @@ import {
 } from "@/lib/ai/request-context";
 import { chatRequestSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
-import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { getCachedItem } from "../../cache";
 
 export const maxDuration = 240;
@@ -79,13 +78,7 @@ async function currentPublication(itemKey?: string) {
 	if (!item) {
 		throw new AIError("ITEM_NOT_FOUND", "Item not found.", 404);
 	}
-	if (!hasVisiblePdfAttachment(item)) {
-		throw new AIError(
-			"INVALID_REQUEST",
-			"This publication has no readable PDF.",
-			403,
-		);
-	}
+
 
 	return { key: item.key, title: item.title || "Untitled publication" };
 }

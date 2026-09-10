@@ -1,16 +1,15 @@
-import { getAIModelPresentation } from "@/constants/ai";
+import type { AIModelPresentation } from "@/constants/ai";
 import { useAIFeature } from "@/hooks/useAIFeature";
 import React from "react";
 
 export const AI_DROPDOWN_ITEMS = (
     t: any,
-    selectedModelId: string | null,
+    presentation: AIModelPresentation,
     onChangeOpenChange: () => void,
     summaryFeature: ReturnType<typeof useAIFeature>,
     explainFeature: ReturnType<typeof useAIFeature>,
     onChatOpenChange: () => void,
 ) => {
-    const presentation = getAIModelPresentation(selectedModelId);
     return [
         {
             key: "change",

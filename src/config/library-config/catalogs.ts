@@ -92,35 +92,14 @@ export const PLATFORM_FONT_CATALOG = {
 	},
 } as const;
 
-export const PLATFORM_AI_MODEL_CATALOG = {
-	openai: {
-		active: ["gpt-5.4", "gpt-5.4-mini"],
-	},
-	google: {
-		active: ["gemini-2.5-flash", "gemini-2.5-pro"],
-	},
-	anthropic: {
-		active: ["claude-sonnet-4-6", "claude-haiku-4-5"],
-	},
-	mistral: {
-		active: ["mistral-large-latest", "mistral-small-latest"],
-	},
-	deepseek: {
-		active: ["deepseek-v4-pro", "deepseek-v4-flash"],
-	},
-	openrouter: {
-		active: [
-			"openai/gpt-5.6-luna",
-			"google/gemini-3.7-flash",
-			"x-ai/grok-4.6",
-		],
-	},
-} as const;
-
-export const PLATFORM_AI_PROVIDERS = Object.keys(PLATFORM_AI_MODEL_CATALOG) as [
-	keyof typeof PLATFORM_AI_MODEL_CATALOG,
-	...(keyof typeof PLATFORM_AI_MODEL_CATALOG)[],
-];
+export const PLATFORM_AI_PROVIDERS = [
+	"openai",
+	"google",
+	"anthropic",
+	"mistral",
+	"deepseek",
+	"openrouter",
+] as const;
 
 export const PLATFORM_PROMPT_SLOTS = [
 	"questions",

@@ -16,7 +16,6 @@ import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST } from "@/lib/utils";
-import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
@@ -47,7 +46,7 @@ function AiButton({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const { selectedModelId, setSelectedModelId } = useSelectedModel();
+	const { selectedModelId, setSelectedModelId, modelPresentation } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
 		...analyticsIdField(getAnalyticsDistinctId()),
@@ -204,7 +203,7 @@ function AiButton({
 					<DropdownMenu
 						items={AI_DROPDOWN_ITEMS(
 							t,
-							selectedModelId,
+							modelPresentation,
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,
@@ -239,10 +238,9 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const aiAllowed = hasVisiblePdfAttachment(data?.item);
 	const isAIEnabled = useLibraryFeature("ai");
 
-	if (!isAIEnabled || !aiAllowed) return null;
+	if (!isAIEnabled || !data?.item) return null;
 
 	return <AiButton data={data} variant={variant} />;
 }

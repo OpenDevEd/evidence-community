@@ -1,4 +1,5 @@
 "use client";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -205,6 +206,7 @@ export function useTranscriptExport<TMessage extends UIMessage>({
 	modelId: string;
 }) {
 	const t = useTranslations("ai");
+	const { ai } = useLibraryConfig();
 	const tUI = useTranslations("ui");
 
 	return useCallback(
@@ -221,7 +223,7 @@ export function useTranscriptExport<TMessage extends UIMessage>({
 				{
 					title: t("askAI"),
 					user: tUI("genericUser"),
-					assistant: getAIModelPresentation(modelId).name,
+					assistant: getAIModelPresentation(modelId, ai.providers).name,
 					reasoning: t("reasoning"),
 					smartScreening: tUI("smartScreening"),
 				},
@@ -229,7 +231,7 @@ export function useTranscriptExport<TMessage extends UIMessage>({
 			);
 			return { content, ...CHAT_EXPORT_OUTPUT[format] };
 		},
-		[messages, modelId, t, tUI],
+		[messages, modelId, t, tUI, ai.providers],
 	);
 }
 

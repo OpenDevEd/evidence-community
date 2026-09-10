@@ -417,8 +417,13 @@ describe("AI routes", () => {
 		expect(options.companyName).toBe("Evidence Library");
 	});
 
-	it("gives the agent the publication the reader has open", async () => {
-		await chat(chatRequest({ itemKey: "ITEM0001" }));
+	it("gives the agent the publication context even when it has no PDF", async () => {
+		const { getCachedItem } = await import("@/app/api/cache");
+		const publication = await getCachedItem("ITEM0001");
+		if (!publication?.item) throw new Error("Missing publication fixture");
+		vi.mocked(getCachedItem).mockResolvedValueOnce({...publication, item: {...publication.item, attachmentsData: []}});
+		const response = await chat(chatRequest({ itemKey: "ITEM0001" }));
+		expect(response.status).toBe(200);
 
 		const validated = mocks.validateMessages.mock.results[0];
 		expect(validated).toBeDefined();

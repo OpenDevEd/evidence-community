@@ -4,11 +4,38 @@ import {
 	OPENROUTER_RESPONSE_CACHE_TTL,
 	openRouterCacheBreakpoint,
 	openRouterModelSettings,
+	openRouterMaximumReasoningSettings,
 	openRouterResponseCacheHeaders,
 	openRouterSessionId,
 } from "@/lib/ai/openrouter";
 
 describe("gateway settings for a request", () => {
+	it("uses current provider defaults for new catalog models and keeps Luna's fixed effort", () => {
+		expect(
+			openRouterModelSettings(
+				"openrouter",
+				"deepseek/deepseek-v4.1-flash",
+				{ sessionId: "chat:test" },
+			),
+		).toEqual({
+			usage: { include: true },
+			extraBody: { session_id: "chat:test" },
+		});
+		expect(
+			openRouterMaximumReasoningSettings(
+				"openrouter",
+				"deepseek/deepseek-v4.1-flash",
+				{},
+			),
+		).toBeUndefined();
+		expect(
+			openRouterMaximumReasoningSettings(
+				"openrouter",
+				"openai/gpt-5.6-luna",
+				{},
+			),
+		).toMatchObject({ extraBody: { reasoning: { effort: "max" } } });
+	});
 	it("prefers the hosts a model needs and reports its cost", () => {
 		const settings = openRouterModelSettings(
 			"openrouter",
