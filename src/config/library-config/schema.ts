@@ -2115,7 +2115,6 @@ export {
 	internalLinkSchema,
 	linkSchema,
 	modelIdSchema,
-	isOpenRouterModelId,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
 	revisionSchema,
