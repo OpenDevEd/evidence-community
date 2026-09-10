@@ -137,7 +137,7 @@ export async function sendEmailForConfig(
 	const recipient = getEmailRecipient(config, channel);
 	if (!recipient) return null;
 
-	const from = config.email.smtp.from;
+	const from = config.contact.email ?? config.email.smtp.from;
 	if (!from) {
 		throw new Error(
 			"Enabled runtime email requires an SMTP sender",
@@ -161,5 +161,6 @@ export async function sendNotificationEmail(config: LibraryServerConfig, message
 }) {
   const transporter = await getEmailTransportForConfig(config);
   if (!transporter || !config.email.smtp.from) throw new Error("Library email is not configured");
-  return transporter.sendMail({ from: { name: config.identity.name, address: config.email.smtp.from }, ...message });
+  const address = config.contact.email ?? config.email.smtp.from;
+  return transporter.sendMail({ from: { name: config.identity.name, address }, replyTo: address, ...message });
 }
