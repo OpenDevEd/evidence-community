@@ -37,6 +37,8 @@ async function expectCrossrefSynced(page: Page) {
 
 test("[publication:reserve] reserves internally, then activates both providers through approval", async ({page}, testInfo) => {
     const inspector = await openPublicationRecord(page);
+    const registerDoi = inspector.getByRole("switch", {name: "Register a DOI", exact: true});
+    await registerDoi.check();
     const route = inspector.getByRole("button", {name: "Crossref + Zenodo", exact: true});
     await route.click();
     await expect(route).toHaveAttribute("aria-pressed", "true");

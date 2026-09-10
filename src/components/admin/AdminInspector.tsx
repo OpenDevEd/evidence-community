@@ -1656,7 +1656,7 @@ export function AdminInspector({
 									state={saveState}
 								/>
 							</div>
-							{versionActions ?? (
+							{versionActions ?? (!readOnlyVersion && (
 								<div className="mt-4 flex min-h-9 flex-wrap items-center gap-2">
 									{!detail.parentItem &&
 									detail.writeback.available.length > 0 ? (
@@ -1797,7 +1797,7 @@ export function AdminInspector({
 										</>
 									) : null}
 								</div>
-							)}
+							))}
 						</>
 					}
 					<ValidationSummary

@@ -44,8 +44,7 @@ export function AuthorPickerDialog({
 	const {
 		nameId,
 		search,
-		setSearch,
-		applySearch,
+		changeSearch,
 		cursors,
 		setCursors,
 		page,
@@ -153,10 +152,7 @@ export function AuthorPickerDialog({
 								maxLength={200}
 								placeholder="Search authors by name"
 								value={search}
-								onValueChange={(value) => {
-									setSearch(value);
-									applySearch(value);
-								}}
+								onValueChange={changeSearch}
 								startContent={
 									<HugeiconsIcon
 										icon={Search01Icon}
@@ -175,10 +171,7 @@ export function AuthorPickerDialog({
 										<button
 											type="button"
 											aria-label="Clear author search"
-											onClick={() => {
-												setSearch("");
-												applySearch("");
-											}}
+											onClick={() => changeSearch("")}
 										>
 											<HugeiconsIcon
 												icon={Cancel01Icon}
@@ -482,6 +475,11 @@ function useAuthorPicker({
 			errorRetryCount: 1,
 		},
 	);
+	const changeSearch = (value: string) => {
+		setSelected(undefined);
+		setSearch(value);
+		applySearch(value);
+	};
 	const busy = search !== query || catalog.isValidating;
 	const close = () => {
 		if (!saving) onClose();
@@ -489,8 +487,7 @@ function useAuthorPicker({
 	return {
 		nameId,
 		search,
-		setSearch,
-		applySearch,
+		changeSearch,
 		cursors,
 		setCursors,
 		page,
@@ -528,6 +525,7 @@ function AuthorPickerFooter({
 		setSaving,
 		setError,
 		selected,
+		busy,
 		close,
 	} = state;
 	return (
@@ -566,7 +564,7 @@ function AuthorPickerFooter({
 					color="accent"
 					className="h-9 gap-1.5 rounded-xl text-xs font-medium"
 					isLoading={saving}
-					isDisabled={creating ? !name.trim() : !selected}
+					isDisabled={creating ? !name.trim() : !selected || busy}
 					startContent={
 						<HugeiconsIcon
 							icon={creating ? Add01Icon : Tick01Icon}
@@ -575,7 +573,7 @@ function AuthorPickerFooter({
 					}
 					onPress={async () => {
 						if (!creating) {
-							if (selected) onSelect(selected);
+							if (selected && !busy) onSelect(selected);
 							return;
 						}
 						setSaving(true);

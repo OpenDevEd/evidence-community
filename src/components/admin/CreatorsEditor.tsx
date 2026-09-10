@@ -123,15 +123,11 @@ export function CreatorsEditor({
 						onModeChange={(mode) => {
 							if (mode === modeFor(creator, index)) return;
 							setModes({ ...modes, [index]: mode });
+							if (mode === "profile") return;
 							const next = profile
 								? creatorFromProfile(creator, profile)
 								: { ...creator };
 							delete next.authorProfileId;
-							if (mode === "profile") {
-								delete next.name;
-								next.firstName = "";
-								next.lastName = "";
-							}
 							replace(index, next);
 						}}
 						onPick={() => setPicker(index)}
