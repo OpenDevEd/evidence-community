@@ -52,17 +52,17 @@ describe("gateway settings for a request", () => {
 		expect(settings).not.toHaveProperty("cache_control");
 	});
 
-	it("caches the Claude models explicitly for an hour", () => {
+	it.each(["anthropic/claude-opus-5", "~anthropic/claude-sonnet-5"])("caches %s explicitly for an hour", (modelId) => {
 		const settings = openRouterModelSettings(
 			"openrouter",
-			"anthropic/claude-opus-5",
+			modelId,
 		);
 
 		expect(settings).toMatchObject({
 			cache_control: { type: "ephemeral", ttl: "1h" },
 		});
 		expect(
-			openRouterCacheBreakpoint("openrouter", "anthropic/claude-opus-5"),
+			openRouterCacheBreakpoint("openrouter", modelId),
 		).toEqual({
 			openrouter: { cacheControl: { type: "ephemeral", ttl: "1h" } },
 		});

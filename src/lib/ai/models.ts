@@ -24,6 +24,10 @@ const MODEL_COMPANIES: Record<string, string> = {
 	"z-ai": "Z.ai",
 };
 
+export function modelPublisher(modelId: AIModelId): string {
+	return modelId.replace(/^~/u, "").split("/")[0];
+}
+
 /** Catalog names are supplied by OpenScholar. Hand-written configurations can use the id. */
 export function getAIModel(
 	modelId: AIModelId,
@@ -35,7 +39,7 @@ export function getAIModel(
 			return metadata[modelId];
 	}
 	const publisher = modelId.includes("/")
-		? modelId.replace(/^~/u, "").split("/")[0]
+		? modelPublisher(modelId)
 		: providers.find((provider) => provider.models.includes(modelId))?.provider ?? "";
 	return {
 		name: modelId,

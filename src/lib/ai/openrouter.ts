@@ -3,6 +3,7 @@ import type { OpenRouterChatSettings } from "@openrouter/ai-sdk-provider";
 
 import {
 	CONTRACT_STARTER_QUESTIONS_MODEL_ID,
+	modelPublisher,
 	type AIModelId,
 	type AIProvider,
 } from "./models";
@@ -36,7 +37,7 @@ export function openRouterCacheBreakpoint(
 	provider: AIProvider,
 	modelId: AIModelId,
 ) {
-	if (provider !== "openrouter" || !modelId.startsWith("anthropic/"))
+	if (provider !== "openrouter" || modelPublisher(modelId) !== "anthropic")
 		return undefined;
 	return {
 		openrouter: {
