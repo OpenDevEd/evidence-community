@@ -22,7 +22,7 @@ export function PublishingChoicePanel({
 	model: ReturnType<typeof usePublishingChoice>;
 }) {
 	const { saved, reservation, saving, save, onReserve } = model;
-	const value = readOnly ? choice : saved.data?.choice;
+	const value = choice === undefined ? saved.data?.choice : choice;
 	const route = value?.route;
 	const enabled = Boolean(value);
 	const controlsDisabled =

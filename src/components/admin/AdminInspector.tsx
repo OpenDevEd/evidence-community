@@ -1824,8 +1824,8 @@ export function AdminInspector({
 						{publishing && (
 							<PublishingChoicePanel
 								detail={detail}
-								readOnly={readOnlyVersion}
-								choice={publishingChoice}
+								readOnly={readOnlyVersion || readOnly}
+								choice={readOnlyVersion ? publishingChoice ?? null : undefined}
 								model={publishing}
 							/>
 						)}
