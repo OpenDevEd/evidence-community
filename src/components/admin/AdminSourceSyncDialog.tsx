@@ -9,6 +9,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
+	Spinner,
 	ModalContent,
 	ModalFooter,
 	ModalHeader,
@@ -171,7 +172,7 @@ function issuesNotice({
 	showDismissed: boolean;
 	shown: number;
 }) {
-	if (isLoading) return "Loading issues…";
+	if (isLoading) return <Spinner aria-label="Loading issues" size="sm" />;
 	if (error) return "Issues could not be loaded.";
 	if (!data) return null;
 	const total = showDismissed ? data.dismissedTotal : data.total;
@@ -312,12 +313,12 @@ function SyncIssues({
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex items-center justify-between gap-2">
-				<p
+				<div
 					aria-live="polite"
 					className={`text-xs ${list.error ? "text-danger" : "text-black/55 dark:text-white/55"}`}
 				>
 					{notice}
-				</p>
+				</div>
 				<ViewToggle data={list.data} onToggle={list.toggleView} showDismissed={list.showDismissed} />
 			</div>
 			{list.actionError ? (
@@ -344,11 +345,12 @@ function SyncIssues({
 			{list.hasMore ? (
 				<Button
 					isDisabled={list.busyKey !== null}
+					isLoading={list.busyKey === "more"}
 					onPress={list.loadMore}
 					size="xs"
 					variant="transparent"
 				>
-					{list.busyKey === "more" ? "Loading…" : "Load more"}
+					Load more
 				</Button>
 			) : null}
 		</div>

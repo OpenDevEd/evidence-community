@@ -8,6 +8,7 @@ import {
 import type { AdminCreator } from "@/lib/admin/types";
 import {
 	ModalBody,
+	Spinner,
 	ModalContent,
 	ModalFooter,
 	ModalHeader,
@@ -338,13 +339,13 @@ function AuthorProfileSearch({
 						</span>
 					</button>
 				))}
-				{!profiles.length && (
+				{isLoading ? (
+					<div className="flex min-h-24 items-center justify-center"><Spinner aria-label="Loading author profiles" size="sm" /></div>
+				) : !profiles.length && (
 					<p className="py-6 text-center text-sm text-black/45 dark:text-white/45">
 						{error
 							? "Unable to load author profiles. Try again shortly."
-							: isLoading
-								? "Loading author profiles…"
-								: "No matching author profiles."}
+							: "No matching author profiles."}
 					</p>
 				)}
 			</div>
