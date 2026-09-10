@@ -39,6 +39,15 @@ function randomUUID() {
 	);
 }
 
+function saveHistoryEntry(previous: Record<string, AIHistory[]>, feature: string, entry: AIHistory) {
+	const history = previous[feature] ?? [];
+	const exists = history.some(({id}) => id === entry.id);
+	const next = exists
+		? history.map((item) => item.id === entry.id ? {...item, content: entry.content} : item)
+		: [entry, ...history];
+	return {...previous, [feature]: next};
+}
+
 function AiButton({
 	data,
 	variant,
@@ -86,23 +95,14 @@ function AiButton({
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
 		if (!selectedModelId) return;
-		setHistories((prev) => {
-			const newHistory = prev[prompt] || [];
-			const obj = newHistory.find((item) => item.id === id);
-			if (obj) {
-				obj.content = completion;
-			} else {
-				newHistory.unshift({
-					id,
-					content: completion,
-					date: new Date(),
-					title: data!.item!.title!,
-					key: data!.item!.key!,
-					modelId: selectedModelId,
-				});
-			}
-			return { ...prev, [prompt]: newHistory };
-		});
+		setHistories((previous) => saveHistoryEntry(previous, prompt, {
+			id,
+			content: completion,
+			date: new Date(),
+			title: data!.item!.title!,
+			key: data!.item!.key!,
+			modelId: selectedModelId,
+		}));
 	};
 
 	const summaryFeature = useAIFeature(
