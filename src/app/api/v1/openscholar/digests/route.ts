@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { ADMIN_RESPONSE_HEADERS, adminErrorResponse } from "@/lib/admin/http";
 import { requireOpenScholarBearer } from "@/lib/admin/openscholar-bearer";
 import { prepareNotificationEditions } from "@/lib/notifications/editions";
@@ -10,9 +10,10 @@ export async function POST(request: Request) {
   const denied = await requireOpenScholarBearer(request);
   if (denied) return denied;
   try {
+    const config = await getLibraryConfig();
     const result = await prepareNotificationEditions(
-      await getDatabase(),
-      await getLibraryConfig(),
+      await getDatabaseForConfig(config),
+      config,
       new Date(),
       { manualWeekly: true },
     );
