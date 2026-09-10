@@ -20,6 +20,12 @@ vi.mock("@/components/features/items/Resource", () => ({
 }));
 
 import { AIMarkdown } from "@/components/features/markdown/Markdown";
+import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
+import { projectPublicLibraryConfig } from "@/config/library-config/public";
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import { minimalLibraryConfig } from "../fixtures/library-config";
+
+const config = projectPublicLibraryConfig(libraryConfigSchema.parse(minimalLibraryConfig));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -36,7 +42,11 @@ describe("what an AI answer shows the reader", () => {
 
 	async function render(answer: string) {
 		await act(async () => {
-			root.render(<AIMarkdown>{answer}</AIMarkdown>);
+			root.render(
+				<LibraryConfigProvider config={config}>
+					<AIMarkdown>{answer}</AIMarkdown>
+				</LibraryConfigProvider>,
+			);
 		});
 		return container;
 	}

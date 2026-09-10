@@ -15,7 +15,7 @@ function PreferenceChoices({ value, onChange, schedule }: { value: Preferences; 
   return <div className="space-y-5">
     {([
       { key: "weekly", icon: Calendar03Icon, label: "Weekly digest", help: schedule },
-      { key: "instant", icon: BookOpen01Icon, label: "New publications", help: "New additions, grouped into hourly emails" },
+      { key: "instant", icon: BookOpen01Icon, label: "New publications", help: "Updates when publications are added" },
     ] as const).map(option => <div key={option.key} className="flex items-center gap-3">
       <span className={muted}><Icon value={option.icon} /></span>
       <div className="min-w-0 flex-1"><label htmlFor={`updates-${option.key}`} className="cursor-pointer text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</label><p className={`mt-0.5 text-xs ${muted}`}>{option.help}</p></div>

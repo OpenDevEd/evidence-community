@@ -85,7 +85,6 @@ function DigestDetail({data, initial, base}: Omit<ViewProps, "locale">) {
         <article className="min-w-0 lg:col-span-8 xl:col-span-9">
           <header className="mb-9"><h1 className="text-3xl font-medium leading-tight">{edition.title}</h1><div className="mt-5"><EditionMeta edition={edition} /></div></header>
           <DigestContent edition={edition} />
-          <p className={`mt-9 text-xs leading-5 ${muted}`}>Generated from publication metadata.</p>
           <section className="mt-10" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount}</span></SectionTitle>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{edition.publications.map(work => <Resource key={work.key} as="div" abstract={false} hideUnapi itemKey={work.key} />)}</div>
