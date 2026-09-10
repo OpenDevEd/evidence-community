@@ -7,10 +7,10 @@ import { prepareNotificationEditions } from "@/lib/notifications/editions";
 
 /** OpenScholar checks the owner and organization dev flag before this service call. */
 export async function POST(request: Request) {
-  const denied = await requireOpenScholarBearer(request);
+  const config = await getLibraryConfig();
+  const denied = await requireOpenScholarBearer(request, config.authentication.openScholar.machineCredential);
   if (denied) return denied;
   try {
-    const config = await getLibraryConfig();
     const result = await prepareNotificationEditions(
       await getDatabaseForConfig(config),
       config,
