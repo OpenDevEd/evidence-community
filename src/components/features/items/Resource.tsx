@@ -1,3 +1,4 @@
+import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Add01Icon,
@@ -419,7 +420,9 @@ export default function Resource({
 			revalidateOnFocus: false,
 		});
 
-	const finalItemData = itemData ?? fetchedItemData?.item;
+	const sourceItemData = itemData ?? fetchedItemData?.item;
+	const {creators} = useAuthorProfiles(sourceItemData?.creators);
+	const finalItemData = sourceItemData ? {...sourceItemData, creators: creators ?? sourceItemData.creators} : undefined;
 	const finalIsLoading = !itemKey ? isLoading : fetchedItemDataLoading;
 	const transformedItem = finalItemData ? transformItem(finalItemData) : null;
 
@@ -427,8 +430,8 @@ export default function Resource({
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
 	const gapmaps = useGapMaps();
 	const matchedGapMaps = useMemo(
-		() => resolveGapMapsByTags(finalItemData?.tags, gapmaps),
-		[finalItemData?.tags, gapmaps],
+		() => resolveGapMapsByTags(sourceItemData?.tags, gapmaps),
+		[sourceItemData?.tags, gapmaps],
 	);
 	const gapMapHref = matchedGapMaps[0]?.href ?? null;
 

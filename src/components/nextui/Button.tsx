@@ -30,6 +30,7 @@ export const Button = extendVariants(NextUIButton, {
         border-black/10 dark:border-white/10`,
     },
     variant: {
+      muted: "border-none rounded-xl bg-default-100 text-black/75 font-medium shadow-none data-[hover=true]:bg-default-200 dark:bg-secondary dark:text-white/75 dark:data-[hover=true]:bg-white/[0.08] aria-pressed:bg-accent/15 aria-pressed:text-accent dark:aria-pressed:bg-accent/15 dark:aria-pressed:text-accent",
       default: "border-small rounded-2xl",
       solid: "border-none rounded-lg",
       transparent: "bg-transparent dark:bg-transparent border-none",
@@ -46,6 +47,7 @@ export const Button = extendVariants(NextUIButton, {
       true: "!px-0 !min-w-0 !aspect-square",
     }
   },
+  compoundVariants: [{variant: "muted", size: "xs", class: "h-9 gap-1.5"}],
   defaultVariants: {
     color: "secondary",
     variant: "default",

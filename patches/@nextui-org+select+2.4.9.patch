@@ -1,0 +1,52 @@
+diff --git a/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs b/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs
+index 83b42c4..083fd15 100644
+--- a/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs
++++ b/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs
+@@ -159,7 +159,7 @@ function useSelect(originalProps) {
+     triggerRef
+   );
+   const isInvalid = originalProps.isInvalid || validationState === "invalid" || isAriaInvalid;
+-  const { isPressed, buttonProps } = useAriaButton(triggerProps, triggerRef);
++  const { isPressed, buttonProps } = useAriaButton({ ...triggerProps, isDisabled: originalProps.isDisabled }, triggerRef);
+   const { focusProps, isFocused, isFocusVisible } = useFocusRing();
+   const { isHovered, hoverProps } = useHover({ isDisabled: originalProps.isDisabled });
+   const labelPlacement = useMemo(() => {
+diff --git a/node_modules/@nextui-org/select/dist/index.js b/node_modules/@nextui-org/select/dist/index.js
+index 80193b9..7450661 100644
+--- a/node_modules/@nextui-org/select/dist/index.js
++++ b/node_modules/@nextui-org/select/dist/index.js
+@@ -200,7 +200,7 @@ function useSelect(originalProps) {
+     triggerRef
+   );
+   const isInvalid = originalProps.isInvalid || validationState === "invalid" || isAriaInvalid;
+-  const { isPressed, buttonProps } = (0, import_use_aria_button.useAriaButton)(triggerProps, triggerRef);
++  const { isPressed, buttonProps } = (0, import_use_aria_button.useAriaButton)({ ...triggerProps, isDisabled: originalProps.isDisabled }, triggerRef);
+   const { focusProps, isFocused, isFocusVisible } = (0, import_focus.useFocusRing)();
+   const { isHovered, hoverProps } = (0, import_interactions.useHover)({ isDisabled: originalProps.isDisabled });
+   const labelPlacement = (0, import_react.useMemo)(() => {
+diff --git a/node_modules/@nextui-org/select/dist/select.js b/node_modules/@nextui-org/select/dist/select.js
+index e220b33..43e83ce 100644
+--- a/node_modules/@nextui-org/select/dist/select.js
++++ b/node_modules/@nextui-org/select/dist/select.js
+@@ -193,7 +193,7 @@ function useSelect(originalProps) {
+     triggerRef
+   );
+   const isInvalid = originalProps.isInvalid || validationState === "invalid" || isAriaInvalid;
+-  const { isPressed, buttonProps } = (0, import_use_aria_button.useAriaButton)(triggerProps, triggerRef);
++  const { isPressed, buttonProps } = (0, import_use_aria_button.useAriaButton)({ ...triggerProps, isDisabled: originalProps.isDisabled }, triggerRef);
+   const { focusProps, isFocused, isFocusVisible } = (0, import_focus.useFocusRing)();
+   const { isHovered, hoverProps } = (0, import_interactions.useHover)({ isDisabled: originalProps.isDisabled });
+   const labelPlacement = (0, import_react.useMemo)(() => {
+diff --git a/node_modules/@nextui-org/select/dist/use-select.js b/node_modules/@nextui-org/select/dist/use-select.js
+index 49cb697..85e9de5 100644
+--- a/node_modules/@nextui-org/select/dist/use-select.js
++++ b/node_modules/@nextui-org/select/dist/use-select.js
+@@ -177,7 +177,7 @@ function useSelect(originalProps) {
+     triggerRef
+   );
+   const isInvalid = originalProps.isInvalid || validationState === "invalid" || isAriaInvalid;
+-  const { isPressed, buttonProps } = (0, import_use_aria_button.useAriaButton)(triggerProps, triggerRef);
++  const { isPressed, buttonProps } = (0, import_use_aria_button.useAriaButton)({ ...triggerProps, isDisabled: originalProps.isDisabled }, triggerRef);
+   const { focusProps, isFocused, isFocusVisible } = (0, import_focus.useFocusRing)();
+   const { isHovered, hoverProps } = (0, import_interactions.useHover)({ isDisabled: originalProps.isDisabled });
+   const labelPlacement = (0, import_react.useMemo)(() => {

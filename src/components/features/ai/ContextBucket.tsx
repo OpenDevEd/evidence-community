@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo } from "react";
 import useSWR from "swr";
@@ -120,35 +122,38 @@ export function BucketList({
 	entries: BucketEntry[];
 	publications: BucketPublications;
 }) {
+	const { profiles } = useAuthorProfiles(Object.values(publications.byKey)?.flatMap(item => item.creators ?? []));
 	return (
-		<div className="flex min-w-0 flex-col gap-4">
-			<AnimatePresence initial={false} mode="popLayout">
-				{entries.map((entry) => (
-					<motion.div
-						key={entry.key}
-						layout
-						// Only measure again when the list itself changes, not
-						// on every render while an answer is arriving.
-						layoutDependency={entries}
-						initial={{ opacity: 0, y: -24, scale: 0.96 }}
-						animate={{ opacity: 1, y: 0, scale: 1 }}
-						exit={{ opacity: 0, scale: 0.96 }}
-						transition={{
-							type: "spring",
-							bounce: 0.25,
-							duration: 0.55,
-						}}
-					>
-						<BucketCard
-							item={publications.byKey[entry.key]}
-							isLoading={
-								publications.byKey[entry.key] === undefined &&
-								publications.isLoading
-							}
-						/>
-					</motion.div>
-				))}
-			</AnimatePresence>
-		</div>
+		<AuthorProfilesContext value={profiles}>
+			<div className="flex min-w-0 flex-col gap-4">
+				<AnimatePresence initial={false} mode="popLayout">
+					{entries.map((entry) => (
+						<motion.div
+							key={entry.key}
+							layout
+							// Only measure again when the list itself changes, not
+							// on every render while an answer is arriving.
+							layoutDependency={entries}
+							initial={{ opacity: 0, y: -24, scale: 0.96 }}
+							animate={{ opacity: 1, y: 0, scale: 1 }}
+							exit={{ opacity: 0, scale: 0.96 }}
+							transition={{
+								type: "spring",
+								bounce: 0.25,
+								duration: 0.55,
+							}}
+						>
+							<BucketCard
+								item={publications.byKey[entry.key]}
+								isLoading={
+									publications.byKey[entry.key] === undefined &&
+									publications.isLoading
+								}
+							/>
+						</motion.div>
+					))}
+				</AnimatePresence>
+			</div>
+		</AuthorProfilesContext>
 	);
 }

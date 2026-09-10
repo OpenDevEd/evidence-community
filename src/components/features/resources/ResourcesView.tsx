@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	CodeSquareIcon,
@@ -383,6 +385,8 @@ function ResourcesList({
 	view: string;
 }) {
 	const itemsContext = use(ItemsContext);
+	const { profiles } = useAuthorProfiles(itemsContext.itemsData?.items?.flatMap((item: Item) => item.creators ?? []));
+
 	const t = useTranslations("ui");
 	const actuallyNoData =
 		(!itemsContext.isItemsLoading &&
@@ -391,7 +395,7 @@ function ResourcesList({
 		itemsContext.itemsError;
 
 	return (
-		<>
+		<AuthorProfilesContext value={profiles}>
 			<ul
 				className={twMerge(
 					"gap-6 -mt-4",
@@ -428,7 +432,7 @@ function ResourcesList({
 					)
 				)}
 			</ul>
-		</>
+		</AuthorProfilesContext>
 	);
 }
 

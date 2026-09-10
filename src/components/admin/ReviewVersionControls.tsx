@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import type { AdminReviewSnapshot } from "./admin-api";
 
-export function ReviewVersionTabs({viewingSubmitted, onSelect}: {viewingSubmitted: boolean; onSelect: (submitted: boolean) => void}) {
+export function ReviewVersionTabs({viewingSubmitted, hasSubmitted, onSelect}: {viewingSubmitted: boolean; hasSubmitted: boolean; onSelect: (submitted: boolean) => void}) {
   return (
 		<div className="shrink-0">
 			<div
@@ -18,8 +18,10 @@ export function ReviewVersionTabs({viewingSubmitted, onSelect}: {viewingSubmitte
 						key={String(value)}
 						type="button"
 						aria-pressed={viewingSubmitted === value}
+						disabled={value && !hasSubmitted}
+						title={value && !hasSubmitted ? "No version has been submitted yet" : undefined}
 						onClick={() => onSelect(value)}
-						className={`relative flex min-h-11 flex-1 items-center justify-center gap-1.5 px-3 py-3 text-xs font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${viewingSubmitted === value ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/45 hover:text-black/70 dark:text-white/45"}`}
+						className={`disabled:cursor-not-allowed disabled:opacity-40 relative flex min-h-11 flex-1 items-center justify-center gap-1.5 px-3 py-3 text-xs font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${viewingSubmitted === value ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/45 hover:text-black/70 dark:text-white/45"}`}
 					>
 						<HugeiconsIcon
 							icon={value ? SquareLock01Icon : PencilIcon}
@@ -40,22 +42,24 @@ const reviewStates = {
     returned: {label: "Changes requested", icon: Comment01Icon},
     withdrawn: {label: "Withdrawn", icon: RotateLeft01Icon},
 };
-export function ReviewVersionNotice({snapshot, pending, canWithdraw, withdrawing, onWithdraw}: {
-  snapshot: AdminReviewSnapshot; pending: boolean; canWithdraw: boolean; withdrawing: boolean; onWithdraw: () => void;
+export function ReviewVersionNotice({snapshot, updatedAt, pending, canWithdraw, withdrawing, onWithdraw}: {
+  snapshot?: AdminReviewSnapshot; updatedAt: string; pending: boolean; canWithdraw: boolean; withdrawing: boolean; onWithdraw: () => void;
 }) {
+  const state = snapshot ? reviewStates[snapshot.reviewState] : {label: "Not submitted", icon: PencilIcon};
+  const timestamp = snapshot?.submittedAt ?? updatedAt;
   return (
 		<div className="mt-4 flex items-center gap-2.5">
 			<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/[0.08] text-accent-700 dark:text-accent-300">
-				<HugeiconsIcon icon={reviewStates[snapshot.reviewState].icon} size={16} />
+				<HugeiconsIcon icon={state.icon} size={16} />
 			</span>
 			<div className="min-w-0 flex-1">
 				<p className="text-xs font-medium text-black/75 dark:text-white/80">
-					{reviewStates[snapshot.reviewState].label}
+					{state.label}
 				</p>
 				<p className="mt-0.5 text-[10px] text-black/45 dark:text-white/45">
-					Submitted{" "}
-					<time dateTime={snapshot.submittedAt}>
-						{new Date(snapshot.submittedAt).toLocaleString(
+					{snapshot ? "Submitted" : "Edited"}{" "}
+					<time dateTime={timestamp}>
+						{new Date(timestamp).toLocaleString(
 							undefined,
 							{
 								month: "short",

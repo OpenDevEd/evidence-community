@@ -1945,6 +1945,7 @@ export default function AdminWorkbench({
 				</Link>
 				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-64 sm:max-w-lg sm:flex-1">
 					<Input
+						color="filled"
 						aria-label="Search records"
 						className="min-w-0 flex-1"
 						classNames={{
@@ -2123,6 +2124,7 @@ export default function AdminWorkbench({
 							<div className="w-full">
 								<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
 									<Input
+										color="filled"
 										aria-label="Find an item type"
 										autoFocus={finePointer}
 										placeholder="Find an item type"
@@ -2676,6 +2678,7 @@ export default function AdminWorkbench({
 									<>
 										<CollectionField label="Name">
 										<Input
+											color="filled"
 											aria-label="Name"
 											autoFocus={finePointer}
 											classNames={collectionControlClassNames}
@@ -2705,6 +2708,7 @@ export default function AdminWorkbench({
 													1 ? (
 													<CollectionField label="Source">
 													<Select
+														color="filled"
 														aria-label="Collection source"
 														classNames={{
 															base: "max-w-none",

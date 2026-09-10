@@ -9,8 +9,11 @@ import { Item, ItemGetResponse, Author } from "@/app/api/item/types";
 import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
 import { RelationsType } from "@/types/item";
-import { siDoi, siZenodo } from "simple-icons";
+import { siDoi } from "simple-icons";
+import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
+import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
 import { useFormatter, useTranslations } from "next-intl";
+import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import { Avatar, Divider, Spinner } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
@@ -66,6 +69,9 @@ import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
 import { buildSiteUrl } from "@/lib/site-url";
 import BrandIcon from "@/components/icons/BrandIcon";
+import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+import type { AuthorProfile } from "@/lib/authors/profiles";
+import { AuthorProfileHover } from "@/components/authors/AuthorProfileHover";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -178,7 +184,31 @@ function SidebarCard({
 	);
 }
 
-function ItemAuthor({ author }: { author?: Author }) {
+function LinkedItemAuthor({
+	author,
+	profile,
+}: {
+	author?: Author;
+	profile?: AuthorProfile;
+}) {
+	const t = useTranslations("creatorType");
+	return profile ? (
+		<AuthorProfileHover
+			profile={profile}
+			roleLabel={author ? t(author.creatorType) : ""}
+		/>
+	) : (
+		<ItemAuthor author={author} profile={profile} />
+	);
+}
+
+function ItemAuthor({
+	author,
+	profile,
+}: {
+	author?: Author;
+	profile?: AuthorProfile;
+}) {
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("creatorType");
 	const tUI = useTranslations("ui");
@@ -225,8 +255,9 @@ function ItemAuthor({ author }: { author?: Author }) {
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.2 }}
 					>
-						<Avatar
-							name={author ? formatAuthor(author).charAt(0) : "-"}
+						<AuthorAvatar
+							src={profile?.photo ?? undefined}
+							name={author ? formatAuthor(author) : "-"}
 							size="lg"
 							className="text-xl text-accent bg-accent/10 brightness-150"
 						/>
@@ -237,7 +268,7 @@ function ItemAuthor({ author }: { author?: Author }) {
 								animate={{ opacity: 1 }}
 								transition={{ delay: 0.1 }}
 							>
-								{author?.firstName} {author?.lastName}
+								{fullName}
 							</motion.h3>
 							<motion.p
 								className="text-sm text-black/60 dark:text-white/60"
@@ -324,21 +355,27 @@ function ItemAuthor({ author }: { author?: Author }) {
 					author?.authorProfileId
 						? `/api/author-profiles/${encodeURIComponent(author.authorProfileId)}`
 						: isAuthorFilterEnabled
-						? getSafeReferrer(referrer)
-						: undefined
+							? getSafeReferrer(referrer)
+							: undefined
 				}
 				params={
-					author?.authorProfileId ? undefined : fullName && isAuthorFilterEnabled
-						? { author: fullName, referrer: referrer ?? undefined }
-						: {}
+					author?.authorProfileId
+						? undefined
+						: fullName && isAuthorFilterEnabled
+							? {
+									author: fullName,
+									referrer: referrer ?? undefined,
+								}
+							: {}
 				}
 				isExternal={Boolean(author?.authorProfileId)}
 				className="opacity-100"
 			>
 				<ItemRow
 					icon={
-						<Avatar
-							name={author ? formatAuthor(author).charAt(0) : "-"}
+						<AuthorAvatar
+							src={profile?.photo ?? undefined}
+							name={author ? formatAuthor(author) : "-"}
 							size="sm"
 							className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
 						/>
@@ -354,17 +391,27 @@ function ItemAuthor({ author }: { author?: Author }) {
 function ItemAuthors({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	const authors = item?.creators as Author[];
+	const { creators: authors, profiles } = useAuthorProfiles(
+		item?.creators as Author[] | undefined,
+	);
 	if (!authors?.length && !loading) return null;
 
 	return (
 		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-						<ItemAuthor key={index} author={undefined} />
+						<LinkedItemAuthor key={index} author={undefined} />
 					))
 				: authors?.map((author: Author, index: number) => (
-						<ItemAuthor key={index} author={author} />
+						<LinkedItemAuthor
+							key={index}
+							author={author}
+							profile={
+								author.authorProfileId
+									? profiles.get(author.authorProfileId)
+									: undefined
+							}
+						/>
 					))}
 		</SidebarCard>
 	);
@@ -551,7 +598,9 @@ function ItemDetailsRow({
 									<span
 										dangerouslySetInnerHTML={{
 											__html: ProcessHTML(
-												escapeHtml(String(formattedValue)),
+												escapeHtml(
+													String(formattedValue),
+												),
 											),
 										}}
 										className="text-black/80 dark:text-white/80 text-wrap-anywhere"
@@ -812,40 +861,6 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 	);
 }
 
-function CrossrefLogo({ className }: { className?: string }) {
-	return (
-		<svg
-			viewBox="0 0 65.4 95.2"
-			role="img"
-			aria-label="Crossref"
-			className={className}
-		>
-			<g transform="translate(-111.8 -0.3)">
-				<polygon
-					fill="#3EB1C8"
-					points="111.8,95.5 111.8,66.8 135.4,59 177.2,73.3"
-				/>
-				<polygon
-					fill="#D8D2C4"
-					points="153.6,36.8 111.8,51.2 135.4,59 177.2,44.6"
-				/>
-				<polygon
-					fill="#4F5858"
-					points="135.4,59 177.2,44.6 177.2,73.3"
-				/>
-				<polygon
-					fill="#FFC72C"
-					points="177.2,0.3 177.2,29 153.6,36.8 111.8,22.5"
-				/>
-				<polygon
-					fill="#EF3340"
-					points="153.6,36.8 111.8,51.2 111.8,22.5"
-				/>
-			</g>
-		</svg>
-	);
-}
-
 type CanonicalWebsiteLink = {
 	provider: "website";
 	kind: "canonical";
@@ -886,10 +901,9 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 					style={{ backgroundImage: `url("${link.iconUrl}")` }}
 				/>
 			) : link.provider === "crossref" ? (
-				<CrossrefLogo className="h-6 w-4" />
+				<CrossrefIcon className="h-6 w-4" />
 			) : link.provider === "zenodo" ? (
-				<BrandIcon
-					icon={siZenodo}
+				<ZenodoIcon
 					className="size-5 text-zenodo"
 					aria-label="Zenodo"
 				/>

@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: string) => key,
@@ -24,6 +24,11 @@ describe("the controls under the message box", () => {
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
+	});
+
+	afterEach(async () => {
+		await act(async () => root.unmount());
+		container.remove();
 	});
 
 	async function render(overrides: Overrides = {}) {

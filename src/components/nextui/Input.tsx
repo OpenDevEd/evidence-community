@@ -1,9 +1,12 @@
 "use client";
 import { extendVariants, Input as NextUIInput } from "@nextui-org/react";
 
+import { filledInputSlots } from "./field-styles";
+
 export const Input = extendVariants(NextUIInput, {
 	variants: {
 		color: {
+			filled: filledInputSlots,
 			secondary: {
 				inputWrapper:
 					"bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
@@ -33,7 +36,8 @@ export const Input = extendVariants(NextUIInput, {
 		},
 		isInvalid: {
 			true: {
-				inputWrapper: "outline-medium outline-danger dark:outline-danger",
+				inputWrapper:
+					"outline-medium outline-danger dark:outline-danger",
 			},
 		},
 	},

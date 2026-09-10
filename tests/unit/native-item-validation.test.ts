@@ -13,6 +13,7 @@ import {
 import {
 	sourceRecordValidationOptions,
 	validateNativeItemDraft,
+    inspectNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
 
 function validFieldValue(field: { baseField?: string; field: string }) {
@@ -254,12 +255,7 @@ describe("native item draft validation", () => {
 			validateNativeItemDraft(sourceRecord, { requireTitle: true }),
 		).toThrow();
 		// Only the format check is relaxed; the length limit still applies.
-		expect(() =>
-			validateNativeItemDraft(
-				{ itemType: "book", url: "x".repeat(70_000) },
-				sourceRecordValidationOptions,
-			),
-		).toThrow("Check url");
+        expect(inspectNativeItemDraft({itemType: "book", url: "x".repeat(70_000)}, sourceRecordValidationOptions).fields).toHaveProperty("url");
 		expect(() =>
 			validateNativeItemDraft(
 				{
@@ -308,12 +304,7 @@ describe("native item draft validation", () => {
 			}
 		}
 
-		expect(() =>
-			validateNativeItemDraft({
-				itemType: "case",
-				dateDecided: "Spring 2024",
-			}),
-		).toThrow("Check date decided");
+        expect(inspectNativeItemDraft({itemType: "case", dateDecided: "Spring 2024"}).fields).toHaveProperty("dateDecided");
 
 		// A stored access date that is not a calendar date (issue #103) is
 		// cleared on save instead of leaving the record impossible to edit.
@@ -372,12 +363,7 @@ describe("native item draft validation", () => {
 	});
 
 	it("enforces Zotero note and annotation limits", () => {
-		expect(() =>
-			validateNativeItemDraft({
-				itemType: "Note",
-				note: "n".repeat(500_001),
-			}),
-		).toThrow("Check note");
+        expect(inspectNativeItemDraft({itemType: "Note", note: "n".repeat(500_001)}).fields).toHaveProperty("note");
 
 		const annotation = {
 			annotationPosition: '{"pageIndex":0,"rects":[]}',

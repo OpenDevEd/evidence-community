@@ -1,0 +1,179 @@
+diff --git a/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs b/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs
+index 84b4a96..531d498 100644
+--- a/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs
++++ b/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs
+@@ -199,10 +199,10 @@ function usePopover(originalProps) {
+     [slots, state.isOpen, classNames, underlayProps]
+   );
+   useEffect(() => {
+-    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
++    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
+       return ariaHideOutside([domRef == null ? void 0 : domRef.current]);
+     }
+-  }, [state.isOpen, domRef]);
++  }, [state.isOpen, isNonModal, domRef]);
+   return {
+     state,
+     Component,
+diff --git a/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs b/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs
+index d395507..3583845 100644
+--- a/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs
++++ b/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs
+@@ -7,7 +7,7 @@ import {
+ import * as React from "react";
+ import { DismissButton, Overlay } from "@react-aria/overlays";
+ import { forwardRef } from "@nextui-org/system";
+-import { LazyMotion, m } from "framer-motion";
++import { LazyMotion, m, useIsPresent } from "framer-motion";
+ import { mergeProps } from "@react-aria/utils";
+ import { getTransformOrigins } from "@nextui-org/aria-utils";
+ import { TRANSITION_VARIANTS } from "@nextui-org/framer-utils";
+@@ -54,6 +54,8 @@ var FreeSoloPopoverWrapper = forwardRef(
+ FreeSoloPopoverWrapper.displayName = "NextUI.FreeSoloPopoverWrapper";
+ var FreeSoloPopover = forwardRef(
+   ({ children, transformOrigin, disableDialogFocus = false, ...props }, ref) => {
++    // Closing menus must release outside clicks and focus during their exit animation.
++    const isPresent = useIsPresent();
+     const {
+       Component,
+       state,
+@@ -69,6 +71,8 @@ var FreeSoloPopover = forwardRef(
+       getContentProps
+     } = usePopover({
+       ...props,
++      state: props.state && !isPresent ? { ...props.state, isOpen: false } : props.state,
++      isOpen: isPresent ? props.isOpen : false,
+       ref
+     });
+     const dialogRef = React.useRef(null);
+@@ -95,7 +99,7 @@ var FreeSoloPopover = forwardRef(
+         }
+       ) });
+     }, [backdrop, disableAnimation, getBackdropProps]);
+-    return /* @__PURE__ */ jsxs(Overlay, { portalContainer, children: [
++    return /* @__PURE__ */ jsxs(Overlay, { portalContainer, isExiting: !isPresent, children: [
+       !isNonModal && backdropContent,
+       /* @__PURE__ */ jsx(Component, { ...getPopoverProps(), children: /* @__PURE__ */ jsxs(
+         FreeSoloPopoverWrapper,
+diff --git a/node_modules/@nextui-org/popover/dist/free-solo-popover.js b/node_modules/@nextui-org/popover/dist/free-solo-popover.js
+index 32373fa..f082c6f 100644
+--- a/node_modules/@nextui-org/popover/dist/free-solo-popover.js
++++ b/node_modules/@nextui-org/popover/dist/free-solo-popover.js
+@@ -311,10 +311,10 @@ function usePopover(originalProps) {
+     [slots, state.isOpen, classNames, underlayProps]
+   );
+   (0, import_react2.useEffect)(() => {
+-    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
++    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
+       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+     }
+-  }, [state.isOpen, domRef]);
++  }, [state.isOpen, isNonModal, domRef]);
+   return {
+     state,
+     Component,
+@@ -383,6 +383,8 @@ var FreeSoloPopoverWrapper = (0, import_system2.forwardRef)(
+ FreeSoloPopoverWrapper.displayName = "NextUI.FreeSoloPopoverWrapper";
+ var FreeSoloPopover = (0, import_system2.forwardRef)(
+   ({ children, transformOrigin, disableDialogFocus = false, ...props }, ref) => {
++    // Closing menus must release outside clicks and focus during their exit animation.
++    const isPresent = (0, import_framer_motion.useIsPresent)();
+     const {
+       Component,
+       state,
+@@ -398,6 +400,8 @@ var FreeSoloPopover = (0, import_system2.forwardRef)(
+       getContentProps
+     } = usePopover({
+       ...props,
++      state: props.state && !isPresent ? { ...props.state, isOpen: false } : props.state,
++      isOpen: isPresent ? props.isOpen : false,
+       ref
+     });
+     const dialogRef = React.useRef(null);
+@@ -424,7 +428,7 @@ var FreeSoloPopover = (0, import_system2.forwardRef)(
+         }
+       ) });
+     }, [backdrop, disableAnimation, getBackdropProps]);
+-    return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_overlays4.Overlay, { portalContainer, children: [
++    return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_overlays4.Overlay, { portalContainer, isExiting: !isPresent, children: [
+       !isNonModal && backdropContent,
+       /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getPopoverProps(), children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+         FreeSoloPopoverWrapper,
+diff --git a/node_modules/@nextui-org/popover/dist/index.js b/node_modules/@nextui-org/popover/dist/index.js
+index 56aa2ba..ad34fce 100644
+--- a/node_modules/@nextui-org/popover/dist/index.js
++++ b/node_modules/@nextui-org/popover/dist/index.js
+@@ -315,10 +315,10 @@ function usePopover(originalProps) {
+     [slots, state.isOpen, classNames, underlayProps]
+   );
+   (0, import_react2.useEffect)(() => {
+-    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
++    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
+       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+     }
+-  }, [state.isOpen, domRef]);
++  }, [state.isOpen, isNonModal, domRef]);
+   return {
+     state,
+     Component,
+@@ -526,6 +526,8 @@ var FreeSoloPopoverWrapper = (0, import_system3.forwardRef)(
+ FreeSoloPopoverWrapper.displayName = "NextUI.FreeSoloPopoverWrapper";
+ var FreeSoloPopover = (0, import_system3.forwardRef)(
+   ({ children, transformOrigin, disableDialogFocus = false, ...props }, ref) => {
++    // Closing menus must release outside clicks and focus during their exit animation.
++    const isPresent = (0, import_framer_motion3.useIsPresent)();
+     const {
+       Component,
+       state,
+@@ -541,6 +543,8 @@ var FreeSoloPopover = (0, import_system3.forwardRef)(
+       getContentProps
+     } = usePopover({
+       ...props,
++      state: props.state && !isPresent ? { ...props.state, isOpen: false } : props.state,
++      isOpen: isPresent ? props.isOpen : false,
+       ref
+     });
+     const dialogRef = React2.useRef(null);
+@@ -567,7 +571,7 @@ var FreeSoloPopover = (0, import_system3.forwardRef)(
+         }
+       ) });
+     }, [backdrop, disableAnimation, getBackdropProps]);
+-    return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_overlays6.Overlay, { portalContainer, children: [
++    return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_overlays6.Overlay, { portalContainer, isExiting: !isPresent, children: [
+       !isNonModal && backdropContent,
+       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Component, { ...getPopoverProps(), children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+         FreeSoloPopoverWrapper,
+diff --git a/node_modules/@nextui-org/popover/dist/popover.js b/node_modules/@nextui-org/popover/dist/popover.js
+index a659b2d..f1ca978 100644
+--- a/node_modules/@nextui-org/popover/dist/popover.js
++++ b/node_modules/@nextui-org/popover/dist/popover.js
+@@ -301,10 +301,10 @@ function usePopover(originalProps) {
+     [slots, state.isOpen, classNames, underlayProps]
+   );
+   (0, import_react2.useEffect)(() => {
+-    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
++    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
+       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+     }
+-  }, [state.isOpen, domRef]);
++  }, [state.isOpen, isNonModal, domRef]);
+   return {
+     state,
+     Component,
+diff --git a/node_modules/@nextui-org/popover/dist/use-popover.js b/node_modules/@nextui-org/popover/dist/use-popover.js
+index 8538423..e5ff2ce 100644
+--- a/node_modules/@nextui-org/popover/dist/use-popover.js
++++ b/node_modules/@nextui-org/popover/dist/use-popover.js
+@@ -295,10 +295,10 @@ function usePopover(originalProps) {
+     [slots, state.isOpen, classNames, underlayProps]
+   );
+   (0, import_react2.useEffect)(() => {
+-    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
++    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
+       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+     }
+-  }, [state.isOpen, domRef]);
++  }, [state.isOpen, isNonModal, domRef]);
+   return {
+     state,
+     Component,

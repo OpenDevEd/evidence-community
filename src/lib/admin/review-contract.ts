@@ -7,6 +7,7 @@ export const publishingChoiceSchema = z.discriminatedUnion("route", [
 	z.object({ route: z.literal("crossref-zenodo"), identifierPolicy: z.enum(["reuse-crossref", "mint-zenodo"]) }),
 ]);
 export type PublishingChoice = z.infer<typeof publishingChoiceSchema>;
+export type PublishingChoiceState = {choice: PublishingChoice | null; canClear: boolean};
 
 export const reviewRecordSchema = z.object({
 	itemKey,

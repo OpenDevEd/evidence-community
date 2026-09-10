@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	BarChartIcon,
@@ -745,75 +747,79 @@ function CitingResourcesList({
 	listRef: React.RefObject<HTMLDivElement | null>;
 }) {
 	const t = useTranslations("ui");
+	const { profiles } = useAuthorProfiles(items?.flatMap(item => item.creators ?? []));
+
 
 	return (
-		<div ref={listRef} className="scroll-mt-20">
-			<div className="flex items-center gap-3 mb-6">
-				<div className="p-2 rounded-xl bg-accent/20">
-					<HugeiconsIcon
-						icon={QuoteUpIcon}
-						className="size-5 text-accent"
-					/>
-				</div>
-				<h2 className="text-xl font-semibold text-black dark:text-white">
-					{t("citingResources")}
-				</h2>
-			</div>
-
-			<ul className="flex flex-col md:grid grid-cols-2 gap-4">
-				{isLoading
-					? Array.from({ length: 4 }).map((_, index) => (
-							<li key={`skeleton-${index}`}>
-								<Resource
-									as="div"
-									itemData={undefined}
-									isLoading={true}
-									abstract={false}
-									className="h-full"
-									hideUnapi={true}
-								/>
-							</li>
-						))
-					: items.map((item) => (
-							<li key={item.key}>
-								<Resource
-									as="div"
-									itemData={item}
-									isLoading={false}
-									abstract={false}
-									className="h-full"
-									hideUnapi={true}
-								/>
-							</li>
-						))}
-			</ul>
-
-			{!isLoading && items.length === 0 && (
-				<div className="flex flex-col items-center justify-center py-12 text-black/60 dark:text-white/60">
-					<HugeiconsIcon
-						icon={SearchRemoveIcon}
-						className="size-12 mb-4"
-					/>
-					<p className="text-lg">{t("noCitingResources")}</p>
-				</div>
-			)}
-
-			{totalPages > 1 && (
-				<div className="w-full flex justify-center py-2 lg:py-6 z-10">
-					<Skeleton
-						isLoaded={totalPages > 0}
-						className="w-full h-14 rounded-2xl flex items-center justify-center"
-					>
-						<Pagination
-							showControls
-							page={currentPage}
-							onChange={onPageChange}
-							total={totalPages}
+		<AuthorProfilesContext value={profiles}>
+			<div ref={listRef} className="scroll-mt-20">
+				<div className="flex items-center gap-3 mb-6">
+					<div className="p-2 rounded-xl bg-accent/20">
+						<HugeiconsIcon
+							icon={QuoteUpIcon}
+							className="size-5 text-accent"
 						/>
-					</Skeleton>
+					</div>
+					<h2 className="text-xl font-semibold text-black dark:text-white">
+						{t("citingResources")}
+					</h2>
 				</div>
-			)}
-		</div>
+
+				<ul className="flex flex-col md:grid grid-cols-2 gap-4">
+					{isLoading
+						? Array.from({ length: 4 }).map((_, index) => (
+								<li key={`skeleton-${index}`}>
+									<Resource
+										as="div"
+										itemData={undefined}
+										isLoading={true}
+										abstract={false}
+										className="h-full"
+										hideUnapi={true}
+									/>
+								</li>
+							))
+						: items.map((item) => (
+								<li key={item.key}>
+									<Resource
+										as="div"
+										itemData={item}
+										isLoading={false}
+										abstract={false}
+										className="h-full"
+										hideUnapi={true}
+									/>
+								</li>
+							))}
+				</ul>
+
+				{!isLoading && items.length === 0 && (
+					<div className="flex flex-col items-center justify-center py-12 text-black/60 dark:text-white/60">
+						<HugeiconsIcon
+							icon={SearchRemoveIcon}
+							className="size-12 mb-4"
+						/>
+						<p className="text-lg">{t("noCitingResources")}</p>
+					</div>
+				)}
+
+				{totalPages > 1 && (
+					<div className="w-full flex justify-center py-2 lg:py-6 z-10">
+						<Skeleton
+							isLoaded={totalPages > 0}
+							className="w-full h-14 rounded-2xl flex items-center justify-center"
+						>
+							<Pagination
+								showControls
+								page={currentPage}
+								onChange={onPageChange}
+								total={totalPages}
+							/>
+						</Skeleton>
+					</div>
+				)}
+			</div>
+		</AuthorProfilesContext>
 	);
 }
 

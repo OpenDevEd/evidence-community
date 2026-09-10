@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+
 import type { Item } from "@/app/api/item/types";
 import useSWR from "swr";
 import { useLastFetchedData } from "@/context/Providers";
@@ -38,6 +40,7 @@ export default function VectorRelations({
 		},
 	);
 
+	const { profiles } = useAuthorProfiles(similarResources?.hits?.flatMap(item => item.creators ?? []));
 	if (!isRelatedItemsEnabled) return null;
 
 	// Waiting for the item or for the recommendations: show placeholder cards
@@ -68,20 +71,22 @@ export default function VectorRelations({
 	if (!similarResources?.hits?.length) return null;
 
 	return (
-		<div
-			id="vector-relations"
-			aria-busy="false"
-			className="flex flex-col md:grid grid-cols-2 gap-4"
-		>
-			{similarResources.hits.map((hit, index) => (
-				<Resource
-					key={index}
-					itemData={hit}
-					abstract={false}
-					isLoading={false}
-					hideUnapi={true}
-				/>
-			))}
-		</div>
+		<AuthorProfilesContext value={profiles}>
+			<div
+				id="vector-relations"
+				aria-busy="false"
+				className="flex flex-col md:grid grid-cols-2 gap-4"
+			>
+				{similarResources.hits.map((hit, index) => (
+					<Resource
+						key={index}
+						itemData={hit}
+						abstract={false}
+						isLoading={false}
+						hideUnapi={true}
+					/>
+				))}
+			</div>
+		</AuthorProfilesContext>
 	);
 }

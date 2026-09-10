@@ -1,13 +1,14 @@
 "use client";
+import { InspectorChoices } from "./InspectorChoices";
 import { Button } from "@/components/nextui/Button";
+import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Link01Icon, Tick01Icon, Add01Icon } from "@hugeicons/core-free-icons";
 import type { getAdminCrossrefReservation } from "./admin-api";
 
 type Props = {
 	reservation:
-		| Awaited<ReturnType<typeof getAdminCrossrefReservation>>
-		| undefined;
+		Awaited<ReturnType<typeof getAdminCrossrefReservation>> | undefined;
 	policy: "reuse-crossref" | "mint-zenodo" | undefined;
 	readOnly: boolean;
 	saving: boolean;
@@ -29,7 +30,7 @@ export function CrossrefIdentifierControls({
 		<>
 			<div className="flex items-center gap-3 p-3">
 				<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card_light text-black/50 dark:bg-white/5 dark:text-white/55">
-					<HugeiconsIcon icon={Link01Icon} size={16} />
+					<CrossrefIcon className="h-5 w-3.5" />
 				</span>
 				<div className="min-w-0 flex-1">
 					<p className="text-xs font-medium">Crossref DOI</p>
@@ -66,36 +67,38 @@ export function CrossrefIdentifierControls({
 				<p className="mb-2 text-[11px] font-medium text-black/70 dark:text-white/70">
 					Zenodo identifier
 				</p>
-				<div
-					role="group"
-					aria-label="Zenodo identifier"
-					className="flex rounded-lg bg-black/[0.035] p-1 dark:bg-white/[0.04]"
-				>
-					{[
+				<InspectorChoices
+					variant="inset"
+					label="Zenodo identifier"
+					value={policy}
+					onChange={setPolicy}
+					disabled={readOnly || saving}
+					options={[
 						{
-							key: "reuse-crossref" as const,
+							key: "reuse-crossref",
 							label: "Use Crossref DOI",
-							icon: Link01Icon,
+							content: (
+								<>
+									<HugeiconsIcon
+										icon={Link01Icon}
+										size={13}
+									/>
+									Use Crossref DOI
+								</>
+							),
 						},
 						{
-							key: "mint-zenodo" as const,
+							key: "mint-zenodo",
 							label: "Separate DOI",
-							icon: Add01Icon,
+							content: (
+								<>
+									<HugeiconsIcon icon={Add01Icon} size={13} />
+									Separate DOI
+								</>
+							),
 						},
-					].map((option) => (
-						<button
-							key={option.key}
-							type="button"
-							disabled={readOnly || saving}
-							aria-pressed={policy === option.key}
-							onClick={() => setPolicy(option.key)}
-							className={`flex min-h-8 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[10px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${policy === option.key ? "bg-white text-black/80 shadow-sm dark:bg-white/[0.08] dark:text-white/85" : "text-black/45 dark:text-white/45"}`}
-						>
-							<HugeiconsIcon icon={option.icon} size={13} />
-							{option.label}
-						</button>
-					))}
-				</div>
+					]}
+				/>
 			</div>
 		</>
 	);

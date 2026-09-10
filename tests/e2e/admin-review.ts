@@ -5,15 +5,6 @@ export async function publishWorkingDraft(page: Page) {
   const inspector = page.locator("#admin-inspector-pane");
   const key = new URL(page.url()).searchParams.get("item");
   if (!key) throw new Error("The inspector has no selected item");
-  const {item: detail} = await (await page.request.get(new URL(`/api/admin/items/${key}`, page.url()).toString())).json();
-  if (detail.kind === "created") {
-    const zenodo = inspector.getByRole("button", {name: "Zenodo", exact: true});
-    const crossref = inspector.getByRole("button", {name: "Crossref + Zenodo", exact: true});
-    if (await zenodo.getAttribute("aria-pressed") !== "true" && await crossref.getAttribute("aria-pressed") !== "true") {
-      await zenodo.click();
-      await expect(zenodo).toHaveAttribute("aria-pressed", "true");
-    }
-  }
   const edit = inspector.getByRole("button", {name: "Edit", exact: true});
   if (await edit.isVisible()) await edit.click();
   await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();

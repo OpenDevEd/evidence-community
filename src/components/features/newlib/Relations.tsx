@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { SearchRemoveIcon } from "@hugeicons/core-free-icons";
 import type { ItemLinks } from "@/app/api/item/types";
@@ -46,74 +48,77 @@ function RelationsList({
 	currentPage: number;
 	onPageChange: (page: number) => void;
 }) {
+	const { profiles } = useAuthorProfiles(items?.flatMap(item => item.creators ?? []));
 	const hasItems = isLoading || items.length > 0;
 
 	return (
-		<div className="flex flex-col gap-6">
-			<ul className="flex flex-col md:grid grid-cols-2 gap-4">
-				<AnimatePresence mode="popLayout">
-					{isLoading
-						? // Show loading skeletons
-						  Array.from({ length: 4 }).map((_, index) => (
-								<motion.li
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
-									transition={{ duration: 0.3 }}
-									key={`skeleton-${index}`}
-									layout
-								>
-									<Resource
-										as="div"
-										itemData={undefined}
-										isLoading={true}
-										abstract={false}
-										className="h-full"
-										hideUnapi={true}
-									/>
-								</motion.li>
-						  ))
-						: // Show fetched items
-						  items.map((item: ListItem) => (
-								<motion.li
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
-									transition={{ duration: 0.3 }}
-									key={item.key}
-									layout
-								>
-									<Resource
-										as="div"
-										itemData={item}
-										isLoading={false}
-										abstract={false}
-										className="h-full"
-										hideUnapi={true}
-									/>
-								</motion.li>
-						  ))}
-				</AnimatePresence>
-				{!hasItems && (
-					<div className="col-span-2">
-						<div className="flex gap-2">
-							<HugeiconsIcon icon={SearchRemoveIcon} className="size-6" />
-							No items found
+		<AuthorProfilesContext value={profiles}>
+			<div className="flex flex-col gap-6">
+				<ul className="flex flex-col md:grid grid-cols-2 gap-4">
+					<AnimatePresence mode="popLayout">
+						{isLoading
+							? // Show loading skeletons
+							  Array.from({ length: 4 }).map((_, index) => (
+									<motion.li
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										exit={{ opacity: 0 }}
+										transition={{ duration: 0.3 }}
+										key={`skeleton-${index}`}
+										layout
+									>
+										<Resource
+											as="div"
+											itemData={undefined}
+											isLoading={true}
+											abstract={false}
+											className="h-full"
+											hideUnapi={true}
+										/>
+									</motion.li>
+							  ))
+							: // Show fetched items
+							  items.map((item: ListItem) => (
+									<motion.li
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										exit={{ opacity: 0 }}
+										transition={{ duration: 0.3 }}
+										key={item.key}
+										layout
+									>
+										<Resource
+											as="div"
+											itemData={item}
+											isLoading={false}
+											abstract={false}
+											className="h-full"
+											hideUnapi={true}
+										/>
+									</motion.li>
+							  ))}
+					</AnimatePresence>
+					{!hasItems && (
+						<div className="col-span-2">
+							<div className="flex gap-2">
+								<HugeiconsIcon icon={SearchRemoveIcon} className="size-6" />
+								No items found
+							</div>
 						</div>
+					)}
+				</ul>
+				{totalPages > 1 && (
+					<div className="flex justify-center">
+						<Pagination
+							total={totalPages}
+							page={currentPage}
+							onChange={onPageChange}
+							showControls
+						/>
 					</div>
 				)}
-			</ul>
-			{totalPages > 1 && (
-				<div className="flex justify-center">
-					<Pagination
-						total={totalPages}
-						page={currentPage}
-						onChange={onPageChange}
-						showControls
-					/>
-				</div>
-			)}
-		</div>
+			</div>
+		</AuthorProfilesContext>
 	);
 }
 
