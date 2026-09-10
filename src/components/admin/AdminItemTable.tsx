@@ -1582,7 +1582,7 @@ export function AdminItemTable({
 								>
 									{loading ? (
 										<Spinner
-											label="Loading records…"
+											aria-label="Loading records"
 											size="sm"
 										/>
 									) : error ? (
