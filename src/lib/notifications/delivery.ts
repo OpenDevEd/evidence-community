@@ -32,8 +32,9 @@ async function notificationMessage(config: LibraryServerConfig, subscriber: type
     content = `<h1>${escapeHtml(edition.title!)}</h1>${await render(markdown)}${edition.stream === "weekly" ? `<p><a href="${escapeHtml(editionUrl)}">Read this edition online</a></p>` : ""}`;
     text = `${edition.title}\n\n${markdown.replace(/\]\((\/lib\/[A-Z0-9]{8})\)/g, (_, href: string) => `](${new URL(href, config.identity.baseUrl)})`)}${edition.stream === "weekly" ? `\n\nRead online: ${editionUrl}` : ""}`;
   }
+  const identity = `<p><a href="${escapeHtml(config.identity.baseUrl)}"><strong>${escapeHtml(config.identity.name)}</strong></a><br>${escapeHtml(new URL(config.identity.baseUrl).hostname)}</p>`;
   const footer = `<p><a href="${escapeHtml(preferences)}">Email preferences</a> &nbsp; <a href="${escapeHtml(unsubscribe)}">Unsubscribe</a></p>`;
-  return { to: subscriber.email, subject, text: `${text}\n\nEmail preferences: ${preferences}\nUnsubscribe: ${unsubscribe}`, html: `<!doctype html><html><body><main style="max-width:680px;margin:32px auto;font-family:Arial,sans-serif;line-height:1.65;color:#242424">${content}${footer}</main></body></html>`, messageId: `<${createHash("sha256").update(messageKey).digest("hex")}@${new URL(config.identity.baseUrl).hostname}>`, headers: { "List-Unsubscribe": `<${unsubscribe}>` } };
+  return { to: subscriber.email, subject, text: `${config.identity.name}\n${config.identity.baseUrl}\n\n${text}\n\nEmail preferences: ${preferences}\nUnsubscribe: ${unsubscribe}`, html: `<!doctype html><html><body><main style="max-width:680px;margin:32px auto;font-family:Arial,sans-serif;line-height:1.65;color:#242424">${identity}${content}${footer}</main></body></html>`, messageId: `<${createHash("sha256").update(messageKey).digest("hex")}@${new URL(config.identity.baseUrl).hostname}>`, headers: { "List-Unsubscribe": `<${unsubscribe}>` } };
 }
 
 type Subscriber = typeof notificationSubscriber.$inferSelect;

@@ -151,7 +151,7 @@ export async function sendEmailForConfig(
 		);
 	}
 
-	return transporter.sendMail({ from, to: recipient, ...message });
+	return transporter.sendMail({ from: { name: config.identity.name, address: from }, to: recipient, ...message });
 }
 
 /** Shared transport for library-owned subscription jobs. */
@@ -161,5 +161,5 @@ export async function sendNotificationEmail(config: LibraryServerConfig, message
 }) {
   const transporter = await getEmailTransportForConfig(config);
   if (!transporter || !config.email.smtp.from) throw new Error("Library email is not configured");
-  return transporter.sendMail({ from: config.email.smtp.from, ...message });
+  return transporter.sendMail({ from: { name: config.identity.name, address: config.email.smtp.from }, ...message });
 }
