@@ -472,11 +472,12 @@ test("delivers configured contact mail through SMTP only when enabled", async ({
 
 	if (!expectedEmail) {
 		await page.goto("/contact");
-		await expect(
-			page.getByText("Page Not Found", { exact: true }),
-		).toBeVisible();
-		await expect(page.locator("form")).toHaveCount(0);
-		await page.waitForTimeout(500);
+		await dismissConsent(page);
+		const contactEmail = process.env.PLAYWRIGHT_EXPECTED_CONTACT_EMAIL;
+		if (contactEmail) {
+			await expect(page.locator("main").getByRole("link", { name: contactEmail, exact: true })).toHaveAttribute("href", `mailto:${contactEmail}`);
+		}
+		await expect(page.locator("main form")).toHaveCount(0);
 		expect((await mailboxMessages(request)).messages ?? []).toHaveLength(0);
 		return;
 	}
