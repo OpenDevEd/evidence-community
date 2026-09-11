@@ -942,9 +942,11 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	);
 
 	await page.goto("/admin");
+	await page.getByRole("button", { name: "Review status and history" }).click();
 	await expect(
 		page.getByRole("button", { name: "Sources: Synced to 1 source" }),
 	).toBeVisible();
+	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	const title = page.getByRole("textbox", { name: "Title", exact: true });
 	await expect(title).toBeEnabled();
@@ -1094,7 +1096,8 @@ test("chooses writeback sources without publishing", async ({
 	await expect(page.locator("[data-admin-writeback-status]")).toHaveCount(0);
 
 	// The Sources button changes the choice without publishing.
-	await inspector.getByRole("button", { name: "Sources", exact: true }).click();
+	await inspector.getByRole("button", { name: "Review status and history" }).click();
+	await page.getByRole("button", { name: "Sources", exact: true }).click();
 	const sourcesDialog = page.getByRole("dialog", {
 		name: "Sources for this record",
 	});
@@ -2720,6 +2723,12 @@ async function mockBookWithAttachment(
 		}
 		await route.fulfill({ status: 404 });
 	});
+	await page.route(`**/api/admin/items/${attachmentKey}/draft`, async (route) => {
+        expect(route.request().method()).toBe("POST");
+        attachmentDetail.draft = attachmentDraft;
+        await route.fulfill({json: {draft: attachmentDraft}});
+    });
+
 }
 
 async function activatePointerDrag(page: Page, source: Locator) {
@@ -3375,6 +3384,67 @@ test("removes native memberships while imported and deleted memberships stay loc
 	).toHaveCount(0);
 });
 
+test("adds a library PDF beside an imported file and retries without creating a second native attachment", async ({ page }) => {
+	await mockPublishedBook(page, { initialDraftPayload: publishedPayload });
+	const attachmentKey = "COVER123";
+	const created: Record<string, unknown>[] = [];
+	let completed = false;
+	let failUpload = true;
+	const fileDraft = () => ({
+		itemKey: attachmentKey, filename: "report.pdf", uploadRevision: 1,
+		expectedSha256: "hash", expectedSizeBytes: 4, actualSha256: completed ? "hash" : null,
+		actualSizeBytes: completed ? 4 : null, pageCount: completed ? 1 : null,
+		coverWidth: completed ? 1 : null, coverHeight: completed ? 1 : null,
+		updatedAt: timestamp, readyAt: completed ? timestamp : null,
+	});
+	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) => route.fulfill({ json: { item: {
+		...publishedDetail(true),
+		attachments: [{
+			...publishedDetail(false), key: "SOURCE22", itemType: "Attachment", title: "Original source PDF",
+			parentItem: publishedItemKey, sourceConnectionKey: "zotero:test", sourceFileUrl: "https://example.test/source.pdf",
+		}, ...(created.length ? [{
+			...publishedDetail(true), key: attachmentKey, itemType: "Attachment", title: "report.pdf",
+			parentItem: publishedItemKey, published: null, fileState: completed ? "staged" : "processing",
+			fileDraft: fileDraft(), state: "draft", fileRemovalPending: false,
+		}] : [])],
+	} } }));
+	await page.route("**/api/admin/items/drafts", async (route) => {
+		created.push(route.request().postDataJSON());
+		await route.fulfill({ json: { draft: { ...publishedDraft(), itemKey: attachmentKey } } });
+	});
+	await page.route(`**/api/admin/items/${attachmentKey}/file`, async (route) => route.fulfill({
+		json: { fileDraft: fileDraft(), upload: { signedUrl: new URL("/test-pdf-upload", page.url()).toString() } },
+	}));
+	await page.route("**/test-pdf-upload", async (route) => {
+		await route.fulfill({ status: failUpload ? 503 : 200, json: {} });
+	});
+	await page.route(`**/api/admin/items/${attachmentKey}/file/complete`, async (route) => {
+		completed = true;
+		await route.fulfill({ json: { fileDraft: fileDraft() } });
+	});
+	await page.route(`**/api/admin/items/${attachmentKey}/file/cover?*`, async (route) => route.fulfill({
+		contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=", "base64"),
+	}));
+	await page.goto(`/admin?item=${publishedItemKey}`);
+	const choosePdf = async () => {
+		const chooser = page.waitForEvent("filechooser");
+		await page.getByRole("button", { name: /^(Add|Replace|Retry) PDF$/u }).click();
+		await (await chooser).setFiles({ name: "report.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF") });
+	};
+	await expect(page.getByRole("button", {name: "Add PDF", exact: true})).toBeEnabled();
+	await choosePdf();
+	await expect(page.locator('[data-admin-region="inspector-scroll"] [role="alert"]')).toBeVisible();
+	expect(completed).toBe(false);
+	expect(created).toEqual([{ collections: [], itemType: "attachment", parentItem: publishedItemKey, tags: [], title: "report.pdf" }]);
+	failUpload = false;
+	await choosePdf();
+	await expect(page.getByRole("button", { name: "Replace PDF", exact: true })).toBeEnabled();
+	await expect(page.locator('[data-admin-document-header] img')).toBeVisible();
+	expect(created).toHaveLength(1);
+	expect(completed).toBe(true);
+	expect(new URL(page.url()).searchParams.get("item")).toBe(publishedItemKey);
+});
+
 test("keeps parent attachments compact and moves file controls to the attachment", async ({
 	page,
 }) => {
@@ -3420,13 +3490,17 @@ test("keeps parent attachments compact and moves file controls to the attachment
 	await expect(
 		inspector.getByRole("button", { name: "Parent record" }),
 	).toBeVisible();
+	await inspector.getByRole("button", {name: "Edit", exact: true}).click();
+	await expect(inspector.getByRole("textbox", {name: "Title", exact: true})).toBeEditable();
 	const publicAttachmentUrl =
 		`${expectedPublicBaseUrl}/lib/LIVEB22K/download/PDFATT22`;
-	await expect(inspector.getByLabel("Open public item")).toHaveAttribute(
+	await inspector.getByRole("button", { name: "Review status and history" }).click();
+	await expect(page.getByLabel("Open public item")).toHaveAttribute(
 		"href",
 		publicAttachmentUrl,
 	);
-	await expect(inspector.getByLabel("Copy public item link")).toBeEnabled();
+	await expect(page.getByLabel("Copy public item link")).toBeEnabled();
+	await page.keyboard.press("Escape");
 	await expect(
 		inspector.locator('[data-admin-file-row="published"]'),
 	).toContainText("published.pdf");
@@ -3470,8 +3544,10 @@ test("keeps an unpublished attachment private and stages it with the parent revi
     await page.goto("/admin");
     const inspector = page.locator("#admin-inspector-pane");
     await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
-    await expect(inspector.getByLabel("Open public item")).toBeDisabled();
-    await expect(inspector.getByLabel("Copy public item link")).toBeDisabled();
+    await inspector.getByRole("button", {name: "Review status and history"}).click();
+    await expect(page.getByLabel("Open public item")).toBeDisabled();
+    await expect(page.getByLabel("Copy public item link")).toBeDisabled();
+    await page.keyboard.press("Escape");
     await expect(inspector.locator('[data-admin-file-row="staged"]')).toContainText("replacement.pdf");
     await expect(inspector.getByRole("button", {name: "Discard staged PDF"})).toBeVisible();
     await expect(inspector.getByRole("button", {name: "Publish PDF", exact: true})).toHaveCount(0);

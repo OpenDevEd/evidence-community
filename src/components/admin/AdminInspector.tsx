@@ -1,4 +1,8 @@
 "use client";
+import { PdfFileInput } from "./PdfFileInput";
+import { AdminDocumentHeader } from "./AdminDocumentHeader";
+import { AdminPdfCover } from "./AdminPdfCover";
+import type { PdfUploadStep } from "./admin-pdf";
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
@@ -31,7 +35,6 @@ import {
 	SentIcon,
 	Tag01Icon,
 	Tick01Icon,
-	Upload01Icon,
 	UserGroupIcon,
 	WorkHistoryIcon,
 } from "@hugeicons/core-free-icons";
@@ -47,7 +50,7 @@ import {
 	PopoverTrigger,
 } from "@nextui-org/react";
 import { Spinner } from "@/components/nextui/Spinner";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
@@ -1005,48 +1008,6 @@ function CollectionsEditor({
 	);
 }
 
-function PdfFileInput({
-	attachmentKey,
-	disabled,
-	label = "Upload PDF",
-	onUpload,
-}: {
-	attachmentKey: string;
-	disabled?: boolean;
-	label?: string;
-	onUpload: (attachmentKey: string, file: File) => void;
-}) {
-	const inputId = `pdf-${attachmentKey}`;
-	const inputRef = useRef<HTMLInputElement>(null);
-	return (
-		<>
-			<input
-				id={inputId}
-				ref={inputRef}
-				accept="application/pdf,.pdf"
-				className="sr-only"
-				disabled={disabled}
-				type="file"
-				onChange={(event) => {
-					const file = event.currentTarget.files?.[0];
-					if (file) onUpload(attachmentKey, file);
-					event.currentTarget.value = "";
-				}}
-			/>
-			<Button
-				isDisabled={disabled}
-				onPress={() => inputRef.current?.click()}
-				size="xs"
-				variant="muted"
-				startContent={
-					<HugeiconsIcon icon={Upload01Icon} aria-hidden size={15} />
-				}
-			>
-				{label}
-			</Button>
-		</>
-	);
-}
 
 function AttachmentList({
 	busy,
@@ -1354,6 +1315,11 @@ export function AdminInspector({
 	versionNotice,
 	editorNotice,
 	versionActions,
+	versionStatus,
+	versionWithdraw,
+	reviewId,
+	onAddPdf,
+	pdfProgress,
 	publishingChoice,
 	publishing,
 	submissionBlocked = false,
@@ -1395,9 +1361,14 @@ export function AdminInspector({
 	readOnlyVersion?: boolean;
 	allowReviewCorrections?: boolean;
 	versionControls?: ReactNode;
-	versionNotice?: ReactNode;
+	versionNotice?: (actions: ReactNode) => ReactNode;
 	editorNotice?: ReactNode;
 	versionActions?: ReactNode;
+	versionStatus?: ReactNode;
+	versionWithdraw?: ReactNode;
+	reviewId?: string;
+	onAddPdf: (file: File) => void;
+	pdfProgress?: PdfUploadStep;
 	publishingChoice?:
 		import("@/lib/admin/review-contract").PublishingChoice | null;
 	publishing?: ReturnType<
@@ -1533,6 +1504,20 @@ export function AdminInspector({
 		!busy;
 	const readOnly = !editable;
 	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
+	const restoring =
+		detail.state === "deleted" &&
+		(Boolean(detail.parentItem) || !detail.draft);
+	const showPrimaryAction =
+		!detail.parentItem || !detail.draft || restoring || !detail.editable;
+	const primaryDisabled =
+		busy ||
+		readOnlyVersion ||
+		(Boolean(detail.draft) &&
+			(saveState === "saving" ||
+				saveState === "conflict" ||
+				saveState === "error" ||
+				reviewPending ||
+				submissionBlocked));
 	const showPublicLinkActions =
 		!readOnlyVersion &&
 		(detail.itemType === "Attachment" || Boolean(itemUrl));
@@ -1543,13 +1528,307 @@ export function AdminInspector({
 			data-admin-region="inspector"
 		>
 			{versionControls}
-			<div className="shrink-0 border-b border-black/[0.06] px-4 pb-4 pt-4 dark:border-white/[0.06]">
-				{error ? (
+			<AdminDocumentHeader
+				detail={detail}
+				cover={
+					<AdminPdfCover
+						detail={detail}
+						submitted={readOnlyVersion}
+						reviewId={reviewId}
+						disabled={
+							readOnlyVersion ||
+							!detail.editable ||
+							detail.state === "deleted" ||
+							busy
+						}
+						progress={readOnlyVersion ? undefined : pdfProgress}
+						error={
+							readOnlyVersion ? undefined : fileErrors[detail.key]
+						}
+						onUpload={onAddPdf}
+					/>
+				}
+				status={
+					versionStatus ?? <RecordStateChip state={detail.state} />
+				}
+				saveIndicator={
+					<SaveIndicator
+						message={saveMessage}
+						onReload={onReloadDraft}
+						state={saveState}
+					/>
+				}
+				parent={
+					detail.parentItem ? (
+						<Button
+							className="ml-3 mt-2"
+							size="xs"
+							variant="transparent"
+							onPress={() => onBackToParent(detail.parentItem!)}
+							startContent={
+								<HugeiconsIcon
+									icon={ArrowLeft01Icon}
+									size={14}
+								/>
+							}
+						>
+							Parent record
+						</Button>
+					) : null
+				}
+				menu={
+					<>
+						{versionNotice?.(
+							readOnlyVersion
+								? versionActions && versionWithdraw
+								: detail.draft && !detail.parentItem && (
+										<Tooltip
+											content={
+												detail.published
+													? "Discard changes"
+													: "Delete draft"
+											}
+										>
+											<span>
+												<Button
+													aria-label={
+														detail.published
+															? "Discard changes"
+															: "Delete draft"
+													}
+													isIconOnly
+													className="h-9 w-9 rounded-xl text-black/45 hover:text-danger dark:text-white/45 dark:hover:text-danger"
+													size="xs"
+													variant="transparent"
+													isDisabled={
+														busy ||
+														(reviewPending &&
+															!detail.published)
+													}
+													onPress={onDiscardDraft}
+												>
+													<HugeiconsIcon
+														icon={Delete02Icon}
+														size={16}
+													/>
+												</Button>
+											</span>
+										</Tooltip>
+									),
+						)}
+						{!readOnlyVersion && !detail.editable && (
+							<p className="mt-3 flex items-start gap-2 text-xs text-black/55 dark:text-white/55">
+								<HugeiconsIcon
+									icon={LockIcon}
+									size={15}
+									className="shrink-0"
+								/>
+								{
+									writebackUnavailableMessage[
+										detail.writeback.available.find(
+											(target) =>
+												target.sourceKey ===
+												detail.writeback
+													.originSourceKey,
+										)?.reason ?? "not-linked"
+									]
+								}
+							</p>
+						)}
+						<div className="mt-3 flex flex-wrap items-center gap-1.5 empty:hidden">
+							{detail.writeback.selected.length > 0 ? (
+								<AdminSourcesWritebackStatus
+									canLoadRemote={!detail.parentItem}
+									itemKey={detail.key}
+									key={detail.key}
+									onResolved={onWritebackResolved}
+									revision={detail.revision}
+									sources={detail.writeback.selected.map(
+										(sourceKey) => {
+											const target =
+												detail.writeback.available.find(
+													(candidate) =>
+														candidate.sourceKey ===
+														sourceKey,
+												);
+											return {
+												provider:
+													target?.provider ??
+													"zotero",
+												sourceKey,
+												sourceLabel:
+													target?.sourceLabel ??
+													sourceKey,
+											};
+										},
+									)}
+								/>
+							) : null}
+							{!detail.parentItem ? (
+								<AdminPublicationHeaderStatus
+									onPress={() => {
+										const toggle = document.getElementById(
+											`admin-${detail.key}-identifiers-toggle`,
+										);
+										if (
+											toggle?.getAttribute(
+												"aria-expanded",
+											) !== "true"
+										) {
+											toggle?.click();
+										}
+										document
+											.getElementById(
+												"admin-doi-publishing",
+											)
+											?.scrollIntoView({
+												behavior: "smooth",
+												block: "start",
+											});
+									}}
+									state={publication}
+								/>
+							) : null}
+						</div>
+						<div className="mt-4 flex flex-wrap items-center gap-2 empty:hidden">
+							{showPublicLinkActions && (
+								<>
+									<Button
+										as="a"
+										aria-label="Open public item"
+										href={itemUrl ?? undefined}
+										isDisabled={!itemUrl}
+										target="_blank"
+										rel="noreferrer"
+										size="xs"
+										variant="muted"
+										startContent={
+											<HugeiconsIcon
+												icon={LinkSquare01Icon}
+												size={14}
+											/>
+										}
+									>
+										Open public item
+									</Button>
+									<Tooltip content="Copy public item link">
+										<span>
+											<Button
+												aria-label="Copy public item link"
+												isIconOnly
+												isDisabled={!itemUrl}
+												size="xs"
+												variant="transparent"
+												onPress={() => {
+													if (itemUrl)
+														void navigator.clipboard
+															.writeText(itemUrl)
+															.then(() =>
+																toast.success(
+																	"Item link copied",
+																),
+															)
+															.catch(() =>
+																toast.error(
+																	"Could not copy item link",
+																),
+															);
+												}}
+											>
+												<HugeiconsIcon
+													icon={Copy01Icon}
+													size={14}
+												/>
+											</Button>
+										</span>
+									</Tooltip>
+								</>
+							)}
+							{!readOnlyVersion &&
+								!detail.parentItem &&
+								detail.writeback.available.length > 0 && (
+									<Button
+										data-admin-writeback-sources-button
+										size="xs"
+										variant="muted"
+										isDisabled={busy}
+										onPress={onManageSources}
+										startContent={
+											<HugeiconsIcon
+												icon={Link02Icon}
+												size={14}
+											/>
+										}
+									>
+										Sources
+									</Button>
+								)}
+						</div>
+					</>
+				}
+				actions={
+					versionActions ?? (
+						<>
+							{showPrimaryAction && (
+								<Button
+									size="xs"
+									color={
+										primaryDisabled ? "secondary" : "accent"
+									}
+									variant={
+										primaryDisabled ? "muted" : "solid"
+									}
+									className="h-9 min-w-0 flex-1 gap-1.5 rounded-xl px-3 font-semibold"
+									isDisabled={primaryDisabled}
+									onPress={
+										!detail.editable
+											? onDuplicate
+											: restoring
+												? onRestore
+												: !detail.draft
+													? onOpenDraft
+													: onPublish
+									}
+									startContent={
+										<HugeiconsIcon
+											icon={
+												!detail.editable
+													? Copy01Icon
+													: restoring
+														? RotateLeft01Icon
+														: !detail.draft
+															? PencilIcon
+															: SentIcon
+											}
+											size={14}
+										/>
+									}
+								>
+									{!detail.editable && !readOnlyVersion
+										? "Duplicate as native"
+										: restoring
+											? "Restore"
+											: !detail.draft
+												? "Edit"
+												: "Submit for review"}
+								</Button>
+							)}
+							{versionWithdraw}
+						</>
+					)
+				}
+			/>
+
+			<div
+				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
+				data-admin-region="inspector-scroll"
+			>
+				{error && (
 					<div
-						className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-danger/5 px-3 py-2 text-xs text-danger"
 						role="alert"
+						className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-danger/5 px-3 py-2 text-xs text-danger"
 					>
-						<span className="truncate">{error}</span>
+						<span>{error}</span>
 						<Button
 							onPress={onRetry}
 							size="xs"
@@ -1558,348 +1837,20 @@ export function AdminInspector({
 							Retry
 						</Button>
 					</div>
-				) : loading ? (
-					<div
-						className="mb-3 flex items-center gap-2 text-xs text-black/45 dark:text-white/45"
-						role="status"
+				)}
+				{fileErrors[detail.key] && (
+					<p
+						role="alert"
+						className="mb-3 rounded-xl bg-danger/5 px-3 py-2 text-xs text-danger"
 					>
-						<Spinner size="sm" />
-						Refreshing…
-					</div>
-				) : null}
-				{detail.parentItem ? (
-					<Button
-						className="mb-2"
-						onPress={() => onBackToParent(detail.parentItem!)}
-						size="xs"
-						startContent={
-							<HugeiconsIcon
-								icon={ArrowLeft01Icon}
-								aria-hidden
-								size={14}
-							/>
-						}
-						variant="transparent"
-					>
-						Parent record
-					</Button>
-				) : null}
-				<div>
-					<div className="flex items-start gap-3">
-						<div className="min-w-0 flex-1">
-							<h2 className="text-inspector-title font-semibold leading-6 tracking-tight text-black/90 dark:text-white/95">
-								{detail.title}
-							</h2>
-							<p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/40 dark:text-white/40">
-								<span>
-									{humanizeAdminField(detail.itemType)}
-								</span>
-								<span className="font-mono text-[10px] tracking-wide text-black/30 dark:text-white/30">
-									{detail.key}
-								</span>
-							</p>
-						</div>
-						<div className="flex shrink-0 items-center gap-1">
-							{showPublicLinkActions ? (
-								<>
-									<Tooltip content="Open public item">
-										<Button
-											as="a"
-											aria-label="Open public item"
-											href={itemUrl ?? undefined}
-											isIconOnly
-											isDisabled={!itemUrl}
-											rel="noreferrer"
-											size="xs"
-											target="_blank"
-											variant="transparent"
-										>
-											<HugeiconsIcon
-												icon={LinkSquare01Icon}
-												aria-hidden
-												size={14}
-											/>
-										</Button>
-									</Tooltip>
-									<Tooltip content="Copy public item link">
-										<Button
-											aria-label="Copy public item link"
-											isIconOnly
-											isDisabled={!itemUrl}
-											onPress={() => {
-												if (!itemUrl) return;
-												void navigator.clipboard
-													.writeText(itemUrl)
-													.then(() =>
-														toast.success(
-															"Item link copied",
-														),
-													)
-													.catch(() =>
-														toast.error(
-															"Could not copy item link",
-														),
-													);
-											}}
-											size="xs"
-											variant="transparent"
-										>
-											<HugeiconsIcon
-												icon={Copy01Icon}
-												aria-hidden
-												size={14}
-											/>
-										</Button>
-									</Tooltip>
-								</>
-							) : null}
-							{!readOnlyVersion && !detail.editable ? (
-								<Tooltip
-									content={
-										writebackUnavailableMessage[
-											detail.writeback.available.find(
-												(target) =>
-													target.sourceKey ===
-													detail.writeback
-														.originSourceKey,
-											)?.reason ?? "not-linked"
-										]
-									}
-								>
-									<HugeiconsIcon
-										icon={LockIcon}
-										aria-label="Read only"
-										className="text-black/35 dark:text-white/35"
-										size={15}
-									/>
-								</Tooltip>
-							) : null}
-						</div>
-					</div>
-					{versionNotice}
-					{
-						<>
-							<div className="mt-2 flex flex-wrap items-center gap-1.5">
-								{!readOnlyVersion && <RecordStateChip state={detail.state} />}
-								<FileStateChip state={detail.fileState} snapshot={readOnlyVersion} />
-								{detail.writeback.selected.length > 0 ? (
-									<AdminSourcesWritebackStatus
-										canLoadRemote={!detail.parentItem}
-										itemKey={detail.key}
-										key={detail.key}
-										onResolved={onWritebackResolved}
-										revision={detail.revision}
-										sources={detail.writeback.selected.map(
-											(sourceKey) => {
-												const target =
-													detail.writeback.available.find(
-														(candidate) =>
-															candidate.sourceKey ===
-															sourceKey,
-													);
-												return {
-													provider:
-														target?.provider ??
-														"zotero",
-													sourceKey,
-													sourceLabel:
-														target?.sourceLabel ??
-														sourceKey,
-												};
-											},
-										)}
-									/>
-								) : null}
-								{!detail.parentItem ? (
-									<AdminPublicationHeaderStatus
-										onPress={() => {
-											const toggle =
-												document.getElementById(
-													`admin-${detail.key}-identifiers-toggle`,
-												);
-											if (
-												toggle?.getAttribute(
-													"aria-expanded",
-												) !== "true"
-											) {
-												toggle?.click();
-											}
-											document
-												.getElementById(
-													"admin-doi-publishing",
-												)
-												?.scrollIntoView({
-													behavior: "smooth",
-													block: "start",
-												});
-										}}
-										state={publication}
-									/>
-								) : null}
-								<SaveIndicator
-									message={saveMessage}
-									onReload={onReloadDraft}
-									state={saveState}
-								/>
-							</div>
-							{versionActions ?? (!readOnlyVersion && (
-								<div className="mt-4 flex min-h-9 flex-wrap items-center gap-2">
-									{!detail.parentItem &&
-									detail.writeback.available.length > 0 ? (
-										<Tooltip content="Choose which sources receive this record's updates">
-											<span>
-												<Button
-													aria-label="Sources"
-													className="h-9 rounded-xl px-2"
-													data-admin-writeback-sources-button
-													isDisabled={busy}
-													isIconOnly
-													onPress={onManageSources}
-													size="xs"
-													variant="transparent"
-												>
-													<HugeiconsIcon
-														icon={Link02Icon}
-														aria-hidden
-														size={15}
-													/>
-												</Button>
-											</span>
-										</Tooltip>
-									) : null}
-									{!detail.editable ? (
-										<Button
-											className="h-9 rounded-xl px-3 font-semibold"
-											color="accent"
-											isDisabled={
-												busy ||
-												detail.itemType === "Attachment"
-											}
-											onPress={onDuplicate}
-											size="xs"
-											startContent={
-												<HugeiconsIcon
-													icon={Copy01Icon}
-													aria-hidden
-													size={14}
-												/>
-											}
-											variant="solid"
-										>
-											Duplicate as native
-										</Button>
-									) : detail.state === "deleted" &&
-									  !detail.draft ? (
-										<Button
-											className="h-9 rounded-xl px-3 font-semibold"
-											color="accent"
-											isDisabled={busy}
-											onPress={onRestore}
-											size="xs"
-											startContent={
-												<HugeiconsIcon
-													icon={RotateLeft01Icon}
-													aria-hidden
-													size={14}
-												/>
-											}
-											variant="solid"
-										>
-											Restore
-										</Button>
-									) : !detail.draft ? (
-										<Button
-											className="h-9 rounded-xl px-3 font-semibold"
-											color="accent"
-											isDisabled={busy}
-											onPress={onOpenDraft}
-											size="xs"
-											startContent={
-												<HugeiconsIcon
-													icon={PencilIcon}
-													aria-hidden
-													size={14}
-												/>
-											}
-											variant="solid"
-										>
-											Edit
-										</Button>
-									) : null}
-									{detail.draft && !detail.parentItem ? (
-										<>
-											<Button
-												color="accent"
-												className="h-9 rounded-xl px-3 font-semibold"
-												isDisabled={
-													busy ||
-													readOnlyVersion ||
-													saveState === "saving" ||
-													saveState === "conflict" ||
-													reviewPending ||
-													submissionBlocked ||
-													saveState === "error"
-												}
-												onPress={onPublish}
-												size="xs"
-												startContent={
-													<HugeiconsIcon
-														icon={SentIcon}
-														aria-hidden
-														size={14}
-													/>
-												}
-												variant="solid"
-											>
-												{detail.state === "deleted"
-													? "Restore and publish"
-													: reviewPending
-														? "Awaiting review"
-														: "Submit for review"}
-											</Button>
-											<Button
-												className="h-9 rounded-xl px-3 font-medium text-danger hover:bg-danger/10"
-												isDisabled={
-													busy ||
-													readOnlyVersion ||
-													(reviewPending &&
-														!detail.published)
-												}
-												onPress={onDiscardDraft}
-												size="xs"
-												startContent={
-													<HugeiconsIcon
-														icon={Delete02Icon}
-														aria-hidden
-														size={14}
-													/>
-												}
-												variant="transparent"
-											>
-												{detail.published
-													? "Discard changes"
-													: "Delete draft"}
-											</Button>
-										</>
-									) : null}
-								</div>
-							))}
-						</>
-					}
-					<ValidationSummary
-						errors={validationErrors}
-						recordKey={detail.key}
-						tone={
-							saveState === "conflict" ? "conflict" : "validation"
-						}
-					/>
-				</div>
-			</div>
-
-			<div
-				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
-				data-admin-region="inspector-scroll"
-			>
+						{fileErrors[detail.key]}
+					</p>
+				)}
+				<ValidationSummary
+					errors={validationErrors}
+					recordKey={detail.key}
+					tone={saveState === "conflict" ? "conflict" : "validation"}
+				/>
 				{editorNotice}
 				{!detail.parentItem ? (
 					<Section
@@ -1911,7 +1862,11 @@ export function AdminInspector({
 							<PublishingChoicePanel
 								detail={detail}
 								readOnly={readOnlyVersion || readOnly}
-								choice={readOnlyVersion ? publishingChoice ?? null : undefined}
+								choice={
+									readOnlyVersion
+										? (publishingChoice ?? null)
+										: undefined
+								}
 								model={publishing}
 							/>
 						)}

@@ -50,6 +50,8 @@ const protectedAdminRequests = [
 	["POST", "/api/admin/items/ABCDEFGH/publication/crossref/activate"],
 	["PUT", "/api/admin/items/ABCDEFGH/writeback/sources"],
 	["GET", "/api/admin/items/ABCDEFGH/file"],
+	["GET", "/api/admin/items/ABCDEFGH/file/cover?revision=1"],
+	["GET", "/api/admin/items/ABCDEFGH/file/cover?revision=1&review=edd606b7-a61f-4c39-a8d6-f2a00381937c"],
 	["POST", "/api/admin/items/ABCDEFGH/file"],
 	["POST", "/api/admin/items/ABCDEFGH/writeback/resolve"],
 	["POST", "/api/admin/items/ABCDEFGH/publication/crossref/retry"],
