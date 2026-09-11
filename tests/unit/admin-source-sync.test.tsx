@@ -146,7 +146,7 @@ describe("source import state in the admin", () => {
 		const text = container.textContent ?? "";
 		expect(text).toContain("Importing");
 		expect(text).toContain("1,500 records processed so far");
-		expect(text).toContain("500 records.");
+		expect(text).toMatch(/(?<![\d,])500 records\b/);
 		expect(text).toContain("Check date and try again.");
 
 		expect(text).toContain("Showing 2 of 250 open issues.");

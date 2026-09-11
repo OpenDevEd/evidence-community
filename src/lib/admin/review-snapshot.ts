@@ -5,10 +5,7 @@ import { itemFilePublication } from "@/db/schema/source";
 import { itemFileRemoval } from "@/db/schema/review";
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { applyItemDraftPatch } from "./item-draft-patch";
-import {
-	loadPublishedItemPayload,
-	ItemDraftConflictError,
-} from "./native-item-service";
+import { loadPublishedItemPayload } from "./native-item-service";
 import { AdminValidationError } from "./errors";
 import { validateReviewPayload } from "./review-validation";
 import type { PublishingChoice } from "./review-contract";
@@ -58,27 +55,22 @@ function captureFile(
 	};
 }
 
-function reviewBaseRevision(
-	key: string,
-	current: typeof item.$inferSelect | undefined,
-	draft: typeof itemDraft.$inferSelect | undefined,
-) {
-	const revision = current?.revision ?? 0;
-	if (draft && draft.baseRevision !== revision)
-		throw new ItemDraftConflictError(key);
-	return revision;
-}
-
-async function reviewRecordPayload(
+async function materializeReviewRecord(
 	transaction: DatabaseTransaction,
 	key: string,
 	current: typeof item.$inferSelect | undefined,
 	draft: typeof itemDraft.$inferSelect | undefined,
 ) {
-	return applyItemDraftPatch(
-		await loadPublishedItemPayload(transaction, key, current ?? null),
-		draft?.patch ?? {},
-	);
+	// Drafts are patches over the current public record, including source imports.
+	// Freeze that same view; approval still rejects changes after this capture.
+	return {
+		itemKey: key,
+		baseRevision: current?.revision ?? 0,
+		payload: applyItemDraftPatch(
+			await loadPublishedItemPayload(transaction, key, current ?? null),
+			draft?.patch ?? {},
+		),
+	};
 }
 
 async function captureRecord(
@@ -90,16 +82,15 @@ async function captureRecord(
 	draft: typeof itemDraft.$inferSelect | undefined,
 ): Promise<ReviewRecord | null> {
 	if (!draft && (!current || current.deleted)) return null;
-	const baseRevision = reviewBaseRevision(key, current, draft);
-	const payload = await reviewRecordPayload(transaction, key, current, draft);
+	const record = await materializeReviewRecord(transaction, key, current, draft);
 	const validated = validateReviewPayload(
-		payload,
+		record.payload,
 		key === rootKey ? publishingChoice : null,
 	);
 	if (key === rootKey && validated.item.parentItem)
 		throw new AdminValidationError("Submit the parent item for review.");
 	if (key !== rootKey && validated.item.parentItem !== rootKey) return null;
-	return { itemKey: key, baseRevision, payload: validated.payload };
+	return { ...record, payload: validated.payload };
 }
 
 /** Capture metadata and private file references while the caller holds item mutation locks. */
