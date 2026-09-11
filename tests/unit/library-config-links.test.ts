@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	getRuntimeHomeHref,
+	getRuntimeLinkHref,
 	getRuntimeInternalHrefPath,
 	getRuntimeLinkAnchorProps,
 	getVisibleRuntimeLinks,
@@ -16,6 +17,14 @@ import {
 } from "../fixtures/library-config";
 
 describe("runtime configuration links", () => {
+	it.each([
+		["https://library.example.org/en-GB/cookie-policy?ref=footer#cookies", "/cookie-policy?ref=footer#cookies"],
+		["/fr/privacy", "/privacy"],
+		["https://policies.example.org/en-GB/privacy", "https://policies.example.org/en-GB/privacy"],
+	])("preserves locale-aware navigation for %s", (href, expected) => {
+		expect(getRuntimeLinkHref(href, "https://library.example.org")).toBe(expected);
+	});
+
 	it("keeps the minimal configuration empty and defaults the logo home link", () => {
 		const config = libraryConfigSchema.parse(minimalLibraryConfig);
 
