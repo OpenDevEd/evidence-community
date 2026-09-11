@@ -81,3 +81,26 @@ test("the page explaining the cookies is readable without answering", async ({
 	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+
+test("follows a configured cookie policy to terms without blocking the document", async ({ page }) => {
+	const destination = process.env.PLAYWRIGHT_EXPECTED_COOKIE_LINK ?? "/cookie-policy";
+	test.skip(!destination.startsWith("/terms"), "This profile uses its standard cookie page.");
+	await page.goto("/en-GB/cookie-policy");
+	await expect(page).toHaveURL(new RegExp(`${destination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+	await expect(page.locator("html")).toHaveAttribute("lang", "en-GB");
+	await expect(page.getByRole("heading", { name: "Terms of Service", exact: true })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Cookie notice", exact: true })).toBeVisible();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
+});
+
+
+test("opens an external terms destination through the library terms route", async ({ page }) => {
+	const destination = process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "";
+	test.skip(!destination.startsWith("https://policies.example.org/"), "This profile uses local terms.");
+	await page.route(destination, route => route.fulfill({ contentType: "text/html", body: "<main><h1>Configured policy destination</h1></main>" }));
+	await page.goto("/en-GB/terms");
+	await expect(page).toHaveURL(destination);
+	await expect(page.getByRole("heading", { name: "Configured policy destination" })).toBeVisible();
+});

@@ -173,6 +173,6 @@ export function readAnalyticsConsentCookieHeader(
  * stay readable while the question is open, so neither is ever asked and
  * neither is ever held still.
  */
-export function asksAnalyticsConsent(pathname: string, locale: string) {
-	return !isAdminPath(pathname, locale) && !isPolicyPage(pathname);
+export function asksAnalyticsConsent(pathname: string, locale: string, config: Parameters<typeof isPolicyPage>[1]) {
+	return !isAdminPath(pathname, locale) && !isPolicyPage(pathname, config);
 }

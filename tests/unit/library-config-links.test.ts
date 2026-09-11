@@ -20,6 +20,10 @@ describe("runtime configuration links", () => {
 	it.each([
 		["https://library.example.org/en-GB/cookie-policy?ref=footer#cookies", "/cookie-policy?ref=footer#cookies"],
 		["/fr/privacy", "/privacy"],
+		["https://library.example.org/policies/privacy.pdf?download=1", "https://library.example.org/policies/privacy.pdf?download=1"],
+		["/policies/privacy.pdf", "https://library.example.org/policies/privacy.pdf"],
+		["https://library.example.org/api/policy", "https://library.example.org/api/policy"],
+		["https://library.example.org/custom-policy", "https://library.example.org/custom-policy"],
 		["https://policies.example.org/en-GB/privacy", "https://policies.example.org/en-GB/privacy"],
 	])("preserves locale-aware navigation for %s", (href, expected) => {
 		expect(getRuntimeLinkHref(href, "https://library.example.org")).toBe(expected);

@@ -1458,6 +1458,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_RUNTIME_ACCEPTANCE: "true",
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
+		PLAYWRIGHT_EXPECTED_COOKIE_LINK: getRuntimeLinkHref(config.legal.cookiePolicy, config.identity.baseUrl),
 		PLAYWRIGHT_EXPECTED_TERMS_LINK: config.legal.termsOfService ? getRuntimeLinkHref(config.legal.termsOfService, config.identity.baseUrl) : "",
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
 		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME: config.identity.shortName,
