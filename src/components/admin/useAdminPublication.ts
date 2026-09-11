@@ -51,6 +51,16 @@ export function useAdminPublication(
 	inputVersion: string | null = null,
 ) {
 	const { mutate: mutateCache } = useSWRConfig();
+	const updateReservation = useCallback((publication: AdminPublicationView) => {
+		const identifier = publication.providers.crossref.exact.identifiers.find(
+			(identifier) => identifier.ownership === "managed",
+		);
+		if (!identifier) return;
+		return mutateCache(["admin-crossref-reservation", publication.itemKey], {
+			doi: identifier.doi,
+			lifecycle: identifier.lifecycle,
+		}, { revalidate: false });
+	}, [mutateCache]);
 	const cacheKey = itemKey
 		? (["admin-publication", itemKey, inputVersion] as const)
 		: null;
@@ -59,6 +69,7 @@ export function useAdminPublication(
 		([, key]) => getAdminPublication(key),
 		{
 			keepPreviousData: false,
+			onSuccess: updateReservation,
 			refreshInterval: (publication) =>
 				shouldPoll(publication) ? ADMIN_PUBLICATION_POLL_MS : 0,
 		},
@@ -91,6 +102,7 @@ export function useAdminPublication(
 			});
 			try {
 				const response = await request(itemKey);
+				await updateReservation(response.publication);
 				await mutateCache(actionCacheKey, response.publication, {
 					revalidate: false,
 				});
@@ -116,7 +128,7 @@ export function useAdminPublication(
 				if (activeAction.current?.token === token) activeAction.current = null;
 			}
 		},
-		[inputVersion, itemKey, mutateCache],
+		[inputVersion, itemKey, mutateCache, updateReservation],
 	);
 
 	const selectedAction = actionState?.itemKey === itemKey ? actionState : null;
