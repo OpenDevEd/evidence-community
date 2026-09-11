@@ -19,6 +19,7 @@
     "resources": "المصادر",
     "explore": "استكشاف",
     "noResourcesFound": "لم يتم العثور على مصادر",
+    "resourcesLoadFailed": "تعذّر تحميل المنشورات.",
     "downloadRecords": "تحميل {count, number} سجل",
     "printCitations": "طباعة {count} اقتباس",
     "mainFeed": "التغذية الرئيسية",

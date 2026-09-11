@@ -35,6 +35,8 @@ import {
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
 import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
+import { FULL_TEXT_PDF_FILTER } from "../src/lib/search-filter-constants";
+import { PLATFORM_SEARCH_SCOPE_OPTIONS } from "../src/config/library-config/catalogs";
 
 const publicationConfig = libraryConfigSchema.parse(maximalLibraryConfig).services.publication;
 
@@ -429,6 +431,43 @@ async function verify() {
 				initialDocument.fullTextPDFs[0]?.fullTextPDF[1]?.page === 2,
 			"Attachment metadata and page text were not projected",
 		);
+		const fullTextScope = PLATFORM_SEARCH_SCOPE_OPTIONS.find(
+			({ key }) => key === "documents",
+		);
+		assert(fullTextScope, "The full-text search scope is missing");
+		const fullTextOptions = {
+			attributesToSearchOn: [...fullTextScope.attributesToSearchOn],
+			filter: FULL_TEXT_PDF_FILTER,
+		};
+		const fullTextResult = await goodService.index.search(
+			"Second page text",
+			fullTextOptions,
+		);
+		assert(
+			fullTextResult.hits.length === 1 &&
+				fullTextResult.hits[0]?.key === parentKey,
+			"Full-text search did not return the publication containing the matching PDF page",
+		);
+		const metadataOnlyResult = await goodService.index.search(
+			"Initial indexed report",
+			fullTextOptions,
+		);
+		assert(
+			metadataOnlyResult.hits.length === 0,
+			"Full-text-only search matched metadata outside the PDF",
+		);
+		const textlessKey = "TEXTLESS2345";
+		await successfulTask(goodService.index.addDocuments([
+			{ ...initialDocument, key: textlessKey, fullTextPDFs: [] },
+		]));
+		const withText = await goodService.index.search("Initial indexed report", {
+			filter: FULL_TEXT_PDF_FILTER,
+		});
+		assert(
+			withText.hits.length === 1 && withText.hits[0]?.key === parentKey,
+			"Requiring PDF text did not exclude a matching record without extracted pages",
+		);
+		await successfulTask(goodService.index.deleteDocument(textlessKey));
 		assert(
 			initialDocument.publicationIdentifiers.crossref.doi ===
 				"10.53832/search.000001" &&

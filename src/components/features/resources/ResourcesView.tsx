@@ -4,10 +4,12 @@ import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-auth
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
+	Alert02Icon,
 	CodeSquareIcon,
 	Compass01Icon,
 	Delete02Icon,
 	Download01Icon,
+	Refresh01Icon,
 } from "@hugeicons/core-free-icons";
 import { ReactNode, use, useContext, useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
@@ -404,10 +406,25 @@ function ResourcesList({
 						: "grid grid-cols-2",
 				)}
 			>
-				{actuallyNoData ? (
-					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
+				{itemsContext.itemsError ? (
+					<li role="alert" className="flex flex-col items-center gap-4 py-12 text-center">
+						<div className="flex items-center gap-2 text-sm font-medium text-black/70 dark:text-white/70">
+							<HugeiconsIcon icon={Alert02Icon} className="size-5 text-danger" />
+							{t("resourcesLoadFailed")}
+						</div>
+						<Button
+							size="sm"
+							isLoading={itemsContext.isItemsFetching}
+							onPress={() => void itemsContext.revalidateResults()}
+							startContent={<HugeiconsIcon icon={Refresh01Icon} className="size-4" />}
+						>
+							{t("retry")}
+						</Button>
+					</li>
+				) : actuallyNoData ? (
+					<li className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
-					</div>
+					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
 						(_, index) =>
@@ -694,6 +711,7 @@ export function ResourcesView({
 
 	useEffect(() => {
 		if (
+			itemsContext.itemsError ||
 			!itemsContext.itemsData ||
 			itemsContext.isItemsLoading ||
 			itemsContext.isItemsFetching
@@ -733,6 +751,7 @@ export function ResourcesView({
 			categoricalFilters,
 		});
 	}, [
+		itemsContext.itemsError,
 		itemsContext.isItemsFetching,
 		itemsContext.isItemsLoading,
 		itemsContext.itemsData,

@@ -1,3 +1,5 @@
+import { FULL_TEXT_PDF_ATTRIBUTE } from "../../lib/search-filter-constants";
+
 export const PLATFORM_LOCALES = [
 	"en-GB",
 	"en-US",
@@ -51,7 +53,7 @@ export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
 		key: "documents",
 		legacyKey: "fulltext",
 		name: "Full text only",
-		attributesToSearchOn: ["fullTextPDFs.fullTextPDF.text"],
+		attributesToSearchOn: [FULL_TEXT_PDF_ATTRIBUTE],
 	},
 	{
 		key: "everywhere",
@@ -60,7 +62,7 @@ export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
 		attributesToSearchOn: [
 			"metadataSearch",
 			"tags",
-			"fullTextPDFs.fullTextPDF.text",
+			FULL_TEXT_PDF_ATTRIBUTE,
 		],
 	},
 ] as const;

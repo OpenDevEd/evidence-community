@@ -19,6 +19,7 @@
     "resources": "Rasilimali",
     "explore": "Chunguza",
     "noResourcesFound": "Hakuna rasilimali zilizopatikana",
+    "resourcesLoadFailed": "Imeshindwa kupakia machapisho.",
     "downloadRecords": "Pakua Rekodi {count, number}",
     "printCitations": "Chapisha Nukuu {count}",
     "mainFeed": "Taarifa Kuu",
