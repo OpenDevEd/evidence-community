@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`); } }));
+vi.mock("next-intl/server", () => ({ getLocale: async () => "fr" }));
 vi.mock("next/cache", () => ({
 	cacheLife: vi.fn(),
 	cacheTag: vi.fn(),
 }));
 vi.mock("@/i18n/routing", () => ({
 	Link: ({ children }: { children: React.ReactNode }) => children,
+	redirect: ({ href, locale }: { href: string; locale: string }) => { throw new Error(`redirect:${locale}:${href}`); },
 }));
 vi.mock("@/components/pages/PolicyToc", () => ({
 	default: () => null,
@@ -33,6 +35,18 @@ describe("policy documents", () => {
 		config.legal[field] = "https://policies.example.org/library";
 		await expect(loadPolicyDocument(config, kind)).resolves.toBeNull();
 		await expect(loadPolicyPageDocument(config, kind)).rejects.toThrow("redirect:https://policies.example.org/library");
+	});
+
+	it.each(["/cookie-policy?ref=footer#cookies", "https://minimal.example.org/en-GB/cookie-policy?ref=footer#cookies"])("keeps the visitor's locale for an internal policy destination: %s", async (href) => {
+		const config = libraryConfigSchema.parse(minimalLibraryConfig);
+		config.legal.privacyPolicy = href;
+		await expect(loadPolicyPageDocument(config, "privacy")).rejects.toThrow("redirect:fr:/cookie-policy?ref=footer#cookies");
+	});
+
+	it.each(["/privacy?ref=footer", "https://minimal.example.org/en-GB/privacy/", "/fr/privacy#contact"])("serves the policy without redirecting to itself: %s", async (href) => {
+		const config = libraryConfigSchema.parse(minimalLibraryConfig);
+		config.legal.privacyPolicy = href;
+		await expect(loadPolicyPageDocument(config, "privacy")).resolves.toMatchObject({ content: expect.stringContaining("customer privacy notice") });
 	});
 
 	it("uses the owner's privacy text, fills in the site host, and reads its date", async () => {

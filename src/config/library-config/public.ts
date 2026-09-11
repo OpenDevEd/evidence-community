@@ -25,7 +25,10 @@ export function projectPublicLibraryConfig(
 
 	// A disabled parent page removes its navigation group, including its children.
 	const availablePages = getRuntimePageAvailability(config);
-	const pageAvailable = (link: { href: string }) => availablePages[getRuntimePagePath(link.href, config.identity.baseUrl) ?? ""] !== false;
+	const pageAvailable = (link: { href: string }) => {
+		const pathname = getRuntimePagePath(link.href, config.identity.baseUrl);
+		return Object.entries(availablePages).every(([page, enabled]) => page !== pathname || enabled);
+	};
 	const publicConfig = publicLibraryConfigSchema.parse({
 		schemaVersion: config.schemaVersion,
 		revision: config.revision,

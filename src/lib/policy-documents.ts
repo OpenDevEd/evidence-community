@@ -1,5 +1,8 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { getLocale } from "next-intl/server";
+import { redirect as redirectLocalized } from "@/i18n/routing";
+import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
 import { getRuntimePagePath } from "@/config/library-config/links";
 
 import { readFile, stat } from "fs/promises";
@@ -13,19 +16,11 @@ const POLICY_DOCUMENT_PATHS = {
 	cookiePolicy: join(process.cwd(), "docs", "cookie-policy.md"),
 } as const;
 
-export type PolicyDocumentKind = keyof typeof POLICY_DOCUMENT_PATHS | "terms";
-
 const POLICY_MANIFEST_FIELDS = {
 	cookiePolicy: "cookieMarkdown",
 	privacy: "privacyMarkdown",
 	terms: "termsMarkdown",
 } as const satisfies Record<PolicyDocumentKind, keyof LibraryServerConfig["legal"]>;
-
-const POLICY_DESTINATIONS = {
-	privacy: { field: "privacyPolicy", path: "/privacy" },
-	cookiePolicy: { field: "cookiePolicy", path: "/cookie-policy" },
-	terms: { field: "termsOfService", path: "/terms" },
-} as const;
 
 const POLICY_SITE_HOST_TOKEN = "{{SITE_HOST}}";
 const POLICY_CONDITIONAL_CLOSE_TOKEN = "{{::}}";
@@ -238,13 +233,20 @@ function getPolicyRedirect(config: PolicyDocumentConfig, document: PolicyDocumen
 
 export async function loadPolicyPageDocument(config: PolicyDocumentConfig, document: PolicyDocumentKind) {
 	const destination = getPolicyRedirect(config, document);
-	if (destination) redirect(destination);
+	if (destination) {
+		const pathname = getRuntimePagePath(destination, config.identity.baseUrl);
+		if (pathname !== null) {
+			const target = new URL(destination, config.identity.baseUrl);
+			redirectLocalized({ href: `${pathname}${target.search}${target.hash}`, locale: await getLocale() });
+		}
+		redirect(destination);
+	}
 	return loadPolicyDocument(config, document);
 }
 
 /**
- * Owner-written text from the library manifest wins over the built-in
- * document. The terms page exists only when the owner wrote terms.
+ * A configured destination takes precedence. For a local policy page, owner
+ * text replaces the built-in document. Terms require owner-written text.
  */
 export async function loadPolicyDocument(
 	config: PolicyDocumentConfig,
