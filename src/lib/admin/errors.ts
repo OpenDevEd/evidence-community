@@ -46,6 +46,7 @@ export class AdminValidationError extends Error {
 }
 
 const fieldLabels: Record<string, string> = {
+	countryFocus: "Country focus",
 	beforeCollection: "Collection position",
 	expectedDraftRevision: "Draft revision",
 	expectedRevision: "Revision",

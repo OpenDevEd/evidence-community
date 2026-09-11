@@ -2,6 +2,8 @@
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
+import { describeCountryFocus } from "@/lib/country-focus";
+import { CountryFocusInput } from "./CountryFocusInput";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
@@ -447,6 +449,78 @@ function ValidationSummary({
 	);
 }
 
+function CountryFocusEditor({
+	payload,
+	titleField,
+	change,
+	onChange,
+	readOnly,
+	error,
+}: {
+	payload: Record<string, unknown>;
+	titleField: string;
+	change: AdminDraftDiff["countryFocus"];
+	onChange: (payload: Record<string, unknown>) => void;
+	readOnly: boolean;
+	error?: string;
+}) {
+	return (
+		<div className="space-y-1.5 pt-1.5">
+			<FieldLabel
+				action={
+					change && !readOnly ? (
+						<ChangedMarker
+							label="country focus"
+							publishedValue={describeCountryFocus(
+								change.previous,
+							)}
+							onRevert={() =>
+								onChange({
+									...payload,
+									countryFocus: change.previous,
+								})
+							}
+						/>
+					) : null
+				}
+			>
+				Country focus
+			</FieldLabel>
+			<CountryFocusInput
+				disabled={readOnly}
+				value={
+					Array.isArray(payload.countryFocus)
+						? (payload.countryFocus as string[])
+						: null
+				}
+				onChange={(countryFocus) =>
+					onChange({ ...payload, countryFocus })
+				}
+				title={String(payload[titleField] ?? "")}
+				abstract={String(payload.abstractNote ?? "")}
+			/>
+			{error && (
+				<p role="alert" className="text-xs text-danger">
+					{error}
+				</p>
+			)}
+		</div>
+	);
+}
+
+function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
+	const metadataFields = adminFieldDescriptors(definition);
+	const titleField =
+		metadataFields.find(({ semanticField }) => semanticField === "title")
+			?.field ?? "title";
+	const countryFocusAfterField = metadataFields.some(
+		({ field }) => field === "abstractNote",
+	)
+		? "abstractNote"
+		: titleField;
+	return { titleField, countryFocusAfterField };
+}
+
 function MetadataEditor({
 	definitions,
 	detail,
@@ -470,6 +544,7 @@ function MetadataEditor({
 		definitions,
 		String(payload.itemType ?? detail.itemType),
 	);
+	const { titleField, countryFocusAfterField } = countryFocusPlacement(definition);
 	const selectedItemType = definition?.itemType ?? null;
 	const [itemTypeInput, setItemTypeInput] = useState(
 		selectedItemType ? humanizeAdminField(selectedItemType) : "",
@@ -604,6 +679,19 @@ function MetadataEditor({
 									updateField(field, next)
 								}
 							/>
+							{field === countryFocusAfterField &&
+								isTopLevelAdminItemType(
+									String(payload.itemType ?? detail.itemType),
+								) && (
+									<CountryFocusEditor
+										payload={payload}
+										titleField={titleField}
+										change={diff.countryFocus}
+										onChange={onChange}
+										readOnly={readOnly}
+										error={errors.countryFocus}
+									/>
+								)}
 							{field === "DOI" && lockedDoi ? (
 								<p className="text-xs text-black/45 dark:text-white/45">
 									Deactivate Zenodo before changing this DOI.

@@ -5,6 +5,7 @@ import {
 } from "@opendeved/evidence-library-core/zotero-schema";
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
+import { countryFocusSchema } from "@/lib/country-focus";
 
 import { creatorType } from "@/db/schema/enums/creatorType";
 import { itemType } from "@/db/schema/enums/itemType";
@@ -280,6 +281,13 @@ export function validateNativeItemDraft(
 	return result.value;
 }
 
+function countryFocusFields(value: unknown, source: boolean | undefined) {
+	if (source || value == null) return {};
+	const result = countryFocusSchema.safeParse(value);
+	if (!result.success) throw new NativeItemValidationError("Choose valid countries for this item.", { countryFocus: "Choose countries from the list." });
+	return { countryFocus: result.data };
+}
+
 function parseNativeItemDraft(
 	input: unknown,
 	options: NativeItemValidationOptions,
@@ -300,6 +308,7 @@ function parseNativeItemDraft(
 
 	const itemValues: Record<string, unknown> = {
 		itemType: normalizedItemType,
+		...countryFocusFields(payload.countryFocus, options.source),
 		...normalizeDraftFields(
 			payload,
 			[

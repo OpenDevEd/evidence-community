@@ -102,6 +102,8 @@ export const item = pgTable(
 		annotationSortIndex: varchar(),
 		annotationPosition: varchar(),
 		country: varchar(),
+		// Library-owned focus. Null derives from title/abstract; [] is explicitly empty.
+		countryFocus: varchar().array(),
 		assignee: varchar(),
 		filingDate: varchar(),
 		applicationNumber: varchar(),

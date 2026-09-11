@@ -10,6 +10,7 @@ import {
 } from "./admin-schema";
 
 export type AdminDraftDiff = {
+	countryFocus: { previous: string[] | null } | null;
 	collections: string[] | null;
 	creators: AdminCreator[] | null;
 	fields: Record<string, string>;
@@ -20,6 +21,7 @@ export type AdminDraftDiff = {
 };
 
 export const EMPTY_ADMIN_DRAFT_DIFF: AdminDraftDiff = {
+	countryFocus: null,
 	collections: null,
 	creators: null,
 	fields: {},
@@ -88,6 +90,11 @@ function sameValue(left: unknown, right: unknown) {
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function countryFocusDiff(current: unknown, previous: unknown) {
+	if (sameValue(current ?? null, previous ?? null)) return null;
+	return { previous: Array.isArray(previous) ? previous as string[] : null };
+}
+
 export function computeAdminDraftDiff(
 	detail: AdminItemDetail,
 	payload: Record<string, unknown>,
@@ -133,6 +140,7 @@ export function computeAdminDraftDiff(
 		);
 
 	return {
+		countryFocus: countryFocusDiff(payload.countryFocus, published.countryFocus),
 		collections: collectionsChanged ? originalCollections : null,
 		creators: creatorsChanged ? originalCreators : null,
 		fields,

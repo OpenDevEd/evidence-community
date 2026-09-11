@@ -1,3 +1,4 @@
+import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import {
 	collectionSourceLink,
 	itemSourceLink,
@@ -233,7 +234,7 @@ export async function markItemWritebackDirty(
 		updatedAt: Date;
 	},
 ) {
-	const commonChangedFields = [...new Set(dirtyFields)].sort();
+	const commonChangedFields = [...new Set(dirtyFields)].filter((field) => !LIBRARY_OWNED_PAYLOAD_FIELDS.has(field)).sort();
 	if (
 		commonChangedFields.length === 0 &&
 		Object.keys(dirtyFieldsBySource).length === 0
@@ -515,7 +516,7 @@ export async function applyParentWritebackLinks(
 export function fullItemWritebackFields() {
 	return [
 		...editableItemDatabaseFields
-			.filter((field) => field !== "itemType")
+			.filter((field) => field !== "itemType" && !LIBRARY_OWNED_PAYLOAD_FIELDS.has(field))
 			.map(databaseItemFieldToPayloadField),
 		"tags",
 	];

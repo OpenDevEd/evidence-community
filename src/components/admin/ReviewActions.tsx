@@ -234,6 +234,7 @@ function ReviewDialog({
 								: !feedback.trim())
 						}
 						onPress={() => void submit()}
+						isLoading={busy}
 					>
 						{dialog === "publish"
 							? confirmCorrection
