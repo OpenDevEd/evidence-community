@@ -19,7 +19,7 @@
     "resources": "المصادر",
     "explore": "استكشاف",
     "noResourcesFound": "لم يتم العثور على مصادر",
-    "downloadRecords": "تحميل {count} سجل",
+    "downloadRecords": "تحميل {count, number} سجل",
     "printCitations": "طباعة {count} اقتباس",
     "mainFeed": "التغذية الرئيسية",
     "lastUpdate": "آخر تحديث من قاعدة البيانات: {date} (UTC)",
