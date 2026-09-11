@@ -22,7 +22,7 @@ import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { Spinner } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import { hasInstitution } from "@/config/library-config/institutions";
 import type { AdminCreator } from "@/lib/admin/types";

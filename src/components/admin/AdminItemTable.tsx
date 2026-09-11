@@ -11,8 +11,8 @@ import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
-	Spinner,
 } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import {
 	flexRender,
 	getCoreRowModel,

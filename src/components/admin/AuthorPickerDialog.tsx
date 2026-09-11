@@ -6,8 +6,8 @@ import {
 	ModalContent,
 	ModalHeader,
 	ModalFooter,
-	Spinner,
 } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import {
 	Add01Icon,
 	ArrowLeft01Icon,

@@ -45,8 +45,8 @@ import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
-	Spinner,
 } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
