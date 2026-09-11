@@ -438,7 +438,11 @@ export default function AdminWorkbench({
 		useState<RecordAssignment | null>(null);
 	const [mobilePane, setMobilePane] = useState<
 		"inspector" | "list" | "navigation"
-	>("list");
+	>(() => selectedKey ? "inspector" : "list");
+	function selectNavigationFilter(next: Parameters<typeof setFilters>[0]) {
+		setFilters(next);
+		setMobilePane("list");
+	}
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
@@ -2190,9 +2194,9 @@ export default function AdminWorkbench({
 							<div className="min-h-0 flex-1">
 								<AdminNavigation
 									reviewQueue={filters.reviewQueue}
-									onSelectReviewQueue={() => setFilters((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
+									onSelectReviewQueue={() => selectNavigationFilter((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
 									kind={filters.reviewQueue ? null : singleAdminItemFilterValue(filters.filters, "kind") ?? "all"}
-									onSelectKind={(kind) => setFilters((current) => ({
+									onSelectKind={(kind) => selectNavigationFilter((current) => ({
 										...current,
 										reviewQueue: false,
 										filters: setSingleAdminItemFilter(current.filters, "kind", kind === "all" ? null : kind),
@@ -2206,7 +2210,7 @@ export default function AdminWorkbench({
 									onOpenSourceSync={setSyncSourceKey}
 									onRestoreCollection={restoreCollection}
 									onSelectCollection={(collection) =>
-										setFilters((current) => ({
+										selectNavigationFilter((current) => ({
 											...current,
 											filters: setSingleAdminItemFilter(
 												current.filters,
@@ -2216,7 +2220,7 @@ export default function AdminWorkbench({
 										}))
 									}
 									onSelectSource={(source) =>
-										setFilters((current) => ({
+										selectNavigationFilter((current) => ({
 											...current,
 											filters: setSingleAdminItemFilter(
 												current.filters,
@@ -2228,7 +2232,7 @@ export default function AdminWorkbench({
 										}))
 									}
 									onSelectState={(state) =>
-										setFilters((current) => ({
+										selectNavigationFilter((current) => ({
 											...current,
 											filters: setSingleAdminItemFilter(
 												current.filters,
@@ -2508,6 +2512,7 @@ export default function AdminWorkbench({
 				onOpenRecord={(itemKey) => {
 					setSyncSourceKey(null);
 					setSelectedKey(itemKey);
+					setMobilePane("inspector");
 				}}
 				source={syncSource}
 			/>

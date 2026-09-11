@@ -2261,6 +2261,34 @@ test("selects the first record when an initially empty list gains results", asyn
 	).toBeVisible();
 });
 
+test("opens a linked record directly in a narrow window", async ({ page }) => {
+	await mockPublishedBook(page);
+	await page.setViewportSize({ height: 768, width: 1024 });
+	await page.goto(`/admin?item=${publishedItemKey}`);
+	const title = page.locator("#admin-inspector-pane").getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toBeVisible();
+	await expect(title).toHaveValue(publishedPayload.title);
+	await page.reload();
+	await expect(title).toBeVisible();
+});
+
+test("shows matching records after choosing a navigation filter in a narrow window", async ({ page }) => {
+	await mockPublishedBook(page);
+	await page.setViewportSize({ height: 768, width: 1024 });
+	await page.goto("/admin");
+	const navigation = page.getByRole("navigation", { name: "Admin filters and collections" });
+	// The toolbar contains a separate filter-dialog trigger.
+	const paneToggle = page.locator('button[aria-label="Filters"]:not([aria-haspopup])');
+	await paneToggle.click();
+	await navigation.getByRole("button", { name: /Review queue/ }).click();
+	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await expect.poll(() => new URL(page.url()).searchParams.get("review")).toBe("pending");
+	await paneToggle.click();
+	await navigation.getByRole("button", { name: "Created", exact: true }).click();
+	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await expect.poll(() => new URL(page.url()).searchParams.get("review")).toBeNull();
+});
+
 test("keeps the filter editor inside a narrow viewport", async ({ page }) => {
 	await mockPublishedBook(page);
 	await page.setViewportSize({ height: 844, width: 390 });

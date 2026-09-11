@@ -2,7 +2,7 @@
 
 import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { SWRConfig, unstable_serialize, type Cache } from "swr";
+import useSWR, { SWRConfig, unstable_serialize, type Cache } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
@@ -92,10 +92,11 @@ describe("useAdminPublication", () => {
 
 	function Harness() {
 		const value = useAdminPublication(itemKey, inputVersion);
+		const reservation = useSWR<{ doi: string; lifecycle: "reserved" | "verified" }>(["admin-crossref-reservation", itemKey], null);
 		useLayoutEffect(() => {
 			current = value;
 		}, [value]);
-		return null;
+		return <output>{reservation.data?.lifecycle}</output>;
 	}
 
 	async function render() {
@@ -130,6 +131,21 @@ describe("useAdminPublication", () => {
 		await act(async () => root.unmount());
 		container.remove();
 		vi.useRealTimers();
+	});
+
+	it.each(["refresh", "activateCrossref"] as const)("updates the DOI reservation display from %s", async (update) => {
+		const queued = publication(itemKey, "queued");
+		queued.providers.crossref.exact.identifiers = [{doi: "10.5555/library.1", lifecycle: "reserved", ownership: "managed", role: "primary"}];
+		api.get.mockResolvedValueOnce(queued);
+		await render();
+		expect(container.querySelector("output")?.textContent).toBe("reserved");
+
+		const verified = publication(itemKey, "synced");
+		verified.providers.crossref.exact.identifiers = [{doi: "10.5555/library.1", lifecycle: "verified", ownership: "managed", role: "primary"}];
+		api.get.mockResolvedValueOnce(verified);
+		api.activateCrossref.mockResolvedValueOnce({ publication: verified });
+		await act(async () => { await current[update](); await flush(); });
+		expect(container.querySelector("output")?.textContent).toBe("verified");
 	});
 
 	it("loads the selected item without keeping the previous item on screen", async () => {

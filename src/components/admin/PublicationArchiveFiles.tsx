@@ -34,7 +34,7 @@ export function PublicationArchiveFiles({
 			<span className="min-w-0 flex-1">
 				<span className="block text-xs font-medium">
 					{files
-						? `${files} ${files === 1 ? "PDF" : "PDFs"} ready to archive`
+						? `${files} ${files === 1 ? "PDF" : "PDFs"} attached`
 						: "Add a PDF"}
 				</span>
 				<span className="mt-1 block truncate text-[10px] text-black/45 dark:text-white/45">
