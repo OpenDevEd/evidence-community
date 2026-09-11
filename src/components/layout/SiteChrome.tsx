@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useLocale } from "next-intl";
 
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { asksAnalyticsConsent } from "@/lib/analytics-consent";
 import { isAdminPath } from "@/lib/path";
 
@@ -65,7 +66,8 @@ export default function SiteChrome({
 	const locale = useLocale();
 	const { isPreferencesOpen } = useAnalyticsConsent();
 	const admin = isAdminPath(pathname, locale);
-	const asksConsent = asksAnalyticsConsent(pathname, locale);
+	const config = useLibraryConfig();
+	const asksConsent = asksAnalyticsConsent(pathname, locale, config);
 
 	return (
 		<>

@@ -91,6 +91,7 @@ const expectedDefaultSearchScopeLabel =
 	"Title, abstract, authors and keywords";
 const expectedYearFilter =
 	process.env.PLAYWRIGHT_EXPECTED_YEAR_FILTER !== "false";
+const expectedCookieLink = process.env.PLAYWRIGHT_EXPECTED_COOKIE_LINK ?? "/cookie-policy";
 const expectedTermsLink =
 	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
 const expectedInstitutionFilterLabel =
@@ -321,7 +322,7 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 		page
 			.locator("#footer")
 			.getByRole("link", { name: "Cookie Policy", exact: true }),
-	).toHaveAttribute("href", /cookie-policy$/u);
+	).toHaveAttribute("href", new RegExp(`${expectedCookieLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "u"));
 	await expect(
 		page
 			.locator("#footer")
@@ -345,21 +346,12 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	await page.goto("/contact");
 	const contactDetails = page.getByRole("main");
 	await expect(contactDetails.locator("form")).toHaveCount(expectedContactForm ? 1 : 0);
-	await expect(
-		contactDetails.getByRole("link", {
-			name: expectedContactEmail,
-			exact: true,
-		}),
-	).toHaveAttribute("href", `mailto:${expectedContactEmail}`);
-	await expect(
-		contactDetails.getByRole("link", {
-			name: expectedContactPhone,
-			exact: true,
-		}),
-	).toHaveAttribute("href", `tel:${expectedContactPhone}`);
-	await expect(
-		contactDetails.getByText(expectedContactAddress, { exact: false }),
-	).toBeVisible();
+	for (const [prefix, value] of [["mailto:", expectedContactEmail], ["tel:", expectedContactPhone]]) {
+		const links = contactDetails.locator(`a[href^="${prefix}"]`);
+		await expect(links).toHaveCount(value ? 1 : 0);
+		if (value) await expect(links).toHaveAttribute("href", `${prefix}${value}`);
+	}
+	if (expectedContactAddress) await expect(contactDetails.getByText(expectedContactAddress, { exact: false })).toBeVisible();
 });
 
 test("enforces runtime locales, default, detection, order, and switcher visibility", async ({
