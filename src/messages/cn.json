@@ -19,6 +19,7 @@
     "resources": "资源",
     "explore": "探索",
     "noResourcesFound": "未找到资源",
+    "resourcesLoadFailed": "无法加载出版物。",
     "downloadRecords": "下载 {count, number} 条记录",
     "printCitations": "打印 {count} 条引用",
     "mainFeed": "主页",

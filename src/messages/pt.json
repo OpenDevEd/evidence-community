@@ -19,6 +19,7 @@
     "resources": "Recursos",
     "explore": "Explorar",
     "noResourcesFound": "Nenhum recurso encontrado",
+    "resourcesLoadFailed": "Não foi possível carregar as publicações.",
     "downloadRecords": "Baixar {count, number} Registros",
     "printCitations": "Imprimir {count} Citações",
     "mainFeed": "Feed Principal",

@@ -26,6 +26,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
+import { FULL_TEXT_PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 
 import {
 	generateFullSearchProjectionPlans,
@@ -963,6 +964,13 @@ export async function ensureSearchIndex(
 				"key",
 				"provider",
 				"sourceConnectionKey",
+				{
+					attributePatterns: [FULL_TEXT_PDF_PRESENCE_ATTRIBUTE],
+					features: {
+						facetSearch: false,
+						filter: { equality: true, comparison: false },
+					},
+				},
 			],
 			pagination: { maxTotalHits: 1_000_000 },
 			searchableAttributes: ["*"],

@@ -38,6 +38,7 @@ function useItemsResults(
 		mutate: revalidateResults,
 	} = useSWR<ItemsGetResponse>(itemsQuery, fetcher, {
 		keepPreviousData: true,
+		shouldRetryOnError: false,
 		revalidateOnFocus: false,
 		revalidateOnReconnect: false,
 		revalidateIfStale: false,
