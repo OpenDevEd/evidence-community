@@ -1830,7 +1830,7 @@ export function createLibraryConfigSchema(
 		: null;
 
 	return baseServerConfigSchema().superRefine((config, context) => {
-		for (const { field, message } of policyRedirectIssues(config.legal, config.identity.baseUrl)) {
+		for (const { field, message } of policyRedirectIssues(config)) {
 			addRequiredIssue(context, ["legal", field], message);
 		}
 		const byteLength = new TextEncoder().encode(

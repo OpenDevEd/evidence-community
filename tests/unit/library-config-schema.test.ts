@@ -1255,6 +1255,27 @@ describe("search embedder", () => {
 
 
 describe("policy redirect destinations", () => {
+	it.each(["/contact", "/map", "/takedown"])("rejects a policy pointing to disabled %s", (destination) => {
+		const result = libraryConfigSchema.safeParse({ ...minimalLibraryConfig, legal: { privacyPolicy: destination } });
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+			expect.objectContaining({ path: ["legal", "privacyPolicy"] }),
+		]));
+	});
+
+	it.each(["/contact", "/map", "/takedown"])("allows a policy pointing to enabled %s", (destination) => {
+		expect(libraryConfigSchema.safeParse({ ...maximalLibraryConfig, legal: { ...maximalLibraryConfig.legal, privacyPolicy: destination } }).success).toBe(true);
+	});
+
+	it("rejects a chain that ends at a disabled page", () => {
+		const result = libraryConfigSchema.safeParse({ ...minimalLibraryConfig, legal: { privacyPolicy: "/terms", termsOfService: "/contact" } });
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+			expect.objectContaining({ path: ["legal", "privacyPolicy"] }),
+			expect.objectContaining({ path: ["legal", "termsOfService"] }),
+		]));
+	});
+
 	it.each([
 		{ privacyPolicy: "/terms" },
 		{ privacyPolicy: "/cookie-policy", cookiePolicy: "/terms" },

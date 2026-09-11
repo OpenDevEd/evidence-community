@@ -13,6 +13,18 @@ const serverConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 const publicConfig = projectPublicLibraryConfig(serverConfig);
 
 describe("public library configuration", () => {
+	it.each(["document", "redirect", "neither"])("offers terms links with %s configured", (mode) => {
+		const config = libraryConfigSchema.parse(maximalLibraryConfig);
+		config.legal.termsMarkdown = mode === "document" ? "Test terms" : undefined;
+		config.legal.termsOfService = mode === "redirect" ? "https://example.org/terms" : undefined;
+		const link = { id: "terms-check", label: "Terms", href: "/fr/terms#details", target: "self" as const, visible: true };
+		config.navigation.links.push({ ...link, children: [] });
+		config.footer.sections[0].links.push(link);
+		const projected = projectPublicLibraryConfig(config);
+		expect(projected.navigation.links.some(entry => entry.id === "terms-check")).toBe(mode !== "neither");
+		expect(projected.footer.sections[0].links.some(entry => entry.id === "terms-check")).toBe(mode !== "neither");
+	});
+
 	it.each(["form", "details", "neither"])("offers contact links with %s available", (mode) => {
 		const config = libraryConfigSchema.parse(maximalLibraryConfig);
 		config.email.contactRecipient = mode === "form" ? "contact@example.org" : undefined;
