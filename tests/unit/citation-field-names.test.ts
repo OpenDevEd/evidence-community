@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Cite } from "@citation-js/core";
 
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import { withZoteroFieldNames } from "@/lib/item-field-codec";
@@ -58,6 +59,57 @@ describe("stored field names become Zotero field names", () => {
 // These run the real converter. Nothing is mocked, so they prove what a
 // reader actually downloads.
 describe("real citation output for a stored report", () => {
+	it("exports ordered creator roles without an empty leading name", async () => {
+		const bibtex = await new BibTeXExporter({
+			...storedReport(),
+			creators: [
+				{ firstName: "Amina", lastName: "Amber", creatorType: "author" },
+				{ firstName: "Sam", lastName: "Park", creatorType: "editor" },
+				{ firstName: "Cher", creatorType: "author" },
+				{ firstName: "Alex", lastName: "Lee", creatorType: "seriesEditor" },
+				{ firstName: "Mina", lastName: "Ito", creatorType: "translator" },
+			],
+		} as never).toBibTeX();
+
+		expect(bibtex).toContain("\tauthor = {Amber, Amina and Cher}");
+		expect(bibtex).toContain("\teditor = {Park, Sam and Lee, Alex}");
+		expect(bibtex).toContain("\ttranslator = {Ito, Mina}");
+	});
+
+	it("keeps an organization as one author instead of treating it as the publisher", async () => {
+		const exporter = new BibTeXExporter({
+			...storedReport(),
+			publisher: undefined,
+			creators: [
+				{ name: "UNESCO and Evidence Group", creatorType: "author" },
+				{ firstName: "Caitlin", lastName: "Mills", creatorType: "author" },
+			],
+		} as never);
+		const bibtex = await exporter.toBibTeX();
+		const ris = await exporter.toRIS();
+
+		const [record] = (await Cite.async(bibtex)).data;
+		expect(record.author).toHaveLength(2);
+		expect(record.publisher).toBeUndefined();
+		expect(ris).toMatch(/^AU  - UNESCO and Evidence Group$/m);
+		expect(ris).toMatch(/^AU  - Mills, Caitlin$/m);
+		expect(ris).not.toMatch(/^PB  - /m);
+	});
+
+	it("escapes TeX characters in creator names while preserving RIS text", async () => {
+		const name = "Research & Development 50% $5 #1_A";
+		const exporter = new BibTeXExporter({
+			...storedReport(),
+			creators: [{ name, creatorType: "author" }],
+		} as never);
+		const bibtex = await exporter.toBibTeX();
+		const authorLine = bibtex.split("\n").find((line) => line.startsWith("\tauthor = "));
+		for (const escaped of [String.raw`\&`, String.raw`\%`, String.raw`\$`, String.raw`\#`, String.raw`\_`]) {
+			expect(authorLine).toContain(escaped);
+		}
+		expect(await exporter.toRIS()).toContain(`AU  - ${name}`);
+	});
+
 	it("keeps the number and language in BibTeX", async () => {
 		const bibtex = await new BibTeXExporter(
 			storedReport() as never,

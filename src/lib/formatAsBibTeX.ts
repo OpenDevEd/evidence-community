@@ -1090,6 +1090,12 @@ function mapHTMLmarkup(characters: string) {
 	return characters;
 }
 
+function escapeBibTeX(value: string) {
+	return value
+		.replace(/[|\<\>\~\^\\\{\}]/g, mapEscape)
+		.replace(/([\#\$\%\&\_])/g, "\\$1");
+}
+
 function unescapeHTML(html: string) {
 	// First remove all HTML tags
 	const withoutTags = html.replace(/<[^>]*>/g, "");
@@ -1169,10 +1175,7 @@ export class BibTeXExporter {
 				field == "lccn"
 			)
 		) {
-			// I hope these are all the escape characters!
-			value = value
-				.replace(/[|\<\>\~\^\\\{\}]/g, mapEscape)
-				.replace(/([\#\$\%\&\_])/g, "\\$1");
+			value = escapeBibTeX(value);
 
 			//disable
 			/** if (field == "title" || field == "type" || field == "shorttitle" || field == "booktitle" || field == "series") {
@@ -1265,24 +1268,20 @@ export class BibTeXExporter {
 		}
 
 		if (this.item.creators && this.item.creators.length) {
-			let author = "";
-			let editor = "";
-			let translator = "";
+			const author: string[] = [];
+			const editor: string[] = [];
+			const translator: string[] = [];
 			for (let i = 0; i < this.item.creators.length; i++) {
 				const creator = this.item.creators[i];
-				let creatorString = creator.lastName;
+				let creatorString = creator.name?.trim() ||
+					[creator.lastName?.trim(), creator.firstName?.trim()]
+						.filter(Boolean).join(", ");
 
 				if (creatorString) {
-					if (creator.firstName) {
-						creatorString =
-							creator.lastName + ", " + creator.firstName;
-					}
-
-					creatorString = creatorString
-						.replace(/[|\<\>\~\^\\\{\}]/g, mapEscape)
+					creatorString = escapeBibTeX(creatorString)
 						.replace(/([^\s-\}\(\[]+[A-Z][^\s,]*)/g, "{$1}");
 
-					if (creator.fieldMode == true) {
+					if (creator.name || creator.fieldMode == true) {
 						creatorString = "{" + creatorString + "}";
 					}
 
@@ -1290,25 +1289,23 @@ export class BibTeXExporter {
 						creator.creatorType == "editor" ||
 						creator.creatorType == "seriesEditor"
 					) {
-						editor += " and " + creatorString;
+						editor.push(creatorString);
 					} else if (creator.creatorType == "translator") {
-						translator += " and " + creatorString;
+						translator.push(creatorString);
 					} else {
-						author += " and " + creatorString;
+						author.push(creatorString);
 					}
-				} else if (creator.name) {
-					this.item.publisher = this.item.publisher ?? creator.name;
 				}
 			}
 
-			if (author) {
-				this.writeField("author", "{" + author + "}", true);
+			if (author.length) {
+				this.writeField("author", "{" + author.join(" and ") + "}", true);
 			}
-			if (editor) {
-				this.writeField("editor", "{" + editor + "}", true);
+			if (editor.length) {
+				this.writeField("editor", "{" + editor.join(" and ") + "}", true);
 			}
-			if (translator) {
-				this.writeField("translator", "{" + translator + "}", true);
+			if (translator.length) {
+				this.writeField("translator", "{" + translator.join(" and ") + "}", true);
 			}
 		}
 

@@ -194,7 +194,7 @@
     "itemTechnicalDetailsTitle": "التفاصيل الفنية",
     "noRelationsFound": "لم يتم العثور على علاقات لهذا العنصر في قاعدة البيانات هذه.",
     "itemBackAriaLabel": "العودة إلى الصفحة السابقة",
-    "itemCopyCitationAriaLabel": "نسخ الاقتباس",
+    "copyField": "نسخ {field}",
     "itemCopyUrlAriaLabel": "نسخ عنوان URL",
     "itemDownloadAriaLabel": "تنزيل المنشور",
     "itemLikeAriaLabel": "أعجبني المنشور",

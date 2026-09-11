@@ -194,7 +194,7 @@
     "itemTechnicalDetailsTitle": "技术细节",
     "noRelationsFound": "在此数据库中，未找到此项目的任何关系。",
     "itemBackAriaLabel": "返回上一页",
-    "itemCopyCitationAriaLabel": "复制引用",
+    "copyField": "复制{field}",
     "itemCopyUrlAriaLabel": "复制网址",
     "itemDownloadAriaLabel": "下载出版物",
     "itemLikeAriaLabel": "喜欢出版物",

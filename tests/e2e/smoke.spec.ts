@@ -8,6 +8,7 @@ const expectedConfigRevision =
 const expectedConfigUpdatedAt =
 	process.env.PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT ??
 	"2026-07-27T12:30:00.000Z";
+const expectedPublicBaseUrl = process.env.PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL ?? "https://example.org";
 const expectedIdentityName =
 	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ?? "Example Evidence Library";
 const expectedLogoUrl =
@@ -93,6 +94,7 @@ const expectedTermsLink =
 	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
 const expectedInstitutionFilterLabel =
 	process.env.PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL ?? "Institutions";
+const expectedCitationsEnabled = process.env.PLAYWRIGHT_EXPECTED_CITATIONS_ENABLED !== "false";
 const expectedCitationUrl =
 	process.env.PLAYWRIGHT_EXPECTED_CITATION_URL !== "false";
 const expectedEmbeddings =
@@ -613,6 +615,28 @@ test("rate limits paid AI requests per browser when AI is enabled", async ({
 	});
 });
 
+test("copies citation text without HTML whitespace or an extra sentence separator", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.route(`**/item/${expectedSearchItemKey}/citation`, (route) => route.fulfill({ json: {
+		citation: '<div class="csl-bib-body">\n  <div class="csl-entry">Mills, C. (2026). <i>Learning &amp; evidence.</i></div>\n</div>\n',
+	} }));
+	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
+	await dismissConsent(page);
+	const heading = page.getByRole("heading", { name: "Citation", exact: true });
+	if (!expectedCitationsEnabled) {
+		await expect(heading).toHaveCount(0);
+		return;
+	}
+	const citation = heading.locator("..");
+	await citation.getByRole("button").click();
+	const suffix = expectedCitationUrl
+		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, expectedPublicBaseUrl)}.`
+		: "";
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
+});
+
 test("shows a search failure and lets the reader retry without losing the query", async ({ page }) => {
 	test.skip(!expectedSearchItemKey, "This library has no search fixture.");
 	let unavailable = true;
@@ -738,7 +762,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 			}),
 		).toBeVisible();
 	}
-	const itemUrl = new URL(`/lib/${firstItem.key}`, page.url()).toString();
+	const itemUrl = new URL(`/lib/${firstItem.key}`, expectedPublicBaseUrl).toString();
 	const citationUrlText = page.getByText(`Available at ${itemUrl}.`, {
 		exact: false,
 	});

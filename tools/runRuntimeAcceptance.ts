@@ -1457,7 +1457,6 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_TERMS_LINK: config.legal.termsOfService ?? "",
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
 		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME: config.identity.shortName,
-		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
 		PLAYWRIGHT_EXPECTED_LOGO_URL:
 			activeTheme === "dark"
 				? config.identity.assets.logoDark
@@ -1543,6 +1542,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL:
 			messages.ui[config.filters.institution.label] ??
 			config.filters.institution.label,
+		PLAYWRIGHT_EXPECTED_CITATIONS_ENABLED: String(Boolean(config.services.zotero.translationUrl)),
 		PLAYWRIGHT_EXPECTED_CITATION_URL: String(
 			config.citations.showUrl &&
 				Boolean(config.services.zotero.translationUrl),
@@ -1550,6 +1550,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
 			config.search.embedder !== null && config.features.relatedResources,
 		),
+		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FACET: String(
 			config.filters.institution.mode !== "hidden",

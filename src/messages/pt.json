@@ -194,7 +194,7 @@
     "itemTechnicalDetailsTitle": "Detalhes técnicos",
     "noRelationsFound": "Nenhuma relação encontrada para este item neste banco de dados.",
     "itemBackAriaLabel": "Voltar para a página anterior",
-    "itemCopyCitationAriaLabel": "Copiar citação",
+    "copyField": "Copiar {field}",
     "itemCopyUrlAriaLabel": "Copiar URL",
     "itemDownloadAriaLabel": "Baixar publicação",
     "itemLikeAriaLabel": "Gostar da publicação",

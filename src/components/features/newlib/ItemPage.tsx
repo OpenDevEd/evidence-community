@@ -613,7 +613,7 @@ function ItemDetailsRow({
 					</div>
 					<CopyButton
 						textToCopy={formattedValue}
-						ariaLabel={tUI("itemCopyCitationAriaLabel")}
+						ariaLabel={tUI("copyField", { field: detail?.label ? t(detail.label) : "" })}
 					/>
 				</div>
 			</Skeleton>
@@ -707,7 +707,7 @@ function ItemPropertyRowWrapper({
 				{copyText && (
 					<CopyButton
 						textToCopy={copyText}
-						ariaLabel={tUI("itemCopyCitationAriaLabel")}
+						ariaLabel={tUI("copyField", { field: title })}
 					/>
 				)}
 			</div>
@@ -771,7 +771,7 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 		const rawCitation = resolvedCitation;
 		const cleanCitationText = rawCitation.replace(/<[^>]+>/g, "");
 		const decodedCitation = cleanCitationText
-			? decodeHTMLEntities(cleanCitationText)
+			? decodeHTMLEntities(cleanCitationText).replace(/\s+/g, " ").trim()
 			: undefined;
 
 		if (!citations.showUrl || !item?.key || !decodedCitation) {
