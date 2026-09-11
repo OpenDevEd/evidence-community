@@ -1014,6 +1014,65 @@ function LibraryControls({
 	);
 }
 
+function ResourcesViewFrame({
+	engaged,
+	showChat,
+	isRTL,
+	planeScope,
+	chat,
+	children,
+}: {
+	engaged: boolean;
+	showChat: boolean;
+	isRTL: boolean;
+	planeScope: ReturnType<typeof useAnimate>[0];
+	chat: ReactNode;
+	children: ReactNode;
+}) {
+	const transformOrigin = isRTL ? "left center" : "right center";
+	return (
+		<MotionConfig reducedMotion="user">
+			<section
+				id="main-content"
+				className={twMerge(
+					"w-full flex flex-col gap-4",
+
+					!engaged && "-mx-1 overflow-hidden px-1",
+				)}
+			>
+				{!engaged && <NoteView />}
+
+				<div
+					className={twMerge(
+						"w-full lg:grid lg:grid-cols-[minmax(0,0fr)_minmax(0,1fr)] lg:items-start lg:gap-x-0 lg:transition-[grid-template-columns,column-gap] lg:duration-split lg:ease-split lg:motion-reduce:transition-none lg:motion-reduce:delay-0",
+
+						!engaged && "lg:delay-[80ms]",
+						engaged &&
+							"grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-x-6 xl:gap-x-8",
+					)}
+				>
+					{showChat && chat}
+					<div
+						ref={planeScope}
+						style={{ transformOrigin }}
+						className="@container relative flex w-full min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1"
+					>
+						<div
+							data-plane-shadow
+							aria-hidden
+							className="pointer-events-none absolute inset-x-[-0.75rem] top-[-0.75rem] -z-10 h-[calc(100dvh+1.5rem)] max-h-[calc(100%+1.5rem)] rounded-3xl opacity-0 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.35),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.06)]"
+						/>
+
+						{engaged && <NoteView />}
+						{children}
+						{!engaged && <LibraryResultsFooter />}
+					</div>
+				</div>
+			</section>
+		</MotionConfig>
+	);
+}
+
 export function ResourcesView({
 	extraFilters,
 	params,
@@ -1050,84 +1109,53 @@ export function ResourcesView({
 	useResultsAnalytics(itemsContext);
 	const resultAbstract = engaged ? engagedAbstract : abstract;
 	const resultView = engaged ? "list" : view;
-	const transformOrigin = isRTL ? "left center" : "right center";
 
 	return (
-		<MotionConfig reducedMotion="user">
-			<section
-				id="main-content"
-				className={twMerge(
-					"w-full flex flex-col gap-4",
+		<ResourcesViewFrame
+			engaged={engaged}
+			showChat={showChat}
+			isRTL={isRTL}
+			planeScope={planeScope}
+			chat={
+				<InlineChatColumn
+					engaged={engaged}
+					modelId={selectedModelId!}
+					searchContext={searchContext}
+				/>
+			}
+		>
+			<LibraryControls
+				engaged={engaged}
+				hasSwapped={hasSwapped}
+				engagedProps={{
+					idPrefix,
+					modelId: selectedModelId!,
+					extraFilters,
+					filterChips: <FilterChips />,
+					view: engagedView,
+					setView: setEngagedView,
+					abstract: engagedAbstract,
+					setAbstract: setEngagedAbstract,
+				}}
+				normalProps={{
+					header,
+					abstract,
+					onAbstractChange: setAbstract,
+					view,
+					setView,
+					countLabel,
+					extraFilters,
+				}}
+			/>
 
-					!engaged && "-mx-1 overflow-hidden px-1",
-				)}
-			>
-				{!engaged && <NoteView />}
-
-				<div
-					className={twMerge(
-						"w-full lg:grid lg:grid-cols-[minmax(0,0fr)_minmax(0,1fr)] lg:items-start lg:gap-x-0 lg:transition-[grid-template-columns,column-gap] lg:duration-split lg:ease-split lg:motion-reduce:transition-none lg:motion-reduce:delay-0",
-
-						!engaged && "lg:delay-[80ms]",
-						engaged &&
-							"grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-x-6 xl:gap-x-8",
-					)}
-				>
-					{showChat && (
-						<InlineChatColumn
-							engaged={engaged}
-							modelId={selectedModelId!}
-							searchContext={searchContext}
-						/>
-					)}
-					<div
-						ref={planeScope}
-						style={{ transformOrigin }}
-						className="@container relative flex w-full min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1"
-					>
-						<div
-							data-plane-shadow
-							aria-hidden
-							className="pointer-events-none absolute inset-x-[-0.75rem] top-[-0.75rem] -z-10 h-[calc(100dvh+1.5rem)] max-h-[calc(100%+1.5rem)] rounded-3xl opacity-0 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.35),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.06)]"
-						/>
-
-						{engaged && <NoteView />}
-						<LibraryControls
-							engaged={engaged}
-							hasSwapped={hasSwapped}
-							engagedProps={{
-								idPrefix,
-								modelId: selectedModelId!,
-								extraFilters,
-								filterChips: <FilterChips />,
-								view: engagedView,
-								setView: setEngagedView,
-								abstract: engagedAbstract,
-								setAbstract: setEngagedAbstract,
-							}}
-							normalProps={{
-								header,
-								abstract,
-								onAbstractChange: setAbstract,
-								view,
-								setView,
-								countLabel,
-								extraFilters,
-							}}
-						/>
-
-						<LibraryResultsPanel
-							engaged={engaged}
-							engagedView={engagedView}
-							idPrefix={idPrefix}
-							abstract={resultAbstract}
-							view={resultView}
-						/>
-						{!engaged && <LibraryResultsFooter />}
-					</div>
-				</div>
-			</section>
-		</MotionConfig>
+			<LibraryResultsPanel
+				engaged={engaged}
+				engagedView={engagedView}
+				idPrefix={idPrefix}
+				abstract={resultAbstract}
+				view={resultView}
+			/>
+		</ResourcesViewFrame>
 	);
 }
 
