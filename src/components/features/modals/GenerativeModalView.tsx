@@ -54,7 +54,7 @@ export type GenerativeContentView = {
 	stickToBottom: StickToBottom;
 };
 
-function HistoryItem({
+function renderHistoryItem({
 	currentId,
 	format,
 	isLoading,
@@ -128,16 +128,15 @@ function HistoryPanel({
 				selectedKeys={selectedItem ? [selectedItem.id] : []}
 				disallowEmptySelection
 			>
-				{displayHistory.map((item) => (
-					<HistoryItem
-						key={item.id}
-						currentId={currentId}
-						format={format}
-						isLoading={isLoading}
-						item={item}
-						providers={providers}
-					/>
-				))}
+				{displayHistory.map((item) =>
+					renderHistoryItem({
+						currentId,
+						format,
+						isLoading,
+						item,
+						providers,
+					}),
+				)}
 			</Listbox>
 		</ScrollShadow>
 	);
@@ -408,21 +407,29 @@ export default function GenerativeModalView({
 									>
 										<ContentToolbar
 											content={content.content}
-											deleteDisabled={history.deleteDisabled}
+											deleteDisabled={
+												history.deleteDisabled
+											}
 											format={history.format}
 											onDelete={history.onDelete}
 											onHistoryOpen={() =>
 												onHistoryOpenChange(true)
 											}
 											selectedItem={history.selectedItem}
-											deleteAriaLabel={labels.deleteAriaLabel}
+											deleteAriaLabel={
+												labels.deleteAriaLabel
+											}
 											deleteLabel={labels.delete}
 											historyLabel={labels.history}
 										/>
 										<GeneratedContent
 											{...content}
-											prefersReducedMotion={prefersReducedMotion}
-											jumpToLatestLabel={labels.jumpToLatest}
+											prefersReducedMotion={
+												prefersReducedMotion
+											}
+											jumpToLatestLabel={
+												labels.jumpToLatest
+											}
 											retryLabel={labels.retry}
 										/>
 									</motion.div>

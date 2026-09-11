@@ -61,8 +61,8 @@ type HistoriesSetter = (
 	value:
 		| Record<string, AIHistory[]>
 		| ((
-			previous: Record<string, AIHistory[]>,
-		) => Record<string, AIHistory[]>),
+				previous: Record<string, AIHistory[]>,
+		  ) => Record<string, AIHistory[]>),
 ) => void;
 
 function AiModals({
@@ -171,9 +171,7 @@ function AiMenu({
 	variant?: "default" | "inline";
 }) {
 	return (
-		<Dropdown
-			classNames={{ content: "bg-white dark:bg-secondary" }}
-		>
+		<Dropdown classNames={{ content: "bg-white dark:bg-secondary" }}>
 			<DropdownTrigger>
 				<Button
 					isIconOnly={variant === "default"}

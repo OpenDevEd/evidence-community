@@ -3,7 +3,6 @@ import { useReducedMotion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
 import { useStickToBottom } from "use-stick-to-bottom";
 
-import { getAIModelPresentation } from "@/constants/ai";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import type { useAIFeature } from "@/hooks/useAIFeature";
@@ -69,26 +68,18 @@ function selectedHistoryItem(items: AIHistory[], selectedId: string) {
 	return items.find((item) => item.id === selectedId) ?? items[0];
 }
 
-function nextSelectedHistoryId(
-	items: AIHistory[],
-	selectedItem: AIHistory,
-) {
+function nextSelectedHistoryId(items: AIHistory[], selectedItem: AIHistory) {
 	const selectedIndex = items.findIndex(
 		(item) => item.id === selectedItem.id,
 	);
-	const remainingItems = items.filter(
-		(item) => item.id !== selectedItem.id,
-	);
+	const remainingItems = items.filter((item) => item.id !== selectedItem.id);
 	return (
-		remainingItems[Math.min(selectedIndex, remainingItems.length - 1)]?.id ??
-		""
+		remainingItems[Math.min(selectedIndex, remainingItems.length - 1)]
+			?.id ?? ""
 	);
 }
 
-function visibleErrorMessage(
-	error: Error | undefined,
-	fallback: string,
-) {
+function visibleErrorMessage(error: Error | undefined, fallback: string) {
 	return error ? clientAIError(error).message || fallback : "";
 }
 
@@ -96,9 +87,7 @@ function currentSelectionId(
 	selection: { requestId: string; historyId: string },
 	requestId: string,
 ) {
-	return selection.requestId === requestId
-		? selection.historyId
-		: requestId;
+	return selection.requestId === requestId ? selection.historyId : requestId;
 }
 
 function currentRequestIsVisible(
@@ -107,9 +96,8 @@ function currentRequestIsVisible(
 	error: Error | undefined,
 	isLoading: boolean,
 ) {
-	const hasVisibleError =
-		error !== undefined && error !== dismissedError;
-	return [isLoading, content.length > 0, hasVisibleError].some(Boolean);
+	const hasVisibleError = error !== undefined && error !== dismissedError;
+	return isLoading || content.length > 0 || hasVisibleError;
 }
 
 function historyDeleteIsDisabled(
@@ -117,10 +105,7 @@ function historyDeleteIsDisabled(
 	isShowingCurrentRequest: boolean,
 	selectedItem: AIHistory | undefined,
 ) {
-	return [
-		isLoading && isShowingCurrentRequest,
-		!selectedItem,
-	].some(Boolean);
+	return (isLoading && isShowingCurrentRequest) || !selectedItem;
 }
 
 function deleteHistoryItem({
@@ -158,6 +143,20 @@ function deleteHistoryItem({
 	});
 }
 
+function contentIsLoaded(
+	isLoading: boolean,
+	content: string,
+	error: Error | undefined,
+	isShowingCurrentRequest: boolean,
+) {
+	return (
+		!isLoading ||
+		content.length > 0 ||
+		Boolean(error) ||
+		!isShowingCurrentRequest
+	);
+}
+
 function makeContentView({
 	currentKey,
 	error,
@@ -184,15 +183,14 @@ function makeContentView({
 		content: contentToDisplay,
 		errorMessage: visibleErrorMessage(error, visibleErrorFallback),
 		isAnimating: isLoading && isShowingCurrentRequest,
-		isLoaded: [
-			!isLoading,
-			contentToDisplay.length > 0,
-			Boolean(error),
-			!isShowingCurrentRequest,
-		].some(Boolean),
+		isLoaded: contentIsLoaded(
+			isLoading,
+			contentToDisplay,
+			error,
+			isShowingCurrentRequest,
+		),
 		onRetry,
-		pdfSources:
-			selectedItem?.key === currentKey ? pdfSources : undefined,
+		pdfSources: selectedItem?.key === currentKey ? pdfSources : undefined,
 		selectedId: selectedItem?.id,
 		showError: Boolean(error) && isShowingCurrentRequest,
 		stickToBottom,
@@ -255,10 +253,7 @@ function useGenerativeModalView(props: GenerativeModalProps) {
 		persistedItem,
 	});
 	const displayHistory = withCurrentItem(history, currentItem);
-	const selectedItem = selectedHistoryItem(
-		displayHistory,
-		selectedHistoryId,
-	);
+	const selectedItem = selectedHistoryItem(displayHistory, selectedHistoryId);
 	const isShowingCurrentRequest = selectedItem?.id === id;
 
 	const deleteSelectedHistory = () => {
@@ -288,8 +283,7 @@ function useGenerativeModalView(props: GenerativeModalProps) {
 		isLoading,
 		label: t("history"),
 		onDelete: deleteSelectedHistory,
-		onSelect: (historyId) =>
-			setSelection({ requestId: id, historyId }),
+		onSelect: (historyId) => setSelection({ requestId: id, historyId }),
 		providers: ai.providers,
 		selectedItem,
 	};

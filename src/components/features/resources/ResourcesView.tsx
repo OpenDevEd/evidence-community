@@ -794,7 +794,7 @@ function useSplitViewMotion(engaged: boolean, isRTL: boolean) {
 	const [swapBaseline] = useState(engaged);
 	if (!hasSwapped && engaged !== swapBaseline) setHasSwapped(true);
 
-	const [planeScope, animatePlane] = useAnimate();
+	const [planeScope, animatePlane] = useAnimate<HTMLDivElement>();
 	const prefersReducedMotion = useReducedMotion();
 
 	const planePrevEngagedRef = useRef(engaged);
@@ -1025,7 +1025,7 @@ function ResourcesViewFrame({
 	engaged: boolean;
 	showChat: boolean;
 	isRTL: boolean;
-	planeScope: ReturnType<typeof useAnimate>[0];
+	planeScope: ReturnType<typeof useAnimate<HTMLDivElement>>[0];
 	chat: ReactNode;
 	children: ReactNode;
 }) {
