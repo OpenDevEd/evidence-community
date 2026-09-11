@@ -634,13 +634,42 @@ test("reports a clipboard failure and retries copying clean citation text", asyn
 		});
 	});
 	await citation.getByRole("button").click();
-	await expect(page.getByText("Could not copy", { exact: true })).toBeVisible();
+	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
 	await citation.getByRole("button").click();
 	const suffix = expectedCitationUrl
 		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, expectedPublicBaseUrl)}.`
 		: "";
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
 		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
+});
+
+test("keeps clipboard feedback tied to the latest attempt", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey || !expectedCitationsEnabled, "Requires a public record with citations.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
+	await dismissConsent(page);
+	const citation = page.getByRole("heading", { name: "Citation", exact: true }).locator("..");
+	const copy = citation.getByRole("button");
+	await page.clock.pauseAt(new Date());
+	const attempts = await page.evaluateHandle(() => {
+		const pending: { resolve: () => void; reject: () => void }[] = [];
+		Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: () => new Promise<void>((resolve, reject) => {
+			pending.push({ resolve, reject: () => reject(new DOMException("Clipboard permission denied", "NotAllowedError")) });
+		}) });
+		return pending;
+	});
+	await copy.click();
+	await copy.click();
+	await attempts.evaluate(pending => pending[1].reject());
+	await page.clock.runFor(100);
+	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
+	await attempts.evaluate(pending => pending[0].resolve());
+	await page.clock.runFor(100);
+	await expect(copy).toHaveAccessibleName("Copy Citation");
+	await copy.click();
+	await attempts.evaluate(pending => pending[2].resolve());
+	await page.clock.runFor(100);
+	await expect(copy).toHaveAccessibleName("Copied!");
 });
 
 test("shows a search failure and lets the reader retry without losing the query", async ({ page }) => {

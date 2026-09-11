@@ -6,6 +6,7 @@ import { Button, type ButtonProps } from "@nextui-org/react";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { ReactElement, cloneElement } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 
 interface CopyButtonProps {
@@ -58,6 +59,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
 
 export default function CopyButton({ textToCopy, className, children, ariaLabel, label }: CopyButtonProps) {
     const { copy, copied } = useClipboardFeedback();
+    const t = useTranslations("ui");
     const handleCopy = () => copy(textToCopy);
 
     if (children) {
@@ -65,7 +67,7 @@ export default function CopyButton({ textToCopy, className, children, ariaLabel,
             ...children.props,
             onPress: handleCopy,
             startContent: <CopyIcon copied={copied} />,
-            ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+            ...((copied || ariaLabel) ? { "aria-label": copied ? t("copied") : ariaLabel } : {}),
             children: label ?? children.props.children
         });
     }
@@ -77,7 +79,7 @@ export default function CopyButton({ textToCopy, className, children, ariaLabel,
             size="sm"
             className={twMerge("rounded-full", className)}
             onPress={handleCopy}
-            aria-label={ariaLabel}
+            aria-label={copied ? t("copied") : ariaLabel}
         >
             <CopyIcon copied={copied} />
             {label}
