@@ -277,11 +277,11 @@ function isLikelyBrokenKey(key: string) {
 
 async function getNoteRedirectDestination(
 	request: NextRequest,
-	hasOwnerWrittenTerms: boolean,
+	hasConfiguredTerms: boolean,
 ) {
 	const lookupPath = getRedirectLookupPath(
 		request.nextUrl.pathname,
-		hasOwnerWrittenTerms,
+		hasConfiguredTerms,
 	);
 	if (!lookupPath) return null;
 
@@ -323,10 +323,10 @@ async function getNoteRedirectDestination(
 
 function redirectUnknownPathToNotFoundPage(
 	request: NextRequest,
-	hasOwnerWrittenTerms: boolean,
+	hasConfiguredTerms: boolean,
 ) {
 	if (
-		!getRedirectLookupPath(request.nextUrl.pathname, hasOwnerWrittenTerms)
+		!getRedirectLookupPath(request.nextUrl.pathname, hasConfiguredTerms)
 	) {
 		return null;
 	}
@@ -584,11 +584,13 @@ export default async function proxy(request: NextRequest) {
 	);
 	if (disabledLocaleRedirect) return disabledLocaleRedirect;
 
-	const hasOwnerWrittenTerms = Boolean(libraryConfig.legal.termsMarkdown);
+	const hasConfiguredTerms = Boolean(
+		libraryConfig.legal.termsMarkdown || libraryConfig.legal.termsOfService,
+	);
 	if (libraryConfig.generation.redirects) {
 		const noteRedirectDestination = await getNoteRedirectDestination(
 			request,
-			hasOwnerWrittenTerms,
+			hasConfiguredTerms,
 		);
 		if (noteRedirectDestination) {
 			return NextResponse.redirect(noteRedirectDestination, 307);
@@ -597,7 +599,7 @@ export default async function proxy(request: NextRequest) {
 
 	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(
 		request,
-		hasOwnerWrittenTerms,
+		hasConfiguredTerms,
 	);
 	if (notFoundPageRedirect) {
 		return notFoundPageRedirect;
