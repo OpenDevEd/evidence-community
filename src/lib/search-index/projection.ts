@@ -2,7 +2,10 @@ import { resolveCountryFocus } from "@/lib/country-focus";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { sourceConnection } from "@opendeved/evidence-library-core";
 
-import { isPublicTopLevelItem } from "@/lib/admin/item-fields";
+import {
+	isPublicTopLevelItem,
+	LIBRARY_OWNED_PAYLOAD_FIELDS,
+} from "@/lib/admin/item-fields";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
@@ -163,8 +166,11 @@ function cleanRow(row: ItemRow) {
 	return Object.fromEntries(
 		Object.entries(row)
 			.filter(
-				([, value]) =>
-					value !== null && value !== undefined && value !== "",
+				([field, value]) =>
+					!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) &&
+					value !== null &&
+					value !== undefined &&
+					value !== "",
 			)
 			.map(([key, value]) => [key, jsonValue(value)]),
 	);

@@ -31,6 +31,26 @@ describe("country focus", () => {
 			resolveCountryFocus({ title: "Attention", abstractNote: "" }),
 		).toEqual([]);
 	});
+	it("matches visible text in rich-text abstracts, ignoring HTML attributes", () => {
+		expect(
+			resolveCountryFocus({
+				abstractNote:
+					'<p data-source="Kenya">Evidence from <em>New</em>&nbsp;Zealand and South Sudan.</p>',
+			}),
+		).toEqual(["NZ", "SS"]);
+	});
+	it.each([
+		["Papua New Guinea", ["PG"]],
+		["Guinea-Bissau and Equatorial Guinea", ["GQ", "GW"]],
+		["South Sudan", ["SS"]],
+		["Democratic Republic of the Congo", ["CD"]],
+		["American Samoa", ["AS"]],
+		["Dominican Republic", ["DO"]],
+		["South Sudan and Sudan", ["SD", "SS"]],
+		["Congolese teachers", []],
+	])("matches the most specific country names in %s", (title, countries) => {
+		expect(resolveCountryFocus({ title })).toEqual(countries);
+	});
 	it("uses only manual countries, including an explicitly empty selection", () => {
 		expect(
 			resolveCountryFocus({ title: "Kenya", countryFocus: ["MA"] }),

@@ -378,6 +378,7 @@ async function verify() {
 			"The consumer did not expose real Meilisearch task progress",
 		);
 		const initialDocument = await goodService.index.getDocument<{
+            country: string[];
 			attachmentsData: Array<{ key: string; tags: string[] }>;
 			collections: string[];
 			collectionsAncestry: string[];
@@ -404,7 +405,8 @@ async function verify() {
 			year: string;
 		}>(parentKey);
 		assert(
-			initialDocument.key === parentKey &&
+			initialDocument.country.join(",") === "GB,MA" &&
+				initialDocument.key === parentKey &&
 				initialDocument.provider === "native" &&
 				initialDocument.revision === 1,
 			"The canonical identity was not projected",

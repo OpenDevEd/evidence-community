@@ -70,30 +70,34 @@ export function editablePayloadFromDetail(
 	if (detail.draft) return { ...detail.draft.payload };
 	const definition = definitionFor(definitions, detail.itemType);
 	const published = detail.published ?? {};
-	const sharedFields = definition
-		? adminSharedPayloadFieldsForZoteroItemType(definition)
-		: ADMIN_SHARED_PAYLOAD_FIELDS;
-	const payload: Record<string, unknown> = {
-		itemType: definition?.itemType ?? detail.itemType,
-		tags: detail.tags,
-	};
-	if (sharedFields.has("collections")) {
-		payload.collections = detail.collectionKeys;
-	}
-	if (sharedFields.has("links")) {
-		payload.links = detail.links.publishedKeys;
-	}
-	if (sharedFields.has("creators")) {
-		payload.creators = published.creators ?? detail.creators;
-	}
-	if (sharedFields.has("parentItem") && detail.parentItem) {
-		payload.parentItem = detail.parentItem;
-	}
+	const payload = sharedPayloadFromDetail(detail, definition);
 	for (const { field } of adminFieldDescriptors(definition)) {
 		const value = published[field];
 		if (value !== null && value !== undefined) payload[field] = value;
 	}
 	return payload;
+}
+
+function sharedPayloadFromDetail(
+	detail: AdminItemDetail,
+	definition: AdminSchemaDefinition | undefined,
+) {
+	const published = detail.published ?? {};
+	const sharedFields = definition
+		? adminSharedPayloadFieldsForZoteroItemType(definition)
+		: ADMIN_SHARED_PAYLOAD_FIELDS;
+	const values: Record<string, unknown> = {
+		itemType: definition?.itemType ?? detail.itemType,
+		tags: detail.tags,
+		collections: detail.collectionKeys,
+		links: detail.links.publishedKeys,
+		countryFocus: published.countryFocus ?? null,
+		creators: published.creators ?? detail.creators,
+		...(detail.parentItem ? { parentItem: detail.parentItem } : {}),
+	};
+	return Object.fromEntries(
+		Object.entries(values).filter(([field]) => sharedFields.has(field)),
+	);
 }
 
 export function payloadForItemType(

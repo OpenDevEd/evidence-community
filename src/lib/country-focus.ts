@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { COUNTRIES } from "@/constants/misc";
 import { COUNTRY_ALIASES } from "@/constants/country-aliases";
+import { abstractPlainText } from "@/lib/abstract-text";
 
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 export const countryFocusOptions = Object.entries(COUNTRIES)
-	.map(([code, name]) => ({ code, name: regionNames.of(code) ?? name }))
+	.map(([code, name]) => ({ code, name }))
 	.sort((left, right) => left.name.localeCompare(right.name));
 export const countryFocusNames = Object.fromEntries(
 	countryFocusOptions.map(({ code, name }) => [code, name]),
@@ -26,21 +26,33 @@ export const countryFocusSchema = z
 	.transform((codes) => [...new Set(codes)].sort())
 	.nullable();
 
-const matchers = countryFocusOptions.map(({ code, name }) => {
-	const terms = [
-		...new Set([name, COUNTRIES[code], ...(COUNTRY_ALIASES[code] ?? [])]),
-	];
-	const alternatives = terms
-		.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-		.join("|");
-	return {
-		code,
-		pattern: new RegExp(
-			`(?:^|[^\\p{L}\\p{N}])(?:${alternatives})(?=$|[^\\p{L}\\p{N}])`,
-			"iu",
-		),
-	};
-});
+function countryTerms() {
+	const candidates = new Map<string, Set<string>>();
+	for (const { code, name } of countryFocusOptions) {
+		for (const term of [name, ...(COUNTRY_ALIASES[code] ?? [])]) {
+			const key = term.toLowerCase();
+			const codes = candidates.get(key) ?? new Set<string>();
+			codes.add(code);
+			candidates.set(key, codes);
+		}
+	}
+	// An ambiguous demonym cannot tell us which country the item means.
+	return new Map(
+		[...candidates]
+			.filter(([, codes]) => codes.size === 1)
+			.map(([term, codes]) => [term, [...codes][0]!]),
+	);
+}
+const codesByTerm = countryTerms();
+const alternatives = [...codesByTerm.keys()]
+	.sort((a, b) => b.length - a.length)
+	.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+	.join("|");
+// Longest names consume the phrase first: South Sudan does not also mean Sudan.
+const countryPattern = new RegExp(
+	`(?:^|[^\\p{L}\\p{N}])(${alternatives})(?=$|[^\\p{L}\\p{N}])`,
+	"giu",
+);
 
 export function resolveCountryFocus({
 	title,
@@ -52,12 +64,15 @@ export function resolveCountryFocus({
 	countryFocus?: readonly string[] | null;
 }) {
 	if (countryFocus) return [...new Set(countryFocus)].sort();
-	const text = `${title ?? ""} ${abstractNote ?? ""}`;
+	const text = `${abstractPlainText(title)}\n${abstractPlainText(abstractNote)}`;
 	// Two-letter codes are ordinary words in prose. Match names and demonyms only.
-	return matchers
-		.filter(({ pattern }) => pattern.test(text))
-		.map(({ code }) => code)
-		.sort();
+	return [
+		...new Set(
+			[...text.matchAll(countryPattern)].map(
+				(match) => codesByTerm.get(match[1].toLowerCase())!,
+			),
+		),
+	].sort();
 }
 
 export function describeCountryFocus(value: unknown) {

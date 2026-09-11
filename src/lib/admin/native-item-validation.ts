@@ -282,10 +282,10 @@ export function validateNativeItemDraft(
 }
 
 function countryFocusFields(value: unknown, source: boolean | undefined) {
- if (source || value == null) return {};
- const result = countryFocusSchema.safeParse(value);
- if (!result.success) throw new NativeItemValidationError("Choose valid countries for this item.", { countryFocus: "Choose countries from the list." });
- return { countryFocus: result.data };
+	if (source || value == null) return {};
+	const result = countryFocusSchema.safeParse(value);
+	if (!result.success) throw new NativeItemValidationError("Choose valid countries for this item.", { countryFocus: "Choose countries from the list." });
+	return { countryFocus: result.data };
 }
 
 function parseNativeItemDraft(
@@ -326,7 +326,6 @@ function parseNativeItemDraft(
 		),
 	};
 	const normalizedPayload = { ...itemValues };
-
 
 	if (payload.creators !== undefined) {
 		const creators = parseDraftCreators(

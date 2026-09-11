@@ -4,7 +4,10 @@ import {
 	computeAdminDraftDiff,
 	EMPTY_ADMIN_DRAFT_DIFF,
 } from "@/components/admin/admin-diff";
-import type { AdminSchemaDefinition } from "@/components/admin/admin-schema";
+import {
+	editablePayloadFromDetail,
+	type AdminSchemaDefinition,
+} from "@/components/admin/admin-schema";
 import type { AdminItemDetail } from "@/lib/admin/types";
 
 const definition: AdminSchemaDefinition = {
@@ -78,6 +81,19 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 }
 
 describe("computeAdminDraftDiff", () => {
+	it.each([["KE", "UG"], []])(
+		"preserves published manual countries in the editor and duplicate payload: %j",
+		(...countries) => {
+			const payload = editablePayloadFromDetail(
+				detail({
+					draft: null,
+					published: { itemType: "book", countryFocus: countries },
+				}),
+				[definition],
+			);
+			expect(payload.countryFocus).toEqual(countries);
+		},
+	);
 	it("compares the item-specific language field and treats empty values equally", () => {
 		const result = computeAdminDraftDiff(
 			detail(),

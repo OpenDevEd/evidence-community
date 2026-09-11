@@ -91,8 +91,8 @@ function sameValue(left: unknown, right: unknown) {
 }
 
 function countryFocusDiff(current: unknown, previous: unknown) {
- if (sameValue(current ?? null, previous ?? null)) return null;
- return { previous: Array.isArray(previous) ? previous as string[] : null };
+	if (sameValue(current ?? null, previous ?? null)) return null;
+	return { previous: Array.isArray(previous) ? previous as string[] : null };
 }
 
 export function computeAdminDraftDiff(

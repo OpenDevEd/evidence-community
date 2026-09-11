@@ -34,6 +34,8 @@ it("publishes the reviewed country set, keeps later edits private, and preserves
 				[{ entityType: "item", entityKey: key }],
 			))
 				plans.push(...plan.documents);
+			expect(plans[0]).not.toHaveProperty("countryFocus");
+			expect(plans[0]?.metadataSearch).not.toContain("MA");
 			return plans[0]?.country;
 		};
 		const edit = async (key: string, countryFocus: string[] | null) => {
@@ -80,14 +82,12 @@ it("publishes the reviewed country set, keeps later edits private, and preserves
 			(await getItemDraft(db, created.itemKey))?.payload.countryFocus,
 		).toEqual(["TZ"]);
 
-		await db
-			.insert(sourceConnection)
-			.values({
-				key: "zotero-maximal",
-				provider: "zotero",
-				scopeKind: "group",
-				externalScopeKey: "6632364",
-			});
+		await db.insert(sourceConnection).values({
+			key: "zotero-maximal",
+			provider: "zotero",
+			scopeKind: "group",
+			externalScopeKey: "6632364",
+		});
 		const sync = (version: number, title: string) =>
 			writeSourceIngestionBatch(db, {
 				sourceConnectionKey: "zotero-maximal",
