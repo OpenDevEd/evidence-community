@@ -201,7 +201,9 @@ services:
                 "noeviction",
             ]
         networks:
-            - private
+            private:
+                aliases:
+                    - evidence-library-redis
         healthcheck:
             test: ["CMD", "redis-cli", "ping"]
             interval: 5s

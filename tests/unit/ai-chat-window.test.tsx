@@ -281,7 +281,7 @@ describe("the full-screen chat window", () => {
 
 		service.fails = false;
 		await press("researchMode");
-		await press("tryAgainLater");
+		await press("retry");
 
 		expect(asked).toHaveLength(2);
 		expect(asked[1]).toMatchObject({ mode: "research" });

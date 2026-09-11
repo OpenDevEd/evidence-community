@@ -117,3 +117,9 @@ describe("controlled AI failures", () => {
 		).toBe("Model is offline.");
 	});
 });
+
+it("uses the normal unavailable error for an upstream HTML error page", () => {
+  const generic = clientAIError(new Error("")).message;
+  expect(generic.length).toBeGreaterThan(0);
+  expect(clientAIError(new Error('<!DOCTYPE html><html><head><title>524 timeout</title></head><body>Proxy error</body></html>')).message).toBe(generic);
+});

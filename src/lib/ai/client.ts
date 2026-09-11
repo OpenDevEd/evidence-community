@@ -13,5 +13,7 @@ export function uiMessageText(message: UIMessage | undefined) {
 
 /** The plain sentence behind a coded AI failure, for the chat to show. */
 export function clientAIError(error: Error) {
-	return new Error(extractAIErrorMessage(error) ?? error.message);
+	const message = extractAIErrorMessage(error);
+	const isHtmlPage = /<(?:!doctype\s+html|html|head|body)\b/iu.test(message ?? "");
+	return new Error(message && !isHtmlPage ? message : "The AI service is temporarily unavailable. Please try again.");
 }

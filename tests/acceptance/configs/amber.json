@@ -225,7 +225,7 @@
 	},
 	"services": {
 		"redis": {
-			"url": "redis://redis:6379"
+			"url": "redis://evidence-library-redis:6379"
 		},
 		"database": {
 			"url": "postgresql://library:library@postgres:5432/amber"

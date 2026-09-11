@@ -167,11 +167,8 @@ function AiButton({
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
 						key={feature.key}
-						isOpen={feature.isOpen}
-						onOpenChange={feature.onOpenChange}
-						content={feature.response}
+						feature={feature}
 						title={t(feature.key)}
-						error={feature.error}
 						history={histories[feature.key] || []}
 						setHistory={(history) =>
 							setHistories((prev) => ({

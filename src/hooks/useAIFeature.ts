@@ -8,9 +8,11 @@ type AIFeature = {
     onOpenChange: () => void;
     response: string;
     error: Error | undefined;
+    isLoading: boolean;
     stream: (key: string, options: any) => void;
     setCompletion: (completion: string) => void;
     onPress: () => void;
+    retry: () => void;
 };
 
 export function useAIFeature(
@@ -25,6 +27,7 @@ export function useAIFeature(
         response,
         stream,
         error,
+        isLoading,
         setCompletion,
     } = useAIStream(
         "/api/ai",
@@ -32,11 +35,10 @@ export function useAIFeature(
         id,
     );
 
+    const retry = () => stream(item?.item?.key ?? "", {body: {feature: key, modelId}});
     const onPress = () => {
         onOpenChange();
-        stream(item?.item?.key ?? "", {
-            body: { feature: key, modelId },
-        });
+        retry();
     };
 
     return {
@@ -45,8 +47,10 @@ export function useAIFeature(
         onOpenChange,
         response,
         error,
+        isLoading,
         stream,
         setCompletion,
         onPress,
+        retry,
     };
 }

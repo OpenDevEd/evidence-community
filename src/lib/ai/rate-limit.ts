@@ -207,10 +207,6 @@ function parseScriptReply(reply: unknown) {
 	return values as [number, number, number, number];
 }
 
-export function redisReconnectDelay(retries: number) {
-	return Math.min(50 * 2 ** Math.min(retries, 5), 1_000);
-}
-
 export function createRedisAIRateLimitStore(
 	redis: RedisEvalClient,
 	policy: AIRateLimitPolicy,
@@ -289,40 +285,57 @@ function newRedisClient(url: string) {
 		url,
 		disableOfflineQueue: true,
 		commandsQueueMaxLength: 100,
+		commandOptions: { timeout: 2_000 },
 		socket: {
 			connectTimeout: 1_000,
-			reconnectStrategy: redisReconnectDelay,
+			reconnectStrategy: false,
 		},
 	});
 }
 
 type RedisClient = ReturnType<typeof newRedisClient>;
 
+async function withRedisDeadline<T>(client: RedisClient, operation: () => Promise<T>): Promise<T> {
+	// The client's command timeout covers its queue, not a reply after writing.
+	const timeout = setTimeout(() => { if (client.isOpen) client.destroy(); }, 2_000);
+	try {
+		return await operation();
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+
 class RevisionAwareAIRateLimitRedis {
-	readonly #factory = new RevisionAwareResourceFactory<string, RedisClient>(
+	readonly #factory = new RevisionAwareResourceFactory<string, () => Promise<RedisClient>>(
 		"AI rate-limit Redis",
-		async (url) => {
+		(url) => {
 			const client = newRedisClient(url);
 			client.on("error", (error) => {
 				console.error("[AI rate limit Redis]", error);
 			});
-			try {
-				await client.connect();
-			} catch (error) {
-				client.destroy();
-				throw new AIRateLimitUnavailableError(
-					"The AI rate-limit service is unavailable.",
-					{ cause: error },
-				);
-			}
+			let connecting: Promise<unknown> | undefined;
 			return {
-				value: client,
-				dispose: async () => client.destroy(),
+				value: async () => {
+					if (!client.isReady) {
+						// Share one attempt; a later request can retry a closed connection.
+						if (!connecting) {
+							const timeout = setTimeout(() => { if (client.isOpen) client.destroy(); }, 2_000);
+							connecting = client.connect().finally(() => {
+								clearTimeout(timeout);
+								connecting = undefined;
+							});
+						}
+						await connecting;
+					}
+					return client;
+				},
+				dispose: async () => { if (client.isOpen) client.destroy(); },
 			};
 		},
 	);
 
-	get(
+	async get(
 		config: Pick<
 			LibraryServerConfig,
 			"revision" | "services" | "updatedAt"
@@ -334,11 +347,12 @@ class RevisionAwareAIRateLimitRedis {
 				"The AI rate-limit Redis service is not configured.",
 			);
 		}
-		return this.#factory.get({
+		const connect = await this.#factory.get({
 			configuration: url,
 			revision: config.revision,
 			updatedAt: config.updatedAt,
 		});
+		return connect();
 	}
 }
 
@@ -358,7 +372,7 @@ export async function consumeConfiguredRateLimit(
 ) {
   try {
     const redis = await redisForConfig.get(config);
-    return await createRedisAIRateLimitStore(redis, policy).consume(identity);
+    return await withRedisDeadline(redis, () => createRedisAIRateLimitStore(redis, policy).consume(identity));
   } catch (error) {
     if (error instanceof AIRateLimitUnavailableError) throw error;
     throw new AIRateLimitUnavailableError("The rate-limit service is unavailable.", { cause: error });
