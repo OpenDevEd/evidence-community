@@ -2,6 +2,8 @@
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
+import { CountryFocusMock } from "./CountryFocusMock";
+import { useSearchParams } from "next/navigation";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
@@ -452,9 +454,9 @@ function MetadataEditor({
 	detail,
 	diff,
 	errors,
-	onChange,
-	payload,
-	readOnly,
+	onChange: saveChanges,
+	payload: savedPayload,
+	readOnly: suppliedReadOnly,
 	lockedDoi,
 }: {
 	definitions: readonly AdminSchemaDefinition[];
@@ -466,6 +468,18 @@ function MetadataEditor({
 	readOnly: boolean;
 	lockedDoi: string | null;
 }) {
+	const searchParams = useSearchParams();
+	const isCountryFocusMock =
+		process.env.NODE_ENV === "development" &&
+		searchParams.has("countryFocusMock");
+	const [mockPayload, setMockPayload] = useState<Record<string, unknown>>({
+		...savedPayload,
+		abstractNote:
+			"This study examines classroom feedback in Kenya and Uganda, with a comparison of teacher training programmes in Tanzania.",
+	});
+	const readOnly = isCountryFocusMock ? false : suppliedReadOnly;
+	const payload = isCountryFocusMock ? mockPayload : savedPayload;
+	const onChange = isCountryFocusMock ? setMockPayload : saveChanges;
 	const definition = definitionFor(
 		definitions,
 		String(payload.itemType ?? detail.itemType),
@@ -479,6 +493,11 @@ function MetadataEditor({
 
 	return (
 		<div className="space-y-3">
+			{isCountryFocusMock && (
+				<p className="text-xs text-black/45 dark:text-white/45">
+					Preview. Changes here stay in this browser.
+				</p>
+			)}
 			<div className="space-y-1.5">
 				<FieldLabel
 					action={
@@ -604,6 +623,17 @@ function MetadataEditor({
 									updateField(field, next)
 								}
 							/>
+							{isCountryFocusMock && field === "abstractNote" && (
+								<div className="space-y-1.5 pt-1.5">
+									<FieldLabel>Country focus</FieldLabel>
+									<CountryFocusMock
+										title={String(payload.title ?? "")}
+										abstract={String(
+											payload.abstractNote ?? "",
+										)}
+									/>
+								</div>
+							)}
 							{field === "DOI" && lockedDoi ? (
 								<p className="text-xs text-black/45 dark:text-white/45">
 									Deactivate Zenodo before changing this DOI.
