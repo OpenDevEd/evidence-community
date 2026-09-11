@@ -354,12 +354,21 @@ export async function chatMessageContent(
 	message: UIMessage,
 	origin?: string,
 ) {
-	const markdown = message.parts
+	const content = message.parts
 		.filter(isTextUIPart)
-		.map((part) => normalizeEvidenceMarkdown(part.text, origin))
+		.map((part) => part.text)
 		.filter(Boolean)
 		.join("\n\n");
+	return evidenceContent(format, content, origin);
+}
 
+/** Shared export for an AI answer, summary, or explanation. */
+export async function evidenceContent(
+	format: ChatTranscriptFormat,
+	content: string,
+	origin?: string,
+) {
+	const markdown = normalizeEvidenceMarkdown(content, origin);
 	if (format === "markdown") return markdown;
 	if (format === "plaintext") return markdownToPlainText(markdown);
 	const markdownToHtml = await createSafeMarkdownRenderer(origin);

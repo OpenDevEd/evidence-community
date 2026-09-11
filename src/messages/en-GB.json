@@ -1,5 +1,8 @@
 {
   "ui": {
+    "exportFailed": "Could not prepare this content",
+    "copyFailed": "Could not copy",
+    "copyFailedHelp": "Check your browser’s clipboard permission and try again.",
     "referenceLabel": "{count, plural, one {reference} other {references}}",
     "libraryCitationLabel": "{count, plural, one {citation in this library} other {citations in this library}}",
     "downloadLibraryLimited": "The first {count, number} of {total, number} publications. Choose a citation format.",
@@ -178,7 +181,6 @@
     "recommendedResources": "Recommended Resources",
     "recommendedResourcesDescription": "Based on the content of this publication, we recommend the following resources.",
     "itemBack": "Back",
-    "itemCitationsCount": "citations",
     "itemViewOriginal": "View Original",
     "itemAuthorsTitle": "Authors",
     "itemInstitutionsTitle": "Institutions",

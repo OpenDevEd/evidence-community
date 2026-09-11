@@ -1,5 +1,8 @@
 {
   "ui": {
+    "exportFailed": "Não foi possível preparar este conteúdo",
+    "copyFailed": "Não foi possível copiar",
+    "copyFailedHelp": "Verifique a permissão da área de transferência no navegador e tente novamente.",
     "referenceLabel": "{count, plural, one {referência} other {referências}}",
     "libraryCitationLabel": "{count, plural, one {citação nesta biblioteca} other {citações nesta biblioteca}}",
     "downloadLibraryLimited": "As primeiras {count, number} de {total, number} publicações. Escolha um formato de citação.",
@@ -178,7 +181,6 @@
     "recommendedResources": "Recursos Recomendados",
     "recommendedResourcesDescription": "Com base no conteúdo desta publicação, recomendamos os seguintes recursos.",
     "itemBack": "Voltar",
-    "itemCitationsCount": "citações",
     "itemViewOriginal": "Ver original",
     "itemAuthorsTitle": "Autores",
     "itemInstitutionsTitle": "Instituições",

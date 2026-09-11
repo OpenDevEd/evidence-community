@@ -1,5 +1,8 @@
 {
   "ui": {
+    "exportFailed": "无法准备此内容",
+    "copyFailed": "无法复制",
+    "copyFailedHelp": "请检查浏览器的剪贴板权限，然后重试。",
     "referenceLabel": "篇参考文献",
     "libraryCitationLabel": "次库内引用",
     "downloadLibraryLimited": "共 {total, number} 篇出版物中的前 {count, number} 篇。请选择引用格式。",
@@ -178,7 +181,6 @@
     "recommendedResources": "推荐资源",
     "recommendedResourcesDescription": "根据本出版物的内容，我们推荐以下资源。",
     "itemBack": "返回",
-    "itemCitationsCount": "引用",
     "itemViewOriginal": "查看原文",
     "itemAuthorsTitle": "作者",
     "itemInstitutionsTitle": "机构",

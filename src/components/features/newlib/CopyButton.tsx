@@ -2,8 +2,8 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Copy01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { Button } from "@nextui-org/react";
-import { useState } from "react";
+import { Button, type ButtonProps } from "@nextui-org/react";
+import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { ReactElement, cloneElement } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { twMerge } from "tailwind-merge";
@@ -11,7 +11,7 @@ import { twMerge } from "tailwind-merge";
 interface CopyButtonProps {
     textToCopy: string;
     className?: string;
-    children?: ReactElement<any>;
+    children?: ReactElement<ButtonProps>;
     ariaLabel?: string;
     label?: string;
 }
@@ -57,25 +57,16 @@ function CopyIcon({ copied }: { copied: boolean }) {
 }
 
 export default function CopyButton({ textToCopy, className, children, ariaLabel, label }: CopyButtonProps) {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = async () => {
-        try {
-            await navigator.clipboard.writeText(textToCopy);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch (err) {
-            console.error('Failed to copy text:', err);
-        }
-    };
+    const { copy, copied } = useClipboardFeedback();
+    const handleCopy = () => copy(textToCopy);
 
     if (children) {
         return cloneElement(children, {
+            ...children.props,
             onPress: handleCopy,
             startContent: <CopyIcon copied={copied} />,
-            ...(children.props as object),
-            ariaLabel: ariaLabel,
-            children: label
+            ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+            children: label ?? children.props.children
         });
     }
 

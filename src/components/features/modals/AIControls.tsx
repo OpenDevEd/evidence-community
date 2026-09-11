@@ -4,9 +4,12 @@ import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
 import { DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
 import { ReactNode } from "react";
-import { parsePageCitation } from "@/lib/ai/citations";
+import { CHAT_EXPORT_OUTPUT, evidenceContent } from "@/lib/ai/transcript-export";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
+import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
+import { toast } from "@/components/layout/Toast";
 import { trackContentAction } from "@/lib/analytics";
 
 export type ControlAction = "markdown" | "html" | "plaintext" | "csv";
@@ -47,31 +50,41 @@ function AIControls({
 	isDisabled,
 	appearance = "default",
 }: AIControlsProps) {
+	const { copy } = useClipboardFeedback();
+	const t = useTranslations("ui");
 	const handleAction = async (action: ControlAction) => {
-		const generated = await getContent(action);
-
-		if (type === "copy") {
-			await navigator.clipboard.writeText(generated.content);
-		} else {
-			const blob = new Blob([generated.content], {
-				type: generated.mimeType,
-			});
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-			a.download = `${downloadName ?? buttonLabel}_${timestamp}.${generated.extension}`;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(url);
+		let generated: GeneratedContent;
+		try {
+			generated = await getContent(action);
+		} catch (error) {
+			console.error("Generated-content export failed", error);
+			toast({ type: "error", title: t("exportFailed"), description: t("tryAgainLater") });
+			return;
 		}
 
-		trackContentAction({
-			action: type,
-			context: "generated_content",
-			format: action,
-		});
+		if (type === "copy") {
+			if (!await copy(generated.content)) return;
+			toast({ type: "success", title: t("copied") });
+		} else {
+			try {
+				const blob = new Blob([generated.content], { type: generated.mimeType });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+				a.download = `${downloadName ?? buttonLabel}_${timestamp}.${generated.extension}`;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+			} catch (error) {
+				console.error("Generated-content download failed", error);
+				toast({ type: "error", title: t("downloadFailed"), description: t("tryAgainLater") });
+				return;
+			}
+		}
+
+		trackContentAction({ action: type, context: "generated_content", format: action });
 	};
 
 	return (
@@ -206,64 +219,19 @@ export function AIGeneratedContentControls({
 
 export function AIContentControls({
 	content,
-	contentRef,
 	isDisabled,
 	appearance = "default",
 }: {
 	content: string;
-	contentRef: React.RefObject<HTMLDivElement | null>;
 	isDisabled?: boolean;
 	appearance?: "default" | "header";
 }) {
-	const getContent = (action: ControlAction): GeneratedContent => {
-		if (action === "markdown") {
-			let transformed = content.replace(
-				/\[QUOTE\s*(.*?)\s*QUOTE\/\][\s.,]*/g,
-				"\n> $1\n",
-			);
-			transformed = transformed.replace(
-				/\[PAGE\s*(.*?)\s*PAGE\/\]/g,
-				(_match, citation: string) => {
-					const parsed = parsePageCitation(citation);
-					return parsed.href
-						? `[Source, p. ${parsed.page}](${parsed.href})`
-						: `(Source unavailable, p. ${parsed.page})`;
-				},
-			);
-			transformed = transformed.replace(
-				/\[RESOURCE\s+(\/lib\/([^/?#\s]+))\s+RESOURCE\/\]/g,
-				(_match, href: string, itemKey: string) =>
-					`[Publication ${itemKey}](${href})`,
-			);
-			transformed = transformed.replace(
-				/\[SECTION\s*(.*?)\s*SECTION\/\]/g,
-				"(s.$1)",
-			);
-			return {
-				content: transformed,
-				extension: "md",
-				mimeType: "text/markdown;charset=utf-8",
-			};
-		}
-
-		if (action === "html") {
-			const html = contentRef.current?.innerHTML || "";
-			return {
-				content: html
-					.replace(/^<div[^>]*>([\s\S]*)<\/div>$/, "$1")
-					.replace(/<([a-zA-Z0-9]+)[^>]*>/g, "<$1>"),
-				extension: "html",
-				mimeType: "text/html;charset=utf-8",
-			};
-		}
-
+	const { identity } = useLibraryConfig();
+	const getContent = async (action: ControlAction): Promise<GeneratedContent> => {
+		if (action === "csv") throw new Error("Unstructured answers cannot be exported as CSV");
 		return {
-			content:
-				action === "plaintext"
-					? contentRef.current?.textContent || ""
-					: content,
-			extension: "txt",
-			mimeType: "text/plain;charset=utf-8",
+			content: await evidenceContent(action, content, identity.baseUrl),
+			...CHAT_EXPORT_OUTPUT[action],
 		};
 	};
 
