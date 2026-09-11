@@ -52,6 +52,10 @@ vi.mock("next-auth/react", () => ({
 import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
 import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
+import {
+	normalizeLibrarySearchContext,
+	type LibrarySearchContext,
+} from "@/lib/search-context";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -164,12 +168,14 @@ describe("the chat beside the search results", () => {
 		openFirst = false,
 		question,
 		rebuild,
+		searchContext,
 	}: {
 		openFirst?: boolean;
 		question: string;
 		rebuild: boolean;
+		searchContext?: LibrarySearchContext;
 	}) {
-		const askAI = useAskInlineChat();
+		const askAI = useAskInlineChat(searchContext);
 		const [engaged, setEngaged] = useState(openFirst);
 		const [rebuilt, setRebuilt] = useState(false);
 		const [accepted, setAccepted] = useState<boolean[]>([]);
@@ -208,11 +214,19 @@ describe("the chat beside the search results", () => {
 		});
 	}
 
-	async function handOver(question: string, rebuild = false) {
+	async function handOver(
+		question: string,
+		rebuild = false,
+		searchContext?: LibrarySearchContext,
+	) {
 		await act(async () => {
 			root.render(
 				<InlineChatLayoutProvider>
-					<AskFromThePage question={question} rebuild={rebuild} />
+					<AskFromThePage
+						question={question}
+						rebuild={rebuild}
+						searchContext={searchContext}
+					/>
 				</InlineChatLayoutProvider>,
 			);
 		});
@@ -310,6 +324,49 @@ describe("the chat beside the search results", () => {
 
 		expect(asked).toHaveLength(1);
 		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	it("uses the search text as a question while keeping the selected filters", async () => {
+		const question = "Which publications discuss country focus?";
+		await handOver(
+			question,
+			true,
+			normalizeLibrarySearchContext({
+				search: question,
+				country: ["KE"],
+				collections: ["SACU3G3A"],
+				range: "2024-2026",
+				scope: "title",
+			}),
+		);
+		await press("settle");
+
+		const context = {
+			search: "",
+			country: ["KE"],
+			collections: ["SACU3G3A"],
+			range: "2024-2026",
+			scope: "title",
+			author: "",
+			institution: [],
+			sort: "relevance",
+		};
+		expect(asked).toHaveLength(1);
+		expect(asked[0]).toMatchObject({
+			searchContext: context,
+			messages: expect.arrayContaining([
+				expect.objectContaining({
+					role: "user",
+					parts: expect.arrayContaining([
+						{ type: "text", text: question },
+						expect.objectContaining({
+							type: "data-requestContext",
+							data: expect.objectContaining({ searchContext: context }),
+						}),
+					]),
+				}),
+			]),
+		});
 	});
 
 	it("still asks the question when the page rebuilds the chat", async () => {

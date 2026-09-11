@@ -43,11 +43,18 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 
 			// A question that has been asked should not also fill the box.
 			setDraft("");
+			// The page clears this text after accepting the question. Keep its
+			// other filters, but do not search for the question as literal text.
+			const questionContext = searchContext
+				? { ...searchContext, search: "" }
+				: undefined;
 			void chat.sendMessage(
 				{
 					parts: researchMessageParts(
 						chat.messages,
-						createResearchRequestContextSnapshot({ searchContext }),
+						createResearchRequestContextSnapshot({
+							searchContext: questionContext,
+						}),
 						question,
 					),
 				},
@@ -55,7 +62,7 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 					locale,
 					mode,
 					modelId: selectedModelId,
-					searchContext,
+					searchContext: questionContext,
 				}),
 			);
 
