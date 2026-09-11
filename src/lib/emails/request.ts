@@ -22,7 +22,7 @@ export function libraryRequestMessage(
 	const body = escapeHtml(description).replace(/\r?\n/g, "<br>");
 	return {
 		replyTo: email,
-		subject: `${identity.name} - ${title}`,
+		subject: `${config.identity.shortName} - ${title}`,
 		text: `From: ${email}\n\n${description}${links ? `\n\nPublications:\n${links.join("\n")}` : ""}`,
 		html: renderLibraryEmail({
 			identity,
