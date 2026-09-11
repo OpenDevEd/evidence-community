@@ -826,6 +826,7 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
 		await country.focus();
 		await expect(country).toBeFocused();
+		await expect(page.getByRole("tooltip")).toContainText("Afghanistan");
 		await country.press("Enter");
 		await expect(page).toHaveURL(url => url.searchParams.getAll("country").includes("Asia > Southern Asia > AF"));
 		await expect(country).toHaveAttribute("aria-pressed", "true");
@@ -844,6 +845,10 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
 		const clearFilters = page.getByRole("button", { name: "Clear all filters", exact: true });
 		await clearFilters.focus();
+		await page.setViewportSize({ width: 1280, height: 900 });
+		await expect(clearFilters).toBeFocused();
+		await page.setViewportSize({ width: 390, height: 844 });
+		await expect(clearFilters).toBeFocused();
 		await clearFilters.press("Enter");
 		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
 		await expect(country).toBeFocused();

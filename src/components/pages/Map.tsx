@@ -38,15 +38,17 @@ const geoUrl = "/features.json";
 function MouseTooltip({
 	content,
 	zoomData,
+	anchor,
 }: {
 	content: ReactNode | null;
 	zoomData: any;
+	anchor: { x: number; y: number } | null;
 }) {
 	const [mouse] = useMouse();
 	const dragging = zoomData?.dragging;
 	const isDesktop = useBreakpoint("md");
 
-	if (!isDesktop) {
+	if (!isDesktop && !anchor) {
 		return null;
 	}
 
@@ -60,8 +62,8 @@ function MouseTooltip({
 			<div
 				style={{
 					position: "fixed",
-					top: dragging ? dragging.y : mouse.y,
-					left: dragging ? dragging.x : mouse.x,
+					top: anchor?.y ?? (dragging ? dragging.y : mouse.y),
+					left: anchor?.x ?? (dragging ? dragging.x : mouse.x),
 					pointerEvents: "none",
 				}}
 				className="size-0"
@@ -93,18 +95,25 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const isDesktop = useBreakpoint("md");
 	const panelRef = useRef<HTMLDivElement>(null);
 
+	const previousFocus = useRef<HTMLElement | SVGElement | null>(null);
 	useEffect(() => {
-		if (!isCountrySelected || isDesktop) return;
-		const previousFocus = document.activeElement;
-		panelRef.current?.focus({ preventScroll: true });
-		return () => {
-			if (
-				previousFocus instanceof HTMLElement ||
-				previousFocus instanceof SVGElement
-			) {
-				previousFocus.focus({ preventScroll: true });
+		const panel = panelRef.current;
+		if (!isCountrySelected) {
+			if (panel?.contains(document.activeElement)) {
+				previousFocus.current?.focus({ preventScroll: true });
 			}
-		};
+			previousFocus.current = null;
+			return;
+		}
+		if (isDesktop || panel?.contains(document.activeElement)) return;
+		const activeElement = document.activeElement;
+		if (
+			activeElement instanceof HTMLElement ||
+			activeElement instanceof SVGElement
+		) {
+			previousFocus.current = activeElement;
+		}
+		panel?.focus({ preventScroll: true });
 	}, [isCountrySelected, isDesktop]);
 
 	return (
@@ -167,6 +176,10 @@ export default function Map() {
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
 		null,
 	);
+	const [tooltipAnchor, setTooltipAnchor] = useState<{
+		x: number;
+		y: number;
+	} | null>(null);
 	const [zoomData, setZoomData] = useState<any>(null);
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
@@ -201,7 +214,11 @@ export default function Map() {
 			tabIndex={-1}
 			className="w-full h-screen overflow-hidden"
 		>
-			<MouseTooltip content={tooltipContent} zoomData={zoomData} />
+			<MouseTooltip
+				content={tooltipContent}
+				zoomData={zoomData}
+				anchor={tooltipAnchor}
+			/>
 			<Search props={props} />
 			<MemoizedItemView props={props} />
 			<div inert={!isDesktop && props.queryParams.country.length > 0}>
@@ -244,6 +261,16 @@ export default function Map() {
 										const countryName =
 											COUNTRIES[countryCode] ||
 											geo.properties.name;
+										const details = (
+											<div className="flex flex-col items-center justify-center">
+												<div className="text-sm font-bold">
+													{countryName}
+												</div>
+												<div className="text-xs">
+													{inFacet || 0}
+												</div>
+											</div>
+										);
 										const selectCountry = () => {
 											if (fullLocation)
 												props.handleCountrySelect(
@@ -293,21 +320,42 @@ export default function Map() {
 														: "rgb(255,200,200)"
 												}
 												onClick={selectCountry}
-												onMouseEnter={() =>
-													setTooltipContent(
-														<div className="flex flex-col justify-center items-center">
-															<div className="text-sm font-bold">
-																{countryName}
-															</div>
-															<div className="text-xs">
-																{inFacet || 0}
-															</div>
-														</div>,
-													)
-												}
+												onMouseEnter={() => {
+													setTooltipAnchor(null);
+													setTooltipContent(details);
+												}}
 												onMouseLeave={() =>
 													setTooltipContent(null)
 												}
+												onFocusCapture={(event) => {
+													const bounds =
+														event.currentTarget.getBoundingClientRect();
+													setTooltipAnchor({
+														x: Math.max(
+															24,
+															Math.min(
+																size.width! -
+																	24,
+																bounds.left +
+																	bounds.width /
+																		2,
+															),
+														),
+														y: Math.max(
+															100,
+															Math.min(
+																size.height! -
+																	80,
+																bounds.top,
+															),
+														),
+													});
+													setTooltipContent(details);
+												}}
+												onBlurCapture={() => {
+													setTooltipAnchor(null);
+													setTooltipContent(null);
+												}}
 												vectorEffect="non-scaling-stroke"
 												className="text-black transition-colors duration-100 dark:text-white"
 												style={{
