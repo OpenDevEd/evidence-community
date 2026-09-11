@@ -15,7 +15,7 @@ import { Tooltip } from "@/components/nextui/Tooltip";
 import { filledInputSlots } from "@/components/nextui/field-styles";
 import {
 	countryFocusNames as countryNames,
-	countryFocusOptions as countries,
+	findCountryFocusOptions,
 	countryFocusSchema,
 	resolveCountryFocus,
 } from "@/lib/country-focus";
@@ -42,11 +42,7 @@ export function CountryFocusInput({
 	const selected = value ?? inferred;
 	const updateManual = (next: string[]) =>
 		onChange(countryFocusSchema.parse(next));
-	const options = countries.filter(
-		({ code, name }) =>
-			!selected.includes(code) &&
-			`${name} ${code}`.toLowerCase().includes(query.toLowerCase()),
-	);
+	const options = findCountryFocusOptions(query, selected);
 	return (
 		<section
 			aria-label="Country focus"

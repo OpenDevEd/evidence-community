@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveCountryFocus } from "@/lib/country-focus";
+import {
+	countryFocusOptions,
+	findCountryFocusOptions,
+	resolveCountryFocus,
+} from "@/lib/country-focus";
 import {
 	validateNativeItemDraft,
 	sourceRecordValidationOptions,
@@ -11,6 +15,15 @@ import {
 
 // Country focus is title/abstract inference or an explicit set, never affiliations or patent jurisdiction.
 describe("country focus", () => {
+	it("offers each named country once", () => {
+		const names = countryFocusOptions.map(({ name }) => name);
+		expect(new Set(names).size).toBe(names.length);
+	});
+	it("resolves every selectable country name to its own code", () => {
+		for (const { code, name } of countryFocusOptions) {
+			expect(resolveCountryFocus({ title: name }), name).toEqual([code]);
+		}
+	});
 	it("detects names and demonyms once across the title and abstract", () => {
 		expect(
 			resolveCountryFocus({
@@ -40,6 +53,7 @@ describe("country focus", () => {
 		).toEqual(["NZ", "SS"]);
 	});
 	it.each([
+		["Education in Curaçao", ["CW"]],
 		["Papua New Guinea", ["PG"]],
 		["Guinea-Bissau and Equatorial Guinea", ["GQ", "GW"]],
 		["South Sudan", ["SS"]],
@@ -51,6 +65,67 @@ describe("country focus", () => {
 	])("matches the most specific country names in %s", (title, countries) => {
 		expect(resolveCountryFocus({ title })).toEqual(countries);
 	});
+	it.each([
+		["Naoero and Nauru", ["NR"]],
+		["Cabo Verde and Cape Verde", ["CV"]],
+		["TÜRKİYE, Turkiye and Turkey", ["TR"]],
+		["Swaziland and Eswatini", ["SZ"]],
+		["Czech Republic and Czechia", ["CZ"]],
+		["FYROM and North Macedonia", ["MK"]],
+		["Cote d'Ivoire and Côte d’Ivoire", ["CI"]],
+		["São Tomé & Príncipe", ["ST"]],
+		["Timor–Leste and Timor Leste", ["TL"]],
+		["DRC and Congo–Kinshasa", ["CD"]],
+		["Republic of the Congo", ["CG"]],
+		["U.S.A., U.S. and United States of America", ["US"]],
+		["U.K. and Northern Ireland", ["GB"]],
+		["U.A.E.", ["AE"]],
+		["DPRK and Republic of Korea", ["KP", "KR"]],
+		["Kenyans, Ugandans, Moroccans and Nauruans", ["KE", "MA", "NR", "UG"]],
+		[
+			"Czechs, Danes, Finns, Swedes and Turks",
+			["CZ", "DK", "FI", "SE", "TR"],
+		],
+		["South Koreans and American Samoans", ["AS", "KR"]],
+		["U.S. Virgin Islands", ["VI"]],
+		["Congo and Congolese teachers", []],
+		["Dominicans and Samoans", []],
+		["A kiwi weighs 3 oz. Join us in class.", []],
+		["English-language instruction in Kenya", ["KE"]],
+	])(
+		"recognizes current names and useful aliases in %s",
+		(title, countries) => {
+			expect(resolveCountryFocus({ title })).toEqual(countries);
+		},
+	);
+	it("keeps the title and abstract from becoming one country name", () => {
+		expect(
+			resolveCountryFocus({
+				title: "Learning in the South",
+				abstractNote: "Sudan is the focus.",
+			}),
+		).toEqual(["SD"]);
+	});
+	it.each([
+		["Nauru", "NR"],
+		["Naoero", "NR"],
+		["Cape Verde", "CV"],
+		["Turkiye", "TR"],
+		["Turkey", "TR"],
+		["Cote d'Ivoire", "CI"],
+		["Curacao", "CW"],
+		["FYROM", "MK"],
+		["D.R.C.", "CD"],
+		["English", "GB"],
+	])(
+		"finds a single current country using %s and excludes it once selected",
+		(query, code) => {
+			expect(
+				findCountryFocusOptions(query).map((country) => country.code),
+			).toEqual([code]);
+			expect(findCountryFocusOptions(query, [code])).toEqual([]);
+		},
+	);
 	it("uses only manual countries, including an explicitly empty selection", () => {
 		expect(
 			resolveCountryFocus({ title: "Kenya", countryFocus: ["MA"] }),
@@ -79,7 +154,7 @@ describe("country focus", () => {
 		).not.toHaveProperty("countryFocus");
 	});
 	it("rejects invented countries and the wrong value type", () => {
-		for (const countryFocus of [["XX"], [123], "KE"]) {
+		for (const countryFocus of [["XX"], ["AN"], [123], "KE"]) {
 			expect(() =>
 				validateNativeItemDraft({ itemType: "report", countryFocus }),
 			).toThrow();

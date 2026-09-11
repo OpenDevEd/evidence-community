@@ -56,7 +56,7 @@ export const COUNTRIES: Record<string, string> = {
 	KH: "Cambodia",
 	CM: "Cameroon",
 	CA: "Canada",
-	CV: "Cape Verde",
+	CV: "Cabo Verde",
 	KY: "Cayman Islands",
 	CF: "Central African Republic",
 	TD: "Chad",
@@ -171,10 +171,9 @@ export const COUNTRIES: Record<string, string> = {
 	MZ: "Mozambique",
 	MM: "Myanmar (Burma)",
 	NA: "Namibia",
-	NR: "Nauru",
+	NR: "Naoero",
 	NP: "Nepal",
 	NL: "Netherlands",
-	AN: "Curaçao",
 	NC: "New Caledonia",
 	NZ: "New Zealand",
 	NI: "Nicaragua",
@@ -429,7 +428,6 @@ export const A3ToA2: Record<string, string> = {
 	NRU: "NR",
 	NPL: "NP",
 	NLD: "NL",
-	ANT: "AN",
 	NCL: "NC",
 	NZL: "NZ",
 	NIC: "NI",
@@ -603,7 +601,7 @@ export const COUNTRY_HIERARCHY: Entry = {
 					children: [
 						{ label: "BJ" }, // Benin
 						{ label: "BF" }, // Burkina Faso
-						{ label: "CV" }, // Cape Verde
+						{ label: "CV" }, // Cabo Verde
 						{ label: "CI" }, // Cote d'Ivoire / Ivory Coast
 						{ label: "GM" }, // Gambia
 						{ label: "GH" }, // Ghana
@@ -646,7 +644,6 @@ export const COUNTRY_HIERARCHY: Entry = {
 						{ label: "JM" }, // Jamaica
 						{ label: "MQ" }, // Martinique
 						{ label: "MS" }, // Montserrat
-						{ label: "AN" }, // Netherlands Antilles (Added - Dissolved)
 						{ label: "PR" }, // Puerto Rico
 						{ label: "BL" }, // Saint Barthelemy
 						{ label: "KN" }, // Saint Kitts and Nevis
@@ -893,7 +890,7 @@ export const COUNTRY_HIERARCHY: Entry = {
 						{ label: "KI" }, // Kiribati
 						{ label: "MH" }, // Marshall Islands
 						{ label: "FM" }, // Micronesia, Federated States of
-						{ label: "NR" }, // Nauru
+						{ label: "NR" }, // Naoero
 						{ label: "MP" }, // Northern Mariana Islands
 						{ label: "PW" }, // Palau
 					],
@@ -1122,7 +1119,6 @@ export const COUNTRY_COLORS: Record<string, string> = {
 	AI: "#d83726",
 	AL: "#d83b26",
 	AM: "#d83f26",
-	AN: "#d84426",
 	AO: "#d84826",
 	AQ: "#d84c26",
 	AR: "#d85026",
