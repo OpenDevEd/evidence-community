@@ -51,7 +51,7 @@ export function ReviewQueueEntry({
 					</span>
 				</span>
 				<span
-					className={`grid h-5 min-w-5 place-items-center rounded-md px-1 text-[10px] font-semibold tabular-nums ${count ? "bg-accent/15 text-accent-700 dark:text-accent-300" : "bg-black/5 text-black/40 dark:text-white/40"}`}
+					className={`grid h-5 min-w-5 place-items-center rounded-md px-1 text-[10px] font-semibold tabular-nums ${count ? "bg-accent/15 text-accent-300 dark:text-accent-700" : "bg-black/5 text-black/40 dark:text-white/40"}`}
 				>
 					{count}
 				</span>

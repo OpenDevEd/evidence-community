@@ -49,7 +49,7 @@ export function ReviewVersionNotice({snapshot, updatedAt, pending, canWithdraw, 
   const timestamp = snapshot?.submittedAt ?? updatedAt;
   return (
 		<div className="mt-4 flex items-center gap-2.5">
-			<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/[0.08] text-accent-700 dark:text-accent-300">
+			<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/[0.08] text-accent-300 dark:text-accent-700">
 				<HugeiconsIcon icon={state.icon} size={16} />
 			</span>
 			<div className="min-w-0 flex-1">

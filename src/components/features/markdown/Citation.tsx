@@ -444,7 +444,7 @@ export function PublicationLink({
 						href={href}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="group/library-link -mx-0.5 rounded-md px-0.5 py-px font-medium text-accent no-underline decoration-accent/35 decoration-1 underline-offset-2 box-decoration-clone transition-colors duration-200 ease-out hover:bg-accent/[0.09] hover:text-accent-600 hover:decoration-accent focus-visible:bg-accent/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transition-none dark:hover:bg-accent/[0.12] dark:hover:text-accent-300"
+						className="group/library-link -mx-0.5 rounded-md px-0.5 py-px font-medium text-accent no-underline decoration-accent/35 decoration-1 underline-offset-2 box-decoration-clone transition-colors duration-200 ease-out hover:bg-accent/[0.09] hover:text-accent-400 hover:decoration-accent focus-visible:bg-accent/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transition-none dark:hover:bg-accent/[0.12] dark:hover:text-accent-700"
 					>
 						<SiteFavicon className="me-1 size-3.5 rounded-favicon align-middle opacity-75 ring-1 ring-black/[0.06] transition-opacity duration-200 ease-out group-hover/library-link:opacity-100 dark:ring-white/10" />
 						<span className="underline decoration-inherit">

@@ -966,12 +966,14 @@ function AttachmentList({
 	onCreateAttachment,
 	onSelectAttachment,
 	readOnly,
+	readOnlyVersion,
 }: {
 	busy: boolean;
 	detail: AdminItemDetail;
 	onCreateAttachment: () => void;
 	onSelectAttachment: (key: string) => void;
 	readOnly: boolean;
+	readOnlyVersion: boolean;
 }) {
 	return (
 		<div className="space-y-2.5">
@@ -995,8 +997,8 @@ function AttachmentList({
 							{attachment.title}
 						</span>
 						<span className="flex shrink-0 items-center gap-1">
-							<RecordStateChip state={attachment.state} />
-							<FileStateChip state={attachment.fileState} />
+							{!readOnlyVersion && <RecordStateChip state={attachment.state} />}
+							<FileStateChip state={attachment.fileState} snapshot={readOnlyVersion} />
 						</span>
 						<HugeiconsIcon
 							icon={ArrowRight01Icon}
@@ -1039,6 +1041,7 @@ function AttachmentFilePanel({
 	onChangePdfRemoval,
 	onUpload,
 	readOnly,
+	readOnlyVersion,
 }: {
 	busy: boolean;
 	detail: AdminItemDetail;
@@ -1047,6 +1050,7 @@ function AttachmentFilePanel({
 	onChangePdfRemoval: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
 	readOnly: boolean;
+	readOnlyVersion: boolean;
 }) {
 	const formatFileDetails = (bytes: number, pages: number | null | undefined) => {
 		const size = bytes < 1024 * 102.4
@@ -1145,6 +1149,7 @@ function AttachmentFilePanel({
 							</p>
 						</div>
 						<FileStateChip
+							snapshot={readOnlyVersion}
 							state={
 								detail.fileDraft.readyAt
 									? "staged"
@@ -1208,7 +1213,6 @@ function AttachmentFilePanel({
 						<p className="font-medium text-black/80 dark:text-white/80">
 							Source PDF
 						</p>
-						<FileStateChip state="published" />
 					</div>
 					<Button
 						as="a"
@@ -1588,8 +1592,8 @@ export function AdminInspector({
 					{
 						<>
 							<div className="mt-2 flex flex-wrap items-center gap-1.5">
-								<RecordStateChip state={detail.state} />
-								<FileStateChip state={detail.fileState} />
+								{!readOnlyVersion && <RecordStateChip state={detail.state} />}
+								<FileStateChip state={detail.fileState} snapshot={readOnlyVersion} />
 								{detail.writeback.selected.length > 0 ? (
 									<AdminSourcesWritebackStatus
 										canLoadRemote={!detail.parentItem}
@@ -2028,6 +2032,7 @@ export function AdminInspector({
 							onChangePdfRemoval={onChangePdfRemoval}
 							onUpload={onUpload}
 							readOnly={readOnlyVersion || !native}
+							readOnlyVersion={readOnlyVersion}
 						/>
 					) : (
 						<AttachmentList
@@ -2036,6 +2041,7 @@ export function AdminInspector({
 							onCreateAttachment={onCreateAttachment}
 							onSelectAttachment={onSelectAttachment}
 							readOnly={readOnlyVersion || !native}
+							readOnlyVersion={readOnlyVersion}
 						/>
 					)}
 				</Section>
