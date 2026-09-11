@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
 import { collection } from "@/db/schema/tables/collection";
+import { sourceConnection } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 
@@ -19,6 +20,7 @@ import {
 	type AdminCollectionSearchRequest,
 } from "./collection-catalog-contract";
 import { AdminValidationError } from "./errors";
+import { sourceDisplayLabel } from "./source-label";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminCollectionCatalogPage,
@@ -348,13 +350,16 @@ export type OpenScholarCollection = {
 	title: string;
 };
 
-function openScholarCollection(row: CatalogRow): OpenScholarCollection {
+function openScholarCollection(
+	row: CatalogRow,
+	source: string,
+): OpenScholarCollection {
 	return {
 		count: row.recordCount,
 		hasChildren: row.hasChildren,
 		id: row.key,
 		parentId: row.parentCollection,
-		source: row.sourceConnectionKey,
+		source,
 		title: collectionTitle(row.name),
 	};
 }
@@ -405,6 +410,35 @@ async function withOpenScholarCounts(
 	}));
 }
 
+async function openScholarCollections(database: Database, rows: CatalogRow[]) {
+	if (rows.length === 0) return [];
+	const [countedRows, sources] = await Promise.all([
+		withOpenScholarCounts(database, rows),
+		database
+			.select({
+				key: sourceConnection.key,
+				displayName: sourceConnection.displayName,
+				provider: sourceConnection.provider,
+				externalScopeKey: sourceConnection.externalScopeKey,
+			})
+			.from(sourceConnection)
+			.where(
+				inArray(sourceConnection.key, [
+					...new Set(rows.map((row) => row.sourceConnectionKey)),
+				]),
+			),
+	]);
+	const labels = new Map(
+		sources.map((source) => [
+			source.key,
+			sourceDisplayLabel(source, { includeIdentifier: true }),
+		]),
+	);
+	return countedRows.map((row) =>
+		openScholarCollection(row, labels.get(row.sourceConnectionKey)!),
+	);
+}
+
 /**
  * The named collections, in the order they were asked for. Ids that no longer
  * exist are left out, so a saved link target that was deleted simply does not
@@ -415,12 +449,12 @@ async function openScholarCollectionsByIds(database: Database, ids: string[]) {
 		.select(catalogSelection(database))
 		.from(collection)
 		.where(and(inArray(collection.key, ids), eq(collection.deleted, 0)));
-	const countedRows = await withOpenScholarCounts(database, rows);
-	const rowsByKey = new Map(countedRows.map((row) => [row.key, row]));
+	const items = await openScholarCollections(database, rows);
+	const rowsByKey = new Map(items.map((row) => [row.id, row]));
 	return {
 		items: ids.flatMap((id) => {
 			const row = rowsByKey.get(id);
-			return row ? [openScholarCollection(row)] : [];
+			return row ? [row] : [];
 		}),
 		nextCursor: null,
 	};
@@ -443,8 +477,7 @@ export async function listOpenScholarCollections(
 		request,
 		decodeSearchCursor(request),
 	);
-	const countedRows = await withOpenScholarCounts(database, pageRows);
-	return { items: countedRows.map(openScholarCollection), nextCursor };
+	return { items: await openScholarCollections(database, pageRows), nextCursor };
 }
 
 export async function resolveAdminCollections(

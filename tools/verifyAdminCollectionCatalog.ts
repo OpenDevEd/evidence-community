@@ -21,6 +21,18 @@ function assert(condition: unknown, message: string): asserts condition {
 async function createFixture(client: Client) {
 	await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
 	await client.query(`
+		CREATE TEMP TABLE "sourceConnection" (
+			key varchar(64) PRIMARY KEY,
+			"displayName" text,
+			provider text NOT NULL,
+			"externalScopeKey" text
+		) ON COMMIT DROP;
+		INSERT INTO "sourceConnection" (key, "displayName", provider, "externalScopeKey") VALUES
+			('native', NULL, 'native', NULL),
+			('edge', 'Configuration test source', 'zotero', '11'),
+			('os', 'Configuration test source', 'zotero', '22');
+	`);
+	await client.query(`
 		CREATE TEMP TABLE "collection" (
 			key varchar(8) PRIMARY KEY,
 			"sourceConnectionKey" varchar(64) NOT NULL,
@@ -96,6 +108,12 @@ async function createFixture(client: Client) {
 			lower(coalesce(name, '')),
 			key
 		)
+	`);
+	await client.query(`
+		CREATE TEMP TABLE "item" (key varchar(8) PRIMARY KEY, deleted integer, "parentItem" varchar(8)) ON COMMIT DROP;
+		CREATE TEMP TABLE "itemToCollection" ("itemKey" varchar(8), "collectionKey" varchar(8)) ON COMMIT DROP;
+		INSERT INTO "item" VALUES ('RECORD22', 0, NULL);
+		INSERT INTO "itemToCollection" VALUES ('RECORD22', 'PARENTAA'), ('RECORD22', 'CHILDAAA');
 	`);
 	await client.query(`ANALYZE "collection"`);
 }
@@ -239,6 +257,16 @@ async function verify() {
 				.map(({ id, hasChildren }) => `${id}:${hasChildren}`)
 				.join(",") === "PARENTAA:true,DELPARAA:false,LEAFAAAA:false",
 			"OpenScholar rows must report a live child and nothing else",
+		);
+		assert(
+			openScholar.items.every(({ source }) => source.includes("Configuration test source")),
+			"Collection results must use the saved source name",
+		);
+		assert(openScholar.items[0]?.count === 1, "Descendant counts must count each record once");
+		const duplicateNames = await listOpenScholarCollections(database, { ids: "PARENTAA,EDGEAAAA" });
+		assert(
+			duplicateNames.items.length === 2 && new Set(duplicateNames.items.map(({ source }) => source)).size === 2,
+			"Groups with the same display name must remain distinct source choices",
 		);
 		const searchPlan = await client.query<{ "QUERY PLAN": unknown }>(
 			`EXPLAIN (FORMAT JSON)

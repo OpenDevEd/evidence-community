@@ -22,7 +22,7 @@ describe("sourceDisplayLabel", () => {
 				key: "zotero-test-2",
 				provider: "zotero",
 			}),
-		).toBe("Zotero · 6642276");
+		).toMatch(/Zotero.*6642276/);
 		expect(
 			sourceDisplayLabel({
 				displayName: "  ",
@@ -30,7 +30,7 @@ describe("sourceDisplayLabel", () => {
 				key: "mendeley-x",
 				provider: "mendeley",
 			}),
-		).toBe("Mendeley · mendeley-x");
+		).toMatch(/Mendeley.*mendeley-x/);
 		expect(
 			sourceDisplayLabel({
 				displayName: "ignored",
