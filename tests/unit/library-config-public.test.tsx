@@ -13,6 +13,27 @@ const serverConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 const publicConfig = projectPublicLibraryConfig(serverConfig);
 
 describe("public library configuration", () => {
+	it.each([true, false])("only offers map links while the map page is enabled: %s", (enabled) => {
+		const config = libraryConfigSchema.parse(maximalLibraryConfig);
+		config.features.countryFocus = enabled;
+		const link = {id: "map", label: "Map", href: "/map?view=country", target: "self" as const, visible: true};
+		config.navigation.links.push({...link, children: []});
+		config.navigation.links[0].children.push(link);
+		config.footer.sections[0].links.push(link);
+		const projected = projectPublicLibraryConfig(config);
+		for (const links of [projected.navigation.links, projected.navigation.links[0].children, projected.footer.sections[0].links]) {
+			expect(links.some(entry => entry.id === "map")).toBe(enabled);
+		}
+		expect(config.navigation.links.at(-1)?.id).toBe("map");
+	});
+
+	it("removes absolute and localized links to its disabled map, but keeps external maps", () => {
+		const config = libraryConfigSchema.parse(maximalLibraryConfig);
+		config.features.countryFocus = false;
+		config.navigation.links = ["/fr/map/", "/map?country=KE", `${config.identity.baseUrl}/en-GB/map#country`, "https://elsewhere.example.org/map"].map((href, index) => ({ id: `map-${index}`, label: "Map", href, visible: true, target: "self", children: [] }));
+		expect(projectPublicLibraryConfig(config).navigation.links.map(link => link.href)).toEqual(["https://elsewhere.example.org/map"]);
+	});
+
 	it("projects only explicitly allowlisted root fields", () => {
 		expect(Object.keys(publicConfig).sort()).toEqual(
 			[

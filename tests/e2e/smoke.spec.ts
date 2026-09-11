@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 import { dismissConsent } from "./consent";
 import { verifySourceCitationMeasure } from "./citation-measure";
@@ -771,4 +772,47 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	} else {
 		await expect(citationUrlText).toHaveCount(0);
 	}
+});
+
+
+test("only opens the country map when its page is enabled", async ({ page }) => {
+	const errors: string[] = [];
+	page.on("pageerror", error => errors.push(error.message));
+	await page.goto("/en-GB/map");
+	await dismissConsent(page);
+	if (process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true") {
+		await expect(page.getByRole("button", { name: /Facet/ }).first()).toBeVisible();
+		expect(errors).toEqual([]);
+	} else {
+		// A streamed Next.js notFound() can report React's recoverable Suspense
+		// bailout. Check the unavailable-page contract instead of treating that
+		// deliberate response as a failed map render.
+		await expect(page.getByText("404", { exact: true })).toBeVisible();
+		await expect(page.getByRole("button", { name: /Facet/ })).toHaveCount(0);
+		await expect(page.locator('meta[name="robots"][content="noindex"]').first()).toHaveAttribute("content", "noindex");
+	}
+});
+
+
+test("keeps the whole-library export total independent of the search", async ({ page }) => {
+	test.skip(!expectedSearchItemKey || process.env.PLAYWRIGHT_EXPECTED_EXPORT_RIS !== "true", "Requires a public record and RIS exports.");
+	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
+	await dismissConsent(page);
+	await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }).first()).toBeVisible();
+	const button = page.getByRole("button", { name: /^Download library/ });
+	const count = Number((await button.innerText()).match(/([\d,]+)\s*$/)?.[1].replaceAll(",", ""));
+	expect(count).toBeGreaterThan(0);
+	await button.click();
+	await page.route("**/lib/export/ris", route => route.fulfill({status: 503, body: "Unavailable"}));
+	await page.getByRole("option", {name: /^RIS/}).click();
+	await expect(page.getByText("Download failed", {exact: true})).toBeVisible();
+	await page.unroute("**/lib/export/ris");
+
+	const downloadStarted = page.waitForEvent("download");
+	await page.getByRole("option", { name: /^RIS/ }).click();
+	const download = await downloadStarted;
+	const path = await download.path();
+	expect(path).not.toBeNull();
+	const records = await readFile(path!, "utf8");
+	expect(records.match(/^TY\s+- /gm)).toHaveLength(count);
 });

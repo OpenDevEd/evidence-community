@@ -1,6 +1,8 @@
 import {
 	and,
 	asc,
+	count,
+	max,
 	desc,
 	gt,
 	inArray,
@@ -251,3 +253,14 @@ export async function readNewestRecords(
 
 	return records as unknown as Item[];
 }
+
+/** Count the same public records used by library exports, without search filters. */
+export async function readPublicLibraryStatus(database: Database, config: LibraryServerConfig) {
+	const [status] = await database.select({
+		totalItems: count(),
+		latestPublicationUpdatedAt: max(item.updatedAt),
+	}).from(item).where(publicRecordCondition(database, config));
+	return status;
+}
+
+export type PublicLibraryStatus = Awaited<ReturnType<typeof readPublicLibraryStatus>>;

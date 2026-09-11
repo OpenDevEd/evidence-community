@@ -20,6 +20,7 @@ import {
 	useLibraryConfig,
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
+import { toast } from "@/components/layout/Toast";
 import { trackContentAction } from "@/lib/analytics";
 
 async function defaultAction(
@@ -74,6 +75,7 @@ export function DownloadModal({
 	hrefForFormat,
 	fileName,
 	formats,
+	description,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -82,6 +84,7 @@ export function DownloadModal({
 	hrefForFormat?: (format: BibliographicExportFormat) => string;
 	fileName: string;
 	formats?: readonly BibliographicExportFormat[];
+	description?: string;
 }) {
 	const t = useTranslations("ui");
 	const [loading, setLoading] = useState(false);
@@ -97,10 +100,10 @@ export function DownloadModal({
 		>
 			<ModalContent>
 				<GenericHeader startContent={<HugeiconsIcon icon={Download01Icon} />} onClose={onClose}>
-					{t("download")}
+					{t(hrefForFormat ? "downloadLibrary" : "download")}
 				</GenericHeader>
 				<ListModalBody
-					description={t("downloadDescription")}
+					description={description ?? t("downloadDescription")}
 					isLoading={loading}
 					onAction={async (index: number) => {
 						setLoading(true);
@@ -108,34 +111,18 @@ export function DownloadModal({
 							const format = availableFormats[index];
 							if (!format) return;
 
+							let blob: Blob;
 							if (hrefForFormat) {
-								const anchor = document.createElement("a");
-								anchor.href = hrefForFormat(format);
-								anchor.download = `${fileName}.${getLibraryExportExtension(format)}`;
-								document.body.appendChild(anchor);
-								anchor.click();
-								anchor.remove();
-								trackContentAction({
-									action: "download",
-									context: "library_records",
-									format,
-								});
-								return;
+								const response = await fetch(hrefForFormat(format));
+								if (!response.ok) throw new Error(`Download returned ${response.status}`);
+								blob = await response.blob();
+							} else {
+								if (!action) throw new Error("A download action or URL is required");
+								const ret = await action(format);
+								if (!ret.trim()) throw new Error("Citation conversion returned no content");
+								blob = new Blob([ret], { type: format === "ris" ? "application/x-research-info-systems" : "application/x-bibtex" });
 							}
 
-							if (!action) {
-								throw new Error(
-									"A download action or URL is required",
-								);
-							}
-
-							const ret = await action(format);
-							const blob = new Blob([ret], {
-								type:
-									format === "ris"
-										? "application/x-research-info-systems"
-										: "application/x-bibtex",
-							});
 							const url = URL.createObjectURL(blob);
 							const anchor = document.createElement("a");
 							anchor.href = url;
@@ -151,6 +138,7 @@ export function DownloadModal({
 							});
 						} catch (error) {
 							console.error(error);
+							toast({ type: "error", title: t("downloadFailed"), description: t("tryAgainLater") });
 						} finally {
 							setLoading(false);
 						}

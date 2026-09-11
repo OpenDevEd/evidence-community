@@ -454,10 +454,10 @@ function ResourcesList({
 }
 
 function ContentActions() {
-	const itemsContext = use(ItemsContext);
 	const t = useTranslations("ui");
 	const format = useFormatter();
-	const totalItems = itemsContext.itemsData?.totalItems || 0;
+	const { status } = useContext(CacheContext) as CacheContextType;
+	const totalItems = status.totalItems;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const { exports, identity } = useLibraryConfig();
 	const isDownloadEnabled = useLibraryFeature("downloads");
@@ -476,6 +476,7 @@ function ContentActions() {
 				hrefForFormat={getLibraryExportPath}
 				formats={availableFormats}
 				fileName={identity.shortName}
+				description={t(totalItems > downloadableRecords ? "downloadLibraryLimited" : "downloadLibraryDescription", { count: downloadableRecords, total: totalItems })}
 			/>
 			{isDownloadEnabled && availableFormats.length > 0 && (
 				<Button
@@ -488,9 +489,8 @@ function ContentActions() {
 					}
 					onPress={onOpen}
 				>
-					{t("downloadRecords", {
-						count: downloadableRecords,
-					})}
+					{t("downloadLibrary")}{" "}
+					<span className="opacity-60">{format.number(downloadableRecords)}</span>
 				</Button>
 			)}
 			{isAtomFeedEnabled && exports.atom && (
@@ -813,9 +813,10 @@ export function ResourcesView({
 			) : (
 				results
 			)}
-			<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
+			{status.latestPublicationUpdatedAt && <div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
 				{t("lastUpdate", {
-					date: format.dateTime(new Date(status.databaseUpdatedAt), {
+					date: format.dateTime(new Date(status.latestPublicationUpdatedAt), {
+						timeZone: "UTC",
 						day: "2-digit",
 						month: "2-digit",
 						year: "numeric",
@@ -823,7 +824,7 @@ export function ResourcesView({
 						minute: "2-digit",
 					}),
 				})}
-			</div>
+			</div>}
 		</section>
 	);
 }

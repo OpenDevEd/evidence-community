@@ -14,7 +14,6 @@ import {
 	useState,
 	Suspense,
 } from "react";
-import type { InferSelectModel } from "drizzle-orm";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
@@ -27,7 +26,7 @@ import {
 	useAnalyticsConsent,
 } from "@/components/features/analytics/AnalyticsConsentProvider";
 import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyticsManager";
-import { status as statusTable } from "@/db/schema/tables/status";
+import type { PublicLibraryStatus } from "@/lib/library-export-records";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
@@ -35,7 +34,7 @@ import { SessionProvider } from "next-auth/react";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-type RuntimeStatus = InferSelectModel<typeof statusTable>;
+type RuntimeStatus = PublicLibraryStatus;
 export type CacheContextType = {
 	status: RuntimeStatus;
 	cache: any;
@@ -49,11 +48,6 @@ export type CacheContextType = {
 };
 
 export const CacheContext = createContext<any>({});
-
-export function useStatus(): CacheContextType["status"] {
-	const { status } = useContext(CacheContext);
-	return status;
-}
 
 export function useGapMaps(): GapMap[] {
 	const { gapmaps } = useContext(CacheContext);

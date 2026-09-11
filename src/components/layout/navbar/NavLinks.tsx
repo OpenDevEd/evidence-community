@@ -89,7 +89,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 						<Button
 							variant="invisible"
 							className="relative text-current dark:text-current"
-							aria-label={tUI("dropdownAriaLabel", { label: link.label })}
+							aria-label={tUI("dropdownAriaLabel", { label: localizeOrUseIfCapitalized(link.label, t) })}
 						>
 							<ChevronDownIcon className="size-4" />
 						</Button>

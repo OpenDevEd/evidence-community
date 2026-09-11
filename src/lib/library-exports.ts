@@ -46,8 +46,8 @@ export type CitationRecordReader = (
 ) => Promise<Item[]>;
 
 /**
- * Turns one page of records into citation text. Records the converter cannot
- * read are skipped instead of breaking the whole file.
+ * Turns one page of records into citation text. A failed conversion aborts
+ * the download so it cannot silently omit a publication.
  */
 export async function convertRecordsToCitations(
 	records: readonly Item[],
@@ -57,7 +57,9 @@ export async function convertRecordsToCitations(
 		records.map((record) => convertItem(record, format)),
 	);
 
-	return converted.filter((entry) => entry.trim().length > 0);
+	const failedIndex = converted.findIndex((entry) => !entry.trim());
+	if (failedIndex !== -1) throw new Error(`Unable to export publication ${records[failedIndex].key}`);
+	return converted;
 }
 
 /**

@@ -549,10 +549,11 @@ function formatBibliographicDate(
 }
 
 function formatValue(
-	key: keyof Item,
+	key: string | undefined,
 	value: any,
 	formatter: ReturnType<typeof useFormatter>,
 ) {
+	if (!key) return value;
 	// Access dates are calendar dates. Old records may still hold text such as
 	// CURRENT_TIMESTAMP (issue #103); hide anything the admin rule rejects.
 	if (key === "accessDate") {
@@ -574,15 +575,15 @@ function formatValue(
 function ItemDetailsRow({
 	detail,
 }: {
-	detail?: { label: string; value: any };
+	detail?: { label: string; value: any; field?: string };
 }) {
 	const { loading } = use(LoadingContext);
-	const t = useTranslations("article");
 	const tUI = useTranslations("ui");
 	const formatter = useFormatter();
 	const formattedValue = detail
-		? formatValue(detail.label as keyof Item, detail.value, formatter)
+		? formatValue(detail.field, detail.value, formatter)
 		: undefined;
+	const hasValue = ![undefined, null, false, ""].includes(formattedValue);
 
 	return (
 		<div className="px-4">
@@ -590,11 +591,11 @@ function ItemDetailsRow({
 				<div className="flex justify-between gap-2">
 					<div className="text-base font-medium flex-1">
 						<div className="text-sm text-black/60 dark:text-white/60">
-							{detail?.label ? t(detail?.label) : "-"}
+							{detail?.label || "-"}
 						</div>
 						<div className="flex justify-between">
 							<div className="text-base">
-								{formattedValue ? (
+								{hasValue ? (
 									<span
 										dangerouslySetInnerHTML={{
 											__html: ProcessHTML(
@@ -613,7 +614,7 @@ function ItemDetailsRow({
 					</div>
 					<CopyButton
 						textToCopy={formattedValue}
-						ariaLabel={tUI("copyField", { field: detail?.label ? t(detail.label) : "" })}
+						ariaLabel={tUI("copyField", { field: detail?.label ?? "" })}
 					/>
 				</div>
 			</Skeleton>
@@ -624,6 +625,7 @@ function ItemDetailsRow({
 export function ItemDetails({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
+	const tArticle = useTranslations("article");
 	const { identity } = useLibraryConfig();
 
 	if (!item && !loading) return null;
@@ -637,7 +639,7 @@ export function ItemDetails({ item }: { item: Item | undefined }) {
 						<ItemDetailsRow key={index} detail={undefined} />
 					))
 				: details.map((detail) => (
-						<ItemDetailsRow key={detail.label} detail={detail} />
+						<ItemDetailsRow key={detail.label} detail={{ ...detail, field: detail.label, label: tArticle(detail.label) }} />
 					))}
 		</SidebarCard>
 	);

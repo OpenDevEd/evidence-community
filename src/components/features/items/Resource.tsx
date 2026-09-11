@@ -31,7 +31,6 @@ import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
-import { useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
@@ -174,7 +173,7 @@ function CitationCounts({
 					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
 					<span>{citedByCount}</span>
 					<span className="text-accent/70 hidden @[480px]:inline">
-						{t("libraryCitations")}
+						{t("libraryCitationLabel", { count: citedByCount })}
 					</span>
 					<HugeiconsIcon
 						icon={ArrowRight01Icon}
@@ -187,7 +186,7 @@ function CitationCounts({
 					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
 					<span>{citesCount}</span>
 					<span className="opacity-70 hidden @[480px]:inline">
-						{t("references").toLowerCase()}
+						{t("referenceLabel", { count: citesCount })}
 					</span>
 				</span>
 			)}
