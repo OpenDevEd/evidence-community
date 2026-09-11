@@ -91,10 +91,7 @@ function LibraryFilters({
 
 	if (itemsContext.config.interactionsStyle === "one-line") {
 		return (
-			<div className="flex gap-4">
-				<ScopeComponent itemsContext={itemsContext} />
-				<SortComponent itemsContext={itemsContext} />
-			</div>
+			<ScopeComponent itemsContext={itemsContext} />
 		);
 	}
 

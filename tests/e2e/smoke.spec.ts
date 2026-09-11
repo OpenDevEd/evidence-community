@@ -813,17 +813,58 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 test("only opens the country map when its page is enabled", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("pageerror", error => errors.push(error.message));
-	await page.goto("/en-GB/map");
+	const enabled = process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true";
+	await page.goto(enabled ? "/en-GB/map?country=Asia+%3E+Southern+Asia+%3E+AF" : "/en-GB/map", { waitUntil: "domcontentloaded" });
 	await dismissConsent(page);
-	if (process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true") {
-		await expect(page.getByRole("button", { name: /Facet/ }).first()).toBeVisible();
+	if (enabled) {
+		const country = page.getByRole("button", { name: "Afghanistan", exact: true });
+		await expect(country).toBeVisible();
+		const skipLink = page.getByRole("link", { name: "Skip to content", exact: true });
+		await expect(page.getByRole("region", { name: "Results", exact: true })).not.toBeFocused();
+		await page.keyboard.press("Tab");
+		await expect(skipLink).toBeFocused();
+		await skipLink.press("Enter");
+		await expect(page.getByRole("main")).toBeFocused();
+		await page.keyboard.press("Tab");
+		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
+		await country.focus();
+		await expect(country).toBeFocused();
+		await expect(country).toHaveAccessibleDescription(/^\d/);
+		await expect(page.getByRole("tooltip")).toContainText("Afghanistan");
+		await country.press("Space");
+		await expect(country).toHaveAttribute("aria-pressed", "false");
+		await country.press("Enter");
+		await expect(page).toHaveURL(url => url.searchParams.getAll("country").includes("Asia > Southern Asia > AF"));
+		await expect(country).toHaveAttribute("aria-pressed", "true");
+		await expect(page.locator("#main-content")).toHaveCount(1);
+		await country.press("Space");
+		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
+		await expect(country).toHaveAttribute("aria-pressed", "false");
+		await country.press("Enter");
+		await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
+		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
+		await page.setViewportSize({ width: 390, height: 844 });
+		await country.focus();
+		await country.press("Enter");
+		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
+		await country.focus();
+		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
+		const clearFilters = page.getByRole("button", { name: "Clear all filters", exact: true });
+		await clearFilters.focus();
+		await page.setViewportSize({ width: 1280, height: 900 });
+		await expect(clearFilters).toBeFocused();
+		await page.setViewportSize({ width: 390, height: 844 });
+		await expect(clearFilters).toBeFocused();
+		await clearFilters.press("Enter");
+		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
+		await expect(country).toBeFocused();
 		expect(errors).toEqual([]);
 	} else {
 		// A streamed Next.js notFound() can report React's recoverable Suspense
 		// bailout. Check the unavailable-page contract instead of treating that
 		// deliberate response as a failed map render.
 		await expect(page.getByText("404", { exact: true })).toBeVisible();
-		await expect(page.getByRole("button", { name: /Facet/ })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "Afghanistan", exact: true })).toHaveCount(0);
 		await expect(page.locator('meta[name="robots"][content="noindex"]').first()).toHaveAttribute("content", "noindex");
 	}
 });
