@@ -93,6 +93,7 @@ const expectedTermsLink =
 	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
 const expectedInstitutionFilterLabel =
 	process.env.PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL ?? "Institutions";
+const expectedCitationsEnabled = process.env.PLAYWRIGHT_EXPECTED_CITATIONS_ENABLED !== "false";
 const expectedCitationUrl =
 	process.env.PLAYWRIGHT_EXPECTED_CITATION_URL !== "false";
 const expectedEmbeddings =
@@ -621,7 +622,12 @@ test("copies citation text without HTML whitespace or an extra sentence separato
 	} }));
 	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
 	await dismissConsent(page);
-	const citation = page.getByRole("heading", { name: "Citation", exact: true }).locator("..");
+	const heading = page.getByRole("heading", { name: "Citation", exact: true });
+	if (!expectedCitationsEnabled) {
+		await expect(heading).toHaveCount(0);
+		return;
+	}
+	const citation = heading.locator("..");
 	await citation.getByRole("button").click();
 	const suffix = expectedCitationUrl
 		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, page.url())}.`

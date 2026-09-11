@@ -242,7 +242,7 @@
 			"publicBucket": "amber-public",
 			"maxPdfBytes": 104857600
 		},
-		"zotero": {},
+		"zotero": { "translationUrl": "http://runtime-provider-fake:4000" },
 		"publication": {
 			"crossref": {
 				"enabled": true,

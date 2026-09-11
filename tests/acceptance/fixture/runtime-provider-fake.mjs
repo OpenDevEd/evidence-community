@@ -135,6 +135,15 @@ const server = createServer(async (request, response) => {
 	const method = request.method ?? "GET";
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
+	if (url.pathname === "/export" && method === "POST") {
+		const items = JSON.parse((await readBody(request)).toString("utf8"));
+		return json(response, 200, items.map((item, index) => ({
+			id: `runtime-citation-${index}`,
+			type: "report",
+			title: item.title,
+			issued: { "date-parts": [[2026]] },
+		})));
+	}
 	if (url.pathname === "/_test/admin-login-codes" && method === "POST") {
 		const bytes = await readBody(request);
 		let libraryId = defaultOpenScholarLibraryId;
