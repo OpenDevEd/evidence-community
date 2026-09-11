@@ -33,6 +33,14 @@ export function getRuntimePagePath(href: string, baseUrl: string): string | null
 	return getRuntimeInternalHrefPath(`/${segments.join("/")}`);
 }
 
+/** Let locale-aware links handle same-origin URLs as internal navigation. */
+export function getRuntimeLinkHref(href: string, baseUrl: string): string {
+	const pathname = getRuntimePagePath(href, baseUrl);
+	if (pathname === null) return href;
+	const target = new URL(href, baseUrl);
+	return `${pathname}${target.search}${target.hash}`;
+}
+
 export function hasRuntimeLinkPath<T extends Pick<RuntimeLink, "href">>(
 	links: readonly T[],
 	path: string,

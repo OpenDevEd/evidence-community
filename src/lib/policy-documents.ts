@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { redirect as redirectLocalized } from "@/i18n/routing";
 import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
-import { getRuntimePagePath } from "@/config/library-config/links";
+import { getRuntimeLinkHref, getRuntimePagePath } from "@/config/library-config/links";
 
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
@@ -234,11 +234,8 @@ function getPolicyRedirect(config: PolicyDocumentConfig, document: PolicyDocumen
 export async function loadPolicyPageDocument(config: PolicyDocumentConfig, document: PolicyDocumentKind) {
 	const destination = getPolicyRedirect(config, document);
 	if (destination) {
-		const pathname = getRuntimePagePath(destination, config.identity.baseUrl);
-		if (pathname !== null) {
-			const target = new URL(destination, config.identity.baseUrl);
-			redirectLocalized({ href: `${pathname}${target.search}${target.hash}`, locale: await getLocale() });
-		}
+		const href = getRuntimeLinkHref(destination, config.identity.baseUrl);
+		if (href.startsWith("/")) redirectLocalized({ href, locale: await getLocale() });
 		redirect(destination);
 	}
 	return loadPolicyDocument(config, document);

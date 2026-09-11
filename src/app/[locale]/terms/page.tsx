@@ -1,3 +1,4 @@
+import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
 import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
 import { Metadata } from "next";
@@ -35,7 +36,7 @@ export default async function TermsPage() {
 			description="The rules for using this public library and its content."
 			lastUpdated={document.lastUpdated}
 			otherPolicyLink={{
-				href: config.legal.privacyPolicy,
+				href: getRuntimeLinkHref(config.legal.privacyPolicy, config.identity.baseUrl),
 				label: tFooter("privacyPolicy"),
 			}}
 			contactEmail={config.contact.email}
