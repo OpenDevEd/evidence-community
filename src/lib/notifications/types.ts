@@ -10,4 +10,4 @@ export type NotificationPublication = {
   doi: string | null;
   item: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>;
 };
-export type NotificationStream = "hourly" | "weekly";
+export type NotificationStream = "hourly" | "digest";

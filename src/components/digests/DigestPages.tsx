@@ -23,7 +23,7 @@ function DigestContent({ edition }: { edition: Edition }) {
   return <AIMarkdown>{edition.markdown}</AIMarkdown>;
 }
 type ViewProps = {data: DigestPageData; initial: Preferences; base: string; locale: string};
-export default function DigestPages({ data, view = "archive", initial = {email: "", weekly: true, instant: false, confirmed: false}, token }: { data: DigestPageData; view?: string; initial?: Preferences; token?: string }) {
+export default function DigestPages({ data, view = "archive", initial = {email: "", digest: true, instant: false, confirmed: false}, token }: { data: DigestPageData; view?: string; initial?: Preferences; token?: string }) {
   const locale = useLocale(); const base = `/${locale}/digests`;
   if (view === "preferences") return <PageContainer className="mx-auto max-w-3xl"><TextLink href={base} back>Digests</TextLink><header className="mb-8 mt-7"><h1 className="text-3xl font-bold">Email preferences</h1><p className={`mt-3 text-sm ${muted}`}>Change your subscriptions to this library.</p></header><Subscription key="preferences" initial={initial} preferences token={token} schedule={data.schedule} /></PageContainer>;
   if (view === "archive") return <DigestArchive data={data} initial={initial} base={base} locale={locale} />;
@@ -47,7 +47,7 @@ function DigestHero({data, base, locale}: Omit<ViewProps, "initial">) {
       <header className={`${styles.hero} relative isolate mb-8 grid items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 -top-[100vh] -z-10 w-screen -translate-x-1/2 bg-card_light dark:bg-card" />
         <div className="max-w-lg">
-          <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Weekly<br />digests</h1>
+          <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
           {edition && <Link href={`${base}/${edition.slug}`} className="mt-7 inline-flex items-center gap-2 rounded-lg text-sm font-semibold text-accent outline-offset-4 transition-colors hover:text-accent/80">Read the latest edition<Icon value={ArrowRight01Icon} size={18} /></Link>}
 

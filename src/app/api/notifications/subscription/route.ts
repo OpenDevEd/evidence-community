@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const config = await getLibraryConfig();
   const subscriber = await readSubscription(await getDatabaseForConfig(config), token);
   if (!subscriber) return json({error: "This subscription link is invalid."}, 404);
-  return json({email: subscriber.email, weekly: subscriber.weekly, instant: subscriber.instant, confirmed: Boolean(subscriber.confirmedAt)});
+  return json({email: subscriber.email, digest: subscriber.digest, instant: subscriber.instant, confirmed: Boolean(subscriber.confirmedAt)});
 }
 
 async function parseMutation(request: Request) {
@@ -37,7 +37,7 @@ async function subscribe(request: Request, config: LibraryServerConfig, db: Data
   if (!hasSubscription(value)) return json({error: "Choose an email subscription."}, 400);
   const limit = await signupRateLimit(request, config);
   if (!limit.allowed) return json({error: "Too many requests. Please try again later."}, 429, aiRateLimitHeaders(limit));
-  await requestSubscription(db, {email: value.email, weekly: value.weekly, instant: value.instant});
+  await requestSubscription(db, {email: value.email, digest: value.digest, instant: value.instant});
   return json({ok: true}, 202);
 }
 
@@ -52,7 +52,7 @@ function signupRateLimit(request: Request, config: LibraryServerConfig) {
 async function applyMutation(request: Request, config: LibraryServerConfig, value: Mutation) {
   const db = await getDatabaseForConfig(config);
   if (value.action === "subscribe") return subscribe(request, config, db, value);
-  const success = value.action === "confirm" ? await confirmSubscription(db, value.token) : await updateSubscription(db, value.token, {weekly: value.weekly, instant: value.instant});
+  const success = value.action === "confirm" ? await confirmSubscription(db, value.token) : await updateSubscription(db, value.token, {digest: value.digest, instant: value.instant});
   return success ? json({ok: true}) : json({error: "This link is invalid or expired."}, 400);
 }
 
@@ -67,6 +67,6 @@ export async function POST(request: Request) {
   }
 }
 
-function hasSubscription(value: {weekly: boolean; instant: boolean}) {
-  return value.weekly || value.instant;
+function hasSubscription(value: {digest: boolean; instant: boolean}) {
+  return value.digest || value.instant;
 }

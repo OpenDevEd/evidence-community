@@ -8,13 +8,13 @@ import { SectionTitle } from "@/components/typography/SectionTitle";
 import { Card } from "@/components/nextui/Card";
 import { Icon, muted } from "./DigestPrimitives";
 import { changeSubscription, subscriptionError } from "./subscription-client";
-export type Preferences = { email: string; weekly: boolean; instant: boolean; confirmed: boolean };
+export type Preferences = { email: string; digest: boolean; instant: boolean; confirmed: boolean };
 type SubscriptionProps = { initial: Preferences; preferences?: boolean; token?: string; schedule: string };
 type Step = "form" | "confirm" | "subscribed" | "stopped";
 function PreferenceChoices({ value, onChange, schedule }: { value: Preferences; onChange: (value: Preferences) => void; schedule: string }) {
   return <div className="space-y-5">
     {([
-      { key: "weekly", icon: Calendar03Icon, label: "Weekly digest", help: schedule },
+      { key: "digest", icon: Calendar03Icon, label: "Library digests", help: schedule },
       { key: "instant", icon: BookOpen01Icon, label: "New publications", help: "Updates when publications are added" },
     ] as const).map(option => <div key={option.key} className="flex items-center gap-3">
       <span className={muted}><Icon value={option.icon} /></span>
@@ -31,18 +31,18 @@ function useSubscriptionForm({initial, preferences, token}: SubscriptionProps) {
   async function persist(next: Preferences, nextStep: Step) {
     setBusy(true); setError("");
     try {
-      await changeSubscription(preferences ? {action: "preferences", token, weekly: next.weekly, instant: next.instant} : {action: "subscribe", email: next.email, weekly: next.weekly, instant: next.instant});
+      await changeSubscription(preferences ? {action: "preferences", token, digest: next.digest, instant: next.instant} : {action: "subscribe", email: next.email, digest: next.digest, instant: next.instant});
       setValue(next); setStep(nextStep);
     } catch (error) {setError(subscriptionError(error));}
     finally {setBusy(false);}
   }
   const change = (next: Preferences) => {setValue(next); setStep("form");};
-  return {value, step, error, busy, setStep, persist, change, hasSelection: value.weekly || value.instant};
+  return {value, step, error, busy, setStep, persist, change, hasSelection: value.digest || value.instant};
 }
 type FormModel = ReturnType<typeof useSubscriptionForm>;
 function savedStep(preferences: boolean, value: Preferences): Step {
   if (!preferences) return "confirm";
-  return value.weekly || value.instant ? "subscribed" : "stopped";
+  return value.digest || value.instant ? "subscribed" : "stopped";
 }
 function SubscriptionEmail({preferences, model}: {preferences: boolean; model: FormModel}) {
   const {value, change} = model;
@@ -54,7 +54,7 @@ function SubscriptionButtons({preferences, model}: {preferences: boolean; model:
   const appearance = preferences ? {width: "", icon: Tick01Icon, label: "Save preferences", empty: false} : {width: "w-full", icon: Mail01Icon, label: "Subscribe", empty: !model.hasSelection};
   return <div className="flex flex-wrap items-center gap-2">
     <Button type="submit" color="accent" size="md" className={`shrink-0 whitespace-nowrap rounded-xl ${appearance.width}`} isLoading={busy} isDisabled={busy || appearance.empty}><Icon value={appearance.icon} size={16} />{appearance.label}</Button>
-    {preferences && <Button size="md" className="shrink-0 whitespace-nowrap rounded-xl" onPress={() => persist({ ...value, weekly: false, instant: false, confirmed: false }, "stopped")}>Unsubscribe from all</Button>}
+    {preferences && <Button size="md" className="shrink-0 whitespace-nowrap rounded-xl" onPress={() => persist({ ...value, digest: false, instant: false, confirmed: false }, "stopped")}>Unsubscribe from all</Button>}
   </div>;
 }
 function SubscriptionForm({preferences, schedule, model}: {preferences: boolean; schedule: string; model: FormModel}) {

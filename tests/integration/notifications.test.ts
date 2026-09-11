@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import { it, expect, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const smtp = vi.hoisted(() => ({sendMail: vi.fn()}));
@@ -14,9 +15,13 @@ import { runNotificationCycle } from "@/lib/notifications/worker";
 import { deliverNotification } from "@/lib/notifications/delivery";
 import { requestSubscription, confirmSubscription, updateSubscription } from "@/lib/notifications/subscriptions";
 
-const config = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], notifications: {enabled: true, weekly: {weekday: 1, time: "09:00", timezone: "UTC"}}, updatedAt: "2026-09-09T00:00:00Z"});
+const config = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], notifications: {enabled: true, schedule: {frequency: "weekly", weekday: 1, time: "09:00", timezone: "UTC"}}, updatedAt: "2026-09-09T00:00:00Z"});
 
-it("shares manual and scheduled digest windows without duplicate or empty editions", async () => {
+it.each([
+  {schedule: {frequency: "weekly" as const, weekday: 1, time: "09:00", timezone: "UTC"}, scheduledAt: new Date("2026-09-14T09:00:00Z")},
+  {schedule: {frequency: "monthly" as const, dayOfMonth: 31, time: "09:00", timezone: "UTC"}, scheduledAt: new Date("2026-09-30T09:00:00Z")},
+])("shares manual and $schedule.frequency digest windows without duplicate or empty editions", async ({schedule, scheduledAt}) => {
+  const scheduledConfig = {...config, notifications: {...config.notifications, schedule}};
   await withIsolatedPublicationDatabase(async (db, client) => {
     const start = new Date("2026-09-09T00:00:00Z");
     const manualAt = new Date("2026-09-10T12:00:00Z");
@@ -26,32 +31,33 @@ it("shares manual and scheduled digest windows without duplicate or empty editio
     await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-09-10T10:00:00Z", first.itemKey]);
 
     const results = await Promise.all([
-      prepareNotificationEditions(db, config, manualAt, {manualWeekly: true}),
-      prepareNotificationEditions(db, config, manualAt, {manualWeekly: true}),
+      prepareNotificationEditions(db, config, manualAt, {manualDigest: true}),
+      prepareNotificationEditions(db, config, manualAt, {manualDigest: true}),
     ]);
     expect(results.map(result => result.status).sort()).toEqual(["empty", "queued"]);
     const [manual] = await db.select().from(notificationEdition);
-    expect(manual).toMatchObject({stream: "weekly", windowStart: start, windowEnd: manualAt, publishedAt: null});
+    expect(manual).toMatchObject({stream: "digest", windowStart: start, windowEnd: manualAt, publishedAt: null});
     expect(manual.publications.map(item => item.key)).toEqual([first.itemKey]);
-    expect((await db.select().from(notificationState))[0]).toMatchObject({weeklyThrough: manualAt, hourlyThrough: start, nextWeeklyAt: new Date("2026-09-14T09:00:00Z")});
+    expect((await db.select().from(notificationState))[0]).toMatchObject({digestThrough: manualAt, hourlyThrough: start, nextDigestAt: new Date("2026-09-14T09:00:00Z")});
 
-    await prepareNotificationEditions(db, config, new Date("2026-09-11T12:00:00Z"), {manualWeekly: true});
-    expect((await db.select().from(notificationState))[0].weeklyThrough).toEqual(manualAt);
+    // Changing cadence preserves the previous manual cutoff and unannounced items.
+    await prepareNotificationEditions(db, scheduledConfig, new Date("2026-09-11T12:00:00Z"), {manualDigest: true});
+    expect((await db.select().from(notificationState))[0].nextDigestAt).toEqual(scheduledAt);
+    expect((await db.select().from(notificationState))[0].digestThrough).toEqual(manualAt);
     const second = await createNativeItemDraft(db, {itemType: "Report", title: "After the manual cutoff"});
     await publishItemDraft(db, second.itemKey);
     await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-09-12T10:00:00Z", second.itemKey]);
-    const scheduledAt = new Date("2026-09-14T09:00:00Z");
     await Promise.all([
-      prepareNotificationEditions(db, config, scheduledAt),
-      prepareNotificationEditions(db, config, scheduledAt, {manualWeekly: true}),
+      prepareNotificationEditions(db, scheduledConfig, scheduledAt),
+      prepareNotificationEditions(db, scheduledConfig, scheduledAt, {manualDigest: true}),
     ]);
-    const weekly = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "weekly"));
-    expect(weekly).toHaveLength(2);
-    const next = weekly.find(edition => edition.id !== manual.id)!;
+    const digest = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(digest).toHaveLength(2);
+    const next = digest.find(edition => edition.id !== manual.id)!;
     expect(next).toMatchObject({windowStart: manualAt, windowEnd: scheduledAt});
     expect(next.publications.map(item => item.key)).toEqual([second.itemKey]);
     const disabled = {...config, notifications: {...config.notifications, enabled: false}};
-    expect(await prepareNotificationEditions(db, disabled, scheduledAt, {manualWeekly: true})).toEqual({status: "disabled"});
+    expect(await prepareNotificationEditions(db, disabled, scheduledAt, {manualDigest: true})).toEqual({status: "disabled"});
     expect(await db.select().from(notificationDelivery)).toHaveLength(0);
   });
 }, 120_000);
@@ -60,15 +66,15 @@ it("keeps drafts private, batches first publications once and honors queued unsu
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
     const email = "reader@example.org";
-    await Promise.all([requestSubscription(db, {email, weekly: true, instant: true}, new Date("2026-09-09T00:01:00Z")), requestSubscription(db, {email, weekly: true, instant: true}, new Date("2026-09-09T00:01:00Z"))]);
+    await Promise.all([requestSubscription(db, {email, digest: true, instant: true}, new Date("2026-09-09T00:01:00Z")), requestSubscription(db, {email, digest: true, instant: true}, new Date("2026-09-09T00:01:00Z"))]);
     const subscribers = await db.select().from(notificationSubscriber);
     expect(subscribers).toHaveLength(1);
     expect(await db.select().from(notificationDelivery)).toHaveLength(1);
     const subscriber = subscribers[0];
     expect(await confirmSubscription(db, "invalid")).toBe(false);
     expect(await confirmSubscription(db, subscriber.token, new Date("2026-09-09T00:02:00Z"))).toBe(true);
-    await requestSubscription(db, {email, weekly: false, instant: true}, new Date("2026-09-11T00:00:00Z"));
-    expect((await db.select().from(notificationSubscriber))[0].weekly).toBe(true);
+    await requestSubscription(db, {email, digest: false, instant: true}, new Date("2026-09-11T00:00:00Z"));
+    expect((await db.select().from(notificationSubscriber))[0].digest).toBe(true);
     const draft = await createNativeItemDraft(db, {itemType: "Report", title: "First addition"});
     expect(await db.select().from(notificationItem)).toHaveLength(0);
     await publishItemDraft(db, draft.itemKey);
@@ -87,7 +93,7 @@ it("keeps drafts private, batches first publications once and honors queued unsu
     await Promise.all([generateNotificationEdition(db, config), generateNotificationEdition(db, config)]);
     const deliveries = await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, editions[0].id));
     expect(deliveries).toHaveLength(1);
-    expect(await updateSubscription(db, subscriber.token, {weekly: true, instant: false})).toBe(true);
+    expect(await updateSubscription(db, subscriber.token, {digest: true, instant: false})).toBe(true);
     expect((await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, editions[0].id)))[0].status).toBe("skipped");
     await prepareNotificationEditions(db, config, new Date("2026-09-09T02:00:00Z"));
     expect(await db.select().from(notificationEdition)).toHaveLength(1);
@@ -115,7 +121,7 @@ it("excludes the first Zotero sync but includes subsequent additions, including 
 it("does not resend accepted or ambiguous SMTP deliveries, and skips expired confirmations", async () => {
   await withIsolatedPublicationDatabase(async db => {
     smtp.sendMail.mockReset().mockResolvedValue({accepted: ["reader@example.org"]});
-    await requestSubscription(db, {email: "reader@example.org", weekly: true, instant: false});
+    await requestSubscription(db, {email: "reader@example.org", digest: true, instant: false});
     await Promise.all([runNotificationCycle(db, config), runNotificationCycle(db, config)]);
     expect(smtp.sendMail).toHaveBeenCalledTimes(1);
     expect((await db.select().from(notificationDelivery))[0].status).toBe("sent");
@@ -124,13 +130,13 @@ it("does not resend accepted or ambiguous SMTP deliveries, and skips expired con
     expect(message.headers["List-Unsubscribe"]).toContain("/digests/unsubscribe?token=");
     await deliverNotification(db, config);
     expect(smtp.sendMail).toHaveBeenCalledTimes(1);
-    await requestSubscription(db, {email: "uncertain@example.org", weekly: true, instant: false});
+    await requestSubscription(db, {email: "uncertain@example.org", digest: true, instant: false});
     smtp.sendMail.mockRejectedValueOnce(new Error("Connection closed after SMTP DATA"));
     await deliverNotification(db, config);
     await deliverNotification(db, config);
     expect(smtp.sendMail).toHaveBeenCalledTimes(2);
     expect((await db.select().from(notificationDelivery)).map(row => row.status).sort()).toEqual(["sent", "uncertain"]);
-    await requestSubscription(db, {email: "expired@example.org", weekly: true, instant: false}, new Date("2020-01-01T00:00:00Z"));
+    await requestSubscription(db, {email: "expired@example.org", digest: true, instant: false}, new Date("2020-01-01T00:00:00Z"));
     await deliverNotification(db, config);
     expect(smtp.sendMail).toHaveBeenCalledTimes(2);
     expect((await db.select().from(notificationDelivery)).map(row => row.status)).toContain("skipped");
@@ -138,13 +144,13 @@ it("does not resend accepted or ambiguous SMTP deliveries, and skips expired con
 }, 120_000);
 
 
-it("publishes only saved weekly editions, preserving their metadata and hiding unfinished summaries", async () => {
+it("publishes only saved digest editions, preserving their metadata and hiding unfinished summaries", async () => {
   await withIsolatedPublicationDatabase(async db => {
     const windowStart = new Date("2026-09-01T00:00:00Z");
     const windowEnd = new Date("2026-09-08T00:00:00Z");
-    const [published] = await db.insert(notificationEdition).values({stream: "weekly", windowStart, windowEnd, publications: [], title: "Saved title", summary: "Saved summary", markdown: "Saved body", publishedAt: windowEnd}).returning();
+    const [published] = await db.insert(notificationEdition).values({stream: "digest", windowStart, windowEnd, publications: [], title: "Saved title", summary: "Saved summary", markdown: "Saved body", publishedAt: windowEnd}).returning();
     await db.insert(notificationEdition).values([
-      {stream: "weekly", windowStart, windowEnd: new Date("2026-09-15T00:00:00Z"), publications: [], title: "Private title"},
+      {stream: "digest", windowStart, windowEnd: new Date("2026-09-15T00:00:00Z"), publications: [], title: "Private title"},
       {stream: "hourly", windowStart, windowEnd, publications: [], title: "Email only", publishedAt: windowEnd},
     ]);
     const archive = await getDigestPageData(db, config, "en-GB", published.id);
@@ -160,7 +166,7 @@ it("publishes only saved weekly editions, preserving their metadata and hiding u
 it("retries pre-connection SMTP failures and lets confirmed readers recover preferences without resubscribing", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     smtp.sendMail.mockReset().mockRejectedValueOnce(Object.assign(new Error("connect ECONNREFUSED"), {command: "CONN", code: "ESOCKET"}));
-    await requestSubscription(db, {email: "recover@example.org", weekly: true, instant: false});
+    await requestSubscription(db, {email: "recover@example.org", digest: true, instant: false});
     await deliverNotification(db, config);
     expect((await db.select().from(notificationDelivery))[0]).toMatchObject({status: "queued", attempts: 1, sendStartedAt: null});
     await client.query('UPDATE "notificationDelivery" SET "nextAttemptAt" = now()');
@@ -169,11 +175,11 @@ it("retries pre-connection SMTP failures and lets confirmed readers recover pref
     expect((await db.select().from(notificationDelivery))[0].status).toBe("sent");
     const [subscriber] = await db.select().from(notificationSubscriber);
     await confirmSubscription(db, subscriber.token);
-    await updateSubscription(db, subscriber.token, {weekly: false, instant: false});
+    await updateSubscription(db, subscriber.token, {digest: false, instant: false});
     await client.query('UPDATE "notificationSubscriber" SET "confirmationRequestedAt" = now() - interval \'2 days\'');
-    await requestSubscription(db, {email: subscriber.email, weekly: true, instant: true});
+    await requestSubscription(db, {email: subscriber.email, digest: true, instant: true});
     await deliverNotification(db, config);
-    expect((await db.select().from(notificationSubscriber))[0]).toMatchObject({weekly: false, instant: false, token: subscriber.token});
+    expect((await db.select().from(notificationSubscriber))[0]).toMatchObject({digest: false, instant: false, token: subscriber.token});
     expect(smtp.sendMail.mock.lastCall?.[0].text).toContain(`/digests/preferences?token=${subscriber.token}`);
     expect(smtp.sendMail.mock.lastCall?.[0].text).not.toContain("/digests/confirm");
     expect((await db.select().from(notificationDelivery)).filter(row => row.status === "sent")).toHaveLength(2);
@@ -182,7 +188,7 @@ it("retries pre-connection SMTP failures and lets confirmed readers recover pref
 
 it("stops retrying a digest after six failed generation attempts", async () => {
   await withIsolatedPublicationDatabase(async db => {
-    await db.insert(notificationEdition).values({stream: "weekly", windowStart: new Date("2026-09-01"), windowEnd: new Date("2026-09-08"), publications: [], attempts: 5});
+    await db.insert(notificationEdition).values({stream: "digest", windowStart: new Date("2026-09-01"), windowEnd: new Date("2026-09-08"), publications: [], attempts: 5});
     const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Unavailable", {status: 503}));
     try {
       await generateNotificationEdition(db, config);
@@ -216,5 +222,36 @@ it("collects late commits and newly revealed items once without replaying every 
     const editions = await db.select().from(notificationEdition);
     expect(editions).toHaveLength(2);
     expect(editions.flatMap(e => e.publications.map(p => p.key)).sort()).toEqual([draft.itemKey, hidden.itemKey].sort());
+  });
+}, 120_000);
+
+// Execute the real upgrade over populated pre-upgrade columns and stream values.
+it("preserves subscriber tokens, published editions and cutoffs when renaming digest storage", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const cutoff = new Date("2026-09-10T12:00:00Z");
+    const nextAt = new Date("2026-09-14T09:00:00Z");
+    await db.insert(notificationState).values({enabled: true, enabledAt: cutoff, hourlyThrough: cutoff, digestThrough: cutoff, nextDigestAt: nextAt, schedule: JSON.stringify({weekday: 1, time: "09:00", timezone: "UTC"})});
+    await requestSubscription(db, {email: "migration@example.org", digest: true, instant: false});
+    const [before] = await db.select().from(notificationSubscriber);
+    await confirmSubscription(db, before.token);
+    const [edition] = await db.insert(notificationEdition).values({stream: "digest", windowStart: new Date("2026-09-01T00:00:00Z"), windowEnd: cutoff, publications: [], title: "Saved edition", publishedAt: cutoff}).returning();
+    await client.query(`ALTER TABLE "notificationState" RENAME COLUMN "digestThrough" TO "weeklyThrough";
+      ALTER TABLE "notificationState" RENAME COLUMN "nextDigestAt" TO "nextWeeklyAt";
+      ALTER TABLE "notificationSubscriber" RENAME COLUMN "digest" TO "weekly";
+      UPDATE "notificationEdition" SET "stream" = 'weekly';`);
+    await client.query(readFileSync("drizzle/0058_library_digest_schedule.sql", "utf8"));
+    expect((await db.select().from(notificationSubscriber))[0]).toMatchObject({id: before.id, token: before.token, digest: true, instant: false, confirmedAt: expect.any(Date)});
+    expect((await db.select().from(notificationEdition))[0]).toMatchObject({id: edition.id, stream: "digest", title: "Saved edition", publishedAt: cutoff});
+    const [state] = await db.select().from(notificationState);
+    expect(state).toMatchObject({digestThrough: cutoff, nextDigestAt: nextAt});
+    expect(JSON.parse(state.schedule)).toEqual({frequency: "weekly", weekday: 1, time: "09:00", timezone: "UTC"});
+    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Added before the saved schedule"});
+    await publishItemDraft(db, draft.itemKey);
+    await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-09-12T10:00:00Z", draft.itemKey]);
+    // The worker must send an overdue edition after upgrade, not postpone it.
+    await prepareNotificationEditions(db, config, new Date("2026-09-14T09:05:00Z"));
+    const digests = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(digests).toHaveLength(2);
+    expect(digests.find(row => row.id !== edition.id)).toMatchObject({windowStart: cutoff, windowEnd: nextAt});
   });
 }, 120_000);

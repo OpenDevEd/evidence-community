@@ -4,8 +4,8 @@ import { z } from "zod";
 import type { Database } from "@/db/database-schema";
 import { notificationDelivery, notificationSubscriber } from "@/db/schema/notifications";
 
-export const preferenceSchema = z.object({weekly: z.boolean(), instant: z.boolean()}).strict();
-export const signupSchema = preferenceSchema.extend({email: z.string().trim().email().max(254).transform(value => value.toLowerCase())}).refine(value => value.weekly || value.instant, "Choose an email subscription");
+export const preferenceSchema = z.object({digest: z.boolean(), instant: z.boolean()}).strict();
+export const signupSchema = preferenceSchema.extend({email: z.string().trim().email().max(254).transform(value => value.toLowerCase())}).refine(value => value.digest || value.instant, "Choose an email subscription");
 export const subscriberTokenSchema = z.string().regex(/^[a-f0-9]{64}$/);
 
 /** Repeated public signup cannot change a confirmed subscriber's preferences. */
@@ -17,7 +17,7 @@ export async function requestSubscription(db: Database, input: z.infer<typeof si
     if (!subscriber) {
       const [existing] = await tx.select().from(notificationSubscriber).where(eq(notificationSubscriber.email, value.email)).for("update");
       if (!existing || existing.confirmationRequestedAt.getTime() > now.getTime() - 86_400_000) return;
-      const [updated] = await tx.update(notificationSubscriber).set({ ...(existing.confirmedAt ? {} : { weekly: value.weekly, instant: value.instant, token: randomBytes(32).toString("hex") }), confirmationRequestedAt: now, confirmationExpiresAt: new Date(now.getTime() + 86_400_000), updatedAt: now }).where(eq(notificationSubscriber.id, existing.id)).returning();
+      const [updated] = await tx.update(notificationSubscriber).set({ ...(existing.confirmedAt ? {} : { digest: value.digest, instant: value.instant, token: randomBytes(32).toString("hex") }), confirmationRequestedAt: now, confirmationExpiresAt: new Date(now.getTime() + 86_400_000), updatedAt: now }).where(eq(notificationSubscriber.id, existing.id)).returning();
       subscriber = updated;
       await tx.update(notificationDelivery).set({ status: "skipped", nextAttemptAt: null }).where(and(eq(notificationDelivery.subscriberId, existing.id), isNull(notificationDelivery.editionId), eq(notificationDelivery.status, "queued")));
     }
@@ -44,13 +44,13 @@ export async function updateSubscription(db: Database, token: string, input: z.i
     const [subscriber] = await tx.select().from(notificationSubscriber).where(eq(notificationSubscriber.token, token)).for("update");
     if (!subscriber) return false;
     // Unsubscribe is always allowed, including an unconfirmed address.
-    if (!subscriber.confirmedAt && (preferences.weekly || preferences.instant)) return false;
+    if (!subscriber.confirmedAt && (preferences.digest || preferences.instant)) return false;
     await tx.update(notificationSubscriber).set({...preferences, updatedAt: new Date()}).where(eq(notificationSubscriber.id, subscriber.id));
     await tx.execute(sql`UPDATE "notificationDelivery" d SET "status" = 'skipped', "nextAttemptAt" = NULL
       WHERE d."subscriberId" = ${subscriber.id}::uuid AND d."status" = 'queued' AND (
-        (NOT ${preferences.weekly} AND NOT ${preferences.instant}) OR EXISTS (
+        (NOT ${preferences.digest} AND NOT ${preferences.instant}) OR EXISTS (
           SELECT 1 FROM "notificationEdition" e WHERE e."id" = d."editionId" AND
-            ((e."stream" = 'weekly' AND NOT ${preferences.weekly}) OR (e."stream" = 'hourly' AND NOT ${preferences.instant}))
+            ((e."stream" = 'digest' AND NOT ${preferences.digest}) OR (e."stream" = 'hourly' AND NOT ${preferences.instant}))
         )
       )`);
     return true;

@@ -1661,16 +1661,20 @@ const emailConfigurationSchema = z
 	.strict()
 	.prefault({});
 
+const digestTimeFields = {
+	time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u, "Use HH:mm").default("09:00"),
+	timezone: z.string().min(1).max(100).refine(value => {
+		try { new Intl.DateTimeFormat("en", {timeZone: value}); return true; }
+		catch { return false; }
+	}, "Use a valid timezone").default("UTC"),
+};
+
 const notificationsSchema = z.object({
 	enabled: z.boolean().default(false),
-	weekly: z.object({
-		weekday: z.number().int().min(0).max(6).default(1),
-		time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u, "Use HH:mm").default("09:00"),
-		timezone: z.string().min(1).max(100).refine(value => {
-			try { new Intl.DateTimeFormat("en", {timeZone: value}); return true; }
-			catch { return false; }
-		}, "Use a valid timezone").default("UTC"),
-	}).strict().prefault({}),
+	schedule: z.discriminatedUnion("frequency", [
+		z.object({frequency: z.literal("weekly"), weekday: z.number().int().min(0).max(6), ...digestTimeFields}).strict(),
+		z.object({frequency: z.literal("monthly"), dayOfMonth: z.number().int().min(1).max(31), ...digestTimeFields}).strict(),
+	]).prefault({frequency: "weekly", weekday: 1}),
 }).strict().prefault({});
 
 const generationSchema = z

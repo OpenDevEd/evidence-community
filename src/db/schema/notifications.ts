@@ -14,8 +14,8 @@ export const notificationState = pgTable("notificationState", {
   enabled: boolean("enabled").notNull().default(false),
   enabledAt: date("enabledAt"),
   hourlyThrough: date("hourlyThrough"),
-  weeklyThrough: date("weeklyThrough"),
-  nextWeeklyAt: date("nextWeeklyAt"),
+  digestThrough: date("digestThrough"),
+  nextDigestAt: date("nextDigestAt"),
   schedule: text("schedule").notNull(),
 }, table => [check("notificationState_singleton", sql`${table.singleton} = true`)]);
 
@@ -23,7 +23,7 @@ export const notificationSubscriber = pgTable("notificationSubscriber", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),
   token: text("token").notNull(),
-  weekly: boolean("weekly").notNull(),
+  digest: boolean("digest").notNull(),
   instant: boolean("instant").notNull(),
   confirmedAt: date("confirmedAt"),
   confirmationRequestedAt: date("confirmationRequestedAt").notNull().defaultNow(),

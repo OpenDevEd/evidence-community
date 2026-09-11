@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { and, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
@@ -37,13 +38,13 @@ export type DigestPreparation =
 
 type NotificationWindow = { stream: NotificationStream; start: Date; end: Date };
 
-function notificationWindows(state: typeof notificationState.$inferSelect, weeklyAt: Date, now: Date, manualWeekly: boolean): NotificationWindow[] {
+function notificationWindows(state: typeof notificationState.$inferSelect, digestAt: Date, now: Date, manualDigest: boolean): NotificationWindow[] {
   const windows: NotificationWindow[] = [];
   const hourlyEnd = completedHourlyWindow(now);
   // A restart combines overdue additions instead of sending one email per missed hour.
   const hourlyNext = new Date(completedHourlyWindow(state.hourlyThrough!).getTime() + 3_600_000);
-  if (!manualWeekly && hourlyNext <= hourlyEnd) windows.push({ stream: "hourly", start: state.hourlyThrough!, end: hourlyEnd });
-  if (manualWeekly || weeklyAt <= now) windows.push({ stream: "weekly", start: state.weeklyThrough!, end: manualWeekly ? now : weeklyAt });
+  if (!manualDigest && hourlyNext <= hourlyEnd) windows.push({ stream: "hourly", start: state.hourlyThrough!, end: hourlyEnd });
+  if (manualDigest || digestAt <= now) windows.push({ stream: "digest", start: state.digestThrough!, end: manualDigest ? now : digestAt });
   return windows;
 }
 
@@ -52,17 +53,17 @@ async function prepareWindow(
   config: LibraryServerConfig,
   enabledAt: Date,
   window: NotificationWindow,
-  manualWeekly: boolean,
+  manualDigest: boolean,
 ): Promise<DigestPreparation> {
   if (window.end <= window.start) return { status: "empty" };
   const publications = await collectPublications(tx, config, enabledAt, window.end, window.stream);
-  if (!publications.length && manualWeekly) return { status: "empty" };
+  if (!publications.length && manualDigest) return { status: "empty" };
   let result: DigestPreparation = { status: "empty" };
   if (publications.length) {
     const [edition] = await tx.insert(notificationEdition).values({ stream: window.stream, windowStart: window.start, windowEnd: window.end, publications }).returning({ id: notificationEdition.id });
-    if (window.stream === "weekly") result = { status: "queued", editionId: edition.id, publicationCount: publications.length };
+    if (window.stream === "digest") result = { status: "queued", editionId: edition.id, publicationCount: publications.length };
   }
-  await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { weeklyThrough: window.end, nextWeeklyAt: nextDigestDate(config.notifications.weekly, window.end) });
+  await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { digestThrough: window.end, nextDigestAt: nextDigestDate(config.notifications.schedule, window.end) });
   return result;
 }
 
@@ -71,9 +72,9 @@ export async function prepareNotificationEditions(
   db: Database,
   config: LibraryServerConfig,
   now = new Date(),
-  { manualWeekly = false } = {},
+  { manualDigest = false } = {},
 ): Promise<DigestPreparation> {
-  const schedule = JSON.stringify(config.notifications.weekly);
+  const schedule = JSON.stringify(config.notifications.schedule);
   return db.transaction(async tx => {
     await tx.insert(notificationState).values({ schedule }).onConflictDoNothing();
     let [state] = await tx.select().from(notificationState).for("update");
@@ -83,17 +84,17 @@ export async function prepareNotificationEditions(
     }
     if (!state.enabled) {
       const enabledAt = new Date(Math.min(now.getTime(), new Date(config.updatedAt).getTime()));
-      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, weeklyThrough: enabledAt, nextWeeklyAt: nextDigestDate(config.notifications.weekly, enabledAt), schedule }).returning();
-      if (!manualWeekly) return { status: "empty" };
+      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, digestThrough: enabledAt, nextDigestAt: nextDigestDate(config.notifications.schedule, enabledAt), schedule }).returning();
+      if (!manualDigest) return { status: "empty" };
     }
-    let weeklyAt = state.nextWeeklyAt!;
-    if (state.schedule !== schedule) {
-      weeklyAt = nextDigestDate(config.notifications.weekly, now);
-      await tx.update(notificationState).set({ schedule, nextWeeklyAt: weeklyAt });
+    let digestAt = state.nextDigestAt!;
+    if (!isDeepStrictEqual(JSON.parse(state.schedule), config.notifications.schedule)) {
+      digestAt = nextDigestDate(config.notifications.schedule, now);
+      await tx.update(notificationState).set({ schedule, nextDigestAt: digestAt });
     }
     let result: DigestPreparation = { status: "empty" };
-    for (const window of notificationWindows(state, weeklyAt, now, manualWeekly)) {
-      const prepared = await prepareWindow(tx, config, state.enabledAt!, window, manualWeekly);
+    for (const window of notificationWindows(state, digestAt, now, manualDigest)) {
+      const prepared = await prepareWindow(tx, config, state.enabledAt!, window, manualDigest);
       if (prepared.status === "queued") result = prepared;
     }
     return result;
@@ -114,7 +115,7 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
   const [edition] = await db.select().from(notificationEdition).where(owned);
   if (!edition) return false;
   try {
-    const output = edition.stream === "weekly" ? await requestDigest(config, edition, signal) : {
+    const output = edition.stream === "digest" ? await requestDigest(config, edition, signal) : {
       title: "New publications", summary: `${edition.publications.length} new ${edition.publications.length === 1 ? "publication" : "publications"}`, markdown: null, model: null, reasoning: null,
     };
     await db.transaction(async tx => {
@@ -124,7 +125,7 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
         INSERT INTO "notificationDelivery" ("messageKey", "subscriberId", "editionId")
         SELECT ${edition.id} || ':' || "id"::text, "id", ${edition.id}::uuid FROM "notificationSubscriber"
         WHERE "confirmedAt" IS NOT NULL AND "confirmedAt" <= ${edition.windowEnd}
-          AND (CASE WHEN ${edition.stream} = 'weekly' THEN "weekly" ELSE "instant" END)
+          AND (CASE WHEN ${edition.stream} = 'digest' THEN "digest" ELSE "instant" END)
         ON CONFLICT DO NOTHING
       `);
     });

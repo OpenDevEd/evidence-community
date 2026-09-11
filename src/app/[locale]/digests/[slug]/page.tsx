@@ -22,7 +22,7 @@ async function Digest({params, searchParams}: Props) {
   if (slug === "preferences") {
     const subscriber = await readSubscription(db, token);
     if (!subscriber) notFound();
-    return <DigestPages data={data} view="preferences" token={token} initial={{email: subscriber.email, weekly: subscriber.weekly, instant: subscriber.instant, confirmed: Boolean(subscriber.confirmedAt)}} />;
+    return <DigestPages data={data} view="preferences" token={token} initial={{email: subscriber.email, digest: subscriber.digest, instant: subscriber.instant, confirmed: Boolean(subscriber.confirmedAt)}} />;
   }
   return <PublishedEdition data={data} slug={slug} />;
 }

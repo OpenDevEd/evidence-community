@@ -18,7 +18,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 type Edition = { id: string; label: string; subject: string; html: string };
 const icons: Record<string, typeof Calendar03Icon> = {
-	weekly: Calendar03Icon,
+	digest: Calendar03Icon,
 	items: BookOpen01Icon,
 	invitation: UserAdd01Icon,
 	confirm: Mail01Icon,
@@ -30,7 +30,7 @@ export default function EmailPreviews({
 	editions: Edition[];
 	senderEmail: string;
 }) {
-	const [kind, setKind] = useState("weekly"),
+	const [kind, setKind] = useState("digest"),
 		[mobile, setMobile] = useState(false);
 	const config = useLibraryConfig();
 	const edition = editions.find((e) => e.id === kind)!;

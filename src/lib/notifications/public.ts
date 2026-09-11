@@ -3,7 +3,7 @@ import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
-import { nextDigestDate } from "./schedule";
+import { describeDigestSchedule, nextDigestDate } from "./schedule";
 import type { NotificationPublication } from "./types";
 
 export type DigestSummary = {slug: string; publishedAt: string; date: string; title: string; summary: string; publicationCount: number};
@@ -12,7 +12,7 @@ export type DigestPageData = {editions: DigestSummary[]; edition?: DigestEdition
 function editionSummary(row: {id: string; publishedAt: Date | null; title: string | null; summary: string | null; publicationCount: number}, locale: string, timezone: string): DigestSummary {
   return {slug: row.id, publishedAt: row.publishedAt!.toISOString(), date: row.publishedAt!.toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone: timezone}), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount};
 }
-const visibleEdition = and(eq(notificationEdition.stream, "weekly"), isNotNull(notificationEdition.publishedAt));
+const visibleEdition = and(eq(notificationEdition.stream, "digest"), isNotNull(notificationEdition.publishedAt));
 
 async function readEdition(db: Database, id: string | undefined) {
   const parsed = z.string().uuid().safeParse(id);
@@ -24,9 +24,9 @@ async function readEdition(db: Database, id: string | undefined) {
 function nextEditionDate(config: LibraryServerConfig, state: typeof notificationState.$inferSelect | undefined) {
   if (!config.notifications.enabled) return null;
   const now = new Date();
-  const currentSchedule = state?.schedule === JSON.stringify(config.notifications.weekly);
-  if (currentSchedule && state?.enabled && state.nextWeeklyAt && state.nextWeeklyAt > now) return state.nextWeeklyAt;
-  return nextDigestDate(config.notifications.weekly, now);
+  const currentSchedule = state?.schedule === JSON.stringify(config.notifications.schedule);
+  if (currentSchedule && state?.enabled && state.nextDigestAt && state.nextDigestAt > now) return state.nextDigestAt;
+  return nextDigestDate(config.notifications.schedule, now);
 }
 
 function publicEdition(edition: typeof notificationEdition.$inferSelect | undefined, locale: string, timezone: string) {
@@ -39,7 +39,6 @@ export async function getDigestPageData(db: Database, config: LibraryServerConfi
   const selected = await readEdition(db, id);
   const [state] = await db.select().from(notificationState).limit(1);
   const next = nextEditionDate(config, state);
-  const {timezone, weekday, time} = config.notifications.weekly;
-  const weekdayDate = new Date(Date.UTC(2026, 0, 4 + weekday, 12));
-  return {editions: rows.map(row => editionSummary(row, locale, timezone)), edition: publicEdition(selected, locale, timezone), libraryName: config.identity.name, enabled: config.notifications.enabled, nextEdition: next?.toISOString() ?? null, timezone, schedule: `${weekdayDate.toLocaleDateString(locale, {weekday: "long", timeZone: "UTC"})} at ${time} ${timezone}`};
+  const {timezone} = config.notifications.schedule;
+  return {editions: rows.map(row => editionSummary(row, locale, timezone)), edition: publicEdition(selected, locale, timezone), libraryName: config.identity.name, enabled: config.notifications.enabled, nextEdition: next?.toISOString() ?? null, timezone, schedule: describeDigestSchedule(config.notifications.schedule, locale)};
 }
