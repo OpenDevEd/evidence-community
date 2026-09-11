@@ -8,6 +8,7 @@ const expectedConfigRevision =
 const expectedConfigUpdatedAt =
 	process.env.PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT ??
 	"2026-07-27T12:30:00.000Z";
+const expectedPublicBaseUrl = process.env.PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL ?? "https://example.org";
 const expectedIdentityName =
 	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ?? "Example Evidence Library";
 const expectedLogoUrl =
@@ -630,7 +631,7 @@ test("copies citation text without HTML whitespace or an extra sentence separato
 	const citation = heading.locator("..");
 	await citation.getByRole("button").click();
 	const suffix = expectedCitationUrl
-		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, page.url())}.`
+		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, expectedPublicBaseUrl)}.`
 		: "";
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
 		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
@@ -761,7 +762,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 			}),
 		).toBeVisible();
 	}
-	const itemUrl = new URL(`/lib/${firstItem.key}`, page.url()).toString();
+	const itemUrl = new URL(`/lib/${firstItem.key}`, expectedPublicBaseUrl).toString();
 	const citationUrlText = page.getByText(`Available at ${itemUrl}.`, {
 		exact: false,
 	});

@@ -1551,6 +1551,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
 			config.search.embedder !== null && config.features.relatedResources,
 		),
+		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FACET: String(
 			config.filters.institution.mode !== "hidden",
