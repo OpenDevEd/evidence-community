@@ -813,13 +813,16 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 test("only opens the country map when its page is enabled", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("pageerror", error => errors.push(error.message));
-	await page.goto("/en-GB/map", { waitUntil: "domcontentloaded" });
+	const enabled = process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true";
+	await page.goto(enabled ? "/en-GB/map?country=Asia+%3E+Southern+Asia+%3E+AF" : "/en-GB/map", { waitUntil: "domcontentloaded" });
 	await dismissConsent(page);
-	if (process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true") {
+	if (enabled) {
 		const country = page.getByRole("button", { name: "Afghanistan", exact: true });
 		await expect(country).toBeVisible();
 		const skipLink = page.getByRole("link", { name: "Skip to content", exact: true });
-		await skipLink.focus();
+		await expect(page.getByRole("region", { name: "Results", exact: true })).not.toBeFocused();
+		await page.keyboard.press("Tab");
+		await expect(skipLink).toBeFocused();
 		await skipLink.press("Enter");
 		await expect(page.getByRole("main")).toBeFocused();
 		await page.keyboard.press("Tab");
@@ -828,6 +831,8 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await expect(country).toBeFocused();
 		await expect(country).toHaveAccessibleDescription(/^\d/);
 		await expect(page.getByRole("tooltip")).toContainText("Afghanistan");
+		await country.press("Space");
+		await expect(country).toHaveAttribute("aria-pressed", "false");
 		await country.press("Enter");
 		await expect(page).toHaveURL(url => url.searchParams.getAll("country").includes("Asia > Southern Asia > AF"));
 		await expect(country).toHaveAttribute("aria-pressed", "true");

@@ -19,6 +19,7 @@ import { SearchBar } from "@/components/features/SearchBar";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
+import { BREAKPOINTS } from "@/../design-tokens";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import {
 	formatCssColor,
@@ -105,7 +106,9 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 			previousFocus.current = null;
 			return;
 		}
-		if (isDesktop || panel?.contains(document.activeElement)) return;
+		// The responsive hook initially returns its server value during hydration.
+		const isDesktopNow = window.matchMedia(`(min-width: ${BREAKPOINTS.md})`).matches;
+		if (isDesktopNow || panel?.contains(document.activeElement)) return;
 		const activeElement = document.activeElement;
 		if (
 			activeElement instanceof HTMLElement ||
