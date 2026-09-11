@@ -448,10 +448,10 @@ function SearchTabContent({
 			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
 				<Skeleton
-					isLoaded={!!itemsContext.itemsData}
+					isLoaded={!!itemsContext.itemsData || !!itemsContext.itemsError}
 					className="flex items-center flex-1 rounded-2xl"
 				>
-					<h2
+					{!itemsContext.itemsError && <h2
 						suppressHydrationWarning
 						className="text-black dark:text-white/80 text-lg leading-none flex items-center whitespace-pre relative"
 					>
@@ -482,7 +482,7 @@ function SearchTabContent({
 								/>
 							</div>
 						)}
-					</h2>
+					</h2>}
 				</Skeleton>
 				<section
 					className={twMerge(

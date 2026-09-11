@@ -19,6 +19,7 @@
     "resources": "Resources",
     "explore": "Explore",
     "noResourcesFound": "No resources found",
+    "resourcesLoadFailed": "Could not load publications.",
     "downloadRecords": "Download {count, plural, one {# record} other {# records}}",
     "printCitations": "Print {count} Citations",
     "mainFeed": "Main Feed",

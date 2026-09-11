@@ -19,6 +19,7 @@
     "resources": "संसाधन",
     "explore": "खोज करें",
     "noResourcesFound": "कोई संसाधन नहीं मिला",
+    "resourcesLoadFailed": "प्रकाशन लोड नहीं हो सके।",
     "downloadRecords": "{count, number} रिकॉर्ड डाउनलोड करें",
     "printCitations": "{count} उद्धरण प्रिंट करें",
     "mainFeed": "मुख्य फ़ीड",

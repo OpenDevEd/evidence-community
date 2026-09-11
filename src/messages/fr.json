@@ -19,6 +19,7 @@
     "resources": "Ressources",
     "explore": "Explorer",
     "noResourcesFound": "Aucune ressource trouvée",
+    "resourcesLoadFailed": "Impossible de charger les publications.",
     "downloadRecords": "Télécharger {count, number} enregistrements",
     "printCitations": "Imprimer {count} citations",
     "mainFeed": "Flux principal",

@@ -19,6 +19,7 @@
     "resources": "Ressourcen",
     "explore": "Erkunden",
     "noResourcesFound": "Keine Ressourcen gefunden",
+    "resourcesLoadFailed": "Publikationen konnten nicht geladen werden.",
     "downloadRecords": "{count, number} Einträge herunterladen",
     "printCitations": "{count} Zitate drucken",
     "mainFeed": "Hauptfeed",

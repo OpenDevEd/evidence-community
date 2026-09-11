@@ -636,6 +636,23 @@ test("copies citation text without HTML whitespace or an extra sentence separato
 		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
 });
 
+test("shows a search failure and lets the reader retry without losing the query", async ({ page }) => {
+	test.skip(!expectedSearchItemKey, "This library has no search fixture.");
+	let unavailable = true;
+	await page.route("**/api/items?**", (route) => unavailable
+		? route.fulfill({ status: 503, json: { error: "Search unavailable" } })
+		: route.continue());
+	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
+	await dismissConsent(page);
+	const results = page.locator("#main-content");
+	await expect(results.getByRole("alert")).toBeVisible();
+	unavailable = false;
+	await results.getByRole("alert").getByRole("button", { name: "Retry", exact: true }).click();
+	await expect(results.getByRole("alert")).toHaveCount(0);
+	await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }).first()).toBeVisible();
+	expect(new URL(page.url()).searchParams.get("search")).toBe(expectedSearchItemTitle);
+});
+
 test("filters institution suggestions by typed name", async ({ page }) => {
 	test.skip(!expectedInstitutionFacet, "Institution filter is disabled for this library.");
 	await page.route("**/api/facets**", (route) => route.fulfill({ json: {
