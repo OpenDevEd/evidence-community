@@ -826,6 +826,7 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
 		await country.focus();
 		await expect(country).toBeFocused();
+		await expect(country).toHaveAccessibleDescription(/^\d/);
 		await expect(page.getByRole("tooltip")).toContainText("Afghanistan");
 		await country.press("Enter");
 		await expect(page).toHaveURL(url => url.searchParams.getAll("country").includes("Asia > Southern Asia > AF"));

@@ -164,6 +164,7 @@ function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 }
 
 export default function Map() {
+	const t = useTranslations("ui");
 	const { search, theme } = useLibraryConfig();
 	const accentRamp = generateColorRamp(theme.colors.accent);
 	const tailwindAccentColor = formatCssColor(accentRamp[600]);
@@ -288,6 +289,10 @@ export default function Map() {
 														: "img"
 												}
 												aria-label={countryName}
+												aria-description={t.markup("resourcesCount", {
+													count: inFacet ?? 0,
+													number: (count) => count,
+												})}
 												tabIndex={fullLocation ? 0 : -1}
 												aria-pressed={
 													fullLocation
