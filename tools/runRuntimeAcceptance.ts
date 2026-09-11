@@ -1457,7 +1457,6 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_TERMS_LINK: config.legal.termsOfService ?? "",
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
 		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME: config.identity.shortName,
-		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
 		PLAYWRIGHT_EXPECTED_LOGO_URL:
 			activeTheme === "dark"
 				? config.identity.assets.logoDark
