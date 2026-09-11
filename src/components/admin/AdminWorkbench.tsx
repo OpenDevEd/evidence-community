@@ -1156,14 +1156,13 @@ export default function AdminWorkbench({
 		setMobilePane("inspector");
 	}, []);
 	useEffect(() => {
-		// Escape leaves pick mode: a document keyboard listener is the only way
-		// to catch it wherever focus is (table cell, banner, inspector).
+		// Capture Escape before the record grid consumes it for selection.
 		if (!activeLinkPick) return;
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key === "Escape") stopLinkPick();
 		};
-		document.addEventListener("keydown", onKeyDown);
-		return () => document.removeEventListener("keydown", onKeyDown);
+		document.addEventListener("keydown", onKeyDown, true);
+		return () => document.removeEventListener("keydown", onKeyDown, true);
 	}, [activeLinkPick, stopLinkPick]);
 
 	const runBusy = useCallback(

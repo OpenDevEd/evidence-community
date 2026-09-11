@@ -1498,6 +1498,7 @@ export function AdminInspector({
 	}
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
+	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&
@@ -1512,6 +1513,7 @@ export function AdminInspector({
 	const primaryDisabled =
 		busy ||
 		readOnlyVersion ||
+		(!detail.editable && isAttachment) ||
 		(Boolean(detail.draft) &&
 			(saveState === "saving" ||
 				saveState === "conflict" ||
@@ -1539,6 +1541,7 @@ export function AdminInspector({
 							readOnlyVersion ||
 							!detail.editable ||
 							detail.state === "deleted" ||
+							(isAttachment && !native) ||
 							busy
 						}
 						progress={readOnlyVersion ? undefined : pdfProgress}

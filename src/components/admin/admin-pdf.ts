@@ -39,10 +39,7 @@ export function documentAttachment(
 }
 
 export function validatePdf(file: File) {
-	if (
-		!file.name.toLowerCase().endsWith(".pdf") ||
-		(file.type && file.type !== "application/pdf")
-	) {
+	if (!file.name.toLowerCase().endsWith(".pdf")) {
 		throw new Error("Choose a PDF file");
 	}
 	if (!file.size) throw new Error("The selected PDF is empty");

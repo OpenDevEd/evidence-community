@@ -956,6 +956,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
   await publishDialog.getByRole("button", {name: "Publish version", exact: true}).click();
   await expect(publishDialog).toBeHidden();
   await page.locator("#admin-inspector-pane").getByRole("button", {name: "Working draft", exact: true}).click();
+	await page.getByRole("button", { name: "Review status and history" }).click();
 
 	const status = page.locator("[data-admin-writeback-status]");
 	await expect(status).toHaveAttribute(
@@ -1007,6 +1008,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	forceFailure = true;
 	writebackStarted = false;
 	await page.reload();
+	await page.getByRole("button", { name: "Review status and history" }).click();
 	const failedStatus = page.locator('[data-admin-writeback-status="failed"]');
 	await expect(failedStatus).toBeVisible();
 	await failedStatus.click();
@@ -1189,6 +1191,7 @@ test("resolves a source conflict with a confirmed choice", async ({
 	);
 
 	await page.goto("/admin");
+	await page.getByRole("button", { name: "Review status and history" }).click();
 	const badge = page.locator('[data-admin-writeback-status="conflict"]');
 	await expect(badge).toBeVisible();
 	await badge.click();
@@ -2577,7 +2580,7 @@ test("toggles collection filters directly from the catalogue", async ({
 
 async function mockBookWithAttachment(
 	page: Page,
-	options: { attachmentState?: "draft" | "published" } = {},
+	options: { attachmentState?: "draft" | "published"; imported?: boolean; editable?: boolean } = {},
 ) {
 	const attachmentKey = "PDFATT22";
 	const attachmentState = options.attachmentState ?? "published";
@@ -2625,7 +2628,7 @@ async function mockBookWithAttachment(
 	const attachmentSummary = {
 		kind: "created",
 		importMethod: null,
-		editable: true,
+		editable: options.editable ?? true,
 		creators: [],
 		date: null,
 		draft: attachmentState === "draft" ? attachmentDraft : null,
@@ -2636,8 +2639,8 @@ async function mockBookWithAttachment(
 		key: attachmentKey,
 		parentItem: publishedItemKey,
 		revision: 1,
-		sourceConnectionKey: "native",
-		sourceFileUrl: null,
+		sourceConnectionKey: options.imported ? "zotero:test" : "native",
+		sourceFileUrl: options.imported ? "https://example.test/source.pdf" : null,
 		state: attachmentState,
 		title: "PDF attachment",
 		updatedAt: timestamp,
@@ -3444,6 +3447,22 @@ test("adds a library PDF beside an imported file and retries without creating a 
 	expect(completed).toBe(true);
 	expect(new URL(page.url()).searchParams.get("item")).toBe(publishedItemKey);
 });
+
+for (const editable of [true, false]) {
+	test(`keeps imported attachment upload and duplication unavailable (editable: ${editable})`, async ({ page }) => {
+		await mockBookWithAttachment(page, { imported: true, editable });
+		await page.goto("/admin");
+		const inspector = page.locator("#admin-inspector-pane");
+		await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toBeEnabled();
+		await inspector.getByRole("button", { name: "Open PDF attachment", exact: true }).click();
+		await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toBeDisabled();
+		if (editable) {
+			await expect(inspector.getByRole("button", { name: "Edit", exact: true })).toBeEnabled();
+		} else {
+			await expect(inspector.getByRole("button", { name: "Duplicate as native", exact: true })).toBeDisabled();
+		}
+	});
+}
 
 test("keeps parent attachments compact and moves file controls to the attachment", async ({
 	page,
