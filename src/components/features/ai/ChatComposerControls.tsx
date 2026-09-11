@@ -3,7 +3,7 @@
 import { ButtonGroup } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { ImSpinner8 } from "react-icons/im";
 import {
 	PiBinocularsBold,
@@ -241,6 +241,7 @@ function SendButton({
 export function ChatComposerShell({
 	children,
 	className,
+	ref,
 	isComposerFocused,
 	isWaiting,
 	prefersReducedMotion,
@@ -248,6 +249,7 @@ export function ChatComposerShell({
 }: {
 	children: ReactNode;
 	className?: string;
+	ref?: Ref<HTMLDivElement>;
 	isComposerFocused: boolean;
 	isWaiting: boolean;
 	prefersReducedMotion: boolean | null;
@@ -257,6 +259,7 @@ export function ChatComposerShell({
 
 	return (
 		<motion.div
+			ref={ref}
 			initial={false}
 			animate={{ y: lifted ? -2 : 0, scale: lifted ? 1.004 : 1 }}
 			whileHover={

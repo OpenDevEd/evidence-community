@@ -17,7 +17,7 @@ import { fetcher, fetcherPOST } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { BsStars } from "react-icons/bs";
 import { useLocalStorage } from "usehooks-ts";
-import { motion } from "framer-motion";
+import { MotionConfig, motion } from "framer-motion";
 import { AIHistory } from "@/types/ai";
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
@@ -39,13 +39,21 @@ function randomUUID() {
 	);
 }
 
-function saveHistoryEntry(previous: Record<string, AIHistory[]>, feature: string, entry: AIHistory) {
+function saveHistoryEntry(
+	previous: Record<string, AIHistory[]>,
+	feature: string,
+	entry: AIHistory,
+) {
 	const history = previous[feature] ?? [];
-	const exists = history.some(({id}) => id === entry.id);
+	const exists = history.some(({ id }) => id === entry.id);
 	const next = exists
-		? history.map((item) => item.id === entry.id ? {...item, content: entry.content} : item)
+		? history.map((item) =>
+				item.id === entry.id
+					? { ...item, content: entry.content }
+					: item,
+			)
 		: [entry, ...history];
-	return {...previous, [feature]: next};
+	return { ...previous, [feature]: next };
 }
 
 function AiButton({
@@ -55,7 +63,8 @@ function AiButton({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const { selectedModelId, setSelectedModelId, modelPresentation } = useSelectedModel();
+	const { selectedModelId, setSelectedModelId, modelPresentation } =
+		useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
 		...analyticsIdField(getAnalyticsDistinctId()),
@@ -103,14 +112,16 @@ function AiButton({
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
 		if (!selectedModelId) return;
-		setHistories((previous) => saveHistoryEntry(previous, prompt, {
-			id,
-			content: completion,
-			date: new Date(),
-			title: data!.item!.title!,
-			key: data!.item!.key!,
-			modelId: selectedModelId,
-		}));
+		setHistories((previous) =>
+			saveHistoryEntry(previous, prompt, {
+				id,
+				content: completion,
+				date: new Date(),
+				title: data!.item!.title!,
+				key: data!.item!.key!,
+				modelId: selectedModelId,
+			}),
+		);
 	};
 
 	const summaryFeature = useAIFeature(
@@ -252,5 +263,9 @@ export default function AiWrapper({
 
 	if (!isAIEnabled || !data?.item) return null;
 
-	return <AiButton data={data} variant={variant} />;
+	return (
+		<MotionConfig reducedMotion="user">
+			<AiButton data={data} variant={variant} />
+		</MotionConfig>
+	);
 }

@@ -1,10 +1,18 @@
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowDown01Icon, BookOpen01Icon, CodeIcon, Copy01Icon, Csv01Icon, TextIcon } from "@hugeicons/core-free-icons";
+import { BiChevronDown, BiSolidBookContent, BiCopy } from "react-icons/bi";
+import {
+	BsBodyText,
+	BsCodeSlash,
+	BsFiletypeCsv,
+	BsMarkdown,
+} from "react-icons/bs";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
 import { DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
 import { ReactNode } from "react";
-import { CHAT_EXPORT_OUTPUT, evidenceContent } from "@/lib/ai/transcript-export";
+import {
+	CHAT_EXPORT_OUTPUT,
+	evidenceContent,
+} from "@/lib/ai/transcript-export";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
@@ -58,20 +66,28 @@ function AIControls({
 			generated = await getContent(action);
 		} catch (error) {
 			console.error("Generated-content export failed", error);
-			toast({ type: "error", title: t("exportFailed"), description: t("tryAgainLater") });
+			toast({
+				type: "error",
+				title: t("exportFailed"),
+				description: t("tryAgainLater"),
+			});
 			return;
 		}
 
 		if (type === "copy") {
-			if (!await copy(generated.content)) return;
+			if (!(await copy(generated.content))) return;
 			toast({ type: "success", title: t("copied") });
 		} else {
 			try {
-				const blob = new Blob([generated.content], { type: generated.mimeType });
+				const blob = new Blob([generated.content], {
+					type: generated.mimeType,
+				});
 				const url = URL.createObjectURL(blob);
 				const a = document.createElement("a");
 				a.href = url;
-				const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+				const timestamp = new Date()
+					.toISOString()
+					.replace(/[:.]/g, "-");
 				a.download = `${downloadName ?? buttonLabel}_${timestamp}.${generated.extension}`;
 				document.body.appendChild(a);
 				a.click();
@@ -79,12 +95,20 @@ function AIControls({
 				URL.revokeObjectURL(url);
 			} catch (error) {
 				console.error("Generated-content download failed", error);
-				toast({ type: "error", title: t("downloadFailed"), description: t("tryAgainLater") });
+				toast({
+					type: "error",
+					title: t("downloadFailed"),
+					description: t("tryAgainLater"),
+				});
 				return;
 			}
 		}
 
-		trackContentAction({ action: type, context: "generated_content", format: action });
+		trackContentAction({
+			action: type,
+			context: "generated_content",
+			format: action,
+		});
 	};
 
 	return (
@@ -97,9 +121,11 @@ function AIControls({
 					}
 					startContent={buttonIcon}
 					endContent={
-						<HugeiconsIcon icon={ArrowDown01Icon}
+						<BiChevronDown
 							className={
-								appearance === "inline" ? "size-3.5 opacity-70" : undefined
+								appearance === "inline"
+									? "size-3.5 opacity-70"
+									: undefined
 							}
 						/>
 					}
@@ -114,7 +140,9 @@ function AIControls({
 				>
 					<span
 						className={
-							appearance === "inline" ? undefined : "hidden lg:block"
+							appearance === "inline"
+								? undefined
+								: "hidden lg:block"
 						}
 					>
 						{buttonLabel}
@@ -155,39 +183,39 @@ export function AIGeneratedContentControls({
 	const copyControls: Control[] = [
 		{
 			label: t("copyAsPlainText"),
-			icon: <HugeiconsIcon icon={TextIcon} />,
+			icon: <BsBodyText />,
 			action: "plaintext",
 		},
 		{
 			label: t("copyAsMarkdown"),
-			icon: <HugeiconsIcon icon={TextIcon} />,
+			icon: <BsMarkdown />,
 			action: "markdown",
 		},
-		{ label: t("copyAsHTML"), icon: <HugeiconsIcon icon={CodeIcon} />, action: "html" },
+		{ label: t("copyAsHTML"), icon: <BsCodeSlash />, action: "html" },
 	];
 	const exportControls: Control[] = [
 		{
 			label: t("exportAsPlainText"),
-			icon: <HugeiconsIcon icon={TextIcon} />,
+			icon: <BsBodyText />,
 			action: "plaintext",
 		},
 		{
 			label: t("exportAsMarkdown"),
-			icon: <HugeiconsIcon icon={TextIcon} />,
+			icon: <BsBodyText />,
 			action: "markdown",
 		},
-		{ label: t("exportAsHTML"), icon: <HugeiconsIcon icon={CodeIcon} />, action: "html" },
+		{ label: t("exportAsHTML"), icon: <BsCodeSlash />, action: "html" },
 	];
 
 	if (includeCsv) {
 		copyControls.push({
 			label: t("copyAsCSV"),
-			icon: <HugeiconsIcon icon={Csv01Icon} />,
+			icon: <BsFiletypeCsv />,
 			action: "csv",
 		});
 		exportControls.push({
 			label: t("exportAsCSV"),
-			icon: <HugeiconsIcon icon={Csv01Icon} />,
+			icon: <BsFiletypeCsv />,
 			action: "csv",
 		});
 	}
@@ -199,7 +227,7 @@ export function AIGeneratedContentControls({
 				getContent={getContent}
 				type="copy"
 				buttonLabel={t("copy")}
-				buttonIcon={<HugeiconsIcon icon={Copy01Icon} />}
+				buttonIcon={<BiCopy />}
 				isDisabled={isDisabled}
 				appearance={appearance}
 			/>
@@ -208,7 +236,7 @@ export function AIGeneratedContentControls({
 				getContent={getContent}
 				type="download"
 				buttonLabel={t("export")}
-				buttonIcon={<HugeiconsIcon icon={BookOpen01Icon} />}
+				buttonIcon={<BiSolidBookContent />}
 				downloadName={downloadName}
 				isDisabled={isDisabled}
 				appearance={appearance}
@@ -227,8 +255,11 @@ export function AIContentControls({
 	appearance?: "default" | "header";
 }) {
 	const { identity } = useLibraryConfig();
-	const getContent = async (action: ControlAction): Promise<GeneratedContent> => {
-		if (action === "csv") throw new Error("Unstructured answers cannot be exported as CSV");
+	const getContent = async (
+		action: ControlAction,
+	): Promise<GeneratedContent> => {
+		if (action === "csv")
+			throw new Error("Unstructured answers cannot be exported as CSV");
 		return {
 			content: await evidenceContent(action, content, identity.baseUrl),
 			...CHAT_EXPORT_OUTPUT[action],

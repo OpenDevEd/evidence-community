@@ -16,6 +16,7 @@ export default function PrefetchLink({
 				if (!href) return;
 
 				if (
+					e.currentTarget.target === "_blank" ||
 					e.button !== 0 ||
 					e.metaKey ||
 					e.ctrlKey ||

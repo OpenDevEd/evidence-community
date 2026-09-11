@@ -1,7 +1,7 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Delete02Icon } from "@hugeicons/core-free-icons";
+import { BiTrash } from "react-icons/bi";
+
 import {
 	ModalBody,
 	ModalContent,
@@ -109,7 +109,7 @@ function ScreeningFieldRow({
 					onPress={onRemove}
 					className="!p-0"
 				>
-					<HugeiconsIcon icon={Delete02Icon} className="size-4" />
+					<BiTrash className="size-4" />
 				</Button>
 			</div>
 		</motion.div>
@@ -131,7 +131,11 @@ function ScreeningFieldsForm({
 	const t = useTranslations("ui");
 
 	return (
-		<form id="fields-form" onSubmit={onSubmit} className="flex flex-col gap-6">
+		<form
+			id="fields-form"
+			onSubmit={onSubmit}
+			className="flex flex-col gap-6"
+		>
 			<AnimatePresence mode="sync">
 				<div className="p-6 flex flex-col gap-6">
 					{localFields.length === 0 ? (

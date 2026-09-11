@@ -12,14 +12,14 @@ import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { useMemo, useState } from "react";
 import { BiTrash } from "react-icons/bi";
 import { AIMarkdown } from "../markdown/Markdown";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { getAIModelPresentation } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
-import { BsClockHistory, BsStars } from "react-icons/bs";
+import { BsClockHistory } from "react-icons/bs";
 import { AIContentControls } from "./AIControls";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -81,11 +81,15 @@ export default function GenerativeModal({
 		resize: "smooth",
 	});
 	const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+	const [dismissedError, setDismissedError] = useState<Error>();
+	const prefersReducedMotion = useReducedMotion();
 	const isDesktop = useBreakpoint("lg");
 	const currentDate = useMemo(() => new Date(), [id]);
 	const persistedCurrentItem = history.find((item) => item.id === id);
 	const hasCurrentRequest =
-		isLoading || content.length > 0 || error !== undefined;
+		isLoading ||
+		content.length > 0 ||
+		(error !== undefined && error !== dismissedError);
 	const currentItem =
 		hasCurrentRequest && currentModelId
 			? {
@@ -121,7 +125,10 @@ export default function GenerativeModal({
 		setHistory(
 			history.filter((item) => item.id !== selectedHistoryItem.id),
 		);
-		if (isShowingCurrentRequest) onClearCurrent();
+		if (isShowingCurrentRequest) {
+			onClearCurrent();
+			setDismissedError(error);
+		}
 		setSelection({
 			requestId: id,
 			historyId:
@@ -149,7 +156,12 @@ export default function GenerativeModal({
 										initial={{ x: -300, opacity: 0 }}
 										animate={{ x: 0, opacity: 1 }}
 										exit={{ x: -300, opacity: 0 }}
-										transition={{ type: "tween", duration: 0.2 }}
+										transition={{
+											type: "tween",
+											duration: prefersReducedMotion
+												? 0
+												: 0.2,
+										}}
 										className="col-span-3 w-full h-full overflow-y-hidden"
 									>
 										<ScrollShadow className="w-full gap-2 p-2 dark:bg-secondary bg-white lg:rounded-tr-3xl lg:rounded-bl-xl h-full">
@@ -160,18 +172,23 @@ export default function GenerativeModal({
 													const key =
 														typeof keys === "string"
 															? keys
-															: Array.from(keys)[0];
+															: Array.from(
+																	keys,
+																)[0];
 													if (key !== undefined) {
 														setSelection({
 															requestId: id,
-															historyId: String(key),
+															historyId:
+																String(key),
 														});
 													}
 													setIsHistoryOpen(false);
 												}}
 												selectedKeys={
 													selectedHistoryItem
-														? [selectedHistoryItem.id]
+														? [
+																selectedHistoryItem.id,
+															]
 														: []
 												}
 												disallowEmptySelection
@@ -181,14 +198,17 @@ export default function GenerativeModal({
 														getAIModelPresentation(
 															item.modelId,
 															ai.providers,
-														).icon ?? BsStars;
+														).icon;
 													return (
 														<ListboxItem
 															key={item.id}
-															textValue={item.title}
+															textValue={
+																item.title
+															}
 															startContent={
 																<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
-																	{item.id === id &&
+																	{item.id ===
+																		id &&
 																	isLoading ? (
 																		<ImSpinner8 className="h-full animate-spin fill-white" />
 																	) : (
@@ -208,11 +228,16 @@ export default function GenerativeModal({
 																{item.title}
 															</div>
 															<div className="text-xs text-black/50 dark:text-white/50 leading-4">
-																{format.dateTime(new Date(item.date), {
-																	year: "2-digit",
-																	month: "2-digit",
-																	day: "2-digit",
-																})}
+																{format.dateTime(
+																	new Date(
+																		item.date,
+																	),
+																	{
+																		year: "2-digit",
+																		month: "2-digit",
+																		day: "2-digit",
+																	},
+																)}
 															</div>
 														</ListboxItem>
 													);
@@ -227,14 +252,23 @@ export default function GenerativeModal({
 										initial={{ x: 300, opacity: 0 }}
 										animate={{ x: 0, opacity: 1 }}
 										exit={{ x: 300, opacity: 0 }}
-										transition={{ type: "tween", duration: 0.2 }}
+										transition={{
+											type: "tween",
+											duration: prefersReducedMotion
+												? 0
+												: 0.2,
+										}}
 										className="w-full col-span-9 flex flex-col h-full overflow-y-hidden"
 									>
 										<div className="w-full dark:bg-secondary bg-white lg:rounded-tl-3xl p-2 flex gap-1 shrink-0">
 											<Button
 												size="sm"
-												startContent={<BsClockHistory />}
-												onPress={() => setIsHistoryOpen(true)}
+												startContent={
+													<BsClockHistory />
+												}
+												onPress={() =>
+													setIsHistoryOpen(true)
+												}
 												className="lg:hidden"
 											>
 												{t("history")}
@@ -246,7 +280,9 @@ export default function GenerativeModal({
 											{selectedHistoryItem && (
 												<Tooltip
 													content={format.dateTime(
-														new Date(selectedHistoryItem.date),
+														new Date(
+															selectedHistoryItem.date,
+														),
 														{
 															year: "numeric",
 															month: "long",
@@ -259,7 +295,9 @@ export default function GenerativeModal({
 												>
 													<div className="text-xs text-black/50 dark:text-white/50 flex-1 flex justify-center items-center">
 														{format.dateTime(
-															new Date(selectedHistoryItem.date),
+															new Date(
+																selectedHistoryItem.date,
+															),
 															{
 																year: "numeric",
 																month: "long",
@@ -274,11 +312,14 @@ export default function GenerativeModal({
 												className="ltr:ml-auto rtl:mr-auto dark:hover:bg-red-600 min-w-0"
 												startContent={<BiTrash />}
 												isDisabled={
-													(isLoading && isShowingCurrentRequest) ||
+													(isLoading &&
+														isShowingCurrentRequest) ||
 													!selectedHistoryItem
 												}
 												onPress={deleteSelectedHistory}
-												aria-label={tUI("deleteHistoryItemAriaLabel")}
+												aria-label={tUI(
+													"deleteHistoryItemAriaLabel",
+												)}
 											>
 												<span className="hidden lg:block">
 													{t("delete")}
@@ -298,46 +339,77 @@ export default function GenerativeModal({
 													<Skeleton
 														isLoaded={
 															!isLoading ||
-															contentToDisplay.length > 0 ||
+															contentToDisplay.length >
+																0 ||
 															!!error ||
 															!isShowingCurrentRequest
 														}
 														className="relative w-full flex-1 rounded-br-xl"
 													>
-														{error && isShowingCurrentRequest ? (
+														{error &&
+														isShowingCurrentRequest ? (
 															<div
 																role="alert"
 																className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-2xl bg-red-500/10 px-24 text-center text-xl text-red-500 text-balance"
 															>
 																<motion.div
 																	className="flex flex-col items-center gap-4"
-																	initial={{ opacity: 0, y: -100 }}
-																	animate={{ opacity: 1, y: 0 }}
-																	exit={{ opacity: 0, y: 100 }}
-																	transition={{ delay: 0.5 }}
+																	initial={{
+																		opacity: 0,
+																		y: -100,
+																	}}
+																	animate={{
+																		opacity: 1,
+																		y: 0,
+																	}}
+																	exit={{
+																		opacity: 0,
+																		y: 100,
+																	}}
+																	transition={
+																		prefersReducedMotion
+																			? {
+																					duration: 0,
+																				}
+																			: {
+																					delay: 0.5,
+																				}
+																	}
 																>
 																	<RiErrorWarningFill className="size-32 opacity-50" />
-																	<p>{visibleErrorMessage}</p>
+																	<p>
+																		{
+																			visibleErrorMessage
+																		}
+																	</p>
 																	<Button
 																		size="sm"
 																		variant="transparent"
 																		className="rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/15"
-																		onPress={onRetry}
+																		onPress={
+																			onRetry
+																		}
 																	>
-																		{tUI("retry")}
+																		{tUI(
+																			"retry",
+																		)}
 																	</Button>
 																</motion.div>
 															</div>
 														) : (
 															<AIMarkdown
 																className="prose dark:prose-invert space-y-2 max-w-full p-6"
-																pdfSources={pdfSources}
+																pdfSources={
+																	pdfSources
+																}
 																isAnimating={
 																	isLoading &&
 																	isShowingCurrentRequest
 																}
 															>
-																{contentToDisplay}
+																{
+																	contentToDisplay
+																}
 															</AIMarkdown>
 														)}
 													</Skeleton>
@@ -348,8 +420,12 @@ export default function GenerativeModal({
 													isIconOnly
 													size="sm"
 													className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full shadow-md"
-													aria-label="Scroll to bottom"
-													onPress={() => void scrollToBottom()}
+													aria-label={t(
+														"jumpToLatest",
+													)}
+													onPress={() =>
+														void scrollToBottom()
+													}
 												>
 													<IoChevronDown className="size-4" />
 												</Button>

@@ -260,13 +260,15 @@ type ChatWindowComposerProps = {
 function StarterQuestions({
 	onPick,
 	questions,
+	ref,
 }: {
 	onPick: (question: string) => void;
 	questions: string[];
+	ref?: React.Ref<HTMLUListElement>;
 }) {
 	return (
 		<motion.ul
-			key="questions"
+			ref={ref}
 			initial={{ opacity: 0, y: 100 }}
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: -100 }}
@@ -395,9 +397,14 @@ function ChatWindowComposer({
 		>
 			<AnimatePresence mode="popLayout">
 				{showQuestions && questions ? (
-					<StarterQuestions onPick={setInput} questions={questions} />
+					<StarterQuestions
+						key="questions"
+						onPick={setInput}
+						questions={questions}
+					/>
 				) : null}
 				<ChatComposerShell
+					key="composer"
 					className="mx-auto max-w-3xl rounded-3xl p-2 dark:bg-card"
 					isComposerFocused={isComposerFocused}
 					isWaiting={isWaiting}
@@ -523,8 +530,12 @@ type ChatModalProps = {
 	onConversationStateChange?: (hasConversation: boolean) => void;
 };
 
-export default function ChatModal(props: Omit<ChatModalProps, "modelId"> & {modelId: AIModelId | null}) {
-	return props.modelId ? <ChatModalContent {...props} modelId={props.modelId} /> : null;
+export default function ChatModal(
+	props: Omit<ChatModalProps, "modelId"> & { modelId: AIModelId | null },
+) {
+	return props.modelId ? (
+		<ChatModalContent {...props} modelId={props.modelId} />
+	) : null;
 }
 
 function ChatModalContent({

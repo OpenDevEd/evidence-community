@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "Resultados",
     "exportFailed": "Não foi possível preparar este conteúdo",
     "copyFailed": "Não foi possível copiar",
     "copyFailedHelp": "Verifique a permissão da área de transferência no navegador e tente novamente.",
@@ -491,6 +492,8 @@
     "invalidCredentials": "Credenciais inválidas"
   },
   "ai": {
+    "sourcesTitle": "Fontes",
+    "sourcesEmpty": "As publicações lidas pela IA aparecerão aqui.",
     "summarize": "Resumir",
     "summarizeDescription": "Resumir este recurso em poucas palavras possível.",
     "explain": "Explicar",

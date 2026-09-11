@@ -1,12 +1,14 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowDown01Icon, Cancel01Icon, Loading03Icon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
+import { IoChevronDown } from "react-icons/io5";
+import { LuX } from "react-icons/lu";
+import { ImSpinner8 } from "react-icons/im";
+import { RiResetLeftFill } from "react-icons/ri";
+
 import { useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import type { ReactNode } from "react";
 
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { ScreeningLimitConfirmation } from "@/components/features/ai/ScreeningLimitConfirmation";
@@ -15,8 +17,6 @@ import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { SHORTCUT_KEYS } from "@/constants/shortcuts";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import type { BucketEntry } from "@/context/InlineChatLayout";
-import type { BucketPublications } from "./ContextBucket";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -74,7 +74,7 @@ function InlineChatHeader({
 						size="sm"
 						variant="transparent"
 						aria-label={tUI("resetChat")}
-						startContent={<HugeiconsIcon icon={RotateLeft01Icon} className="size-3.5" />}
+						startContent={<RiResetLeftFill className="size-3.5" />}
 						// Icon only where the header is tight; the words come
 						// back on a wider screen.
 						className="h-7 w-7 min-w-0 gap-1 rounded-lg px-0 text-xs text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10 lg:w-auto lg:px-2"
@@ -103,7 +103,7 @@ function InlineChatHeader({
 						className="h-7 w-7 min-w-0 rounded-lg text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
 						onPress={closeChat}
 					>
-						<HugeiconsIcon icon={Cancel01Icon} className="size-4" />
+						<LuX className="size-4" />
 					</Button>
 				</Tooltip>
 			</div>
@@ -171,7 +171,7 @@ function InlineChatMessages({
 					{isWaitingForAssistant ? (
 						<div className="flex items-center gap-3 p-2">
 							<div className="flex w-fit items-center justify-center rounded-full bg-black p-2 opacity-60">
-								<HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin text-white" />
+								<ImSpinner8 className="size-4 animate-spin text-white" />
 							</div>
 						</div>
 					) : null}
@@ -216,7 +216,7 @@ function InlineChatMessages({
 							aria-label={t("jumpToLatest")}
 							onPress={() => void scrollToBottom()}
 						>
-							<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
+							<IoChevronDown className="size-4" />
 						</Button>
 					</motion.div>
 				)}
@@ -351,19 +351,10 @@ function InlineChatComposer({
  */
 export default function InlineLibraryChat({
 	modelId,
-	renderSources,
 	searchContext,
 }: {
 	modelId: AIModelId;
-	/**
-	 * What to show beside the chat. The publications the assistant has used
-	 * are worked out from the conversation, so they are handed over here
-	 * rather than stored somewhere else.
-	 */
-	renderSources: (
-		entries: BucketEntry[],
-		publications: BucketPublications,
-	) => ReactNode;
+	/** Active library filters and sorting for the assistant's search tools. */
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
@@ -417,7 +408,6 @@ export default function InlineLibraryChat({
 					/>
 				</div>
 			</section>
-			{renderSources(chat.bucketEntries, chat.publications)}
 		</>
 	);
 }

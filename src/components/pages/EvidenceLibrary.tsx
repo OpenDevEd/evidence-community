@@ -1,108 +1,65 @@
 "use client";
+import type { IconType } from "react-icons";
+import { GiArchiveResearch } from "react-icons/gi";
+import { AiOutlineCompass } from "react-icons/ai";
+import { IoGrid } from "react-icons/io5";
+import { BiHelpCircle } from "react-icons/bi";
+import { HiOutlineViewList } from "react-icons/hi";
+import { FaSort } from "react-icons/fa";
+import { BsStars } from "react-icons/bs";
 import { SkipLink } from "@/components/layout/SkipLink";
 
-import {
-	HugeiconsIcon,
-	type IconSvgElement,
-} from "@/components/icons/Hugeicon";
-import {
-	ArchiveIcon,
-	BubbleChatIcon,
-	Compass01Icon,
-	GridViewIcon,
-	HelpCircleIcon,
-	ListViewIcon,
-	Search01Icon,
-	SentIcon,
-	Sorting01Icon,
-	SparklesIcon,
-} from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
 import { Select } from "@/components/nextui/Select";
-import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
+import { Spinner, useDisclosure } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import {
-	Divider,
-	Modal,
-	ModalBody,
-	ModalContent,
-	ModalFooter,
-	PropsOf,
-	ScrollShadow,
-	Spinner,
-	Textarea,
-	Tooltip,
-	useDisclosure,
-} from "@nextui-org/react";
-import React, {
-	ReactNode,
+	type ReactNode,
 	use,
 	useEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
-import { Tabs, Tab } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { getLangDir } from "rtl-detect";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
-import FullScreenModal from "../nextui/FullScreenModal";
-import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal, { type ChatWindowHandle } from "../features/modals/ChatModal";
-import type { ChatMode } from "@/types/ai";
-import ModelSelector from "../features/ai/ModelSelector";
-import DialogModal from "../nextui/DialogModal";
-import AIHeader from "../features/ai/AIHeader";
-import { useLocalStorage } from "usehooks-ts";
-import { AnimatePresence, motion } from "framer-motion";
-import { useModalError } from "@/hooks/useModalError";
-import { z } from "zod";
-import { Props } from "next/script";
-import { toast } from "@/components/layout/Toast";
-import { Formatter } from "recharts/types/component/DefaultTooltipContent";
-import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
+import { motion, useReducedMotion } from "framer-motion";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { LibraryTagline } from "@/components/library/LibraryTagline";
-import {
-	useLibraryConfig,
-	useLibraryFeature,
-} from "@/context/LibraryConfigProvider";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
-import { useFiltersContext } from "@/context/FiltersProvider";
 import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
-import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
-import {
-	SMART_SCREENING_FIELD_TYPES,
-	type SmartScreeningField,
-} from "@/types/ai";
 
 function DropDownIcon({
 	Icon,
 	className,
 	label,
 }: {
-	Icon: IconSvgElement;
+	Icon: IconType;
 	className?: string;
 	label?: string;
 }) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<HugeiconsIcon
-				icon={Icon}
+			<Icon
 				className={twMerge("w-full h-full", className)}
 				aria-label={label}
 			/>
@@ -120,7 +77,7 @@ const genericSelectClassNames = {
 // Re-exported here so existing consumers (e.g. Map) can keep importing it from this module.
 export { SearchBar };
 
-function SortComponent({
+export function SortComponent({
 	itemsContext,
 }: {
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -129,9 +86,7 @@ function SortComponent({
 
 	return (
 		<Select
-			startContent={
-				<DropDownIcon label="Sort icon" Icon={Sorting01Icon} />
-			}
+			startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
 			selectedKeys={
 				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
 			}
@@ -178,7 +133,7 @@ function SortComponent({
 	);
 }
 
-function ScopeComponent({
+export function ScopeComponent({
 	itemsContext,
 }: {
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -193,7 +148,7 @@ function ScopeComponent({
 	return (
 		<Select
 			startContent={
-				<DropDownIcon label="Scope icon" Icon={ArchiveIcon} />
+				<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
 			}
 			color="tertiary"
 			selectedKeys={
@@ -248,6 +203,19 @@ function ScopeComponent({
 /** Hands whatever is in the search field to the assistant. */
 function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
 	const tAI = useTranslations("ai");
+	const [revealed, setRevealed] = useState(false);
+	// Firefox needs a painted frame before the entrance begins.
+	useEffect(() => {
+		let revealFrame = 0;
+		const paintFrame = requestAnimationFrame(() => {
+			revealFrame = requestAnimationFrame(() => setRevealed(true));
+		});
+		return () => {
+			cancelAnimationFrame(paintFrame);
+			cancelAnimationFrame(revealFrame);
+		};
+	}, []);
+	if (!revealed) return null;
 
 	return (
 		// A plain button: press handling inside the search field's own
@@ -258,12 +226,9 @@ function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
 			onClick={onAsk}
 			// Smaller on a phone, where the search field is shorter and
 			// there is no keyboard to show a shortcut for.
-			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 lg:h-9 lg:gap-1.5 lg:rounded-large lg:pl-3 lg:pr-1.5 lg:text-sm"
+			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 motion-reduce:animate-none lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:pl-3 lg:pr-1.5 lg:text-sm"
 		>
-			<HugeiconsIcon
-				icon={SparklesIcon}
-				className="size-3.5 shrink-0 lg:size-4"
-			/>
+			<BsStars className="size-3.5 shrink-0 lg:size-4" />
 			{tAI("askAI")}
 			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
 				{hint}
@@ -357,7 +322,6 @@ function SearchTabContent({
 	askAI?: (text: string) => boolean;
 }) {
 	const t = useTranslations("ui");
-	const tAI = useTranslations("ai");
 	const formatter = useFormatter();
 
 	const {
@@ -385,18 +349,16 @@ function SearchTabContent({
 					<div className="flex items-end gap-4">
 						{header || (
 							<>
-								<SkipLink href="#collections">{t("goToFilters")}</SkipLink>
+								<SkipLink href="#collections">
+									{t("goToFilters")}
+								</SkipLink>
 								{showHeader && t("searchTitle")}
 							</>
 						)}
-						{!showHeader && <SearchModeSwitch mode={"search"} />}
 					</div>
 					<Button
 						startContent={
-							<HugeiconsIcon
-								icon={Compass01Icon}
-								className="size-6 shrink-0"
-							/>
+							<AiOutlineCompass className="size-6 shrink-0" />
 						}
 						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
@@ -417,8 +379,7 @@ function SearchTabContent({
 								onPress={onHelpOpen}
 								aria-label={t("helpAriaLabel")}
 							>
-								<HugeiconsIcon
-									icon={HelpCircleIcon}
+								<BiHelpCircle
 									aria-label={t("helpIconAriaLabel")}
 									className="size-6"
 								/>
@@ -444,41 +405,45 @@ function SearchTabContent({
 			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
 				<Skeleton
-					isLoaded={!!itemsContext.itemsData || !!itemsContext.itemsError}
+					isLoaded={
+						!!itemsContext.itemsData || !!itemsContext.itemsError
+					}
 					className="flex items-center flex-1 rounded-2xl"
 				>
-					{!itemsContext.itemsError && <h2
-						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-none flex items-center whitespace-pre relative"
-					>
-						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
-							{countLabel ||
-								t.rich("resourcesCount", {
-									count: formatter.number(
-										actuallyNoData
-											? 0
-											: itemsContext.itemsData
-													?.totalItems || 0,
-									),
-									number: (chunks) => (
-										<span
-											suppressHydrationWarning
-											className="text-2xl leading-6"
-										>
-											{chunks}{" "}
-										</span>
-									),
-								})}
-						</div>
-						{itemsContext.isItemsFetching && (
-							<div className="flex items-center !size-0 absolute ltr:-right-4 rtl:-left-4 translate-x-full">
-								<Spinner
-									size="sm"
-									className="opacity-60 absolute"
-								/>
+					{!itemsContext.itemsError && (
+						<h2
+							suppressHydrationWarning
+							className="text-black dark:text-white/80 text-lg leading-none flex items-center whitespace-pre relative"
+						>
+							<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
+								{countLabel ||
+									t.rich("resourcesCount", {
+										count: formatter.number(
+											actuallyNoData
+												? 0
+												: itemsContext.itemsData
+														?.totalItems || 0,
+										),
+										number: (chunks) => (
+											<span
+												suppressHydrationWarning
+												className="text-2xl leading-6"
+											>
+												{chunks}{" "}
+											</span>
+										),
+									})}
 							</div>
-						)}
-					</h2>}
+							{itemsContext.isItemsFetching && (
+								<div className="flex items-center !size-0 absolute ltr:-right-4 rtl:-left-4 translate-x-full">
+									<Spinner
+										size="sm"
+										className="opacity-60 absolute"
+									/>
+								</div>
+							)}
+						</h2>
+					)}
 				</Skeleton>
 				<section
 					className={twMerge(
@@ -513,8 +478,7 @@ function SearchTabContent({
 								onPress={() => setView("list")}
 								aria-label={t("viewAsListAriaLabel")}
 							>
-								<HugeiconsIcon
-									icon={ListViewIcon}
+								<HiOutlineViewList
 									aria-label={t("viewAsListAriaLabel")}
 									className="size-6"
 								/>
@@ -528,8 +492,7 @@ function SearchTabContent({
 								onPress={() => setView("grid")}
 								aria-label={t("viewAsGridAriaLabel")}
 							>
-								<HugeiconsIcon
-									icon={GridViewIcon}
+								<IoGrid
 									aria-label={t("viewAsGridAriaLabel")}
 									className="size-4"
 								/>
@@ -542,63 +505,6 @@ function SearchTabContent({
 	);
 }
 
-/** The research toggle and send button inside the quick ask box. */
-function AskBoxActions({
-	isDeepResearchEnabled,
-	mode,
-	setMode,
-}: {
-	isDeepResearchEnabled: boolean;
-	mode: ChatMode;
-	setMode: (mode: ChatMode) => void;
-}) {
-	const tUI = useTranslations("ui");
-	const isResearch = mode === "research";
-
-	return (
-		<div className="flex items-center gap-1">
-			{isDeepResearchEnabled && (
-				<Tooltip content={tUI("researchModeTooltip")}>
-					<Button
-						isIconOnly
-						size="sm"
-						variant="default"
-						className="shrink-0"
-						onPress={() =>
-							setMode(isResearch ? "quick" : "research")
-						}
-						aria-label={tUI("researchMode")}
-					>
-						<HugeiconsIcon
-							icon={ArchiveIcon}
-							className={twMerge(
-								"size-4",
-								isResearch
-									? "text-accent"
-									: "text-black/60 dark:text-white/60",
-							)}
-						/>
-					</Button>
-				</Tooltip>
-			)}
-			<Button
-				type="submit"
-				isIconOnly
-				variant="default"
-				className="shrink-0"
-				size="sm"
-			>
-				<HugeiconsIcon icon={SentIcon} className="size-4" />
-			</Button>
-		</div>
-	);
-}
-
-/**
- * Opens the full-screen chat window, asking whatever the reader had already
- * typed on the page. The window is built before it is shown, so it can be
- * asked straight away.
- */
 function useLibraryChatWindow() {
 	const { isOpen, onOpen, onOpenChange } = useDisclosure();
 	const chatWindow = useRef<ChatWindowHandle>(null);
@@ -616,296 +522,6 @@ function useLibraryChatWindow() {
 		onChatOpenChange: onOpenChange,
 		openChatWindow,
 	};
-}
-
-function AITabContent({
-	askAI,
-	onSwitchToSearch,
-	onChatOpen,
-	externalInput,
-	hasChatConversation,
-	onModelChange,
-	setExternalInput,
-}: {
-	askAI: (question: string) => boolean;
-	onSwitchToSearch: () => void;
-	onChatOpen: (question: string) => boolean;
-	externalInput: string;
-	hasChatConversation: boolean;
-	onModelChange: (modelId: string) => void;
-	setExternalInput: (input: string) => void;
-}) {
-	const {
-		modelPresentation: { icon: Icon },
-		selectedModelId,
-	} = useSelectedModel();
-
-	const {
-		isOpen: isModelOpen,
-		onOpen: onModelOpen,
-		onOpenChange: onModelOpenChange,
-	} = useDisclosure();
-	const {
-		isOpen: isSmartScreeningOpen,
-		onOpen: onSmartScreeningOpen,
-		onOpenChange: onSmartScreeningOpenChange,
-	} = useDisclosure();
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
-	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	// The window opens with whatever is already in the field. The field only
-	// gives the question up once the window has taken it.
-	const handleOpenChat = () => {
-		if (onChatOpen(externalInput)) setExternalInput("");
-	};
-	// Asking a question opens the chat beside the results rather than over
-	// them, so the reader keeps their list while they read the answer.
-	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		if (askAI(externalInput)) setExternalInput("");
-		onSwitchToSearch();
-	};
-
-	const tAI = useTranslations("ai");
-	const tUI = useTranslations("ui");
-	const t = useTranslations("ui");
-
-	return (
-		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-ai-panel">
-			<ModelSelector
-				isOpen={isModelOpen}
-				onOpenChange={onModelOpenChange}
-				selectedModelId={selectedModelId}
-				onModelChange={onModelChange}
-				hasConversation={hasChatConversation}
-			/>
-
-			{isSmartScreeningOpen ? (
-				<SmartScreeningModal
-					isOpen
-					onOpenChange={onSmartScreeningOpenChange}
-				/>
-			) : null}
-
-			<div className="flex items-end justify-start h-12">
-				<div className="flex items-end gap-4">
-					{/* <h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-						{tAI("askAI") || "Ask AI"}
-					</h1> */}
-					<SearchModeSwitch mode={"ai"} />
-				</div>
-			</div>
-
-			<form
-				onSubmit={handleSubmit}
-				className="flex justify-center items-center gap-4"
-			>
-				<div className="flex gap-4 w-full items-center">
-					<Tooltip content={t("openChatTooltip")}>
-						<Button
-							isIconOnly
-							startContent={
-								<HugeiconsIcon icon={BubbleChatIcon} />
-							}
-							size="md"
-							className="!p-0"
-							onPress={handleOpenChat}
-						></Button>
-					</Tooltip>
-					<div className="relative flex-1">
-						<Input
-							autoComplete="off"
-							value={externalInput}
-							onValueChange={setExternalInput}
-							startContent={
-								<Button
-									isIconOnly
-									variant="invisible"
-									className="shrink-0"
-									onPress={onModelOpen}
-								>
-									<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0 fill-white" />
-								</Button>
-							}
-							endContent={
-								<AskBoxActions
-									isDeepResearchEnabled={
-										isDeepResearchEnabled
-									}
-									mode={mode}
-									setMode={setMode}
-								/>
-							}
-							placeholder={tAI("askMeAnythingPublications")}
-							className="w-full"
-							classNames={{
-								inputWrapper:
-									"h-12 p-3 rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-								input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base",
-							}}
-						/>
-					</div>
-					<Tooltip content={t("smartScreening")}>
-						<Button
-							isIconOnly
-							startContent={<HugeiconsIcon icon={SparklesIcon} />}
-							size="md"
-							className="!p-0"
-							onPress={onSmartScreeningOpen}
-						></Button>
-					</Tooltip>
-				</div>
-			</form>
-
-			<div className="text-start text-sm text-black/60 dark:text-white/40 mr-auto">
-				{tAI("aiDescription") ||
-					"Ask questions about the evidence library or get help with your research. "}
-			</div>
-		</div>
-	);
-}
-
-export type SearchMode = "search" | "ai" | "research";
-
-function selectedSearchMode(
-	mode: ChatMode,
-	selectedTab: SearchMode,
-	isAISearchEnabled: boolean,
-): SearchMode {
-	if (selectedTab !== "ai" || !isAISearchEnabled) return "search";
-
-	return mode === "research" ? "research" : "ai";
-}
-
-export function useSearchMode() {
-	const t = useTranslations("ui");
-	const tAI = useTranslations("ai");
-	const [selectedTabOriginal, setSelectedTab] = useLocalStorage<SearchMode>(
-		"selectedSearchTab",
-		"search",
-	);
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
-	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
-
-	const selectedTab = selectedSearchMode(
-		mode,
-		selectedTabOriginal,
-		isAISearchEnabled,
-	);
-
-	const tabData: Record<
-		SearchMode,
-		{
-			text: string;
-			tooltip: string;
-			icon: ReactNode;
-			action: () => void;
-			disabled: boolean;
-		}
-	> = {
-		search: {
-			text: t("search"),
-			tooltip: t("searchTooltip"),
-			icon: <HugeiconsIcon icon={Search01Icon} className="size-5" />,
-			action: () => setSelectedTab("search"),
-			disabled: false,
-		},
-		ai: {
-			text: t("quickAnswer"),
-			tooltip: t("quickAnswerTooltip"),
-			icon: <HugeiconsIcon icon={SparklesIcon} className="size-5" />,
-			action: () => {
-				setMode("quick");
-				setSelectedTab("ai");
-			},
-			disabled: !isAISearchEnabled,
-		},
-		research: {
-			text: t("deepResearch"),
-			tooltip: t("deepResearchTooltip"),
-			icon: <HugeiconsIcon icon={ArchiveIcon} className="size-5" />,
-			action: () => {
-				setMode("research");
-				setSelectedTab("ai");
-			},
-			disabled: !isDeepResearchEnabled,
-		},
-	};
-
-	const activeCount = Object.keys(tabData).filter(
-		(mode) => !tabData[mode as SearchMode].disabled,
-	).length;
-
-	return { selectedTab, tabData, setSelectedTab, activeCount };
-}
-
-function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
-	const t = useTranslations("ui");
-	const { tabData } = useSearchMode();
-	const isMobile = useBreakpointBelow("lg");
-	const isReallySmall = useBreakpointBelow(null, "400px");
-
-	return (
-		<div className="flex gap-2">
-			{Object.keys(tabData).map((mode) => (
-				<Tooltip
-					content={tabData[mode as SearchMode].tooltip}
-					key={mode}
-				>
-					{!tabData[mode as SearchMode].disabled && (
-						<Button
-							key={mode}
-							startContent={tabData[mode as SearchMode].icon}
-							className={twMerge(
-								"h-10",
-								isMobile &&
-									(mode === selectedTab || isReallySmall) &&
-									"!min-w-0 !aspect-square !p-0",
-							)}
-							variant="light"
-							color={
-								mode === selectedTab ? "accent" : "secondary"
-							}
-							onPress={() => tabData[mode as SearchMode].action()}
-						>
-							<span
-								className={twMerge(
-									isMobile &&
-										(mode === selectedTab ||
-											isReallySmall) &&
-										"hidden",
-								)}
-							>
-								{tabData[mode as SearchMode].text}
-							</span>
-						</Button>
-					)}
-				</Tooltip>
-			))}
-		</div>
-	);
-}
-
-/** One tab's content, sliding in from the side it belongs to. */
-function ContentTabPanel({
-	children,
-	fromLeft,
-}: {
-	children: ReactNode;
-	fromLeft?: boolean;
-}) {
-	const offset = fromLeft ? -20 : 20;
-
-	return (
-		<motion.div
-			initial={{ opacity: 0, x: offset, scale: 0.95 }}
-			animate={{ opacity: 1, x: 0, scale: 1 }}
-			exit={{ opacity: 0, x: -offset, scale: 0.95 }}
-			transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-			className="w-full p-1"
-		>
-			{children}
-		</motion.div>
-	);
 }
 
 export function ContentInteractions({
@@ -926,105 +542,145 @@ export function ContentInteractions({
 	header?: ReactNode;
 }) {
 	const itemsContext = use(ItemsContext);
-	const { selectedTab, setSelectedTab, activeCount } = useSearchMode();
-	const {
-		modelPresentation: { icon: Icon },
-		selectedModelId,
-		setSelectedModelId,
-	} = useSelectedModel();
-	const [externalInput, setExternalInput] = useState<string>("");
-	const [hasChatConversation, setHasChatConversation] = useState(false);
-	const handleModelChange = (modelId: string) => {
-		setSelectedModelId(modelId);
-		setHasChatConversation(false);
-	};
-	// What the reader is looking at right now, so the assistant can answer
-	// questions about these results.
-	const searchContext = normalizeLibrarySearchContext(
-		useFiltersContext().queryParams,
-	);
+	const { selectedModelId, setSelectedModelId } = useSelectedModel();
 	const { isAISearchEnabled } = useIsAISearchEnabled();
-	// One search field, two things to do with it: typing filters the library
-	// as you go, and Ask AI hands the same text to the assistant.
-	const askAI = useAskInlineChat(searchContext);
-	// The window is already built when it is closed, so a question typed on
-	// the page can be asked the moment the reader opens it.
+	const searchContext = itemsContext.userData
+		? undefined
+		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	const askInline = useAskInlineChat(searchContext);
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();
 
 	return (
 		<div className="relative">
 			<ChatModal
-				// Changing the model starts a new conversation.
 				key={selectedModelId ?? "no-model"}
+				ref={chatWindow}
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
 				modelId={selectedModelId}
-				onModelChange={handleModelChange}
-				onConversationStateChange={setHasChatConversation}
+				onModelChange={setSelectedModelId}
 				searchContext={searchContext}
-				ref={chatWindow}
 			/>
-			<AnimatePresence mode="wait">
-				{selectedTab === "search" ? (
-					<ContentTabPanel key="search-content" fromLeft>
-						<SearchTabContent
-							header={header}
-							itemsContext={itemsContext}
-							extraFilters={extraFilters}
-							countLabel={countLabel}
-							abstract={abstract}
-							onAbstractChange={onAbstractChange}
-							view={view}
-							setView={setView}
-							showHeader={activeCount === 1}
-							askAI={isAISearchEnabled ? askAI : undefined}
-						/>
-					</ContentTabPanel>
-				) : (
-					<ContentTabPanel key="ai-content">
-						<AITabContent
-							askAI={askAI}
-							onSwitchToSearch={() => setSelectedTab("search")}
-							onChatOpen={openChatWindow}
-							externalInput={externalInput}
-							hasChatConversation={hasChatConversation}
-							onModelChange={handleModelChange}
-							setExternalInput={setExternalInput}
-						/>
-					</ContentTabPanel>
-				)}
-			</AnimatePresence>
+			<SearchTabContent
+				header={header}
+				itemsContext={itemsContext}
+				extraFilters={extraFilters}
+				countLabel={countLabel}
+				abstract={abstract}
+				onAbstractChange={onAbstractChange}
+				view={view}
+				setView={setView}
+				showHeader
+				askAI={
+					isAISearchEnabled
+						? itemsContext.userData
+							? openChatWindow
+							: askInline
+						: undefined
+				}
+			/>
 		</div>
 	);
 }
 
 function MainContent() {
+	const isRTL = getLangDir(useLocale()) === "rtl";
 	const props = useItemsList();
+	const { engaged } = useInlineChatLayout();
+	const prefersReducedMotion = useReducedMotion();
 
 	return (
 		<>
-			<CollectionsList
-				data={props.collectionsData}
-				handleCheckboxChange={props.handleCheckboxChange}
-				selectedCollections={props.selectedCollections}
-				hierarchy={props.hierarchy}
-				range={props.queryParams.range}
-				handleRangeChange={props.handleRangeChange}
-				facetDistribution={props.facetDistribution}
-				queryParams={props.queryParams}
-				handleInstitutionSelect={props.handleInstitutionSelect}
-				handleCountrySelect={props.handleCountrySelect}
-			/>
+			<motion.div
+				initial={false}
+				animate={{
+					width: engaged ? 0 : "auto",
+					height: engaged ? 0 : "auto",
+				}}
+				transition={
+					prefersReducedMotion
+						? { duration: 0 }
+						: engaged
+							? { duration: 0.45, ease: [0.16, 1, 0.3, 1] }
+							: {
+									delay: 0.13,
+									duration: 0.42,
+									ease: [0.16, 1, 0.3, 1],
+								}
+				}
+				inert={engaged || undefined}
+				aria-hidden={engaged || undefined}
+				style={{
+					marginInlineEnd: engaged
+						? "calc(-1 * var(--library-gap))"
+						: "0rem",
+				}}
+				className={twMerge(
+					"hidden shrink-0 lg:block transition-[margin-inline-end] duration-split ease-split motion-reduce:transition-none",
+					!engaged && "delay-[130ms]",
+					engaged && "pointer-events-none",
+				)}
+			>
+				<motion.div
+					initial={false}
+					animate={
+						engaged
+							? {
+									opacity: 0,
+									x: prefersReducedMotion
+										? 0
+										: isRTL
+											? -48
+											: 48,
+								}
+							: { opacity: 1, x: 0 }
+					}
+					transition={
+						prefersReducedMotion
+							? { duration: 0 }
+							: engaged
+								? { duration: 0.35, ease: "easeOut" }
+								: {
+										delay: 0.2,
+										type: "spring",
+										bounce: 0.15,
+										duration: 0.55,
+									}
+					}
+					className="lg:w-[24rem] xl:w-[28.5rem]"
+				>
+					<CollectionsList
+						data={props.collectionsData}
+						handleCheckboxChange={props.handleCheckboxChange}
+						selectedCollections={props.selectedCollections}
+						hierarchy={props.hierarchy}
+						range={props.queryParams.range}
+						handleRangeChange={props.handleRangeChange}
+						facetDistribution={props.facetDistribution}
+						queryParams={props.queryParams}
+						handleInstitutionSelect={props.handleInstitutionSelect}
+						handleCountrySelect={props.handleCountrySelect}
+					/>
+				</motion.div>
+			</motion.div>
+
 			<ItemsList props={props} />
 		</>
 	);
 }
 
 export default function EvidenceLibrary() {
+	const { engaged } = useInlineChatLayout();
 	return (
-		<PageContainer>
-			<div className="flex xl:gap-10 gap-8 flex-col lg:flex-row">
+		<PageContainer
+			className={twMerge(
+				"transition-page-space duration-split ease-split motion-reduce:transition-none",
+
+				engaged && "overflow-visible pt-4 lg:pt-5 xl:pt-0",
+			)}
+		>
+			<div className="flex gap-[var(--library-gap)] [--library-gap:2rem] xl:[--library-gap:2.5rem] flex-col lg:flex-row lg:[container-type:inline-size]">
 				<MainContent />
 			</div>
 		</PageContainer>

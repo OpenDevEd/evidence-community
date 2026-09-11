@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "Matokeo",
     "exportFailed": "Imeshindikana kuandaa maudhui haya",
     "copyFailed": "Imeshindikana kunakili",
     "copyFailedHelp": "Angalia ruhusa ya ubao wa kunakili kwenye kivinjari chako kisha ujaribu tena.",
@@ -492,6 +493,8 @@
     "invalidCredentials": "Umbali wa kusafiri haijulikana"
   },
   "ai": {
+    "sourcesTitle": "Vyanzo",
+    "sourcesEmpty": "Machapisho yanayosomwa na AI yataonekana hapa.",
     "summarize": "Fupisha",
     "summarizeDescription": "Fupisha rasilimali hii kwa maneno machache iwezekanavyo.",
     "explain": "Eleza",

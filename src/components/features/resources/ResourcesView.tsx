@@ -1,6 +1,9 @@
 "use client";
 
-import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+import {
+	AuthorProfilesContext,
+	useAuthorProfiles,
+} from "@/lib/authors/use-author-profiles";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
@@ -11,10 +14,25 @@ import {
 	Download01Icon,
 	Refresh01Icon,
 } from "@hugeicons/core-free-icons";
-import { ReactNode, use, useContext, useEffect, useRef, useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import {
+	ReactNode,
+	use,
+	useId,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { getLangDir } from "rtl-detect";
 import { twMerge } from "tailwind-merge";
-import { AnimatePresence, motion } from "framer-motion";
+import {
+	AnimatePresence,
+	MotionConfig,
+	motion,
+	useAnimate,
+	useReducedMotion,
+} from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/nextui/Button";
 import { ContentInteractions } from "@/components/pages/EvidenceLibrary";
@@ -32,11 +50,14 @@ import { DownloadModal } from "../newlib/DownloadModal";
 import { CardBody, useDisclosure } from "@nextui-org/react";
 import { ItemsContext } from "../items/ItemsList";
 import { useFiltersContext } from "@/context/FiltersProvider";
+import {
+	EngagedLibraryPanel,
+	type EngagedLibraryView,
+} from "./EngagedLibraryPanel";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import InlineLibraryChat from "../ai/InlineLibraryChat";
-import { BucketList } from "../ai/ContextBucket";
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
@@ -382,12 +403,20 @@ export function FilterChips() {
 function ResourcesList({
 	abstract,
 	view,
+	className,
+	openLinksInNewTab = false,
 }: {
 	abstract: boolean;
 	view: string;
+	className?: string;
+	openLinksInNewTab?: boolean;
 }) {
 	const itemsContext = use(ItemsContext);
-	const { profiles } = useAuthorProfiles(itemsContext.itemsData?.items?.flatMap((item: Item) => item.creators ?? []));
+	const { profiles } = useAuthorProfiles(
+		itemsContext.itemsData?.items?.flatMap(
+			(item: Item) => item.creators ?? [],
+		),
+	);
 
 	const t = useTranslations("ui");
 	const actuallyNoData =
@@ -404,19 +433,33 @@ function ResourcesList({
 					view === "list" || actuallyNoData
 						? "flex flex-col"
 						: "grid grid-cols-2",
+					className,
 				)}
 			>
 				{itemsContext.itemsError ? (
-					<li role="alert" className="flex flex-col items-center gap-4 py-12 text-center">
+					<li
+						role="alert"
+						className="flex flex-col items-center gap-4 py-12 text-center"
+					>
 						<div className="flex items-center gap-2 text-sm font-medium text-black/70 dark:text-white/70">
-							<HugeiconsIcon icon={Alert02Icon} className="size-5 text-danger" />
+							<HugeiconsIcon
+								icon={Alert02Icon}
+								className="size-5 text-danger"
+							/>
 							{t("resourcesLoadFailed")}
 						</div>
 						<Button
 							size="sm"
 							isLoading={itemsContext.isItemsFetching}
-							onPress={() => void itemsContext.revalidateResults()}
-							startContent={<HugeiconsIcon icon={Refresh01Icon} className="size-4" />}
+							onPress={() =>
+								void itemsContext.revalidateResults()
+							}
+							startContent={
+								<HugeiconsIcon
+									icon={Refresh01Icon}
+									className="size-4"
+								/>
+							}
 						>
 							{t("retry")}
 						</Button>
@@ -432,6 +475,7 @@ function ResourcesList({
 								(itemsContext.itemsData &&
 									itemsContext.itemsData.items[index])) && (
 								<Resource
+									openLinksInNewTab={openLinksInNewTab}
 									key={index}
 									itemData={
 										itemsContext.itemsData?.items[index]
@@ -476,7 +520,12 @@ function ContentActions() {
 				hrefForFormat={getLibraryExportPath}
 				formats={availableFormats}
 				fileName={identity.shortName}
-				description={t(totalItems > downloadableRecords ? "downloadLibraryLimited" : "downloadLibraryDescription", { count: downloadableRecords, total: totalItems })}
+				description={t(
+					totalItems > downloadableRecords
+						? "downloadLibraryLimited"
+						: "downloadLibraryDescription",
+					{ count: downloadableRecords, total: totalItems },
+				)}
 			/>
 			{isDownloadEnabled && availableFormats.length > 0 && (
 				<Button
@@ -490,7 +539,9 @@ function ContentActions() {
 					onPress={onOpen}
 				>
 					{t("downloadLibrary")}{" "}
-					<span className="opacity-60">{format.number(downloadableRecords)}</span>
+					<span className="opacity-60">
+						{format.number(downloadableRecords)}
+					</span>
 				</Button>
 			)}
 			{isAtomFeedEnabled && exports.atom && (
@@ -512,7 +563,7 @@ function ContentActions() {
 	);
 }
 
-function PaginationControls() {
+function PaginationControls({ className }: { className?: string }) {
 	const itemsContext = use(ItemsContext);
 	const totalPages = itemsContext.itemsData?.totalPages || 0;
 	const actuallyNoData =
@@ -524,7 +575,12 @@ function PaginationControls() {
 
 	return (
 		!actuallyNoData && (
-			<div className="w-full flex justify-center py-2 lg:py-6 z-10">
+			<div
+				className={twMerge(
+					"w-full flex justify-center py-2 lg:py-6 z-10",
+					className,
+				)}
+			>
 				<Skeleton
 					isLoaded={totalPages > 0}
 					className="w-full h-14 rounded-2xl flex items-center justify-center"
@@ -702,11 +758,76 @@ export function ResourcesView({
 	header?: ReactNode;
 }) {
 	const t = useTranslations("ui");
+	const idPrefix = useId();
+	const isRTL = getLangDir(useLocale()) === "rtl";
 	const format = useFormatter();
 	const [abstract, setAbstract] = useState(true);
 	const [view, setView] = useState("list");
+
+	const [engagedView, setEngagedView] =
+		useState<EngagedLibraryView>("results");
+	const [engagedAbstract, setEngagedAbstract] = useState(false);
 	const { status } = useContext(CacheContext) as CacheContextType;
 	const itemsContext = use(ItemsContext);
+
+	const { engaged: chatEngaged } = useInlineChatLayout();
+	const { selectedModelId } = useSelectedModel();
+	const engaged =
+		chatEngaged && !itemsContext.userData && Boolean(selectedModelId);
+	const { theme } = useLibraryConfig();
+
+	const [chatLinger, setChatLinger] = useState(false);
+	const [prevEngaged, setPrevEngaged] = useState(engaged);
+	if (engaged !== prevEngaged) {
+		setPrevEngaged(engaged);
+		if (!engaged) setChatLinger(true);
+	}
+	useEffect(() => {
+		if (!chatLinger || engaged) return;
+		const timeout = setTimeout(() => setChatLinger(false), 400);
+		return () => clearTimeout(timeout);
+	}, [chatLinger, engaged]);
+	const showChat = engaged || chatLinger;
+
+	const [hasSwapped, setHasSwapped] = useState(false);
+	const [swapBaseline] = useState(engaged);
+	if (!hasSwapped && engaged !== swapBaseline) setHasSwapped(true);
+
+	const [planeScope, animatePlane] = useAnimate();
+	const prefersReducedMotion = useReducedMotion();
+
+	const planePrevEngagedRef = useRef(engaged);
+	useEffect(() => {
+		if (planePrevEngagedRef.current === engaged) return;
+		planePrevEngagedRef.current = engaged;
+		if (prefersReducedMotion) return;
+		const plane = planeScope.current as HTMLElement | null;
+		const shadow = plane?.querySelector<HTMLElement>("[data-plane-shadow]");
+		if (!plane || !shadow) return;
+		const fromX = (engaged ? -PLANE_SHIFT : PLANE_SHIFT) * (isRTL ? -1 : 1);
+		const fromScale = engaged ? PLANE_RECEDE_SCALE : PLANE_LIFT_SCALE;
+		const controls = [
+			animatePlane(
+				plane,
+				{ x: [fromX, 0], scale: [fromScale, 1] },
+				{ ...PLANE_SPRING, delay: engaged ? 0 : PLANE_CLOSE_DELAY },
+			),
+			animatePlane(
+				shadow,
+				{ opacity: [0, 1, 0] },
+				{
+					duration: 0.7,
+					times: [0, 0.3, 1],
+					ease: "easeOut",
+					delay: engaged ? 0 : PLANE_CLOSE_DELAY,
+				},
+			),
+		];
+		return () => controls.forEach((c) => c.stop());
+	}, [engaged, animatePlane, planeScope, prefersReducedMotion, isRTL]);
+	const searchContext = itemsContext.userData
+		? undefined
+		: normalizeLibrarySearchContext(itemsContext.queryParams);
 	const lastTrackedResults = useRef<string | null>(null);
 
 	useEffect(() => {
@@ -758,73 +879,175 @@ export function ResourcesView({
 		itemsContext.queryParams,
 	]);
 
-	const { engaged } = useInlineChatLayout();
-	const { selectedModelId } = useSelectedModel();
-	const searchContext = normalizeLibrarySearchContext(
-		useFiltersContext().queryParams,
-	);
-
-	const results = (
-		<>
-			<NoteView />
-			<ContentInteractions
-				header={header}
-				abstract={abstract}
-				onAbstractChange={setAbstract}
-				view={view}
-				setView={setView}
-				countLabel={countLabel}
-				extraFilters={extraFilters}
-			/>
-			<FilterChips />
-			<ResourcesList abstract={abstract} view={view} />
-			<PaginationControls />
-			<ContentActions />
-		</>
-	);
-
 	return (
-		<section
-			id="main-content"
-			className="w-full flex flex-col gap-4 overflow-hidden"
-		>
-			{engaged && selectedModelId ? (
-				// Split view: the conversation on one side, and what it has
-				// found on the other.
-				<div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-2">
-					<InlineLibraryChat
-						key={selectedModelId}
-						modelId={selectedModelId}
-						searchContext={searchContext}
-						renderSources={(bucketEntries, publications) => (
-							<div className="flex min-w-0 flex-col gap-4">
-								{bucketEntries.length > 0 ? (
-									<BucketList
-										entries={bucketEntries}
-										publications={publications}
-									/>
-								) : (
-									results
+		<MotionConfig reducedMotion="user">
+			<section
+				id="main-content"
+				className={twMerge(
+					"w-full flex flex-col gap-4",
+
+					!engaged && "-mx-1 overflow-hidden px-1",
+				)}
+			>
+				{!engaged && <NoteView />}
+
+				<div
+					className={twMerge(
+						"w-full lg:grid lg:grid-cols-[minmax(0,0fr)_minmax(0,1fr)] lg:items-start lg:gap-x-0 lg:transition-[grid-template-columns,column-gap] lg:duration-split lg:ease-split lg:motion-reduce:transition-none lg:motion-reduce:delay-0",
+
+						!engaged && "lg:delay-[80ms]",
+						engaged &&
+							"grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-x-6 xl:gap-x-8",
+					)}
+				>
+					{showChat && (
+						<div
+							inert={!engaged || undefined}
+							className={twMerge(
+								"min-w-0 origin-bottom animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 lg:sticky lg:top-[4.75rem] motion-reduce:animate-none motion-reduce:transition-none lg:col-start-1 lg:row-start-1",
+
+								theme.layout === "small"
+									? "xl:top-[8.125rem]"
+									: "xl:top-[6.5rem]",
+
+								"lg:overflow-hidden",
+
+								"transition-[opacity,transform] ease-in",
+
+								engaged
+									? "opacity-100"
+									: "pointer-events-none translate-y-6 scale-[0.97] opacity-0",
+							)}
+						>
+							<div className="lg:ms-auto lg:w-[calc((100cqw-1.5rem)*5/9)] xl:w-[calc((100cqw-2rem)*5/9)]">
+								<InlineLibraryChat
+									key={selectedModelId!}
+									modelId={selectedModelId!}
+									searchContext={searchContext}
+								/>
+							</div>
+						</div>
+					)}
+					<div
+						ref={planeScope}
+						style={{
+							transformOrigin: isRTL
+								? "left center"
+								: "right center",
+						}}
+						className="@container relative flex w-full min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1"
+					>
+						<div
+							data-plane-shadow
+							aria-hidden
+							className="pointer-events-none absolute inset-x-[-0.75rem] top-[-0.75rem] -z-10 h-[calc(100dvh+1.5rem)] max-h-[calc(100%+1.5rem)] rounded-3xl opacity-0 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.35),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.06)]"
+						/>
+
+						{engaged && <NoteView />}
+						{engaged ? (
+							<div
+								key="engaged-panel"
+								className={twMerge(
+									"flex w-full min-w-0 flex-col gap-4",
+									hasSwapped &&
+										"animate-in fade-in slide-in-from-right-4 rtl:slide-in-from-left-4 duration-200 ease-out motion-reduce:animate-none",
 								)}
+							>
+								<EngagedLibraryPanel
+									idPrefix={idPrefix}
+									key={selectedModelId}
+									modelId={selectedModelId!}
+									extraFilters={extraFilters}
+									view={engagedView}
+									setView={setEngagedView}
+									abstract={engagedAbstract}
+									setAbstract={setEngagedAbstract}
+								/>
+							</div>
+						) : (
+							<div
+								key="library-full"
+								className={twMerge(
+									"flex w-full min-w-0 flex-col gap-4",
+									hasSwapped &&
+										"animate-in fade-in slide-in-from-left-4 rtl:slide-in-from-right-4 duration-200 ease-out motion-reduce:animate-none",
+								)}
+							>
+								<ContentInteractions
+									header={header}
+									abstract={abstract}
+									onAbstractChange={setAbstract}
+									view={view}
+									setView={setView}
+									countLabel={countLabel}
+									extraFilters={extraFilters}
+								/>
+								<FilterChips />
 							</div>
 						)}
-					/>
+
+						<div
+							role={engaged ? "tabpanel" : undefined}
+							id={`${idPrefix}-results`}
+							aria-labelledby={
+								engaged ? `${idPrefix}-tab-results` : undefined
+							}
+							tabIndex={engaged ? 0 : undefined}
+							className={twMerge(
+								"flex min-w-0 flex-col gap-4",
+								engaged &&
+									engagedView === "sources" &&
+									"hidden",
+							)}
+						>
+							<ResourcesList
+								abstract={engaged ? engagedAbstract : abstract}
+								view={engaged ? "list" : view}
+								openLinksInNewTab={engaged}
+								className={twMerge(engaged && "gap-4")}
+							/>
+							<PaginationControls
+								className={twMerge(engaged && "py-0 lg:py-0")}
+							/>
+						</div>
+						{!engaged && (
+							<>
+								<ContentActions />
+								{status.latestPublicationUpdatedAt && (
+									<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
+										{t("lastUpdate", {
+											date: format.dateTime(
+												new Date(
+													status.latestPublicationUpdatedAt!,
+												),
+												{
+													timeZone: "UTC",
+													day: "2-digit",
+													month: "2-digit",
+													year: "numeric",
+													hour: "2-digit",
+													minute: "2-digit",
+												},
+											),
+										})}
+									</div>
+								)}
+							</>
+						)}
+					</div>
 				</div>
-			) : (
-				results
-			)}
-			{status.latestPublicationUpdatedAt && <div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
-				{t("lastUpdate", {
-					date: format.dateTime(new Date(status.latestPublicationUpdatedAt), {
-						timeZone: "UTC",
-						day: "2-digit",
-						month: "2-digit",
-						year: "numeric",
-						hour: "2-digit",
-						minute: "2-digit",
-					}),
-				})}
-			</div>}
-		</section>
+			</section>
+		</MotionConfig>
 	);
 }
+
+const PLANE_SHIFT = 28;
+const PLANE_LIFT_SCALE = 0.97;
+const PLANE_RECEDE_SCALE = 0.985;
+const PLANE_CLOSE_DELAY = 0.08;
+const PLANE_SPRING = {
+	type: "spring",
+	stiffness: 260,
+	damping: 30,
+	mass: 1.05,
+} as const;
