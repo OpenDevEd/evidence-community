@@ -1,25 +1,24 @@
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { SparklesIcon } from "@hugeicons/core-free-icons";
-import { Spinner } from "@nextui-org/react";
+import { BsStars } from "react-icons/bs";
 import GenericHeader from "../modals/GenericHeader";
 import { twMerge } from "tailwind-merge";
 
 
 export default function AIHeader({
-	isLoading,
 	onClose,
 	children,
+	actions,
 	className,
 }: {
-	isLoading?: boolean;
 	onClose: () => void;
 	children?: React.ReactNode;
+	actions?: React.ReactNode;
 	className?: string;
 }) {
 	return (
 		<GenericHeader
 			onClose={onClose}
-			startContent={isLoading ? <Spinner size="sm" color="current" className="text-accent" /> : <HugeiconsIcon icon={SparklesIcon} className="text-accent" />}
+			startContent={<BsStars className="text-accent" />}
+			actions={actions}
 			classNames={{
 				base: twMerge("flex items-center justify-between gap-2", className),
 				title: "flex items-center gap-2",

@@ -1,12 +1,13 @@
 "use client";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowDown01Icon, Cancel01Icon, RotateLeft01Icon } from "@hugeicons/core-free-icons";
 import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import React, { type ComponentType } from "react";
+import { IoChevronDown } from "react-icons/io5";
+import { PiXBold } from "react-icons/pi";
+import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 
 import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
@@ -240,7 +241,7 @@ function ChatMessageList({
 					aria-label={t("jumpToLatest")}
 					onPress={() => scrollToBottom()}
 				>
-					<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
+					<IoChevronDown className="size-4" />
 				</Button>
 			)}
 		</motion.div>
@@ -473,10 +474,10 @@ function ChatWindowTopBar({
 						className="h-8 w-8 min-w-0 rounded-2xl"
 						onPress={onModelOpen}
 					>
-						<ModelIcon className="size-6 shrink-0 rounded-full bg-accent fill-white p-1" />
+						<ModelIcon className="size-5 shrink-0 rounded-full bg-accent fill-white p-1" />
 					</Button>
 					<Button
-						startContent={<HugeiconsIcon icon={RotateLeft01Icon} />}
+						startContent={<RiResetLeftFill />}
 						variant="transparent"
 						size="sm"
 						className="h-8 min-w-0 gap-1.5 rounded-2xl px-2.5 text-sm text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.06] data-[disabled=true]:bg-transparent"
@@ -502,7 +503,7 @@ function ChatWindowTopBar({
 					className="pointer-events-auto size-10 rounded-full border border-black/[0.08] bg-white text-black/55 shadow-card-flat hover:bg-black/[0.035] hover:text-black/75 dark:border-white/10 dark:bg-secondary-400 dark:text-white/55 dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:text-white/75"
 					aria-label={tUI("closePopupAriaLabel")}
 				>
-					<HugeiconsIcon icon={Cancel01Icon} className="size-4" />
+					<PiXBold className="size-4" />
 				</Button>
 			</div>
 		</>

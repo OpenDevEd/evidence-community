@@ -1,7 +1,5 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { Button } from "@/components/nextui/Button";
 import {
@@ -16,7 +14,8 @@ import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST } from "@/lib/utils";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { BsStars } from "react-icons/bs";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { AIHistory } from "@/types/ai";
@@ -31,6 +30,7 @@ import {
 import { twMerge } from "tailwind-merge";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { analyticsIdField } from "@/lib/ai/chat-request";
+import { publicationPdfCitationSources } from "@/lib/ai/citations";
 
 function randomUUID() {
 	return (
@@ -88,6 +88,14 @@ function AiButton({
 	const [hasChatConversation, setHasChatConversation] = useState(false);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
+	const pdfSources = useMemo(
+		() =>
+			publicationPdfCitationSources(
+				data?.item?.key,
+				data?.item?.attachmentsData,
+			),
+		[data?.item?.key, data?.item?.attachmentsData],
+	);
 
 	const [histories, setHistories] = useLocalStorage<
 		Record<string, AIHistory[]>
@@ -177,6 +185,11 @@ function AiButton({
 							}))
 						}
 						id={id}
+						currentTitle={data!.item!.title!}
+						currentKey={data!.item!.key!}
+						currentModelId={selectedModelId}
+						onClearCurrent={() => feature.setCompletion("")}
+						pdfSources={pdfSources}
 					/>
 				))}
 				<Dropdown
@@ -193,7 +206,7 @@ function AiButton({
 							)}
 							size={variant === "inline" ? "sm" : "lg"}
 						>
-							<HugeiconsIcon icon={SparklesIcon} />
+							<BsStars />
 							{variant === "inline" && t("askAI")}
 						</Button>
 					</DropdownTrigger>
