@@ -71,12 +71,12 @@ export default function ModelSelector({
 						}
 						list={models.map((model): ListModalBodyItem => {
 							const presentation = getAIModelPresentation(
-								model.id, ai.providers,
+								model.id,
+								ai.providers,
 							);
 							return {
 								name: presentation.name,
-								subtitle: presentation.company,
-								description: model.id,
+								description: presentation.company,
 								icon: presentation.icon,
 							};
 						})}

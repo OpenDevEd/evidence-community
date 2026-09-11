@@ -33,8 +33,10 @@ function closesTheChat(event: KeyboardEvent) {
 	if (event.key !== "Escape") return false;
 	if (event.defaultPrevented || event.isComposing) return false;
 
-	// The model picker and the screening settings own Esc while they are open.
-	return !document.querySelector('[role="dialog"]');
+	// Dialogs and open menus own Escape before the conversation does.
+	return !document.querySelector(
+		'[role="dialog"], [role="menu"], [role="listbox"]',
+	);
 }
 
 /** Esc closes the chat, unless a dialog on top of it wants the key. */
@@ -48,9 +50,10 @@ function useEscapeToClose(closeChat: () => void) {
 			closeChat();
 		};
 
-		document.addEventListener("keydown", onKeyDown);
+		// React Aria buttons stop key events from bubbling to the document.
+		document.addEventListener("keydown", onKeyDown, true);
 
-		return () => document.removeEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown, true);
 	}, [closeChat]);
 }
 

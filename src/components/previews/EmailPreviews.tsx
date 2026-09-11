@@ -10,6 +10,8 @@ import {
 	BookOpen01Icon,
 	ComputerIcon,
 	SmartPhone01Icon,
+	Message01Icon,
+	Flag01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -22,6 +24,8 @@ const icons: Record<string, typeof Calendar03Icon> = {
 	items: BookOpen01Icon,
 	invitation: UserAdd01Icon,
 	confirm: Mail01Icon,
+	contact: Message01Icon,
+	takedown: Flag01Icon,
 };
 export default function EmailPreviews({
 	editions,

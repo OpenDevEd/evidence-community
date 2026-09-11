@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "Résultats",
     "exportFailed": "Impossible de préparer ce contenu",
     "copyFailed": "Copie impossible",
     "copyFailedHelp": "Vérifiez l’autorisation du presse-papiers dans votre navigateur et réessayez.",
@@ -491,6 +492,8 @@
     "invalidCredentials": "Informations d'identification invalides"
   },
   "ai": {
+    "sourcesTitle": "Sources",
+    "sourcesEmpty": "Les publications lues par l’IA apparaîtront ici.",
     "summarize": "Résumer",
     "summarizeDescription": "Résumer cette ressource en aussi peu de mots que possible.",
     "explain": "Expliquer",

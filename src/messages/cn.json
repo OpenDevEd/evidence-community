@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "结果",
     "exportFailed": "无法准备此内容",
     "copyFailed": "无法复制",
     "copyFailedHelp": "请检查浏览器的剪贴板权限，然后重试。",
@@ -491,6 +492,8 @@
     "invalidCredentials": "无效的凭证"
   },
   "ai": {
+    "sourcesTitle": "来源",
+    "sourcesEmpty": "AI 阅读的出版物将显示在这里。",
     "summarize": "总结",
     "summarizeDescription": "用尽可能少的词总结此资源",
     "explain": "解释",

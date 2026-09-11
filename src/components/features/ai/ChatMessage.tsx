@@ -1,7 +1,7 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Cancel01Icon, HashtagIcon, TextFontIcon, Tick01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { LuHash, LuType, LuCheck, LuX, LuUser } from "react-icons/lu";
+
 import { Spinner } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
 import React, { useMemo } from "react";
@@ -70,17 +70,11 @@ function visibleMessageParts(message: Message): VisibleMessagePart[] {
 }
 
 /** The icon that stands for one answer's type, or its yes-or-no value. */
-function ScreeningFieldIcon({
-	type,
-	value,
-}: {
-	type: string;
-	value: unknown;
-}) {
-	if (type === "number") return <HugeiconsIcon icon={HashtagIcon} />;
-	if (type === "string") return <HugeiconsIcon icon={TextFontIcon} />;
+function ScreeningFieldIcon({ type, value }: { type: string; value: unknown }) {
+	if (type === "number") return <LuHash />;
+	if (type === "string") return <LuType />;
 
-	return value === true ? <HugeiconsIcon icon={Tick01Icon} /> : <HugeiconsIcon icon={Cancel01Icon} />;
+	return value === true ? <LuCheck /> : <LuX />;
 }
 
 /** What the screening run found for one publication. */
@@ -209,6 +203,7 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 					>
 						<Resource
 							itemKey={resourceId}
+							openLinksInNewTab
 							abstract={true}
 							as="div"
 							className="rounded-none bg-transparent dark:bg-transparent [&>div:last-child]:rounded-none"
@@ -264,11 +259,14 @@ function MessageAvatar({
 			)}
 		>
 			{message.role === "user" ? (
-				<HugeiconsIcon icon={UserIcon} className="size-4 text-white" />
+				<LuUser className="size-4 text-white" />
 			) : (
-				React.createElement(getAIModelPresentation(modelId, ai.providers).icon, {
-					className: "size-4 invert shrink-0",
-				})
+				React.createElement(
+					getAIModelPresentation(modelId, ai.providers).icon,
+					{
+						className: "size-4 invert shrink-0",
+					},
+				)
 			)}
 		</div>
 	);

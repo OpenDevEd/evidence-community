@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "परिणाम",
     "exportFailed": "यह सामग्री तैयार नहीं हो सकी",
     "copyFailed": "कॉपी नहीं हो सका",
     "copyFailedHelp": "अपने ब्राउज़र की क्लिपबोर्ड अनुमति जाँचें और फिर कोशिश करें।",
@@ -491,6 +492,8 @@
     "invalidCredentials": "अमान्य विवरण"
   },
   "ai": {
+    "sourcesTitle": "स्रोत",
+    "sourcesEmpty": "एआई द्वारा पढ़े गए प्रकाशन यहाँ दिखाई देंगे।",
     "summarize": "सारांश",
     "summarizeDescription": "इस संसाधन का सारांश कम से कम शब्दों में करें।",
     "explain": "व्याख्या करें",

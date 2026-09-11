@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "Ergebnisse",
     "exportFailed": "Dieser Inhalt konnte nicht vorbereitet werden",
     "copyFailed": "Kopieren nicht möglich",
     "copyFailedHelp": "Prüfen Sie die Zwischenablage-Berechtigung Ihres Browsers und versuchen Sie es erneut.",
@@ -491,6 +492,8 @@
     "invalidCredentials": "Ungültige Anmeldeinformationen"
   },
   "ai": {
+    "sourcesTitle": "Quellen",
+    "sourcesEmpty": "Publikationen, die die KI liest, erscheinen hier.",
     "summarize": "Zusammenfassen",
     "summarizeDescription": "Diese Ressource in möglichst wenigen Worten zusammenfassen.",
     "explain": "Erklären",

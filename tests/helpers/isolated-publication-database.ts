@@ -1,8 +1,25 @@
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import type { Database } from "../../src/db/database-schema";
 import { createPostgresDatabaseResource } from "../../src/db/postgres";
+
+async function waitForDatabaseConnectionsToClose(
+	admin: Client,
+	databaseName: string,
+) {
+	const deadline = Date.now() + 5_000;
+	while (Date.now() < deadline) {
+		const result = await admin.query<{ active: boolean }>(
+			"SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = $1) AS active",
+			[databaseName],
+		);
+		if (!result.rows[0]?.active) return;
+		await delay(10);
+	}
+	throw new Error(`Database connections did not close for ${databaseName}`);
+}
 
 /** Run against a fresh migrated database and remove it even when an assertion fails. */
 export async function withIsolatedPublicationDatabase(
@@ -30,7 +47,8 @@ export async function withIsolatedPublicationDatabase(
 				await Promise.all([client.end(), resource.dispose()]);
 			}
 		} finally {
-			await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+			await waitForDatabaseConnectionsToClose(admin, databaseName);
+			await admin.query(`DROP DATABASE "${databaseName}"`);
 		}
 	} finally {
 		await admin.end();

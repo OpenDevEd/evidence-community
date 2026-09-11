@@ -107,7 +107,7 @@ export default function Navbar() {
 		<>
 		<header
 			className={twMerge(
-				"w-full max-w-site px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top",
+				"w-full max-w-site px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top motion-reduce:transition-none",
 				styleVariant === "wide" && "bg-white dark:bg-secondary max-w-none",
 				isMapPage &&
 					(styleVariant !== "wide"
@@ -125,9 +125,9 @@ export default function Navbar() {
 		>
 			<div
 				className={twMerge(
-					"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split",
+					"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
 					// Only where the split view exists: on a phone the chat
-					// sits below the results and the header keeps its size.
+					// sits above the results and the header keeps its size.
 					chatEngaged && "lg:h-14 lg:py-2",
 					styleVariant === "wide" &&
 						"bg-transparent max-w-site mx-auto xl:px-14",

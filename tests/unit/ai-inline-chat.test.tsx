@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("next-intl", () => ({
 	useLocale: () => "en-GB",
-	useTranslations: () => Object.assign((key: string) => key, {
-		rich: (key: string) => key,
-	}),
+	useTranslations: () =>
+		Object.assign((key: string) => key, {
+			rich: (key: string) => key,
+		}),
 }));
 vi.mock("@/i18n/routing", () => ({
 	usePathname: () => "/lib",
@@ -52,8 +53,9 @@ import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
 import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-	true;
+(
+	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The test page has no layout engine, so nothing ever changes size.
 class NoResize {
@@ -139,12 +141,7 @@ describe("the chat beside the search results", () => {
 
 	/** The chat, with nothing of interest beside it. */
 	function Chat() {
-		return (
-			<InlineLibraryChat
-				modelId="gemini-2.5-flash"
-				renderSources={() => null}
-			/>
-		);
+		return <InlineLibraryChat modelId="gemini-2.5-flash" />;
 	}
 
 	async function render() {

@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "النتائج",
     "exportFailed": "تعذّر تجهيز هذا المحتوى",
     "copyFailed": "تعذّر النسخ",
     "copyFailedHelp": "تحقق من إذن الحافظة في متصفحك ثم حاول مجددًا.",
@@ -491,6 +492,8 @@
     "invalidCredentials": "البيانات غير صالحة"
   },
   "ai": {
+    "sourcesTitle": "المصادر",
+    "sourcesEmpty": "ستظهر هنا المنشورات التي يقرأها الذكاء الاصطناعي.",
     "summarize": "تلخيص",
     "summarizeDescription": "تلخيص هذا المصدر بأقل عدد ممكن من الكلمات",
     "explain": "شرح",

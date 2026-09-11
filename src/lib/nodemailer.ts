@@ -10,6 +10,7 @@ type RuntimeEmailMessage = {
 	replyTo: string;
 	subject: string;
 	text: string;
+	html: string;
 };
 
 type SmtpTransporter = Transporter<SMTPTransport.SentMessageInfo>;

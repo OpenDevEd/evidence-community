@@ -1,7 +1,5 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { Button } from "@/components/nextui/Button";
 import {
@@ -16,9 +14,10 @@ import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST } from "@/lib/utils";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { BsStars } from "react-icons/bs";
 import { useLocalStorage } from "usehooks-ts";
-import { motion } from "framer-motion";
+import { MotionConfig, motion } from "framer-motion";
 import { AIHistory } from "@/types/ai";
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
@@ -31,6 +30,7 @@ import {
 import { twMerge } from "tailwind-merge";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { analyticsIdField } from "@/lib/ai/chat-request";
+import { publicationPdfCitationSources } from "@/lib/ai/citations";
 
 function randomUUID() {
 	return (
@@ -39,13 +39,172 @@ function randomUUID() {
 	);
 }
 
-function saveHistoryEntry(previous: Record<string, AIHistory[]>, feature: string, entry: AIHistory) {
+function saveHistoryEntry(
+	previous: Record<string, AIHistory[]>,
+	feature: string,
+	entry: AIHistory,
+) {
 	const history = previous[feature] ?? [];
-	const exists = history.some(({id}) => id === entry.id);
+	const exists = history.some(({ id }) => id === entry.id);
 	const next = exists
-		? history.map((item) => item.id === entry.id ? {...item, content: entry.content} : item)
+		? history.map((item) =>
+				item.id === entry.id
+					? { ...item, content: entry.content }
+					: item,
+			)
 		: [entry, ...history];
-	return {...previous, [feature]: next};
+	return { ...previous, [feature]: next };
+}
+
+type AIFeature = ReturnType<typeof useAIFeature>;
+type HistoriesSetter = (
+	value:
+		| Record<string, AIHistory[]>
+		| ((
+				previous: Record<string, AIHistory[]>,
+		  ) => Record<string, AIHistory[]>),
+) => void;
+
+function AiModals({
+	data,
+	explainFeature,
+	explainTitle,
+	hasChatConversation,
+	histories,
+	id,
+	isChangeOpen,
+	isChatOpen,
+	onChangeOpenChange,
+	onChatOpenChange,
+	onConversationStateChange,
+	onModelChange,
+	questions,
+	selectedModelId,
+	setHistories,
+	summaryFeature,
+	summaryTitle,
+}: {
+	data: ItemGetResponse | undefined;
+	explainFeature: AIFeature;
+	explainTitle: string;
+	hasChatConversation: boolean;
+	histories: Record<string, AIHistory[]>;
+	id: string;
+	isChangeOpen: boolean;
+	isChatOpen: boolean;
+	onChangeOpenChange: () => void;
+	onChatOpenChange: () => void;
+	onConversationStateChange: (hasConversation: boolean) => void;
+	onModelChange: (modelId: string) => void;
+	questions: string[] | undefined;
+	selectedModelId: string | null;
+	setHistories: HistoriesSetter;
+	summaryFeature: AIFeature;
+	summaryTitle: string;
+}) {
+	const pdfSources = useMemo(
+		() =>
+			publicationPdfCitationSources(
+				data?.item?.key,
+				data?.item?.attachmentsData,
+			),
+		[data?.item?.key, data?.item?.attachmentsData],
+	);
+	const generativeFeatures = [
+		{ feature: summaryFeature, title: summaryTitle },
+		{ feature: explainFeature, title: explainTitle },
+	];
+
+	return (
+		<>
+			<ModelSelector
+				isOpen={isChangeOpen}
+				onOpenChange={onChangeOpenChange}
+				selectedModelId={selectedModelId}
+				onModelChange={onModelChange}
+				hasConversation={hasChatConversation}
+				onResetConversation={() => onConversationStateChange(false)}
+			/>
+			<ChatModal
+				key={selectedModelId ?? "no-model"}
+				isOpen={isChatOpen}
+				onOpenChange={onChatOpenChange}
+				data={data}
+				modelId={selectedModelId}
+				onModelChange={onModelChange}
+				onConversationStateChange={onConversationStateChange}
+				questions={questions}
+			/>
+			{generativeFeatures.map(({ feature, title }) => (
+				<GenerativeModal
+					key={feature.key}
+					feature={feature}
+					title={title}
+					history={histories[feature.key] || []}
+					setHistory={(history) =>
+						setHistories((previous) => ({
+							...previous,
+							[feature.key]: history,
+						}))
+					}
+					id={id}
+					currentTitle={data!.item!.title!}
+					currentKey={data!.item!.key!}
+					currentModelId={selectedModelId}
+					onClearCurrent={() => feature.setCompletion("")}
+					pdfSources={pdfSources}
+				/>
+			))}
+		</>
+	);
+}
+
+function AiMenu({
+	ariaLabel,
+	items,
+	label,
+	variant,
+}: {
+	ariaLabel: string;
+	items: ReturnType<typeof AI_DROPDOWN_ITEMS>;
+	label: string;
+	variant?: "default" | "inline";
+}) {
+	return (
+		<Dropdown classNames={{ content: "bg-white dark:bg-secondary" }}>
+			<DropdownTrigger>
+				<Button
+					isIconOnly={variant === "default"}
+					aria-label={ariaLabel}
+					className={twMerge(
+						variant === "default" && "!p-0 rounded-full ",
+					)}
+					size={variant === "inline" ? "sm" : "lg"}
+				>
+					<BsStars />
+					{variant === "inline" && label}
+				</Button>
+			</DropdownTrigger>
+			<DropdownMenu
+				items={items}
+				itemClasses={{
+					base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
+				}}
+			>
+				{(item) => (
+					<DropdownItem
+						key={item.key}
+						description={item.description}
+						onPress={item.onPress}
+						startContent={item.startContent}
+						className="gap-4"
+					>
+						{item.label}
+					</DropdownItem>
+				)}
+			</DropdownMenu>
+		</Dropdown>
+	);
 }
 
 function AiButton({
@@ -55,7 +214,8 @@ function AiButton({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const { selectedModelId, setSelectedModelId, modelPresentation } = useSelectedModel();
+	const { selectedModelId, setSelectedModelId, modelPresentation } =
+		useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
 		...analyticsIdField(getAnalyticsDistinctId()),
@@ -88,21 +248,22 @@ function AiButton({
 	const [hasChatConversation, setHasChatConversation] = useState(false);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
-
 	const [histories, setHistories] = useLocalStorage<
 		Record<string, AIHistory[]>
 	>(`ai-history-v2`, {});
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
 		if (!selectedModelId) return;
-		setHistories((previous) => saveHistoryEntry(previous, prompt, {
-			id,
-			content: completion,
-			date: new Date(),
-			title: data!.item!.title!,
-			key: data!.item!.key!,
-			modelId: selectedModelId,
-		}));
+		setHistories((previous) =>
+			saveHistoryEntry(previous, prompt, {
+				id,
+				content: completion,
+				date: new Date(),
+				title: data!.item!.title!,
+				key: data!.item!.key!,
+				modelId: selectedModelId,
+			}),
+		);
 	};
 
 	const summaryFeature = useAIFeature(
@@ -128,6 +289,14 @@ function AiButton({
 		});
 		setId(crypto.randomUUID());
 	};
+	const menuItems = AI_DROPDOWN_ITEMS(
+		t,
+		modelPresentation,
+		onChangeOpenChange,
+		summaryFeature,
+		explainFeature,
+		onChatOpenChange,
+	);
 
 	return (
 		<motion.div
@@ -145,84 +314,31 @@ function AiButton({
 					variant === "default" && " p-4",
 				)}
 			>
-				<ModelSelector
-					isOpen={isChangeOpen}
-					onOpenChange={onChangeOpenChange}
-					selectedModelId={selectedModelId}
-					onModelChange={handleModelChange}
-					hasConversation={hasChatConversation}
-					onResetConversation={() => setHasChatConversation(false)}
-				/>
-				<ChatModal
-					// Changing the model starts a new conversation.
-					key={selectedModelId ?? "no-model"}
-					isOpen={isChatOpen}
-					onOpenChange={onChatOpenChange}
+				<AiModals
 					data={data}
-					modelId={selectedModelId}
-					onModelChange={handleModelChange}
+					explainFeature={explainFeature}
+					explainTitle={t("explain")}
+					hasChatConversation={hasChatConversation}
+					histories={histories}
+					id={id}
+					isChangeOpen={isChangeOpen}
+					isChatOpen={isChatOpen}
+					onChangeOpenChange={onChangeOpenChange}
+					onChatOpenChange={onChatOpenChange}
 					onConversationStateChange={setHasChatConversation}
+					onModelChange={handleModelChange}
 					questions={questions}
+					selectedModelId={selectedModelId}
+					setHistories={setHistories}
+					summaryFeature={summaryFeature}
+					summaryTitle={t("summarize")}
 				/>
-				{[summaryFeature, explainFeature].map((feature) => (
-					<GenerativeModal
-						key={feature.key}
-						feature={feature}
-						title={t(feature.key)}
-						history={histories[feature.key] || []}
-						setHistory={(history) =>
-							setHistories((prev) => ({
-								...prev,
-								[feature.key]: history,
-							}))
-						}
-						id={id}
-					/>
-				))}
-				<Dropdown
-					classNames={{
-						content: "bg-white dark:bg-secondary",
-					}}
-				>
-					<DropdownTrigger>
-						<Button
-							isIconOnly={variant === "default"}
-							aria-label={tUI("aiMenuAriaLabel")}
-							className={twMerge(
-								variant === "default" && "!p-0 rounded-full ",
-							)}
-							size={variant === "inline" ? "sm" : "lg"}
-						>
-							<HugeiconsIcon icon={SparklesIcon} />
-							{variant === "inline" && t("askAI")}
-						</Button>
-					</DropdownTrigger>
-					<DropdownMenu
-						items={AI_DROPDOWN_ITEMS(
-							t,
-							modelPresentation,
-							onChangeOpenChange,
-							summaryFeature,
-							explainFeature,
-							onChatOpenChange,
-						)}
-						itemClasses={{
-							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
-						}}
-					>
-						{(item) => (
-							<DropdownItem
-								key={item.key}
-								description={item.description}
-								onPress={item.onPress}
-								startContent={item.startContent}
-								className="gap-4"
-							>
-								{item.label}
-							</DropdownItem>
-						)}
-					</DropdownMenu>
-				</Dropdown>
+				<AiMenu
+					ariaLabel={tUI("aiMenuAriaLabel")}
+					items={menuItems}
+					label={t("askAI")}
+					variant={variant}
+				/>
 			</div>
 		</motion.div>
 	);
@@ -239,5 +355,9 @@ export default function AiWrapper({
 
 	if (!isAIEnabled || !data?.item) return null;
 
-	return <AiButton data={data} variant={variant} />;
+	return (
+		<MotionConfig reducedMotion="user">
+			<AiButton data={data} variant={variant} />
+		</MotionConfig>
+	);
 }
