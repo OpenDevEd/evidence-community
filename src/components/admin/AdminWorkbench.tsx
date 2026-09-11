@@ -1150,18 +1150,20 @@ export default function AdminWorkbench({
 		],
 		[items, pickedLinkTargets],
 	);
+	const stopLinkPick = useCallback(() => {
+		setLinkPick((current) => current ? { ...current, kind: null } : null);
+		setMobilePane("inspector");
+	}, []);
 	useEffect(() => {
 		// Escape leaves pick mode: a document keyboard listener is the only way
 		// to catch it wherever focus is (table cell, banner, inspector).
 		if (!activeLinkPick) return;
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				setLinkPick((current) => (current ? { ...current, kind: null } : null));
-			}
+			if (event.key === "Escape") stopLinkPick();
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [activeLinkPick]);
+	}, [activeLinkPick, stopLinkPick]);
 
 	const runBusy = useCallback(
 		async (
@@ -2356,11 +2358,7 @@ export default function AdminWorkbench({
 											for “{detail.title || detail.key}”; click or untick again to remove. Esc to finish.
 										</span>
 										<Button
-											onPress={() =>
-												setLinkPick((current) =>
-													current ? { ...current, kind: null } : null,
-												)
-											}
+											onPress={stopLinkPick}
 											size="xs"
 											variant="solid"
 										>
@@ -2447,12 +2445,7 @@ export default function AdminWorkbench({
 								setLinkPick({ forKey: detail.key, kind });
 								setMobilePane("list");
 							}}
-							onStopLinkPick={() => {
-								setLinkPick((current) =>
-									current ? { ...current, kind: null } : null,
-								);
-								setMobilePane("inspector");
-							}}
+							onStopLinkPick={stopLinkPick}
 							onCreateAttachment={createAttachment}
 							onDiscardDraft={discardCurrent}
 							onDiscardFile={discardPdfDraft}

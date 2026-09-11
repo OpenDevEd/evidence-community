@@ -19,7 +19,7 @@
     "resources": "Resources",
     "explore": "Explore",
     "noResourcesFound": "No resources found",
-    "downloadRecords": "Download {count} Records",
+    "downloadRecords": "Download {count, plural, one {# record} other {# records}}",
     "printCitations": "Print {count} Citations",
     "mainFeed": "Main Feed",
     "lastUpdate": "Last update from database: {date} (UTC)",
