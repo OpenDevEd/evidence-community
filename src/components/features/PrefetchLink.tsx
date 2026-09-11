@@ -1,5 +1,41 @@
 import { Link, useRouter } from "@/i18n/routing";
 
+type LinkMouseEvent = React.MouseEvent<HTMLAnchorElement>;
+type RouterPush = ReturnType<typeof useRouter>["push"];
+
+function hasPlainPrimaryClick(event: LinkMouseEvent, href: string) {
+	const hasModifier = [
+		event.metaKey,
+		event.ctrlKey,
+		event.shiftKey,
+		event.altKey,
+	].some(Boolean);
+	return [
+		Boolean(href),
+		event.currentTarget.target !== "_blank",
+		event.button === 0,
+		!hasModifier,
+	].every(Boolean);
+}
+
+function hasCurrentOrigin(href: string) {
+	try {
+		return new URL(href, window.location.href).origin === window.location.origin;
+	} catch {
+		return false;
+	}
+}
+
+function navigateOnMouseDown(
+	event: LinkMouseEvent,
+	href: string,
+	push: RouterPush,
+) {
+	if (!hasPlainPrimaryClick(event, href) || !hasCurrentOrigin(href)) return;
+	event.preventDefault();
+	push(href);
+}
+
 export default function PrefetchLink({
 	href,
 	children,
@@ -12,30 +48,9 @@ export default function PrefetchLink({
 	return (
 		<Link
 			href={href}
-			onMouseDown={(e) => {
-				if (!href) return;
-
-				if (
-					e.currentTarget.target === "_blank" ||
-					e.button !== 0 ||
-					e.metaKey ||
-					e.ctrlKey ||
-					e.shiftKey ||
-					e.altKey
-				) {
-					return;
+				onMouseDown={(event) =>
+					navigateOnMouseDown(event, href, router.push)
 				}
-
-				try {
-					const url = new URL(href, window.location.href);
-					if (url.origin !== window.location.origin) return;
-				} catch {
-					return;
-				}
-
-				e.preventDefault();
-				router.push(href);
-			}}
 			prefetch={true}
 			{...props}
 		>
