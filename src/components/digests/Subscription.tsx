@@ -14,7 +14,7 @@ type Step = "form" | "confirm" | "subscribed" | "stopped";
 function PreferenceChoices({ value, onChange, schedule }: { value: Preferences; onChange: (value: Preferences) => void; schedule: string }) {
   return <div className="space-y-5">
     {([
-      { key: "digest", icon: Calendar03Icon, label: "Library digest", help: schedule },
+      { key: "digest", icon: Calendar03Icon, label: "Library digests", help: schedule },
       { key: "instant", icon: BookOpen01Icon, label: "New publications", help: "Updates when publications are added" },
     ] as const).map(option => <div key={option.key} className="flex items-center gap-3">
       <span className={muted}><Icon value={option.icon} /></span>

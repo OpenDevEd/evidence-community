@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import { it, expect, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const smtp = vi.hoisted(() => ({sendMail: vi.fn()}));
@@ -221,5 +222,28 @@ it("collects late commits and newly revealed items once without replaying every 
     const editions = await db.select().from(notificationEdition);
     expect(editions).toHaveLength(2);
     expect(editions.flatMap(e => e.publications.map(p => p.key)).sort()).toEqual([draft.itemKey, hidden.itemKey].sort());
+  });
+}, 120_000);
+
+// Execute the real upgrade over populated pre-upgrade columns and stream values.
+it("preserves subscriber tokens, published editions and cutoffs when renaming digest storage", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const cutoff = new Date("2026-09-10T12:00:00Z");
+    const nextAt = new Date("2026-09-14T09:00:00Z");
+    await db.insert(notificationState).values({enabled: true, digestThrough: cutoff, nextDigestAt: nextAt, schedule: JSON.stringify({weekday: 1, time: "09:00", timezone: "UTC"})});
+    await requestSubscription(db, {email: "migration@example.org", digest: true, instant: false});
+    const [before] = await db.select().from(notificationSubscriber);
+    await confirmSubscription(db, before.token);
+    const [edition] = await db.insert(notificationEdition).values({stream: "digest", windowStart: cutoff, windowEnd: nextAt, publications: [], title: "Saved edition", publishedAt: nextAt}).returning();
+    await client.query(`ALTER TABLE "notificationState" RENAME COLUMN "digestThrough" TO "weeklyThrough";
+      ALTER TABLE "notificationState" RENAME COLUMN "nextDigestAt" TO "nextWeeklyAt";
+      ALTER TABLE "notificationSubscriber" RENAME COLUMN "digest" TO "weekly";
+      UPDATE "notificationEdition" SET "stream" = 'weekly';`);
+    await client.query(readFileSync("drizzle/0058_library_digest_schedule.sql", "utf8"));
+    expect((await db.select().from(notificationSubscriber))[0]).toMatchObject({id: before.id, token: before.token, digest: true, instant: false, confirmedAt: expect.any(Date)});
+    expect((await db.select().from(notificationEdition))[0]).toMatchObject({id: edition.id, stream: "digest", title: "Saved edition", publishedAt: nextAt});
+    const [state] = await db.select().from(notificationState);
+    expect(state).toMatchObject({digestThrough: cutoff, nextDigestAt: nextAt});
+    expect(JSON.parse(state.schedule)).toEqual({frequency: "weekly", weekday: 1, time: "09:00", timezone: "UTC"});
   });
 }, 120_000);
