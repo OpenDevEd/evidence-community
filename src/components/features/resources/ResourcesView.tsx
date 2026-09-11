@@ -16,6 +16,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
 	ReactNode,
+	type ComponentProps,
 	use,
 	useId,
 	useContext,
@@ -33,6 +34,7 @@ import {
 	useAnimate,
 	useReducedMotion,
 } from "framer-motion";
+import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/nextui/Button";
 import { ContentInteractions } from "@/components/pages/EvidenceLibrary";
@@ -48,7 +50,7 @@ import {
 } from "@/context/LibraryConfigProvider";
 import { DownloadModal } from "../newlib/DownloadModal";
 import { CardBody, useDisclosure } from "@nextui-org/react";
-import { ItemsContext } from "../items/ItemsList";
+import { ItemsContext } from "@/context/ItemsContext";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import {
 	EngagedLibraryPanel,
@@ -746,36 +748,35 @@ export function NoteView() {
 	);
 }
 
-export function ResourcesView({
-	extraFilters,
-	params,
-	countLabel,
-	header,
-}: {
-	extraFilters: ReactNode;
-	params?: Record<string, any>;
-	countLabel?: ReactNode;
-	header?: ReactNode;
-}) {
-	const t = useTranslations("ui");
-	const idPrefix = useId();
-	const isRTL = getLangDir(useLocale()) === "rtl";
-	const format = useFormatter();
-	const [abstract, setAbstract] = useState(true);
-	const [view, setView] = useState("list");
+function animateResultsPlane(
+	plane: HTMLElement,
+	shadow: HTMLElement,
+	animatePlane: ReturnType<typeof useAnimate>[1],
+	engaged: boolean,
+	isRTL: boolean,
+) {
+	const fromX = (engaged ? -PLANE_SHIFT : PLANE_SHIFT) * (isRTL ? -1 : 1);
+	const fromScale = engaged ? PLANE_RECEDE_SCALE : PLANE_LIFT_SCALE;
+	return [
+		animatePlane(
+			plane,
+			{ x: [fromX, 0], scale: [fromScale, 1] },
+			{ ...PLANE_SPRING, delay: engaged ? 0 : PLANE_CLOSE_DELAY },
+		),
+		animatePlane(
+			shadow,
+			{ opacity: [0, 1, 0] },
+			{
+				duration: 0.7,
+				times: [0, 0.3, 1],
+				ease: "easeOut",
+				delay: engaged ? 0 : PLANE_CLOSE_DELAY,
+			},
+		),
+	];
+}
 
-	const [engagedView, setEngagedView] =
-		useState<EngagedLibraryView>("results");
-	const [engagedAbstract, setEngagedAbstract] = useState(false);
-	const { status } = useContext(CacheContext) as CacheContextType;
-	const itemsContext = use(ItemsContext);
-
-	const { engaged: chatEngaged } = useInlineChatLayout();
-	const { selectedModelId } = useSelectedModel();
-	const engaged =
-		chatEngaged && !itemsContext.userData && Boolean(selectedModelId);
-	const { theme } = useLibraryConfig();
-
+function useSplitViewMotion(engaged: boolean, isRTL: boolean) {
 	const [chatLinger, setChatLinger] = useState(false);
 	const [prevEngaged, setPrevEngaged] = useState(engaged);
 	if (engaged !== prevEngaged) {
@@ -804,30 +805,19 @@ export function ResourcesView({
 		const plane = planeScope.current as HTMLElement | null;
 		const shadow = plane?.querySelector<HTMLElement>("[data-plane-shadow]");
 		if (!plane || !shadow) return;
-		const fromX = (engaged ? -PLANE_SHIFT : PLANE_SHIFT) * (isRTL ? -1 : 1);
-		const fromScale = engaged ? PLANE_RECEDE_SCALE : PLANE_LIFT_SCALE;
-		const controls = [
-			animatePlane(
-				plane,
-				{ x: [fromX, 0], scale: [fromScale, 1] },
-				{ ...PLANE_SPRING, delay: engaged ? 0 : PLANE_CLOSE_DELAY },
-			),
-			animatePlane(
-				shadow,
-				{ opacity: [0, 1, 0] },
-				{
-					duration: 0.7,
-					times: [0, 0.3, 1],
-					ease: "easeOut",
-					delay: engaged ? 0 : PLANE_CLOSE_DELAY,
-				},
-			),
-		];
+		const controls = animateResultsPlane(
+			plane,
+			shadow,
+			animatePlane,
+			engaged,
+			isRTL,
+		);
 		return () => controls.forEach((c) => c.stop());
 	}, [engaged, animatePlane, planeScope, prefersReducedMotion, isRTL]);
-	const searchContext = itemsContext.userData
-		? undefined
-		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	return { showChat, hasSwapped, planeScope };
+}
+
+function useResultsAnalytics(itemsContext: ReturnType<typeof useItemsList>) {
 	const lastTrackedResults = useRef<string | null>(null);
 
 	useEffect(() => {
@@ -878,6 +868,189 @@ export function ResourcesView({
 		itemsContext.itemsData,
 		itemsContext.queryParams,
 	]);
+}
+
+function InlineChatColumn({
+	engaged,
+	modelId,
+	searchContext,
+}: {
+	engaged: boolean;
+	modelId: string;
+	searchContext: ReturnType<typeof normalizeLibrarySearchContext> | undefined;
+}) {
+	const { theme } = useLibraryConfig();
+	return (
+		<div
+			inert={!engaged || undefined}
+			className={twMerge(
+				"min-w-0 origin-bottom animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 lg:sticky lg:top-[4.75rem] motion-reduce:animate-none motion-reduce:transition-none lg:col-start-1 lg:row-start-1",
+
+				theme.layout === "small"
+					? "xl:top-[8.125rem]"
+					: "xl:top-[6.5rem]",
+
+				"lg:overflow-hidden",
+
+				"transition-[opacity,transform] ease-in",
+
+				engaged
+					? "opacity-100"
+					: "pointer-events-none translate-y-6 scale-[0.97] opacity-0",
+			)}
+		>
+			<div className="lg:ms-auto lg:w-[calc((100cqw-1.5rem)*5/9)] xl:w-[calc((100cqw-2rem)*5/9)]">
+				<InlineLibraryChat
+					key={modelId}
+					modelId={modelId}
+					searchContext={searchContext}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function LibraryResultsPanel({
+	engaged,
+	engagedView,
+	idPrefix,
+	abstract,
+	view,
+}: {
+	engaged: boolean;
+	engagedView: EngagedLibraryView;
+	idPrefix: string;
+	abstract: boolean;
+	view: string;
+}) {
+	return (
+		<div
+			{...(engaged && {
+				role: "tabpanel",
+				"aria-labelledby": `${idPrefix}-tab-results`,
+				tabIndex: 0,
+			})}
+			id={`${idPrefix}-results`}
+			className={twMerge(
+				"flex min-w-0 flex-col gap-4",
+				engaged && engagedView === "sources" && "hidden",
+			)}
+		>
+			<ResourcesList
+				abstract={abstract}
+				view={view}
+				openLinksInNewTab={engaged}
+				className={twMerge(engaged && "gap-4")}
+			/>
+			<PaginationControls
+				className={twMerge(engaged && "py-0 lg:py-0")}
+			/>
+		</div>
+	);
+}
+
+function LibraryResultsFooter() {
+	const t = useTranslations("ui");
+	const format = useFormatter();
+	const { status } = useContext(CacheContext) as CacheContextType;
+	return (
+		<>
+			<ContentActions />
+			{status.latestPublicationUpdatedAt && (
+				<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
+					{t("lastUpdate", {
+						date: format.dateTime(
+							new Date(status.latestPublicationUpdatedAt!),
+							{
+								timeZone: "UTC",
+								day: "2-digit",
+								month: "2-digit",
+								year: "numeric",
+								hour: "2-digit",
+								minute: "2-digit",
+							},
+						),
+					})}
+				</div>
+			)}
+		</>
+	);
+}
+
+function LibraryControls({
+	engaged,
+	hasSwapped,
+	engagedProps,
+	normalProps,
+}: {
+	engaged: boolean;
+	hasSwapped: boolean;
+	engagedProps: ComponentProps<typeof EngagedLibraryPanel>;
+	normalProps: ComponentProps<typeof ContentInteractions>;
+}) {
+	return engaged ? (
+		<div
+			key="engaged-panel"
+			className={twMerge(
+				"flex w-full min-w-0 flex-col gap-4",
+				hasSwapped &&
+					"animate-in fade-in slide-in-from-right-4 rtl:slide-in-from-left-4 duration-200 ease-out motion-reduce:animate-none",
+			)}
+		>
+			<EngagedLibraryPanel {...engagedProps} key={engagedProps.modelId} />
+		</div>
+	) : (
+		<div
+			key="library-full"
+			className={twMerge(
+				"flex w-full min-w-0 flex-col gap-4",
+				hasSwapped &&
+					"animate-in fade-in slide-in-from-left-4 rtl:slide-in-from-right-4 duration-200 ease-out motion-reduce:animate-none",
+			)}
+		>
+			<ContentInteractions {...normalProps} />
+			<FilterChips />
+		</div>
+	);
+}
+
+export function ResourcesView({
+	extraFilters,
+	params,
+	countLabel,
+	header,
+}: {
+	extraFilters: ReactNode;
+	params?: Record<string, any>;
+	countLabel?: ReactNode;
+	header?: ReactNode;
+}) {
+	const idPrefix = useId();
+	const isRTL = getLangDir(useLocale()) === "rtl";
+	const [abstract, setAbstract] = useState(true);
+	const [view, setView] = useState("list");
+
+	const [engagedView, setEngagedView] =
+		useState<EngagedLibraryView>("results");
+	const [engagedAbstract, setEngagedAbstract] = useState(false);
+	const itemsContext = use(ItemsContext);
+
+	const { engaged: chatEngaged } = useInlineChatLayout();
+	const { selectedModelId } = useSelectedModel();
+	const engaged =
+		chatEngaged && !itemsContext.userData && Boolean(selectedModelId);
+
+	const { showChat, hasSwapped, planeScope } = useSplitViewMotion(
+		engaged,
+		isRTL,
+	);
+	const searchContext = itemsContext.userData
+		? undefined
+		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	useResultsAnalytics(itemsContext);
+	const resultAbstract = engaged ? engagedAbstract : abstract;
+	const resultView = engaged ? "list" : view;
+	const transformOrigin = isRTL ? "left center" : "right center";
 
 	return (
 		<MotionConfig reducedMotion="user">
@@ -901,40 +1074,15 @@ export function ResourcesView({
 					)}
 				>
 					{showChat && (
-						<div
-							inert={!engaged || undefined}
-							className={twMerge(
-								"min-w-0 origin-bottom animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 lg:sticky lg:top-[4.75rem] motion-reduce:animate-none motion-reduce:transition-none lg:col-start-1 lg:row-start-1",
-
-								theme.layout === "small"
-									? "xl:top-[8.125rem]"
-									: "xl:top-[6.5rem]",
-
-								"lg:overflow-hidden",
-
-								"transition-[opacity,transform] ease-in",
-
-								engaged
-									? "opacity-100"
-									: "pointer-events-none translate-y-6 scale-[0.97] opacity-0",
-							)}
-						>
-							<div className="lg:ms-auto lg:w-[calc((100cqw-1.5rem)*5/9)] xl:w-[calc((100cqw-2rem)*5/9)]">
-								<InlineLibraryChat
-									key={selectedModelId!}
-									modelId={selectedModelId!}
-									searchContext={searchContext}
-								/>
-							</div>
-						</div>
+						<InlineChatColumn
+							engaged={engaged}
+							modelId={selectedModelId!}
+							searchContext={searchContext}
+						/>
 					)}
 					<div
 						ref={planeScope}
-						style={{
-							transformOrigin: isRTL
-								? "left center"
-								: "right center",
-						}}
+						style={{ transformOrigin }}
 						className="@container relative flex w-full min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1"
 					>
 						<div
@@ -944,96 +1092,38 @@ export function ResourcesView({
 						/>
 
 						{engaged && <NoteView />}
-						{engaged ? (
-							<div
-								key="engaged-panel"
-								className={twMerge(
-									"flex w-full min-w-0 flex-col gap-4",
-									hasSwapped &&
-										"animate-in fade-in slide-in-from-right-4 rtl:slide-in-from-left-4 duration-200 ease-out motion-reduce:animate-none",
-								)}
-							>
-								<EngagedLibraryPanel
-									idPrefix={idPrefix}
-									key={selectedModelId}
-									modelId={selectedModelId!}
-									extraFilters={extraFilters}
-									view={engagedView}
-									setView={setEngagedView}
-									abstract={engagedAbstract}
-									setAbstract={setEngagedAbstract}
-								/>
-							</div>
-						) : (
-							<div
-								key="library-full"
-								className={twMerge(
-									"flex w-full min-w-0 flex-col gap-4",
-									hasSwapped &&
-										"animate-in fade-in slide-in-from-left-4 rtl:slide-in-from-right-4 duration-200 ease-out motion-reduce:animate-none",
-								)}
-							>
-								<ContentInteractions
-									header={header}
-									abstract={abstract}
-									onAbstractChange={setAbstract}
-									view={view}
-									setView={setView}
-									countLabel={countLabel}
-									extraFilters={extraFilters}
-								/>
-								<FilterChips />
-							</div>
-						)}
+						<LibraryControls
+							engaged={engaged}
+							hasSwapped={hasSwapped}
+							engagedProps={{
+								idPrefix,
+								modelId: selectedModelId!,
+								extraFilters,
+								filterChips: <FilterChips />,
+								view: engagedView,
+								setView: setEngagedView,
+								abstract: engagedAbstract,
+								setAbstract: setEngagedAbstract,
+							}}
+							normalProps={{
+								header,
+								abstract,
+								onAbstractChange: setAbstract,
+								view,
+								setView,
+								countLabel,
+								extraFilters,
+							}}
+						/>
 
-						<div
-							role={engaged ? "tabpanel" : undefined}
-							id={`${idPrefix}-results`}
-							aria-labelledby={
-								engaged ? `${idPrefix}-tab-results` : undefined
-							}
-							tabIndex={engaged ? 0 : undefined}
-							className={twMerge(
-								"flex min-w-0 flex-col gap-4",
-								engaged &&
-									engagedView === "sources" &&
-									"hidden",
-							)}
-						>
-							<ResourcesList
-								abstract={engaged ? engagedAbstract : abstract}
-								view={engaged ? "list" : view}
-								openLinksInNewTab={engaged}
-								className={twMerge(engaged && "gap-4")}
-							/>
-							<PaginationControls
-								className={twMerge(engaged && "py-0 lg:py-0")}
-							/>
-						</div>
-						{!engaged && (
-							<>
-								<ContentActions />
-								{status.latestPublicationUpdatedAt && (
-									<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
-										{t("lastUpdate", {
-											date: format.dateTime(
-												new Date(
-													status.latestPublicationUpdatedAt!,
-												),
-												{
-													timeZone: "UTC",
-													day: "2-digit",
-													month: "2-digit",
-													year: "numeric",
-													hour: "2-digit",
-													minute: "2-digit",
-												},
-											),
-										})}
-									</div>
-								)}
-							</>
-						)}
+						<LibraryResultsPanel
+							engaged={engaged}
+							engagedView={engagedView}
+							idPrefix={idPrefix}
+							abstract={resultAbstract}
+							view={resultView}
+						/>
+						{!engaged && <LibraryResultsFooter />}
 					</div>
 				</div>
 			</section>

@@ -16,7 +16,7 @@ import ItemsList from "../features/items/ItemsList";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFacetList } from "@/hooks/useFacetList";
 import { Input } from "../nextui/Input";
-import { SearchBar } from "./EvidenceLibrary";
+import { SearchBar } from "@/components/features/SearchBar";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";

@@ -1,204 +1,43 @@
 "use client";
-import type { IconType } from "react-icons";
-import { GiArchiveResearch } from "react-icons/gi";
 import { AiOutlineCompass } from "react-icons/ai";
 import { IoGrid } from "react-icons/io5";
 import { BiHelpCircle } from "react-icons/bi";
 import { HiOutlineViewList } from "react-icons/hi";
-import { FaSort } from "react-icons/fa";
 import { BsStars } from "react-icons/bs";
 import { SkipLink } from "@/components/layout/SkipLink";
 
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
-import { Select } from "@/components/nextui/Select";
-import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import { Spinner, useDisclosure } from "@nextui-org/react";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import {
-	type ReactNode,
-	use,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { type ReactNode, use, useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { SORT_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import { useItemsList } from "@/hooks/useItemsList";
-import ItemsList, { ItemsContext } from "../features/items/ItemsList";
+import ItemsList from "../features/items/ItemsList";
+import { ItemsContext } from "@/context/ItemsContext";
+import {
+	ScopeComponent,
+	SortComponent,
+} from "@/components/features/resources/LibrarySearchSelects";
 import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal, { type ChatWindowHandle } from "../features/modals/ChatModal";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { LibraryTagline } from "@/components/library/LibraryTagline";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
 import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
-
-function DropDownIcon({
-	Icon,
-	className,
-	label,
-}: {
-	Icon: IconType;
-	className?: string;
-	label?: string;
-}) {
-	return (
-		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon
-				className={twMerge("w-full h-full", className)}
-				aria-label={label}
-			/>
-		</div>
-	);
-}
-
-const genericSelectClassNames = {
-	base: "!mt-0",
-	mainWrapper: "h-10 lg:h-full",
-	label: "hidden",
-};
-
-// SearchBar now lives in "@/components/features/SearchBar".
-// Re-exported here so existing consumers (e.g. Map) can keep importing it from this module.
-export { SearchBar };
-
-export function SortComponent({
-	itemsContext,
-}: {
-	itemsContext: ReturnType<typeof useItemsList>;
-}) {
-	const tSorts = useTranslations("sorts");
-
-	return (
-		<Select
-			startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
-			selectedKeys={
-				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
-			}
-			onSelectionChange={itemsContext.handleSortChange as any}
-			items={SORT_OPTIONS}
-			selectorIcon={<div className="hidden"></div>}
-			classNames={
-				!itemsContext.userData &&
-				itemsContext.config.interactionsStyle !== "one-line"
-					? {
-							base: twMerge(
-								"flex-1 max-w-full lg:max-w-56 shrink-0",
-								genericSelectClassNames.base,
-							),
-							mainWrapper: twMerge(
-								"h-full",
-								genericSelectClassNames.mainWrapper,
-							),
-							label: twMerge("", genericSelectClassNames.label),
-						}
-					: {
-							base: twMerge(
-								"flex-1 max-w-full min-w-0 lg:min-w-56",
-								genericSelectClassNames.base,
-							),
-							mainWrapper: twMerge(
-								"",
-								genericSelectClassNames.mainWrapper,
-							),
-							label: twMerge("", genericSelectClassNames.label),
-						}
-			}
-			label={"Sort by"}
-			labelPlacement="outside"
-		>
-			{(item: any) => {
-				return (
-					<SelectItem aria-label={tSorts(item.key)} key={item.key}>
-						{tSorts(item.key)}
-					</SelectItem>
-				);
-			}}
-		</Select>
-	);
-}
-
-export function ScopeComponent({
-	itemsContext,
-}: {
-	itemsContext: ReturnType<typeof useItemsList>;
-}) {
-	const tScopes = useTranslations("scopes");
-	const { search } = useLibraryConfig();
-	const scopeOptions = useMemo(
-		() => getRuntimeSearchScopeOptions(search),
-		[search],
-	);
-
-	return (
-		<Select
-			startContent={
-				<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
-			}
-			color="tertiary"
-			selectedKeys={
-				itemsContext.queryParams.scope && [
-					itemsContext.queryParams.scope,
-				]
-			}
-			onSelectionChange={itemsContext.handleScopeChange as any}
-			items={scopeOptions}
-			selectorIcon={<div className="hidden"></div>}
-			classNames={
-				!itemsContext.userData
-					? {
-							base: twMerge(
-								"lg:max-w-72 max-w-full",
-								itemsContext.config.interactionsStyle ===
-									"one-line" && "flex-1",
-								genericSelectClassNames.base,
-							),
-							mainWrapper: twMerge(
-								"h-10 lg:h-full",
-								genericSelectClassNames.mainWrapper,
-							),
-							label: twMerge("", genericSelectClassNames.label),
-						}
-					: {
-							base: twMerge(
-								"flex-1 max-w-full min-w-0 lg:min-w-56",
-								genericSelectClassNames.base,
-							),
-							mainWrapper: twMerge(
-								"",
-								genericSelectClassNames.mainWrapper,
-							),
-							label: twMerge("", genericSelectClassNames.label),
-						}
-			}
-			label={"Search scope"}
-			labelPlacement="outside"
-		>
-			{(item: any) => {
-				return (
-					<SelectItem aria-label={tScopes(item.key)} key={item.key}>
-						{tScopes(item.key)}
-					</SelectItem>
-				);
-			}}
-		</Select>
-	);
-}
 
 /** Hands whatever is in the search field to the assistant. */
 function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
@@ -584,87 +423,103 @@ export function ContentInteractions({
 	);
 }
 
-function MainContent() {
-	const isRTL = getLangDir(useLocale()) === "rtl";
-	const props = useItemsList();
-	const { engaged } = useInlineChatLayout();
-	const prefersReducedMotion = useReducedMotion();
+function collectionTransitions(
+	engaged: boolean,
+	reducedMotion: boolean,
+): { collapse: Transition; content: Transition } {
+	if (reducedMotion)
+		return { collapse: { duration: 0 }, content: { duration: 0 } };
+	if (engaged)
+		return {
+			collapse: { duration: 0.45, ease: [0.16, 1, 0.3, 1] },
+			content: { duration: 0.35, ease: "easeOut" },
+		};
+	return {
+		collapse: {
+			delay: 0.13,
+			duration: 0.42,
+			ease: [0.16, 1, 0.3, 1],
+		},
+		content: {
+			delay: 0.2,
+			type: "spring",
+			bounce: 0.15,
+			duration: 0.55,
+		},
+	};
+}
 
+function CollectionsSidebar({
+	engaged,
+	children,
+}: {
+	engaged: boolean;
+	children: ReactNode;
+}) {
+	const isRTL = getLangDir(useLocale()) === "rtl";
+	const prefersReducedMotion = Boolean(useReducedMotion());
+	const direction = isRTL ? -1 : 1;
+	const exitOffset = prefersReducedMotion ? 0 : direction * 48;
+	const extent = engaged ? 0 : "auto";
+	const hidden = engaged || undefined;
+	const { collapse: collapseTransition, content: contentTransition } =
+		collectionTransitions(engaged, prefersReducedMotion);
 	return (
-		<>
+		<motion.div
+			initial={false}
+			animate={{
+				width: extent,
+				height: extent,
+			}}
+			transition={collapseTransition}
+			inert={hidden}
+			aria-hidden={hidden}
+			style={{
+				marginInlineEnd: engaged
+					? "calc(-1 * var(--library-gap))"
+					: "0rem",
+			}}
+			className={twMerge(
+				"hidden shrink-0 lg:block transition-[margin-inline-end] duration-split ease-split motion-reduce:transition-none",
+				!engaged && "delay-[130ms]",
+				engaged && "pointer-events-none",
+			)}
+		>
 			<motion.div
 				initial={false}
-				animate={{
-					width: engaged ? 0 : "auto",
-					height: engaged ? 0 : "auto",
-				}}
-				transition={
-					prefersReducedMotion
-						? { duration: 0 }
-						: engaged
-							? { duration: 0.45, ease: [0.16, 1, 0.3, 1] }
-							: {
-									delay: 0.13,
-									duration: 0.42,
-									ease: [0.16, 1, 0.3, 1],
-								}
+				animate={
+					engaged
+						? { opacity: 0, x: exitOffset }
+						: { opacity: 1, x: 0 }
 				}
-				inert={engaged || undefined}
-				aria-hidden={engaged || undefined}
-				style={{
-					marginInlineEnd: engaged
-						? "calc(-1 * var(--library-gap))"
-						: "0rem",
-				}}
-				className={twMerge(
-					"hidden shrink-0 lg:block transition-[margin-inline-end] duration-split ease-split motion-reduce:transition-none",
-					!engaged && "delay-[130ms]",
-					engaged && "pointer-events-none",
-				)}
+				transition={contentTransition}
+				className="lg:w-[24rem] xl:w-[28.5rem]"
 			>
-				<motion.div
-					initial={false}
-					animate={
-						engaged
-							? {
-									opacity: 0,
-									x: prefersReducedMotion
-										? 0
-										: isRTL
-											? -48
-											: 48,
-								}
-							: { opacity: 1, x: 0 }
-					}
-					transition={
-						prefersReducedMotion
-							? { duration: 0 }
-							: engaged
-								? { duration: 0.35, ease: "easeOut" }
-								: {
-										delay: 0.2,
-										type: "spring",
-										bounce: 0.15,
-										duration: 0.55,
-									}
-					}
-					className="lg:w-[24rem] xl:w-[28.5rem]"
-				>
-					<CollectionsList
-						data={props.collectionsData}
-						handleCheckboxChange={props.handleCheckboxChange}
-						selectedCollections={props.selectedCollections}
-						hierarchy={props.hierarchy}
-						range={props.queryParams.range}
-						handleRangeChange={props.handleRangeChange}
-						facetDistribution={props.facetDistribution}
-						queryParams={props.queryParams}
-						handleInstitutionSelect={props.handleInstitutionSelect}
-						handleCountrySelect={props.handleCountrySelect}
-					/>
-				</motion.div>
+				{children}
 			</motion.div>
+		</motion.div>
+	);
+}
 
+function MainContent() {
+	const props = useItemsList();
+	const { engaged } = useInlineChatLayout();
+	return (
+		<>
+			<CollectionsSidebar engaged={engaged}>
+				<CollectionsList
+					data={props.collectionsData}
+					handleCheckboxChange={props.handleCheckboxChange}
+					selectedCollections={props.selectedCollections}
+					hierarchy={props.hierarchy}
+					range={props.queryParams.range}
+					handleRangeChange={props.handleRangeChange}
+					facetDistribution={props.facetDistribution}
+					queryParams={props.queryParams}
+					handleInstitutionSelect={props.handleInstitutionSelect}
+					handleCountrySelect={props.handleCountrySelect}
+				/>
+			</CollectionsSidebar>
 			<ItemsList props={props} />
 		</>
 	);
