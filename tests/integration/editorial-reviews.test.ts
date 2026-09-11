@@ -131,6 +131,31 @@ it('clears conflicts when their working draft is discarded or attachment removed
  });
 }, 120_000);
 
+it('submits the materialized draft after source updates without changing the public record', async () => {
+ await withIsolatedPublicationDatabase(async db => {
+  const created = await createNativeItemDraft(db, {itemType: "Report", title: "Original source title", abstractNote: "Original source abstract"});
+  await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, created.itemKey));
+  const published = await publishNativeItemDraft(db, created.itemKey);
+  const opened = await openNativeItemDraft(db, created.itemKey);
+  await saveNativeItemDraft(db, {itemKey: created.itemKey, expectedDraftGeneration: opened.generation, expectedDraftRevision: opened.draftRevision, expectedPayload: opened.payload, payload: {...opened.payload, title: "Working title"}});
+  // A source import changes the public record while the private patch stays open.
+  const [sourceUpdate] = await db.update(item).set({title: "Updated source title", abstractNote: "Updated source abstract", revision: published.revision + 1}).where(eq(item.key, created.itemKey)).returning();
+  const displayed = await getNativeItemDraft(db, created.itemKey);
+  assert(displayed);
+  assert.equal(displayed.payload.title, "Working title");
+  assert.equal(displayed.payload.abstractNote, "Updated source abstract");
+  const submitted = await submitItemReview(db, created.itemKey, noFileActor);
+  const record = submitted.snapshot.records.find(record => record.itemKey === created.itemKey);
+  assert.equal(record?.baseRevision, sourceUpdate!.revision);
+  assert.deepEqual(record?.payload, displayed.payload);
+  assert.equal((await db.select().from(item).where(eq(item.key, created.itemKey)))[0]?.title, "Updated source title");
+  await approveItemReview(db, new MemoryFileStorage(), {reviewId: submitted.id, expectedRevision: submitted.revision, publicationTags: PUBLICATION_TAGS}, {userId: "source-update-editor", role: "editor"}, reviewConfig);
+  const [approved] = await db.select().from(item).where(eq(item.key, created.itemKey));
+  assert.equal(approved?.title, "Working title");
+  assert.equal(approved?.abstractNote, "Updated source abstract");
+ });
+}, 120_000);
+
 it('rejects approval when public data changes after submission', async () => {
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();

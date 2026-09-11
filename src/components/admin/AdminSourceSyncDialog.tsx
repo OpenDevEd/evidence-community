@@ -110,7 +110,9 @@ export function AdminSourceSyncBadge({
 }
 
 function records(count: number | null, suffix: string) {
-	return count === null ? "" : `, ${count.toLocaleString()} ${suffix}`;
+	return count === null
+		? ""
+		: `, ${count.toLocaleString()} ${count === 1 ? "record" : "records"} ${suffix}`;
 }
 
 /** The plain sentences the dialog shows under the status line. */
@@ -118,12 +120,14 @@ function syncFacts(sync: AdminSourceSync) {
 	const facts: string[] = [];
 	if (sync.status === "running") {
 		facts.push(
-			`Running since ${formatTime(sync.runningSince)}${records(sync.processed, "records processed so far")}.`,
+			`Running since ${formatTime(sync.runningSince)}${records(sync.processed, "processed so far")}.`,
 		);
 	}
 	if (sync.lastSuccessAt) {
 		facts.push(
-			`Last successful import ${formatTime(sync.lastSuccessAt)}${records(sync.lastRecords, "records")}.`,
+			sync.lastRecords === 0
+				? `Last checked ${formatTime(sync.lastSuccessAt)}. No new or changed records.`
+				: `Last checked ${formatTime(sync.lastSuccessAt)}${records(sync.lastRecords, "processed")}.`,
 		);
 	}
 	if (sync.lastFailureAt) {
@@ -179,7 +183,7 @@ function issuesNotice({
 	if (total === 0) {
 		return showDismissed
 			? "No dismissed issues."
-			: "No open record issues. Every record was stored in full.";
+			: "No open record issues.";
 	}
 	return `Showing ${shown.toLocaleString()} of ${total.toLocaleString()} ${showDismissed ? "dismissed" : "open"} issues.`;
 }
