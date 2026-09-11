@@ -451,7 +451,9 @@ function SearchTabContent({
 						suppressHydrationWarning
 						className="text-black dark:text-white/80 text-lg leading-none flex items-center whitespace-pre relative"
 					>
-						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
+						<div className={countLabel
+							? "flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal"
+							: "flex items-center gap-2 whitespace-nowrap"}>
 							{countLabel ||
 								t.rich("resourcesCount", {
 									count: formatter.number(
@@ -854,6 +856,8 @@ function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
 					{!tabData[mode as SearchMode].disabled && (
 						<Button
 							key={mode}
+							aria-label={tabData[mode as SearchMode].text}
+							aria-pressed={mode === selectedTab}
 							startContent={tabData[mode as SearchMode].icon}
 							className={twMerge(
 								"h-10",
