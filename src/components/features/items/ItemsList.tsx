@@ -27,7 +27,9 @@ export default function ItemsList({
 	userData,
 	extraFilters,
 	props,
+	contentId,
 }: {
+	contentId?: string;
 	userData?: any;
 	extraFilters?: ReactNode;
 	props: ReturnType<typeof useItemsList>;
@@ -38,6 +40,7 @@ export default function ItemsList({
 	return (
 		<ItemsContext.Provider value={props}>
 			<ResourcesView
+				contentId={contentId}
 				extraFilters={extraFilters}
 				{...(!userData
 					? {}

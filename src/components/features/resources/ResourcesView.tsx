@@ -1012,6 +1012,7 @@ function LibraryControls({
 }
 
 function ResourcesViewFrame({
+	contentId,
 	engaged,
 	showChat,
 	isRTL,
@@ -1025,12 +1026,13 @@ function ResourcesViewFrame({
 	planeScope: ReturnType<typeof useAnimate<HTMLDivElement>>[0];
 	chat: ReactNode;
 	children: ReactNode;
+	contentId: string;
 }) {
 	const transformOrigin = isRTL ? "left center" : "right center";
 	return (
 		<MotionConfig reducedMotion="user">
 			<section
-				id="main-content"
+				id={contentId}
 				className={twMerge(
 					"w-full flex flex-col gap-4",
 
@@ -1071,6 +1073,7 @@ function ResourcesViewFrame({
 }
 
 export function ResourcesView({
+	contentId = "main-content",
 	extraFilters,
 	params,
 	countLabel,
@@ -1080,6 +1083,7 @@ export function ResourcesView({
 	params?: Record<string, any>;
 	countLabel?: ReactNode;
 	header?: ReactNode;
+	contentId?: string;
 }) {
 	const idPrefix = useId();
 	const isRTL = getLangDir(useLocale()) === "rtl";
@@ -1109,6 +1113,7 @@ export function ResourcesView({
 
 	return (
 		<ResourcesViewFrame
+			contentId={contentId}
 			engaged={engaged}
 			showChat={showChat}
 			isRTL={isRTL}

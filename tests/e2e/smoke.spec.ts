@@ -822,17 +822,31 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await skipLink.focus();
 		await skipLink.press("Enter");
 		await expect(page.getByRole("main")).toBeFocused();
+		await page.keyboard.press("Tab");
+		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
 		await country.focus();
 		await expect(country).toBeFocused();
 		await country.press("Enter");
 		await expect(page).toHaveURL(url => url.searchParams.getAll("country").includes("Asia > Southern Asia > AF"));
 		await expect(country).toHaveAttribute("aria-pressed", "true");
+		await expect(page.locator("#main-content")).toHaveCount(1);
 		await country.press("Space");
 		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
 		await expect(country).toHaveAttribute("aria-pressed", "false");
 		await country.press("Enter");
 		await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
 		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
+		await page.setViewportSize({ width: 390, height: 844 });
+		await country.focus();
+		await country.press("Enter");
+		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
+		await country.focus();
+		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
+		const clearFilters = page.getByRole("button", { name: "Clear all filters", exact: true });
+		await clearFilters.focus();
+		await clearFilters.press("Enter");
+		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
+		await expect(country).toBeFocused();
 		expect(errors).toEqual([]);
 	} else {
 		// A streamed Next.js notFound() can report React's recoverable Suspense

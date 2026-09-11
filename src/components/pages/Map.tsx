@@ -6,7 +6,8 @@ import {
 	Geography,
 	ZoomableGroup,
 } from "react-simple-maps";
-import { ReactNode, useEffect, useState, memo } from "react";
+import { ReactNode, useEffect, useState, useRef, memo } from "react";
+import { useTranslations } from "next-intl";
 import { Tooltip } from "@nextui-org/react";
 import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
@@ -88,13 +89,34 @@ function linearColor(
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const isCountrySelected = props.queryParams.country.length > 0;
 	const { theme } = useLibraryConfig();
+	const t = useTranslations("ui");
+	const isDesktop = useBreakpoint("md");
+	const panelRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!isCountrySelected || isDesktop) return;
+		const previousFocus = document.activeElement;
+		panelRef.current?.focus({ preventScroll: true });
+		return () => {
+			if (
+				previousFocus instanceof HTMLElement ||
+				previousFocus instanceof SVGElement
+			) {
+				previousFocus.focus({ preventScroll: true });
+			}
+		};
+	}, [isCountrySelected, isDesktop]);
 
 	return (
 		<AnimatePresence>
 			{isCountrySelected && (
 				<motion.div
+					ref={panelRef}
+					role="region"
+					aria-label={t("resultsLabel")}
+					tabIndex={-1}
 					className={twMerge(
-						"fixed right-0 inset-y-0 top-36 w-full md:w-auto md:top-0 md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4",
+						"fixed right-0 inset-y-0 top-36 outline-none w-full md:w-auto md:top-0 md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4",
 						theme.layout === "small" && "md:pt-[calc(7.5rem)]",
 					)}
 					initial={{ opacity: 0, x: 100 }}
@@ -104,7 +126,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 				>
 					<div className="w-full md:w-[32rem] h-full rounded-2xl overflow-y-scroll overflow-x-hidden no-scrollbar">
 						<Card color="card" className="p-4 min-h-full">
-							<ItemsList props={props} />
+							<ItemsList props={props} contentId="map-results" />
 						</Card>
 					</div>
 				</motion.div>
@@ -156,6 +178,7 @@ export default function Map() {
 		...Object.values(countriesFacet || {}).map(Number),
 	);
 	const size = useWindowSize();
+	const isDesktop = useBreakpoint("md");
 
 	useEffect(() => {
 		const country = props.queryParams.country;
@@ -179,128 +202,146 @@ export default function Map() {
 			className="w-full h-screen overflow-hidden"
 		>
 			<MouseTooltip content={tooltipContent} zoomData={zoomData} />
-			{size.width && size.height && (
-				<ComposableMap
-					projection="geoEqualEarth"
-					projectionConfig={{
-						center: [0, 150],
-						scale: 600,
-					}}
-					width={size.width ?? undefined}
-					height={size.height ?? undefined}
-				>
-					<ZoomableGroup
-						minZoom={0.35}
-						maxZoom={20}
-						onMoveEnd={() => setZoomData(null)}
-						onMove={(data) => setZoomData(data)}
-					>
-						<Geographies
-							stroke={"black"}
-							strokeWidth={0.25}
-							geography={geoUrl}
-						>
-							{({
-								geographies,
-							}: {
-								geographies: FeatureGeometry[];
-							}) =>
-								geographies.map((geo: FeatureGeometry) => {
-									const countryCode = A3ToA2[geo.id];
-									const inFacet =
-										countriesFacet?.[countryCode];
-									const fullLocation =
-										COUNTRY_PARAMS[countryCode];
-									const countryName =
-										COUNTRIES[countryCode] ||
-										geo.properties.name;
-									const selectCountry = () => {
-										if (fullLocation)
-											props.handleCountrySelect(
-												fullLocation,
-											);
-									};
-
-									return (
-										<Geography
-											key={geo.id}
-											geography={geo}
-											role={
-												fullLocation ? "button" : "img"
-											}
-											aria-label={countryName}
-											tabIndex={fullLocation ? 0 : -1}
-											aria-pressed={
-												fullLocation
-													? props.queryParams.country.includes(
-															fullLocation,
-														)
-													: undefined
-											}
-											onKeyDown={(event) => {
-												if (
-													fullLocation &&
-													(event.key === "Enter" ||
-														event.key === " ")
-												) {
-													event.preventDefault();
-													if (!event.repeat)
-														selectCountry();
-												}
-											}}
-											fill={
-												countryCode
-													? linearColor(
-															RGBLightAccent,
-															RGBAccent,
-															[100, 100, 100],
-															inFacet
-																? inFacet /
-																		maxItems
-																: 0,
-														)
-													: "rgb(255,200,200)"
-											}
-											onClick={selectCountry}
-											onMouseEnter={() =>
-												setTooltipContent(
-													<div className="flex flex-col justify-center items-center">
-														<div className="text-sm font-bold">
-															{countryName}
-														</div>
-														<div className="text-xs">
-															{inFacet || 0}
-														</div>
-													</div>,
-												)
-											}
-											onMouseLeave={() =>
-												setTooltipContent(null)
-											}
-											className="transition-colors duration-100"
-											style={{
-												default: {
-													outline: "none",
-												},
-												hover: {
-													fill: tailwindAccentColor,
-													outline: "none",
-												},
-												pressed: {
-													fill: tailwindAccentColor,
-													outline: "none",
-												},
-											}}
-										/>
-									);
-								})
-							}
-						</Geographies>
-					</ZoomableGroup>
-				</ComposableMap>
-			)}
 			<Search props={props} />
 			<MemoizedItemView props={props} />
+			<div inert={!isDesktop && props.queryParams.country.length > 0}>
+				{size.width && size.height && (
+					<ComposableMap
+						projection="geoEqualEarth"
+						projectionConfig={{
+							center: [0, 150],
+							scale: 600,
+						}}
+						width={size.width ?? undefined}
+						height={size.height ?? undefined}
+					>
+						<ZoomableGroup
+							minZoom={0.35}
+							maxZoom={20}
+							onMoveEnd={() => setZoomData(null)}
+							onMove={(data) => setZoomData(data)}
+						>
+							<Geographies
+								stroke={"black"}
+								strokeWidth={0.25}
+								geography={geoUrl}
+							>
+								{({
+									geographies,
+								}: {
+									geographies: FeatureGeometry[];
+								}) =>
+									geographies.map((geo: FeatureGeometry) => {
+										const countryCode = A3ToA2[geo.id];
+										const inFacet =
+											countriesFacet?.[countryCode];
+										const fullLocation =
+											COUNTRY_PARAMS[countryCode];
+										const selected =
+											props.queryParams.country.includes(
+												fullLocation,
+											);
+										const countryName =
+											COUNTRIES[countryCode] ||
+											geo.properties.name;
+										const selectCountry = () => {
+											if (fullLocation)
+												props.handleCountrySelect(
+													fullLocation,
+												);
+										};
+
+										return (
+											<Geography
+												key={geo.id}
+												geography={geo}
+												role={
+													fullLocation
+														? "button"
+														: "img"
+												}
+												aria-label={countryName}
+												tabIndex={fullLocation ? 0 : -1}
+												aria-pressed={
+													fullLocation
+														? selected
+														: undefined
+												}
+												onKeyDown={(event) => {
+													if (
+														fullLocation &&
+														(event.key ===
+															"Enter" ||
+															event.key === " ")
+													) {
+														event.preventDefault();
+														if (!event.repeat)
+															selectCountry();
+													}
+												}}
+												fill={
+													countryCode
+														? linearColor(
+																RGBLightAccent,
+																RGBAccent,
+																[100, 100, 100],
+																inFacet
+																	? inFacet /
+																			maxItems
+																	: 0,
+															)
+														: "rgb(255,200,200)"
+												}
+												onClick={selectCountry}
+												onMouseEnter={() =>
+													setTooltipContent(
+														<div className="flex flex-col justify-center items-center">
+															<div className="text-sm font-bold">
+																{countryName}
+															</div>
+															<div className="text-xs">
+																{inFacet || 0}
+															</div>
+														</div>,
+													)
+												}
+												onMouseLeave={() =>
+													setTooltipContent(null)
+												}
+												vectorEffect="non-scaling-stroke"
+												className="text-black transition-colors duration-100 dark:text-white"
+												style={{
+													default: {
+														stroke: selected
+															? "currentColor"
+															: undefined,
+														strokeWidth: selected
+															? 2
+															: undefined,
+														outline: "none",
+													},
+													hover: {
+														fill: tailwindAccentColor,
+														stroke: "currentColor",
+														strokeWidth: 3,
+														outline: "none",
+													},
+													pressed: {
+														fill: tailwindAccentColor,
+														stroke: "currentColor",
+														strokeWidth: 3,
+														outline: "none",
+													},
+												}}
+											/>
+										);
+									})
+								}
+							</Geographies>
+						</ZoomableGroup>
+					</ComposableMap>
+				)}
+			</div>
 		</main>
 	);
 }
