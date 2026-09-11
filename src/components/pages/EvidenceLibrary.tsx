@@ -32,7 +32,6 @@ import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal, { type ChatWindowHandle } from "../features/modals/ChatModal";
 import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
-import { LibraryTagline } from "@/components/library/LibraryTagline";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { useModEnterHint } from "@/hooks/useShortcutHints";
@@ -159,6 +158,8 @@ function SearchTabContent({
 }) {
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
+	const { identity } = useLibraryConfig();
+	const searchTitle = identity.tagline?.trim() || t("searchTitle");
 
 	const {
 		isOpen: isExploreOpen,
@@ -181,22 +182,30 @@ function SearchTabContent({
 		<div className="flex flex-col gap-4">
 			{/* Header with title and explore button */}
 			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
-				<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
-					<div className="flex items-end gap-4">
+				<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
+					<SkipLink href="#collections">
+						{t("goToFilters")}
+					</SkipLink>
+					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
 						{header || (
-							<>
-								<SkipLink href="#collections">
-									{t("goToFilters")}
-								</SkipLink>
-								{showHeader && t("searchTitle")}
-							</>
+							showHeader && (
+								<Tooltip
+									content={searchTitle}
+									placement="bottom-start"
+									classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))]" }}
+								>
+									<span className="block truncate" tabIndex={0}>
+										{searchTitle}
+									</span>
+								</Tooltip>
+							)
 						)}
-					</div>
+					</h1>
 					<Button
 						startContent={
 							<AiOutlineCompass className="size-6 shrink-0" />
 						}
-						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
+						className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
 					>
 						{t("explore")}
@@ -205,8 +214,8 @@ function SearchTabContent({
 						isOpen={isExploreOpen}
 						onOpenChange={onExploreOpenChange}
 					/>
-				</h1>
-				<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
+				</div>
+				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
 					{!itemsContext.userData && (
 						<>
 							<Button
@@ -229,8 +238,6 @@ function SearchTabContent({
 					)}
 				</div>
 			</div>
-
-			<LibraryTagline show={showHeader} />
 
 			<LibraryFilters
 				askAI={askAI}
