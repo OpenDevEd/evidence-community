@@ -613,6 +613,23 @@ test("rate limits paid AI requests per browser when AI is enabled", async ({
 	});
 });
 
+test("copies citation text without HTML whitespace or an extra sentence separator", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.route(`**/item/${expectedSearchItemKey}/citation`, (route) => route.fulfill({ json: {
+		citation: '<div class="csl-bib-body">\n  <div class="csl-entry">Mills, C. (2026). <i>Learning &amp; evidence.</i></div>\n</div>\n',
+	} }));
+	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
+	await dismissConsent(page);
+	const citation = page.getByRole("heading", { name: "Citation", exact: true }).locator("..");
+	await citation.getByRole("button").click();
+	const suffix = expectedCitationUrl
+		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, page.url())}.`
+		: "";
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
+});
+
 test("enforces runtime search scopes, filters, embeddings, and citation URLs", async ({
 	page,
 	request,

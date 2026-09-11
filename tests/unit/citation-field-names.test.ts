@@ -58,6 +58,42 @@ describe("stored field names become Zotero field names", () => {
 // These run the real converter. Nothing is mocked, so they prove what a
 // reader actually downloads.
 describe("real citation output for a stored report", () => {
+	it("exports ordered creator roles without an empty leading name", async () => {
+		const bibtex = await new BibTeXExporter({
+			...storedReport(),
+			creators: [
+				{ firstName: "Amina", lastName: "Amber", creatorType: "author" },
+				{ firstName: "Sam", lastName: "Park", creatorType: "editor" },
+				{ firstName: "Cher", creatorType: "author" },
+				{ firstName: "Alex", lastName: "Lee", creatorType: "seriesEditor" },
+				{ firstName: "Mina", lastName: "Ito", creatorType: "translator" },
+			],
+		} as never).toBibTeX();
+
+		expect(bibtex).toContain("\tauthor = {Amber, Amina and Cher}");
+		expect(bibtex).toContain("\teditor = {Park, Sam and Lee, Alex}");
+		expect(bibtex).toContain("\ttranslator = {Ito, Mina}");
+	});
+
+	it("keeps an organization as one author instead of treating it as the publisher", async () => {
+		const exporter = new BibTeXExporter({
+			...storedReport(),
+			publisher: undefined,
+			creators: [
+				{ name: "Learning and Evidence Group", creatorType: "author" },
+				{ firstName: "Caitlin", lastName: "Mills", creatorType: "author" },
+			],
+		} as never);
+		const bibtex = await exporter.toBibTeX();
+		const ris = await exporter.toRIS();
+
+		expect(bibtex).toContain("\tauthor = {{Learning and Evidence Group} and Mills, Caitlin}");
+		expect(bibtex).not.toContain("\tinstitution = ");
+		expect(ris).toMatch(/^AU  - Learning and Evidence Group$/m);
+		expect(ris).toMatch(/^AU  - Mills, Caitlin$/m);
+		expect(ris).not.toMatch(/^PB  - /m);
+	});
+
 	it("keeps the number and language in BibTeX", async () => {
 		const bibtex = await new BibTeXExporter(
 			storedReport() as never,
