@@ -60,7 +60,7 @@ const appearance = {
 		spin: false,
 	},
 	queued: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		description: "The edit is queued for writeback.",
 		icon: Clock03Icon,
 		label: "Waiting to sync",
@@ -81,7 +81,7 @@ const appearance = {
 		spin: true,
 	},
 	sending: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		description: "The edit is being written back now.",
 		icon: Loading03Icon,
 		label: "Syncing",

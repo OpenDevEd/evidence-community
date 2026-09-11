@@ -3,6 +3,7 @@
 import {
 	ArchiveIcon,
 	CloudUploadIcon,
+	FileAttachmentIcon,
 	FileClockIcon,
 	FileXIcon,
 	PencilIcon,
@@ -25,7 +26,7 @@ const stateConfig = {
 		label: "Draft",
 	},
 	edited: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		icon: PencilIcon,
 		label: "Edited",
 	},
@@ -48,7 +49,7 @@ const fileConfig = {
 		label: "Processing",
 	},
 	staged: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		icon: CloudUploadIcon,
 		label: "Staged",
 	},
@@ -82,6 +83,10 @@ export function RecordStateChip({ state }: { state: AdminRecordState }) {
 	return <Status {...stateConfig[state]} />;
 }
 
-export function FileStateChip({ state }: { state: AdminFileState }) {
-	return <Status {...fileConfig[state]} />;
+export function FileStateChip({ state, snapshot = false }: { state: AdminFileState; snapshot?: boolean }) {
+	const config = fileConfig[state];
+	return <Status {...config} {...(snapshot && state !== "none" ? {
+		icon: FileAttachmentIcon,
+		label: "PDF included",
+	} : {})} />;
 }

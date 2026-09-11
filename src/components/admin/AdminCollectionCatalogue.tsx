@@ -104,7 +104,7 @@ function RootDropZone({ active }: { active: boolean }) {
 			ref={ref}
 			className={`mx-2 flex h-8 items-center justify-center gap-1.5 rounded-lg border border-dashed text-[11px] ${
 				isDropTarget
-					? "border-accent bg-accent/[0.12] text-accent-700 dark:bg-accent/20 dark:text-accent-300"
+					? "border-accent bg-accent/[0.12] text-accent-300 dark:bg-accent/20 dark:text-accent-700"
 					: "border-black/15 text-black/40 dark:border-white/15 dark:text-white/40"
 			}`}
 			data-collection-drop="root"
@@ -423,7 +423,7 @@ function CollectionRow({
 					aria-hidden
 					className={`shrink-0 ${
 						selected
-							? "text-accent-700 dark:text-accent-300"
+							? "text-accent-300 dark:text-accent-700"
 							: "opacity-55"
 					}`}
 					size={14}
@@ -1258,7 +1258,7 @@ export function AdminCollectionCatalogue({
 								: "Show deleted collections"
 						}
 						aria-pressed={view === "deleted"}
-						className={`grid size-8 shrink-0 place-items-center rounded-lg ${view === "deleted" ? "bg-accent/[0.12] text-accent-700 dark:bg-accent/20 dark:text-accent-300" : "text-black/40 hover:bg-black/[0.05] dark:text-white/40 dark:hover:bg-white/[0.06]"}`}
+						className={`grid size-8 shrink-0 place-items-center rounded-lg ${view === "deleted" ? "bg-accent/[0.12] text-accent-300 dark:bg-accent/20 dark:text-accent-700" : "text-black/40 hover:bg-black/[0.05] dark:text-white/40 dark:hover:bg-white/[0.06]"}`}
 						onClick={() =>
 							setView((current) =>
 								current === "active" ? "deleted" : "active",
@@ -1485,7 +1485,7 @@ export function AdminCollectionCatalogue({
 								) : (
 									<button
 										aria-disabled={row.kind === "loading"}
-										className={`flex h-full w-full items-center gap-2 rounded-lg px-3 text-left text-[11px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${row.kind === "loading" ? "cursor-wait text-black/35 dark:text-white/35" : "text-accent-700 hover:bg-accent/[0.08] dark:text-accent-300"}`}
+										className={`flex h-full w-full items-center gap-2 rounded-lg px-3 text-left text-[11px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${row.kind === "loading" ? "cursor-wait text-black/35 dark:text-white/35" : "text-accent-300 hover:bg-accent/[0.08] dark:text-accent-700"}`}
 										aria-level={row.depth + 1}
 										aria-posinset={row.positionInSet}
 										aria-selected={false}

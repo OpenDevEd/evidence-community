@@ -26,7 +26,7 @@ const statusAppearance = {
 		spin: false,
 	},
 	indexing: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		icon: Loading03Icon,
 		spin: true,
 	},
@@ -36,7 +36,7 @@ const statusAppearance = {
 		spin: false,
 	},
 	queued: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		icon: Clock03Icon,
 		spin: false,
 	},
@@ -46,7 +46,7 @@ const statusAppearance = {
 		spin: false,
 	},
 	retrying: {
-		className: "text-accent-700 dark:text-accent-300",
+		className: "text-accent-300 dark:text-accent-700",
 		icon: Refresh01Icon,
 		spin: true,
 	},
