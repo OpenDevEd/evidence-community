@@ -1,11 +1,16 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { BinocularsIcon, Loading03Icon, PlayIcon, SentIcon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { ButtonGroup } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
+import { ImSpinner8 } from "react-icons/im";
+import {
+	PiBinocularsBold,
+	PiGearSixBold,
+	PiPaperPlaneTiltFill,
+	PiPlayFill,
+} from "react-icons/pi";
 import { twMerge } from "tailwind-merge";
 
 import { Button } from "@/components/nextui/Button";
@@ -63,9 +68,14 @@ function ResearchModeButton({
 					transition={{ type: "spring", stiffness: 420, damping: 22 }}
 					className="grid place-items-center"
 				>
-					<HugeiconsIcon icon={BinocularsIcon} className="size-4 shrink-0" />
+					<PiBinocularsBold className="size-4 shrink-0" />
 				</motion.span>
-				<span className="hidden whitespace-nowrap xl:inline">
+				<span
+					className={twMerge(
+						"hidden whitespace-nowrap",
+						compact ? "xl:inline" : "sm:inline",
+					)}
+				>
 					{tUI("researchMode")}
 				</span>
 			</Button>
@@ -74,6 +84,7 @@ function ResearchModeButton({
 }
 
 function ScreeningButtons({
+	compact,
 	canScreen,
 	isScreening,
 	isWaiting,
@@ -82,6 +93,7 @@ function ScreeningButtons({
 	screeningTooltip,
 }: Pick<
 	ChatComposerControlsProps,
+	| "compact"
 	| "canScreen"
 	| "isScreening"
 	| "isWaiting"
@@ -93,7 +105,12 @@ function ScreeningButtons({
 	const settingsLabel = `${tUI("smartScreening")} ${tUI("settings")}`;
 
 	return (
-		<ButtonGroup className="shrink-0 overflow-hidden rounded-xl bg-black/[0.035] dark:bg-white/[0.05]">
+		<ButtonGroup
+			className={twMerge(
+				"shrink-0 overflow-hidden bg-black/[0.035] dark:bg-white/[0.05]",
+				compact ? "rounded-xl" : "rounded-2xl",
+			)}
+		>
 			<Tooltip content={settingsLabel}>
 				<Button
 					type="button"
@@ -104,8 +121,13 @@ function ScreeningButtons({
 					aria-label={settingsLabel}
 					onPress={onScreeningSettings}
 				>
-					<HugeiconsIcon icon={Settings02Icon} className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
-					<span className="hidden whitespace-nowrap xl:inline">
+					<PiGearSixBold className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
+					<span
+						className={twMerge(
+							"hidden whitespace-nowrap",
+							compact ? "xl:inline" : "sm:inline",
+						)}
+					>
 						{tUI("smartScreening")}
 					</span>
 				</Button>
@@ -122,9 +144,9 @@ function ScreeningButtons({
 					onPress={onScreen}
 				>
 					{isScreening ? (
-						<HugeiconsIcon icon={Loading03Icon} className="size-3.5 animate-spin" />
+						<ImSpinner8 className="size-3.5 animate-spin" />
 					) : (
-						<HugeiconsIcon icon={PlayIcon} className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
+						<PiPlayFill className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
 					)}
 				</Button>
 			</Tooltip>
@@ -133,12 +155,13 @@ function ScreeningButtons({
 }
 
 function SendButton({
+	compact,
 	isInputReady,
 	isWaiting,
 	prefersReducedMotion,
 }: Pick<
 	ChatComposerControlsProps,
-	"isInputReady" | "isWaiting" | "prefersReducedMotion"
+	"compact" | "isInputReady" | "isWaiting" | "prefersReducedMotion"
 >) {
 	const tUI = useTranslations("ui");
 	const still = prefersReducedMotion || isWaiting;
@@ -171,7 +194,10 @@ function SendButton({
 					isIconOnly
 					color="accent"
 					size="sm"
-					className="group/send !h-8 !w-8 !min-w-8 shrink-0 rounded-xl border-0"
+					className={twMerge(
+						"group/send !h-8 !w-8 !min-w-8 shrink-0 border-0",
+						compact ? "rounded-xl" : "rounded-2xl",
+					)}
 					aria-label={tUI("sendMessageAriaLabel")}
 					aria-keyshortcuts="Enter"
 				>
@@ -199,9 +225,9 @@ function SendButton({
 							className="grid place-items-center"
 						>
 							{isWaiting ? (
-								<HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+								<ImSpinner8 className="size-4 animate-spin" />
 							) : (
-								<HugeiconsIcon icon={SentIcon} className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
+								<PiPaperPlaneTiltFill className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
 							)}
 						</motion.span>
 					</AnimatePresence>
@@ -215,6 +241,7 @@ function SendButton({
 export function ChatComposerShell({
 	children,
 	className,
+	ref,
 	isComposerFocused,
 	isWaiting,
 	prefersReducedMotion,
@@ -222,6 +249,7 @@ export function ChatComposerShell({
 }: {
 	children: ReactNode;
 	className?: string;
+	ref?: Ref<HTMLDivElement>;
 	isComposerFocused: boolean;
 	isWaiting: boolean;
 	prefersReducedMotion: boolean | null;
@@ -231,6 +259,7 @@ export function ChatComposerShell({
 
 	return (
 		<motion.div
+			ref={ref}
 			initial={false}
 			animate={{ y: lifted ? -2 : 0, scale: lifted ? 1.004 : 1 }}
 			whileHover={
@@ -287,6 +316,7 @@ export function ChatComposerControls({
 					/>
 				)}
 				<ScreeningButtons
+					compact={compact}
 					canScreen={canScreen}
 					isScreening={isScreening}
 					isWaiting={isWaiting}
@@ -296,6 +326,7 @@ export function ChatComposerControls({
 				/>
 			</div>
 			<SendButton
+				compact={compact}
 				isInputReady={isInputReady}
 				isWaiting={isWaiting}
 				prefersReducedMotion={prefersReducedMotion}

@@ -1,6 +1,9 @@
 "use client";
 
-import { AuthorProfilesContext, useAuthorProfiles } from "@/lib/authors/use-author-profiles";
+import {
+	AuthorProfilesContext,
+	useAuthorProfiles,
+} from "@/lib/authors/use-author-profiles";
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo } from "react";
@@ -102,6 +105,7 @@ function BucketCard({
 }) {
 	return (
 		<Resource
+			openLinksInNewTab
 			itemData={item}
 			isLoading={isLoading}
 			abstract={false}
@@ -122,7 +126,11 @@ export function BucketList({
 	entries: BucketEntry[];
 	publications: BucketPublications;
 }) {
-	const { profiles } = useAuthorProfiles(Object.values(publications.byKey)?.flatMap(item => item.creators ?? []));
+	const { profiles } = useAuthorProfiles(
+		Object.values(publications.byKey)?.flatMap(
+			(item) => item.creators ?? [],
+		),
+	);
 	return (
 		<AuthorProfilesContext value={profiles}>
 			<div className="flex min-w-0 flex-col gap-4">
@@ -146,8 +154,8 @@ export function BucketList({
 							<BucketCard
 								item={publications.byKey[entry.key]}
 								isLoading={
-									publications.byKey[entry.key] === undefined &&
-									publications.isLoading
+									publications.byKey[entry.key] ===
+										undefined && publications.isLoading
 								}
 							/>
 						</motion.div>

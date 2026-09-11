@@ -2,6 +2,7 @@ import type { Config } from "tailwindcss";
 import { nextui } from "@nextui-org/react";
 import containerQueries from "@tailwindcss/container-queries";
 import typography from "@tailwindcss/typography";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 import { BREAKPOINTS } from "./design-tokens";
 
@@ -284,6 +285,7 @@ const config: Config = {
 		},
 		containerQueries,
 		typography,
+		tailwindcssAnimate,
 		nextui({
 			themes: {
 				dark: {

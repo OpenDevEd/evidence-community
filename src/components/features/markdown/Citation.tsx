@@ -1,11 +1,16 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { BookOpen01Icon, Download01Icon, LinkSquare01Icon } from "@hugeicons/core-free-icons";
+import { BiBookOpen } from "react-icons/bi";
+import { LuDownload, LuExternalLink } from "react-icons/lu";
 import Image from "next/image";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
-import { forwardRef, type ComponentProps, type CSSProperties, type ReactNode } from "react";
+import {
+	forwardRef,
+	type ComponentProps,
+	type CSSProperties,
+	type ReactNode,
+} from "react";
 import useSWR from "swr";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
@@ -33,22 +38,31 @@ import { twMerge } from "tailwind-merge";
 const pdfHrefPattern = /^\/lib\/([^/?#]+)\/download\/([^/?#]+)(?:[?#].*)?$/;
 
 const copyLinkClassNames = {
-	button:
-		"!h-7 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-1.5 text-citation text-black/40 shadow-none hover:!bg-black/[0.045] hover:!text-black/65 dark:text-white/40 dark:hover:!bg-white/[0.07] dark:hover:!text-white/70",
+	button: "!h-7 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-1.5 text-citation text-black/40 shadow-none hover:!bg-black/[0.045] hover:!text-black/65 dark:text-white/40 dark:hover:!bg-white/[0.07] dark:hover:!text-white/70",
 	icon: "size-3",
 	text: "leading-none",
 };
 
 const citationChipClassName =
-	"not-prose group/chip mx-1 inline-flex h-6 items-center gap-1.5 rounded-full border border-black/[0.08] bg-white py-0 pl-0.5 pr-2 align-middle font-sans text-citation font-medium not-italic leading-none tracking-normal text-black/55 no-underline shadow-sm outline-none transition-citation duration-200 ease-out hover:-translate-y-px hover:border-accent/40 hover:bg-accent/[0.06] hover:text-black/70 focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transform-none dark:border-white/10 dark:bg-white/[0.06] dark:text-white/60 dark:shadow-none dark:hover:border-accent/45 dark:hover:bg-accent/10 dark:hover:text-white/80";
+	"not-prose group/chip mx-1 inline-flex h-6 items-center gap-1.5 rounded-full border border-black/[0.08] bg-white py-0 pl-[2px] pr-2 align-[0.08em] font-sans text-citation font-medium not-italic leading-none tracking-normal text-black/55 no-underline shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-citation duration-200 ease-out hover:-translate-y-px hover:border-accent/40 hover:bg-accent/[0.06] hover:text-black/70 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transform-none dark:border-white/10 dark:bg-white/[0.06] dark:text-white/60 dark:shadow-none dark:hover:border-accent/45 dark:hover:bg-accent/10 dark:hover:text-white/80";
 
-function CitationCopyLink({ href, itemKey }: { href: string; itemKey?: string }) {
+function CitationCopyLink({
+	href,
+	itemKey,
+}: {
+	href: string;
+	itemKey?: string;
+}) {
 	const { identity } = useLibraryConfig();
 	const itemUrl = useLibraryItemUrl();
 	const t = useTranslations("ui");
 	return (
 		<CopyButton
-			content={itemKey ? itemUrl(itemKey) : new URL(href, identity.baseUrl).toString()}
+			content={
+				itemKey
+					? itemUrl(itemKey)
+					: new URL(href, identity.baseUrl).toString()
+			}
 			text={t("copyLink")}
 			textOnCopy={t("linkCopied")}
 			classNames={copyLinkClassNames}
@@ -65,10 +79,12 @@ function SiteFavicon({ className }: { className?: string }) {
 				"inline-block shrink-0 bg-contain bg-center bg-no-repeat bg-[image:var(--citation-icon-light)] dark:bg-[image:var(--citation-icon-dark)]",
 				className,
 			)}
-			style={{
-				"--citation-icon-light": `url("${identity.assets.faviconLight ?? identity.assets.favicon}")`,
-				"--citation-icon-dark": `url("${identity.assets.faviconDark ?? identity.assets.favicon}")`,
-			} as CSSProperties}
+			style={
+				{
+					"--citation-icon-light": `url("${identity.assets.faviconLight ?? identity.assets.favicon}")`,
+					"--citation-icon-dark": `url("${identity.assets.faviconDark ?? identity.assets.favicon}")`,
+				} as CSSProperties
+			}
 		/>
 	);
 }
@@ -80,7 +96,7 @@ function CitationChipContents({ children }: { children: ReactNode }) {
 				aria-hidden="true"
 				className="grid size-icon-md shrink-0 place-items-center rounded-full bg-accent/[0.12] text-accent transition-colors group-hover/chip:bg-accent group-hover/chip:text-white dark:bg-accent/20"
 			>
-				<HugeiconsIcon icon={BookOpen01Icon} className="size-icon-xs" />
+				<BiBookOpen className="size-icon-xs" />
 			</span>
 			{children}
 		</>
@@ -290,7 +306,7 @@ function PdfActions({
 				rel="noopener noreferrer"
 				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-black/[0.055] px-2 text-xs font-semibold text-black/65 no-underline transition-colors hover:bg-accent/[0.12] hover:text-accent dark:bg-white/[0.08] dark:text-white/70 dark:hover:bg-accent/[0.15] dark:hover:text-accent"
 			>
-				<HugeiconsIcon icon={LinkSquare01Icon} className="size-3.5" aria-hidden="true" />
+				<LuExternalLink className="size-3.5" aria-hidden="true" />
 				{t("openDocument")}
 			</a>
 			<button
@@ -302,7 +318,7 @@ function PdfActions({
 				}}
 				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-xs font-semibold text-white transition-colors hover:bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
 			>
-				<HugeiconsIcon icon={Download01Icon} className="size-3.5" aria-hidden="true" />
+				<LuDownload className="size-3.5" aria-hidden="true" />
 				{t("download")}
 			</button>
 		</div>
@@ -330,7 +346,7 @@ function PdfCover({
 				/>
 			) : (
 				<div className="flex h-full items-center justify-center text-accent/70">
-					<HugeiconsIcon icon={BookOpen01Icon} className="size-6" aria-hidden="true" />
+					<BiBookOpen className="size-6" aria-hidden="true" />
 				</div>
 			)}
 		</div>
@@ -444,9 +460,9 @@ export function PublicationLink({
 						href={href}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="group/library-link -mx-0.5 rounded-md px-0.5 py-px font-medium text-accent no-underline decoration-accent/35 decoration-1 underline-offset-2 box-decoration-clone transition-colors duration-200 ease-out hover:bg-accent/[0.09] hover:text-accent-400 hover:decoration-accent focus-visible:bg-accent/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transition-none dark:hover:bg-accent/[0.12] dark:hover:text-accent-700"
+						className="group/library-link -mx-0.5 rounded-[0.35rem] px-0.5 py-px font-medium text-accent no-underline decoration-accent/35 decoration-1 underline-offset-[0.18em] box-decoration-clone transition-[color,background-color,text-decoration-color] duration-200 ease-out hover:bg-accent/[0.09] hover:text-accent-600 hover:decoration-accent focus-visible:bg-accent/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transition-none dark:hover:bg-accent/[0.12] dark:hover:text-accent-300"
 					>
-						<SiteFavicon className="me-1 size-3.5 rounded-favicon align-middle opacity-75 ring-1 ring-black/[0.06] transition-opacity duration-200 ease-out group-hover/library-link:opacity-100 dark:ring-white/10" />
+						<SiteFavicon className="me-1 size-3.5 rounded-favicon align-[-0.12em] opacity-75 ring-1 ring-black/[0.06] transition-[opacity,transform] duration-200 ease-out group-hover/library-link:-translate-y-px group-hover/library-link:opacity-100 motion-reduce:transform-none motion-reduce:transition-none dark:ring-white/10" />
 						<span className="underline decoration-inherit">
 							{children}
 						</span>
@@ -466,13 +482,7 @@ export function PublicationLink({
  * One citation control showing both the publication source and the exact
  * page. Hovering it previews the cited PDF; clicking opens that page.
  */
-export function PageCitation({
-	href,
-	page,
-}: {
-	href?: string;
-	page: string;
-}) {
+export function PageCitation({ href, page }: { href?: string; page: string }) {
 	const match = href?.match(pdfHrefPattern);
 	if (!href || !match) {
 		return (

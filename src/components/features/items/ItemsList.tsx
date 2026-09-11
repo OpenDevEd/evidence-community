@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, ReactNode } from "react";
+import { type ReactNode } from "react";
+import { ItemsContext } from "@/context/ItemsContext";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useItemsList } from "@/hooks/useItemsList";
@@ -21,8 +22,6 @@ function CollectionWrapper({ children }: { children: ReactNode }) {
 		</span>
 	);
 }
-
-export const ItemsContext = createContext<ReturnType<typeof useItemsList>>({} as ReturnType<typeof useItemsList>);
 
 export default function ItemsList({
 	userData,

@@ -1,5 +1,6 @@
 {
   "ui": {
+    "resultsLabel": "Results",
     "exportFailed": "Could not prepare this content",
     "copyFailed": "Could not copy",
     "copyFailedHelp": "Check your browser’s clipboard permission and try again.",
@@ -491,6 +492,8 @@
     "invalidCredentials": "Invalid credentials"
   },
   "ai": {
+    "sourcesTitle": "Sources",
+    "sourcesEmpty": "Publications the AI reads will appear here.",
     "summarize": "Summarise",
     "summarizeDescription": "Summarise this resource in as few words as possible.",
     "explain": "Explain",

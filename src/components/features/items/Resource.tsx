@@ -395,6 +395,7 @@ export default function Resource({
 	className,
 	as = "li",
 	hideUnapi,
+	openLinksInNewTab = false,
 }: {
 	itemData?: Item | ListItem | undefined;
 	abstract: boolean;
@@ -406,6 +407,7 @@ export default function Resource({
 	className?: string;
 	as?: "li" | "div";
 	hideUnapi?: boolean;
+	openLinksInNewTab?: boolean;
 }) {
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
@@ -420,8 +422,10 @@ export default function Resource({
 		});
 
 	const sourceItemData = itemData ?? fetchedItemData?.item;
-	const {creators} = useAuthorProfiles(sourceItemData?.creators);
-	const finalItemData = sourceItemData ? {...sourceItemData, creators: creators ?? sourceItemData.creators} : undefined;
+	const { creators } = useAuthorProfiles(sourceItemData?.creators);
+	const finalItemData = sourceItemData
+		? { ...sourceItemData, creators: creators ?? sourceItemData.creators }
+		: undefined;
 	const finalIsLoading = !itemKey ? isLoading : fetchedItemDataLoading;
 	const transformedItem = finalItemData ? transformItem(finalItemData) : null;
 
@@ -498,6 +502,8 @@ export default function Resource({
 				</a>
 			) : (
 				<PrefetchLink
+					target={openLinksInNewTab ? "_blank" : undefined}
+					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
