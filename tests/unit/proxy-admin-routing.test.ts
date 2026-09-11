@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-// next-intl's middleware entry cannot be loaded outside the Next runtime, and
-// these checks all answer before the locale middleware runs.
+// next-intl's middleware entry needs the Next runtime. These checks cover
+// proxy routing before locale formatting.
 vi.mock("next-intl/middleware", () => ({
 	default: () => () => NextResponse.next(),
 }));
@@ -104,6 +104,22 @@ describe("admin requests through the proxy", () => {
 });
 
 describe("public domain requests through the proxy", () => {
+	it.each([
+		["/terms", "https://policies.example.org/terms"],
+		["/en-GB/terms", "/privacy"],
+	])("lets %s reach its configured policy destination", async (pathname, termsOfService) => {
+		const config = libraryConfigSchema.parse({
+			...structuredClone(minimalLibraryConfig),
+			legal: { termsOfService },
+		});
+		mocks.loadLibraryConfig.mockResolvedValue(config);
+
+		const response = await proxy(adminRequest(pathname));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("location")).toBeNull();
+	});
+
 	it("temporarily redirects an alias because the selected main domain can change", async () => {
 		const response = await proxy(publicAliasRequest("/lib?search=proof"));
 
