@@ -3,7 +3,7 @@ import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { getItem, getItemRaw } from "./item/[key]/route";
 import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { status as statusTable } from "@/db/schema/tables/status";
+import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
 import { Collection } from "./collections/types";
 import { cacheLife, cacheTag } from "next/cache";
@@ -253,31 +253,14 @@ export async function getUserLikesDirect(
 async function _getCachedStatus(
 	configRevision: string,
 	config: LibraryServerConfig,
-): Promise<InferSelectModel<typeof statusTable>> {
+): Promise<PublicLibraryStatus> {
 	"use cache";
 	cacheLife({ revalidate: 60 });
 	cacheTag("status");
-	return getStatusDirect(config);
+	return readPublicLibraryStatus(await getDatabaseForConfig(config), config);
 }
 
-export async function getCachedStatus(): Promise<
-	InferSelectModel<typeof statusTable>
-> {
+export async function getCachedStatus(): Promise<PublicLibraryStatus> {
 	const config = await getLibraryConfig();
 	return _getCachedStatus(config.revision, config);
-}
-
-export async function getStatusDirect(
-	config?: LibraryServerConfig,
-): Promise<InferSelectModel<typeof statusTable>> {
-	const db = config
-		? await getDatabaseForConfig(config)
-		: await getDatabase();
-	const newStatus = await db.query.status.findFirst();
-	if (!newStatus) {
-		throw new Error(
-			"The status row is missing. Run npm run db:migrate to create it.",
-		);
-	}
-	return newStatus;
 }

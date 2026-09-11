@@ -17,6 +17,7 @@ export default defineConfig({
 			"tools/verifyNativeFileLifecycle.ts",
             "tests/integration/editorial-reviews.test.ts",
             "tests/integration/notifications.test.ts",
+            "tests/integration/public-library-status.test.ts",
 		],
 		maxWorkers: 1,
 	},

@@ -3,7 +3,6 @@ import ItemPage from "@/components/features/newlib/ItemPage";
 import { notFound } from "next/navigation";
 import { getCachedItemSmall } from "@/app/api/cache";
 import { Metadata } from "next";
-import { getCachedStatus } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import { routing } from "@/i18n/routing";

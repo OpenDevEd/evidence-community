@@ -4,6 +4,7 @@ import {
 	type LibraryServerConfig,
 } from "./schema";
 import { getEnabledGapMaps } from "./gap-maps";
+import { getRuntimeInternalHrefPath } from "./links";
 
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
@@ -21,6 +22,7 @@ export function projectPublicLibraryConfig(
 	const cached = publicConfigCache.get(config);
 	if (cached) return cached;
 
+	const pageAvailable = (link: { href: string }) => config.features.countryFocus || getRuntimeInternalHrefPath(link.href) !== "/map";
 	const publicConfig = publicLibraryConfigSchema.parse({
 		schemaVersion: config.schemaVersion,
 		revision: config.revision,
@@ -28,8 +30,8 @@ export function projectPublicLibraryConfig(
 		identity: config.identity,
 		institutions: config.institutions,
 		theme: config.theme,
-		navigation: config.navigation,
-		footer: config.footer,
+		navigation: { ...config.navigation, links: config.navigation.links.filter(pageAvailable).map(link => ({ ...link, children: link.children.filter(pageAvailable) })) },
+		footer: { ...config.footer, sections: config.footer.sections.map(section => ({ ...section, links: section.links.filter(pageAvailable) })) },
 		contact: config.contact,
 		legal: config.legal,
 		localization: config.localization,

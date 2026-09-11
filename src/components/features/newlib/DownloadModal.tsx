@@ -74,6 +74,7 @@ export function DownloadModal({
 	hrefForFormat,
 	fileName,
 	formats,
+	description,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -82,6 +83,7 @@ export function DownloadModal({
 	hrefForFormat?: (format: BibliographicExportFormat) => string;
 	fileName: string;
 	formats?: readonly BibliographicExportFormat[];
+	description?: string;
 }) {
 	const t = useTranslations("ui");
 	const [loading, setLoading] = useState(false);
@@ -97,10 +99,10 @@ export function DownloadModal({
 		>
 			<ModalContent>
 				<GenericHeader startContent={<HugeiconsIcon icon={Download01Icon} />} onClose={onClose}>
-					{t("download")}
+					{t(hrefForFormat ? "downloadLibrary" : "download")}
 				</GenericHeader>
 				<ListModalBody
-					description={t("downloadDescription")}
+					description={description ?? t("downloadDescription")}
 					isLoading={loading}
 					onAction={async (index: number) => {
 						setLoading(true);

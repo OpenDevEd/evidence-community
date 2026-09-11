@@ -8,7 +8,8 @@ import {
 } from "react-simple-maps";
 import { ReactNode, useEffect, useRef, useState, memo } from "react";
 import {Tooltip } from "@nextui-org/react";
-import { useLocalStorage, useMouse, useWindowSize } from "@uidotdev/usehooks";
+import { useMouse, useWindowSize } from "@uidotdev/usehooks";
+import { useLocalStorage } from "usehooks-ts";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS, countryFacetOptions } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
@@ -181,7 +182,7 @@ export default function Map() {
 		disableViewSwitch: true,
 		interactionsStyle: "one-line",
 	});
-	const [mapFacetValue, setMapFacet] = useLocalStorage("mapFacet", 0);
+	const [mapFacetValue, setMapFacet] = useLocalStorage("mapFacet", 0, { initializeWithValue: false });
 	const mapFacet = countryFacetOptions[mapFacetValue] ? mapFacetValue : 0;
 	const countriesFacet = props?.facetDistribution?.[countryFacetOptions[mapFacet].key + "_uncategorized"];
 	const maxItems = Math.max(
