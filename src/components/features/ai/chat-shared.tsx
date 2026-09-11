@@ -115,9 +115,9 @@ export function ChatErrorCard({
 					aria-label={
 						isContextTooLarge
 							? tUI("resetAriaLabel")
-							: tUI("tryAgainLater")
+							: tUI("retry")
 					}
-					onClick={isContextTooLarge ? onReset : onRetry}
+					onPress={isContextTooLarge ? onReset : onRetry}
 				>
 					{isContextTooLarge ? tUI("resetChat") : tUI("retry")}
 				</Button>

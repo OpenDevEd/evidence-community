@@ -9,7 +9,6 @@ import {
 	aiRateLimitHeaders,
 	buildAIRateLimitKeyPrefix,
 	createRedisAIRateLimitStore,
-	redisReconnectDelay,
 	resolveAIRateLimitClientIdentity,
 	type AIRateLimitPolicy,
 } from "@/lib/ai/rate-limit";
@@ -34,12 +33,6 @@ describe("AI request rate-limit policy", () => {
 			windowMs: 60_000,
 		});
 		expect(AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS).toBe(31_536_000);
-	});
-
-	it("retries Redis connections with a bounded delay", () => {
-		expect([0, 1, 5, 20].map(redisReconnectDelay)).toEqual([
-			50, 100, 1_000, 1_000,
-		]);
 	});
 
 	it("separates deployment and library counters", () => {

@@ -14,7 +14,7 @@ type ComposeService = {
 	healthcheck?: { start_period?: string; test?: string[] };
 	image?: string;
 	labels?: Record<string, string>;
-	networks?: Record<string, unknown>;
+	networks?: Record<string, { aliases?: string[] }>;
 	ports?: unknown[];
 	user?: string;
 	volumes?: Array<{ source: string; target: string }>;
@@ -275,8 +275,8 @@ function requireRedisRuntime(
 	requireRedisMemoryLimit(redis);
 	requireRedisNetworkAndHealth(redis);
 	requireCondition(
-		libraryConfig.services.redis.url === "redis://redis:6379",
-		"Runtime Redis URL must use the private Compose service",
+		redis.networks?.private?.aliases?.includes(new URL(libraryConfig.services.redis.url).hostname),
+		"Runtime Redis URL must use an explicit private-network alias",
 	);
 }
 
@@ -386,7 +386,7 @@ function requirePublicationAndWeb(services: Record<string, ComposeService>) {
 	);
 }
 
-function requireRenderedConfig(model: ComposeModel) {
+function requireRenderedConfig(model: ComposeModel, expected: LibraryConfig) {
 	const content = model.configs?.["library-config"]?.content;
 	requireCondition(content, "Rendered runtime configuration is missing");
 	const renderedConfig = JSON.parse(content) as LibraryConfig;
@@ -395,8 +395,8 @@ function requireRenderedConfig(model: ComposeModel) {
 		"Rendered runtime search host must use the private Compose service",
 	);
 	requireCondition(
-		renderedConfig.services.redis.url === "redis://redis:6379",
-		"Rendered runtime Redis URL must use the private Compose service",
+		renderedConfig.services.redis.url === expected.services.redis.url,
+		"Rendered runtime Redis URL must preserve the configured private service",
 	);
 }
 
@@ -437,7 +437,7 @@ function main() {
 	requireSearchIndexer(services);
 	requireRuntimeServices(services);
 	requirePublicationAndWeb(services);
-	requireRenderedConfig(model);
+	requireRenderedConfig(model, libraryConfig);
 	requireNamedStorage(model);
 	requireCoolifyNetwork(model);
 	requireVerifierDockerAccess(
