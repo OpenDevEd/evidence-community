@@ -1477,6 +1477,9 @@ export function AdminInspector({
 		return () => cancelAnimationFrame(frame);
 	}, [detailKey, validationRevision]);
 
+	const [menuOpen, setMenuOpen] = useState(false);
+	const closeMenu = () => setMenuOpen(false);
+
 	if (loading && !detail) {
 		return (
 			<div className="flex h-full items-center justify-center">
@@ -1531,6 +1534,8 @@ export function AdminInspector({
 		>
 			{versionControls}
 			<AdminDocumentHeader
+				menuOpen={menuOpen}
+				onMenuOpenChange={setMenuOpen}
 				detail={detail}
 				cover={
 					<AdminPdfCover
@@ -1608,7 +1613,10 @@ export function AdminInspector({
 														(reviewPending &&
 															!detail.published)
 													}
-													onPress={onDiscardDraft}
+													onPress={() => {
+														closeMenu();
+														onDiscardDraft();
+													}}
 												>
 													<HugeiconsIcon
 														icon={Delete02Icon}
@@ -1670,6 +1678,7 @@ export function AdminInspector({
 							{!detail.parentItem ? (
 								<AdminPublicationHeaderStatus
 									onPress={() => {
+										closeMenu();
 										const toggle = document.getElementById(
 											`admin-${detail.key}-identifiers-toggle`,
 										);
@@ -1755,7 +1764,10 @@ export function AdminInspector({
 										size="xs"
 										variant="muted"
 										isDisabled={busy}
-										onPress={onManageSources}
+										onPress={() => {
+											closeMenu();
+											onManageSources();
+										}}
 										startContent={
 											<HugeiconsIcon
 												icon={Link02Icon}
