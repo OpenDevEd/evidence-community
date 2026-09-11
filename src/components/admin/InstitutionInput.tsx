@@ -6,8 +6,8 @@ import {
 	Autocomplete,
 	AutocompleteItem,
 	Chip,
-	Spinner,
 } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import {
 	Add01Icon,
 	ArrowDown01Icon,

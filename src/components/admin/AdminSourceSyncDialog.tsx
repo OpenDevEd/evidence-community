@@ -9,11 +9,11 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
-	Spinner,
 	ModalContent,
 	ModalFooter,
 	ModalHeader,
 } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import { useState } from "react";
 import useSWR from "swr";
 

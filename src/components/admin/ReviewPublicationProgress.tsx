@@ -1,5 +1,5 @@
 "use client";
-import { Spinner } from "@nextui-org/react";
+import { Spinner } from "@/components/nextui/Spinner";
 import { RotateLeft01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
