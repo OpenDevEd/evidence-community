@@ -1090,6 +1090,12 @@ function mapHTMLmarkup(characters: string) {
 	return characters;
 }
 
+function escapeBibTeX(value: string) {
+	return value
+		.replace(/[|\<\>\~\^\\\{\}]/g, mapEscape)
+		.replace(/([\#\$\%\&\_])/g, "\\$1");
+}
+
 function unescapeHTML(html: string) {
 	// First remove all HTML tags
 	const withoutTags = html.replace(/<[^>]*>/g, "");
@@ -1169,10 +1175,7 @@ export class BibTeXExporter {
 				field == "lccn"
 			)
 		) {
-			// I hope these are all the escape characters!
-			value = value
-				.replace(/[|\<\>\~\^\\\{\}]/g, mapEscape)
-				.replace(/([\#\$\%\&\_])/g, "\\$1");
+			value = escapeBibTeX(value);
 
 			//disable
 			/** if (field == "title" || field == "type" || field == "shorttitle" || field == "booktitle" || field == "series") {
@@ -1275,8 +1278,7 @@ export class BibTeXExporter {
 						.filter(Boolean).join(", ");
 
 				if (creatorString) {
-					creatorString = creatorString
-						.replace(/[|\<\>\~\^\\\{\}]/g, mapEscape)
+					creatorString = escapeBibTeX(creatorString)
 						.replace(/([^\s-\}\(\[]+[A-Z][^\s,]*)/g, "{$1}");
 
 					if (creator.name || creator.fieldMode == true) {

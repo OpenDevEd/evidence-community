@@ -96,6 +96,20 @@ describe("real citation output for a stored report", () => {
 		expect(ris).not.toMatch(/^PB  - /m);
 	});
 
+	it("escapes TeX characters in creator names while preserving RIS text", async () => {
+		const name = "Research & Development 50% $5 #1_A";
+		const exporter = new BibTeXExporter({
+			...storedReport(),
+			creators: [{ name, creatorType: "author" }],
+		} as never);
+		const bibtex = await exporter.toBibTeX();
+		const authorLine = bibtex.split("\n").find((line) => line.startsWith("\tauthor = "));
+		for (const escaped of [String.raw`\&`, String.raw`\%`, String.raw`\$`, String.raw`\#`, String.raw`\_`]) {
+			expect(authorLine).toContain(escaped);
+		}
+		expect(await exporter.toRIS()).toContain(`AU  - ${name}`);
+	});
+
 	it("keeps the number and language in BibTeX", async () => {
 		const bibtex = await new BibTeXExporter(
 			storedReport() as never,
