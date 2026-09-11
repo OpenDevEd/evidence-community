@@ -613,7 +613,10 @@ const AI_SOURCES = [
 	"src/components/features/modals/AIControls.tsx",
 	"src/components/features/modals/ChatModal.tsx",
 	"src/components/features/modals/GenerativeModal.tsx",
+	"src/components/features/modals/GenerativeModalView.tsx",
 	"src/components/features/newlib/AiWrapper.tsx",
+	"src/components/features/resources/EngagedLibraryPanel.tsx",
+	"src/components/features/resources/LibrarySearchSelects.tsx",
 	"src/components/pages/EvidenceLibrary.tsx",
 	"src/hooks/useAIStream.ts",
 ];
