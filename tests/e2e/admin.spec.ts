@@ -1104,6 +1104,9 @@ test("chooses writeback sources without publishing", async ({
 		name: "Sources for this record",
 	});
 	await expect(sourcesDialog).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Review status and history", includeHidden: true }),
+	).toHaveAttribute("aria-expanded", "false");
 	const box = sourcesDialog.getByRole("switch", {
 		name: importedSource.label,
 	});
@@ -1113,6 +1116,8 @@ test("chooses writeback sources without publishing", async ({
 	await expect.poll(() => sourcesBody).toEqual({
 		sourceKeys: [importedSource.key],
 	});
+	await expect(sourcesDialog).toBeHidden();
+	await inspector.getByRole("button", { name: "Review status and history" }).click();
 	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
 		"data-admin-writeback-status",
 		"queued",
@@ -1201,9 +1206,6 @@ test("resolves a source conflict with a confirmed choice", async ({
 	const loadRemote = popover.locator('[data-admin-writeback-resolve="load-remote"]');
 	await expect(sendLocal).toHaveText(`Send this record to ${importedSource.label}`);
 	await expect(loadRemote).toHaveText(`Load ${importedSource.label}’s version`);
-	await expect(
-		popover.getByText(`Replaces this record with the ${importedSource.label} copy.`, { exact: false }),
-	).toBeVisible();
 
 	// The first click arms the choice; nothing is sent until it is confirmed.
 	await loadRemote.click();

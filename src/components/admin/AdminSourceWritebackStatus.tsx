@@ -244,7 +244,7 @@ export function AdminSourcesWritebackStatus({
 										<div className="space-y-2" data-admin-writeback-conflict>
 											<ConflictChoiceButton
 												choice="send-local"
-												description={`Replaces the ${source.sourceLabel} copy with this record. Changes made in ${source.sourceLabel} while updates were paused are lost there.`}
+												description={`Replaces the ${source.sourceLabel} copy with the published version. Changes made in ${source.sourceLabel} while updates were paused are lost there.`}
 												disabled={busy}
 												label={`Send this record to ${source.sourceLabel}`}
 												onConfirm={() => {
@@ -261,7 +261,7 @@ export function AdminSourcesWritebackStatus({
 											{canLoadRemote ? (
 												<ConflictChoiceButton
 													choice="load-remote"
-													description={`Replaces this record with the ${source.sourceLabel} copy. Unpublished local changes are lost.`}
+													description={`Replaces published metadata with the ${source.sourceLabel} copy. Working drafts stay private.`}
 													disabled={busy}
 													label={`Load ${source.sourceLabel}’s version`}
 													onConfirm={() => {

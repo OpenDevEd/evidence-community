@@ -14,6 +14,8 @@ export function AdminDocumentHeader({
 	cover,
 	status,
 	menu,
+	menuOpen,
+	onMenuOpenChange,
 	actions,
 	parent,
 	saveIndicator,
@@ -22,6 +24,8 @@ export function AdminDocumentHeader({
 	cover: ReactNode;
 	status: ReactNode;
 	menu: ReactNode;
+	menuOpen: boolean;
+	onMenuOpenChange: (open: boolean) => void;
 	actions: ReactNode;
 	parent: ReactNode;
 	saveIndicator: ReactNode;
@@ -82,7 +86,11 @@ export function AdminDocumentHeader({
 						</Tooltip>
 						{saveIndicator}
 					</div>
-					<Popover placement="bottom-start">
+					<Popover
+						placement="bottom-start"
+						isOpen={menuOpen}
+						onOpenChange={onMenuOpenChange}
+					>
 						<PopoverTrigger>
 							<Button
 								size="xs"
