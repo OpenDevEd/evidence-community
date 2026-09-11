@@ -2,6 +2,7 @@ import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import { loadLibraryConfig } from "./config/library-config/source";
+import { getRuntimePageAvailability } from "./config/library-config/pages";
 import type { LibraryServerConfig } from "./config/library-config/schema";
 import {
 	getDisabledLocaleRedirectPathname,
@@ -584,9 +585,7 @@ export default async function proxy(request: NextRequest) {
 	);
 	if (disabledLocaleRedirect) return disabledLocaleRedirect;
 
-	const hasConfiguredTerms = Boolean(
-		libraryConfig.legal.termsMarkdown || libraryConfig.legal.termsOfService,
-	);
+	const hasConfiguredTerms = getRuntimePageAvailability(libraryConfig)["/terms"];
 	if (libraryConfig.generation.redirects) {
 		const noteRedirectDestination = await getNoteRedirectDestination(
 			request,

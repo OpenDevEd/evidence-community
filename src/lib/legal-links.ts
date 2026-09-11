@@ -1,4 +1,5 @@
-import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import { getRuntimePageAvailability } from "@/config/library-config/pages";
+import type { LibraryPublicConfig, LibraryServerConfig } from "@/config/library-config/schema";
 import { getRuntimePagePath } from "@/config/library-config/links";
 
 export const POLICY_DESTINATIONS = {
@@ -18,11 +19,11 @@ export function isPolicyPage(pathname: string, { identity, legal }: LegalPageCon
 }
 
 /** Self destinations need a document; cross-page redirects must terminate. */
-export function policyRedirectIssues(
-	legal: LibraryPublicConfig["legal"],
-	baseUrl: string,
-) {
+export function policyRedirectIssues(config: LibraryServerConfig) {
+	const { legal, identity: { baseUrl } } = config;
 	if (!URL.canParse(baseUrl)) return [];
+	const unavailablePages = new Set(Object.entries(getRuntimePageAvailability(config))
+		.filter(([, available]) => !available).map(([path]) => path));
 	const destinations = Object.values(POLICY_DESTINATIONS);
 	return destinations.filter(source => legal[source.field]).flatMap((source) => {
 		let current: (typeof destinations)[number] | undefined = source;
@@ -32,12 +33,8 @@ export function policyRedirectIssues(
 			visited.add(current.path);
 			const href: string | undefined = legal[current.field];
 			const path: string | null = href && URL.canParse(href, baseUrl) ? getRuntimePagePath(href, baseUrl) : null;
-			if (!href || path === current.path) {
-				if (current.path === POLICY_DESTINATIONS.terms.path && !legal.termsMarkdown) {
-					return [{ field: source.field, message: "This link leads to an empty terms page. Add terms text or choose another destination." }];
-				}
-				break;
-			}
+			if (unavailablePages.has(path ?? "")) return [{ field: source.field, message: "This link leads to a page that is not available. Configure that page or choose another destination." }];
+			if (!href || path === current.path) break;
 			current = destinations.find((destination) => destination.path === path);
 		}
 		return [];
