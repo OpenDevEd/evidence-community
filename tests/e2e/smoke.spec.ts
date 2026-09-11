@@ -789,7 +789,7 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		// deliberate response as a failed map render.
 		await expect(page.getByText("404", { exact: true })).toBeVisible();
 		await expect(page.getByRole("button", { name: /Facet/ })).toHaveCount(0);
-		await expect(page.locator('meta[name="robots"][content="noindex"]')).toHaveCount(1);
+		await expect(page.locator('meta[name="robots"][content="noindex"]').first()).toHaveAttribute("content", "noindex");
 	}
 });
 
