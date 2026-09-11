@@ -46,14 +46,15 @@ export default function GenerativeModal({
 	const tUI = useTranslations("ui");
 
 	const format = useFormatter();
-	const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(0);
+	const [historySelection, setSelectedHistoryIndex] = useState<number | null>(null);
+	const selectedHistoryIndex = historySelection ?? history.findIndex(item => item.id === id);
 	const selectedHistoryItem = history[selectedHistoryIndex];
 	const contentRef = useRef<HTMLDivElement>(null);
 
 	const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-	const isDesktop = useBreakpoint("xl");
+	const isDesktop = useBreakpoint("lg");
 
-	const isSelectedCurrentItem = selectedHistoryItem?.id === id;
+	const isSelectedCurrentItem = historySelection === null || selectedHistoryItem?.id === id;
 	const contentToDisplay = isSelectedCurrentItem ? content : selectedHistoryItem?.content ?? "";
 
 	const deleteSelectedHistory = () => {
@@ -111,7 +112,7 @@ export default function GenerativeModal({
 													setIsHistoryOpen(false);
 												}}
 												selectedKeys={
-													isDesktop
+													isDesktop && selectedHistoryIndex >= 0
 														? [
 																selectedHistoryIndex.toString(),
 															]
@@ -228,6 +229,7 @@ export default function GenerativeModal({
 												className="ltr:ml-auto rtl:mr-auto dark:hover:bg-red-600 min-w-0"
 												startContent={<HugeiconsIcon icon={Delete02Icon} />}
 												onPress={deleteSelectedHistory}
+												isDisabled={!selectedHistoryItem}
 												aria-label={tUI(
 													"deleteHistoryItemAriaLabel",
 												)}

@@ -315,22 +315,23 @@ class RevisionAwareAIRateLimitRedis {
 				console.error("[AI rate limit Redis]", error);
 			});
 			let connecting: Promise<unknown> | undefined;
+			let disposed = false;
 			return {
 				value: async () => {
+					if (disposed) throw new AIRateLimitUnavailableError("The Redis configuration was replaced. Retry the request.");
 					if (!client.isReady) {
 						// Share one attempt; a later request can retry a closed connection.
 						if (!connecting) {
-							const timeout = setTimeout(() => { if (client.isOpen) client.destroy(); }, 2_000);
-							connecting = client.connect().finally(() => {
-								clearTimeout(timeout);
+							connecting = withRedisDeadline(client, () => client.connect()).finally(() => {
 								connecting = undefined;
 							});
 						}
 						await connecting;
 					}
+					if (disposed) throw new AIRateLimitUnavailableError("The Redis configuration was replaced. Retry the request.");
 					return client;
 				},
-				dispose: async () => { if (client.isOpen) client.destroy(); },
+				dispose: async () => { disposed = true; if (client.isOpen) client.destroy(); },
 			};
 		},
 	);

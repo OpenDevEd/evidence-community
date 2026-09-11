@@ -29,7 +29,6 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
 
     const debouncedComplete = useCallback((...args: Parameters<typeof complete>) => {
         if (isLoading || (completion && !error)) return;
-        onFinish("", id);
         complete(...args).then((completion) => {
             if (completion) {
                 onFinish(completion, id);
