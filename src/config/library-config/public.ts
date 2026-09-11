@@ -22,6 +22,7 @@ export function projectPublicLibraryConfig(
 	const cached = publicConfigCache.get(config);
 	if (cached) return cached;
 
+	// A disabled parent page removes its navigation group, including its children.
 	const pageAvailable = (link: { href: string }) => config.features.countryFocus || getRuntimeInternalHrefPath(link.href) !== "/map";
 	const publicConfig = publicLibraryConfigSchema.parse({
 		schemaVersion: config.schemaVersion,

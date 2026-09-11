@@ -1,3 +1,5 @@
+import { projectPublicLibraryConfig } from "../src/config/library-config/public";
+import { getVisibleRuntimeLinks } from "../src/config/library-config/links";
 import { analyticsCapabilities } from "../src/lib/analytics-consent";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -1423,7 +1425,9 @@ function publicExpectations(profile: Profile) {
 	const defaultScope =
 		scopes.find((scope) => scope.key === config.search.defaultScope) ??
 		PLATFORM_SEARCH_SCOPE_OPTIONS[0];
-	const externalNavigation = config.navigation.links.find((link) =>
+	const publicConfig = projectPublicLibraryConfig(config);
+	const visibleNavigation = getVisibleRuntimeLinks(publicConfig.navigation.links);
+	const externalNavigation = visibleNavigation.find((link) =>
 		link.href.startsWith("https://"),
 	);
 	const logoStyleToken = config.identity.assets.logoStyles
@@ -1498,11 +1502,11 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_LIBRARY_CITATION_LABEL:
 			messages.ui.libraryCitations,
 		PLAYWRIGHT_EXPECTED_NAVIGATION_LABEL:
-			config.navigation.links[0]?.label ?? "",
+			visibleNavigation[0]?.label ?? "",
 		PLAYWRIGHT_EXPECTED_EXTERNAL_NAVIGATION_LABEL:
 			externalNavigation?.label ?? "",
 		PLAYWRIGHT_EXPECTED_FOOTER_SECTION:
-			config.footer.sections[0]?.title ?? "",
+			publicConfig.footer.sections.find((section) => getVisibleRuntimeLinks(section.links).length > 0)?.title ?? "",
 		PLAYWRIGHT_EXPECTED_CONTACT_EMAIL: config.contact.email ?? "",
 		PLAYWRIGHT_EXPECTED_CONTACT_PHONE: config.contact.phone ?? "",
 		PLAYWRIGHT_EXPECTED_CONTACT_ADDRESS:

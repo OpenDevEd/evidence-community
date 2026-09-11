@@ -489,7 +489,7 @@ function ContentActions() {
 					}
 					onPress={onOpen}
 				>
-					{t("downloadLibrary")}
+					{t("downloadLibrary")}{" "}
 					<span className="opacity-60">{format.number(downloadableRecords)}</span>
 				</Button>
 			)}

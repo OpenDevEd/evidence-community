@@ -1,7 +1,7 @@
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { getItem, getItemRaw } from "./item/[key]/route";
-import { and, eq, InferSelectModel } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
