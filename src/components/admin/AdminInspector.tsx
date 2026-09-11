@@ -2,8 +2,8 @@
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
-import { CountryFocusMock } from "./CountryFocusMock";
-import { useSearchParams } from "next/navigation";
+import { describeCountryFocus } from "@/lib/country-focus";
+import { CountryFocusInput } from "./CountryFocusInput";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
@@ -449,14 +449,86 @@ function ValidationSummary({
 	);
 }
 
+function CountryFocusEditor({
+	payload,
+	titleField,
+	change,
+	onChange,
+	readOnly,
+	error,
+}: {
+	payload: Record<string, unknown>;
+	titleField: string;
+	change: AdminDraftDiff["countryFocus"];
+	onChange: (payload: Record<string, unknown>) => void;
+	readOnly: boolean;
+	error?: string;
+}) {
+	return (
+		<div className="space-y-1.5 pt-1.5">
+			<FieldLabel
+				action={
+					change && !readOnly ? (
+						<ChangedMarker
+							label="country focus"
+							publishedValue={describeCountryFocus(
+								change.previous,
+							)}
+							onRevert={() =>
+								onChange({
+									...payload,
+									countryFocus: change.previous,
+								})
+							}
+						/>
+					) : null
+				}
+			>
+				Country focus
+			</FieldLabel>
+			<CountryFocusInput
+				disabled={readOnly}
+				value={
+					Array.isArray(payload.countryFocus)
+						? (payload.countryFocus as string[])
+						: null
+				}
+				onChange={(countryFocus) =>
+					onChange({ ...payload, countryFocus })
+				}
+				title={String(payload[titleField] ?? "")}
+				abstract={String(payload.abstractNote ?? "")}
+			/>
+			{error && (
+				<p role="alert" className="text-xs text-danger">
+					{error}
+				</p>
+			)}
+		</div>
+	);
+}
+
+function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
+	const metadataFields = adminFieldDescriptors(definition);
+	const titleField =
+		metadataFields.find(({ semanticField }) => semanticField === "title")
+			?.field ?? "title";
+	const countryFocusAfterField = metadataFields.some(
+		({ field }) => field === "abstractNote",
+	)
+		? "abstractNote"
+		: titleField;
+	return { titleField, countryFocusAfterField };
+}
+
 function MetadataEditor({
 	definitions,
 	detail,
 	diff,
 	errors,
-	onChange: saveChanges,
-	payload: savedPayload,
-	readOnly: suppliedReadOnly,
+	onChange,
+	payload,
+	readOnly,
 	lockedDoi,
 }: {
 	definitions: readonly AdminSchemaDefinition[];
@@ -468,22 +540,11 @@ function MetadataEditor({
 	readOnly: boolean;
 	lockedDoi: string | null;
 }) {
-	const searchParams = useSearchParams();
-	const isCountryFocusMock =
-		process.env.NODE_ENV === "development" &&
-		searchParams.has("countryFocusMock");
-	const [mockPayload, setMockPayload] = useState<Record<string, unknown>>({
-		...savedPayload,
-		abstractNote:
-			"This study examines classroom feedback in Kenya and Uganda, with a comparison of teacher training programmes in Tanzania.",
-	});
-	const readOnly = isCountryFocusMock ? false : suppliedReadOnly;
-	const payload = isCountryFocusMock ? mockPayload : savedPayload;
-	const onChange = isCountryFocusMock ? setMockPayload : saveChanges;
 	const definition = definitionFor(
 		definitions,
 		String(payload.itemType ?? detail.itemType),
 	);
+	const { titleField, countryFocusAfterField } = countryFocusPlacement(definition);
 	const selectedItemType = definition?.itemType ?? null;
 	const [itemTypeInput, setItemTypeInput] = useState(
 		selectedItemType ? humanizeAdminField(selectedItemType) : "",
@@ -493,11 +554,6 @@ function MetadataEditor({
 
 	return (
 		<div className="space-y-3">
-			{isCountryFocusMock && (
-				<p className="text-xs text-black/45 dark:text-white/45">
-					Preview. Changes here stay in this browser.
-				</p>
-			)}
 			<div className="space-y-1.5">
 				<FieldLabel
 					action={
@@ -623,17 +679,19 @@ function MetadataEditor({
 									updateField(field, next)
 								}
 							/>
-							{isCountryFocusMock && field === "abstractNote" && (
-								<div className="space-y-1.5 pt-1.5">
-									<FieldLabel>Country focus</FieldLabel>
-									<CountryFocusMock
-										title={String(payload.title ?? "")}
-										abstract={String(
-											payload.abstractNote ?? "",
-										)}
+							{field === countryFocusAfterField &&
+								isTopLevelAdminItemType(
+									String(payload.itemType ?? detail.itemType),
+								) && (
+									<CountryFocusEditor
+										payload={payload}
+										titleField={titleField}
+										change={diff.countryFocus}
+										onChange={onChange}
+										readOnly={readOnly}
+										error={errors.countryFocus}
 									/>
-								</div>
-							)}
+								)}
 							{field === "DOI" && lockedDoi ? (
 								<p className="text-xs text-black/45 dark:text-white/45">
 									Deactivate Zenodo before changing this DOI.

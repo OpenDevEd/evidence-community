@@ -1,3 +1,4 @@
+import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { preserveCreatorProfileLinks } from "@/lib/admin/creator-profile-links";
 import {
 	collectionIdentity,
@@ -75,7 +76,7 @@ const COLLECTION_UPSERT_CHUNK_SIZE = 1_000;
 const itemColumns = getTableColumns(item);
 const sourceWritableItemFields = Object.keys(itemColumns).filter(
 	(field) =>
-		!new Set([
+		!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) && !new Set([
 			"createdAt",
 			"deleted",
 			"deletedAt",

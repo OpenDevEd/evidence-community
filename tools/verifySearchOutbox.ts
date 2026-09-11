@@ -227,8 +227,7 @@ async function verify() {
 		);
 		await database.insert(item).values([
 			{
-				abstractNote: "A searchable local projection",
-				country: "MA|GB",
+				abstractNote: "A searchable local projection about Morocco and the United Kingdom",
 				creators: [
 					{
 						creatorType: "author",

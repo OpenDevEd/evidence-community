@@ -1,6 +1,5 @@
 "use client";
 
-// Local preview of the automatic and manual field, inside the real item editor.
 import { useState } from "react";
 import { Autocomplete, AutocompleteItem, Chip } from "@nextui-org/react";
 import {
@@ -14,42 +13,35 @@ import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { filledInputSlots } from "@/components/nextui/field-styles";
-import { COUNTRIES } from "@/constants/misc";
+import {
+	countryFocusNames as countryNames,
+	countryFocusOptions as countries,
+	countryFocusSchema,
+	resolveCountryFocus,
+} from "@/lib/country-focus";
 import { InspectorChoices } from "./InspectorChoices";
 
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-const countryNames = Object.fromEntries(
-	Object.entries(COUNTRIES).map(([code, name]) => [
-		code,
-		regionNames.of(code) ?? name,
-	]),
-);
-const countries = Object.entries(countryNames).map(([code, name]) => ({
-	code,
-	name,
-}));
-
-export function CountryFocusMock({
+export function CountryFocusInput({
 	title,
 	abstract,
+	value,
+	onChange,
+	disabled = false,
 }: {
 	title: string;
 	abstract: string;
+	value: string[] | null;
+	onChange: (value: string[] | null) => void;
+	disabled?: boolean;
 }) {
-	const [mode, setMode] = useState<"automatic" | "manual">("automatic");
-	const inferred = countries.filter(({ name }) =>
-		new RegExp(
-			`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-			"i",
-		).test(`${title} ${abstract}`),
-	);
-	const [manual, setManual] = useState<string[] | null>(null);
+	const mode = value === null ? "automatic" : "manual";
+	const inferred = resolveCountryFocus({ title, abstractNote: abstract });
+	const [previousManual, setPreviousManual] = useState<string[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [selectedKey, setSelectedKey] = useState<string | null>(null);
-	const selected =
-		mode === "automatic"
-			? inferred.map(({ code }) => code)
-			: (manual ?? []);
+	const selected = value ?? inferred;
+	const updateManual = (next: string[]) =>
+		onChange(countryFocusSchema.parse(next));
 	const options = countries.filter(
 		({ code, name }) =>
 			!selected.includes(code) &&
@@ -57,16 +49,21 @@ export function CountryFocusMock({
 	);
 	return (
 		<section
-			aria-label="Country focus preview"
+			aria-label="Country focus"
 			className="overflow-hidden rounded-2xl border border-black/[0.07] bg-black/[0.025] dark:border-white/[0.07] dark:bg-white/[0.025]"
 		>
 			<InspectorChoices
 				label="Country focus mode"
 				value={mode}
+				disabled={disabled}
 				onChange={(next) => {
-					if (next === "manual" && manual === null)
-						setManual(inferred.map(({ code }) => code));
-					setMode(next);
+					if (next === mode) return;
+					if (next === "automatic") {
+						setPreviousManual(value);
+						onChange(null);
+					} else updateManual(previousManual ?? inferred);
+					setQuery("");
+					setSelectedKey(null);
 				}}
 				options={[
 					{
@@ -131,7 +128,7 @@ export function CountryFocusMock({
 									/>
 								}
 								endContent={
-									mode === "manual" ? (
+									mode === "manual" && !disabled ? (
 										<Button
 											isIconOnly
 											size="xs"
@@ -139,7 +136,7 @@ export function CountryFocusMock({
 											className="!h-5 !w-5 shrink-0 rounded-md text-black/45 dark:text-white/45"
 											aria-label={`Remove ${countryNames[code]}`}
 											onPress={() =>
-												setManual(
+												updateManual(
 													selected.filter(
 														(entry) =>
 															entry !== code,
@@ -159,7 +156,7 @@ export function CountryFocusMock({
 								<Tooltip
 									content={
 										mode === "automatic"
-											? `Found in ${title.toLowerCase().includes(countryNames[code].toLowerCase()) ? "the title" : "the abstract"}`
+											? "Found in the title or abstract"
 											: countryNames[code]
 									}
 								>
@@ -180,7 +177,7 @@ export function CountryFocusMock({
 						</span>
 					)}
 				</div>
-				{mode === "manual" && (
+				{mode === "manual" && !disabled && (
 					<Autocomplete
 						aria-label="Add a country"
 						placeholder="Find a country"
@@ -198,8 +195,12 @@ export function CountryFocusMock({
 							setSelectedKey(null);
 						}}
 						onSelectionChange={(value) => {
-							if (typeof value !== "string") return;
-							setManual([...selected, value]);
+							if (
+								typeof value !== "string" ||
+								selected.includes(value)
+							)
+								return;
+							updateManual([...selected, value]);
 							setQuery("");
 							setSelectedKey(value);
 						}}

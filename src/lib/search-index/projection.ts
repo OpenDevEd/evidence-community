@@ -1,3 +1,4 @@
+import { resolveCountryFocus } from "@/lib/country-focus";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { sourceConnection } from "@opendeved/evidence-library-core";
 
@@ -473,7 +474,7 @@ async function buildSearchProjectionPlanForKeys(
 					directCollections,
 					collectionsByKey,
 				),
-				country: splitValues(parent.country),
+				country: resolveCountryFocus(parent),
 				deleted: parent.deleted ?? 0,
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,

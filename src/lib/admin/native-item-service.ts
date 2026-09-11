@@ -1,3 +1,4 @@
+import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { isNotNull } from "drizzle-orm";
 import {
 	itemDraft,
@@ -1254,7 +1255,7 @@ export async function publishItemDraftWithContext(
 		const changedFields = Object.keys(options.review
 			? createItemDraftPatch(basePayload, options.review.approved.payload)
 			: draft!.patch).filter(
-			(field) => field !== "collections" && field !== "links",
+			(field) => field !== "collections" && !LIBRARY_OWNED_PAYLOAD_FIELDS.has(field),
 		);
 		// A changed "related" set changes what the source shows as Related, so the
 		// record's relations must be written back. "Cites" never reaches a source.

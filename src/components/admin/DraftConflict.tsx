@@ -1,5 +1,7 @@
 "use client";
 
+import { describeCountryFocus } from "@/lib/country-focus";
+
 import { adminFieldLabel } from "@/lib/admin/errors";
 import { useState } from "react";
 import {
@@ -93,7 +95,7 @@ export function DraftConflict({
 											{sourceLabels[source].label}
 										</span>
 										<span className="mt-1.5 block break-words text-xs leading-relaxed">
-											{String(
+											{(key === "countryFocus" ? describeCountryFocus : String)(
 												source === "draft"
 													? (payload[key] ?? "")
 													: published[key],
