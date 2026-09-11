@@ -388,15 +388,6 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		);
 	}
 
-	for (const locale of expectedEnabledLocales) {
-		if (locale === expectedDefaultLocale) continue;
-		const enabledResponse = await request.get(`/${locale}/lib`, {
-			maxRedirects: 0,
-		});
-		expect(enabledResponse.status()).toBe(200);
-		expect(enabledResponse.headers().location).toBeUndefined();
-	}
-
 	if (expectedDetectedLocale) {
 		const detectedResponse = await request.get("/lib", {
 			headers: { "Accept-Language": expectedDetectedLocale },
@@ -412,6 +403,16 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		expect(detectedResponse.headers()["cache-control"]).toBe(
 			"private, no-store",
 		);
+	}
+
+	// Explicit locale URLs save a preference, so check browser detection first.
+	for (const locale of expectedEnabledLocales) {
+		if (locale === expectedDefaultLocale) continue;
+		const enabledResponse = await request.get(`/${locale}/lib`, {
+			maxRedirects: 0,
+		});
+		expect(enabledResponse.status()).toBe(200);
+		expect(enabledResponse.headers().location).toBeUndefined();
 	}
 
 	await page.setViewportSize({ width: 1600, height: 900 });
