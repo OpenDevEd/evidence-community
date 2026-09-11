@@ -1048,10 +1048,12 @@ function AttachmentFilePanel({
 	onUpload: (key: string, file: File) => void;
 	readOnly: boolean;
 }) {
-	const formatFileSize = (bytes: number) =>
-		bytes < 1024 * 102.4
+	const formatFileDetails = (bytes: number, pages: number | null | undefined) => {
+		const size = bytes < 1024 * 102.4
 			? `${Math.max(1, Math.round(bytes / 1024))} KB`
 			: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+		return pages ? `${pages} ${pages === 1 ? "page" : "pages"}, ${size}` : size;
+	};
 
 	return (
 		<div className="space-y-3">
@@ -1074,10 +1076,7 @@ function AttachmentFilePanel({
 								{detail.filePublication.filename}
 							</p>
 							<p className="mt-1 text-black/45 dark:text-white/45">
-								{detail.filePublication.pageCount} pages ·{" "}
-								{formatFileSize(
-									detail.filePublication.sizeBytes,
-								)}
+								{formatFileDetails(detail.filePublication.sizeBytes, detail.filePublication.pageCount)}
 							</p>
 						</div>
 						<FileStateChip state="published" />
@@ -1142,12 +1141,7 @@ function AttachmentFilePanel({
 								{detail.fileDraft.filename}
 							</p>
 							<p className="mt-1 text-black/45 dark:text-white/45">
-								{detail.fileDraft.pageCount
-									? `${detail.fileDraft.pageCount} pages · `
-									: ""}
-								{formatFileSize(
-									detail.fileDraft.expectedSizeBytes,
-								)}
+								{formatFileDetails(detail.fileDraft.expectedSizeBytes, detail.fileDraft.pageCount)}
 							</p>
 						</div>
 						<FileStateChip

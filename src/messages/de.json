@@ -19,7 +19,7 @@
     "resources": "Ressourcen",
     "explore": "Erkunden",
     "noResourcesFound": "Keine Ressourcen gefunden",
-    "downloadRecords": "{count} Einträge herunterladen",
+    "downloadRecords": "{count, number} Einträge herunterladen",
     "printCitations": "{count} Zitate drucken",
     "mainFeed": "Hauptfeed",
     "lastUpdate": "Letzte Aktualisierung der Datenbank: {date} (UTC)",

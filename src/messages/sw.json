@@ -19,7 +19,7 @@
     "resources": "Rasilimali",
     "explore": "Chunguza",
     "noResourcesFound": "Hakuna rasilimali zilizopatikana",
-    "downloadRecords": "Pakua Rekodi {count}",
+    "downloadRecords": "Pakua Rekodi {count, number}",
     "printCitations": "Chapisha Nukuu {count}",
     "mainFeed": "Taarifa Kuu",
     "lastUpdate": "Sasisho la mwisho kutoka kwenye hifadhidata: {date} (UTC)",

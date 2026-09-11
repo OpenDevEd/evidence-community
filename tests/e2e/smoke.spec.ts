@@ -630,6 +630,25 @@ test("copies citation text without HTML whitespace or an extra sentence separato
 		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
 });
 
+test("filters institution suggestions by typed name", async ({ page }) => {
+	test.skip(!expectedInstitutionFacet, "Institution filter is disabled for this library.");
+	await page.route("**/api/facets**", (route) => route.fulfill({ json: {
+		facetDistribution: { institution: { "North University": 2, "South Institute": 1 } },
+	} }));
+	await page.setViewportSize({ width: 1600, height: 1000 });
+	await page.goto("/en-GB/lib");
+	await dismissConsent(page);
+	const picker = page.getByRole("combobox", { name: expectedInstitutionFilterLabel, exact: true }).first();
+	await picker.fill("North");
+	await expect(page.getByRole("option", { name: /North University/ })).toBeVisible();
+	await expect(page.getByRole("option", { name: /South Institute/ })).toHaveCount(0);
+	await picker.fill("No matching institution");
+	await expect(page.getByRole("option")).toHaveCount(0);
+	await picker.fill("South");
+	await page.getByRole("option", { name: /South Institute/ }).click();
+	await expect.poll(() => new URL(page.url()).searchParams.get("institution")).toContain("South Institute");
+});
+
 test("enforces runtime search scopes, filters, embeddings, and citation URLs", async ({
 	page,
 	request,

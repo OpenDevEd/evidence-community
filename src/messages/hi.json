@@ -19,7 +19,7 @@
     "resources": "संसाधन",
     "explore": "खोज करें",
     "noResourcesFound": "कोई संसाधन नहीं मिला",
-    "downloadRecords": "{count} रिकॉर्ड डाउनलोड करें",
+    "downloadRecords": "{count, number} रिकॉर्ड डाउनलोड करें",
     "printCitations": "{count} उद्धरण प्रिंट करें",
     "mainFeed": "मुख्य फ़ीड",
     "lastUpdate": "डेटाबेस से अंतिम अपडेट: {date} (UTC)",
