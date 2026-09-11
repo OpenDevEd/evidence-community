@@ -434,7 +434,7 @@ function ResourcesList({
 					"gap-6 -mt-4",
 					view === "list" || actuallyNoData
 						? "flex flex-col"
-						: "grid grid-cols-2",
+						: "grid grid-cols-1 lg:grid-cols-2",
 					className,
 				)}
 			>
