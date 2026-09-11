@@ -5,7 +5,7 @@ import {
 	type Page,
 } from "@playwright/test";
 
-import { dismissConsent } from "./consent";
+import { dismissConsent, expectsConsent } from "./consent";
 
 test.skip(
 	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
@@ -384,12 +384,14 @@ test("sends analytics only for the configured and consented profile", async ({
 	const network = trackAnalyticsNetwork(page);
 
 	await page.goto("/lib");
-	await page
-		.getByRole("button", {
-			name: consentAccept,
-			exact: true,
-		})
-		.click();
+	if (expectsConsent) {
+		await page
+			.getByRole("button", {
+				name: consentAccept,
+				exact: true,
+			})
+			.click();
+	}
 
 	if (expectedAnalytics) {
 		await expectSuccessfulAnalytics(page, network);

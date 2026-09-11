@@ -9,6 +9,7 @@ import { sendTakedownRequest } from "@/lib/email-actions";
 import { toast } from "../layout/Toast";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Link } from "@/i18n/routing";
+import { parseRequestLinks } from "@/lib/utils";
 
 function Footer() {
 	const t = useTranslations("ui");
@@ -44,7 +45,7 @@ export default function Takedown() {
 			<EmailForm fields={["email", "links", "description"]} footer={<Footer/>} onSubmit={async (value, reset) => {
 				const result = await sendTakedownRequest(
 					value.email,
-					value.links.split("\n").filter(Boolean),
+					parseRequestLinks(value.links),
 					value.description
 				);
 				if (result.success) {

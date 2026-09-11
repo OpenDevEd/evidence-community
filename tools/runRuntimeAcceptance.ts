@@ -1,3 +1,4 @@
+import { analyticsCapabilities } from "../src/lib/analytics-consent";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -1587,6 +1588,7 @@ function publicExpectations(profile: Profile) {
 						EXPORT_RECORDS.draft.title,
 					].join("|")
 				: "",
+		PLAYWRIGHT_EXPECTED_CONSENT: String(analyticsCapabilities(config.analytics).analytics),
 		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
 			Boolean(
 				config.analytics.posthog.host && config.analytics.posthog.key,
@@ -1619,6 +1621,7 @@ function runBrowserSuite(profile: Profile) {
 			"playwright",
 			"test",
 			"tests/e2e/smoke.spec.ts",
+			"tests/e2e/email-form.spec.ts",
 			"tests/e2e/brand-logo.spec.ts",
 			"--project",
 			"chromium",

@@ -1,3 +1,4 @@
+import { expectsConsent } from "./consent";
 import { expect, test, type Page } from "@playwright/test";
 
 import {
@@ -21,6 +22,7 @@ const hasThemeSwitcher =
 	process.env.PLAYWRIGHT_EXPECTED_THEME_SWITCHER !== "false";
 
 async function declineCookies(page: Page) {
+	if (!expectsConsent) return;
 	await page
 		.getByRole("button", { name: consentDecline, exact: true })
 		.click();
@@ -28,12 +30,14 @@ async function declineCookies(page: Page) {
 }
 
 async function measureLibraryPage(page: Page, shape: LogoShape, prefix: string) {
-	await expectLogoFits(
-		page,
-		logoBoxes.cookie,
-		shape,
-		`${prefix}cookie dialog`,
-	);
+	if (expectsConsent) {
+		await expectLogoFits(
+			page,
+			logoBoxes.cookie,
+			shape,
+			`${prefix}cookie dialog`,
+		);
+	}
 	await declineCookies(page);
 
 	await expectLogoFits(

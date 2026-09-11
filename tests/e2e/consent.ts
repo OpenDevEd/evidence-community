@@ -1,6 +1,8 @@
 import { expect, type Page } from "@playwright/test";
 
 /** What the button that turns the cookies down says, in the library's language. */
+export const expectsConsent = process.env.PLAYWRIGHT_EXPECTED_CONSENT !== "false";
+
 const DECLINE_LABEL =
 	process.env.PLAYWRIGHT_EXPECTED_CONSENT_DECLINE ?? "Decline";
 
@@ -19,6 +21,7 @@ const CONSENT_APPEARS_WITHIN_MS = 15_000;
  * nothing is waited for.
  */
 export async function dismissConsent(page: Page) {
+	if (!expectsConsent) return;
 	const dialog = page.getByRole("dialog");
 
 	await dialog

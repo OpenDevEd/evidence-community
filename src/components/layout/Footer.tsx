@@ -96,7 +96,7 @@ export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
 	const { contact, footer, legal } = useLibraryConfig();
-	const { openPreferences } = useAnalyticsConsent();
+	const { capabilities, openPreferences } = useAnalyticsConsent();
 	const pathname = usePathname();
 	const router = useRouter();
 	const isMapPage = pathname.includes("/map");
@@ -211,19 +211,21 @@ export default function Footer() {
 								</Link>
 							</li>
 						)}
-						<li>
-							<button
-								type="button"
-								onClick={
-									onPolicyPage
-										? () => setPolicyDialogOpen(true)
-										: openPreferences
-								}
-								className="text-left text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
-							>
-								{tUI("cookieSettings")}
-							</button>
-						</li>
+						{capabilities.analytics && (
+							<li>
+								<button
+									type="button"
+									onClick={
+										onPolicyPage
+											? () => setPolicyDialogOpen(true)
+											: openPreferences
+									}
+									className="text-left text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
+								>
+									{tUI("cookieSettings")}
+								</button>
+							</li>
+						)}
 					</ul>
 				</FooterColumn>
 

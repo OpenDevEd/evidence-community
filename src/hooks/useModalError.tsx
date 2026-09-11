@@ -58,7 +58,7 @@ export function useModalError({
 		({ customMessage }: { customMessage?: string }) => (
 			<motion.div
 				role="alert"
-				aria-label={errorMessage || t("errorMessageAriaLabel")}
+				aria-label={customMessage || errorMessage || t("errorMessageAriaLabel")}
 				initial={initial}
 				animate={animate}
 				exit={exit}

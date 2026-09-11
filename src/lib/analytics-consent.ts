@@ -1,3 +1,4 @@
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { isPolicyPage } from "@/lib/legal-links";
 import { isAdminPath } from "@/lib/path";
 
@@ -7,6 +8,14 @@ export type AnalyticsConsentPreferences = {
 	analytics: boolean;
 	sessionReplay: boolean;
 };
+
+export function analyticsCapabilities(analytics: LibraryPublicConfig["analytics"]): AnalyticsConsentPreferences {
+	const posthog = Boolean(analytics.posthog.host && analytics.posthog.key);
+	return {
+		analytics: posthog || Boolean(analytics.google.measurementId),
+		sessionReplay: posthog,
+	};
+}
 
 export type AnalyticsConsentPolicy = {
 	scope: string;

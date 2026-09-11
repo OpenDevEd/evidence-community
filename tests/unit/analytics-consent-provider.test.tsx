@@ -100,6 +100,8 @@ describe("analytics consent provider", () => {
 		runtime.config.analytics = {
 			...runtime.config.analytics,
 			consentPolicyVersion: 2,
+			google: {},
+			posthog: {host: "https://analytics.runtime.example", key: "phc_runtime_consent"},
 		};
 		runtime.applyClientAnalyticsConsent.mockClear();
 		container = document.createElement("div");
@@ -110,6 +112,27 @@ describe("analytics consent provider", () => {
 		await act(async () => {
 			root.unmount();
 		});
+	});
+
+	it("does not interrupt readers when no analytics provider is configured", async () => {
+		runtime.config.analytics.posthog = { host: "", key: "" };
+		await act(async () => {
+			root.render(<AnalyticsConsentProvider><ConsentController /></AnalyticsConsentProvider>);
+		});
+		expect(shown("consent-open")).toBe("false");
+		expect(shown("consent-state")).toBe("pending:false:false");
+		expect(document.cookie).not.toContain("analytics_consent=");
+	});
+
+	it("accepts Google analytics without granting unavailable session replay", async () => {
+		runtime.config.analytics.posthog = { host: "", key: "" };
+		runtime.config.analytics.google = { measurementId: "G-TEST1234" };
+		await act(async () => {
+			root.render(<AnalyticsConsentProvider><ConsentController /></AnalyticsConsentProvider>);
+		});
+		expect(shown("consent-open")).toBe("true");
+		await act(async () => { clickButton(container, "Grant consent"); });
+		expect(shown("consent-state")).toBe("granted:true:false");
 	});
 
 	it("lets a reader who already answered straight through", async () => {
