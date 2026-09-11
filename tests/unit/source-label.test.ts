@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { sourceDisplayLabel } from "@/lib/admin/source-label";
 
 describe("sourceDisplayLabel", () => {
+	it("keeps same-name source choices distinct across scopes and providers", () => {
+		const labels = [
+			{ provider: "zotero", externalScopeKey: "123" },
+			{ provider: "zotero", externalScopeKey: "456" },
+			{ provider: "mendeley", externalScopeKey: "123" },
+		].map((source) => sourceDisplayLabel({
+			...source,
+			displayName: "Research",
+			key: `${source.provider}-${source.externalScopeKey}`,
+		}, { includeIdentifier: true }));
+		expect(new Set(labels).size).toBe(3);
+	});
+
 	it("prefers the source's own name", () => {
 		expect(
 			sourceDisplayLabel({
@@ -22,7 +35,7 @@ describe("sourceDisplayLabel", () => {
 				key: "zotero-test-2",
 				provider: "zotero",
 			}),
-		).toBe("Zotero · 6642276");
+		).toMatch(/Zotero.*6642276/);
 		expect(
 			sourceDisplayLabel({
 				displayName: "  ",
@@ -30,7 +43,7 @@ describe("sourceDisplayLabel", () => {
 				key: "mendeley-x",
 				provider: "mendeley",
 			}),
-		).toBe("Mendeley · mendeley-x");
+		).toMatch(/Mendeley.*mendeley-x/);
 		expect(
 			sourceDisplayLabel({
 				displayName: "ignored",

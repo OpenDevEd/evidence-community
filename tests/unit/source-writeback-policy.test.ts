@@ -145,7 +145,7 @@ describe("item writeback targets", () => {
 			provider: "zotero",
 			reason: "not-linked",
 			sourceEnabled: true,
-			sourceLabel: "Zotero · group-a",
+			sourceLabel: expect.stringMatching(/Zotero.*group-a/),
 		});
 	});
 

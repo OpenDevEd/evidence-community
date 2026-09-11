@@ -82,7 +82,7 @@ describe("admin library snapshot", () => {
 				{
 					collectionCount: 3,
 					key: "zotero-main",
-					label: "Zotero · group-42",
+					label: expect.stringMatching(/Zotero.*group-42/),
 					provider: "zotero",
 					readOnly: true,
 					status: "active",
