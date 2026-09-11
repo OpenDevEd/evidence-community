@@ -2,6 +2,7 @@ import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`); } }));
 vi.mock("next/cache", () => ({
 	cacheLife: vi.fn(),
 	cacheTag: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock("@/components/pages/PolicyToc", () => ({
 
 import PolicyPage from "@/components/pages/PolicyPage";
 import { libraryConfigSchema } from "@/config/library-config/schema";
-import { loadPolicyDocument } from "@/lib/policy-documents";
+import { loadPolicyDocument, loadPolicyPageDocument } from "@/lib/policy-documents";
 import {
 	maximalLibraryConfig,
 	minimalLibraryConfig,
@@ -25,6 +26,15 @@ const withManifestText = libraryConfigSchema.parse(maximalLibraryConfig);
 const withBakedText = libraryConfigSchema.parse(minimalLibraryConfig);
 
 describe("policy documents", () => {
+	it.each([
+		["privacy", "privacyPolicy"], ["cookiePolicy", "cookiePolicy"], ["terms", "termsOfService"],
+	] as const)("redirects %s to the configured policy", async (kind, field) => {
+		const config = libraryConfigSchema.parse(minimalLibraryConfig);
+		config.legal[field] = "https://policies.example.org/library";
+		await expect(loadPolicyDocument(config, kind)).resolves.toBeNull();
+		await expect(loadPolicyPageDocument(config, kind)).rejects.toThrow("redirect:https://policies.example.org/library");
+	});
+
 	it("uses the owner's privacy text, fills in the site host, and reads its date", async () => {
 		const document = await loadPolicyDocument(withManifestText, "privacy");
 
@@ -75,6 +85,12 @@ describe("policy page", () => {
 
 		expect(markup).toContain("Terms of use");
 		expect(markup).toContain("Use the library for research and teaching.");
+	});
+
+	it.each(["library@example.org", undefined])("uses only the configured contact address: %s", (contactEmail) => {
+		const html = renderToStaticMarkup(<PolicyPage content="Policy content" title="Policy" description="" lastUpdated={new Date("2026-09-11")} otherPolicyLink={{href: "/privacy", label: "Privacy"}} homeLabel="Home" contactEmail={contactEmail} />);
+		expect(html.includes("mailto:")).toBe(Boolean(contactEmail));
+		if (contactEmail) expect(html).toContain(`href="mailto:${contactEmail}"`);
 	});
 
 	it("sends the update date as one readable sentence", async () => {

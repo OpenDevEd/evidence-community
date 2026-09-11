@@ -1,4 +1,6 @@
 import "server-only";
+import { redirect } from "next/navigation";
+import { getRuntimePagePath } from "@/config/library-config/links";
 
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
@@ -18,6 +20,12 @@ const POLICY_MANIFEST_FIELDS = {
 	privacy: "privacyMarkdown",
 	terms: "termsMarkdown",
 } as const satisfies Record<PolicyDocumentKind, keyof LibraryServerConfig["legal"]>;
+
+const POLICY_DESTINATIONS = {
+	privacy: { field: "privacyPolicy", path: "/privacy" },
+	cookiePolicy: { field: "cookiePolicy", path: "/cookie-policy" },
+	terms: { field: "termsOfService", path: "/terms" },
+} as const;
 
 const POLICY_SITE_HOST_TOKEN = "{{SITE_HOST}}";
 const POLICY_CONDITIONAL_CLOSE_TOKEN = "{{::}}";
@@ -219,14 +227,30 @@ async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATH
 	return statedLastUpdated ?? (await stat(/* turbopackIgnore: true */ path)).mtime;
 }
 
+type PolicyDocumentConfig = Pick<LibraryServerConfig, "identity" | "legal" | "updatedAt">;
+
+function getPolicyRedirect(config: PolicyDocumentConfig, document: PolicyDocumentKind) {
+	const destination = POLICY_DESTINATIONS[document];
+	const href = config.legal[destination.field];
+	if (href && getRuntimePagePath(href, config.identity.baseUrl) !== destination.path) return href;
+	return null;
+}
+
+export async function loadPolicyPageDocument(config: PolicyDocumentConfig, document: PolicyDocumentKind) {
+	const destination = getPolicyRedirect(config, document);
+	if (destination) redirect(destination);
+	return loadPolicyDocument(config, document);
+}
+
 /**
  * Owner-written text from the library manifest wins over the built-in
  * document. The terms page exists only when the owner wrote terms.
  */
 export async function loadPolicyDocument(
-	config: Pick<LibraryServerConfig, "identity" | "legal" | "updatedAt">,
+	config: PolicyDocumentConfig,
 	document: PolicyDocumentKind,
 ): Promise<{ content: string; lastUpdated: Date } | null> {
+	if (getPolicyRedirect(config, document)) return null;
 	const siteHost = new URL(config.identity.baseUrl).host;
 	const manifestText = config.legal[POLICY_MANIFEST_FIELDS[document]];
 	if (manifestText) {

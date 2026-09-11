@@ -113,7 +113,8 @@ const expectedAi = process.env.PLAYWRIGHT_EXPECTED_AI !== "false";
 const expectedAiSearch = process.env.PLAYWRIGHT_EXPECTED_AI_SEARCH !== "false";
 const expectedDeepResearch =
 	process.env.PLAYWRIGHT_EXPECTED_DEEP_RESEARCH !== "false";
-const expectedContactPage = process.env.PLAYWRIGHT_EXPECTED_EMAIL !== "false";
+const expectedContactForm = process.env.PLAYWRIGHT_EXPECTED_EMAIL !== "false";
+const expectedContactPage = expectedContactForm || Boolean(expectedContactEmail || expectedContactPhone || expectedContactAddress);
 const expectedSourceCitationLabel =
 	process.env.PLAYWRIGHT_EXPECTED_SOURCE_CITATION_LABEL ?? "";
 const expectedSourceCitationCount =
@@ -343,6 +344,7 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 
 	await page.goto("/contact");
 	const contactDetails = page.getByRole("main");
+	await expect(contactDetails.locator("form")).toHaveCount(expectedContactForm ? 1 : 0);
 	await expect(
 		contactDetails.getByRole("link", {
 			name: expectedContactEmail,

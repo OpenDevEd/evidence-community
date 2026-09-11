@@ -26,6 +26,7 @@ import {
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Link, useRouter } from "@/i18n/routing";
+import { hasContactDetails } from "@/config/library-config/pages";
 import { isPolicyPage } from "@/lib/legal-links";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
 
@@ -102,9 +103,7 @@ export default function Footer() {
 	const isMapPage = pathname.includes("/map");
 	const onPolicyPage = isPolicyPage(pathname);
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
-	const hasContact = Boolean(
-		contact.email || contact.phone || contact.address,
-	);
+	const hasContact = hasContactDetails(contact);
 
 	if (isMapPage) return null;
 
