@@ -1,7 +1,9 @@
 "use client";
 
+import { documentAttachment, uploadPdfFile, validatePdf, type PdfUploadStep } from "./admin-pdf";
+
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, ListIcon, Logout01Icon, Menu01Icon, PanelRightIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, Files01Icon, Logout01Icon, FilterHorizontalIcon, FileEditIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
@@ -77,7 +79,6 @@ import {
 } from "./AdminNavigation";
 import {
 	AdminApiError,
-	completeAdminPdf,
 	createAdminCollection,
 	createAdminDraft,
 	deleteAdminCollection,
@@ -92,10 +93,7 @@ import {
 	renameAdminCollection,
 	restoreAdminCollection,
 	saveAdminDraft,
-	sha256File,
-	stageAdminPdf,
 	unpublishAdminItem,
-	uploadAdminPdf,
 } from "./admin-api";
 import {
 	type AdminSchemaDefinition,
@@ -471,6 +469,8 @@ export default function AdminWorkbench({
 	const [moveDestinationChanged, setMoveDestinationChanged] = useState(false);
 	const [moveErrors, setMoveErrors] = useState<AdminFieldErrors>({});
 	const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+	const [pdfProgress, setPdfProgress] = useState<Record<string, PdfUploadStep | undefined>>({});
+	const createdPdfAttachments = useRef(new Map<string, string>());
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
 		null,
 	);
@@ -758,6 +758,7 @@ export default function AdminWorkbench({
 				if (requestId === detailRequest.current) {
 					applyDetail(next, discardLocal);
 				}
+				return next;
 			} catch (error) {
 				if (requestId === detailRequest.current) {
 					const message = errorMessage(error);
@@ -1155,14 +1156,13 @@ export default function AdminWorkbench({
 		setMobilePane("inspector");
 	}, []);
 	useEffect(() => {
-		// Escape leaves pick mode: a document keyboard listener is the only way
-		// to catch it wherever focus is (table cell, banner, inspector).
+		// Capture Escape before the record grid consumes it for selection.
 		if (!activeLinkPick) return;
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key === "Escape") stopLinkPick();
 		};
-		document.addEventListener("keydown", onKeyDown);
-		return () => document.removeEventListener("keydown", onKeyDown);
+		document.addEventListener("keydown", onKeyDown, true);
+		return () => document.removeEventListener("keydown", onKeyDown, true);
 	}, [activeLinkPick, stopLinkPick]);
 
 	const runBusy = useCallback(
@@ -1381,28 +1381,70 @@ export default function AdminWorkbench({
 			toast.success("Attachment draft created");
 		});
 
-	const uploadPdf = (key: string, file: File) =>
+	const uploadPdf = (key: string, file: File, parent?: AdminItemDetail) => {
+		// The ref also blocks a second file-chooser event before React renders busy.
+		if (busyOperations.current) return;
 		void runBusy(
 			async () => {
 				setFileErrors((current) => withoutRecordError(current, key));
-				if (
-					file.type !== "application/pdf" &&
-					!file.name.toLowerCase().endsWith(".pdf")
-				) {
-					throw new Error("Choose a PDF file");
+				validatePdf(file);
+				setPdfProgress((current) => ({
+					...current,
+					[key]: "Preparing",
+				}));
+				let attachmentKey = key;
+				try {
+					if (parent) {
+						await flushDraft(parent.key);
+						if (!parent.draft) await openAdminDraft(parent.key);
+						const existing = documentAttachment(parent, true);
+						attachmentKey =
+							existing?.sourceConnectionKey === "native"
+								? existing.key
+								: (createdPdfAttachments.current.get(
+										parent.key,
+									) ?? "");
+						if (!attachmentKey) {
+							const created = await createAdminDraft({
+								collections: [],
+								itemType: "attachment",
+								parentItem: parent.key,
+								tags: [],
+								title: file.name,
+							});
+							attachmentKey = created.itemKey;
+							createdPdfAttachments.current.set(
+								parent.key,
+								attachmentKey,
+							);
+						}
+					}
+					await uploadPdfFile(attachmentKey, file, (step) =>
+						setPdfProgress((current) => ({
+							...current,
+							[key]: step,
+						})),
+					);
+					toast.success("PDF added to the working draft");
+				} finally {
+					// Keep the attachment after a failed upload so a retry uses the same draft.
+					try {
+						const refreshed =
+							selectedKeyRef.current === key
+								? await loadDetail(key)
+								: await getAdminItem(key).catch(
+										() => undefined,
+									);
+						if (refreshed)
+							createdPdfAttachments.current.delete(key);
+						await loadItems();
+					} finally {
+						setPdfProgress((current) => ({
+							...current,
+							[key]: undefined,
+						}));
+					}
 				}
-				toast.info("Preparing PDF");
-				const expectedSha256 = await sha256File(file);
-				const staged = await stageAdminPdf(key, {
-					expectedSha256,
-					expectedSizeBytes: file.size,
-					filename: file.name,
-				});
-				await uploadAdminPdf(staged.upload.signedUrl, file);
-				await completeAdminPdf(key, staged.fileDraft.uploadRevision);
-				if (detail) await loadDetail(detail.key);
-				await loadItems();
-				toast.success("PDF staged and processed");
 			},
 			(error) =>
 				setFileErrors((current) => ({
@@ -1410,6 +1452,7 @@ export default function AdminWorkbench({
 					[key]: fileErrorMessage(error),
 				})),
 		);
+	};
 
 	const discardPdfDraft = (key: string) => {
 		setConfirmDialog({
@@ -1939,17 +1982,17 @@ export default function AdminWorkbench({
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Library administration</h1>
 			<header
-				className="admin-toolbar-grid grid min-h-28 shrink-0 items-center gap-2 px-3 py-3 sm:flex sm:min-h-16 xl:relative"
+				className="admin-toolbar-grid grid shrink-0 items-center gap-2 px-3 py-3 xl:relative xl:flex xl:min-h-16"
 				data-admin-region="toolbar"
 			>
 				<Link
 					aria-label="Open library"
-					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-30 items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-30 sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
+					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-30 items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus xl:mr-1 xl:w-30 xl:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
 					<LibraryLogo className="max-w-full" place="admin" />
 				</Link>
-				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-64 sm:max-w-lg sm:flex-1">
+				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:col-span-1 sm:col-start-1 xl:min-w-64 xl:max-w-lg xl:flex-1">
 					<Input
 						color="filled"
 						aria-label="Search records"
@@ -1961,7 +2004,12 @@ export default function AdminWorkbench({
 						isClearable
 						placeholder="Search title, creator, date or tag"
 						startContent={
-							<HugeiconsIcon icon={Search01Icon} aria-hidden className="text-black/35 dark:text-white/35" size={15} />
+							<HugeiconsIcon
+								icon={Search01Icon}
+								aria-hidden
+								className="text-black/35 dark:text-white/35"
+								size={15}
+							/>
 						}
 						value={filters.query}
 						onClear={() =>
@@ -1990,48 +2038,57 @@ export default function AdminWorkbench({
 						sources={library.sources}
 					/>
 				</div>
-				<div className="hidden flex-1 sm:block" />
+				<div
+					role="group"
+					aria-label="Library panels"
+					className="col-span-3 row-start-3 flex min-w-0 rounded-xl bg-black/[0.035] p-1 sm:col-span-2 sm:col-start-2 sm:row-start-2 sm:min-w-72 xl:hidden dark:bg-white/[0.035]"
+				>
+					{[
+						{
+							icon: FilterHorizontalIcon,
+							key: "navigation" as const,
+							label: "Filters",
+						},
+						{
+							icon: Files01Icon,
+							key: "list" as const,
+							label: "Records",
+						},
+						{
+							icon: FileEditIcon,
+							key: "inspector" as const,
+							label: "Editor",
+						},
+					].map((entry) => {
+						const Icon = entry.icon;
+						return (
+							<Button
+								key={entry.key}
+								aria-controls={`admin-${entry.key}-pane`}
+								aria-label={entry.label}
+								aria-pressed={mobilePane === entry.key}
+								className="h-9 min-w-0 flex-1 gap-2 rounded-lg px-2"
+								onPress={() => setMobilePane(entry.key)}
+								size="xs"
+								variant={
+									mobilePane === entry.key
+										? "muted"
+										: "transparent"
+								}
+							>
+								<HugeiconsIcon
+									icon={Icon}
+									aria-hidden
+									size={18}
+									strokeWidth={1.8}
+								/>
+								{entry.label}
+							</Button>
+						);
+					})}
+				</div>
+				<div className="hidden flex-1 xl:block" />
 				<div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1">
-					<div className="flex rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]">
-						{[
-							{
-								icon: Menu01Icon,
-								key: "navigation" as const,
-								label: "Filters",
-							},
-							{
-								icon: ListIcon,
-								key: "list" as const,
-								label: "Records",
-							},
-							{
-								icon: PanelRightIcon,
-								key: "inspector" as const,
-								label: "Editor",
-							},
-						].map((entry) => {
-							const Icon = entry.icon;
-							return (
-								<Tooltip key={entry.key} content={entry.label}>
-									<Button
-										aria-controls={`admin-${entry.key}-pane`}
-										aria-label={entry.label}
-										aria-pressed={mobilePane === entry.key}
-										isIconOnly
-										onPress={() => setMobilePane(entry.key)}
-										size="xs"
-										variant={
-											mobilePane === entry.key
-												? "solid"
-												: "transparent"
-										}
-									>
-										<HugeiconsIcon icon={Icon} aria-hidden size={15} />
-									</Button>
-								</Tooltip>
-							);
-						})}
-					</div>
 					<div
 						aria-label="Library tools"
 						className="flex h-10 items-center rounded-xl bg-black/[0.035] dark:bg-white/[0.035]"
@@ -2057,7 +2114,11 @@ export default function AdminWorkbench({
 								size="xs"
 								variant="transparent"
 							>
-								<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={15} />
+								<HugeiconsIcon
+									icon={Refresh01Icon}
+									aria-hidden
+									size={15}
+								/>
 							</Button>
 						</Tooltip>
 						<form
@@ -2070,12 +2131,18 @@ export default function AdminWorkbench({
 								aria-label="Log out"
 								className="h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
 								isIconOnly
-								onPress={() => logoutFormRef.current?.requestSubmit()}
+								onPress={() =>
+									logoutFormRef.current?.requestSubmit()
+								}
 								size="xs"
 								type="button"
 								variant="transparent"
 							>
-								<HugeiconsIcon icon={Logout01Icon} aria-hidden size={15} />
+								<HugeiconsIcon
+									icon={Logout01Icon}
+									aria-hidden
+									size={15}
+								/>
 							</Button>
 						</Tooltip>
 					</div>
@@ -2086,81 +2153,106 @@ export default function AdminWorkbench({
 						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
 						role="group"
 					>
-					<Tooltip content="Import Item">
-						<Button
-							aria-label="Import Item"
-							className="h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3"
-							color="secondary"
-							isDisabled={busy}
-							onPress={() => setImportOpen(true)}
-							size="xs"
-							variant="solid"
-						>
-							<HugeiconsIcon icon={FileImportIcon} aria-hidden size={15} /><span className="hidden lg:inline">Import Item</span>
-						</Button>
-					</Tooltip>
-					<span aria-hidden className="h-10 w-px shrink-0 bg-white/25" />
-					<Popover
-						disableAnimation
-						isOpen={newItemOpen}
-						onOpenChange={(open) => {
-							setNewItemOpen(open);
-							if (!open) setNewItemSearch("");
-						}}
-						placement="bottom-end"
-					>
-						<PopoverTrigger>
+						<Tooltip content="Import Item">
 							<Button
-								aria-label="Create Item"
-								className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0 font-semibold lg:w-auto lg:!min-w-0 lg:px-3"
-								color="accent"
+								aria-label="Import Item"
+								className="h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3"
+								color="secondary"
+								isDisabled={busy}
+								onPress={() => setImportOpen(true)}
 								size="xs"
 								variant="solid"
 							>
-								<HugeiconsIcon icon={Add01Icon} aria-hidden size={15} />
+								<HugeiconsIcon
+									icon={FileImportIcon}
+									aria-hidden
+									size={15}
+								/>
 								<span className="hidden lg:inline">
-									Create Item
+									Import Item
 								</span>
 							</Button>
-						</PopoverTrigger>
-						<PopoverContent
-							aria-label="Create Item"
-							className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+						</Tooltip>
+						<span
+							aria-hidden
+							className="h-10 w-px shrink-0 bg-white/25"
+						/>
+						<Popover
+							disableAnimation
+							isOpen={newItemOpen}
+							onOpenChange={(open) => {
+								setNewItemOpen(open);
+								if (!open) setNewItemSearch("");
+							}}
+							placement="bottom-end"
 						>
-							<div className="w-full">
-								<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
-									<Input
-										color="filled"
-										aria-label="Find an item type"
-										autoFocus={finePointer}
-										placeholder="Find an item type"
-										startContent={
-											<HugeiconsIcon icon={Search01Icon} aria-hidden size={15} />
-										}
-										value={newItemSearch}
-										onValueChange={setNewItemSearch}
+							<PopoverTrigger>
+								<Button
+									aria-label="Create Item"
+									className="h-10 min-h-10 w-10 !min-w-10 rounded-none px-0 font-semibold lg:w-auto lg:!min-w-0 lg:px-3"
+									color="accent"
+									size="xs"
+									variant="solid"
+								>
+									<HugeiconsIcon
+										icon={Add01Icon}
+										aria-hidden
+										size={15}
 									/>
-								</div>
-									<div className="admin-item-type-list flex flex-col gap-1 overflow-y-auto p-1">
-									{filteredDefinitions.map((definition) => (
-										<button
-											key={definition.itemType}
-											className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-white/[0.05]"
-											onClick={() =>
-												createItem(definition)
+									<span className="hidden lg:inline">
+										Create Item
+									</span>
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent
+								aria-label="Create Item"
+								className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+							>
+								<div className="w-full">
+									<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
+										<Input
+											color="filled"
+											aria-label="Find an item type"
+											autoFocus={finePointer}
+											placeholder="Find an item type"
+											startContent={
+												<HugeiconsIcon
+													icon={Search01Icon}
+													aria-hidden
+													size={15}
+												/>
 											}
-											type="button"
-										>
-											<HugeiconsIcon icon={LibraryIcon} aria-hidden className="shrink-0 opacity-45" size={16} />
-											{humanizeAdminField(
-												definition.itemType,
-											)}
-										</button>
-									))}
+											value={newItemSearch}
+											onValueChange={setNewItemSearch}
+										/>
+									</div>
+									<div className="admin-item-type-list flex flex-col gap-1 overflow-y-auto p-1">
+										{filteredDefinitions.map(
+											(definition) => (
+												<button
+													key={definition.itemType}
+													className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-white/[0.05]"
+													onClick={() =>
+														createItem(definition)
+													}
+													type="button"
+												>
+													<HugeiconsIcon
+														icon={LibraryIcon}
+														aria-hidden
+														className="shrink-0 opacity-45"
+														size={16}
+													/>
+													{humanizeAdminField(
+														definition.itemType,
+													)}
+												</button>
+											),
+										)}
+									</div>
 								</div>
-							</div>
-						</PopoverContent>
-					</Popover>
+							</PopoverContent>
+						</Popover>
 					</div>
 				</div>
 			</header>
@@ -2476,6 +2568,17 @@ export default function AdminWorkbench({
 							onSelectAttachment={(key) => setSelectedKey(key)}
 							onChangePdfRemoval={changePdfRemoval}
 							onUpload={uploadPdf}
+							onAddPdf={(file) => {
+								if (detail)
+									uploadPdf(
+										detail.key,
+										file,
+										detail.parentItem ? undefined : detail,
+									);
+							}}
+							pdfProgress={
+								detail ? pdfProgress[detail.key] : undefined
+							}
 							payload={draftPayload}
 							saveMessage={saveMessage}
 							saveState={saveState}

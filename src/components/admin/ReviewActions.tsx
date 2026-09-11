@@ -63,11 +63,11 @@ export function ReviewActions({
 	return (
 		<>
 			{role !== "creator" ? (
-				<div className="mt-4 flex flex-wrap gap-2">
+				<div className="flex w-full items-center gap-2">
 					<Button
 						size="xs"
 						color="accent"
-						className="h-9 rounded-xl px-3 font-semibold"
+						className="h-9 min-w-0 flex-1 rounded-xl px-3 font-semibold"
 						startContent={
 							<HugeiconsIcon icon={SentIcon} size={14} />
 						}
@@ -82,8 +82,8 @@ export function ReviewActions({
 					</Button>
 					<Button
 						size="xs"
-						variant="transparent"
-						className="h-9 rounded-xl px-2.5"
+						variant="muted"
+						className="h-9 shrink-0 rounded-xl px-3"
 						startContent={
 							<HugeiconsIcon icon={Comment01Icon} size={14} />
 						}

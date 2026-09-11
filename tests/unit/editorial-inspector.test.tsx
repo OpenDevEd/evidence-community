@@ -137,6 +137,7 @@ function Inspector({ role }: { role: "editor" | "creator" }) {
 		onSelectAttachment: noop,
 		onChangePdfRemoval: noop,
 		onUpload: noop,
+		onAddPdf: noop,
 	};
 	return (
 		<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>

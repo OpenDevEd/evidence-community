@@ -9,6 +9,7 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
 import { getAdminItemListPage } from "../../src/lib/admin/item-list-query";
 import { parseAdminItemListRequest } from "../../src/lib/admin/item-list-contract";
+import { getAdminPdfCover } from "../../src/lib/admin/file-cover-query";
 import { getAdminReviewSnapshot } from "../../src/lib/admin/review-query";
 import { AdminValidationError } from "../../src/lib/admin/errors";
 import { itemReview } from "../../src/db/schema/review";
@@ -214,6 +215,10 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
 		const actor = { userId: "review-test-creator", role: "creator" } as const;
 		const captured = await submitItemReview(db, reviewParent.itemKey, actor);
+        const originalCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision);
+        const submittedCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision, captured.id);
+        assert.deepEqual(submittedCover, originalCover);
+        await assert.rejects(getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision + 1, captured.id), /not found/i);
         const resolvedRoot = await createNativeItemDraft(db, {itemType: "Report", title: "Already reviewed"});
         await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, resolvedRoot.itemKey));
         const resolvedSubmission = await submitItemReview(db, resolvedRoot.itemKey, actor);
@@ -227,7 +232,12 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Replacing a draft deleted the submitted PDF");
 		reviewStorage.privateFiles.set(reviewReplacement.upload.path, replacementPdf);
 		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewReplacement.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
+		const frozenCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision, captured.id);
+        assert.deepEqual(frozenCover, originalCover, "Replacing the working PDF changed the submitted cover");
+        const replacementCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewReplacement.fileDraft.uploadRevision);
+        assert.notDeepEqual(replacementCover, originalCover);
+        await assert.rejects(getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision), /not found/i);
+        const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
 		assert(approvedReview.review.state === "published", "Review approval did not finish");
 		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
         const [publishedReviewRoot] = await db.select().from(item).where(eq(item.key, reviewParent.itemKey));

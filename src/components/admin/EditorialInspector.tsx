@@ -20,6 +20,8 @@ import { ReviewReadiness, useReviewReadiness } from "./ReviewReadiness";
 import {
 	ReviewVersionTabs,
 	ReviewVersionNotice,
+	ReviewStatusLabel,
+	ReviewWithdrawButton,
 	ReviewDraftNotice,
 } from "./ReviewVersionControls";
 
@@ -44,14 +46,8 @@ export function EditorialInspector(props: Props) {
 
 function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	const model = useReviewInspector(props);
-	const {
-		snapshot,
-		pending,
-		session,
-		version,
-		viewingSubmitted,
-		frozenDetail,
-	} = model;
+	const { snapshot, pending, version, viewingSubmitted, frozenDetail } =
+		model;
 	const controls = (
 		<ReviewVersionTabs
 			viewingSubmitted={viewingSubmitted}
@@ -59,23 +55,39 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 			onSelect={version.selectVersion}
 		/>
 	);
-	const notice = (
+	const notice = (actions: ReactNode) => (
 		<ReviewVersionNotice
+			actions={actions}
 			snapshot={snapshot}
 			updatedAt={props.detail.draft?.updatedAt ?? props.detail.updatedAt}
-			pending={pending}
-			canWithdraw={
-				session.role !== "creator" ||
-				snapshot?.submittedBy === session.userId
-			}
-			withdrawing={version.withdrawing}
-			onWithdraw={version.withdraw}
+			viewingSubmitted={viewingSubmitted}
+			onViewSubmitted={() => version.selectVersion(true)}
 		/>
 	);
+	const header = {
+		versionStatus: (
+			<ReviewStatusLabel
+				snapshot={snapshot}
+				detail={props.detail}
+				viewingSubmitted={viewingSubmitted}
+			/>
+		),
+		versionWithdraw: (
+			<ReviewWithdrawButton
+				pending={pending}
+				submittedBy={snapshot?.submittedBy}
+				withdrawing={version.withdrawing}
+				onWithdraw={version.withdraw}
+			/>
+		),
+		reviewId: snapshot?.reviewId,
+	};
+
 	if (!viewingSubmitted || !frozenDetail || !snapshot) {
 		return (
 			<WorkingDraftInspector
 				{...props}
+				{...header}
 				model={model}
 				controls={controls}
 				notice={notice}
@@ -85,6 +97,7 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	return (
 		<SubmittedInspector
 			{...props}
+			{...header}
 			model={model}
 			snapshot={snapshot}
 			frozenDetail={frozenDetail}
@@ -98,7 +111,7 @@ type VersionInspectorProps = Props & {
 	detail: AdminItemDetail;
 	model: ReturnType<typeof useReviewInspector>;
 	controls: ReactNode;
-	notice: ReactNode;
+	notice: (actions: ReactNode) => ReactNode;
 };
 
 function WorkingDraftInspector({
@@ -114,9 +127,9 @@ function WorkingDraftInspector({
 		props.payload,
 		model.publishing,
 	);
-	const draftNotice = (
+	const draftNotice = (actions: ReactNode) => (
 		<ReviewDraftNotice
-			notice={notice}
+			notice={notice(actions)}
 			conflictCount={conflicts.fields.length}
 			feedback={
 				snapshot?.reviewState === "returned" ? snapshot.note : null
@@ -200,7 +213,11 @@ function SubmittedInspector({
 			onChange={(payload) =>
 				corrections.change(frozenDetail.key, payload)
 			}
-			versionActions={pending ? reviewActions : undefined}
+			versionActions={
+				pending && session.role !== "creator"
+					? reviewActions
+					: undefined
+			}
 			editorNotice={
 				<SubmittedNotice
 					pending={pending}
