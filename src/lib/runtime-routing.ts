@@ -84,13 +84,13 @@ const RESERVED_ROUTE_SEGMENTS = new Set([
  * The address to look up in the owner's redirect list, or `null` when the
  * request already points at a page the library serves.
  *
- * The terms page only exists when the owner wrote terms, and only at exactly
+ * The terms route serves configured text or a policy destination, only at exactly
  * `/terms`. Reserving the whole `/terms` branch would silently switch off the
  * owner's own redirects for addresses such as `/terms/archive`.
  */
 export function getRedirectLookupPath(
 	pathname: string,
-	hasOwnerWrittenTerms: boolean,
+	hasConfiguredTerms: boolean,
 ) {
 	const segments = pathname.split("/").filter(Boolean);
 	if (segments.length === 0) return null;
@@ -102,7 +102,7 @@ export function getRedirectLookupPath(
 	if (pathSegments.length === 0) return null;
 	if (RESERVED_ROUTE_SEGMENTS.has(pathSegments[0])) return null;
 	if (
-		hasOwnerWrittenTerms &&
+		hasConfiguredTerms &&
 		pathSegments.length === 1 &&
 		pathSegments[0] === "terms"
 	) {

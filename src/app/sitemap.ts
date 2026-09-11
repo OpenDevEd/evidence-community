@@ -11,10 +11,8 @@ import {
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
-import {
-	loadPolicyDocument,
-	type PolicyDocumentKind,
-} from "@/lib/policy-documents";
+import { loadPolicyDocument } from "@/lib/policy-documents";
+import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
 import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
 
 // Sitemap shards render per request so both shard enumeration and document
@@ -79,16 +77,12 @@ export default async function sitemap(props: {
 	let policyEntries: MetadataRoute.Sitemap = [];
 	let gapmapEntries: MetadataRoute.Sitemap = [];
 	if (identifier === 0) {
-		const policyPages: [PolicyDocumentKind, string][] = [
-			["privacy", "/privacy"],
-			["cookiePolicy", "/cookie-policy"],
-			["terms", "/terms"],
-		];
+		const policyPages = Object.entries(POLICY_DESTINATIONS) as [PolicyDocumentKind, (typeof POLICY_DESTINATIONS)[PolicyDocumentKind]][];
 		try {
 			const documents = await Promise.all(
 				policyPages.map(([kind]) => loadPolicyDocument(libraryConfig, kind)),
 			);
-			policyEntries = policyPages.flatMap(([, pathname], index) => {
+			policyEntries = policyPages.flatMap(([, { path: pathname }], index) => {
 				const document = documents[index];
 				if (!document) return [];
 				return [

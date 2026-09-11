@@ -26,6 +26,8 @@ import {
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Link, useRouter } from "@/i18n/routing";
+import { hasContactDetails } from "@/config/library-config/pages";
+import { getRuntimeLinkHref } from "@/config/library-config/links";
 import { isPolicyPage } from "@/lib/legal-links";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
 
@@ -95,16 +97,14 @@ function Logo() {
 export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
-	const { contact, footer, legal } = useLibraryConfig();
+	const { contact, footer, identity, legal } = useLibraryConfig();
 	const { capabilities, openPreferences } = useAnalyticsConsent();
 	const pathname = usePathname();
 	const router = useRouter();
 	const isMapPage = pathname.includes("/map");
-	const onPolicyPage = isPolicyPage(pathname);
+	const onPolicyPage = isPolicyPage(pathname, { identity, legal });
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
-	const hasContact = Boolean(
-		contact.email || contact.phone || contact.address,
-	);
+	const hasContact = hasContactDetails(contact);
 
 	if (isMapPage) return null;
 
@@ -187,7 +187,7 @@ export default function Footer() {
 					<ul className="flex flex-col items-center gap-3 sm:items-start">
 						<li>
 							<Link
-								href={legal.privacyPolicy}
+								href={getRuntimeLinkHref(legal.privacyPolicy, identity.baseUrl)}
 								className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
 							>
 								{t("privacyPolicy")}
@@ -195,7 +195,7 @@ export default function Footer() {
 						</li>
 						<li>
 							<Link
-								href={legal.cookiePolicy}
+								href={getRuntimeLinkHref(legal.cookiePolicy, identity.baseUrl)}
 								className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
 							>
 								{t("cookiePolicy")}
@@ -204,7 +204,7 @@ export default function Footer() {
 						{legal.termsOfService && (
 							<li>
 								<Link
-									href={legal.termsOfService}
+									href={getRuntimeLinkHref(legal.termsOfService, identity.baseUrl)}
 									className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
 								>
 									{t("termsOfService")}

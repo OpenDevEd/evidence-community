@@ -117,14 +117,12 @@
     "attribution": "Curated by the Indigo Research team."
   },
   "contact": {
-    "email": "indigo@example.org",
-    "phone": "+442000000002",
-    "address": "2 Indigo Square\nLondon, United Kingdom"
+    "email": "indigo@example.org"
   },
   "legal": {
     "privacyPolicy": "/privacy",
     "cookiePolicy": "/cookie-policy",
-    "termsOfService": "https://indigo.example.org/terms"
+    "termsOfService": "https://policies.example.org/indigo-terms"
   },
   "localization": {
     "locales": [

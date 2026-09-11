@@ -13,6 +13,20 @@ const serverConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 const publicConfig = projectPublicLibraryConfig(serverConfig);
 
 describe("public library configuration", () => {
+	it.each(["form", "details", "neither"])("offers contact links with %s available", (mode) => {
+		const config = libraryConfigSchema.parse(maximalLibraryConfig);
+		config.email.contactRecipient = mode === "form" ? "contact@example.org" : undefined;
+		config.email.takedownRecipient = undefined;
+		config.contact = mode === "details" ? { email: "hello@example.org" } : {};
+		const link = { id: "contact-check", label: "Contact", href: "/contact", target: "self" as const, visible: true };
+		config.navigation.links.push({ ...link, children: [] });
+		config.footer.sections[0].links.push(link, {...link, id: "takedown-check", href: "/takedown"});
+		const projected = projectPublicLibraryConfig(config);
+		expect(projected.navigation.links.some(entry => entry.id === "contact-check")).toBe(mode !== "neither");
+		expect(projected.footer.sections[0].links.some(entry => entry.id === "contact-check")).toBe(mode !== "neither");
+		expect(projected.footer.sections[0].links.some(entry => entry.id === "takedown-check")).toBe(false);
+	});
+
 	it.each([true, false])("only offers map links while the map page is enabled: %s", (enabled) => {
 		const config = libraryConfigSchema.parse(maximalLibraryConfig);
 		config.features.countryFocus = enabled;

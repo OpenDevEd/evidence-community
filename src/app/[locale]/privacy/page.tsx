@@ -1,5 +1,6 @@
+import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
-import { getPolicyMetadata, loadPolicyDocument } from "@/lib/policy-documents";
+import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -18,7 +19,7 @@ export default async function PrivacyPage() {
 	await connection();
 	const config = await getLibraryConfig();
 	const [document, tFooter, tNav] = await Promise.all([
-		loadPolicyDocument(config, "privacy"),
+		loadPolicyPageDocument(config, "privacy"),
 		getTranslations("footer"),
 		getTranslations("nav"),
 	]);
@@ -30,9 +31,10 @@ export default async function PrivacyPage() {
 			description="How this public library collects, uses, stores, and protects personal information across support, analytics, and site operations."
 			lastUpdated={document!.lastUpdated}
 			otherPolicyLink={{
-				href: "/cookie-policy",
+				href: getRuntimeLinkHref(config.legal.cookiePolicy, config.identity.baseUrl),
 				label: tFooter("cookiePolicy"),
 			}}
+			contactEmail={config.contact.email}
 			homeLabel={tNav("home")}
 		/>
 	);

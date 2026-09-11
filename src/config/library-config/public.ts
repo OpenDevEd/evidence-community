@@ -5,6 +5,7 @@ import {
 } from "./schema";
 import { getEnabledGapMaps } from "./gap-maps";
 import { getRuntimePagePath } from "./links";
+import { getRuntimePageAvailability } from "./pages";
 
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
@@ -23,7 +24,11 @@ export function projectPublicLibraryConfig(
 	if (cached) return cached;
 
 	// A disabled parent page removes its navigation group, including its children.
-	const pageAvailable = (link: { href: string }) => config.features.countryFocus || getRuntimePagePath(link.href, config.identity.baseUrl) !== "/map";
+	const availablePages = getRuntimePageAvailability(config);
+	const pageAvailable = (link: { href: string }) => {
+		const pathname = getRuntimePagePath(link.href, config.identity.baseUrl);
+		return Object.entries(availablePages).every(([page, enabled]) => page !== pathname || enabled);
+	};
 	const publicConfig = publicLibraryConfigSchema.parse({
 		schemaVersion: config.schemaVersion,
 		revision: config.revision,

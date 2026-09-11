@@ -228,6 +228,7 @@ export default function PolicyPage({
 	lastUpdated,
 	otherPolicyLink,
 	homeLabel,
+	contactEmail,
 	className,
 }: {
 	content: string;
@@ -239,6 +240,7 @@ export default function PolicyPage({
 		label: string;
 	};
 	homeLabel: string;
+	contactEmail?: string;
 	className?: string;
 }) {
 	const articleContent = stripLeadingHeading(content);
@@ -317,7 +319,7 @@ export default function PolicyPage({
 						<div className="sticky top-6 flex max-h-[calc(100vh-3rem)] flex-col gap-4">
 							<PolicyToc sections={sections} />
 
-							<div className="shrink-0 rounded-[1.75rem] border border-black/10 bg-gradient-to-br from-background_light/800 to-accent/10 p-5 dark:border-white/10 dark:from-secondary dark:to-accent/12">
+							{contactEmail && <div className="shrink-0 rounded-[1.75rem] border border-black/10 bg-gradient-to-br from-background_light/800 to-accent/10 p-5 dark:border-white/10 dark:from-secondary dark:to-accent/12">
 								<div className="mb-3 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/45 dark:text-white/45">
 									<HugeiconsIcon icon={Mail01Icon} className="size-4 text-accent" />
 									Questions
@@ -327,13 +329,13 @@ export default function PolicyPage({
 									team directly.
 								</p>
 								<a
-									href="mailto:contact@opendeved.net"
+									href={`mailto:${contactEmail}`}
 									className="inline-flex items-center gap-2 text-sm font-medium text-accent transition-transform hover:translate-x-0.5"
 								>
-									contact@opendeved.net
+									{contactEmail}
 									<HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
 								</a>
-							</div>
+							</div>}
 						</div>
 					</aside>
 				</div>

@@ -123,8 +123,8 @@
 	},
 	"legal": {
 		"privacyPolicy": "/privacy",
-		"cookiePolicy": "/cookie-policy",
-		"termsMarkdown": "# Amber terms of use\n\nUse {{SITE_HOST}} for research and teaching.\n\n**Last updated:** 1 August 2026"
+		"cookiePolicy": "/terms?policy=cookies#cookie-notice",
+		"termsMarkdown": "# Amber terms of use\n\nUse {{SITE_HOST}} for research and teaching.\n\n**Last updated:** 1 August 2026\n\n## Cookie notice\n\nDisposable runtime fixture for checking policy navigation before consent.\n"
 	},
 	"localization": {
 		"locales": ["en-GB", "fr"],
