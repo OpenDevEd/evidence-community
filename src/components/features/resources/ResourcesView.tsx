@@ -378,9 +378,6 @@ export function FilterChips() {
 						className="w-7 shrink-0 flex justify-end"
 					>
 						<Button
-							aria-hidden={
-								itemsContext.selectedCollections.length == 0
-							}
 							aria-label={t("clearFiltersAriaLabel")}
 							onPress={clearButton}
 							isIconOnly

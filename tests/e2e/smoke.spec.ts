@@ -813,17 +813,33 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 test("only opens the country map when its page is enabled", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("pageerror", error => errors.push(error.message));
-	await page.goto("/en-GB/map");
+	await page.goto("/en-GB/map", { waitUntil: "domcontentloaded" });
 	await dismissConsent(page);
 	if (process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true") {
-		await expect(page.getByRole("button", { name: /Facet/ }).first()).toBeVisible();
+		const country = page.getByRole("button", { name: "Afghanistan", exact: true });
+		await expect(country).toBeVisible();
+		const skipLink = page.getByRole("link", { name: "Skip to content", exact: true });
+		await skipLink.focus();
+		await skipLink.press("Enter");
+		await expect(page.getByRole("main")).toBeFocused();
+		await country.focus();
+		await expect(country).toBeFocused();
+		await country.press("Enter");
+		await expect(page).toHaveURL(url => url.searchParams.getAll("country").includes("Asia > Southern Asia > AF"));
+		await expect(country).toHaveAttribute("aria-pressed", "true");
+		await country.press("Space");
+		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
+		await expect(country).toHaveAttribute("aria-pressed", "false");
+		await country.press("Enter");
+		await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
+		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
 		expect(errors).toEqual([]);
 	} else {
 		// A streamed Next.js notFound() can report React's recoverable Suspense
 		// bailout. Check the unavailable-page contract instead of treating that
 		// deliberate response as a failed map render.
 		await expect(page.getByText("404", { exact: true })).toBeVisible();
-		await expect(page.getByRole("button", { name: /Facet/ })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "Afghanistan", exact: true })).toHaveCount(0);
 		await expect(page.locator('meta[name="robots"][content="noindex"]').first()).toHaveAttribute("content", "noindex");
 	}
 });
