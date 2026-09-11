@@ -1,3 +1,4 @@
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { getRuntimePagePath } from "@/config/library-config/links";
 
 export const POLICY_DESTINATIONS = {
@@ -7,37 +8,38 @@ export const POLICY_DESTINATIONS = {
 } as const;
 
 export type PolicyDocumentKind = keyof typeof POLICY_DESTINATIONS;
-const CONSENT_POLICY_PATHS = [POLICY_DESTINATIONS.privacy.path, POLICY_DESTINATIONS.cookiePolicy.path];
+type LegalPageConfig = Pick<LibraryPublicConfig, "identity" | "legal">;
 
-export function isPolicyPage(pathname: string) {
-	const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
-
-	return CONSENT_POLICY_PATHS.some(
-		(policyPath) =>
-			normalizedPathname === policyPath ||
-			normalizedPathname.endsWith(policyPath)
+export function isPolicyPage(pathname: string, { identity, legal }: LegalPageConfig) {
+	const path = getRuntimePagePath(pathname, identity.baseUrl);
+	return Object.values(POLICY_DESTINATIONS).some(({ field, path: policyPath }) =>
+		path === policyPath || Boolean(legal[field] && path === getRuntimePagePath(legal[field], identity.baseUrl))
 	);
 }
 
-/** Self destinations show local text; cross-page redirects must terminate. */
-export function policyRedirectCycleFields(
-	legal: Partial<Record<(typeof POLICY_DESTINATIONS)[PolicyDocumentKind]["field"], string>>,
+/** Self destinations need a document; cross-page redirects must terminate. */
+export function policyRedirectIssues(
+	legal: LibraryPublicConfig["legal"],
 	baseUrl: string,
 ) {
 	if (!URL.canParse(baseUrl)) return [];
 	const destinations = Object.values(POLICY_DESTINATIONS);
-	return destinations.filter((source) => {
+	return destinations.filter(source => legal[source.field]).flatMap((source) => {
 		let current: (typeof destinations)[number] | undefined = source;
 		const visited = new Set<string>();
 		while (current) {
-			if (visited.has(current.path)) return true;
+			if (visited.has(current.path)) return [{ field: source.field, message: "Policy links form a redirect loop. Choose a local policy page or an external destination." }];
 			visited.add(current.path);
-			const href = legal[current.field];
-			if (!href || !URL.canParse(href, baseUrl)) break;
-			const path = getRuntimePagePath(href, baseUrl);
-			if (path === current.path) break;
+			const href: string | undefined = legal[current.field];
+			const path: string | null = href && URL.canParse(href, baseUrl) ? getRuntimePagePath(href, baseUrl) : null;
+			if (!href || path === current.path) {
+				if (current.path === POLICY_DESTINATIONS.terms.path && !legal.termsMarkdown) {
+					return [{ field: source.field, message: "This link leads to an empty terms page. Add terms text or choose another destination." }];
+				}
+				break;
+			}
 			current = destinations.find((destination) => destination.path === path);
 		}
-		return false;
-	}).map((destination) => destination.field);
+		return [];
+	});
 }

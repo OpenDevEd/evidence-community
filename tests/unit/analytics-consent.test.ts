@@ -12,6 +12,10 @@ import {
 	serializeAnalyticsConsentRecord,
 } from "@/lib/analytics-consent";
 
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import { minimalLibraryConfig } from "../fixtures/library-config";
+const runtimeConfig = libraryConfigSchema.parse(minimalLibraryConfig);
+
 const now = 1_777_777_777_777;
 const policy = {
 	scope: "https://library.example.org",
@@ -121,19 +125,33 @@ describe("analytics consent records", () => {
 
 describe("where the cookie question is asked", () => {
 	it("asks on the library pages", () => {
-		expect(asksAnalyticsConsent("/en-GB/lib", "en-GB")).toBe(true);
-		expect(asksAnalyticsConsent("/en-GB", "en-GB")).toBe(true);
-		expect(asksAnalyticsConsent("/en-GB/map/", "en-GB")).toBe(true);
+		expect(asksAnalyticsConsent("/en-GB/lib", "en-GB", runtimeConfig)).toBe(true);
+		expect(asksAnalyticsConsent("/en-GB", "en-GB", runtimeConfig)).toBe(true);
+		expect(asksAnalyticsConsent("/en-GB/map/", "en-GB", runtimeConfig)).toBe(true);
 	});
 
 	it("never asks in the admin area, which has no dialog to answer", () => {
-		expect(asksAnalyticsConsent("/en-GB/admin", "en-GB")).toBe(false);
-		expect(asksAnalyticsConsent("/en-GB/admin/items", "en-GB")).toBe(false);
-		expect(asksAnalyticsConsent("/admin", "en-GB")).toBe(false);
+		expect(asksAnalyticsConsent("/en-GB/admin", "en-GB", runtimeConfig)).toBe(false);
+		expect(asksAnalyticsConsent("/en-GB/admin/items", "en-GB", runtimeConfig)).toBe(false);
+		expect(asksAnalyticsConsent("/admin", "en-GB", runtimeConfig)).toBe(false);
 	});
 
 	it("never asks on the pages that explain the cookies", () => {
-		expect(asksAnalyticsConsent("/en-GB/privacy", "en-GB")).toBe(false);
-		expect(asksAnalyticsConsent("/en-GB/cookie-policy/", "en-GB")).toBe(false);
+		expect(asksAnalyticsConsent("/en-GB/privacy", "en-GB", runtimeConfig)).toBe(false);
+		expect(asksAnalyticsConsent("/en-GB/cookie-policy/", "en-GB", runtimeConfig)).toBe(false);
+	});
+});
+
+
+describe("configured policy pages stay readable before consent", () => {
+	const config = { ...runtimeConfig, identity: { ...runtimeConfig.identity, baseUrl: "https://library.example.org" }, legal: {
+		privacyPolicy: "/privacy", cookiePolicy: "/terms", termsOfService: "/terms",
+	} };
+	it.each(["/en-GB/terms", "/ar/terms/"])("does not gate %s", (path) => {
+		expect(asksAnalyticsConsent(path, "en-GB", config)).toBe(false);
+	});
+	it("allows a configured local destination without exempting an external lookalike", () => {
+		expect(asksAnalyticsConsent("/fr/contact", "fr", { ...config, legal: { ...config.legal, cookiePolicy: "/en-GB/contact?policy=1#cookies" } })).toBe(false);
+		expect(asksAnalyticsConsent("/fr/contact", "fr", { ...config, legal: { ...config.legal, cookiePolicy: "https://external.example.org/contact" } })).toBe(true);
 	});
 });

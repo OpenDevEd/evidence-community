@@ -91,6 +91,7 @@ const expectedDefaultSearchScopeLabel =
 	"Title, abstract, authors and keywords";
 const expectedYearFilter =
 	process.env.PLAYWRIGHT_EXPECTED_YEAR_FILTER !== "false";
+const expectedCookieLink = process.env.PLAYWRIGHT_EXPECTED_COOKIE_LINK ?? "/cookie-policy";
 const expectedTermsLink =
 	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
 const expectedInstitutionFilterLabel =
@@ -321,7 +322,7 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 		page
 			.locator("#footer")
 			.getByRole("link", { name: "Cookie Policy", exact: true }),
-	).toHaveAttribute("href", /cookie-policy$/u);
+	).toHaveAttribute("href", new RegExp(`${expectedCookieLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "u"));
 	await expect(
 		page
 			.locator("#footer")
@@ -345,21 +346,12 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	await page.goto("/contact");
 	const contactDetails = page.getByRole("main");
 	await expect(contactDetails.locator("form")).toHaveCount(expectedContactForm ? 1 : 0);
-	await expect(
-		contactDetails.getByRole("link", {
-			name: expectedContactEmail,
-			exact: true,
-		}),
-	).toHaveAttribute("href", `mailto:${expectedContactEmail}`);
-	await expect(
-		contactDetails.getByRole("link", {
-			name: expectedContactPhone,
-			exact: true,
-		}),
-	).toHaveAttribute("href", `tel:${expectedContactPhone}`);
-	await expect(
-		contactDetails.getByText(expectedContactAddress, { exact: false }),
-	).toBeVisible();
+	for (const [prefix, value] of [["mailto:", expectedContactEmail], ["tel:", expectedContactPhone]]) {
+		const links = contactDetails.locator(`a[href^="${prefix}"]`);
+		await expect(links).toHaveCount(value ? 1 : 0);
+		if (value) await expect(links).toHaveAttribute("href", `${prefix}${value}`);
+	}
+	if (expectedContactAddress) await expect(contactDetails.getByText(expectedContactAddress, { exact: false })).toBeVisible();
 });
 
 test("enforces runtime locales, default, detection, order, and switcher visibility", async ({
@@ -642,13 +634,42 @@ test("reports a clipboard failure and retries copying clean citation text", asyn
 		});
 	});
 	await citation.getByRole("button").click();
-	await expect(page.getByText("Could not copy", { exact: true })).toBeVisible();
+	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
 	await citation.getByRole("button").click();
 	const suffix = expectedCitationUrl
 		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, expectedPublicBaseUrl)}.`
 		: "";
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
 		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
+});
+
+test("keeps clipboard feedback tied to the latest attempt", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey || !expectedCitationsEnabled, "Requires a public record with citations.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
+	await dismissConsent(page);
+	const citation = page.getByRole("heading", { name: "Citation", exact: true }).locator("..");
+	const copy = citation.getByRole("button");
+	await page.clock.pauseAt(new Date());
+	const attempts = await page.evaluateHandle(() => {
+		const pending: { resolve: () => void; reject: () => void }[] = [];
+		Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: () => new Promise<void>((resolve, reject) => {
+			pending.push({ resolve, reject: () => reject(new DOMException("Clipboard permission denied", "NotAllowedError")) });
+		}) });
+		return pending;
+	});
+	await copy.click();
+	await copy.click();
+	await attempts.evaluate(pending => pending[1].reject());
+	await page.clock.runFor(100);
+	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
+	await attempts.evaluate(pending => pending[0].resolve());
+	await page.clock.runFor(100);
+	await expect(copy).toHaveAccessibleName("Copy Citation");
+	await copy.click();
+	await attempts.evaluate(pending => pending[2].resolve());
+	await page.clock.runFor(100);
+	await expect(copy).toHaveAccessibleName("Copied!");
 });
 
 test("shows a search failure and lets the reader retry without losing the query", async ({ page }) => {

@@ -1,3 +1,4 @@
+import { getRedirectLookupPath } from "@/lib/runtime-routing";
 import { PLATFORM_LOCALES } from "./catalogs";
 import type { LibraryPublicConfig } from "./schema";
 
@@ -38,6 +39,8 @@ export function getRuntimeLinkHref(href: string, baseUrl: string): string {
 	const pathname = getRuntimePagePath(href, baseUrl);
 	if (pathname === null) return href;
 	const target = new URL(href, baseUrl);
+	// Static files, API routes and addresses outside the app do not take locales.
+	if (pathname.includes(".") || /^\/api(?:\/|$)/u.test(pathname) || getRedirectLookupPath(pathname, true) !== null) return target.href;
 	return `${pathname}${target.search}${target.hash}`;
 }
 
