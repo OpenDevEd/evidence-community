@@ -27,6 +27,13 @@ describe("public library configuration", () => {
 		expect(config.navigation.links.at(-1)?.id).toBe("map");
 	});
 
+	it("removes absolute and localized links to its disabled map, but keeps external maps", () => {
+		const config = libraryConfigSchema.parse(maximalLibraryConfig);
+		config.features.countryFocus = false;
+		config.navigation.links = ["/fr/map/", "/map?country=KE", `${config.identity.baseUrl}/en-GB/map#country`, "https://elsewhere.example.org/map"].map((href, index) => ({ id: `map-${index}`, label: "Map", href, visible: true, target: "self", children: [] }));
+		expect(projectPublicLibraryConfig(config).navigation.links.map(link => link.href)).toEqual(["https://elsewhere.example.org/map"]);
+	});
+
 	it("projects only explicitly allowlisted root fields", () => {
 		expect(Object.keys(publicConfig).sort()).toEqual(
 			[

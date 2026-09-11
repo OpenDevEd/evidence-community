@@ -4,6 +4,7 @@
     "libraryCitationLabel": "{count, plural, one {اقتباس في هذه المكتبة} two {اقتباسان في هذه المكتبة} few {اقتباسات في هذه المكتبة} other {اقتباسًا في هذه المكتبة}}",
     "downloadLibraryLimited": "أول {count, number} من أصل {total, number} منشورًا. اختر تنسيق الاقتباس.",
     "downloadLibraryDescription": "{count, number} من المنشورات. اختر تنسيق الاقتباس.",
+    "downloadFailed": "فشل التنزيل",
     "downloadLibrary": "تنزيل المكتبة",
     "noAbstract": "لا يوجد ملخص",
     "return": "عودة",

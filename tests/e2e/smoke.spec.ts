@@ -799,6 +799,11 @@ test("keeps the whole-library export total independent of the search", async ({ 
 	const count = Number((await button.innerText()).match(/([\d,]+)\s*$/)?.[1].replaceAll(",", ""));
 	expect(count).toBeGreaterThan(0);
 	await button.click();
+	await page.route("**/lib/export/ris", route => route.fulfill({status: 503, body: "Unavailable"}));
+	await page.getByRole("option", {name: /^RIS/}).click();
+	await expect(page.getByText("Download failed", {exact: true})).toBeVisible();
+	await page.unroute("**/lib/export/ris");
+
 	const downloadStarted = page.waitForEvent("download");
 	await page.getByRole("option", { name: /^RIS/ }).click();
 	const download = await downloadStarted;

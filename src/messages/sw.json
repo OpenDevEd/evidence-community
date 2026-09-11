@@ -4,6 +4,7 @@
     "libraryCitationLabel": "{count, plural, one {nukuu katika maktaba hii} other {nukuu katika maktaba hii}}",
     "downloadLibraryLimited": "Machapisho {count, number} ya kwanza kati ya {total, number}. Chagua umbizo la nukuu.",
     "downloadLibraryDescription": "Machapisho {count, number}. Chagua umbizo la nukuu.",
+    "downloadFailed": "Upakuaji umeshindwa",
     "downloadLibrary": "Pakua maktaba",
     "noAbstract": "Hakuna muhtasari",
     "return": "Rudi",

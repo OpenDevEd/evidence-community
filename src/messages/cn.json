@@ -4,6 +4,7 @@
     "libraryCitationLabel": "次库内引用",
     "downloadLibraryLimited": "共 {total, number} 篇出版物中的前 {count, number} 篇。请选择引用格式。",
     "downloadLibraryDescription": "共 {count, number} 篇出版物。请选择引用格式。",
+    "downloadFailed": "下载失败",
     "downloadLibrary": "下载文献库",
     "noAbstract": "无摘要",
     "return": "返回",

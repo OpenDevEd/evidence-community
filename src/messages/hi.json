@@ -4,6 +4,7 @@
     "libraryCitationLabel": "इस लाइब्रेरी में उद्धरण",
     "downloadLibraryLimited": "{total, number} में से पहले {count, number} प्रकाशन। उद्धरण का प्रारूप चुनें।",
     "downloadLibraryDescription": "{count, number} प्रकाशन। उद्धरण का प्रारूप चुनें।",
+    "downloadFailed": "डाउनलोड नहीं हो सका",
     "downloadLibrary": "लाइब्रेरी डाउनलोड करें",
     "noAbstract": "कोई सारांश नहीं",
     "return": "वापस जाएं",

@@ -1,3 +1,4 @@
+import { PLATFORM_LOCALES } from "./catalogs";
 import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeNavigationLink =
@@ -21,6 +22,15 @@ export function getRuntimeInternalHrefPath(href: string): string | null {
 	const path = delimiterIndex === -1 ? href : href.slice(0, delimiterIndex);
 
 	return path.length > 1 ? path.replace(/\/+$/u, "") : path;
+}
+
+export function getRuntimePagePath(href: string, baseUrl: string): string | null {
+	const base = new URL(baseUrl);
+	const target = new URL(href, base);
+	if (target.origin !== base.origin) return null;
+	const segments = target.pathname.split("/").filter(Boolean);
+	if (PLATFORM_LOCALES.some(locale => locale === segments[0])) segments.shift();
+	return getRuntimeInternalHrefPath(`/${segments.join("/")}`);
 }
 
 export function hasRuntimeLinkPath<T extends Pick<RuntimeLink, "href">>(

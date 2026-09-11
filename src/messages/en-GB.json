@@ -4,6 +4,7 @@
     "libraryCitationLabel": "{count, plural, one {citation in this library} other {citations in this library}}",
     "downloadLibraryLimited": "The first {count, number} of {total, number} publications. Choose a citation format.",
     "downloadLibraryDescription": "{count, plural, one {# publication} other {# publications}}. Choose a citation format.",
+    "downloadFailed": "Download failed",
     "downloadLibrary": "Download library",
     "noAbstract": "No abstract",
     "return": "Return",

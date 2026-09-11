@@ -27,6 +27,7 @@ export function ListModalBody({ description, onAction, highlightedIndexes, child
           {description}
         </p>
         <Listbox
+          aria-label={description}
           disabledKeys={isLoading ? list.map((_, index) => String(index)) : undefined}
           onAction={onAction as (key: Key) => void}
           classNames={{
@@ -37,6 +38,7 @@ export function ListModalBody({ description, onAction, highlightedIndexes, child
           {list.map((item, index) => (
             <ListboxItem
               key={index}
+              textValue={item.name}
               className="!p-0 !bg-transparent !rounded-none"
             >
               <div

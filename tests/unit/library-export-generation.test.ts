@@ -163,17 +163,15 @@ describe("whole-library citation stream", () => {
 		expect(written).toHaveLength(untouchedKeys.length);
 	});
 
-	it("skips records the converter cannot read", async () => {
+	it("fails the whole download when a publication cannot be converted", async () => {
 		mocks.convertItem.mockImplementation(async (item: { key: string }) =>
 			item.key === "BAD" ? "" : `entry-${item.key}`,
 		);
 
-		const entries = await convertRecordsToCitations(
-			[{ key: "GOOD" }, { key: "BAD" }] as never,
-			"bibtex",
-		);
-
-		expect(entries).toEqual(["entry-GOOD"]);
+		await expect(convertRecordsToCitations(
+			[{ key: "GOOD" }, { key: "BAD" }] as never, "bibtex",
+		)).rejects.toThrow("Unable to export publication BAD");
+		await expect(readAll(streamCitationRecords(fakeLibrary(["GOOD", "BAD"]).reader, "bibtex"))).rejects.toThrow("Unable to export publication BAD");
 	});
 });
 
