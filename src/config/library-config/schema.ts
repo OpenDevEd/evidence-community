@@ -47,6 +47,7 @@ import {
 	utcTimestampSchema,
 } from "./primitives";
 import { generateColorRamp, parseHexColor, type RgbaColor } from "./theme";
+import { policyRedirectCycleFields } from "@/lib/legal-links";
 
 export const MAX_LIBRARY_CONFIG_BYTES = 1024 * 1024;
 const DEFAULT_FONT_WEIGHTS = [400, 500, 700] as const;
@@ -1829,6 +1830,9 @@ export function createLibraryConfigSchema(
 		: null;
 
 	return baseServerConfigSchema().superRefine((config, context) => {
+		for (const field of policyRedirectCycleFields(config.legal, config.identity.baseUrl)) {
+			addRequiredIssue(context, ["legal", field], "Policy links form a redirect loop. Choose a local policy page or an external destination.");
+		}
 		const byteLength = new TextEncoder().encode(
 			JSON.stringify(config),
 		).byteLength;

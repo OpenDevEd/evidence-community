@@ -1252,3 +1252,27 @@ describe("search embedder", () => {
 		expectCatalogInvalid(mutate);
 	});
 });
+
+
+describe("policy redirect destinations", () => {
+	it.each([
+		{ privacyPolicy: "/cookie-policy", cookiePolicy: "/privacy" },
+		{ privacyPolicy: "/fr/cookie-policy?from=privacy", cookiePolicy: "/terms", termsOfService: "https://minimal.example.org/en-GB/privacy" },
+	])("rejects a redirect cycle before activation: %j", (legal) => {
+		const config = structuredClone(minimalLibraryConfig);
+		config.identity.baseUrl = "https://minimal.example.org";
+		const result = libraryConfigSchema.safeParse({ ...config, legal });
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+			expect.objectContaining({ path: ["legal", "privacyPolicy"] }),
+		]));
+	});
+
+	it.each([
+		{ privacyPolicy: "/privacy", cookiePolicy: "/cookie-policy" },
+		{ privacyPolicy: "/cookie-policy", cookiePolicy: "/cookie-policy" },
+		{ privacyPolicy: "/cookie-policy", cookiePolicy: "https://external.example.org/privacy" },
+	])("allows local documents and chains with a destination: %j", (legal) => {
+		expect(libraryConfigSchema.safeParse({ ...minimalLibraryConfig, legal }).success).toBe(true);
+	});
+});
