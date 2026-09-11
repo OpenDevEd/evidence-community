@@ -1,6 +1,7 @@
+import { libraryEmailIdentity } from "./identity";
+import { libraryRequestMessage } from "./request";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
-	libraryEmailIdentity,
 	notificationMessage,
 	type EmailEdition,
 } from "@/lib/notifications/message";
@@ -67,6 +68,27 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 		),
 	]);
 	return [
+		...[
+			{
+				id: "contact",
+				label: "Contact",
+				email: "reader@example.org",
+				description:
+					"I’m looking for research on classroom feedback and would like to suggest a publication for the library.\n\nCould you let me know how to share it with your editors?",
+			},
+			{
+				id: "takedown",
+				label: "Takedown request",
+				email: "rights-holder@example.org",
+				description:
+					"I’m contacting you about the publication below. Please review its availability while we confirm the permission to distribute it.",
+				links: [new URL("/lib/RHSRAM6J", config.identity.baseUrl).href],
+			},
+		].map(({ id, label, ...request }) => ({
+			id,
+			label,
+			...libraryRequestMessage(config, request),
+		})),
 		{
 			id: "digest",
 			label: "Library digest",

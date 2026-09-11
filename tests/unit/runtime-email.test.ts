@@ -59,6 +59,7 @@ describe("runtime email", () => {
 				replyTo: "reader@example.org",
 				subject: "Runtime proof",
 				text: "No delivery",
+				html: "<p>No delivery</p>",
 			}),
 		).resolves.toBeNull();
 		expect(harness.createTransport).not.toHaveBeenCalled();
@@ -134,6 +135,7 @@ describe("runtime email", () => {
 				replyTo: "reader@example.org",
 				subject: "Maximal Library - Feedback",
 				text: "Runtime email proof",
+				html: "<p>Runtime email proof</p>",
 			}),
 		).resolves.toMatchObject({
 			accepted: ["contact@example.org"],
@@ -142,6 +144,7 @@ describe("runtime email", () => {
 			replyTo: "rights-holder@example.org",
 			subject: "Maximal Library - Takedown Request",
 			text: "Runtime takedown proof",
+			html: "<p>Runtime takedown proof</p>",
 		});
 
 		expect(harness.createTransport).toHaveBeenCalledOnce();
@@ -166,6 +169,7 @@ describe("runtime email", () => {
 			replyTo: "reader@example.org",
 			subject: "Maximal Library - Feedback",
 			text: "Runtime email proof",
+			html: "<p>Runtime email proof</p>",
 			to: "contact@example.org",
 		});
 		expect(harness.sendMail).toHaveBeenNthCalledWith(2, {
@@ -173,6 +177,7 @@ describe("runtime email", () => {
 			replyTo: "rights-holder@example.org",
 			subject: "Maximal Library - Takedown Request",
 			text: "Runtime takedown proof",
+			html: "<p>Runtime takedown proof</p>",
 			to: "takedown@example.org",
 		});
 
@@ -189,6 +194,7 @@ describe("runtime email", () => {
 			replyTo: "next-reader@example.org",
 			subject: "Maximal Library - Feedback",
 			text: "Next revision proof",
+			html: "<p>Next revision proof</p>",
 		});
 
 		expect(harness.createTransport).toHaveBeenCalledTimes(2);
@@ -221,6 +227,7 @@ describe("runtime email", () => {
 				replyTo: "conflict-reader@example.org",
 				subject: "Maximal Library - Feedback",
 				text: "Conflict proof",
+				html: "<p>Conflict proof</p>",
 			}),
 		).rejects.toBeInstanceOf(RevisionResourceConflictError);
 	});

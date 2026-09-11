@@ -1,3 +1,4 @@
+import { libraryEmailIdentity } from "@/lib/emails/identity";
 import { createHash } from "node:crypto";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type {
@@ -36,22 +37,6 @@ function subscriptionUrl(
 		`/${config.localization.defaultLocale}/digests/${action}?token=${encodeURIComponent(token)}`,
 		config.identity.baseUrl,
 	).toString();
-}
-
-export function libraryEmailIdentity(
-	config: Pick<LibraryServerConfig, "identity" | "theme">,
-) {
-	return {
-		name: config.identity.name,
-		baseUrl: config.identity.baseUrl,
-		accent: config.theme.colors.accent,
-		logoUrl:
-			config.identity.assets.icons.find((icon) =>
-				/\.png(?:\?|$)/.test(icon),
-			) ||
-			config.identity.assets.logoLight ||
-			config.identity.assets.logoDark,
-	};
 }
 
 /** Builds the exact message used by the delivery worker and development preview. */
