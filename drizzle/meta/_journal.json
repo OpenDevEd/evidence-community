@@ -421,6 +421,13 @@
       "when": 1789147344072,
       "tag": "0059_country_focus",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789152737579,
+      "tag": "0060_country_keywords_reindex",
+      "breakpoints": true
     }
   ]
 }
