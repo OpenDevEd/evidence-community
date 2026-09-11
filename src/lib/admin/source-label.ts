@@ -15,13 +15,14 @@ export function sourceDisplayLabel(
 	options: { includeIdentifier?: boolean } = {},
 ) {
 	if (connection.provider === NATIVE_SOURCE_CONNECTION_KEY) return "Native";
+	const identifier = `${connection.provider[0]!.toUpperCase()}${connection.provider.slice(1)} ${
+		connection.externalScopeKey ?? connection.key
+	}`;
 	const name = connection.displayName?.trim();
 	if (name) {
 		return options.includeIdentifier
-			? `${name} (${connection.externalScopeKey ?? connection.key})`
+			? `${name} (${identifier})`
 			: name;
 	}
-	return `${connection.provider[0]!.toUpperCase()}${connection.provider.slice(1)} ${
-		connection.externalScopeKey ?? connection.key
-	}`;
+	return identifier;
 }

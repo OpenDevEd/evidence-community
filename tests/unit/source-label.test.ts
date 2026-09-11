@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { sourceDisplayLabel } from "@/lib/admin/source-label";
 
 describe("sourceDisplayLabel", () => {
+	it("keeps same-name source choices distinct across scopes and providers", () => {
+		const labels = [
+			{ provider: "zotero", externalScopeKey: "123" },
+			{ provider: "zotero", externalScopeKey: "456" },
+			{ provider: "mendeley", externalScopeKey: "123" },
+		].map((source) => sourceDisplayLabel({
+			...source,
+			displayName: "Research",
+			key: `${source.provider}-${source.externalScopeKey}`,
+		}, { includeIdentifier: true }));
+		expect(new Set(labels).size).toBe(3);
+	});
+
 	it("prefers the source's own name", () => {
 		expect(
 			sourceDisplayLabel({
