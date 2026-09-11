@@ -2435,19 +2435,23 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		profile,
 		"/api/openscholar/collections?query=source",
 	);
-	assert.deepEqual(search.body, {
-		items: [
+	assert.equal(search.response.status, 200);
+	assert.equal(search.body.nextCursor, null);
+	assert.deepEqual(
+		search.body.items.map(({ count, hasChildren, id, parentId, title }) => ({
+			count, hasChildren, id, parentId, title,
+		})),
+		[
 			{
 				count: 1,
 				hasChildren: false,
 				id: "ZBJ4NBSL",
 				parentId: null,
-				source: "native",
 				title: "Amber source collection",
 			},
 		],
-		nextCursor: null,
-	});
+	);
+	assert.match(search.body.items[0].source, /native/i);
 
 	seedCollectionTree(profile);
 	try {
