@@ -2272,6 +2272,28 @@ test("opens a linked record directly in a narrow window", async ({ page }) => {
 	await expect(title).toBeVisible();
 });
 
+test("returns to the open draft after finishing link selection in a narrow window", async ({ page }) => {
+	await mockPublishedBook(page);
+	await page.setViewportSize({ height: 768, width: 1024 });
+	await page.goto(`/admin?item=${publishedItemKey}`);
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
+	const title = inspector.getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toBeEnabled();
+
+	await inspector.getByRole("button", { name: "Add to Cites" }).click();
+	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await page.locator('[data-admin-link-pick-banner="cites"]').getByRole("button", { name: "Done" }).click();
+	await expect(title).toBeVisible();
+	await expect(title).toHaveValue(publishedPayload.title);
+
+	await inspector.getByRole("button", { name: "Add to Related" }).click();
+	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(title).toBeVisible();
+	await expect(title).toHaveValue(publishedPayload.title);
+});
+
 test("shows matching records after choosing a navigation filter in a narrow window", async ({ page }) => {
 	await mockPublishedBook(page);
 	await page.setViewportSize({ height: 768, width: 1024 });

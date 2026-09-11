@@ -16,6 +16,7 @@ export function PublicationArchiveFiles({
 			(a.fileDraft?.readyAt || a.filePublication),
 	);
 	const files = readyFiles.length;
+	const removalPending = attachments.some((file) => file.fileRemovalPending);
 
 	return (
 		<button
@@ -35,7 +36,7 @@ export function PublicationArchiveFiles({
 				<span className="block text-xs font-medium">
 					{files
 						? `${files} ${files === 1 ? "PDF" : "PDFs"} attached`
-						: "Add a PDF"}
+						: removalPending ? "PDF removal staged" : "Add a PDF"}
 				</span>
 				<span className="mt-1 block truncate text-[10px] text-black/45 dark:text-white/45">
 					{files
@@ -47,7 +48,9 @@ export function PublicationArchiveFiles({
 										file.title,
 								)
 								.join(", ")
-						: "Archive waits for an approved PDF"}
+						: removalPending
+							? "Published files stay unchanged until approval"
+							: "Archive waits for an approved PDF"}
 				</span>
 			</span>
 			{files > 0 && (

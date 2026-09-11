@@ -472,7 +472,7 @@ function ContentActions() {
 					onPress={onOpen}
 				>
 					{t("downloadRecords", {
-						count: format.number(downloadableRecords),
+						count: downloadableRecords,
 					})}
 				</Button>
 			)}

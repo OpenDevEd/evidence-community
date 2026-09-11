@@ -19,7 +19,7 @@
     "resources": "Ressources",
     "explore": "Explorer",
     "noResourcesFound": "Aucune ressource trouvée",
-    "downloadRecords": "Télécharger {count} enregistrements",
+    "downloadRecords": "Télécharger {count, number} enregistrements",
     "printCitations": "Imprimer {count} citations",
     "mainFeed": "Flux principal",
     "lastUpdate": "Dernière mise à jour de la base de données : {date} (UTC)",

@@ -19,7 +19,7 @@
     "resources": "资源",
     "explore": "探索",
     "noResourcesFound": "未找到资源",
-    "downloadRecords": "下载 {count} 条记录",
+    "downloadRecords": "下载 {count, number} 条记录",
     "printCitations": "打印 {count} 条引用",
     "mainFeed": "主页",
     "lastUpdate": "数据库最后更新时间：{date}（UTC）",
