@@ -1,4 +1,5 @@
 "use client";
+import { SkipLink } from "@/components/layout/SkipLink";
 
 import {
 	HugeiconsIcon,
@@ -384,12 +385,7 @@ function SearchTabContent({
 					<div className="flex items-end gap-4">
 						{header || (
 							<>
-								<a
-									href="#collections"
-									className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
-								>
-									{t("goToFilters")}
-								</a>
+								<SkipLink href="#collections">{t("goToFilters")}</SkipLink>
 								{showHeader && t("searchTitle")}
 							</>
 						)}

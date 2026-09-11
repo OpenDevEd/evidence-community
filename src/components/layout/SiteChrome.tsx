@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { SkipLink } from "./SkipLink";
 import { usePathname } from "next/navigation";
 import { useLocale } from "next-intl";
 
@@ -31,20 +32,10 @@ function ReaderHeader({
 		<>
 			<nav
 				aria-label={skipNavigationLabel}
-				className="absolute left-0 top-0 h-0 w-64"
+				className="absolute start-0 top-0 h-0 w-64"
 			>
-				<a
-					href="#main-content"
-					className="absolute left-[-999px] top-0 z-[-999] h-1 w-1 p-4 text-center opacity-0 focus:left-0 focus:z-[999] focus:h-fit focus:w-fit focus:opacity-100"
-				>
-					{skipToContentLabel}
-				</a>
-				<a
-					href="#footer"
-					className="absolute left-[-999px] top-0 z-[-999] h-1 w-1 p-4 text-center opacity-0 focus:left-0 focus:z-[999] focus:h-fit focus:w-fit focus:opacity-100"
-				>
-					{skipToFooterLabel}
-				</a>
+				<SkipLink href="#main-content">{skipToContentLabel}</SkipLink>
+				<SkipLink href="#footer">{skipToFooterLabel}</SkipLink>
 			</nav>
 			<Navbar />
 		</>

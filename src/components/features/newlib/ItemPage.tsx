@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Mortarboard01Icon } from "@hugeicons/core-free-icons";
+import { Building03Icon, Mortarboard01Icon } from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { escapeHtml } from "@/lib/escape-html";
@@ -14,7 +14,7 @@ import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
 import { useFormatter, useTranslations } from "next-intl";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
-import { Avatar, Divider, Spinner } from "@nextui-org/react";
+import { Divider, Spinner } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
@@ -499,11 +499,9 @@ function ItemFundingPartners() {
 				<ItemRow
 					key={partner.id}
 					icon={
-						<Avatar
-							name={partner.name.charAt(0)}
-							size="sm"
-							className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
-						/>
+						<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+							<HugeiconsIcon icon={Building03Icon} className="size-4" />
+						</span>
 					}
 					title={partner.name}
 				/>

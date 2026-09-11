@@ -16,7 +16,6 @@ import { Link, usePathname } from "@/i18n/routing";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
 import { Card } from "@/components/nextui/Card";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import CopyButton from "@/components/features/newlib/CopyButton";
@@ -26,6 +25,7 @@ import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
 import { hasAnyTag } from "@/lib/tags";
 import GapMapAction from "@/components/features/gapmaps/GapMapAction";
+import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 function getCitationCount(item: Item | undefined) {
@@ -62,7 +62,7 @@ function ItemCitationButton({
 		>
 			<span className="font-bold">{count}</span>
 			<span className="opacity-80 font-normal">
-				{t("itemCitationsCount")}
+				{t("libraryCitationLabel", { count })}
 			</span>
 		</Button>
 	);
@@ -126,13 +126,8 @@ function ItemHeaderActions({
 	isLoading: boolean;
 }) {
 	const t = useTranslations("ui");
-	const { identity } = useLibraryConfig();
+	const itemUrl = useLibraryItemUrl();
 	const resourceHref = useResourceHref();
-	const itemUrl = useCallback(() => {
-		const finalURL = new URL(`/lib/${item?.key}`, identity.baseUrl);
-		finalURL.search = "";
-		return finalURL.toString();
-	}, [identity.baseUrl, item?.key]);
 
 	return (
 		<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
@@ -145,7 +140,7 @@ function ItemHeaderActions({
 				aria-label={t("itemDownloadAriaLabel")}
 			/>
 			<GapMapAction tags={item?.tags} size="sm" />
-			<CopyButton textToCopy={itemUrl()} label={t("copyLink")}>
+			<CopyButton textToCopy={item ? itemUrl(item.key) : ""} label={t("copyLink")}>
 				<Button size="sm" aria-label={t("itemCopyUrlAriaLabel")}>
 					{t("copyLink")}
 				</Button>

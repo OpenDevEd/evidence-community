@@ -1,5 +1,8 @@
 {
   "ui": {
+    "exportFailed": "Impossible de préparer ce contenu",
+    "copyFailed": "Copie impossible",
+    "copyFailedHelp": "Vérifiez l’autorisation du presse-papiers dans votre navigateur et réessayez.",
     "referenceLabel": "{count, plural, one {référence} other {références}}",
     "libraryCitationLabel": "{count, plural, one {citation dans cette bibliothèque} other {citations dans cette bibliothèque}}",
     "downloadLibraryLimited": "Les {count, number} premières publications sur {total, number}. Choisissez un format de citation.",
@@ -178,7 +181,6 @@
     "recommendedResources": "Ressources recommandées",
     "recommendedResourcesDescription": "Sur la base du contenu de cette publication, nous recommandons les ressources suivantes.",
     "itemBack": "Retour",
-    "itemCitationsCount": "citations",
     "itemViewOriginal": "Voir l'original",
     "itemAuthorsTitle": "Auteurs",
     "itemInstitutionsTitle": "Institutions",

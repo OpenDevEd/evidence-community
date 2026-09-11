@@ -1,13 +1,12 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Copy01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useDebounce } from "@/hooks/useDebounce";
-import { useLocale } from "next-intl";
+import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
+import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { Item, ListItem } from "@/app/api/item/types";
-import { useState, forwardRef } from "react";
+import { forwardRef } from "react";
 import { Button } from "@/components/nextui/Button";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 const CopyButton = forwardRef<
 	any,
 	{
@@ -26,29 +25,14 @@ const CopyButton = forwardRef<
 		contentRef?: React.RefObject<any>;
 	}
 >(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false, isIconOnly = false, contentRef, classNames }, ref) => {
-	const [isCopied, setIsCopied] = useState(false);
-	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
-	const locale = useLocale();
+	const { copy, copied: isCopied } = useClipboardFeedback();
 	const t = useTranslations("ui");
-	const { localization } = useLibraryConfig();
+	const itemUrl = useLibraryItemUrl();
 
 	const handleCopy = () => {
-		if (content || contentRef) {
-			const contentToCopy = content || contentRef?.current?.textContent;
-			navigator.clipboard.writeText(contentToCopy.trim());
-		} else {
-			const currentUrl = window.location.href;
-			const url = new URL(currentUrl);
-			if (locale !== localization.defaultLocale) {
-				url.pathname = `/${locale}/lib/${itemData?.key}`;
-			} else {
-				url.pathname = `/lib/${itemData?.key}`;
-			}
-			url.search = "";
-			navigator.clipboard.writeText(url.toString());
-		}
-		setIsCopied(true);
-		clearCopied();
+		const textToCopy = content ?? contentRef?.current?.textContent;
+		if (typeof textToCopy === "string") return copy(textToCopy.trim());
+		if (itemData) return copy(itemUrl(itemData.key));
 	};
 
 	return (

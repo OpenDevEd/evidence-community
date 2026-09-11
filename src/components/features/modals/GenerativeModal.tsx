@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import AIHeader from "../ai/AIHeader";
 import { ChatErrorCard } from "../ai/chat-shared";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
@@ -49,7 +49,6 @@ export default function GenerativeModal({
 	const [historySelection, setSelectedHistoryIndex] = useState<number | null>(null);
 	const selectedHistoryIndex = historySelection ?? history.findIndex(item => item.id === id);
 	const selectedHistoryItem = history[selectedHistoryIndex];
-	const contentRef = useRef<HTMLDivElement>(null);
 
 	const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 	const isDesktop = useBreakpoint("lg");
@@ -192,7 +191,6 @@ export default function GenerativeModal({
 											<AIContentControls
 												content={contentToDisplay}
 												isDisabled={!contentToDisplay}
-												contentRef={contentRef}
 											/>
 											{selectedHistoryItem && (
 												<Tooltip
@@ -254,7 +252,7 @@ export default function GenerativeModal({
 															<ChatErrorCard message={clientAIError(error).message} isContextTooLarge={false} onReset={onRetry} onRetry={onRetry} className="max-w-lg" />
 														</div>
 													) : (
-														<div ref={contentRef}>
+														<div>
 															<AIMarkdown className="prose dark:prose-invert space-y-2 max-w-full p-6 ">
 																{
 																	contentToDisplay

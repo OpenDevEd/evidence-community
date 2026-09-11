@@ -388,15 +388,6 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		);
 	}
 
-	for (const locale of expectedEnabledLocales) {
-		if (locale === expectedDefaultLocale) continue;
-		const enabledResponse = await request.get(`/${locale}/lib`, {
-			maxRedirects: 0,
-		});
-		expect(enabledResponse.status()).toBe(200);
-		expect(enabledResponse.headers().location).toBeUndefined();
-	}
-
 	if (expectedDetectedLocale) {
 		const detectedResponse = await request.get("/lib", {
 			headers: { "Accept-Language": expectedDetectedLocale },
@@ -412,6 +403,16 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		expect(detectedResponse.headers()["cache-control"]).toBe(
 			"private, no-store",
 		);
+	}
+
+	// Explicit locale URLs save a preference, so check browser detection first.
+	for (const locale of expectedEnabledLocales) {
+		if (locale === expectedDefaultLocale) continue;
+		const enabledResponse = await request.get(`/${locale}/lib`, {
+			maxRedirects: 0,
+		});
+		expect(enabledResponse.status()).toBe(200);
+		expect(enabledResponse.headers().location).toBeUndefined();
 	}
 
 	await page.setViewportSize({ width: 1600, height: 900 });
@@ -610,7 +611,7 @@ test("rate limits paid AI requests per browser when AI is enabled", async ({
 	});
 });
 
-test("copies citation text without HTML whitespace or an extra sentence separator", async ({ page, context }) => {
+test("reports a clipboard failure and retries copying clean citation text", async ({ page, context }) => {
 	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 	await page.route(`**/item/${expectedSearchItemKey}/citation`, (route) => route.fulfill({ json: {
@@ -624,12 +625,52 @@ test("copies citation text without HTML whitespace or an extra sentence separato
 		return;
 	}
 	const citation = heading.locator("..");
+	await page.evaluate(() => {
+		Object.defineProperty(navigator.clipboard, "writeText", {
+			configurable: true,
+			value: () => {
+				Reflect.deleteProperty(navigator.clipboard, "writeText");
+				return Promise.reject(new DOMException("Clipboard permission denied", "NotAllowedError"));
+			},
+		});
+	});
+	await citation.getByRole("button").click();
+	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
 	await citation.getByRole("button").click();
 	const suffix = expectedCitationUrl
 		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, expectedPublicBaseUrl)}.`
 		: "";
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
 		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
+});
+
+test("keeps clipboard feedback tied to the latest attempt", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey || !expectedCitationsEnabled, "Requires a public record with citations.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
+	await dismissConsent(page);
+	const citation = page.getByRole("heading", { name: "Citation", exact: true }).locator("..");
+	const copy = citation.getByRole("button");
+	await page.clock.pauseAt(new Date());
+	const attempts = await page.evaluateHandle(() => {
+		const pending: { resolve: () => void; reject: () => void }[] = [];
+		Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: () => new Promise<void>((resolve, reject) => {
+			pending.push({ resolve, reject: () => reject(new DOMException("Clipboard permission denied", "NotAllowedError")) });
+		}) });
+		return pending;
+	});
+	await copy.click();
+	await copy.click();
+	await attempts.evaluate(pending => pending[1].reject());
+	await page.clock.runFor(100);
+	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
+	await attempts.evaluate(pending => pending[0].resolve());
+	await page.clock.runFor(100);
+	await expect(copy).toHaveAccessibleName("Copy Citation");
+	await copy.click();
+	await attempts.evaluate(pending => pending[2].resolve());
+	await page.clock.runFor(100);
+	await expect(copy).toHaveAccessibleName("Copied!");
 });
 
 test("shows a search failure and lets the reader retry without losing the query", async ({ page }) => {
@@ -810,3 +851,30 @@ test("keeps the whole-library export total independent of the search", async ({ 
 	const records = await readFile(path!, "utf8");
 	expect(records.match(/^TY\s+- /gm)).toHaveLength(count);
 });
+
+for (const width of [1200, 390]) {
+	test(`keeps RTL pages within ${width}px and exposes keyboard skip links`, async ({ page }) => {
+		test.skip(!expectedEnabledLocales.includes("ar"), "Requires an enabled RTL locale.");
+		await page.goto("/en-GB/lib");
+		await dismissConsent(page);
+		await page.setViewportSize({ width, height: 844 });
+		await page.goto("/ar/lib");
+		await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+		const skip = page.locator('a[href="#main-content"]');
+		await skip.waitFor({ state: "visible" });
+		expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+		await expect(page.locator("[data-consent-gate]")).not.toHaveAttribute("inert");
+		// Start from a known document control, independent of browser chrome
+		// or developer tools inserted before the page's tab order.
+		await page.locator('a[href="#footer"]').focus();
+		await page.keyboard.press("Shift+Tab");
+		await expect(skip).toBeFocused();
+		const bounds = await skip.boundingBox();
+		expect(bounds).not.toBeNull();
+		expect(bounds!.width).toBeGreaterThan(1);
+		expect(bounds!.x).toBeGreaterThanOrEqual(0);
+		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+		await page.keyboard.press("Enter");
+		await expect(page).toHaveURL(/#main-content$/);
+	});
+}

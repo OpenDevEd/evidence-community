@@ -1,5 +1,8 @@
 {
   "ui": {
+    "exportFailed": "تعذّر تجهيز هذا المحتوى",
+    "copyFailed": "تعذّر النسخ",
+    "copyFailedHelp": "تحقق من إذن الحافظة في متصفحك ثم حاول مجددًا.",
     "referenceLabel": "{count, plural, one {مرجع} two {مرجعان} few {مراجع} other {مرجعًا}}",
     "libraryCitationLabel": "{count, plural, one {اقتباس في هذه المكتبة} two {اقتباسان في هذه المكتبة} few {اقتباسات في هذه المكتبة} other {اقتباسًا في هذه المكتبة}}",
     "downloadLibraryLimited": "أول {count, number} من أصل {total, number} منشورًا. اختر تنسيق الاقتباس.",
@@ -178,7 +181,6 @@
     "recommendedResources": "الموارد الموصى بها",
     "recommendedResourcesDescription": "بناءً على محتوى هذا المنشور، نوصي بالموارد التالية.",
     "itemBack": "رجوع",
-    "itemCitationsCount": "الاستشهادات",
     "itemViewOriginal": "عرض الأصل",
     "itemAuthorsTitle": "المؤلفون",
     "itemInstitutionsTitle": "المؤسسات",

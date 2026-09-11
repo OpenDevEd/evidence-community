@@ -22,6 +22,7 @@ import {
 	publicationPreviewData,
 } from "@/components/features/items/PublicationHoverPreview";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
@@ -41,17 +42,13 @@ const copyLinkClassNames = {
 const citationChipClassName =
 	"not-prose group/chip mx-1 inline-flex h-6 items-center gap-1.5 rounded-full border border-black/[0.08] bg-white py-0 pl-0.5 pr-2 align-middle font-sans text-citation font-medium not-italic leading-none tracking-normal text-black/55 no-underline shadow-sm outline-none transition-citation duration-200 ease-out hover:-translate-y-px hover:border-accent/40 hover:bg-accent/[0.06] hover:text-black/70 focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transform-none dark:border-white/10 dark:bg-white/[0.06] dark:text-white/60 dark:shadow-none dark:hover:border-accent/45 dark:hover:bg-accent/10 dark:hover:text-white/80";
 
-/** The server has no origin to resolve against, so it keeps the path. */
-function absoluteLink(href: string) {
-	if (typeof window === "undefined") return href;
-	return new URL(href, window.location.origin).toString();
-}
-
-function CitationCopyLink({ href }: { href: string }) {
+function CitationCopyLink({ href, itemKey }: { href: string; itemKey?: string }) {
+	const { identity } = useLibraryConfig();
+	const itemUrl = useLibraryItemUrl();
 	const t = useTranslations("ui");
 	return (
 		<CopyButton
-			content={absoluteLink(href)}
+			content={itemKey ? itemUrl(itemKey) : new URL(href, identity.baseUrl).toString()}
 			text={t("copyLink")}
 			textOnCopy={t("linkCopied")}
 			classNames={copyLinkClassNames}
@@ -408,7 +405,7 @@ function PublicationLinkPreview({
 					<SiteFavicon className="size-3.5 rounded-favicon" />
 					<span className="truncate">{identity.name}</span>
 				</span>
-				<CitationCopyLink href={href} />
+				<CitationCopyLink href={href} itemKey={itemKey} />
 			</div>
 			<PublicationHoverPreview
 				preview={publicationPreviewData(data.item, {
