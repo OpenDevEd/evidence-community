@@ -230,20 +230,28 @@ it("preserves subscriber tokens, published editions and cutoffs when renaming di
   await withIsolatedPublicationDatabase(async (db, client) => {
     const cutoff = new Date("2026-09-10T12:00:00Z");
     const nextAt = new Date("2026-09-14T09:00:00Z");
-    await db.insert(notificationState).values({enabled: true, digestThrough: cutoff, nextDigestAt: nextAt, schedule: JSON.stringify({weekday: 1, time: "09:00", timezone: "UTC"})});
+    await db.insert(notificationState).values({enabled: true, enabledAt: cutoff, hourlyThrough: cutoff, digestThrough: cutoff, nextDigestAt: nextAt, schedule: JSON.stringify({weekday: 1, time: "09:00", timezone: "UTC"})});
     await requestSubscription(db, {email: "migration@example.org", digest: true, instant: false});
     const [before] = await db.select().from(notificationSubscriber);
     await confirmSubscription(db, before.token);
-    const [edition] = await db.insert(notificationEdition).values({stream: "digest", windowStart: cutoff, windowEnd: nextAt, publications: [], title: "Saved edition", publishedAt: nextAt}).returning();
+    const [edition] = await db.insert(notificationEdition).values({stream: "digest", windowStart: new Date("2026-09-01T00:00:00Z"), windowEnd: cutoff, publications: [], title: "Saved edition", publishedAt: cutoff}).returning();
     await client.query(`ALTER TABLE "notificationState" RENAME COLUMN "digestThrough" TO "weeklyThrough";
       ALTER TABLE "notificationState" RENAME COLUMN "nextDigestAt" TO "nextWeeklyAt";
       ALTER TABLE "notificationSubscriber" RENAME COLUMN "digest" TO "weekly";
       UPDATE "notificationEdition" SET "stream" = 'weekly';`);
     await client.query(readFileSync("drizzle/0058_library_digest_schedule.sql", "utf8"));
     expect((await db.select().from(notificationSubscriber))[0]).toMatchObject({id: before.id, token: before.token, digest: true, instant: false, confirmedAt: expect.any(Date)});
-    expect((await db.select().from(notificationEdition))[0]).toMatchObject({id: edition.id, stream: "digest", title: "Saved edition", publishedAt: nextAt});
+    expect((await db.select().from(notificationEdition))[0]).toMatchObject({id: edition.id, stream: "digest", title: "Saved edition", publishedAt: cutoff});
     const [state] = await db.select().from(notificationState);
     expect(state).toMatchObject({digestThrough: cutoff, nextDigestAt: nextAt});
     expect(JSON.parse(state.schedule)).toEqual({frequency: "weekly", weekday: 1, time: "09:00", timezone: "UTC"});
+    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Added before the saved schedule"});
+    await publishItemDraft(db, draft.itemKey);
+    await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-09-12T10:00:00Z", draft.itemKey]);
+    // The worker must send an overdue edition after upgrade, not postpone it.
+    await prepareNotificationEditions(db, config, new Date("2026-09-14T09:05:00Z"));
+    const digests = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(digests).toHaveLength(2);
+    expect(digests.find(row => row.id !== edition.id)).toMatchObject({windowStart: cutoff, windowEnd: nextAt});
   });
 }, 120_000);

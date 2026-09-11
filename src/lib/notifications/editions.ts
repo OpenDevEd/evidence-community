@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { and, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
@@ -87,7 +88,7 @@ export async function prepareNotificationEditions(
       if (!manualDigest) return { status: "empty" };
     }
     let digestAt = state.nextDigestAt!;
-    if (state.schedule !== schedule) {
+    if (!isDeepStrictEqual(JSON.parse(state.schedule), config.notifications.schedule)) {
       digestAt = nextDigestDate(config.notifications.schedule, now);
       await tx.update(notificationState).set({ schedule, nextDigestAt: digestAt });
     }
