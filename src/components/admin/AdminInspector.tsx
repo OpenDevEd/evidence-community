@@ -1524,7 +1524,7 @@ export function AdminInspector({
 
 	return (
 		<div
-			className="flex h-full min-h-0 flex-col"
+			className="flex h-full min-h-0 flex-col [@media(max-height:600px)]:overflow-y-auto"
 			data-admin-region="inspector"
 		>
 			{versionControls}
@@ -1820,7 +1820,7 @@ export function AdminInspector({
 			/>
 
 			<div
-				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
+				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4 [@media(max-height:600px)]:flex-none [@media(max-height:600px)]:overflow-visible"
 				data-admin-region="inspector-scroll"
 			>
 				{error && (

@@ -1993,7 +1993,7 @@ export default function AdminWorkbench({
 				>
 					<LibraryLogo className="max-w-full" place="admin" />
 				</Link>
-				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 xl:min-w-64 xl:max-w-lg xl:flex-1">
+				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:col-span-1 sm:col-start-1 xl:min-w-64 xl:max-w-lg xl:flex-1">
 					<Input
 						color="filled"
 						aria-label="Search records"
@@ -2042,7 +2042,7 @@ export default function AdminWorkbench({
 				<div
 					role="group"
 					aria-label="Library panels"
-					className="col-span-3 row-start-3 flex min-w-0 rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]"
+					className="col-span-3 row-start-3 flex min-w-0 rounded-xl bg-black/[0.035] p-1 sm:col-span-2 sm:col-start-2 sm:row-start-2 sm:min-w-72 xl:hidden dark:bg-white/[0.035]"
 				>
 					{[
 						{
