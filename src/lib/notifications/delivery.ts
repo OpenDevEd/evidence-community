@@ -13,11 +13,11 @@ type OwnedDelivery = ReturnType<typeof and>;
 
 function canSendEdition(subscriber: Subscriber, edition: Edition) {
   if (!subscriber.confirmedAt || !edition.publishedAt) return false;
-  return edition.stream === "weekly" ? subscriber.weekly : subscriber.instant;
+  return edition.stream === "digest" ? subscriber.digest : subscriber.instant;
 }
 
 function canSendConfirmation(subscriber: Subscriber, messageKey: string) {
-  if (!subscriber.confirmedAt && !subscriber.weekly && !subscriber.instant) return false;
+  if (!subscriber.confirmedAt && !subscriber.digest && !subscriber.instant) return false;
   return subscriber.confirmationExpiresAt > new Date() && messageKey === `confirmation:${subscriber.id}:${subscriber.confirmationRequestedAt.getTime()}`;
 }
 

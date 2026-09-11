@@ -36,7 +36,7 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 	];
 	const edition: EmailEdition = {
 		id: "preview",
-		stream: "weekly",
+		stream: "digest",
 		title: "Attention, feedback and the everyday classroom",
 		windowStart: new Date("2026-09-07T00:00:00Z"),
 		windowEnd: new Date("2026-09-14T00:00:00Z"),
@@ -47,12 +47,12 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 	const subscriber = {
 		email: "preview@example.org",
 		token: "preview",
-		weekly: true,
+		digest: true,
 		instant: false,
 		confirmedAt: new Date(),
 	};
-	const [weekly, items, confirm] = await Promise.all([
-		notificationMessage(config, subscriber, edition, "preview:weekly"),
+	const [digest, items, confirm] = await Promise.all([
+		notificationMessage(config, subscriber, edition, "preview:digest"),
 		notificationMessage(
 			config,
 			subscriber,
@@ -68,10 +68,10 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 	]);
 	return [
 		{
-			id: "weekly",
-			label: "Weekly digest",
-			subject: weekly.subject,
-			html: weekly.html,
+			id: "digest",
+			label: "Library digest",
+			subject: digest.subject,
+			html: digest.html,
 		},
 		{
 			id: "items",

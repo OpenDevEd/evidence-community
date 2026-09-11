@@ -13,7 +13,7 @@ export default function SubscriptionAction({token, action, locale}: {token: stri
   async function save() {
     setState("saving"); setError("");
     try {
-      await changeSubscription(action === "confirm" ? {action, token} : {action: "preferences", token, weekly: false, instant: false});
+      await changeSubscription(action === "confirm" ? {action, token} : {action: "preferences", token, digest: false, instant: false});
       setState("done");
     } catch (error) {setError(subscriptionError(error));setState("ready");}
   }

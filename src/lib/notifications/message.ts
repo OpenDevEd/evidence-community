@@ -15,7 +15,7 @@ import {
 
 export type EmailSubscriber = Pick<
 	typeof notificationSubscriber.$inferSelect,
-	"email" | "token" | "weekly" | "instant" | "confirmedAt"
+	"email" | "token" | "digest" | "instant" | "confirmedAt"
 >;
 export type EmailEdition = Pick<
 	typeof notificationEdition.$inferSelect,
@@ -111,7 +111,7 @@ function subscriptionContent(
 		subject = `Confirm email updates from ${identity.name}`;
 		title = "Confirm your email updates";
 		text = `Confirm your email updates: ${confirm}\n\nThis link expires after 24 hours. If you did not subscribe, ignore this email.`;
-		content = `<p style="${emailStyles.paragraph}">One last step to receive updates from <strong style="color:#202822">${escapeHtml(identity.name)}</strong>.</p>${subscriber.weekly ? emailPanel("Weekly digest", "A summary of the week’s additions, with links to the publications.") : ""}${subscriber.instant ? emailPanel("New publications", "Updates when publications are added.") : ""}${button("Confirm email updates", confirm)}<p style="font-size:13px;line-height:1.7;color:#797b73;margin:22px 0 0">This link is valid for 24 hours. If you didn’t request these updates, you can ignore this email.</p>`;
+		content = `<p style="${emailStyles.paragraph}">One last step to receive updates from <strong style="color:#202822">${escapeHtml(identity.name)}</strong>.</p>${subscriber.digest ? emailPanel("Library digest", "A summary of new additions, with links to the publications.") : ""}${subscriber.instant ? emailPanel("New publications", "Updates when publications are added.") : ""}${button("Confirm email updates", confirm)}<p style="font-size:13px;line-height:1.7;color:#797b73;margin:22px 0 0">This link is valid for 24 hours. If you didn’t request these updates, you can ignore this email.</p>`;
 	}
 	return { subject, text, content, title, detail };
 }
@@ -133,19 +133,19 @@ async function editionContent(
 	).toString();
 	const publicationUrl = (key: string) =>
 		new URL(`/lib/${key}`, identity.baseUrl).href;
-	if (edition.stream === "weekly") {
+	if (edition.stream === "digest") {
 		const render = await createSafeMarkdownRenderer(
 			identity.baseUrl,
 			emailStyles,
 		);
-		content = `${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this week’s digest", editionUrl)}</div>`;
+		content = `${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this edition", editionUrl)}</div>`;
 		const date = new Intl.DateTimeFormat(
 			config.localization.defaultLocale,
 			{
 				day: "numeric",
 				month: "short",
 				year: "numeric",
-				timeZone: config.notifications.weekly.timezone,
+				timeZone: config.notifications.schedule.timezone,
 			},
 		);
 		detail = {
@@ -161,7 +161,7 @@ async function editionContent(
 			.join("")}`;
 	}
 	const body =
-		edition.stream === "weekly"
+		edition.stream === "digest"
 			? (edition.markdown ?? "").replace(
 					/\]\((\/lib\/[A-Z0-9]{8})\)/g,
 					(_, href: string) =>
@@ -173,6 +173,6 @@ async function editionContent(
 							`${publication.title}\n${publication.creators.join(", ")}\n\n${publication.abstract ?? ""}\n${publicationUrl(publication.key)}`,
 					)
 					.join("\n\n");
-	const text = `${title}\n\n${body}${edition.stream === "weekly" ? `\n\nRead online: ${editionUrl}` : ""}`;
+	const text = `${title}\n\n${body}${edition.stream === "digest" ? `\n\nRead online: ${editionUrl}` : ""}`;
 	return { subject, text, content, title, detail };
 }

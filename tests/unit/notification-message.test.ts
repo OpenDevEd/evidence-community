@@ -5,7 +5,7 @@ import {notificationMessage, type EmailEdition} from "@/lib/notifications/messag
 import {renderLibraryInvitation} from "@/lib/emails/library-template";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
-const subscriber = {email: "reader@example.org", token: "reader-secret", weekly: true, instant: false, confirmedAt: null};
+const subscriber = {email: "reader@example.org", token: "reader-secret", digest: true, instant: false, confirmedAt: null};
 
 it("keeps confirmation, preference and unsubscribe links specific to the recipient and library", async () => {
   const confirmation = await notificationMessage(config, subscriber, null, "confirmation:reader");
@@ -28,11 +28,11 @@ it("renders every publication and digest citation with absolute links while esca
   expect(hourly.html).toContain('Report &lt;script&gt;alert(1)&lt;/script&gt;');
   expect(hourly.html).toContain('Someone &lt;img src=x&gt;');
   expect(hourly.html).not.toMatch(/<(script|iframe)\b/);
-  const weekly = await notificationMessage(config, subscriber, {...edition, stream: "weekly", markdown: '## Finding\n\nSee [1](/lib/ABCDEFGH). <script>bad()</script>\n\n[bad](javascript:alert(1))'}, "weekly:reader");
-  expect(weekly.html).toContain(`href="${config.identity.baseUrl}/lib/ABCDEFGH"`);
-  expect(weekly.html).toContain(`/digests/saved-edition`);
-  expect(weekly.html).not.toMatch(/<script\b|href="javascript:/);
-  expect(weekly.text).toContain(`${config.identity.baseUrl}/lib/ABCDEFGH`);
+  const digest = await notificationMessage(config, subscriber, {...edition, stream: "digest", markdown: '## Finding\n\nSee [1](/lib/ABCDEFGH). <script>bad()</script>\n\n[bad](javascript:alert(1))'}, "digest:reader");
+  expect(digest.html).toContain(`href="${config.identity.baseUrl}/lib/ABCDEFGH"`);
+  expect(digest.html).toContain(`/digests/saved-edition`);
+  expect(digest.html).not.toMatch(/<script\b|href="javascript:/);
+  expect(digest.text).toContain(`${config.identity.baseUrl}/lib/ABCDEFGH`);
 });
 
 it("uses the actual invitation role and destination without inserting the library name as HTML", () => {

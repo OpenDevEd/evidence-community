@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       await getDatabaseForConfig(config),
       config,
       new Date(),
-      { manualWeekly: true },
+      { manualDigest: true },
     );
     return NextResponse.json(result, {
       headers: ADMIN_RESPONSE_HEADERS,

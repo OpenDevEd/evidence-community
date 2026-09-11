@@ -792,3 +792,32 @@ environments, DOI prefix, namespace, admin login, and publication worker all
 match docs-pen. The final JSON contains the record keys, DOI, Crossref Test
 submission IDs, Zenodo Sandbox record ID, and PDF hashes. It does not contain
 provider credentials.
+
+## Library digest schedules
+
+`notifications.schedule` selects one recurrence. Both use an IANA timezone and
+`HH:mm` local time:
+
+```json
+{"frequency":"weekly","weekday":1,"time":"09:00","timezone":"Europe/London"}
+```
+
+```json
+{"frequency":"monthly","dayOfMonth":31,"time":"09:00","timezone":"Europe/London"}
+```
+
+Weekdays run from Sunday `0` to Saturday `6`. Monthly days run from `1` to `31`.
+A shorter month uses its last day. Manual sends and scheduled sends share the
+same digest cutoff and publication deduplication. Empty manual sends leave the
+cutoff unchanged. Changing frequency preserves already announced publications.
+
+This release replaces `notifications.weekly` with `notifications.schedule` and
+renames the subscriber preference and edition stream to `digest`. Migration
+`0058` preserves subscriber tokens, editions and cutoffs. OpenScholar owner
+configuration version 5 converts saved weekly schedules when creating a new
+revision; frozen revisions stay unchanged. For a runtime upgrade, prepare and
+validate a new configuration with `frequency: "weekly"` and the existing clock
+settings, then deploy it with this runtime. An older runtime cannot read that
+configuration. Rollback requires the matching old configuration and reversing
+the three column renames and `digest` stream value, or restoring the pre-upgrade
+database snapshot. Never rewrite historical configuration files in place.
