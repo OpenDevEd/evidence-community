@@ -22,6 +22,7 @@ vi.mock("next-intl", () => ({
 }));
 vi.mock("@/components/features/analytics/AnalyticsConsentProvider", () => ({
 	useAnalyticsConsent: () => ({
+		capabilities: { analytics: false, sessionReplay: false },
 		openPreferences: vi.fn(),
 		setConsentState: vi.fn(),
 	}),

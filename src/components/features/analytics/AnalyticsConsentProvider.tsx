@@ -6,6 +6,7 @@ import {
 	ANALYTICS_CONSENT_COOKIE_NAME,
 	DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
 	analyticsConsentState,
+	analyticsCapabilities,
 	createAnalyticsConsentRecord,
 	normalizeAnalyticsConsentScope,
 	parseAnalyticsConsentRecord,
@@ -27,6 +28,7 @@ import {
 
 type AnalyticsConsentContextValue = {
 	analyticsReady: boolean;
+	capabilities: AnalyticsConsentPreferences;
 	closePreferences: () => void;
 	consentState: AnalyticsConsentState;
 	preferences: AnalyticsConsentPreferences;
@@ -42,13 +44,17 @@ const AnalyticsConsentContext =
 function writeConsentCookie(
 	policy: AnalyticsConsentPolicy,
 	preferences: AnalyticsConsentPreferences,
+	capabilities: AnalyticsConsentPreferences,
 ) {
 	const secureCookie =
 		typeof window !== "undefined" && window.location.protocol === "https:"
 			? "; Secure"
 			: "";
 	const value = serializeAnalyticsConsentRecord(
-		createAnalyticsConsentRecord(policy, preferences),
+		createAnalyticsConsentRecord(policy, {
+			analytics: capabilities.analytics && preferences.analytics,
+			sessionReplay: capabilities.sessionReplay && preferences.sessionReplay,
+		}),
 	);
 	document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=${value}; Max-Age=${ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureCookie}`;
 }
@@ -92,12 +98,15 @@ export function AnalyticsConsentProvider({
 	storedConsentFromServer?: string | null;
 }) {
 	const config = useLibraryConfig();
-	const policy = useMemo(
+	const { capabilities, policy } = useMemo(
 		() => ({
-			scope: normalizeAnalyticsConsentScope(config.identity.baseUrl),
-			version: config.analytics.consentPolicyVersion,
+			capabilities: analyticsCapabilities(config.analytics),
+			policy: {
+				scope: normalizeAnalyticsConsentScope(config.identity.baseUrl),
+				version: config.analytics.consentPolicyVersion,
+			},
 		}),
-		[config.analytics.consentPolicyVersion, config.identity.baseUrl],
+		[config.analytics, config.identity.baseUrl],
 	);
 	// The decision is read as the page is drawn, so a reader who has already
 	// answered is never asked again, and one who has not is asked in the same
@@ -116,10 +125,10 @@ export function AnalyticsConsentProvider({
 		record?.preferences ?? DEFAULT_ANALYTICS_CONSENT_PREFERENCES;
 	const [analyticsReady, setAnalyticsReady] = useState(false);
 	const [openedByReader, setOpenedByReader] = useState(false);
-	// An undecided reader is always asked, whatever they closed before. That
-	// includes a reader whose old answer no longer covers what we do, because
-	// the policy has moved on since they gave it.
-	const isPreferencesOpen = consentState === "pending" || openedByReader;
+	// Ask only about configured analytics, including when an earlier answer
+	// no longer covers the current policy.
+	const isPreferencesOpen =
+		capabilities.analytics && (consentState === "pending" || openedByReader);
 
 	useEffect(() => {
 		let active = true;
@@ -135,25 +144,17 @@ export function AnalyticsConsentProvider({
 		};
 	}, [config.analytics, consentState, policy.scope, preferences]);
 
-	const closePreferences = useCallback(() => {
-		if (consentState === "pending") return;
-		setOpenedByReader(false);
-	}, [consentState]);
+	const closePreferences = useCallback(() => setOpenedByReader(false), []);
 
 	const openPreferences = useCallback(() => setOpenedByReader(true), []);
 
 	const savePreferences = useCallback(
 		(nextPreferences: AnalyticsConsentPreferences) => {
-			const normalized = {
-				analytics: nextPreferences.analytics,
-				sessionReplay:
-					nextPreferences.analytics && nextPreferences.sessionReplay,
-			};
-			writeConsentCookie(policy, normalized);
+			writeConsentCookie(policy, nextPreferences, capabilities);
 			for (const onChange of consentReaders) onChange();
 			setOpenedByReader(false);
 		},
-		[policy],
+		[capabilities, policy],
 	);
 
 	const setConsentState = useCallback(
@@ -170,6 +171,7 @@ export function AnalyticsConsentProvider({
 	const value = useMemo(
 		() => ({
 			analyticsReady,
+			capabilities,
 			closePreferences,
 			consentState,
 			preferences,
@@ -180,6 +182,7 @@ export function AnalyticsConsentProvider({
 		}),
 		[
 			analyticsReady,
+			capabilities,
 			closePreferences,
 			consentState,
 			preferences,

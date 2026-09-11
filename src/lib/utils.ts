@@ -8,10 +8,17 @@ import { areLinksValid } from "./actions";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import balanced from "balanced-match";
 
-export const takedownRequestSchema = z.object({
+export function parseRequestLinks(value: string) {
+	return value.split("\n").map((link) => link.trim()).filter(Boolean);
+}
+
+export const contactRequestSchema = z.object({
 	email: z.string().email(),
-	links: z.array(z.string().url()),
-	description: z.string().min(20),
+	description: z.string().trim().min(20),
+});
+
+export const takedownRequestSchema = contactRequestSchema.extend({
+	links: z.array(z.string().trim().url()).min(1),
 });
 
 export async function validateTakedownRequest(email: string, links: string[], description: string): Promise<{ error: string } | { success: boolean }> {
@@ -21,17 +28,12 @@ export async function validateTakedownRequest(email: string, links: string[], de
 	}
 
 	const linksValid = await areLinksValid(result.data.links);
-	if (!linksValid) {
+	if (!linksValid.every((result) => result.status === "fulfilled" && result.value)) {
 		return { error: "Invalid links" };
 	}
 
 	return { success: true };
 }
-
-export const contactRequestSchema = z.object({
-	email: z.string().email(),
-	description: z.string().min(20),
-});
 
 export async function validateContactRequest(email: string, description: string): Promise<{ error: string } | { success: boolean }> {
 	const result = contactRequestSchema.safeParse({ email, description });

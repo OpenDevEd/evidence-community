@@ -157,7 +157,7 @@
     "etAl": "et al.",
     "recommendedItems": "Recommended Resources",
     "countryFilterDescription": "Select regions, countries",
-    "cookieConsentMessage": "Choose whether we may use pseudonymous product analytics and masked session diagnostics to improve the library. You can change this choice at any time.",
+    "cookieConsentMessage": "Choose which analytics to allow. You can change your choice at any time.",
     "cookieConsentTitle": "Help Us Improve Your Experience",
     "cookieAccept": "Accept All & Continue",
     "cookieDecline": "Decline",

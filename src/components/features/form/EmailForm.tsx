@@ -2,8 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Link02Icon, Mail01Icon, Message01Icon, SentIcon } from "@hugeicons/core-free-icons";
-import { AnyFieldApi, FormApi, useForm } from "@tanstack/react-form";
-import { z, ZodError } from "zod";
+import { AnyFieldApi, useForm } from "@tanstack/react-form";
 import { Input } from "@/components/nextui/Input";
 import { Card } from "@/components/nextui/Card";
 import { Button } from "@/components/nextui/Button";
@@ -12,13 +11,9 @@ import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence, motion } from "framer-motion";
 import { areLinksValid } from "@/lib/actions";
 import { Spinner } from "@nextui-org/react";
-import { toast } from "@/components/layout/Toast";
-import { takedownRequestSchema } from "@/lib/utils";
+import { contactRequestSchema, parseRequestLinks, takedownRequestSchema } from "@/lib/utils";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { useMemo } from "react";
-
-const LINK_SEPARATOR = "\t• ";
 
 function formatLinkErrors(
 	links: string[],
@@ -32,9 +27,9 @@ function formatLinkErrors(
 	}));
 
 	if (invalidLinks.length > 0) {
-		return `${errorType}\n${LINK_SEPARATOR}${invalidLinks
+		return `${errorType}\n${invalidLinks
 			.map((v) => `${v.url} (${v.index})`)
-			.join(`\n${LINK_SEPARATOR}`)}`;
+			.join("\n")}`;
 	}
 
 	return null;
@@ -44,13 +39,7 @@ function FieldInfo({ field }: { field: AnyFieldApi }) {
 	"use no memo";
 	const t = useTranslations("ui");
 
-	const {
-		displayOnError,
-		errorClassName,
-		ErrorField,
-		containerRef,
-		errorMessage,
-	} = useModalError({
+	const { ErrorField } = useModalError({
 		initial: {
 			height: 0,
 			opacity: 0,
@@ -124,8 +113,16 @@ function InputField({
 	return (
 		<>
 			<Input
+				type="email"
+				autoComplete="email"
 				id={field.name}
+				isRequired
+				validationBehavior="aria"
 				name={field.name}
+				onBlur={() => {
+					field.handleBlur();
+					void field.validate("change");
+				}}
 				value={field.state.value}
 				onValueChange={(value: string) => field.handleChange(value)}
 				isInvalid={
@@ -155,11 +152,17 @@ function TextareaField({
 		<>
 			<Textarea
 				id={field.name}
+				isRequired
+				validationBehavior="aria"
 				isInvalid={
 					field.state.meta.isTouched &&
 					field.state.meta.errors.length > 0
 				}
 				name={field.name}
+				onBlur={() => {
+					field.handleBlur();
+					void field.validate("change");
+				}}
 				value={field.state.value}
 				onValueChange={(value: string) => field.handleChange(value)}
 				label={label}
@@ -174,7 +177,7 @@ const defaultValues = {
     email: "",
     links: "",
     description: "",
-} as const;
+};
 
 export default function EmailForm({ fields, header, subtitle, footer, onSubmit }: { fields: (keyof typeof defaultValues)[], header?: string, subtitle?: string, footer?: React.ReactNode, onSubmit: (value: typeof defaultValues, reset: () => void) => Promise<void> }) {
 	"use no memo";
@@ -187,6 +190,15 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 		}, {} as Record<string, boolean>);
 	}, [fields]);
 
+	const requestSchema = fieldsMap.links ? takedownRequestSchema : contactRequestSchema;
+	const validateEmail = ({ value }: { value: string }) =>
+		contactRequestSchema.shape.email.safeParse(value).success
+			? undefined
+			: t("invalidEmail");
+	const validateDescription = ({ value }: { value: string }) =>
+		contactRequestSchema.shape.description.safeParse(value).success
+			? undefined
+			: t("descriptionMin20");
 	const form = useForm({
 		defaultValues: {
             email: "",
@@ -194,7 +206,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
             description: "",
         },
 		onSubmit: async ({ value, formApi }) => {
-			await onSubmit(value as typeof defaultValues, () => formApi.reset());
+			await onSubmit(value, () => formApi.reset());
 		},
 	});
 
@@ -226,9 +238,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 						<form.Field
 							name="email"
 							validators={{
-								onSubmit: z
-									.string()
-									.email({ message: t("invalidEmail") }),
+								onChange: validateEmail,
 							}}
 						>
 							{(field) => (
@@ -252,11 +262,10 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 										return t("enterLinks");
 									}
 
-									const links = value
-										.split("\n")
-										.filter(Boolean);
+									const links = parseRequestLinks(value);
+									if (links.length === 0) return t("enterLinks");
 									// zod link validation
-									const linkSchema = z.string().url();
+									const linkSchema = takedownRequestSchema.shape.links.element;
 									const linkErrors = links.map((link) =>
 										linkSchema.safeParse(link)
 									);
@@ -364,11 +373,7 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 						<form.Field
 							name="description"
 							validators={{
-								onSubmit: ({ value }) => {
-									if (value.length < 20) {
-										return t("descriptionMin20");
-									}
-								},
+								onChange: validateDescription,
 							}}
 						>
 							{(field) => (
@@ -385,7 +390,13 @@ export default function EmailForm({ fields, header, subtitle, footer, onSubmit }
 				</div>
 
 				<form.Subscribe
-					selector={(state) => [state.canSubmit, state.isSubmitting]}
+					selector={(state) => [
+						state.canSubmit && requestSchema.safeParse({
+							...state.values,
+							links: parseRequestLinks(state.values.links),
+						}).success,
+						state.isSubmitting,
+					]}
 				>
 					{([canSubmit, isSubmitting]) => (
 						<Button

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { dismissConsent } from "./consent";
+import { dismissConsent, expectsConsent } from "./consent";
 
 test.skip(
 	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
@@ -12,11 +12,18 @@ const consentTitle =
 	process.env.PLAYWRIGHT_EXPECTED_CONSENT_TITLE ??
 	"Help Us Improve Your Experience";
 
-test("a reader who has not answered cannot use the page yet", async ({
+test("a new reader is asked for consent only for configured analytics", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.goto("/en-GB/lib");
+
+	if (!expectsConsent) {
+		await expect(page.getByRole("main")).toBeVisible();
+		await expect(page.getByRole("dialog")).toHaveCount(0);
+		await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
+		return;
+	}
 
 	// The question is still open, so the library is visible but held still.
 	const searchField = page.getByPlaceholder("Search", { exact: true }).first();

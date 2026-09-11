@@ -11,7 +11,7 @@ export function AnalyticsConsentPreferencesForm({
 }: {
 	onComplete?: () => void;
 }) {
-	const { preferences, savePreferences, setConsentState } =
+	const { capabilities, preferences, savePreferences, setConsentState } =
 		useAnalyticsConsent();
 	const [analytics, setAnalytics] = useState(preferences.analytics);
 	const [sessionReplay, setSessionReplay] = useState(
@@ -54,23 +54,27 @@ export function AnalyticsConsentPreferencesForm({
 						}}
 					/>
 				</div>
-				<div className="mx-3 h-px bg-divider" />
-				<div className="flex min-h-16 items-center justify-between gap-4 rounded-xl px-3 py-2.5">
-					<div className="min-w-0">
-						<p className="text-sm font-semibold">
-							{t("cookieReplayLabel")}
-						</p>
-						<p className="mt-0.5 text-xs leading-4 text-default-500">
-							{t("cookieReplayDescription")}
-						</p>
-					</div>
-					<Switch
-						aria-label={t("cookieReplayLabel")}
-						isDisabled={!analytics}
-						isSelected={analytics && sessionReplay}
-						onValueChange={setSessionReplay}
-					/>
-				</div>
+				{capabilities.sessionReplay && (
+					<>
+						<div className="mx-3 h-px bg-divider" />
+						<div className="flex min-h-16 items-center justify-between gap-4 rounded-xl px-3 py-2.5">
+							<div className="min-w-0">
+								<p className="text-sm font-semibold">
+									{t("cookieReplayLabel")}
+								</p>
+								<p className="mt-0.5 text-xs leading-4 text-default-500">
+									{t("cookieReplayDescription")}
+								</p>
+							</div>
+							<Switch
+								aria-label={t("cookieReplayLabel")}
+								isDisabled={!analytics}
+								isSelected={analytics && sessionReplay}
+								onValueChange={setSessionReplay}
+							/>
+						</div>
+					</>
+				)}
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<Button
