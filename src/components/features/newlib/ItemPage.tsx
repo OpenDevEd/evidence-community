@@ -613,7 +613,7 @@ function ItemDetailsRow({
 					</div>
 					<CopyButton
 						textToCopy={formattedValue}
-						ariaLabel={`${tUI("copy")} ${detail?.label ? t(detail.label) : ""}`.trim()}
+						ariaLabel={tUI("copyField", { field: detail?.label ? t(detail.label) : "" })}
 					/>
 				</div>
 			</Skeleton>
@@ -707,7 +707,7 @@ function ItemPropertyRowWrapper({
 				{copyText && (
 					<CopyButton
 						textToCopy={copyText}
-						ariaLabel={`${tUI("copy")} ${title}`}
+						ariaLabel={tUI("copyField", { field: title })}
 					/>
 				)}
 			</div>

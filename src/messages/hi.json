@@ -193,7 +193,7 @@
     "itemTechnicalDetailsTitle": "तकनीकी विवरण",
     "noRelationsFound": "इस आइटम के लिए इस डेटाबेस में कोई संबंध नहीं मिला।",
     "itemBackAriaLabel": "पिछला पृष्ठ पर वापस जाएँ",
-    "itemCopyCitationAriaLabel": "उद्धरण कॉपी करें",
+    "copyField": "{field} कॉपी करें",
     "itemCopyUrlAriaLabel": "यूआरएल कॉपी करें",
     "itemDownloadAriaLabel": "प्रकाशन डाउनलोड करें",
     "itemLikeAriaLabel": "प्रकाशन पसंद है",

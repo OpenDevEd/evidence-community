@@ -193,7 +193,7 @@
     "itemTechnicalDetailsTitle": "Technical Details",
     "noRelationsFound": "There are currently no related items for this record in the database.",
     "itemBackAriaLabel": "Back to previous page",
-    "itemCopyCitationAriaLabel": "Copy citation",
+    "copyField": "Copy {field}",
     "itemCopyUrlAriaLabel": "Copy URL",
     "itemDownloadAriaLabel": "Download publication",
     "itemLikeAriaLabel": "Like publication",
