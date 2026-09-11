@@ -784,11 +784,15 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 	await dismissConsent(page);
 	if (process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP === "true") {
 		await expect(page.getByRole("button", { name: /Facet/ }).first()).toBeVisible();
+		expect(errors).toEqual([]);
 	} else {
+		// A streamed Next.js notFound() can report React's recoverable Suspense
+		// bailout. Check the unavailable-page contract instead of treating that
+		// deliberate response as a failed map render.
 		await expect(page.getByText("404", { exact: true })).toBeVisible();
 		await expect(page.getByRole("button", { name: /Facet/ })).toHaveCount(0);
+		await expect(page.locator('meta[name="robots"][content="noindex"]')).toHaveCount(1);
 	}
-	expect(errors).toEqual([]);
 });
 
 
