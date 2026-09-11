@@ -91,6 +91,7 @@ describe("country focus", () => {
 		["Congo and Congolese teachers", []],
 		["Dominicans and Samoans", []],
 		["A kiwi weighs 3 oz. Join us in class.", []],
+		["English-language instruction in Kenya", ["KE"]],
 	])(
 		"recognizes current names and useful aliases in %s",
 		(title, countries) => {
@@ -115,6 +116,7 @@ describe("country focus", () => {
 		["Curacao", "CW"],
 		["FYROM", "MK"],
 		["D.R.C.", "CD"],
+		["English", "GB"],
 	])(
 		"finds a single current country using %s and excludes it once selected",
 		(query, code) => {

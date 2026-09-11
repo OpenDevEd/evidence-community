@@ -70,10 +70,11 @@ function countryTerms() {
 			candidates.set(term, codes);
 		}
 	}
-	// An ambiguous demonym cannot tell us which country the item means.
+	// Ambiguous demonyms cannot identify a country. English usually names a
+	// language used worldwide; keep it in picker search, not automatic focus.
 	return new Map(
 		[...candidates]
-			.filter(([, codes]) => codes.size === 1)
+			.filter(([term, codes]) => codes.size === 1 && term !== "english")
 			.map(([term, codes]) => [term, [...codes][0]!]),
 	);
 }
