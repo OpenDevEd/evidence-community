@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import {
 	expect,
 	test,
@@ -95,6 +96,13 @@ function trackAnalyticsNetwork(page: Page) {
 	const eventRequests: string[] = [];
 	const eventResponses: string[] = [];
 	const eventFailures: string[] = [];
+	const capturedEvents: Array<{
+		event?: string;
+		properties?: Record<string, unknown>;
+	}> = [];
+	const payloadErrors: string[] = [];
+	const isCapture = (url: string) =>
+		url.startsWith(fixtureOrigin) && /\/(?:i\/v0\/)?[es]\/?$/u.test(new URL(url).pathname);
 
 	page.on("request", (request) => {
 		if (request.url().startsWith(fixtureOrigin)) {
@@ -105,7 +113,7 @@ function trackAnalyticsNetwork(page: Page) {
 		}
 		if (
 			request.method() === "POST" &&
-			request.url().startsWith(fixtureOrigin)
+			isCapture(request.url())
 		) {
 			eventRequests.push(request.url());
 		}
@@ -113,9 +121,22 @@ function trackAnalyticsNetwork(page: Page) {
 	page.on("response", (response) => {
 		if (
 			response.request().method() === "POST" &&
-			response.url().startsWith(fixtureOrigin)
+			isCapture(response.url())
 		) {
 			eventResponses.push(`${response.status()} ${response.url()}`);
+			if (response.ok()) {
+				try {
+					const body = response.request().postDataBuffer();
+					if (!body) throw new Error("Missing capture body");
+					const decoded = body[0] === 0x1f && body[1] === 0x8b
+						? gunzipSync(body).toString("utf8")
+						: body.toString("utf8");
+					const payload = JSON.parse(decoded);
+					capturedEvents.push(...(Array.isArray(payload) ? payload : payload.batch ?? [payload]));
+				} catch (error) {
+					payloadErrors.push(String(error));
+				}
+			}
 		}
 	});
 	page.on("requestfailed", (request) => {
@@ -132,6 +153,8 @@ function trackAnalyticsNetwork(page: Page) {
 	});
 
 	return {
+		capturedEvents,
+		payloadErrors,
 		allPostRequests,
 		collectorRequests,
 		consoleMessages,
@@ -151,9 +174,7 @@ async function expectSuccessfulAnalytics(
 		await expect
 			.poll(
 				() =>
-					network.eventResponses.some((response) =>
-						response.startsWith("200 "),
-					),
+						network.capturedEvents.some((event) => event.event === "$pageview"),
 				{ timeout: 10_000 },
 			)
 			.toBe(true);
@@ -172,6 +193,11 @@ async function expectSuccessfulAnalytics(
 		);
 	}
 	expect(network.eventRequests.length).toBeGreaterThan(0);
+	expect(network.payloadErrors).toEqual([]);
+	const pageview = network.capturedEvents.find((event) => event.event === "$pageview");
+	expect(pageview?.properties?.token).toEqual(expect.any(String));
+	expect(pageview?.properties?.distinct_id).toEqual(expect.any(String));
+	expect(JSON.stringify(network.capturedEvents)).not.toContain("analytics-privacy-canary");
 }
 
 async function expectFlushedSessionReplay(
@@ -383,7 +409,7 @@ test("sends analytics only for the configured and consented profile", async ({
 
 	const network = trackAnalyticsNetwork(page);
 
-	await page.goto("/lib");
+	await page.goto("/lib?qa_email=analytics-privacy-canary%40example.org");
 	if (expectsConsent) {
 		await page
 			.getByRole("button", {

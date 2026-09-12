@@ -181,6 +181,10 @@ describe("runtime browser analytics", () => {
 				password: "private",
 				access_token: "private",
 				search_query: "private",
+				$heatmap_data: {
+					"https://library.example.org/lib?search=one": [{ x: 1, y: 2 }],
+					"https://library.example.org/lib?search=two": [{ x: 3, y: 4 }],
+				},
 				$set_once: {
 					$initial_current_url: "https://library.example.org/lib?email=reader@example.org",
 					$initial_referrer: "https://example.org/private",
@@ -201,6 +205,9 @@ describe("runtime browser analytics", () => {
 				token: key,
 				distinct_id: "visitor-id",
 				$current_url: "https://library.example.org/lib",
+				$heatmap_data: {
+					"https://library.example.org/lib": [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+				},
 				$set_once: { $initial_current_url: "https://library.example.org/lib" },
 				$web_vitals_LCP_event: {
 					$current_url: "https://library.example.org/lib",

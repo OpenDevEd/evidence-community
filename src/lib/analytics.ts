@@ -187,20 +187,31 @@ function sanitizePostHogProperties(
 	properties: Record<string, unknown>,
 	preserveProjectToken = false,
 ): Record<string, unknown> {
-	return Object.fromEntries(
-		Object.entries(properties).flatMap(([key, value]) => {
-			// PostHog's public project token is required for event ingestion.
-			if (key === "token" && preserveProjectToken) return [[key, value]];
-			if (key === "$current_url")
-				return [[key, sanitizedCurrentUrl(value)]];
-			if (key === "$pathname") {
-				return [[key, sanitizeAnalyticsPath(String(value ?? "/"))]];
-			}
-			if (key === "$referrer" || key === "$initial_referrer") return [];
-			if (SENSITIVE_PROPERTY_NAME.test(key)) return [];
-			return [[key, sanitizePostHogValue(value)]];
-		}),
-	);
+	const sanitized = new Map<string, unknown>();
+	for (const [key, value] of Object.entries(properties)) {
+		// PostHog's public project token is required for event ingestion.
+		if (key === "token" && preserveProjectToken) {
+			sanitized.set(key, value);
+			continue;
+		}
+		if (key === "$referrer" || key === "$initial_referrer") continue;
+		if (SENSITIVE_PROPERTY_NAME.test(key)) continue;
+		const safeKey = sanitizeString(key);
+		const safeValue = key === "$current_url"
+			? sanitizedCurrentUrl(value)
+			: key === "$pathname"
+				? sanitizeAnalyticsPath(String(value ?? "/"))
+				: sanitizePostHogValue(value);
+		// Heatmap URLs are object keys. Combine points when query variants
+		// become the same URL after sanitizing them.
+		const previous = sanitized.get(safeKey);
+		sanitized.set(safeKey,
+			safeKey !== key && Array.isArray(previous) && Array.isArray(safeValue)
+				? [...previous, ...safeValue]
+				: safeValue,
+		);
+	}
+	return Object.fromEntries(sanitized);
 }
 
 function sanitizePostHogEvent(event: CaptureResult | null) {
