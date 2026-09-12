@@ -11,16 +11,15 @@ import { changeSubscription, subscriptionError } from "./subscription-client";
 export type Preferences = { email: string; digest: boolean; instant: boolean; confirmed: boolean };
 type SubscriptionProps = { initial: Preferences; preferences?: boolean; token?: string; schedule: string };
 type Step = "form" | "confirm" | "subscribed" | "stopped";
-function PreferenceChoices({ value, onChange, schedule }: { value: Preferences; onChange: (value: Preferences) => void; schedule: string }) {
+function PreferenceChoices({ value, onChange, schedule, busy }: { value: Preferences; onChange: (value: Preferences) => void; schedule: string; busy: boolean }) {
   return <div className="space-y-5">
     {([
       { key: "digest", icon: Calendar03Icon, label: "Library digests", help: schedule },
       { key: "instant", icon: BookOpen01Icon, label: "New publications", help: "Updates when publications are added" },
-    ] as const).map(option => <div key={option.key} className="flex items-center gap-3">
+    ] as const).map(option => <Switch key={option.key} name={option.key} aria-labelledby={`updates-${option.key}-label`} aria-describedby={`updates-${option.key}-help`} color="accent" isDisabled={busy} isSelected={value[option.key]} onValueChange={checked => onChange({ ...value, [option.key]: checked })} classNames={{base: "h-auto w-full max-w-none gap-3", label: "flex min-w-0 flex-1 items-center gap-3"}}>
       <span className={muted}><Icon value={option.icon} /></span>
-      <div className="min-w-0 flex-1"><label htmlFor={`updates-${option.key}`} className="cursor-pointer text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</label><p className={`mt-0.5 text-xs ${muted}`}>{option.help}</p></div>
-      <Switch id={`updates-${option.key}`} aria-label={option.label} color="accent" isSelected={value[option.key]} onValueChange={checked => onChange({ ...value, [option.key]: checked })} />
-    </div>)}
+      <span className="min-w-0 flex-1"><span id={`updates-${option.key}-label`} className="text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</span><span id={`updates-${option.key}-help`} className={`mt-0.5 block text-xs font-normal ${muted}`}>{option.help}</span></span>
+    </Switch>)}
   </div>;
 }
 function useSubscriptionForm({initial, preferences, token}: SubscriptionProps) {
@@ -36,7 +35,7 @@ function useSubscriptionForm({initial, preferences, token}: SubscriptionProps) {
     } catch (error) {setError(subscriptionError(error));}
     finally {setBusy(false);}
   }
-  const change = (next: Preferences) => {setValue(next); setStep("form");};
+  const change = (next: Preferences) => {setValue(next); setStep("form"); setError("");};
   return {value, step, error, busy, setStep, persist, change, hasSelection: value.digest || value.instant};
 }
 type FormModel = ReturnType<typeof useSubscriptionForm>;
@@ -47,21 +46,21 @@ function savedStep(preferences: boolean, value: Preferences): Step {
 function SubscriptionEmail({preferences, model}: {preferences: boolean; model: FormModel}) {
   const {value, change} = model;
   if (preferences) return <p className={`break-all text-sm ${muted}`}>{value.email}</p>;
-  return <div className="space-y-2"><label htmlFor="digest-email" className="block text-sm font-semibold text-black/90 dark:text-white/90">Email address</label><Input id="digest-email" aria-label="Email address" type="email" isRequired value={value.email} onValueChange={email => change({...value, email})} placeholder="you@example.org" classNames={{ inputWrapper: "h-11 rounded-xl", input: "text-sm" }} /></div>;
+  return <div className="space-y-2"><label htmlFor="digest-email" className="block text-sm font-semibold text-black/90 dark:text-white/90">Email address</label><Input id="digest-email" aria-label="Email address" type="email" isRequired isDisabled={model.busy} value={value.email} onValueChange={email => change({...value, email})} placeholder="you@example.org" classNames={{ inputWrapper: "h-11 rounded-xl", input: "text-sm" }} /></div>;
 }
 function SubscriptionButtons({preferences, model}: {preferences: boolean; model: FormModel}) {
   const {value, busy, persist} = model;
   const appearance = preferences ? {width: "", icon: Tick01Icon, label: "Save preferences", empty: false} : {width: "w-full", icon: Mail01Icon, label: "Subscribe", empty: !model.hasSelection};
   return <div className="flex flex-wrap items-center gap-2">
     <Button type="submit" color="accent" size="md" className={`shrink-0 whitespace-nowrap rounded-xl ${appearance.width}`} isLoading={busy} isDisabled={busy || appearance.empty}><Icon value={appearance.icon} size={16} />{appearance.label}</Button>
-    {preferences && <Button size="md" className="shrink-0 whitespace-nowrap rounded-xl" onPress={() => persist({ ...value, digest: false, instant: false, confirmed: false }, "stopped")}>Unsubscribe from all</Button>}
+    {preferences && <Button size="md" className="shrink-0 whitespace-nowrap rounded-xl" isDisabled={busy} onPress={() => persist({ ...value, digest: false, instant: false, confirmed: false }, "stopped")}>Unsubscribe from all</Button>}
   </div>;
 }
 function SubscriptionForm({preferences, schedule, model}: {preferences: boolean; schedule: string; model: FormModel}) {
   const {value, step, persist, change} = model;
   return <form className="space-y-6" onSubmit={event => {event.preventDefault();void persist({...value, confirmed: preferences}, savedStep(preferences, value));}}>
     <SubscriptionEmail preferences={preferences} model={model} />
-    <PreferenceChoices schedule={schedule} value={value} onChange={change} />
+    <PreferenceChoices schedule={schedule} value={value} onChange={change} busy={model.busy} />
     <SubscriptionButtons preferences={preferences} model={model} />
     {step === "subscribed" && <p role="status" className="flex items-center gap-2 text-sm"><Icon value={Tick01Icon} size={16} />Preferences saved</p>}
     {!preferences && <p className={`text-xs ${muted}`}>No account needed. Unsubscribe in any email.</p>}

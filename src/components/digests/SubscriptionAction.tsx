@@ -22,6 +22,6 @@ export default function SubscriptionAction({token, action, locale}: {token: stri
 }
 
 const actionText = {
-  confirm: {heading: "Confirm email updates", done: "Subscription confirmed", message: "Your email preferences are active.", button: "Confirm subscription"},
+  confirm: {heading: "Confirm email updates", done: "Subscription confirmed", message: "Your email address is confirmed.", button: "Confirm subscription"},
   unsubscribe: {heading: "Stop email updates", done: "Unsubscribed", message: "All emails from this library are switched off.", button: "Unsubscribe from all"},
 };

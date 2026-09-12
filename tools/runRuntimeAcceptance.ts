@@ -3,7 +3,7 @@ import { getRuntimeLinkHref, getVisibleRuntimeLinks } from "../src/config/librar
 import { analyticsCapabilities } from "../src/lib/analytics-consent";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -30,6 +30,8 @@ import {
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
 import { localesNames, shortLocalesNames } from "../src/i18n/routing";
 import { PgDialect } from "drizzle-orm/pg-core";
+
+const subscriptionToken = randomBytes(32).toString("hex");
 
 import { parseOpenScholarInstitutionRequest } from "../src/lib/admin/institution-catalog-contract";
 import { buildInstitutionCountsQuery } from "../src/lib/admin/openscholar-institutions";
@@ -1461,6 +1463,7 @@ function publicExpectations(profile: Profile) {
 	return {
 		PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${profile.port}`,
 		PLAYWRIGHT_RUNTIME_ACCEPTANCE: "true",
+		PLAYWRIGHT_SUBSCRIPTION_TOKEN: subscriptionToken,
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
 		PLAYWRIGHT_EXPECTED_COOKIE_LINK: getRuntimeLinkHref(config.legal.cookiePolicy, config.identity.baseUrl),
@@ -1634,6 +1637,7 @@ function runBrowserSuite(profile: Profile) {
 			"test",
 			"tests/e2e/smoke.spec.ts",
 			"tests/e2e/email-form.spec.ts",
+			"tests/e2e/subscription.spec.ts",
 			"tests/e2e/brand-logo.spec.ts",
 			"--project",
 			"chromium",
@@ -3189,6 +3193,7 @@ async function startAcceptanceSearchWorkers(profiles: Profile[]) {
 
 async function seedAcceptanceRecords(profiles: Profile[]) {
 	for (const profile of profiles) {
+		postgresScalar(profile.name, `INSERT INTO "notificationSubscriber" ("email", "token", "digest", "instant", "confirmedAt", "confirmationExpiresAt") VALUES ('subscription@example.invalid', '${subscriptionToken}', true, true, now(), now() + interval '1 day')`);
 		await seedSearch(profile);
 		seedExportRecords(profile);
 		seedRedirectNotes(profile);
