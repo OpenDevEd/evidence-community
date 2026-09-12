@@ -207,7 +207,7 @@ function sanitizePostHogProperties(
 		// become the same URL after sanitizing them.
 		const previous = sanitized.get(safeKey);
 		sanitized.set(safeKey,
-			safeKey !== key && Array.isArray(previous) && Array.isArray(safeValue)
+			Array.isArray(previous) && Array.isArray(safeValue)
 				? [...previous, ...safeValue]
 				: safeValue,
 		);

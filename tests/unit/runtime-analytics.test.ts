@@ -184,6 +184,7 @@ describe("runtime browser analytics", () => {
 				$heatmap_data: {
 					"https://library.example.org/lib?search=one": [{ x: 1, y: 2 }],
 					"https://library.example.org/lib?search=two": [{ x: 3, y: 4 }],
+					"https://library.example.org/lib": [{ x: 5, y: 6 }],
 				},
 				$set_once: {
 					$initial_current_url: "https://library.example.org/lib?email=reader@example.org",
@@ -206,7 +207,7 @@ describe("runtime browser analytics", () => {
 				distinct_id: "visitor-id",
 				$current_url: "https://library.example.org/lib",
 				$heatmap_data: {
-					"https://library.example.org/lib": [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+					"https://library.example.org/lib": [{ x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 6 }],
 				},
 				$set_once: { $initial_current_url: "https://library.example.org/lib" },
 				$web_vitals_LCP_event: {
