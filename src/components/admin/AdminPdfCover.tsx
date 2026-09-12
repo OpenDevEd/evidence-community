@@ -12,7 +12,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Spinner } from "@/components/nextui/Spinner";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type { AdminItemDetail } from "@/lib/admin/types";
-import { documentAttachment, type PdfUploadStep } from "./admin-pdf";
+import { documentAttachment, isUnrestoredRecord, type PdfUploadStep } from "./admin-pdf";
 import { PdfFileInput } from "./PdfFileInput";
 
 type CoverProps = {
@@ -177,7 +177,7 @@ export function AdminPdfCover({
 		/>
 	);
 	const surfaceClassName = "group relative flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-black/10 bg-white text-black/35 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-white/35";
-	if (detail.state === "deleted") {
+	if (isUnrestoredRecord(detail)) {
 		return (
 			<div className={surfaceClassName} role="img" aria-label={hasPdf ? "PDF cover" : "No PDF"}>
 				{cover}

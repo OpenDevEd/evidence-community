@@ -8,6 +8,11 @@ import {
 
 export type PdfUploadStep = "Preparing" | "Uploading" | "Processing";
 
+/** A restoration draft is editable while its public record remains deleted. */
+export function isUnrestoredRecord(detail: AdminItemDetail) {
+	return detail.state === "deleted" && !detail.draft;
+}
+
 /** Use an existing PDF, then an empty attachment, before creating another one. */
 export function documentAttachment(
 	detail: AdminItemDetail,

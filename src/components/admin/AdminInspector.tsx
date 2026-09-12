@@ -2,7 +2,7 @@
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
 import { AdminPdfCover } from "./AdminPdfCover";
-import type { PdfUploadStep } from "./admin-pdf";
+import { isUnrestoredRecord, type PdfUploadStep } from "./admin-pdf";
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
@@ -1534,7 +1534,8 @@ export function AdminInspector({
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
-	const filesReadOnly = readOnlyVersion || !native || detail.state === "deleted";
+	const unrestored = isUnrestoredRecord(detail);
+	const filesReadOnly = readOnlyVersion || !native || unrestored;
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&
@@ -1578,7 +1579,7 @@ export function AdminInspector({
 						disabled={
 							readOnlyVersion ||
 							!detail.editable ||
-							detail.state === "deleted" ||
+							unrestored ||
 							(isAttachment && !native) ||
 							busy
 						}
