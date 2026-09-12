@@ -107,12 +107,14 @@ export default function Navbar() {
 		<>
 		<header
 			className={twMerge(
-				"w-full max-w-site px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top motion-reduce:transition-none",
-				styleVariant === "wide" && "bg-white dark:bg-secondary max-w-none",
+				"w-full px-0 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top motion-reduce:transition-none",
+				styleVariant === "wide"
+					? "bg-white dark:bg-secondary"
+					: "max-w-site xl:px-14",
 				isMapPage &&
 					(styleVariant !== "wide"
 						? "xl:absolute xl:top-6 xl:scale-75"
-						: "xl:absolute xl:scale-75 xl:rounded-b-2xl"),
+						: "xl:absolute"),
 				// The small style floats the header below the top of the
 				// page; while the chat is open it sticks at the same offset,
 				// so the header and the chat do not jump apart on scroll.
@@ -120,7 +122,7 @@ export default function Navbar() {
 					!isMapPage &&
 					(styleVariant !== "wide"
 						? "xl:sticky xl:top-split xl:scale-75"
-						: "xl:sticky xl:top-0 xl:scale-75 xl:rounded-b-2xl")
+						: "xl:sticky xl:top-0")
 			)}
 		>
 			<div
