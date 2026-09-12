@@ -748,8 +748,10 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
 		citation: string | null;
 	}>(
-		citations.enabled && item?.key ? `/item/${item.key}/citation` : null,
-		fetcher,
+		citations.enabled && item?.key
+			? [`/item/${item.key}/citation`, item.revision]
+			: null,
+		([url]: [string, number]) => fetcher(url),
 		{
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,

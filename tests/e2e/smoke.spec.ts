@@ -405,6 +405,12 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		);
 	}
 
+	if (expectedDatabaseItemKey) {
+		const publication = await request.get(`/lib/${expectedDatabaseItemKey}`);
+		expect(publication.status()).toBe(200);
+		expect(publication.headers()["cache-control"]).toBe("private, no-store");
+	}
+
 	// Explicit locale URLs save a preference, so check browser detection first.
 	for (const locale of expectedEnabledLocales) {
 		if (locale === expectedDefaultLocale) continue;
@@ -925,7 +931,6 @@ for (const width of [1200, 390]) {
 
 
 test("keeps keyboard navigation at the start of a policy page", async ({ page }) => {
-	test.skip(expectedPrivacyLink !== "/privacy", "Requires the internal privacy page.");
 	await page.setViewportSize({ width: 1440, height: 950 });
 	await page.goto("/en-GB/privacy");
 	await dismissConsent(page);
