@@ -297,6 +297,10 @@ function ResourceArticle({
 	format: ReturnType<typeof useFormatter>;
 }) {
 	const { content } = useLibraryConfig();
+	const tItemType = useTranslations("itemType");
+	const title = finalItemData?.title?.trim() || (finalItemData
+		? `${tItemType(finalItemData.itemType)} ${finalItemData.key}`
+		: "");
 
 	return (
 		<article className="flex flex-col gap-4">
@@ -307,7 +311,7 @@ function ResourceArticle({
 				<h3
 					id={titleId}
 					dangerouslySetInnerHTML={{
-						__html: finalItemData?.title ?? "",
+						__html: title,
 					}}
 					className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
 				></h3>
