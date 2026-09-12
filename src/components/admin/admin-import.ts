@@ -38,9 +38,7 @@ export function doiPreviewRequest(text: string): ImportPreviewInput {
 	return { dois, files: [] };
 }
 
-export async function filePreviewRequest(
-	files: readonly File[],
-): Promise<ImportPreviewInput> {
+export function validateImportFiles(files: readonly File[]): void {
 	if (!files.length) throw new ImportInputError("Choose at least one file.");
 	if (files.length > ADMIN_IMPORT_MAX_FILES) {
 		throw new ImportInputError(
@@ -51,6 +49,14 @@ export async function filePreviewRequest(
 	if (oversized) {
 		throw new ImportInputError(`${oversized.name} is larger than 5 MB.`);
 	}
+	const empty = files.find(({ size }) => size === 0);
+	if (empty) throw new ImportInputError(`${empty.name} is empty. Choose a file with records to import.`);
+}
+
+export async function filePreviewRequest(
+	files: readonly File[],
+): Promise<ImportPreviewInput> {
+	validateImportFiles(files);
 	return {
 		dois: [],
 		files: await Promise.all(

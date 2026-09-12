@@ -38,6 +38,7 @@ describe("import input checks", () => {
 
 	it("reads chosen files and rejects empty or oversized selections", async () => {
 		await expect(filePreviewRequest([])).rejects.toThrow("at least one file");
+		await expect(filePreviewRequest([new File([], "empty.ris")])).rejects.toBeInstanceOf(Error);
 		const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.ris");
 		await expect(filePreviewRequest([big])).rejects.toThrow("larger than 5 MB");
 		await expect(
