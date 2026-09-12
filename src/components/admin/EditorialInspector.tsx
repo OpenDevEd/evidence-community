@@ -335,6 +335,9 @@ function WorkingDraftNotices({
 }: WorkingDraftNoticeProps & {
 	readiness: ReturnType<typeof useReviewReadiness>;
 }) {
+	const requirements = props.detail.parentItem || !props.detail.draft
+		? null
+		: <ReviewReadiness recordKey={props.detail.key} readiness={readiness} />;
 	if (model.conflicts.fields.length > 0)
 		return (
 			<>
@@ -347,18 +350,10 @@ function WorkingDraftNotices({
 						props.saveState === "saving"
 					}
 				/>
-				{!props.detail.parentItem && props.detail.draft && readiness.missing > 0 && (
-					<ReviewReadiness recordKey={props.detail.key} readiness={readiness} />
-				)}
+				{readiness.missing > 0 && requirements}
 			</>
 		);
-	if (
-		props.saveState === "conflict" ||
-		props.detail.parentItem ||
-		!props.detail.draft
-	)
-		return null;
-	return <ReviewReadiness recordKey={props.detail.key} readiness={readiness} />;
+	return props.saveState === "conflict" ? null : requirements;
 }
 
 function WorkingDraftConflict({
