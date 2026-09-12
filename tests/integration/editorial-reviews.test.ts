@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { eq } from "drizzle-orm";
@@ -287,3 +288,31 @@ it('opens a reviewable parent draft when an attachment is added to a published r
     assert.deepEqual(review.snapshot.records.map(record => record.itemKey).sort(), [parent.itemKey, attachment.itemKey].sort());
   });
 });
+
+
+it("migrates queued language fields without losing other pending fields or job state", async () => {
+ await withIsolatedPublicationDatabase(async (_db, client) => {
+  // Temp tables keep this SQL check independent of publication setup.
+  await client.query(`
+   CREATE TEMP TABLE "itemSourceLink" (id int, "dirtyFields" jsonb);
+   CREATE TEMP TABLE "sourceWritebackJob" (id int, "dirtyFields" jsonb, attempts int);
+   INSERT INTO "itemSourceLink" VALUES
+    (1, '["title", "language"]'),
+    (2, '["languageName", "language", "tags"]'),
+    (3, '["abstractNote"]'),
+    (4, '[]');
+   INSERT INTO "sourceWritebackJob" SELECT id, "dirtyFields", 2 FROM "itemSourceLink";
+  `);
+  const migration = await readFile(new URL("../../drizzle/0061_canonical_writeback_language.sql", import.meta.url), "utf8");
+  await client.query(migration);
+  await client.query(migration);
+  const fields = [
+   { id: 1, dirtyFields: ["title", "languageName"] },
+   { id: 2, dirtyFields: ["tags", "languageName"] },
+   { id: 3, dirtyFields: ["abstractNote"] },
+   { id: 4, dirtyFields: [] },
+  ];
+  assert.deepEqual((await client.query('SELECT * FROM "itemSourceLink" ORDER BY id')).rows, fields);
+  assert.deepEqual((await client.query('SELECT * FROM "sourceWritebackJob" ORDER BY id')).rows, fields.map(row => ({ ...row, attempts: 2 })));
+ });
+}, 120_000);

@@ -347,7 +347,7 @@ function WorkingDraftNotices({
 						props.saveState === "saving"
 					}
 				/>
-				{readiness.missing > 0 && (
+				{!props.detail.parentItem && props.detail.draft && readiness.missing > 0 && (
 					<ReviewReadiness recordKey={props.detail.key} readiness={readiness} />
 				)}
 			</>
