@@ -28,7 +28,7 @@ export type WritebackDialogRequest = {
 };
 
 /**
- * One dialog for three moments: publish, unpublish and the Sources button.
+ * One dialog for three moments: restore, unpublish and the Sources button.
  * The first row is this library, which always takes part; every source
  * below is a switch with one line saying what it has and does today. It
  * only asks which sources; it never resolves conflicts.

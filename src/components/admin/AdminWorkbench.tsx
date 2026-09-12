@@ -1234,17 +1234,11 @@ export default function AdminWorkbench({
 		action: "manage" | "restore" | "unpublish",
 	) => {
 		if (!detail) return false;
-		const mode =
-			action === "unpublish"
-				? "unpublish"
-				: action === "manage"
-					? "manage"
-					: "publish";
 		const options = detail.parentItem
 			? null
-			: resolveWritebackDialogOptions(detail.writeback, mode);
+			: resolveWritebackDialogOptions(detail.writeback, action);
 		if (!options) return false;
-		setWritebackDialog({ action, mode, options, recordKey: detail.key });
+		setWritebackDialog({ action, mode: action, options, recordKey: detail.key });
 		return true;
 	};
 

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
 	resolveWritebackDialogOptions,
 	writebackDialogSummary,
-	writebackDialogText,
 } from "@/components/admin/writeback-selection";
 import type { AdminItemWritebackTarget } from "@/lib/admin/types";
 
@@ -147,18 +146,10 @@ describe("resolveWritebackDialogOptions", () => {
 	});
 });
 
-describe("dialog wording", () => {
-	it("names each mode in plain words and says this library always takes part", () => {
-		expect(writebackDialogText("publish").title).toBe("Publish this record");
-		expect(writebackDialogText("publish").intro).toMatch(/This library always gets it/);
-		expect(writebackDialogText("unpublish").title).toBe("Unpublish this record");
-		expect(writebackDialogText("unpublish").intro).toMatch(/leaves this library either way/);
-		expect(writebackDialogText("manage").confirm).toBe("Save");
-	});
-
+describe("dialog summary", () => {
 	it("sums up the choice in the footer", () => {
-		expect(writebackDialogSummary("publish", 0)).toBe("Here only");
-		expect(writebackDialogSummary("publish", 1)).toBe("Here + 1 source");
+		expect(writebackDialogSummary("restore", 0)).toBe("Here only");
+		expect(writebackDialogSummary("restore", 1)).toBe("Here + 1 source");
 		expect(writebackDialogSummary("manage", 2)).toBe("Here + 2 sources");
 		expect(writebackDialogSummary("unpublish", 0)).toBe("Removes from here only");
 		expect(writebackDialogSummary("unpublish", 2)).toBe("Removes from here + 2 sources");

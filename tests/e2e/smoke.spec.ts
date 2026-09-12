@@ -909,7 +909,7 @@ for (const width of [1200, 390]) {
 		await page.setViewportSize({ width, height: 844 });
 		await page.goto("/ar/lib");
 		await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-		const skip = page.locator('a[href="#main-content"]');
+		const skip = page.locator('a[href="#page-content"]');
 		await skip.waitFor({ state: "visible" });
 		expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 		await expect(page.locator("[data-consent-gate]")).not.toHaveAttribute("inert");
@@ -924,6 +924,7 @@ for (const width of [1200, 390]) {
 		expect(bounds!.x).toBeGreaterThanOrEqual(0);
 		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
 		await page.keyboard.press("Enter");
-		await expect(page).toHaveURL(/#main-content$/);
+		await expect(page).toHaveURL(/#page-content$/);
+		await expect(page.locator("#page-content")).toBeFocused();
 	});
 }
