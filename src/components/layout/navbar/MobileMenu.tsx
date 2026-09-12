@@ -63,7 +63,7 @@ export default function MobileMenu({
 					// Position absolutely when open to overlay content
 					"absolute left-0 right-0 top-full",
 					isOpen
-						? "max-h-[calc(100vh-104px)] py-8 mb-4 opacity-100 shadow-xl shadow-[#EAE9E5] dark:shadow-secondary-400"
+						? "max-h-[calc(100dvh-104px)] py-8 mb-4 opacity-100 shadow-xl shadow-[#EAE9E5] dark:shadow-secondary-400"
 						: "max-h-0 opacity-0"
 				)}
 			>
@@ -73,6 +73,7 @@ export default function MobileMenu({
 						pathname={pathname}
 						isMobile={true}
 						styleVariant={context.styleVariant}
+						onNavigate={() => setIsOpen(false)}
 					/>
 				</li>
 

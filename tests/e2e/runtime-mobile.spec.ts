@@ -88,6 +88,13 @@ test("mobile navigation stays out of the focus order while closed and returns fo
 	const opener = page.getByRole("button", {name: "Open hamburger menu", exact: true});
 	const destination = page.getByRole("link", {name: expectedNavigationLabel, exact: true});
 	await expect(destination).toHaveCount(0);
+	const menuId = await opener.getAttribute("aria-controls");
+	const menu = page.locator(`[id="${menuId}"]`);
+	await opener.focus();
+	await menu.getByRole("link", {name: expectedNavigationLabel, exact: true, includeHidden: true}).focus();
+	await expect(opener).toBeFocused();
+	await page.keyboard.press("Tab");
+	expect(await menu.evaluate(element => element.contains(document.activeElement))).toBe(false);
 	await opener.click();
 	const closer = page.getByRole("button", {name: "Close", exact: true});
 	await expect(closer).toHaveAttribute("aria-expanded", "true");
@@ -101,6 +108,10 @@ test("mobile navigation stays out of the focus order while closed and returns fo
 	await opener.click();
 	await destination.click();
 	await expect(page).toHaveURL(/\/lib(?:\?|$)/u);
+	await expect(opener).toHaveAttribute("aria-expanded", "false");
+	await expect(destination).toHaveCount(0);
+	await opener.click();
+	await destination.click();
 	await expect(opener).toHaveAttribute("aria-expanded", "false");
 	await expect(destination).toHaveCount(0);
 });
