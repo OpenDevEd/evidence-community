@@ -1,4 +1,4 @@
-import type { ZodError, ZodIssue } from "zod";
+import { z, type ZodError, type ZodIssue } from "zod";
 
 const adminErrorCodes = [
 	"already_exists",
@@ -23,10 +23,19 @@ export function isAdminErrorCode(value: unknown): value is AdminErrorCode {
 
 export type AdminFieldErrors = Record<string, string>;
 
+export const conflictingDraftSchema = z.object({
+	generation: z.string().min(1),
+	draftRevision: z.number().int().nonnegative(),
+	payload: z.record(z.string(), z.unknown()),
+});
+
+export type ConflictingDraft = z.infer<typeof conflictingDraftSchema>;
+
 export type AdminErrorPayload = {
 	error: {
 		code: AdminErrorCode;
 		fields?: AdminFieldErrors;
+		conflictingDraft?: ConflictingDraft;
 		message: string;
 	};
 };

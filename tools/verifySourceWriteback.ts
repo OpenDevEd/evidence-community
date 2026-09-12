@@ -221,6 +221,7 @@ async function verify() {
 
 		const nativeDraft = await createNativeItemDraft(db, {
 			abstractNote: "First abstract",
+			language: "French",
 			itemType: "report",
 			tags: ["writeback-test"],
 			title: "First title",
@@ -255,6 +256,8 @@ async function verify() {
 
 		const firstResult =
 			await processNextSourceWritebackJob(consumerOptions);
+		const firstCall = calls.find(call => call.entity === "item" && call.itemKey === nativeDraft.itemKey);
+		assert(firstCall?.entity === "item" && firstCall.payload.languageName === "French" && firstCall.dirtyFields.includes("languageName"), "Published language did not reach the writeback boundary under its canonical field");
 		const [[acknowledgedLink], [snapshot]] = await Promise.all([
 			db
 				.select()

@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
+import { createZoteroItemPatch } from "@/lib/source-writeback/zotero/mapper";
+import { fullItemWritebackFields } from "@/lib/source-writeback/queue";
+import { item } from "@/db/schema/tables/item";
 
 import {
 	applyItemDraftPatch,
@@ -125,6 +129,15 @@ describe("item draft patches", () => {
 		expect(
 			effectiveItemParent("PARENT23", { parentItem: "PARENT45" }),
 		).toBe("PARENT45");
+	});
+
+	it("keeps language edits and full Zotero writeback on the same canonical field", () => {
+		const published = publishedAdminItemPayload(
+			{ itemType: "Report", key: "ABCD2345", languageName: "English" } as typeof item.$inferSelect,
+		);
+		const edited = validateNativeItemDraft(applyItemDraftPatch(published, { languageName: "French" }));
+		expect(edited.payload.languageName).toBe("French");
+		expect(createZoteroItemPatch(published, fullItemWritebackFields()).language).toBe("English");
 	});
 
 	it("stores links as one pseudo-field and drops it when reverted", () => {

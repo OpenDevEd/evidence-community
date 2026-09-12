@@ -2,7 +2,6 @@ import { getZoteroItemTypes } from "@opendeved/evidence-library-core/zotero-sche
 import { describe, expect, it } from "vitest";
 
 import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
-import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 
 import { itemType } from "@/db/schema/enums/itemType";
 import {
@@ -291,7 +290,7 @@ describe("Zotero writeback mapping", () => {
 		// A tombstone restore marks every editable field dirty, itemType
 		// included, while the type itself does not change.
 		const everyField = [
-			...editableItemDatabaseFields.map(databaseItemFieldToPayloadField),
+			...editableItemDatabaseFields,
 			"tags",
 		];
 		const patch = createZoteroItemPatch(

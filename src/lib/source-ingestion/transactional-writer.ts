@@ -49,7 +49,6 @@ import {
 	sourceRecordValidationOptions,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
-import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 import {
@@ -266,7 +265,7 @@ function maskDirtyItemFields(
 	const masked = { ...incoming } as Record<string, unknown>;
 	const existingValues = existing as unknown as Record<string, unknown>;
 	for (const field of sourceWritableItemFields) {
-		if (dirtyFields.has(databaseItemFieldToPayloadField(field))) {
+		if (dirtyFields.has(field)) {
 			masked[field] = existingValues[field];
 		}
 	}

@@ -1,6 +1,8 @@
 "use client";
 
 import { describeCountryFocus } from "@/lib/country-focus";
+import { creatorDisplayName } from "@/lib/creator-display-name";
+import { adminCanonicalPayloadToItemFields } from "@/lib/admin/item-fields";
 
 import { adminFieldLabel } from "@/lib/admin/errors";
 import { useState } from "react";
@@ -8,6 +10,7 @@ import {
 	PencilIcon,
 	Tick01Icon,
 	AlertCircleIcon,
+	UserEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -17,27 +20,118 @@ const sourceLabels = {
 	published: { icon: Tick01Icon, label: "Editor's published version" },
 };
 
+function formFieldName(field: string, payload: Record<string, unknown>) {
+	return (
+		Object.keys(
+			adminCanonicalPayloadToItemFields(
+				{ [field]: null },
+				String(payload.itemType),
+			),
+		)[0] ?? field
+	);
+}
+
+function ConflictValue({ field, value }: { field: string; value: unknown }) {
+	if (field === "countryFocus") return describeCountryFocus(value);
+	if (
+		value == null ||
+		value === "" ||
+		(Array.isArray(value) && value.length === 0)
+	) {
+		return <span className="text-black/45 dark:text-white/45">Empty</span>;
+	}
+	if (Array.isArray(value)) {
+		return (
+			<span className="flex flex-col gap-1">
+				{value.map((entry, index) => (
+					<span key={index}>
+						<ConflictValue field={field} value={entry} />
+					</span>
+				))}
+			</span>
+		);
+	}
+	if (typeof value === "object")
+		return <ObjectConflictValue field={field} value={value} />;
+	return String(value);
+}
+
+function ObjectConflictValue({
+	field,
+	value,
+}: {
+	field: string;
+	value: object;
+}) {
+	if (field === "creators") {
+		const creator = value as Record<string, unknown>;
+		const name = creatorDisplayName({
+			name: typeof creator.name === "string" ? creator.name : undefined,
+			firstName:
+				typeof creator.firstName === "string" ? creator.firstName : undefined,
+			lastName:
+				typeof creator.lastName === "string" ? creator.lastName : undefined,
+		});
+		return (
+			<span>
+				{name || "Unnamed creator"}
+				{typeof creator.creatorType === "string" && (
+					<span className="ml-2 text-black/45 dark:text-white/45">
+						{adminFieldLabel(creator.creatorType)}
+					</span>
+				)}
+			</span>
+		);
+	}
+	if (field === "tags" && "tag" in value)
+		return <ConflictValue field="tag" value={value.tag} />;
+	return (
+		<span className="flex flex-col gap-1">
+			{Object.entries(value).map(([key, entry]) => (
+				<span key={key}>
+					<span className="mr-2 font-medium">{adminFieldLabel(key)}</span>
+					<ConflictValue field={key} value={entry} />
+				</span>
+			))}
+		</span>
+	);
+}
+
 export function DraftConflict({
 	payload,
 	published,
 	conflictFields,
 	disabled,
 	onResolve,
+	source = "published",
 }: {
 	payload: Record<string, unknown>;
 	published: Record<string, unknown>;
 	conflictFields: string[];
 	disabled: boolean;
+	source?: "published" | "session";
 	onResolve: (choices: Record<string, "draft" | "published">) => void;
 }) {
-	const [choices, setChoices] = useState<
-		Record<string, "draft" | "published">
-	>({});
+	const [choices, setChoices] = useState<Record<string, "draft" | "published">>(
+		{},
+	);
+	const currentValues = adminCanonicalPayloadToItemFields(payload, String(payload.itemType));
+	const otherValues = adminCanonicalPayloadToItemFields(published, String(published.itemType));
 	const fields = conflictFields.map((key) => ({
 		key,
-		label: adminFieldLabel(key),
+		label: adminFieldLabel(formFieldName(key, payload)),
 	}));
-	const count = Object.keys(choices).length;
+	const count = fields.filter(({ key }) => choices[key]).length;
+	const labels =
+		source === "session"
+			? {
+					draft: { ...sourceLabels.draft, label: "Your changes" },
+					published: {
+						icon: UserEdit01Icon,
+						label: "Saved in another session",
+					},
+				}
+			: sourceLabels;
 	return (
 		<section
 			aria-label="Resolve draft conflicts"
@@ -56,9 +150,9 @@ export function DraftConflict({
 							: `${fields.length} edits need your choice`}
 					</h3>
 					<p className="mt-1 text-[11px] leading-relaxed text-black/55 dark:text-white/55">
-						An Editor published corrections while you edited this
-						draft. Choose which values to keep before submitting
-						again. The published item stays unchanged.
+						{source === "session"
+							? "Another session saved changes to these fields. Choose which values to keep in your draft."
+							: "An Editor published corrections while you edited this draft. Choose which values to keep before submitting again. The published item stays unchanged."}
 					</p>
 				</div>
 			</div>
@@ -88,18 +182,18 @@ export function DraftConflict({
 									/>
 									<span className="min-w-0">
 										<span className="flex items-center gap-1.5 text-[10px] font-medium text-black/50 dark:text-white/50">
-											<HugeiconsIcon
-												icon={sourceLabels[source].icon}
-												size={12}
-											/>
-											{sourceLabels[source].label}
+											<HugeiconsIcon icon={labels[source].icon} size={12} />
+											{labels[source].label}
 										</span>
 										<span className="mt-1.5 block break-words text-xs leading-relaxed">
-											{(key === "countryFocus" ? describeCountryFocus : String)(
-												source === "draft"
-													? (payload[key] ?? "")
-													: published[key],
-											)}
+											<ConflictValue
+												field={key}
+												value={
+													source === "draft"
+														? currentValues[formFieldName(key, payload)]
+														: otherValues[formFieldName(key, published)]
+												}
+											/>
 										</span>
 									</span>
 								</label>

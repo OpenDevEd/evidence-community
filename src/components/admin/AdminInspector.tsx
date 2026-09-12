@@ -325,14 +325,40 @@ function EmptyValue({ label }: { label: string }) {
 }
 
 function SaveIndicator({
+	conflictCount,
+	onResolveConflicts,
 	message,
 	onReload,
 	state,
 }: {
+	conflictCount: number;
+	onResolveConflicts?: () => void;
 	message: string | null;
 	onReload: () => void;
 	state: SaveState;
 }) {
+	if (state === "conflict" && onResolveConflicts && conflictCount > 0)
+		return (
+			<div
+				role="status"
+				className="flex items-center gap-2 text-[11px] text-amber-800 dark:text-amber-200"
+			>
+				<HugeiconsIcon icon={AlertCircleIcon} size={14} />
+				<span>
+					{conflictCount === 1
+						? "One edit needs a choice"
+						: `${conflictCount} edits need a choice`}
+				</span>
+				<Button
+					size="xs"
+					variant="transparent"
+					onPress={onResolveConflicts}
+					endContent={<HugeiconsIcon icon={ArrowRight01Icon} size={14} />}
+				>
+					Resolve
+				</Button>
+			</div>
+		);
 	if (state === "idle") return null;
 	return (
 		<div
@@ -1310,6 +1336,8 @@ function AttachmentFilePanel({
 }
 
 export function AdminInspector({
+	conflictCount = 0,
+	onResolveConflicts,
 	readOnlyVersion = false,
 	allowReviewCorrections = false,
 	versionControls,
@@ -1359,6 +1387,8 @@ export function AdminInspector({
 	validationErrors = {},
 	validationRevision = 0,
 }: {
+	conflictCount?: number;
+	onResolveConflicts?: () => void;
 	readOnlyVersion?: boolean;
 	allowReviewCorrections?: boolean;
 	versionControls?: ReactNode;
@@ -1563,6 +1593,8 @@ export function AdminInspector({
 				}
 				saveIndicator={
 					<SaveIndicator
+						conflictCount={conflictCount}
+						onResolveConflicts={onResolveConflicts}
 						message={saveMessage}
 						onReload={onReloadDraft}
 						state={saveState}
@@ -1863,11 +1895,11 @@ export function AdminInspector({
 						{fileErrors[detail.key]}
 					</p>
 				)}
-				<ValidationSummary
+				{!(onResolveConflicts && conflictCount > 0) && <ValidationSummary
 					errors={validationErrors}
 					recordKey={detail.key}
 					tone={saveState === "conflict" ? "conflict" : "validation"}
-				/>
+				/>}
 				{editorNotice}
 				{!detail.parentItem ? (
 					<Section

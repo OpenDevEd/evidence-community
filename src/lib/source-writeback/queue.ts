@@ -11,7 +11,6 @@ import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
-import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 
 import {
 	configuredWritebackSourceKeys,
@@ -516,8 +515,7 @@ export async function applyParentWritebackLinks(
 export function fullItemWritebackFields() {
 	return [
 		...editableItemDatabaseFields
-			.filter((field) => field !== "itemType" && !LIBRARY_OWNED_PAYLOAD_FIELDS.has(field))
-			.map(databaseItemFieldToPayloadField),
+			.filter((field) => field !== "itemType" && !LIBRARY_OWNED_PAYLOAD_FIELDS.has(field)),
 		"tags",
 	];
 }
