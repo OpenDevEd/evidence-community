@@ -275,6 +275,18 @@ function ResourceInteractions({
 	);
 }
 
+function ResourceTitle({ id, item }: { id: string; item: Item | ListItem | undefined }) {
+	const tItemType = useTranslations("itemType");
+	const title = item?.title?.trim() || (item ? `${tItemType(item.itemType)} ${item.key}` : "");
+	return (
+		<h3
+			id={id}
+			dangerouslySetInnerHTML={{ __html: title }}
+			className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
+		/>
+	);
+}
+
 function ResourceArticle({
 	titleId,
 	finalItemData,
@@ -297,10 +309,6 @@ function ResourceArticle({
 	format: ReturnType<typeof useFormatter>;
 }) {
 	const { content } = useLibraryConfig();
-	const tItemType = useTranslations("itemType");
-	const title = finalItemData?.title?.trim() || (finalItemData
-		? `${tItemType(finalItemData.itemType)} ${finalItemData.key}`
-		: "");
 
 	return (
 		<article className="flex flex-col gap-4">
@@ -308,13 +316,7 @@ function ResourceArticle({
 				isLoaded={!finalIsLoading}
 				className="w-full min-h-8 rounded-2xl"
 			>
-				<h3
-					id={titleId}
-					dangerouslySetInnerHTML={{
-						__html: title,
-					}}
-					className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
-				></h3>
+				<ResourceTitle id={titleId} item={finalItemData} />
 			</Skeleton>
 			<Skeleton
 				isLoaded={!finalIsLoading}
