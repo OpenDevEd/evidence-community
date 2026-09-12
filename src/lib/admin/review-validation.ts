@@ -48,7 +48,10 @@ export function validateReviewPayload(
 			(entry) => entry.field === field || entry.semanticField === field,
 		);
 		const path = descriptor?.field ?? field;
-		fields[path] ??= issue.message;
+		fields[path] ??=
+			raw === "publicationDate"
+				? "Enter a valid publication date."
+				: issue.message;
 	}
 	if (Object.keys(fields).length)
 		throw new AdminValidationError(
