@@ -5985,8 +5985,13 @@ test("lets Creators request restoration without changing writeback sources", asy
 		provider: "zotero", reason: "ok", sourceEnabled: true,
 		sourceKey: "zotero:qa", sourceLabel: "Test source", sourceStatus: "active", supported: true,
 	};
+	let restorationDraft = false;
+	await page.route(`**/api/admin/items/${publishedItemKey}/draft`, route => {
+		restorationDraft = true;
+		return route.fulfill({ json: { draft: publishedDraft(publishedPayload) } });
+	});
 	await page.route(`**/api/admin/items/${publishedItemKey}`, route => route.fulfill({
-		json: { item: { ...publishedDetail(false), state: "deleted", writeback: {
+		json: { item: { ...publishedDetail(restorationDraft), state: "deleted", writeback: {
 			available: [target], originSourceKey: null, selected: [target.sourceKey],
 		} } },
 	}));
@@ -6015,8 +6020,18 @@ test("lets Creators request restoration without changing writeback sources", asy
 	await page.getByRole("button", { name: "Sources: Sync failed", exact: true }).click();
 	await expect(page.getByRole("button", { name: "Retry writeback", exact: true })).toBeDisabled();
 	await page.reload();
+	const inspector = page.locator("#admin-inspector-pane");
+	await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toHaveCount(0);
+	await expect(inspector.getByRole("button", { name: "Add attachment", exact: true })).toHaveCount(0);
 	await page.getByRole("button", { name: "Restore", exact: true }).click();
 	await expect(page.getByText("Restoration submitted for review", { exact: true })).toBeVisible();
+	await expect(inspector.getByRole("textbox", { name: "Title", exact: true })).toBeEditable();
+	await expect(inspector.getByRole("button", { name: "Add attachment", exact: true })).toBeEnabled();
+	const picker = page.waitForEvent("filechooser");
+	await inspector.getByRole("button", { name: "Add PDF", exact: true }).click();
+	expect((await picker).isMultiple()).toBe(false);
+	await page.reload();
+	await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toBeEnabled();
 	expect(submissions).toBe(1);
 	expect(sourceMutations).toBe(0);
 });
