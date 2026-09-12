@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { eq } from "drizzle-orm";
@@ -51,7 +52,7 @@ it('publishes the frozen identifier choice without a PDF and resolves later draf
 		const citationTarget = await createNativeItemDraft(db, {itemType: "Report", title: "Referenced publication"});
 
         await publishNativeItemDraft(db, citationTarget.itemKey);
-        const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file", date: "2026-09-10", institution: "Learning Lab", creators: [{creatorType: "author", name: "Learning Lab"}], links: {cites: [citationTarget.itemKey], related: []} });
+        const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{creatorType: "author", name: "Learning Lab"}], links: {cites: [citationTarget.itemKey], related: []} });
 
 		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
 		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor);
@@ -60,7 +61,7 @@ it('publishes the frozen identifier choice without a PDF and resolves later draf
 		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor, reviewConfig); }
 		catch (error) { creatorDenied = error instanceof AdminValidationError; }
 		assert(creatorDenied, "Creator could approve a review");
-		const laterDraft = await saveNativeItemDraft(db, {itemKey: noFileDraft.itemKey, expectedDraftRevision: noFileDraft.draftRevision, expectedPayload: noFileDraft.payload, payload: {...noFileDraft.payload, title: "Creator's later title"}});
+		const laterDraft = await saveNativeItemDraft(db, {itemKey: noFileDraft.itemKey, expectedDraftRevision: noFileDraft.draftRevision, expectedPayload: noFileDraft.payload, payload: {...noFileDraft.payload, title: "Creator's later title", languageName: "fr"}});
         const incomplete = await correctItemReview(db, {reviewId: noFileReview.id, expectedRevision: noFileReview.revision, records: noFileReview.snapshot.records.map(record => ({...record, payload: {...record.payload, publisher: "", date: ""}}))}, {userId: "no-file-editor", role: "editor"});
         await assert.rejects(
             approveItemReview(db, reviewStorage, {reviewId: incomplete.id, expectedRevision: incomplete.revision, publicationTags: PUBLICATION_TAGS}, {userId: "no-file-editor", role: "editor"}, reviewConfig),
@@ -68,7 +69,7 @@ it('publishes the frozen identifier choice without a PDF and resolves later draf
             "Approval must validate editor corrections against the frozen Crossref choice",
         );
         assert.equal((await db.select().from(item).where(eq(item.key, noFileDraft.itemKey))).length, 0);
-		const corrected = await correctItemReview(db, {reviewId: noFileReview.id, expectedRevision: incomplete.revision, records: noFileReview.snapshot.records.map(record => ({...record, payload: {...record.payload, title: "Editor's corrected title"}}))}, {userId: "no-file-editor", role: "editor"});
+		const corrected = await correctItemReview(db, {reviewId: noFileReview.id, expectedRevision: incomplete.revision, records: noFileReview.snapshot.records.map(record => ({...record, payload: {...record.payload, title: "Editor's corrected title", languageName: "es"}}))}, {userId: "no-file-editor", role: "editor"});
 		const noFileApproval = await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: corrected.revision, publicationTags: PUBLICATION_TAGS }, { userId: "no-file-editor", role: "editor" }, reviewConfig);
 		assert(noFileApproval.review.state === "published", "A PDF was required to publish a review");
         const [approvedPublic] = await db.select({ revision: item.revision }).from(item).where(eq(item.key, noFileDraft.itemKey));
@@ -78,14 +79,14 @@ it('publishes the frozen identifier choice without a PDF and resolves later draf
         assert(noFileApproval.review.remainingConflicts[noFileDraft.itemKey]?.includes("title"), "Correction failed to preserve the conflicting working title");
         const conflictDraft = await getNativeItemDraft(db, noFileDraft.itemKey);
         assert(conflictDraft, "Conflicting draft disappeared");
-        const resolution = {reviewId: noFileReview.id, expectedRevision: noFileApproval.review.revision, itemKey: noFileDraft.itemKey, generation: conflictDraft.generation, draftRevision: conflictDraft.draftRevision, choices: {title: "published" as const}};
+        const resolution = {reviewId: noFileReview.id, expectedRevision: noFileApproval.review.revision, itemKey: noFileDraft.itemKey, generation: conflictDraft.generation, draftRevision: conflictDraft.draftRevision, choices: {title: "draft" as const, languageName: "published" as const}};
         let staleResolutionDenied = false;
         try { await resolveReviewConflicts(db, {...resolution, draftRevision: laterDraft.draftRevision - 1}, reviewConfig); }
         catch { staleResolutionDenied = true; }
         assert(staleResolutionDenied, "Conflict resolution accepted a stale draft revision");
         const resolved = await resolveReviewConflicts(db, resolution, reviewConfig);
         const resolvedDraft = await getNativeItemDraft(db, noFileDraft.itemKey);
-        assert(!resolved.remainingConflicts[noFileDraft.itemKey] && resolvedDraft?.payload.title === "Editor's corrected title", "Resolution did not atomically apply the published choice");
+        assert(!resolved.remainingConflicts[noFileDraft.itemKey] && resolvedDraft?.payload.title === "Creator's later title" && resolvedDraft.payload.languageName === "es", "Resolution did not atomically apply the published choice");
 
         const activatedTargets = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, noFileDraft.itemKey));
         assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");
@@ -287,3 +288,31 @@ it('opens a reviewable parent draft when an attachment is added to a published r
     assert.deepEqual(review.snapshot.records.map(record => record.itemKey).sort(), [parent.itemKey, attachment.itemKey].sort());
   });
 });
+
+
+it("migrates queued language fields without losing other pending fields or job state", async () => {
+ await withIsolatedPublicationDatabase(async (_db, client) => {
+  // Temp tables keep this SQL check independent of publication setup.
+  await client.query(`
+   CREATE TEMP TABLE "itemSourceLink" (id int, "dirtyFields" jsonb);
+   CREATE TEMP TABLE "sourceWritebackJob" (id int, "dirtyFields" jsonb, attempts int);
+   INSERT INTO "itemSourceLink" VALUES
+    (1, '["title", "language"]'),
+    (2, '["languageName", "language", "tags"]'),
+    (3, '["abstractNote"]'),
+    (4, '[]');
+   INSERT INTO "sourceWritebackJob" SELECT id, "dirtyFields", 2 FROM "itemSourceLink";
+  `);
+  const migration = await readFile(new URL("../../drizzle/0061_canonical_writeback_language.sql", import.meta.url), "utf8");
+  await client.query(migration);
+  await client.query(migration);
+  const fields = [
+   { id: 1, dirtyFields: ["title", "languageName"] },
+   { id: 2, dirtyFields: ["tags", "languageName"] },
+   { id: 3, dirtyFields: ["abstractNote"] },
+   { id: 4, dirtyFields: [] },
+  ];
+  assert.deepEqual((await client.query('SELECT * FROM "itemSourceLink" ORDER BY id')).rows, fields);
+  assert.deepEqual((await client.query('SELECT * FROM "sourceWritebackJob" ORDER BY id')).rows, fields.map(row => ({ ...row, attempts: 2 })));
+ });
+}, 120_000);

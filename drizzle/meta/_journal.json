@@ -428,6 +428,13 @@
       "when": 1789152737579,
       "tag": "0060_country_keywords_reindex",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789187224402,
+      "tag": "0061_canonical_writeback_language",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,6 @@
 import { getTableColumns } from "drizzle-orm";
 
 import { item } from "@/db/schema/tables/item";
-import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import {
 	applyItemDraftPatch,
 	createItemDraftPatch,
@@ -58,7 +57,7 @@ export function publishedAdminItemPayload(
 		if (field === "url" && hasPublishedFile) continue;
 		const value = published[field as keyof typeof published];
 		if (value !== null && value !== undefined) {
-			payload[databaseItemFieldToPayloadField(field)] = value;
+			payload[field] = value;
 		}
 	}
 	payload.collections = [...collectionKeys].sort();

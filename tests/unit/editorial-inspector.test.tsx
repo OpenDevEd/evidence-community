@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DraftConflict } from "@/components/admin/DraftConflict";
 import { act, useState, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NextUIProvider } from "@nextui-org/react";
@@ -88,7 +89,7 @@ let container: HTMLDivElement;
 let snapshot: AdminReviewSnapshot;
 let requests: unknown[];
 const draftChanges = vi.fn();
-function Inspector({ role }: { role: "editor" | "creator" }) {
+function Inspector({ role, overrides }: { role: "editor" | "creator"; overrides?: Partial<ComponentProps<typeof EditorialInspector>> }) {
 	const [working, setWorking] = useState(draftPayload);
 	const noop = () => {};
 	const props: ComponentProps<typeof EditorialInspector> = {
@@ -122,6 +123,7 @@ function Inspector({ role }: { role: "editor" | "creator" }) {
 		},
 		onPublicationChanged: async () => {},
 		onStartReviewLinkPick: noop,
+		onResolveConcurrentConflict: noop,
 		onBackToParent: noop,
 		onCreateAttachment: noop,
 		onDiscardDraft: noop,
@@ -144,7 +146,7 @@ function Inspector({ role }: { role: "editor" | "creator" }) {
 			<NextUIProvider disableAnimation>
 				<LibraryConfigProvider config={config}>
 					<AdminSessionProvider session={{ role, userId: "creator" }}>
-						<EditorialInspector {...props} />
+						<EditorialInspector {...props} {...overrides} />
 					</AdminSessionProvider>
 				</LibraryConfigProvider>
 			</NextUIProvider>
@@ -269,4 +271,61 @@ it("lets Creators edit the working draft while keeping the submitted version rea
 	expect(titleField()?.value).toBe("Newer working title");
 	expect(titleField()?.disabled).toBe(false);
 	expect(requests).toEqual([]);
+});
+
+it("shows report conflict values under form field names and preserves the server choice keys", async () => {
+	const resolve = vi.fn();
+	await act(async () =>
+		root.render(
+			<NextUIProvider disableAnimation>
+				<DraftConflict
+					conflictFields={["number", "languageName"]}
+					payload={{
+						itemType: "Report",
+						reportNumber: "R-2",
+						language: "French",
+					}}
+					published={{
+						itemType: "Report",
+						reportNumber: "R-1",
+						language: "English",
+					}}
+					disabled={false}
+					onResolve={resolve}
+				/>
+			</NextUIProvider>,
+		),
+	);
+	const apply = [...container.querySelectorAll("button")].find(
+		(button) => button.textContent?.trim() === "Apply to draft",
+	)!;
+	expect(apply.disabled).toBe(true);
+	for (const value of ["R-2", "English"]) {
+		const choice = [...container.querySelectorAll("label")].find((label) =>
+			label.textContent?.includes(value),
+		);
+		expect(choice, `Missing saved field value: ${value}`).toBeTruthy();
+		await act(async () => choice!.click());
+	}
+	expect(apply.disabled).toBe(false);
+	await act(async () => apply.click());
+	expect(resolve).toHaveBeenCalledWith({
+		number: "draft",
+		languageName: "published",
+	});
+});
+
+
+it.each(["note", "attachment"])("resolves a child %s conflict without requiring a separate review", async (itemType) => {
+	const childPayload = { itemType, note: "Local note", creators: [], tags: [], collections: [] };
+	await act(async () => root.render(<Inspector role="creator" overrides={{
+		detail: { ...submitted, itemType, title: "", parentItem: "PARN2345", parentState: "published", editable: true, draft: { ...submitted.draft, payload: childPayload } },
+		payload: childPayload,
+		definitions: [{ itemType, fields: [{ field: "note" }], creatorTypes: [] }],
+		concurrentConflict: { generation: submitted.draft.generation, draftRevision: 2, payload: { ...childPayload, note: "Other note" } },
+		validationErrors: { note: "Changed in another session." },
+		saveState: "conflict",
+	}} />));
+	expect(container.querySelector('[aria-label="Resolve draft conflicts"]')).not.toBeNull();
+	expect(container.querySelector('[aria-label="Review requirements"]')).toBeNull();
 });

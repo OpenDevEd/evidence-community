@@ -216,6 +216,10 @@ async function verify() {
 		} catch (error) {
 			if (error instanceof NativeDraftConflictError) {
 				staleSaveRejected = [...error.fields];
+				assert(error.conflictingDraft?.generation === draft.generation, "Conflict omitted the draft identity");
+				assert(error.conflictingDraft.draftRevision === 3, "Conflict returned a stale draft revision");
+				assert(error.conflictingDraft.payload.title === "First published title", "Conflict omitted the saved title");
+				assert(error.conflictingDraft.payload.abstractNote === "Added in another tab", "Conflict omitted a non-conflicting saved edit");
 			}
 		}
 		assert(
