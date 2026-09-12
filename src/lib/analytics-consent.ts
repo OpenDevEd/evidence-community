@@ -23,9 +23,14 @@ export type AnalyticsConsentPolicy = {
 };
 
 export type AnalyticsConsentRecord = AnalyticsConsentPolicy & {
+	runtimePolicyVersion: number;
 	decidedAt: number;
 	preferences: AnalyticsConsentPreferences;
 };
+
+// Bump when the built-in notice or collection policy changes. Library owners
+// version their own notice separately through consentPolicyVersion.
+const RUNTIME_ANALYTICS_POLICY_VERSION = 2;
 
 export const ANALYTICS_CONSENT_COOKIE_NAME = "analytics_consent";
 export const ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
@@ -52,7 +57,8 @@ function hasMatchingPolicy(
 	value: Record<string, unknown>,
 	policy: AnalyticsConsentPolicy,
 ) {
-	return value.scope === policy.scope && value.version === policy.version;
+	return value.scope === policy.scope && value.version === policy.version &&
+		value.runtimePolicyVersion === RUNTIME_ANALYTICS_POLICY_VERSION;
 }
 
 function hasValidDecisionTime(value: unknown, now: number) {
@@ -107,6 +113,7 @@ export function createAnalyticsConsentRecord(
 	return {
 		scope: normalizeAnalyticsConsentScope(policy.scope),
 		version: policy.version,
+		runtimePolicyVersion: RUNTIME_ANALYTICS_POLICY_VERSION,
 		decidedAt: now,
 		preferences: {
 			analytics: preferences.analytics,

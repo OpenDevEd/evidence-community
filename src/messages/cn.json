@@ -174,7 +174,7 @@
     "cookieAnalyticsLabel": "产品分析",
     "cookieAnalyticsDescription": "通过假名化资料帮助我们了解导航、搜索、下载、AI 功能使用情况和性能。",
     "cookieReplayLabel": "会话回放与诊断",
-    "cookieReplayDescription": "记录经过遮蔽的画面回放和技术错误。不包含输入文字、文档文字和 AI 对话。",
+    "cookieReplayDescription": "记录页面布局和技术错误，并遮蔽文字、输入内容、链接和图片。",
     "cookieSavePreferences": "保存偏好设置",
     "helpTitle": "帮助",
     "relatedResourcesByCitation": "以下资源通过引用与本出版物相关。",

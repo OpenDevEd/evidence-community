@@ -174,7 +174,7 @@
     "cookieAnalyticsLabel": "Analyse du produit",
     "cookieAnalyticsDescription": "Nous aide à comprendre la navigation, les recherches, les téléchargements, l'utilisation des fonctions d'IA et les performances grâce à un profil pseudonyme.",
     "cookieReplayLabel": "Relecture de session et diagnostics",
-    "cookieReplayDescription": "Enregistre une relecture visuelle masquée et les erreurs techniques. Les saisies, le texte des documents et les conversations avec l'IA sont exclus.",
+    "cookieReplayDescription": "Enregistre la mise en page et les erreurs techniques. Le texte, les saisies, les liens et les images sont masqués.",
     "cookieSavePreferences": "Enregistrer les préférences",
     "helpTitle": "Aide",
     "relatedResourcesByCitation": "Les ressources suivantes sont liées à cette publication par citation.",

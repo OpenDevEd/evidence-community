@@ -154,6 +154,71 @@ describe("runtime browser analytics", () => {
 		expect(getAnalyticsDistinctId()).toBe("runtime-distinct-id");
 	});
 
+	it("keeps the ingestion token while removing private event properties", async () => {
+		const key = "phc_1234567890123456";
+		await applyClientAnalyticsConsent(
+			{
+				...baseConfiguration,
+				analytics: {
+					...baseConfiguration.analytics,
+					posthog: { host: "https://analytics.runtime.example", key },
+				},
+			},
+			"granted",
+			{ analytics: true, sessionReplay: false },
+		);
+		const options = posthog.instances.at(-1)?.init.mock.calls[0]?.[1];
+		const event = options.before_send({
+			event: "$pageview",
+			$set: { locale: "en", email: "reader@example.org" },
+			$set_once: {
+				$initial_current_url: "https://library.example.org/lib?search=private",
+			},
+			properties: {
+				token: key,
+				distinct_id: "visitor-id",
+				$current_url: "https://library.example.org/lib?search=private",
+				password: "private",
+				access_token: "private",
+				search_query: "private",
+				$heatmap_data: {
+					"https://library.example.org/lib?search=one": [{ x: 1, y: 2 }],
+					"https://library.example.org/lib?search=two": [{ x: 3, y: 4 }],
+					"https://library.example.org/lib": [{ x: 5, y: 6 }],
+				},
+				$set_once: {
+					$initial_current_url: "https://library.example.org/lib?email=reader@example.org",
+					$initial_referrer: "https://example.org/private",
+					access_token: "private",
+				},
+				$web_vitals_LCP_event: {
+					$current_url: "https://library.example.org/lib?search=private",
+					value: 123,
+					attribution: [{ target: "reader@example.org", token: "private" }],
+				},
+			},
+		});
+		expect(event).toEqual({
+			event: "$pageview",
+			$set: { locale: "en" },
+			$set_once: { $initial_current_url: "https://library.example.org/lib" },
+			properties: {
+				token: key,
+				distinct_id: "visitor-id",
+				$current_url: "https://library.example.org/lib",
+				$heatmap_data: {
+					"https://library.example.org/lib": [{ x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 6 }],
+				},
+				$set_once: { $initial_current_url: "https://library.example.org/lib" },
+				$web_vitals_LCP_event: {
+					$current_url: "https://library.example.org/lib",
+					value: 123,
+					attribution: [{ target: "[redacted-email]" }],
+				},
+			},
+		});
+	});
+
 	it("tears down the old client when the tenant changes or consent is revoked", async () => {
 		const analytics = {
 			...baseConfiguration.analytics,

@@ -69,7 +69,25 @@ type QueuedGoogleEvent = {
 const GOOGLE_COOKIE_PREFIXES = ["_ga", "_gid", "_gat"];
 const POSTHOG_STORAGE_PREFIXES = ["ph_", "__ph_", "posthog"];
 const SENSITIVE_PROPERTY_NAME =
-	/(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
+	/^\$(?:initial_)?referrer$|(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
+const REPLAY_LAYOUT_ATTRIBUTES = new Set([
+	"class", "style", "_csstext", "rel", "type", "media",
+	"width", "height", "viewbox", "d", "fill", "stroke", "stroke-width",
+	"stroke-linecap", "stroke-linejoin", "fill-rule", "clip-rule", "transform",
+	"x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry",
+	"data-state", "data-theme", "data-slot", "data-open", "data-selected",
+]);
+
+function maskReplayAttribute(name: string, value: string) {
+	const attribute = name.toLowerCase();
+	if (attribute === "style" || attribute === "_csstext") {
+		// CSS keeps the layout, but resource URLs can contain private values.
+		return value.replace(/url\(\s*(?:"[^"]*"|'[^']*'|[^)]*)\s*\)/giu, "url(about:blank)");
+	}
+	return REPLAY_LAYOUT_ATTRIBUTES.has(attribute)
+		? value
+		: "*".repeat(value.length);
+}
 
 let analyticsMode: AnalyticsConsentState = "pending";
 let analyticsPreferences: AnalyticsConsentPreferences = {
@@ -175,26 +193,59 @@ function sanitizeString(value: string) {
 		.replace(/https?:\/\/[^\s]+/gi, (url) => sanitizedCurrentUrl(url));
 }
 
+function sanitizePostHogValue(value: unknown): unknown {
+	if (typeof value === "string") return sanitizeString(value);
+	if (Array.isArray(value)) return value.map(sanitizePostHogValue);
+	if (value && typeof value === "object")
+		return sanitizePostHogProperties(value as Record<string, unknown>);
+	return value;
+}
+
+function sanitizePostHogPropertyValue(key: string, value: unknown) {
+	// rrweb masks snapshots before capture. Recursively rewriting their CSS,
+	// attribute names or text nodes corrupts the replay protocol.
+	if (key === "$snapshot_data") return value;
+	if (key === "$current_url") return sanitizedCurrentUrl(value);
+	if (key === "$pathname") return sanitizeAnalyticsPath(String(value ?? "/"));
+	return sanitizePostHogValue(value);
+}
+
+function sanitizePostHogProperties(
+	properties: Record<string, unknown>,
+	preserveProjectToken = false,
+): Record<string, unknown> {
+	const sanitized = new Map<string, unknown>();
+	for (const [key, value] of Object.entries(properties)) {
+		// PostHog's public project token is required for event ingestion.
+		if (key === "token" && preserveProjectToken) {
+			sanitized.set(key, value);
+			continue;
+		}
+		if (SENSITIVE_PROPERTY_NAME.test(key)) continue;
+		const safeKey = sanitizeString(key);
+		const safeValue = sanitizePostHogPropertyValue(key, value);
+		// Heatmap URLs are object keys. Combine points when query variants
+		// become the same URL after sanitizing them.
+		const previous = sanitized.get(safeKey);
+		sanitized.set(safeKey,
+			Array.isArray(previous) && Array.isArray(safeValue)
+				? [...previous, ...safeValue]
+				: safeValue,
+		);
+	}
+	return Object.fromEntries(sanitized);
+}
+
 function sanitizePostHogEvent(event: CaptureResult | null) {
 	if (!event || analyticsMode !== "granted") return null;
-	const properties = Object.fromEntries(
-		Object.entries(event.properties).flatMap(([key, value]) => {
-			if (key === "$current_url")
-				return [[key, sanitizedCurrentUrl(value)]];
-			if (key === "$pathname") {
-				return [[key, sanitizeAnalyticsPath(String(value ?? "/"))]];
-			}
-			if (key === "$referrer" || key === "$initial_referrer") return [];
-			if (SENSITIVE_PROPERTY_NAME.test(key)) return [];
-			return [
-				[
-					key,
-					typeof value === "string" ? sanitizeString(value) : value,
-				],
-			];
+	return {
+		...event,
+		...(event.$set && { $set: sanitizePostHogProperties(event.$set) }),
+		...(event.$set_once && {
+			$set_once: sanitizePostHogProperties(event.$set_once),
 		}),
-	);
-	return { ...event, properties };
+		properties: sanitizePostHogProperties(event.properties, true),
+	};
 }
 
 function clearCookies(prefixes: string[]) {
@@ -312,7 +363,12 @@ async function initializePostHog(expectedSignature: string) {
 					blockSelector: "[data-analytics-block], .ph-no-capture",
 					maskTextSelector: "*",
 					maskAllInputs: true,
-					maskAllElementAttributes: true,
+					maskAllElementAttributes: false,
+					maskAttributeFn: maskReplayAttribute,
+					maskCapturedNetworkRequestFn: (request) => ({
+						...request,
+						name: request.name ? sanitizedCurrentUrl(request.name) : request.name,
+					}),
 					recordHeaders: false,
 					recordBody: false,
 					recordCrossOriginIframes: false,

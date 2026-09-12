@@ -43,7 +43,7 @@ Our lawful basis is **consent**. PostHog and Google Analytics do not load in the
 
 ## **Session replay after separate consent**
 
-If you separately allow session replay and diagnostics, PostHog records a masked visual reconstruction of your session so we can reproduce interface problems. All page text, input values, and element attributes are masked. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
+If you separately allow session replay and diagnostics, PostHog records a masked visual reconstruction of your session so we can reproduce interface problems. Page text, input values, element identifiers, links, and image sources are masked. Only styling and visual-state attributes are retained to reconstruct the layout; URLs in CSS are removed. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
 
 Our lawful basis is **consent**. Session replay can only be enabled with product analytics and can be turned off separately at any time.
 
@@ -84,7 +84,7 @@ We receive information:
 
 We use service providers only for the jobs described below:
 
-- **PostHog Inc.** processes consented product analytics, optional masked session replay, and limited server-side aggregate events.
+- **PostHog analytics** include consented product analytics, optional masked session replay, and limited server-side aggregate events. The library’s hosting provider processes them when PostHog is self-hosted; **PostHog Inc.** processes them when PostHog Cloud is used.
 - **Google LLC** processes consented traffic and usage analytics. It may also provide Google sign-in when that option is enabled.
 - **Cloudflare, Inc.** may deliver the site and provide bot protection, abuse prevention, and rate limiting.
 - **Our hosting and database providers** store and serve the application, account, and operational data. The active host may be Vercel, DigitalOcean, or another provider selected by the library operator.
@@ -154,8 +154,8 @@ Website: [ico.org.uk/make-a-complaint](https://ico.org.uk/make-a-complaint/)
 
 # **Changes to this notice**
 
-We review this notice when our use of information changes. If a change affects an existing analytics choice, we can increase the analytics policy version so the site asks for consent again.
+We review this notice when our use of information changes. A change to the built-in analytics policy or this library’s analytics policy version makes the site ask for consent again.
 
 # **Last updated**
 
-August 27, 2026
+September 12, 2026

@@ -1,12 +1,12 @@
 # Cookie Inventory
 
-This inventory reflects the current application behavior as of August 27, 2026.
+This inventory reflects the current application behavior as of September 12, 2026.
 
 ## Essential cookies
 
 | Name                                                      | Owner                             | Purpose                                                                                   | Required               | Retention                       | Notes                                                                                                    |
 | --------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `analytics_consent`                                       | First-party application           | Stores analytics and replay preferences, tenant scope, policy version, and decision time. | Yes                    | 180 days                        | PostHog and Google Analytics do not load in the browser unless product analytics is allowed.             |
+| `analytics_consent`                                       | First-party application           | Stores analytics and replay preferences, tenant scope, library and built-in policy versions, and decision time. | Yes                    | 180 days                        | PostHog and Google Analytics do not load in the browser unless product analytics is allowed.             |
 | `NEXT_LOCALE`                                             | First-party application / Next.js | Stores the user's language preference.                                                    | Yes                    | Browser-managed                 | Functional cookie for localized routing.                                                                 |
 | `ai_rate_limit_id`                                        | First-party application           | Keeps one anonymous browser quota across AI requests and web processes.                   | Yes when AI is used    | 365 days                        | HTTP-only, same-site cookie scoped to `/api/ai`; it contains a random identifier, not an account ID.     |
 | `__cf_bm`                                                 | Cloudflare                        | Bot-management and abuse detection.                                                       | Yes                    | Cloudflare-managed, short-lived | Security/infrastructure cookie.                                                                          |
@@ -21,7 +21,7 @@ These must not exist before explicit consent is granted.
 
 | Name                                                  | Owner                   | Purpose                                               | Required | Retention          | Notes                                                                  |
 | ----------------------------------------------------- | ----------------------- | ----------------------------------------------------- | -------- | ------------------ | ---------------------------------------------------------------------- |
-| `_ga` and `_ga_*`                                     | Google Analytics        | Analytics measurement and visit/session attribution.  | No       | Google-managed     | Only loaded after `analytics_consent=granted`.                         |
+| `_ga` and `_ga_*`                                     | Google Analytics        | Analytics measurement and visit/session attribution.  | No       | Google-managed     | Only loaded when a current `analytics_consent` record allows product analytics.                         |
 | `ph_*` cookies                                        | PostHog                 | Analytics persistence for consented PostHog sessions. | No       | PostHog-managed    | Only created after consent. The app clears these on denial/revocation. |
 | `ph_*`, `posthog*`, `posthog-opted` in `localStorage` | PostHog                 | Client analytics persistence.                         | No       | PostHog-managed    | Stored locally, not cookies, but relevant for privacy review.          |
 | `utm:active` in `localStorage`                        | First-party application | Stores consented UTM campaign attribution data.       | No       | Runtime-configured | Removed whenever product analytics is not allowed.                     |

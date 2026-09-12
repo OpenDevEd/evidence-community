@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import {
 	expect,
 	test,
@@ -88,6 +89,15 @@ async function mailboxMessages(
 	return response.json() as Promise<{ messages?: unknown[] }>;
 }
 
+function decodeCaptureBody(body: Buffer | null) {
+	if (!body) throw new Error("Missing capture body");
+	const decoded = body[0] === 0x1f && body[1] === 0x8b
+		? gunzipSync(body).toString("utf8")
+		: body.toString("utf8");
+	const payload = JSON.parse(decoded);
+	return Array.isArray(payload) ? payload : payload.batch ?? [payload];
+}
+
 function trackAnalyticsNetwork(page: Page) {
 	const allPostRequests: string[] = [];
 	const collectorRequests: string[] = [];
@@ -95,6 +105,13 @@ function trackAnalyticsNetwork(page: Page) {
 	const eventRequests: string[] = [];
 	const eventResponses: string[] = [];
 	const eventFailures: string[] = [];
+	const capturedEvents: Array<{
+		event?: string;
+		properties?: Record<string, unknown>;
+	}> = [];
+	const payloadErrors: string[] = [];
+	const isCapture = (url: string) =>
+		url.startsWith(fixtureOrigin) && /\/(?:i\/v0\/)?[es]\/?$/u.test(new URL(url).pathname);
 
 	page.on("request", (request) => {
 		if (request.url().startsWith(fixtureOrigin)) {
@@ -105,7 +122,7 @@ function trackAnalyticsNetwork(page: Page) {
 		}
 		if (
 			request.method() === "POST" &&
-			request.url().startsWith(fixtureOrigin)
+			isCapture(request.url())
 		) {
 			eventRequests.push(request.url());
 		}
@@ -113,9 +130,16 @@ function trackAnalyticsNetwork(page: Page) {
 	page.on("response", (response) => {
 		if (
 			response.request().method() === "POST" &&
-			response.url().startsWith(fixtureOrigin)
+			isCapture(response.url())
 		) {
 			eventResponses.push(`${response.status()} ${response.url()}`);
+			if (response.ok()) {
+				try {
+					capturedEvents.push(...decodeCaptureBody(response.request().postDataBuffer()));
+				} catch (error) {
+					payloadErrors.push(String(error));
+				}
+			}
 		}
 	});
 	page.on("requestfailed", (request) => {
@@ -132,6 +156,8 @@ function trackAnalyticsNetwork(page: Page) {
 	});
 
 	return {
+		capturedEvents,
+		payloadErrors,
 		allPostRequests,
 		collectorRequests,
 		consoleMessages,
@@ -143,6 +169,50 @@ function trackAnalyticsNetwork(page: Page) {
 
 type AnalyticsNetwork = ReturnType<typeof trackAnalyticsNetwork>;
 
+type ReplayNode = {
+	tagName?: string;
+	textContent?: string;
+	attributes?: Record<string, string>;
+	childNodes?: ReplayNode[];
+};
+
+function allReplayNodes(node: ReplayNode): ReplayNode[] {
+	return [node, ...(node.childNodes ?? []).flatMap(allReplayNodes)];
+}
+
+function capturedReplaySnapshots(network: AnalyticsNetwork) {
+	return network.capturedEvents
+		.filter((event) => event.event === "$snapshot")
+		.flatMap((event) => event.properties?.$snapshot_data as Array<{
+			type: number;
+			data: string | { node?: ReplayNode };
+		}>)
+		.map((snapshot) => ({
+			...snapshot,
+			data: typeof snapshot.data === "string"
+				? JSON.parse(gunzipSync(Buffer.from(snapshot.data, "latin1")).toString("utf8"))
+				: snapshot.data,
+		}));
+}
+
+function expectPrivateStyledReplay(network: AnalyticsNetwork) {
+	const snapshots = capturedReplaySnapshots(network);
+	expect(JSON.stringify(snapshots)).not.toContain("analytics-privacy-canary");
+	const fullSnapshot = snapshots.find((snapshot) => snapshot.type === 2);
+	if (!fullSnapshot?.data.node) throw new Error("No full DOM snapshot was captured");
+	const styles = allReplayNodes(fullSnapshot.data.node)
+		.filter((node) => node.tagName === "style" || node.attributes?._cssText !== undefined)
+		.map((node) => node.attributes?._cssText ??
+			(node.childNodes ?? []).map((child) => child.textContent ?? "").join(""))
+		.filter((css) => css.trim().length > 0);
+	expect(styles.length).toBeGreaterThan(0);
+	for (const css of styles) {
+		// Masking stylesheet content destroys replay layout. This checks the
+		// recorder protocol, without depending on application styles or classes.
+		expect(/^[\s*]+$/u.test(css), "Replay stylesheet was masked").toBe(false);
+	}
+}
+
 async function expectSuccessfulAnalytics(
 	page: Page,
 	network: AnalyticsNetwork,
@@ -151,9 +221,7 @@ async function expectSuccessfulAnalytics(
 		await expect
 			.poll(
 				() =>
-					network.eventResponses.some((response) =>
-						response.startsWith("200 "),
-					),
+						network.capturedEvents.some((event) => event.event === "$pageview"),
 				{ timeout: 10_000 },
 			)
 			.toBe(true);
@@ -172,6 +240,11 @@ async function expectSuccessfulAnalytics(
 		);
 	}
 	expect(network.eventRequests.length).toBeGreaterThan(0);
+	expect(network.payloadErrors).toEqual([]);
+	const pageview = network.capturedEvents.find((event) => event.event === "$pageview");
+	expect(pageview?.properties?.token).toEqual(expect.any(String));
+	expect(pageview?.properties?.distinct_id).toEqual(expect.any(String));
+	expect(JSON.stringify(network.capturedEvents)).not.toContain("analytics-privacy-canary");
 }
 
 async function expectFlushedSessionReplay(
@@ -181,26 +254,9 @@ async function expectFlushedSessionReplay(
 	try {
 		await expect
 			.poll(
-				() =>
-					page.evaluate(() =>
-						Object.entries(localStorage).some(([key, value]) => {
-							if (!key.startsWith("ph_") || !key.endsWith("_posthog"))
-								return false;
-							try {
-								const replay = JSON.parse(value) as {
-									$debug_first_full_snapshot_timestamp?: number;
-									$sess_rec_flush_size?: { size?: number };
-								};
-								return (
-									typeof replay.$debug_first_full_snapshot_timestamp ===
-										"number" &&
-									(replay.$sess_rec_flush_size?.size ?? 0) > 0
-								);
-							} catch {
-								return false;
-							}
-						}),
-					),
+				() => capturedReplaySnapshots(network).some(
+					(snapshot) => snapshot.type === 2 && snapshot.data.node,
+				),
 				{ timeout: 10_000 },
 			)
 			.toBe(true);
@@ -383,7 +439,12 @@ test("sends analytics only for the configured and consented profile", async ({
 
 	const network = trackAnalyticsNetwork(page);
 
-	await page.goto("/lib");
+	await page.goto("/lib?qa_email=analytics-privacy-canary%40example.org");
+	await page.getByRole("main").evaluate((element) => {
+		element.id = "analytics-privacy-canary";
+		element.setAttribute("data-private", "analytics-privacy-canary");
+		element.style.setProperty("--privacy-probe", 'url("https://example.org/analytics-privacy-canary")');
+	});
 	if (expectsConsent) {
 		await page
 			.getByRole("button", {
@@ -394,10 +455,15 @@ test("sends analytics only for the configured and consented profile", async ({
 	}
 
 	if (expectedAnalytics) {
+		await page.getByRole("textbox", { name: "Search", exact: true })
+			.fill("analytics-privacy-canary@example.org");
 		await expectSuccessfulAnalytics(page, network);
 		await page.mouse.click(4, 4);
 		await expectFlushedSessionReplay(page, network);
 		await withdrawAnalyticsConsent(page, network);
+		expectPrivateStyledReplay(network);
+		expect(network.payloadErrors).toEqual([]);
+		expect(JSON.stringify(network.capturedEvents)).not.toContain("analytics-privacy-canary");
 		return;
 	}
 

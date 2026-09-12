@@ -10,7 +10,7 @@ This storage is needed for the site to work or remember a choice you asked it to
 
 | **Name**                | **Owner**               | **Purpose**                                                                                                                          | **Expires**                        |
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the library they apply to, the policy version, and when you made the choice.       | 180 days                           |
+| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the library they apply to, the policy versions, and when you made the choice.       | 180 days                           |
 | `NEXT_LOCALE`           | {{SITE_HOST}} / Next.js | Stores your language preference.                                                                                                     | Browser-managed                    |
 | Auth.js session cookies | {{SITE_HOST}} / Auth.js | Maintain sign-in and protect authentication requests when login is enabled. Cookie names vary between secure and local environments. | Session or Auth.js-managed         |
 | `__cf_bm`, `_cfuvid`    | Cloudflare              | Support bot protection, abuse prevention, and rate limiting when Cloudflare is used.                                                 | Cloudflare-managed and short-lived |
@@ -32,7 +32,7 @@ We remove or mask free-text searches, form values, passwords, document text, AI 
 
 Session replay is a separate choice. It can only be enabled when product analytics is enabled.
 
-When enabled, PostHog can record a visual reconstruction of a session so we can reproduce interface problems. All page text, input values, and element attributes are masked. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
+When enabled, PostHog can record a visual reconstruction of a session so we can reproduce interface problems. Page text, input values, element identifiers, links, and image sources are masked. Only styling and visual-state attributes are retained to reconstruct the layout; URLs in CSS are removed. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
 
 Turning session replay off stops new replay recording without turning off ordinary product analytics.
 
@@ -46,7 +46,7 @@ The server groups these aggregate events by library and day before sending them 
 
 Use **Cookie settings** in the footer to change your choices at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the two switches exactly as shown. **Decline** disables both.
 
-If this library changes its analytics policy version, or if you move to a different library with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
+If the built-in analytics policy or this library’s policy version changes, or if you move to a different library with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
 
 Most browsers also let you inspect or delete stored site data in their privacy settings.
 
@@ -54,4 +54,4 @@ Most browsers also let you inspect or delete stored site data in their privacy s
 
 For questions about our use of cookies and similar storage, email contact@opendeved.net.
 
-**Last updated**: August 27, 2026
+**Last updated**: September 12, 2026

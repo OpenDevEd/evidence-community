@@ -84,6 +84,14 @@ describe("analytics consent records", () => {
 		expect(analyticsConsentState(null)).toBe("pending");
 	});
 
+	it("requires renewed consent after the built-in collection policy changes", () => {
+		const record = createAnalyticsConsentRecord(policy, { analytics: true, sessionReplay: true }, now);
+		const { runtimePolicyVersion: _version, ...previousRecord } = record;
+		for (const previous of [previousRecord, { ...record, runtimePolicyVersion: 1 }]) {
+			expect(parseAnalyticsConsentRecord(encodeURIComponent(JSON.stringify(previous)), policy, now)).toBeNull();
+		}
+	});
+
 	it("normalizes the configured base URL as a stable tenant scope", () => {
 		expect(
 			normalizeAnalyticsConsentScope("https://Library.Example.org/path?q=1#x"),

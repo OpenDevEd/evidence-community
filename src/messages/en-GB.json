@@ -174,7 +174,7 @@
     "cookieAnalyticsLabel": "Product analytics",
     "cookieAnalyticsDescription": "Helps us understand navigation, searches, downloads, AI feature use, and performance using a pseudonymous profile.",
     "cookieReplayLabel": "Session replay and diagnostics",
-    "cookieReplayDescription": "Records a masked visual replay and technical errors. Input text, document text, and AI conversations are excluded.",
+    "cookieReplayDescription": "Records the page layout, with text, inputs, links and images masked, plus technical errors.",
     "cookieSavePreferences": "Save preferences",
     "helpTitle": "Help",
     "relatedResourcesByCitation": "The following resources are related to this publication by citation.",
