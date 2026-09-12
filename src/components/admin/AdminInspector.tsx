@@ -15,6 +15,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Add01Icon,
 	AlertCircleIcon,
+	ArchiveIcon,
 	ArrowLeft01Icon,
 	ArrowRight01Icon,
 	AttachmentIcon,
@@ -1377,6 +1378,7 @@ export function AdminInspector({
 	onReloadDraft,
 	onRetry,
 	onRestore,
+	onUnpublish,
 	onSelectAttachment,
 	onStartLinkPick,
 	onStopLinkPick,
@@ -1435,6 +1437,7 @@ export function AdminInspector({
 	onReloadDraft: () => void;
 	onRetry: () => void;
 	onRestore: () => void;
+	onUnpublish: () => void;
 	onSelectAttachment: (key: string) => void;
 	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
 	onStopLinkPick?: () => void;
@@ -1627,7 +1630,7 @@ export function AdminInspector({
 						{versionNotice?.(
 							readOnlyVersion
 								? versionActions && versionWithdraw
-								: detail.draft && !detail.parentItem && (
+								: detail.draft && (
 										<Tooltip
 											content={
 												detail.published
@@ -1742,7 +1745,7 @@ export function AdminInspector({
 						</div>
 						<div className="mt-4 flex flex-wrap items-center gap-2 empty:hidden">
 							{showPublicLinkActions && (
-								<>
+								<div className="flex items-center gap-1.5">
 									<Button
 										as="a"
 										aria-label="Open public item"
@@ -1792,7 +1795,22 @@ export function AdminInspector({
 											</Button>
 										</span>
 									</Tooltip>
-								</>
+								</div>
+							)}
+							{!readOnlyVersion && canPublish && native && detail.editable && detail.published && detail.state !== "deleted" && (
+								<Button
+									size="xs"
+									variant="muted"
+									color="danger"
+									isDisabled={busy}
+									onPress={() => {
+										closeMenu();
+										onUnpublish();
+									}}
+									startContent={<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />}
+								>
+									Unpublish
+								</Button>
 							)}
 							{!readOnlyVersion &&
 								!detail.parentItem &&
