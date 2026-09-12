@@ -1312,13 +1312,14 @@ export default function AdminWorkbench({
 			await loadItems();
 			setSelectedKey(created.itemKey);
 			setMobilePane("inspector");
-			toast.success("Native draft created");
+			toast.success("Draft created");
 		});
 
 	const discardCurrent = () => {
 		if (!detail?.draft) return;
 		setConfirmDialog({
 			title: detail.published ? "Discard changes?" : "Delete draft?",
+			confirmLabel: detail.published ? "Discard changes" : "Delete draft",
 			message: detail.published
 				? "The published record will stay unchanged."
 				: "This draft has never been published.",
@@ -1356,6 +1357,7 @@ export default function AdminWorkbench({
 		const recordKey = detail.key;
 		setConfirmDialog({
 			title: "Unpublish record?",
+			confirmLabel: "Unpublish record",
 			message:
 				"It will leave the public library and remain recoverable here.",
 			danger: true,
@@ -1461,6 +1463,7 @@ export default function AdminWorkbench({
 		setConfirmDialog({
 			danger: true,
 			title: "Discard staged PDF?",
+			confirmLabel: "Discard staged PDF",
 			message:
 				"The staged PDF will be removed. Any currently published PDF will stay online.",
 			action: async () => {
@@ -1924,7 +1927,7 @@ export default function AdminWorkbench({
 					changedLabels: ["draft updated", "drafts updated"],
 					emptyMessage: "No records were changed",
 					successDescription:
-						"Publish the drafts to update the public library.",
+						"Submit the drafts for review to update the public library.",
 				},
 				failures,
 			);
@@ -1957,8 +1960,9 @@ export default function AdminWorkbench({
 		const keys = [...bulkKeys];
 		setConfirmDialog({
 			title: `Remove ${keys.length} ${keys.length === 1 ? "record" : "records"}?`,
+			confirmLabel: keys.length === 1 ? "Remove record" : "Remove records",
 			message:
-				"Native drafts will be deleted. Published native records will be unpublished. Imported records are skipped.",
+				"Unpublished drafts will be deleted. Published records will leave the public library. Records synced from Zotero are skipped.",
 			danger: true,
 			action: async () => {
 				for (const key of keys) {
