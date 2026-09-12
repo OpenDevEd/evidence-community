@@ -25,6 +25,9 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
+import { getPublicItemLinks } from "@/lib/links/item-links";
+import { hasAnyTag } from "@/lib/tags";
+import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { buildPublicationIdentifierSummary } from "@/lib/publication/publication-identifier-summary";
 
@@ -600,4 +603,26 @@ export async function* generateFullSearchProjectionPlans(
 		batchSize,
 		signal,
 	);
+}
+
+/** Read the committed record with the same metadata projection used by search. */
+export async function readPublicItem(
+	database: Database,
+	key: string,
+	config: LibraryServerConfig,
+): Promise<Item | null> {
+	return database.transaction(async (transaction) => {
+		const collections = await transaction.select().from(collection).orderBy(asc(collection.key));
+		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, [key], collections);
+		const document = plan.documents.find((document) => document.key === key);
+		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;
+		const result = document as Item;
+		result.attachmentsData = result.attachmentsData?.filter((attachment) =>
+			attachment.deleted === 0 && !hasAnyTag(attachment.tags, config.content.tags.hidden),
+		);
+		const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
+		result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
+		result.links = await getPublicItemLinks(transaction, key, { hiddenTags: config.content.tags.hidden });
+		return result;
+	}, { isolationLevel: "repeatable read", accessMode: "read only" });
 }

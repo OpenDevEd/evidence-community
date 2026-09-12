@@ -19,6 +19,7 @@ export default defineConfig({
             "tests/integration/country-focus.test.ts",
             "tests/integration/notifications.test.ts",
             "tests/integration/public-library-status.test.ts",
+            "tests/integration/public-item-read.test.ts",
 		],
 		maxWorkers: 1,
 	},

@@ -1028,43 +1028,48 @@ async function seedSearch(profile: Profile) {
 	const countryCode = amber ? "MA" : "GB";
 	const year = amber ? "2026" : "2025";
 	const searchItemKey = amber
-		? "AMBER_SEARCH_FIXTURE"
-		: "INDIGO_SEARCH_FIXTURE";
+		? "AMBR3456"
+		: "INDG3456";
 
-	await enqueue(profile, `/indexes/${indexUid}/documents`, "POST", [
-		{
-			key: searchItemKey,
-			id: `${colorName.toUpperCase()}_ACCEPTANCE`,
-			title: `${colorName} runtime evidence`,
-			shortTitle: `${colorName} proof`,
-			abstractNote: `This record proves the ${profile.name} deployment selected its own runtime search index.`,
-			itemType: "JournalArticle",
-			deleted: 0,
-			date: year,
-			datePublished: year,
-			fullNames: [`${amber ? "Amina" : "Iris"} ${colorName}`],
-			creators: [
-				{
-					firstName: amber ? "Amina" : "Iris",
-					lastName: colorName,
-					creatorType: "author",
-					institutions: [
-						{
-							display_name: institution,
-							country_code: countryCode,
-						},
-					],
-				},
-			],
-			institution: [institution],
-			country: [country],
-			tags: [],
-			collections: [],
-			collectionsAncestry: [],
-			url: `https://${profile.name}.example.org/evidence/${profile.name}`,
-			citation: `<div>${colorName}, A. (${year}). ${colorName} runtime evidence.</div>`,
-		},
-	]);
+	const document = {
+		key: searchItemKey,
+		id: `${colorName.toUpperCase()}_ACCEPTANCE`,
+		title: `${colorName} runtime evidence`,
+		shortTitle: `${colorName} proof`,
+		abstractNote: `This record proves the ${profile.name} deployment selected its own runtime search index.`,
+		itemType: "JournalArticle",
+		deleted: 0,
+		date: year,
+		datePublished: year,
+		fullNames: [`${amber ? "Amina" : "Iris"} ${colorName}`],
+		creators: [
+			{
+				firstName: amber ? "Amina" : "Iris",
+				lastName: colorName,
+				creatorType: "author",
+				institutions: [
+					{
+						display_name: institution,
+						country_code: countryCode,
+					},
+				],
+			},
+		],
+		institution: [institution],
+		country: [country],
+		tags: [],
+		collections: [],
+		collectionsAncestry: [],
+		url: `https://${profile.name}.example.org/evidence/${profile.name}`,
+		citation: `<div>${colorName}, A. (${year}). ${colorName} runtime evidence.</div>`,
+	};
+	// Search results refer to real published records, as they do in a library.
+	postgresScalar(profile.name, [
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${searchItemKey}', 'native', '${searchItemKey}')`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "shortTitle", "abstractNote", "date", "creators", "url", "citation") VALUES ('${searchItemKey}', 'native', '${searchItemKey}', '${document.itemType}', '${document.title}', '${document.shortTitle}', '${document.abstractNote}', '${document.date}', $seed$${JSON.stringify(document.creators)}$seed$::jsonb, '${document.url}', $seed$${document.citation}$seed$)`,
+		`INSERT INTO "itemInstitution" ("itemKey", "institutionName") VALUES ('${searchItemKey}', '${institution}')`,
+	].join('; '));
+	await enqueue(profile, `/indexes/${indexUid}/documents`, "POST", [document]);
 }
 
 // Records the whole-library exports and the Atom feed read straight from
@@ -1492,7 +1497,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_GOOGLE_FONT_FAMILIES: googleFonts.join("|"),
 		PLAYWRIGHT_EXPECTED_LOADED_LOGO: "true",
 		PLAYWRIGHT_EXPECTED_THEME_CLASS: activeTheme,
-		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY: `${searchItemPrefix.toUpperCase()}_SEARCH_FIXTURE`,
+		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY: profile.name === "amber" ? "AMBR3456" : "INDG3456",
 		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_TITLE: `${searchItemPrefix} runtime evidence`,
 		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY: databaseItemKey,
 		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE: `${searchItemPrefix} database evidence`,
@@ -3180,9 +3185,9 @@ async function startAcceptanceSearchWorkers(profiles: Profile[]) {
 	}
 }
 
-function seedAcceptanceRecords(profiles: Profile[]) {
+async function seedAcceptanceRecords(profiles: Profile[]) {
 	for (const profile of profiles) {
-		seedSearch(profile);
+		await seedSearch(profile);
 		seedExportRecords(profile);
 		seedRedirectNotes(profile);
 	}
@@ -3256,7 +3261,7 @@ async function runAcceptance() {
 		buildAcceptanceImage();
 		await startAcceptanceInfrastructure(profiles);
 		await startAcceptanceSearchWorkers(profiles);
-		seedAcceptanceRecords(profiles);
+		await seedAcceptanceRecords(profiles);
 		await runAcceptanceBehavior(profiles);
 		reportAcceptanceSuccess();
 	} catch (error) {

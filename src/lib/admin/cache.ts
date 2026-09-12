@@ -16,8 +16,6 @@ export function revalidateIndexedReceiptCaches(
 			tags.add("collections");
 			continue;
 		}
-		tags.add(`item-${receipt.entityKey}`);
-		tags.add(`item-small-${receipt.entityKey}`);
 		tags.add(`item-citation-source-${receipt.entityKey}`);
 		tags.add(`metadata-citation-${receipt.entityKey}`);
 	}

@@ -75,7 +75,7 @@ export async function getPublicItemLinks(
 	key: string,
 	options: { hiddenTags?: readonly string[] } = {},
 ): Promise<PublicItemLinks> {
-	const hiddenTags = [...(options.hiddenTags ?? [])];
+	const hiddenTags = (options.hiddenTags ?? []).map((tag) => tag.toLowerCase());
 	const visible = (
 		column: typeof itemLink.toKey | typeof itemLink.fromKey,
 	) =>
@@ -90,7 +90,7 @@ export async function getPublicItemLinks(
 							.where(
 								and(
 									eq(itemToTag.itemKey, column),
-									inArray(itemToTag.tagName, hiddenTags),
+									inArray(sql`lower(${itemToTag.tagName})`, hiddenTags),
 								),
 							),
 					),

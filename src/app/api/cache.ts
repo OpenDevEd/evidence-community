@@ -1,6 +1,7 @@
+import { cache } from "react";
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
-import { getItem, getItemRaw } from "./item/[key]/route";
+import { getItem } from "./item/[key]/route";
 import { and, eq } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
@@ -61,109 +62,15 @@ export async function getCachedCollections(config?: LibraryServerConfig) {
 	return result.collections;
 }
 
-// --- Hydrate helper (unchanged) ---
+// Share the database read within one render, without keeping an older public revision.
+export const getCachedItem = cache(getItem);
 
-function hydrateCollections(
-	item: NonNullable<Awaited<ReturnType<typeof getItemRaw>>["item"]>,
-	collections: Collection[],
-) {
-	item.collectionsData = item.collectionsAncestry
-		?.map((collection) => collections.find((c) => c.key === collection))
-		.filter((c) => c !== undefined) as Collection[];
-	return item;
-}
-
-// --- Items (revalidate: 60s) ---
-
-async function _getItemRawCached(
-	key: string,
-	configRevision: string,
-	config: LibraryServerConfig,
-) {
-	"use cache";
-	cacheLife({ revalidate: 60 });
-	cacheTag("item-" + key);
-	return getItemRaw(key, "meilisearch", config);
-}
-
-export async function getCachedItem(key: string, ignoreCache: boolean = false) {
-	if (ignoreCache) {
-		return getItem(key);
-	}
-
-	const config = await getLibraryConfig();
-	const result = await _getItemRawCached(key, config.revision, config);
-
-	if (!result || !result.item) {
-		return await getItem(key);
-	}
-
-	const collections = await getCachedCollections(config);
-	if (collections) {
-		hydrateCollections(result.item, collections as Collection[]);
-	}
-
-	return result;
-}
-
-function stripNulls<T extends Record<string, unknown>>(obj: T): Partial<T> {
-	const result = {} as Partial<T>;
-	for (const key in obj) {
-		if (obj[key] !== null && obj[key] !== undefined) {
-			result[key] = obj[key];
-		}
-	}
-	return result;
-}
-
-async function _getItemSmallCached(
-	key: string,
-	configRevision: string,
-	config: LibraryServerConfig,
-): Promise<ReturnType<typeof getItemRaw>> {
-	"use cache";
-	cacheLife({ revalidate: 60 });
-	cacheTag("item-small-" + key);
-	const item = await getItemRaw(key, "meilisearch", config);
-
-	if (!item.item) {
-		return item;
-	}
-
-	const { fullTextPDFs, ...rest } = item.item;
-
-	return {
-		item: stripNulls(rest) as typeof item.item,
-	};
-}
-
-export async function getCachedItemSmall(
-	key: string,
-	ignoreCache: boolean = false,
-) {
-	if (ignoreCache) {
-		const item = await getItem(key);
-		if (!item.item) return item;
-		const { fullTextPDFs, ...rest } = item.item;
-		return { item: stripNulls(rest) as typeof item.item };
-	}
-
-	const config = await getLibraryConfig();
-	const result = await _getItemSmallCached(key, config.revision, config);
-
-	if (!result || !result.item) {
-		const item = await getItem(key);
-		if (!item.item) return item;
-		return { item: { ...item.item, fullTextPDFs: undefined } };
-	}
-
-	const collections = await getCachedCollections(config);
-	if (collections) {
-		hydrateCollections(result.item, collections as Collection[]);
-	}
-
-	return result;
-}
+export const getCachedItemSmall = cache(async (key: string) => {
+	const result = await getCachedItem(key);
+	if (!result.item) return result;
+	const { fullTextPDFs, ...item } = result.item;
+	return { item };
+});
 
 // --- User data (revalidate: 60s) ---
 
