@@ -13,11 +13,13 @@ import { PublicationArchiveFiles } from "./PublicationArchiveFiles";
 export function PublishingChoicePanel({
 	detail,
 	readOnly = false,
+	filesReadOnly,
 	choice,
 	model,
 }: {
 	detail: AdminItemDetail;
 	readOnly?: boolean;
+	filesReadOnly: boolean;
 	choice?: PublishingChoice | null;
 	model: ReturnType<typeof usePublishingChoice>;
 }) {
@@ -144,7 +146,7 @@ export function PublishingChoicePanel({
 						)}
 						<PublicationArchiveFiles
 							attachments={detail.attachments}
-							readOnly={readOnly}
+							readOnly={filesReadOnly}
 						/>
 					</div>
 				</>

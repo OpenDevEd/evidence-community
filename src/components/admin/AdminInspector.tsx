@@ -754,9 +754,10 @@ function TagsEditor({
 				(entry): entry is string => typeof entry === "string",
 			)
 		: [];
+	const tag = value.trim();
+	const alreadyAdded = tags.includes(tag);
 	const addTag = () => {
-		const tag = value.trim();
-		if (!tag || tags.includes(tag)) return;
+		if (!tag || alreadyAdded) return;
 		onChange({ ...payload, tags: [...tags, tag] });
 		setValue("");
 	};
@@ -795,13 +796,14 @@ function TagsEditor({
 					classNames={inspectorInputClassNames}
 					endContent={
 						<IconButton
-							disabled={!value.trim()}
+							disabled={!tag || alreadyAdded}
 							icon={Add01Icon}
 							label="Add tag"
 							onPress={addTag}
 						/>
 					}
 					placeholder="Add a tag"
+					description={alreadyAdded ? "This tag is already added." : undefined}
 					errorMessage={error}
 					isInvalid={Boolean(error)}
 					value={value}
@@ -1913,6 +1915,7 @@ export function AdminInspector({
 							<PublishingChoicePanel
 								detail={detail}
 								readOnly={readOnlyVersion || readOnly}
+								filesReadOnly={filesReadOnly}
 								choice={
 									readOnlyVersion
 										? (publishingChoice ?? null)

@@ -50,7 +50,7 @@ export function validateReviewPayload(
 		const path = descriptor?.field ?? field;
 		fields[path] ??=
 			raw === "publicationDate"
-				? "Enter a valid publication date, including the day, month and year."
+				? "Enter a valid publication date."
 				: issue.message;
 	}
 	if (Object.keys(fields).length)
