@@ -4841,6 +4841,38 @@ test("configures columns, density, sizing, and persists computed table geometry"
 	).toBeGreaterThan(beforeWidth + 35);
 });
 
+test("lets Creators assign records but prevents library management actions", async ({
+	page,
+}) => {
+	const batchRequests: unknown[] = [];
+	await createAdminBrowserSession(
+		page,
+		await issueAdminLoginCode(undefined, "creator"),
+	);
+	await mockPublishedBook(page, {
+		itemCount: 2,
+		onBatchRequest: (body) => batchRequests.push(body),
+	});
+	await page.goto("/admin");
+	await expect(page.getByRole("heading", { name: "Published book" })).toBeVisible();
+	await page.getByRole("checkbox", { name: "Select all loaded records" }).check();
+	const toolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await expect(toolbar.getByRole("button", { name: "Remove selected" })).toBeDisabled();
+	await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
+	await expect(page.locator('[data-collection-key="TEACHDEV"]')).toBeVisible();
+	await expect(page.getByRole("button", { name: /^Manage / })).toHaveCount(0);
+	await expect(page.getByRole("button", { name: /^Drag Teacher/ })).toHaveCount(0);
+	await expect(toolbar.getByRole("button", { name: "Add selected to collection" })).toBeEnabled();
+	await assignSelectedRecords(page);
+	expect(batchRequests).toEqual([
+		{
+			action: "assignCollection",
+			collectionKey: "TEACHDEV",
+			keys: ["LIVEB22K", "ROW00001"],
+		},
+	]);
+});
+
 test("runs selected-record actions through one compact batch request", async ({
 	page,
 }) => {
@@ -5943,6 +5975,50 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 	if (!finishRequest) throw new Error("Collection request did not start");
 	finishRequest();
 	await expect(dialog).toBeHidden();
+});
+
+test("lets Creators request restoration without changing writeback sources", async ({ page }) => {
+	await createAdminBrowserSession(page, await issueAdminLoginCode(undefined, "creator"));
+	await mockPublishedBook(page);
+	const target = {
+		effective: true, isOrigin: false, itemEnabled: true, linkExists: true,
+		provider: "zotero", reason: "ok", sourceEnabled: true,
+		sourceKey: "zotero:qa", sourceLabel: "Test source", sourceStatus: "active", supported: true,
+	};
+	await page.route(`**/api/admin/items/${publishedItemKey}`, route => route.fulfill({
+		json: { item: { ...publishedDetail(false), state: "deleted", writeback: {
+			available: [target], originSourceKey: null, selected: [target.sourceKey],
+		} } },
+	}));
+	let sourceMutations = 0;
+	await page.route(`**/api/admin/items/${publishedItemKey}/writeback/**`, route => {
+		if (route.request().method() !== "GET") {
+			sourceMutations += 1;
+			return route.fulfill({ status: 403, json: { error: { code: "forbidden", message: "Publisher required" } } });
+		}
+		return route.fulfill({ json: { status: {
+			attempts: 3, canonicalRevision: 1, error: "Source unavailable", jobId: 1,
+			nextAttemptAt: null, processedAt: null, sourceKey: target.sourceKey, state: "failed",
+		} } });
+	});
+	let submissions = 0;
+	await page.route(`**/api/admin/items/${publishedItemKey}/review`, route => {
+		if (route.request().method() === "POST") {
+			submissions += 1;
+			return route.fulfill({ json: { review: { id: "restore-creator", revision: 1, state: "pending" } } });
+		}
+		return route.fulfill({ json: { reviews: [] } });
+	});
+	await page.goto("/admin");
+	await page.getByRole("button", { name: "Review status and history", exact: true }).click();
+	await expect(page.getByRole("button", { name: "Sources", exact: true })).toBeDisabled();
+	await page.getByRole("button", { name: "Sources: Sync failed", exact: true }).click();
+	await expect(page.getByRole("button", { name: "Retry writeback", exact: true })).toBeDisabled();
+	await page.reload();
+	await page.getByRole("button", { name: "Restore", exact: true }).click();
+	await expect(page.getByText("Restoration submitted for review", { exact: true })).toBeVisible();
+	expect(submissions).toBe(1);
+	expect(sourceMutations).toBe(0);
 });
 
 test("tracks unpublishing and submits restoration for review", async ({page}) => {

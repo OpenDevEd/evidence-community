@@ -53,6 +53,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 
+import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
@@ -381,6 +382,7 @@ export default function AdminWorkbench({
 	initialFilters: AdminItemViewFilters;
 }) {
 	const finePointer = useFinePointer();
+	const { canPublish } = useAdminSession();
 	const { navigation, theme } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
 	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
@@ -1295,7 +1297,7 @@ export default function AdminWorkbench({
 
 	const restoreCurrent = () => {
 		if (!detail) return;
-		if (askWritebackSources("restore")) return;
+		if (canPublish && askWritebackSources("restore")) return;
 		runRestore(detail.key);
 	};
 
@@ -2386,18 +2388,20 @@ export default function AdminWorkbench({
 												<HugeiconsIcon icon={FolderInputIcon} aria-hidden size={14} />
 											</Button>
 										</Tooltip>
-										<Tooltip content="Remove selected">
-											<Button
-												aria-label="Remove selected"
-												className="text-danger"
-												isDisabled={busy || bulkKeys.size === 0}
-												isIconOnly
-												onPress={bulkDelete}
-												size="xs"
-												variant="transparent"
-											>
-												<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />
-											</Button>
+										<Tooltip content={canPublish ? "Remove selected" : "Editors and owners can remove records"}>
+											<span className="inline-flex">
+												<Button
+													aria-label="Remove selected"
+													className="text-danger"
+													isDisabled={busy || !canPublish || bulkKeys.size === 0}
+													isIconOnly
+													onPress={bulkDelete}
+													size="xs"
+													variant="transparent"
+												>
+													<HugeiconsIcon icon={Delete02Icon} aria-hidden size={14} />
+												</Button>
+											</span>
 										</Tooltip>
 										<Tooltip content="Clear selection">
 											<Button

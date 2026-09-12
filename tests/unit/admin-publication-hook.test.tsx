@@ -8,8 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 
 const api = vi.hoisted(() => ({
-	activateCrossref: vi.fn(),
-	activateZenodo: vi.fn(),
 	get: vi.fn(),
 	retryCrossref: vi.fn(),
 	retryZenodo: vi.fn(),
@@ -17,8 +15,6 @@ const api = vi.hoisted(() => ({
 
 vi.mock("@/components/admin/admin-api", async (importOriginal) => ({
 	...(await importOriginal()),
-	activateAdminCrossrefPublication: api.activateCrossref,
-	activateAdminZenodoPublication: api.activateZenodo,
 	getAdminPublication: api.get,
 	retryAdminCrossrefPublication: api.retryCrossref,
 	retryAdminZenodoPublication: api.retryZenodo,
@@ -133,7 +129,7 @@ describe("useAdminPublication", () => {
 		vi.useRealTimers();
 	});
 
-	it.each(["refresh", "activateCrossref"] as const)("updates the DOI reservation display from %s", async (update) => {
+	it.each(["refresh", "retryCrossref"] as const)("updates the DOI reservation display from %s", async (update) => {
 		const queued = publication(itemKey, "queued");
 		queued.providers.crossref.exact.identifiers = [{doi: "10.5555/library.1", lifecycle: "reserved", ownership: "managed", role: "primary"}];
 		api.get.mockResolvedValueOnce(queued);
@@ -143,7 +139,7 @@ describe("useAdminPublication", () => {
 		const verified = publication(itemKey, "synced");
 		verified.providers.crossref.exact.identifiers = [{doi: "10.5555/library.1", lifecycle: "verified", ownership: "managed", role: "primary"}];
 		api.get.mockResolvedValueOnce(verified);
-		api.activateCrossref.mockResolvedValueOnce({ publication: verified });
+		api.retryCrossref.mockResolvedValueOnce({ publication: verified });
 		await act(async () => { await current[update](); await flush(); });
 		expect(container.querySelector("output")?.textContent).toBe("verified");
 	});
@@ -226,9 +222,9 @@ describe("useAdminPublication", () => {
 		expect(api.get).toHaveBeenCalledTimes(callsAfterSync);
 	});
 
-	it("seeds the shared view after activation and ignores a duplicate click", async () => {
+	it("seeds the shared view after a retry and ignores a duplicate click", async () => {
 		let finish!: (value: { publication: AdminPublicationView }) => void;
-		api.activateCrossref.mockImplementation(
+		api.retryCrossref.mockImplementation(
 			() => new Promise((resolve) => (finish = resolve)),
 		);
 		await render();
@@ -236,11 +232,11 @@ describe("useAdminPublication", () => {
 		let first!: Promise<boolean>;
 		let second!: Promise<boolean>;
 		await act(async () => {
-			first = current.activateCrossref();
-			second = current.activateCrossref();
+			first = current.retryCrossref();
+			second = current.retryCrossref();
 			await Promise.resolve();
 		});
-		expect(api.activateCrossref).toHaveBeenCalledTimes(1);
+		expect(api.retryCrossref).toHaveBeenCalledTimes(1);
 		await expect(second).resolves.toBe(false);
 
 		await act(async () => {
@@ -253,10 +249,10 @@ describe("useAdminPublication", () => {
 	});
 
 	it("seeds a completed action under the item where it started", async () => {
-		let finishActivation!: (value: { publication: AdminPublicationView }) => void;
+		let finishRetry!: (value: { publication: AdminPublicationView }) => void;
 		let finishSecondItem!: (value: AdminPublicationView) => void;
-		api.activateCrossref.mockImplementation(
-			() => new Promise((resolve) => (finishActivation = resolve)),
+		api.retryCrossref.mockImplementation(
+			() => new Promise((resolve) => (finishRetry = resolve)),
 		);
 		api.get.mockImplementation((key: string) =>
 			key === "ABCDEFGH"
@@ -265,9 +261,9 @@ describe("useAdminPublication", () => {
 		);
 		await render();
 
-		let activation!: Promise<boolean>;
+		let retry!: Promise<boolean>;
 		await act(async () => {
-			activation = current.activateCrossref();
+			retry = current.retryCrossref();
 			await Promise.resolve();
 		});
 		itemKey = "HGFEDCBA";
@@ -281,8 +277,8 @@ describe("useAdminPublication", () => {
 		});
 
 		await act(async () => {
-			finishActivation({ publication: publication("ABCDEFGH", "queued") });
-			await activation;
+			finishRetry({ publication: publication("ABCDEFGH", "queued") });
+			await retry;
 			await Promise.resolve();
 		});
 		expect(current.publication).toBeNull();
@@ -301,7 +297,7 @@ describe("useAdminPublication", () => {
 	});
 
 	it("keeps human validation details with the selected item", async () => {
-		api.activateZenodo.mockRejectedValue(
+		api.retryZenodo.mockRejectedValue(
 			new AdminApiError(
 				{
 					code: "validation_failed",
@@ -314,16 +310,13 @@ describe("useAdminPublication", () => {
 		await render();
 
 		await act(async () => {
-			await current.activateZenodo("mint-zenodo");
+			await current.retryZenodo();
 			await flush();
 		});
 		expect(api.get).toHaveBeenCalledTimes(2);
 		expect(current.actionError).toBe(
 			"Complete the required Zenodo fields and try again.",
 		);
-		expect(current.actionFieldErrors).toEqual({
-			abstractNote: "Add an abstract or description.",
-		});
 
 		itemKey = "HGFEDCBA";
 		await act(async () => {
@@ -335,6 +328,5 @@ describe("useAdminPublication", () => {
 			await flush();
 		});
 		expect(current.actionError).toBeNull();
-		expect(current.actionFieldErrors).toEqual({});
 	});
 });

@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, CheckmarkCircle01Icon, Clock03Icon, Loading03Icon, Refresh01Icon, SearchCheckIcon, ServerOffIcon } from "@hugeicons/core-free-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 
+import { useAdminSession } from "./AdminSessionProvider";
 import { Button } from "@/components/nextui/Button";
 import { Progress } from "@/components/nextui/Progress";
 
@@ -68,6 +69,7 @@ export function AdminSearchIndexStatus({
 	onRetry: () => void;
 	view: AdminSearchIndexView;
 }) {
+	const { canPublish } = useAdminSession();
 	const appearance = statusAppearance[view.kind];
 	const Icon = appearance.icon;
 	return (
@@ -142,7 +144,7 @@ export function AdminSearchIndexStatus({
 							{error}
 						</p>
 					) : null}
-					{view.canRetry ? (
+					{view.canRetry && canPublish ? (
 						<Button
 							className="w-full"
 							color="accent"

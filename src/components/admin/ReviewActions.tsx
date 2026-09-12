@@ -49,7 +49,7 @@ export function ReviewActions({
 	disabled = false,
 	publishBlocked = false,
 }: ReviewActionProps) {
-	const { role } = useAdminSession();
+	const { canPublish } = useAdminSession();
 	const state = useReviewAction(
 		snapshot,
 		onUpdated,
@@ -62,7 +62,7 @@ export function ReviewActions({
 	if (snapshot.reviewState !== "pending") return null;
 	return (
 		<>
-			{role !== "creator" ? (
+			{canPublish ? (
 				<div className="flex w-full items-center gap-2">
 					<Button
 						size="xs"

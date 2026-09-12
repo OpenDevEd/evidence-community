@@ -101,6 +101,7 @@ import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 import { AdminLinksEditor } from "./AdminLinksEditor";
 import { AdminMetadataField } from "./AdminMetadataField";
+import { useAdminSession } from "./AdminSessionProvider";
 import { AdminPublicationHeaderStatus } from "./AdminPublicationStatus";
 import { useAdminPublication } from "./useAdminPublication";
 
@@ -1415,6 +1416,7 @@ export function AdminInspector({
 	validationRevision: number;
 }) {
 	const { identity } = useLibraryConfig();
+	const { canPublish } = useAdminSession();
 	const detailKey = detail?.key;
 	const definition = useMemo(
 		() =>
@@ -1763,7 +1765,7 @@ export function AdminInspector({
 										data-admin-writeback-sources-button
 										size="xs"
 										variant="muted"
-										isDisabled={busy}
+										isDisabled={busy || !canPublish}
 										onPress={() => {
 											closeMenu();
 											onManageSources();

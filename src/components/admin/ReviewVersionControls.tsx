@@ -167,7 +167,7 @@ export function ReviewWithdrawButton({
 }) {
 	const session = useAdminSession();
 	const canWithdraw =
-		session.role !== "creator" || submittedBy === session.userId;
+		session.canPublish || submittedBy === session.userId;
 	return (
 		<Button
 			size="xs"
