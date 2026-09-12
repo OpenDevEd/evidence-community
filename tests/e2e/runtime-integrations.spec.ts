@@ -453,6 +453,11 @@ test("sends analytics only for the configured and consented profile", async ({
 	const network = trackAnalyticsNetwork(page);
 
 	await page.goto("/lib?qa_email=analytics-privacy-canary%40example.org");
+	await page.getByRole("main").evaluate((element) => {
+		element.id = "analytics-privacy-canary";
+		element.setAttribute("data-private", "analytics-privacy-canary");
+		element.style.setProperty("--privacy-probe", 'url("https://example.org/analytics-privacy-canary")');
+	});
 	if (expectsConsent) {
 		await page
 			.getByRole("button", {

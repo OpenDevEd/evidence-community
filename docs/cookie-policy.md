@@ -32,7 +32,7 @@ We remove or mask free-text searches, form values, passwords, document text, AI 
 
 Session replay is a separate choice. It can only be enabled when product analytics is enabled.
 
-When enabled, PostHog can record a visual reconstruction of a session so we can reproduce interface problems. All page text, input values, and element attributes are masked. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
+When enabled, PostHog can record a visual reconstruction of a session so we can reproduce interface problems. Page text, input values, element identifiers, links, and image sources are masked. Only styling and visual-state attributes are retained to reconstruct the layout; URLs in CSS are removed. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
 
 Turning session replay off stops new replay recording without turning off ordinary product analytics.
 

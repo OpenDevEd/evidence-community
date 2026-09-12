@@ -43,7 +43,7 @@ Our lawful basis is **consent**. PostHog and Google Analytics do not load in the
 
 ## **Session replay after separate consent**
 
-If you separately allow session replay and diagnostics, PostHog records a masked visual reconstruction of your session so we can reproduce interface problems. All page text, input values, and element attributes are masked. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
+If you separately allow session replay and diagnostics, PostHog records a masked visual reconstruction of your session so we can reproduce interface problems. Page text, input values, element identifiers, links, and image sources are masked. Only styling and visual-state attributes are retained to reconstruct the layout; URLs in CSS are removed. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
 
 Our lawful basis is **consent**. Session replay can only be enabled with product analytics and can be turned off separately at any time.
 

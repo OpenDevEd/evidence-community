@@ -174,7 +174,7 @@
     "cookieAnalyticsLabel": "Produktanalyse",
     "cookieAnalyticsDescription": "Hilft uns, Navigation, Suchen, Downloads, die Nutzung von KI-Funktionen und die Leistung anhand eines pseudonymen Profils zu verstehen.",
     "cookieReplayLabel": "Sitzungswiedergabe und Diagnose",
-    "cookieReplayDescription": "Zeichnet eine maskierte visuelle Wiedergabe und technische Fehler auf. Eingaben, Dokumenttexte und KI-Unterhaltungen sind ausgeschlossen.",
+    "cookieReplayDescription": "Zeichnet das Seitenlayout und technische Fehler auf. Texte, Eingaben, Links und Bilder werden maskiert.",
     "cookieSavePreferences": "Einstellungen speichern",
     "helpTitle": "Hilfe",
     "relatedResourcesByCitation": "Die folgenden Ressourcen beziehen sich durch Zitation auf diese Veröffentlichung.",

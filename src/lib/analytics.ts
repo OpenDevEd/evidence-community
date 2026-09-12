@@ -71,7 +71,7 @@ const POSTHOG_STORAGE_PREFIXES = ["ph_", "__ph_", "posthog"];
 const SENSITIVE_PROPERTY_NAME =
 	/^\$(?:initial_)?referrer$|(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
 const REPLAY_LAYOUT_ATTRIBUTES = new Set([
-	"class", "id", "style", "_csstext", "rel", "type", "media",
+	"class", "style", "_csstext", "rel", "type", "media",
 	"width", "height", "viewbox", "d", "fill", "stroke", "stroke-width",
 	"stroke-linecap", "stroke-linejoin", "fill-rule", "clip-rule", "transform",
 	"x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry",
@@ -79,7 +79,12 @@ const REPLAY_LAYOUT_ATTRIBUTES = new Set([
 ]);
 
 function maskReplayAttribute(name: string, value: string) {
-	return REPLAY_LAYOUT_ATTRIBUTES.has(name.toLowerCase())
+	const attribute = name.toLowerCase();
+	if (attribute === "style" || attribute === "_csstext") {
+		// CSS keeps the layout, but resource URLs can contain private values.
+		return value.replace(/url\(\s*(?:"[^"]*"|'[^']*'|[^)]*)\s*\)/giu, "url(about:blank)");
+	}
+	return REPLAY_LAYOUT_ATTRIBUTES.has(attribute)
 		? value
 		: "*".repeat(value.length);
 }
