@@ -180,8 +180,8 @@ function allReplayNodes(node: ReplayNode): ReplayNode[] {
 	return [node, ...(node.childNodes ?? []).flatMap(allReplayNodes)];
 }
 
-function expectPrivateStyledReplay(network: AnalyticsNetwork) {
-	const snapshots = network.capturedEvents
+function capturedReplaySnapshots(network: AnalyticsNetwork) {
+	return network.capturedEvents
 		.filter((event) => event.event === "$snapshot")
 		.flatMap((event) => event.properties?.$snapshot_data as Array<{
 			type: number;
@@ -193,6 +193,10 @@ function expectPrivateStyledReplay(network: AnalyticsNetwork) {
 				? JSON.parse(gunzipSync(Buffer.from(snapshot.data, "latin1")).toString("utf8"))
 				: snapshot.data,
 		}));
+}
+
+function expectPrivateStyledReplay(network: AnalyticsNetwork) {
+	const snapshots = capturedReplaySnapshots(network);
 	expect(JSON.stringify(snapshots)).not.toContain("analytics-privacy-canary");
 	const fullSnapshot = snapshots.find((snapshot) => snapshot.type === 2);
 	if (!fullSnapshot?.data.node) throw new Error("No full DOM snapshot was captured");
@@ -250,26 +254,9 @@ async function expectFlushedSessionReplay(
 	try {
 		await expect
 			.poll(
-				() =>
-					page.evaluate(() =>
-						Object.entries(localStorage).some(([key, value]) => {
-							if (!key.startsWith("ph_") || !key.endsWith("_posthog"))
-								return false;
-							try {
-								const replay = JSON.parse(value) as {
-									$debug_first_full_snapshot_timestamp?: number;
-									$sess_rec_flush_size?: { size?: number };
-								};
-								return (
-									typeof replay.$debug_first_full_snapshot_timestamp ===
-										"number" &&
-									(replay.$sess_rec_flush_size?.size ?? 0) > 0
-								);
-							} catch {
-								return false;
-							}
-						}),
-					),
+				() => capturedReplaySnapshots(network).some(
+					(snapshot) => snapshot.type === 2 && snapshot.data.node,
+				),
 				{ timeout: 10_000 },
 			)
 			.toBe(true);
