@@ -38,6 +38,7 @@ import {
 	selectedImportRecords,
 	summarizeImportResults,
 	toggleImportSelection,
+	validateImportFiles,
 } from "./admin-import";
 
 type ImportTab = "dois" | "files";
@@ -58,6 +59,16 @@ function errorMessage(error: unknown) {
 		return fieldMessages.length ? `${error.message} ${fieldMessages.join(" ")}` : error.message;
 	}
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
+}
+
+function importInputError(tab: ImportTab, doiText: string, files: readonly File[]): string | null {
+	try {
+		if (tab === "dois") doiPreviewRequest(doiText);
+		else validateImportFiles(files);
+		return null;
+	} catch (error) {
+		return errorMessage(error);
+	}
 }
 
 /**
@@ -112,6 +123,7 @@ function ImportForm({
 	const [collections, setCollections] = useState<string[]>([]);
 	const [results, setResults] = useState<AdminImportCommitResult[] | null>(null);
 	const stage: ImportStage = importStage(preview, results);
+	const inputError = importInputError(tab, doiText, files);
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -169,11 +181,22 @@ function ImportForm({
 					/>
 				) : (
 					<ImportInputPanel
+						busy={busy}
 						doiText={doiText}
 						files={files}
-						onDoiTextChange={setDoiText}
-						onFilesChange={setFiles}
-						onTabChange={setTab}
+						inputError={inputError}
+						onDoiTextChange={(value) => {
+							setDoiText(value);
+							setError(null);
+						}}
+						onFilesChange={(value) => {
+							setFiles(value);
+							setError(null);
+						}}
+						onTabChange={(value) => {
+							setTab(value);
+							setError(null);
+						}}
 						tab={tab}
 					/>
 				)}
@@ -185,6 +208,7 @@ function ImportForm({
 			</ModalBody>
 			<ImportFooter
 				busy={busy}
+				canPreview={inputError === null}
 				onBack={() => {
 					setPreview(null);
 					setError(null);
@@ -200,15 +224,19 @@ function ImportForm({
 }
 
 function ImportInputPanel({
+	busy,
 	doiText,
 	files,
+	inputError,
 	onDoiTextChange,
 	onFilesChange,
 	onTabChange,
 	tab,
 }: {
+	busy: boolean;
 	doiText: string;
 	files: File[];
+	inputError: string | null;
 	onDoiTextChange: (value: string) => void;
 	onFilesChange: (files: File[]) => void;
 	onTabChange: (tab: ImportTab) => void;
@@ -217,12 +245,16 @@ function ImportInputPanel({
 	return (
 		<Tabs
 			aria-label="Import source"
+			isDisabled={busy}
 			onSelectionChange={(key) => onTabChange(key as ImportTab)}
 			selectedKey={tab}
 		>
 			<Tab key="dois" title="DOIs">
 				<Textarea
 					aria-label="DOIs"
+					isDisabled={busy}
+					isInvalid={Boolean(doiText.trim() && inputError)}
+					errorMessage={inputError}
 					minRows={6}
 					onValueChange={onDoiTextChange}
 					placeholder={"10.1000/xyz123\nhttps://doi.org/10.1000/abc456"}
@@ -233,24 +265,46 @@ function ImportInputPanel({
 				</p>
 			</Tab>
 			<Tab key="files" title="Bibliography files">
-				<input
-					accept={ADMIN_IMPORT_FILE_EXTENSIONS}
-					aria-label="Bibliography files"
-					className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-black/[0.05] file:px-3 file:py-2 file:text-sm file:font-medium dark:file:bg-white/[0.08]"
-					multiple
-					onChange={(event) => onFilesChange(Array.from(event.currentTarget.files ?? []))}
-					type="file"
-				/>
-				<p className="mt-2 text-xs text-black/55 dark:text-white/55">
-					Supported formats: {ADMIN_IMPORT_FILE_FORMATS.join(", ")}. Up to {ADMIN_IMPORT_MAX_FILES} files, 5 MB each.
-				</p>
-				<ul className="mt-2 text-xs text-black/70 dark:text-white/70">
-					{files.map((file) => (
-						<li key={file.name}>{file.name}</li>
-					))}
-				</ul>
+				<BibliographyFileInput busy={busy} files={files} inputError={inputError} onFilesChange={onFilesChange} />
 			</Tab>
 		</Tabs>
+	);
+}
+
+function BibliographyFileInput({ busy, files, inputError, onFilesChange }: {
+	busy: boolean;
+	files: File[];
+	inputError: string | null;
+	onFilesChange: (files: File[]) => void;
+}) {
+	const fileError = files.length > 0 ? inputError : null;
+	return (
+		<>
+			<input
+				accept={ADMIN_IMPORT_FILE_EXTENSIONS}
+				aria-label="Bibliography files"
+				className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-black/[0.05] file:px-3 file:py-2 file:text-sm file:font-medium dark:file:bg-white/[0.08]"
+				disabled={busy}
+				aria-describedby={fileError ? "import-file-error" : undefined}
+				aria-invalid={Boolean(fileError)}
+				multiple
+				onChange={(event) => onFilesChange(Array.from(event.currentTarget.files ?? []))}
+				type="file"
+			/>
+			<p className="mt-2 text-xs text-black/55 dark:text-white/55">
+				Supported formats: {ADMIN_IMPORT_FILE_FORMATS.join(", ")}. Up to {ADMIN_IMPORT_MAX_FILES} files, 5 MB each.
+			</p>
+			<ul className="mt-2 text-xs text-black/70 dark:text-white/70">
+				{files.map((file) => (
+					<li key={file.name}>{file.name}</li>
+				))}
+			</ul>
+			{fileError ? (
+				<p className="mt-2 text-sm text-danger" id="import-file-error" role="alert">
+					{fileError}
+				</p>
+			) : null}
+		</>
 	);
 }
 
@@ -431,6 +485,7 @@ function PreviewRow({
 
 function ImportFooter({
 	busy,
+	canPreview,
 	onBack,
 	onClose,
 	onCommit,
@@ -439,6 +494,7 @@ function ImportFooter({
 	stage,
 }: {
 	busy: boolean;
+	canPreview: boolean;
 	onBack: () => void;
 	onClose: () => void;
 	onCommit: () => void;
@@ -458,6 +514,7 @@ function ImportFooter({
 			</Button>
 			<PrimaryAction
 				busy={busy}
+				canPreview={canPreview}
 				onCommit={onCommit}
 				onPreview={onPreview}
 				selectedCount={selectedCount}
@@ -469,12 +526,14 @@ function ImportFooter({
 
 function PrimaryAction({
 	busy,
+	canPreview,
 	onCommit,
 	onPreview,
 	selectedCount,
 	stage,
 }: {
 	busy: boolean;
+	canPreview: boolean;
 	onCommit: () => void;
 	onPreview: () => void;
 	selectedCount: number;
@@ -483,7 +542,7 @@ function PrimaryAction({
 	if (stage === "done") return null;
 	if (stage === "input") {
 		return (
-			<Button color="accent" isLoading={busy} onPress={onPreview} size="xs" variant="solid">
+			<Button color="accent" isDisabled={!canPreview} isLoading={busy} onPress={onPreview} size="xs" variant="solid">
 				Preview
 			</Button>
 		);
