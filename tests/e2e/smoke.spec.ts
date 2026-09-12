@@ -832,7 +832,7 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await page.keyboard.press("Tab");
 		await expect(skipLink).toBeFocused();
 		await skipLink.press("Enter");
-		await expect(page.getByRole("main")).toBeFocused();
+		await expect(page.locator("#page-content")).toBeFocused();
 		await page.keyboard.press("Tab");
 		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
 		await country.focus();
@@ -930,3 +930,17 @@ for (const width of [1200, 390]) {
 		await expect(page.locator("#page-content")).toBeFocused();
 	});
 }
+
+
+test("keeps keyboard navigation at the start of a policy page", async ({ page }) => {
+	test.skip(expectedPrivacyLink !== "/privacy", "Requires the internal privacy page.");
+	await page.setViewportSize({ width: 1440, height: 950 });
+	await page.goto("/en-GB/privacy");
+	await dismissConsent(page);
+	await expect(page.getByRole("navigation", { name: "Policy sections" })).toBeVisible();
+	await page.keyboard.press("Tab");
+	const skip = page.getByRole("link", { name: "Skip to content", exact: true });
+	await expect(skip).toBeFocused();
+	await skip.press("Enter");
+	await expect(page.locator("#page-content")).toBeFocused();
+});
