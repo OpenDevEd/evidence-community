@@ -1,6 +1,6 @@
 import type { AdminItemWriteback } from "@/lib/admin/types";
 
-export type WritebackDialogMode = "manage" | "publish" | "unpublish";
+export type WritebackDialogMode = "manage" | "restore" | "unpublish";
 
 export type WritebackDialogStatusTone = "off" | "ok" | "warn";
 
@@ -52,7 +52,7 @@ function statusFor(
  */
 export function resolveWritebackDialogOptions(
 	writeback: AdminItemWriteback,
-	mode: WritebackDialogMode = "publish",
+	mode: WritebackDialogMode = "restore",
 ): WritebackDialogOption[] | null {
 	if (writeback.available.length === 0) return null;
 	const selected = new Set(writeback.selected);
@@ -74,13 +74,13 @@ export function resolveWritebackDialogOptions(
 
 export function writebackDialogText(mode: WritebackDialogMode) {
 	switch (mode) {
-		case "publish":
+		case "restore":
 			return {
-				confirm: "Publish",
-				here: "Public page and search",
+				confirm: "Submit for review",
+				here: "Public after approval",
 				intro:
-					"This library always gets it. Switch on any source that should get it too, now and whenever it is published again.",
-				title: "Publish this record",
+					"An Editor must approve the restored record before it goes public. Choose which sources should receive it when published.",
+				title: "Restore this record",
 			};
 		case "unpublish":
 			return {
