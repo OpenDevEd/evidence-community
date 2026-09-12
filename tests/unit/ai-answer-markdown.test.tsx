@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { act } from "react";
+import Link from "next/link";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next-intl", () => ({
@@ -19,7 +20,7 @@ vi.mock("@/components/features/items/Resource", () => ({
 	),
 }));
 
-import { AIMarkdown } from "@/components/features/markdown/Markdown";
+import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Markdown";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -38,6 +39,11 @@ describe("what an AI answer shows the reader", () => {
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
+	});
+
+	afterEach(async () => {
+		await act(async () => root.unmount());
+		container.remove();
 	});
 
 	async function render(answer: string) {
@@ -132,5 +138,17 @@ describe("what an AI answer shows the reader", () => {
 			container.querySelector("[aria-label='Publication card ABCD1234']"),
 		).not.toBeNull();
 		expect(container.textContent).not.toContain("RESOURCE");
+	});
+	it("renders an archive excerpt as text without nested links or Markdown syntax", async () => {
+		await act(async () => {
+			root.render(
+				<Link href="/digests/edition">
+					<MarkdownExcerpt>{"Two **reports**: [country-filter test](/lib/ABCD1234) and [document test](/lib/EFGH5678)."}</MarkdownExcerpt>
+				</Link>,
+			);
+		});
+		expect(container.textContent).toBe("Two reports: country-filter test and document test.");
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(container.querySelector("a")?.getAttribute("href")).toBe("/digests/edition");
 	});
 });
