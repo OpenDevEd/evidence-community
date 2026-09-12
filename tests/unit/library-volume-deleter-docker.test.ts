@@ -25,54 +25,87 @@ function jsonResponse(status: number, body: unknown) {
 }
 
 describe("library volume Docker deleter", () => {
-	it("deletes only the derived volume without force and verifies absence", async () => {
-		const requests: Array<{ method: string; path: string }> = [];
-		let inspections = 0;
-		const request: DockerVolumeRequest = async (candidate) => {
-			requests.push(candidate);
-			if (candidate.path.startsWith("/containers/json?")) {
-				const url = new URL(candidate.path, "http://docker.test");
-				expect(JSON.parse(url.searchParams.get("filters") ?? "null")).toEqual({
-					volume: [volumeName],
-				});
-				return jsonResponse(200, []);
-			}
-			if (candidate.method === "GET") {
-				inspections += 1;
-				return inspections === 1
-					? jsonResponse(200, { Name: volumeName })
-					: { body: "", contentType: null, status: 404 };
-			}
+	it.each([
+		{ name: "both volumes", present: [volumeName, `${applicationUuid}_library-config-data`] },
+		{ name: "configuration volume alone", present: [`${applicationUuid}_library-config-data`] },
+		{ name: "neither volume", present: [] },
+	])("removes $name without touching another library", async ({ present }) => {
+		const otherVolume = "anotherlibrary00000000000_library-config-data";
+		const remaining = new Set([...present, otherVolume]);
+		const request: DockerVolumeRequest = async ({ method, path }) => {
+			if (path.startsWith("/containers/json?")) return jsonResponse(200, []);
+			const name = path.slice("/volumes/".length);
+			if (!remaining.has(name)) return { body: "", contentType: null, status: 404 };
+			if (method === "GET") return jsonResponse(200, { Name: name });
+			remaining.delete(name);
 			return { body: "", contentType: null, status: 204 };
 		};
-
 		const remove = createDockerLibraryVolumeDeleter(request);
 		await expect(remove(applicationUuid)).resolves.toEqual({
-			outcome: "deleted",
+			outcome: present.length ? "deleted" : "absent",
 		});
-		expect(requests).toEqual([
-			expect.objectContaining({ method: "GET" }),
-			{ method: "GET", path: `/volumes/${volumeName}` },
-			{ method: "DELETE", path: `/volumes/${volumeName}` },
-			{ method: "GET", path: `/volumes/${volumeName}` },
-		]);
-		expect(requests.some(({ path }) => path.includes("force"))).toBe(false);
+		expect([...remaining]).toEqual([otherVolume]);
+		await expect(remove(applicationUuid)).resolves.toEqual({ outcome: "absent" });
 	});
 
-	it("treats an absent derived volume as success", async () => {
-		const requests: Array<{ method: string; path: string }> = [];
-		const remove = createDockerLibraryVolumeDeleter(async (request) => {
-			requests.push(request);
-			return request.path.startsWith("/containers/json?")
-				? jsonResponse(200, [])
-				: { body: "", contentType: null, status: 404 };
+	it("does not report success while the configuration volume is in use", async () => {
+		const remove = createDockerLibraryVolumeDeleter(async ({ path }) => {
+			if (path.startsWith("/containers/json?")) {
+				const filters = JSON.parse(new URL(path, "http://docker.test").searchParams.get("filters")!);
+				return jsonResponse(200, filters.volume[0].endsWith("_library-config-data")
+					? [{ Id: "a".repeat(64) }] : []);
+			}
+			return { body: "", contentType: null, status: 404 };
 		});
+		await expect(remove(applicationUuid)).rejects.toMatchObject({ code: "volume_in_use" });
+	});
 
-		await expect(remove(applicationUuid)).resolves.toEqual({
-			outcome: "absent",
+	it.each(["coolify-proxy", "library-worker"])("cleans the private network only when %s is its last endpoint", async (endpointName) => {
+		const networkName = `${applicationUuid}_private`;
+		let exists = true;
+		const endpoints: Record<string, { Name: string }> = { ["b".repeat(64)]: { Name: endpointName } };
+		const remove = createDockerLibraryVolumeDeleter(async ({ method, path, body }) => {
+			if (path.startsWith("/containers/json?")) return jsonResponse(200, []);
+			if (!path.startsWith(`/networks/${networkName}`) || !exists) return jsonResponse(404, {});
+			if (method === "GET") return jsonResponse(200, {
+				Name: networkName, Labels: { "com.docker.compose.project": applicationUuid }, Containers: endpoints,
+			});
+			if (method === "POST") {
+				expect(JSON.parse(body!)).toEqual({ Container: "b".repeat(64), Force: false });
+				delete endpoints["b".repeat(64)];
+				return jsonResponse(200, {});
+			}
+			expect(endpoints).toEqual({});
+			exists = false;
+			return jsonResponse(204, {});
 		});
-		expect(requests).toHaveLength(2);
-		expect(requests.every(({ method }) => method === "GET")).toBe(true);
+		if (endpointName === "library-worker") {
+			await expect(remove(applicationUuid)).rejects.toMatchObject({ code: "volume_in_use" });
+			expect(exists).toBe(true);
+			expect(Object.keys(endpoints)).toHaveLength(1);
+		} else {
+			await expect(remove(applicationUuid)).resolves.toEqual({ outcome: "deleted" });
+			expect(exists).toBe(false);
+			await expect(remove(applicationUuid)).resolves.toEqual({ outcome: "absent" });
+		}
+	});
+
+	it.each(["stopped container", "endpoint reattached"])("keeps a network for retry after %s", async (scenario) => {
+		let deletionAttempted = false;
+		const remove = createDockerLibraryVolumeDeleter(async ({ method, path }) => {
+			if (path.startsWith("/containers/json?")) {
+				const filter = JSON.parse(new URL(path, "http://docker.test").searchParams.get("filters")!);
+				return jsonResponse(200, filter.network && scenario === "stopped container" ? [{ Id: "c".repeat(64) }] : []);
+			}
+			if (!path.startsWith("/networks/")) return jsonResponse(404, {});
+			if (method === "GET") return jsonResponse(200, {
+				Name: `${applicationUuid}_private`, Labels: { "com.docker.compose.project": applicationUuid }, Containers: {},
+			});
+			deletionAttempted = true;
+			return jsonResponse(403, {});
+		});
+		await expect(remove(applicationUuid)).rejects.toMatchObject({ code: "volume_in_use" });
+		expect(deletionAttempted).toBe(scenario === "endpoint reattached");
 	});
 
 	it("refuses deletion while any container references the volume", async () => {
