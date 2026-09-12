@@ -53,8 +53,8 @@ function LinkItem({ link, pathname, isMobile, styleVariant, onNavigate }: LinkIt
 	const visibleChildren = getVisibleRuntimeLinks(link.children);
 	return (
 		<li
-			onMouseEnter={clearTimeoutOpen}
-			onMouseLeave={debouncedOnClose}
+			onMouseEnter={isMobile ? undefined : clearTimeoutOpen}
+			onMouseLeave={isMobile ? undefined : debouncedOnClose}
 			className={twMerge(
 				"flex items-center gap-2 text-black/60 dark:text-white/60",
 				isActive && "text-accent dark:text-accent"

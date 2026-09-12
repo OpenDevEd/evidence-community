@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
-import { useSyncExternalStore } from "react";
+import { useHydrated } from "@/hooks/useHydrated";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { DropdownItem } from "@nextui-org/react";
@@ -11,8 +11,6 @@ import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import type { NavbarElementProps } from "@/types/navbar";
-
-const subscribeToHydration = () => () => {};
 
 type ThemeSwitcherProps = NavbarElementProps & {
 	toolbar?: boolean;
@@ -24,11 +22,7 @@ export default function ThemeSwitcher({
 	showLabel,
 	toolbar = false,
 }: ThemeSwitcherProps) {
-	const mounted = useSyncExternalStore(
-		subscribeToHydration,
-		() => true,
-		() => false,
-	);
+	const mounted = useHydrated();
 	const { resolvedTheme, setTheme } = useTheme();
 	const isEnabled = useLibraryFeature("themeSwitcher");
 	const t = useTranslations("ui");

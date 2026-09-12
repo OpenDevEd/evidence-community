@@ -90,6 +90,7 @@ test("mobile navigation stays out of the focus order while closed and returns fo
 	await expect(destination).toHaveCount(0);
 	const menuId = await opener.getAttribute("aria-controls");
 	const menu = page.locator(`[id="${menuId}"]`);
+	await expect(opener).toBeEnabled();
 	await opener.focus();
 	await menu.getByRole("link", {name: expectedNavigationLabel, exact: true, includeHidden: true}).focus();
 	await expect(opener).toBeFocused();
@@ -127,7 +128,30 @@ test("mobile navigation scrolls to its final control on a short screen", async (
 	await opener.click();
 	await expect(page.getByRole("button", {name: "Close", exact: true})).toHaveAttribute("aria-expanded", "true");
 	await menu.hover();
+	await expect(page.getByRole("menu")).toHaveCount(0);
 	await page.mouse.wheel(0, 600);
 	await expect.poll(() => menu.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 	await expect(menu.locator("a[href],button").last()).toBeInViewport();
+});
+
+
+test("mobile navigation waits until its first press can be handled", async ({page}) => {
+	let releaseScripts = () => {};
+	const scriptsReady = new Promise<void>(resolve => { releaseScripts = resolve; });
+	await page.route("**/_next/static/**/*.js", async route => {
+		await scriptsReady;
+		await route.continue();
+	});
+	try {
+		await page.goto("/digests", {waitUntil: "commit"});
+		const opener = page.getByRole("button", {name: "Open hamburger menu", exact: true});
+		await expect(opener).toBeVisible();
+		await expect(opener).toBeDisabled();
+		releaseScripts();
+		await dismissConsent(page);
+		await opener.click();
+		await expect(page.getByRole("button", {name: "Close", exact: true})).toHaveAttribute("aria-expanded", "true");
+	} finally {
+		releaseScripts();
+	}
 });

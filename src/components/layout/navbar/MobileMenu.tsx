@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import NavLinks from "./NavLinks";
+import { useHydrated } from "@/hooks/useHydrated";
 import type { NavbarElementConfig, NavbarContext } from "@/types/navbar";
 
 interface MobileMenuProps {
@@ -31,6 +32,7 @@ export default function MobileMenu({
 	pathname,
 }: MobileMenuProps) {
 	const [isOpen, setIsOpen] = useState(false);
+	const hydrated = useHydrated();
 	const menuId = useId();
 	const triggerRef = useRef<HTMLDivElement>(null);
 	const t = useTranslations("ui");
@@ -47,7 +49,7 @@ export default function MobileMenu({
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
 			<div ref={triggerRef} className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
-				<Button variant="invisible" aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={toggleMenu} onKeyDown={closeOnEscape}>
+				<Button variant="invisible" isDisabled={!hydrated} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={toggleMenu} onKeyDown={closeOnEscape}>
 					<MenuIcon isOpen={isOpen} />
 				</Button>
 			</div>
