@@ -205,6 +205,15 @@ test("lets an Editor publish and update a record without stale client navigation
 		inspector.getByText("Published", { exact: true }).first(),
 	).toBeVisible();
 
+	const published = await page.request.get(`/api/admin/items/${key}`);
+	const revision = (await published.json()).item.revision;
+	await expect.poll(async () => {
+		const response = await page.request.post("/api/admin/search-index/receipts", {
+			data: { receipts: [{ entityType: "item", entityKey: key, revision }] },
+		});
+		return (await response.json()).receipts[0].state;
+	}, { timeout: 30_000 }).toBe("indexed");
+
 	const readerContext = await browser.newContext({
 		baseURL: testInfo.project.use.baseURL,
 		ignoreHTTPSErrors: true,
@@ -231,7 +240,7 @@ test("lets an Editor publish and update a record without stale client navigation
 		const removed = await page.request.post(`/api/admin/items/${key}/unpublish`, { data: {} });
 		expect(removed.ok()).toBe(true);
 		await recordLink.click();
-		await expect(reader.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+		await expect(reader.locator('meta[name="robots"]').first()).toHaveAttribute("content", /noindex/);
 		await expect(reader.getByRole("heading", { name: `${title} revised`, exact: true })).toHaveCount(0);
 		await expect(reader.locator('meta[name="citation_title"]')).toHaveCount(0);
 	} finally {
