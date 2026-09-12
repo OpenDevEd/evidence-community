@@ -25,7 +25,6 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { getPublicItemLinks } from "@/lib/links/item-links";
 import { hasAnyTag } from "@/lib/tags";
 import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
@@ -54,7 +53,7 @@ export type SearchProjectionPlan = {
 	documents: ItemSearchDocument[];
 };
 
-type CollectionRow = typeof collection.$inferSelect;
+type CollectionRow = Pick<typeof collection.$inferSelect, "key" | "parentCollection" | "deleted">;
 type ItemRow = typeof item.$inferSelect;
 export type PublicationProjectionConfig = LibraryServerConfig["services"]["publication"];
 
@@ -276,6 +275,7 @@ async function buildSearchProjectionPlanForKeys(
 	publication: PublicationProjectionConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
+	hiddenTags: readonly string[] = [],
 ): Promise<SearchProjectionPlan> {
 	if (topLevelKeys.length === 0) {
 		return { deleteKeys: [], documents: [] };
@@ -425,10 +425,8 @@ async function buildSearchProjectionPlanForKeys(
 	const zenodoStateByItem = new Map(
 		zenodoStateRows.map((row) => [row.itemKey, row]),
 	);
-	// Links and source citation metrics are search projections. The item API
-	// re-reads both from PostgreSQL.
 	const [linksByItem, citationMetricsByItem] = await Promise.all([
-		getPublicItemLinksForKeys(database, activeParentKeys),
+		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
 	]);
 	const childrenByParent = new Map<string, ItemRow[]>();
@@ -612,8 +610,12 @@ export async function readPublicItem(
 	config: LibraryServerConfig,
 ): Promise<Item | null> {
 	return database.transaction(async (transaction) => {
-		const collections = await transaction.select().from(collection).orderBy(asc(collection.key));
-		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, [key], collections);
+		const collections = await transaction.select({
+			key: collection.key,
+			parentCollection: collection.parentCollection,
+			deleted: collection.deleted,
+		}).from(collection);
+		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, [key], collections, config.content.tags.hidden);
 		const document = plan.documents.find((document) => document.key === key);
 		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;
 		const result = document as Item;
@@ -622,7 +624,6 @@ export async function readPublicItem(
 		);
 		const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
 		result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
-		result.links = await getPublicItemLinks(transaction, key, { hiddenTags: config.content.tags.hidden });
 		return result;
 	}, { isolationLevel: "repeatable read", accessMode: "read only" });
 }

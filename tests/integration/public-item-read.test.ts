@@ -1,31 +1,61 @@
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/actions", () => ({ areLinksValid: vi.fn() }));
 vi.mock("@/db", () => ({ getDatabaseForConfig: vi.fn() }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
-vi.mock("@/app/api/cache", () => ({ getCachedCollections: async () => [] }));
-// An item page must work even when its search document does not exist yet.
-vi.mock("@/lib/meilisearch", () => ({
-	getMeilisearchForConfig: async () => ({ index: { getDocument: async () => { throw { response: { status: 404 } }; } } }),
+vi.mock("@/app/api/cache", () => ({
+	getCachedItem: async (key: string) => (await import("@/app/api/item/[key]/route")).getItem(key),
+	getCachedCollections: async () => [],
 }));
+vi.mock("next/cache", () => ({ cacheLife: () => {}, cacheTag: () => {} }));
+vi.mock("@/i18n/server", () => ({ getRuntimeRequestLocale: async () => "en-GB" }));
 
 import { getDatabaseForConfig } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { GET } from "@/app/api/item/[key]/route";
+import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
+import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
 config.content.tags.hidden = ["hidden"];
+
+afterEach(() => vi.unstubAllGlobals());
+
+// Only external citation services are replaced; the source record and renderer are real.
+function stubCitationServices() {
+	vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
+		if (String(url).includes("/export?format=csljson")) {
+			const [record] = JSON.parse(String(init?.body));
+			return Response.json([{ id: "PUBAAAAA", type: "report", title: record.title }]);
+		}
+		if (String(url).endsWith("apa.csl")) {
+			return new Response('<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text"><info><title>Test title citation</title><id>https://example.org/test</id></info><citation><layout><text variable="title"/></layout></citation><bibliography><layout><text variable="title"/></layout></bibliography></style>');
+		}
+		if (String(url).includes("locales-en-GB.xml")) {
+			return new Response('<locale xmlns="http://purl.org/net/xbiblio/csl" xml:lang="en-GB"><terms/></locale>');
+		}
+		throw new Error(`Unexpected external request: ${url}`);
+	}));
+}
+
+async function citation(key: string) {
+	const response = await readCitation(new NextRequest(`https://library.example.org/api/item/${key}/citation`), { params: Promise.resolve({ key }) });
+	expect(response.headers.get("cache-control")).toBe("no-store");
+	return (await response.json()).citation;
+}
 
 function read(key: string) {
 	return GET(new NextRequest(`https://library.example.org/api/item/${key}`), { params: Promise.resolve({ key }) });
 }
 
 it("reads committed publications before indexing, and immediately respects edits, removal and hidden records", async () => {
+	stubCitationServices();
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
 		vi.mocked(getLibraryConfig).mockResolvedValue(config);
@@ -50,6 +80,10 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(response.status).toBe(200);
 		const publication = (await response.json()).item;
 		expect(publication.title).toBe("Published title");
+		expect(await citation("PUBAAAAA")).toContain("Published title");
+		const links = await getPublicItemLinksForKeys(database, ["PUBAAAAA", "HIDDENNN"], { hiddenTags: ["hidden"] });
+		expect(links.get("PUBAAAAA")?.related ?? []).toEqual([]);
+		expect(links.get("HIDDENNN")?.related).toEqual(["PUBAAAAA"]);
 		expect(publication.institution).toEqual(["Learning Lab"]);
 		expect(publication.links).toEqual({ cites: [], citedBy: [], related: [] });
 		expect(publication.attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["CHILDDDD"]);
@@ -59,11 +93,14 @@ it("reads committed publications before indexing, and immediately respects edits
 			const missing = await read(key);
 			expect(missing.status).toBe(404);
 			expect((await missing.json()).item).toBeNull();
+			expect(await citation(key)).toBeNull();
 		}
 		await client.query('UPDATE "item" SET "title" = \'Revised title\', "revision" = "revision" + 1 WHERE "key" = \'PUBAAAAA\'');
 		expect((await (await read("PUBAAAAA")).json()).item.title).toBe("Revised title");
+		expect(await citation("PUBAAAAA")).toContain("Revised title");
 		await client.query('UPDATE "item" SET "deleted" = 1 WHERE "key" = \'PUBAAAAA\'');
 		expect((await read("PUBAAAAA")).status).toBe(404);
+		expect(await citation("PUBAAAAA")).toBeNull();
 	});
 }, 120_000);
 
@@ -74,4 +111,7 @@ it("reports an unavailable database as a retryable failure instead of a missing 
 	expect(response.status).toBe(503);
 	expect(response.headers.get("cache-control")).toBe("no-store");
 	expect((await read("invalid")).status).toBe(400);
+	const citationResponse = await readCitation(new NextRequest("https://library.example.org/api/item/PUBAAAAA/citation"), { params: Promise.resolve({ key: "PUBAAAAA" }) });
+	expect(citationResponse.status).toBe(503);
+	expect(citationResponse.headers.get("cache-control")).toBe("no-store");
 });

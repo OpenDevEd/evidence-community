@@ -4,7 +4,7 @@ import ItemPage from "@/components/features/newlib/ItemPage";
 import { ItemGetResponse } from "@/app/api/item/types";
 
 async function getCurrentItem(key: string) {
-    const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
+    const data = await getCachedItemSmall(key);
     if (data?.item && !data.item.citation) {
         data.item.citation = "<div>Loading...</div>";
     }
@@ -15,12 +15,12 @@ async function getCurrentItem(key: string) {
 export default async function NewLibPage({
 	params,
 }: {
-	params: { key: string };
+	params: Promise<{ key: string }>;
 }) {
 	const { key } = await params;
 	const data = await getCurrentItem(key);
 
-	if (!data) {
+	if (!data?.item) {
 		return notFound();
 	}
 	return <ItemPage data={data as ItemGetResponse} loading={false} />;

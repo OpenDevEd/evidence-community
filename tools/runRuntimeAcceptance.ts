@@ -1985,7 +1985,7 @@ function removeCollectionTree(profile: Profile) {
 
 // Institutions the picker must page through. Zephyr is named by three records
 // and Borough by two, so the count order and the name order differ, while the
-// fixture's own Amber Institute and Indigo College keep one count tie.
+// search fixture also contributes Amber Institute once.
 const INSTITUTION_FIXTURES = [
 	{ institution: "Zephyr University", key: "ZEPHYRA2" },
 	{ institution: "Zephyr University", key: "ZEPHYRA3" },
@@ -1998,10 +1998,12 @@ const INSTITUTIONS_BY_COUNT = [
 	{ count: 3, name: "Amber Evidence Library" },
 	{ count: 3, name: "Zephyr University" },
 	{ count: 2, name: "Borough College" },
+	{ count: 1, name: "Amber Institute" },
 ];
 
 const INSTITUTIONS_BY_NAME = [
 	{ count: 3, name: "Amber Evidence Library" },
+	{ count: 1, name: "Amber Institute" },
 	{ count: 2, name: "Borough College" },
 	{ count: 3, name: "Zephyr University" },
 ];

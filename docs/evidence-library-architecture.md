@@ -122,8 +122,10 @@ At runtime:
 - Direct publication pages, exports, AI publication reads and `/api/item/[key]`
   read the committed PostgreSQL record through the shared metadata projection.
   They do not wait for a search indexing receipt. React deduplicates reads within
-  one render; item responses are not retained across requests. Drafts, removed
-  records and hidden-tagged records or attachments stay private.
+  one render; item and citation responses are not retained across requests.
+  The server-rendered page uses that record without an identical mount-time
+  fetch. Drafts, removed records and hidden-tagged records or attachments stay
+  private.
 - Published PDFs and cover images are served from the shared Supabase storage
   project.
 - Citation conversion uses the shared Zotero translation server.

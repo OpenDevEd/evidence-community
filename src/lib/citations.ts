@@ -1,11 +1,9 @@
 import { Item } from "@/app/api/item/types";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { getCachedItem } from "@/app/api/cache";
 import { ItemToZoteroJSON, transformItem } from "@/lib/utils";
 import { cacheLife, cacheTag } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
 import { getLibraryConfig } from "@/config/library-config/server";
-import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { hasAnyTag } from "@/lib/tags";
 import {
 	translateZoteroItemToCSL,
 } from "@/lib/zotero-translation";
@@ -121,43 +119,6 @@ async function getCSL(
 	);
 }
 
-async function getCitationSourceItem(
-	key: string,
-	hiddenTags: readonly string[],
-	libraryConfig: LibraryServerConfig,
-): Promise<Item | null> {
-	try {
-		const { index } = await getMeilisearchForConfig(libraryConfig);
-		const result = await index.getDocument(key);
-
-		const item = result as Item;
-		if (!item || item.deleted || hasAnyTag(item.tags, hiddenTags)) {
-			return null;
-		}
-
-		return transformItem(item) as Item;
-	} catch {
-		return null;
-	}
-}
-
-async function getCitationSourceItemCached(
-	indexKey: string,
-	key: string,
-	configRevision: string,
-	hiddenTags: readonly string[],
-	libraryConfig: LibraryServerConfig,
-) {
-	'use cache'
-	cacheLife({ revalidate: 60 })
-	cacheTag('item-citation-source-' + key)
-	return getCitationSourceItem(
-		key,
-		hiddenTags,
-		libraryConfig,
-	);
-}
-
 export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
 	const normalizedLocale = normalizeLocale(lang);
 	const libraryConfig = await getLibraryConfig();
@@ -166,18 +127,12 @@ export async function getCitationForItemKey(key: string, lang: string = "en-GB")
 		return null;
 	}
 
-	const item = await getCitationSourceItemCached(
-		libraryConfig.services.search.index,
-		key,
-		libraryConfig.revision,
-		libraryConfig.content.tags.hidden,
-		libraryConfig,
-	);
+	const { item } = await getCachedItem(key);
 	if (!item) {
 		return null;
 	}
 
-	const csl = await getCSL(item, translationUrl);
+	const csl = await getCSL(transformItem(item) as Item, translationUrl);
 	if (!csl) {
 		return null;
 	}

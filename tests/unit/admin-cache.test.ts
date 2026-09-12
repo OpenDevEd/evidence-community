@@ -43,8 +43,6 @@ describe("indexed receipt cache invalidation", () => {
 		]);
 
 		expect(mocks.revalidateTag.mock.calls).toEqual([
-			["item-citation-source-ITEM0001", { expire: 0 }],
-			["metadata-citation-ITEM0001", { expire: 0 }],
 			["collections", { expire: 0 }],
 		]);
 	});
