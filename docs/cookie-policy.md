@@ -46,7 +46,7 @@ The server groups these aggregate events by library and day before sending them 
 
 Use **Cookie settings** in the footer to change your choices at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the two switches exactly as shown. **Decline** disables both.
 
-If this library changes its analytics policy version, or if you move to a different library with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
+If the built-in analytics policy or this library’s policy version changes, or if you move to a different library with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
 
 Most browsers also let you inspect or delete stored site data in their privacy settings.
 
