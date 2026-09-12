@@ -109,7 +109,8 @@ jobs:
               released=true
               continue
             fi
-            if [ -z "$previous" ] && git merge-base --is-ancestor "$candidate" "$RUNTIME_COMMIT"; then
+            if git merge-base --is-ancestor "$candidate" "$RUNTIME_COMMIT" &&
+              { [ -z "$previous" ] || git merge-base --is-ancestor "$previous" "$candidate"; }; then
               previous="$candidate"
             fi
           done
