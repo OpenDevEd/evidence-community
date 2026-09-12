@@ -226,6 +226,7 @@ test("lets an Editor publish and update a record without stale client navigation
 		await expect(recordLink).toBeVisible({ timeout: 30_000 });
 		await recordLink.click();
 		await expect(reader.getByRole("heading", { name: title, exact: true })).toBeVisible();
+		await expect(reader.locator('[data-citation-state="ready"]')).toContainText(title);
 		await reader.locator('a[href$="/lib"]').first().click();
 		await expect(recordLink).toBeVisible();
 
@@ -234,6 +235,7 @@ test("lets an Editor publish and update a record without stale client navigation
 		await publishWorkingDraft(page);
 		await recordLink.click();
 		await expect(reader.getByRole("heading", { name: `${title} revised`, exact: true })).toBeVisible();
+		await expect(reader.locator('[data-citation-state="ready"]')).toContainText(`${title} revised`);
 
 		await reader.locator('a[href$="/lib"]').first().click();
 		await expect(recordLink).toBeVisible();
