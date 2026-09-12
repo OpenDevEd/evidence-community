@@ -72,8 +72,10 @@ attach a name or email address to it.
 ### Session replay allowed
 
 Replay starts only when both product analytics and session replay are enabled.
-The bundled recorder masks all text, input values, and element attributes. It
-does not record request or response bodies, headers, canvas content, console
+The bundled recorder masks text, input values, element IDs, links, images and
+other content attributes. It keeps styles, classes, SVG geometry and visual
+state attributes so the recording retains its layout, while removing CSS URLs.
+It does not record request or response bodies, headers, canvas content, console
 logs, or cross-origin frames.
 
 ## Data that analytics must never receive
@@ -81,11 +83,11 @@ logs, or cross-origin frames.
 - search words or full URLs with query strings;
 - AI prompts, chat messages, model responses, or transcripts;
 - abstracts, PDF text, titles, filenames, or link text;
-- form values, authentication values, tokens, names, or email addresses.
+- form values, authentication credentials or tokens, names, or email addresses.
 
 AI events contain only the model, status, finish reason, duration, and token or
 cache counts. A server event uses the browser's PostHog ID only when the request
-has a valid consent record for the current library and policy version.
+has a valid consent record for the current library and both policy versions.
 
 ## Changing or withdrawing consent
 
@@ -98,9 +100,10 @@ first choice. Withdrawing product analytics:
 4. Changes Google consent back to denied.
 5. Keeps only the necessary, tenant-scoped consent record for 180 days.
 
-A consent record is valid only for the configured library origin and policy
-version. Moving between libraries or increasing the policy version asks the
-visitor again.
+A consent record is valid only for the configured library origin, the library's
+`consentPolicyVersion` and the application's built-in `runtimePolicyVersion`.
+Moving between libraries or changing either policy version asks the visitor
+again. A record without the built-in version is also invalid.
 
 ## Deployment checks
 

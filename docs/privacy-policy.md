@@ -154,7 +154,7 @@ Website: [ico.org.uk/make-a-complaint](https://ico.org.uk/make-a-complaint/)
 
 # **Changes to this notice**
 
-We review this notice when our use of information changes. If a change affects an existing analytics choice, we can increase the analytics policy version so the site asks for consent again.
+We review this notice when our use of information changes. A change to the built-in analytics policy or this library’s analytics policy version makes the site ask for consent again.
 
 # **Last updated**
 
