@@ -2,9 +2,9 @@
 
 import { Cancel01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { useState } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslations } from "next-intl";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import NavLinks from "./NavLinks";
@@ -16,44 +16,50 @@ interface MobileMenuProps {
 	pathname: string;
 }
 
+function MenuIcon({isOpen}: {isOpen: boolean}) {
+	const reducedMotion = useReducedMotion();
+	return <AnimatePresence mode="wait" initial={false}>
+		<motion.span key={isOpen ? "close" : "menu"} initial={{opacity: 0, scale: 0.8}} animate={{opacity: 1, scale: 1}} exit={{opacity: 0, scale: 0.8}} transition={{duration: reducedMotion ? 0 : 0.15}} className="inline-flex size-8">
+			<HugeiconsIcon icon={isOpen ? Cancel01Icon : Menu01Icon} className="size-8 text-accent cursor-pointer transition-transform active:scale-80 delay-0" />
+		</motion.span>
+	</AnimatePresence>;
+}
+
 export default function MobileMenu({
 	elements,
 	context,
 	pathname,
 }: MobileMenuProps) {
 	const [isOpen, setIsOpen] = useState(false);
+	const menuId = useId();
+	const triggerRef = useRef<HTMLDivElement>(null);
 	const t = useTranslations("ui");
 
 	const toggleMenu = () => setIsOpen(!isOpen);
+	function closeOnEscape(event: KeyboardEvent) {
+		if (event.key !== "Escape" || event.defaultPrevented) return;
+		event.preventDefault();
+		setIsOpen(false);
+		triggerRef.current?.querySelector("button")?.focus();
+	}
 
 	return (
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
-			<AnimatePresence mode="wait">
-				{(isOpen ? [Cancel01Icon] : [Menu01Icon]).map((Icon) => (
-					<motion.div
-						key={isOpen ? "close" : "menu"}
-						initial={{ opacity: 0, scale: 0.8 }}
-						animate={{ opacity: 1, scale: 1 }}
-						exit={{ opacity: 0, scale: 0.8 }}
-						transition={{ duration: 0.15 }}
-						className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center"
-					>
-						<Button
-							variant="invisible"
-							aria-label={t("openMenuAriaLabel")}
-							onPress={toggleMenu}
-						>
-							<HugeiconsIcon icon={Icon} className="size-8 text-accent cursor-pointer transition-transform active:scale-80 delay-0" />
-						</Button>
-					</motion.div>
-				))}
-			</AnimatePresence>
+			<div ref={triggerRef} className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
+				<Button variant="invisible" aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={toggleMenu} onKeyDown={closeOnEscape}>
+					<MenuIcon isOpen={isOpen} />
+				</Button>
+			</div>
 
 			{/* Mobile menu dropdown */}
 			<ul
+				id={menuId}
+				inert={!isOpen}
+				aria-hidden={!isOpen}
+				onKeyDown={closeOnEscape}
 				className={twMerge(
-					"xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 overflow-y-hidden -z-10 flex flex-col gap-8",
+					"xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 motion-reduce:duration-0 overflow-y-auto overscroll-contain -z-10 flex flex-col gap-8",
 					// Position absolutely when open to overlay content
 					"absolute left-0 right-0 top-full",
 					isOpen

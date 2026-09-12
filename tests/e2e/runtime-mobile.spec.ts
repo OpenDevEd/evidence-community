@@ -81,3 +81,42 @@ test("renders the runtime navigation and feature controls on mobile", async ({
 		page.getByRole("button").filter({ hasText: "EN-GB" }),
 	).toHaveCount(expectedLanguageSwitcher ? 1 : 0);
 });
+
+test("mobile navigation stays out of the focus order while closed and returns focus on Escape", async ({page}) => {
+	await page.goto("/digests");
+	await dismissConsent(page);
+	const opener = page.getByRole("button", {name: "Open hamburger menu", exact: true});
+	const destination = page.getByRole("link", {name: expectedNavigationLabel, exact: true});
+	await expect(destination).toHaveCount(0);
+	await opener.click();
+	const closer = page.getByRole("button", {name: "Close", exact: true});
+	await expect(closer).toHaveAttribute("aria-expanded", "true");
+	await expect(closer).toBeFocused();
+	await expect(destination).toBeVisible();
+	await destination.focus();
+	await page.keyboard.press("Escape");
+	await expect(opener).toHaveAttribute("aria-expanded", "false");
+	await expect(opener).toBeFocused();
+	await expect(destination).toHaveCount(0);
+	await opener.click();
+	await destination.click();
+	await expect(page).toHaveURL(/\/lib(?:\?|$)/u);
+	await expect(opener).toHaveAttribute("aria-expanded", "false");
+	await expect(destination).toHaveCount(0);
+});
+
+test("mobile navigation scrolls to its final control on a short screen", async ({page}) => {
+	await page.setViewportSize({width: 500, height: 220});
+	await page.goto("/digests");
+	await dismissConsent(page);
+	const opener = page.getByRole("button", {name: "Open hamburger menu", exact: true});
+	const menuId = await opener.getAttribute("aria-controls");
+	expect(menuId).toBeTruthy();
+	const menu = page.locator(`[id="${menuId}"]`);
+	await opener.click();
+	await expect(page.getByRole("button", {name: "Close", exact: true})).toHaveAttribute("aria-expanded", "true");
+	await menu.hover();
+	await page.mouse.wheel(0, 600);
+	await expect.poll(() => menu.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await expect(menu.locator("a[href],button").last()).toBeInViewport();
+});

@@ -205,6 +205,7 @@ export default function Navbar() {
 
 				{/* Mobile hamburger menu (< xl) */}
 				<MobileMenu
+					key={pathname}
 					elements={mobileMenuElements}
 					context={navbarContext}
 					pathname={pathname}
