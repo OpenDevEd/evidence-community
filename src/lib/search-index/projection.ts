@@ -21,7 +21,7 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
 import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
@@ -383,7 +383,8 @@ async function buildSearchProjectionPlanForKeys(
 			const directCollections = uniqueSorted(
 				collectionsByItem.get(parent.key) ?? [],
 			);
-			const attachments = (childrenByParent.get(parent.key) ?? []).map(
+			const parentChildren = childrenByParent.get(parent.key) ?? [];
+			const attachments = parentChildren.map(
 				(child) => ({
 					...cleanRow({
 						...child,
@@ -392,7 +393,7 @@ async function buildSearchProjectionPlanForKeys(
 					tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
 				}),
 			);
-			const fullTextPDFs = (childrenByParent.get(parent.key) ?? [])
+			const fullTextPDFs = parentChildren
 				.filter((child) => child.deleted !== 1)
 				.map((child) => ({
 					key: child.key,
@@ -403,7 +404,11 @@ async function buildSearchProjectionPlanForKeys(
 
 			return {
 				...cleanRow(parent),
-				DOI: resolvePublicDoi({ ...parent, publicationIdentifiers }),
+				DOI: resolvePublicDoi({
+					...parent, publicationIdentifiers,
+					attachments: parentChildren.filter(child => child.deleted !== 1 && !hasAnyTag(tagsByItem.get(child.key), hiddenTags))
+						.map(child => ({ url: child.url, tags: tagsByItem.get(child.key) })),
+				}),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
 				citationMetrics: citationMetricsByItem.get(parent.key) ?? [],
@@ -558,9 +563,7 @@ export async function readPublicItem(
 		const document = plan.documents.find((document) => document.key === key);
 		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;
 		const result = document as Item;
-		result.attachmentsData = result.attachmentsData?.filter((attachment) =>
-			attachment.deleted === 0 && !hasAnyTag(attachment.tags, config.content.tags.hidden),
-		);
+		result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags.hidden);
 		const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
 		result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
 		return result;

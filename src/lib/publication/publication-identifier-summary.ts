@@ -101,15 +101,18 @@ export function resolvePublicDoi(
 		publicationIdentifiers?: PublicationIdentifierSummary | null;
 	},
 ) {
-	const bibliographic = normalizeDoi(input.DOI)
-		?? resolveBibliographicDoi({ extra: input.extra }).doi;
+	const summary = input.publicationIdentifiers;
+	const version = normalizeDoi(summary?.zenodo?.versionDoi);
+	const concept = normalizeDoi(summary?.zenodo?.conceptDoi);
+	const resolution = resolveBibliographicDoi(input, {
+		ignoredDois: [version, concept].filter((doi): doi is string => doi !== null),
+	});
+	if (resolution.status === "conflict") return null;
+	const bibliographic = resolution.doi;
 	if (bibliographic && !isZenodoDoi(bibliographic)) return bibliographic;
 
-	const summary = input.publicationIdentifiers;
 	const crossref = summary?.crossref?.lifecycle === "verified"
 		? normalizeDoi(summary.crossref.doi)
 		: null;
-	const version = normalizeDoi(summary?.zenodo?.versionDoi);
-	const concept = normalizeDoi(summary?.zenodo?.conceptDoi);
-	return crossref ?? version ?? (bibliographic === concept ? null : bibliographic);
+	return crossref ?? version ?? bibliographic;
 }

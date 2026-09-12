@@ -1,5 +1,4 @@
-import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
-import { Item, ListItem } from "@/app/api/item/types";
+import { Item } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
@@ -314,12 +313,3 @@ export function processSentenceCaseAPAItems(item: ZoteroItem) {
 
 	return item;
 };
-
-export function transformItem(item: Item | undefined): Item | null;
-export function transformItem(item: ListItem | undefined): ListItem | null;
-export function transformItem<T extends Item | ListItem>(item: T | undefined): T | null {
-	if (!item) return null;
-	item.DOI = resolvePublicDoi(item);
-
-	return item;
-}

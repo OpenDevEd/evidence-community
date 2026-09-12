@@ -1,5 +1,7 @@
 "use server";
 
+import { filterPublicAttachments } from "./tags";
+
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { InferSelectModel } from "drizzle-orm";
 import { Session } from "next-auth";
@@ -259,9 +261,7 @@ export async function searchIndex(
 					) as Collection[];
 			}
 
-			item.attachmentsData = item.attachmentsData?.filter(
-				(attachment: any) => attachment.deleted === 0,
-			);
+			item.attachmentsData = filterPublicAttachments(item.attachmentsData, libraryConfig.content.tags.hidden);
 
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,

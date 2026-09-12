@@ -1,4 +1,5 @@
-import { readPublicIdentifiers } from "@/lib/publication/public-identifiers";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { readPublicDoiAttachments, readPublicIdentifiers } from "@/lib/publication/public-identifiers";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import {
 	and,
@@ -8,15 +9,12 @@ import {
 	desc,
 	gt,
 	inArray,
-	notExists,
-	notInArray,
 	sql,
 } from "drizzle-orm";
 
 import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
-import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Item } from "@/app/api/item/types";
 
@@ -132,32 +130,7 @@ function publicRecordCondition(
 	database: Database,
 	config: LibraryServerConfig,
 ) {
-	const hiddenTags = config.content.tags.hidden;
-
-	return and(
-		sql`coalesce(${item.deleted}, 0) <> 1`,
-		// Compared as text so the enum column never depends on how the driver
-		// types a parameter.
-		notInArray(sql`${item.itemType}::text`, EXCLUDED_ITEM_TYPES),
-		sql`coalesce(${item.parentItem}, '') = ''`,
-		hiddenTags.length
-			? notExists(
-					database
-						.select({ value: sql`1` })
-						.from(itemToTag)
-						.where(
-							and(
-								sql`${itemToTag.itemKey} = ${item.key}`,
-								inArray(
-									sql`lower(${itemToTag.tagName})`,
-									hiddenTags.map((tag) => tag.toLowerCase()),
-								),
-							),
-						)
-						.limit(1),
-				)
-			: undefined,
-	);
+	return publicParentVisibility(database, config.content.tags.hidden);
 }
 
 async function attachTags(
@@ -243,19 +216,20 @@ export async function readCitationRecordsPage(
 		limit,
 	);
 
-	const [tagged, identifiers] = await Promise.all([
+	const [tagged, identifiers, doiAttachments] = await Promise.all([
 		attachTags(database, records as Record<string, unknown>[]),
 		readPublicIdentifiers(
 			database,
 			records.map((record) => ({ ...record, key: String(record.key) })),
 			config.services.publication,
 		),
+		readPublicDoiAttachments(database, records.map(record => String(record.key)), config.content.tags.hidden),
 	]);
 	return tagged.map((record) => ({
 		...record,
 		publicationIdentifiers: identifiers.get(record.key),
 		DOI: resolvePublicDoi({
-			...record,
+			...record, attachments: doiAttachments.get(record.key),
 			publicationIdentifiers: identifiers.get(record.key),
 		}),
 	}));

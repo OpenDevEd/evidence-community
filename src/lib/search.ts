@@ -1,3 +1,4 @@
+import { filterPublicAttachments } from "./tags";
 import { getCachedCollections } from "@/app/api/cache";
 import { Collection } from "@/app/api/collections/types";
 import { ListItem } from "@/app/api/item/types";
@@ -129,7 +130,7 @@ function toLightweightItem(item: any): ListItem {
 	return nextItem;
 }
 
-function applyCollectionsData(items: ListItem[], collections: Collection[]) {
+function applyCollectionsData(items: ListItem[], collections: Collection[], hiddenTags: readonly string[]) {
 	const collectionMap = new Map(
 		collections.map((collection) => [collection.key, collection]),
 	);
@@ -142,9 +143,7 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 					!!collectionData,
 			);
 
-		item.attachmentsData = item.attachmentsData?.filter(
-			(attachment: any) => attachment.deleted === 0,
-		);
+		item.attachmentsData = filterPublicAttachments(item.attachmentsData, hiddenTags);
 	}
 }
 
@@ -288,7 +287,7 @@ export async function getPublicItems(
 		includeHeavyFields ? item : toLightweightItem(item),
 	);
 
-	applyCollectionsData(items, collections as Collection[]);
+	applyCollectionsData(items, collections as Collection[], libraryConfig.content.tags.hidden);
 
 	const totalCount =
 		searchResults.estimatedTotalHits || searchResults.hits.length;

@@ -1,6 +1,6 @@
 import { Item } from "@/app/api/item/types";
 import { getCachedItem } from "@/app/api/cache";
-import { ItemToZoteroJSON, transformItem } from "@/lib/utils";
+import { ItemToZoteroJSON } from "@/lib/utils";
 import { cacheLife, cacheTag } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -132,7 +132,7 @@ export async function getCitationForItemKey(key: string, lang: string = "en-GB")
 		return null;
 	}
 
-	const csl = await getCSL(transformItem(item) as Item, translationUrl);
+	const csl = await getCSL(item, translationUrl);
 	if (!csl) {
 		return null;
 	}

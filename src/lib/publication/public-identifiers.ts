@@ -1,10 +1,30 @@
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { publicationIdentifier, publicationSyncState } from "@/db/schema/publication";
 import type { BibliographicDoiInput } from "./bibliographic-doi";
 import { buildPublicationIdentifierSummary, resolvePublicDoi } from "./publication-identifier-summary";
 import type { PublicationIdentifierSummary } from "./publication-display-adapter";
+import { item } from "@/db/schema/tables/item";
+import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { publicItemVisibility } from "@/lib/public-item-visibility";
+import type { BibliographicDoiAttachment } from "./bibliographic-doi";
+
+/** Read only the published attachment metadata used to identify a DOI. */
+export async function readPublicDoiAttachments(database: Pick<Database, "select">, keys: readonly string[], hiddenTags: readonly string[]) {
+	const byParent = new Map<string, BibliographicDoiAttachment[]>();
+	if (!keys.length) return byParent;
+	const rows = await database.select({ parent: item.parentItem, url: item.url, tag: itemToTag.tagName })
+		.from(item).innerJoin(itemToTag, eq(itemToTag.itemKey, item.key))
+		.where(and(inArray(item.parentItem, [...keys]), publicItemVisibility(database, hiddenTags), eq(sql`lower(trim(${itemToTag.tagName}))`, "_r:doi")));
+	for (const row of rows) {
+		if (!row.parent) continue;
+		const attachments = byParent.get(row.parent) ?? [];
+		attachments.push({ url: row.url, tags: [row.tag] });
+		byParent.set(row.parent, attachments);
+	}
+	return byParent;
+}
 
 /** Batch-read current provider identifiers for records already checked for public access. */
 export async function readPublicIdentifiers(
