@@ -20,6 +20,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { GET } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
+import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
@@ -74,12 +75,18 @@ it("reads committed publications before indexing, and immediately respects edits
 		}
 		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\')');
 		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\')');
-		await client.query('INSERT INTO "itemInstitution" ("itemKey", "institutionName") VALUES (\'PUBAAAAA\', \'Learning Lab\')');
 		await client.query('INSERT INTO "itemLink" ("fromKey", "toKey", "kind", "origin") VALUES (\'PUBAAAAA\', \'HIDDENNN\', \'related\', \'manual\')');
+		const root = await createNativeCollection(database, { name: "Root", parentCollection: null });
+		const child = await createNativeCollection(database, { name: "Child", parentCollection: root.key });
+		await createNativeCollection(database, { name: "Unrelated", parentCollection: null });
+		await client.query('INSERT INTO "itemToCollection" ("itemKey", "collectionKey") VALUES ($1, $2)', ["PUBAAAAA", child.key]);
+		await client.query('INSERT INTO "itemInstitution" ("itemKey", "institutionName") VALUES (\'PUBAAAAA\', \'Learning Lab\')');
 		const response = await read("PUBAAAAA");
 		expect(response.status).toBe(200);
 		const publication = (await response.json()).item;
 		expect(publication.title).toBe("Published title");
+		expect(publication.collections).toEqual([child.key]);
+		expect(publication.collectionsAncestry).toEqual([child.key, root.key].sort());
 		expect(await citation("PUBAAAAA")).toContain("Published title");
 		const links = await getPublicItemLinksForKeys(database, ["PUBAAAAA", "HIDDENNN"], { hiddenTags: ["hidden"] });
 		expect(links.get("PUBAAAAA")?.related ?? []).toEqual([]);

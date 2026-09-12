@@ -14,9 +14,6 @@ const nextConfig = {
 	},
 	experimental: {
 		cpus: Math.max(1, availableParallelism() - 1),
-		staleTimes: {
-			dynamic: 30,
-		},
 		turbopackFileSystemCacheForBuild: true,
 		workerThreads: true,
 	},

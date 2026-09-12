@@ -124,7 +124,10 @@ At runtime:
   They do not wait for a search indexing receipt. React deduplicates reads within
   one render; item and citation responses are not retained across requests.
   The server-rendered page uses that record without an identical mount-time
-  fetch. Drafts, removed records and hidden-tagged records or attachments stay
+  fetch. Public card links use Next.js automatic prefetching and its default
+  zero dynamic stale time so client navigation fetches the current page.
+  Collection ancestry reads follow only the record’s memberships and parents.
+  Drafts, removed records and hidden-tagged records or attachments stay
   private.
 - Published PDFs and cover images are served from the shared Supabase storage
   project.

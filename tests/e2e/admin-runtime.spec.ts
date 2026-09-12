@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openAdmin } from "./admin-login";
+import { dismissConsent } from "./consent";
 import { publishWorkingDraft } from "./admin-review";
 
 const runtimeE2e = process.env.PLAYWRIGHT_RUNTIME_E2E === "true";
@@ -158,9 +159,11 @@ test("lets an Editor dismiss and restore a source import issue in the real libra
 	).toBe(404);
 });
 
-test("lets an Editor create and publish a native record through the real stack", async ({
+test("lets an Editor publish and update a record without stale client navigation", async ({
 	page,
+	browser,
 }, testInfo) => {
+	test.setTimeout(120_000);
 	const title = `Runtime published book ${testInfo.workerIndex}-${testInfo.retry}-${Date.now()}`;
 	await openAdmin(page);
   await page.locator(`[data-record-key="${expectedKey}"]`).click();
@@ -196,14 +199,41 @@ test("lets an Editor create and publish a native record through the real stack",
 	});
 	await expect(titleInput).toHaveValue("");
 	await titleInput.fill(title);
-	await publishWorkingDraft(page);
+	const key = await publishWorkingDraft(page);
 	await expect(titleInput).toHaveValue(title);
 	await expect(
 		inspector.getByText("Published", { exact: true }).first(),
 	).toBeVisible();
 
-	await page.reload();
-	const search = page.getByRole("textbox", { name: "Search records" });
-	await search.fill(title);
-	await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+	const readerContext = await browser.newContext({
+		baseURL: testInfo.project.use.baseURL,
+		ignoreHTTPSErrors: true,
+	});
+	try {
+		const reader = await readerContext.newPage();
+		await reader.goto("/en-GB/lib");
+		await dismissConsent(reader);
+		const recordLink = reader.locator(`a[href*="/lib/${key}"]`).first();
+		await expect(recordLink).toBeVisible({ timeout: 30_000 });
+		await recordLink.click();
+		await expect(reader.getByRole("heading", { name: title, exact: true })).toBeVisible();
+		await reader.locator('a[href$="/lib"]').first().click();
+		await expect(recordLink).toBeVisible();
+
+		await inspector.getByRole("button", { name: "Edit", exact: true }).click();
+		await titleInput.fill(`${title} revised`);
+		await publishWorkingDraft(page);
+		await recordLink.click();
+		await expect(reader.getByRole("heading", { name: `${title} revised`, exact: true })).toBeVisible();
+
+		await reader.locator('a[href$="/lib"]').first().click();
+		await expect(recordLink).toBeVisible();
+		const removed = await page.request.post(`/api/admin/items/${key}/unpublish`, { data: {} });
+		expect(removed.ok()).toBe(true);
+		await recordLink.click();
+		await expect(reader.getByText("Page Not Found", { exact: true })).toBeVisible();
+	} finally {
+		await readerContext.close();
+	}
+
 });
