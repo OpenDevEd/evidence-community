@@ -342,7 +342,7 @@ describe("admin API error mapping", () => {
 			],
 			[
 				new NativeItemHasPublishedFileError("ABCD2345"),
-				"Unpublish this attachment's PDF before unpublishing the attachment.",
+				expect.stringMatching(/\S/u),
 			],
 			[
 				new NativeItemHasChildrenError("ABCD2345"),

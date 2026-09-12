@@ -136,6 +136,7 @@ function Inspector({ role, overrides }: { role: "editor" | "creator"; overrides?
 		onReloadDraft: noop,
 		onRetry: noop,
 		onRestore: noop,
+		onUnpublish: noop,
 		onSelectAttachment: noop,
 		onChangePdfRemoval: noop,
 		onUpload: noop,

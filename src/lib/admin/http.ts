@@ -288,7 +288,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		return {
 			code: "conflict",
 			message:
-				"Unpublish this attachment's PDF before unpublishing the attachment.",
+				"Use Remove PDF from draft, then submit and publish the parent record's updated version. You can then unpublish this attachment.",
 			status: 409,
 		};
 	}

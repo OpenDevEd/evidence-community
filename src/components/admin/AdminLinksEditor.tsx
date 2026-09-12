@@ -72,7 +72,6 @@ function LinkRow({
 	row: AdminLinkRowPlan;
 }>) {
 	const changeLabel = CHANGE_LABELS[row.change];
-	const meta = [row.itemType, row.key].filter(Boolean).join(" · ");
 	const titleClassName = `block max-w-full truncate text-left font-medium ${
 		row.change === "removed" ? "line-through" : ""
 	}`;
@@ -103,26 +102,12 @@ function LinkRow({
 						{row.title}
 					</span>
 				)}
-				<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
-					{meta}
-					{changeLabel ? (
-						<>
-							{meta ? " · " : ""}
-							<span className="text-accent">{changeLabel}</span>
-						</>
-					) : null}
-					{row.deleted ? (
-						<>
-							{" · "}
-							<span className="text-warning">Unpublished</span>
-						</>
-					) : null}
-					{row.sourceLabel ? (
-						<>
-							{" · "}
-							<span>{row.sourceLabel}</span>
-						</>
-					) : null}
+				<span className="flex flex-wrap items-center gap-x-2 text-[11px] text-black/40 dark:text-white/40">
+					{row.itemType ? <span>{row.itemType}</span> : null}
+					<span>{row.key}</span>
+					{changeLabel ? <span className="text-accent">{changeLabel}</span> : null}
+					{row.deleted ? <span className="text-warning">Unpublished</span> : null}
+					{row.sourceLabel ? <span className="min-w-0 truncate" title={row.sourceLabel}>{row.sourceLabel}</span> : null}
 				</span>
 			</span>
 			<LinkRowAction onRemove={onRemove} readOnly={readOnly} row={row} />

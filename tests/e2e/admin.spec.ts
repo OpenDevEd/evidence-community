@@ -27,7 +27,7 @@ async function assignSelectedRecords(page: Page) {
 
 async function removeSelectedRecords(page: Page) {
   await page.getByRole("toolbar", {name: "Bulk actions"}).getByRole("button", {name: "Remove selected"}).click();
-  await page.getByRole("dialog", {name: /Remove .*records?\?/}).getByRole("button", {name: "Confirm", exact: true}).click();
+  await page.getByRole("dialog", {name: /Remove .*records?\?/}).getByRole("button", {name: /^Remove records?$/u}).click();
 }
 
 async function mockSubmittedReview(page: Page, onApprove: (body: Record<string, unknown>) => Promise<{status?: number; json: unknown}>) {
@@ -2729,6 +2729,11 @@ async function mockBookWithAttachment(
 		await route.fulfill({ status: 404 });
 	});
 	await page.route(`**/api/admin/items/${attachmentKey}/draft`, async (route) => {
+        if (route.request().method() === "DELETE") {
+            parentDetail.attachments = [];
+            await route.fulfill({status: 204});
+            return;
+        }
         expect(route.request().method()).toBe("POST");
         attachmentDetail.draft = attachmentDraft;
         await route.fulfill({json: {draft: attachmentDraft}});
@@ -3574,6 +3579,17 @@ test("keeps an unpublished attachment private and stages it with the parent revi
     await expect(inspector.getByRole("button", {name: "Publish PDF", exact: true})).toHaveCount(0);
     await inspector.getByRole("button", {name: "Parent record"}).click();
     await expect(inspector.getByRole("button", {name: "Open PDF attachment"})).toBeVisible();
+    await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+    await inspector.getByRole("button", {name: "Review status and history"}).click();
+    await page.getByRole("button", {name: "Delete draft", exact: true}).click();
+    const dialog = page.getByRole("dialog", {name: "Delete draft?"});
+    await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+    await inspector.getByRole("button", {name: "Review status and history"}).click();
+    await page.getByRole("button", {name: "Delete draft", exact: true}).click();
+    await dialog.getByRole("button", {name: "Delete draft", exact: true}).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(new RegExp(`item=${publishedItemKey}`, "u"));
+    await expect(inspector.getByRole("button", {name: "Open PDF attachment"})).toHaveCount(0);
 });
 
 test("searches active collections and browses deleted collections as flat trees", async ({
@@ -6036,15 +6052,29 @@ test("lets Creators request restoration without changing writeback sources", asy
 	expect(sourceMutations).toBe(0);
 });
 
-test("tracks unpublishing and submits restoration for review", async ({page}) => {
-  await mockPublishedBook(page, {batchResults: ({keys}) => keys.map(key => ({key, outcome: "changed", indexingReceipts: [indexingReceipt(key, "item", 3)]}))});
+test("unpublishes through the inspector and submits restoration for review", async ({page}) => {
+  await mockPublishedBook(page);
   const indexing = await mockCompletedIndexing(page);
   const receipt = indexingReceipt(publishedItemKey, "item", 3);
-  await page.goto("/admin");
+  let unpublishRequests = 0;
+  await page.route(`**/api/admin/items/${publishedItemKey}/unpublish`, route => {
+    expect(route.request().method()).toBe("POST");
+    unpublishRequests += 1;
+    return route.fulfill({json: {item: {...publishedDetail(false), state: "deleted"}, indexingReceipts: [receipt]}});
+  });
+  await page.goto(`/admin?item=${publishedItemKey}`);
   const inspector = page.locator("#admin-inspector-pane");
-  await page.getByRole("checkbox", {name: "Select Published book", exact: true}).check();
-  await removeSelectedRecords(page);
+  await inspector.getByRole("button", {name: "Review status and history"}).click();
+  await page.getByRole("button", {name: "Unpublish", exact: true}).click();
+  const dialog = page.getByRole("dialog", {name: "Unpublish record?"});
+  await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+  expect(unpublishRequests).toBe(0);
+  await inspector.getByRole("button", {name: "Review status and history"}).click();
+  await page.getByRole("button", {name: "Unpublish", exact: true}).click();
+  await dialog.getByRole("button", {name: "Unpublish record", exact: true}).click();
   await indexing.expectTracked(receipt);
+  await expect(dialog).toBeHidden();
+  expect(unpublishRequests).toBe(1);
   let submissions = 0;
   await page.route("**/api/admin/items", route => route.fulfill({json: {hasMore: false, items: [publishedListRow({state: "deleted"})], nextCursor: null}}));
   await page.route(`**/api/admin/items/${publishedItemKey}`, route => route.fulfill({json: {item: {...publishedDetail(false), state: "deleted"}}}));
@@ -6263,7 +6293,7 @@ test("tracks bulk remove mutations", async ({ page }) => {
 		.click();
 	const dialog = page.getByRole("dialog", { name: /Remove 2 records/u });
 	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+	await dialog.getByRole("button", { name: "Remove records", exact: true }).click();
 	await expect.poll(() => batchRequests.length).toBe(1);
 	expect(batchRequests).toEqual([
 		{
@@ -6272,6 +6302,38 @@ test("tracks bulk remove mutations", async ({ page }) => {
 		},
 	]);
 	await indexing.expectTracked(receipt);
+});
+
+test("keeps partial removal failures in the dialog and preserves failed selections for retry", async ({ page }) => {
+	const batchRequests: unknown[] = [];
+	let removalBlocked = true;
+	const reason = "An attachment must be unpublished before this record can be removed.";
+	await mockPublishedBook(page, {
+		itemCount: 2,
+		onBatchRequest: (body) => batchRequests.push(body),
+		batchResults: ({ keys }) => keys.map((key) => ({
+			key,
+			indexingReceipts: [],
+			...(removalBlocked && key === publishedItemKey
+				? { outcome: "failed" as const, message: reason, code: "conflict" as const, retryable: true }
+				: { outcome: "changed" as const }),
+		})),
+	});
+	await mockCompletedIndexing(page);
+	await page.goto("/admin");
+	await page.getByRole("checkbox", { name: "Select all loaded records" }).check();
+	await removeSelectedRecords(page);
+	const dialog = page.getByRole("dialog", { name: /Remove .*records?\?/u });
+	await expect(dialog.getByRole("alert")).toContainText(reason);
+	await expect(dialog.getByRole("button", { name: /^Remove records?$/u })).toBeEnabled();
+	await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(page.getByRole("checkbox", { name: "Select Published book", exact: true })).toBeChecked();
+	await expect(page.getByRole("checkbox", { name: "Select Published book 2", exact: true })).not.toBeChecked();
+	removalBlocked = false;
+	await removeSelectedRecords(page);
+	await expect(dialog).toBeHidden();
+	expect(batchRequests[0]).toEqual({ action: "remove", keys: [publishedItemKey, "ROW00001"] });
+	expect(batchRequests.at(-1)).toEqual({ action: "remove", keys: [publishedItemKey] });
 });
 
 test("keeps an immediately rejected batch indexing wait handled", async ({
