@@ -84,7 +84,7 @@ We receive information:
 
 We use service providers only for the jobs described below:
 
-- **PostHog Inc.** processes consented product analytics, optional masked session replay, and limited server-side aggregate events.
+- **PostHog analytics** include consented product analytics, optional masked session replay, and limited server-side aggregate events. The library’s hosting provider processes them when PostHog is self-hosted; **PostHog Inc.** processes them when PostHog Cloud is used.
 - **Google LLC** processes consented traffic and usage analytics. It may also provide Google sign-in when that option is enabled.
 - **Cloudflare, Inc.** may deliver the site and provide bot protection, abuse prevention, and rate limiting.
 - **Our hosting and database providers** store and serve the application, account, and operational data. The active host may be Vercel, DigitalOcean, or another provider selected by the library operator.
@@ -158,4 +158,4 @@ We review this notice when our use of information changes. If a change affects a
 
 # **Last updated**
 
-August 27, 2026
+September 12, 2026

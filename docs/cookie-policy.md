@@ -10,7 +10,7 @@ This storage is needed for the site to work or remember a choice you asked it to
 
 | **Name**                | **Owner**               | **Purpose**                                                                                                                          | **Expires**                        |
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the library they apply to, the policy version, and when you made the choice.       | 180 days                           |
+| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the library they apply to, the policy versions, and when you made the choice.       | 180 days                           |
 | `NEXT_LOCALE`           | {{SITE_HOST}} / Next.js | Stores your language preference.                                                                                                     | Browser-managed                    |
 | Auth.js session cookies | {{SITE_HOST}} / Auth.js | Maintain sign-in and protect authentication requests when login is enabled. Cookie names vary between secure and local environments. | Session or Auth.js-managed         |
 | `__cf_bm`, `_cfuvid`    | Cloudflare              | Support bot protection, abuse prevention, and rate limiting when Cloudflare is used.                                                 | Cloudflare-managed and short-lived |
@@ -54,4 +54,4 @@ Most browsers also let you inspect or delete stored site data in their privacy s
 
 For questions about our use of cookies and similar storage, email contact@opendeved.net.
 
-**Last updated**: August 27, 2026
+**Last updated**: September 12, 2026
