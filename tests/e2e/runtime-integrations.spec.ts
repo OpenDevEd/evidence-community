@@ -89,6 +89,15 @@ async function mailboxMessages(
 	return response.json() as Promise<{ messages?: unknown[] }>;
 }
 
+function decodeCaptureBody(body: Buffer | null) {
+	if (!body) throw new Error("Missing capture body");
+	const decoded = body[0] === 0x1f && body[1] === 0x8b
+		? gunzipSync(body).toString("utf8")
+		: body.toString("utf8");
+	const payload = JSON.parse(decoded);
+	return Array.isArray(payload) ? payload : payload.batch ?? [payload];
+}
+
 function trackAnalyticsNetwork(page: Page) {
 	const allPostRequests: string[] = [];
 	const collectorRequests: string[] = [];
@@ -126,13 +135,7 @@ function trackAnalyticsNetwork(page: Page) {
 			eventResponses.push(`${response.status()} ${response.url()}`);
 			if (response.ok()) {
 				try {
-					const body = response.request().postDataBuffer();
-					if (!body) throw new Error("Missing capture body");
-					const decoded = body[0] === 0x1f && body[1] === 0x8b
-						? gunzipSync(body).toString("utf8")
-						: body.toString("utf8");
-					const payload = JSON.parse(decoded);
-					capturedEvents.push(...(Array.isArray(payload) ? payload : payload.batch ?? [payload]));
+					capturedEvents.push(...decodeCaptureBody(response.request().postDataBuffer()));
 				} catch (error) {
 					payloadErrors.push(String(error));
 				}
@@ -424,6 +427,8 @@ test("sends analytics only for the configured and consented profile", async ({
 		await page.mouse.click(4, 4);
 		await expectFlushedSessionReplay(page, network);
 		await withdrawAnalyticsConsent(page, network);
+		expect(network.payloadErrors).toEqual([]);
+		expect(JSON.stringify(network.capturedEvents)).not.toContain("analytics-privacy-canary");
 		return;
 	}
 

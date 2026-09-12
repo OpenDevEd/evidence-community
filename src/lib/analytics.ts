@@ -69,7 +69,7 @@ type QueuedGoogleEvent = {
 const GOOGLE_COOKIE_PREFIXES = ["_ga", "_gid", "_gat"];
 const POSTHOG_STORAGE_PREFIXES = ["ph_", "__ph_", "posthog"];
 const SENSITIVE_PROPERTY_NAME =
-	/(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
+	/^\$(?:initial_)?referrer$|(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
 
 let analyticsMode: AnalyticsConsentState = "pending";
 let analyticsPreferences: AnalyticsConsentPreferences = {
@@ -183,6 +183,12 @@ function sanitizePostHogValue(value: unknown): unknown {
 	return value;
 }
 
+function sanitizePostHogPropertyValue(key: string, value: unknown) {
+	if (key === "$current_url") return sanitizedCurrentUrl(value);
+	if (key === "$pathname") return sanitizeAnalyticsPath(String(value ?? "/"));
+	return sanitizePostHogValue(value);
+}
+
 function sanitizePostHogProperties(
 	properties: Record<string, unknown>,
 	preserveProjectToken = false,
@@ -194,14 +200,9 @@ function sanitizePostHogProperties(
 			sanitized.set(key, value);
 			continue;
 		}
-		if (key === "$referrer" || key === "$initial_referrer") continue;
 		if (SENSITIVE_PROPERTY_NAME.test(key)) continue;
 		const safeKey = sanitizeString(key);
-		const safeValue = key === "$current_url"
-			? sanitizedCurrentUrl(value)
-			: key === "$pathname"
-				? sanitizeAnalyticsPath(String(value ?? "/"))
-				: sanitizePostHogValue(value);
+		const safeValue = sanitizePostHogPropertyValue(key, value);
 		// Heatmap URLs are object keys. Combine points when query variants
 		// become the same URL after sanitizing them.
 		const previous = sanitized.get(safeKey);
