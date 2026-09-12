@@ -21,7 +21,7 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
 import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
@@ -563,9 +563,7 @@ export async function readPublicItem(
 		const document = plan.documents.find((document) => document.key === key);
 		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;
 		const result = document as Item;
-		result.attachmentsData = result.attachmentsData?.filter((attachment) =>
-			attachment.deleted === 0 && !hasAnyTag(attachment.tags, config.content.tags.hidden),
-		);
+		result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags.hidden);
 		const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
 		result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
 		return result;

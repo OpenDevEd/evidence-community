@@ -1,3 +1,4 @@
+import { filterPublicAttachments } from "@/lib/tags";
 import { describe, expect, it } from "vitest";
 
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
@@ -218,4 +219,14 @@ it("does not cite a known concept DOI stored on the record", () => {
 it("uses tagged bibliographic attachments without treating ordinary URLs as DOIs", () => {
 	expect(resolvePublicDoi({ attachments: [{ url: "https://doi.org/10.5555/attachment", tags: ["_r:doi"] }] })).toBe("10.5555/attachment");
 	expect(resolvePublicDoi({ attachments: [{ url: "https://doi.org/10.5555/unrelated", tags: [] }] })).toBeNull();
+});
+
+
+it("excludes hidden attachment DOIs from search result exports", () => {
+	const attachments = filterPublicAttachments([
+		{ deleted: 0, url: "https://doi.org/10.5555/hidden", tags: ["_r:doi", "Hidden"] },
+		{ deleted: 1, url: "https://doi.org/10.5555/deleted", tags: ["_r:doi"] },
+	], ["hidden"]);
+	expect(attachments).toEqual([]);
+	expect(resolvePublicDoi({ attachments })).toBeNull();
 });
