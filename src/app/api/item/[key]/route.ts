@@ -60,7 +60,7 @@ export async function GET(
 		if (searchParams.get("view") === "card") {
 			const config = await getLibraryConfig();
 			const database = await getDatabaseForConfig(config);
-			result = { item: await getPublicItemCard(database, key, config.content.tags.hidden) };
+			result = { item: await getPublicItemCard(database, key, config) };
 		} else {
 			result = await getItem(key);
 		}

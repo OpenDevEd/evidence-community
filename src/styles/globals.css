@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+#page-content, #footer {
+	@apply scroll-mt-20 xl:scroll-mt-0;
+}
+
 :root {
 	font-size: 100%;
 	--select-popover-tertiary-color-mixed-bg: color-mix(in srgb, rgb(var(--color-tertiary-500) / var(--color-tertiary-500-alpha)) 10%, rgb(var(--color-background-500) / var(--color-background-500-alpha)) 90%);

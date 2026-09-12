@@ -749,9 +749,9 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 		citation: string | null;
 	}>(
 		citations.enabled && item?.key
-			? [`/item/${item.key}/citation`, item.revision]
+			? [`/item/${item.key}/citation`, item.revision, item.DOI ?? null]
 			: null,
-		([url]: [string, number]) => fetcher(url),
+		([url]: [string, number, string | null]) => fetcher(url),
 		{
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,

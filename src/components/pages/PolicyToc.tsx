@@ -96,10 +96,17 @@ export default function PolicyToc({
 			`a[href="#${CSS.escape(activeId)}"]`,
 		);
 
-		activeLink?.scrollIntoView({
-			block: "nearest",
-			inline: "nearest",
-		});
+		if (!activeLink) return;
+		// Follow the section inside the contents list without moving the page
+		// or changing the reader's keyboard starting point.
+		const nav = navRef.current;
+		const linkBounds = activeLink.getBoundingClientRect();
+		const navBounds = nav.getBoundingClientRect();
+		if (linkBounds.top < navBounds.top) {
+			nav.scrollTop += linkBounds.top - navBounds.top;
+		} else if (linkBounds.bottom > navBounds.bottom) {
+			nav.scrollTop += linkBounds.bottom - navBounds.bottom;
+		}
 	}, [activeId]);
 
 	if (!sections.length) {

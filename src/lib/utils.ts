@@ -1,3 +1,4 @@
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { Item, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -318,10 +319,7 @@ export function transformItem(item: Item | undefined): Item | null;
 export function transformItem(item: ListItem | undefined): ListItem | null;
 export function transformItem<T extends Item | ListItem>(item: T | undefined): T | null {
 	if (!item) return null;
-	const ExtraValues = getExtraValues(item.extra || "");
-
-	const rawDoi = item.DOI || ExtraValues.get("DOI") || null;
-	item.DOI = rawDoi?.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "") ?? null;
+	item.DOI = resolvePublicDoi(item);
 
 	return item;
 }

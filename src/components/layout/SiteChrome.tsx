@@ -34,7 +34,7 @@ function ReaderHeader({
 				aria-label={skipNavigationLabel}
 				className="absolute start-0 top-0 h-0 w-64"
 			>
-				<SkipLink href="#main-content">{skipToContentLabel}</SkipLink>
+				<SkipLink href="#page-content">{skipToContentLabel}</SkipLink>
 				<SkipLink href="#footer">{skipToFooterLabel}</SkipLink>
 			</nav>
 			<Navbar />
@@ -81,7 +81,7 @@ export default function SiteChrome({
 					skipToContentLabel={skipToContentLabel}
 					skipToFooterLabel={skipToFooterLabel}
 				/>
-				<div className="flex w-full flex-1 flex-col items-center">
+				<div id="page-content" tabIndex={-1} className="flex w-full flex-1 flex-col items-center focus:outline-none">
 					{children}
 				</div>
 				{admin ? null : <Footer />}

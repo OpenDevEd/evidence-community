@@ -832,7 +832,7 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await page.keyboard.press("Tab");
 		await expect(skipLink).toBeFocused();
 		await skipLink.press("Enter");
-		await expect(page.getByRole("main")).toBeFocused();
+		await expect(page.locator("#page-content")).toBeFocused();
 		await page.keyboard.press("Tab");
 		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
 		await country.focus();
@@ -899,6 +899,8 @@ test("keeps the whole-library export total independent of the search", async ({ 
 	expect(path).not.toBeNull();
 	const records = await readFile(path!, "utf8");
 	expect(records.match(/^TY\s+- /gm)).toHaveLength(count);
+	await expect(page.getByRole("dialog")).toBeHidden();
+	await expect(button).toBeFocused();
 });
 
 for (const width of [1200, 390]) {
@@ -909,7 +911,7 @@ for (const width of [1200, 390]) {
 		await page.setViewportSize({ width, height: 844 });
 		await page.goto("/ar/lib");
 		await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-		const skip = page.locator('a[href="#main-content"]');
+		const skip = page.locator('a[href="#page-content"]');
 		await skip.waitFor({ state: "visible" });
 		expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 		await expect(page.locator("[data-consent-gate]")).not.toHaveAttribute("inert");
@@ -924,6 +926,7 @@ for (const width of [1200, 390]) {
 		expect(bounds!.x).toBeGreaterThanOrEqual(0);
 		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
 		await page.keyboard.press("Enter");
-		await expect(page).toHaveURL(/#main-content$/);
+		await expect(page).toHaveURL(/#page-content$/);
+		await expect(page.locator("#page-content")).toBeFocused();
 	});
 }

@@ -1,3 +1,5 @@
+import { readPublicIdentifiers } from "@/lib/publication/public-identifiers";
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import {
 	and,
 	asc,
@@ -241,7 +243,22 @@ export async function readCitationRecordsPage(
 		limit,
 	);
 
-	return attachTags(database, records as Record<string, unknown>[]);
+	const [tagged, identifiers] = await Promise.all([
+		attachTags(database, records as Record<string, unknown>[]),
+		readPublicIdentifiers(
+			database,
+			records.map((record) => ({ ...record, key: String(record.key) })),
+			config.services.publication,
+		),
+	]);
+	return tagged.map((record) => ({
+		...record,
+		publicationIdentifiers: identifiers.get(record.key),
+		DOI: resolvePublicDoi({
+			...record,
+			publicationIdentifiers: identifiers.get(record.key),
+		}),
+	}));
 }
 
 export async function readNewestRecords(

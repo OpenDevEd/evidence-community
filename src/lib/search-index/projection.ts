@@ -6,7 +6,7 @@ import {
 	isPublicTopLevelItem,
 	LIBRARY_OWNED_PAYLOAD_FIELDS,
 } from "@/lib/admin/item-fields";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
@@ -14,10 +14,6 @@ import {
 	withCancellableDatabaseTransaction,
 } from "@/db/cancellable-transaction";
 import { collection } from "@/db/schema/tables/collection";
-import {
-	publicationIdentifier,
-	publicationSyncState,
-} from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
@@ -28,7 +24,8 @@ import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { hasAnyTag } from "@/lib/tags";
 import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
-import { buildPublicationIdentifierSummary } from "@/lib/publication/publication-identifier-summary";
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
+import { readPublicIdentifiers } from "@/lib/publication/public-identifiers";
 
 export type SearchProjectionEvent = {
 	entityKey: string;
@@ -314,8 +311,7 @@ async function buildSearchProjectionPlanForKeys(
 		tagRows,
 		membershipRows,
 		institutionRows,
-		identifierRows,
-		zenodoStateRows,
+		identifiersByItem,
 	] =
 		allDocumentItemKeys.length > 0
 			? await Promise.all([
@@ -347,53 +343,9 @@ async function buildSearchProjectionPlanForKeys(
 							asc(itemInstitution.itemKey),
 							asc(itemInstitution.institutionName),
 						),
-					database
-						.select({
-							doi: publicationIdentifier.doi,
-							itemKey: publicationIdentifier.itemKey,
-							lifecycle: publicationIdentifier.lifecycle,
-							ownership: publicationIdentifier.ownership,
-							registrar: publicationIdentifier.registrar,
-							role: publicationIdentifier.role,
-						})
-						.from(publicationIdentifier)
-						.where(
-							and(
-								inArray(
-									publicationIdentifier.itemKey,
-									activeParentKeys,
-								),
-								eq(publicationIdentifier.isCurrent, true),
-								or(
-									and(eq(publicationIdentifier.registrar, "crossref"), eq(publicationIdentifier.environment, publication.crossref.environment)),
-									and(eq(publicationIdentifier.registrar, "zenodo"), eq(publicationIdentifier.environment, publication.zenodo.environment)),
-								),
-							),
-						)
-						.orderBy(
-							asc(publicationIdentifier.itemKey),
-							asc(publicationIdentifier.registrar),
-							asc(publicationIdentifier.role),
-						),
-					database
-						.select({
-							itemKey: publicationSyncState.itemKey,
-							zenodoParentId: publicationSyncState.zenodoParentId,
-							zenodoRecordId: publicationSyncState.zenodoRecordId,
-						})
-						.from(publicationSyncState)
-						.where(
-							and(
-								inArray(
-									publicationSyncState.itemKey,
-									activeParentKeys,
-								),
-								eq(publicationSyncState.provider, "zenodo"),
-								eq(publicationSyncState.environment, publication.zenodo.environment),
-							),
-						),
+					readPublicIdentifiers(database, activeParents.map(({ item }) => item), publication),
 				])
-			: [[], [], [], [], []];
+			: [[], [], [], new Map()];
 
 	const tagsByItem = new Map<string, string[]>();
 	for (const row of tagRows) {
@@ -413,18 +365,6 @@ async function buildSearchProjectionPlanForKeys(
 		names.push(row.institutionName);
 		institutionsByItem.set(row.itemKey, names);
 	}
-	const identifiersByItem = new Map<
-		string,
-		Array<(typeof identifierRows)[number]>
-	>();
-	for (const row of identifierRows) {
-		const identifiers = identifiersByItem.get(row.itemKey) ?? [];
-		identifiers.push(row);
-		identifiersByItem.set(row.itemKey, identifiers);
-	}
-	const zenodoStateByItem = new Map(
-		zenodoStateRows.map((row) => [row.itemKey, row]),
-	);
 	const [linksByItem, citationMetricsByItem] = await Promise.all([
 		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
@@ -459,20 +399,11 @@ async function buildSearchProjectionPlanForKeys(
 					fullTextPDF: fullTextPages(child.fullTextPDF),
 				}))
 				.filter((entry) => entry.fullTextPDF.length > 0);
-			const zenodoState = zenodoStateByItem.get(parent.key);
-			const publicationIdentifiers = buildPublicationIdentifierSummary({
-				identifiers: identifiersByItem.get(parent.key) ?? [],
-				zenodoState: zenodoState
-					? {
-							environment: publication.zenodo.environment,
-							zenodoParentId: zenodoState.zenodoParentId,
-							zenodoRecordId: zenodoState.zenodoRecordId,
-						}
-					: null,
-			});
+			const publicationIdentifiers = identifiersByItem.get(parent.key);
 
 			return {
 				...cleanRow(parent),
+				DOI: resolvePublicDoi({ ...parent, publicationIdentifiers }),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
 				citationMetrics: citationMetricsByItem.get(parent.key) ?? [],

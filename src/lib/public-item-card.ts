@@ -1,3 +1,6 @@
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { readPublicIdentifiers } from "@/lib/publication/public-identifiers";
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { and, asc, eq, inArray, isNotNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -7,8 +10,9 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 export async function getPublicItemCard(
 	database: Pick<Database, "query" | "select">,
 	key: string,
-	hiddenTags: readonly string[],
+	config: LibraryServerConfig,
 ) {
+	const hiddenTags = config.content.tags.hidden;
 	const visibleTags = hiddenTags.length
 		? notExists(
 				database
@@ -35,6 +39,7 @@ export async function getPublicItemCard(
 			creators: true,
 			date: true,
 			DOI: true,
+			extra: true,
 			abstractNote: true,
 			PDFCoverPageImage: true,
 			PDFCoverPageWidth: true,
@@ -47,7 +52,13 @@ export async function getPublicItemCard(
 	if (!record || record.deleted || record.parentItem) {
 		return null;
 	}
-	const { deleted: _deleted, parentItem: _parent, ...card } = record;
+	const { deleted: _deleted, parentItem: _parent, extra, ...card } = record;
+	const identifiers = await readPublicIdentifiers(
+		database, [record], config.services.publication,
+	);
+	card.DOI = resolvePublicDoi({
+		...card, extra, publicationIdentifiers: identifiers.get(key),
+	});
 	if (!card.PDFCoverPageImage) {
 		const attachment = await database.query.item.findFirst({
 			where: and(
