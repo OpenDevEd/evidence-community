@@ -1,3 +1,5 @@
+import { drizzle } from "drizzle-orm/node-postgres";
+import { schema } from "@/db/database-schema";
 import {readFileSync} from "node:fs";
 import { it, expect, vi } from "vitest";
 vi.mock("server-only", () => ({}));
@@ -253,5 +255,29 @@ it("preserves subscriber tokens, published editions and cutoffs when renaming di
     const digests = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
     expect(digests).toHaveLength(2);
     expect(digests.find(row => row.id !== edition.id)).toMatchObject({windowStart: cutoff, windowEnd: nextAt});
+  });
+}, 120_000);
+
+
+it("snapshots a thousand publications with bounded queries and carries the remainder into the next digest", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const start = new Date("2026-09-09T00:00:00Z");
+    await prepareNotificationEditions(db, config, start);
+    await client.query(`INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") SELECT 'B' || translate(lpad(i::text, 7, '0'), '0123456789', 'ABCDEFGHIJ'), 'native', 'B' || translate(lpad(i::text, 7, '0'), '0123456789', 'ABCDEFGHIJ') FROM generate_series(1, 1001) i`);
+    await client.query(`INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", title, "DOI") SELECT key, 'native', key, 'Report', 'Publication ' || key, '10.5555/' || lower(key) FROM "itemIdentity" WHERE key LIKE 'B%'`);
+    await client.query(`UPDATE "notificationItem" SET "firstPublishedAt" = '2026-09-10T00:00:00Z'`);
+    let queries = 0;
+    const measured = drizzle({ client, schema, logger: { logQuery() { queries++; } } });
+    const first = await prepareNotificationEditions(measured, config, new Date("2026-09-10T12:00:00Z"), {manualDigest: true});
+    expect(first).toMatchObject({status: "queued", publicationCount: 1000});
+    expect(queries).toBeLessThan(20);
+    const [edition] = await db.select().from(notificationEdition);
+    expect(edition.publications[0]).toMatchObject({key: "BAAAAAAB", doi: "10.5555/baaaaaab", item: {DOI: "10.5555/baaaaaab"}});
+    expect(edition.publications.at(-1)?.key).toBe("BAAABAAA");
+    const second = await prepareNotificationEditions(db, config, new Date("2026-09-10T13:00:00Z"), {manualDigest: true});
+    expect(second).toMatchObject({status: "queued", publicationCount: 1});
+    const editions = await db.select().from(notificationEdition);
+    expect(editions.flatMap(row => row.publications.map(p => p.key))).toHaveLength(1001);
+    expect(new Set(editions.flatMap(row => row.publications.map(p => p.key))).size).toBe(1001);
   });
 }, 120_000);

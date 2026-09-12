@@ -319,7 +319,7 @@ export function transformItem(item: Item | undefined): Item | null;
 export function transformItem(item: ListItem | undefined): ListItem | null;
 export function transformItem<T extends Item | ListItem>(item: T | undefined): T | null {
 	if (!item) return null;
-	item.DOI = resolvePublicDoi(item);
+	item.DOI = resolvePublicDoi({ ...item, attachments: item.attachmentsData });
 
 	return item;
 }

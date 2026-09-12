@@ -1135,7 +1135,7 @@ export class BibTeXExporter {
 		// its number and its language.
 		this.item = withZoteroFieldNames({
 			...item,
-			DOI: resolvePublicDoi(item ?? {}),
+			DOI: resolvePublicDoi({ ...item, attachments: item?.attachmentsData }),
 		} as Record<string, unknown>);
 
 		this.item.attachments =

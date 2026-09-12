@@ -1,10 +1,12 @@
+import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { item } from "@/db/schema/tables/item";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { notificationEdition, notificationItem, notificationState } from "@/db/schema/notifications";
-import { getPublicItemCard } from "@/lib/public-item-card";
+import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
 import type { NotificationPublication, NotificationStream } from "./types";
 
@@ -13,15 +15,17 @@ function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicIte
 }
 
 async function collectPublications(db: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, end: Date, stream: NotificationStream) {
-  const rows = await db.select({ key: notificationItem.itemKey }).from(notificationItem).where(and(
+  const rows = await db.select({ key: notificationItem.itemKey }).from(notificationItem).innerJoin(item, eq(item.key, notificationItem.itemKey)).where(and(
+    publicParentVisibility(db, config.content.tags.hidden),
     eq(notificationItem.eligible, true), gt(notificationItem.firstPublishedAt, enabledAt), lte(notificationItem.firstPublishedAt, end),
     sql`NOT EXISTS (SELECT 1 FROM "notificationEdition" e WHERE e."stream" = ${stream}
       AND e."publications" @> jsonb_build_array(jsonb_build_object('key', ${notificationItem.itemKey})))`,
-  )).orderBy(notificationItem.firstPublishedAt, notificationItem.itemKey);
+  )).orderBy(notificationItem.firstPublishedAt, notificationItem.itemKey).limit(1000);
   const publications: NotificationPublication[] = [];
   let metadataBytes = 0;
+  const cards = new Map((await getPublicItemCards(db, rows.map(row => row.key), config)).map(card => [card.key, card]));
   for (const row of rows) {
-    const card = await getPublicItemCard(db, row.key, config);
+    const card = cards.get(row.key);
     if (!card || card.itemType === "Attachment" || card.itemType === "Note") continue;
     const metadata = digestMetadata(card);
     metadataBytes += Buffer.byteLength(JSON.stringify(metadata));

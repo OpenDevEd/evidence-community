@@ -213,3 +213,9 @@ it("does not cite a known concept DOI stored on the record", () => {
 		publicationIdentifiers: { zenodo: { conceptDoi: "10.5281/zenodo.700001" } },
 	})).toBeNull();
 });
+
+
+it("uses tagged bibliographic attachments without treating ordinary URLs as DOIs", () => {
+	expect(resolvePublicDoi({ attachments: [{ url: "https://doi.org/10.5555/attachment", tags: ["_r:doi"] }] })).toBe("10.5555/attachment");
+	expect(resolvePublicDoi({ attachments: [{ url: "https://doi.org/10.5555/unrelated", tags: [] }] })).toBeNull();
+});

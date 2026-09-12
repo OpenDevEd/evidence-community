@@ -102,7 +102,7 @@ export function resolvePublicDoi(
 	},
 ) {
 	const bibliographic = normalizeDoi(input.DOI)
-		?? resolveBibliographicDoi({ extra: input.extra }).doi;
+		?? resolveBibliographicDoi(input).doi;
 	if (bibliographic && !isZenodoDoi(bibliographic)) return bibliographic;
 
 	const summary = input.publicationIdentifiers;

@@ -383,7 +383,8 @@ async function buildSearchProjectionPlanForKeys(
 			const directCollections = uniqueSorted(
 				collectionsByItem.get(parent.key) ?? [],
 			);
-			const attachments = (childrenByParent.get(parent.key) ?? []).map(
+			const parentChildren = childrenByParent.get(parent.key) ?? [];
+			const attachments = parentChildren.map(
 				(child) => ({
 					...cleanRow({
 						...child,
@@ -392,7 +393,7 @@ async function buildSearchProjectionPlanForKeys(
 					tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
 				}),
 			);
-			const fullTextPDFs = (childrenByParent.get(parent.key) ?? [])
+			const fullTextPDFs = parentChildren
 				.filter((child) => child.deleted !== 1)
 				.map((child) => ({
 					key: child.key,
@@ -403,7 +404,11 @@ async function buildSearchProjectionPlanForKeys(
 
 			return {
 				...cleanRow(parent),
-				DOI: resolvePublicDoi({ ...parent, publicationIdentifiers }),
+				DOI: resolvePublicDoi({
+					...parent, publicationIdentifiers,
+					attachments: parentChildren.filter(child => child.deleted !== 1 && !hasAnyTag(tagsByItem.get(child.key), hiddenTags))
+						.map(child => ({ url: child.url, tags: tagsByItem.get(child.key) })),
+				}),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
 				citationMetrics: citationMetricsByItem.get(parent.key) ?? [],

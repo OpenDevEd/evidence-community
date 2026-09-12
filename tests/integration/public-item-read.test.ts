@@ -20,7 +20,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { GET } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
 import { readCitationRecordsPage } from "@/lib/library-export-records";
-import { getPublicItemCard } from "@/lib/public-item-card";
+import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { createNativeCollection } from "@/lib/admin/native-collection-service";
@@ -78,6 +78,9 @@ it("reads committed publications before indexing, and immediately respects edits
 		}
 		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\')');
 		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\')');
+		await client.query(`INSERT INTO tag (name) VALUES ('_r:doi')`);
+		await client.query(`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('CHILDDDD', '_r:doi'), ('SECRETAA', '_r:doi'), ('DELETEDD', '_r:doi')`);
+		await client.query(`UPDATE item SET url = 'https://doi.org/10.5555/' || lower(key) WHERE "parentItem" = 'PUBAAAAA'`);
 		await client.query('INSERT INTO "itemLink" ("fromKey", "toKey", "kind", "origin") VALUES (\'PUBAAAAA\', \'HIDDENNN\', \'related\', \'manual\')');
 		const root = await createNativeCollection(database, { name: "Root", parentCollection: null });
 		const child = await createNativeCollection(database, { name: "Child", parentCollection: root.key });
@@ -88,6 +91,10 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(response.status).toBe(200);
 		const publication = (await response.json()).item;
 		expect(publication.title).toBe("Published title");
+		expect(publication.DOI).toBe("10.5555/childddd");
+		expect(await citation("PUBAAAAA")).toContain("10.5555/childddd");
+		expect((await getPublicItemCards(database, ["PUBAAAAA", "HIDDENNN", "CHILDDDD"], config)).map(card => [card.key, card.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
+		expect((await readCitationRecordsPage(config, null, 10)).map(record => [record.key, record.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
 		expect(publication.collections).toEqual([child.key]);
 		expect(publication.collectionsAncestry).toEqual([child.key, root.key].sort());
 		expect(await citation("PUBAAAAA")).toContain("Published title");
