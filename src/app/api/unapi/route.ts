@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { getCachedItemSmall } from "../cache";
 import { formatItemAsMODS } from "@/lib/formatAsMODS";
 import { create } from "xmlbuilder2";
-import { transformItem } from "@/lib/utils";
 import { Item } from "../item/types";
 
 // unAPI service discovery
@@ -41,7 +40,7 @@ export async function GET(request: NextRequest) {
 			return NextResponse.json({ message: "Item not found" }, { status: 404 });
 		}
 
-		const xml = formatItemAsMODS(transformItem(result.item) as Item);
+		const xml = formatItemAsMODS(result.item as Item);
 		return new Response(xml, {
 			headers: {
 				"Content-Type": "application/mods+xml; charset=utf-8",

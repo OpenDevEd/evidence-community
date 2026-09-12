@@ -57,7 +57,6 @@ import { useQueryState } from "nuqs";
 import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
-import { transformItem } from "@/lib/utils";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
@@ -1415,7 +1414,7 @@ export default function ItemPage({
 		);
 	}, [data?.item]);
 
-	const item = transformItem(loading ? undefined : data?.item)!;
+	const item = (loading ? undefined : data?.item)!;
 
 	return (
 		<PageContainer>

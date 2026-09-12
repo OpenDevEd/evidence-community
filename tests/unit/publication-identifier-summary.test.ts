@@ -146,6 +146,26 @@ describe("buildPublicationIdentifierSummary", () => {
 });
 
 describe("public citation DOI", () => {
+	it("checks attachment DOIs even when the parent has a managed Zenodo DOI", () => {
+		for (const DOI of ["10.5281/zenodo.700001", "10.5281/zenodo.700002"]) {
+			expect(resolvePublicDoi({
+				DOI,
+				attachments: [{ url: "https://doi.org/10.5555/article", tags: ["_r:doi"] }],
+				publicationIdentifiers: { zenodo: {
+					versionDoi: "10.5281/zenodo.700002", conceptDoi: "10.5281/zenodo.700001",
+				} },
+			})).toBe("10.5555/article");
+		}
+	});
+
+	it("does not choose a DOI when the public bibliographic sources conflict", () => {
+		expect(resolvePublicDoi({
+			DOI: "10.5555/parent",
+			attachments: [{ url: "https://doi.org/10.5555/attachment", tags: ["_r:doi"] }],
+			publicationIdentifiers: { crossref: { doi: "10.5555/parent", lifecycle: "verified" } },
+		})).toBeNull();
+	});
+
 	it("uses the registered Zenodo version, not its concept DOI", () => {
 		expect(resolvePublicDoi({
 			publicationIdentifiers: {

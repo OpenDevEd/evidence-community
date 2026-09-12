@@ -106,6 +106,12 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(publication.attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["CHILDDDD"]);
 		expect(publication.fullTextPDFs).toEqual([{ key: "CHILDDDD", fullTextPDF: [{ page: 1, text: "Published PDF text" }] }]);
 		expect(response.headers.get("cache-control")).toBe("no-store");
+		await client.query(`UPDATE item SET "DOI" = '10.5555/conflicting-parent' WHERE key = 'PUBAAAAA'`);
+		expect((await (await read("PUBAAAAA")).json()).item.DOI).toBeNull();
+		expect(await citation("PUBAAAAA")).not.toContain("10.5555/");
+		expect((await getPublicItemCard(database, "PUBAAAAA", config))?.DOI).toBeNull();
+		expect((await readCitationRecordsPage(config, null, 10))[0].DOI).toBeNull();
+		await client.query(`UPDATE item SET "DOI" = null WHERE key = 'PUBAAAAA'`);
 		for (const key of ["HIDDENNN", "CHILDDDD", "DELETEDD", "MISSINGG"]) {
 			const missing = await read(key);
 			expect(missing.status).toBe(404);

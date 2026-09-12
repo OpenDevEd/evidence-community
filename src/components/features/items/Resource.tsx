@@ -12,7 +12,6 @@ import {
 	fetcher,
 	firstNonNullOrEmpty,
 	setter,
-	transformItem,
 } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
@@ -426,7 +425,6 @@ export default function Resource({
 		? { ...sourceItemData, creators: creators ?? sourceItemData.creators }
 		: undefined;
 	const finalIsLoading = !itemKey ? isLoading : fetchedItemDataLoading;
-	const transformedItem = finalItemData ? transformItem(finalItemData) : null;
 
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
@@ -473,11 +471,11 @@ export default function Resource({
 			)}
 		>
 			{/* add COINs here */}
-			{transformedItem && (
+			{finalItemData && (
 				<div
 					className="hidden"
 					dangerouslySetInnerHTML={{
-						__html: generateCOinS(transformedItem),
+						__html: generateCOinS(finalItemData),
 					}}
 				/>
 			)}

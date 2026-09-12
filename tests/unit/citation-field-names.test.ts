@@ -157,21 +157,20 @@ describe("real citation output for a stored report", () => {
 	});
 });
 
-it("exports only a bibliographic DOI from Extra", async () => {
-	for (const extra of ["ZenodoConceptDOI: 10.5281/zenodo.700001", "PreviousDOI: 10.5281/zenodo.700000"]) {
-		const exporter = new BibTeXExporter({ ...storedReport(), extra } as never);
-		expect(await exporter.toBibTeX()).not.toContain("doi =");
-		expect(await exporter.toRIS()).not.toContain("DO  -");
+it("exports the resolved public DOI without choosing again from attachment or Extra metadata", async () => {
+	for (const DOI of [null, "10.5555/current"]) {
+		const exporter = new BibTeXExporter({
+			...storedReport(), DOI, extra: "DOI: 10.5555/extra",
+			attachmentsData: [{ url: "https://doi.org/10.5555/attachment", tags: ["_r:doi"] }],
+		} as never);
+		const bibtex = await exporter.toBibTeX();
+		const ris = await exporter.toRIS();
+		if (DOI) {
+			expect(bibtex).toContain("doi = {10.5555/current}");
+			expect(ris).toContain("DO  - 10.5555/current");
+		} else {
+			expect(bibtex).not.toContain("doi =");
+			expect(ris).not.toContain("DO  -");
+		}
 	}
-	const exporter = new BibTeXExporter({
-		...storedReport(), extra: "DOI: 10.5555/current\nPreviousDOI: 10.5555/old",
-	} as never);
-	expect(await exporter.toBibTeX()).toContain("doi = {10.5555/current}");
-	expect(await exporter.toRIS()).toContain("DO  - 10.5555/current");
-	const conceptOnly = new BibTeXExporter({
-		...storedReport(), DOI: "10.5281/zenodo.700001",
-		publicationIdentifiers: { zenodo: { conceptDoi: "10.5281/zenodo.700001" } },
-	} as never);
-	expect(await conceptOnly.toBibTeX()).not.toContain("doi =");
-	expect(await conceptOnly.toRIS()).not.toContain("DO  -");
 });
