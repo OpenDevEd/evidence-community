@@ -144,6 +144,7 @@ export function PublishingChoicePanel({
 						)}
 						<PublicationArchiveFiles
 							attachments={detail.attachments}
+							readOnly={readOnly}
 						/>
 					</div>
 				</>

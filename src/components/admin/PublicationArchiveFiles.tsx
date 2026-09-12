@@ -9,7 +9,8 @@ import type { AdminItemDetail } from "@/lib/admin/types";
 
 export function PublicationArchiveFiles({
 	attachments,
-}: Pick<AdminItemDetail, "attachments">) {
+	readOnly,
+}: Pick<AdminItemDetail, "attachments"> & { readOnly: boolean }) {
 	const readyFiles = attachments.filter(
 		(a) =>
 			!a.fileRemovalPending &&
@@ -17,11 +18,13 @@ export function PublicationArchiveFiles({
 	);
 	const files = readyFiles.length;
 	const removalPending = attachments.some((file) => file.fileRemovalPending);
+	const disabled = readOnly && files === 0;
 
 	return (
 		<button
 			type="button"
-			className="group flex w-full items-center gap-3 border-t border-black/[0.05] p-3 text-left transition-background-fill hover:bg-black/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.04]"
+			disabled={disabled}
+			className="group flex w-full items-center gap-3 border-t border-black/[0.05] p-3 text-left transition-background-fill enabled:hover:bg-black/[0.03] dark:border-white/[0.06] dark:enabled:hover:bg-white/[0.04]"
 			onClick={() =>
 				document.getElementById("admin-attachments")?.scrollIntoView({
 					behavior: "smooth",
@@ -36,7 +39,9 @@ export function PublicationArchiveFiles({
 				<span className="block text-xs font-medium">
 					{files
 						? `${files} ${files === 1 ? "PDF" : "PDFs"} attached`
-						: removalPending ? "PDF removal staged" : "Add a PDF"}
+						: removalPending
+							? "PDF removal staged"
+							: readOnly ? "No PDF attached" : "Add a PDF"}
 				</span>
 				<span className="mt-1 block truncate text-[10px] text-black/45 dark:text-white/45">
 					{files
@@ -60,11 +65,13 @@ export function PublicationArchiveFiles({
 					className="shrink-0 text-emerald-600 dark:text-emerald-400"
 				/>
 			)}
-			<HugeiconsIcon
-				icon={ArrowRight01Icon}
-				size={13}
-				className="shrink-0 text-black/30 transition-transform group-hover:translate-x-0.5 dark:text-white/35"
-			/>
+			{!disabled && (
+				<HugeiconsIcon
+					icon={ArrowRight01Icon}
+					size={13}
+					className="shrink-0 text-black/30 transition-transform group-hover:translate-x-0.5 dark:text-white/35"
+				/>
+			)}
 		</button>
 	);
 }
