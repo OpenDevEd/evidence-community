@@ -6,7 +6,7 @@ import {
 	isPublicTopLevelItem,
 	LIBRARY_OWNED_PAYLOAD_FIELDS,
 } from "@/lib/admin/item-fields";
-import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
@@ -610,11 +610,19 @@ export async function readPublicItem(
 	config: LibraryServerConfig,
 ): Promise<Item | null> {
 	return database.transaction(async (transaction) => {
-		const collections = await transaction.select({
-			key: collection.key,
-			parentCollection: collection.parentCollection,
-			deleted: collection.deleted,
-		}).from(collection);
+		const { rows: collections } = await transaction.execute<CollectionRow>(sql`
+			WITH RECURSIVE ancestors AS (
+				SELECT current.key, current."parentCollection", current.deleted
+				FROM ${collection} current
+				JOIN ${itemToCollection} membership ON membership."collectionKey" = current.key
+				WHERE membership."itemKey" = ${key}
+				UNION
+				SELECT parent.key, parent."parentCollection", parent.deleted
+				FROM ${collection} parent
+				JOIN ancestors child ON parent.key = child."parentCollection"
+			)
+			SELECT * FROM ancestors
+		`);
 		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, [key], collections, config.content.tags.hidden);
 		const document = plan.documents.find((document) => document.key === key);
 		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;

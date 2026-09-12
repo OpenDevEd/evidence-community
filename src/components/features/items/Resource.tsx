@@ -37,7 +37,6 @@ import useSWR from "swr";
 import { useQueryState } from "nuqs";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { hasAnyTag } from "@/lib/tags";
-import PrefetchLink from "../PrefetchLink";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
@@ -501,7 +500,7 @@ export default function Resource({
 					{article}
 				</a>
 			) : (
-				<PrefetchLink
+				<Link
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
@@ -513,7 +512,7 @@ export default function Resource({
 					)}
 				>
 					{article}
-				</PrefetchLink>
+				</Link>
 			)}
 			<ResourceInteractions
 				itemData={finalItemData}
