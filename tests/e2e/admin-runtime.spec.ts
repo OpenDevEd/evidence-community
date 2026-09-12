@@ -326,13 +326,13 @@ test("lets an Editor publish and update a record without stale client navigation
 	});
 	try {
 		const reader = await readerContext.newPage();
-		await reader.goto("/en-GB/lib");
+		await reader.goto(`/en-GB/lib?search=${encodeURIComponent(title)}&scope=title`);
 		await dismissConsent(reader);
 		const recordLink = reader.locator(`a[href*="/lib/${key}"]`).first();
 		await expect(recordLink).toBeVisible({ timeout: 30_000 });
 		await recordLink.click();
 		await expect(reader.getByRole("heading", { name: title, exact: true })).toBeVisible();
-		await reader.locator('a[href$="/lib"]').first().click();
+		await reader.goBack();
 		await expect(recordLink).toBeVisible();
 
 		await inspector.getByRole("button", { name: "Edit", exact: true }).click();
@@ -341,11 +341,13 @@ test("lets an Editor publish and update a record without stale client navigation
 		await recordLink.click();
 		await expect(reader.getByRole("heading", { name: `${title} revised`, exact: true })).toBeVisible();
 
-		await reader.locator('a[href$="/lib"]').first().click();
+		await reader.goBack();
 		await expect(recordLink).toBeVisible();
 		const removed = await page.request.post(`/api/admin/items/${key}/unpublish`, { data: {} });
 		expect(removed.ok()).toBe(true);
 		await recordLink.click();
+		await expect(reader).toHaveURL((url) => url.pathname.endsWith(`/lib/${key}`));
+		await expect(reader.getByText("Page Not Found", { exact: true })).toBeVisible();
 		await expect(reader.locator('meta[name="robots"]').first()).toHaveAttribute("content", /noindex/);
 		await expect(reader.getByRole("heading", { name: `${title} revised`, exact: true })).toHaveCount(0);
 		await expect(reader.locator('meta[name="citation_title"]')).toHaveCount(0);
