@@ -1534,6 +1534,7 @@ export function AdminInspector({
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
+	const filesReadOnly = readOnlyVersion || !native || detail.state === "deleted";
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&
@@ -2123,7 +2124,7 @@ export function AdminInspector({
 							onDiscardFile={onDiscardFile}
 							onChangePdfRemoval={onChangePdfRemoval}
 							onUpload={onUpload}
-							readOnly={readOnlyVersion || !native}
+							readOnly={filesReadOnly}
 							readOnlyVersion={readOnlyVersion}
 						/>
 					) : (
@@ -2132,7 +2133,7 @@ export function AdminInspector({
 							detail={detail}
 							onCreateAttachment={onCreateAttachment}
 							onSelectAttachment={onSelectAttachment}
-							readOnly={readOnlyVersion || !native}
+							readOnly={filesReadOnly}
 							readOnlyVersion={readOnlyVersion}
 						/>
 					)}

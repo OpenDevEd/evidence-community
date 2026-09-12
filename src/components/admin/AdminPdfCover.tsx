@@ -167,6 +167,23 @@ export function AdminPdfCover({
 		submitted,
 		error,
 	);
+	const cover = (
+		<PdfCoverContent
+			url={url}
+			filename={filename}
+			hasPdf={hasPdf}
+			error={error}
+			progress={progress}
+		/>
+	);
+	const surfaceClassName = "group relative flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-black/10 bg-white text-black/35 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-white/35";
+	if (detail.state === "deleted") {
+		return (
+			<div className={surfaceClassName} role="img" aria-label={hasPdf ? "PDF cover" : "No PDF"}>
+				{cover}
+			</div>
+		);
+	}
 	const blocked = disabled || Boolean(progress);
 	return (
 		<PdfFileInput
@@ -182,15 +199,9 @@ export function AdminPdfCover({
 							aria-label={presentation.label}
 							disabled={blocked}
 							onClick={open}
-							className="group relative flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-black/10 bg-white text-black/35 shadow-sm transition-colors hover:border-accent/50 focus-visible:outline-focus dark:border-white/10 dark:bg-white/[0.04] dark:text-white/35 dark:hover:border-accent/50"
+							className={`${surfaceClassName} transition-colors hover:border-accent/50 focus-visible:outline-focus dark:hover:border-accent/50`}
 						>
-							<PdfCoverContent
-								url={url}
-								filename={filename}
-								hasPdf={hasPdf}
-								error={error}
-								progress={progress}
-							/>
+							{cover}
 							<span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center gap-1 bg-black/[0.03] text-[10px] font-medium text-black/60 dark:bg-white/[0.04] dark:text-white/60">
 								<HugeiconsIcon
 									icon={presentation.icon}
