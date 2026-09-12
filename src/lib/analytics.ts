@@ -175,12 +175,22 @@ function sanitizeString(value: string) {
 		.replace(/https?:\/\/[^\s]+/gi, (url) => sanitizedCurrentUrl(url));
 }
 
-function sanitizePostHogEvent(event: CaptureResult | null) {
-	if (!event || analyticsMode !== "granted") return null;
-	const properties = Object.fromEntries(
-		Object.entries(event.properties).flatMap(([key, value]) => {
+function sanitizePostHogValue(value: unknown): unknown {
+	if (typeof value === "string") return sanitizeString(value);
+	if (Array.isArray(value)) return value.map(sanitizePostHogValue);
+	if (value && typeof value === "object")
+		return sanitizePostHogProperties(value as Record<string, unknown>);
+	return value;
+}
+
+function sanitizePostHogProperties(
+	properties: Record<string, unknown>,
+	preserveProjectToken = false,
+): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries(properties).flatMap(([key, value]) => {
 			// PostHog's public project token is required for event ingestion.
-			if (key === "token") return [[key, value]];
+			if (key === "token" && preserveProjectToken) return [[key, value]];
 			if (key === "$current_url")
 				return [[key, sanitizedCurrentUrl(value)]];
 			if (key === "$pathname") {
@@ -188,15 +198,21 @@ function sanitizePostHogEvent(event: CaptureResult | null) {
 			}
 			if (key === "$referrer" || key === "$initial_referrer") return [];
 			if (SENSITIVE_PROPERTY_NAME.test(key)) return [];
-			return [
-				[
-					key,
-					typeof value === "string" ? sanitizeString(value) : value,
-				],
-			];
+			return [[key, sanitizePostHogValue(value)]];
 		}),
 	);
-	return { ...event, properties };
+}
+
+function sanitizePostHogEvent(event: CaptureResult | null) {
+	if (!event || analyticsMode !== "granted") return null;
+	return {
+		...event,
+		...(event.$set && { $set: sanitizePostHogProperties(event.$set) }),
+		...(event.$set_once && {
+			$set_once: sanitizePostHogProperties(event.$set_once),
+		}),
+		properties: sanitizePostHogProperties(event.properties, true),
+	};
 }
 
 function clearCookies(prefixes: string[]) {
