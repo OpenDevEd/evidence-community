@@ -9,7 +9,7 @@ type Edition = DigestEdition;
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
 
-import { AIMarkdown } from "@/components/features/markdown/Markdown";
+import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Markdown";
 
 
 import { SectionTitle } from "@/components/typography/SectionTitle";
@@ -70,7 +70,7 @@ function ArchiveList({editions, data, base, locale}: Omit<ViewProps, "initial"> 
         <section aria-label="Digest archive" className="space-y-3">{!editions.length && <p className={`py-5 text-sm ${muted}`}>No editions yet. The first digest will appear after new publications are added.</p>}
           {editions.map(item => {const date = new Date(item.publishedAt); const day = date.toLocaleDateString(locale, {day: "numeric", timeZone: data.timezone}); const month = date.toLocaleDateString(locale, {month: "short", timeZone: data.timezone});return <Link key={item.slug} href={`${base}/${item.slug}`} className="group grid grid-cols-[56px_minmax(0,1fr)_18px] items-start gap-4 rounded-2xl bg-card_light p-5 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055] sm:grid-cols-[64px_minmax(0,1fr)_18px] sm:gap-5">
             <time dateTime={item.publishedAt} aria-label={item.date} className="rounded-xl bg-black/[0.04] px-1 py-3 text-center dark:bg-white/[0.04]"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(day)}</span><span className={`mt-2 block text-xs ${muted}`}>{month}</span></time>
-            <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><p className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</p><span className={`mt-3 inline-flex items-center gap-1.5 text-xs ${muted}`}><Icon value={BookOpen01Icon} size={14} />{item.publicationCount} {item.publicationCount === 1 ? "publication" : "publications"}</span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
+            <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><MarkdownExcerpt className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt><span className={`mt-3 inline-flex items-center gap-1.5 text-xs ${muted}`}><Icon value={BookOpen01Icon} size={14} />{item.publicationCount} {item.publicationCount === 1 ? "publication" : "publications"}</span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
           </Link>;})}
         </section>);
 }
