@@ -169,6 +169,46 @@ function trackAnalyticsNetwork(page: Page) {
 
 type AnalyticsNetwork = ReturnType<typeof trackAnalyticsNetwork>;
 
+type ReplayNode = {
+	tagName?: string;
+	textContent?: string;
+	attributes?: Record<string, string>;
+	childNodes?: ReplayNode[];
+};
+
+function allReplayNodes(node: ReplayNode): ReplayNode[] {
+	return [node, ...(node.childNodes ?? []).flatMap(allReplayNodes)];
+}
+
+function expectPrivateStyledReplay(network: AnalyticsNetwork) {
+	const snapshots = network.capturedEvents
+		.filter((event) => event.event === "$snapshot")
+		.flatMap((event) => event.properties?.$snapshot_data as Array<{
+			type: number;
+			data: string | { node?: ReplayNode };
+		}>)
+		.map((snapshot) => ({
+			...snapshot,
+			data: typeof snapshot.data === "string"
+				? JSON.parse(gunzipSync(Buffer.from(snapshot.data, "latin1")).toString("utf8"))
+				: snapshot.data,
+		}));
+	expect(JSON.stringify(snapshots)).not.toContain("analytics-privacy-canary");
+	const fullSnapshot = snapshots.find((snapshot) => snapshot.type === 2);
+	if (!fullSnapshot?.data.node) throw new Error("No full DOM snapshot was captured");
+	const styles = allReplayNodes(fullSnapshot.data.node)
+		.filter((node) => node.tagName === "style" || node.attributes?._cssText !== undefined)
+		.map((node) => node.attributes?._cssText ??
+			(node.childNodes ?? []).map((child) => child.textContent ?? "").join(""))
+		.filter((css) => css.trim().length > 0);
+	expect(styles.length).toBeGreaterThan(0);
+	for (const css of styles) {
+		// Masking stylesheet content destroys replay layout. This checks the
+		// recorder protocol, without depending on application styles or classes.
+		expect(/^[\s*]+$/u.test(css), "Replay stylesheet was masked").toBe(false);
+	}
+}
+
 async function expectSuccessfulAnalytics(
 	page: Page,
 	network: AnalyticsNetwork,
@@ -423,10 +463,13 @@ test("sends analytics only for the configured and consented profile", async ({
 	}
 
 	if (expectedAnalytics) {
+		await page.getByRole("textbox", { name: "Search", exact: true })
+			.fill("analytics-privacy-canary@example.org");
 		await expectSuccessfulAnalytics(page, network);
 		await page.mouse.click(4, 4);
 		await expectFlushedSessionReplay(page, network);
 		await withdrawAnalyticsConsent(page, network);
+		expectPrivateStyledReplay(network);
 		expect(network.payloadErrors).toEqual([]);
 		expect(JSON.stringify(network.capturedEvents)).not.toContain("analytics-privacy-canary");
 		return;
