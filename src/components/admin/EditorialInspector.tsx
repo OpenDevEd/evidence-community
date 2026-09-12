@@ -208,13 +208,13 @@ function SubmittedInspector({
 			detail={frozenDetail}
 			payload={reviewPayload}
 			readOnlyVersion
-			allowReviewCorrections={pending && session.role !== "creator"}
+			allowReviewCorrections={pending && session.canPublish}
 			publishingChoice={snapshot.publishing}
 			onChange={(payload) =>
 				corrections.change(frozenDetail.key, payload)
 			}
 			versionActions={
-				pending && session.role !== "creator"
+				pending && session.canPublish
 					? reviewActions
 					: undefined
 			}
@@ -287,7 +287,7 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		detail: frozenDetail,
 		payload: reviewPayload,
 		change: corrections.change,
-		enabled: Boolean(pending) && session.role !== "creator",
+		enabled: Boolean(pending) && session.canPublish,
 		onStart: props.onStartReviewLinkPick,
 	});
 	return {

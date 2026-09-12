@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/nextui/Button";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 
+import { useAdminSession } from "./AdminSessionProvider";
 import { SourceProviderIcon } from "./SourceProviderIcon";
 import { useAdminSourcesWriteback } from "./useAdminSourcesWriteback";
 import {
@@ -131,6 +132,7 @@ export function AdminSourcesWritebackStatus({
 	revision: number | null;
 	sources: readonly AdminWritebackSourceSummary[];
 }) {
+	const { canPublish } = useAdminSession();
 	const writeback = useAdminSourcesWriteback(
 		itemKey,
 		sources.map((source) => source.sourceKey),
@@ -198,6 +200,7 @@ export function AdminSourcesWritebackStatus({
 									? pendingChoice.choice
 									: null;
 							const busy = writeback.busySource === source.sourceKey;
+							const controlsDisabled = busy || !canPublish;
 							return (
 								<li
 									className="space-y-2"
@@ -245,7 +248,7 @@ export function AdminSourcesWritebackStatus({
 											<ConflictChoiceButton
 												choice="send-local"
 												description={`Replaces the ${source.sourceLabel} copy with the published version. Changes made in ${source.sourceLabel} while updates were paused are lost there.`}
-												disabled={busy}
+												disabled={controlsDisabled}
 												label={`Send this record to ${source.sourceLabel}`}
 												onConfirm={() => {
 													setPendingChoice(null);
@@ -262,7 +265,7 @@ export function AdminSourcesWritebackStatus({
 												<ConflictChoiceButton
 													choice="load-remote"
 													description={`Replaces published metadata with the ${source.sourceLabel} copy. Working drafts stay private.`}
-													disabled={busy}
+													disabled={controlsDisabled}
 													label={`Load ${source.sourceLabel}’s version`}
 													onConfirm={() => {
 														setPendingChoice(null);
@@ -281,7 +284,7 @@ export function AdminSourcesWritebackStatus({
 										<Button
 											className="w-full"
 											color="accent"
-											isDisabled={busy}
+											isDisabled={controlsDisabled}
 											onPress={() => void writeback.retry(source.sourceKey)}
 											size="xs"
 											startContent={

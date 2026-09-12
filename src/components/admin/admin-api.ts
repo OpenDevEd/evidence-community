@@ -5,7 +5,6 @@ import type { OpenScholarInstitutionPage } from "@/lib/admin/openscholar-institu
 import type { SavedReview, PublishingChoice, PublishingChoiceState, ReviewRecord } from "@/lib/admin/review-contract";
 import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 
-import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import type {
 	AdminCollection,
 	AdminCollectionCatalogEntry,
@@ -308,30 +307,10 @@ export async function getAdminPublication(key: string) {
 	).publication;
 }
 
-export function activateAdminCrossrefPublication(key: string) {
-	return requestJson<AdminPublicationMutationResponse>(
-		`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/activate`,
-		{ method: "POST" },
-	);
-}
-
 export function retryAdminCrossrefPublication(key: string) {
 	return requestJson<AdminPublicationMutationResponse>(
 		`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/retry`,
 		{ method: "POST" },
-	);
-}
-
-export function activateAdminZenodoPublication(
-	key: string,
-	identifierPolicy: ZenodoIdentifierPolicy,
-) {
-	return requestJson<AdminPublicationMutationResponse>(
-		`/api/admin/items/${encodeURIComponent(key)}/publication/zenodo/activate`,
-		{
-			body: JSON.stringify({ identifierPolicy }),
-			method: "POST",
-		},
 	);
 }
 

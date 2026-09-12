@@ -24,7 +24,7 @@ function PublicationStep({step}: {step: ProgressStep}) {
 }
 
 export function ReviewPublicationProgress({snapshot}: {snapshot: Pick<AdminReviewSnapshot, "key" | "reviewRevision" | "publishing">}) {
- const {role} = useAdminSession();
+ const {canPublish} = useAdminSession();
  const state = useAdminPublication(snapshot.key, String(snapshot.reviewRevision));
  const providers = state.publication ? [state.publication.providers.crossref, state.publication.providers.zenodo].filter(provider => provider.exact.targetActive) : [];
  const steps = [
@@ -57,7 +57,7 @@ export function ReviewPublicationProgress({snapshot}: {snapshot: Pick<AdminRevie
 							>
 								{failure}
 							</p>
-							{role !== "creator" && retryable.length > 0 && (
+							{canPublish && retryable.length > 0 && (
 								<Button
 									size="xs"
 									variant="light"

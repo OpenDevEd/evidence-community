@@ -2,16 +2,15 @@ import type { APIResponse, Page } from "@playwright/test";
 
 export async function issueAdminLoginCode(
 	libraryId = process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID,
+	role: "owner" | "editor" | "creator" = "editor",
 ) {
 	const fakeUrl = process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL;
 	if (fakeUrl) {
 		const response = await fetch(
 			new URL("/_test/admin-login-codes", fakeUrl),
 			{
-				body: libraryId ? JSON.stringify({ libraryId }) : undefined,
-				headers: libraryId
-					? { "Content-Type": "application/json" }
-					: undefined,
+				body: JSON.stringify({ libraryId, role }),
+				headers: { "Content-Type": "application/json" },
 				method: "POST",
 			},
 		);

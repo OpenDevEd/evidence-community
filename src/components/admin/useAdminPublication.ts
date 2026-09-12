@@ -1,16 +1,11 @@
 "use client";
 
-import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import { useCallback, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
-import type { AdminFieldErrors } from "@/lib/admin/errors";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 
 import {
-	activateAdminCrossrefPublication,
-	activateAdminZenodoPublication,
-	AdminApiError,
 	getAdminPublication,
 	retryAdminCrossrefPublication,
 	retryAdminZenodoPublication,
@@ -18,16 +13,11 @@ import {
 
 export const ADMIN_PUBLICATION_POLL_MS = 1_000;
 
-type PublicationAction =
-	| "activate-crossref"
-	| "activate-zenodo"
-	| "retry-crossref"
-	| "retry-zenodo";
+type PublicationAction = "retry-crossref" | "retry-zenodo";
 
 type ActionState = {
 	action: PublicationAction;
 	error: string | null;
-	fields: AdminFieldErrors;
 	itemKey: string;
 	pending: boolean;
 };
@@ -96,7 +86,6 @@ export function useAdminPublication(
 			setActionState({
 				action,
 				error: null,
-				fields: {},
 				itemKey,
 				pending: true,
 			});
@@ -109,7 +98,6 @@ export function useAdminPublication(
 				setActionState({
 					action,
 					error: null,
-					fields: {},
 					itemKey,
 					pending: false,
 				});
@@ -118,7 +106,6 @@ export function useAdminPublication(
 				setActionState({
 					action,
 					error: messageFor(caught),
-					fields: caught instanceof AdminApiError ? caught.fields : {},
 					itemKey,
 					pending: false,
 				});
@@ -135,14 +122,6 @@ export function useAdminPublication(
 	return {
 		action: selectedAction?.action ?? null,
 		actionError: selectedAction?.error ?? null,
-		actionFieldErrors: selectedAction?.fields ?? {},
-		activateCrossref: () =>
-			run("activate-crossref", activateAdminCrossrefPublication),
-		activateZenodo: (policy: ZenodoIdentifierPolicy) =>
-			run("activate-zenodo", (key) =>
-				activateAdminZenodoPublication(key, policy),
-			),
-		clearActionError: () => setActionState(null),
 		error: error ? messageFor(error) : null,
 		isLoading,
 		isMutating: selectedAction?.pending ?? false,

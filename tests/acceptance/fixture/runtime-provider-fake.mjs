@@ -9,6 +9,7 @@ const storageBytes = Buffer.from(
 );
 const depositions = new Map();
 const adminLoginCodes = new Map();
+const adminUsers = { editor: "user_acceptance_admin", creator: "user_acceptance_creator", owner: "user_acceptance_owner" };
 function requiredEnvironment(name) {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} is required`);
@@ -147,18 +148,22 @@ const server = createServer(async (request, response) => {
 	if (url.pathname === "/_test/admin-login-codes" && method === "POST") {
 		const bytes = await readBody(request);
 		let libraryId = defaultOpenScholarLibraryId;
+		let role = "editor";
 		if (bytes.byteLength > 0) {
 			try {
-				libraryId = JSON.parse(bytes.toString("utf8")).libraryId;
+				const input = JSON.parse(bytes.toString("utf8"));
+				libraryId = input.libraryId ?? defaultOpenScholarLibraryId;
+				role = input.role ?? "editor";
 			} catch {
 				return json(response, 400, { error: "invalid_request" });
 			}
 		}
+		if (!Object.hasOwn(adminUsers, role)) return json(response, 400, { error: "invalid_role" });
 		if (!openScholarLibraryIds.has(libraryId)) {
 			return json(response, 400, { error: "invalid_library" });
 		}
 		const code = `elc_${randomBytes(32).toString("base64url")}`;
-		adminLoginCodes.set(code, libraryId);
+		adminLoginCodes.set(code, { libraryId, role });
 		return json(response, 201, { code });
 	}
 	if (url.pathname === "/_test/state") {
@@ -200,22 +205,24 @@ const server = createServer(async (request, response) => {
 			return json(response, 400, { error: "invalid_request" });
 		}
     if (url.pathname === "/api/v1/evidence-libraries/admin-session/check") {
-      if (body?.libraryId !== credentialLibraryId || body?.clerkUserId !== "user_acceptance_admin") return json(response, 403, { error: "access_revoked" });
-      return json(response, 200, { role: "editor" });
+      const role = Object.keys(adminUsers).find(role => adminUsers[role] === body?.clerkUserId);
+      if (body?.libraryId !== credentialLibraryId || !role) return json(response, 403, { error: "access_revoked" });
+      return json(response, 200, { role });
     }
 		if (
 			body?.libraryId !== credentialLibraryId ||
 			typeof body?.code !== "string" ||
-			adminLoginCodes.get(body.code) !== credentialLibraryId
+			adminLoginCodes.get(body.code)?.libraryId !== credentialLibraryId
 		) {
 			return json(response, 400, { error: "invalid_login_code" });
 		}
+		const { role } = adminLoginCodes.get(body.code);
 		adminLoginCodes.delete(body.code);
 		return json(response, 200, {
 			libraryId: credentialLibraryId,
-			clerkUserId: "user_acceptance_admin",
+			clerkUserId: adminUsers[role],
 			clerkOrganizationId: "org_acceptance",
-			role: "editor",
+			role,
 			consumedAt: Date.now(),
 		});
 	}

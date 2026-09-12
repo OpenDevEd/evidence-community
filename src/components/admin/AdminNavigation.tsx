@@ -1,5 +1,7 @@
 "use client";
 
+import { useAdminSession } from "./AdminSessionProvider";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { ReviewQueueEntry } from "./ReviewQueueEntry";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
@@ -84,6 +86,25 @@ const navigationItemClass =
 	"flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] transition-colors";
 const navigationListSurfaceClass =
 	"bg-black/[0.035] px-2 py-2 dark:bg-black/20";
+
+function NewCollectionButton({ onCreate }: { onCreate: () => void }) {
+	const { canPublish } = useAdminSession();
+	return (
+		<Tooltip content={canPublish ? "New collection" : "Editors and owners manage collections"}>
+			<span className="inline-flex">
+				<button
+					disabled={!canPublish}
+					className="disabled:pointer-events-none disabled:opacity-50 inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-black/50 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+					onClick={onCreate}
+					type="button"
+				>
+					<HugeiconsIcon icon={FolderAddIcon} aria-hidden size={13} />
+					New
+				</button>
+			</span>
+		</Tooltip>
+	);
+}
 
 export function AdminNavigation({
 	kind,
@@ -228,14 +249,7 @@ export function AdminNavigation({
 
 			<NavigationHeading
 				action={
-					<button
-						className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-black/50 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
-						onClick={() => onCreateCollection(null)}
-						type="button"
-					>
-						<HugeiconsIcon icon={FolderAddIcon} aria-hidden size={13} />
-						New
-					</button>
+					<NewCollectionButton onCreate={() => onCreateCollection(null)} />
 				}
 				icon={Folder01Icon}
 				title="Collections"

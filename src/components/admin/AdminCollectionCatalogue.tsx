@@ -21,6 +21,7 @@ import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
+import { useAdminSession } from "./AdminSessionProvider";
 import { SourceProviderIcon } from "./SourceProviderIcon";
 import { editableCollectionSourceKeys, itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import type {
@@ -265,8 +266,10 @@ function CollectionRow({
 	setSize,
 	view,
 }: CollectionRowProps) {
+	const { canPublish } = useAdminSession();
+	const canManage = editable && canPublish;
 	const movesEnabled =
-		editable && view === "active" && hierarchyEnabled && !busy;
+		canManage && view === "active" && hierarchyEnabled && !busy;
 	const visualDepth = Math.min(depth, MAX_VISUAL_DEPTH);
 	const {
 		activeCollectionKey,
@@ -398,7 +401,7 @@ function CollectionRow({
 				<span className="size-6 shrink-0" />
 			)}
 			<button
-				aria-disabled={view === "deleted" && !editable}
+				aria-disabled={view === "deleted" && !canManage}
 				aria-expanded={
 					entry.hasChildren && hierarchyEnabled ? expanded : undefined
 				}
@@ -410,7 +413,7 @@ function CollectionRow({
 				id={`admin-catalogue-collection:${entry.key}`}
 				onClick={() => {
 					if (view === "active") onSelect(entry.key);
-					else if (editable) onRestore(entry);
+					else if (canManage) onRestore(entry);
 				}}
 				onFocus={onFocus}
 				onKeyDown={onKeyDown}
@@ -436,11 +439,11 @@ function CollectionRow({
 						</span>
 					) : null}
 				</span>
-				{!editable ? (
+				{!canManage ? (
 					<HugeiconsIcon icon={LockIcon} aria-label="Collection editing unavailable" className="shrink-0 opacity-35" size={11} />
 				) : null}
 			</button>
-			{view === "deleted" && editable ? (
+			{view === "deleted" && canManage ? (
 				<Tooltip content={`Restore ${entry.name}`}>
 					<button
 						aria-label={`Restore ${entry.name}`}
@@ -451,7 +454,7 @@ function CollectionRow({
 						<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={13} />
 					</button>
 				</Tooltip>
-			) : view === "active" && editable ? (
+			) : view === "active" && canManage ? (
 				<div className="relative z-30 flex items-center opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
 					{entry.hasChildren && hierarchyEnabled ? (
 						<button
