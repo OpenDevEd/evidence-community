@@ -191,7 +191,7 @@ The verifier is a host control-plane service. Its bearer-protected endpoint
 must remain private to OpenScholar because its Docker proxy permissions can
 create and remove guard containers and connect them to networks.
 
-## Delete a library search volume
+## Delete library volumes
 
 Deploy one fixed volume deleter on the development Coolify server from
 `docker/compose.volume-deleter.yaml`. The service receives a public HTTPS
@@ -218,7 +218,8 @@ Content-Type: application/json
 ```
 
 The request accepts only `applicationUuid`. The service derives
-`<application-uuid>_meilisearch-data`; callers cannot send a volume name,
+`<application-uuid>_meilisearch-data` and
+`<application-uuid>_library-config-data`; callers cannot send a volume name,
 Docker path or command. It asks Docker for every container that references the
 derived volume and returns `volume_in_use` without deleting when any exists.
 It then inspects the volume, deletes it without force and inspects it again.
@@ -230,7 +231,10 @@ the caller.
 OpenScholar calls this service after deleting the matching Coolify
 application. A `volume_in_use` or `volume_deletion_failed` result keeps the
 library teardown pending for retry. Teardown is complete only after the
-service confirms the derived volume is absent.
+service confirms both derived volumes and the private network are absent.
+The service also removes `<application-uuid>_private` after checking its
+Compose project label. It detaches only Coolify's proxy endpoint. Any remaining
+library or unknown container blocks cleanup. Other networks stay unchanged.
 
 ## Create a library database
 

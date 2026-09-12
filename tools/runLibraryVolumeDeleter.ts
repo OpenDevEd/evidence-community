@@ -16,7 +16,7 @@ const dockerRequestTimeoutMs = 2_000;
 const maximumDockerResponseBytes = 64 * 1_024;
 const maximumVolumeContainers = 24;
 
-type DockerMethod = "DELETE" | "GET";
+type DockerMethod = "DELETE" | "GET" | "POST";
 
 export type DockerVolumeResponse = {
 	body: string;
@@ -27,9 +27,11 @@ export type DockerVolumeResponse = {
 export type DockerVolumeRequest = (request: {
 	method: DockerMethod;
 	path: string;
+	body?: string;
 }) => Promise<DockerVolumeResponse>;
 
-function deletionFailed(): never {
+function deletionFailed(step = "docker_response", status?: number): never {
+	console.error("Library runtime cleanup failed", { step, status });
 	throw new LibraryVolumeDeletionError("volume_deletion_failed");
 }
 
@@ -62,36 +64,108 @@ function requireContainerList(response: DockerVolumeResponse) {
 	return body;
 }
 
+function requireDockerObject(value: unknown): Record<string, unknown> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return deletionFailed();
+	return value as Record<string, unknown>;
+}
+
 function requireContainerSummary(candidate: unknown) {
-	if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-		return deletionFailed();
-	}
-	const id = (candidate as Record<string, unknown>).Id;
+	const id = requireDockerObject(candidate).Id;
 	if (typeof id !== "string" || !/^[a-f0-9]{64}$/u.test(id)) {
 		return deletionFailed();
 	}
 }
 
-function requireNamedVolume(
+function requireNamedResource(
 	response: DockerVolumeResponse,
 	volumeName: string,
 ) {
 	if (response.status !== 200) return deletionFailed();
-	const body = parseDockerJsonResponse(response);
-	if (!body || typeof body !== "object" || Array.isArray(body)) {
+	const body = requireDockerObject(parseDockerJsonResponse(response));
+	if (body.Name !== volumeName) {
 		return deletionFailed();
 	}
-	if ((body as Record<string, unknown>).Name !== volumeName) {
-		return deletionFailed();
-	}
+	return body;
 }
 
-function containerListPath(volumeName: string) {
+function containerListPath(filter: "volume" | "network", resourceName: string) {
 	const query = new URLSearchParams({
 		all: "true",
-		filters: JSON.stringify({ volume: [volumeName] }),
+		filters: JSON.stringify({ [filter]: [resourceName] }),
 	});
 	return `/containers/json?${query}`;
+}
+
+async function deleteDockerResource(requestDocker: DockerVolumeRequest, path: string) {
+	const removal = await requestDocker({ method: "DELETE", path });
+	if ([403, 409].includes(removal.status)) throw new LibraryVolumeDeletionError("volume_in_use");
+	if (removal.status === 404) return false;
+	if (removal.status !== 204) return deletionFailed(`delete ${path}`, removal.status);
+	const verification = await requestDocker({ method: "GET", path });
+	if (verification.status !== 404) return deletionFailed(`verify ${path}`, verification.status);
+	return true;
+}
+
+async function deleteNamedVolume(
+	requestDocker: DockerVolumeRequest,
+	volumeName: string,
+): Promise<boolean> {
+	const volumePath = `/volumes/${volumeName}`;
+
+	const containers = requireContainerList(
+		await requestDocker({
+			method: "GET",
+			path: containerListPath("volume", volumeName),
+		}),
+	);
+	if (containers.length > 0) {
+		throw new LibraryVolumeDeletionError("volume_in_use");
+	}
+
+	const inspection = await requestDocker({ method: "GET", path: volumePath });
+	if (inspection.status === 404) return false;
+	requireNamedResource(inspection, volumeName);
+
+	return deleteDockerResource(requestDocker, volumePath);
+}
+
+function requireUnusedNetwork(body: Record<string, unknown>, applicationUuid: string) {
+	const labels = requireDockerObject(body.Labels);
+	if (labels["com.docker.compose.project"] !== applicationUuid) return deletionFailed("network_ownership");
+	const containers = requireDockerObject(body.Containers);
+	const entries = Object.entries(containers);
+	if (entries.length > maximumVolumeContainers) return deletionFailed();
+	for (const [id, container] of entries) {
+		requireContainerSummary({ Id: id });
+		if (requireDockerObject(container).Name !== "coolify-proxy") {
+			throw new LibraryVolumeDeletionError("volume_in_use");
+		}
+	}
+	return entries.map(([id]) => id);
+}
+
+async function deletePrivateNetwork(requestDocker: DockerVolumeRequest, applicationUuid: string) {
+	const networkName = `${applicationUuid}_private`;
+	const path = `/networks/${networkName}`;
+	const inspection = await requestDocker({ method: "GET", path });
+	if (inspection.status === 404) return false;
+	const body = requireNamedResource(inspection, networkName);
+	const proxyIds = requireUnusedNetwork(body, applicationUuid);
+	// Network inspection omits stopped containers. They still need this network.
+	const containers = requireContainerList(await requestDocker({
+		method: "GET", path: containerListPath("network", networkName),
+	}));
+	if (containers.some(({ Id }) => !proxyIds.includes(Id))) {
+		throw new LibraryVolumeDeletionError("volume_in_use");
+	}
+	for (const id of proxyIds) {
+		const detached = await requestDocker({
+			method: "POST", path: `${path}/disconnect`,
+			body: JSON.stringify({ Container: id, Force: false }),
+		});
+		if (detached.status !== 200 && detached.status !== 404) return deletionFailed("network_disconnect", detached.status);
+	}
+	return deleteDockerResource(requestDocker, path);
 }
 
 export function createDockerLibraryVolumeDeleter(
@@ -99,47 +173,25 @@ export function createDockerLibraryVolumeDeleter(
 ): LibraryVolumeHttpDeleter {
 	return async (applicationUuid) => {
 		if (!isCoolifyApplicationUuid(applicationUuid)) return deletionFailed();
-		const volumeName = `${applicationUuid}_meilisearch-data`;
-		const volumePath = `/volumes/${volumeName}`;
-
-		const containers = requireContainerList(
-			await requestDocker({
-				method: "GET",
-				path: containerListPath(volumeName),
-			}),
-		);
-		if (containers.length > 0) {
-			throw new LibraryVolumeDeletionError("volume_in_use");
+		let deleted = false;
+		for (const suffix of ["meilisearch-data", "library-config-data"]) {
+			const removed = await deleteNamedVolume(requestDocker, `${applicationUuid}_${suffix}`);
+			deleted ||= removed;
 		}
-
-		const inspection = await requestDocker({ method: "GET", path: volumePath });
-		if (inspection.status === 404) return { outcome: "absent" };
-		requireNamedVolume(inspection, volumeName);
-
-		const removal = await requestDocker({ method: "DELETE", path: volumePath });
-		if (removal.status === 409) {
-			throw new LibraryVolumeDeletionError("volume_in_use");
-		}
-		if (removal.status === 404) return { outcome: "absent" };
-		if (removal.status !== 204) return deletionFailed();
-
-		const verification = await requestDocker({
-			method: "GET",
-			path: volumePath,
-		});
-		if (verification.status !== 404) return deletionFailed();
-		return { outcome: "deleted" };
+		const removedNetwork = await deletePrivateNetwork(requestDocker, applicationUuid);
+		return { outcome: deleted || removedNetwork ? "deleted" : "absent" };
 	};
 }
 
 export function requestDockerSocket(input: {
 	method: DockerMethod;
 	path: string;
+	body?: string;
 }, socketPath = dockerSocketPath): Promise<DockerVolumeResponse> {
 	return new Promise((resolveRequest, rejectRequest) => {
 		const request = sendHttpRequest(
 			{
-				headers: { Accept: "application/json" },
+				headers: { Accept: "application/json", ...(input.body ? { "Content-Type": "application/json" } : {}) },
 				method: input.method,
 				path: input.path,
 				socketPath,
@@ -186,7 +238,7 @@ export function requestDockerSocket(input: {
 				new LibraryVolumeDeletionError("volume_deletion_failed"),
 			);
 		});
-		request.end();
+		request.end(input.body);
 	});
 }
 
