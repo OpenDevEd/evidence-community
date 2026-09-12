@@ -74,7 +74,7 @@ async function deliverAssociations(
 	const card = await getPublicItemCard(
 		database,
 		job.itemKey,
-		config.content.tags.hidden,
+		config,
 	);
 
 	const service = config.authentication.openScholar;

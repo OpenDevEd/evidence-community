@@ -1,3 +1,4 @@
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { Cite } from "@citation-js/core";
 import { withZoteroFieldNames } from "@/lib/item-field-codec";
@@ -1132,7 +1133,10 @@ export class BibTeXExporter {
 		// Records are stored under shared field names. Citation output asks for
 		// the name Zotero gives the field on this item type, so a report keeps
 		// its number and its language.
-		this.item = withZoteroFieldNames({ ...item } as Record<string, unknown>);
+		this.item = withZoteroFieldNames({
+			...item,
+			DOI: resolvePublicDoi(item ?? {}),
+		} as Record<string, unknown>);
 
 		this.item.attachments =
 			this.item.attachments ||
@@ -1332,21 +1336,8 @@ export class BibTeXExporter {
 			}
 		}
 
-		let doi = this.item.DOI;
-
-		if (this.item.extra) {
-			if (!doi) {
-				const split = this.item.extra.split("\n");
-				for (const line of split) {
-					if (line.includes("DOI:")) {
-						doi = line.split("DOI:")[1].trim();
-					}
-				}
-			}
-		}
-
-		if (doi) {
-			this.writeField("doi", doi);
+		if (this.item.DOI) {
+			this.writeField("doi", this.item.DOI);
 		}
 
 		if (this.item.tags && this.item.tags.length) {

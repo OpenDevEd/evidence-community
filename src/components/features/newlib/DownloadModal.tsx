@@ -136,6 +136,7 @@ export function DownloadModal({
 								context: "library_records",
 								format,
 							});
+							onClose();
 						} catch (error) {
 							console.error(error);
 							toast({ type: "error", title: t("downloadFailed"), description: t("tryAgainLater") });

@@ -19,6 +19,9 @@ import { getDatabaseForConfig } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { GET } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
+import { readCitationRecordsPage } from "@/lib/library-export-records";
+import { getPublicItemCard } from "@/lib/public-item-card";
+import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
@@ -33,10 +36,10 @@ function stubCitationServices() {
 	vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
 		if (String(url).includes("/export?format=csljson")) {
 			const [record] = JSON.parse(String(init?.body));
-			return Response.json([{ id: "PUBAAAAA", type: "report", title: record.title }]);
+			return Response.json([{ id: "PUBAAAAA", type: "report", title: record.title, DOI: record.DOI }]);
 		}
 		if (String(url).endsWith("apa.csl")) {
-			return new Response('<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text"><info><title>Test title citation</title><id>https://example.org/test</id></info><citation><layout><text variable="title"/></layout></citation><bibliography><layout><text variable="title"/></layout></bibliography></style>');
+			return new Response('<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text"><info><title>Test title citation</title><id>https://example.org/test</id></info><citation><layout><text variable="title"/></layout></citation><bibliography><layout><text variable="title"/><text variable="DOI" prefix=" "/></layout></bibliography></style>');
 		}
 		if (String(url).includes("locales-en-GB.xml")) {
 			return new Response('<locale xmlns="http://purl.org/net/xbiblio/csl" xml:lang="en-GB"><terms/></locale>');
@@ -122,3 +125,47 @@ it("reports an unavailable database as a retryable failure instead of a missing 
 	expect(citationResponse.status).toBe(503);
 	expect(citationResponse.headers.get("cache-control")).toBe("no-store");
 });
+
+it("uses current registered identifiers across public records, citations, cards and library exports", async () => {
+	stubCitationServices();
+	await withIsolatedPublicationDatabase(async (database, client) => {
+		const config = publicationTestConfig();
+		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
+		vi.mocked(getLibraryConfig).mockResolvedValue(config);
+		for (const [key, doi] of [["ZENDAAAA", null], ["RESERVAA", null], ["IMPRTAAA", "10.5555/external"]]) {
+			await client.query('INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'native\', $1)', [key]);
+			await client.query('INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", title, "DOI") VALUES ($1, \'native\', $1, \'Report\', $1, $2)', [key, doi]);
+		}
+		await client.query(`INSERT INTO "publicationTarget" ("itemKey", provider, environment, "identifierPolicy", "requestedBy") VALUES
+			('ZENDAAAA', 'zenodo', 'sandbox', 'mint-zenodo', 'qa'),
+			('ZENDAAAA', 'zenodo', 'production', 'mint-zenodo', 'qa'),
+			('RESERVAA', 'crossref', 'test', null, 'qa')`);
+		await client.query(`INSERT INTO "publicationIdentifier" ("itemKey", registrar, environment, role, doi, ownership, lifecycle, "isCurrent", "verifiedAt") VALUES
+			('ZENDAAAA', 'zenodo', 'sandbox', 'version', '10.5072/zenodo.700002', 'managed', 'verified', true, now()),
+			('ZENDAAAA', 'zenodo', 'sandbox', 'version', '10.5072/zenodo.700000', 'managed', 'verified', false, now()),
+			('ZENDAAAA', 'zenodo', 'sandbox', 'concept', '10.5072/zenodo.700001', 'managed', 'verified', true, now()),
+			('ZENDAAAA', 'zenodo', 'production', 'version', '10.5281/zenodo.900002', 'managed', 'verified', true, now()),
+			('RESERVAA', 'crossref', 'test', 'primary', '10.5555/private-reservation', 'managed', 'reserved', true, null)`);
+		const doi = "10.5072/zenodo.700002";
+		expect((await (await read("ZENDAAAA")).json()).item.DOI).toBe(doi);
+		expect(await citation("ZENDAAAA")).toContain(doi);
+		expect((await getPublicItemCard(database, "ZENDAAAA", config))?.DOI).toBe(doi);
+		const exported = await readCitationRecordsPage(config, null, 10);
+		expect(exported.map((record) => [record.key, record.DOI])).toEqual([["IMPRTAAA", "10.5555/external"], ["RESERVAA", null], ["ZENDAAAA", doi]]);
+		const reserved = (await (await read("RESERVAA")).json()).item;
+		expect(reserved.DOI).toBeNull();
+		expect(reserved.publicationIdentifiers).toBeUndefined();
+		expect(await citation("RESERVAA")).not.toContain("private-reservation");
+		// Editor activation copies an allocated DOI onto the approved record.
+		// Keep its reserved label until the provider confirms registration.
+		await client.query('UPDATE item SET "DOI" = \'10.5555/private-reservation\' WHERE key = \'RESERVAA\'');
+		const activated = (await (await read("RESERVAA")).json()).item;
+		expect(activated.publicationIdentifiers.crossref).toEqual({
+			doi: "10.5555/private-reservation", lifecycle: "reserved",
+		});
+		await client.query('UPDATE item SET deleted = 1 WHERE key = \'ZENDAAAA\'');
+		expect((await read("ZENDAAAA")).status).toBe(404);
+		expect(await getPublicItemCard(database, "ZENDAAAA", config)).toBeNull();
+		expect((await readCitationRecordsPage(config, null, 10)).map((record) => record.key)).toEqual(["IMPRTAAA", "RESERVAA"]);
+	});
+}, 120_000);

@@ -156,3 +156,22 @@ describe("real citation output for a stored report", () => {
 		expect(bibtex).not.toContain("language");
 	});
 });
+
+it("exports only a bibliographic DOI from Extra", async () => {
+	for (const extra of ["ZenodoConceptDOI: 10.5281/zenodo.700001", "PreviousDOI: 10.5281/zenodo.700000"]) {
+		const exporter = new BibTeXExporter({ ...storedReport(), extra } as never);
+		expect(await exporter.toBibTeX()).not.toContain("doi =");
+		expect(await exporter.toRIS()).not.toContain("DO  -");
+	}
+	const exporter = new BibTeXExporter({
+		...storedReport(), extra: "DOI: 10.5555/current\nPreviousDOI: 10.5555/old",
+	} as never);
+	expect(await exporter.toBibTeX()).toContain("doi = {10.5555/current}");
+	expect(await exporter.toRIS()).toContain("DO  - 10.5555/current");
+	const conceptOnly = new BibTeXExporter({
+		...storedReport(), DOI: "10.5281/zenodo.700001",
+		publicationIdentifiers: { zenodo: { conceptDoi: "10.5281/zenodo.700001" } },
+	} as never);
+	expect(await conceptOnly.toBibTeX()).not.toContain("doi =");
+	expect(await conceptOnly.toRIS()).not.toContain("DO  -");
+});

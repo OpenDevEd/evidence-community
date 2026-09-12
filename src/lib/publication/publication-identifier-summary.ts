@@ -1,3 +1,9 @@
+import { normalizeDoi } from "@/lib/doi";
+import {
+	isZenodoDoi,
+	resolveBibliographicDoi,
+	type BibliographicDoiInput,
+} from "./bibliographic-doi";
 import type { PublicationIdentifierSummary } from "./publication-display-adapter";
 
 export type PublicPublicationIdentifierRow = {
@@ -26,22 +32,30 @@ const ZENODO_BASE_URL = {
 export function buildPublicationIdentifierSummary(input: {
 	identifiers: readonly PublicPublicationIdentifierRow[];
 	zenodoState: PublicZenodoStateRow | null;
+	bibliographicDoi?: string | null;
 }): PublicationIdentifierSummary | undefined {
+	// Creator reservations stay private until Editor activation assigns the DOI
+	// to the approved record, or the provider confirms it.
 	const crossref = input.identifiers.find(
 		(identifier) =>
-			identifier.registrar === "crossref" && identifier.role === "primary",
+			identifier.registrar === "crossref" &&
+			identifier.role === "primary" &&
+			(identifier.lifecycle === "verified" ||
+				normalizeDoi(identifier.doi) === input.bibliographicDoi),
 	);
 	const zenodoVersion = input.identifiers.find(
 		(identifier) =>
 			identifier.registrar === "zenodo" &&
 			identifier.role === "version" &&
-			identifier.ownership === "managed",
+			identifier.ownership === "managed" &&
+			identifier.lifecycle === "verified",
 	);
 	const zenodoConcept = input.identifiers.find(
 		(identifier) =>
 			identifier.registrar === "zenodo" &&
 			identifier.role === "concept" &&
-			identifier.ownership === "managed",
+			identifier.ownership === "managed" &&
+			identifier.lifecycle === "verified",
 	);
 	const hasZenodo = Boolean(
 		zenodoVersion ||
@@ -79,4 +93,23 @@ export function buildPublicationIdentifierSummary(input: {
 				}
 			: {}),
 	};
+}
+
+/** Prefer the bibliographic DOI, then a confirmed provider DOI. */
+export function resolvePublicDoi(
+	input: BibliographicDoiInput & {
+		publicationIdentifiers?: PublicationIdentifierSummary | null;
+	},
+) {
+	const bibliographic = normalizeDoi(input.DOI)
+		?? resolveBibliographicDoi({ extra: input.extra }).doi;
+	if (bibliographic && !isZenodoDoi(bibliographic)) return bibliographic;
+
+	const summary = input.publicationIdentifiers;
+	const crossref = summary?.crossref?.lifecycle === "verified"
+		? normalizeDoi(summary.crossref.doi)
+		: null;
+	const version = normalizeDoi(summary?.zenodo?.versionDoi);
+	const concept = normalizeDoi(summary?.zenodo?.conceptDoi);
+	return crossref ?? version ?? (bibliographic === concept ? null : bibliographic);
 }

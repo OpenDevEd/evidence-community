@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
-import { buildPublicationIdentifierSummary } from "@/lib/publication/publication-identifier-summary";
+import { buildPublicationIdentifierSummary, resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 
 describe("buildPublicationIdentifierSummary", () => {
 	it("classifies one reused DOI as Crossref and keeps the Zenodo records", () => {
@@ -142,4 +142,74 @@ describe("buildPublicationIdentifierSummary", () => {
 			},
 		});
 	});
+});
+
+describe("public citation DOI", () => {
+	it("uses the registered Zenodo version, not its concept DOI", () => {
+		expect(resolvePublicDoi({
+			publicationIdentifiers: {
+				zenodo: {
+					versionDoi: "10.5281/zenodo.700002",
+					conceptDoi: "10.5281/zenodo.700001",
+				},
+			},
+		})).toBe("10.5281/zenodo.700002");
+	});
+
+	it("preserves an imported DOI and prefers a verified Crossref DOI over the archive DOI", () => {
+		const publicationIdentifiers = {
+			crossref: { doi: "10.5555/crossref", lifecycle: "verified" as const },
+			zenodo: { versionDoi: "10.5281/zenodo.700002" },
+		};
+		expect(resolvePublicDoi({
+			DOI: "https://doi.org/10.5555/imported", publicationIdentifiers,
+		})).toBe("10.5555/imported");
+		expect(resolvePublicDoi({
+			extra: "DOI: 10.5555/imported", publicationIdentifiers,
+		})).toBe("10.5555/imported");
+		expect(resolvePublicDoi({ publicationIdentifiers })).toBe("10.5555/crossref");
+	});
+
+	it("uses the current version instead of an older managed Zenodo DOI", () => {
+		expect(resolvePublicDoi({
+			DOI: "10.5281/zenodo.700000",
+			publicationIdentifiers: { zenodo: { versionDoi: "10.5281/zenodo.700002" } },
+		})).toBe("10.5281/zenodo.700002");
+	});
+
+	it("does not cite a private reservation or a concept-only archive", () => {
+		expect(resolvePublicDoi({
+			publicationIdentifiers: { crossref: { doi: "10.5555/reserved", lifecycle: "reserved" } },
+		})).toBeNull();
+		expect(resolvePublicDoi({
+			publicationIdentifiers: { zenodo: { conceptDoi: "10.5281/zenodo.700001" } },
+		})).toBeNull();
+		expect(buildPublicationIdentifierSummary({
+			identifiers: [{
+				doi: "10.5555/reserved", lifecycle: "reserved", ownership: "managed",
+				registrar: "crossref", role: "primary",
+			}],
+			zenodoState: null,
+		})).toBeUndefined();
+	});
+});
+
+it("shows an allocated Crossref DOI only after it belongs to the approved record", () => {
+	const crossref = {
+		doi: "10.5555/allocated", lifecycle: "reserved" as const,
+		ownership: "managed" as const, registrar: "crossref" as const, role: "primary" as const,
+	};
+	expect(buildPublicationIdentifierSummary({
+		identifiers: [crossref], zenodoState: null, bibliographicDoi: crossref.doi,
+	})?.crossref).toEqual({ doi: crossref.doi, lifecycle: "reserved" });
+	expect(buildPublicationIdentifierSummary({
+		identifiers: [crossref], zenodoState: null, bibliographicDoi: "10.5281/zenodo.700002",
+	})).toBeUndefined();
+});
+
+it("does not cite a known concept DOI stored on the record", () => {
+	expect(resolvePublicDoi({
+		DOI: "10.5281/zenodo.700001",
+		publicationIdentifiers: { zenodo: { conceptDoi: "10.5281/zenodo.700001" } },
+	})).toBeNull();
 });

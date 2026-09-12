@@ -899,6 +899,8 @@ test("keeps the whole-library export total independent of the search", async ({ 
 	expect(path).not.toBeNull();
 	const records = await readFile(path!, "utf8");
 	expect(records.match(/^TY\s+- /gm)).toHaveLength(count);
+	await expect(page.getByRole("dialog")).toBeHidden();
+	await expect(button).toBeFocused();
 });
 
 for (const width of [1200, 390]) {

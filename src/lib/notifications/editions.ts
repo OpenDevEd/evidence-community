@@ -21,7 +21,7 @@ async function collectPublications(db: DatabaseTransaction, config: LibraryServe
   const publications: NotificationPublication[] = [];
   let metadataBytes = 0;
   for (const row of rows) {
-    const card = await getPublicItemCard(db, row.key, config.content.tags.hidden);
+    const card = await getPublicItemCard(db, row.key, config);
     if (!card || card.itemType === "Attachment" || card.itemType === "Note") continue;
     const metadata = digestMetadata(card);
     metadataBytes += Buffer.byteLength(JSON.stringify(metadata));
