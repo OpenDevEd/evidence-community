@@ -631,6 +631,7 @@ export default async function proxy(request: NextRequest) {
 		response.headers.set(
 			"Cache-Control",
 			isRedirect ||
+				Boolean(libItemMatch) ||
 				setsLocaleCookie ||
 				hasLocaleRewriteHeader ||
 				variesByLocaleDetection

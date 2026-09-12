@@ -405,6 +405,12 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		);
 	}
 
+	if (expectedDatabaseItemKey) {
+		const publication = await request.get(`/lib/${expectedDatabaseItemKey}`);
+		expect(publication.status()).toBe(200);
+		expect(publication.headers()["cache-control"]).toBe("private, no-store");
+	}
+
 	// Explicit locale URLs save a preference, so check browser detection first.
 	for (const locale of expectedEnabledLocales) {
 		if (locale === expectedDefaultLocale) continue;
