@@ -103,6 +103,7 @@ function adminError(details: AdminErrorDetails) {
 		{
 			error: {
 				code: details.code,
+				...(details.conflictingDraft ? { conflictingDraft: details.conflictingDraft } : {}),
 				...(details.fields && Object.keys(details.fields).length > 0
 					? { fields: details.fields }
 					: {}),
@@ -227,6 +228,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	}
 	if (error instanceof ItemDraftConflictError && error.fields.length > 0) {
 		return {
+			conflictingDraft: error.conflictingDraft,
 			code: "conflict",
 			fields: Object.fromEntries(
 				error.fields.map((field) => [
@@ -235,7 +237,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 				]),
 			),
 			message:
-				"Another session changed the same field while you were editing it. Reload to see its value, then make your change again.",
+				"Another session changed these fields. Choose which values to keep.",
 			status: 409,
 		};
 	}

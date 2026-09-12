@@ -183,6 +183,7 @@ async function verify() {
 				sourceConnectionKey: "native",
 				sourceRecordKey: nativeLinkItemKey,
 				title: "Local title",
+				languageName: "French",
 			},
 			{
 				key: nativeFileParentKey,
@@ -215,7 +216,7 @@ async function verify() {
 		]);
 		await db.insert(itemSourceLink).values([
 			{
-				dirtyFields: ["title"],
+				dirtyFields: ["title", "languageName"],
 				itemKey: nativeLinkItemKey,
 				sourceConnectionKey: "zotero-native-link-writer",
 				sourceRecordKey: "LINK2345",
@@ -491,6 +492,7 @@ async function verify() {
 				abstractNote: "Remote abstract",
 				itemType: "Report",
 				title: "Remote title",
+				languageName: "English",
 			},
 		};
 		const linkedFirst = await writeSourceIngestionBatch(db, {
@@ -512,6 +514,7 @@ async function verify() {
 		assert(
 			linkedAfterFirst?.sourceConnectionKey === "native" &&
 				linkedAfterFirst.title === "Local title" &&
+				linkedAfterFirst.languageName === "French" &&
 				linkedAfterFirst.abstractNote === "Remote abstract" &&
 				linkedAfterFirst.revision === 2,
 			"Inbound sync did not preserve ownership and dirty fields",
@@ -1804,6 +1807,7 @@ async function verify() {
 				environment: "test",
 				identifierPolicy: null,
 				requestedBy: "source-writer-verifier",
+				activatedAt: new Date(),
 			},
 			{
 				itemKey: publicationParentKey,
@@ -1811,6 +1815,7 @@ async function verify() {
 				environment: "sandbox",
 				identifierPolicy: "mint-zenodo",
 				requestedBy: "source-writer-verifier",
+				activatedAt: new Date(),
 			},
 		]);
 		await db.insert(sourceFileCleanup).values(
@@ -1905,9 +1910,10 @@ async function verify() {
 				),
 			);
 		assert(
-			jobsAfterSourceFileRemoval.length === 1 &&
-				jobsAfterSourceFileRemoval[0]?.provider === "crossref" &&
-				jobsAfterSourceFileRemoval[0].reason === "file_changed",
+			jobsAfterSourceFileRemoval.length === 2 &&
+				jobsAfterSourceFileRemoval.every(job => job.reason === "file_changed") &&
+				jobsAfterSourceFileRemoval.some(job => job.provider === "crossref") &&
+				jobsAfterSourceFileRemoval.some(job => job.provider === "zenodo"),
 			"A source PDF removal did not queue the active publication targets correctly",
 		);
 
@@ -2056,9 +2062,10 @@ async function verify() {
 				),
 			);
 		assert(
-			currentPublicationJobs.length === 1 &&
-				currentPublicationJobs[0]?.provider === "crossref" &&
-				currentPublicationJobs[0].reason === "record_changed",
+			currentPublicationJobs.length === 2 &&
+				currentPublicationJobs.every(job => job.reason === "record_changed") &&
+				currentPublicationJobs.some(job => job.provider === "crossref") &&
+				currentPublicationJobs.some(job => job.provider === "zenodo"),
 			"A source metadata update did not replace stale publication jobs",
 		);
 

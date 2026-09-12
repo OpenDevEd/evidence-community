@@ -1,6 +1,7 @@
 "use client";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import type { ComponentProps, ReactNode } from "react";
+import type { ConflictingDraft } from "@/lib/admin/errors";
 import type { AdminReviewSnapshot } from "./admin-api";
 import { AdminInspector } from "./AdminInspector";
 import { usePublishingChoice } from "./usePublishingChoice";
@@ -26,6 +27,8 @@ import {
 } from "./ReviewVersionControls";
 
 type Props = ComponentProps<typeof AdminInspector> & {
+	concurrentConflict?: ConflictingDraft;
+	onResolveConcurrentConflict: (choices: Record<string, "draft" | "published">) => void;
 	reviewQueue: boolean;
 	onStartReviewLinkPick: (
 		kind: AdminItemLinkKind,
@@ -121,7 +124,8 @@ function WorkingDraftInspector({
 	...props
 }: VersionInspectorProps) {
 	const { snapshot, pending, error, conflicts } = model;
-	const hasConflict = conflicts.fields.length > 0;
+	const fields = conflicts.fields;
+	const hasConflict = fields.length > 0;
 	const readiness = useReviewReadiness(
 		props.detail,
 		props.payload,
@@ -130,7 +134,7 @@ function WorkingDraftInspector({
 	const draftNotice = (actions: ReactNode) => (
 		<ReviewDraftNotice
 			notice={notice(actions)}
-			conflictCount={conflicts.fields.length}
+			conflictCount={props.concurrentConflict ? 0 : fields.length}
 			feedback={
 				snapshot?.reviewState === "returned" ? snapshot.note : null
 			}
@@ -141,6 +145,8 @@ function WorkingDraftInspector({
 	return (
 		<AdminInspector
 			{...props}
+			conflictCount={props.concurrentConflict ? fields.length : 0}
+			onResolveConflicts={props.concurrentConflict ? conflicts.focus : undefined}
 			publishing={model.publishing}
 			error={error instanceof Error ? error.message : props.error}
 			versionControls={controls}
@@ -299,7 +305,10 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		corrections,
 		changed,
 		conflictRef,
-		conflicts,
+		conflicts: {
+			...conflicts,
+			fields: workingConflictFields(props, conflicts.fields),
+		},
 		version,
 		viewingSubmitted,
 		frozenDetail,
@@ -308,46 +317,76 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	};
 }
 
+function workingConflictFields(props: Props, reviewFields: string[]) {
+	return props.concurrentConflict
+		? Object.keys(props.validationErrors ?? {})
+		: reviewFields;
+}
+
+type WorkingDraftNoticeProps = {
+	model: VersionInspectorProps["model"];
+	props: Omit<VersionInspectorProps, "model" | "controls" | "notice">;
+};
+
 function WorkingDraftNotices({
 	model,
 	props,
 	readiness,
-}: {
-	model: VersionInspectorProps["model"];
-	props: Omit<VersionInspectorProps, "model" | "controls" | "notice">;
+}: WorkingDraftNoticeProps & {
 	readiness: ReturnType<typeof useReviewReadiness>;
 }) {
-	const { snapshot, conflicts, conflictRef } = model;
-	const hasConflict = conflicts.fields.length > 0;
-	return (
-		<>
-			{!props.detail.parentItem && props.detail.draft && (
-				<ReviewReadiness
-					recordKey={props.detail.key}
-					readiness={readiness}
+	if (model.conflicts.fields.length > 0)
+		return (
+			<>
+				<WorkingDraftConflict
+					model={model}
+					props={props}
+					disabled={
+						props.busy ||
+						model.conflicts.resolving ||
+						props.saveState === "saving"
+					}
 				/>
-			)}
-			{hasConflict ? (
-				<div
-					ref={conflictRef}
-					tabIndex={-1}
-					className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
-				>
-					<DraftConflict
-						key={`${snapshot?.reviewRevision}:${props.detail.draft?.draftRevision}`}
-						payload={props.payload}
-						published={props.detail.published ?? {}}
-						conflictFields={conflicts.fields}
-						disabled={
-							conflicts.resolving || props.saveState === "saving"
-						}
-						onResolve={(choices) => {
-							void conflicts.resolve(choices);
-						}}
-					/>
-				</div>
-			) : undefined}
-		</>
+				{readiness.missing > 0 && (
+					<ReviewReadiness recordKey={props.detail.key} readiness={readiness} />
+				)}
+			</>
+		);
+	if (
+		props.saveState === "conflict" ||
+		props.detail.parentItem ||
+		!props.detail.draft
+	)
+		return null;
+	return <ReviewReadiness recordKey={props.detail.key} readiness={readiness} />;
+}
+
+function WorkingDraftConflict({
+	model,
+	props,
+	disabled,
+}: WorkingDraftNoticeProps & { disabled: boolean }) {
+	const { snapshot, conflicts, conflictRef } = model;
+	const concurrent = props.concurrentConflict;
+	const version = concurrent ?? props.detail.draft;
+	return (
+		<div
+			ref={conflictRef}
+			tabIndex={-1}
+			className="mb-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
+		>
+			<DraftConflict
+				key={`${snapshot?.reviewRevision}:${version?.draftRevision}`}
+				source={concurrent ? "session" : "published"}
+				payload={props.payload}
+				published={concurrent?.payload ?? props.detail.published ?? {}}
+				conflictFields={conflicts.fields}
+				disabled={disabled}
+				onResolve={
+					concurrent ? props.onResolveConcurrentConflict : conflicts.resolve
+				}
+			/>
+		</div>
 	);
 }
 

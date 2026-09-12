@@ -1,5 +1,7 @@
 "use client";
 
+import { adminCanonicalPayloadToItemFields } from "@/lib/admin/item-fields";
+import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 import { documentAttachment, uploadPdfFile, validatePdf, type PdfUploadStep } from "./admin-pdf";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -109,7 +111,7 @@ import {
 	type CollectionDropDestination,
 } from "./AdminDragDropProvider";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
-import type { AdminFieldErrors } from "@/lib/admin/errors";
+import type { AdminFieldErrors, ConflictingDraft } from "@/lib/admin/errors";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 import {
 	applyItemDraftPatch,
@@ -549,6 +551,7 @@ export default function AdminWorkbench({
 				fields: AdminFieldErrors;
 				message: string;
 				state: SaveState;
+				conflictingDraft?: ConflictingDraft;
 			}
 		>(),
 	);
@@ -912,12 +915,14 @@ export default function AdminWorkbench({
 					pendingPayloadByKey.current.delete(key);
 				}
 				if (selectedKeyRef.current === key) {
+					setValidationErrors({});
 					setSaveState("saved");
 					setSaveMessage(null);
 				}
 			} catch (error) {
 				if (saveGeneration.current.get(key) !== generation) return;
 				const failure = {
+					conflictingDraft: error instanceof AdminApiError ? error.conflictingDraft : undefined,
 					fields:
 						error instanceof AdminApiError &&
 						(error.code === "validation_failed" || error.status === 409)
@@ -947,7 +952,6 @@ export default function AdminWorkbench({
 
 	const queueDraftSave = useCallback(
 		(key: string, payload: Record<string, unknown>, immediate = false) => {
-			saveFailureByKey.current.delete(key);
 			const generation = (saveGeneration.current.get(key) ?? 0) + 1;
 			saveGeneration.current.set(key, generation);
 			pendingPayloadByKey.current.set(key, { generation, payload });
@@ -1015,9 +1019,10 @@ export default function AdminWorkbench({
 					normalized = payloadForItemType(next, nextDefinition);
 				}
 			}
-			setValidationErrors((current) =>
-				clearChangedAdminFieldErrors(current, draftPayload, normalized),
-			);
+			if (!saveFailureByKey.current.get(detail.key)?.conflictingDraft)
+				setValidationErrors((current) =>
+					clearChangedAdminFieldErrors(current, draftPayload, normalized),
+				);
 			setDraftPayload(normalized);
 			const title =
 				typeof normalized.title === "string"
@@ -1053,8 +1058,10 @@ export default function AdminWorkbench({
 						: record,
 				),
 			);
-			setSaveState("idle");
-			setSaveMessage(null);
+			if (!saveFailureByKey.current.get(detail.key)?.conflictingDraft) {
+				setSaveState("idle");
+				setSaveMessage(null);
+			}
 			void queueDraftSave(detail.key, normalized);
 		},
 		[definitions, detail, draftPayload, queueDraftSave],
@@ -1755,6 +1762,33 @@ export default function AdminWorkbench({
 			setMobilePane("inspector");
 			toast.success("Draft created");
 		});
+
+	const concurrentConflict = selectedKey
+		? saveFailureByKey.current.get(selectedKey)?.conflictingDraft
+		: undefined;
+	const resolveConcurrentConflict = (
+		choices: Record<string, "draft" | "published">,
+	) => {
+		if (!detail?.draft || !concurrentConflict) return;
+		const draft = detail.draft;
+		const key = detail.key;
+		void runBusy(async () => {
+			const canonical = (payload: unknown) => validateNativeItemDraft(payload, { allowIncompleteCreators: true }).payload;
+			const expected = canonical(JSON.parse(requiredDraftValue(savedPayloadByKey.current, key, "Saved draft payload")));
+			const changes = Object.fromEntries(
+				Object.entries(createItemDraftPatch(expected, canonical(draftPayload))).filter(
+					([field]) => choices[field] !== "published",
+				),
+			);
+			const canonicalResolved = applyItemDraftPatch(concurrentConflict.payload, changes);
+			const resolved = adminCanonicalPayloadToItemFields(canonicalResolved, String(canonicalResolved.itemType));
+			rememberServerDraft(key, { ...draft, ...concurrentConflict, payload: adminCanonicalPayloadToItemFields(concurrentConflict.payload, String(concurrentConflict.payload.itemType)) });
+			updatePayload(resolved);
+			await flushDraft(key, resolved);
+			await refreshCurrent(key);
+			toast.success("Draft conflicts resolved");
+		});
+	};
 
 	const reloadConflictedDraft = () => {
 		if (!detail || detailLoading) return;
@@ -2520,6 +2554,8 @@ export default function AdminWorkbench({
 						} xl:block`}
 					>
 						<EditorialInspector
+							concurrentConflict={concurrentConflict}
+							onResolveConcurrentConflict={resolveConcurrentConflict}
                             reviewQueue={filters.reviewQueue}
                             onStartReviewLinkPick={(kind, review) => {
                                 if (!detail) return;

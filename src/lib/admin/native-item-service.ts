@@ -1,3 +1,4 @@
+import type { ConflictingDraft } from "./errors";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { isNotNull } from "drizzle-orm";
 import {
@@ -36,7 +37,6 @@ import {
 	collectionKeysFromPayload,
 	payloadWithCollection,
 } from "./item-payload";
-import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import { resolveBibliographicDoi } from "@/lib/publication/bibliographic-doi";
 import {
 	existingItemKeys,
@@ -129,7 +129,7 @@ export class ItemDraftConflictError extends Error {
 	/** Fields changed to different values by this editor and another session. */
 	readonly fields: readonly string[];
 
-	constructor(itemKey: string, fields: readonly string[] = []) {
+	constructor(itemKey: string, fields: readonly string[] = [], readonly conflictingDraft?: ConflictingDraft) {
 		super(
 			fields.length > 0
 				? `Item draft changed in another session (${fields.join(", ")}): ${itemKey}`
@@ -769,7 +769,11 @@ export async function saveItemDraftInTransaction(
 			payload: submittedPayload,
 		});
 		if (merge.kind === "conflict") {
-			throw new ItemDraftConflictError(itemKey, merge.fields);
+			throw new ItemDraftConflictError(itemKey, merge.fields, {
+				generation: currentDraft.generation,
+				draftRevision: currentDraft.draftRevision,
+				payload: currentPayload,
+			});
 		}
 		submittedPayload = merge.payload;
 		baselinePayload = currentPayload;
@@ -1262,9 +1266,7 @@ export async function publishItemDraftWithContext(
 		if (publishedLinks.relatedChanged) changedFields.push("relations");
 		if (current?.deleted === 1) {
 			changedFields.push(
-				...editableItemDatabaseFields.map(
-					databaseItemFieldToPayloadField,
-				),
+				...editableItemDatabaseFields,
 				"tags",
 			);
 		}

@@ -19,6 +19,8 @@ import type {
 import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
 import {
 	isAdminErrorCode,
+	conflictingDraftSchema,
+	type ConflictingDraft,
 	type AdminErrorCode,
 	type AdminErrorPayload,
 	type AdminFieldErrors,
@@ -59,12 +61,14 @@ export class AdminApiError extends Error {
 	readonly code: AdminErrorCode;
 	readonly fields: AdminFieldErrors;
 	readonly status: number;
+	readonly conflictingDraft?: ConflictingDraft;
 
 	constructor(details: AdminErrorPayload["error"], status: number) {
 		super(details.message);
 		this.name = "AdminApiError";
 		this.code = details.code;
 		this.fields = details.fields ?? {};
+		this.conflictingDraft = details.conflictingDraft;
 		this.status = status;
 	}
 }
@@ -114,7 +118,9 @@ function parsedError(
 	) {
 		return fallbackError(status);
 	}
+	const draft = conflictingDraftSchema.safeParse(candidate.conflictingDraft);
 	return {
+		...(draft.success ? { conflictingDraft: draft.data } : {}),
 		code: candidate.code,
 		...(candidate.fields
 			? { fields: candidate.fields as AdminFieldErrors }

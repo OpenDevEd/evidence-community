@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DraftConflict } from "@/components/admin/DraftConflict";
 import { act, useState, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NextUIProvider } from "@nextui-org/react";
@@ -122,6 +123,7 @@ function Inspector({ role }: { role: "editor" | "creator" }) {
 		},
 		onPublicationChanged: async () => {},
 		onStartReviewLinkPick: noop,
+		onResolveConcurrentConflict: noop,
 		onBackToParent: noop,
 		onCreateAttachment: noop,
 		onDiscardDraft: noop,
@@ -269,4 +271,46 @@ it("lets Creators edit the working draft while keeping the submitted version rea
 	expect(titleField()?.value).toBe("Newer working title");
 	expect(titleField()?.disabled).toBe(false);
 	expect(requests).toEqual([]);
+});
+
+it("shows report conflict values under form field names and preserves the server choice keys", async () => {
+	const resolve = vi.fn();
+	await act(async () =>
+		root.render(
+			<NextUIProvider disableAnimation>
+				<DraftConflict
+					conflictFields={["number", "languageName"]}
+					payload={{
+						itemType: "Report",
+						reportNumber: "R-2",
+						language: "French",
+					}}
+					published={{
+						itemType: "Report",
+						reportNumber: "R-1",
+						language: "English",
+					}}
+					disabled={false}
+					onResolve={resolve}
+				/>
+			</NextUIProvider>,
+		),
+	);
+	const apply = [...container.querySelectorAll("button")].find(
+		(button) => button.textContent?.trim() === "Apply to draft",
+	)!;
+	expect(apply.disabled).toBe(true);
+	for (const value of ["R-2", "English"]) {
+		const choice = [...container.querySelectorAll("label")].find((label) =>
+			label.textContent?.includes(value),
+		);
+		expect(choice, `Missing saved field value: ${value}`).toBeTruthy();
+		await act(async () => choice!.click());
+	}
+	expect(apply.disabled).toBe(false);
+	await act(async () => apply.click());
+	expect(resolve).toHaveBeenCalledWith({
+		number: "draft",
+		languageName: "published",
+	});
 });

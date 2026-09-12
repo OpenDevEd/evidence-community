@@ -158,6 +158,112 @@ test("lets an Editor dismiss and restore a source import issue in the real libra
 	).toBe(404);
 });
 
+test("resolves concurrent draft fields without losing either session's other changes", async ({
+	page,
+}) => {
+	test.setTimeout(120_000);
+	await openAdmin(page);
+	await expect(page.locator("[data-record-key]").first()).toBeVisible();
+	await page.getByRole("button", { name: "Create Item", exact: true }).click();
+	await page
+		.getByRole("dialog", { name: "Create Item", exact: true })
+		.getByRole("button", { name: "Book", exact: true })
+		.click();
+	const inspector = page.locator("#admin-inspector-pane");
+	const title = inspector.getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toHaveValue("", { timeout: 30_000 });
+	await title.fill("Shared draft");
+	const key = new URL(page.url()).searchParams.get("item");
+	if (!key) throw new Error("Created draft has no key");
+	const readDraft = async () => {
+		const response = await page.request.get(`/api/admin/items/${key}`);
+		return (await response.json()).item.draft.payload;
+	};
+	await expect
+		.poll(async () => (await readDraft()).title, { timeout: 30_000 })
+		.toBe("Shared draft");
+	const second = await page.context().newPage();
+	try {
+		await second.goto(`/admin?item=${key}`);
+		const other = second.locator("#admin-inspector-pane");
+		await expect(
+			other.getByRole("textbox", { name: "Title", exact: true }),
+		).toHaveValue("Shared draft");
+		await title.fill("First session title");
+		await inspector
+			.getByRole("textbox", { name: "Language", exact: true })
+			.fill("English");
+		await inspector
+			.getByRole("textbox", { name: "Publisher", exact: true })
+			.fill("First session publisher");
+		await expect
+			.poll(async () => (await readDraft()).publisher)
+			.toBe("First session publisher");
+		await other
+			.getByRole("textbox", { name: "Title", exact: true })
+			.fill("Second session title");
+		await other
+			.getByRole("textbox", { name: "Language", exact: true })
+			.fill("French");
+		await other
+			.getByRole("textbox", { name: "Place", exact: true })
+			.fill("Second session place");
+		const comparison = other.getByRole("region", {
+			name: "Resolve draft conflicts",
+		});
+		await expect(comparison).toBeVisible();
+		const apply = comparison.getByRole("button", {
+			name: "Apply to draft",
+			exact: true,
+		});
+		await expect(apply).toBeDisabled();
+		await comparison
+			.getByRole("group", { name: "Title", exact: true })
+			.getByRole("radio", { name: /Your changes/ })
+			.check();
+		await expect(apply).toBeDisabled();
+		await comparison
+			.getByRole("group", { name: "Language", exact: true })
+			.getByRole("radio", { name: /Saved in another session/ })
+			.check();
+		await expect(apply).toBeEnabled();
+		// Editing a different field must not discard already-selected choices.
+		await other.getByRole("textbox", { name: "Place", exact: true }).fill("Updated second session place");
+		await expect(comparison.getByRole("group", { name: "Title", exact: true }).getByRole("radio", { name: /Your changes/ })).toBeChecked();
+		await expect(comparison.getByRole("group", { name: "Language", exact: true }).getByRole("radio", { name: /Saved in another session/ })).toBeChecked();
+		await expect(apply).toBeEnabled();
+		await title.fill("A newer first-session title");
+		await expect
+			.poll(async () => (await readDraft()).title)
+			.toBe("A newer first-session title");
+		await apply.click();
+		await expect(
+			comparison.getByText("A newer first-session title", { exact: true }),
+		).toBeVisible();
+		await expect(apply).toBeDisabled();
+		await comparison
+			.getByRole("group", { name: "Title", exact: true })
+			.getByRole("radio", { name: /Your changes/ })
+			.check();
+		await apply.click();
+		await expect(comparison).toHaveCount(0);
+		await expect(
+			other.getByRole("textbox", { name: "Title", exact: true }),
+		).not.toHaveAttribute("aria-invalid", "true");
+		await expect
+			.poll(readDraft)
+			.toMatchObject({
+				title: "Second session title",
+				language: "English",
+				publisher: "First session publisher",
+				place: "Updated second session place",
+			});
+		expect((await page.request.get(`/api/item/${key}`)).status()).toBe(404);
+	} finally {
+		await second.close();
+	}
+});
+
 test("lets an Editor create and publish a native record through the real stack", async ({
 	page,
 }, testInfo) => {
