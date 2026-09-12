@@ -231,7 +231,9 @@ test("lets an Editor publish and update a record without stale client navigation
 		const removed = await page.request.post(`/api/admin/items/${key}/unpublish`, { data: {} });
 		expect(removed.ok()).toBe(true);
 		await recordLink.click();
-		await expect(reader.getByText("Page Not Found", { exact: true })).toBeVisible();
+		await expect(reader.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+		await expect(reader.getByRole("heading", { name: `${title} revised`, exact: true })).toHaveCount(0);
+		await expect(reader.locator('meta[name="citation_title"]')).toHaveCount(0);
 	} finally {
 		await readerContext.close();
 	}
