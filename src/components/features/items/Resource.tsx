@@ -323,7 +323,7 @@ function ResourceArticle({
 								icon={MapsIcon}
 								className="size-3.5 shrink-0"
 							/>
-							<span>{tNav("gapMap")}</span>
+							<span id={`${titleId}-gap-map`}>{tNav("gapMap")}</span>
 						</span>
 					)}
 					<ResourceAuthors itemData={finalItemData} />
@@ -490,7 +490,7 @@ export default function Resource({
 			)}
 			{gapMapHref ? (
 				<a
-					aria-labelledby={titleId}
+					aria-labelledby={`${titleId} ${titleId}-gap-map`}
 					href={gapMapHref}
 					target="_blank"
 					rel="noopener noreferrer"
