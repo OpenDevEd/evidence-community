@@ -772,12 +772,14 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 
 	if (expectedDatabaseItemKey) {
 		const databaseItemResponse = await request.get(
-			`/api/item/${expectedDatabaseItemKey}?source=db`,
+			`/api/item/${expectedDatabaseItemKey}`,
 		);
 		expect(databaseItemResponse.status()).toBe(200);
 		const databaseItem = (await databaseItemResponse.json()).item;
 		expect(databaseItem?.key).toBe(expectedDatabaseItemKey);
 		expect(databaseItem?.title).toBe(expectedDatabaseItemTitle);
+		await page.goto(`/en-GB/lib/${expectedDatabaseItemKey}`);
+		await expect(page.getByRole("heading", { name: expectedDatabaseItemTitle, exact: true })).toBeVisible();
 	}
 
 	const similarResponse = await request.get(`/api/similar/${firstItem.key}`);

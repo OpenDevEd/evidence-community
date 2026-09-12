@@ -25,6 +25,8 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
+import { hasAnyTag } from "@/lib/tags";
+import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { buildPublicationIdentifierSummary } from "@/lib/publication/publication-identifier-summary";
 
@@ -51,7 +53,7 @@ export type SearchProjectionPlan = {
 	documents: ItemSearchDocument[];
 };
 
-type CollectionRow = typeof collection.$inferSelect;
+type CollectionRow = Pick<typeof collection.$inferSelect, "key" | "parentCollection" | "deleted">;
 type ItemRow = typeof item.$inferSelect;
 export type PublicationProjectionConfig = LibraryServerConfig["services"]["publication"];
 
@@ -273,6 +275,7 @@ async function buildSearchProjectionPlanForKeys(
 	publication: PublicationProjectionConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
+	hiddenTags: readonly string[] = [],
 ): Promise<SearchProjectionPlan> {
 	if (topLevelKeys.length === 0) {
 		return { deleteKeys: [], documents: [] };
@@ -422,10 +425,8 @@ async function buildSearchProjectionPlanForKeys(
 	const zenodoStateByItem = new Map(
 		zenodoStateRows.map((row) => [row.itemKey, row]),
 	);
-	// Links and source citation metrics are search projections. The item API
-	// re-reads both from PostgreSQL.
 	const [linksByItem, citationMetricsByItem] = await Promise.all([
-		getPublicItemLinksForKeys(database, activeParentKeys),
+		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
 	]);
 	const childrenByParent = new Map<string, ItemRow[]>();
@@ -600,4 +601,29 @@ export async function* generateFullSearchProjectionPlans(
 		batchSize,
 		signal,
 	);
+}
+
+/** Read the committed record with the same metadata projection used by search. */
+export async function readPublicItem(
+	database: Database,
+	key: string,
+	config: LibraryServerConfig,
+): Promise<Item | null> {
+	return database.transaction(async (transaction) => {
+		const collections = await transaction.select({
+			key: collection.key,
+			parentCollection: collection.parentCollection,
+			deleted: collection.deleted,
+		}).from(collection);
+		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, [key], collections, config.content.tags.hidden);
+		const document = plan.documents.find((document) => document.key === key);
+		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;
+		const result = document as Item;
+		result.attachmentsData = result.attachmentsData?.filter((attachment) =>
+			attachment.deleted === 0 && !hasAnyTag(attachment.tags, config.content.tags.hidden),
+		);
+		const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
+		result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
+		return result;
+	}, { isolationLevel: "repeatable read", accessMode: "read only" });
 }

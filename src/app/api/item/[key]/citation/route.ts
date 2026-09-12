@@ -1,6 +1,5 @@
 import { getCitationForItemKey } from "@/lib/citations";
 import { getRuntimeRequestLocale } from "@/i18n/server";
-import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { ZoteroTranslationError } from "@/lib/zotero-translation";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -20,7 +19,10 @@ export async function GET(
 		citation = await getCitationForItemKey(params.key, locale);
 	} catch (error) {
 		if (!(error instanceof ZoteroTranslationError)) {
-			throw error;
+			console.error("Public citation read failed", { key: params.key, error });
+			return NextResponse.json({ error: "Unable to load citation" }, {
+				status: 503, headers: { "Cache-Control": "no-store" },
+			});
 		}
 
 		console.warn("Zotero citation translation unavailable", error);
@@ -39,7 +41,7 @@ export async function GET(
 		{ citation: citation || null },
 		{
 			headers: {
-				"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+				"Cache-Control": "no-store",
 				Vary: "Accept-Language",
 			},
 		},

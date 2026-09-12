@@ -14,9 +14,7 @@ import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
 
 export async function getCurrentItem(key: string) {
-	const data = await getCachedItemSmall(key).catch(() => ({
-		item: undefined,
-	}));
+	const data = await getCachedItemSmall(key);
 
 	if (data?.item && !data.item.citation) {
 		data.item.citation = "<div>Loading...</div>";

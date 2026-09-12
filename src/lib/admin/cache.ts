@@ -14,12 +14,7 @@ export function revalidateIndexedReceiptCaches(
 		if (receipt.state !== "indexed") continue;
 		if (receipt.entityType === "collection") {
 			tags.add("collections");
-			continue;
 		}
-		tags.add(`item-${receipt.entityKey}`);
-		tags.add(`item-small-${receipt.entityKey}`);
-		tags.add(`item-citation-source-${receipt.entityKey}`);
-		tags.add(`metadata-citation-${receipt.entityKey}`);
 	}
 	for (const tag of tags) revalidateTag(tag, IMMEDIATE_EXPIRY);
 }

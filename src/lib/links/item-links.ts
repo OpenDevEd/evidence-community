@@ -75,70 +75,28 @@ export async function getPublicItemLinks(
 	key: string,
 	options: { hiddenTags?: readonly string[] } = {},
 ): Promise<PublicItemLinks> {
-	const hiddenTags = [...(options.hiddenTags ?? [])];
-	const visible = (
-		column: typeof itemLink.toKey | typeof itemLink.fromKey,
-	) =>
-		hiddenTags.length === 0
-			? eq(item.deleted, 0)
-			: and(
-					eq(item.deleted, 0),
-					notExists(
-						db
-							.select({ one: sql`1` })
-							.from(itemToTag)
-							.where(
-								and(
-									eq(itemToTag.itemKey, column),
-									inArray(itemToTag.tagName, hiddenTags),
-								),
-							),
-					),
-				);
-	const outgoing = await db
-		.select({ toKey: itemLink.toKey, kind: itemLink.kind })
-		.from(itemLink)
-		.innerJoin(item, eq(item.key, itemLink.toKey))
-		.where(and(eq(itemLink.fromKey, key), visible(itemLink.toKey)))
-		.orderBy(asc(itemLink.createdAt), asc(itemLink.toKey));
-	const incoming = await db
-		.select({ fromKey: itemLink.fromKey, kind: itemLink.kind })
-		.from(itemLink)
-		.innerJoin(item, eq(item.key, itemLink.fromKey))
-		.where(and(eq(itemLink.toKey, key), visible(itemLink.fromKey)))
-		.orderBy(asc(itemLink.createdAt), asc(itemLink.fromKey));
-
-	// Several owners may assert the same pair; the public view lists each record once.
-	const cites = new Set<string>();
-	const citedBy = new Set<string>();
-	const related = new Set<string>();
-	for (const row of outgoing) {
-		if (row.kind === "related") related.add(row.toKey);
-		else cites.add(row.toKey);
-	}
-	for (const row of incoming) {
-		if (row.kind === "related") related.add(row.fromKey);
-		else citedBy.add(row.fromKey);
-	}
-
-	return { cites: [...cites], citedBy: [...citedBy], related: [...related] };
+	const links = await getPublicItemLinksForKeys(db, [key], options);
+	return links.get(key) ?? { cites: [], citedBy: [], related: [] };
 }
 
 /**
  * `getPublicItemLinks` for many records at once (used by the search projection).
- * Lists only published targets; readers that know hidden tags filter further.
+ * Applies the same visibility rules as the single-record reader.
  */
 export async function getPublicItemLinksForKeys(
 	db: Pick<Executor, "select">,
 	keys: readonly string[],
+	options: { hiddenTags?: readonly string[] } = {},
 ): Promise<Map<string, PublicItemLinks>> {
 	const result = new Map<string, PublicItemLinks>();
 	if (keys.length === 0) return result;
+	const hiddenTags = (options.hiddenTags ?? []).map((tag) => tag.toLowerCase());
 	const rows = await db
 		.select({
 			fromKey: itemLink.fromKey,
 			kind: itemLink.kind,
 			toKey: itemLink.toKey,
+			visibleKey: item.key,
 		})
 		.from(itemLink)
 		.innerJoin(
@@ -154,7 +112,13 @@ export async function getPublicItemLinksForKeys(
 				),
 			),
 		)
-		.where(eq(item.deleted, 0))
+		.where(and(
+			eq(item.deleted, 0),
+			hiddenTags.length ? notExists(db.select({ one: sql`1` }).from(itemToTag).where(and(
+				eq(itemToTag.itemKey, item.key),
+				inArray(sql`lower(${itemToTag.tagName})`, hiddenTags),
+			))) : undefined,
+		))
 		.orderBy(
 			asc(itemLink.createdAt),
 			asc(itemLink.fromKey),
@@ -178,16 +142,11 @@ export async function getPublicItemLinksForKeys(
 	};
 	const wanted = new Set(keys);
 	for (const row of rows) {
-		if (wanted.has(row.fromKey)) {
-			const entry = bucket(row.fromKey);
-			if (row.kind === "related") entry.related.add(row.toKey);
-			else entry.cites.add(row.toKey);
-		}
-		if (wanted.has(row.toKey)) {
-			const entry = bucket(row.toKey);
-			if (row.kind === "related") entry.related.add(row.fromKey);
-			else entry.citedBy.add(row.fromKey);
-		}
+		const outgoing = row.visibleKey === row.toKey;
+		const key = outgoing ? row.fromKey : row.toKey;
+		if (!wanted.has(key)) continue;
+		const direction = outgoing ? "cites" : "citedBy";
+		bucket(key)[row.kind === "related" ? "related" : direction].add(row.visibleKey);
 	}
 	for (const [key, entry] of sets) {
 		result.set(key, {

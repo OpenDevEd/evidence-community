@@ -15,7 +15,7 @@ import {
 const consentDecline =
 	process.env.PLAYWRIGHT_EXPECTED_CONSENT_DECLINE ?? "Decline";
 const recordKey =
-	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY ?? "AMBER_SEARCH_FIXTURE";
+	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY ?? "AMBR3456";
 const hasNavbarSearch = process.env.PLAYWRIGHT_EXPECTED_NAVBAR_SEARCH !== "false";
 const headerReservation = 192;
 const hasThemeSwitcher =

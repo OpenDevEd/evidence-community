@@ -6,7 +6,7 @@ import { renderPublicationShareImage } from "@/lib/publication-share-image";
 export async function GET(_request: Request, context: { params: Promise<{ key: string }> }) {
 	const { key } = await context.params;
 	const [{ item }, config] = await Promise.all([
-		getCachedItemSmall(key).catch(() => ({ item: undefined })),
+		getCachedItemSmall(key),
 		getLibraryConfig(),
 	]);
 	if (!item) return new Response(null, { status: 404 });

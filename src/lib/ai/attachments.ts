@@ -228,7 +228,7 @@ export async function loadPublication(
 ): Promise<LoadedPublication | null> {
 	// Always the live record: attachment keys are what the model cites, and a
 	// stale cached record hands out keys the download route cannot match.
-	const response = await getCachedItem(itemKey, true);
+	const response = await getCachedItem(itemKey);
 	const item = response?.item;
 	if (!item) return null;
 

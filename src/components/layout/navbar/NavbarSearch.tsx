@@ -16,7 +16,7 @@ import dynamic from "next/dynamic";
 import { useRouter, Link, usePathname } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import useSWR, { preload } from "swr";
+import useSWR from "swr";
 import { Spinner, Tooltip, useDisclosure } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
@@ -25,7 +25,7 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Pagination } from "@/components/nextui/Pagination";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
-import { buildItemsQuery, buildFacetsQuery, fetcher } from "@/lib/utils";
+import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
@@ -309,16 +309,6 @@ export default function NavbarSearch() {
 	const isSearching =
 		params.search.trim() !== trimmedSearch || isLoading || isValidating;
 	const showDropdown = isOpen;
-
-	// Prefetch the Explore modal's data (collections + facet counts) for the
-	// current query, so opening Explore doesn't hit a loading skeleton. Warms
-	// the same SWR cache keys useItemsList reads (collections is static; facets
-	// re-warm whenever the query changes).
-	const facetsKey = buildFacetsQuery(runtimeParams);
-	useEffect(() => {
-		preload("/collections", fetcher);
-		preload(facetsKey, fetcher);
-	}, [facetsKey]);
 
 	// Close the dropdown when clicking outside the search field.
 	useEffect(() => {

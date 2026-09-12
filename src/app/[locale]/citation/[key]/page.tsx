@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
-import { cacheLife, cacheTag } from "next/cache";
 import { getCachedItemSmall } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -9,22 +8,12 @@ import { notFound } from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import PageContainer from "@/components/layout/PageContainer";
 
-async function getSourceItem(key: string) {
-	const data = await getCachedItemSmall(key).catch(() => ({
-		item: undefined,
-	}));
-	return data;
-}
-
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
-	"use cache";
 	const params = await props.params;
-	cacheLife({ revalidate: 60 });
-	cacheTag("metadata-citation-" + params.key);
 	const [data, libraryConfig] = await Promise.all([
-		getSourceItem(params.key),
+		getCachedItemSmall(params.key),
 		getLibraryConfig(),
 	]);
 
@@ -71,7 +60,7 @@ function LoadingComponent() {
 
 async function ServerComponent(props: { params: Promise<{ key: string }> }) {
 	const params = await props.params;
-	const data = await getSourceItem(params.key);
+	const data = await getCachedItemSmall(params.key);
 	
 	if (!data || !data.item) {
 		return notFound();

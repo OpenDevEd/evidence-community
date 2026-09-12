@@ -1404,27 +1404,16 @@ export default function ItemPage({
 	data: ItemGetResponse;
 	loading: boolean;
 }) {
-	const itemKey = data?.item?.key;
-	const { data: refreshedData } = useSWR<ItemGetResponse>(
-		itemKey ? `/item/${itemKey}` : null,
-		fetcher,
-		{
-			fallbackData: data,
-			keepPreviousData: true,
-			revalidateOnMount: true,
-		},
-	);
-	const currentData = refreshedData ?? data;
-	const loading = currentData?.item ? false : loadingProp;
+	const loading = data?.item ? false : loadingProp;
 
 	useEffect(() => {
 		// Zotero Connector listens for this browser event to refresh its page snapshot.
 		document.dispatchEvent(
 			new Event("ZoteroItemUpdated", { bubbles: true, cancelable: true }),
 		);
-	}, [currentData?.item]);
+	}, [data?.item]);
 
-	const item = transformItem(loading ? undefined : currentData?.item)!;
+	const item = transformItem(loading ? undefined : data?.item)!;
 
 	return (
 		<PageContainer>

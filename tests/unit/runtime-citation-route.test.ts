@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 describe("runtime citation route", () => {
-	it("publicly caches a stable citation response", async () => {
+	it("does not serve an older public citation after the record changes", async () => {
 		const response = await GET(
 			new Request(
 				"https://library.example.org/api/item/ITEM01/citation",
@@ -35,9 +35,7 @@ describe("runtime citation route", () => {
 		expect(await response.json()).toEqual({
 			citation: '<div class="csl-entry">A citation.</div>',
 		});
-		expect(response.headers.get("cache-control")).toContain(
-			"s-maxage=60",
-		);
+		expect(response.headers.get("cache-control")).toBe("no-store");
 	});
 
 	it("does not cache a transient translation outage", async () => {
