@@ -179,6 +179,8 @@ function sanitizePostHogEvent(event: CaptureResult | null) {
 	if (!event || analyticsMode !== "granted") return null;
 	const properties = Object.fromEntries(
 		Object.entries(event.properties).flatMap(([key, value]) => {
+			// PostHog's public project token is required for event ingestion.
+			if (key === "token") return [[key, value]];
 			if (key === "$current_url")
 				return [[key, sanitizedCurrentUrl(value)]];
 			if (key === "$pathname") {

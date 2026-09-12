@@ -154,6 +154,41 @@ describe("runtime browser analytics", () => {
 		expect(getAnalyticsDistinctId()).toBe("runtime-distinct-id");
 	});
 
+	it("keeps the ingestion token while removing private event properties", async () => {
+		const key = "phc_1234567890123456";
+		await applyClientAnalyticsConsent(
+			{
+				...baseConfiguration,
+				analytics: {
+					...baseConfiguration.analytics,
+					posthog: { host: "https://analytics.runtime.example", key },
+				},
+			},
+			"granted",
+			{ analytics: true, sessionReplay: false },
+		);
+		const options = posthog.instances.at(-1)?.init.mock.calls[0]?.[1];
+		const event = options.before_send({
+			event: "$pageview",
+			properties: {
+				token: key,
+				distinct_id: "visitor-id",
+				$current_url: "https://library.example.org/lib?search=private",
+				password: "private",
+				access_token: "private",
+				search_query: "private",
+			},
+		});
+		expect(event).toEqual({
+			event: "$pageview",
+			properties: {
+				token: key,
+				distinct_id: "visitor-id",
+				$current_url: "https://library.example.org/lib",
+			},
+		});
+	});
+
 	it("tears down the old client when the tenant changes or consent is revoked", async () => {
 		const analytics = {
 			...baseConfiguration.analytics,
