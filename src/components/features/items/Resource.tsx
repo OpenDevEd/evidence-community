@@ -21,7 +21,7 @@ import ResourceData from "./ResourceData";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useId } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
@@ -275,7 +275,20 @@ function ResourceInteractions({
 	);
 }
 
+function ResourceTitle({ id, item }: { id: string; item: Item | ListItem | undefined }) {
+	const tItemType = useTranslations("itemType");
+	const title = item?.title?.trim() || (item ? `${tItemType(item.itemType)} ${item.key}` : "");
+	return (
+		<h3
+			id={id}
+			dangerouslySetInnerHTML={{ __html: title }}
+			className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
+		/>
+	);
+}
+
 function ResourceArticle({
+	titleId,
 	finalItemData,
 	finalIsLoading,
 	gapMapHref,
@@ -285,6 +298,7 @@ function ResourceArticle({
 	tNav,
 	format,
 }: {
+	titleId: string;
 	finalItemData: Item | ListItem | undefined;
 	finalIsLoading: boolean;
 	gapMapHref: string | null;
@@ -302,12 +316,7 @@ function ResourceArticle({
 				isLoaded={!finalIsLoading}
 				className="w-full min-h-8 rounded-2xl"
 			>
-				<h3
-					dangerouslySetInnerHTML={{
-						__html: finalItemData?.title ?? "",
-					}}
-					className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
-				></h3>
+				<ResourceTitle id={titleId} item={finalItemData} />
 			</Skeleton>
 			<Skeleton
 				isLoaded={!finalIsLoading}
@@ -320,7 +329,7 @@ function ResourceArticle({
 								icon={MapsIcon}
 								className="size-3.5 shrink-0"
 							/>
-							<span>{tNav("gapMap")}</span>
+							<span id={`${titleId}-gap-map`}>{tNav("gapMap")}</span>
 						</span>
 					)}
 					<ResourceAuthors itemData={finalItemData} />
@@ -407,6 +416,7 @@ export default function Resource({
 	hideUnapi?: boolean;
 	openLinksInNewTab?: boolean;
 }) {
+	const titleId = useId();
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
 	const tNav = useTranslations("nav");
@@ -451,6 +461,7 @@ export default function Resource({
 		: "";
 	const article = (
 		<ResourceArticle
+			titleId={titleId}
 			finalItemData={finalItemData}
 			finalIsLoading={finalIsLoading}
 			gapMapHref={gapMapHref}
@@ -485,6 +496,7 @@ export default function Resource({
 			)}
 			{gapMapHref ? (
 				<a
+					aria-labelledby={`${titleId} ${titleId}-gap-map`}
 					href={gapMapHref}
 					target="_blank"
 					rel="noopener noreferrer"
@@ -499,6 +511,7 @@ export default function Resource({
 				</a>
 			) : (
 				<Link
+					aria-labelledby={titleId}
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
