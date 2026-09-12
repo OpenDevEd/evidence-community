@@ -21,7 +21,7 @@ import ResourceData from "./ResourceData";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useId } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
@@ -276,6 +276,7 @@ function ResourceInteractions({
 }
 
 function ResourceArticle({
+	titleId,
 	finalItemData,
 	finalIsLoading,
 	gapMapHref,
@@ -285,6 +286,7 @@ function ResourceArticle({
 	tNav,
 	format,
 }: {
+	titleId: string;
 	finalItemData: Item | ListItem | undefined;
 	finalIsLoading: boolean;
 	gapMapHref: string | null;
@@ -303,6 +305,7 @@ function ResourceArticle({
 				className="w-full min-h-8 rounded-2xl"
 			>
 				<h3
+					id={titleId}
 					dangerouslySetInnerHTML={{
 						__html: finalItemData?.title ?? "",
 					}}
@@ -407,6 +410,7 @@ export default function Resource({
 	hideUnapi?: boolean;
 	openLinksInNewTab?: boolean;
 }) {
+	const titleId = useId();
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
 	const tNav = useTranslations("nav");
@@ -451,6 +455,7 @@ export default function Resource({
 		: "";
 	const article = (
 		<ResourceArticle
+			titleId={titleId}
 			finalItemData={finalItemData}
 			finalIsLoading={finalIsLoading}
 			gapMapHref={gapMapHref}
@@ -485,6 +490,7 @@ export default function Resource({
 			)}
 			{gapMapHref ? (
 				<a
+					aria-labelledby={titleId}
 					href={gapMapHref}
 					target="_blank"
 					rel="noopener noreferrer"
@@ -499,6 +505,7 @@ export default function Resource({
 				</a>
 			) : (
 				<Link
+					aria-labelledby={titleId}
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}

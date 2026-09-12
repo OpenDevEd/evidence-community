@@ -696,6 +696,18 @@ test("shows a search failure and lets the reader retry without losing the query"
 	expect(new URL(page.url()).searchParams.get("search")).toBe(expectedSearchItemTitle);
 });
 
+test("names publication card links and opens them with the keyboard", async ({ page }) => {
+	test.skip(!expectedSearchItemKey, "This library has no search fixture.");
+	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
+	await dismissConsent(page);
+	const card = page.locator(`a[href*="/lib/${expectedSearchItemKey}"]`).filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) }).first();
+	await expect(card).toHaveAccessibleName(expectedSearchItemTitle);
+	await card.focus();
+	await card.press("Enter");
+	await expect(page).toHaveURL(url => url.pathname.endsWith(`/lib/${expectedSearchItemKey}`));
+	await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true })).toBeVisible();
+});
+
 test("filters institution suggestions by typed name", async ({ page }) => {
 	test.skip(!expectedInstitutionFacet, "Institution filter is disabled for this library.");
 	await page.route("**/api/facets**", (route) => route.fulfill({ json: {
