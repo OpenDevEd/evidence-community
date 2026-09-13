@@ -74,12 +74,16 @@ function Contents({ sections, scrollContainer }: { sections: Section[]; scrollCo
 		const style = getComputedStyle(container);
 		// Returning to the navbar takes precedence over following a section link.
 		if (window.scrollY <= (Number.parseFloat(style.getPropertyValue("--policy-header-space")) || 0)) return;
+		if (active === ids.at(-1)) {
+			container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+			return;
+		}
 		const inset = Number.parseFloat(style.getPropertyValue("--scroll-shadow-size")) || 16;
 		const topInset = Math.max(inset, Number.parseFloat(style.scrollPaddingTop) || 0);
 		const delta = row.top < bounds.top + topInset ? row.top - bounds.top - topInset
 			: row.bottom > bounds.bottom - inset ? row.bottom - bounds.bottom + inset : 0;
 		if (delta) container.scrollBy({ top: delta, behavior: "auto" });
-	}, [active, scrollContainer]);
+	}, [active, ids, scrollContainer]);
 	return <nav ref={navRef} className={styles.contents} aria-label="Policy sections">
 		<h2><Icon icon={BookOpen01Icon} />Contents</h2>
 		{sections.map((section, i) => <a href={`#${section.id}`} key={section.id}
