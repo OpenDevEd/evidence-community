@@ -27,6 +27,7 @@ interface LinkItemProps {
 	pathname: string;
 	isMobile: boolean;
 	styleVariant: NavbarStyleVariant;
+	onNavigate?: () => void;
 }
 
 function isActiveHref(pathname: string, href: string) {
@@ -35,7 +36,7 @@ function isActiveHref(pathname: string, href: string) {
 
 	return `${pathname}/`.includes(`${activeHrefPath}/`);
 }
-function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
+function LinkItem({ link, pathname, isMobile, styleVariant, onNavigate }: LinkItemProps) {
 	const t = useTranslations("nav");
 	const tUI = useTranslations("ui");
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
@@ -52,8 +53,8 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 	const visibleChildren = getVisibleRuntimeLinks(link.children);
 	return (
 		<li
-			onMouseEnter={clearTimeoutOpen}
-			onMouseLeave={debouncedOnClose}
+			onMouseEnter={isMobile ? undefined : clearTimeoutOpen}
+			onMouseLeave={isMobile ? undefined : debouncedOnClose}
 			className={twMerge(
 				"flex items-center gap-2 text-black/60 dark:text-white/60",
 				isActive && "text-accent dark:text-accent"
@@ -61,6 +62,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 		>
 			<Link
 				href={link.href}
+				onNavigate={onNavigate}
 				{...getRuntimeLinkAnchorProps(link)}
 				data-is-mobile={isMobile}
 				className={twMerge(
@@ -105,6 +107,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 								<DropdownItem
 									key={child.id}
 									href={child.href}
+									onAction={onNavigate}
 									{...getRuntimeLinkAnchorProps(child)}
 									startContent={
 										child.icon ? (
@@ -131,12 +134,14 @@ interface NavLinksProps {
 	pathname: string;
 	isMobile?: boolean;
 	styleVariant?: NavbarStyleVariant;
+	onNavigate?: () => void;
 }
 
 export default function NavLinks({
 	pathname,
 	isMobile = false,
 	styleVariant = "small",
+	onNavigate,
 }: NavLinksProps) {
 	const { navigation } = useLibraryConfig();
 	const links = getVisibleRuntimeLinks(navigation.links);
@@ -156,12 +161,14 @@ export default function NavLinks({
 					pathname={pathname}
 					isMobile={isMobile}
 					styleVariant={styleVariant}
+					onNavigate={onNavigate}
 				/>
 			))}
 			<GapMapLinks
 				pathname={pathname}
 				isMobile={isMobile}
 				styleVariant={styleVariant}
+					onNavigate={onNavigate}
 			/>
 		</ul>
 	);

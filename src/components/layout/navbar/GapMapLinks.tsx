@@ -12,12 +12,14 @@ interface GapMapLinksProps {
 	pathname: string;
 	isMobile: boolean;
 	styleVariant: NavbarStyleVariant;
+	onNavigate?: () => void;
 }
 
 export default function GapMapLinks({
 	pathname,
 	isMobile,
 	styleVariant,
+	onNavigate,
 }: GapMapLinksProps) {
 	const t = useTranslations("nav");
 	const gapmaps = useGapMaps();
@@ -35,6 +37,7 @@ export default function GapMapLinks({
 		>
 			<Link
 				href="/gapmaps"
+				onNavigate={onNavigate}
 				data-is-mobile={isMobile}
 				className={twMerge(
 					"flex gap-2 text-lg items-center justify-center font-medium",
