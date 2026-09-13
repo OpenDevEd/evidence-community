@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
@@ -14,10 +15,6 @@ import { SITEMAP_SIZE } from "@/constants/misc";
 import { loadPolicyDocument } from "@/lib/policy-documents";
 import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
 import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
-
-// Sitemap shards render per request so both shard enumeration and document
-// reads resolve the active runtime configuration revision.
-export const dynamic = "force-dynamic";
 
 export async function generateSitemaps() {
 	if (process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD) {
@@ -37,6 +34,8 @@ export async function generateSitemaps() {
 export default async function sitemap(props: {
 	id: Promise<number>
 }): Promise<MetadataRoute.Sitemap> {
+	// Resolve the active library and its documents at request time.
+	await connection();
 	const maxRetries = 10;
 	let attempt = 0;
 	let items;
