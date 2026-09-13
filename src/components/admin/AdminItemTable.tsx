@@ -668,6 +668,7 @@ export function AdminItemTable({
 					<div onClick={(event) => event.stopPropagation()}>
 						<Checkbox
 							aria-label="Select all loaded records"
+							isDisabled={selectable.length === 0}
 							isIndeterminate={
 								someVisibleSelected && !allVisibleSelected
 							}
@@ -814,12 +815,14 @@ export function AdminItemTable({
 		],
 		[
 			allVisibleSelected,
+			bulkDisabledKey,
 			bulkKeys,
 			editableSourceKeys,
 			items,
 			onRequestCollectionAssignment,
 			onToggleBulk,
 			onToggleVisible,
+			selectable.length,
 			someVisibleSelected,
 			sourceLabels,
 			profiles,
