@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type { ItemsGetResponse } from "../../src/app/api/items/types";
+import type { ItemGetResponse } from "../../src/app/api/item/types";
+import { creatorDisplayName } from "../../src/lib/creator-display-name";
 
 import { dismissConsent } from "./consent";
 import { verifySourceCitationMeasure } from "./citation-measure";
@@ -617,6 +619,53 @@ test("rate limits paid AI requests per browser when AI is enabled", async ({
 		},
 	});
 });
+
+for (const profileAvailable of [true, false]) {
+	test(`filters by a linked author when their profile is ${profileAvailable ? "available" : "unavailable"}`, async ({ page, request, context }) => {
+		test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
+		const response = await request.get(`/api/item/${expectedSearchItemKey}`);
+		expect(response.ok()).toBe(true);
+		const { item } = await response.json() as ItemGetResponse;
+		const creator = item!.creators![0];
+		expect(creator.authorProfileId).toBeTruthy();
+		const name = creatorDisplayName(creator);
+		const profileBaseUrl = "https://openscholar.example.org";
+		const profileUrl = `${profileBaseUrl}/authors/${creator.authorProfileId}`;
+		// The saved record and search are real. Only the external profile catalog
+		// is controlled, so both profile availability states are repeatable.
+		await page.route("**/api/author-profiles?*", route => route.fulfill({ json: {
+			profileBaseUrl,
+			profiles: profileAvailable ? [{
+				id: creator.authorProfileId, revision: 1, name,
+				headline: "Researcher", affiliation: "", bio: "", website: "",
+				linkedin: "", orcid: "", openalex: "", photo: null,
+			}] : [],
+		} }));
+		try {
+			await Promise.all([
+				page.waitForResponse(response => new URL(response.url()).pathname === "/api/author-profiles"),
+				page.goto(`/en-GB/lib/${expectedSearchItemKey}`),
+			]);
+			await dismissConsent(page);
+			const authors = page.getByRole("heading", { name: "Authors", exact: true }).locator("../..");
+			const author = authors.getByRole("link");
+			await expect(author).toHaveCount(1);
+			await expect(author).toBeEnabled();
+			if (profileAvailable) {
+				await expect(authors.getByText(name, { exact: true })).toBeVisible();
+				await page.mouse.move(0, 0);
+				await author.hover();
+				await expect(page.getByRole("link", { name: "View OpenScholar profile", exact: true })).toHaveAttribute("href", profileUrl);
+			}
+			await author.click();
+			await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && url.searchParams.get("author") === name);
+			await expect(page.getByRole("link").filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) })).toBeVisible();
+			expect(context.pages()).toHaveLength(1);
+		} finally {
+			await page.unrouteAll({ behavior: "wait" });
+		}
+	});
+}
 
 test("reports a clipboard failure and retries copying clean citation text", async ({ page, context }) => {
 	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");

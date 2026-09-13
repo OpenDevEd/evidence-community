@@ -71,6 +71,7 @@ import BrandIcon from "@/components/icons/BrandIcon";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { AuthorProfileHover } from "@/components/authors/AuthorProfileHover";
+import { creatorDisplayName } from "@/lib/creator-display-name";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -183,24 +184,6 @@ function SidebarCard({
 	);
 }
 
-function LinkedItemAuthor({
-	author,
-	profile,
-}: {
-	author?: Author;
-	profile?: AuthorProfile;
-}) {
-	const t = useTranslations("creatorType");
-	return profile ? (
-		<AuthorProfileHover
-			profile={profile}
-			roleLabel={author ? t(author.creatorType) : ""}
-		/>
-	) : (
-		<ItemAuthor author={author} profile={profile} />
-	);
-}
-
 function ItemAuthor({
 	author,
 	profile,
@@ -208,16 +191,11 @@ function ItemAuthor({
 	author?: Author;
 	profile?: AuthorProfile;
 }) {
-	const [referrer, setReferrer] = useQueryState("referrer");
+	const [referrer] = useQueryState("referrer");
 	const t = useTranslations("creatorType");
 	const tUI = useTranslations("ui");
 	const creatorTypeLabel = author ? t(author?.creatorType) : undefined;
-	const { creatorType, institutions, ...rest } = author || {};
-	const fullName = author
-		? author?.name
-			? author.name
-			: `${author?.firstName} ${author?.lastName}`
-		: undefined;
+	const fullName = author ? creatorDisplayName(author) : undefined;
 
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	const affiliationCount = author?.institutions?.length || 0;
@@ -230,7 +208,7 @@ function ItemAuthor({
 						{creatorTypeLabel}
 					</div>
 				)}
-				{affiliationCount > 0 && (
+				{!profile && affiliationCount > 0 && (
 					<div className="text-xs text-black/40 dark:text-white/40">
 						{affiliationCount} {tUI("itemAffiliationsCount")}
 					</div>
@@ -238,6 +216,39 @@ function ItemAuthor({
 			</div>
 		</>
 	);
+
+	const row = (
+		<LinkWithParams
+			href={isAuthorFilterEnabled ? getSafeReferrer(referrer) : undefined}
+			params={
+				fullName && isAuthorFilterEnabled
+					? { author: fullName, referrer: referrer ?? undefined }
+					: {}
+			}
+			className="opacity-100"
+		>
+			<ItemRow
+				icon={
+					<AuthorAvatar
+						src={profile?.photo ?? undefined}
+						name={author ? formatAuthor(author) : "-"}
+						size="sm"
+						className={
+							profile
+								? "size-9 shrink-0"
+								: "text-lg text-accent bg-accent/10 brightness-150 shrink-0"
+						}
+					/>
+				}
+				title={author && formatAuthor(author)}
+				subtitle={subtitle}
+			/>
+		</LinkWithParams>
+	);
+
+	if (profile) {
+		return <AuthorProfileHover profile={profile}>{row}</AuthorProfileHover>;
+	}
 
 	return (
 		<Tooltip
@@ -255,7 +266,6 @@ function ItemAuthor({
 						transition={{ duration: 0.2 }}
 					>
 						<AuthorAvatar
-							src={profile?.photo ?? undefined}
 							name={author ? formatAuthor(author) : "-"}
 							size="lg"
 							className="text-xl text-accent bg-accent/10 brightness-150"
@@ -349,40 +359,7 @@ function ItemAuthor({
 				</div>
 			}
 		>
-			<LinkWithParams
-				href={
-					author?.authorProfileId
-						? `/api/author-profiles/${encodeURIComponent(author.authorProfileId)}`
-						: isAuthorFilterEnabled
-							? getSafeReferrer(referrer)
-							: undefined
-				}
-				params={
-					author?.authorProfileId
-						? undefined
-						: fullName && isAuthorFilterEnabled
-							? {
-									author: fullName,
-									referrer: referrer ?? undefined,
-								}
-							: {}
-				}
-				isExternal={Boolean(author?.authorProfileId)}
-				className="opacity-100"
-			>
-				<ItemRow
-					icon={
-						<AuthorAvatar
-							src={profile?.photo ?? undefined}
-							name={author ? formatAuthor(author) : "-"}
-							size="sm"
-							className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
-						/>
-					}
-					title={author && formatAuthor(author)}
-					subtitle={subtitle}
-				/>
-			</LinkWithParams>
+			{row}
 		</Tooltip>
 	);
 }
@@ -399,10 +376,10 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-						<LinkedItemAuthor key={index} author={undefined} />
+						<ItemAuthor key={index} author={undefined} />
 					))
 				: authors?.map((author: Author, index: number) => (
-						<LinkedItemAuthor
+						<ItemAuthor
 							key={index}
 							author={author}
 							profile={
@@ -498,9 +475,11 @@ function ItemFundingPartners() {
 				<ItemRow
 					key={partner.id}
 					icon={
-						<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
-							<HugeiconsIcon icon={Building03Icon} className="size-4" />
-						</span>
+						<InstitutionLogo
+							alt=""
+							fallback={<HugeiconsIcon icon={Building03Icon} />}
+							size="row"
+						/>
 					}
 					title={partner.name}
 				/>

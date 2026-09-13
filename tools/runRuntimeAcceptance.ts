@@ -1051,6 +1051,7 @@ async function seedSearch(profile: Profile) {
 				firstName: amber ? "Amina" : "Iris",
 				lastName: colorName,
 				creatorType: "author",
+				authorProfileId: `${profile.name}acceptanceauthor`,
 				institutions: [
 					{
 						display_name: institution,

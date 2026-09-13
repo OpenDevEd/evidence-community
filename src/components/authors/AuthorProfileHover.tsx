@@ -3,7 +3,7 @@
 import { Tooltip } from "@nextui-org/react";
 import { useReducedMotion } from "framer-motion";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { ArrowUpRight01Icon, Building03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -12,10 +12,10 @@ import type { AuthorProfile } from "@/lib/authors/profiles";
 
 export function AuthorProfileHover({
 	profile,
-	roleLabel,
+	children,
 }: {
 	profile: AuthorProfile;
-	roleLabel: string;
+	children: ReactElement;
 }) {
 	const [open, setOpen] = useState(false);
 	const reducedMotion = useReducedMotion();
@@ -88,27 +88,7 @@ export function AuthorProfileHover({
 				</div>
 			}
 		>
-			<a
-				href={profile.url}
-				target="_blank"
-				rel="noopener noreferrer"
-				className="mx-4 flex items-center gap-3 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
-				aria-label={`About ${profile.name}`}
-			>
-				<AuthorAvatar
-					src={profile.photo ?? undefined}
-					name={profile.name}
-					className="size-9 shrink-0"
-				/>
-				<span className="min-w-0">
-					<span className="block text-base font-medium text-black/80 dark:text-white/80">
-						{profile.name}
-					</span>
-					<span className="block text-xs text-black/50 dark:text-white/50">
-						{roleLabel}
-					</span>
-				</span>
-			</a>
+			{children}
 		</Tooltip>
 	);
 }
