@@ -22,10 +22,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function TermsPage() {
 	await connection();
 	const config = await getLibraryConfig();
-	const [document, tFooter, tNav] = await Promise.all([
+	const [document, tFooter] = await Promise.all([
 		loadPolicyPageDocument(config, "terms"),
 		getTranslations("footer"),
-		getTranslations("nav"),
 	]);
 	if (!document) notFound();
 
@@ -40,7 +39,6 @@ export default async function TermsPage() {
 				label: tFooter("privacyPolicy"),
 			}}
 			contactEmail={config.contact.email}
-			homeLabel={tNav("home")}
 		/>
 	);
 }

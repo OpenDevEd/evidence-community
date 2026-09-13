@@ -106,6 +106,7 @@ export default function Navbar() {
 	return (
 		<>
 		<header
+			id="site-header"
 			className={twMerge(
 				"w-full px-0 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top motion-reduce:transition-none",
 				styleVariant === "wide"

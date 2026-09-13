@@ -874,5 +874,12 @@
     "title": "Evidenz-Gap-Maps",
     "subtitle": "Erkunden Sie interaktive Visualisierungen, die Forschungsevidenz thematisch abbilden und zeigen, wo Evidenz vorhanden ist und wo Lücken bestehen.",
     "empty": "Noch keine Gap-Maps verfügbar."
-  }
+  },
+    "policy": {
+        "updated": "Aktualisiert",
+        "contents": "Inhalt",
+        "documents": "Richtliniendokumente",
+        "sections": "Abschnitte der Richtlinie",
+        "copyEmail": "E-Mail-Adresse kopieren"
+    }
 }
