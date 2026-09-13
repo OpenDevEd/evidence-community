@@ -1,7 +1,7 @@
 "use client";
 
 // Local-only policy layout studies. Switch with ?variant=1 through 5.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { parseAsInteger, useQueryState } from "nuqs";
 import { useTheme } from "next-themes";
@@ -11,6 +11,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Select } from "@/components/nextui/Select";
 import PolicyEmailCopyButton from "./PolicyEmailCopyButton";
+import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { Link } from "@/i18n/routing";
 import styles from "./PolicyDesignMocks.module.css";
 
@@ -43,10 +44,31 @@ function DocumentLinks({ otherPolicyLink, title }: Pick<Props, "otherPolicyLink"
 		<Button as={Link} href={`${otherPolicyLink.href}${suffix}`} variant="muted" size="xs" endContent={<Icon icon={ArrowRight01Icon} />}>{otherPolicyLink.label}</Button>
 	</nav>;
 }
-function Contents({ sections }: { sections: Section[] }) {
-	return <nav className={styles.contents} aria-label="Policy sections">
+function Contents({ sections, scrollContainer }: { sections: Section[]; scrollContainer?: RefObject<HTMLDivElement | null> }) {
+	const ids = useMemo(() => sections.map(section => section.id), [sections]);
+	const { active, jumpTo } = useScrollSpy(ids);
+	const navRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		const container = scrollContainer?.current;
+		const link = navRef.current?.querySelector('[aria-current="location"]');
+		if (!container || !link || container.scrollHeight <= container.clientHeight) return;
+		const bounds = container.getBoundingClientRect();
+		const row = link.getBoundingClientRect();
+		const inset = Number.parseFloat(getComputedStyle(container).getPropertyValue("--scroll-shadow-size")) || 16;
+		const delta = row.top < bounds.top + inset ? row.top - bounds.top - inset
+			: row.bottom > bounds.bottom - inset ? row.bottom - bounds.bottom + inset : 0;
+		if (delta) container.scrollBy({ top: delta, behavior: "instant" });
+	}, [active, scrollContainer]);
+	return <nav ref={navRef} className={styles.contents} aria-label="Policy sections">
 		<h2><Icon icon={BookOpen01Icon} />Contents</h2>
-		{sections.map((section, i) => <a href={`#${section.id}`} key={section.id}><span className={styles.index}>{String(i + 1).padStart(2, "0")}</span><span>{section.title}</span></a>)}
+		{sections.map((section, i) => <a href={`#${section.id}`} key={section.id}
+			aria-current={active === section.id ? "location" : undefined}
+			onClick={event => {
+				if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+				event.preventDefault();
+				window.history.pushState(null, "", `#${section.id}`);
+				jumpTo(section.id);
+			}}><span className={styles.index}>{String(i + 1).padStart(2, "0")}</span><span>{section.title}</span></a>)}
 	</nav>;
 }
 function Chapter({ section, index, numbered = false }: { section: Section; index: number; numbered?: boolean }) {
@@ -106,13 +128,14 @@ function ExpandableSections(props: Props) {
 }
 function SplitPage(props: Props) {
 	const sidebarRef = useRef<HTMLDivElement>(null);
+	const scrollRef = useRef<HTMLDivElement>(null);
 	useLayoutEffect(() => {
 		const sidebar = sidebarRef.current;
 		if (!sidebar) return;
 		const measure = () => {
 			const padding = parseFloat(getComputedStyle(sidebar).paddingTop);
 			const clearance = sidebar.getBoundingClientRect().top + window.scrollY + padding;
-			sidebar.style.setProperty("--policy-panel-clearance", `${clearance}px`);
+			sidebar.parentElement?.style.setProperty("--policy-panel-clearance", `${clearance}px`);
 		};
 		measure();
 		const observer = new ResizeObserver(measure);
@@ -122,12 +145,12 @@ function SplitPage(props: Props) {
 	}, []);
 	return <div className={styles.splitPage}>
 		<div ref={sidebarRef} className={styles.splitIdentity}>
-			<ScrollShadow className={styles.splitSticky} size={80} offset={1}>
+			<ScrollShadow ref={scrollRef} className={styles.splitSticky} size={80} offset={1}>
 				<DocumentLinks {...props} />
 				<h1>{props.title}</h1>
 				<p className={styles.splitDescription}>{props.description}</p>
 				<Updated date={props.updated} />
-				<Contents sections={props.sections} />
+				<Contents sections={props.sections} scrollContainer={scrollRef} />
 				<Contact email={props.contactEmail} />
 			</ScrollShadow>
 		</div>
