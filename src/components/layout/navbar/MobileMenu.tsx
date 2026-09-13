@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
-import NavLinks from "./NavLinks";
+import NavLinks, { useNavigationLinks } from "./NavLinks";
 import { useHydrated } from "@/hooks/useHydrated";
 import type { NavbarElementConfig, NavbarContext } from "@/types/navbar";
 
@@ -31,6 +31,7 @@ export default function MobileMenu({
 	context,
 	pathname,
 }: MobileMenuProps) {
+	const { hasLinks } = useNavigationLinks();
 	const [isOpen, setIsOpen] = useState(false);
 	const hydrated = useHydrated();
 	const menuId = useId();
@@ -47,6 +48,8 @@ export default function MobileMenu({
 		event.preventDefault();
 		closeMenu();
 	}
+
+	if (!hasLinks && elements.length === 0) return null;
 
 	return (
 		<>
@@ -73,18 +76,18 @@ export default function MobileMenu({
 				)}
 			>
 				{/* Navigation links */}
-				<li>
+				{hasLinks && <li>
 					<NavLinks
 						pathname={pathname}
 						isMobile={true}
 						styleVariant={context.styleVariant}
 						onNavigate={closeMenu}
 					/>
-				</li>
+				</li>}
 
 				{/* Render enabled elements as menu items */}
 				{elements
-					.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+					.toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0))
 					.map((element) => {
 						const Component = element.component;
 						return (

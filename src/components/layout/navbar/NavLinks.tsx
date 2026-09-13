@@ -11,6 +11,7 @@ import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { useDebounce } from "@/hooks/useDebounce";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
+import { useGapMaps } from "@/context/Providers";
 import GapMapLinks from "./GapMapLinks";
 import type { NavbarStyleVariant } from "@/types/navbar";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
@@ -137,14 +138,21 @@ interface NavLinksProps {
 	onNavigate?: () => void;
 }
 
+export function useNavigationLinks() {
+	const { navigation } = useLibraryConfig();
+	const gapmaps = useGapMaps();
+	const links = getVisibleRuntimeLinks(navigation.links);
+	return { links, hasLinks: links.length > 0 || gapmaps.length > 0 };
+}
+
 export default function NavLinks({
 	pathname,
 	isMobile = false,
 	styleVariant = "small",
 	onNavigate,
 }: NavLinksProps) {
-	const { navigation } = useLibraryConfig();
-	const links = getVisibleRuntimeLinks(navigation.links);
+	const { links, hasLinks } = useNavigationLinks();
+	if (!hasLinks) return null;
 
 	return (
 		<ul
