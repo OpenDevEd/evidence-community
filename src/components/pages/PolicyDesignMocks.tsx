@@ -10,6 +10,7 @@ import { ArrowLeft01Icon, ArrowRight01Icon, ArrowDown01Icon, BookOpen01Icon, Cal
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Select } from "@/components/nextui/Select";
+import CopyButton from "@/components/features/newlib/CopyButton";
 import { Link } from "@/i18n/routing";
 import styles from "./PolicyDesignMocks.module.css";
 
@@ -27,7 +28,14 @@ function Updated({ date }: { date: string }) {
 	return <div className={styles.updated}><Icon icon={Calendar01Icon} /><span>Updated</span><time>{date}</time></div>;
 }
 function Contact({ email, compact = false }: { email?: string; compact?: boolean }) {
-	return email ? <a className={styles.contact} href={`mailto:${email}`} title={email}><Icon icon={Mail01Icon} /><span>{compact ? "Contact" : email}</span><Icon icon={ArrowRight01Icon} /></a> : null;
+	return email ? <div className={styles.contact}>
+		<a href={`mailto:${email}`} title={email}>
+			<Icon icon={Mail01Icon} /><span>{compact ? "Contact" : email}</span>
+		</a>
+		<CopyButton textToCopy={email} ariaLabel="Copy email">
+			<Button isIconOnly variant="transparent" size="xs" title="Copy email" className="shrink-0" />
+		</CopyButton>
+	</div> : null;
 }
 function DocumentLinks({ otherPolicyLink, title }: Pick<Props, "otherPolicyLink" | "title">) {
 	const search = useSearchParams();

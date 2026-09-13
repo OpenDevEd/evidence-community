@@ -10,10 +10,11 @@
 .updated {display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:13px;line-height:1.6;}
 .updated svg {width:16px;height:16px;}
 .updated time {color:var(--ink);font-weight:500;}
-.contact {display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;min-width:0;transition:color .15s;}
+.contact {display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;min-width:0;}
+.contact a {display:flex;align-items:center;gap:10px;min-width:0;transition:color .15s;}
 .contact span {overflow-wrap:anywhere;}
 .contact svg {width:16px;height:16px;}
-.contact:hover {color:rgb(var(--color-accent-500));}
+.contact a:hover {color:rgb(var(--color-accent-500));}
 .muted {color:var(--muted);}
 .markdown {font-size:16px;line-height:1.8;overflow-wrap:anywhere;}
 .markdown p {margin:0 0 18px;color:var(--ink);opacity:.82;font-size:inherit;line-height:inherit;}
