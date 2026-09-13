@@ -1,3 +1,4 @@
+import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
 import NotFound from "@/components/layout/NotFound";
 import type { Metadata } from "next";
 
@@ -11,5 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default function NotFoundRoutePage() {
-	return <NotFound />;
+	return (
+		<>
+			<NotFound />
+			<RuntimeMetadata />
+		</>
+	);
 }

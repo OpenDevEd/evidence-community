@@ -1,3 +1,4 @@
+import PageBoundary from "@/components/layout/PageBoundary";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
 import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
@@ -15,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 	return getPolicyMetadata("Cookie Policy", description, config.identity.name);
 }
 
-export default async function CookiePolicyPage() {
+async function CookiePolicyPageContent() {
 	await connection();
 	const config = await getLibraryConfig();
 	const [document, tFooter] = await Promise.all([
@@ -35,5 +36,13 @@ export default async function CookiePolicyPage() {
 			}}
 			contactEmail={config.contact.email}
 		/>
+	);
+}
+
+export default function CookiePolicyPage() {
+	return (
+		<PageBoundary>
+			<CookiePolicyPageContent />
+		</PageBoundary>
 	);
 }

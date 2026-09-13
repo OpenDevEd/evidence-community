@@ -4,6 +4,11 @@ import { routing } from "@/i18n/routing";
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 
+// Library theme and consent are resolved before this shared document renders.
+// Next.js reads this route export. Fallow does not recognize it yet.
+// fallow-ignore-next-line unused-export
+export const instant = false;
+
 export function generateStaticParams() {
     return routing.locales.map((locale) => ({ locale }));
 }

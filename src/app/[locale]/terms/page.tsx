@@ -1,3 +1,4 @@
+import PageBoundary from "@/components/layout/PageBoundary";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
 import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
@@ -19,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 	);
 }
 
-export default async function TermsPage() {
+async function TermsPageContent() {
 	await connection();
 	const config = await getLibraryConfig();
 	const [document, tFooter] = await Promise.all([
@@ -40,5 +41,13 @@ export default async function TermsPage() {
 			}}
 			contactEmail={config.contact.email}
 		/>
+	);
+}
+
+export default function TermsPage() {
+	return (
+		<PageBoundary>
+			<TermsPageContent />
+		</PageBoundary>
 	);
 }

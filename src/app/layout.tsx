@@ -1,4 +1,4 @@
-import { ReactNode, Suspense } from "react";
+import { ReactNode } from "react";
 import "@/styles/globals.css";
 import { Metadata, Viewport } from "next";
 import { connection } from "next/server";
@@ -19,20 +19,6 @@ export async function generateMetadata(): Promise<Metadata> {
 	return buildLibraryMetadata(config.identity);
 }
 
-async function RuntimeMetadataMarker() {
-	await connection();
-	return null;
-}
-
 export default function RootLayout({ children }: { children: ReactNode }) {
-	return (
-		<>
-			{children}
-			{/* Next.js requires a Suspense-contained dynamic marker when
-			    request-time metadata is used with Cache Components. */}
-			<Suspense fallback={null}>
-				<RuntimeMetadataMarker />
-			</Suspense>
-		</>
-	);
+	return children;
 }
