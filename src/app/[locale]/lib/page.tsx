@@ -8,6 +8,7 @@ import {
 import { getItemsPaginationMeta } from "@/lib/search";
 import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
 
 async function getCachedPaginationMeta(
   queryParams: Parameters<typeof getItemsPaginationMeta>[0],
@@ -103,8 +104,11 @@ export async function generateMetadata(props: {
   });
 }
 
-export default async function Lib() {
+export default function Lib() {
   return (
-    <EvidenceLibrary />
+    <>
+      <EvidenceLibrary />
+      <RuntimeMetadata />
+    </>
   );
 }

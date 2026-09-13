@@ -1,3 +1,5 @@
+import PageBoundary from "@/components/layout/PageBoundary";
+import StatisticsLoading from "./loading";
 import StatisticsPage from "@/components/layout/StatisticsPageNew";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -10,7 +12,7 @@ import {
 
 export const maxDuration = 300;
 
-export default async function Statistics({
+async function StatisticsContent({
 	searchParams,
 }: {
 	searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -35,4 +37,12 @@ export default async function Statistics({
 	);
 
 	return <StatisticsPage stats={stats} />;
+}
+
+export default function Statistics(props: Parameters<typeof StatisticsContent>[0]) {
+	return (
+		<PageBoundary fallback={<StatisticsLoading />}>
+			<StatisticsContent {...props} />
+		</PageBoundary>
+	);
 }

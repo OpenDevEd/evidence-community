@@ -1,3 +1,4 @@
+import PageBoundary from "@/components/layout/PageBoundary";
 import { getRuntimePageAvailability } from "@/config/library-config/pages";
 import ContactComponent from "@/components/pages/Contact";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -5,7 +6,7 @@ import { isEmailChannelEnabled } from "@/lib/nodemailer";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
-export default async function Contact() {
+async function ContactContent() {
 	await connection();
 	const config = await getLibraryConfig();
 
@@ -14,4 +15,12 @@ export default async function Contact() {
 	}
 
 	return <ContactComponent formEnabled={isEmailChannelEnabled(config, "contact")} />;
+}
+
+export default function Contact() {
+	return (
+		<PageBoundary>
+			<ContactContent />
+		</PageBoundary>
+	);
 }
