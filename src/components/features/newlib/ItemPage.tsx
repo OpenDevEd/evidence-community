@@ -195,7 +195,9 @@ function ItemAuthor({
 	const t = useTranslations("creatorType");
 	const tUI = useTranslations("ui");
 	const creatorTypeLabel = author ? t(author?.creatorType) : undefined;
+	// Search indexes the saved creator; the profile supplies its current display.
 	const fullName = author ? creatorDisplayName(author) : undefined;
+	const displayName = profile?.name ?? (author ? formatAuthor(author) : undefined);
 
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	const affiliationCount = author?.institutions?.length || 0;
@@ -231,7 +233,7 @@ function ItemAuthor({
 				icon={
 					<AuthorAvatar
 						src={profile?.photo ?? undefined}
-						name={author ? formatAuthor(author) : "-"}
+						name={displayName ?? "-"}
 						size="sm"
 						className={
 							profile
@@ -240,7 +242,7 @@ function ItemAuthor({
 						}
 					/>
 				}
-				title={author && formatAuthor(author)}
+				title={displayName}
 				subtitle={subtitle}
 			/>
 		</LinkWithParams>
@@ -367,9 +369,8 @@ function ItemAuthor({
 function ItemAuthors({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	const { creators: authors, profiles } = useAuthorProfiles(
-		item?.creators as Author[] | undefined,
-	);
+	const authors = item?.creators as Author[] | undefined;
+	const { profiles } = useAuthorProfiles(authors);
 	if (!authors?.length && !loading) return null;
 
 	return (

@@ -631,6 +631,7 @@ for (const profileAvailable of [true, false]) {
 		const creator = item!.creators![0];
 		expect(creator.authorProfileId).toBeTruthy();
 		const name = creatorDisplayName(creator);
+		const profileName = `${name} Updated`;
 		const profileBaseUrl = "https://openscholar.example.org";
 		const profileUrl = `${profileBaseUrl}/authors/${creator.authorProfileId}`;
 		// The saved record and search are real. Only the external profile catalog
@@ -638,7 +639,7 @@ for (const profileAvailable of [true, false]) {
 		await page.route("**/api/author-profiles?*", route => route.fulfill({ json: {
 			profileBaseUrl,
 			profiles: profileAvailable ? [{
-				id: creator.authorProfileId, revision: 1, name,
+				id: creator.authorProfileId, revision: 1, name: profileName,
 				headline: "Researcher", affiliation: "", bio: "", website: "",
 				linkedin: "", orcid: "", openalex: "", photo: "/favicon.ico",
 			}] : [],
@@ -655,7 +656,7 @@ for (const profileAvailable of [true, false]) {
 			if (expectedAuthorFilter) await expect(author).toBeEnabled();
 			else await expect(author).toBeDisabled();
 			if (profileAvailable) {
-				await expect(authors.getByText(name, { exact: true })).toBeVisible();
+				await expect(authors.getByText(profileName, { exact: true })).toBeVisible();
 				await expect(author.locator("img")).toHaveAttribute("src", "/favicon.ico");
 				await page.mouse.move(0, 0);
 				await author.hover();
