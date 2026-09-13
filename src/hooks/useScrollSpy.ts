@@ -1,18 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 
 // Ported from OpenScholar's configuration/use-scroll-spy. Section IDs are
 // supplied directly here; the active line still follows each scroll margin.
-export function useScrollSpy(ids: readonly string[]) {
+export function useScrollSpy(ids: readonly string[], onMeasure?: () => void) {
 	const [active, setActive] = useState<string | null>(null);
 	const locked = useRef<string | null>(null);
 	const releaseScroll = useRef<(() => void) | null>(null);
+	const measureRelatedScroll = useEffectEvent(() => onMeasure?.());
 
 	useEffect(() => {
 		let frame = 0;
 		const measure = () => {
 			frame = 0;
+			measureRelatedScroll();
 			if (locked.current) return;
 			let current: string | null = null;
 			for (const id of ids) {

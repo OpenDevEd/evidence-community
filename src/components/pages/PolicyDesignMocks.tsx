@@ -46,8 +46,25 @@ function DocumentLinks({ otherPolicyLink, title }: Pick<Props, "otherPolicyLink"
 }
 function Contents({ sections, scrollContainer }: { sections: Section[]; scrollContainer?: RefObject<HTMLDivElement | null> }) {
 	const ids = useMemo(() => sections.map(section => section.id), [sections]);
-	const { active, jumpTo } = useScrollSpy(ids);
 	const navRef = useRef<HTMLElement>(null);
+	const scrollState = useRef({ pastNavbar: false, atTop: false });
+	function syncNavbar() {
+		const container = scrollContainer?.current;
+		if (!container || getComputedStyle(container).overflowY !== "auto") return;
+		const navbar = document.querySelector('nav[aria-label="Main navigation"]')?.closest("header");
+		if (!navbar) return;
+		const pastNavbar = navbar.getBoundingClientRect().bottom <= 0;
+		const atTop = window.scrollY <= 1;
+		const previous = scrollState.current;
+		scrollState.current = { pastNavbar, atTop };
+		if ((atTop && !previous.atTop) || (!pastNavbar && previous.pastNavbar)) {
+			container.removeAttribute("data-navbar-away");
+			container.scrollTo({ top: 0, behavior: "auto" });
+		} else if (pastNavbar && !previous.pastNavbar && container.scrollTop <= 1) {
+			container.setAttribute("data-navbar-away", "true");
+		}
+	}
+	const { active, jumpTo } = useScrollSpy(ids, syncNavbar);
 	useEffect(() => {
 		const container = scrollContainer?.current;
 		const link = navRef.current?.querySelector('[aria-current="location"]');
@@ -55,6 +72,8 @@ function Contents({ sections, scrollContainer }: { sections: Section[]; scrollCo
 		const bounds = container.getBoundingClientRect();
 		const row = link.getBoundingClientRect();
 		const style = getComputedStyle(container);
+		// Returning to the navbar takes precedence over following a section link.
+		if (window.scrollY <= (Number.parseFloat(style.getPropertyValue("--policy-header-space")) || 0)) return;
 		const inset = Number.parseFloat(style.getPropertyValue("--scroll-shadow-size")) || 16;
 		const topInset = Math.max(inset, Number.parseFloat(style.scrollPaddingTop) || 0);
 		const delta = row.top < bounds.top + topInset ? row.top - bounds.top - topInset
