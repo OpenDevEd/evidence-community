@@ -94,6 +94,8 @@ const expectedDefaultSearchScopeLabel =
 	"Title, abstract, authors and keywords";
 const expectedYearFilter =
 	process.env.PLAYWRIGHT_EXPECTED_YEAR_FILTER !== "false";
+const expectedAuthorFilter =
+	process.env.PLAYWRIGHT_EXPECTED_AUTHOR_FILTER !== "false";
 const expectedCookieLink = process.env.PLAYWRIGHT_EXPECTED_COOKIE_LINK ?? "/cookie-policy";
 const expectedTermsLink =
 	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
@@ -621,7 +623,7 @@ test("rate limits paid AI requests per browser when AI is enabled", async ({
 });
 
 for (const profileAvailable of [true, false]) {
-	test(`filters by a linked author when their profile is ${profileAvailable ? "available" : "unavailable"}`, async ({ page, request, context }) => {
+	test(`respects author filtering when a linked profile is ${profileAvailable ? "available" : "unavailable"}`, async ({ page, request, context }) => {
 		test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
 		const response = await request.get(`/api/item/${expectedSearchItemKey}`);
 		expect(response.ok()).toBe(true);
@@ -638,7 +640,7 @@ for (const profileAvailable of [true, false]) {
 			profiles: profileAvailable ? [{
 				id: creator.authorProfileId, revision: 1, name,
 				headline: "Researcher", affiliation: "", bio: "", website: "",
-				linkedin: "", orcid: "", openalex: "", photo: null,
+				linkedin: "", orcid: "", openalex: "", photo: "/favicon.ico",
 			}] : [],
 		} }));
 		try {
@@ -650,16 +652,25 @@ for (const profileAvailable of [true, false]) {
 			const authors = page.getByRole("heading", { name: "Authors", exact: true }).locator("../..");
 			const author = authors.getByRole("link");
 			await expect(author).toHaveCount(1);
-			await expect(author).toBeEnabled();
+			if (expectedAuthorFilter) await expect(author).toBeEnabled();
+			else await expect(author).toBeDisabled();
 			if (profileAvailable) {
 				await expect(authors.getByText(name, { exact: true })).toBeVisible();
+				await expect(author.locator("img")).toHaveAttribute("src", "/favicon.ico");
 				await page.mouse.move(0, 0);
 				await author.hover();
 				await expect(page.getByRole("link", { name: "View OpenScholar profile", exact: true })).toHaveAttribute("href", profileUrl);
 			}
-			await author.click();
-			await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && url.searchParams.get("author") === name);
-			await expect(page.getByRole("link").filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) })).toBeVisible();
+			if (expectedAuthorFilter) {
+				await author.click();
+				await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && url.searchParams.get("author") === name);
+				await expect(page.getByRole("link").filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) })).toBeVisible();
+			} else {
+				await expect(author).not.toHaveAttribute("href", /[?&]author=/);
+				const itemUrl = page.url();
+				await author.click({ force: true });
+				await expect(page).toHaveURL(itemUrl);
+			}
 			expect(context.pages()).toHaveLength(1);
 		} finally {
 			await page.unrouteAll({ behavior: "wait" });

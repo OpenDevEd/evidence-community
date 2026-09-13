@@ -1557,6 +1557,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_DEFAULT_SEARCH_SCOPE_LABEL:
 			messages.scopes[defaultScope.key] ?? defaultScope.name,
 		PLAYWRIGHT_EXPECTED_YEAR_FILTER: String(config.filters.years.enabled),
+		PLAYWRIGHT_EXPECTED_AUTHOR_FILTER: String(config.features.authorFilter),
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL:
 			messages.ui[config.filters.institution.label] ??
 			config.filters.institution.label,
