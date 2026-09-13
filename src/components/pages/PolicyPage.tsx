@@ -8,6 +8,7 @@ import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { twMerge } from "tailwind-merge";
+import PolicyDesignMocks from "./PolicyDesignMocks";
 
 function formatLastUpdated(lastUpdated: Date) {
 	return new Intl.DateTimeFormat("en-GB", {
@@ -245,6 +246,27 @@ export default function PolicyPage({
 }) {
 	const articleContent = stripLeadingHeading(content);
 	const sections = extractSections(articleContent);
+	if (process.env.NODE_ENV === "development") {
+		// Five local design studies on the existing policy routes. The text and
+		// Markdown renderer are the same as the current page.
+		const headings = Array.from(articleContent.matchAll(/^(#{1,3})\s+(.+)$/gm));
+		const level = Math.min(...headings.map((match) => match[1].length));
+		const chapters = headings.filter((match) => match[1].length === level);
+		const render = (text: string) => text.trim() ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{text}</ReactMarkdown> : null;
+		return <PolicyDesignMocks
+			title={title}
+			description={description}
+			updated={formatLastUpdated(lastUpdated)}
+			contactEmail={contactEmail}
+			otherPolicyLink={otherPolicyLink}
+			intro={render(articleContent.slice(0, chapters[0]?.index ?? articleContent.length))}
+			sections={chapters.map((match, index) => ({
+				id: slugify(match[2]),
+				title: stripMarkdownDecorators(match[2]),
+				body: render(articleContent.slice((match.index ?? 0) + match[0].length, chapters[index + 1]?.index ?? articleContent.length)),
+			}))}
+		/>;
+	}
 
 	return (
 		<main
