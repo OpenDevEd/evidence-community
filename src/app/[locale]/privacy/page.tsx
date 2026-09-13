@@ -18,10 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PrivacyPage() {
 	await connection();
 	const config = await getLibraryConfig();
-	const [document, tFooter, tNav] = await Promise.all([
+	const [document, tFooter] = await Promise.all([
 		loadPolicyPageDocument(config, "privacy"),
 		getTranslations("footer"),
-		getTranslations("nav"),
 	]);
 
 	return (
@@ -35,7 +34,6 @@ export default async function PrivacyPage() {
 				label: tFooter("cookiePolicy"),
 			}}
 			contactEmail={config.contact.email}
-			homeLabel={tNav("home")}
 		/>
 	);
 }

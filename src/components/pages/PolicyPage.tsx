@@ -1,14 +1,11 @@
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowLeft01Icon, ArrowRight01Icon, Calendar01Icon, FileAttachmentIcon, Mail01Icon } from "@hugeicons/core-free-icons";
+import { lexer } from "marked";
 import { Link } from "@/i18n/routing";
-import PolicyToc, { type PolicyTocSection } from "@/components/pages/PolicyToc";
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { twMerge } from "tailwind-merge";
-import PolicyDesignMocks from "./PolicyDesignMocks";
+import PolicyLayout from "./PolicyLayout";
 import PolicyEmailCopyButton from "./PolicyEmailCopyButton";
 
 function formatLastUpdated(lastUpdated: Date) {
@@ -18,10 +15,6 @@ function formatLastUpdated(lastUpdated: Date) {
 		year: "numeric",
 		timeZone: "UTC",
 	}).format(lastUpdated);
-}
-
-function stripLeadingHeading(content: string) {
-	return content.replace(/^#\s+.*\n+/, "");
 }
 
 function stripMarkdownDecorators(value: string) {
@@ -37,7 +30,7 @@ function slugify(value: string) {
 	return stripMarkdownDecorators(value)
 		.toLowerCase()
 		.replace(/&/g, "and")
-		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/[^\p{Letter}\p{Number}]+/gu, "-")
 		.replace(/^-+|-+$/g, "");
 }
 
@@ -55,40 +48,6 @@ function getNodeText(node: ReactNode): string {
 	}
 
 	return "";
-}
-
-function extractSections(content: string): PolicyTocSection[] {
-	const sections = Array.from(
-		content.matchAll(/^(#{1,3})\s+(.+)$/gm),
-	).map(([_, hashes, rawTitle]) => ({
-		id: slugify(rawTitle),
-		level: Math.min(hashes.length, 3) as 1 | 2 | 3,
-		title: stripMarkdownDecorators(rawTitle),
-	}));
-
-	const baseLevel =
-		sections.length > 0
-			? Math.min(...sections.map((section) => section.level))
-			: 1;
-
-	const seen = new Set<string>();
-
-	return sections
-		.map((section) => ({
-			...section,
-			level: Math.max(
-				1,
-				Math.min(3, section.level - baseLevel + 1),
-			) as 1 | 2 | 3,
-		}))
-		.filter((section) => {
-			if (!section.id || seen.has(section.id)) {
-				return false;
-			}
-
-			seen.add(section.id);
-			return true;
-		});
 }
 
 function createHeading(level: "h1" | "h2" | "h3", className: string) {
@@ -116,6 +75,16 @@ function createHeading(level: "h1" | "h2" | "h3", className: string) {
 	};
 }
 
+function emailFromLink(url: string) {
+	const email = /^mailto:([^?]+)/i.exec(url)?.[1];
+	if (!email) return undefined;
+	try {
+		return decodeURIComponent(email);
+	} catch {
+		return undefined;
+	}
+}
+
 const markdownComponents: Components = {
 	h1: createHeading(
 		"h1",
@@ -132,17 +101,9 @@ const markdownComponents: Components = {
 	a: ({ href, children }) => {
 		const url = href ?? "#";
 		const isEmail = /^mailto:/i.test(url);
-		let email = /^mailto:([^?]+)/i.exec(url)?.[1];
-		try {
-			email = email && decodeURIComponent(email);
-		} catch {
-			// Keep malformed links readable without offering an invalid address to copy.
-			email = undefined;
-		}
+		const email = emailFromLink(url);
 		const isExternal =
-			url.startsWith("http://") ||
-			url.startsWith("https://") ||
-			isEmail;
+			url.startsWith("http://") || url.startsWith("https://") || isEmail;
 
 		if (isExternal) {
 			const link = (
@@ -160,7 +121,9 @@ const markdownComponents: Components = {
 					{link}
 					<PolicyEmailCopyButton email={email} />
 				</span>
-			) : link;
+			) : (
+				link
+			);
 		}
 
 		return (
@@ -185,7 +148,9 @@ const markdownComponents: Components = {
 		</div>
 	),
 	thead: ({ children }) => (
-		<thead className="bg-black/[0.045] dark:bg-white/[0.05]">{children}</thead>
+		<thead className="bg-black/[0.045] dark:bg-white/[0.05]">
+			{children}
+		</thead>
 	),
 	th: ({ children }) => (
 		<th className="px-4 py-3 text-left text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-black/60 dark:text-white/60">
@@ -233,15 +198,53 @@ const markdownComponents: Components = {
 	},
 };
 
+function uniqueSectionId(title: string, ids: Set<string>) {
+	const base = slugify(title) || "section";
+	let id = base;
+	for (let suffix = 2; ids.has(id); suffix++) id = `${base}-${suffix}`;
+	ids.add(id);
+	return id;
+}
+
+function readChapters(content: string) {
+	const tokens = lexer(content);
+	if (tokens[0]?.type === "heading" && tokens[0].depth === 1) tokens.shift();
+	const level = Math.min(
+		...tokens.map((token) =>
+			token.type === "heading" ? token.depth : Infinity,
+		),
+	);
+	const definitions = tokens
+		.filter((token) => token.type === "def")
+		.map((token) => token.raw)
+		.join("\n");
+	const chapters: { id: string; title: string; content: string }[] = [];
+	const ids = new Set<string>();
+	let intro = "";
+	for (const token of tokens) {
+		if (token.type === "heading" && token.depth === level) {
+			const id = uniqueSectionId(token.text, ids);
+			chapters.push({
+				id,
+				title: stripMarkdownDecorators(token.text),
+				content: "",
+			});
+		} else {
+			const chapter = chapters.at(-1);
+			if (chapter) chapter.content += token.raw;
+			else intro += token.raw;
+		}
+	}
+	return { intro, chapters, definitions };
+}
+
 export default function PolicyPage({
 	content,
 	title,
 	description,
 	lastUpdated,
 	otherPolicyLink,
-	homeLabel,
 	contactEmail,
-	className,
 }: {
 	content: string;
 	title: string;
@@ -251,128 +254,31 @@ export default function PolicyPage({
 		href: string;
 		label: string;
 	};
-	homeLabel: string;
 	contactEmail?: string;
-	className?: string;
 }) {
-	const articleContent = stripLeadingHeading(content);
-	const sections = extractSections(articleContent);
-	if (process.env.NODE_ENV === "development") {
-		// Five local design studies on the existing policy routes. The text and
-		// Markdown renderer are the same as the current page.
-		const headings = Array.from(articleContent.matchAll(/^(#{1,3})\s+(.+)$/gm));
-		const level = Math.min(...headings.map((match) => match[1].length));
-		const chapters = headings.filter((match) => match[1].length === level);
-		const render = (text: string) => text.trim() ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{text}</ReactMarkdown> : null;
-		return <PolicyDesignMocks
+	const { intro, chapters, definitions } = readChapters(content);
+	const render = (text: string) =>
+		text.trim() ? (
+			<ReactMarkdown
+				remarkPlugins={[remarkGfm]}
+				components={markdownComponents}
+			>{`${text}\n\n${definitions}`}</ReactMarkdown>
+		) : null;
+	return (
+		<PolicyLayout
+			key={title}
 			title={title}
 			description={description}
 			updated={formatLastUpdated(lastUpdated)}
+			updatedISO={lastUpdated.toISOString()}
 			contactEmail={contactEmail}
 			otherPolicyLink={otherPolicyLink}
-			intro={render(articleContent.slice(0, chapters[0]?.index ?? articleContent.length))}
-			sections={chapters.map((match, index) => ({
-				id: slugify(match[2]),
-				title: stripMarkdownDecorators(match[2]),
-				body: render(articleContent.slice((match.index ?? 0) + match[0].length, chapters[index + 1]?.index ?? articleContent.length)),
+			intro={render(intro)}
+			sections={chapters.map((chapter) => ({
+				id: chapter.id,
+				title: chapter.title,
+				body: render(chapter.content),
 			}))}
-		/>;
-	}
-
-	return (
-		<main
-			id="main-content"
-			className="relative min-h-screen w-full overflow-x-clip px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-10 xl:px-12 xl:py-14"
-		>
-			<div className="pointer-events-none absolute inset-y-0 left-1/2 w-screen -translate-x-1/2">
-				<div className="absolute inset-x-0 -top-56 h-[42rem] bg-[radial-gradient(circle_at_top_left,rgba(230,129,36,0.18),transparent_38%),radial-gradient(circle_at_top_right,rgba(92,172,253,0.16),transparent_30%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(230,129,36,0.24),transparent_34%),radial-gradient(circle_at_top_right,rgba(92,172,253,0.16),transparent_26%)]" />
-				<div className="absolute inset-x-0 bottom-0 h-[18rem] bg-[linear-gradient(180deg,transparent,rgba(15,15,15,0.02))] dark:bg-[linear-gradient(180deg,transparent,rgba(15,15,15,0.3))]" />
-			</div>
-
-			<div className="relative mx-auto flex min-w-0 max-w-7xl flex-col gap-6">
-				<nav className="flex flex-wrap items-center gap-3 text-sm">
-					<Link
-						href="/"
-						className="inline-flex items-center gap-2 rounded-full border border-black/15 bg-black px-2.5 py-2 text-white shadow-[0_16px_40px_-28px_rgba(0,0,0,0.6)] transition-all hover:-translate-y-0.5 hover:bg-black/90 dark:border-accent/25 dark:bg-accent/14 dark:text-white dark:hover:bg-accent/18"
-					>
-						<span className="inline-flex size-8 items-center justify-center rounded-full bg-white/12 text-white dark:bg-accent/20">
-							<HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
-						</span>
-						<span className="pr-2 font-medium tracking-tight">{homeLabel}</span>
-					</Link>
-					<Link
-						href={otherPolicyLink.href}
-						className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/900 px-4 py-2 text-black/72 transition-all hover:-translate-y-0.5 hover:bg-background_light/800 dark:border-white/10 dark:bg-secondary/92 dark:text-white/75 dark:hover:bg-card/92"
-					>
-						<HugeiconsIcon icon={FileAttachmentIcon} className="size-4" />
-						{otherPolicyLink.label}
-						<HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
-					</Link>
-				</nav>
-
-				<section className="relative min-w-0 overflow-hidden rounded-[2rem] border border-black/10 bg-gradient-to-br from-white via-background_light/900 to-accent/10 px-6 py-8 shadow-[0_28px_90px_-46px_rgba(0,0,0,0.28)] dark:border-white/10 dark:from-secondary dark:via-card dark:to-accent/15 sm:px-8 lg:px-10 lg:py-10">
-					<div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(230,129,36,0.16),transparent_34%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.07),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(230,129,36,0.12),transparent_28%)]" />
-					<div className="relative">
-						<div className="space-y-5">
-							<div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/800 px-4 py-2 text-xs font-medium text-black/65 dark:border-white/10 dark:bg-card/80 dark:text-white/65">
-								<HugeiconsIcon icon={Calendar01Icon} className="size-4" />
-								{`Updated ${formatLastUpdated(lastUpdated)}`}
-							</div>
-
-							<div className="max-w-3xl space-y-4">
-								<h1 className="text-balance text-4xl font-semibold tracking-tight text-black sm:text-5xl dark:text-white">
-									{title}
-								</h1>
-								<p className="max-w-2xl text-pretty text-base leading-7 text-black/70 sm:text-lg dark:text-white/70">
-									{description}
-								</p>
-							</div>
-						</div>
-					</div>
-				</section>
-
-				<div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
-					<section className="min-w-0 overflow-x-hidden rounded-[2rem] border border-black/10 bg-background_light/900 px-6 py-8 shadow-[0_24px_70px_-48px_rgba(0,0,0,0.45)] dark:border-white/10 dark:bg-secondary/88 sm:px-8 lg:px-12 lg:py-12">
-						<article
-							className={twMerge(
-								"prose prose-slate max-w-3xl break-words prose-headings:scroll-mt-28 prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-black prose-p:text-black/72 prose-li:text-black/72 prose-strong:text-black prose-a:no-underline prose-th:border-none prose-td:border-none dark:prose-invert dark:prose-headings:text-white dark:prose-p:text-white/72 dark:prose-li:text-white/72 dark:prose-strong:text-white",
-								className,
-							)}
-						>
-							<ReactMarkdown
-								remarkPlugins={[remarkGfm]}
-								components={markdownComponents}
-							>
-								{articleContent}
-							</ReactMarkdown>
-						</article>
-					</section>
-
-					<aside className="hidden xl:block">
-						<div className="sticky top-6 flex max-h-[calc(100vh-3rem)] flex-col gap-4">
-							<PolicyToc sections={sections} />
-
-							{contactEmail && <div className="shrink-0 rounded-[1.75rem] border border-black/10 bg-gradient-to-br from-background_light/800 to-accent/10 p-5 dark:border-white/10 dark:from-secondary dark:to-accent/12">
-								<div className="mb-3 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/45 dark:text-white/45">
-									<HugeiconsIcon icon={Mail01Icon} className="size-4 text-accent" />
-									Questions
-								</div>
-								<p className="mb-4 text-sm leading-6 text-black/70 dark:text-white/70">
-									If you need clarification about this notice, contact the
-									team directly.
-								</p>
-								<a
-									href={`mailto:${contactEmail}`}
-									className="inline-flex items-center gap-2 text-sm font-medium text-accent transition-transform hover:translate-x-0.5"
-								>
-									{contactEmail}
-									<HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
-								</a>
-							</div>}
-						</div>
-					</aside>
-				</div>
-			</div>
-		</main>
+		/>
 	);
 }

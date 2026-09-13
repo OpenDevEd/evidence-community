@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useEffectEvent,
+	useRef,
+	useState,
+} from "react";
 
 // Ported from OpenScholar's configuration/use-scroll-spy. Section IDs are
 // supplied directly here; the active line still follows each scroll margin.
@@ -20,19 +26,30 @@ export function useScrollSpy(ids: readonly string[], onMeasure?: () => void) {
 			for (const id of ids) {
 				const element = document.getElementById(id);
 				if (!element) continue;
-				const line = (Number.parseFloat(getComputedStyle(element).scrollMarginTop) || 0) + 8;
+				const line =
+					(Number.parseFloat(
+						getComputedStyle(element).scrollMarginTop,
+					) || 0) + 8;
 				if (element.getBoundingClientRect().top <= line) current = id;
 				else break;
 			}
-			if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+			if (
+				window.innerHeight + window.scrollY >=
+				document.documentElement.scrollHeight - 2
+			) {
 				current = ids[ids.length - 1] ?? current;
 			}
-			setActive(previous => previous === current ? previous : current);
+			setActive((previous) =>
+				previous === current ? previous : current,
+			);
 		};
 		const onScroll = () => {
 			if (!frame) frame = window.requestAnimationFrame(measure);
 		};
-		const interrupt = () => { releaseScroll.current?.(); onScroll(); };
+		const interrupt = () => {
+			releaseScroll.current?.();
+			onScroll();
+		};
 		measure();
 		window.addEventListener("scroll", onScroll, { passive: true });
 		window.addEventListener("resize", onScroll);
@@ -69,7 +86,10 @@ export function useScrollSpy(ids: readonly string[], onMeasure?: () => void) {
 		timer = window.setTimeout(release, 1200);
 		element.focus({ preventScroll: true });
 		element.scrollIntoView({
-			behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+			behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+				.matches
+				? "instant"
+				: "smooth",
 			block: "start",
 		});
 	}, []);

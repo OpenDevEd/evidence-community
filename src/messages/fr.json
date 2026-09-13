@@ -874,5 +874,12 @@
     "title": "Cartes des lacunes",
     "subtitle": "Explorez des visualisations interactives qui cartographient les preuves de recherche par thème, identifiant où les preuves existent et où subsistent des lacunes.",
     "empty": "Aucune carte des lacunes disponible."
-  }
+  },
+    "policy": {
+        "updated": "Mis à jour",
+        "contents": "Sommaire",
+        "documents": "Documents de politique",
+        "sections": "Sections de la politique",
+        "copyEmail": "Copier l’adresse e-mail"
+    }
 }

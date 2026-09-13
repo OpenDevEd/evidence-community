@@ -874,5 +874,12 @@
     "title": "Evidence Gap Maps",
     "subtitle": "Explore interactive visualisations that map research evidence across topics, identifying where evidence exists and where gaps remain.",
     "empty": "No gap maps available yet."
-  }
+  },
+    "policy": {
+        "updated": "Updated",
+        "contents": "Contents",
+        "documents": "Policy documents",
+        "sections": "Policy sections",
+        "copyEmail": "Copy email"
+    }
 }

@@ -874,5 +874,12 @@
     "title": "Mapas de lacunas de evidências",
     "subtitle": "Explore visualizações interativas que mapeiam evidências de pesquisa por temas, identificando onde existem evidências e onde permanecem lacunas.",
     "empty": "Nenhum mapa de lacunas disponível."
-  }
+  },
+    "policy": {
+        "updated": "Atualizado",
+        "contents": "Índice",
+        "documents": "Documentos de políticas",
+        "sections": "Seções da política",
+        "copyEmail": "Copiar e-mail"
+    }
 }

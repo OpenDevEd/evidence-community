@@ -875,5 +875,12 @@
     "title": "Ramani za mapengo ya ushahidi",
     "subtitle": "Chunguza taswira shirikishi zinazopanga ushahidi wa utafiti kwa mada, zikitambua mahali ushahidi upo na mahali mapengo yalipo.",
     "empty": "Hakuna ramani za mapengo bado."
-  }
+  },
+    "policy": {
+        "updated": "Imesasishwa",
+        "contents": "Yaliyomo",
+        "documents": "Nyaraka za sera",
+        "sections": "Sehemu za sera",
+        "copyEmail": "Nakili barua pepe"
+    }
 }
