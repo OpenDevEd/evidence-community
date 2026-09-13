@@ -38,11 +38,14 @@ export default function MobileMenu({
 	const t = useTranslations("ui");
 
 	const toggleMenu = () => setIsOpen(!isOpen);
+	function closeMenu() {
+		setIsOpen(false);
+		triggerRef.current?.querySelector("button")?.focus();
+	}
 	function closeOnEscape(event: KeyboardEvent) {
 		if (event.key !== "Escape" || event.defaultPrevented) return;
 		event.preventDefault();
-		setIsOpen(false);
-		triggerRef.current?.querySelector("button")?.focus();
+		closeMenu();
 	}
 
 	return (
@@ -75,7 +78,7 @@ export default function MobileMenu({
 						pathname={pathname}
 						isMobile={true}
 						styleVariant={context.styleVariant}
-						onNavigate={() => setIsOpen(false)}
+						onNavigate={closeMenu}
 					/>
 				</li>
 

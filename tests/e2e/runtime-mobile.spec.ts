@@ -112,8 +112,10 @@ test("mobile navigation stays out of the focus order while closed and returns fo
 	await expect(opener).toHaveAttribute("aria-expanded", "false");
 	await expect(destination).toHaveCount(0);
 	await opener.click();
-	await destination.click();
+	await destination.focus();
+	await page.keyboard.press("Enter");
 	await expect(opener).toHaveAttribute("aria-expanded", "false");
+	await expect(opener).toBeFocused();
 	await expect(destination).toHaveCount(0);
 });
 
