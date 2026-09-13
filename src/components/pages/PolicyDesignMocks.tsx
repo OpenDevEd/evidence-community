@@ -54,10 +54,12 @@ function Contents({ sections, scrollContainer }: { sections: Section[]; scrollCo
 		if (!container || !link || container.scrollHeight <= container.clientHeight) return;
 		const bounds = container.getBoundingClientRect();
 		const row = link.getBoundingClientRect();
-		const inset = Number.parseFloat(getComputedStyle(container).getPropertyValue("--scroll-shadow-size")) || 16;
-		const delta = row.top < bounds.top + inset ? row.top - bounds.top - inset
+		const style = getComputedStyle(container);
+		const inset = Number.parseFloat(style.getPropertyValue("--scroll-shadow-size")) || 16;
+		const topInset = Math.max(inset, Number.parseFloat(style.scrollPaddingTop) || 0);
+		const delta = row.top < bounds.top + topInset ? row.top - bounds.top - topInset
 			: row.bottom > bounds.bottom - inset ? row.bottom - bounds.bottom + inset : 0;
-		if (delta) container.scrollBy({ top: delta, behavior: "instant" });
+		if (delta) container.scrollBy({ top: delta, behavior: "auto" });
 	}, [active, scrollContainer]);
 	return <nav ref={navRef} className={styles.contents} aria-label="Policy sections">
 		<h2><Icon icon={BookOpen01Icon} />Contents</h2>
@@ -133,9 +135,12 @@ function SplitPage(props: Props) {
 		const sidebar = sidebarRef.current;
 		if (!sidebar) return;
 		const measure = () => {
-			const padding = parseFloat(getComputedStyle(sidebar).paddingTop);
-			const clearance = sidebar.getBoundingClientRect().top + window.scrollY + padding;
-			sidebar.parentElement?.style.setProperty("--policy-panel-clearance", `${clearance}px`);
+			const page = sidebar.parentElement;
+			if (!page) return;
+			const headerSpace = page.getBoundingClientRect().top + window.scrollY;
+			const padding = parseFloat(getComputedStyle(sidebar).getPropertyValue("--policy-content-gap"));
+			page.style.setProperty("--policy-header-space", `${headerSpace}px`);
+			page.style.setProperty("--policy-panel-clearance", `${headerSpace + padding}px`);
 		};
 		measure();
 		const observer = new ResizeObserver(measure);
