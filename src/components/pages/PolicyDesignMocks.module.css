@@ -80,7 +80,9 @@
 .accordionContent .markdown {font-size:15px;}
 .splitPage {display:grid;grid-template-columns:minmax(320px,.85fr) minmax(0,1.3fr);max-width:1500px;margin:auto;}
 .preview:has(>.splitPage) {min-height:0;padding-bottom:0;}
-.splitIdentity {padding:42px 48px;background:rgb(var(--color-accent-500)/.045);border-right:1px solid var(--line);}
+.splitIdentity {position:relative;isolation:isolate;padding:42px 48px;border-right:1px solid var(--line);}
+/* Extend the column's background beyond the reading container and behind either navbar. */
+.splitIdentity::before {content:"";position:absolute;inset:-100vmax 0 0 -100vmax;z-index:-1;pointer-events:none;background:rgb(var(--color-accent-500)/.045);}
 .splitSticky {position:sticky;top:135px;max-height:calc(100dvh - 170px);overflow-y:auto;}
 .splitIdentity .documentLinks {margin-bottom:44px;}
 .splitIdentity h1 {font-size:clamp(44px,4.2vw,68px);max-width:360px;}
