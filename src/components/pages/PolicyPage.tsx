@@ -156,7 +156,7 @@ const markdownComponents: Components = {
 				</a>
 			);
 			return email ? (
-				<span className="inline-flex max-w-full items-baseline gap-1">
+				<span className="inline-flex max-w-full items-baseline gap-1 px-1.5">
 					{link}
 					<PolicyEmailCopyButton email={email} />
 				</span>
