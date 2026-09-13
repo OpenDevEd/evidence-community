@@ -1642,6 +1642,7 @@ function runBrowserSuite(profile: Profile) {
 			"tests/e2e/smoke.spec.ts",
 			"tests/e2e/email-form.spec.ts",
 			"tests/e2e/subscription.spec.ts",
+			"tests/e2e/digest-loading.spec.ts",
 			"tests/e2e/brand-logo.spec.ts",
 			"--project",
 			"chromium",
