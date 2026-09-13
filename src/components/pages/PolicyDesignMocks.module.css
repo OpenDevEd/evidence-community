@@ -83,8 +83,11 @@
 .splitIdentity {position:relative;isolation:isolate;padding:42px 48px;border-right:1px solid var(--line);}
 /* Extend the column's background beyond the reading container and behind either navbar. */
 .splitIdentity::before {content:"";position:absolute;inset:-100vmax 0 0 -100vmax;z-index:-1;pointer-events:none;background:rgb(var(--color-accent-500)/.045);}
-.splitSticky {position:sticky;top:var(--policy-panel-clearance,135px);max-height:max(10rem,calc(100dvh - 2 * var(--policy-panel-clearance,135px)));overflow-y:auto;}
-@media (min-width:801px) {.splitPage .splitIdentity {padding-bottom:var(--policy-panel-clearance,42px);}}
+.splitSticky {position:sticky;top:var(--policy-panel-clearance,135px);max-height:max(10rem,calc(100dvh - var(--policy-panel-clearance,135px)));overflow-y:auto;}
+@media (min-width:801px) {
+.splitPage .splitIdentity {padding-bottom:0;}
+.splitSticky {padding-bottom:var(--policy-panel-clearance,42px);}
+}
 .splitIdentity .documentLinks {margin-bottom:44px;}
 .splitIdentity h1 {font-size:clamp(44px,4.2vw,68px);max-width:360px;}
 .splitDescription {font-size:17px;line-height:1.7;color:var(--muted);margin:24px 0;max-width:360px;}
