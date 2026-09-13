@@ -26,8 +26,8 @@ for (const view of ["archive", "edition"] as const) {
 
 		await page.goto(view === "archive" ? "/digests" : `/digests/${editionId}`);
 		expect(delayedChunks).toBeGreaterThan(0);
-		await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 		await dismissConsent(page);
+		await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 		const archive = page.getByRole("region", { name: "Digest archive", exact: true });
 		if (view === "archive") {
 			await archive.getByRole("link").filter({ hasText: editionTitle }).click();
