@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { twMerge } from "tailwind-merge";
 import PolicyDesignMocks from "./PolicyDesignMocks";
+import PolicyEmailCopyButton from "./PolicyEmailCopyButton";
 
 function formatLastUpdated(lastUpdated: Date) {
 	return new Intl.DateTimeFormat("en-GB", {
@@ -130,26 +131,36 @@ const markdownComponents: Components = {
 	),
 	a: ({ href, children }) => {
 		const url = href ?? "#";
+		const isEmail = /^mailto:/i.test(url);
+		let email = /^mailto:([^?]+)/i.exec(url)?.[1];
+		try {
+			email = email && decodeURIComponent(email);
+		} catch {
+			// Keep malformed links readable without offering an invalid address to copy.
+			email = undefined;
+		}
 		const isExternal =
 			url.startsWith("http://") ||
 			url.startsWith("https://") ||
-			url.startsWith("mailto:");
+			isEmail;
 
 		if (isExternal) {
-			return (
+			const link = (
 				<a
 					href={url}
-					target={url.startsWith("mailto:") ? undefined : "_blank"}
-					rel={
-						url.startsWith("mailto:")
-							? undefined
-							: "noopener noreferrer"
-					}
-					className="font-medium text-link underline decoration-black/15 underline-offset-4 transition-colors hover:decoration-current dark:decoration-white/20"
+					target={isEmail ? undefined : "_blank"}
+					rel={isEmail ? undefined : "noopener noreferrer"}
+					className="min-w-0 font-medium text-link underline decoration-black/15 underline-offset-4 transition-colors hover:decoration-current dark:decoration-white/20"
 				>
 					{children}
 				</a>
 			);
+			return email ? (
+				<span className="inline-flex max-w-full items-baseline gap-1">
+					{link}
+					<PolicyEmailCopyButton email={email} />
+				</span>
+			) : link;
 		}
 
 		return (

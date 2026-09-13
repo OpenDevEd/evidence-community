@@ -10,7 +10,7 @@ import { ArrowLeft01Icon, ArrowRight01Icon, ArrowDown01Icon, BookOpen01Icon, Cal
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Select } from "@/components/nextui/Select";
-import CopyButton from "@/components/features/newlib/CopyButton";
+import PolicyEmailCopyButton from "./PolicyEmailCopyButton";
 import { Link } from "@/i18n/routing";
 import styles from "./PolicyDesignMocks.module.css";
 
@@ -32,9 +32,7 @@ function Contact({ email, compact = false }: { email?: string; compact?: boolean
 		<a href={`mailto:${email}`} title={email}>
 			<Icon icon={Mail01Icon} /><span>{compact ? "Contact" : email}</span>
 		</a>
-		<CopyButton textToCopy={email} ariaLabel="Copy email">
-			<Button isIconOnly variant="transparent" size="xs" title="Copy email" className="shrink-0" />
-		</CopyButton>
+		<PolicyEmailCopyButton email={email} />
 	</div> : null;
 }
 function DocumentLinks({ otherPolicyLink, title }: Pick<Props, "otherPolicyLink" | "title">) {
