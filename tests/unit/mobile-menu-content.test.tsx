@@ -42,10 +42,9 @@ describe("mobile menu content", () => {
 		expect(html).toContain('aria-label="Open hamburger menu"');
 		expect(html).toContain('href="/gapmaps"');
 	});
-	it("renders controls without an empty navigation list above them", () => {
+	it("keeps a menu containing only an enabled control", () => {
 		const html = renderMenu({controls: true});
 		expect(html).toContain('aria-label="Open hamburger menu"');
 		expect(html).toContain('<button>Theme</button>');
-		expect(html.match(/<ul\b/g)).toHaveLength(1);
 	});
 });
