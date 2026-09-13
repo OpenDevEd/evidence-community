@@ -101,7 +101,7 @@ function ExpandableSections(props: Props) {
 function SplitPage(props: Props) {
 	return <div className={styles.splitPage}>
 		<div className={styles.splitIdentity}>
-			<ScrollShadow className={styles.splitSticky} size={80}>
+			<ScrollShadow className={styles.splitSticky} size={80} offset={1}>
 				<DocumentLinks {...props} />
 				<h1>{props.title}</h1>
 				<p className={styles.splitDescription}>{props.description}</p>
