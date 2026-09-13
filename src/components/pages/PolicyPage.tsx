@@ -17,7 +17,7 @@ function formatLastUpdated(lastUpdated: Date) {
 	}).format(lastUpdated);
 }
 
-function inlineText(tokens: Token[]): string {
+function inlineText(tokens: Token[] = []): string {
 	return tokens
 		.map((token) => {
 			if (token.type === "br") return " ";
