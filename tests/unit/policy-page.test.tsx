@@ -197,21 +197,24 @@ describe("policy chapter navigation", () => {
 
 Opening paragraph with [contact details][contact].
 
-## Your rights
+# **Your rights**
 First section.
 
-### Details
+## Details
 A nested subsection.
 
-## Your rights
+# *Your rights*
 Second section.
 
 \`\`\`md
 ## This is a code example
 \`\`\`
 
-## Français
+# ~~Français~~
 French section.
+
+# [Further information][contact]
+Further section.
 
 [contact]: https://example.org/contact
 `;
@@ -232,6 +235,7 @@ French section.
 			"#your-rights",
 			"#your-rights-2",
 			"#français",
+			"#further-information",
 		]);
 		for (const link of links) {
 			const target = document.getElementById(
@@ -251,5 +255,12 @@ French section.
 		expect(document.querySelector("article")?.textContent).toContain(
 			"A nested subsection.",
 		);
+		expect(document.getElementById("details")?.tagName).toBe("H3");
+		expect(links.map((link) => link.textContent?.slice(2))).toEqual([
+			"Your rights",
+			"Your rights",
+			"Français",
+			"Further information",
+		]);
 	});
 });

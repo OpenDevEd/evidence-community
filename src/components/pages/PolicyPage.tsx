@@ -1,4 +1,4 @@
-import { lexer } from "marked";
+import { lexer, type Token } from "marked";
 import { Link } from "@/i18n/routing";
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
@@ -17,17 +17,19 @@ function formatLastUpdated(lastUpdated: Date) {
 	}).format(lastUpdated);
 }
 
-function stripMarkdownDecorators(value: string) {
-	return value
-		.replace(/\*\*(.*?)\*\*/g, "$1")
-		.replace(/__(.*?)__/g, "$1")
-		.replace(/`(.*?)`/g, "$1")
-		.replace(/\[(.*?)\]\((.*?)\)/g, "$1")
-		.trim();
+function inlineText(tokens: Token[]): string {
+	return tokens
+		.map((token) => {
+			if (token.type === "br") return " ";
+			if ("tokens" in token && token.tokens)
+				return inlineText(token.tokens);
+			return "text" in token ? token.text : "";
+		})
+		.join("");
 }
 
 function slugify(value: string) {
-	return stripMarkdownDecorators(value)
+	return value
 		.toLowerCase()
 		.replace(/&/g, "and")
 		.replace(/[^\p{Letter}\p{Number}]+/gu, "-")
@@ -50,14 +52,35 @@ function getNodeText(node: ReactNode): string {
 	return "";
 }
 
-function createHeading(level: "h1" | "h2" | "h3", className: string) {
+const headingTags = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
+type HeadingTag = (typeof headingTags)[number];
+const headingClasses: Partial<Record<HeadingTag, string>> = {
+	h1: "group mb-6 mt-14 border-t border-black/8 pt-8 text-3xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
+	h2: "group mb-5 mt-12 border-t border-black/8 pt-8 text-2xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
+	h3: "group mb-4 mt-10 text-xl font-semibold tracking-tight text-black dark:text-white",
+};
+
+function createHeading(level: HeadingTag, chapterLevel?: number) {
 	return function Heading({ children }: { children?: ReactNode }) {
 		const headingText = getNodeText(children);
 		const id = slugify(headingText);
-		const Tag = level;
+		const Tag =
+			chapterLevel === undefined
+				? level
+				: headingTags[
+						Math.min(
+							5,
+							Math.max(2, Number(level[1]) - chapterLevel + 1),
+						)
+					];
 
 		return (
-			<Tag id={id} tabIndex={-1} className={className}>
+			<Tag
+				id={id}
+				tabIndex={-1}
+				className={headingClasses[level]}
+				data-policy-heading={level}
+			>
 				<a
 					href={`#${id}`}
 					className="inline-flex items-start gap-3 no-underline transition-colors hover:text-accent"
@@ -86,18 +109,6 @@ function emailFromLink(url: string) {
 }
 
 const markdownComponents: Components = {
-	h1: createHeading(
-		"h1",
-		"group mb-6 mt-14 border-t border-black/8 pt-8 text-3xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
-	),
-	h2: createHeading(
-		"h2",
-		"group mb-5 mt-12 border-t border-black/8 pt-8 text-2xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
-	),
-	h3: createHeading(
-		"h3",
-		"group mb-4 mt-10 text-xl font-semibold tracking-tight text-black dark:text-white",
-	),
 	a: ({ href, children }) => {
 		const url = href ?? "#";
 		const isEmail = /^mailto:/i.test(url);
@@ -223,10 +234,11 @@ function readChapters(content: string) {
 	let intro = "";
 	for (const token of tokens) {
 		if (token.type === "heading" && token.depth === level) {
-			const id = uniqueSectionId(token.text, ids);
+			const title = inlineText(token.tokens);
+			const id = uniqueSectionId(title, ids);
 			chapters.push({
 				id,
-				title: stripMarkdownDecorators(token.text),
+				title,
 				content: "",
 			});
 		} else {
@@ -235,7 +247,7 @@ function readChapters(content: string) {
 			else intro += token.raw;
 		}
 	}
-	return { intro, chapters, definitions };
+	return { intro, chapters, definitions, level };
 }
 
 export default function PolicyPage({
@@ -256,12 +268,20 @@ export default function PolicyPage({
 	};
 	contactEmail?: string;
 }) {
-	const { intro, chapters, definitions } = readChapters(content);
-	const render = (text: string) =>
+	const { intro, chapters, definitions, level } = readChapters(content);
+	const render = (text: string, chapterLevel?: number) =>
 		text.trim() ? (
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
-				components={markdownComponents}
+				components={{
+					...markdownComponents,
+					...Object.fromEntries(
+						headingTags.map((tag) => [
+							tag,
+							createHeading(tag, chapterLevel),
+						]),
+					),
+				}}
 			>{`${text}\n\n${definitions}`}</ReactMarkdown>
 		) : null;
 	return (
@@ -277,7 +297,7 @@ export default function PolicyPage({
 			sections={chapters.map((chapter) => ({
 				id: chapter.id,
 				title: chapter.title,
-				body: render(chapter.content),
+				body: render(chapter.content, level),
 			}))}
 		/>
 	);

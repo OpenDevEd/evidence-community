@@ -14,16 +14,19 @@
 }
 .page h1,
 .page h2,
-.page h3 {
+.page h3,
+.page [data-policy-heading] {
 	color: var(--ink);
 	letter-spacing: -0.035em;
 }
-.page h1 {
+.page h1,
+.page [data-policy-heading="h1"] {
 	font-size: clamp(34px, 4vw, 56px);
 	line-height: 1.12;
 	font-weight: 700;
 }
-.page h2 {
+.page h2,
+.page [data-policy-heading="h2"] {
 	font-size: 25px;
 	line-height: 1.35;
 	font-weight: 700;
@@ -106,23 +109,23 @@
 .markdown p:last-child {
 	margin-bottom: 0;
 }
-.markdown h1,
-.markdown h2,
-.markdown h3 {
+.markdown [data-policy-heading="h1"],
+.markdown [data-policy-heading="h2"],
+.markdown [data-policy-heading="h3"] {
 	font-size: 19px;
 	line-height: 1.4;
 	margin: 30px 0 12px;
 	padding: 0;
 	border: 0;
 }
-.markdown h1:first-child,
-.markdown h2:first-child,
-.markdown h3:first-child {
+.markdown [data-policy-heading="h1"]:first-child,
+.markdown [data-policy-heading="h2"]:first-child,
+.markdown [data-policy-heading="h3"]:first-child {
 	margin-top: 0;
 }
-.markdown h1 a,
-.markdown h2 a,
-.markdown h3 a {
+.markdown [data-policy-heading="h1"] a,
+.markdown [data-policy-heading="h2"] a,
+.markdown [data-policy-heading="h3"] a {
 	color: inherit;
 }
 .markdown ul,
@@ -169,7 +172,7 @@
 	min-width: 0;
 	outline: none;
 }
-.chapter h2 {
+.chapter :is(h2, [data-policy-heading="h2"]) {
 	margin: 0 0 18px;
 }
 .chapterBody {
@@ -231,13 +234,14 @@
 	position: relative;
 	isolation: isolate;
 	padding: 42px 48px;
-	border-right: 1px solid var(--line);
+	border-inline-end: 1px solid var(--line);
 }
 /* Extend the column's background beyond the reading container and behind either navbar. */
 .splitIdentity::before {
 	content: "";
 	position: absolute;
-	inset: -100vmax 0 0 -100vmax;
+	inset-block: -100vmax 0;
+	inset-inline: -100vmax 0;
 	z-index: -1;
 	pointer-events: none;
 	background: rgb(var(--color-accent-500) / 0.045);
@@ -344,7 +348,7 @@
 		gap: 10px;
 		grid-template-columns: 26px minmax(0, 1fr);
 	}
-	.chapter h2 {
+	.chapter :is(h2, [data-policy-heading="h2"]) {
 		font-size: 23px;
 	}
 }
