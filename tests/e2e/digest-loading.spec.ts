@@ -7,6 +7,10 @@ const editionTitle = process.env.PLAYWRIGHT_EXPECTED_DIGEST_TITLE ?? "";
 
 test.skip(!editionId || !editionTitle, "requires a published digest fixture");
 
+test.afterEach(async ({ page }) => {
+	await page.unrouteAll({ behavior: "wait" });
+});
+
 for (const view of ["archive", "edition"] as const) {
 	test(`${view} recovers when Markdown code arrives after the page shell`, async ({ page }) => {
 		const errors: Error[] = [];
