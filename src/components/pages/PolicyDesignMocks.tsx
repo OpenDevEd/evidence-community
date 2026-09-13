@@ -1,7 +1,7 @@
 "use client";
 
 // Local-only policy layout studies. Switch with ?variant=1 through 5.
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { parseAsInteger, useQueryState } from "nuqs";
 import { useTheme } from "next-themes";
@@ -105,8 +105,23 @@ function ExpandableSections(props: Props) {
 	</div>;
 }
 function SplitPage(props: Props) {
+	const sidebarRef = useRef<HTMLDivElement>(null);
+	useLayoutEffect(() => {
+		const sidebar = sidebarRef.current;
+		if (!sidebar) return;
+		const measure = () => {
+			const padding = parseFloat(getComputedStyle(sidebar).paddingTop);
+			const clearance = sidebar.getBoundingClientRect().top + window.scrollY + padding;
+			sidebar.style.setProperty("--policy-panel-clearance", `${clearance}px`);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(document.body);
+		observer.observe(sidebar);
+		return () => observer.disconnect();
+	}, []);
 	return <div className={styles.splitPage}>
-		<div className={styles.splitIdentity}>
+		<div ref={sidebarRef} className={styles.splitIdentity}>
 			<ScrollShadow className={styles.splitSticky} size={80} offset={1}>
 				<DocumentLinks {...props} />
 				<h1>{props.title}</h1>
