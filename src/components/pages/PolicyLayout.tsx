@@ -143,7 +143,7 @@ function Contents({
 		[sections],
 	);
 	const navRef = useRef<HTMLElement>(null);
-	const scrollState = useRef({ pastNavbar: false, atTop: false });
+	const scrollState = useRef({ pastNavbar: false, atTop: true });
 	function syncNavbar() {
 		const position = sidebarNavbarState(scrollContainer.current);
 		if (!position) return;

@@ -71,20 +71,31 @@ export function useScrollSpy(ids: readonly string[], onMeasure?: () => void) {
 		const element = document.getElementById(id);
 		if (!element) return;
 		releaseScroll.current?.();
-		locked.current = id;
 		setActive(id);
-		let timer = 0;
+		element.focus({ preventScroll: true });
+		const margin =
+			Number.parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
+		const target = Math.min(
+			document.documentElement.scrollHeight - window.innerHeight,
+			Math.max(
+				0,
+				window.scrollY + element.getBoundingClientRect().top - margin,
+			),
+		);
+		// An already-aligned section produces no scrollend event.
+		if (Math.abs(window.scrollY - target) <= 1) return;
+		locked.current = id;
+		const onScrollEnd = (event: Event) => {
+			// A separately scrolling contents panel must not unlock the page.
+			if (event.target === document) release();
+		};
 		const release = () => {
-			window.removeEventListener("scrollend", release);
-			window.clearTimeout(timer);
+			window.removeEventListener("scrollend", onScrollEnd);
 			locked.current = null;
 			releaseScroll.current = null;
 		};
 		releaseScroll.current = release;
-		window.addEventListener("scrollend", release, { once: true });
-		// A click on an already-aligned section does not produce scrollend.
-		timer = window.setTimeout(release, 1200);
-		element.focus({ preventScroll: true });
+		window.addEventListener("scrollend", onScrollEnd);
 		element.scrollIntoView({
 			behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
 				.matches
