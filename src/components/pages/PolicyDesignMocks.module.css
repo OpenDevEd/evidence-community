@@ -78,6 +78,7 @@
 .accordionContent {padding:0 28px 28px 60px;}
 .accordionContent .markdown {font-size:15px;}
 .splitPage {display:grid;grid-template-columns:minmax(320px,.85fr) minmax(0,1.3fr);max-width:1500px;margin:auto;}
+.preview:has(>.splitPage) {min-height:0;padding-bottom:0;}
 .splitIdentity {padding:42px 48px;background:rgb(var(--color-accent-500)/.045);border-right:1px solid var(--line);}
 .splitSticky {position:sticky;top:135px;max-height:calc(100dvh - 170px);overflow-y:auto;}
 .splitIdentity .documentLinks {margin-bottom:44px;}
@@ -122,6 +123,7 @@
 .mobileChapterSelect {display:none;}
 .readerTop>span {white-space:nowrap;flex-shrink:0;}
 @media (max-width:800px) {
+.splitPage .splitIdentity .splitSticky {mask-image:none;}
 .readerSidebar nav {display:none;}
 .mobileChapterSelect {display:block;padding:0 8px;}
 }

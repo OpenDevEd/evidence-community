@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { parseAsInteger, useQueryState } from "nuqs";
 import { useTheme } from "next-themes";
-import { Accordion, AccordionItem, SelectItem, Tooltip } from "@nextui-org/react";
+import { Accordion, AccordionItem, ScrollShadow, SelectItem, Tooltip } from "@nextui-org/react";
 import { ArrowLeft01Icon, ArrowRight01Icon, ArrowDown01Icon, BookOpen01Icon, Calendar01Icon, File02Icon, Layers01Icon, Mail01Icon, Moon02Icon, PrinterIcon, Shield01Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -100,7 +100,16 @@ function ExpandableSections(props: Props) {
 }
 function SplitPage(props: Props) {
 	return <div className={styles.splitPage}>
-		<div className={styles.splitIdentity}><div className={styles.splitSticky}><DocumentLinks {...props} /><h1>{props.title}</h1><p className={styles.splitDescription}>{props.description}</p><Updated date={props.updated} /><Contents sections={props.sections} /><Contact email={props.contactEmail} /></div></div>
+		<div className={styles.splitIdentity}>
+			<ScrollShadow className={styles.splitSticky} size={80}>
+				<DocumentLinks {...props} />
+				<h1>{props.title}</h1>
+				<p className={styles.splitDescription}>{props.description}</p>
+				<Updated date={props.updated} />
+				<Contents sections={props.sections} />
+				<Contact email={props.contactEmail} />
+			</ScrollShadow>
+		</div>
 		<article className={styles.splitArticle}>{props.intro && <div className={`${styles.markdown} ${styles.intro}`}>{props.intro}</div>}{props.sections.map((section, i) => <Chapter key={section.id} section={section} index={i} numbered />)}</article>
 	</div>;
 }
