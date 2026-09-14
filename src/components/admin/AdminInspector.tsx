@@ -740,12 +740,14 @@ function MetadataEditor({
 }
 
 const TagsEditor = memo(function TagsEditor({
+	separateDisplayTags,
 	errors,
 	onChange,
 	payload,
 	readOnly,
 	recordKey,
 }: {
+	separateDisplayTags: boolean;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
@@ -760,6 +762,7 @@ const TagsEditor = memo(function TagsEditor({
 				(entry): entry is string => typeof entry === "string",
 			)
 		: [];
+	const visibleTags = separateDisplayTags ? ordinaryItemTags(tags, content.tags) : tags;
 	const tag = value.trim();
 	const alreadyAdded = tags.includes(tag);
 	const addTag = () => {
@@ -769,11 +772,11 @@ const TagsEditor = memo(function TagsEditor({
 	};
 	return (
 		<div className="space-y-2">
-			{ordinaryItemTags(tags, content.tags).length === 0 && readOnly ? (
+			{visibleTags.length === 0 && readOnly ? (
 				<EmptyValue label="No tags" />
 			) : null}
 			<div className="flex flex-wrap gap-1.5">
-				{ordinaryItemTags(tags, content.tags).map((tag) => (
+				{visibleTags.map((tag) => (
 					<Chip
 						key={tag}
 						className="rounded-lg bg-black/[0.045] dark:bg-white/[0.06]"
@@ -1557,6 +1560,8 @@ export function AdminInspector({
 		);
 	}
 
+	const tagsForEditor = (tags: string[]) =>
+		detail.parentItem ? [...tags] : ordinaryItemTags(tags, content.tags);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
@@ -2072,13 +2077,10 @@ export function AdminInspector({
 					actions={
 						diff.tags &&
 						JSON.stringify(
-							ordinaryItemTags(diff.tags, content.tags).sort(),
+							tagsForEditor(diff.tags).sort(),
 						) !==
 							JSON.stringify(
-								ordinaryItemTags(
-									(payload.tags ?? []) as string[],
-									content.tags,
-								).sort(),
+								tagsForEditor((payload.tags ?? []) as string[]).sort(),
 							) ? (
 							<ChangedMarker
 								label="tags"
@@ -2086,28 +2088,19 @@ export function AdminInspector({
 									onChange({
 										...payload,
 										tags: [
-											...ordinaryItemTags(
-												diff.tags ?? [],
-												content.tags,
-											),
+											...tagsForEditor(diff.tags ?? []),
 											...(
 												(payload.tags ?? []) as string[]
 											).filter(
 												(tag) =>
-													!ordinaryItemTags(
-														[tag],
-														content.tags,
-													).length,
+													!tagsForEditor([tag]).length,
 											),
 										],
 									})
 								}
 								publishedValue={
 									<PublishedList
-										values={ordinaryItemTags(
-											diff.tags,
-											content.tags,
-										)}
+										values={tagsForEditor(diff.tags)}
 									/>
 								}
 							/>
@@ -2117,6 +2110,7 @@ export function AdminInspector({
 					title="Tags"
 				>
 					<TagsEditor
+						separateDisplayTags={!detail.parentItem}
 						errors={validationErrors}
 						onChange={patchPayload}
 						payload={tagsPayload}
@@ -2255,7 +2249,7 @@ export function AdminInspector({
 								Source
 							</dt>
 							<dd className="font-medium text-black/70 dark:text-white/75">
-								{humanizeAdminField(detail.sourceConnectionKey)}
+								{humanizeAdminField(liveRecord.sourceConnectionKey)}
 							</dd>
 						</div>
 						<div className="flex items-center justify-between gap-3">
@@ -2263,7 +2257,7 @@ export function AdminInspector({
 								Published revision
 							</dt>
 							<dd className="font-medium text-black/70 dark:text-white/75">
-								{detail.revision}
+								{liveRecord.revision}
 							</dd>
 						</div>
 						{detail.draft ? (

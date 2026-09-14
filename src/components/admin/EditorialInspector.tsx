@@ -1,6 +1,8 @@
 "use client";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import type { ComponentProps, ReactNode } from "react";
+import useSWR from "swr";
+import { getAdminItem, adminErrorMessage } from "./admin-api";
 import type { ConflictingDraft } from "@/lib/admin/errors";
 import type { AdminReviewSnapshot } from "./admin-api";
 import { AdminInspector } from "./AdminInspector";
@@ -49,7 +51,11 @@ export function EditorialInspector(props: Props) {
 	);
 }
 
-function viewSubmittedAction(snapshot: AdminReviewSnapshot | undefined, viewingSubmitted: boolean, select: (submitted: boolean) => void) {
+function viewSubmittedAction(
+	snapshot: AdminReviewSnapshot | undefined,
+	viewingSubmitted: boolean,
+	select: (submitted: boolean) => void,
+) {
 	if (!snapshot || viewingSubmitted) return undefined;
 	return () => select(true);
 }
@@ -79,8 +85,11 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	);
 	const header = {
 		liveDetail: props.detail,
-		onViewSubmitted:
-			viewSubmittedAction(snapshot, viewingSubmitted, version.selectVersion),
+		onViewSubmitted: viewSubmittedAction(
+			snapshot,
+			viewingSubmitted,
+			version.selectVersion,
+		),
 		versionStatus: (
 			<ReviewStatusLabel
 				snapshot={snapshot}
@@ -148,9 +157,7 @@ function WorkingDraftInspector({
 		<ReviewDraftNotice
 			notice={notice}
 			conflictCount={props.concurrentConflict ? 0 : fields.length}
-			feedback={
-				returnedReviewNote(snapshot)
-			}
+			feedback={returnedReviewNote(snapshot)}
 			onConflicts={conflicts.focus}
 		/>
 	);
@@ -184,6 +191,31 @@ function WorkingDraftInspector({
 	);
 }
 
+function useSubmittedLiveDetail(
+	detail: AdminItemDetail,
+	frozen: AdminItemDetail,
+	onRetry: () => void,
+) {
+	const needsLiveDetail = frozen.key !== detail.key;
+	const request = useSWR(
+		needsLiveDetail ? ["admin-review-live-item", frozen.key] : null,
+		([, key]) => getAdminItem(key),
+	);
+	const liveDetail = needsLiveDetail ? request.data : detail;
+	return {
+		detail: liveDetail ? frozen : null,
+		liveDetail,
+		loading: needsLiveDetail && request.isLoading,
+		error: request.error
+			? adminErrorMessage(
+					request.error,
+					"Could not load the attachment status",
+				)
+			: null,
+		onRetry: needsLiveDetail ? () => void request.mutate() : onRetry,
+	};
+}
+
 function SubmittedInspector({
 	model,
 	controls,
@@ -207,12 +239,19 @@ function SubmittedInspector({
 		version,
 	} = model;
 
+	const live = useSubmittedLiveDetail(
+		props.detail,
+		frozenDetail,
+		props.onRetry,
+	);
+
 	const readiness = useReviewReadiness(
 		frozenDetail,
 		reviewPayload,
 		model.publishing,
 		snapshot.publishing,
 	);
+	const allowCorrections = pending && session.canPublish;
 	const saveState = corrections.saving ? "saving" : "saved";
 	const reviewActions = (
 		<ReviewActions
@@ -226,16 +265,17 @@ function SubmittedInspector({
 		<AdminInspector
 			{...props}
 			publishing={model.publishing}
-			detail={frozenDetail}
+			detail={live.detail}
+			liveDetail={live.liveDetail}
 			payload={reviewPayload}
 			readOnlyVersion
-			allowReviewCorrections={pending && session.canPublish}
+			allowReviewCorrections={allowCorrections}
 			publishingChoice={snapshot.publishing}
 			onChange={(payload) =>
 				corrections.change(frozenDetail.key, payload)
 			}
 			versionActions={
-				pending && session.canPublish ? reviewActions : undefined
+				allowCorrections ? reviewActions : undefined
 			}
 			editorNotice={
 				<SubmittedNotice
@@ -255,8 +295,9 @@ function SubmittedInspector({
 			fileErrors={{}}
 			validationErrors={{}}
 			validationRevision={0}
-			loading={false}
-			error={corrections.error}
+			loading={live.loading}
+			error={live.error ?? corrections.error}
+			onRetry={live.onRetry}
 			saveMessage={corrections.error}
 			saveState={corrections.error ? "error" : saveState}
 			onSelectAttachment={version.selectAttachment}
