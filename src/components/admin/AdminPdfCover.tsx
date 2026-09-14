@@ -10,7 +10,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Spinner } from "@/components/nextui/Spinner";
-import { Tooltip } from "@/components/nextui/Tooltip";
 import type { AdminItemDetail } from "@/lib/admin/types";
 import { documentAttachment, isUnrestoredRecord, type PdfUploadStep } from "./admin-pdf";
 import { PdfFileInput } from "./PdfFileInput";
@@ -192,26 +191,22 @@ export function AdminPdfCover({
 			onUpload={(_, picked) => onUpload(picked)}
 		>
 			{(open) => (
-				<Tooltip content={error || presentation.label}>
-					<span className="inline-flex shrink-0">
-						<button
-							type="button"
-							aria-label={presentation.label}
-							disabled={blocked}
-							onClick={open}
-							className={`${surfaceClassName} transition-colors hover:border-accent/50 focus-visible:outline-focus dark:hover:border-accent/50`}
-						>
-							{cover}
-							<span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center gap-1 bg-black/[0.03] text-[10px] font-medium text-black/60 dark:bg-white/[0.04] dark:text-white/60">
-								<HugeiconsIcon
-									icon={presentation.icon}
-									size={12}
-								/>
-								{progress ? "Please wait" : presentation.footer}
-							</span>
-						</button>
+				<button
+					type="button"
+					aria-label={presentation.label}
+					disabled={blocked}
+					onClick={open}
+					className={`${surfaceClassName} transition-colors hover:border-accent/50 focus-visible:outline-focus dark:hover:border-accent/50`}
+				>
+					{cover}
+					<span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center gap-1 bg-black/[0.03] text-[10px] font-medium text-black/60 dark:bg-white/[0.04] dark:text-white/60">
+						<HugeiconsIcon
+							icon={presentation.icon}
+							size={12}
+						/>
+						{progress ? "Please wait" : presentation.footer}
 					</span>
-				</Tooltip>
+				</button>
 			)}
 		</PdfFileInput>
 	);

@@ -4,7 +4,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { ArrowDown01Icon, Copy01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
-import { Tooltip } from "@/components/nextui/Tooltip";
 import { toast } from "sonner";
 import { humanizeAdminField } from "./admin-schema";
 import type { AdminItemDetail } from "@/lib/admin/types";
@@ -41,51 +40,39 @@ export function AdminDocumentHeader({
 			<div className="flex items-start gap-4 p-4 pb-3">
 				{cover}
 				<div className="min-w-0 flex-1">
-					<Tooltip
-						content={detail.title}
-						placement="bottom-start"
-						classNames={{
-							content: "max-w-[min(24rem,calc(100vw-2rem))]",
-						}}
-					>
-						<h2
-							tabIndex={0}
-							className="line-clamp-3 text-inspector-title font-semibold leading-6 tracking-tight text-black/90 outline-none dark:text-white/95"
-						>
-							{detail.title}
-						</h2>
-					</Tooltip>
+					<h2 className="line-clamp-3 text-inspector-title font-semibold leading-6 tracking-tight text-black/90 outline-none dark:text-white/95">
+						{detail.title}
+					</h2>
 					<div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
 						<span className="text-[11px] text-black/45 dark:text-white/45">
 							{humanizeAdminField(detail.itemType)}
 						</span>
-						<Tooltip content="Copy item key">
-							<Button
-								variant="transparent"
-								size="xs"
-								className="h-6 min-w-0 gap-1.5 rounded-md px-1 text-[10px] text-black/45 dark:text-white/45"
-								onPress={() => {
-									void navigator.clipboard
-										.writeText(detail.key)
-										.then(() =>
-											toast.success("Item key copied"),
-										)
-										.catch(() =>
-											toast.error(
-												"Could not copy item key",
-											),
-										);
-								}}
-								endContent={
-									<HugeiconsIcon
-										icon={Copy01Icon}
-										size={11}
-									/>
-								}
-							>
-								<span className="font-mono">{detail.key}</span>
-							</Button>
-						</Tooltip>
+						<Button
+							aria-label={`Copy item key ${detail.key}`}
+							variant="transparent"
+							size="xs"
+							className="h-6 min-w-0 gap-1.5 rounded-md px-1 text-[10px] text-black/45 dark:text-white/45"
+							onPress={() => {
+								void navigator.clipboard
+									.writeText(detail.key)
+									.then(() =>
+										toast.success("Item key copied"),
+									)
+									.catch(() =>
+										toast.error(
+											"Could not copy item key",
+										),
+									);
+							}}
+							endContent={
+								<HugeiconsIcon
+									icon={Copy01Icon}
+									size={11}
+								/>
+							}
+						>
+							<span className="font-mono">{detail.key}</span>
+						</Button>
 						{saveIndicator}
 					</div>
 				</div>
