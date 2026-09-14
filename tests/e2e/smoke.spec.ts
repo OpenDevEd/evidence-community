@@ -666,6 +666,16 @@ for (const profileAvailable of [true, false]) {
 				await author.click();
 				await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && url.searchParams.get("author") === name);
 				await expect(page.getByRole("link").filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) })).toBeVisible();
+				const authorChip = page.getByRole("button").filter({ hasText: name });
+				await authorChip.click();
+				await expect(page).toHaveURL(url => !url.searchParams.has("author"));
+				await expect(authorChip).toHaveCount(0);
+				await page.getByRole("link").filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) }).click();
+				await expect(page).toHaveURL(url => url.pathname.endsWith(`/lib/${expectedSearchItemKey}`));
+				await page.goBack();
+				await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && !url.searchParams.has("author"));
+				await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true })).toBeVisible();
+				await expect(authorChip).toHaveCount(0);
 			} else {
 				await expect(author).not.toHaveAttribute("href", /[?&]author=/);
 				const itemUrl = page.url();

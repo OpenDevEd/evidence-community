@@ -303,12 +303,7 @@ export function InnerCollectionList({
 		);
 	}, [hierarchy, data, filteredFacetDistribution]);
 
-	return hierarchy &&
-		hierarchy.length > 0 &&
-		facetDistribution &&
-		Object.keys(facetDistribution.collectionsAncestry || {}).filter((key) =>
-			data?.collections.find((c) => c.key === key),
-		).length > 0 ? (
+	return displayedCollections.length > 0 ? (
 		<Accordion
 			defaultSelectedKeys={
 				accordionGlobalExpanded
