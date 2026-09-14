@@ -161,7 +161,7 @@ function writebackSummaryTitle(
 	unavailable: boolean,
 	checking: boolean,
 ) {
-	if (unavailable || checking || !sourceCount) return label;
+	if (unavailable || checking) return label;
 	return writebackSummaryLabel(state, sourceCount);
 }
 
@@ -222,7 +222,6 @@ function AdminWritebackSummary({
 	sources: readonly AdminWritebackSourceSummary[];
 	writeback: Writeback;
 }) {
-	if (!sources.length) return null;
 	const { Icon, className, label, spin, title } = getWritebackSummary(
 		sources,
 		writeback,
@@ -298,12 +297,12 @@ export function AdminSourcesWritebackStatus({
 								? "Writeback locked"
 								: "Writeback restricted"}
 						</span>
-					) : (
+					) : sources.length ? (
 						<AdminWritebackSummary
 							sources={sources}
 							writeback={writeback}
 						/>
-					)
+					) : undefined
 				}
 			>
 
