@@ -4,6 +4,7 @@
 	"updatedAt": "2026-07-28T13:35:00Z",
 	"identity": {
 		"name": "Amber Evidence Library",
+		"tagline": "Search the Amber Research Library",
 		"shortName": "Amber Evidence",
 		"baseUrl": "https://amber.example.org",
 		"fundingPartners": [
