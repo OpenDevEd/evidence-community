@@ -1,0 +1,40 @@
+diff --git a/node_modules/@nextui-org/use-aria-button/dist/index.js b/node_modules/@nextui-org/use-aria-button/dist/index.js
+index 6d1a0f8..4822414 100644
+--- a/node_modules/@nextui-org/use-aria-button/dist/index.js
++++ b/node_modules/@nextui-org/use-aria-button/dist/index.js
+@@ -34,6 +34,7 @@ function useAriaButton(props, ref) {
+     onPress,
+     onPressStart,
+     onPressEnd,
++    onPressUp,
+     onPressChange,
+     preventFocusOnPress,
+     allowFocusWhenDisabled,
+@@ -78,6 +79,7 @@ function useAriaButton(props, ref) {
+   let { pressProps, isPressed } = (0, import_interactions.usePress)({
+     onPressStart,
+     onPressEnd,
++    onPressUp,
+     onPressChange,
+     onPress: handlePress,
+     isDisabled,
+diff --git a/node_modules/@nextui-org/use-aria-button/dist/index.mjs b/node_modules/@nextui-org/use-aria-button/dist/index.mjs
+index 7344389..17760c2 100644
+--- a/node_modules/@nextui-org/use-aria-button/dist/index.mjs
++++ b/node_modules/@nextui-org/use-aria-button/dist/index.mjs
+@@ -10,6 +10,7 @@ function useAriaButton(props, ref) {
+     onPress,
+     onPressStart,
+     onPressEnd,
++    onPressUp,
+     onPressChange,
+     preventFocusOnPress,
+     allowFocusWhenDisabled,
+@@ -54,6 +55,7 @@ function useAriaButton(props, ref) {
+   let { pressProps, isPressed } = usePress({
+     onPressStart,
+     onPressEnd,
++    onPressUp,
+     onPressChange,
+     onPress: handlePress,
+     isDisabled,

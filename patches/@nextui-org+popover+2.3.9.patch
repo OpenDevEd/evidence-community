@@ -1,20 +1,72 @@
 diff --git a/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs b/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs
-index 84b4a96..531d498 100644
+index 84b4a96..5358f03 100644
 --- a/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs
 +++ b/node_modules/@nextui-org/popover/dist/chunk-BMSUXXDY.mjs
-@@ -199,10 +199,10 @@ function usePopover(originalProps) {
+@@ -4,11 +4,10 @@ import {
+ } from "./chunk-WB3W6ZN2.mjs";
+
+ // src/use-popover.ts
+-import { useEffect } from "react";
+ import { useDOMRef } from "@nextui-org/react-utils";
+ import { useOverlayTriggerState } from "@react-stately/overlays";
+ import { useFocusRing } from "@react-aria/focus";
+-import { ariaHideOutside, useOverlayTrigger, usePreventScroll } from "@react-aria/overlays";
++import { useOverlayTrigger, usePreventScroll } from "@react-aria/overlays";
+ import { getShouldUseAxisPlacement } from "@nextui-org/aria-utils";
+ import {
+   mapPropsVariants,
+@@ -198,11 +197,6 @@ function usePopover(originalProps) {
+     }),
      [slots, state.isOpen, classNames, underlayProps]
    );
-   useEffect(() => {
+-  useEffect(() => {
 -    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
-+    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
-       return ariaHideOutside([domRef == null ? void 0 : domRef.current]);
-     }
+-      return ariaHideOutside([domRef == null ? void 0 : domRef.current]);
+-    }
 -  }, [state.isOpen, domRef]);
-+  }, [state.isOpen, isNonModal, domRef]);
    return {
      state,
      Component,
+diff --git a/node_modules/@nextui-org/popover/dist/chunk-WB3W6ZN2.mjs b/node_modules/@nextui-org/popover/dist/chunk-WB3W6ZN2.mjs
+index 3754c85..6db8bb2 100644
+--- a/node_modules/@nextui-org/popover/dist/chunk-WB3W6ZN2.mjs
++++ b/node_modules/@nextui-org/popover/dist/chunk-WB3W6ZN2.mjs
+@@ -1,15 +1,14 @@
+ "use client";
++import { useAriaOverlay } from "@nextui-org/aria-utils";
+
+ // src/use-aria-popover.ts
+ import { useEffect } from "react";
+ import {
+-  useOverlay,
+   useOverlayPosition
+ } from "@react-aria/overlays";
+ import {
+   ariaHideOutside,
+-  toReactAriaPlacement,
+-  ariaShouldCloseOnInteractOutside
++  toReactAriaPlacement
+ } from "@nextui-org/aria-utils";
+ import { mergeProps } from "@react-aria/utils";
+ import { useSafeLayoutEffect } from "@nextui-org/use-safe-layout-effect";
+@@ -35,14 +34,15 @@ function useReactAriaPopover(props, state) {
+     ...otherProps
+   } = props;
+   const isNonModal = isNonModalProp != null ? isNonModalProp : true;
+-  const { overlayProps, underlayProps } = useOverlay(
++  const { overlayProps, underlayProps } = useAriaOverlay(
+     {
+       isOpen: state.isOpen,
+       onClose: state.close,
+       shouldCloseOnBlur,
+       isDismissable,
+       isKeyboardDismissDisabled,
+-      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside ? shouldCloseOnInteractOutside : (element) => ariaShouldCloseOnInteractOutside(element, triggerRef, state)
++      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside || ((el) => !triggerRef.current?.contains(el)),
++      disableOutsideEvents: !isNonModal
+     },
+     popoverRef
+   );
 diff --git a/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs b/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs
 index d395507..3583845 100644
 --- a/node_modules/@nextui-org/popover/dist/chunk-XVHGMAVG.mjs
@@ -56,23 +108,47 @@ index d395507..3583845 100644
        /* @__PURE__ */ jsx(Component, { ...getPopoverProps(), children: /* @__PURE__ */ jsxs(
          FreeSoloPopoverWrapper,
 diff --git a/node_modules/@nextui-org/popover/dist/free-solo-popover.js b/node_modules/@nextui-org/popover/dist/free-solo-popover.js
-index 32373fa..f082c6f 100644
+index 32373fa..e0646b4 100644
 --- a/node_modules/@nextui-org/popover/dist/free-solo-popover.js
 +++ b/node_modules/@nextui-org/popover/dist/free-solo-popover.js
-@@ -311,10 +311,10 @@ function usePopover(originalProps) {
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __create = Object.create;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+@@ -81,14 +82,15 @@ function useReactAriaPopover(props, state) {
+     ...otherProps
+   } = props;
+   const isNonModal = isNonModalProp != null ? isNonModalProp : true;
+-  const { overlayProps, underlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps, underlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen: state.isOpen,
+       onClose: state.close,
+       shouldCloseOnBlur,
+       isDismissable,
+       isKeyboardDismissDisabled,
+-      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside ? shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
++      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside || ((el) => !triggerRef.current?.contains(el)),
++      disableOutsideEvents: !isNonModal
+     },
+     popoverRef
+   );
+@@ -310,11 +312,6 @@ function usePopover(originalProps) {
+     }),
      [slots, state.isOpen, classNames, underlayProps]
    );
-   (0, import_react2.useEffect)(() => {
+-  (0, import_react2.useEffect)(() => {
 -    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
-+    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
-       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
-     }
+-      return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+-    }
 -  }, [state.isOpen, domRef]);
-+  }, [state.isOpen, isNonModal, domRef]);
    return {
      state,
      Component,
-@@ -383,6 +383,8 @@ var FreeSoloPopoverWrapper = (0, import_system2.forwardRef)(
+@@ -383,6 +380,8 @@ var FreeSoloPopoverWrapper = (0, import_system2.forwardRef)(
  FreeSoloPopoverWrapper.displayName = "NextUI.FreeSoloPopoverWrapper";
  var FreeSoloPopover = (0, import_system2.forwardRef)(
    ({ children, transformOrigin, disableDialogFocus = false, ...props }, ref) => {
@@ -81,7 +157,7 @@ index 32373fa..f082c6f 100644
      const {
        Component,
        state,
-@@ -398,6 +400,8 @@ var FreeSoloPopover = (0, import_system2.forwardRef)(
+@@ -398,6 +397,8 @@ var FreeSoloPopover = (0, import_system2.forwardRef)(
        getContentProps
      } = usePopover({
        ...props,
@@ -90,7 +166,7 @@ index 32373fa..f082c6f 100644
        ref
      });
      const dialogRef = React.useRef(null);
-@@ -424,7 +428,7 @@ var FreeSoloPopover = (0, import_system2.forwardRef)(
+@@ -424,7 +425,7 @@ var FreeSoloPopover = (0, import_system2.forwardRef)(
          }
        ) });
      }, [backdrop, disableAnimation, getBackdropProps]);
@@ -100,23 +176,47 @@ index 32373fa..f082c6f 100644
        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getPopoverProps(), children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
          FreeSoloPopoverWrapper,
 diff --git a/node_modules/@nextui-org/popover/dist/index.js b/node_modules/@nextui-org/popover/dist/index.js
-index 56aa2ba..ad34fce 100644
+index 56aa2ba..4f9efa8 100644
 --- a/node_modules/@nextui-org/popover/dist/index.js
 +++ b/node_modules/@nextui-org/popover/dist/index.js
-@@ -315,10 +315,10 @@ function usePopover(originalProps) {
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __create = Object.create;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+@@ -85,14 +86,15 @@ function useReactAriaPopover(props, state) {
+     ...otherProps
+   } = props;
+   const isNonModal = isNonModalProp != null ? isNonModalProp : true;
+-  const { overlayProps, underlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps, underlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen: state.isOpen,
+       onClose: state.close,
+       shouldCloseOnBlur,
+       isDismissable,
+       isKeyboardDismissDisabled,
+-      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside ? shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
++      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside || ((el) => !triggerRef.current?.contains(el)),
++      disableOutsideEvents: !isNonModal
+     },
+     popoverRef
+   );
+@@ -314,11 +316,6 @@ function usePopover(originalProps) {
+     }),
      [slots, state.isOpen, classNames, underlayProps]
    );
-   (0, import_react2.useEffect)(() => {
+-  (0, import_react2.useEffect)(() => {
 -    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
-+    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
-       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
-     }
+-      return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+-    }
 -  }, [state.isOpen, domRef]);
-+  }, [state.isOpen, isNonModal, domRef]);
    return {
      state,
      Component,
-@@ -526,6 +526,8 @@ var FreeSoloPopoverWrapper = (0, import_system3.forwardRef)(
+@@ -526,6 +523,8 @@ var FreeSoloPopoverWrapper = (0, import_system3.forwardRef)(
  FreeSoloPopoverWrapper.displayName = "NextUI.FreeSoloPopoverWrapper";
  var FreeSoloPopover = (0, import_system3.forwardRef)(
    ({ children, transformOrigin, disableDialogFocus = false, ...props }, ref) => {
@@ -125,7 +225,7 @@ index 56aa2ba..ad34fce 100644
      const {
        Component,
        state,
-@@ -541,6 +543,8 @@ var FreeSoloPopover = (0, import_system3.forwardRef)(
+@@ -541,6 +540,8 @@ var FreeSoloPopover = (0, import_system3.forwardRef)(
        getContentProps
      } = usePopover({
        ...props,
@@ -134,7 +234,7 @@ index 56aa2ba..ad34fce 100644
        ref
      });
      const dialogRef = React2.useRef(null);
-@@ -567,7 +571,7 @@ var FreeSoloPopover = (0, import_system3.forwardRef)(
+@@ -567,7 +568,7 @@ var FreeSoloPopover = (0, import_system3.forwardRef)(
          }
        ) });
      }, [backdrop, disableAnimation, getBackdropProps]);
@@ -144,36 +244,113 @@ index 56aa2ba..ad34fce 100644
        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Component, { ...getPopoverProps(), children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
          FreeSoloPopoverWrapper,
 diff --git a/node_modules/@nextui-org/popover/dist/popover.js b/node_modules/@nextui-org/popover/dist/popover.js
-index a659b2d..f1ca978 100644
+index a659b2d..8106841 100644
 --- a/node_modules/@nextui-org/popover/dist/popover.js
 +++ b/node_modules/@nextui-org/popover/dist/popover.js
-@@ -301,10 +301,10 @@ function usePopover(originalProps) {
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -71,14 +72,15 @@ function useReactAriaPopover(props, state) {
+     ...otherProps
+   } = props;
+   const isNonModal = isNonModalProp != null ? isNonModalProp : true;
+-  const { overlayProps, underlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps, underlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen: state.isOpen,
+       onClose: state.close,
+       shouldCloseOnBlur,
+       isDismissable,
+       isKeyboardDismissDisabled,
+-      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside ? shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
++      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside || ((el) => !triggerRef.current?.contains(el)),
++      disableOutsideEvents: !isNonModal
+     },
+     popoverRef
+   );
+@@ -300,11 +302,6 @@ function usePopover(originalProps) {
+     }),
      [slots, state.isOpen, classNames, underlayProps]
    );
-   (0, import_react2.useEffect)(() => {
+-  (0, import_react2.useEffect)(() => {
 -    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
-+    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
-       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
-     }
+-      return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+-    }
 -  }, [state.isOpen, domRef]);
-+  }, [state.isOpen, isNonModal, domRef]);
    return {
      state,
      Component,
+diff --git a/node_modules/@nextui-org/popover/dist/use-aria-popover.js b/node_modules/@nextui-org/popover/dist/use-aria-popover.js
+index 0b20f94..94b8e60 100644
+--- a/node_modules/@nextui-org/popover/dist/use-aria-popover.js
++++ b/node_modules/@nextui-org/popover/dist/use-aria-popover.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -51,14 +52,15 @@ function useReactAriaPopover(props, state) {
+     ...otherProps
+   } = props;
+   const isNonModal = isNonModalProp != null ? isNonModalProp : true;
+-  const { overlayProps, underlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps, underlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen: state.isOpen,
+       onClose: state.close,
+       shouldCloseOnBlur,
+       isDismissable,
+       isKeyboardDismissDisabled,
+-      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside ? shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
++      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside || ((el) => !triggerRef.current?.contains(el)),
++      disableOutsideEvents: !isNonModal
+     },
+     popoverRef
+   );
 diff --git a/node_modules/@nextui-org/popover/dist/use-popover.js b/node_modules/@nextui-org/popover/dist/use-popover.js
-index 8538423..e5ff2ce 100644
+index 8538423..5f7a7e7 100644
 --- a/node_modules/@nextui-org/popover/dist/use-popover.js
 +++ b/node_modules/@nextui-org/popover/dist/use-popover.js
-@@ -295,10 +295,10 @@ function usePopover(originalProps) {
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -65,14 +66,15 @@ function useReactAriaPopover(props, state) {
+     ...otherProps
+   } = props;
+   const isNonModal = isNonModalProp != null ? isNonModalProp : true;
+-  const { overlayProps, underlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps, underlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen: state.isOpen,
+       onClose: state.close,
+       shouldCloseOnBlur,
+       isDismissable,
+       isKeyboardDismissDisabled,
+-      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside ? shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
++      shouldCloseOnInteractOutside: shouldCloseOnInteractOutside || ((el) => !triggerRef.current?.contains(el)),
++      disableOutsideEvents: !isNonModal
+     },
+     popoverRef
+   );
+@@ -294,11 +296,6 @@ function usePopover(originalProps) {
+     }),
      [slots, state.isOpen, classNames, underlayProps]
    );
-   (0, import_react2.useEffect)(() => {
+-  (0, import_react2.useEffect)(() => {
 -    if (state.isOpen && (domRef == null ? void 0 : domRef.current)) {
-+    if (state.isOpen && !isNonModal && (domRef == null ? void 0 : domRef.current)) {
-       return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
-     }
+-      return (0, import_overlays3.ariaHideOutside)([domRef == null ? void 0 : domRef.current]);
+-    }
 -  }, [state.isOpen, domRef]);
-+  }, [state.isOpen, isNonModal, domRef]);
    return {
      state,
      Component,

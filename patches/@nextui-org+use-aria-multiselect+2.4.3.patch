@@ -1,0 +1,48 @@
+diff --git a/node_modules/@nextui-org/use-aria-multiselect/dist/chunk-ZAWAHRYS.mjs b/node_modules/@nextui-org/use-aria-multiselect/dist/chunk-ZAWAHRYS.mjs
+index cfe6ffb..74e3c21 100644
+--- a/node_modules/@nextui-org/use-aria-multiselect/dist/chunk-ZAWAHRYS.mjs
++++ b/node_modules/@nextui-org/use-aria-multiselect/dist/chunk-ZAWAHRYS.mjs
+@@ -59,6 +59,11 @@ function useMultiSelect(props, state, ref) {
+   });
+   typeSelectProps.onKeyDown = typeSelectProps.onKeyDownCapture;
+   delete typeSelectProps.onKeyDownCapture;
++  menuTriggerProps.onPressStart = (e) => {
++    if (e.pointerType !== "touch" && e.pointerType !== "keyboard" && !isDisabled) {
++      state.toggle(e.pointerType === "virtual" ? "first" : null);
++    }
++  };
+   const domProps = filterDOMProps(props, { labelable: true });
+   const triggerProps = mergeProps(typeSelectProps, menuTriggerProps, fieldProps);
+   const valueId = useId();
+diff --git a/node_modules/@nextui-org/use-aria-multiselect/dist/index.js b/node_modules/@nextui-org/use-aria-multiselect/dist/index.js
+index 6b06a53..86af3bb 100644
+--- a/node_modules/@nextui-org/use-aria-multiselect/dist/index.js
++++ b/node_modules/@nextui-org/use-aria-multiselect/dist/index.js
+@@ -87,6 +87,11 @@ function useMultiSelect(props, state, ref) {
+   });
+   typeSelectProps.onKeyDown = typeSelectProps.onKeyDownCapture;
+   delete typeSelectProps.onKeyDownCapture;
++  menuTriggerProps.onPressStart = (e) => {
++    if (e.pointerType !== "touch" && e.pointerType !== "keyboard" && !isDisabled) {
++      state.toggle(e.pointerType === "virtual" ? "first" : null);
++    }
++  };
+   const domProps = (0, import_utils.filterDOMProps)(props, { labelable: true });
+   const triggerProps = (0, import_utils.mergeProps)(typeSelectProps, menuTriggerProps, fieldProps);
+   const valueId = (0, import_utils.useId)();
+diff --git a/node_modules/@nextui-org/use-aria-multiselect/dist/use-multiselect.js b/node_modules/@nextui-org/use-aria-multiselect/dist/use-multiselect.js
+index 6084a1e..d6fd717 100644
+--- a/node_modules/@nextui-org/use-aria-multiselect/dist/use-multiselect.js
++++ b/node_modules/@nextui-org/use-aria-multiselect/dist/use-multiselect.js
+@@ -83,6 +83,11 @@ function useMultiSelect(props, state, ref) {
+   });
+   typeSelectProps.onKeyDown = typeSelectProps.onKeyDownCapture;
+   delete typeSelectProps.onKeyDownCapture;
++  menuTriggerProps.onPressStart = (e) => {
++    if (e.pointerType !== "touch" && e.pointerType !== "keyboard" && !isDisabled) {
++      state.toggle(e.pointerType === "virtual" ? "first" : null);
++    }
++  };
+   const domProps = (0, import_utils.filterDOMProps)(props, { labelable: true });
+   const triggerProps = (0, import_utils.mergeProps)(typeSelectProps, menuTriggerProps, fieldProps);
+   const valueId = (0, import_utils.useId)();

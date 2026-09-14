@@ -1,0 +1,262 @@
+diff --git a/node_modules/@nextui-org/tooltip/dist/chunk-G6TJXAS5.mjs b/node_modules/@nextui-org/tooltip/dist/chunk-G6TJXAS5.mjs
+index de7dce8..bc9d8bd 100644
+--- a/node_modules/@nextui-org/tooltip/dist/chunk-G6TJXAS5.mjs
++++ b/node_modules/@nextui-org/tooltip/dist/chunk-G6TJXAS5.mjs
+@@ -1,11 +1,12 @@
+ "use client";
++import { useAriaOverlay } from "@nextui-org/aria-utils";
+
+ // src/use-tooltip.ts
+ import { useId, useImperativeHandle } from "react";
+ import { useTooltipTriggerState } from "@react-stately/tooltip";
+ import { mergeProps } from "@react-aria/utils";
+ import { useTooltip as useReactAriaTooltip, useTooltipTrigger } from "@react-aria/tooltip";
+-import { useOverlayPosition, useOverlay } from "@react-aria/overlays";
++import { useOverlayPosition } from "@react-aria/overlays";
+ import {
+   mapPropsVariants,
+   useProviderContext
+@@ -108,7 +109,7 @@ function useTooltip(originalProps) {
+       return;
+     updatePosition();
+   }, updatePositionDeps);
+-  const { overlayProps } = useOverlay(
++  const { overlayProps } = useAriaOverlay(
+     {
+       isOpen,
+       onClose: state.close,
+diff --git a/node_modules/@nextui-org/tooltip/dist/chunk-LY4WDGUU.mjs b/node_modules/@nextui-org/tooltip/dist/chunk-LY4WDGUU.mjs
+index 1fe0cb2..d8cbd48 100644
+--- a/node_modules/@nextui-org/tooltip/dist/chunk-LY4WDGUU.mjs
++++ b/node_modules/@nextui-org/tooltip/dist/chunk-LY4WDGUU.mjs
+@@ -15,6 +15,7 @@ import { mergeProps } from "@react-aria/utils";
+ import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+ var domAnimation = () => import("@nextui-org/dom-animation").then((res) => res.default);
+ var Tooltip = forwardRef((props, ref) => {
++  var _a;
+   const {
+     Component,
+     children,
+@@ -34,20 +35,20 @@ var Tooltip = forwardRef((props, ref) => {
+   let trigger;
+   try {
+     const childrenNum = Children.count(children);
+-    if (childrenNum !== 1)
+-      throw new Error();
++    if (childrenNum !== 1) throw new Error();
+     if (!isValidElement(children)) {
+       trigger = /* @__PURE__ */ jsx("p", { ...getTriggerProps(), children });
+     } else {
+       const child = children;
+-      trigger = cloneElement(child, getTriggerProps(child.props, child.ref));
++      const childRef = (_a = child.props.ref) != null ? _a : child.ref;
++      trigger = cloneElement(child, getTriggerProps(child.props, childRef));
+     }
+   } catch (error) {
+     trigger = /* @__PURE__ */ jsx("span", {});
+     warn("Tooltip must have only one child node. Please, check your code.");
+   }
+   const { ref: tooltipRef, id, style, ...otherTooltipProps } = getTooltipProps();
+-  const animatedContent = /* @__PURE__ */ jsx("div", { ref: tooltipRef, id, style, children: /* @__PURE__ */ jsx(LazyMotion, { features: domAnimation, children: /* @__PURE__ */ jsx(
++  const animatedContent = /* @__PURE__ */ jsx("div", { ref: tooltipRef, id, style, children: /* @__PURE__ */ jsx(
+     m.div,
+     {
+       animate: "enter",
+@@ -59,11 +60,12 @@ var Tooltip = forwardRef((props, ref) => {
+         ...getTransformOrigins(placement)
+       },
+       children: /* @__PURE__ */ jsx(Component, { ...getTooltipContentProps(), children: content })
+-    }
+-  ) }) });
++    },
++    `${id}-tooltip-inner`
++  ) }, `${id}-tooltip-content`);
+   return /* @__PURE__ */ jsxs(Fragment, { children: [
+     trigger,
+-    disableAnimation && isOpen ? /* @__PURE__ */ jsx(OverlayContainer, { portalContainer, children: /* @__PURE__ */ jsx("div", { ref: tooltipRef, id, style, ...otherTooltipProps, children: /* @__PURE__ */ jsx(Component, { ...getTooltipContentProps(), children: content }) }) }) : /* @__PURE__ */ jsx(AnimatePresence, { children: isOpen ? /* @__PURE__ */ jsx(OverlayContainer, { portalContainer, children: animatedContent }) : null })
++    disableAnimation ? isOpen && /* @__PURE__ */ jsx(OverlayContainer, { portalContainer, children: /* @__PURE__ */ jsx("div", { ref: tooltipRef, id, style, ...otherTooltipProps, children: /* @__PURE__ */ jsx(Component, { ...getTooltipContentProps(), children: content }) }) }) : /* @__PURE__ */ jsx(LazyMotion, { features: domAnimation, children: /* @__PURE__ */ jsx(AnimatePresence, { children: isOpen && /* @__PURE__ */ jsx(OverlayContainer, { portalContainer, children: animatedContent }) }) })
+   ] });
+ });
+ Tooltip.displayName = "NextUI.Tooltip";
+diff --git a/node_modules/@nextui-org/tooltip/dist/index.js b/node_modules/@nextui-org/tooltip/dist/index.js
+index 79fd5a1..9629264 100644
+--- a/node_modules/@nextui-org/tooltip/dist/index.js
++++ b/node_modules/@nextui-org/tooltip/dist/index.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __create = Object.create;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+@@ -147,7 +148,7 @@ function useTooltip(originalProps) {
+       return;
+     updatePosition();
+   }, updatePositionDeps);
+-  const { overlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen,
+       onClose: state.close,
+@@ -245,7 +246,8 @@ function useTooltip(originalProps) {
+ // src/tooltip.tsx
+ var import_jsx_runtime = require("react/jsx-runtime");
+ var domAnimation = () => import("@nextui-org/dom-animation").then((res) => res.default);
+-var Tooltip = (0, import_system2.forwardRef)((props, ref) => {
++var Tooltip = (0, import_system.forwardRef)((props, ref) => {
++  var _a;
+   const {
+     Component,
+     children,
+@@ -264,37 +266,38 @@ var Tooltip = (0, import_system2.forwardRef)((props, ref) => {
+   });
+   let trigger;
+   try {
+-    const childrenNum = import_react3.Children.count(children);
+-    if (childrenNum !== 1)
+-      throw new Error();
+-    if (!(0, import_react3.isValidElement)(children)) {
++    const childrenNum = import_react2.Children.count(children);
++    if (childrenNum !== 1) throw new Error();
++    if (!(0, import_react2.isValidElement)(children)) {
+       trigger = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { ...getTriggerProps(), children });
+     } else {
+       const child = children;
+-      trigger = (0, import_react3.cloneElement)(child, getTriggerProps(child.props, child.ref));
++      const childRef = (_a = child.props.ref) != null ? _a : child.ref;
++      trigger = (0, import_react2.cloneElement)(child, getTriggerProps(child.props, childRef));
+     }
+   } catch (error) {
+     trigger = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {});
+-    (0, import_shared_utils2.warn)("Tooltip must have only one child node. Please, check your code.");
++    (0, import_shared_utils.warn)("Tooltip must have only one child node. Please, check your code.");
+   }
+   const { ref: tooltipRef, id, style, ...otherTooltipProps } = getTooltipProps();
+-  const animatedContent = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: domAnimation, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
++  const animatedContent = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+     import_framer_motion.m.div,
+     {
+       animate: "enter",
+       exit: "exit",
+       initial: "exit",
+       variants: import_framer_utils.TRANSITION_VARIANTS.scaleSpring,
+-      ...(0, import_utils2.mergeProps)(motionProps, otherTooltipProps),
++      ...(0, import_utils.mergeProps)(motionProps, otherTooltipProps),
+       style: {
+-        ...(0, import_aria_utils2.getTransformOrigins)(placement)
++        ...(0, import_aria_utils.getTransformOrigins)(placement)
+       },
+       children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getTooltipContentProps(), children: content })
+-    }
+-  ) }) });
++    },
++    `${id}-tooltip-inner`
++  ) }, `${id}-tooltip-content`);
+   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+     trigger,
+-    disableAnimation && isOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays2.OverlayContainer, { portalContainer, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, ...otherTooltipProps, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getTooltipContentProps(), children: content }) }) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.AnimatePresence, { children: isOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays2.OverlayContainer, { portalContainer, children: animatedContent }) : null })
++    disableAnimation ? isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays.OverlayContainer, { portalContainer, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, ...otherTooltipProps, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getTooltipContentProps(), children: content }) }) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: domAnimation, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays.OverlayContainer, { portalContainer, children: animatedContent }) }) })
+   ] });
+ });
+ Tooltip.displayName = "NextUI.Tooltip";
+diff --git a/node_modules/@nextui-org/tooltip/dist/tooltip.js b/node_modules/@nextui-org/tooltip/dist/tooltip.js
+index c5de62a..e4556c3 100644
+--- a/node_modules/@nextui-org/tooltip/dist/tooltip.js
++++ b/node_modules/@nextui-org/tooltip/dist/tooltip.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __create = Object.create;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+@@ -144,7 +145,7 @@ function useTooltip(originalProps) {
+       return;
+     updatePosition();
+   }, updatePositionDeps);
+-  const { overlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen,
+       onClose: state.close,
+@@ -242,7 +243,8 @@ function useTooltip(originalProps) {
+ // src/tooltip.tsx
+ var import_jsx_runtime = require("react/jsx-runtime");
+ var domAnimation = () => import("@nextui-org/dom-animation").then((res) => res.default);
+-var Tooltip = (0, import_system2.forwardRef)((props, ref) => {
++var Tooltip = (0, import_system.forwardRef)((props, ref) => {
++  var _a;
+   const {
+     Component,
+     children,
+@@ -261,37 +263,38 @@ var Tooltip = (0, import_system2.forwardRef)((props, ref) => {
+   });
+   let trigger;
+   try {
+-    const childrenNum = import_react3.Children.count(children);
+-    if (childrenNum !== 1)
+-      throw new Error();
+-    if (!(0, import_react3.isValidElement)(children)) {
++    const childrenNum = import_react2.Children.count(children);
++    if (childrenNum !== 1) throw new Error();
++    if (!(0, import_react2.isValidElement)(children)) {
+       trigger = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { ...getTriggerProps(), children });
+     } else {
+       const child = children;
+-      trigger = (0, import_react3.cloneElement)(child, getTriggerProps(child.props, child.ref));
++      const childRef = (_a = child.props.ref) != null ? _a : child.ref;
++      trigger = (0, import_react2.cloneElement)(child, getTriggerProps(child.props, childRef));
+     }
+   } catch (error) {
+     trigger = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {});
+-    (0, import_shared_utils2.warn)("Tooltip must have only one child node. Please, check your code.");
++    (0, import_shared_utils.warn)("Tooltip must have only one child node. Please, check your code.");
+   }
+   const { ref: tooltipRef, id, style, ...otherTooltipProps } = getTooltipProps();
+-  const animatedContent = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: domAnimation, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
++  const animatedContent = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+     import_framer_motion.m.div,
+     {
+       animate: "enter",
+       exit: "exit",
+       initial: "exit",
+       variants: import_framer_utils.TRANSITION_VARIANTS.scaleSpring,
+-      ...(0, import_utils2.mergeProps)(motionProps, otherTooltipProps),
++      ...(0, import_utils.mergeProps)(motionProps, otherTooltipProps),
+       style: {
+-        ...(0, import_aria_utils2.getTransformOrigins)(placement)
++        ...(0, import_aria_utils.getTransformOrigins)(placement)
+       },
+       children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getTooltipContentProps(), children: content })
+-    }
+-  ) }) });
++    },
++    `${id}-tooltip-inner`
++  ) }, `${id}-tooltip-content`);
+   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+     trigger,
+-    disableAnimation && isOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays2.OverlayContainer, { portalContainer, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, ...otherTooltipProps, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getTooltipContentProps(), children: content }) }) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.AnimatePresence, { children: isOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays2.OverlayContainer, { portalContainer, children: animatedContent }) : null })
++    disableAnimation ? isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays.OverlayContainer, { portalContainer, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: tooltipRef, id, style, ...otherTooltipProps, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Component, { ...getTooltipContentProps(), children: content }) }) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: domAnimation, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_overlays.OverlayContainer, { portalContainer, children: animatedContent }) }) })
+   ] });
+ });
+ Tooltip.displayName = "NextUI.Tooltip";
+diff --git a/node_modules/@nextui-org/tooltip/dist/use-tooltip.js b/node_modules/@nextui-org/tooltip/dist/use-tooltip.js
+index 25adf81..345aaf0 100644
+--- a/node_modules/@nextui-org/tooltip/dist/use-tooltip.js
++++ b/node_modules/@nextui-org/tooltip/dist/use-tooltip.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -128,7 +129,7 @@ function useTooltip(originalProps) {
+       return;
+     updatePosition();
+   }, updatePositionDeps);
+-  const { overlayProps } = (0, import_overlays.useOverlay)(
++  const { overlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       isOpen,
+       onClose: state.close,

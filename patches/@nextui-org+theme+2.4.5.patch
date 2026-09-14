@@ -1,0 +1,220 @@
+diff --git a/node_modules/@nextui-org/theme/dist/chunk-TYZBTYGB.mjs b/node_modules/@nextui-org/theme/dist/chunk-TYZBTYGB.mjs
+index c7f4a0a..07e7504 100644
+--- a/node_modules/@nextui-org/theme/dist/chunk-TYZBTYGB.mjs
++++ b/node_modules/@nextui-org/theme/dist/chunk-TYZBTYGB.mjs
+@@ -13,6 +13,7 @@ var tabs = tv({
+   slots: {
+     base: "inline-flex",
+     tabList: [
++      "relative",
+       "flex",
+       "p-1",
+       "h-fit",
+@@ -51,7 +52,17 @@ var tabs = tv({
+       "text-default-500",
+       "group-data-[selected=true]:text-foreground"
+     ],
+-    cursor: ["absolute", "z-0", "bg-white"],
++    cursor: [
++      "absolute",
++      "z-0",
++      "bg-white",
++      "will-change-[transform,width,height]",
++      "invisible",
++      "data-[initialized=true]:visible",
++      "data-[animated=true]:transition-[left,top,width,height]",
++      "data-[animated=true]:duration-250",
++      "data-[animated=true]:ease-out"
++    ],
+     panel: [
+       "py-3",
+       "px-1",
+@@ -63,20 +74,16 @@ var tabs = tv({
+   },
+   variants: {
+     variant: {
+-      solid: {
+-        cursor: "inset-0"
+-      },
++      solid: {},
+       light: {
+-        tabList: "bg-transparent dark:bg-transparent",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent"
+       },
+       underlined: {
+         tabList: "bg-transparent dark:bg-transparent",
+         cursor: "h-[2px] w-[80%] bottom-0 shadow-[0_1px_0px_0_rgba(0,0,0,0.05)]"
+       },
+       bordered: {
+-        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm"
+       }
+     },
+     color: {
+diff --git a/node_modules/@nextui-org/theme/dist/components/index.js b/node_modules/@nextui-org/theme/dist/components/index.js
+index 7659f8f..8d8c4e3 100644
+--- a/node_modules/@nextui-org/theme/dist/components/index.js
++++ b/node_modules/@nextui-org/theme/dist/components/index.js
+@@ -6240,6 +6240,7 @@ var tabs = tv({
+   slots: {
+     base: "inline-flex",
+     tabList: [
++      "relative",
+       "flex",
+       "p-1",
+       "h-fit",
+@@ -6278,7 +6279,17 @@ var tabs = tv({
+       "text-default-500",
+       "group-data-[selected=true]:text-foreground"
+     ],
+-    cursor: ["absolute", "z-0", "bg-white"],
++    cursor: [
++      "absolute",
++      "z-0",
++      "bg-white",
++      "will-change-[transform,width,height]",
++      "invisible",
++      "data-[initialized=true]:visible",
++      "data-[animated=true]:transition-[left,top,width,height]",
++      "data-[animated=true]:duration-250",
++      "data-[animated=true]:ease-out"
++    ],
+     panel: [
+       "py-3",
+       "px-1",
+@@ -6290,20 +6301,16 @@ var tabs = tv({
+   },
+   variants: {
+     variant: {
+-      solid: {
+-        cursor: "inset-0"
+-      },
++      solid: {},
+       light: {
+-        tabList: "bg-transparent dark:bg-transparent",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent"
+       },
+       underlined: {
+         tabList: "bg-transparent dark:bg-transparent",
+         cursor: "h-[2px] w-[80%] bottom-0 shadow-[0_1px_0px_0_rgba(0,0,0,0.05)]"
+       },
+       bordered: {
+-        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm"
+       }
+     },
+     color: {
+diff --git a/node_modules/@nextui-org/theme/dist/components/tabs.js b/node_modules/@nextui-org/theme/dist/components/tabs.js
+index 724f8de..ad5d013 100644
+--- a/node_modules/@nextui-org/theme/dist/components/tabs.js
++++ b/node_modules/@nextui-org/theme/dist/components/tabs.js
+@@ -158,6 +158,7 @@ var tabs = tv({
+   slots: {
+     base: "inline-flex",
+     tabList: [
++      "relative",
+       "flex",
+       "p-1",
+       "h-fit",
+@@ -196,7 +197,17 @@ var tabs = tv({
+       "text-default-500",
+       "group-data-[selected=true]:text-foreground"
+     ],
+-    cursor: ["absolute", "z-0", "bg-white"],
++    cursor: [
++      "absolute",
++      "z-0",
++      "bg-white",
++      "will-change-[transform,width,height]",
++      "invisible",
++      "data-[initialized=true]:visible",
++      "data-[animated=true]:transition-[left,top,width,height]",
++      "data-[animated=true]:duration-250",
++      "data-[animated=true]:ease-out"
++    ],
+     panel: [
+       "py-3",
+       "px-1",
+@@ -208,20 +219,16 @@ var tabs = tv({
+   },
+   variants: {
+     variant: {
+-      solid: {
+-        cursor: "inset-0"
+-      },
++      solid: {},
+       light: {
+-        tabList: "bg-transparent dark:bg-transparent",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent"
+       },
+       underlined: {
+         tabList: "bg-transparent dark:bg-transparent",
+         cursor: "h-[2px] w-[80%] bottom-0 shadow-[0_1px_0px_0_rgba(0,0,0,0.05)]"
+       },
+       bordered: {
+-        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm"
+       }
+     },
+     color: {
+diff --git a/node_modules/@nextui-org/theme/dist/index.js b/node_modules/@nextui-org/theme/dist/index.js
+index 47fbafb..b2c4704 100644
+--- a/node_modules/@nextui-org/theme/dist/index.js
++++ b/node_modules/@nextui-org/theme/dist/index.js
+@@ -6302,6 +6302,7 @@ var tabs = tv({
+   slots: {
+     base: "inline-flex",
+     tabList: [
++      "relative",
+       "flex",
+       "p-1",
+       "h-fit",
+@@ -6340,7 +6341,17 @@ var tabs = tv({
+       "text-default-500",
+       "group-data-[selected=true]:text-foreground"
+     ],
+-    cursor: ["absolute", "z-0", "bg-white"],
++    cursor: [
++      "absolute",
++      "z-0",
++      "bg-white",
++      "will-change-[transform,width,height]",
++      "invisible",
++      "data-[initialized=true]:visible",
++      "data-[animated=true]:transition-[left,top,width,height]",
++      "data-[animated=true]:duration-250",
++      "data-[animated=true]:ease-out"
++    ],
+     panel: [
+       "py-3",
+       "px-1",
+@@ -6352,20 +6363,16 @@ var tabs = tv({
+   },
+   variants: {
+     variant: {
+-      solid: {
+-        cursor: "inset-0"
+-      },
++      solid: {},
+       light: {
+-        tabList: "bg-transparent dark:bg-transparent",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent"
+       },
+       underlined: {
+         tabList: "bg-transparent dark:bg-transparent",
+         cursor: "h-[2px] w-[80%] bottom-0 shadow-[0_1px_0px_0_rgba(0,0,0,0.05)]"
+       },
+       bordered: {
+-        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm",
+-        cursor: "inset-0"
++        tabList: "bg-transparent dark:bg-transparent border-medium border-default-200 shadow-sm"
+       }
+     },
+     color: {

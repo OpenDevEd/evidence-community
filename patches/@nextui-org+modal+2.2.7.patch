@@ -1,0 +1,48 @@
+diff --git a/node_modules/@nextui-org/modal/dist/chunk-S5DIVYM4.mjs b/node_modules/@nextui-org/modal/dist/chunk-S5DIVYM4.mjs
+index d9650db..962a64c 100644
+--- a/node_modules/@nextui-org/modal/dist/chunk-S5DIVYM4.mjs
++++ b/node_modules/@nextui-org/modal/dist/chunk-S5DIVYM4.mjs
+@@ -92,7 +92,6 @@ function useModal(originalProps) {
+   const getBackdropProps = useCallback(
+     (props2 = {}) => ({
+       className: slots.backdrop({ class: classNames == null ? void 0 : classNames.backdrop }),
+-      onClick: () => state.close(),
+       ...underlayProps,
+       ...props2
+     }),
+diff --git a/node_modules/@nextui-org/modal/dist/index.js b/node_modules/@nextui-org/modal/dist/index.js
+index 631b0f3..3553012 100644
+--- a/node_modules/@nextui-org/modal/dist/index.js
++++ b/node_modules/@nextui-org/modal/dist/index.js
+@@ -134,7 +134,6 @@ function useModal(originalProps) {
+   const getBackdropProps = (0, import_react.useCallback)(
+     (props2 = {}) => ({
+       className: slots.backdrop({ class: classNames == null ? void 0 : classNames.backdrop }),
+-      onClick: () => state.close(),
+       ...underlayProps,
+       ...props2
+     }),
+diff --git a/node_modules/@nextui-org/modal/dist/modal.js b/node_modules/@nextui-org/modal/dist/modal.js
+index 1d56843..2cebc11 100644
+--- a/node_modules/@nextui-org/modal/dist/modal.js
++++ b/node_modules/@nextui-org/modal/dist/modal.js
+@@ -117,7 +117,6 @@ function useModal(originalProps) {
+   const getBackdropProps = (0, import_react.useCallback)(
+     (props2 = {}) => ({
+       className: slots.backdrop({ class: classNames == null ? void 0 : classNames.backdrop }),
+-      onClick: () => state.close(),
+       ...underlayProps,
+       ...props2
+     }),
+diff --git a/node_modules/@nextui-org/modal/dist/use-modal.js b/node_modules/@nextui-org/modal/dist/use-modal.js
+index dc8d909..bfaad38 100644
+--- a/node_modules/@nextui-org/modal/dist/use-modal.js
++++ b/node_modules/@nextui-org/modal/dist/use-modal.js
+@@ -112,7 +112,6 @@ function useModal(originalProps) {
+   const getBackdropProps = (0, import_react.useCallback)(
+     (props2 = {}) => ({
+       className: slots.backdrop({ class: classNames == null ? void 0 : classNames.backdrop }),
+-      onClick: () => state.close(),
+       ...underlayProps,
+       ...props2
+     }),
