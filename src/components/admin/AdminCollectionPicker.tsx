@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, LockIcon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, SquareLock01Icon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -71,7 +71,7 @@ function SelectionRow({
 				</div>
 			</div>
 			{locked ? (
-				<HugeiconsIcon icon={LockIcon} aria-label={entry.deleted ? "Deleted" : "Read only"} className="shrink-0 text-black/30 dark:text-white/30" size={12} />
+				<HugeiconsIcon icon={SquareLock01Icon} aria-label={entry.deleted ? "Deleted" : "Read only"} className="shrink-0 text-black/30 dark:text-white/30" size={12} />
 			) : (
 				<button
 					aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
@@ -649,7 +649,7 @@ export function AdminCollectionPicker({
 										{source.label}
 									</span>
 									{source.readOnly ? (
-										<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="opacity-35" size={12} />
+										<HugeiconsIcon icon={SquareLock01Icon} aria-label="Read only" className="opacity-35" size={12} />
 									) : null}
 									<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="opacity-35" size={13} />
 								</button>

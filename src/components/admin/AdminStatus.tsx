@@ -7,7 +7,7 @@ import {
 	FileClockIcon,
 	FileXIcon,
 	PencilIcon,
-	RotateLeft01Icon,
+	Undo02Icon,
 	Tick01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
@@ -45,7 +45,7 @@ const fileConfig = {
 	},
 	processing: {
 		className: "text-amber-700 dark:text-amber-300",
-		icon: RotateLeft01Icon,
+		icon: Undo02Icon,
 		label: "Processing",
 	},
 	staged: {

@@ -28,6 +28,7 @@ export function clearChangedAdminFieldErrors(
 	previous: Record<string, unknown>,
 	next: Record<string, unknown>,
 ) {
+	if (Object.keys(errors).length === 0) return errors;
 	const changedFields = new Set(
 		[...new Set([...Object.keys(previous), ...Object.keys(next)])].filter(
 			(field) => !valuesEqual(previous[field], next[field]),

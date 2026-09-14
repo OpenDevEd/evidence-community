@@ -17,6 +17,7 @@ import {
 } from "@nextui-org/react";
 import {
 	type FormEvent,
+	type SetStateAction,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -441,10 +442,10 @@ export default function AdminWorkbench({
 	const [mobilePane, setMobilePane] = useState<
 		"inspector" | "list" | "navigation"
 	>(() => selectedKey ? "inspector" : "list");
-	function selectNavigationFilter(next: Parameters<typeof setFilters>[0]) {
+	const selectNavigationFilter = useCallback((next: Parameters<typeof setFilters>[0]) => {
 		setFilters(next);
 		setMobilePane("list");
-	}
+	}, [setFilters]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
@@ -899,7 +900,9 @@ export default function AdminWorkbench({
 									}
 								: current,
 						);
-						setDraftPayload(rebasedPayload);
+						setDraftPayload((current) =>
+							JSON.stringify(current) === JSON.stringify(rebasedPayload) ? current : rebasedPayload,
+						);
 					}
 					return;
 				}
@@ -909,7 +912,9 @@ export default function AdminWorkbench({
 							? { ...current, draft: saved }
 							: current,
 					);
-					setDraftPayload(saved.payload);
+					setDraftPayload((current) =>
+						JSON.stringify(current) === JSON.stringify(saved.payload) ? current : saved.payload,
+					);
 				}
 				if (pending?.generation === generation) {
 					pendingPayloadByKey.current.delete(key);
@@ -1004,8 +1009,11 @@ export default function AdminWorkbench({
 	);
 
 	const updatePayload = useCallback(
-		(next: Record<string, unknown>) => {
+		(update: SetStateAction<Record<string, unknown>>) => {
+			const detail = detailRef.current;
+			const draftPayload = draftPayloadRef.current;
 			if (!detail?.draft || detail.key !== selectedKeyRef.current) return;
+			const next = typeof update === "function" ? update(draftPayload) : update;
 			let normalized = next;
 			const currentType = String(
 				draftPayload.itemType ?? detail.itemType,
@@ -1023,48 +1031,35 @@ export default function AdminWorkbench({
 				setValidationErrors((current) =>
 					clearChangedAdminFieldErrors(current, draftPayload, normalized),
 				);
+			draftPayloadRef.current = normalized;
 			setDraftPayload(normalized);
 			const title =
 				typeof normalized.title === "string"
 					? normalized.title.trim() || "Untitled"
 					: detail.title;
+			const itemType = String(normalized.itemType ?? detail.itemType);
 			setDetail((current) =>
-				current
-					? {
-							...current,
-							itemType: String(
-								normalized.itemType ?? current.itemType,
-							),
-							title,
-						}
+				current && (current.title !== title || current.itemType !== itemType)
+					? { ...current, itemType, title }
 					: current,
 			);
-			setItems((current) =>
-				current.map((record) =>
-					record.key === detail.key
-						? {
-								...record,
-								itemType: String(
-									normalized.itemType ?? record.itemType,
-								),
-								state:
-									record.state === "deleted"
-										? "deleted"
-										: record.revision
-											? "edited"
-											: "draft",
-								title,
-							}
-						: record,
-				),
-			);
+			setItems((current) => {
+				const index = current.findIndex((record) => record.key === detail.key);
+				const record = current[index];
+				if (!record) return current;
+				const state = record.state === "deleted" ? "deleted" : record.revision ? "edited" : "draft";
+				if (record.title === title && record.itemType === itemType && record.state === state) return current;
+				const next = [...current];
+				next[index] = { ...record, itemType, state, title };
+				return next;
+			});
 			if (!saveFailureByKey.current.get(detail.key)?.conflictingDraft) {
 				setSaveState("idle");
 				setSaveMessage(null);
 			}
 			void queueDraftSave(detail.key, normalized);
 		},
-		[definitions, detail, draftPayload, queueDraftSave],
+		[definitions, queueDraftSave],
 	);
 
 	// Pick mode is only live while the same record is still open as a draft.
@@ -1492,7 +1487,26 @@ export default function AdminWorkbench({
         toast.success(remove ? "PDF removal saved in draft" : "PDF removal undone");
     }, error => setFileErrors(current => ({...current, [key]: fileErrorMessage(error)})));
 
-	const openCreateCollection = (
+	const selectedCollectionFilter = singleAdminItemFilterValue(
+		filters.filters,
+		"collections",
+	);
+	const collectionFilter = selectedCollectionFilter ?? null;
+	const selectedSourceFilter = singleAdminItemFilterValue(
+		filters.filters,
+		"source",
+	);
+	const sourceFilter =
+		selectedSourceFilter === undefined ? "all" : selectedSourceFilter;
+	const selectedStateFilter = singleAdminItemFilterValue(
+		filters.filters,
+		"state",
+	);
+	const stateFilter = (
+		selectedStateFilter === undefined ? "all" : selectedStateFilter
+	) as AdminRecordState | "all" | null;
+
+	const openCreateCollection = useCallback((
 		parentCollection: AdminCollectionCatalogEntry | null,
 	) => {
 		const requestedSource =
@@ -1522,16 +1536,14 @@ export default function AdminWorkbench({
 				: null,
 		);
 		setCollectionParentPickerOpen(false);
-	};
-
-	const openRenameCollection = (collection: AdminCollectionCatalogEntry) => {
+	}, [library.sources, sourceFilter]);
+	const openRenameCollection = useCallback((collection: AdminCollectionCatalogEntry) => {
 		setCollectionErrors({});
 		setCollectionDialog({ collection, mode: "rename" });
 		setCollectionName(collection.name);
 		setCollectionParentPickerOpen(false);
-	};
-
-	const openMoveCollection = (collection: AdminCollectionCatalogEntry) => {
+	}, []);
+	const openMoveCollection = useCallback((collection: AdminCollectionCatalogEntry) => {
 		setMoveErrors({});
 		setMoveDialog({ collection });
 		setMoveParent(collection.parentCollection);
@@ -1540,8 +1552,7 @@ export default function AdminWorkbench({
 		);
 		setMoveParentPickerOpen(false);
 		setMoveDestinationChanged(false);
-	};
-
+	}, [library.sources]);
 	const closeMoveParentPicker = () => {
 		setMoveParentPickerOpen(false);
 		window.requestAnimationFrame(() =>
@@ -1690,7 +1701,7 @@ export default function AdminWorkbench({
 		);
 	};
 
-	const removeCollection = (collection: AdminCollectionCatalogEntry) =>
+	const removeCollection = useCallback((collection: AdminCollectionCatalogEntry) =>
 		setConfirmDialog({
 			title: `Delete ${collection.name}?`,
 			message:
@@ -1724,9 +1735,9 @@ export default function AdminWorkbench({
 				await refreshCurrent();
 				toast.success("Collection deleted");
 			},
-		});
+		}), [waitForIndexing, filters.filters, setFilters, refreshCurrent]);
 
-	const restoreCollection = (collection: AdminCollectionCatalogEntry) =>
+	const restoreCollection = useCallback((collection: AdminCollectionCatalogEntry) =>
 		setConfirmDialog({
 			title: `Restore ${collection.name}?`,
 			message:
@@ -1742,7 +1753,7 @@ export default function AdminWorkbench({
 				await refreshCurrent();
 				toast.success("Collection restored");
 			},
-		});
+		}), [waitForIndexing, refreshCurrent]);
 
 	const createItem = (definition: AdminSchemaDefinition) =>
 		void runBusy(async () => {
@@ -1994,24 +2005,60 @@ export default function AdminWorkbench({
 		);
 	}, [definitions, newItemSearch]);
 
-	const selectedCollectionFilter = singleAdminItemFilterValue(
-		filters.filters,
-		"collections",
-	);
-	const collectionFilter = selectedCollectionFilter ?? null;
-	const selectedSourceFilter = singleAdminItemFilterValue(
-		filters.filters,
-		"source",
-	);
-	const sourceFilter =
-		selectedSourceFilter === undefined ? "all" : selectedSourceFilter;
-	const selectedStateFilter = singleAdminItemFilterValue(
-		filters.filters,
-		"state",
-	);
-	const stateFilter = (
-		selectedStateFilter === undefined ? "all" : selectedStateFilter
-	) as AdminRecordState | "all" | null;
+
+	const navigationPane = useMemo(() => (<AdminNavigation
+									reviewQueue={filters.reviewQueue}
+									onSelectReviewQueue={() => selectNavigationFilter((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
+									kind={filters.reviewQueue ? null : singleAdminItemFilterValue(filters.filters, "kind") ?? "all"}
+									onSelectKind={(kind) => selectNavigationFilter((current) => ({
+										...current,
+										reviewQueue: false,
+										filters: setSingleAdminItemFilter(current.filters, "kind", kind === "all" ? null : kind),
+									}))}
+									collection={collectionFilter}
+									isBusy={busy}
+									onCreateCollection={openCreateCollection}
+									onDeleteCollection={removeCollection}
+									onEditCollection={openRenameCollection}
+									onMoveCollection={openMoveCollection}
+									onOpenSourceSync={setSyncSourceKey}
+									onRestoreCollection={restoreCollection}
+									onSelectCollection={(collection) =>
+										selectNavigationFilter((current) => ({
+											...current,
+											filters: setSingleAdminItemFilter(
+												current.filters,
+												"collections",
+												collection,
+											),
+										}))
+									}
+									onSelectSource={(source) =>
+										selectNavigationFilter((current) => ({
+											...current,
+											filters: setSingleAdminItemFilter(
+												current.filters,
+												"source",
+												source === "all"
+													? null
+													: source,
+											),
+										}))
+									}
+									onSelectState={(state) =>
+										selectNavigationFilter((current) => ({
+											...current,
+											filters: setSingleAdminItemFilter(
+												current.filters,
+												"state",
+												state === "all" ? null : state,
+											),
+										}))
+									}
+									source={sourceFilter}
+									sources={library.sources}
+									state={stateFilter}
+								/>), [filters.reviewQueue, filters.filters, selectNavigationFilter, collectionFilter, busy, openCreateCollection, removeCollection, openRenameCollection, openMoveCollection, restoreCollection, sourceFilter, library.sources, stateFilter]);
 
 	return (
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
@@ -2321,59 +2368,7 @@ export default function AdminWorkbench({
 								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
-								<AdminNavigation
-									reviewQueue={filters.reviewQueue}
-									onSelectReviewQueue={() => selectNavigationFilter((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
-									kind={filters.reviewQueue ? null : singleAdminItemFilterValue(filters.filters, "kind") ?? "all"}
-									onSelectKind={(kind) => selectNavigationFilter((current) => ({
-										...current,
-										reviewQueue: false,
-										filters: setSingleAdminItemFilter(current.filters, "kind", kind === "all" ? null : kind),
-									}))}
-									collection={collectionFilter}
-									isBusy={busy}
-									onCreateCollection={openCreateCollection}
-									onDeleteCollection={removeCollection}
-									onEditCollection={openRenameCollection}
-									onMoveCollection={openMoveCollection}
-									onOpenSourceSync={setSyncSourceKey}
-									onRestoreCollection={restoreCollection}
-									onSelectCollection={(collection) =>
-										selectNavigationFilter((current) => ({
-											...current,
-											filters: setSingleAdminItemFilter(
-												current.filters,
-												"collections",
-												collection,
-											),
-										}))
-									}
-									onSelectSource={(source) =>
-										selectNavigationFilter((current) => ({
-											...current,
-											filters: setSingleAdminItemFilter(
-												current.filters,
-												"source",
-												source === "all"
-													? null
-													: source,
-											),
-										}))
-									}
-									onSelectState={(state) =>
-										selectNavigationFilter((current) => ({
-											...current,
-											filters: setSingleAdminItemFilter(
-												current.filters,
-												"state",
-												state === "all" ? null : state,
-											),
-										}))
-									}
-									source={sourceFilter}
-									sources={library.sources}
-									state={stateFilter}
-								/>
+								{navigationPane}
 							</div>
 						</div>
 					</aside>

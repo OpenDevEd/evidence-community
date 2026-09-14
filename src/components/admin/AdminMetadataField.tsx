@@ -1,7 +1,7 @@
 "use client";
 
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -112,10 +112,12 @@ type CommonFieldProps = {
 	value: string;
 };
 
-export function AdminMetadataField({
+export const AdminMetadataField = memo(function AdminMetadataField({
 	descriptor,
-	...props
-}: CommonFieldProps & { descriptor: ZoteroFieldDescriptor }) {
+	onFieldChange,
+	...fieldProps
+}: Omit<CommonFieldProps, "onValueChange"> & { descriptor: ZoteroFieldDescriptor; onFieldChange: (field: string, value: string) => void }) {
+	const props = { ...fieldProps, onValueChange: (value: string) => onFieldChange(descriptor.field, value) };
 	const { kind } = adminFieldContract(descriptor);
 	if (kind === "institution-list") return <InstitutionInput {...props} />;
 	if (kind === "bibliographic-date") {
@@ -214,7 +216,7 @@ export function AdminMetadataField({
 			onValueChange={props.onValueChange}
 		/>
 	);
-}
+});
 
 function AnnotationTypeField(props: CommonFieldProps) {
 	const kind = "annotation-type";

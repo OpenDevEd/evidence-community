@@ -1,4 +1,5 @@
 "use client";
+import { AiOutlineCompass } from "react-icons/ai";
 
 import {
 	HugeiconsIcon,
@@ -6,7 +7,6 @@ import {
 } from "@/components/icons/Hugeicon";
 import {
 	ArchiveIcon,
-	Compass01Icon,
 	Search01Icon,
 	Sorting01Icon,
 } from "@hugeicons/core-free-icons";
@@ -668,10 +668,7 @@ export default function NavbarSearch() {
 					{/* Explore — opens the full filter panel wired to the same params */}
 					<Button
 						startContent={
-							<HugeiconsIcon
-								icon={Compass01Icon}
-								className="size-5 shrink-0"
-							/>
+							<AiOutlineCompass className="size-5 shrink-0" />
 						}
 						onPress={onExploreOpen}
 						className="h-10 w-full shrink-0 lg:h-12 xl:w-auto"

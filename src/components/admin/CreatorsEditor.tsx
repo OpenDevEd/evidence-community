@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -19,7 +19,7 @@ import {
 import { CreatorCard, type CreatorMode } from "./CreatorCard";
 import { AuthorPickerDialog } from "./AuthorPickerDialog";
 
-export function CreatorsEditor({
+export const CreatorsEditor = memo(function CreatorsEditor({
 	definition,
 	errors,
 	onChange,
@@ -225,4 +225,4 @@ export function CreatorsEditor({
 			)}
 		</div>
 	);
-}
+});

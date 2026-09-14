@@ -1,19 +1,21 @@
 "use client";
+import { adminPanelTabState } from "./admin-tab-styles";
 import { useAdminSession } from "./AdminSessionProvider";
 import type { ReactNode } from "react";
 import {
 	FileLockedIcon,
+	Delete02Icon,
+	Clock01Icon,
 	FileEditIcon,
-	PencilIcon,
 	InboxIcon,
-	RotateLeft01Icon,
+	Undo02Icon,
 	Tick01Icon,
 	Comment01Icon,
 	ArrowRight01Icon,
-	Clock01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { RecordStateChip } from "./AdminStatus";
 import type { AdminItemDetail } from "@/lib/admin/types";
 import type { AdminReviewSnapshot } from "./admin-api";
@@ -29,11 +31,7 @@ export function ReviewVersionTabs({
 }) {
 	return (
 		<div className="shrink-0">
-			<div
-				role="group"
-				aria-label="Record version"
-				className="flex border-b border-black/[0.06] dark:border-white/[0.07]"
-			>
+			<div role="group" aria-label="Record version" className="flex">
 				{[false, true].map((value) => (
 					<button
 						key={String(value)}
@@ -46,7 +44,7 @@ export function ReviewVersionTabs({
 								: undefined
 						}
 						onClick={() => onSelect(value)}
-						className={`disabled:cursor-not-allowed disabled:opacity-40 relative flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-3 text-xs sm:px-3 font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${viewingSubmitted === value ? "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85" : "text-black/45 hover:text-black/70 dark:text-white/45"}`}
+						className={`disabled:cursor-not-allowed disabled:opacity-40 relative flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-3 text-xs sm:px-3 font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${adminPanelTabState(viewingSubmitted === value)}`}
 					>
 						<HugeiconsIcon
 							icon={value ? FileLockedIcon : FileEditIcon}
@@ -64,11 +62,167 @@ export function ReviewVersionTabs({
 }
 
 const reviewStates = {
-	pending: { label: "Awaiting review", icon: InboxIcon },
-	published: { label: "Published version", icon: Tick01Icon },
-	returned: { label: "Changes requested", icon: Comment01Icon },
-	withdrawn: { label: "Withdrawn", icon: RotateLeft01Icon },
+	pending: {
+		label: "Awaiting review",
+		icon: InboxIcon,
+		className: "text-sky-700 dark:text-sky-300",
+		headerClassName:
+			"bg-sky-100/80 text-sky-950 dark:bg-sky-500/[0.16] dark:text-sky-200",
+	},
+	published: {
+		label: "Published",
+		icon: Tick01Icon,
+		className: "text-emerald-700 dark:text-emerald-300",
+		headerClassName:
+			"bg-emerald-100/80 text-emerald-950 dark:bg-emerald-500/[0.16] dark:text-emerald-200",
+	},
+	returned: {
+		label: "Changes requested",
+		icon: Comment01Icon,
+		className: "text-rose-700 dark:text-rose-300",
+		headerClassName:
+			"bg-rose-100/80 text-rose-950 dark:bg-rose-500/[0.16] dark:text-rose-200",
+	},
+	withdrawn: {
+		label: "Withdrawn",
+		icon: Undo02Icon,
+		className: "text-black/50 dark:text-white/50",
+		headerClassName:
+			"bg-black/[0.05] text-black/70 dark:bg-white/[0.08] dark:text-white/70",
+	},
 };
+
+const deletedReviewState = {
+	label: "Deleted",
+	icon: Delete02Icon,
+	headerClassName: reviewStates.withdrawn.headerClassName,
+};
+
+const notSubmittedReviewState = {
+	label: "Not submitted",
+	icon: FileEditIcon,
+	headerClassName:
+		"bg-amber-100/80 text-amber-950 dark:bg-amber-500/[0.16] dark:text-amber-200",
+};
+
+function reviewVersionTitle(
+	detail: AdminItemDetail,
+	viewingSubmitted: boolean,
+) {
+	if (viewingSubmitted) return "Submitted version";
+	if (detail.state === "deleted") return "Deleted record";
+	if (detail.draft) return "Working draft";
+	return "Published version";
+}
+
+function reviewVersionPresentation(
+	detail: AdminItemDetail,
+	snapshot: AdminReviewSnapshot | undefined,
+	viewingSubmitted: boolean,
+) {
+	const reviewState = selectedReviewState(
+		detail.state,
+		snapshot,
+		viewingSubmitted,
+	);
+	const state = reviewState ?? recordReviewState(detail);
+
+	return {
+		dataState: reviewState ? snapshot?.reviewState : detail.state,
+		state,
+		stateLabel: reviewState ? state.label : recordReviewStateLabel(detail, state),
+		title: reviewVersionTitle(detail, viewingSubmitted),
+	};
+}
+
+function selectedReviewState(
+	detailState: AdminItemDetail["state"],
+	snapshot: AdminReviewSnapshot | undefined,
+	viewingSubmitted: boolean,
+) {
+	if (!snapshot) return null;
+	if (viewingSubmitted) return reviewStates[snapshot.reviewState];
+	if (detailState === "deleted") return null;
+	return reviewStates[snapshot.reviewState];
+}
+
+function recordReviewState(detail: AdminItemDetail) {
+	if (detail.state === "deleted") return deletedReviewState;
+	if (!detail.draft && detail.published) return reviewStates.published;
+	return notSubmittedReviewState;
+}
+
+function recordReviewStateLabel(
+	detail: AdminItemDetail,
+	state: ReturnType<typeof recordReviewState>,
+) {
+	if (!detail.draft && detail.published && detail.state !== "deleted") {
+		return `Revision ${detail.revision}`;
+	}
+	return state.label;
+}
+
+function formatReviewTime(value: string) {
+	return new Date(value).toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
+function ReviewVersionTime({
+	snapshot,
+	updatedAt,
+}: {
+	snapshot?: AdminReviewSnapshot;
+	updatedAt: string;
+}) {
+	const displayedAt = snapshot?.submittedAt ?? updatedAt;
+	const label = snapshot
+		? `Submitted ${formatReviewTime(snapshot.submittedAt)}`
+		: `Edited ${formatReviewTime(updatedAt)}`;
+
+	return (
+		<Tooltip
+			content={
+				<div className="text-xs leading-5">
+					<p>Last edited {formatReviewTime(updatedAt)}</p>
+					{snapshot && (
+						<p>Submitted {formatReviewTime(snapshot.submittedAt)}</p>
+					)}
+				</div>
+			}
+		>
+			<time
+				tabIndex={0}
+				dateTime={displayedAt}
+				className="inline-flex items-center gap-1 whitespace-nowrap text-[10px] opacity-65 outline-none focus-visible:ring-2 focus-visible:ring-focus"
+			>
+				<HugeiconsIcon
+					icon={Clock01Icon}
+					size={11}
+					className="shrink-0"
+					aria-hidden
+				/>
+				{label}
+			</time>
+		</Tooltip>
+	);
+}
+
+function activeReviewState(
+	snapshot: AdminReviewSnapshot | undefined,
+	viewingSubmitted: boolean,
+) {
+	return snapshot &&
+		(viewingSubmitted ||
+			snapshot.reviewState === "pending" ||
+			snapshot.reviewState === "returned")
+		? reviewStates[snapshot.reviewState]
+		: null;
+}
+
 export function ReviewStatusLabel({
 	snapshot,
 	detail,
@@ -78,19 +232,13 @@ export function ReviewStatusLabel({
 	detail: AdminItemDetail;
 	viewingSubmitted: boolean;
 }) {
-	const state =
-		snapshot &&
-		(viewingSubmitted ||
-			snapshot.reviewState === "pending" ||
-			snapshot.reviewState === "returned")
-			? reviewStates[snapshot.reviewState]
-			: null;
+	const state = activeReviewState(snapshot, viewingSubmitted);
 	return state ? (
 		<span className="inline-flex items-center gap-1.5">
 			<HugeiconsIcon
 				icon={state.icon}
 				size={14}
-				className="text-accent-300 dark:text-accent-700"
+				className={state.className}
 			/>
 			{state.label}
 		</span>
@@ -100,57 +248,40 @@ export function ReviewStatusLabel({
 }
 
 export function ReviewVersionNotice({
+	detail,
 	snapshot,
 	updatedAt,
 	viewingSubmitted,
-	onViewSubmitted,
-	actions,
 }: {
 	snapshot?: AdminReviewSnapshot;
 	updatedAt: string;
 	viewingSubmitted: boolean;
-	onViewSubmitted: () => void;
-	actions: ReactNode;
+	detail: AdminItemDetail;
 }) {
-	const state = snapshot
-		? reviewStates[snapshot.reviewState]
-		: { label: "Not submitted", icon: PencilIcon };
-	const timestamp = snapshot?.submittedAt ?? updatedAt;
+	const { dataState, state, stateLabel, title } = reviewVersionPresentation(
+		detail,
+		snapshot,
+		viewingSubmitted,
+	);
 	return (
-		<>
-			<h3 className="text-sm font-semibold text-black/80 dark:text-white/85">
-				{state.label}
+		<header
+			data-admin-review-state={dataState}
+			className={`-mx-4 -mt-4 mb-3 px-4 py-3 ${state.headerClassName}`}
+		>
+			<h3 className="flex items-center gap-2 text-base font-semibold leading-6 tracking-tight">
+				<HugeiconsIcon
+					icon={state.icon}
+					size={18}
+					className="shrink-0"
+					aria-hidden
+				/>
+				{title}
 			</h3>
-			<div className="mt-3 flex items-center gap-2 text-[10px] text-black/45 dark:text-white/45">
-				<HugeiconsIcon icon={Clock01Icon} size={14} />
-				<time dateTime={timestamp}>
-					{snapshot ? "Submitted" : "Edited"}{" "}
-					{new Date(timestamp).toLocaleString(undefined, {
-						month: "short",
-						day: "numeric",
-						hour: "numeric",
-						minute: "2-digit",
-					})}
-				</time>
+			<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+				<p className="text-xs font-medium opacity-80">{stateLabel}</p>
+				<ReviewVersionTime snapshot={snapshot} updatedAt={updatedAt} />
 			</div>
-			<div className="mt-4 flex items-center gap-2 empty:hidden">
-				{!viewingSubmitted && (
-					<Button
-						size="xs"
-						variant="muted"
-						className="h-9 min-w-0 flex-1 justify-between rounded-xl"
-						isDisabled={!snapshot || viewingSubmitted}
-						onPress={onViewSubmitted}
-						endContent={
-							<HugeiconsIcon icon={ArrowRight01Icon} size={14} />
-						}
-					>
-						View submitted version
-					</Button>
-				)}
-				{actions}
-			</div>
-		</>
+		</header>
 	);
 }
 
@@ -166,17 +297,16 @@ export function ReviewWithdrawButton({
 	onWithdraw: () => void;
 }) {
 	const session = useAdminSession();
-	const canWithdraw =
-		session.canPublish || submittedBy === session.userId;
+	const canWithdraw = session.canPublish || submittedBy === session.userId;
 	return (
 		<Button
 			size="xs"
-			variant="muted"
-			className="h-9 shrink-0 rounded-xl px-3"
+			variant="default"
+			className="h-9 shrink-0 rounded-xl border-black/[0.06] bg-black/[0.035] px-3 shadow-none dark:border-white/[0.08] dark:bg-white/[0.07]"
 			isDisabled={!pending || !canWithdraw || withdrawing}
 			isLoading={withdrawing}
 			onPress={onWithdraw}
-			startContent={<HugeiconsIcon icon={RotateLeft01Icon} size={14} />}
+			startContent={<HugeiconsIcon icon={Undo02Icon} size={14} />}
 		>
 			Withdraw
 		</Button>
@@ -210,7 +340,8 @@ export function ReviewDraftNotice({
 			)}
 			{feedback && (
 				<div className="mt-3 rounded-xl bg-amber-500/[0.07] p-3">
-					<p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+					<p className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+						<HugeiconsIcon icon={Comment01Icon} size={14} />
 						Changes requested
 					</p>
 					<p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-black/65 dark:text-white/65">

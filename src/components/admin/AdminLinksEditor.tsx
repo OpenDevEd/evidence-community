@@ -1,6 +1,6 @@
 "use client";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Add01Icon, Cancel01Icon, Link02Icon, LockIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon, Link02Icon, SquareLock01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
@@ -42,7 +42,7 @@ function LinkRowAction({
 	if (row.origin !== "manual") {
 		return (
 			<Tooltip content={`Comes from ${row.sourceLabel ?? "a source"}. Change it there.`}>
-				<HugeiconsIcon icon={LockIcon} aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+				<HugeiconsIcon icon={SquareLock01Icon} aria-label="Read only" className="shrink-0 opacity-40" size={11} />
 			</Tooltip>
 		);
 	}

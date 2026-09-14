@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+	type SetStateAction,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { toast } from "sonner";
 import {
 	adminErrorMessage,
@@ -9,7 +15,7 @@ import {
 } from "./admin-api";
 
 type CorrectionRecord = Pick<AdminReviewSnapshot, "key"> & {
-	draft: { baseRevision: number } | null;
+	draft: { baseRevision: number; payload: Record<string, unknown> } | null;
 };
 type CorrectionSnapshot = Pick<
 	AdminReviewSnapshot,
@@ -59,13 +65,53 @@ function shouldLoadSnapshot(
 	snapshot: CorrectionSnapshot | undefined,
 	current: CorrectionSnapshot | undefined,
 	loadedRevision: string | undefined,
-	busy: boolean,
+	pendingCount: number,
+	saving: boolean,
 ) {
-	if (!snapshot || busy) return false;
+	if (!snapshot || pendingCount > 0 || saving) return false;
 	return (
 		revisionKey(snapshot) !== loadedRevision &&
 		!awaitingSnapshot(snapshot, current)
 	);
+}
+
+function acknowledgeCorrections(
+	review: CorrectionSnapshot,
+	edits: Map<string, Record<string, unknown>>,
+	revision: number,
+): CorrectionSnapshot {
+	const savedRecord = (record: CorrectionRecord) => {
+		const payload = edits.get(record.key);
+		return payload && record.draft
+			? { ...record, draft: { ...record.draft, payload } }
+			: record;
+	};
+	return {
+		...review,
+		...savedRecord(review),
+		frozenAttachments: review.frozenAttachments.map(savedRecord),
+		reviewRevision: revision,
+	};
+}
+
+function resolveCorrectionPayload(
+	review: CorrectionSnapshot | undefined,
+	pending: Map<string, Record<string, unknown>>,
+	inFlight: Map<string, Record<string, unknown>>,
+	key: string,
+	update: SetStateAction<Record<string, unknown>>,
+) {
+	const record =
+		review &&
+		[review, ...review.frozenAttachments].find(
+			(entry) => entry.key === key,
+		);
+	const previous =
+		pending.get(key) ?? inFlight.get(key) ?? record?.draft?.payload;
+	if (typeof update !== "function") return update;
+	if (!previous)
+		throw new Error("The submitted item is no longer available.");
+	return update(previous);
 }
 
 export function useReviewCorrections(
@@ -80,6 +126,7 @@ export function useReviewCorrections(
 	>({});
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const inFlight = useRef(new Map<string, Record<string, unknown>>());
 	const pending = useRef(new Map<string, Record<string, unknown>>());
 	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const queue = useRef(Promise.resolve());
@@ -91,7 +138,8 @@ export function useReviewCorrections(
 			snapshot,
 			current.current,
 			loadedRevision,
-			Boolean(pending.current.size || saving),
+			pending.current.size,
+			saving,
 		)
 	) {
 		current.current = snapshot;
@@ -103,6 +151,7 @@ export function useReviewCorrections(
 		const review = current.current;
 		if (!review || !pending.current.size) return;
 		const edits = new Map(pending.current);
+		inFlight.current = edits;
 		pending.current.clear();
 		try {
 			const saved = await updateAdminReview(review.reviewId, {
@@ -110,7 +159,11 @@ export function useReviewCorrections(
 				expectedRevision: review.reviewRevision,
 				records: correctionRecords(review, edits),
 			});
-			current.current = { ...review, reviewRevision: saved.revision };
+			current.current = acknowledgeCorrections(
+				review,
+				edits,
+				saved.revision,
+			);
 			await refreshRef.current();
 			setError(null);
 		} catch (error) {
@@ -122,6 +175,7 @@ export function useReviewCorrections(
 			setError(message);
 			toast.error(message);
 		} finally {
+			inFlight.current = new Map();
 			setSaving(pending.current.size > 0);
 		}
 	};
@@ -139,11 +193,15 @@ export function useReviewCorrections(
 		[],
 	);
 
-	return {
-		payloads,
-		saving: saving || awaitingSnapshot(snapshot, current.current),
-		error,
-		change: (key: string, payload: Record<string, unknown>) => {
+	const change = useCallback(
+		(key: string, update: SetStateAction<Record<string, unknown>>) => {
+			const payload = resolveCorrectionPayload(
+				current.current,
+				pending.current,
+				inFlight.current,
+				key,
+				update,
+			);
 			setPayloads((previous) => ({ ...previous, [key]: payload }));
 			pending.current.set(key, payload);
 			setSaving(true);
@@ -153,5 +211,13 @@ export function useReviewCorrections(
 				void flushRef.current();
 			}, 700);
 		},
+		[],
+	);
+
+	return {
+		payloads,
+		saving: saving || awaitingSnapshot(snapshot, current.current),
+		error,
+		change,
 	};
 }

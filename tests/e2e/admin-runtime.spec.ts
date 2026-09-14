@@ -357,3 +357,90 @@ test("lets an Editor publish and update a record without stale client navigation
 	}
 
 });
+
+test("keeps typing and field patches intact while an autosave is in flight", async ({ page }) => {
+	test.setTimeout(90_000);
+	await openAdmin(page);
+	await page.getByRole("button", { name: "Create Item", exact: true }).click();
+	await page.getByRole("dialog", { name: "Create Item", exact: true }).getByRole("button", { name: "Book", exact: true }).click();
+	const inspector = page.locator("#admin-inspector-pane");
+	const title = inspector.getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toHaveValue("");
+	await title.fill("Typing persistence check");
+	const key = new URL(page.url()).searchParams.get("item");
+	if (!key) throw new Error("Created draft has no key");
+	const readDraft = async () => (await (await page.request.get(`/api/admin/items/${key}`)).json()).item.draft.payload;
+	await expect.poll(async () => (await readDraft()).title).toBe("Typing persistence check");
+	let release!: () => void;
+	let requested!: () => void;
+	const held = new Promise<void>(resolve => { release = resolve; });
+	const saving = new Promise<void>(resolve => { requested = resolve; });
+	let requests = 0;
+	await page.route(`**/api/admin/items/${key}/draft`, async route => {
+		if (route.request().method() === "PUT" && ++requests === 1) {
+			requested();
+			await held;
+		}
+		await route.continue();
+	});
+	const abstract = inspector.getByRole("textbox", { name: "Abstract Note", exact: true });
+	try {
+		await abstract.pressSequentially("Evidence from Kenya", { delay: 20 });
+		await saving;
+		await abstract.pressSequentially(" and Ghana.", { delay: 20 });
+		await expect(abstract).toBeFocused();
+		await expect(abstract).toHaveValue("Evidence from Kenya and Ghana.");
+		await expect.poll(() => abstract.evaluate((node: HTMLTextAreaElement) => node.selectionStart)).toBe("Evidence from Kenya and Ghana.".length);
+		await inspector.getByRole("textbox", { name: "Language", exact: true }).fill("English");
+		release();
+		await expect.poll(readDraft).toMatchObject({ title: "Typing persistence check", abstractNote: "Evidence from Kenya and Ghana.", language: "English" });
+		await page.reload();
+		await expect(abstract).toHaveValue("Evidence from Kenya and Ghana.");
+		await expect(inspector.getByRole("textbox", { name: "Language", exact: true })).toHaveValue("English");
+	} finally {
+		release();
+		await page.unrouteAll({ behavior: "wait" });
+	}
+});
+
+test("saves library display switches as tags and keeps the published preview unchanged until publication", async ({ page }) => {
+	test.setTimeout(120_000);
+	await openAdmin(page);
+	await page.getByRole("button", { name: "Create Item", exact: true }).click();
+	await page.getByRole("dialog", { name: "Create Item", exact: true }).getByRole("button", { name: "Book", exact: true }).click();
+	const inspector = page.locator("#admin-inspector-pane");
+	const title = inspector.getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toHaveValue("");
+	await title.fill("Display controls check");
+	const key = await publishWorkingDraft(page);
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
+	await expect(title).toBeEditable();
+	const menu = inspector.getByRole("button", { name: "Record status and sources" });
+	await menu.click();
+	const display = page.getByRole("region", { name: "Library display", exact: true });
+	const trigger = display.getByRole("button", { name: /^Library display/ });
+	await expect(trigger).toHaveAttribute("aria-expanded", "false");
+	await expect(page.getByRole("region", { name: "Connected sources" }).getByRole("button", { name: /^Sources/ })).toHaveAttribute("aria-expanded", "false");
+	await trigger.click();
+	for (const name of ["Hide from library", "Available on request", "Coming soon"]) {
+		await display.getByRole("switch", { name, exact: true }).check();
+	}
+	await expect.poll(async () => (await (await page.request.get(`/api/admin/items/${key}`)).json()).item.draft.payload.tags).toEqual(expect.arrayContaining(["hidden-record", "internal-only", "coming-soon"]));
+	await display.getByRole("button", { name: /^Preview published revision/ }).click();
+	for (const name of ["Hide from library", "Available on request", "Coming soon"]) {
+		await expect(display.getByRole("switch", { name, exact: true })).toBeChecked();
+	}
+	await expect(display.getByRole("region", { name: "Reader preview" }).getByText("Available on request", { exact: true })).toHaveCount(0);
+	await expect(display.getByRole("region", { name: "Reader preview" }).getByText("Coming soon", { exact: true })).toHaveCount(0);
+	const record = (await (await page.request.get(`/api/admin/items/${key}`)).json()).item;
+	expect(record.publishedTags).not.toEqual(expect.arrayContaining(["hidden-record", "internal-only", "coming-soon"]));
+	await page.keyboard.press("Escape");
+	await page.reload();
+	await menu.click();
+	await trigger.click();
+	for (const name of ["Hide from library", "Available on request", "Coming soon"]) {
+		await expect(display.getByRole("switch", { name, exact: true })).toBeChecked();
+		await display.getByRole("switch", { name, exact: true }).uncheck();
+	}
+	await expect.poll(async () => (await (await page.request.get(`/api/admin/items/${key}`)).json()).item.draft.payload.tags).toEqual(record.publishedTags);
+});

@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 
 const styles = {
 	tabs: {
-		group: "flex border-y border-black/[0.06] dark:border-white/[0.07]",
+		group: "flex",
 		button: "relative flex min-w-0 items-center justify-center gap-1.5 px-2 py-3 text-[11px] font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus flex-1",
-		active: "bg-black/[0.045] text-black/85 dark:bg-white/[0.045] dark:text-white/85",
+		active: "bg-transparent text-black/85 dark:text-white/85",
 		inactive:
-			"text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80",
+			"bg-black/[0.04] text-black/50 hover:text-black/80 dark:bg-black/20 dark:text-white/50 dark:hover:text-white/80",
 	},
 	inset: {
 		group: "flex rounded-lg bg-black/[0.035] p-1 dark:bg-white/[0.04]",

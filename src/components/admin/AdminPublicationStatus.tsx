@@ -1,23 +1,39 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { AlertCircleIcon, CheckmarkBadge01Icon, CircleIcon, Loading03Icon } from "@hugeicons/core-free-icons";
+import {
+	AlertCircleIcon,
+	CheckmarkBadge01Icon,
+	CircleIcon,
+	Loading03Icon,
+} from "@hugeicons/core-free-icons";
+import { Button } from "@/components/nextui/Button";
 import type { useAdminPublication } from "./useAdminPublication";
 
 type PublicationHook = ReturnType<typeof useAdminPublication>;
-type Publication = NonNullable<PublicationHook["publication"]>;
 
 function headerPresentation(
-	publication: Publication,
+	attention: boolean,
 	changing: boolean,
+	hasDoi: boolean,
 ) {
-	if (publication.identifiers.attention) {
-		return { Icon: AlertCircleIcon, label: "DOI needs attention", color: "text-danger", spin: false };
+	if (attention) {
+		return {
+			Icon: AlertCircleIcon,
+			label: "DOI needs attention",
+			color: "text-danger",
+			spin: false,
+		};
 	}
 	if (changing) {
-		return { Icon: Loading03Icon, label: "DOI publishing", color: "text-accent", spin: true };
+		return {
+			Icon: Loading03Icon,
+			label: "DOI publishing",
+			color: "text-accent",
+			spin: true,
+		};
 	}
-	if (publication.identifiers.doi) {
+	if (hasDoi) {
 		return {
 			Icon: CheckmarkBadge01Icon,
 			label: "DOI",
@@ -42,21 +58,34 @@ export function AdminPublicationHeaderStatus({
 }) {
 	const publication = state.publication;
 	if (!publication) return null;
-	const { providers } = publication;
-	const changing = [providers.crossref, providers.zenodo].some(
-		(provider) => provider.status.shouldPoll,
+	const presentation = headerPresentation(
+		Boolean(publication?.identifiers.attention),
+		Boolean(
+					publication &&
+					[
+						publication.providers.crossref,
+						publication.providers.zenodo,
+					].some((provider) => provider.status.shouldPoll),
+				),
+		Boolean(publication?.identifiers.doi),
 	);
-	const { Icon, color, label, spin } = headerPresentation(publication, changing);
+	const { Icon, color, label, spin } = presentation;
 	return (
-		<button
-			className={`inline-flex h-6 items-center gap-1 whitespace-nowrap text-[11px] font-medium transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${color}`}
-			onClick={onPress}
-			type="button"
+		<Button
+			size="xs"
+			variant="transparent"
+			className={`h-8 min-w-0 gap-2 rounded-lg px-0 text-xs ${color}`}
+			onPress={onPress}
 		>
 			<span className="grid size-3 shrink-0 place-items-center overflow-hidden">
-				<HugeiconsIcon icon={Icon} aria-hidden className={spin ? "animate-spin" : undefined} size={12} />
+				<HugeiconsIcon
+					icon={Icon}
+					aria-hidden
+					className={spin ? "animate-spin" : undefined}
+					size={12}
+				/>
 			</span>
 			{label}
-		</button>
+		</Button>
 	);
 }

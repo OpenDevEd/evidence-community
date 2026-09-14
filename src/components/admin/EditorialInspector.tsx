@@ -28,7 +28,9 @@ import {
 
 type Props = ComponentProps<typeof AdminInspector> & {
 	concurrentConflict?: ConflictingDraft;
-	onResolveConcurrentConflict: (choices: Record<string, "draft" | "published">) => void;
+	onResolveConcurrentConflict: (
+		choices: Record<string, "draft" | "published">,
+	) => void;
 	reviewQueue: boolean;
 	onStartReviewLinkPick: (
 		kind: AdminItemLinkKind,
@@ -47,6 +49,15 @@ export function EditorialInspector(props: Props) {
 	);
 }
 
+function viewSubmittedAction(snapshot: AdminReviewSnapshot | undefined, viewingSubmitted: boolean, select: (submitted: boolean) => void) {
+	if (!snapshot || viewingSubmitted) return undefined;
+	return () => select(true);
+}
+
+function returnedReviewNote(snapshot: AdminReviewSnapshot | undefined) {
+	return snapshot?.reviewState === "returned" ? snapshot.note : null;
+}
+
 function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	const model = useReviewInspector(props);
 	const { snapshot, pending, version, viewingSubmitted, frozenDetail } =
@@ -58,16 +69,18 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 			onSelect={version.selectVersion}
 		/>
 	);
-	const notice = (actions: ReactNode) => (
+	const notice = (
 		<ReviewVersionNotice
-			actions={actions}
+			detail={props.detail}
 			snapshot={snapshot}
 			updatedAt={props.detail.draft?.updatedAt ?? props.detail.updatedAt}
 			viewingSubmitted={viewingSubmitted}
-			onViewSubmitted={() => version.selectVersion(true)}
 		/>
 	);
 	const header = {
+		liveDetail: props.detail,
+		onViewSubmitted:
+			viewSubmittedAction(snapshot, viewingSubmitted, version.selectVersion),
 		versionStatus: (
 			<ReviewStatusLabel
 				snapshot={snapshot}
@@ -114,7 +127,7 @@ type VersionInspectorProps = Props & {
 	detail: AdminItemDetail;
 	model: ReturnType<typeof useReviewInspector>;
 	controls: ReactNode;
-	notice: (actions: ReactNode) => ReactNode;
+	notice: ReactNode;
 };
 
 function WorkingDraftInspector({
@@ -131,12 +144,12 @@ function WorkingDraftInspector({
 		props.payload,
 		model.publishing,
 	);
-	const draftNotice = (actions: ReactNode) => (
+	const draftNotice = (
 		<ReviewDraftNotice
-			notice={notice(actions)}
+			notice={notice}
 			conflictCount={props.concurrentConflict ? 0 : fields.length}
 			feedback={
-				snapshot?.reviewState === "returned" ? snapshot.note : null
+				returnedReviewNote(snapshot)
 			}
 			onConflicts={conflicts.focus}
 		/>
@@ -146,7 +159,9 @@ function WorkingDraftInspector({
 		<AdminInspector
 			{...props}
 			conflictCount={props.concurrentConflict ? fields.length : 0}
-			onResolveConflicts={props.concurrentConflict ? conflicts.focus : undefined}
+			onResolveConflicts={
+				props.concurrentConflict ? conflicts.focus : undefined
+			}
 			publishing={model.publishing}
 			error={error instanceof Error ? error.message : props.error}
 			versionControls={controls}
@@ -220,9 +235,7 @@ function SubmittedInspector({
 				corrections.change(frozenDetail.key, payload)
 			}
 			versionActions={
-				pending && session.canPublish
-					? reviewActions
-					: undefined
+				pending && session.canPublish ? reviewActions : undefined
 			}
 			editorNotice={
 				<SubmittedNotice
@@ -335,9 +348,13 @@ function WorkingDraftNotices({
 }: WorkingDraftNoticeProps & {
 	readiness: ReturnType<typeof useReviewReadiness>;
 }) {
-	const requirements = props.detail.parentItem || !props.detail.draft
-		? null
-		: <ReviewReadiness recordKey={props.detail.key} readiness={readiness} />;
+	const requirements =
+		props.detail.parentItem || !props.detail.draft ? null : (
+			<ReviewReadiness
+				recordKey={props.detail.key}
+				readiness={readiness}
+			/>
+		);
 	if (model.conflicts.fields.length > 0)
 		return (
 			<>
@@ -378,7 +395,9 @@ function WorkingDraftConflict({
 				conflictFields={conflicts.fields}
 				disabled={disabled}
 				onResolve={
-					concurrent ? props.onResolveConcurrentConflict : conflicts.resolve
+					concurrent
+						? props.onResolveConcurrentConflict
+						: conflicts.resolve
 				}
 			/>
 		</div>
