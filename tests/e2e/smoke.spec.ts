@@ -359,6 +359,26 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	if (expectedContactAddress) await expect(contactDetails.getByText(expectedContactAddress, { exact: false })).toBeVisible();
 });
 
+test("keeps server-component redirects out of page caches", async ({ request }) => {
+	const response = await request.get("/lib?search=cache-protocol-check", {
+		headers: {
+			"Accept-Language": "zz-ZZ",
+			RSC: "1",
+			"Next-Router-Prefetch": "1",
+			"Next-Router-Segment-Prefetch": "/_tree",
+		},
+		maxRedirects: 0,
+	});
+
+	// Next adds the RSC hash redirect after the proxy has set its headers.
+	expect(response.status()).toBe(307);
+	const destination = new URL(response.headers().location!, response.url());
+	expect(destination.pathname).toBe("/lib");
+	expect(destination.searchParams.get("search")).toBe("cache-protocol-check");
+	expect(destination.searchParams.has("_rsc")).toBe(true);
+	expect(response.headers()["cache-control"]).toBe("private, no-store");
+});
+
 test("enforces runtime locales, default, detection, order, and switcher visibility", async ({
 	page,
 	request,
@@ -383,15 +403,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	expect(await defaultResponse.text()).toContain(
 		`<html lang="${expectedDefaultLocale}"`,
 	);
-	if (expectedDetectedLocale) {
-		expect(defaultResponse.headers()["cache-control"]).toBe(
-			"private, no-store",
-		);
-	} else {
-		expect(defaultResponse.headers()["cache-control"]).toContain(
-			"public, s-maxage=",
-		);
-	}
+	expect(defaultResponse.headers()["cache-control"]).toBe("private, no-store");
 
 	if (expectedDetectedLocale) {
 		const detectedResponse = await request.get("/lib", {
