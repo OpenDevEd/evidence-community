@@ -8,9 +8,8 @@ import { useReducedMotion, type Variants } from "framer-motion";
 const contentVariants: Variants = {
 	enter: {
 		...TRANSITION_VARIANTS.collapse.enter,
-		// Keep the full body from overflowing while its height is still expanding.
+		// Keep interrupted height animations from exposing the full body as well.
 		overflowY: "hidden",
-		transitionEnd: { overflowY: "unset" },
 	},
 	exit: {
 		...TRANSITION_VARIANTS.collapse.exit,
