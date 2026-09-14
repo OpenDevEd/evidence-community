@@ -132,6 +132,39 @@ function LibraryFilters({
 	);
 }
 
+function SearchTitle({ title }: { title: string }) {
+	const textRef = useRef<HTMLSpanElement>(null);
+	const [isTruncated, setIsTruncated] = useState(false);
+
+	useEffect(() => {
+		const text = textRef.current;
+		if (!text) return;
+		const measure = () => setIsTruncated(text.scrollWidth > text.clientWidth);
+		const observer = new ResizeObserver(measure);
+		observer.observe(text);
+		// A loaded font can change the text width without resizing its container.
+		document.fonts.addEventListener("loadingdone", measure);
+		measure();
+		return () => {
+			observer.disconnect();
+			document.fonts.removeEventListener("loadingdone", measure);
+		};
+	}, [title]);
+
+	return (
+		<Tooltip
+			content={title}
+			isDisabled={!isTruncated}
+			placement="bottom-start"
+			classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))]" }}
+		>
+			<span ref={textRef} className="block truncate" tabIndex={isTruncated ? 0 : undefined}>
+				{title}
+			</span>
+		</Tooltip>
+	);
+}
+
 function SearchTabContent({
 	askAI,
 	header,
@@ -187,19 +220,7 @@ function SearchTabContent({
 						{t("goToFilters")}
 					</SkipLink>
 					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-						{header || (
-							showHeader && (
-								<Tooltip
-									content={searchTitle}
-									placement="bottom-start"
-									classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))]" }}
-								>
-									<span className="block truncate" tabIndex={0}>
-										{searchTitle}
-									</span>
-								</Tooltip>
-							)
-						)}
+						{header || (showHeader && <SearchTitle title={searchTitle} />)}
 					</h1>
 					<Button
 						startContent={
