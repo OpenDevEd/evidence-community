@@ -587,7 +587,9 @@ export default function AdminWorkbench({
 		}
 		if (window.matchMedia(ADMIN_DESKTOP_MEDIA_QUERY).matches) return;
 		const frame = requestAnimationFrame(() => {
-			document.getElementById(`admin-${mobilePane}-pane`)?.focus();
+			if (document.activeElement?.id !== "admin-record-search") {
+				document.getElementById(`admin-${mobilePane}-pane`)?.focus();
+			}
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [mobilePane]);
@@ -2078,6 +2080,7 @@ export default function AdminWorkbench({
 					<Input
 						color="filled"
 						aria-label="Search records"
+						id="admin-record-search"
 						className="min-w-0 flex-1"
 						classNames={{
 							input: "text-sm",
@@ -2095,13 +2098,13 @@ export default function AdminWorkbench({
 						}
 						value={filters.query}
 						onClear={() =>
-							setFilters((current) => ({
+							selectNavigationFilter((current) => ({
 								...current,
 								query: "",
 							}))
 						}
 						onValueChange={(query) =>
-							setFilters((current) => ({
+							selectNavigationFilter((current) => ({
 								...current,
 								query,
 							}))

@@ -6551,3 +6551,17 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		page.getByRole("button", { name: "Search indexing: Search updated" }),
 	).toBeVisible({ timeout: 4_000 });
 });
+
+
+test("shows search results from the narrow editor without interrupting typing", async ({ page }) => {
+ await mockPublishedBook(page);
+ await page.setViewportSize({ width: 390, height: 844 });
+ await page.goto(`/admin?item=${publishedItemKey}`);
+ await expect(page.locator("#admin-inspector-pane")).toBeVisible();
+ const search = page.getByRole("textbox", { name: "Search records" });
+ await search.pressSequentially("Published book", { delay: 30 });
+ await expect(search).toBeFocused();
+ await expect(search).toHaveValue("Published book");
+ await expect(page.getByRole("region", { name: "Records", exact: true })).toBeVisible();
+ await expect(page.locator(`[data-record-key="${publishedItemKey}"]`)).toBeVisible();
+});
