@@ -1,21 +1,9 @@
 import { PLATFORM_LOCALES } from "@/config/library-config/catalogs";
 import { createNavigation } from "next-intl/navigation";
-import { defineRouting } from "next-intl/routing";
-import { RUNTIME_LOCALE_COOKIE } from "./runtime";
+import { routing } from "./routing-config";
 
-export const PLATFORM_DEFAULT_LOCALE = "en-GB" as const;
-
-export const routing = defineRouting({
-	locales: PLATFORM_LOCALES,
-	defaultLocale: PLATFORM_DEFAULT_LOCALE,
-	localeDetection: false,
-	// Client navigation cannot know the runtime default at module initialization.
-	// Explicit prefixes keep every locale correct; the runtime proxy canonicalizes
-	// the configured default locale to an unprefixed URL.
-	localePrefix: "always",
-	localeCookie: RUNTIME_LOCALE_COOKIE,
-	alternateLinks: false,
-});
+export { PLATFORM_DEFAULT_LOCALE, routing } from "./routing-config";
+export { Link, useRouter } from "./client-navigation";
 
 export const localesNames = {
 	"en-US": "English (US)",
@@ -41,5 +29,5 @@ export const shortLocalesNames = {
 	pt: "PT",
 } satisfies Record<(typeof PLATFORM_LOCALES)[number], string>;
 
-export const { Link, getPathname, redirect, usePathname, useRouter } =
+export const { getPathname, redirect, usePathname } =
 	createNavigation(routing);

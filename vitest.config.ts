@@ -8,6 +8,7 @@ export default defineConfig({
 		},
 	},
 	test: {
+		server: { deps: { inline: ["next-intl"] } },
 		clearMocks: true,
 		environment: "node",
 		include: ["tests/unit/**/*.test.{ts,tsx}"],
