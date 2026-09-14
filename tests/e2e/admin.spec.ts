@@ -985,7 +985,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	await page.getByRole("button", { name: "Record status and sources" }).click();
 	const failedStatus = page.locator('[data-admin-writeback-status="failed"]');
 	await expect(failedStatus).toBeVisible();
-	await failedStatus.getByRole("button", { name: /^Sources/ }).click();
+	await failedStatus.click();
 	await expect(page.getByText("Zotero rejected the update.")).toBeVisible();
 	await page
 		.getByRole("button", { name: "Retry writeback", exact: true })
@@ -6525,7 +6525,7 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		name: "Search indexing: Indexing failed",
 	});
 	await expect(failedStatus).toBeVisible();
-	await failedStatus.getByRole("button", { name: /^Sources/ }).click();
+	await failedStatus.click();
 	await page.getByRole("button", { name: "Retry indexing" }).click();
 	await expect
 		.poll(() => retryRequest)

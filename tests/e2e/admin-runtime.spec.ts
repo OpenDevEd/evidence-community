@@ -94,6 +94,7 @@ test("lets an Editor load a record from the real library database", async ({
 	page,
 }) => {
 	await openAdmin(page);
+	await page.getByRole("textbox", { name: "Search records" }).fill(expectedTitle);
 	await page.locator(`[data-record-key="${expectedKey}"]`).click();
 
 	await expect(
@@ -272,7 +273,8 @@ test("lets an Editor publish and update a record without stale client navigation
 	test.setTimeout(120_000);
 	const title = `Runtime published book ${testInfo.workerIndex}-${testInfo.retry}-${Date.now()}`;
 	await openAdmin(page);
-  await page.locator(`[data-record-key="${expectedKey}"]`).click();
+  await page.getByRole("textbox", { name: "Search records" }).fill(expectedTitle);
+	await page.locator(`[data-record-key="${expectedKey}"]`).click();
   const previousTitle = page.locator("#admin-inspector-pane").getByRole("textbox", {name: "Title", exact: true});
   await expect(previousTitle).toHaveValue(expectedTitle);
   let releaseDetail!: () => void;
