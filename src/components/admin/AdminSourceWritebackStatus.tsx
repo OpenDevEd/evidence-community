@@ -148,7 +148,7 @@ function writebackSummaryText(
 	unavailable: boolean,
 	checking: boolean,
 ) {
-	if (!sourceCount) return "None connected";
+	if (!sourceCount) return "";
 	if (unavailable) return "Status unavailable";
 	if (checking) return "Checking sources";
 	if (state === "synced") return `${sourceCount} synced`;
@@ -306,11 +306,7 @@ export function AdminSourcesWritebackStatus({
 					)
 				}
 			>
-				{!sources.length && (
-					<p className="py-2 text-xs text-black/50 dark:text-white/50">
-						No sources connected to this item.
-					</p>
-				)}
+
 				{restriction && (
 					<div className="mb-3 flex items-start gap-2.5 py-1 text-black/60 dark:text-white/60">
 						<span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] dark:bg-white/[0.06]">
@@ -352,6 +348,7 @@ export function AdminSourcesWritebackStatus({
 										{source.sourceLabel}
 									</p>
 									<Tooltip
+										isDisabled={["sending", "queued", "removed", "locked"].includes(sourceState)}
 										content={`${sourceConfig.label}. ${sourceConfig.description}`}
 										classNames={{
 											content:

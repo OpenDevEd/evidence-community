@@ -90,7 +90,7 @@ const navigationListSurfaceClass =
 function NewCollectionButton({ onCreate }: { onCreate: () => void }) {
 	const { canPublish } = useAdminSession();
 	return (
-		<Tooltip content={canPublish ? "New collection" : "Editors and owners manage collections"}>
+		<Tooltip isDisabled={canPublish} content="Editors and owners manage collections">
 			<span className="inline-flex">
 				<button
 					disabled={!canPublish}

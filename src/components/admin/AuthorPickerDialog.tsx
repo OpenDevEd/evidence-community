@@ -1,5 +1,7 @@
 "use client";
 
+import { TruncatedText } from "@/components/nextui/TruncatedText";
+
 import { useEffect, useId, useState } from "react";
 import useSWR from "swr";
 import {
@@ -354,19 +356,9 @@ function AuthorResult({
 				className="w-10 h-10 shrink-0 rounded-xl bg-black/[0.045] text-black/35 dark:bg-white/[0.06] dark:text-white/40"
 			/>
 			<span className="min-w-0 flex-1">
-				<span
-					className="block truncate text-sm font-semibold text-black/80 dark:text-white/85"
-					title={profile.name}
-				>
-					{profile.name}
-				</span>
+				<TruncatedText text={profile.name} className="text-sm font-semibold text-black/80 dark:text-white/85" />
 				{(profile.affiliation || profile.headline) && (
-					<span
-						className="mt-1 block truncate text-xs text-black/45 dark:text-white/45"
-						title={profile.affiliation || profile.headline}
-					>
-						{profile.affiliation || profile.headline}
-					</span>
+					<TruncatedText text={profile.affiliation || profile.headline || ""} className="mt-1 text-xs text-black/45 dark:text-white/45" />
 				)}
 			</span>
 			<span

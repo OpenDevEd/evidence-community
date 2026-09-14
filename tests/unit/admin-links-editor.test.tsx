@@ -74,6 +74,9 @@ describe("AdminLinksEditor", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+		Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
@@ -82,6 +85,8 @@ describe("AdminLinksEditor", () => {
 	afterEach(async () => {
 		await act(async () => root.unmount());
 		container.remove();
+		vi.unstubAllGlobals();
+		Reflect.deleteProperty(document, "fonts");
 	});
 
 	async function render(
@@ -115,13 +120,19 @@ describe("AdminLinksEditor", () => {
 		return onChange;
 	}
 
-	it("shows the three lists with change markers and locked source rows", async () => {
+	async function selectTab(label: "Cites" | "Related" | "Cited by") {
+		const tab = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+		expect(tab).not.toBeNull();
+		await act(async () => tab!.click());
+		expect(tab!.getAttribute("aria-pressed")).toBe("true");
+	}
+
+	it("switches link kinds while keeping source and incoming links read only", async () => {
 		await render({
 			itemType: "Book",
 			links: { cites: ["AAAA2345", "NEWW2345"], related: [] },
 		});
-		const headings = [...container.querySelectorAll("h4")].map((node) => node.textContent);
-		expect(headings).toEqual(["Cites", "Related", "Cited by"]);
+		await selectTab("Cites");
 
 		const cites = [...container.querySelectorAll('[data-admin-link-kind="cites"]')]
 			.filter((node) => node.closest('[data-admin-link-list="cites"]'))
@@ -134,16 +145,17 @@ describe("AdminLinksEditor", () => {
 			["NEWW2345", "added"],
 			["GONE2345", "removed"],
 		]);
-		expect(container.textContent).toContain("Added in this draft");
-		expect(container.textContent).toContain("Removed in this draft");
 
+
+		await selectTab("Related");
 		const sourceRow = container.querySelector('[data-admin-link-key="SRCA2345"]');
 		expect(sourceRow?.getAttribute("data-admin-link-origin")).toBe("source:zotero-main");
 		expect(sourceRow?.querySelector('button[aria-label^="Remove"]')).toBeNull();
 		expect(sourceRow?.querySelector('[aria-label="Read only"]')).not.toBeNull();
 		expect(sourceRow?.textContent).toContain("Main Zotero group");
 
-		const incoming = container.querySelector('[data-admin-link-incoming="cites"]');
+		await selectTab("Cited by");
+		const incoming = container.querySelector('[data-admin-link-list="citedBy"]');
 		expect(incoming?.textContent).toContain("Citing book");
 		expect(incoming?.querySelector('button[aria-label^="Remove"]')).toBeNull();
 	});
@@ -173,7 +185,7 @@ describe("AdminLinksEditor", () => {
 		});
 		expect(container.querySelector('[role="dialog"]')).toBeNull();
 		const add = container.querySelector<HTMLButtonElement>('[data-admin-link-pick="cites"]');
-		expect(add?.textContent).toBe("Add to Cites");
+		expect(add?.disabled).toBe(false);
 		await act(async () => add!.click());
 		expect(onStartPick).toHaveBeenCalledWith("cites");
 
@@ -183,9 +195,7 @@ describe("AdminLinksEditor", () => {
 			pickingKind: "cites",
 		});
 		const done = container.querySelector<HTMLButtonElement>('[data-admin-link-pick="cites"]');
-		expect(done?.textContent).toBe("Done picking");
 		expect(done?.getAttribute("aria-pressed")).toBe("true");
-		expect(container.textContent).toContain("Click records in the list to add them under Cites");
 		await act(async () => done!.click());
 		expect(onStopPick).toHaveBeenCalled();
 	});
@@ -209,6 +219,7 @@ describe("AdminLinksEditor", () => {
 		expect(open).not.toBeNull();
 		await act(async () => open!.click());
 		expect(onOpenRecord).toHaveBeenCalledWith("AAAA2345");
+		await selectTab("Cited by");
 		// Incoming rows open too
 		const openIncoming = container.querySelector<HTMLButtonElement>(
 			'button[aria-label="Open Citing book"]',
@@ -216,11 +227,20 @@ describe("AdminLinksEditor", () => {
 		expect(openIncoming).not.toBeNull();
 	});
 
-	it("offers no add or remove controls when read only", async () => {
-		await render({ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }, vi.fn(), true, {
-			onStartPick: vi.fn(),
-		});
-		expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
-		expect(container.textContent).not.toContain("Add to Cites");
+	it("keeps adding disabled and prevents mutation when read only", async () => {
+		const onStartPick = vi.fn();
+		const onChange = vi.fn();
+		await render({ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }, onChange, true, { onStartPick });
+		for (const kind of ["Cites", "Related"] as const) {
+			await selectTab(kind);
+			const add = container.querySelector<HTMLButtonElement>("button[data-admin-link-pick]");
+			expect(add?.disabled).toBe(true);
+			await act(async () => add!.click());
+			expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
+		}
+		await selectTab("Cited by");
+		expect(container.querySelector("button[data-admin-link-pick]")).toBeNull();
+		expect(onStartPick).not.toHaveBeenCalled();
+		expect(onChange).not.toHaveBeenCalled();
 	});
 });

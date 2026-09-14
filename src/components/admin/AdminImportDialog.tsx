@@ -1,5 +1,7 @@
 "use client";
 
+import { TruncatedText } from "@/components/nextui/TruncatedText";
+
 import {
 	ModalBody,
 	ModalContent,
@@ -470,8 +472,8 @@ function PreviewRow({
 			<td className="p-2">{cells.creators}</td>
 			<td className="p-2 tabular-nums">{cells.year}</td>
 			<td className="p-2">{cells.itemType}</td>
-			<td className="max-w-40 truncate p-2" title={record.source}>
-				{record.source}
+			<td className="max-w-40 p-2">
+				<TruncatedText text={record.source} focusable />
 			</td>
 			<td className={`p-2 ${stateTone[status.tone]}`}>
 				{status.label}

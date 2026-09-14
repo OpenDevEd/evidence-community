@@ -34,6 +34,7 @@ import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import useBreakpoint from "@/hooks/useBreakpoint";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminItemDraft,
@@ -384,6 +385,7 @@ export default function AdminWorkbench({
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
 }) {
+	const showImportLabel = useBreakpoint("lg");
 	const finePointer = useFinePointer();
 	const { canPublish } = useAdminSession();
 	const { navigation, theme } = useLibraryConfig();
@@ -2238,7 +2240,7 @@ export default function AdminWorkbench({
 						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
 						role="group"
 					>
-						<Tooltip content="Import Item">
+						<Tooltip content="Import Item" isDisabled={showImportLabel}>
 							<Button
 								aria-label="Import Item"
 								className="h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3"

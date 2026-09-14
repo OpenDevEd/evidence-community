@@ -84,6 +84,7 @@ export function AdminItemDisplay({
 				>
 					{ITEM_DISPLAY_OPTIONS.map(({ key, label, description }) => (
 						<Tooltip
+							isDisabled={key === "comingSoon"}
 							key={key}
 							content={description}
 							placement="left"

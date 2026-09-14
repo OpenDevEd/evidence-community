@@ -65,6 +65,8 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { InspectorSection as Section } from "./InspectorSection";
+import { InspectorListRow, InspectorListRemove } from "./InspectorListRow";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type {
 	AdminCreator,
@@ -279,51 +281,6 @@ function IconButton({
 				</Button>
 			</span>
 		</Tooltip>
-	);
-}
-
-function Section({
-	actions,
-	children,
-	icon: Icon,
-	id,
-	title,
-}: {
-	actions?: React.ReactNode;
-	children: React.ReactNode;
-	icon: typeof Add01Icon;
-	id?: string;
-	title: string;
-}) {
-	return (
-		<section className="scroll-mt-4 py-5 first:pt-0" id={id}>
-			<div className="mb-3 flex min-h-6 items-center gap-2.5">
-				<HugeiconsIcon
-					icon={Icon}
-					aria-hidden
-					className="shrink-0 text-black/35 dark:text-white/35"
-					size={15}
-					strokeWidth={1.8}
-				/>
-				<h3 className="text-sm font-semibold text-black/80 dark:text-white/85">
-					{title}
-				</h3>
-				<span
-					aria-hidden
-					className="h-px min-w-4 flex-1 bg-black/[0.06] dark:bg-white/[0.07]"
-				/>
-				{actions}
-			</div>
-			{children}
-		</section>
-	);
-}
-
-function EmptyValue({ label }: { label: string }) {
-	return (
-		<div className="flex min-h-9 items-center text-xs text-black/35 dark:text-white/35">
-			<span>{label}</span>
-		</div>
 	);
 }
 
@@ -772,59 +729,57 @@ const TagsEditor = memo(function TagsEditor({
 	};
 	return (
 		<div className="space-y-2">
-			{visibleTags.length === 0 && readOnly ? (
-				<EmptyValue label="No tags" />
-			) : null}
-			<div className="flex flex-wrap gap-1.5">
-				{visibleTags.map((tag) => (
-					<Chip
-						key={tag}
-						className="rounded-lg bg-black/[0.045] dark:bg-white/[0.06]"
-						onClose={
-							readOnly
-								? undefined
-								: () =>
-										onChange({
-											...payload,
-											tags: tags.filter(
-												(entry) => entry !== tag,
-											),
-										})
-						}
-						size="sm"
-						variant="flat"
-					>
-						{tag}
-					</Chip>
-				))}
-			</div>
-			{!readOnly ? (
-				<Input
-					color="filled"
-					id={`admin-${recordKey}-tags`}
-					classNames={inspectorInputClassNames}
-					endContent={
-						<IconButton
-							disabled={!tag || alreadyAdded}
-							icon={Add01Icon}
-							label="Add tag"
-							onPress={addTag}
-						/>
+			{visibleTags.length > 0 && (
+				<div className="flex flex-wrap gap-1.5">
+					{visibleTags.map((tag) => (
+						<Chip
+							key={tag}
+							className="rounded-lg bg-black/[0.045] dark:bg-white/[0.06]"
+							onClose={
+								readOnly
+									? undefined
+									: () =>
+											onChange({
+												...payload,
+												tags: tags.filter(
+													(entry) => entry !== tag,
+												),
+											})
+							}
+							size="sm"
+							variant="flat"
+						>
+							{tag}
+						</Chip>
+					))}
+				</div>
+			)}
+			<Input
+				color="filled"
+				id={`admin-${recordKey}-tags`}
+				isDisabled={readOnly}
+				classNames={inspectorInputClassNames}
+				endContent={
+					<IconButton
+						disabled={readOnly || !tag || alreadyAdded}
+						icon={Add01Icon}
+						label="Add tag"
+						onPress={addTag}
+					/>
+				}
+				placeholder="Add a tag"
+				description={alreadyAdded ? "This tag is already added." : undefined}
+				errorMessage={error}
+				isInvalid={Boolean(error)}
+				value={value}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						addTag();
 					}
-					placeholder="Add a tag"
-					description={alreadyAdded ? "This tag is already added." : undefined}
-					errorMessage={error}
-					isInvalid={Boolean(error)}
-					value={value}
-					onKeyDown={(event) => {
-						if (event.key === "Enter") {
-							event.preventDefault();
-							addTag();
-						}
-					}}
-					onValueChange={setValue}
-				/>
-			) : null}
+				}}
+				onValueChange={setValue}
+			/>
 		</div>
 	);
 });
@@ -871,7 +826,7 @@ function CollectionsEditor({
 				id={`admin-${recordKey}-collections`}
 				aria-describedby={error ? errorId : undefined}
 				aria-label="Collections"
-				className={`space-y-1.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-danger ${
+				className={`space-y-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-danger ${
 					error ? "bg-danger/5 p-2" : ""
 				}`}
 				role="group"
@@ -909,99 +864,53 @@ function CollectionsEditor({
 					<div className="grid min-h-10 place-items-center">
 						<Spinner aria-label="Loading collections" size="sm" />
 					</div>
-				) : !resolveError && entries.length === 0 ? (
-					<EmptyValue label="No collections" />
 				) : null}
-				{entries.map((entry) => {
-					const locked =
-						entry.deleted ||
-						!editableSourceSet.has(entry.sourceConnectionKey);
-					const membershipChanged =
-						publishedCollectionKeys !== undefined &&
-						!publishedSelected.has(entry.key);
-					return (
-						<div
-							key={entry.key}
-							className="flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75"
-							data-admin-collection-membership={entry.key}
-						>
-							<HugeiconsIcon
-								icon={Folder01Icon}
-								aria-hidden
-								className="shrink-0 text-black/35 dark:text-white/35"
-								size={14}
-								strokeWidth={1.7}
-							/>
-							<span className="min-w-0 flex-1">
-								<span className="block truncate font-medium">
-									{entry.name}
-								</span>
-								<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
-									{adminCollectionPath(entry, sources)}
-								</span>
-							</span>
-							{membershipChanged ? (
-								<Tooltip content="Added in this draft">
-									<HugeiconsIcon
-										icon={PencilIcon}
-										aria-label="Added in this draft"
-										className="shrink-0 text-accent"
-										size={11}
-									/>
-								</Tooltip>
-							) : null}
-							{entry.deleted ? (
-								<Chip className="h-5" size="sm" variant="flat">
-									Deleted
-								</Chip>
-							) : null}
-							{locked ? (
-								<HugeiconsIcon
-									icon={SquareLock01Icon}
-									aria-label="Read only"
-									className="shrink-0 opacity-40"
-									size={11}
+				{entries.length > 0 && (
+					<ul className="space-y-1.5" aria-label="Selected collections">
+						{entries.map((entry) => {
+							const locked = entry.deleted || !editableSourceSet.has(entry.sourceConnectionKey);
+							const membershipChanged = publishedCollectionKeys !== undefined && !publishedSelected.has(entry.key);
+							return (
+								<InspectorListRow
+									key={entry.key}
+									icon={Folder01Icon}
+									title={entry.name}
+									data-admin-collection-membership={entry.key}
+									description={adminCollectionPath(entry, sources)}
+									status={membershipChanged || entry.deleted ? (
+										<>
+											{membershipChanged && <span className="text-accent">Added in this draft</span>}
+											{entry.deleted && <span className="text-warning">Deleted</span>}
+										</>
+									) : undefined}
+									actions={locked ? (
+										<HugeiconsIcon icon={SquareLock01Icon} aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+									) : !readOnly ? (
+										<InspectorListRemove
+											label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
+											onRemove={() => onChange({ ...payload, collections: selectedKeys.filter(key => key !== entry.key) })}
+										/>
+									) : undefined}
 								/>
-							) : !readOnly ? (
-								<button
-									aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
-									className="grid size-7 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
-									onClick={() =>
-										onChange({
-											...payload,
-											collections: selectedKeys.filter(
-												(key) => key !== entry.key,
-											),
-										})
-									}
-									type="button"
-								>
-									<HugeiconsIcon
-										icon={Cancel01Icon}
-										aria-hidden
-										size={13}
-									/>
-								</button>
-							) : null}
-						</div>
-					);
-				})}
-				{!readOnly ? (
-					<Button
-						onPress={() => setPickerOpen(true)}
-						size="xs"
-						startContent={
-							<HugeiconsIcon
-								icon={Add01Icon}
-								aria-hidden
-								size={15}
-							/>
-						}
-						variant="muted"
-					>
-						Add to collection
-					</Button>
-				) : null}
+							);
+						})}
+					</ul>
+				)}
+				<Button
+					isDisabled={readOnly}
+					onPress={() => setPickerOpen(true)}
+					size="xs"
+					startContent={
+						<HugeiconsIcon
+							icon={Add01Icon}
+							aria-hidden
+							size={15}
+						/>
+					}
+					variant="muted"
+				>
+					Add to collection
+				</Button>
 			</div>
 
 			<DialogModal
@@ -1063,59 +972,206 @@ function AttachmentList({
 	readOnlyVersion: boolean;
 }) {
 	return (
-		<div className="space-y-2.5">
-			<div className="space-y-1">
-				{detail.attachments.map((attachment) => (
-					<button
-						key={attachment.key}
-						aria-label={`Open ${attachment.title}`}
-						className="flex min-h-11 w-full items-center gap-2.5 rounded-lg bg-black/[0.03] px-2.5 py-2 text-left transition-colors hover:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
-						onClick={() => onSelectAttachment(attachment.key)}
-						type="button"
-					>
-						<HugeiconsIcon
+		<div className="space-y-2">
+			{detail.attachments.length > 0 && (
+				<ul className="space-y-1.5" aria-label="Attachments">
+					{detail.attachments.map((attachment) => (
+						<InspectorListRow
+							key={attachment.key}
 							icon={FileAttachmentIcon}
-							aria-hidden
-							className="shrink-0 text-black/40 dark:text-white/40"
-							size={15}
-							strokeWidth={1.7}
+							title={attachment.title}
+							onOpen={() => onSelectAttachment(attachment.key)}
+							status={
+								<>
+									{!readOnlyVersion && <RecordStateChip state={attachment.state} />}
+									{attachment.fileState !== "none" && <FileStateChip state={attachment.fileState} snapshot={readOnlyVersion} />}
+								</>
+							}
 						/>
-						<span className="min-w-0 flex-1 truncate text-sm font-medium text-black/75 dark:text-white/80">
-							{attachment.title}
-						</span>
-						<span className="flex shrink-0 items-center gap-1">
-							{!readOnlyVersion && <RecordStateChip state={attachment.state} />}
-							<FileStateChip state={attachment.fileState} snapshot={readOnlyVersion} />
-						</span>
+					))}
+				</ul>
+			)}
+			<Button
+				isDisabled={readOnly || busy}
+				onPress={onCreateAttachment}
+				size="xs"
+				startContent={
+					<HugeiconsIcon
+						icon={FilePlusIcon}
+						aria-hidden
+						size={15}
+					/>
+				}
+				variant="muted"
+			>
+				Add attachment
+			</Button>
+		</div>
+	);
+}
+
+function formatFileDetails(bytes: number, pages: number | null | undefined) {
+	const size = bytes < 1024 * 102.4
+		? `${Math.max(1, Math.round(bytes / 1024))} KB`
+		: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	return pages ? `${pages} ${pages === 1 ? "page" : "pages"}, ${size}` : size;
+}
+
+function StagedAttachmentFile({
+	file, sourceFileUrl, busy, readOnly, readOnlyVersion, onDiscardFile,
+}: {
+	file: NonNullable<AdminItemDetail["fileDraft"]>;
+	sourceFileUrl: AdminItemDetail["sourceFileUrl"];
+	busy: boolean;
+	readOnly: boolean;
+	readOnlyVersion: boolean;
+	onDiscardFile: (key: string) => void;
+}) {
+	return (
+		<div
+			className="rounded-xl bg-black/[0.03] p-3 text-xs dark:bg-white/[0.04]"
+			data-admin-file-row={
+				file.readyAt ? "staged" : "processing"
+			}
+		>
+			<div className="flex items-start gap-3">
+				<div className="min-w-0 flex-1">
+					<p className="truncate font-medium text-black/80 dark:text-white/80">
+						{file.filename}
+					</p>
+					<p className="mt-1 text-black/45 dark:text-white/45">
+						{formatFileDetails(file.expectedSizeBytes, file.pageCount)}
+					</p>
+				</div>
+				<FileStateChip
+					snapshot={readOnlyVersion}
+					state={
+						file.readyAt
+							? "staged"
+							: "processing"
+					}
+				/>
+			</div>
+			<p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-black/30 dark:text-white/30">
+				{file.actualSha256 ??
+					file.expectedSha256}
+			</p>
+			{readOnly &&
+			file.readyAt &&
+			sourceFileUrl ? (
+				<Button
+					as="a"
+					href={sourceFileUrl}
+					target="_blank"
+					rel="noreferrer"
+					size="xs"
+					variant="transparent"
+					className="mt-2"
+					startContent={
 						<HugeiconsIcon
-							icon={ArrowRight01Icon}
-							aria-hidden
-							className="shrink-0 text-black/30 dark:text-white/30"
+							icon={LinkSquare01Icon}
 							size={14}
 						/>
-					</button>
-				))}
-			</div>
-			{detail.attachments.length === 0 ? (
-				<EmptyValue label="No attachments" />
+					}
+				>
+					Open PDF
+				</Button>
 			) : null}
 			{!readOnly ? (
+				<div className="mt-2 flex flex-wrap gap-1">
+					<Button
+						isDisabled={busy}
+						onPress={() => onDiscardFile(file.itemKey)}
+						size="xs"
+						startContent={
+							<HugeiconsIcon
+								icon={Delete02Icon}
+								aria-hidden
+								size={14}
+							/>
+						}
+						variant="transparent"
+					>
+						{file.readyAt
+							? "Discard staged PDF"
+							: "Cancel upload"}
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+function PublishedAttachmentFile({
+	file, removalPending, busy, readOnly, onChangePdfRemoval,
+}: {
+	file: NonNullable<AdminItemDetail["filePublication"]>;
+	removalPending: boolean;
+	busy: boolean;
+	readOnly: boolean;
+	onChangePdfRemoval: (key: string) => void;
+}) {
+	return (
+		<div
+			className="rounded-xl bg-black/[0.03] p-3 text-xs dark:bg-white/[0.04]"
+			data-admin-file-row="published"
+		>
+			<div className="flex items-start gap-3">
+				<div className="min-w-0 flex-1">
+					<p className="truncate font-medium text-black/80 dark:text-white/80">
+						{file.filename}
+					</p>
+					<p className="mt-1 text-black/45 dark:text-white/45">
+						{formatFileDetails(file.sizeBytes, file.pageCount)}
+					</p>
+				</div>
+				<FileStateChip state="published" />
+			</div>
+			<p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-black/30 dark:text-white/30">
+				{file.sha256}
+			</p>
+			<div className="mt-2 flex flex-wrap gap-1">
 				<Button
-					isDisabled={busy}
-					onPress={onCreateAttachment}
+					as="a"
+					href={file.publicUrl}
+					rel="noreferrer"
 					size="xs"
 					startContent={
 						<HugeiconsIcon
-							icon={FilePlusIcon}
+							icon={Download01Icon}
 							aria-hidden
-							size={15}
+							size={14}
 						/>
 					}
-					variant="muted"
+					target="_blank"
+					variant="transparent"
 				>
-					Add attachment
+					Open PDF
 				</Button>
-			) : null}
+				{!readOnly ? (
+					<Button
+						isDisabled={busy}
+						onPress={() => onChangePdfRemoval(file.itemKey)}
+						size="xs"
+						startContent={
+							<HugeiconsIcon
+								icon={
+									removalPending
+										? Undo02Icon
+										: Delete02Icon
+								}
+								aria-hidden
+								size={14}
+							/>
+						}
+						variant="transparent"
+					>
+						{removalPending
+							? "Undo removal"
+							: "Remove PDF from draft"}
+					</Button>
+				) : null}
+			</div>
 		</div>
 	);
 }
@@ -1139,13 +1195,6 @@ function AttachmentFilePanel({
 	readOnly: boolean;
 	readOnlyVersion: boolean;
 }) {
-	const formatFileDetails = (bytes: number, pages: number | null | undefined) => {
-		const size = bytes < 1024 * 102.4
-			? `${Math.max(1, Math.round(bytes / 1024))} KB`
-			: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-		return pages ? `${pages} ${pages === 1 ? "page" : "pages"}, ${size}` : size;
-	};
-
 	return (
 		<div className="space-y-3">
 			{fileError ? (
@@ -1156,142 +1205,25 @@ function AttachmentFilePanel({
 					{fileError}
 				</div>
 			) : null}
-			{detail.filePublication ? (
-				<div
-					className="rounded-xl bg-black/[0.03] p-3 text-xs dark:bg-white/[0.04]"
-					data-admin-file-row="published"
-				>
-					<div className="flex items-start gap-3">
-						<div className="min-w-0 flex-1">
-							<p className="truncate font-medium text-black/80 dark:text-white/80">
-								{detail.filePublication.filename}
-							</p>
-							<p className="mt-1 text-black/45 dark:text-white/45">
-								{formatFileDetails(detail.filePublication.sizeBytes, detail.filePublication.pageCount)}
-							</p>
-						</div>
-						<FileStateChip state="published" />
-					</div>
-					<p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-black/30 dark:text-white/30">
-						{detail.filePublication.sha256}
-					</p>
-					<div className="mt-2 flex flex-wrap gap-1">
-						<Button
-							as="a"
-							href={detail.filePublication.publicUrl}
-							rel="noreferrer"
-							size="xs"
-							startContent={
-								<HugeiconsIcon
-									icon={Download01Icon}
-									aria-hidden
-									size={14}
-								/>
-							}
-							target="_blank"
-							variant="transparent"
-						>
-							Open PDF
-						</Button>
-						{!readOnly ? (
-							<Button
-								isDisabled={busy}
-								onPress={() => onChangePdfRemoval(detail.key)}
-								size="xs"
-								startContent={
-									<HugeiconsIcon
-										icon={
-											detail.fileRemovalPending
-												? Undo02Icon
-												: Delete02Icon
-										}
-										aria-hidden
-										size={14}
-									/>
-								}
-								variant="transparent"
-							>
-								{detail.fileRemovalPending
-									? "Undo removal"
-									: "Remove PDF from draft"}
-							</Button>
-						) : null}
-					</div>
-				</div>
-			) : null}
-			{detail.fileDraft ? (
-				<div
-					className="rounded-xl bg-black/[0.03] p-3 text-xs dark:bg-white/[0.04]"
-					data-admin-file-row={
-						detail.fileDraft.readyAt ? "staged" : "processing"
-					}
-				>
-					<div className="flex items-start gap-3">
-						<div className="min-w-0 flex-1">
-							<p className="truncate font-medium text-black/80 dark:text-white/80">
-								{detail.fileDraft.filename}
-							</p>
-							<p className="mt-1 text-black/45 dark:text-white/45">
-								{formatFileDetails(detail.fileDraft.expectedSizeBytes, detail.fileDraft.pageCount)}
-							</p>
-						</div>
-						<FileStateChip
-							snapshot={readOnlyVersion}
-							state={
-								detail.fileDraft.readyAt
-									? "staged"
-									: "processing"
-							}
-						/>
-					</div>
-					<p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-black/30 dark:text-white/30">
-						{detail.fileDraft.actualSha256 ??
-							detail.fileDraft.expectedSha256}
-					</p>
-					{readOnly &&
-					detail.fileDraft.readyAt &&
-					detail.sourceFileUrl ? (
-						<Button
-							as="a"
-							href={detail.sourceFileUrl}
-							target="_blank"
-							rel="noreferrer"
-							size="xs"
-							variant="transparent"
-							className="mt-2"
-							startContent={
-								<HugeiconsIcon
-									icon={LinkSquare01Icon}
-									size={14}
-								/>
-							}
-						>
-							Open PDF
-						</Button>
-					) : null}
-					{!readOnly ? (
-						<div className="mt-2 flex flex-wrap gap-1">
-							<Button
-								isDisabled={busy}
-								onPress={() => onDiscardFile(detail.key)}
-								size="xs"
-								startContent={
-									<HugeiconsIcon
-										icon={Delete02Icon}
-										aria-hidden
-										size={14}
-									/>
-								}
-								variant="transparent"
-							>
-								{detail.fileDraft.readyAt
-									? "Discard staged PDF"
-									: "Cancel upload"}
-							</Button>
-						</div>
-					) : null}
-				</div>
-			) : null}
+			{detail.filePublication && (
+				<PublishedAttachmentFile
+					file={detail.filePublication}
+					removalPending={detail.fileRemovalPending}
+					busy={busy}
+					readOnly={readOnly}
+					onChangePdfRemoval={onChangePdfRemoval}
+				/>
+			)}
+			{detail.fileDraft && (
+				<StagedAttachmentFile
+					file={detail.fileDraft}
+					sourceFileUrl={detail.sourceFileUrl}
+					busy={busy}
+					readOnly={readOnly}
+					readOnlyVersion={readOnlyVersion}
+					onDiscardFile={onDiscardFile}
+				/>
+			)}
 			{!detail.filePublication &&
 			!detail.fileDraft &&
 			detail.sourceFileUrl ? (
@@ -1321,27 +1253,19 @@ function AttachmentFilePanel({
 					</Button>
 				</div>
 			) : null}
-			{!detail.filePublication &&
-			!detail.fileDraft &&
-			!detail.sourceFileUrl ? (
-				<p className="text-xs text-black/40 dark:text-white/40">
-					No PDF uploaded
-				</p>
-			) : null}
-			{!readOnly ? (
-				<div>
-					<PdfFileInput
-						attachmentKey={detail.key}
-						disabled={busy}
-						label={
-							detail.filePublication
-								? "Stage replacement"
-								: "Upload PDF"
-						}
-						onUpload={onUpload}
-					/>
-				</div>
-			) : null}
+
+			<div>
+				<PdfFileInput
+					attachmentKey={detail.key}
+					disabled={readOnly || busy}
+					label={
+						detail.filePublication
+							? "Stage replacement"
+							: "Upload PDF"
+					}
+					onUpload={onUpload}
+				/>
+			</div>
 		</div>
 	);
 }
@@ -1565,7 +1489,7 @@ export function AdminInspector({
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
-	const filesReadOnly = readOnlyVersion || !native || unrestored;
+	const filesReadOnly = readOnlyVersion || !native || unrestored || !detail.draft || !detail.editable;
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&
@@ -1673,6 +1597,7 @@ export function AdminInspector({
 						submitted={readOnlyVersion}
 						reviewId={reviewId}
 						disabled={
+							!detail.draft ||
 							readOnlyVersion ||
 							!detail.editable ||
 							unrestored ||
@@ -2119,51 +2044,46 @@ export function AdminInspector({
 					/>
 				</Section>
 				{!detail.parentItem ? (
-					<Section
-						actions={
-							diff.links ? (
-								<ChangedMarker
-									label="links"
-									onRevert={() =>
-										onChange({
-											...payload,
-											links: diff.links,
-										})
-									}
-									publishedValue={
-										<PublishedList
-											values={[
-												...diff.links.cites.map(
-													(key) =>
-														`Cites: ${linkTitles.get(key) ?? key}`,
-												),
-												...diff.links.related.map(
-													(key) =>
-														`Related: ${linkTitles.get(key) ?? key}`,
-												),
-											]}
-										/>
-									}
-								/>
-							) : undefined
+					<AdminLinksEditor
+						key={detail.key}
+						actions={diff.links ? (
+							<ChangedMarker
+								label="links"
+								onRevert={() =>
+									onChange({
+										...payload,
+										links: diff.links,
+									})
+								}
+								publishedValue={
+									<PublishedList
+										values={[
+											...diff.links.cites.map(
+												(key) =>
+													`Cites: ${linkTitles.get(key) ?? key}`,
+											),
+											...diff.links.related.map(
+												(key) =>
+													`Related: ${linkTitles.get(key) ?? key}`,
+											),
+										]}
+									/>
+								}
+							/>
+						) : undefined
 						}
-						icon={Link02Icon}
-						title="Links"
-					>
-						<AdminLinksEditor
-							detail={detail}
-							errors={validationErrors}
-							knownTargets={linkTargets}
-							onChange={patchPayload}
-							onOpenRecord={onBackToParent}
-							onStartPick={onStartLinkPick}
-							onStopPick={onStopLinkPick}
-							payload={linksPayload}
-							pickingKind={linkPickKind}
-							readOnly={readOnly}
-							sources={sources}
-						/>
-					</Section>
+						detail={detail}
+						errors={validationErrors}
+						knownTargets={linkTargets}
+						onChange={patchPayload}
+						onOpenRecord={onBackToParent}
+						onStartPick={onStartLinkPick}
+						onStopPick={onStopLinkPick}
+						payload={linksPayload}
+						pickingKind={linkPickKind}
+						readOnly={readOnly}
+						sources={sources}
+					/>
 				) : null}
 				{!detail.parentItem ? (
 					<Section
