@@ -148,7 +148,6 @@ function writebackSummaryText(
 	unavailable: boolean,
 	checking: boolean,
 ) {
-	if (!sourceCount) return "";
 	if (unavailable) return "Status unavailable";
 	if (checking) return "Checking sources";
 	if (state === "synced") return `${sourceCount} synced`;
@@ -223,6 +222,7 @@ function AdminWritebackSummary({
 	sources: readonly AdminWritebackSourceSummary[];
 	writeback: Writeback;
 }) {
+	if (!sources.length) return null;
 	const { Icon, className, label, spin, title } = getWritebackSummary(
 		sources,
 		writeback,

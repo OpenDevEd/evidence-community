@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { ArrowRight01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -15,6 +15,14 @@ type InspectorListRowProps = ComponentPropsWithoutRef<"li"> & {
 	removed?: boolean;
 };
 
+function RowDescription({ value, focusable }: { value: ReactNode; focusable: boolean }) {
+	return (
+		<span className="min-w-0 flex-1">
+			{typeof value === "string" ? <TruncatedText text={value} focusable={focusable} /> : value}
+		</span>
+	);
+}
+
 export function InspectorListRow({
 	icon,
 	title,
@@ -26,6 +34,7 @@ export function InspectorListRow({
 	className = "",
 	...props
 }: InspectorListRowProps) {
+	const [titleOpen, setTitleOpen] = useState(false);
 	const content = (
 		<>
 			<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-black/[0.035] text-black/40 dark:bg-white/[0.045] dark:text-white/45">
@@ -35,14 +44,14 @@ export function InspectorListRow({
 				<TruncatedText
 					text={title}
 					focusable={!onOpen}
+					isOpen={titleOpen}
+					onOpenChange={setTitleOpen}
 					className={`text-[13px] font-medium leading-4 ${removed ? "line-through" : ""}`}
 				/>
 				{(description || status) && (
 					<span className="flex h-4 min-w-0 items-center gap-2 whitespace-nowrap text-[11px] leading-4 text-black/45 dark:text-white/45">
 						{description && (
-							<span className="min-w-0 flex-1">
-								{typeof description === "string" ? <TruncatedText text={description} focusable={!onOpen} /> : description}
-							</span>
+							<RowDescription value={description} focusable={!onOpen} />
 						)}
 						{status && <span className="flex shrink-0 items-center gap-2 [&>span]:h-4">{status}</span>}
 					</span>
@@ -64,6 +73,10 @@ export function InspectorListRow({
 					type="button"
 					aria-label={`Open ${title}`}
 					onClick={onOpen}
+					onFocus={(event) => {
+						setTitleOpen(event.currentTarget.matches(":focus-visible"));
+					}}
+					onBlur={() => setTitleOpen(false)}
 					className={`${contentClassName} bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus`}
 				>
 					{content}

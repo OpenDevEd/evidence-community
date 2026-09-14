@@ -8,10 +8,14 @@ export function TruncatedText({
 	text,
 	className = "",
 	focusable = false,
+	isOpen,
+	onOpenChange,
 }: {
 	text: string;
 	className?: string;
 	focusable?: boolean;
+	isOpen?: boolean;
+	onOpenChange?: (open: boolean) => void;
 }) {
 	const ref = useRef<HTMLSpanElement>(null);
 	const [isTruncated, setIsTruncated] = useState(false);
@@ -34,6 +38,8 @@ export function TruncatedText({
 		<Tooltip
 			content={text}
 			isDisabled={!isTruncated}
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
 			placement="bottom-start"
 			classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))] whitespace-normal break-words" }}
 		>
