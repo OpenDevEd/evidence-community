@@ -441,6 +441,10 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.goto(`/${expectedDefaultLocale}/lib`);
 	await dismissConsent(page);
+	await expect(page.getByRole("link", {
+		name: expectedNavigationLabel,
+		exact: true,
+	})).toHaveAttribute("href", "/lib");
 
 	const secondaryNavigation = page.getByRole("navigation", {
 		name: "Secondary navigation",
