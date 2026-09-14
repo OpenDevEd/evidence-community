@@ -4,6 +4,7 @@
   "updatedAt": "2026-07-28T13:36:00Z",
   "identity": {
     "name": "Indigo Research Library",
+    "tagline": "Search the Indigo Research Library",
     "shortName": "Indigo Research",
     "baseUrl": "https://indigo.example.org",
     "fundingPartners": [

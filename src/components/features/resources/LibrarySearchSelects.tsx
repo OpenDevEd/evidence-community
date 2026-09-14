@@ -68,7 +68,7 @@ export function SortComponent({
 				itemsContext.config.interactionsStyle !== "one-line"
 					? {
 							base: twMerge(
-								"flex-1 max-w-full lg:max-w-56 shrink-0",
+								"flex-1 max-w-full lg:flex-none lg:w-56 lg:max-w-56 shrink-0",
 								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(

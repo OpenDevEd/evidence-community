@@ -2,7 +2,20 @@
 
 import type { ReactNode } from "react";
 import { Accordion, AccordionItem } from "@nextui-org/react";
-import { useReducedMotion } from "framer-motion";
+import { TRANSITION_VARIANTS } from "@nextui-org/framer-utils";
+import { useReducedMotion, type Variants } from "framer-motion";
+
+const contentVariants: Variants = {
+	enter: {
+		...TRANSITION_VARIANTS.collapse.enter,
+		// Keep interrupted height animations from exposing the full body as well.
+		overflow: "hidden",
+	},
+	exit: {
+		...TRANSITION_VARIANTS.collapse.exit,
+		overflow: "hidden",
+	},
+};
 
 export function AdminStatusAccordion({
 	title,
@@ -42,6 +55,7 @@ export function AdminStatusAccordion({
 					aria-label={title}
 					title={title}
 					subtitle={summary}
+					motionProps={{ variants: contentVariants }}
 				>
 					{children}
 				</AccordionItem>
