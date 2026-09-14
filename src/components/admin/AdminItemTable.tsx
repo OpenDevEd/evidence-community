@@ -5,7 +5,7 @@ import { creatorDisplayName } from "@/lib/creator-display-name";
 import { editableCollectionSourceKeys } from "@/lib/admin/item-collection-policy";
 
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
-import { AlertCircleIcon, ArrowDown01Icon, ArrowUp01Icon, ArrowUpDownIcon, Calendar01Icon, DatabaseIcon, DragDropVerticalIcon, FileAttachmentIcon, Folder01Icon, LayoutThreeColumnIcon, LayoutThreeRowIcon, LockIcon, RotateLeft01Icon, Tag01Icon, Tick01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, ArrowDown01Icon, ArrowUp01Icon, ArrowUpDownIcon, Calendar01Icon, DatabaseIcon, DragDropVerticalIcon, FileAttachmentIcon, Folder01Icon, LayoutThreeColumnIcon, LayoutThreeRowIcon, SquareLock01Icon, Undo02Icon, Tag01Icon, Tick01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
 import { useDraggable } from "@dnd-kit/react";
 import {
 	Popover,
@@ -303,7 +303,7 @@ function RecordTitleCell({
 					className="grid size-7 shrink-0 place-items-center text-black/20 dark:text-white/20"
 					title="Collection assignment unavailable for this source"
 				>
-					<HugeiconsIcon icon={LockIcon} aria-hidden size={12} />
+					<HugeiconsIcon icon={SquareLock01Icon} aria-hidden size={12} />
 				</span>
 			)}
 			<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={15} />
@@ -380,7 +380,7 @@ function TableViewControls({
 								size="xs"
 								variant="transparent"
 							>
-								<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={14} />
+								<HugeiconsIcon icon={Undo02Icon} aria-hidden size={14} />
 							</Button>
 						</Tooltip>
 					</div>
@@ -474,7 +474,7 @@ function TableViewControls({
 												</Button>
 											</div>
 										) : (
-											<HugeiconsIcon icon={LockIcon} aria-label="Required column" className="mx-2 opacity-30" size={12} />
+											<HugeiconsIcon icon={SquareLock01Icon} aria-label="Required column" className="mx-2 opacity-30" size={12} />
 										)}
 									</div>
 								);

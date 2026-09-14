@@ -11,6 +11,7 @@ import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { AdminReviewSnapshot } from "@/components/admin/admin-api";
+import type { AdminItemDetail } from "@/lib/admin/types";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
 vi.mock("server-only", () => ({}));
@@ -88,6 +89,8 @@ let root: Root;
 let container: HTMLDivElement;
 let snapshot: AdminReviewSnapshot;
 let requests: unknown[];
+let childResponses: Response[];
+let childRequests: string[];
 const draftChanges = vi.fn();
 function Inspector({ role, overrides }: { role: "editor" | "creator"; overrides?: Partial<ComponentProps<typeof EditorialInspector>> }) {
 	const [working, setWorking] = useState(draftPayload);
@@ -165,10 +168,18 @@ beforeEach(() => {
 	}));
 	snapshot = structuredClone(submitted);
 	requests = [];
+	childResponses = [];
+	childRequests = [];
 	draftChanges.mockClear();
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async (url: string, init?: RequestInit) => {
+			if (url.endsWith("/api/admin/items/CHILDKEY")) {
+				childRequests.push(url);
+				const response = childResponses.shift();
+				if (response) return response;
+				throw new Error(`Missing child response: ${url}`);
+			}
 			if (url.endsWith("/review"))
 				return Response.json({
 					reviews: [
@@ -224,6 +235,19 @@ const titleField = () =>
 		'input[aria-label="Title"], input[id="admin-field-title"]',
 	);
 
+async function settleRequests() {
+	await act(async () => {
+		for (let index = 0; index < 5; index += 1) await Promise.resolve();
+	});
+}
+
+function revisionValue(label: string) {
+	const term = [...container.querySelectorAll("dt")].find(
+		(entry) => entry.textContent?.trim() === label,
+	);
+	return term?.parentElement?.querySelector("dd")?.textContent?.trim();
+}
+
 it("saves submitted corrections without changing the newer working draft", async () => {
 	await act(async () => root.render(<Inspector role="editor" />));
 	await clickVersion("Submitted version");
@@ -272,6 +296,158 @@ it("lets Creators edit the working draft while keeping the submitted version rea
 	expect(titleField()?.value).toBe("Newer working title");
 	expect(titleField()?.disabled).toBe(false);
 	expect(requests).toEqual([]);
+});
+
+it("keeps attachment display tags removable through a field patch", async () => {
+	const tags = ["hide", "internal", "_comingsoon", "research"];
+	const attachmentPayload = {
+		...payload,
+		itemType: "Attachment",
+		parentItem: submitted.key,
+		tags,
+		title: "Submitted PDF",
+	};
+	const change = vi.fn();
+	await act(async () =>
+		root.render(
+			<Inspector
+				role="creator"
+				overrides={{
+					detail: {
+						...submitted,
+						editable: true,
+						key: "CHILDKEY",
+						itemType: "Attachment",
+						parentItem: submitted.key,
+						parentState: "draft",
+						title: "Submitted PDF",
+						tags,
+						draft: {
+							...submitted.draft!,
+							itemKey: "CHILDKEY",
+							patch: attachmentPayload,
+							payload: attachmentPayload,
+						},
+					},
+					payload: attachmentPayload,
+					definitions: [
+						{
+							itemType: "Attachment",
+							fields: [{ field: "title" }],
+							creatorTypes: [],
+						},
+					],
+					onChange: change,
+				}}
+			/>,
+		),
+	);
+
+	const closeButtons = [
+		...container.querySelectorAll<HTMLElement>('[aria-label="close chip"]'),
+	];
+	expect(
+		closeButtons.map((button) => button.parentElement?.textContent?.trim()),
+	).toEqual(expect.arrayContaining(tags));
+	const hide = closeButtons.find(
+		(button) => button.parentElement?.textContent?.trim() === "hide",
+	);
+	expect(hide).toBeTruthy();
+	await act(async () => hide!.click());
+
+	const update = change.mock.calls[0]?.[0] as
+		| Record<string, unknown>
+		| ((current: Record<string, unknown>) => Record<string, unknown>);
+	expect(update).toBeTypeOf("function");
+	const current = { ...attachmentPayload, title: "Latest working title" };
+	expect(
+		typeof update === "function" ? update(current) : update,
+	).toEqual({
+		...current,
+		tags: ["internal", "_comingsoon", "research"],
+	});
+});
+
+it("loads the live attachment status for a frozen submitted attachment and retries failures", async () => {
+	const childPayload = {
+		itemType: "Attachment",
+		parentItem: submitted.key,
+		title: "Submitted PDF",
+		creators: [],
+		tags: [],
+		collections: [],
+	};
+	const frozenAttachment: AdminReviewSnapshot["frozenAttachments"][number] = {
+		...submitted,
+		key: "CHILDKEY",
+		itemType: "Attachment",
+		parentItem: submitted.key,
+		parentState: "draft",
+		title: "Submitted PDF",
+		draft: {
+			...submitted.draft!,
+			itemKey: "CHILDKEY",
+			patch: childPayload,
+			payload: childPayload,
+		},
+	};
+	const liveAttachment: AdminItemDetail = {
+		...frozenAttachment,
+		revision: 7,
+		sourceConnectionKey: "zotero-main",
+		state: "published",
+		parentState: "published",
+		published: childPayload,
+		filePublication: {
+			coverPublicUrl: "https://minimal.example.org/cover.jpg",
+			filename: "submitted.pdf",
+			itemKey: "CHILDKEY",
+			pageCount: 12,
+			publicUrl: "https://minimal.example.org/submitted.pdf",
+			publishedAt: "2026-09-09T10:00:00Z",
+			sha256: "a".repeat(64),
+			sizeBytes: 1024,
+			uploadRevision: 2,
+		},
+	};
+	snapshot = {
+		...submitted,
+		attachments: [{ ...frozenAttachment, parentItem: submitted.key }],
+		frozenAttachments: [frozenAttachment],
+	};
+	childResponses.push(
+		Response.json({}, { status: 503 }),
+		Response.json({ item: liveAttachment }),
+	);
+
+	await act(async () => root.render(<Inspector role="editor" />));
+	await clickVersion("Submitted version");
+	const attachment = container.querySelector<HTMLButtonElement>(
+		'[aria-label="Open Submitted PDF"]',
+	);
+	expect(attachment).toBeTruthy();
+	await act(async () => attachment!.click());
+	await settleRequests();
+	expect(container.textContent).toContain("Something went wrong. Try again.");
+	const retry = [...container.querySelectorAll("button")].find(
+		(button) => button.textContent?.trim() === "Try again",
+	);
+	expect(retry).toBeTruthy();
+	await act(async () => retry!.click());
+	await settleRequests();
+
+	expect(childRequests).toEqual([
+		"/api/admin/items/CHILDKEY",
+		"/api/admin/items/CHILDKEY",
+	]);
+	const publicLink = container.querySelector<HTMLAnchorElement>(
+		'a[aria-label="Open public item"]',
+	);
+	expect(publicLink?.href).toBe(
+		"https://minimal.example.org/lib/BOOK2345/download/CHILDKEY",
+	);
+	expect(revisionValue("Source")).toBe("Zotero Main");
+	expect(revisionValue("Published revision")).toBe("7");
 });
 
 it("shows report conflict values under form field names and preserves the server choice keys", async () => {

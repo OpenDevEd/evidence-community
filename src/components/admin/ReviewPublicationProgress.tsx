@@ -1,6 +1,6 @@
 "use client";
 import { Spinner } from "@/components/nextui/Spinner";
-import { RotateLeft01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { Undo02Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { useAdminPublication } from "./useAdminPublication";
@@ -64,7 +64,7 @@ export function ReviewPublicationProgress({snapshot}: {snapshot: Pick<AdminRevie
 									className="mt-2"
 									startContent={
 										<HugeiconsIcon
-											icon={RotateLeft01Icon}
+											icon={Undo02Icon}
 											size={14}
 										/>
 									}

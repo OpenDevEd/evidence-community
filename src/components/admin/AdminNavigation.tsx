@@ -4,7 +4,7 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { ReviewQueueEntry } from "./ReviewQueueEntry";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, LockIcon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, SquareLock01Icon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
 
 import { AdminSourceSyncBadge } from "./AdminSourceSyncDialog";
 import { type ReactNode, useRef } from "react";
@@ -208,7 +208,7 @@ export function AdminNavigation({
 								  entry.writeback.supported ? (
 									<HugeiconsIcon icon={CloudUploadIcon} aria-label="Writeback enabled" size={11} />
 								) : entry.readOnly ? (
-									<HugeiconsIcon icon={LockIcon} aria-label="Writeback unavailable" size={11} />
+									<HugeiconsIcon icon={SquareLock01Icon} aria-label="Writeback unavailable" size={11} />
 								) : null}
 							</button>
 							{entry.sync ? (

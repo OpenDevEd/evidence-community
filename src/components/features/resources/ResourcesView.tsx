@@ -1,4 +1,5 @@
 "use client";
+import { AiOutlineCompass } from "react-icons/ai";
 
 import {
 	AuthorProfilesContext,
@@ -9,7 +10,6 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Alert02Icon,
 	CodeSquareIcon,
-	Compass01Icon,
 	Delete02Icon,
 	Download01Icon,
 	Refresh01Icon,
@@ -713,10 +713,7 @@ export function NoteView() {
 								<div className="flex flex-col gap-4">
 									<h3 className="text-xl text-black/80 dark:text-white/80 font-medium flex flex-col">
 										<div className="flex gap-2 items-center">
-											<HugeiconsIcon
-												icon={Compass01Icon}
-												className="size-4 shrink-0"
-											/>
+											<AiOutlineCompass className="size-4 shrink-0" />
 											<span className="text-base text-black/80 dark:text-white/80">
 												{collectionData?.title}
 											</span>

@@ -1,9 +1,23 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { AlertCircleIcon, CheckmarkCircle01Icon, Clock03Icon, CloudLoadingIcon, CloudOffIcon, CloudUploadIcon, GitCompareIcon, Loading03Icon, LockIcon, PauseIcon, Refresh01Icon, UnplugIcon } from "@hugeicons/core-free-icons";
-import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import { useState } from "react";
+import {
+	AlertCircleIcon,
+	CheckmarkCircle01Icon,
+	Clock03Icon,
+	CloudLoadingIcon,
+	CloudOffIcon,
+	CloudUploadIcon,
+	GitCompareIcon,
+	Loading03Icon,
+	SquareLock01Icon,
+	PauseIcon,
+	Refresh01Icon,
+	UnplugIcon,
+} from "@hugeicons/core-free-icons";
+import { useState, type ReactNode } from "react";
+import { AdminStatusAccordion } from "./AdminStatusAccordion";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 import { Button } from "@/components/nextui/Button";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
@@ -27,7 +41,8 @@ const appearance = {
 	},
 	disabled: {
 		className: "text-black/45 dark:text-white/45",
-		description: "Writeback is disabled for this source in the library configuration.",
+		description:
+			"Writeback is disabled for this source in the library configuration.",
 		icon: CloudOffIcon,
 		label: "Writeback off",
 		spin: false,
@@ -49,7 +64,7 @@ const appearance = {
 	locked: {
 		className: "text-black/45 dark:text-white/45",
 		description: "Writeback is locked for this record.",
-		icon: LockIcon,
+		icon: SquareLock01Icon,
 		label: "Writeback locked",
 		spin: false,
 	},
@@ -76,7 +91,8 @@ const appearance = {
 	},
 	retrying: {
 		className: "text-amber-700 dark:text-amber-300",
-		description: "Writeback hit a temporary error and will retry automatically.",
+		description:
+			"Writeback hit a temporary error and will retry automatically.",
 		icon: Refresh01Icon,
 		label: "Retrying sync",
 		spin: true,
@@ -90,7 +106,8 @@ const appearance = {
 	},
 	synced: {
 		className: "text-emerald-700 dark:text-emerald-300",
-		description: "The latest published edit was acknowledged by the source.",
+		description:
+			"The latest published edit was acknowledged by the source.",
 		icon: CheckmarkCircle01Icon,
 		label: "Synced",
 		spin: false,
@@ -112,25 +129,139 @@ export type AdminWritebackSourceSummary = {
 	sourceLabel: string;
 };
 
-/**
- * One chip for all the sources a record writes to. The chip shows the state
- * that needs attention most; the popover lists every source with its own
- * state and actions (retry, or the two conflict choices).
- */
+type Writeback = ReturnType<typeof useAdminSourcesWriteback>;
+type WritebackState = keyof typeof appearance;
+
+function writebackSummaryIcon(
+	state: WritebackState,
+	unavailable: boolean,
+	checking: boolean,
+) {
+	if (unavailable) return AlertCircleIcon;
+	if (checking) return Loading03Icon;
+	return appearance[state].icon;
+}
+
+function writebackSummaryText(
+	state: WritebackState,
+	sourceCount: number,
+	unavailable: boolean,
+	checking: boolean,
+) {
+	if (!sourceCount) return "None connected";
+	if (unavailable) return "Status unavailable";
+	if (checking) return "Checking sources";
+	if (state === "synced") return `${sourceCount} synced`;
+	return appearance[state].label;
+}
+
+function writebackSummaryTitle(
+	label: string,
+	state: WritebackState,
+	sourceCount: number,
+	unavailable: boolean,
+	checking: boolean,
+) {
+	if (unavailable || checking || !sourceCount) return label;
+	return writebackSummaryLabel(state, sourceCount);
+}
+
+function sourceWritebackStates(
+	sources: readonly AdminWritebackSourceSummary[],
+	writeback: Writeback,
+) {
+	return sources.map(
+		(source) => writeback.entries[source.sourceKey]?.status?.state ?? null,
+	);
+}
+
+function hasUnavailableSource(
+	sources: readonly AdminWritebackSourceSummary[],
+	writeback: Writeback,
+) {
+	return sources.some((source) =>
+		Boolean(writeback.entries[source.sourceKey]?.error),
+	);
+}
+
+function getWritebackSummary(
+	sources: readonly AdminWritebackSourceSummary[],
+	writeback: Writeback,
+) {
+	const states = sourceWritebackStates(sources, writeback);
+	const state = summarizeWritebackStates(states);
+	const config = appearance[state];
+	const checking =
+		!states.some((sourceState) => sourceState !== null) && writeback.loading;
+	const unavailable = hasUnavailableSource(sources, writeback);
+	const label = writebackSummaryText(
+		state,
+		sources.length,
+		unavailable,
+		checking,
+	);
+
+	return {
+		Icon: writebackSummaryIcon(state, unavailable, checking),
+		className: unavailable ? "text-danger" : config.className,
+		label,
+		spin: !unavailable && (checking || config.spin),
+		title: writebackSummaryTitle(
+			label,
+			state,
+			sources.length,
+			unavailable,
+			checking,
+		),
+	};
+}
+
+function AdminWritebackSummary({
+	sources,
+	writeback,
+}: {
+	sources: readonly AdminWritebackSourceSummary[];
+	writeback: Writeback;
+}) {
+	const { Icon, className, label, spin, title } = getWritebackSummary(
+		sources,
+		writeback,
+	);
+	return (
+		<span
+			aria-label={label}
+			title={title}
+			className={`inline-flex items-center gap-1.5 text-[11px] ${className}`}
+		>
+			<HugeiconsIcon
+				icon={Icon}
+				size={13}
+				className={
+					spin ? "animate-spin motion-reduce:animate-none" : undefined
+				}
+			/>
+			{label}
+		</span>
+	);
+}
+
+/** Per-source status and recovery actions. */
 export function AdminSourcesWritebackStatus({
 	canLoadRemote,
-	itemKey,
-	onResolved,
-	revision,
 	sources,
+	itemKey,
+	revision,
+	onResolved,
+	manageAction,
+	restriction,
 }: {
-	/** Attachments and notes follow their parent; only the parent may load the source's copy. */
 	canLoadRemote: boolean;
-	itemKey: string;
-	/** Called after a conflict choice, so the record can be reloaded and search updates tracked. */
-	onResolved: (result: AdminSearchIndexMutationResult) => void;
-	revision: number | null;
+	manageAction?: ReactNode;
+	restriction?: string;
 	sources: readonly AdminWritebackSourceSummary[];
+	itemKey: string;
+	revision: number | null;
+	onResolved: (result: AdminSearchIndexMutationResult) => void;
 }) {
 	const { canPublish } = useAdminSession();
 	const writeback = useAdminSourcesWriteback(
@@ -149,168 +280,218 @@ export function AdminSourcesWritebackStatus({
 	const states = sources.map(
 		(source) => writeback.entries[source.sourceKey]?.status?.state ?? null,
 	);
-	const loaded = states.some((state) => state !== null);
-	const state = summarizeWritebackStates(states);
-	const config = appearance[state];
-	const Icon = !loaded && writeback.loading ? Loading03Icon : config.icon;
-	const spin = (!loaded && writeback.loading) || config.spin;
-	const label =
-		!loaded && writeback.loading
-			? "Checking sources"
-			: writebackSummaryLabel(state, sources.length);
 
 	return (
-		<Popover placement="bottom-start">
-			<PopoverTrigger>
-				<button
-					aria-label={`Sources: ${label}`}
-					className={`inline-flex h-6 items-center gap-1 whitespace-nowrap text-[11px] font-medium transition-colors hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${config.className}`}
-					data-admin-writeback-status={state}
-					type="button"
-				>
-					<span className="grid size-3 shrink-0 place-items-center overflow-hidden">
-						<HugeiconsIcon
-							icon={Icon}
-							aria-hidden
-							className={spin ? "animate-spin" : undefined}
-							size={12}
-							strokeWidth={2}
+		<section
+			data-admin-writeback-status={summarizeWritebackStates(states)}
+			aria-label="Connected sources"
+		>
+			<AdminStatusAccordion
+				title="Sources"
+				action={manageAction}
+				summary={
+					restriction ? (
+						<span className="inline-flex items-center gap-1.5 text-black/55 dark:text-white/55">
+							<HugeiconsIcon icon={SquareLock01Icon} size={12} />
+							{restriction ===
+							"Writeback is locked for this record."
+								? "Writeback locked"
+								: "Writeback restricted"}
+						</span>
+					) : (
+						<AdminWritebackSummary
+							sources={sources}
+							writeback={writeback}
 						/>
-					</span>
-					{label}
-				</button>
-			</PopoverTrigger>
-			<PopoverContent
-				className="w-64 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
-				data-admin-writeback-popover
+					)
+				}
 			>
-				<div className="w-full space-y-3 p-3">
-					<p className="text-xs font-medium text-black/45 dark:text-white/45">
-						Sources
+				{!sources.length && (
+					<p className="py-2 text-xs text-black/50 dark:text-white/50">
+						No sources connected to this item.
 					</p>
-					<ul className="space-y-3">
-						{sources.map((source) => {
-							const entry = writeback.entries[source.sourceKey];
-							const sourceState = entry?.status?.state ?? "idle";
-							const sourceConfig = appearance[sourceState];
-							const SourceIcon = sourceConfig.icon;
-							const armed =
-								pendingChoice?.sourceKey === source.sourceKey &&
-								sourceState === "conflict"
-									? pendingChoice.choice
-									: null;
-							const busy = writeback.busySource === source.sourceKey;
-							const controlsDisabled = busy || !canPublish;
-							return (
-								<li
-									className="space-y-2"
-									data-admin-writeback-source={source.sourceKey}
-									data-admin-writeback-source-status={sourceState}
-									key={source.sourceKey}
-								>
-									<div className="flex items-start gap-2.5">
-										<span className="mt-0.5 grid size-[15px] shrink-0 place-items-center text-black/55 dark:text-white/55">
-											<SourceProviderIcon
-												provider={source.provider}
-												size={14}
-											/>
-										</span>
-										<div className="min-w-0 flex-1">
-											<p className="truncate text-sm font-semibold text-black/85 dark:text-white/90">
-												{source.sourceLabel}
-											</p>
-											<p
-												className={`mt-0.5 inline-flex items-center gap-1 text-xs font-medium ${sourceConfig.className}`}
-											>
-												<HugeiconsIcon
-													icon={SourceIcon}
-													aria-hidden
-													className={sourceConfig.spin ? "animate-spin" : undefined}
-													size={12}
-												/>
-												{sourceConfig.label}
-											</p>
-											<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">
-												{sourceConfig.description}
-											</p>
-										</div>
-									</div>
-									{entry?.error || entry?.status?.error ? (
-										<p
-											className="rounded-lg bg-danger/[0.07] px-2.5 py-2 text-xs leading-5 text-danger"
-											role="alert"
+				)}
+				{restriction && (
+					<div className="mb-3 flex items-start gap-2.5 py-1 text-black/60 dark:text-white/60">
+						<span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] dark:bg-white/[0.06]">
+							<HugeiconsIcon icon={SquareLock01Icon} size={14} />
+						</span>
+						<p className="min-w-0 flex-1 py-1 text-xs leading-5">
+							{restriction}
+						</p>
+					</div>
+				)}
+				<ul className="space-y-1">
+					{sources.map((source) => {
+						const entry = writeback.entries[source.sourceKey];
+						const sourceState = entry?.status?.state ?? "idle";
+						const sourceConfig = appearance[sourceState];
+						const SourceIcon = sourceConfig.icon;
+						const armed =
+							pendingChoice?.sourceKey === source.sourceKey &&
+							sourceState === "conflict"
+								? pendingChoice.choice
+								: null;
+						const busy = writeback.busySource === source.sourceKey;
+						const controlsDisabled = busy || !canPublish;
+						return (
+							<li
+								className="space-y-2"
+								data-admin-writeback-source={source.sourceKey}
+								data-admin-writeback-source-status={sourceState}
+								key={source.sourceKey}
+							>
+								<div className="flex min-h-8 items-center gap-2 py-1">
+									<span className="grid size-5 shrink-0 place-items-center text-black/55 dark:text-white/60">
+										<SourceProviderIcon
+											provider={source.provider}
+											size={18}
+										/>
+									</span>
+									<p className="min-w-0 flex-1 text-xs font-medium leading-5 text-black/85 dark:text-white/90">
+										{source.sourceLabel}
+									</p>
+									<Tooltip
+										content={`${sourceConfig.label}. ${sourceConfig.description}`}
+										classNames={{
+											content:
+												"max-w-[min(16rem,calc(100vw-2rem))] whitespace-normal break-words text-xs leading-5",
+										}}
+										placement="left"
+									>
+										<span
+											tabIndex={0}
+											aria-label={`${source.sourceLabel}: ${sourceConfig.label}`}
+											className={`inline-flex shrink-0 items-center gap-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-focus ${sourceConfig.className}`}
 										>
-											{entry.error ?? entry.status?.error}
-										</p>
-									) : null}
-									{sourceState === "conflict" ? (
-										<div className="space-y-2" data-admin-writeback-conflict>
+											<HugeiconsIcon
+												icon={SourceIcon}
+												size={13}
+												className={
+													sourceConfig.spin
+														? "animate-spin"
+														: undefined
+												}
+											/>
+											{sourceConfig.label}
+										</span>
+									</Tooltip>
+								</div>
+								{entry?.error || entry?.status?.error ? (
+									<p
+										className="rounded-lg bg-danger/[0.07] px-2.5 py-2 text-xs leading-5 text-danger"
+										role="alert"
+									>
+										{entry.error ?? entry.status?.error}
+									</p>
+								) : null}
+								{sourceState === "conflict" ? (
+									<div
+										className="space-y-2"
+										data-admin-writeback-conflict
+									>
+										<ConflictChoiceButton
+											choice="send-local"
+											description={`Replaces the ${source.sourceLabel} copy with the published version. Changes made in ${source.sourceLabel} while updates were paused are lost there.`}
+											disabled={controlsDisabled}
+											label={`Send this record to ${source.sourceLabel}`}
+											onConfirm={() => {
+												setPendingChoice(null);
+												void writeback.resolve(
+													source.sourceKey,
+													"send-local",
+												);
+											}}
+											onPick={(choice) =>
+												setPendingChoice(
+													choice
+														? {
+																choice,
+																sourceKey:
+																	source.sourceKey,
+															}
+														: null,
+												)
+											}
+											pending={armed}
+										/>
+										{canLoadRemote ? (
 											<ConflictChoiceButton
-												choice="send-local"
-												description={`Replaces the ${source.sourceLabel} copy with the published version. Changes made in ${source.sourceLabel} while updates were paused are lost there.`}
+												choice="load-remote"
+												description={`Replaces published metadata with the ${source.sourceLabel} copy. Working drafts stay private.`}
 												disabled={controlsDisabled}
-												label={`Send this record to ${source.sourceLabel}`}
+												label={`Load ${source.sourceLabel}’s version`}
 												onConfirm={() => {
 													setPendingChoice(null);
-													void writeback.resolve(source.sourceKey, "send-local");
+													void writeback.resolve(
+														source.sourceKey,
+														"load-remote",
+													);
 												}}
 												onPick={(choice) =>
 													setPendingChoice(
-														choice ? { choice, sourceKey: source.sourceKey } : null,
+														choice
+															? {
+																	choice,
+																	sourceKey:
+																		source.sourceKey,
+																}
+															: null,
 													)
 												}
 												pending={armed}
 											/>
-											{canLoadRemote ? (
-												<ConflictChoiceButton
-													choice="load-remote"
-													description={`Replaces published metadata with the ${source.sourceLabel} copy. Working drafts stay private.`}
-													disabled={controlsDisabled}
-													label={`Load ${source.sourceLabel}’s version`}
-													onConfirm={() => {
-														setPendingChoice(null);
-														void writeback.resolve(source.sourceKey, "load-remote");
-													}}
-													onPick={(choice) =>
-														setPendingChoice(
-															choice ? { choice, sourceKey: source.sourceKey } : null,
-														)
-													}
-													pending={armed}
-												/>
-											) : null}
-										</div>
-									) : sourceState === "failed" ? (
-										<Button
-											className="w-full"
-											color="accent"
-											isDisabled={controlsDisabled}
-											onPress={() => void writeback.retry(source.sourceKey)}
-											size="xs"
-											startContent={
-												<HugeiconsIcon icon={Refresh01Icon} aria-hidden className={busy ? "animate-spin" : undefined} size={14} />
-											}
-											variant="solid"
-										>
-											Retry writeback
-										</Button>
-									) : entry?.error ? (
-										<Button
-											className="w-full"
-											onPress={() => void writeback.refresh()}
-											size="xs"
-											startContent={<HugeiconsIcon icon={Refresh01Icon} aria-hidden size={14} />}
-										>
-											Check again
-										</Button>
-									) : null}
-								</li>
-							);
-						})}
-					</ul>
-				</div>
-			</PopoverContent>
-		</Popover>
+										) : null}
+									</div>
+								) : sourceState === "failed" ? (
+									<Button
+										className="w-full"
+										color="accent"
+										isDisabled={controlsDisabled}
+										onPress={() =>
+											void writeback.retry(
+												source.sourceKey,
+											)
+										}
+										size="xs"
+										startContent={
+											<HugeiconsIcon
+												icon={Refresh01Icon}
+												aria-hidden
+												className={
+													busy
+														? "animate-spin"
+														: undefined
+												}
+												size={14}
+											/>
+										}
+										variant="solid"
+									>
+										Retry writeback
+									</Button>
+								) : entry?.error ? (
+									<Button
+										className="w-full"
+										onPress={() => void writeback.refresh()}
+										size="xs"
+										startContent={
+											<HugeiconsIcon
+												icon={Refresh01Icon}
+												aria-hidden
+												size={14}
+											/>
+										}
+									>
+										Check again
+									</Button>
+								) : null}
+							</li>
+						);
+					})}
+				</ul>
+			</AdminStatusAccordion>
+		</section>
 	);
 }
 
@@ -335,7 +516,7 @@ function ConflictChoiceButton({
 	return (
 		<div className="space-y-1">
 			<Button
-				className="w-full"
+				className="h-auto min-h-8 w-full whitespace-normal rounded-lg py-2 text-left"
 				color={armed ? "accent" : undefined}
 				data-admin-writeback-resolve={choice}
 				isDisabled={disabled}

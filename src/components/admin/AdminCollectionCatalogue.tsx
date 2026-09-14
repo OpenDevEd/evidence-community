@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArchiveIcon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, DragDropVerticalIcon, Folder01Icon, FolderAddIcon, FolderInputIcon, FolderOpenIcon, Loading03Icon, LockIcon, PencilIcon, RotateLeft01Icon, Search01Icon, Settings02Icon } from "@hugeicons/core-free-icons";
+import { ArchiveIcon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, DragDropVerticalIcon, Folder01Icon, FolderAddIcon, FolderInputIcon, FolderOpenIcon, Loading03Icon, SquareLock01Icon, PencilIcon, Undo02Icon, Search01Icon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { useDraggable, useDroppable } from "@dnd-kit/react";
 import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
@@ -440,7 +440,7 @@ function CollectionRow({
 					) : null}
 				</span>
 				{!canManage ? (
-					<HugeiconsIcon icon={LockIcon} aria-label="Collection editing unavailable" className="shrink-0 opacity-35" size={11} />
+					<HugeiconsIcon icon={SquareLock01Icon} aria-label="Collection editing unavailable" className="shrink-0 opacity-35" size={11} />
 				) : null}
 			</button>
 			{view === "deleted" && canManage ? (
@@ -451,7 +451,7 @@ function CollectionRow({
 						onClick={() => onRestore(entry)}
 						type="button"
 					>
-						<HugeiconsIcon icon={RotateLeft01Icon} aria-hidden size={13} />
+						<HugeiconsIcon icon={Undo02Icon} aria-hidden size={13} />
 					</button>
 				</Tooltip>
 			) : view === "active" && canManage ? (
@@ -1381,7 +1381,7 @@ export function AdminCollectionCatalogue({
 											{row.source.key !==
 												NATIVE_SOURCE_CONNECTION_KEY &&
 											row.source.readOnly ? (
-												<HugeiconsIcon icon={LockIcon} aria-hidden size={13} />
+												<HugeiconsIcon icon={SquareLock01Icon} aria-hidden size={13} />
 											) : (
 												<SourceProviderIcon
 													provider={row.source.provider}

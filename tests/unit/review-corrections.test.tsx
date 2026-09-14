@@ -10,8 +10,8 @@ let root: Root;
 let container: HTMLDivElement;
 function Editor() {
  const [revision, setRevision] = useState(1);
- const corrections = useReviewCorrections({key: "ABCD2345", reviewId: "review-1", reviewRevision: revision, draft: {baseRevision: 0}, frozenAttachments: []}, async () => {setRevision(current => current + 1);});
- return <><button onClick={() => corrections.change("ABCD2345", {title: "First correction"})}>First</button><button onClick={() => corrections.change("ABCD2345", {title: "Later correction"})}>Later</button><output>{corrections.saving ? "saving" : "saved"}:{String(corrections.payloads.ABCD2345?.title ?? "")}:{corrections.error ?? ""}</output></>;
+ const corrections = useReviewCorrections({key: "ABCD2345", reviewId: "review-1", reviewRevision: revision, draft: {baseRevision: 0, payload: {title: "Submitted"}}, frozenAttachments: []}, async () => {setRevision(current => current + 1);});
+ return <><button onClick={() => corrections.change("ABCD2345", {title: "First correction"})}>First</button><button onClick={() => corrections.change("ABCD2345", previous => ({...previous, abstractNote: "Later correction"}))}>Later</button><output>{corrections.saving ? "saving" : "saved"}:{String(corrections.payloads.ABCD2345?.abstractNote ?? corrections.payloads.ABCD2345?.title ?? "")}:{corrections.error ?? ""}</output></>;
 }
 beforeEach(() => {vi.useFakeTimers();container = document.createElement("div");document.body.append(container);root = createRoot(container);});
 afterEach(async () => {await act(async () => root.unmount());container.remove();vi.useRealTimers();vi.unstubAllGlobals();});
@@ -33,7 +33,7 @@ it("serializes corrections made during an in-flight save against the acknowledge
  await act(async () => {finish(Response.json({review:{revision:2}}));});
  expect(requests).toEqual([
   {action:"correct",expectedRevision:1,records:[{itemKey:"ABCD2345",baseRevision:0,payload:{title:"First correction"}}]},
-  {action:"correct",expectedRevision:2,records:[{itemKey:"ABCD2345",baseRevision:0,payload:{title:"Later correction"}}]},
+  {action:"correct",expectedRevision:2,records:[{itemKey:"ABCD2345",baseRevision:0,payload:{title:"First correction",abstractNote:"Later correction"}}]},
  ]);
  expect(container.querySelector("output")?.textContent).toBe("saved::");
 });
@@ -50,7 +50,7 @@ it("keeps unsaved corrections after a failed request and retries with the newest
  await click(1);
  expect(requests).toEqual([
   {action:"correct",expectedRevision:1,records:[{itemKey:"ABCD2345",baseRevision:0,payload:{title:"First correction"}}]},
-  {action:"correct",expectedRevision:1,records:[{itemKey:"ABCD2345",baseRevision:0,payload:{title:"Later correction"}}]},
+  {action:"correct",expectedRevision:1,records:[{itemKey:"ABCD2345",baseRevision:0,payload:{title:"First correction",abstractNote:"Later correction"}}]},
  ]);
  expect(container.querySelector("output")?.textContent).toBe("saved::");
 });

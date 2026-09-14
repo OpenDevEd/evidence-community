@@ -942,9 +942,9 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	);
 
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "Review status and history" }).click();
+	await page.getByRole("button", { name: "Record status and sources" }).click();
 	await expect(
-		page.getByRole("button", { name: "Sources: Synced to 1 source" }),
+		page.getByRole("button", { name: "Sources 1 synced" }),
 	).toBeVisible();
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "Edit", exact: true }).click();
@@ -956,7 +956,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
   await publishDialog.getByRole("button", {name: "Publish version", exact: true}).click();
   await expect(publishDialog).toBeHidden();
   await page.locator("#admin-inspector-pane").getByRole("button", {name: "Working draft", exact: true}).click();
-	await page.getByRole("button", { name: "Review status and history" }).click();
+	await page.getByRole("button", { name: "Record status and sources" }).click();
 
 	const status = page.locator("[data-admin-writeback-status]");
 	await expect(status).toHaveAttribute(
@@ -976,39 +976,13 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		{ timeout: 5_000 },
 	);
 
-	await status.click();
-	const popover = page.locator("[data-admin-writeback-popover]");
-	await expect(popover).toBeVisible();
-	const geometry = await popover.evaluate((element) => {
-		const content = element.firstElementChild as HTMLElement;
-		const inner = content.firstElementChild as HTMLElement;
-		const chip = document.querySelector<HTMLElement>(
-			"[data-admin-writeback-status]",
-		)!;
-		const icon = chip.querySelector("svg")!;
-		return {
-			chipHeight: getComputedStyle(chip).height,
-			iconHeight: getComputedStyle(icon).height,
-			innerPadding: [
-				getComputedStyle(inner).paddingTop,
-				getComputedStyle(inner).paddingRight,
-				getComputedStyle(inner).paddingBottom,
-				getComputedStyle(inner).paddingLeft,
-			],
-			width: getComputedStyle(content).width,
-		};
-	});
-	expect(geometry).toEqual({
-		chipHeight: "24px",
-		iconHeight: "12px",
-		innerPadding: ["12px", "12px", "12px", "12px"],
-		width: "256px",
-	});
+	await status.getByRole("button", { name: /^Sources/ }).click();
+	await expect(page.getByRole("region", { name: "Connected sources" }).getByText(importedSource.label, { exact: true })).toBeVisible();
 
 	forceFailure = true;
 	writebackStarted = false;
 	await page.reload();
-	await page.getByRole("button", { name: "Review status and history" }).click();
+	await page.getByRole("button", { name: "Record status and sources" }).click();
 	const failedStatus = page.locator('[data-admin-writeback-status="failed"]');
 	await expect(failedStatus).toBeVisible();
 	await failedStatus.click();
@@ -1098,14 +1072,14 @@ test("chooses writeback sources without publishing", async ({
 	await expect(page.locator("[data-admin-writeback-status]")).toHaveCount(0);
 
 	// The Sources button changes the choice without publishing.
-	await inspector.getByRole("button", { name: "Review status and history" }).click();
-	await page.getByRole("button", { name: "Sources", exact: true }).click();
+	await inspector.getByRole("button", { name: "Record status and sources" }).click();
+	await page.getByRole("button", { name: "Manage sources", exact: true }).click();
 	const sourcesDialog = page.getByRole("dialog", {
 		name: "Sources for this record",
 	});
 	await expect(sourcesDialog).toBeVisible();
 	await expect(
-		page.getByRole("button", { name: "Review status and history", includeHidden: true }),
+		page.getByRole("button", { name: "Record status and sources", includeHidden: true }),
 	).toHaveAttribute("aria-expanded", "false");
 	const box = sourcesDialog.getByRole("switch", {
 		name: importedSource.label,
@@ -1117,7 +1091,7 @@ test("chooses writeback sources without publishing", async ({
 		sourceKeys: [importedSource.key],
 	});
 	await expect(sourcesDialog).toBeHidden();
-	await inspector.getByRole("button", { name: "Review status and history" }).click();
+	await inspector.getByRole("button", { name: "Record status and sources" }).click();
 	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
 		"data-admin-writeback-status",
 		"queued",
@@ -1196,11 +1170,11 @@ test("resolves a source conflict with a confirmed choice", async ({
 	);
 
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "Review status and history" }).click();
+	await page.getByRole("button", { name: "Record status and sources" }).click();
 	const badge = page.locator('[data-admin-writeback-status="conflict"]');
 	await expect(badge).toBeVisible();
-	await badge.click();
-	const popover = page.locator("[data-admin-writeback-popover]");
+	await badge.getByRole("button", { name: /^Sources/ }).click();
+	const popover = page.getByRole("region", { name: "Connected sources" });
 	await expect(popover.locator("[data-admin-writeback-conflict]")).toBeVisible();
 	const sendLocal = popover.locator('[data-admin-writeback-resolve="send-local"]');
 	const loadRemote = popover.locator('[data-admin-writeback-resolve="load-remote"]');
@@ -3520,13 +3494,11 @@ test("keeps parent attachments compact and moves file controls to the attachment
 	await expect(inspector.getByRole("textbox", {name: "Title", exact: true})).toBeEditable();
 	const publicAttachmentUrl =
 		`${expectedPublicBaseUrl}/lib/LIVEB22K/download/PDFATT22`;
-	await inspector.getByRole("button", { name: "Review status and history" }).click();
 	await expect(page.getByLabel("Open public item")).toHaveAttribute(
 		"href",
 		publicAttachmentUrl,
 	);
 	await expect(page.getByLabel("Copy public item link")).toBeEnabled();
-	await page.keyboard.press("Escape");
 	await expect(
 		inspector.locator('[data-admin-file-row="published"]'),
 	).toContainText("published.pdf");
@@ -3570,21 +3542,19 @@ test("keeps an unpublished attachment private and stages it with the parent revi
     await page.goto("/admin");
     const inspector = page.locator("#admin-inspector-pane");
     await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
-    await inspector.getByRole("button", {name: "Review status and history"}).click();
-    await expect(page.getByLabel("Open public item")).toBeDisabled();
-    await expect(page.getByLabel("Copy public item link")).toBeDisabled();
-    await page.keyboard.press("Escape");
+    await expect(page.getByLabel("Open public item")).toHaveCount(0);
+    await expect(page.getByLabel("Copy public item link")).toHaveCount(0);
     await expect(inspector.locator('[data-admin-file-row="staged"]')).toContainText("replacement.pdf");
     await expect(inspector.getByRole("button", {name: "Discard staged PDF"})).toBeVisible();
     await expect(inspector.getByRole("button", {name: "Publish PDF", exact: true})).toHaveCount(0);
     await inspector.getByRole("button", {name: "Parent record"}).click();
     await expect(inspector.getByRole("button", {name: "Open PDF attachment"})).toBeVisible();
     await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
-    await inspector.getByRole("button", {name: "Review status and history"}).click();
+    await inspector.getByRole("button", {name: "Record status and sources"}).click();
     await page.getByRole("button", {name: "Delete draft", exact: true}).click();
     const dialog = page.getByRole("dialog", {name: "Delete draft?"});
     await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
-    await inspector.getByRole("button", {name: "Review status and history"}).click();
+    await inspector.getByRole("button", {name: "Record status and sources"}).click();
     await page.getByRole("button", {name: "Delete draft", exact: true}).click();
     await dialog.getByRole("button", {name: "Delete draft", exact: true}).click();
     await expect(dialog).toBeHidden();
@@ -6031,9 +6001,9 @@ test("lets Creators request restoration without changing writeback sources", asy
 		return route.fulfill({ json: { reviews: [] } });
 	});
 	await page.goto("/admin");
-	await page.getByRole("button", { name: "Review status and history", exact: true }).click();
-	await expect(page.getByRole("button", { name: "Sources", exact: true })).toBeDisabled();
-	await page.getByRole("button", { name: "Sources: Sync failed", exact: true }).click();
+	await page.getByRole("button", { name: "Record status and sources", exact: true }).click();
+	await expect(page.getByRole("button", { name: "Manage sources", exact: true })).toBeDisabled();
+	await page.getByRole("button", { name: "Sources Sync failed", exact: true }).click();
 	await expect(page.getByRole("button", { name: "Retry writeback", exact: true })).toBeDisabled();
 	await page.reload();
 	const inspector = page.locator("#admin-inspector-pane");
@@ -6064,12 +6034,12 @@ test("unpublishes through the inspector and submits restoration for review", asy
   });
   await page.goto(`/admin?item=${publishedItemKey}`);
   const inspector = page.locator("#admin-inspector-pane");
-  await inspector.getByRole("button", {name: "Review status and history"}).click();
+  await inspector.getByRole("button", {name: "Record status and sources"}).click();
   await page.getByRole("button", {name: "Unpublish", exact: true}).click();
   const dialog = page.getByRole("dialog", {name: "Unpublish record?"});
   await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
   expect(unpublishRequests).toBe(0);
-  await inspector.getByRole("button", {name: "Review status and history"}).click();
+  await inspector.getByRole("button", {name: "Record status and sources"}).click();
   await page.getByRole("button", {name: "Unpublish", exact: true}).click();
   await dialog.getByRole("button", {name: "Unpublish record", exact: true}).click();
   await indexing.expectTracked(receipt);
@@ -6580,4 +6550,18 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 	await expect(
 		page.getByRole("button", { name: "Search indexing: Search updated" }),
 	).toBeVisible({ timeout: 4_000 });
+});
+
+
+test("shows search results from the narrow editor without interrupting typing", async ({ page }) => {
+ await mockPublishedBook(page);
+ await page.setViewportSize({ width: 390, height: 844 });
+ await page.goto(`/admin?item=${publishedItemKey}`);
+ await expect(page.locator("#admin-inspector-pane")).toBeVisible();
+ const search = page.getByRole("textbox", { name: "Search records" });
+ await search.pressSequentially("Published book", { delay: 30 });
+ await expect(search).toBeFocused();
+ await expect(search).toHaveValue("Published book");
+ await expect(page.getByRole("region", { name: "Records", exact: true })).toBeVisible();
+ await expect(page.locator(`[data-record-key="${publishedItemKey}"]`)).toBeVisible();
 });

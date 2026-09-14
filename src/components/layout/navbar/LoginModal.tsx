@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { LockIcon, Mail01Icon } from "@hugeicons/core-free-icons";
+import { SquareLock01Icon, Mail01Icon } from "@hugeicons/core-free-icons";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { AnimatePresence } from "framer-motion";
@@ -110,7 +110,7 @@ export default function LoginModal({
 								/>
 								<Input
 									startContent={
-										<HugeiconsIcon icon={LockIcon}
+										<HugeiconsIcon icon={SquareLock01Icon}
 											aria-hidden="true"
 											className="size-5 ltr:mr-1 rtl:ml-1 text-black dark:text-white/40"
 										/>

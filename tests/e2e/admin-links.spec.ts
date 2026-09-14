@@ -62,7 +62,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	// Add: citing → cited, by picking the cited record straight from the record table
 	let inspector = await openRecord(page, citingKey);
 	await inspector.getByRole("button", { name: "Edit" }).click();
-	const links = inspector.getByRole("group", { name: "Links" });
+	const links = inspector.getByRole("group", { name: "Links", includeHidden: true });
 	await links.getByRole("button", { name: "Add to Cites" }).click();
 	const banner = page.locator('[data-admin-link-pick-banner="cites"]');
 	await expect(banner).toContainText("Tick or click records to add them under Cites");
@@ -71,8 +71,8 @@ test("links two records, shows both sides, and removes the link again", async ({
 	const citedRow = page.locator(`[data-record-key="${citedKey}"]`);
 	await expect(citedRow).toBeVisible({ timeout: 30_000 });
 	await citedRow.click();
-	// Picking must not switch the inspector away from the citing record
-	await expect(inspector.getByRole("heading", { name: citingTitle })).toBeVisible();
+	// Picking keeps the citing record selected while mobile users see the list.
+	await expect.poll(() => new URL(page.url()).searchParams.get("item")).toBe(citingKey);
 	// A second click on the same row toggles the link off again, a third adds it back
 	const citesRow = links.locator(
 		`[data-admin-link-list="cites"] [data-admin-link-key="${citedKey}"]`,
@@ -107,9 +107,9 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await expect(relatedRow).toHaveCount(0);
 	await citedCheckbox.check();
 	await expect(relatedRow).toHaveAttribute("data-admin-link-change", "added");
+	await page.getByRole("textbox", { name: "Search records" }).fill("");
 	await page.keyboard.press("Escape");
 	await expect(relatedBanner).toHaveCount(0);
-	await page.getByRole("textbox", { name: "Search records" }).fill("");
 
 	const addedRow = links.locator(
 		`[data-admin-link-list="cites"] [data-admin-link-key="${citedKey}"]`,

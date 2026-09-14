@@ -1,4 +1,6 @@
 "use client";
+import { ordinaryItemTags } from "@/lib/item-display";
+import { AdminItemDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
 import { AdminPdfCover } from "./AdminPdfCover";
@@ -30,9 +32,9 @@ import {
 	Folder01Icon,
 	Link02Icon,
 	LinkSquare01Icon,
-	LockIcon,
+	SquareLock01Icon,
 	PencilIcon,
-	RotateLeft01Icon,
+	Undo02Icon,
 	SentIcon,
 	Tag01Icon,
 	Tick01Icon,
@@ -51,7 +53,7 @@ import {
 	PopoverTrigger,
 } from "@nextui-org/react";
 import { Spinner } from "@/components/nextui/Spinner";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, type SetStateAction, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
@@ -86,7 +88,7 @@ import {
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 
-import { AdminSourcesWritebackStatus } from "./AdminSourceWritebackStatus";
+import { AdminRecordStatusMenu } from "./AdminRecordStatusMenu";
 import {
 	computeAdminDraftDiff,
 	EMPTY_ADMIN_DRAFT_DIFF,
@@ -219,7 +221,7 @@ function ChangedMarker({
 						size="xs"
 						startContent={
 							<HugeiconsIcon
-								icon={RotateLeft01Icon}
+								icon={Undo02Icon}
 								aria-hidden
 								size={13}
 							/>
@@ -390,7 +392,7 @@ function SaveIndicator({
 							: "Needs attention")}
 			{state === "conflict" ? (
 				<IconButton
-					icon={RotateLeft01Icon}
+					icon={Undo02Icon}
 					label="Reload server draft"
 					onPress={onReload}
 				/>
@@ -439,7 +441,7 @@ function ValidationSummary({
 			<div className="flex items-center gap-2 font-medium">
 				{conflict ? (
 					<HugeiconsIcon
-						icon={RotateLeft01Icon}
+						icon={Undo02Icon}
 						aria-hidden
 						size={14}
 					/>
@@ -480,7 +482,7 @@ function ValidationSummary({
 	);
 }
 
-function CountryFocusEditor({
+const CountryFocusEditor = memo(function CountryFocusEditor({
 	payload,
 	titleField,
 	change,
@@ -507,8 +509,7 @@ function CountryFocusEditor({
 							)}
 							onRevert={() =>
 								onChange({
-									...payload,
-									countryFocus: change.previous,
+																		countryFocus: change.previous,
 								})
 							}
 						/>
@@ -525,7 +526,7 @@ function CountryFocusEditor({
 						: null
 				}
 				onChange={(countryFocus) =>
-					onChange({ ...payload, countryFocus })
+					onChange({ countryFocus })
 				}
 				title={String(payload[titleField] ?? "")}
 				abstract={String(payload.abstractNote ?? "")}
@@ -537,7 +538,7 @@ function CountryFocusEditor({
 			)}
 		</div>
 	);
-}
+});
 
 function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	const metadataFields = adminFieldDescriptors(definition);
@@ -558,6 +559,7 @@ function MetadataEditor({
 	diff,
 	errors,
 	onChange,
+	onFieldChange,
 	payload,
 	readOnly,
 	lockedDoi,
@@ -566,6 +568,7 @@ function MetadataEditor({
 	detail: AdminItemDetail;
 	diff: AdminDraftDiff;
 	errors: AdminFieldErrors;
+	onFieldChange: (field: string, value: string) => void;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	readOnly: boolean;
@@ -576,12 +579,15 @@ function MetadataEditor({
 		String(payload.itemType ?? detail.itemType),
 	);
 	const { titleField, countryFocusAfterField } = countryFocusPlacement(definition);
+	const metadataFields = useMemo(() => adminFieldDescriptors(definition), [definition]);
+	const countryTitle = useDeferredValue(payload[titleField]);
+	const countryAbstract = useDeferredValue(payload.abstractNote);
+	const countryPayload = useMemo(() => ({ [titleField]: countryTitle, abstractNote: countryAbstract, countryFocus: payload.countryFocus }), [titleField, countryTitle, countryAbstract, payload.countryFocus]);
 	const selectedItemType = definition?.itemType ?? null;
 	const [itemTypeInput, setItemTypeInput] = useState(
 		selectedItemType ? humanizeAdminField(selectedItemType) : "",
 	);
-	const updateField = (field: string, value: string) =>
-		onChange({ ...payload, [field]: value });
+	const updateField = onFieldChange;
 
 	return (
 		<div className="space-y-3">
@@ -649,7 +655,7 @@ function MetadataEditor({
 						))}
 				</Autocomplete>
 			</div>
-			{adminFieldDescriptors(definition)
+			{metadataFields
 				.filter(
 					({ field }) =>
 						field !== "annotationPosition" &&
@@ -706,16 +712,14 @@ function MetadataEditor({
 								id={fieldId}
 								label={label}
 								value={value}
-								onValueChange={(next) =>
-									updateField(field, next)
-								}
+								onFieldChange={onFieldChange}
 							/>
 							{field === countryFocusAfterField &&
 								isTopLevelAdminItemType(
 									String(payload.itemType ?? detail.itemType),
 								) && (
 									<CountryFocusEditor
-										payload={payload}
+										payload={countryPayload}
 										titleField={titleField}
 										change={diff.countryFocus}
 										onChange={onChange}
@@ -735,13 +739,15 @@ function MetadataEditor({
 	);
 }
 
-function TagsEditor({
+const TagsEditor = memo(function TagsEditor({
+	separateDisplayTags,
 	errors,
 	onChange,
 	payload,
 	readOnly,
 	recordKey,
 }: {
+	separateDisplayTags: boolean;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
@@ -749,12 +755,14 @@ function TagsEditor({
 	recordKey: string;
 }) {
 	const [value, setValue] = useState("");
+	const { content } = useLibraryConfig();
 	const error = firstAdminFieldError(errors, "tags");
 	const tags = Array.isArray(payload.tags)
 		? payload.tags.filter(
 				(entry): entry is string => typeof entry === "string",
 			)
 		: [];
+	const visibleTags = separateDisplayTags ? ordinaryItemTags(tags, content.tags) : tags;
 	const tag = value.trim();
 	const alreadyAdded = tags.includes(tag);
 	const addTag = () => {
@@ -764,11 +772,11 @@ function TagsEditor({
 	};
 	return (
 		<div className="space-y-2">
-			{tags.length === 0 && readOnly ? (
+			{visibleTags.length === 0 && readOnly ? (
 				<EmptyValue label="No tags" />
 			) : null}
 			<div className="flex flex-wrap gap-1.5">
-				{tags.map((tag) => (
+				{visibleTags.map((tag) => (
 					<Chip
 						key={tag}
 						className="rounded-lg bg-black/[0.045] dark:bg-white/[0.06]"
@@ -819,7 +827,7 @@ function TagsEditor({
 			) : null}
 		</div>
 	);
-}
+});
 
 function CollectionsEditor({
 	errors,
@@ -949,7 +957,7 @@ function CollectionsEditor({
 							) : null}
 							{locked ? (
 								<HugeiconsIcon
-									icon={LockIcon}
+									icon={SquareLock01Icon}
 									aria-label="Read only"
 									className="shrink-0 opacity-40"
 									size={11}
@@ -1194,7 +1202,7 @@ function AttachmentFilePanel({
 									<HugeiconsIcon
 										icon={
 											detail.fileRemovalPending
-												? RotateLeft01Icon
+												? Undo02Icon
 												: Delete02Icon
 										}
 										aria-hidden
@@ -1345,6 +1353,8 @@ export function AdminInspector({
 	allowReviewCorrections = false,
 	versionControls,
 	versionNotice,
+	liveDetail,
+	onViewSubmitted,
 	editorNotice,
 	versionActions,
 	versionStatus,
@@ -1396,7 +1406,9 @@ export function AdminInspector({
 	readOnlyVersion?: boolean;
 	allowReviewCorrections?: boolean;
 	versionControls?: ReactNode;
-	versionNotice?: (actions: ReactNode) => ReactNode;
+	versionNotice?: ReactNode;
+	liveDetail?: AdminItemDetail;
+	onViewSubmitted?: () => void;
 	editorNotice?: ReactNode;
 	versionActions?: ReactNode;
 	versionStatus?: ReactNode;
@@ -1422,7 +1434,7 @@ export function AdminInspector({
 	linkTargets?: readonly AdminLinkTarget[];
 	loading: boolean;
 	onBackToParent: (key: string) => void;
-	onChange: (payload: Record<string, unknown>) => void;
+	onChange: (payload: SetStateAction<Record<string, unknown>>) => void;
 	onCreateAttachment: () => void;
 	onDiscardDraft: () => void;
 	onDiscardFile: (key: string) => void;
@@ -1450,7 +1462,7 @@ export function AdminInspector({
 	validationErrors: AdminFieldErrors;
 	validationRevision: number;
 }) {
-	const { identity } = useLibraryConfig();
+	const { identity, content } = useLibraryConfig();
 	const { canPublish } = useAdminSession();
 	const detailKey = detail?.key;
 	const definition = useMemo(
@@ -1514,6 +1526,17 @@ export function AdminInspector({
 		return () => cancelAnimationFrame(frame);
 	}, [detailKey, validationRevision]);
 
+	const patchPayload = useCallback((patch: Record<string, unknown>) => {
+		onChange((current) => ({ ...current, ...patch }));
+	}, [onChange]);
+	const changeField = useCallback((field: string, value: string) => {
+		patchPayload({ [field]: value });
+	}, [patchPayload]);
+	const creatorsPayload = useMemo(() => ({ creators: payload.creators, institution: payload.institution, university: payload.university }), [payload.creators, payload.institution, payload.university]);
+	const tagsPayload = useMemo(() => ({ tags: payload.tags }), [payload.tags]);
+	const collectionsPayload = useMemo(() => ({ collections: payload.collections }), [payload.collections]);
+	const linksPayload = useMemo(() => ({ links: payload.links }), [payload.links]);
+
 	const [menuOpen, setMenuOpen] = useState(false);
 	const closeMenu = () => setMenuOpen(false);
 
@@ -1537,6 +1560,8 @@ export function AdminInspector({
 		);
 	}
 
+	const tagsForEditor = (tags: string[]) =>
+		detail.parentItem ? [...tags] : ordinaryItemTags(tags, content.tags);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
@@ -1546,7 +1571,13 @@ export function AdminInspector({
 		Boolean(detail.draft) &&
 		!busy;
 	const readOnly = !editable;
-	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
+	const liveRecord = liveDetail?.key === detail.key ? liveDetail : detail;
+    const originWritebackReason = liveRecord.writeback.available.find(
+        target => target.sourceKey === liveRecord.writeback.originSourceKey,
+    )?.reason;
+    const writebackRestriction = !readOnlyVersion && !liveRecord.editable && liveRecord.state !== "deleted" && originWritebackReason && originWritebackReason !== "ok"
+        ? writebackUnavailableMessage[originWritebackReason] : null;
+	const itemUrl = buildAdminPublicItemUrl(liveRecord, identity.baseUrl);
 	const restoring =
 		detail.state === "deleted" &&
 		(Boolean(detail.parentItem) || !detail.draft);
@@ -1562,9 +1593,14 @@ export function AdminInspector({
 				saveState === "error" ||
 				reviewPending ||
 				submissionBlocked));
-	const showPublicLinkActions =
-		!readOnlyVersion &&
-		(detail.itemType === "Attachment" || Boolean(itemUrl));
+  const hasPublishedVersion = Boolean(liveRecord.published) && liveRecord.state !== "deleted";
+  const showPublicLinkActions = hasPublishedVersion && Boolean(itemUrl);
+  const openPublicationSettings = () => {
+    closeMenu();
+    const toggle = document.getElementById(`admin-${detail.key}-identifiers-toggle`);
+    if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
+    document.getElementById("admin-doi-publishing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
 	return (
 		<div
@@ -1573,6 +1609,61 @@ export function AdminInspector({
 		>
 			{versionControls}
 			<AdminDocumentHeader
+				publicActions={
+					<>
+						{showPublicLinkActions && (
+							<div className="flex shrink-0 items-center gap-1.5">
+								<Button
+									as="a"
+									aria-label="Open public item"
+									href={itemUrl ?? undefined}
+									target="_blank"
+									rel="noreferrer"
+									size="xs"
+									variant="muted"
+									className="h-8 min-w-0 gap-1.5 rounded-xl px-3 text-xs font-medium"
+									endContent={
+										<HugeiconsIcon
+											icon={LinkSquare01Icon}
+											size={13}
+										/>
+									}
+								>
+									Open item
+								</Button>
+								<Tooltip content="Copy public item link">
+									<Button
+										aria-label="Copy public item link"
+										isIconOnly
+										size="xs"
+										variant="muted"
+										className="h-8 w-8 rounded-xl"
+										onPress={() => {
+											if (itemUrl)
+												void navigator.clipboard
+													.writeText(itemUrl)
+													.then(() =>
+														toast.success(
+															"Item link copied",
+														),
+													)
+													.catch(() =>
+														toast.error(
+															"Could not copy item link",
+														),
+													);
+										}}
+									>
+										<HugeiconsIcon
+											icon={Copy01Icon}
+											size={13}
+										/>
+									</Button>
+								</Tooltip>
+							</div>
+						)}
+					</>
+				}
 				menuOpen={menuOpen}
 				onMenuOpenChange={setMenuOpen}
 				detail={detail}
@@ -1626,217 +1717,182 @@ export function AdminInspector({
 					) : null
 				}
 				menu={
-					<>
-						{versionNotice?.(
-							readOnlyVersion
-								? versionActions && versionWithdraw
-								: detail.draft && (
-										<Tooltip
-											content={
-												detail.published
-													? "Discard changes"
-													: "Delete draft"
-											}
-										>
-											<span>
-												<Button
-													aria-label={
-														detail.published
-															? "Discard changes"
-															: "Delete draft"
-													}
-													isIconOnly
-													className="h-9 w-9 rounded-xl text-black/45 hover:text-danger dark:text-white/45 dark:hover:text-danger"
-													size="xs"
-													variant="transparent"
-													isDisabled={
-														busy ||
-														(reviewPending &&
-															!detail.published)
-													}
-													onPress={() => {
-														closeMenu();
-														onDiscardDraft();
-													}}
-												>
-													<HugeiconsIcon
-														icon={Delete02Icon}
-														size={16}
-													/>
-												</Button>
-											</span>
-										</Tooltip>
-									),
+					<AdminRecordStatusMenu
+ restriction={writebackRestriction || undefined}
+						canLoadRemote={!detail.parentItem}
+						itemKey={detail.key}
+						key={detail.key}
+						onResolved={onWritebackResolved}
+						revision={liveRecord.revision}
+						sources={liveRecord.writeback.selected.map(
+							(sourceKey) => {
+								const target =
+									liveRecord.writeback.available.find(
+										(candidate) =>
+											candidate.sourceKey === sourceKey,
+									);
+								return {
+									provider: target?.provider ?? "zotero",
+									sourceKey,
+									sourceLabel:
+										target?.sourceLabel ?? sourceKey,
+								};
+							},
 						)}
-						{!readOnlyVersion && !detail.editable && (
-							<p className="mt-3 flex items-start gap-2 text-xs text-black/55 dark:text-white/55">
-								<HugeiconsIcon
-									icon={LockIcon}
-									size={15}
-									className="shrink-0"
-								/>
-								{
-									writebackUnavailableMessage[
-										detail.writeback.available.find(
-											(target) =>
-												target.sourceKey ===
-												detail.writeback
-													.originSourceKey,
-										)?.reason ?? "not-linked"
-									]
-								}
-							</p>
-						)}
-						<div className="mt-3 flex flex-wrap items-center gap-1.5 empty:hidden">
-							{detail.writeback.selected.length > 0 ? (
-								<AdminSourcesWritebackStatus
-									canLoadRemote={!detail.parentItem}
-									itemKey={detail.key}
-									key={detail.key}
-									onResolved={onWritebackResolved}
-									revision={detail.revision}
-									sources={detail.writeback.selected.map(
-										(sourceKey) => {
-											const target =
-												detail.writeback.available.find(
-													(candidate) =>
-														candidate.sourceKey ===
-														sourceKey,
-												);
-											return {
-												provider:
-													target?.provider ??
-													"zotero",
-												sourceKey,
-												sourceLabel:
-													target?.sourceLabel ??
-													sourceKey,
-											};
-										},
-									)}
-								/>
-							) : null}
-							{!detail.parentItem ? (
-								<AdminPublicationHeaderStatus
-									onPress={() => {
-										closeMenu();
-										const toggle = document.getElementById(
-											`admin-${detail.key}-identifiers-toggle`,
-										);
-										if (
-											toggle?.getAttribute(
-												"aria-expanded",
-											) !== "true"
-										) {
-											toggle?.click();
-										}
-										document
-											.getElementById(
-												"admin-doi-publishing",
-											)
-											?.scrollIntoView({
-												behavior: "smooth",
-												block: "start",
-											});
-									}}
-									state={publication}
-								/>
-							) : null}
-						</div>
-						<div className="mt-4 flex flex-wrap items-center gap-2 empty:hidden">
-							{showPublicLinkActions && (
-								<div className="flex items-center gap-1.5">
-									<Button
-										as="a"
-										aria-label="Open public item"
-										href={itemUrl ?? undefined}
-										isDisabled={!itemUrl}
-										target="_blank"
-										rel="noreferrer"
-										size="xs"
-										variant="muted"
-										startContent={
-											<HugeiconsIcon
-												icon={LinkSquare01Icon}
-												size={14}
-											/>
-										}
-									>
-										Open public item
-									</Button>
-									<Tooltip content="Copy public item link">
-										<span>
-											<Button
-												aria-label="Copy public item link"
-												isIconOnly
-												isDisabled={!itemUrl}
-												size="xs"
-												variant="transparent"
-												onPress={() => {
-													if (itemUrl)
-														void navigator.clipboard
-															.writeText(itemUrl)
-															.then(() =>
-																toast.success(
-																	"Item link copied",
-																),
-															)
-															.catch(() =>
-																toast.error(
-																	"Could not copy item link",
-																),
-															);
-												}}
-											>
-												<HugeiconsIcon
-													icon={Copy01Icon}
-													size={14}
-												/>
-											</Button>
-										</span>
-									</Tooltip>
-								</div>
-							)}
-							{!readOnlyVersion && canPublish && native && detail.editable && detail.published && detail.state !== "deleted" && (
+						manageAction={
+							!readOnlyVersion &&
+							!detail.parentItem &&
+							liveRecord.writeback.available.length > 0 ? (
 								<Button
+									data-admin-writeback-sources-button
+									aria-label="Manage sources"
 									size="xs"
 									variant="muted"
-									color="danger"
-									isDisabled={busy}
+									className="h-9 min-w-0 rounded-xl px-3 text-xs"
+									isDisabled={busy || !canPublish}
 									onPress={() => {
 										closeMenu();
-										onUnpublish();
+										onManageSources();
 									}}
-									startContent={<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />}
 								>
-									Unpublish
+									Manage
 								</Button>
+							) : undefined
+						}
+						footer={
+							<div className="flex w-full flex-wrap items-center gap-2 [&_button]:h-9 [&_button]:rounded-xl [&_button]:text-xs">
+                                {onViewSubmitted && (
+                                    <Button size="xs" variant="muted" onPress={onViewSubmitted} className="min-w-0 flex-1 justify-between gap-2 px-3" endContent={<HugeiconsIcon icon={ArrowRight01Icon} size={14} />}>
+                                        View submitted version
+                                    </Button>
+                                )}
+								{readOnlyVersion
+									? versionActions && versionWithdraw
+									: detail.draft && (
+											<Button
+												aria-label={
+													detail.published
+														? "Discard changes"
+														: "Delete draft"
+												}
+												size="xs"
+												variant="transparent"
+												className="h-9 gap-2 rounded-xl px-2 text-xs text-black/50 hover:text-danger dark:text-white/50 dark:hover:text-red-300"
+												isDisabled={
+													busy ||
+													(reviewPending &&
+														!detail.published)
+												}
+												onPress={() => {
+													closeMenu();
+													onDiscardDraft();
+												}}
+												startContent={
+													<HugeiconsIcon
+														icon={Delete02Icon}
+														size={13}
+													/>
+												}
+											>
+												{detail.published
+													? "Discard changes"
+													: "Delete draft"}
+											</Button>
+										)}
+                                {!readOnlyVersion && canPublish && native && detail.editable && detail.published && detail.state !== "deleted" && (
+                                    <Button size="xs" variant="muted" color="danger" isDisabled={busy}
+                                        onPress={() => { closeMenu(); onUnpublish(); }}
+                                        startContent={<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />}>
+                                        Unpublish
+                                    </Button>
+                                )}
+							</div>
+						}
+					>
+						<section aria-label="Review status">
+							{versionNotice ?? (
+								<RecordStateChip state={detail.state} />
 							)}
-							{!readOnlyVersion &&
-								!detail.parentItem &&
-								detail.writeback.available.length > 0 && (
-									<Button
-										data-admin-writeback-sources-button
-										size="xs"
-										variant="muted"
-										isDisabled={busy || !canPublish}
-										onPress={() => {
-											closeMenu();
-											onManageSources();
-										}}
-										startContent={
-											<HugeiconsIcon
-												icon={Link02Icon}
-												size={14}
-											/>
-										}
-									>
-										Sources
-									</Button>
-								)}
-						</div>
-					</>
+						</section>
+						{!detail.parentItem && (
+							<AdminItemDisplay
+								publishedDetail={liveRecord}
+								publicationStatus={
+									publication.publication ? (
+										<AdminPublicationHeaderStatus
+											onPress={openPublicationSettings}
+											state={publication}
+										/>
+									) : (
+										<Button
+											size="xs"
+											variant="transparent"
+											startContent={
+												<HugeiconsIcon
+													icon={Link02Icon}
+													size={13}
+												/>
+											}
+											className="h-8 min-w-0 max-w-[150px] gap-2 rounded-lg px-0 text-xs text-black/65 dark:text-white/70"
+											onPress={openPublicationSettings}
+											endContent={
+												<HugeiconsIcon
+													icon={ArrowRight01Icon}
+													size={12}
+													className="shrink-0"
+												/>
+											}
+										>
+											<span
+												className="truncate"
+												title={String(
+													liveRecord.published?.DOI ||
+														"No DOI",
+												)}
+											>
+												{publication.error
+													? "Status unavailable"
+													: publication.isLoading
+														? "Loading…"
+														: String(
+																liveRecord
+																	.published
+																	?.DOI ||
+																	"No DOI",
+															)}
+											</span>
+										</Button>
+									)
+								}
+								title={String(payload.title || detail.title)}
+								tags={
+									Array.isArray(payload.tags)
+										? payload.tags.filter(
+												(tag): tag is string =>
+													typeof tag === "string",
+											)
+										: []
+								}
+								readOnly={readOnly}
+								onChange={(tags) =>
+									patchPayload({ tags })
+								}
+							/>
+						)}
+						{detail.parentItem && (
+							<span className="flex items-center gap-1.5 text-[11px] text-black/45 dark:text-white/45">
+								<HugeiconsIcon
+									icon={CheckmarkBadge01Icon}
+									size={13}
+								/>
+								{hasPublishedVersion
+									? `Published revision ${liveRecord.revision}`
+									: "Not published"}
+							</span>
+						)}
+					</AdminRecordStatusMenu>
 				}
+
 				actions={
 					versionActions ?? (
 						<>
@@ -1866,7 +1922,7 @@ export function AdminInspector({
 												!detail.editable
 													? Copy01Icon
 													: restoring
-														? RotateLeft01Icon
+														? Undo02Icon
 														: !detail.draft
 															? PencilIcon
 															: SentIcon
@@ -1917,11 +1973,15 @@ export function AdminInspector({
 						{fileErrors[detail.key]}
 					</p>
 				)}
-				{!(onResolveConflicts && conflictCount > 0) && <ValidationSummary
-					errors={validationErrors}
-					recordKey={detail.key}
-					tone={saveState === "conflict" ? "conflict" : "validation"}
-				/>}
+				{!(onResolveConflicts && conflictCount > 0) && (
+					<ValidationSummary
+						errors={validationErrors}
+						recordKey={detail.key}
+						tone={
+							saveState === "conflict" ? "conflict" : "validation"
+						}
+					/>
+				)}
 				{editorNotice}
 				{!detail.parentItem ? (
 					<Section
@@ -1950,12 +2010,13 @@ export function AdminInspector({
 					title="Metadata"
 				>
 					<MetadataEditor
+ onFieldChange={changeField}
 						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
 						definitions={definitions}
 						detail={detail}
 						diff={diff}
 						errors={validationErrors}
-						onChange={onChange}
+						onChange={patchPayload}
 						payload={payload}
 						readOnly={readOnly}
 						lockedDoi={
@@ -2004,23 +2065,43 @@ export function AdminInspector({
 							key={detail.key}
 							definition={definition}
 							errors={validationErrors}
-							onChange={onChange}
-							payload={payload}
+							onChange={patchPayload}
+							payload={creatorsPayload}
 							readOnly={readOnly}
 							recordKey={detail.key}
 						/>
 					</Section>
 				) : null}
+
 				<Section
 					actions={
-						diff.tags ? (
+						diff.tags &&
+						JSON.stringify(
+							tagsForEditor(diff.tags).sort(),
+						) !==
+							JSON.stringify(
+								tagsForEditor((payload.tags ?? []) as string[]).sort(),
+							) ? (
 							<ChangedMarker
 								label="tags"
 								onRevert={() =>
-									onChange({ ...payload, tags: diff.tags })
+									onChange({
+										...payload,
+										tags: [
+											...tagsForEditor(diff.tags ?? []),
+											...(
+												(payload.tags ?? []) as string[]
+											).filter(
+												(tag) =>
+													!tagsForEditor([tag]).length,
+											),
+										],
+									})
 								}
 								publishedValue={
-									<PublishedList values={diff.tags} />
+									<PublishedList
+										values={tagsForEditor(diff.tags)}
+									/>
 								}
 							/>
 						) : undefined
@@ -2029,9 +2110,10 @@ export function AdminInspector({
 					title="Tags"
 				>
 					<TagsEditor
+						separateDisplayTags={!detail.parentItem}
 						errors={validationErrors}
-						onChange={onChange}
-						payload={payload}
+						onChange={patchPayload}
+						payload={tagsPayload}
 						readOnly={readOnly}
 						recordKey={detail.key}
 					/>
@@ -2072,11 +2154,11 @@ export function AdminInspector({
 							detail={detail}
 							errors={validationErrors}
 							knownTargets={linkTargets}
-							onChange={onChange}
+							onChange={patchPayload}
 							onOpenRecord={onBackToParent}
 							onStartPick={onStartLinkPick}
 							onStopPick={onStopLinkPick}
-							payload={payload}
+							payload={linksPayload}
 							pickingKind={linkPickKind}
 							readOnly={readOnly}
 							sources={sources}
@@ -2113,8 +2195,8 @@ export function AdminInspector({
 					>
 						<CollectionsEditor
 							errors={validationErrors}
-							onChange={onChange}
-							payload={payload}
+							onChange={patchPayload}
+							payload={collectionsPayload}
 							publishedCollectionKeys={
 								diff.collections
 									? detail.publishedCollectionKeys
@@ -2167,7 +2249,7 @@ export function AdminInspector({
 								Source
 							</dt>
 							<dd className="font-medium text-black/70 dark:text-white/75">
-								{humanizeAdminField(detail.sourceConnectionKey)}
+								{humanizeAdminField(liveRecord.sourceConnectionKey)}
 							</dd>
 						</div>
 						<div className="flex items-center justify-between gap-3">
@@ -2175,7 +2257,7 @@ export function AdminInspector({
 								Published revision
 							</dt>
 							<dd className="font-medium text-black/70 dark:text-white/75">
-								{detail.revision}
+								{liveRecord.revision}
 							</dd>
 						</div>
 						{detail.draft ? (

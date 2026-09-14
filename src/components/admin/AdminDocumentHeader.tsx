@@ -19,6 +19,7 @@ export function AdminDocumentHeader({
 	actions,
 	parent,
 	saveIndicator,
+	publicActions,
 }: {
 	detail: AdminItemDetail;
 	cover: ReactNode;
@@ -29,6 +30,7 @@ export function AdminDocumentHeader({
 	actions: ReactNode;
 	parent: ReactNode;
 	saveIndicator: ReactNode;
+	publicActions?: ReactNode;
 }) {
 	return (
 		<div
@@ -86,33 +88,42 @@ export function AdminDocumentHeader({
 						</Tooltip>
 						{saveIndicator}
 					</div>
-					<Popover
-						placement="bottom-start"
-						isOpen={menuOpen}
-						onOpenChange={onMenuOpenChange}
-					>
-						<PopoverTrigger>
-							<Button
-								size="xs"
-								variant="transparent"
-								className="-ml-1 mt-1 h-8 min-w-0 gap-1.5 rounded-lg px-1 text-left font-medium text-black/70 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.04]"
-								aria-label="Review status and history"
-								endContent={
-									<HugeiconsIcon
-										icon={ArrowDown01Icon}
-										size={11}
-										className="text-black/45 dark:text-white/45"
-									/>
-								}
-							>
-								{status}
-							</Button>
-						</PopoverTrigger>
-						<PopoverContent className="max-h-[min(32rem,70dvh)] w-72 items-stretch overflow-y-auto rounded-2xl border border-black/[0.06] bg-white p-4 shadow-xl dark:border-white/[0.08] dark:bg-[#202020]">
-							{menu}
-						</PopoverContent>
-					</Popover>
 				</div>
+			</div>
+			<div className="flex items-center justify-between gap-2 px-4 pb-3">
+				<Popover
+					classNames={{ base: "flex max-h-[inherit]" }}
+					motionProps={{ className: "max-h-[inherit]" }}
+					placement="bottom-start"
+					isOpen={menuOpen}
+					onOpenChange={onMenuOpenChange}
+				>
+					<PopoverTrigger>
+						<Button
+							size="xs"
+							variant="transparent"
+							className="h-8 min-w-0 shrink-0 gap-1.5 rounded-xl px-2 text-left font-medium text-black/70 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.04]"
+							aria-label="Record status and sources"
+							endContent={
+								<HugeiconsIcon
+									icon={ArrowDown01Icon}
+									size={11}
+									className="text-black/45 dark:text-white/45"
+								/>
+							}
+						>
+							{status}
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent
+						data-admin-record-status
+						aria-label="Record status and sources"
+						className="flex max-h-[inherit] w-[360px] max-w-[calc(100vw-24px)] items-stretch justify-start overflow-y-auto rounded-2xl [&>*]:shrink-0 border border-black/[0.08] bg-white p-0 shadow-xl dark:border-white/10 dark:bg-card"
+					>
+						{menu}
+					</PopoverContent>
+				</Popover>
+				{publicActions}
 			</div>
 			<div className="flex min-h-[60px] items-center gap-2 bg-black/[0.02] px-4 py-3 dark:bg-white/[0.02]">
 				{actions}
