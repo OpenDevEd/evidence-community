@@ -10,10 +10,7 @@ import {
 	getPlatformPathLocale,
 	RUNTIME_LOCALE_COOKIE,
 } from "./i18n/runtime";
-import {
-	PRIVATE_NO_STORE_CACHE_CONTROL,
-	PUBLIC_READ_CACHE_CONTROL,
-} from "./lib/http-cache";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "./lib/http-cache";
 import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { normalizePathname } from "./lib/path";
 import {
@@ -622,21 +619,12 @@ export default async function proxy(request: NextRequest) {
 	})(request);
 
 	if (isPublicLibraryPage(request.nextUrl.pathname)) {
-		const isRedirect = response.status >= 300 && response.status < 400;
-		const setsLocaleCookie = response.headers.has("set-cookie");
-		const variesByLocaleDetection =
-			libraryConfig.localization.detectLocale &&
-			(!getPlatformPathLocale(request.nextUrl.pathname) ||
-				isInternalLocaleRewrite);
+		// Next normalizes page and RSC requests before the proxy, then can add
+		// redirects afterward. Neither can safely inherit public cache headers.
+		// The public data APIs own their cache policy separately.
 		response.headers.set(
 			"Cache-Control",
-			isRedirect ||
-				Boolean(libItemMatch) ||
-				setsLocaleCookie ||
-				hasLocaleRewriteHeader ||
-				variesByLocaleDetection
-				? PRIVATE_NO_STORE_CACHE_CONTROL
-				: PUBLIC_READ_CACHE_CONTROL,
+			PRIVATE_NO_STORE_CACHE_CONTROL,
 		);
 	}
 
