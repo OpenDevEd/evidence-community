@@ -1,7 +1,21 @@
 diff --git a/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs b/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs
-index 83b42c4..083fd15 100644
+index 83b42c4..767de18 100644
 --- a/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs
 +++ b/node_modules/@nextui-org/select/dist/chunk-OQVAZGUQ.mjs
+@@ -1,4 +1,5 @@
+ "use client";
++import { usePreventScroll as preventSelectScroll } from "@react-aria/overlays";
+
+ // src/use-select.ts
+ import {
+@@ -18,7 +19,6 @@ import {
+   useMultiSelectState
+ } from "@nextui-org/use-aria-multiselect";
+ import { useSafeLayoutEffect } from "@nextui-org/use-safe-layout-effect";
+-import { ariaShouldCloseOnInteractOutside } from "@nextui-org/aria-utils";
+ import { FormContext, useSlottedContext } from "@nextui-org/form";
+ var selectData = /* @__PURE__ */ new WeakMap();
+ function useSelect(originalProps) {
 @@ -159,7 +159,7 @@ function useSelect(originalProps) {
      triggerRef
    );
@@ -11,10 +25,41 @@ index 83b42c4..083fd15 100644
    const { focusProps, isFocused, isFocusVisible } = useFocusRing();
    const { isHovered, hoverProps } = useHover({ isDisabled: originalProps.isDisabled });
    const labelPlacement = useMemo(() => {
+@@ -198,6 +198,7 @@ function useSelect(originalProps) {
+       }
+     }
+   }, [state.isOpen, disableAnimation]);
++  preventSelectScroll({ isDisabled: !state.isOpen });
+   const errorMessage = typeof props.errorMessage === "function" ? props.errorMessage({ isInvalid, validationErrors, validationDetails }) : props.errorMessage || (validationErrors == null ? void 0 : validationErrors.join(" "));
+   const hasHelper = !!description || !!errorMessage;
+   useEffect(() => {
+@@ -363,7 +364,6 @@ function useSelect(originalProps) {
+         },
+         ...popoverProps2,
+         offset: state.selectedItems && state.selectedItems.length > 0 ? state.selectedItems.length * 1e-8 + (((_a2 = slotsProps.popoverProps) == null ? void 0 : _a2.offset) || 0) : (_b2 = slotsProps.popoverProps) == null ? void 0 : _b2.offset,
+-        shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => ariaShouldCloseOnInteractOutside(element, domRef, state)
+       };
+     },
+     [
 diff --git a/node_modules/@nextui-org/select/dist/index.js b/node_modules/@nextui-org/select/dist/index.js
-index 80193b9..7450661 100644
+index 80193b9..9aea0bc 100644
 --- a/node_modules/@nextui-org/select/dist/index.js
 +++ b/node_modules/@nextui-org/select/dist/index.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var preventSelectScroll = require("@react-aria/overlays").usePreventScroll;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -59,7 +60,6 @@ var import_utils = require("@react-aria/utils");
+ var import_interactions = require("@react-aria/interactions");
+ var import_use_aria_multiselect = require("@nextui-org/use-aria-multiselect");
+ var import_use_safe_layout_effect = require("@nextui-org/use-safe-layout-effect");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ var import_form = require("@nextui-org/form");
+ var selectData = /* @__PURE__ */ new WeakMap();
+ function useSelect(originalProps) {
 @@ -200,7 +200,7 @@ function useSelect(originalProps) {
      triggerRef
    );
@@ -24,10 +69,41 @@ index 80193b9..7450661 100644
    const { focusProps, isFocused, isFocusVisible } = (0, import_focus.useFocusRing)();
    const { isHovered, hoverProps } = (0, import_interactions.useHover)({ isDisabled: originalProps.isDisabled });
    const labelPlacement = (0, import_react.useMemo)(() => {
+@@ -239,6 +239,7 @@ function useSelect(originalProps) {
+       }
+     }
+   }, [state.isOpen, disableAnimation]);
++  preventSelectScroll({ isDisabled: !state.isOpen });
+   const errorMessage = typeof props.errorMessage === "function" ? props.errorMessage({ isInvalid, validationErrors, validationDetails }) : props.errorMessage || (validationErrors == null ? void 0 : validationErrors.join(" "));
+   const hasHelper = !!description || !!errorMessage;
+   (0, import_react.useEffect)(() => {
+@@ -404,7 +405,6 @@ function useSelect(originalProps) {
+         },
+         ...popoverProps2,
+         offset: state.selectedItems && state.selectedItems.length > 0 ? state.selectedItems.length * 1e-8 + (((_a2 = slotsProps.popoverProps) == null ? void 0 : _a2.offset) || 0) : (_b2 = slotsProps.popoverProps) == null ? void 0 : _b2.offset,
+-        shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, domRef, state)
+       };
+     },
+     [
 diff --git a/node_modules/@nextui-org/select/dist/select.js b/node_modules/@nextui-org/select/dist/select.js
-index e220b33..43e83ce 100644
+index e220b33..a0831e3 100644
 --- a/node_modules/@nextui-org/select/dist/select.js
 +++ b/node_modules/@nextui-org/select/dist/select.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var preventSelectScroll = require("@react-aria/overlays").usePreventScroll;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -52,7 +53,6 @@ var import_utils = require("@react-aria/utils");
+ var import_interactions = require("@react-aria/interactions");
+ var import_use_aria_multiselect = require("@nextui-org/use-aria-multiselect");
+ var import_use_safe_layout_effect = require("@nextui-org/use-safe-layout-effect");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ var import_form = require("@nextui-org/form");
+ var selectData = /* @__PURE__ */ new WeakMap();
+ function useSelect(originalProps) {
 @@ -193,7 +193,7 @@ function useSelect(originalProps) {
      triggerRef
    );
@@ -37,10 +113,41 @@ index e220b33..43e83ce 100644
    const { focusProps, isFocused, isFocusVisible } = (0, import_focus.useFocusRing)();
    const { isHovered, hoverProps } = (0, import_interactions.useHover)({ isDisabled: originalProps.isDisabled });
    const labelPlacement = (0, import_react.useMemo)(() => {
+@@ -232,6 +232,7 @@ function useSelect(originalProps) {
+       }
+     }
+   }, [state.isOpen, disableAnimation]);
++  preventSelectScroll({ isDisabled: !state.isOpen });
+   const errorMessage = typeof props.errorMessage === "function" ? props.errorMessage({ isInvalid, validationErrors, validationDetails }) : props.errorMessage || (validationErrors == null ? void 0 : validationErrors.join(" "));
+   const hasHelper = !!description || !!errorMessage;
+   (0, import_react.useEffect)(() => {
+@@ -397,7 +398,6 @@ function useSelect(originalProps) {
+         },
+         ...popoverProps2,
+         offset: state.selectedItems && state.selectedItems.length > 0 ? state.selectedItems.length * 1e-8 + (((_a2 = slotsProps.popoverProps) == null ? void 0 : _a2.offset) || 0) : (_b2 = slotsProps.popoverProps) == null ? void 0 : _b2.offset,
+-        shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, domRef, state)
+       };
+     },
+     [
 diff --git a/node_modules/@nextui-org/select/dist/use-select.js b/node_modules/@nextui-org/select/dist/use-select.js
-index 49cb697..85e9de5 100644
+index 49cb697..fe503ed 100644
 --- a/node_modules/@nextui-org/select/dist/use-select.js
 +++ b/node_modules/@nextui-org/select/dist/use-select.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var preventSelectScroll = require("@react-aria/overlays").usePreventScroll;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -36,7 +37,6 @@ var import_utils = require("@react-aria/utils");
+ var import_interactions = require("@react-aria/interactions");
+ var import_use_aria_multiselect = require("@nextui-org/use-aria-multiselect");
+ var import_use_safe_layout_effect = require("@nextui-org/use-safe-layout-effect");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ var import_form = require("@nextui-org/form");
+ var selectData = /* @__PURE__ */ new WeakMap();
+ function useSelect(originalProps) {
 @@ -177,7 +177,7 @@ function useSelect(originalProps) {
      triggerRef
    );
@@ -50,3 +157,19 @@ index 49cb697..85e9de5 100644
    const { focusProps, isFocused, isFocusVisible } = (0, import_focus.useFocusRing)();
    const { isHovered, hoverProps } = (0, import_interactions.useHover)({ isDisabled: originalProps.isDisabled });
    const labelPlacement = (0, import_react.useMemo)(() => {
+@@ -216,6 +216,7 @@ function useSelect(originalProps) {
+       }
+     }
+   }, [state.isOpen, disableAnimation]);
++  preventSelectScroll({ isDisabled: !state.isOpen });
+   const errorMessage = typeof props.errorMessage === "function" ? props.errorMessage({ isInvalid, validationErrors, validationDetails }) : props.errorMessage || (validationErrors == null ? void 0 : validationErrors.join(" "));
+   const hasHelper = !!description || !!errorMessage;
+   (0, import_react.useEffect)(() => {
+@@ -381,7 +382,6 @@ function useSelect(originalProps) {
+         },
+         ...popoverProps2,
+         offset: state.selectedItems && state.selectedItems.length > 0 ? state.selectedItems.length * 1e-8 + (((_a2 = slotsProps.popoverProps) == null ? void 0 : _a2.offset) || 0) : (_b2 = slotsProps.popoverProps) == null ? void 0 : _b2.offset,
+-        shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, domRef, state)
+       };
+     },
+     [

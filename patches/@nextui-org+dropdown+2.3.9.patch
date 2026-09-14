@@ -1,0 +1,80 @@
+diff --git a/node_modules/@nextui-org/dropdown/dist/chunk-COZ4ZNVY.mjs b/node_modules/@nextui-org/dropdown/dist/chunk-COZ4ZNVY.mjs
+index 261f946..2c42db0 100644
+--- a/node_modules/@nextui-org/dropdown/dist/chunk-COZ4ZNVY.mjs
++++ b/node_modules/@nextui-org/dropdown/dist/chunk-COZ4ZNVY.mjs
+@@ -7,7 +7,6 @@ import { useMenuTrigger } from "@react-aria/menu";
+ import { dropdown } from "@nextui-org/theme";
+ import { clsx } from "@nextui-org/shared-utils";
+ import { mergeRefs } from "@nextui-org/react-utils";
+-import { ariaShouldCloseOnInteractOutside } from "@nextui-org/aria-utils";
+ import { useMemo, useRef } from "react";
+ import { mergeProps } from "@react-aria/utils";
+ var getMenuItem = (props, key) => {
+@@ -103,7 +102,6 @@ function useDropdown(props) {
+         ...props2.classNames,
+         content: clsx(classNames, classNamesProp == null ? void 0 : classNamesProp.content, props2.className)
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => ariaShouldCloseOnInteractOutside(element, triggerRef, state)
+     };
+   };
+   const getMenuTriggerProps = (originalProps = {}) => {
+diff --git a/node_modules/@nextui-org/dropdown/dist/dropdown.js b/node_modules/@nextui-org/dropdown/dist/dropdown.js
+index 016d843..d788d2c 100644
+--- a/node_modules/@nextui-org/dropdown/dist/dropdown.js
++++ b/node_modules/@nextui-org/dropdown/dist/dropdown.js
+@@ -47,7 +47,6 @@ var import_menu2 = require("@react-aria/menu");
+ var import_theme = require("@nextui-org/theme");
+ var import_shared_utils = require("@nextui-org/shared-utils");
+ var import_react_utils2 = require("@nextui-org/react-utils");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ var import_react = require("react");
+ var import_utils = require("@react-aria/utils");
+ var getMenuItem = (props, key) => {
+@@ -143,7 +142,6 @@ function useDropdown(props) {
+         ...props2.classNames,
+         content: (0, import_shared_utils.clsx)(classNames, classNamesProp == null ? void 0 : classNamesProp.content, props2.className)
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
+     };
+   };
+   const getMenuTriggerProps = (originalProps = {}) => {
+diff --git a/node_modules/@nextui-org/dropdown/dist/index.js b/node_modules/@nextui-org/dropdown/dist/index.js
+index 019f7b1..bfe5584 100644
+--- a/node_modules/@nextui-org/dropdown/dist/index.js
++++ b/node_modules/@nextui-org/dropdown/dist/index.js
+@@ -55,7 +55,6 @@ var import_menu2 = require("@react-aria/menu");
+ var import_theme = require("@nextui-org/theme");
+ var import_shared_utils = require("@nextui-org/shared-utils");
+ var import_react_utils2 = require("@nextui-org/react-utils");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ var import_react = require("react");
+ var import_utils = require("@react-aria/utils");
+ var getMenuItem = (props, key) => {
+@@ -151,7 +150,6 @@ function useDropdown(props) {
+         ...props2.classNames,
+         content: (0, import_shared_utils.clsx)(classNames, classNamesProp == null ? void 0 : classNamesProp.content, props2.className)
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
+     };
+   };
+   const getMenuTriggerProps = (originalProps = {}) => {
+diff --git a/node_modules/@nextui-org/dropdown/dist/use-dropdown.js b/node_modules/@nextui-org/dropdown/dist/use-dropdown.js
+index 5db0819..49cf381 100644
+--- a/node_modules/@nextui-org/dropdown/dist/use-dropdown.js
++++ b/node_modules/@nextui-org/dropdown/dist/use-dropdown.js
+@@ -30,7 +30,6 @@ var import_menu2 = require("@react-aria/menu");
+ var import_theme = require("@nextui-org/theme");
+ var import_shared_utils = require("@nextui-org/shared-utils");
+ var import_react_utils = require("@nextui-org/react-utils");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ var import_react = require("react");
+ var import_utils = require("@react-aria/utils");
+ var getMenuItem = (props, key) => {
+@@ -126,7 +125,6 @@ function useDropdown(props) {
+         ...props2.classNames,
+         content: (0, import_shared_utils.clsx)(classNames, classNamesProp == null ? void 0 : classNamesProp.content, props2.className)
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, triggerRef, state)
+     };
+   };
+   const getMenuTriggerProps = (originalProps = {}) => {

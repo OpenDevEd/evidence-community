@@ -1,0 +1,80 @@
+diff --git a/node_modules/@nextui-org/autocomplete/dist/autocomplete.js b/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
+index 1d43d70..d4fff34 100644
+--- a/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
++++ b/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
+@@ -45,7 +45,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
+ var import_utils = require("@react-aria/utils");
+ var import_combobox2 = require("@react-aria/combobox");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ function useAutocomplete(originalProps) {
+   var _a, _b, _c, _d, _e;
+   const globalContext = (0, import_system.useProviderContext)();
+@@ -336,7 +335,6 @@ function useAutocomplete(originalProps) {
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, inputWrapperRef, state),
+       disableDialogFocus: true
+     };
+   };
+diff --git a/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs b/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
+index 021f527..5238df2 100644
+--- a/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
++++ b/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
+@@ -12,7 +12,6 @@ import { clsx, dataAttr, objectToDeps } from "@nextui-org/shared-utils";
+ import { chain, mergeProps } from "@react-aria/utils";
+ import { useComboBox } from "@react-aria/combobox";
+ import { FormContext, useSlottedContext } from "@nextui-org/form";
+-import { ariaShouldCloseOnInteractOutside } from "@nextui-org/aria-utils";
+ function useAutocomplete(originalProps) {
+   var _a, _b, _c, _d, _e;
+   const globalContext = useProviderContext();
+@@ -303,7 +302,6 @@ function useAutocomplete(originalProps) {
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => ariaShouldCloseOnInteractOutside(element, inputWrapperRef, state),
+       disableDialogFocus: true
+     };
+   };
+diff --git a/node_modules/@nextui-org/autocomplete/dist/index.js b/node_modules/@nextui-org/autocomplete/dist/index.js
+index 431d596..e275d5b 100644
+--- a/node_modules/@nextui-org/autocomplete/dist/index.js
++++ b/node_modules/@nextui-org/autocomplete/dist/index.js
+@@ -51,7 +51,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
+ var import_utils = require("@react-aria/utils");
+ var import_combobox2 = require("@react-aria/combobox");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ function useAutocomplete(originalProps) {
+   var _a, _b, _c, _d, _e;
+   const globalContext = (0, import_system.useProviderContext)();
+@@ -342,7 +341,6 @@ function useAutocomplete(originalProps) {
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, inputWrapperRef, state),
+       disableDialogFocus: true
+     };
+   };
+diff --git a/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js b/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
+index fadb2d4..b4b6caf 100644
+--- a/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
++++ b/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
+@@ -35,7 +35,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
+ var import_utils = require("@react-aria/utils");
+ var import_combobox2 = require("@react-aria/combobox");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+ function useAutocomplete(originalProps) {
+   var _a, _b, _c, _d, _e;
+   const globalContext = (0, import_system.useProviderContext)();
+@@ -326,7 +325,6 @@ function useAutocomplete(originalProps) {
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps2 == null ? void 0 : popoverProps2.shouldCloseOnInteractOutside) ? popoverProps2.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, inputWrapperRef, state),
+       disableDialogFocus: true
+     };
+   };

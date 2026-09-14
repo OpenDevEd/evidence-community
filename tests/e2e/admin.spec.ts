@@ -675,6 +675,139 @@ async function mockPublishedBook(
 	};
 }
 
+test.describe("overlay lifecycle", () => {
+	test.beforeEach(async ({ page }) => {
+		await mockPublishedBook(page);
+		await page.goto("/admin");
+		await expect(page.getByRole("textbox", { name: "Search records" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Published book", exact: true })).toBeVisible();
+	});
+
+	test("removes tooltips after rapid pointer movement and keyboard blur", async ({ page }) => {
+		const logout = page.getByRole("button", { name: "Log out" });
+		const create = page.getByRole("button", { name: "Create Item" });
+		const search = page.getByRole("textbox", { name: "Search records" });
+		await search.hover();
+		for (let cycle = 0; cycle < 3; cycle++) {
+			await logout.hover();
+			await expect(page.getByRole("tooltip")).toHaveText("Log out");
+			await create.hover();
+			await logout.hover();
+			await search.hover();
+			await expect(page.getByRole("tooltip", { includeHidden: true })).toHaveCount(0);
+		}
+		await page.getByRole("button", { name: "Import Item", exact: true }).focus();
+		await page.keyboard.press("Shift+Tab");
+		await expect(logout).toBeFocused();
+		await expect(page.getByRole("tooltip", { includeHidden: true })).toHaveCount(1);
+		await expect(page.getByRole("tooltip")).toHaveText("Log out");
+		await search.click();
+		await expect(page.getByRole("tooltip", { includeHidden: true })).toHaveCount(0);
+		await expect(search).toBeFocused();
+	});
+
+	test("switches adjacent popovers with one click and releases focus", async ({ page }) => {
+		const columns = page.getByRole("button", { name: "Choose and arrange columns" });
+		const density = page.getByRole("button", { name: "Change row density" });
+		await columns.click();
+		await expect(page.getByRole("checkbox", { name: "Show Tags", exact: true })).toBeVisible();
+		await density.click();
+		await expect(columns).toHaveAttribute("aria-expanded", "false");
+		await expect(page.getByRole("button", { name: "compact", exact: true })).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
+		const search = page.getByRole("textbox", { name: "Search records" });
+		await search.click();
+		await expect(search).toBeFocused();
+	});
+
+	test("dismisses only the nested select and keeps its parent usable", async ({ page }) => {
+		await page.getByRole("button", { name: "Filters", exact: true }).click();
+		const filters = page.getByRole("dialog", { name: "Filter records" });
+		const add = filters.locator('button[aria-label="Add filter"]');
+		await add.click();
+		await expect(page.getByRole("listbox")).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("listbox", { includeHidden: true })).toHaveCount(0);
+		await expect(filters).toBeVisible();
+		await add.click();
+		await page.getByRole("option", { name: "Title", exact: true }).click();
+		const value = filters.getByRole("textbox", { name: "Title value" });
+		await value.fill("evidence");
+		await filters.locator('button[aria-label="Filter 1 field"]').click();
+		await expect(page.getByRole("listbox", { includeHidden: true })).toHaveCount(1);
+		await expect(page.getByRole("listbox", { name: "Filter 1 field" })).toBeVisible();
+		await value.click();
+		await expect(page.getByRole("listbox", { includeHidden: true })).toHaveCount(0);
+		await expect(value).toBeFocused();
+		await expect(value).toHaveValue("evidence");
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
+	});
+
+	test("closes a dialog opened from a dropdown without leaving an overlay", async ({ page }) => {
+		await Promise.all([
+			page.waitForResponse((response) => {
+				const url = new URL(response.url());
+				return url.pathname === "/api/admin/collections" &&
+					url.searchParams.get("view") === "search" &&
+					url.searchParams.get("query") === teacherCollection.name;
+			}),
+			page.getByRole("textbox", { name: "Search collections" }).fill(teacherCollection.name),
+		]);
+		await page.getByRole("button", { name: `Manage ${teacherCollection.name}`, exact: true }).click();
+		await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+		const dialog = page.getByRole("dialog", { name: "Rename collection" });
+		await expect(dialog.getByRole("textbox", { name: "Name" })).toHaveValue(teacherCollection.name);
+		await expect(page.getByRole("menu", { includeHidden: true })).toHaveCount(0);
+		await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+		await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
+		const search = page.getByRole("textbox", { name: "Search records" });
+		await search.click();
+		await expect(search).toBeFocused();
+	});
+
+	test("closes and reopens a modal after switching tabs and resizing", async ({ page }) => {
+		for (let cycle = 0; cycle < 3; cycle++) {
+			await page.getByRole("button", { name: "Import Item", exact: true }).click();
+			const dialog = page.getByRole("dialog");
+			const files = dialog.getByRole("tab", { name: "Bibliography files" });
+			await files.click();
+			await expect(files).toHaveAttribute("aria-selected", "true");
+			await page.setViewportSize({ width: cycle % 2 ? 1280 : 820, height: 900 });
+			await dialog.getByRole("tab", { name: "DOIs", exact: true }).click();
+			await expect(dialog.getByRole("textbox", { name: "DOIs", exact: true })).toBeVisible();
+			await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+			await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
+			const search = page.getByRole("textbox", { name: "Search records" });
+			await search.click();
+			await expect(search).toBeFocused();
+		}
+	});
+
+	test.describe("touch input", () => {
+		test.use({ hasTouch: true });
+
+		test("selects and reopens nested menus without dismissing the parent", async ({ page }) => {
+			await page.getByRole("button", { name: "Filters", exact: true }).tap();
+			const filters = page.getByRole("dialog", { name: "Filter records" });
+			await filters.locator('button[aria-label="Add filter"]').tap();
+			await page.getByRole("option", { name: "Title", exact: true }).tap();
+			const value = filters.getByRole("textbox", { name: "Title value" });
+			await expect(value).toBeVisible();
+			await filters.locator('button[aria-label="Filter 1 field"]').tap();
+			await expect(page.getByRole("listbox", { name: "Filter 1 field" })).toBeVisible();
+			await value.tap();
+			await expect(page.getByRole("listbox", { includeHidden: true })).toHaveCount(0);
+			await expect(filters).toBeVisible();
+			const search = page.getByRole("textbox", { name: "Search records" });
+			await search.tap();
+			await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
+			await expect(search).toBeFocused();
+		});
+	});
+});
+
 test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	page,
 }) => {

@@ -1,0 +1,587 @@
+diff --git a/node_modules/@nextui-org/aria-utils/dist/chunk-CTXDOZRW.mjs b/node_modules/@nextui-org/aria-utils/dist/chunk-CTXDOZRW.mjs
+deleted file mode 100644
+index 08bfe49..0000000
+--- a/node_modules/@nextui-org/aria-utils/dist/chunk-CTXDOZRW.mjs
++++ /dev/null
+@@ -1,22 +0,0 @@
+-"use client";
+-
+-// src/overlays/ariaShouldCloseOnInteractOutside.ts
+-var ariaShouldCloseOnInteractOutside = (element, triggerRef, state) => {
+-  const trigger = triggerRef == null ? void 0 : triggerRef.current;
+-  if (!trigger || !trigger.contains(element)) {
+-    const startElements = document.querySelectorAll("body > span[data-focus-scope-start]");
+-    let focusScopeElements = [];
+-    startElements.forEach((startElement) => {
+-      focusScopeElements.push(startElement.nextElementSibling);
+-    });
+-    if (focusScopeElements.length === 1) {
+-      state.close();
+-      return false;
+-    }
+-  }
+-  return !trigger || !trigger.contains(element);
+-};
+-
+-export {
+-  ariaShouldCloseOnInteractOutside
+-};
+diff --git a/node_modules/@nextui-org/aria-utils/dist/index.d.ts b/node_modules/@nextui-org/aria-utils/dist/index.d.ts
+index f931ceb..41b0939 100644
+--- a/node_modules/@nextui-org/aria-utils/dist/index.d.ts
++++ b/node_modules/@nextui-org/aria-utils/dist/index.d.ts
+@@ -5,10 +5,10 @@ export { CollectionProps } from './collections/types.js';
+ export { OverlayOptions, OverlayPlacement } from './overlays/types.js';
+ export { getArrowPlacement, getShouldUseAxisPlacement, getTransformOrigins, toOverlayPlacement, toReactAriaPlacement } from './overlays/utils.js';
+ export { ariaHideOutside } from './overlays/ariaHideOutside.js';
+-export { ariaShouldCloseOnInteractOutside } from './overlays/ariaShouldCloseOnInteractOutside.js';
+ export { isCtrlKeyPressed, isNonContiguousSelectionModifier } from './utils/index.js';
+ export { Item as BaseItem, Section as BaseSection, PartialNode } from '@react-stately/collections';
+ import '@react-types/shared';
+ import '@nextui-org/system';
+ import 'react';
+ import '@react-types/overlays';
++export { useAriaOverlay } from "./overlays/useAriaOverlay";
+diff --git a/node_modules/@nextui-org/aria-utils/dist/index.js b/node_modules/@nextui-org/aria-utils/dist/index.js
+index 39a6047..21f1747 100644
+--- a/node_modules/@nextui-org/aria-utils/dist/index.js
++++ b/node_modules/@nextui-org/aria-utils/dist/index.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("./overlays/useAriaOverlay.js");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -24,7 +25,7 @@ __export(src_exports, {
+   BaseItem: () => import_collections.Item,
+   BaseSection: () => import_collections2.Section,
+   ariaHideOutside: () => ariaHideOutside,
+-  ariaShouldCloseOnInteractOutside: () => ariaShouldCloseOnInteractOutside,
++  useAriaOverlay: () => import_overlay_fix.useAriaOverlay,
+   getArrowPlacement: () => getArrowPlacement,
+   getShouldUseAxisPlacement: () => getShouldUseAxisPlacement,
+   getTransformOrigins: () => getTransformOrigins,
+@@ -257,28 +258,12 @@ function ariaHideOutside(targets, root = document.body) {
+   };
+ }
+
+-// src/overlays/ariaShouldCloseOnInteractOutside.ts
+-var ariaShouldCloseOnInteractOutside = (element, triggerRef, state) => {
+-  const trigger = triggerRef == null ? void 0 : triggerRef.current;
+-  if (!trigger || !trigger.contains(element)) {
+-    const startElements = document.querySelectorAll("body > span[data-focus-scope-start]");
+-    let focusScopeElements = [];
+-    startElements.forEach((startElement) => {
+-      focusScopeElements.push(startElement.nextElementSibling);
+-    });
+-    if (focusScopeElements.length === 1) {
+-      state.close();
+-      return false;
+-    }
+-  }
+-  return !trigger || !trigger.contains(element);
+-};
+ // Annotate the CommonJS export names for ESM import in node:
+ 0 && (module.exports = {
+   BaseItem,
+   BaseSection,
+   ariaHideOutside,
+-  ariaShouldCloseOnInteractOutside,
++  useAriaOverlay,
+   getArrowPlacement,
+   getShouldUseAxisPlacement,
+   getTransformOrigins,
+diff --git a/node_modules/@nextui-org/aria-utils/dist/index.mjs b/node_modules/@nextui-org/aria-utils/dist/index.mjs
+index 9398307..b077a72 100644
+--- a/node_modules/@nextui-org/aria-utils/dist/index.mjs
++++ b/node_modules/@nextui-org/aria-utils/dist/index.mjs
+@@ -21,14 +21,10 @@ import {
+ import {
+   ariaHideOutside
+ } from "./chunk-3LSSXNCG.mjs";
+-import {
+-  ariaShouldCloseOnInteractOutside
+-} from "./chunk-CTXDOZRW.mjs";
+ export {
+   Item as BaseItem,
+   Section as BaseSection,
+   ariaHideOutside,
+-  ariaShouldCloseOnInteractOutside,
+   getArrowPlacement,
+   getShouldUseAxisPlacement,
+   getTransformOrigins,
+@@ -37,3 +33,5 @@ export {
+   toOverlayPlacement,
+   toReactAriaPlacement
+ };
++
++export { useAriaOverlay } from "./overlays/useAriaOverlay.mjs";
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.d.ts b/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.d.ts
+deleted file mode 100644
+index bfce99d..0000000
+--- a/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.d.ts
++++ /dev/null
+@@ -1,13 +0,0 @@
+-import { RefObject } from 'react';
+-
+-/**
+- * Used to handle the outside interaction for popover-based components
+- * e.g. dropdown, datepicker, date-range-picker, popover, select, autocomplete etc
+- * @param element - the element outside of the popover ref, originally from `shouldCloseOnInteractOutside`
+- * @param triggerRef - The trigger ref object
+- * @param state - The state from the popover component
+- * @returns - a boolean value which is same as shouldCloseOnInteractOutside
+- */
+-declare const ariaShouldCloseOnInteractOutside: (element: Element, triggerRef: RefObject<Element>, state: any) => boolean;
+-
+-export { ariaShouldCloseOnInteractOutside };
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.js b/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.js
+deleted file mode 100644
+index 8c33d83..0000000
+--- a/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.js
++++ /dev/null
+@@ -1,45 +0,0 @@
+-"use client";
+-"use strict";
+-var __defProp = Object.defineProperty;
+-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+-var __getOwnPropNames = Object.getOwnPropertyNames;
+-var __hasOwnProp = Object.prototype.hasOwnProperty;
+-var __export = (target, all) => {
+-  for (var name in all)
+-    __defProp(target, name, { get: all[name], enumerable: true });
+-};
+-var __copyProps = (to, from, except, desc) => {
+-  if (from && typeof from === "object" || typeof from === "function") {
+-    for (let key of __getOwnPropNames(from))
+-      if (!__hasOwnProp.call(to, key) && key !== except)
+-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+-  }
+-  return to;
+-};
+-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+-
+-// src/overlays/ariaShouldCloseOnInteractOutside.ts
+-var ariaShouldCloseOnInteractOutside_exports = {};
+-__export(ariaShouldCloseOnInteractOutside_exports, {
+-  ariaShouldCloseOnInteractOutside: () => ariaShouldCloseOnInteractOutside
+-});
+-module.exports = __toCommonJS(ariaShouldCloseOnInteractOutside_exports);
+-var ariaShouldCloseOnInteractOutside = (element, triggerRef, state) => {
+-  const trigger = triggerRef == null ? void 0 : triggerRef.current;
+-  if (!trigger || !trigger.contains(element)) {
+-    const startElements = document.querySelectorAll("body > span[data-focus-scope-start]");
+-    let focusScopeElements = [];
+-    startElements.forEach((startElement) => {
+-      focusScopeElements.push(startElement.nextElementSibling);
+-    });
+-    if (focusScopeElements.length === 1) {
+-      state.close();
+-      return false;
+-    }
+-  }
+-  return !trigger || !trigger.contains(element);
+-};
+-// Annotate the CommonJS export names for ESM import in node:
+-0 && (module.exports = {
+-  ariaShouldCloseOnInteractOutside
+-});
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.mjs b/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.mjs
+deleted file mode 100644
+index 22beb20..0000000
+--- a/node_modules/@nextui-org/aria-utils/dist/overlays/ariaShouldCloseOnInteractOutside.mjs
++++ /dev/null
+@@ -1,7 +0,0 @@
+-"use client";
+-import {
+-  ariaShouldCloseOnInteractOutside
+-} from "../chunk-CTXDOZRW.mjs";
+-export {
+-  ariaShouldCloseOnInteractOutside
+-};
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/index.d.ts b/node_modules/@nextui-org/aria-utils/dist/overlays/index.d.ts
+index 9a2e8b2..508e95a 100644
+--- a/node_modules/@nextui-org/aria-utils/dist/overlays/index.d.ts
++++ b/node_modules/@nextui-org/aria-utils/dist/overlays/index.d.ts
+@@ -1,6 +1,6 @@
+ export { OverlayOptions, OverlayPlacement } from './types.js';
+ export { getArrowPlacement, getShouldUseAxisPlacement, getTransformOrigins, toOverlayPlacement, toReactAriaPlacement } from './utils.js';
+ export { ariaHideOutside } from './ariaHideOutside.js';
+-export { ariaShouldCloseOnInteractOutside } from './ariaShouldCloseOnInteractOutside.js';
+ import '@react-types/overlays';
+ import 'react';
++export { useAriaOverlay } from "./useAriaOverlay";
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/index.js b/node_modules/@nextui-org/aria-utils/dist/overlays/index.js
+index 8aa5bad..aa292b6 100644
+--- a/node_modules/@nextui-org/aria-utils/dist/overlays/index.js
++++ b/node_modules/@nextui-org/aria-utils/dist/overlays/index.js
+@@ -1,5 +1,6 @@
+ "use client";
+ "use strict";
++var import_overlay_fix = require("./useAriaOverlay.js");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -22,7 +23,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
+ var overlays_exports = {};
+ __export(overlays_exports, {
+   ariaHideOutside: () => ariaHideOutside,
+-  ariaShouldCloseOnInteractOutside: () => ariaShouldCloseOnInteractOutside,
++  useAriaOverlay: () => import_overlay_fix.useAriaOverlay,
+   getArrowPlacement: () => getArrowPlacement,
+   getShouldUseAxisPlacement: () => getShouldUseAxisPlacement,
+   getTransformOrigins: () => getTransformOrigins,
+@@ -234,26 +235,10 @@ function ariaHideOutside(targets, root = document.body) {
+   };
+ }
+
+-// src/overlays/ariaShouldCloseOnInteractOutside.ts
+-var ariaShouldCloseOnInteractOutside = (element, triggerRef, state) => {
+-  const trigger = triggerRef == null ? void 0 : triggerRef.current;
+-  if (!trigger || !trigger.contains(element)) {
+-    const startElements = document.querySelectorAll("body > span[data-focus-scope-start]");
+-    let focusScopeElements = [];
+-    startElements.forEach((startElement) => {
+-      focusScopeElements.push(startElement.nextElementSibling);
+-    });
+-    if (focusScopeElements.length === 1) {
+-      state.close();
+-      return false;
+-    }
+-  }
+-  return !trigger || !trigger.contains(element);
+-};
+ // Annotate the CommonJS export names for ESM import in node:
+ 0 && (module.exports = {
+   ariaHideOutside,
+-  ariaShouldCloseOnInteractOutside,
++  useAriaOverlay,
+   getArrowPlacement,
+   getShouldUseAxisPlacement,
+   getTransformOrigins,
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/index.mjs b/node_modules/@nextui-org/aria-utils/dist/overlays/index.mjs
+index 19bf21f..c4f917a 100644
+--- a/node_modules/@nextui-org/aria-utils/dist/overlays/index.mjs
++++ b/node_modules/@nextui-org/aria-utils/dist/overlays/index.mjs
+@@ -10,15 +10,13 @@ import {
+ import {
+   ariaHideOutside
+ } from "../chunk-3LSSXNCG.mjs";
+-import {
+-  ariaShouldCloseOnInteractOutside
+-} from "../chunk-CTXDOZRW.mjs";
+ export {
+   ariaHideOutside,
+-  ariaShouldCloseOnInteractOutside,
+   getArrowPlacement,
+   getShouldUseAxisPlacement,
+   getTransformOrigins,
+   toOverlayPlacement,
+   toReactAriaPlacement
+ };
++
++export { useAriaOverlay } from "./useAriaOverlay.mjs";
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.d.ts b/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.d.ts
+new file mode 100644
+index 0000000..c3dec76
+--- /dev/null
++++ b/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.d.ts
+@@ -0,0 +1,22 @@
++// Backported from @heroui/use-aria-overlay 2.0.6 (MIT).
++import { AriaOverlayProps, OverlayAria } from '@react-aria/overlays';
++import { RefObject } from 'react';
++
++interface UseAriaOverlayProps extends AriaOverlayProps {
++    /**
++     * When `true`, `click/focus` interactions will be disabled on elements outside
++     * the `Overlay`. Users need to click twice on outside elements to interact with them:
++     * once to close the overlay, and again to trigger the element.
++     *
++     * @default true
++     */
++    disableOutsideEvents?: boolean;
++}
++/**
++ * Provides the behavior for overlays such as dialogs, popovers, and menus.
++ * Hides the overlay when the user interacts outside it, when the Escape key is pressed,
++ * or optionally, on blur. Only the top-most overlay will close at once.
++ */
++declare function useAriaOverlay(props: UseAriaOverlayProps, ref: RefObject<Element>): OverlayAria;
++
++export { type UseAriaOverlayProps, useAriaOverlay };
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.js b/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.js
+new file mode 100644
+index 0000000..f497a32
+--- /dev/null
++++ b/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.js
+@@ -0,0 +1,136 @@
++// Backported from @heroui/use-aria-overlay 2.0.6 (MIT).
++"use strict";
++var __defProp = Object.defineProperty;
++var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
++var __getOwnPropNames = Object.getOwnPropertyNames;
++var __hasOwnProp = Object.prototype.hasOwnProperty;
++var __export = (target, all) => {
++  for (var name in all)
++    __defProp(target, name, { get: all[name], enumerable: true });
++};
++var __copyProps = (to, from, except, desc) => {
++  if (from && typeof from === "object" || typeof from === "function") {
++    for (let key of __getOwnPropNames(from))
++      if (!__hasOwnProp.call(to, key) && key !== except)
++        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
++  }
++  return to;
++};
++var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
++
++// src/index.ts
++var index_exports = {};
++__export(index_exports, {
++  useAriaOverlay: () => useAriaOverlay
++});
++module.exports = __toCommonJS(index_exports);
++var import_focus = require("@react-aria/focus");
++var import_interactions = require("@react-aria/interactions");
++var import_react = require("react");
++var visibleOverlays = [];
++function useAriaOverlay(props, ref) {
++  const {
++    disableOutsideEvents = true,
++    isDismissable = false,
++    isKeyboardDismissDisabled = false,
++    isOpen,
++    onClose,
++    shouldCloseOnBlur,
++    shouldCloseOnInteractOutside
++  } = props;
++  (0, import_react.useEffect)(() => {
++    if (isOpen && !visibleOverlays.includes(ref)) {
++      visibleOverlays.push(ref);
++      return () => {
++        let index = visibleOverlays.indexOf(ref);
++        if (index >= 0) {
++          visibleOverlays.splice(index, 1);
++        }
++      };
++    }
++  }, [isOpen, ref]);
++  const onHide = () => {
++    if (visibleOverlays[visibleOverlays.length - 1] === ref && onClose) {
++      onClose();
++    }
++  };
++  const onInteractOutsideStart = (e) => {
++    if (!shouldCloseOnInteractOutside || shouldCloseOnInteractOutside(e.target)) {
++      if (visibleOverlays[visibleOverlays.length - 1] === ref) {
++        if (disableOutsideEvents) {
++          e.stopPropagation();
++          e.preventDefault();
++        }
++      }
++      if (getOverlayInteractionType(ref) !== "pressEnd") {
++        onHide();
++      }
++    }
++  };
++  const onInteractOutside = (e) => {
++    if (!shouldCloseOnInteractOutside || shouldCloseOnInteractOutside(e.target)) {
++      if (visibleOverlays[visibleOverlays.length - 1] === ref) {
++        if (disableOutsideEvents) {
++          e.stopPropagation();
++          e.preventDefault();
++        }
++      }
++      onHide();
++    }
++  };
++  const onKeyDown = (e) => {
++    if (e.key === "Escape" && !isKeyboardDismissDisabled && !e.nativeEvent.isComposing) {
++      e.stopPropagation();
++      e.preventDefault();
++      onHide();
++    }
++  };
++  (0, import_interactions.useInteractOutside)({
++    isDisabled: !(isDismissable && isOpen),
++    onInteractOutside: isDismissable && isOpen ? onInteractOutside : void 0,
++    onInteractOutsideStart,
++    ref
++  });
++  const { focusWithinProps } = (0, import_interactions.useFocusWithin)({
++    isDisabled: !shouldCloseOnBlur,
++    onBlurWithin: (e) => {
++      if (!e.relatedTarget || (0, import_focus.isElementInChildOfActiveScope)(e.relatedTarget)) {
++        return;
++      }
++      if (!shouldCloseOnInteractOutside || shouldCloseOnInteractOutside(e.relatedTarget)) {
++        onHide();
++      }
++    }
++  });
++  const onPointerDownUnderlay = (e) => {
++    if (e.target === e.currentTarget) {
++      e.preventDefault();
++    }
++  };
++  function getOverlayInteractionType(ref2) {
++    const el = ref2.current;
++    if (!el) return "unknown";
++    const role = (el.getAttribute("role") || "").toLowerCase();
++    const ariaModalAttr = el.getAttribute("aria-modal");
++    if ((role === "dialog" || role === "alertdialog") && (ariaModalAttr === null || ariaModalAttr.toLowerCase() === "true")) {
++      return "pressEnd";
++    }
++    if (["listbox", "menu", "tree", "grid", "combobox"].includes(role)) {
++      return "pressStart";
++    }
++    return "unknown";
++  }
++  return {
++    overlayProps: {
++      onKeyDown,
++      ...focusWithinProps
++    },
++    underlayProps: {
++      onPointerDown: onPointerDownUnderlay
++    }
++  };
++}
++// Annotate the CommonJS export names for ESM import in node:
++0 && (module.exports = {
++  useAriaOverlay
++});
+diff --git a/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.mjs b/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.mjs
+new file mode 100644
+index 0000000..22f36c3
+--- /dev/null
++++ b/node_modules/@nextui-org/aria-utils/dist/overlays/useAriaOverlay.mjs
+@@ -0,0 +1,111 @@
++// Backported from @heroui/use-aria-overlay 2.0.6 (MIT).
++// src/index.ts
++import { isElementInChildOfActiveScope } from "@react-aria/focus";
++import { useFocusWithin, useInteractOutside } from "@react-aria/interactions";
++import { useEffect } from "react";
++var visibleOverlays = [];
++function useAriaOverlay(props, ref) {
++  const {
++    disableOutsideEvents = true,
++    isDismissable = false,
++    isKeyboardDismissDisabled = false,
++    isOpen,
++    onClose,
++    shouldCloseOnBlur,
++    shouldCloseOnInteractOutside
++  } = props;
++  useEffect(() => {
++    if (isOpen && !visibleOverlays.includes(ref)) {
++      visibleOverlays.push(ref);
++      return () => {
++        let index = visibleOverlays.indexOf(ref);
++        if (index >= 0) {
++          visibleOverlays.splice(index, 1);
++        }
++      };
++    }
++  }, [isOpen, ref]);
++  const onHide = () => {
++    if (visibleOverlays[visibleOverlays.length - 1] === ref && onClose) {
++      onClose();
++    }
++  };
++  const onInteractOutsideStart = (e) => {
++    if (!shouldCloseOnInteractOutside || shouldCloseOnInteractOutside(e.target)) {
++      if (visibleOverlays[visibleOverlays.length - 1] === ref) {
++        if (disableOutsideEvents) {
++          e.stopPropagation();
++          e.preventDefault();
++        }
++      }
++      if (getOverlayInteractionType(ref) !== "pressEnd") {
++        onHide();
++      }
++    }
++  };
++  const onInteractOutside = (e) => {
++    if (!shouldCloseOnInteractOutside || shouldCloseOnInteractOutside(e.target)) {
++      if (visibleOverlays[visibleOverlays.length - 1] === ref) {
++        if (disableOutsideEvents) {
++          e.stopPropagation();
++          e.preventDefault();
++        }
++      }
++      onHide();
++    }
++  };
++  const onKeyDown = (e) => {
++    if (e.key === "Escape" && !isKeyboardDismissDisabled && !e.nativeEvent.isComposing) {
++      e.stopPropagation();
++      e.preventDefault();
++      onHide();
++    }
++  };
++  useInteractOutside({
++    isDisabled: !(isDismissable && isOpen),
++    onInteractOutside: isDismissable && isOpen ? onInteractOutside : void 0,
++    onInteractOutsideStart,
++    ref
++  });
++  const { focusWithinProps } = useFocusWithin({
++    isDisabled: !shouldCloseOnBlur,
++    onBlurWithin: (e) => {
++      if (!e.relatedTarget || isElementInChildOfActiveScope(e.relatedTarget)) {
++        return;
++      }
++      if (!shouldCloseOnInteractOutside || shouldCloseOnInteractOutside(e.relatedTarget)) {
++        onHide();
++      }
++    }
++  });
++  const onPointerDownUnderlay = (e) => {
++    if (e.target === e.currentTarget) {
++      e.preventDefault();
++    }
++  };
++  function getOverlayInteractionType(ref2) {
++    const el = ref2.current;
++    if (!el) return "unknown";
++    const role = (el.getAttribute("role") || "").toLowerCase();
++    const ariaModalAttr = el.getAttribute("aria-modal");
++    if ((role === "dialog" || role === "alertdialog") && (ariaModalAttr === null || ariaModalAttr.toLowerCase() === "true")) {
++      return "pressEnd";
++    }
++    if (["listbox", "menu", "tree", "grid", "combobox"].includes(role)) {
++      return "pressStart";
++    }
++    return "unknown";
++  }
++  return {
++    overlayProps: {
++      onKeyDown,
++      ...focusWithinProps
++    },
++    underlayProps: {
++      onPointerDown: onPointerDownUnderlay
++    }
++  };
++}
++export {
++  useAriaOverlay
++};
+diff --git a/node_modules/@nextui-org/aria-utils/package.json b/node_modules/@nextui-org/aria-utils/package.json
+index fc05c5a..1b2a5d7 100644
+--- a/node_modules/@nextui-org/aria-utils/package.json
++++ b/node_modules/@nextui-org/aria-utils/package.json
+@@ -36,7 +36,10 @@
+     "@react-types/shared": "3.26.0",
+     "@nextui-org/system": "2.4.6",
+     "@nextui-org/shared-utils": "2.1.2",
+-    "@nextui-org/react-rsc-utils": "2.1.1"
++    "@nextui-org/react-rsc-utils": "2.1.1",
++    "@react-aria/focus": "3.19.0",
++    "@react-aria/interactions": "3.22.5",
++    "@react-aria/overlays": "3.24.0"
+   },
+   "clean-package": "../../../clean-package.config.json",
+   "module": "dist/index.mjs",

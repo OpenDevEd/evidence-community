@@ -1,0 +1,156 @@
+diff --git a/node_modules/@nextui-org/date-picker/dist/chunk-3NQFZADX.mjs b/node_modules/@nextui-org/date-picker/dist/chunk-3NQFZADX.mjs
+index 8361f7f..7f100ee 100644
+--- a/node_modules/@nextui-org/date-picker/dist/chunk-3NQFZADX.mjs
++++ b/node_modules/@nextui-org/date-picker/dist/chunk-3NQFZADX.mjs
+@@ -12,7 +12,6 @@ import { useDatePicker as useAriaDatePicker } from "@react-aria/datepicker";
+ import { clsx, dataAttr, objectToDeps } from "@nextui-org/shared-utils";
+ import { mergeProps } from "@react-aria/utils";
+ import { FormContext, useSlottedContext } from "@nextui-org/form";
+-import { ariaShouldCloseOnInteractOutside } from "@nextui-org/aria-utils";
+ function useDatePicker({
+   className,
+   classNames,
+@@ -136,7 +135,6 @@ function useDatePicker({
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => ariaShouldCloseOnInteractOutside(element, popoverTriggerRef, state)
+     };
+   };
+   const getCalendarProps = () => {
+diff --git a/node_modules/@nextui-org/date-picker/dist/chunk-ZSZI3C2P.mjs b/node_modules/@nextui-org/date-picker/dist/chunk-ZSZI3C2P.mjs
+index 7f22c70..bb2e602 100644
+--- a/node_modules/@nextui-org/date-picker/dist/chunk-ZSZI3C2P.mjs
++++ b/node_modules/@nextui-org/date-picker/dist/chunk-ZSZI3C2P.mjs
+@@ -12,7 +12,6 @@ import { clsx, dataAttr, objectToDeps } from "@nextui-org/shared-utils";
+ import { mergeProps } from "@react-aria/utils";
+ import { dateRangePicker, dateInput, cn } from "@nextui-org/theme";
+ import { FormContext, useSlottedContext } from "@nextui-org/form";
+-import { ariaShouldCloseOnInteractOutside } from "@nextui-org/aria-utils";
+ function useDateRangePicker({
+   as,
+   isInvalid: isInvalidProp,
+@@ -147,7 +146,6 @@ function useDateRangePicker({
+             props.className
+           )
+         }),
+-        shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => ariaShouldCloseOnInteractOutside(element, popoverTriggerRef, state)
+       }
+     };
+   };
+diff --git a/node_modules/@nextui-org/date-picker/dist/date-picker.js b/node_modules/@nextui-org/date-picker/dist/date-picker.js
+index de009c9..48016cb 100644
+--- a/node_modules/@nextui-org/date-picker/dist/date-picker.js
++++ b/node_modules/@nextui-org/date-picker/dist/date-picker.js
+@@ -43,7 +43,6 @@ var import_datepicker2 = require("@react-aria/datepicker");
+ var import_shared_utils2 = require("@nextui-org/shared-utils");
+ var import_utils3 = require("@react-aria/utils");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+
+ // src/use-date-picker-base.ts
+ var import_shared_utils = require("@nextui-org/shared-utils");
+@@ -515,7 +514,6 @@ function useDatePicker({
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, popoverTriggerRef, state)
+     };
+   };
+   const getCalendarProps = () => {
+diff --git a/node_modules/@nextui-org/date-picker/dist/date-range-picker.js b/node_modules/@nextui-org/date-picker/dist/date-range-picker.js
+index 3b2eb36..9189b24 100644
+--- a/node_modules/@nextui-org/date-picker/dist/date-range-picker.js
++++ b/node_modules/@nextui-org/date-picker/dist/date-range-picker.js
+@@ -87,7 +87,6 @@ var import_shared_utils2 = require("@nextui-org/shared-utils");
+ var import_utils4 = require("@react-aria/utils");
+ var import_theme2 = require("@nextui-org/theme");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+
+ // src/use-date-picker-base.ts
+ var import_shared_utils = require("@nextui-org/shared-utils");
+@@ -570,7 +569,6 @@ function useDateRangePicker({
+             props.className
+           )
+         }),
+-        shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, popoverTriggerRef, state)
+       }
+     };
+   };
+diff --git a/node_modules/@nextui-org/date-picker/dist/index.js b/node_modules/@nextui-org/date-picker/dist/index.js
+index 9e0cb4c..3ec82a6 100644
+--- a/node_modules/@nextui-org/date-picker/dist/index.js
++++ b/node_modules/@nextui-org/date-picker/dist/index.js
+@@ -49,7 +49,6 @@ var import_datepicker2 = require("@react-aria/datepicker");
+ var import_shared_utils2 = require("@nextui-org/shared-utils");
+ var import_utils3 = require("@react-aria/utils");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+
+ // src/use-date-picker-base.ts
+ var import_shared_utils = require("@nextui-org/shared-utils");
+@@ -521,7 +520,6 @@ function useDatePicker({
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, popoverTriggerRef, state)
+     };
+   };
+   const getCalendarProps = () => {
+@@ -690,7 +688,6 @@ var import_shared_utils3 = require("@nextui-org/shared-utils");
+ var import_utils5 = require("@react-aria/utils");
+ var import_theme3 = require("@nextui-org/theme");
+ var import_form2 = require("@nextui-org/form");
+-var import_aria_utils2 = require("@nextui-org/aria-utils");
+ function useDateRangePicker({
+   as,
+   isInvalid: isInvalidProp,
+@@ -825,7 +822,6 @@ function useDateRangePicker({
+             props.className
+           )
+         }),
+-        shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils2.ariaShouldCloseOnInteractOutside)(element, popoverTriggerRef, state)
+       }
+     };
+   };
+diff --git a/node_modules/@nextui-org/date-picker/dist/use-date-picker.js b/node_modules/@nextui-org/date-picker/dist/use-date-picker.js
+index f2bd6f9..cd0774f 100644
+--- a/node_modules/@nextui-org/date-picker/dist/use-date-picker.js
++++ b/node_modules/@nextui-org/date-picker/dist/use-date-picker.js
+@@ -32,7 +32,6 @@ var import_datepicker2 = require("@react-aria/datepicker");
+ var import_shared_utils2 = require("@nextui-org/shared-utils");
+ var import_utils3 = require("@react-aria/utils");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+
+ // src/use-date-picker-base.ts
+ var import_shared_utils = require("@nextui-org/shared-utils");
+@@ -504,7 +503,6 @@ function useDatePicker({
+           )
+         })
+       },
+-      shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, popoverTriggerRef, state)
+     };
+   };
+   const getCalendarProps = () => {
+diff --git a/node_modules/@nextui-org/date-picker/dist/use-date-range-picker.js b/node_modules/@nextui-org/date-picker/dist/use-date-range-picker.js
+index d13037a..e5ba85e 100644
+--- a/node_modules/@nextui-org/date-picker/dist/use-date-range-picker.js
++++ b/node_modules/@nextui-org/date-picker/dist/use-date-range-picker.js
+@@ -32,7 +32,6 @@ var import_shared_utils2 = require("@nextui-org/shared-utils");
+ var import_utils3 = require("@react-aria/utils");
+ var import_theme2 = require("@nextui-org/theme");
+ var import_form = require("@nextui-org/form");
+-var import_aria_utils = require("@nextui-org/aria-utils");
+
+ // src/use-date-picker-base.ts
+ var import_shared_utils = require("@nextui-org/shared-utils");
+@@ -515,7 +514,6 @@ function useDateRangePicker({
+             props.className
+           )
+         }),
+-        shouldCloseOnInteractOutside: (popoverProps == null ? void 0 : popoverProps.shouldCloseOnInteractOutside) ? popoverProps.shouldCloseOnInteractOutside : (element) => (0, import_aria_utils.ariaShouldCloseOnInteractOutside)(element, popoverTriggerRef, state)
+       }
+     };
+   };

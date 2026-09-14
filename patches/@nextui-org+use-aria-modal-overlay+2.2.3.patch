@@ -1,0 +1,55 @@
+diff --git a/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.js b/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.js
+index 866fec9..2146259 100644
+--- a/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.js
++++ b/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.js
+@@ -1,4 +1,5 @@
+ "use strict";
++var import_overlay_fix = require("@nextui-org/aria-utils");
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+ var __getOwnPropNames = Object.getOwnPropertyNames;
+@@ -29,7 +30,7 @@ var import_react = require("react");
+ function useAriaModalOverlay(props = {
+   shouldBlockScroll: true
+ }, state, ref) {
+-  let { overlayProps, underlayProps } = (0, import_overlays.useOverlay)(
++  let { overlayProps, underlayProps } = (0, import_overlay_fix.useAriaOverlay)(
+     {
+       ...props,
+       isOpen: state.isOpen,
+diff --git a/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.mjs b/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.mjs
+index d49c81b..7d3c6d4 100644
+--- a/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.mjs
++++ b/node_modules/@nextui-org/use-aria-modal-overlay/dist/index.mjs
+@@ -1,7 +1,7 @@
++import { useAriaOverlay } from "@nextui-org/aria-utils";
+ // src/index.ts
+ import {
+   ariaHideOutside,
+-  useOverlay,
+   usePreventScroll,
+   useOverlayFocusContain
+ } from "@react-aria/overlays";
+@@ -10,7 +10,7 @@ import { useEffect } from "react";
+ function useAriaModalOverlay(props = {
+   shouldBlockScroll: true
+ }, state, ref) {
+-  let { overlayProps, underlayProps } = useOverlay(
++  let { overlayProps, underlayProps } = useAriaOverlay(
+     {
+       ...props,
+       isOpen: state.isOpen,
+diff --git a/node_modules/@nextui-org/use-aria-modal-overlay/package.json b/node_modules/@nextui-org/use-aria-modal-overlay/package.json
+index b7d4b32..2ce10a4 100644
+--- a/node_modules/@nextui-org/use-aria-modal-overlay/package.json
++++ b/node_modules/@nextui-org/use-aria-modal-overlay/package.json
+@@ -28,7 +28,8 @@
+     "@react-aria/overlays": "3.24.0",
+     "@react-aria/utils": "3.26.0",
+     "@react-stately/overlays": "3.6.12",
+-    "@react-types/shared": "3.26.0"
++    "@react-types/shared": "3.26.0",
++    "@nextui-org/aria-utils": "2.2.7"
+   },
+   "peerDependencies": {
+     "react": ">=18 || >=19.0.0-rc.0",

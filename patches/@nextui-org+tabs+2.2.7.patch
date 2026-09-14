@@ -1,0 +1,1206 @@
+diff --git a/node_modules/@nextui-org/tabs/dist/chunk-73H64UCB.mjs b/node_modules/@nextui-org/tabs/dist/chunk-73H64UCB.mjs
+index 90708e7..59e5831 100644
+--- a/node_modules/@nextui-org/tabs/dist/chunk-73H64UCB.mjs
++++ b/node_modules/@nextui-org/tabs/dist/chunk-73H64UCB.mjs
+@@ -24,7 +24,6 @@ function useTabs(originalProps) {
+     classNames,
+     children,
+     disableCursorAnimation,
+-    motionProps,
+     isVertical = false,
+     shouldSelectOnPressUp = true,
+     destroyInactiveTabPanel = true,
+@@ -54,7 +53,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       classNames,
+-      motionProps,
+       disableAnimation,
+       listRef: domRef,
+       shouldSelectOnPressUp,
+@@ -65,7 +63,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       domRef,
+-      motionProps,
+       disableAnimation,
+       disableCursorAnimation,
+       shouldSelectOnPressUp,
+@@ -105,6 +102,15 @@ function useTabs(originalProps) {
+     }),
+     [domRef, tabListProps, classNames, slots]
+   );
++  const getTabCursorProps = useCallback(
++    (props2) => ({
++      "data-slot": "cursor",
++      className: slots.cursor({
++        class: clsx(classNames == null ? void 0 : classNames.cursor, props2 == null ? void 0 : props2.className)
++      })
++    }),
++    [classNames, slots]
++  );
+   return {
+     Component,
+     domRef,
+@@ -113,7 +119,8 @@ function useTabs(originalProps) {
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   };
+ }
+
+diff --git a/node_modules/@nextui-org/tabs/dist/chunk-TBXVIZ2K.mjs b/node_modules/@nextui-org/tabs/dist/chunk-TBXVIZ2K.mjs
+index 7e2ea6d..037a1d8 100644
+--- a/node_modules/@nextui-org/tabs/dist/chunk-TBXVIZ2K.mjs
++++ b/node_modules/@nextui-org/tabs/dist/chunk-TBXVIZ2K.mjs
+@@ -10,8 +10,7 @@ import {
+ } from "./chunk-73H64UCB.mjs";
+
+ // src/tabs.tsx
+-import { useId } from "react";
+-import { LayoutGroup } from "framer-motion";
++import { useEffect, useCallback, useRef, useMemo } from "react";
+ import { forwardRef } from "@nextui-org/system";
+ import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+ var Tabs = forwardRef(function Tabs2(props, ref) {
+@@ -19,44 +18,146 @@ var Tabs = forwardRef(function Tabs2(props, ref) {
+     Component,
+     values,
+     state,
++    domRef,
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   } = useTabs({
+     ...props,
+     ref
+   });
+-  const layoutId = useId();
+-  const layoutGroupEnabled = !props.disableAnimation && !props.disableCursorAnimation;
+   const tabsProps = {
+     state,
+     listRef: values.listRef,
+     slots: values.slots,
+     classNames: values.classNames,
+     isDisabled: values.isDisabled,
+-    motionProps: values.motionProps,
+-    disableAnimation: values.disableAnimation,
+-    shouldSelectOnPressUp: values.shouldSelectOnPressUp,
+-    disableCursorAnimation: values.disableCursorAnimation
++    shouldSelectOnPressUp: values.shouldSelectOnPressUp
+   };
+   const tabs = [...state.collection].map((item) => /* @__PURE__ */ jsx(tab_default, { item, ...tabsProps, ...item.props }, item.key));
+-  const renderTabs = /* @__PURE__ */ jsxs(Fragment, { children: [
+-    /* @__PURE__ */ jsx("div", { ...getBaseProps(), children: /* @__PURE__ */ jsx(Component, { ...getTabListProps(), children: layoutGroupEnabled ? /* @__PURE__ */ jsx(LayoutGroup, { id: layoutId, children: tabs }) : tabs }) }),
+-    [...state.collection].map((item) => {
+-      return /* @__PURE__ */ jsx(
+-        tab_panel_default,
+-        {
+-          classNames: values.classNames,
+-          destroyInactiveTabPanel,
+-          slots: values.slots,
+-          state: values.state,
+-          tabKey: item.key
+-        },
+-        item.key
+-      );
+-    })
+-  ] });
++  const variant = props == null ? void 0 : props.variant;
++  const previousVariant = useRef(void 0);
++  const isVertical = props == null ? void 0 : props.isVertical;
++  const previousIsVertical = useRef(void 0);
++  const placement = props == null ? void 0 : props.placement;
++  const previousPlacement = useRef(void 0);
++  const cursorRef = useRef(null);
++  const selectedItem = state.selectedItem;
++  const selectedKey = selectedItem == null ? void 0 : selectedItem.key;
++  const getCursorStyles = useCallback(
++    (tabRect) => {
++      if (variant === "underlined") {
++        return {
++          left: `${tabRect.left + tabRect.width * 0.1}px`,
++          top: `${tabRect.top + tabRect.height - 2}px`,
++          width: `${tabRect.width * 0.8}px`,
++          height: ""
++        };
++      }
++      return {
++        left: `${tabRect.left}px`,
++        top: `${tabRect.top}px`,
++        width: `${tabRect.width}px`,
++        height: `${tabRect.height}px`
++      };
++    },
++    [variant]
++  );
++  const withAnimationReset = useCallback(
++    (callback) => {
++      var _a;
++      if (variant !== previousVariant.current || isVertical !== previousIsVertical.current || placement !== previousPlacement.current) {
++        (_a = cursorRef.current) == null ? void 0 : _a.removeAttribute("data-animated");
++      }
++      callback();
++      previousVariant.current = variant;
++      previousIsVertical.current = isVertical;
++      previousPlacement.current = placement;
++      requestAnimationFrame(() => {
++        var _a2, _b;
++        (_a2 = cursorRef.current) == null ? void 0 : _a2.setAttribute("data-animated", "true");
++        (_b = cursorRef.current) == null ? void 0 : _b.setAttribute("data-initialized", "true");
++      });
++    },
++    [isVertical, variant, placement]
++  );
++  const updateCursorPosition = useCallback(
++    (selectedTab) => {
++      if (!cursorRef.current) return;
++      const tabRect = {
++        width: selectedTab.offsetWidth,
++        height: selectedTab.offsetHeight,
++        left: selectedTab.offsetLeft,
++        top: selectedTab.offsetTop
++      };
++      const styles = getCursorStyles(tabRect);
++      withAnimationReset(() => {
++        cursorRef.current.style.left = styles.left;
++        cursorRef.current.style.top = styles.top;
++        cursorRef.current.style.width = styles.width;
++        cursorRef.current.style.height = styles.height;
++      });
++    },
++    [cursorRef.current, getCursorStyles, withAnimationReset]
++  );
++  const onResize = useCallback(
++    (entries) => {
++      const contentRect = entries[0].contentRect;
++      if (contentRect.width === 0 && contentRect.height === 0) return;
++      updateCursorPosition(entries[0].target);
++    },
++    [updateCursorPosition]
++  );
++  useEffect(() => {
++    var _a;
++    const selectedTab = (_a = domRef.current) == null ? void 0 : _a.querySelector(`[data-key="${selectedKey}"]`);
++    if (!selectedTab) return;
++    const observer = new ResizeObserver(onResize);
++    observer.observe(selectedTab);
++    return () => observer.disconnect();
++  }, [domRef.current, onResize, selectedKey]);
++  const renderTabs = useMemo(
++    () => /* @__PURE__ */ jsxs(Fragment, { children: [
++      /* @__PURE__ */ jsx("div", { ...getBaseProps(), children: /* @__PURE__ */ jsxs(Component, { ...getTabListProps(), children: [
++        !values.disableAnimation && !values.disableCursorAnimation && selectedKey != null && /* @__PURE__ */ jsx("span", { ...getTabCursorProps(), ref: cursorRef }),
++        tabs
++      ] }) }),
++      [...state.collection].map((item) => {
++        return /* @__PURE__ */ jsx(
++          tab_panel_default,
++          {
++            classNames: values.classNames,
++            destroyInactiveTabPanel,
++            slots: values.slots,
++            state: values.state,
++            tabKey: item.key
++          },
++          item.key
++        );
++      })
++    ] }),
++    [
++      Component,
++      getBaseProps,
++      getTabListProps,
++      getTabCursorProps,
++      tabs,
++      selectedKey,
++      state.collection,
++      values.disableAnimation,
++      values.disableCursorAnimation,
++      values.classNames,
++      values.slots,
++      values.state,
++      destroyInactiveTabPanel,
++      domRef,
++      cursorRef,
++      variant,
++      isVertical
++    ]
++  );
+   if ("placement" in props || "isVertical" in props) {
+     return /* @__PURE__ */ jsx("div", { ...getWrapperProps(), children: renderTabs });
+   }
+diff --git a/node_modules/@nextui-org/tabs/dist/chunk-WIIQT7L4.mjs b/node_modules/@nextui-org/tabs/dist/chunk-WIIQT7L4.mjs
+index 9a96697..76c632f 100644
+--- a/node_modules/@nextui-org/tabs/dist/chunk-WIIQT7L4.mjs
++++ b/node_modules/@nextui-org/tabs/dist/chunk-WIIQT7L4.mjs
+@@ -4,14 +4,12 @@
+ import { forwardRef } from "@nextui-org/system";
+ import { useDOMRef, filterDOMProps, mergeRefs } from "@nextui-org/react-utils";
+ import { clsx, dataAttr } from "@nextui-org/shared-utils";
+-import { chain, mergeProps } from "@react-aria/utils";
++import { mergeProps } from "@react-aria/utils";
+ import scrollIntoView from "scroll-into-view-if-needed";
+ import { useFocusRing } from "@react-aria/focus";
+ import { useTab } from "@react-aria/tabs";
+ import { useHover } from "@react-aria/interactions";
+-import { m, domMax, LazyMotion } from "framer-motion";
+-import { useIsMounted } from "@nextui-org/use-is-mounted";
+-import { jsx, jsxs } from "react/jsx-runtime";
++import { jsx } from "react/jsx-runtime";
+ var Tab = forwardRef((props, ref) => {
+   var _a;
+   const {
+@@ -23,9 +21,6 @@ var Tab = forwardRef((props, ref) => {
+     isDisabled: isDisabledProp,
+     listRef,
+     slots,
+-    motionProps,
+-    disableAnimation,
+-    disableCursorAnimation,
+     shouldSelectOnPressUp,
+     onClick,
+     tabRef,
+@@ -50,11 +45,7 @@ var Tab = forwardRef((props, ref) => {
+     isDisabled
+   });
+   const tabStyles = clsx(classNames == null ? void 0 : classNames.tab, className);
+-  const [, isMounted] = useIsMounted({
+-    rerender: true
+-  });
+   const handleClick = () => {
+-    chain(onClick, tabProps.onClick);
+     if (!(domRef == null ? void 0 : domRef.current) || !(listRef == null ? void 0 : listRef.current))
+       return;
+     scrollIntoView(domRef.current, {
+@@ -65,7 +56,7 @@ var Tab = forwardRef((props, ref) => {
+       boundary: listRef == null ? void 0 : listRef.current
+     });
+   };
+-  return /* @__PURE__ */ jsxs(
++  return /* @__PURE__ */ jsx(
+     Component,
+     {
+       ref: mergeRefs(domRef, tabRef),
+@@ -74,6 +65,7 @@ var Tab = forwardRef((props, ref) => {
+       "data-focus-visible": dataAttr(isFocusVisible),
+       "data-hover": dataAttr(isHovered),
+       "data-hover-unselected": dataAttr((isHovered || isPressed) && !isSelected),
++      "data-key": key,
+       "data-pressed": dataAttr(isPressed),
+       "data-selected": dataAttr(isSelected),
+       "data-slot": "tab",
+@@ -92,33 +84,16 @@ var Tab = forwardRef((props, ref) => {
+       className: (_a = slots.tab) == null ? void 0 : _a.call(slots, { class: tabStyles }),
+       title: otherProps == null ? void 0 : otherProps.titleValue,
+       type: Component === "button" ? "button" : void 0,
+-      children: [
+-        isSelected && !disableAnimation && !disableCursorAnimation && isMounted ? /* @__PURE__ */ jsx(LazyMotion, { features: domMax, children: /* @__PURE__ */ jsx(
+-          m.span,
+-          {
+-            className: slots.cursor({ class: classNames == null ? void 0 : classNames.cursor }),
+-            "data-slot": "cursor",
+-            layoutDependency: false,
+-            layoutId: "cursor",
+-            transition: {
+-              type: "spring",
+-              bounce: 0.15,
+-              duration: 0.5
+-            },
+-            ...motionProps
+-          }
+-        ) }) : null,
+-        /* @__PURE__ */ jsx(
+-          "div",
+-          {
+-            className: slots.tabContent({
+-              class: classNames == null ? void 0 : classNames.tabContent
+-            }),
+-            "data-slot": "tabContent",
+-            children: item.rendered
+-          }
+-        )
+-      ]
++      children: /* @__PURE__ */ jsx(
++        "div",
++        {
++          className: slots.tabContent({
++            class: classNames == null ? void 0 : classNames.tabContent
++          }),
++          "data-slot": "tabContent",
++          children: item.rendered
++        }
++      )
+     }
+   );
+ });
+diff --git a/node_modules/@nextui-org/tabs/dist/index.d.ts b/node_modules/@nextui-org/tabs/dist/index.d.ts
+index c19e3ee..d98c1a2 100644
+--- a/node_modules/@nextui-org/tabs/dist/index.d.ts
++++ b/node_modules/@nextui-org/tabs/dist/index.d.ts
+@@ -8,4 +8,3 @@ import '@nextui-org/theme';
+ import '@nextui-org/react-utils';
+ import '@react-stately/tabs';
+ import '@react-aria/tabs';
+-import 'framer-motion';
+diff --git a/node_modules/@nextui-org/tabs/dist/index.js b/node_modules/@nextui-org/tabs/dist/index.js
+index 9d89e0a..f93cbcd 100644
+--- a/node_modules/@nextui-org/tabs/dist/index.js
++++ b/node_modules/@nextui-org/tabs/dist/index.js
+@@ -35,7 +35,6 @@ module.exports = __toCommonJS(src_exports);
+
+ // src/tabs.tsx
+ var import_react2 = require("react");
+-var import_framer_motion2 = require("framer-motion");
+ var import_system4 = require("@nextui-org/system");
+
+ // src/use-tabs.ts
+@@ -59,7 +58,6 @@ function useTabs(originalProps) {
+     classNames,
+     children,
+     disableCursorAnimation,
+-    motionProps,
+     isVertical = false,
+     shouldSelectOnPressUp = true,
+     destroyInactiveTabPanel = true,
+@@ -89,7 +87,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       classNames,
+-      motionProps,
+       disableAnimation,
+       listRef: domRef,
+       shouldSelectOnPressUp,
+@@ -100,7 +97,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       domRef,
+-      motionProps,
+       disableAnimation,
+       disableCursorAnimation,
+       shouldSelectOnPressUp,
+@@ -140,6 +136,15 @@ function useTabs(originalProps) {
+     }),
+     [domRef, tabListProps, classNames, slots]
+   );
++  const getTabCursorProps = (0, import_react.useCallback)(
++    (props2) => ({
++      "data-slot": "cursor",
++      className: slots.cursor({
++        class: (0, import_shared_utils.clsx)(classNames == null ? void 0 : classNames.cursor, props2 == null ? void 0 : props2.className)
++      })
++    }),
++    [classNames, slots]
++  );
+   return {
+     Component,
+     domRef,
+@@ -148,7 +153,8 @@ function useTabs(originalProps) {
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   };
+ }
+
+@@ -161,8 +167,6 @@ var import_scroll_into_view_if_needed = __toESM(require("scroll-into-view-if-nee
+ var import_focus = require("@react-aria/focus");
+ var import_tabs3 = require("@react-aria/tabs");
+ var import_interactions = require("@react-aria/interactions");
+-var import_framer_motion = require("framer-motion");
+-var import_use_is_mounted = require("@nextui-org/use-is-mounted");
+ var import_jsx_runtime = require("react/jsx-runtime");
+ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+   var _a;
+@@ -175,9 +179,6 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+     isDisabled: isDisabledProp,
+     listRef,
+     slots,
+-    motionProps,
+-    disableAnimation,
+-    disableCursorAnimation,
+     shouldSelectOnPressUp,
+     onClick,
+     tabRef,
+@@ -202,11 +203,7 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+     isDisabled
+   });
+   const tabStyles = (0, import_shared_utils2.clsx)(classNames == null ? void 0 : classNames.tab, className);
+-  const [, isMounted] = (0, import_use_is_mounted.useIsMounted)({
+-    rerender: true
+-  });
+   const handleClick = () => {
+-    (0, import_utils2.chain)(onClick, tabProps.onClick);
+     if (!(domRef == null ? void 0 : domRef.current) || !(listRef == null ? void 0 : listRef.current))
+       return;
+     (0, import_scroll_into_view_if_needed.default)(domRef.current, {
+@@ -226,6 +223,7 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+       "data-focus-visible": (0, import_shared_utils2.dataAttr)(isFocusVisible),
+       "data-hover": (0, import_shared_utils2.dataAttr)(isHovered),
+       "data-hover-unselected": (0, import_shared_utils2.dataAttr)((isHovered || isPressed) && !isSelected),
++      "data-key": key,
+       "data-pressed": (0, import_shared_utils2.dataAttr)(isPressed),
+       "data-selected": (0, import_shared_utils2.dataAttr)(isSelected),
+       "data-slot": "tab",
+@@ -244,33 +242,16 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+       className: (_a = slots.tab) == null ? void 0 : _a.call(slots, { class: tabStyles }),
+       title: otherProps == null ? void 0 : otherProps.titleValue,
+       type: Component === "button" ? "button" : void 0,
+-      children: [
+-        isSelected && !disableAnimation && !disableCursorAnimation && isMounted ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: import_framer_motion.domMax, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+-          import_framer_motion.m.span,
+-          {
+-            className: slots.cursor({ class: classNames == null ? void 0 : classNames.cursor }),
+-            "data-slot": "cursor",
+-            layoutDependency: false,
+-            layoutId: "cursor",
+-            transition: {
+-              type: "spring",
+-              bounce: 0.15,
+-              duration: 0.5
+-            },
+-            ...motionProps
+-          }
+-        ) }) : null,
+-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+-          "div",
+-          {
+-            className: slots.tabContent({
+-              class: classNames == null ? void 0 : classNames.tabContent
+-            }),
+-            "data-slot": "tabContent",
+-            children: item.rendered
+-          }
+-        )
+-      ]
++      children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
++        "div",
++        {
++          className: slots.tabContent({
++            class: classNames == null ? void 0 : classNames.tabContent
++          }),
++          "data-slot": "tabContent",
++          children: item.rendered
++        }
++      )
+     }
+   );
+ });
+@@ -324,44 +305,146 @@ var Tabs = (0, import_system4.forwardRef)(function Tabs2(props, ref) {
+     Component,
+     values,
+     state,
++    domRef,
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   } = useTabs({
+     ...props,
+     ref
+   });
+-  const layoutId = (0, import_react2.useId)();
+-  const layoutGroupEnabled = !props.disableAnimation && !props.disableCursorAnimation;
+   const tabsProps = {
+     state,
+     listRef: values.listRef,
+     slots: values.slots,
+     classNames: values.classNames,
+     isDisabled: values.isDisabled,
+-    motionProps: values.motionProps,
+-    disableAnimation: values.disableAnimation,
+-    shouldSelectOnPressUp: values.shouldSelectOnPressUp,
+-    disableCursorAnimation: values.disableCursorAnimation
++    shouldSelectOnPressUp: values.shouldSelectOnPressUp
+   };
+   const tabs2 = [...state.collection].map((item) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(tab_default, { item, ...tabsProps, ...item.props }, item.key));
+-  const renderTabs = /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ...getBaseProps(), children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Component, { ...getTabListProps(), children: layoutGroupEnabled ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_framer_motion2.LayoutGroup, { id: layoutId, children: tabs2 }) : tabs2 }) }),
+-    [...state.collection].map((item) => {
+-      return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+-        tab_panel_default,
+-        {
+-          classNames: values.classNames,
+-          destroyInactiveTabPanel,
+-          slots: values.slots,
+-          state: values.state,
+-          tabKey: item.key
+-        },
+-        item.key
+-      );
+-    })
+-  ] });
++  const variant = props == null ? void 0 : props.variant;
++  const previousVariant = (0, import_react2.useRef)(void 0);
++  const isVertical = props == null ? void 0 : props.isVertical;
++  const previousIsVertical = (0, import_react2.useRef)(void 0);
++  const placement = props == null ? void 0 : props.placement;
++  const previousPlacement = (0, import_react2.useRef)(void 0);
++  const cursorRef = (0, import_react2.useRef)(null);
++  const selectedItem = state.selectedItem;
++  const selectedKey = selectedItem == null ? void 0 : selectedItem.key;
++  const getCursorStyles = (0, import_react2.useCallback)(
++    (tabRect) => {
++      if (variant === "underlined") {
++        return {
++          left: `${tabRect.left + tabRect.width * 0.1}px`,
++          top: `${tabRect.top + tabRect.height - 2}px`,
++          width: `${tabRect.width * 0.8}px`,
++          height: ""
++        };
++      }
++      return {
++        left: `${tabRect.left}px`,
++        top: `${tabRect.top}px`,
++        width: `${tabRect.width}px`,
++        height: `${tabRect.height}px`
++      };
++    },
++    [variant]
++  );
++  const withAnimationReset = (0, import_react2.useCallback)(
++    (callback) => {
++      var _a;
++      if (variant !== previousVariant.current || isVertical !== previousIsVertical.current || placement !== previousPlacement.current) {
++        (_a = cursorRef.current) == null ? void 0 : _a.removeAttribute("data-animated");
++      }
++      callback();
++      previousVariant.current = variant;
++      previousIsVertical.current = isVertical;
++      previousPlacement.current = placement;
++      requestAnimationFrame(() => {
++        var _a2, _b;
++        (_a2 = cursorRef.current) == null ? void 0 : _a2.setAttribute("data-animated", "true");
++        (_b = cursorRef.current) == null ? void 0 : _b.setAttribute("data-initialized", "true");
++      });
++    },
++    [isVertical, variant, placement]
++  );
++  const updateCursorPosition = (0, import_react2.useCallback)(
++    (selectedTab) => {
++      if (!cursorRef.current) return;
++      const tabRect = {
++        width: selectedTab.offsetWidth,
++        height: selectedTab.offsetHeight,
++        left: selectedTab.offsetLeft,
++        top: selectedTab.offsetTop
++      };
++      const styles = getCursorStyles(tabRect);
++      withAnimationReset(() => {
++        cursorRef.current.style.left = styles.left;
++        cursorRef.current.style.top = styles.top;
++        cursorRef.current.style.width = styles.width;
++        cursorRef.current.style.height = styles.height;
++      });
++    },
++    [cursorRef.current, getCursorStyles, withAnimationReset]
++  );
++  const onResize = (0, import_react2.useCallback)(
++    (entries) => {
++      const contentRect = entries[0].contentRect;
++      if (contentRect.width === 0 && contentRect.height === 0) return;
++      updateCursorPosition(entries[0].target);
++    },
++    [updateCursorPosition]
++  );
++  (0, import_react2.useEffect)(() => {
++    var _a;
++    const selectedTab = (_a = domRef.current) == null ? void 0 : _a.querySelector(`[data-key="${selectedKey}"]`);
++    if (!selectedTab) return;
++    const observer = new ResizeObserver(onResize);
++    observer.observe(selectedTab);
++    return () => observer.disconnect();
++  }, [domRef.current, onResize, selectedKey]);
++  const renderTabs = (0, import_react2.useMemo)(
++    () => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
++      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ...getBaseProps(), children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Component, { ...getTabListProps(), children: [
++        !values.disableAnimation && !values.disableCursorAnimation && selectedKey != null && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { ...getTabCursorProps(), ref: cursorRef }),
++        tabs2
++      ] }) }),
++      [...state.collection].map((item) => {
++        return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
++          tab_panel_default,
++          {
++            classNames: values.classNames,
++            destroyInactiveTabPanel,
++            slots: values.slots,
++            state: values.state,
++            tabKey: item.key
++          },
++          item.key
++        );
++      })
++    ] }),
++    [
++      Component,
++      getBaseProps,
++      getTabListProps,
++      getTabCursorProps,
++      tabs2,
++      selectedKey,
++      state.collection,
++      values.disableAnimation,
++      values.disableCursorAnimation,
++      values.classNames,
++      values.slots,
++      values.state,
++      destroyInactiveTabPanel,
++      domRef,
++      cursorRef,
++      variant,
++      isVertical
++    ]
++  );
+   if ("placement" in props || "isVertical" in props) {
+     return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ...getWrapperProps(), children: renderTabs });
+   }
+diff --git a/node_modules/@nextui-org/tabs/dist/tab-panel.d.ts b/node_modules/@nextui-org/tabs/dist/tab-panel.d.ts
+index 415e845..6f70ff4 100644
+--- a/node_modules/@nextui-org/tabs/dist/tab-panel.d.ts
++++ b/node_modules/@nextui-org/tabs/dist/tab-panel.d.ts
+@@ -8,7 +8,6 @@ import '@nextui-org/react-utils';
+ import 'react';
+ import '@react-stately/tabs';
+ import '@nextui-org/aria-utils';
+-import 'framer-motion';
+
+ interface Props extends HTMLNextUIProps<"div"> {
+     /**
+diff --git a/node_modules/@nextui-org/tabs/dist/tab.d.ts b/node_modules/@nextui-org/tabs/dist/tab.d.ts
+index 0770119..32fc3a6 100644
+--- a/node_modules/@nextui-org/tabs/dist/tab.d.ts
++++ b/node_modules/@nextui-org/tabs/dist/tab.d.ts
+@@ -8,7 +8,6 @@ import '@nextui-org/theme';
+ import '@nextui-org/react-utils';
+ import '@react-stately/tabs';
+ import '@react-aria/tabs';
+-import 'framer-motion';
+
+ interface TabItemProps<T extends object = object> extends TabItemProps$1<T> {
+     item: Node<T>;
+@@ -17,9 +16,6 @@ interface TabItemProps<T extends object = object> extends TabItemProps$1<T> {
+     listRef?: ValuesType["listRef"];
+     classNames?: ValuesType["classNames"];
+     isDisabled?: ValuesType["isDisabled"];
+-    motionProps?: ValuesType["motionProps"];
+-    disableAnimation?: ValuesType["disableAnimation"];
+-    disableCursorAnimation?: ValuesType["disableCursorAnimation"];
+ }
+ /**
+  * @internal
+diff --git a/node_modules/@nextui-org/tabs/dist/tab.js b/node_modules/@nextui-org/tabs/dist/tab.js
+index d9c2ad5..5592886 100644
+--- a/node_modules/@nextui-org/tabs/dist/tab.js
++++ b/node_modules/@nextui-org/tabs/dist/tab.js
+@@ -38,8 +38,6 @@ var import_scroll_into_view_if_needed = __toESM(require("scroll-into-view-if-nee
+ var import_focus = require("@react-aria/focus");
+ var import_tabs = require("@react-aria/tabs");
+ var import_interactions = require("@react-aria/interactions");
+-var import_framer_motion = require("framer-motion");
+-var import_use_is_mounted = require("@nextui-org/use-is-mounted");
+ var import_jsx_runtime = require("react/jsx-runtime");
+ var Tab = (0, import_system.forwardRef)((props, ref) => {
+   var _a;
+@@ -52,9 +50,6 @@ var Tab = (0, import_system.forwardRef)((props, ref) => {
+     isDisabled: isDisabledProp,
+     listRef,
+     slots,
+-    motionProps,
+-    disableAnimation,
+-    disableCursorAnimation,
+     shouldSelectOnPressUp,
+     onClick,
+     tabRef,
+@@ -79,11 +74,7 @@ var Tab = (0, import_system.forwardRef)((props, ref) => {
+     isDisabled
+   });
+   const tabStyles = (0, import_shared_utils.clsx)(classNames == null ? void 0 : classNames.tab, className);
+-  const [, isMounted] = (0, import_use_is_mounted.useIsMounted)({
+-    rerender: true
+-  });
+   const handleClick = () => {
+-    (0, import_utils.chain)(onClick, tabProps.onClick);
+     if (!(domRef == null ? void 0 : domRef.current) || !(listRef == null ? void 0 : listRef.current))
+       return;
+     (0, import_scroll_into_view_if_needed.default)(domRef.current, {
+@@ -103,6 +94,7 @@ var Tab = (0, import_system.forwardRef)((props, ref) => {
+       "data-focus-visible": (0, import_shared_utils.dataAttr)(isFocusVisible),
+       "data-hover": (0, import_shared_utils.dataAttr)(isHovered),
+       "data-hover-unselected": (0, import_shared_utils.dataAttr)((isHovered || isPressed) && !isSelected),
++      "data-key": key,
+       "data-pressed": (0, import_shared_utils.dataAttr)(isPressed),
+       "data-selected": (0, import_shared_utils.dataAttr)(isSelected),
+       "data-slot": "tab",
+@@ -121,33 +113,16 @@ var Tab = (0, import_system.forwardRef)((props, ref) => {
+       className: (_a = slots.tab) == null ? void 0 : _a.call(slots, { class: tabStyles }),
+       title: otherProps == null ? void 0 : otherProps.titleValue,
+       type: Component === "button" ? "button" : void 0,
+-      children: [
+-        isSelected && !disableAnimation && !disableCursorAnimation && isMounted ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: import_framer_motion.domMax, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+-          import_framer_motion.m.span,
+-          {
+-            className: slots.cursor({ class: classNames == null ? void 0 : classNames.cursor }),
+-            "data-slot": "cursor",
+-            layoutDependency: false,
+-            layoutId: "cursor",
+-            transition: {
+-              type: "spring",
+-              bounce: 0.15,
+-              duration: 0.5
+-            },
+-            ...motionProps
+-          }
+-        ) }) : null,
+-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+-          "div",
+-          {
+-            className: slots.tabContent({
+-              class: classNames == null ? void 0 : classNames.tabContent
+-            }),
+-            "data-slot": "tabContent",
+-            children: item.rendered
+-          }
+-        )
+-      ]
++      children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
++        "div",
++        {
++          className: slots.tabContent({
++            class: classNames == null ? void 0 : classNames.tabContent
++          }),
++          "data-slot": "tabContent",
++          children: item.rendered
++        }
++      )
+     }
+   );
+ });
+diff --git a/node_modules/@nextui-org/tabs/dist/tabs.d.ts b/node_modules/@nextui-org/tabs/dist/tabs.d.ts
+index 019b78c..de80fa4 100644
+--- a/node_modules/@nextui-org/tabs/dist/tabs.d.ts
++++ b/node_modules/@nextui-org/tabs/dist/tabs.d.ts
+@@ -6,7 +6,6 @@ import '@nextui-org/react-utils';
+ import '@react-stately/tabs';
+ import '@react-aria/tabs';
+ import '@nextui-org/aria-utils';
+-import 'framer-motion';
+
+ interface Props<T> extends UseTabsProps<T> {
+ }
+diff --git a/node_modules/@nextui-org/tabs/dist/tabs.js b/node_modules/@nextui-org/tabs/dist/tabs.js
+index fa64848..bc37ad8 100644
+--- a/node_modules/@nextui-org/tabs/dist/tabs.js
++++ b/node_modules/@nextui-org/tabs/dist/tabs.js
+@@ -31,7 +31,6 @@ __export(tabs_exports, {
+ });
+ module.exports = __toCommonJS(tabs_exports);
+ var import_react2 = require("react");
+-var import_framer_motion2 = require("framer-motion");
+ var import_system4 = require("@nextui-org/system");
+
+ // src/use-tabs.ts
+@@ -55,7 +54,6 @@ function useTabs(originalProps) {
+     classNames,
+     children,
+     disableCursorAnimation,
+-    motionProps,
+     isVertical = false,
+     shouldSelectOnPressUp = true,
+     destroyInactiveTabPanel = true,
+@@ -85,7 +83,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       classNames,
+-      motionProps,
+       disableAnimation,
+       listRef: domRef,
+       shouldSelectOnPressUp,
+@@ -96,7 +93,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       domRef,
+-      motionProps,
+       disableAnimation,
+       disableCursorAnimation,
+       shouldSelectOnPressUp,
+@@ -136,6 +132,15 @@ function useTabs(originalProps) {
+     }),
+     [domRef, tabListProps, classNames, slots]
+   );
++  const getTabCursorProps = (0, import_react.useCallback)(
++    (props2) => ({
++      "data-slot": "cursor",
++      className: slots.cursor({
++        class: (0, import_shared_utils.clsx)(classNames == null ? void 0 : classNames.cursor, props2 == null ? void 0 : props2.className)
++      })
++    }),
++    [classNames, slots]
++  );
+   return {
+     Component,
+     domRef,
+@@ -144,7 +149,8 @@ function useTabs(originalProps) {
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   };
+ }
+
+@@ -157,8 +163,6 @@ var import_scroll_into_view_if_needed = __toESM(require("scroll-into-view-if-nee
+ var import_focus = require("@react-aria/focus");
+ var import_tabs3 = require("@react-aria/tabs");
+ var import_interactions = require("@react-aria/interactions");
+-var import_framer_motion = require("framer-motion");
+-var import_use_is_mounted = require("@nextui-org/use-is-mounted");
+ var import_jsx_runtime = require("react/jsx-runtime");
+ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+   var _a;
+@@ -171,9 +175,6 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+     isDisabled: isDisabledProp,
+     listRef,
+     slots,
+-    motionProps,
+-    disableAnimation,
+-    disableCursorAnimation,
+     shouldSelectOnPressUp,
+     onClick,
+     tabRef,
+@@ -198,11 +199,7 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+     isDisabled
+   });
+   const tabStyles = (0, import_shared_utils2.clsx)(classNames == null ? void 0 : classNames.tab, className);
+-  const [, isMounted] = (0, import_use_is_mounted.useIsMounted)({
+-    rerender: true
+-  });
+   const handleClick = () => {
+-    (0, import_utils2.chain)(onClick, tabProps.onClick);
+     if (!(domRef == null ? void 0 : domRef.current) || !(listRef == null ? void 0 : listRef.current))
+       return;
+     (0, import_scroll_into_view_if_needed.default)(domRef.current, {
+@@ -222,6 +219,7 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+       "data-focus-visible": (0, import_shared_utils2.dataAttr)(isFocusVisible),
+       "data-hover": (0, import_shared_utils2.dataAttr)(isHovered),
+       "data-hover-unselected": (0, import_shared_utils2.dataAttr)((isHovered || isPressed) && !isSelected),
++      "data-key": key,
+       "data-pressed": (0, import_shared_utils2.dataAttr)(isPressed),
+       "data-selected": (0, import_shared_utils2.dataAttr)(isSelected),
+       "data-slot": "tab",
+@@ -240,33 +238,16 @@ var Tab = (0, import_system2.forwardRef)((props, ref) => {
+       className: (_a = slots.tab) == null ? void 0 : _a.call(slots, { class: tabStyles }),
+       title: otherProps == null ? void 0 : otherProps.titleValue,
+       type: Component === "button" ? "button" : void 0,
+-      children: [
+-        isSelected && !disableAnimation && !disableCursorAnimation && isMounted ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_framer_motion.LazyMotion, { features: import_framer_motion.domMax, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+-          import_framer_motion.m.span,
+-          {
+-            className: slots.cursor({ class: classNames == null ? void 0 : classNames.cursor }),
+-            "data-slot": "cursor",
+-            layoutDependency: false,
+-            layoutId: "cursor",
+-            transition: {
+-              type: "spring",
+-              bounce: 0.15,
+-              duration: 0.5
+-            },
+-            ...motionProps
+-          }
+-        ) }) : null,
+-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+-          "div",
+-          {
+-            className: slots.tabContent({
+-              class: classNames == null ? void 0 : classNames.tabContent
+-            }),
+-            "data-slot": "tabContent",
+-            children: item.rendered
+-          }
+-        )
+-      ]
++      children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
++        "div",
++        {
++          className: slots.tabContent({
++            class: classNames == null ? void 0 : classNames.tabContent
++          }),
++          "data-slot": "tabContent",
++          children: item.rendered
++        }
++      )
+     }
+   );
+ });
+@@ -320,44 +301,146 @@ var Tabs = (0, import_system4.forwardRef)(function Tabs2(props, ref) {
+     Component,
+     values,
+     state,
++    domRef,
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   } = useTabs({
+     ...props,
+     ref
+   });
+-  const layoutId = (0, import_react2.useId)();
+-  const layoutGroupEnabled = !props.disableAnimation && !props.disableCursorAnimation;
+   const tabsProps = {
+     state,
+     listRef: values.listRef,
+     slots: values.slots,
+     classNames: values.classNames,
+     isDisabled: values.isDisabled,
+-    motionProps: values.motionProps,
+-    disableAnimation: values.disableAnimation,
+-    shouldSelectOnPressUp: values.shouldSelectOnPressUp,
+-    disableCursorAnimation: values.disableCursorAnimation
++    shouldSelectOnPressUp: values.shouldSelectOnPressUp
+   };
+   const tabs2 = [...state.collection].map((item) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(tab_default, { item, ...tabsProps, ...item.props }, item.key));
+-  const renderTabs = /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ...getBaseProps(), children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Component, { ...getTabListProps(), children: layoutGroupEnabled ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_framer_motion2.LayoutGroup, { id: layoutId, children: tabs2 }) : tabs2 }) }),
+-    [...state.collection].map((item) => {
+-      return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+-        tab_panel_default,
+-        {
+-          classNames: values.classNames,
+-          destroyInactiveTabPanel,
+-          slots: values.slots,
+-          state: values.state,
+-          tabKey: item.key
+-        },
+-        item.key
+-      );
+-    })
+-  ] });
++  const variant = props == null ? void 0 : props.variant;
++  const previousVariant = (0, import_react2.useRef)(void 0);
++  const isVertical = props == null ? void 0 : props.isVertical;
++  const previousIsVertical = (0, import_react2.useRef)(void 0);
++  const placement = props == null ? void 0 : props.placement;
++  const previousPlacement = (0, import_react2.useRef)(void 0);
++  const cursorRef = (0, import_react2.useRef)(null);
++  const selectedItem = state.selectedItem;
++  const selectedKey = selectedItem == null ? void 0 : selectedItem.key;
++  const getCursorStyles = (0, import_react2.useCallback)(
++    (tabRect) => {
++      if (variant === "underlined") {
++        return {
++          left: `${tabRect.left + tabRect.width * 0.1}px`,
++          top: `${tabRect.top + tabRect.height - 2}px`,
++          width: `${tabRect.width * 0.8}px`,
++          height: ""
++        };
++      }
++      return {
++        left: `${tabRect.left}px`,
++        top: `${tabRect.top}px`,
++        width: `${tabRect.width}px`,
++        height: `${tabRect.height}px`
++      };
++    },
++    [variant]
++  );
++  const withAnimationReset = (0, import_react2.useCallback)(
++    (callback) => {
++      var _a;
++      if (variant !== previousVariant.current || isVertical !== previousIsVertical.current || placement !== previousPlacement.current) {
++        (_a = cursorRef.current) == null ? void 0 : _a.removeAttribute("data-animated");
++      }
++      callback();
++      previousVariant.current = variant;
++      previousIsVertical.current = isVertical;
++      previousPlacement.current = placement;
++      requestAnimationFrame(() => {
++        var _a2, _b;
++        (_a2 = cursorRef.current) == null ? void 0 : _a2.setAttribute("data-animated", "true");
++        (_b = cursorRef.current) == null ? void 0 : _b.setAttribute("data-initialized", "true");
++      });
++    },
++    [isVertical, variant, placement]
++  );
++  const updateCursorPosition = (0, import_react2.useCallback)(
++    (selectedTab) => {
++      if (!cursorRef.current) return;
++      const tabRect = {
++        width: selectedTab.offsetWidth,
++        height: selectedTab.offsetHeight,
++        left: selectedTab.offsetLeft,
++        top: selectedTab.offsetTop
++      };
++      const styles = getCursorStyles(tabRect);
++      withAnimationReset(() => {
++        cursorRef.current.style.left = styles.left;
++        cursorRef.current.style.top = styles.top;
++        cursorRef.current.style.width = styles.width;
++        cursorRef.current.style.height = styles.height;
++      });
++    },
++    [cursorRef.current, getCursorStyles, withAnimationReset]
++  );
++  const onResize = (0, import_react2.useCallback)(
++    (entries) => {
++      const contentRect = entries[0].contentRect;
++      if (contentRect.width === 0 && contentRect.height === 0) return;
++      updateCursorPosition(entries[0].target);
++    },
++    [updateCursorPosition]
++  );
++  (0, import_react2.useEffect)(() => {
++    var _a;
++    const selectedTab = (_a = domRef.current) == null ? void 0 : _a.querySelector(`[data-key="${selectedKey}"]`);
++    if (!selectedTab) return;
++    const observer = new ResizeObserver(onResize);
++    observer.observe(selectedTab);
++    return () => observer.disconnect();
++  }, [domRef.current, onResize, selectedKey]);
++  const renderTabs = (0, import_react2.useMemo)(
++    () => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
++      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ...getBaseProps(), children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Component, { ...getTabListProps(), children: [
++        !values.disableAnimation && !values.disableCursorAnimation && selectedKey != null && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { ...getTabCursorProps(), ref: cursorRef }),
++        tabs2
++      ] }) }),
++      [...state.collection].map((item) => {
++        return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
++          tab_panel_default,
++          {
++            classNames: values.classNames,
++            destroyInactiveTabPanel,
++            slots: values.slots,
++            state: values.state,
++            tabKey: item.key
++          },
++          item.key
++        );
++      })
++    ] }),
++    [
++      Component,
++      getBaseProps,
++      getTabListProps,
++      getTabCursorProps,
++      tabs2,
++      selectedKey,
++      state.collection,
++      values.disableAnimation,
++      values.disableCursorAnimation,
++      values.classNames,
++      values.slots,
++      values.state,
++      destroyInactiveTabPanel,
++      domRef,
++      cursorRef,
++      variant,
++      isVertical
++    ]
++  );
+   if ("placement" in props || "isVertical" in props) {
+     return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ...getWrapperProps(), children: renderTabs });
+   }
+diff --git a/node_modules/@nextui-org/tabs/dist/use-tabs.d.ts b/node_modules/@nextui-org/tabs/dist/use-tabs.d.ts
+index e6781d9..5afa410 100644
+--- a/node_modules/@nextui-org/tabs/dist/use-tabs.d.ts
++++ b/node_modules/@nextui-org/tabs/dist/use-tabs.d.ts
+@@ -6,17 +6,12 @@ import { RefObject } from 'react';
+ import { TabListStateOptions, TabListState } from '@react-stately/tabs';
+ import { AriaTabListProps } from '@react-aria/tabs';
+ import { CollectionProps } from '@nextui-org/aria-utils';
+-import { HTMLMotionProps } from 'framer-motion';
+
+ interface Props extends Omit<HTMLNextUIProps, "children"> {
+     /**
+      * Ref to the DOM node.
+      */
+     ref?: ReactRef<HTMLElement | null>;
+-    /**
+-     * The props to modify the cursor motion animation. Use the `variants` API to create your own animation.
+-     */
+-    motionProps?: HTMLMotionProps<"span">;
+     /**
+      * Whether the tabs selection should occur on press up instead of press down.
+      * @default true
+@@ -66,7 +61,6 @@ type ValuesType<T = object> = {
+     listRef?: RefObject<HTMLElement>;
+     shouldSelectOnPressUp?: boolean;
+     classNames?: SlotsToClasses<TabsSlots>;
+-    motionProps?: HTMLMotionProps<"span">;
+     disableAnimation?: boolean;
+     isDisabled?: boolean;
+ };
+@@ -79,6 +73,7 @@ declare function useTabs<T extends object>(originalProps: UseTabsProps<T>): {
+     getBaseProps: PropGetter<Record<string, unknown>, _nextui_org_system.DOMAttributes<_nextui_org_system.DOMElement>>;
+     getTabListProps: PropGetter<Record<string, unknown>, _nextui_org_system.DOMAttributes<_nextui_org_system.DOMElement>>;
+     getWrapperProps: PropGetter<Record<string, unknown>, _nextui_org_system.DOMAttributes<_nextui_org_system.DOMElement>>;
++    getTabCursorProps: PropGetter;
+ };
+ type UseTabsReturn = ReturnType<typeof useTabs>;
+
+diff --git a/node_modules/@nextui-org/tabs/dist/use-tabs.js b/node_modules/@nextui-org/tabs/dist/use-tabs.js
+index a027235..48e163f 100644
+--- a/node_modules/@nextui-org/tabs/dist/use-tabs.js
++++ b/node_modules/@nextui-org/tabs/dist/use-tabs.js
+@@ -44,7 +44,6 @@ function useTabs(originalProps) {
+     classNames,
+     children,
+     disableCursorAnimation,
+-    motionProps,
+     isVertical = false,
+     shouldSelectOnPressUp = true,
+     destroyInactiveTabPanel = true,
+@@ -74,7 +73,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       classNames,
+-      motionProps,
+       disableAnimation,
+       listRef: domRef,
+       shouldSelectOnPressUp,
+@@ -85,7 +83,6 @@ function useTabs(originalProps) {
+       state,
+       slots,
+       domRef,
+-      motionProps,
+       disableAnimation,
+       disableCursorAnimation,
+       shouldSelectOnPressUp,
+@@ -125,6 +122,15 @@ function useTabs(originalProps) {
+     }),
+     [domRef, tabListProps, classNames, slots]
+   );
++  const getTabCursorProps = (0, import_react.useCallback)(
++    (props2) => ({
++      "data-slot": "cursor",
++      className: slots.cursor({
++        class: (0, import_shared_utils.clsx)(classNames == null ? void 0 : classNames.cursor, props2 == null ? void 0 : props2.className)
++      })
++    }),
++    [classNames, slots]
++  );
+   return {
+     Component,
+     domRef,
+@@ -133,7 +139,8 @@ function useTabs(originalProps) {
+     destroyInactiveTabPanel,
+     getBaseProps,
+     getTabListProps,
+-    getWrapperProps
++    getWrapperProps,
++    getTabCursorProps
+   };
+ }
+ // Annotate the CommonJS export names for ESM import in node:
