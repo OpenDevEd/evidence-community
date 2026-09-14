@@ -9,11 +9,11 @@ const contentVariants: Variants = {
 	enter: {
 		...TRANSITION_VARIANTS.collapse.enter,
 		// Keep interrupted height animations from exposing the full body as well.
-		overflowY: "hidden",
+		overflow: "hidden",
 	},
 	exit: {
 		...TRANSITION_VARIANTS.collapse.exit,
-		overflowY: "hidden",
+		overflow: "hidden",
 	},
 };
 
