@@ -74,11 +74,6 @@ export const CreatorsEditor = memo(function CreatorsEditor({
 	);
 	return (
 		<div className="space-y-3">
-			{!creators.length && (
-				<p className="text-xs text-black/40 dark:text-white/40">
-					No creators
-				</p>
-			)}
 			{creators.map((creator, index) => {
 				const profile = profileFor(creator);
 				return (
@@ -100,7 +95,7 @@ export const CreatorsEditor = memo(function CreatorsEditor({
 						onRetryProfile={() => void catalog.mutate()}
 						institutions={institutions}
 						onAddInstitution={
-							institutionField && !readOnly
+							institutionField
 								? (name) =>
 										onChange({
 											...payload,
@@ -175,9 +170,10 @@ export const CreatorsEditor = memo(function CreatorsEditor({
 					/>
 				);
 			})}
-			{!readOnly && roles.length > 0 && (
+			{roles.length > 0 && (
 				<Button
 					id={`admin-${recordKey}-creators`}
+					isDisabled={readOnly}
 					size="xs"
 					variant="muted"
 					startContent={

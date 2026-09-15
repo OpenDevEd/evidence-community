@@ -1,4 +1,6 @@
 "use client";
+
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { creatorDisplayName } from "@/lib/creator-display-name";
@@ -75,6 +77,7 @@ const ADMIN_ITEM_TABLE_WIDGET_SELECTOR = [
 	"select:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
 	"textarea:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
 	"[role='button'][tabindex]:not([aria-disabled='true']):not([data-disabled='true'])",
+	"[data-truncated-text][tabindex]",
 ].join(", ");
 const DOCUMENT_TAB_STOP_SELECTOR =
 	"a[href], button, input, select, textarea, [tabindex]";
@@ -121,13 +124,11 @@ function PlainCell({
 			className={`flex min-w-0 items-center gap-1.5 truncate text-xs text-black/55 dark:text-white/55 ${
 				numeric ? "w-full justify-end tabular-nums" : ""
 			}`}
-			style={numeric ? { fontVariantNumeric: "tabular-nums" } : undefined}
-			title={title}
 		>
 			{Icon ? (
 				<HugeiconsIcon icon={Icon} aria-hidden className="shrink-0 opacity-45" size={13} />
 			) : null}
-			{children}
+			{title ? <TruncatedText text={title} focusable managed /> : children}
 		</span>
 	);
 }
@@ -145,7 +146,6 @@ function RelationCell({
 	return (
 		<div
 			className="flex min-w-0 items-center gap-1 overflow-hidden text-[11px] text-black/55 dark:text-white/55"
-			title={entries.map(({ label }) => label).join(", ")}
 		>
 			<HugeiconsIcon
 				icon={Icon}
@@ -156,9 +156,9 @@ function RelationCell({
 			{visible.map(({ key, label }) => (
 				<span
 					key={key}
-					className="max-w-28 shrink truncate rounded-md bg-black/[0.045] px-1.5 py-0.5 dark:bg-white/[0.06]"
+					className="min-w-0 max-w-28 shrink rounded-md bg-black/[0.045] px-1.5 py-0.5 dark:bg-white/[0.06]"
 				>
-					{label}
+					<TruncatedText text={label} focusable managed />
 				</span>
 			))}
 			{remaining.length > 0 ? (

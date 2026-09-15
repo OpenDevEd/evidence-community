@@ -16,7 +16,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { filledInputSlots } from "@/components/nextui/field-styles";
 import { Button } from "@/components/nextui/Button";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	formatInstitutionNames,
@@ -150,9 +150,7 @@ export function InstitutionInput({
 								)
 							}
 						>
-							<Tooltip content={name}>
-								<span>{name}</span>
-							</Tooltip>
+							<TruncatedText text={name} focusable />
 						</Chip>
 					))}
 				</div>

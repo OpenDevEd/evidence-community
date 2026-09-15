@@ -119,7 +119,7 @@ function PdfCoverContent({
 				</span>
 			</>
 		);
-	const caption = error ? "Upload failed" : hasPdf ? "PDF added" : "No PDF";
+	const caption = error ? "Upload failed" : hasPdf ? "PDF added" : "";
 	const fallback = (
 		<>
 			<HugeiconsIcon
@@ -127,7 +127,7 @@ function PdfCoverContent({
 				size={29}
 				className={hasPdf ? "text-accent-300 dark:text-accent-700" : ""}
 			/>
-			<span className="text-[10px] font-medium">{caption}</span>
+			{caption && <span className="text-[10px] font-medium">{caption}</span>}
 		</>
 	);
 	if (error || !url) return fallback;
@@ -196,7 +196,7 @@ export function AdminPdfCover({
 					aria-label={presentation.label}
 					disabled={blocked}
 					onClick={open}
-					className={`${surfaceClassName} transition-colors hover:border-accent/50 focus-visible:outline-focus dark:hover:border-accent/50`}
+					className={`${surfaceClassName} transition-colors enabled:hover:border-accent/50 focus-visible:outline-focus disabled:cursor-default disabled:opacity-50 dark:enabled:hover:border-accent/50`}
 				>
 					{cover}
 					<span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center gap-1 bg-black/[0.03] text-[10px] font-medium text-black/60 dark:bg-white/[0.04] dark:text-white/60">

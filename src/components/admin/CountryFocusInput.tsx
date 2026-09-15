@@ -11,7 +11,6 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { Button } from "@/components/nextui/Button";
-import { Tooltip } from "@/components/nextui/Tooltip";
 import { filledInputSlots } from "@/components/nextui/field-styles";
 import {
 	countryFocusNames as countryNames,
@@ -48,6 +47,11 @@ export function CountryFocusInput({
 			aria-label="Country focus"
 			className="overflow-hidden rounded-2xl border border-black/[0.07] bg-black/[0.025] dark:border-white/[0.07] dark:bg-white/[0.025]"
 		>
+			<p className="sr-only" aria-live="polite" aria-atomic="true">
+				{selected.length
+					? `${mode === "automatic" ? "Detected" : "Selected"} countries: ${selected.map(code => countryNames[code]).join(", ")}`
+					: mode === "automatic" ? "No countries detected." : "No countries selected."}
+			</p>
 			<InspectorChoices
 				label="Country focus mode"
 				value={mode}
@@ -98,17 +102,15 @@ export function CountryFocusInput({
 						? "From the title and abstract. Updates as you edit."
 						: "Choose the countries this item focuses on."}
 				</p>
-				<div
+				{selected.length > 0 && <div
 					aria-label={
 						mode === "automatic"
 							? "Detected countries"
 							: "Selected countries"
 					}
 					className="flex min-h-8 flex-wrap items-center gap-1.5"
-					aria-live="polite"
 				>
-					{selected.length ? (
-						selected.map((code) => (
+					{selected.map((code) => (
 							<Chip
 								key={code}
 								size="sm"
@@ -149,33 +151,14 @@ export function CountryFocusInput({
 									) : undefined
 								}
 							>
-								<Tooltip
-									content={
-										mode === "automatic"
-											? "Found in the title or abstract"
-											: countryNames[code]
-									}
-								>
-									<span>{countryNames[code]}</span>
-								</Tooltip>
+								<span>{countryNames[code]}</span>
 							</Chip>
-						))
-					) : (
-						<span className="flex items-center gap-2 text-xs text-black/45 dark:text-white/45">
-							<HugeiconsIcon
-								icon={Globe02Icon}
-								size={16}
-								aria-hidden
-							/>
-							{mode === "automatic"
-								? "No countries found in the title or abstract."
-								: "No countries selected."}
-						</span>
-					)}
-				</div>
-				{mode === "manual" && !disabled && (
+					))}
+				</div>}
+				{mode === "manual" && (
 					<Autocomplete
 						aria-label="Add a country"
+						isDisabled={disabled}
 						placeholder="Find a country"
 						inputProps={{
 							classNames: {

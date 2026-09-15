@@ -185,6 +185,7 @@ function ReviewVersionTime({
 
 	return (
 		<Tooltip
+			isDisabled={!snapshot || snapshot.submittedAt === updatedAt}
 			content={
 				<div className="text-xs leading-5">
 					<p>Last edited {formatReviewTime(updatedAt)}</p>
@@ -195,7 +196,7 @@ function ReviewVersionTime({
 			}
 		>
 			<time
-				tabIndex={0}
+				tabIndex={snapshot && snapshot.submittedAt !== updatedAt ? 0 : undefined}
 				dateTime={displayedAt}
 				className="inline-flex items-center gap-1 whitespace-nowrap text-[10px] opacity-65 outline-none focus-visible:ring-2 focus-visible:ring-focus"
 			>

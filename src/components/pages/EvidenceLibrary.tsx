@@ -1,4 +1,6 @@
 "use client";
+
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { AiOutlineCompass } from "react-icons/ai";
 import { IoGrid } from "react-icons/io5";
 import { BiHelpCircle } from "react-icons/bi";
@@ -133,36 +135,7 @@ function LibraryFilters({
 }
 
 function SearchTitle({ title }: { title: string }) {
-	const textRef = useRef<HTMLSpanElement>(null);
-	const [isTruncated, setIsTruncated] = useState(false);
-
-	useEffect(() => {
-		const text = textRef.current;
-		if (!text) return;
-		const measure = () => setIsTruncated(text.scrollWidth > text.clientWidth);
-		const observer = new ResizeObserver(measure);
-		observer.observe(text);
-		// A loaded font can change the text width without resizing its container.
-		document.fonts.addEventListener("loadingdone", measure);
-		measure();
-		return () => {
-			observer.disconnect();
-			document.fonts.removeEventListener("loadingdone", measure);
-		};
-	}, [title]);
-
-	return (
-		<Tooltip
-			content={title}
-			isDisabled={!isTruncated}
-			placement="bottom-start"
-			classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))]" }}
-		>
-			<span ref={textRef} className="block truncate" tabIndex={isTruncated ? 0 : undefined}>
-				{title}
-			</span>
-		</Tooltip>
-	);
+	return <TruncatedText text={title} focusable />;
 }
 
 function SearchTabContent({

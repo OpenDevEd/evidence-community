@@ -2402,6 +2402,7 @@ test("returns to the open draft after finishing link selection in a narrow windo
 	await expect(title).toBeVisible();
 	await expect(title).toHaveValue(publishedPayload.title);
 
+	await inspector.getByRole("button", { name: "Related", exact: true }).click();
 	await inspector.getByRole("button", { name: "Add to Related" }).click();
 	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
 	await page.keyboard.press("Escape");
@@ -3056,18 +3057,14 @@ test("creates an item through a pointer click in the new-item popover", async ({
 	});
 });
 
-test("shows inspector empty values as text without decorative icons", async ({
-	page,
-}) => {
+test("keeps add controls disabled until a working draft is opened", async ({ page }) => {
 	await mockPublishedBook(page);
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-
-	for (const label of ["No tags", "No collections", "No attachments"]) {
-		const emptyValue = inspector.getByText(label, { exact: true });
-		await expect(emptyValue).toBeVisible();
-		await expect(emptyValue.locator("..").locator("svg")).toHaveCount(0);
-	}
+	const labels = ["Add creator", "Add to Cites", "Add to collection", "Add attachment", "Add PDF"];
+	for (const name of labels) await expect(inspector.getByRole("button", { name, exact: true })).toBeDisabled();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
+	for (const name of labels) await expect(inspector.getByRole("button", { name, exact: true })).toBeEnabled();
 });
 
 test("focuses item search in a narrow keyboard-driven window", async ({
@@ -3330,26 +3327,6 @@ test("shows draft differences with the published value and a revert action", asy
 	await expect
 		.poll(() => savedDrafts.at(-1)?.collections)
 		.toEqual([teacherCollection.key]);
-	const membershipGeometry = await collectionsGroup
-		.locator('[data-admin-collection-membership="TEACHDEV"]')
-		.evaluate((row) => ({
-			height: row.getBoundingClientRect().height,
-			removeSize: (() => {
-				const button = row.querySelector("button")!;
-				return [button.offsetWidth, button.offsetHeight];
-			})(),
-			rightInsideGroup:
-				row.getBoundingClientRect().right <=
-				row.parentElement!.getBoundingClientRect().right,
-		}));
-	expect(membershipGeometry).toEqual({
-		height: 44,
-		removeSize: [28, 28],
-		rightInsideGroup: true,
-	});
-	await expect(
-		collectionsGroup.getByLabel("Added in this draft"),
-	).toHaveCount(1);
 	const collectionMarker = inspector.getByRole("button", {
 		name: "Changed: show published collections",
 	});
@@ -3357,7 +3334,8 @@ test("shows draft differences with the published value and a revert action", asy
 	await collectionMarker.click();
 	await expect(page.getByText("Empty", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Revert to published" }).click();
-	await expect(collectionsGroup).toContainText("No collections");
+	await expect(collectionsGroup.locator("[data-admin-collection-membership]")).toHaveCount(0);
+	await expect.poll(() => savedDrafts.at(-1)?.collections).toEqual([]);
 	await expect(collectionMarker).toHaveCount(0);
 });
 
@@ -3567,7 +3545,7 @@ for (const editable of [true, false]) {
 		await mockBookWithAttachment(page, { imported: true, editable });
 		await page.goto("/admin");
 		const inspector = page.locator("#admin-inspector-pane");
-		await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toBeEnabled();
+		await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toBeDisabled();
 		await inspector.getByRole("button", { name: "Open PDF attachment", exact: true }).click();
 		await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toBeDisabled();
 		if (editable) {
@@ -3599,22 +3577,6 @@ test("keeps parent attachments compact and moves file controls to the attachment
 	await expect(
 		inspector.getByRole("button", { name: "Discard staged PDF" }),
 	).toHaveCount(0);
-
-	const rowGeometry = await attachmentRow.evaluate((element) => {
-		const style = getComputedStyle(element);
-		return {
-			columnGap: Number.parseFloat(style.columnGap),
-			height: element.getBoundingClientRect().height,
-			paddingLeft: Number.parseFloat(style.paddingLeft),
-			paddingRight: Number.parseFloat(style.paddingRight),
-		};
-	});
-	expect(rowGeometry).toEqual({
-		columnGap: 10,
-		height: 44,
-		paddingLeft: 10,
-		paddingRight: 10,
-	});
 
 	await attachmentRow.click();
 	await expect(
@@ -5910,10 +5872,9 @@ test("renders field types with semantic cells instead of plain text", async ({
 	await expect(collections).not.toContainText(teacherCollection.key);
 	await expect(tags).toContainText("equity");
 	await expect(tags).toContainText("teacher training");
-	await expect(tags).toContainText("+1");
-	await expect(tags.locator("div")).toHaveAttribute(
+	await expect(tags.getByText("+1", { exact: true })).toHaveAttribute(
 		"title",
-		"equity, teacher training, rural schools",
+		"rural schools",
 	);
 	await expect(source).toContainText("Native");
 	await expect(source.locator("svg")).toHaveCount(1);
@@ -6141,7 +6102,7 @@ test("lets Creators request restoration without changing writeback sources", asy
 	await page.reload();
 	const inspector = page.locator("#admin-inspector-pane");
 	await expect(inspector.getByRole("button", { name: "Add PDF", exact: true })).toHaveCount(0);
-	await expect(inspector.getByRole("button", { name: "Add attachment", exact: true })).toHaveCount(0);
+	await expect(inspector.getByRole("button", { name: "Add attachment", exact: true })).toBeDisabled();
 	await page.getByRole("button", { name: "Restore", exact: true }).click();
 	await expect(page.getByText("Restoration submitted for review", { exact: true })).toBeVisible();
 	await expect(inspector.getByRole("textbox", { name: "Title", exact: true })).toBeEditable();

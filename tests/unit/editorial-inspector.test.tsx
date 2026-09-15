@@ -159,6 +159,8 @@ function Inspector({ role, overrides }: { role: "editor" | "creator"; overrides?
 }
 beforeEach(() => {
 	vi.useFakeTimers();
+	vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+	Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 	vi.stubGlobal("matchMedia", () => ({
 		matches: false,
 		addEventListener() {},
@@ -220,6 +222,7 @@ afterEach(async () => {
 	container.remove();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
+	Reflect.deleteProperty(document, "fonts");
 });
 async function clickVersion(name: string) {
 	const button = [...container.querySelectorAll("button")].find(
