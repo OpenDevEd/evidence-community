@@ -150,7 +150,7 @@ export function InstitutionInput({
 								)
 							}
 						>
-							<TruncatedText text={name} focusable />
+							<TruncatedText text={name} tabIndex={0} />
 						</Chip>
 					))}
 				</div>

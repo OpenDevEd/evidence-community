@@ -15,10 +15,10 @@ type InspectorListRowProps = ComponentPropsWithoutRef<"li"> & {
 	removed?: boolean;
 };
 
-function RowDescription({ value, focusable }: { value: ReactNode; focusable: boolean }) {
+function RowDescription({ value, tabIndex }: { value: ReactNode; tabIndex: 0 | undefined }) {
 	return (
 		<span className="min-w-0 flex-1">
-			{typeof value === "string" ? <TruncatedText text={value} focusable={focusable} /> : value}
+			{typeof value === "string" ? <TruncatedText text={value} tabIndex={tabIndex} /> : value}
 		</span>
 	);
 }
@@ -43,7 +43,7 @@ export function InspectorListRow({
 			<span className="min-w-0 flex-1">
 				<TruncatedText
 					text={title}
-					focusable={!onOpen}
+					tabIndex={onOpen ? undefined : 0}
 					isOpen={titleOpen}
 					onOpenChange={setTitleOpen}
 					className={`text-[13px] font-medium leading-4 ${removed ? "line-through" : ""}`}
@@ -51,7 +51,7 @@ export function InspectorListRow({
 				{(description || status) && (
 					<span className="flex h-4 min-w-0 items-center gap-2 whitespace-nowrap text-[11px] leading-4 text-black/45 dark:text-white/45">
 						{description && (
-							<RowDescription value={description} focusable={!onOpen} />
+							<RowDescription value={description} tabIndex={onOpen ? undefined : 0} />
 						)}
 						{status && <span className="flex shrink-0 items-center gap-2 [&>span]:h-4">{status}</span>}
 					</span>

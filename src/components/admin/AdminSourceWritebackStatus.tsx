@@ -329,6 +329,7 @@ export function AdminSourcesWritebackStatus({
 								: null;
 						const busy = writeback.busySource === source.sourceKey;
 						const controlsDisabled = busy || !canPublish;
+						const statusTooltipDisabled = ["sending", "queued", "removed", "locked"].includes(sourceState);
 						return (
 							<li
 								className="space-y-2"
@@ -347,7 +348,7 @@ export function AdminSourcesWritebackStatus({
 										{source.sourceLabel}
 									</p>
 									<Tooltip
-										isDisabled={["sending", "queued", "removed", "locked"].includes(sourceState)}
+										isDisabled={statusTooltipDisabled}
 										content={`${sourceConfig.label}. ${sourceConfig.description}`}
 										classNames={{
 											content:
@@ -356,7 +357,7 @@ export function AdminSourcesWritebackStatus({
 										placement="left"
 									>
 										<span
-											tabIndex={0}
+											tabIndex={statusTooltipDisabled ? undefined : 0}
 											aria-label={`${source.sourceLabel}: ${sourceConfig.label}`}
 											className={`inline-flex shrink-0 items-center gap-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-focus ${sourceConfig.className}`}
 										>

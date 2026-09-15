@@ -135,7 +135,7 @@ function LibraryFilters({
 }
 
 function SearchTitle({ title }: { title: string }) {
-	return <TruncatedText text={title} focusable />;
+	return <TruncatedText text={title} tabIndex={0} />;
 }
 
 function SearchTabContent({

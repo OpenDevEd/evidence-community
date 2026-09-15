@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "./Tooltip";
 
-/** Show the full value on hover only when its rendered text overflows. */
+/** Show the full value on hover only when its rendered text overflows. `tabIndex` makes the span focusable (only while truncated) so keyboard users can reveal it; -1 keeps it out of the tab order for composite widgets that manage focus. */
 export function TruncatedText({
 	text,
 	className = "",
-	focusable = false,
+	tabIndex,
 	isOpen,
 	onOpenChange,
 }: {
 	text: string;
 	className?: string;
-	focusable?: boolean;
+	tabIndex?: 0 | -1;
 	isOpen?: boolean;
 	onOpenChange?: (open: boolean) => void;
 }) {
@@ -43,7 +43,7 @@ export function TruncatedText({
 			placement="bottom-start"
 			classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))] whitespace-normal break-words" }}
 		>
-			<span ref={ref} className={`block min-w-0 truncate ${className}`} tabIndex={focusable && isTruncated ? 0 : undefined}>
+			<span ref={ref} className={`block min-w-0 truncate ${className}`} data-truncated-text tabIndex={isTruncated ? tabIndex : undefined}>
 				{text}
 			</span>
 		</Tooltip>

@@ -77,6 +77,7 @@ const ADMIN_ITEM_TABLE_WIDGET_SELECTOR = [
 	"select:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
 	"textarea:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
 	"[role='button'][tabindex]:not([aria-disabled='true']):not([data-disabled='true'])",
+	"[data-truncated-text][tabindex]",
 ].join(", ");
 const DOCUMENT_TAB_STOP_SELECTOR =
 	"a[href], button, input, select, textarea, [tabindex]";
@@ -127,7 +128,7 @@ function PlainCell({
 			{Icon ? (
 				<HugeiconsIcon icon={Icon} aria-hidden className="shrink-0 opacity-45" size={13} />
 			) : null}
-			{title ? <TruncatedText text={title} focusable /> : children}
+			{title ? <TruncatedText text={title} tabIndex={-1} /> : children}
 		</span>
 	);
 }
@@ -157,7 +158,7 @@ function RelationCell({
 					key={key}
 					className="min-w-0 max-w-28 shrink rounded-md bg-black/[0.045] px-1.5 py-0.5 dark:bg-white/[0.06]"
 				>
-					<TruncatedText text={label} focusable />
+					<TruncatedText text={label} tabIndex={-1} />
 				</span>
 			))}
 			{remaining.length > 0 ? (
