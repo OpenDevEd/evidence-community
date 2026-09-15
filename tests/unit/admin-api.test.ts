@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+	AdminApiError,
+	adminErrorMessage,
 	unpublishAdminItem,
 	retryAdminCrossrefPublication,
 	getAdminPublication,
@@ -452,5 +454,44 @@ describe("admin API client", () => {
 				"The server returned an invalid search indexing response. Refresh and try again.",
 			status: 502,
 		});
+	});
+
+	it("explains an offline failure instead of showing \"Failed to fetch\"", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+		);
+
+		const caught = await getAdminLibrary().catch((error: unknown) => error);
+
+		expect(adminErrorMessage(caught, "Admin operation failed")).toBe(
+			"Can't reach the library right now. Check your connection and try again.",
+		);
+	});
+
+	it("recognises Firefox and Safari network failures", () => {
+		for (const text of ["NetworkError when attempting to fetch resource.", "Load failed"]) {
+			expect(adminErrorMessage(new TypeError(text), "Admin operation failed")).toBe(
+				"Can't reach the library right now. Check your connection and try again.",
+			);
+		}
+	});
+
+	it("keeps the message of a TypeError that is not a network failure", () => {
+		expect(
+			adminErrorMessage(new TypeError("Cannot read properties of undefined"), "Admin operation failed"),
+		).toBe("Cannot read properties of undefined");
+	});
+
+	it("keeps server error wording", () => {
+		expect(
+			adminErrorMessage(
+				new AdminApiError(
+					{ code: "not_found", message: "The draft is gone." },
+					404,
+				),
+				"Admin operation failed",
+			),
+		).toBe("The draft is gone.");
 	});
 });

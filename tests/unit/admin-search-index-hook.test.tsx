@@ -12,7 +12,10 @@ const api = vi.hoisted(() => ({
 	retry: vi.fn(),
 }));
 
-vi.mock("@/components/admin/admin-api", () => ({
+vi.mock("@/components/admin/admin-api", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("@/components/admin/admin-api")
+	>()),
 	getAdminSearchIndexOverview: api.overview,
 	getAdminSearchIndexReceipts: api.receipts,
 	retryAdminSearchIndex: api.retry,

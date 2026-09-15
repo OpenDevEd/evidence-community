@@ -838,6 +838,17 @@ export async function reserveAdminCrossrefDoi(key: string) {
  return (await requestJson<{reservation: CrossrefReservation}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`, {method: "POST"})).reservation;
 }
 
+const ADMIN_NETWORK_ERROR_MESSAGE = "Can't reach the library right now. Check your connection and try again.";
+
+/** `fetch` rejects with a `TypeError` when the browser cannot reach the server
+ * ("Failed to fetch" in Chromium, "NetworkError when attempting to fetch resource."
+ * in Firefox, "Load failed" in Safari); that text means nothing to an editor.
+ * Other TypeErrors are programming errors and keep their message. */
+function isNetworkError(error: unknown) {
+ return error instanceof TypeError && /fetch|network|load failed/i.test(error.message);
+}
+
 export function adminErrorMessage(error: unknown, fallback: string) {
+ if (isNetworkError(error)) return ADMIN_NETWORK_ERROR_MESSAGE;
  return error instanceof Error ? error.message : fallback;
 }

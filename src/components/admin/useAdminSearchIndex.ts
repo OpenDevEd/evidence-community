@@ -12,6 +12,7 @@ import type {
 } from "@/lib/admin/search-index-contract";
 
 import {
+	adminErrorMessage,
 	getAdminSearchIndexOverview,
 	getAdminSearchIndexReceipts,
 	retryAdminSearchIndex,
@@ -27,9 +28,10 @@ import {
 } from "./admin-search-index";
 
 function errorMessage(error: unknown) {
-	return error instanceof Error
-		? error.message
-		: "Search indexing status could not be loaded.";
+	return adminErrorMessage(
+		error,
+		"Search indexing status could not be loaded.",
+	);
 }
 
 function isAbortError(error: unknown) {

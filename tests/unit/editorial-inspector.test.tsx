@@ -351,13 +351,17 @@ it("keeps attachment display tags removable through a field patch", async () => 
 	);
 
 	const closeButtons = [
-		...container.querySelectorAll<HTMLElement>('[aria-label="close chip"]'),
+		...container.querySelectorAll<HTMLElement>(
+			'[aria-label^="Remove tag "]',
+		),
 	];
 	expect(
-		closeButtons.map((button) => button.parentElement?.textContent?.trim()),
-	).toEqual(expect.arrayContaining(tags));
+		closeButtons.map((button) => button.getAttribute("aria-label")),
+	).toEqual(
+		expect.arrayContaining(tags.map((tag) => `Remove tag ${tag}`)),
+	);
 	const hide = closeButtons.find(
-		(button) => button.parentElement?.textContent?.trim() === "hide",
+		(button) => button.getAttribute("aria-label") === "Remove tag hide",
 	);
 	expect(hide).toBeTruthy();
 	await act(async () => hide!.click());
@@ -373,6 +377,22 @@ it("keeps attachment display tags removable through a field patch", async () => 
 		...current,
 		tags: ["internal", "_comingsoon", "research"],
 	});
+
+	const tagInput = container.querySelector<HTMLInputElement>(
+		'input[placeholder="Add a tag"]',
+	);
+	await act(async () => {
+		Object.getOwnPropertyDescriptor(
+			HTMLInputElement.prototype,
+			"value",
+		)!.set!.call(tagInput, "  RESEARCH ");
+		tagInput!.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+	expect(
+		container.querySelector<HTMLButtonElement>('[aria-label="Add tag"]')
+			?.disabled,
+	).toBe(true);
+	expect(container.textContent).toContain("This tag is already added.");
 });
 
 it("loads the live attachment status for a frozen submitted attachment and retries failures", async () => {

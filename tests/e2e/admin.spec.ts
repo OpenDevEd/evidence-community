@@ -3651,7 +3651,7 @@ test("keeps an unpublished attachment private and stages it with the parent revi
     await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
     await inspector.getByRole("button", {name: "Record status and sources"}).click();
     await page.getByRole("button", {name: "Delete draft", exact: true}).click();
-    await dialog.getByRole("button", {name: "Delete draft", exact: true}).click();
+    await dialog.getByRole("button", {name: "Delete permanently", exact: true}).click();
     await expect(dialog).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`item=${publishedItemKey}`, "u"));
     await expect(inspector.getByRole("button", {name: "Open PDF attachment"})).toHaveCount(0);

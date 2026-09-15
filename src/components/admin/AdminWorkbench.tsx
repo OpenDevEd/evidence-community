@@ -84,6 +84,7 @@ import {
 } from "./AdminNavigation";
 import {
 	AdminApiError,
+	adminErrorMessage,
 	createAdminCollection,
 	createAdminDraft,
 	deleteAdminCollection,
@@ -287,7 +288,7 @@ function singleKey(keys: "all" | Set<React.Key>) {
 }
 
 function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : "Admin operation failed";
+	return adminErrorMessage(error, "Admin operation failed");
 }
 
 function formErrors(error: unknown): AdminFieldErrors {
@@ -1318,10 +1319,12 @@ export default function AdminWorkbench({
 		if (!detail?.draft) return;
 		setConfirmDialog({
 			title: detail.published ? "Discard changes?" : "Delete draft?",
-			confirmLabel: detail.published ? "Discard changes" : "Delete draft",
+			confirmLabel: detail.published
+				? "Discard changes"
+				: "Delete permanently",
 			message: detail.published
 				? "The published record will stay unchanged."
-				: "This draft has never been published.",
+				: "This draft has never been published, so it will be deleted permanently and cannot be restored.",
 			danger: !detail.published,
 			action: async () => {
 				abandonPendingDraft(detail.key);
