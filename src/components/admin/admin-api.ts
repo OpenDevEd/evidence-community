@@ -838,6 +838,15 @@ export async function reserveAdminCrossrefDoi(key: string) {
  return (await requestJson<{reservation: CrossrefReservation}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`, {method: "POST"})).reservation;
 }
 
+const ADMIN_NETWORK_ERROR_MESSAGE = "Can't reach the library right now. Check your connection and try again.";
+
+/** `fetch` throws a `TypeError` when the browser cannot reach the server, and
+ * its "Failed to fetch" text means nothing to an editor. */
+function isNetworkError(error: unknown) {
+ return error instanceof TypeError || (error instanceof DOMException && error.name === "AbortError");
+}
+
 export function adminErrorMessage(error: unknown, fallback: string) {
+ if (isNetworkError(error)) return ADMIN_NETWORK_ERROR_MESSAGE;
  return error instanceof Error ? error.message : fallback;
 }

@@ -1,5 +1,6 @@
 "use client";
 import { ordinaryItemTags } from "@/lib/item-display";
+import { hasTag } from "@/lib/tags";
 import { AdminItemDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
@@ -721,7 +722,7 @@ const TagsEditor = memo(function TagsEditor({
 		: [];
 	const visibleTags = separateDisplayTags ? ordinaryItemTags(tags, content.tags) : tags;
 	const tag = value.trim();
-	const alreadyAdded = tags.includes(tag);
+	const alreadyAdded = hasTag(tags, tag);
 	const addTag = () => {
 		if (!tag || alreadyAdded) return;
 		onChange({ ...payload, tags: [...tags, tag] });
@@ -735,16 +736,30 @@ const TagsEditor = memo(function TagsEditor({
 						<Chip
 							key={tag}
 							className="rounded-lg bg-black/[0.045] dark:bg-white/[0.06]"
-							onClose={
-								readOnly
-									? undefined
-									: () =>
+							endContent={
+								readOnly ? undefined : (
+									<Button
+										isIconOnly
+										size="xs"
+										variant="transparent"
+										className="!h-5 !w-5 shrink-0 rounded-md text-black/45 dark:text-white/45"
+										aria-label={`Remove tag ${tag}`}
+										onPress={() =>
 											onChange({
 												...payload,
 												tags: tags.filter(
 													(entry) => entry !== tag,
 												),
 											})
+										}
+									>
+										<HugeiconsIcon
+											icon={Cancel01Icon}
+											size={12}
+											aria-hidden
+										/>
+									</Button>
+								)
 							}
 							size="sm"
 							variant="flat"
