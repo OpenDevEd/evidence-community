@@ -1451,7 +1451,14 @@ export function AdminInspector({
 	}, [detailKey, validationRevision]);
 
 	const patchPayload = useCallback((patch: Record<string, unknown>) => {
-		onChange((current) => ({ ...current, ...patch }));
+		// Section editors patch a slice of the payload, so keys they leave undefined must not stay in the draft.
+		onChange((current) =>
+			Object.fromEntries(
+				Object.entries({ ...current, ...patch }).filter(
+					([, value]) => value !== undefined,
+				),
+			),
+		);
 	}, [onChange]);
 	const changeField = useCallback((field: string, value: string) => {
 		patchPayload({ [field]: value });

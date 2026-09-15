@@ -21,6 +21,19 @@ function blockers(payload: unknown, choice: PublishingChoice | null) {
 	}
 }
 describe("review publishing requirements", () => {
+	it("treats an undefined field from a client patch as absent", () => {
+		expect(
+			blockers(
+				{
+					itemType: "Dataset",
+					title: "Rainfall records",
+					institution: undefined,
+					creators: [{ creatorType: "author", name: "Learning Lab" }],
+				},
+				null,
+			),
+		).toEqual({});
+	});
 	it("permits a title-only item when identifiers are disabled", () => {
 		expect(blockers(report, null)).toEqual({});
 	});
