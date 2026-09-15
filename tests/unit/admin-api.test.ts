@@ -469,6 +469,20 @@ describe("admin API client", () => {
 		);
 	});
 
+	it("recognises Firefox and Safari network failures", () => {
+		for (const text of ["NetworkError when attempting to fetch resource.", "Load failed"]) {
+			expect(adminErrorMessage(new TypeError(text), "Admin operation failed")).toBe(
+				"Can't reach the library right now. Check your connection and try again.",
+			);
+		}
+	});
+
+	it("keeps the message of a TypeError that is not a network failure", () => {
+		expect(
+			adminErrorMessage(new TypeError("Cannot read properties of undefined"), "Admin operation failed"),
+		).toBe("Cannot read properties of undefined");
+	});
+
 	it("keeps server error wording", () => {
 		expect(
 			adminErrorMessage(
