@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import type { Database } from "@/db/database-schema";
 
+import type { AdminItemListRow } from "@/lib/admin/types";
+
 import {
+	applySubmittedSnapshots,
 	decodeAdminItemCursor,
 	encodeAdminItemCursor,
 	buildAdminItemListQuery,
@@ -84,6 +87,73 @@ describe("admin item list query", () => {
 
 		expect(statement.sql.split("ESCAPE '\\'")).toHaveLength(3);
 		expect(statement.params).toContain("%\\%\\_\\\\%");
+	});
+
+	it("shows submitted titles in the review queue and draft titles elsewhere", async () => {
+		const draftRow = {
+			creators: [{ creatorType: "author", name: "Later Editor" }],
+			date: "2027-01-02",
+			key: "AB12CD34",
+			title: "QA 2026-09-15: Creator dataset draft (edited after submit)",
+			year: 2027,
+		} as AdminItemListRow;
+		const database = {
+			select: () => ({
+				from: () => ({
+					where: async () => [
+						{
+							itemKey: "AB12CD34",
+							snapshot: {
+								records: [
+									{
+										itemKey: "ZZ99ZZ99",
+										payload: { title: "Attachment" },
+									},
+									{
+										itemKey: "AB12CD34",
+										payload: {
+											creators: [
+												{
+													creatorType: "author",
+													name: "Submitting Creator",
+												},
+											],
+											date: "2026-09-15",
+											title: "QA 2026-09-15: Creator dataset draft",
+										},
+									},
+								],
+							},
+						},
+					],
+				}),
+			}),
+		} as unknown as Database;
+
+		expect(await applySubmittedSnapshots(database, true, [draftRow])).toEqual(
+			[
+				{
+					...draftRow,
+					creators: [
+						{ creatorType: "author", name: "Submitting Creator" },
+					],
+					date: "2026-09-15",
+					title: "QA 2026-09-15: Creator dataset draft",
+					year: 2026,
+				},
+			],
+		);
+		expect(
+			await applySubmittedSnapshots(
+				{
+					select() {
+						throw new Error("the normal list must not read reviews");
+					},
+				} as unknown as Database,
+				false,
+				[draftRow],
+			),
+		).toEqual([draftRow]);
 	});
 
 	it("rejects cursor values that do not match the sort column", () => {

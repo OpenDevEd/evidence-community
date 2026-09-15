@@ -291,6 +291,68 @@ function dateString(value: Date | string | null) {
 	return value instanceof Date ? value.toISOString() : value;
 }
 
+const YEAR_PATTERN = /(1[0-9]{3}|2[0-9]{3})/u;
+
+/** Match how the list projection reads a year out of a bibliographic date. */
+function listYear(date: string | null) {
+	const match = date ? YEAR_PATTERN.exec(date) : null;
+	return match ? Number(match[1]) : null;
+}
+
+function submittedRow(
+	row: AdminItemListRow,
+	payload: Record<string, unknown> | undefined,
+): AdminItemListRow {
+	if (!payload) return row;
+	const title = typeof payload.title === "string" ? payload.title.trim() : "";
+	const date =
+		typeof payload.date === "string" && payload.date
+			? payload.date
+			: row.date;
+	return {
+		...row,
+		creators: Array.isArray(payload.creators)
+			? (payload.creators as AdminItemListRow["creators"])
+			: row.creators,
+		date,
+		title: title || row.title,
+		year: listYear(date),
+	};
+}
+
+/**
+ * The review queue lists submitted versions, so show the frozen snapshot values
+ * the editor reviews instead of the working draft that moved on since.
+ */
+export async function applySubmittedSnapshots(
+	database: Database,
+	reviewQueue: boolean,
+	rows: AdminItemListRow[],
+): Promise<AdminItemListRow[]> {
+	if (!reviewQueue || rows.length === 0) return rows;
+	const reviews = await database
+		.select({ itemKey: itemReview.itemKey, snapshot: itemReview.snapshot })
+		.from(itemReview)
+		.where(
+			and(
+				eq(itemReview.state, "pending"),
+				inArray(
+					itemReview.itemKey,
+					rows.map((row) => row.key),
+				),
+			),
+		);
+	const payloads = new Map(
+		reviews.flatMap(({ itemKey, snapshot }) => {
+			const record = snapshot.records.find(
+				(entry) => entry.itemKey === itemKey,
+			);
+			return record ? [[itemKey, record.payload] as const] : [];
+		}),
+	);
+	return rows.map((row) => submittedRow(row, payloads.get(row.key)));
+}
+
 export async function getAdminItemListPage(
 	database: Database,
 	input: Partial<AdminItemListRequest> = {},
@@ -311,7 +373,11 @@ export async function getAdminItemListPage(
 	);
 	return {
 		hasMore,
-		items: pageRows,
+		items: await applySubmittedSnapshots(
+			database,
+			request.reviewQueue,
+			pageRows,
+		),
 		nextCursor:
 			hasMore && last
 				? rowCursor(last, sorting.column, sorting.direction)
