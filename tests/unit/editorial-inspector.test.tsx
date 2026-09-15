@@ -586,3 +586,29 @@ it("keeps a creator edit submittable on an item type without an institution fiel
 	expect(requirements()).not.toContain("Institution");
 	expect(requirements()).toContain("Ready for review");
 });
+
+it("leads the requirements panel with the requested changes until the draft is resubmitted", async () => {
+	const panel = async () => {
+		await act(async () => root.render(<Inspector role="creator" />));
+		await settleRequests();
+		return container.querySelector('[aria-label="Review requirements"]')!;
+	};
+	snapshot.reviewState = "returned";
+	snapshot.note = "Add the funder.\nName the licence.";
+	const returned = await panel();
+	expect(returned.textContent).toContain("Changes requested");
+	expect(returned.textContent).not.toContain("Ready for review");
+	expect(returned.textContent).toContain("Add the funder.");
+	expect(returned.textContent).toContain("Name the licence.");
+	expect(returned.textContent).toContain("Title");
+	expect(
+		returned.querySelector('button[aria-expanded="true"]'),
+	).not.toBeNull();
+
+	await act(async () => root.unmount());
+	root = createRoot(container);
+	snapshot = structuredClone(submitted);
+	const resubmitted = await panel();
+	expect(resubmitted.textContent).toContain("Ready for review");
+	expect(resubmitted.textContent).not.toContain("Changes requested");
+});
