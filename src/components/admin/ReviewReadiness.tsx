@@ -7,6 +7,7 @@ import {
 	AlertCircleIcon,
 	ArrowRight01Icon,
 	CheckmarkBadge01Icon,
+	Comment01Icon,
 	FilePenLineIcon,
 	FingerPrintIcon,
 	Tick01Icon,
@@ -61,18 +62,20 @@ export function useReviewReadiness(
 export function ReviewReadiness({
 	recordKey,
 	readiness,
+	requestedChanges,
 }: {
 	recordKey: string;
 	readiness: ReturnType<typeof useReviewReadiness>;
+	requestedChanges?: string | null;
 }) {
 	const { checks, missing, loading } = readiness;
-	const blocked = missing > 0 || loading;
+	const header = readinessHeader(missing > 0 || loading, requestedChanges);
 	const [disclosure, setDisclosure] = useState({
-		blocked,
-		expanded: blocked,
+		open: header.open,
+		expanded: header.open,
 	});
-	if (disclosure.blocked !== blocked)
-		setDisclosure({ blocked, expanded: blocked });
+	if (disclosure.open !== header.open)
+		setDisclosure({ open: header.open, expanded: header.open });
 	const reducedMotion = useReducedMotion();
 	return (
 		<section
@@ -85,7 +88,7 @@ export function ReviewReadiness({
 				}
 				onSelectionChange={(keys) =>
 					setDisclosure({
-						blocked,
+						open: header.open,
 						expanded: keys === "all" || keys.has("requirements"),
 					})
 				}
@@ -103,27 +106,15 @@ export function ReviewReadiness({
 			>
 				<AccordionItem
 					key="requirements"
-					aria-label={
-						blocked ? "Review requirements" : "Ready for review"
-					}
+					aria-label={header.label}
 					title={
 						<span className="flex items-center gap-2 text-xs font-semibold">
 							<HugeiconsIcon
-								icon={
-									blocked ? CheckmarkBadge01Icon : Tick01Icon
-								}
+								icon={header.icon}
 								size={15}
-								className={
-									blocked
-										? "text-black/45 dark:text-white/50"
-										: "text-emerald-700 dark:text-emerald-400"
-								}
+								className={header.className}
 							/>
-							<span className="flex-1">
-								{blocked
-									? "Review requirements"
-									: "Ready for review"}
-							</span>
+							<span className="flex-1">{header.label}</span>
 							{missing > 0 && !loading && (
 								<span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
 									{missing} missing
@@ -133,6 +124,7 @@ export function ReviewReadiness({
 					}
 				>
 					<div className="p-1.5">
+						<RequestedChangesNote text={requestedChanges} />
 						{checks.map((check) => (
 							<button
 								key={check.key}
@@ -195,6 +187,37 @@ export function ReviewReadiness({
 			</Accordion>
 		</section>
 	);
+}
+
+function readinessHeader(blocked: boolean, requestedChanges?: string | null) {
+	if (requestedChanges)
+		return {
+			label: "Changes requested",
+			icon: Comment01Icon,
+			className: "text-rose-700 dark:text-rose-300",
+			open: true,
+		};
+	if (blocked)
+		return {
+			label: "Review requirements",
+			icon: CheckmarkBadge01Icon,
+			className: "text-black/45 dark:text-white/50",
+			open: true,
+		};
+	return {
+		label: "Ready for review",
+		icon: Tick01Icon,
+		className: "text-emerald-700 dark:text-emerald-400",
+		open: false,
+	};
+}
+
+function RequestedChangesNote({ text }: { text?: string | null }) {
+	return text ? (
+		<p className="whitespace-pre-wrap px-2 py-2 text-[11px] leading-relaxed text-black/65 dark:text-white/65">
+			{text}
+		</p>
+	) : null;
 }
 
 function identifierLabel(

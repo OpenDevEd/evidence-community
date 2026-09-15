@@ -394,6 +394,7 @@ function WorkingDraftNotices({
 			<ReviewReadiness
 				recordKey={props.detail.key}
 				readiness={readiness}
+				requestedChanges={returnedReviewNote(model.snapshot)}
 			/>
 		);
 	if (model.conflicts.fields.length > 0)
