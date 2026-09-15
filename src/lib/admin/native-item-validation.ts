@@ -494,7 +494,10 @@ function validateAllowedDraftFields(
 		...adminSpecialFieldsForZoteroItemType(definition.itemType),
 	]);
 
-	for (const field of Object.keys(payload)) {
+	// A client patch can carry an undefined value; JSON never sends one, so treat it as absent.
+	for (const field of Object.keys(payload).filter(
+		(key) => payload[key] !== undefined,
+	)) {
 		if (!allowedFields.has(field)) {
 			if (options.source) {
 				delete payload[field];

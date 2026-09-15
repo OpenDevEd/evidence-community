@@ -92,13 +92,13 @@ let requests: unknown[];
 let childResponses: Response[];
 let childRequests: string[];
 const draftChanges = vi.fn();
-function Inspector({ role, overrides }: { role: "editor" | "creator"; overrides?: Partial<ComponentProps<typeof EditorialInspector>> }) {
-	const [working, setWorking] = useState(draftPayload);
+function Inspector({ role, overrides, initial = draftPayload }: { role: "editor" | "creator"; overrides?: Partial<ComponentProps<typeof EditorialInspector>>; initial?: Record<string, unknown> }) {
+	const [working, setWorking] = useState<Record<string, unknown>>(initial);
 	const noop = () => {};
 	const props: ComponentProps<typeof EditorialInspector> = {
 		detail: {
 			...submitted,
-			title: working.title,
+			title: String(working.title ?? ""),
 			editable: true,
 			draft: { ...submitted.draft, payload: working },
 		},
@@ -122,7 +122,11 @@ function Inspector({ role, overrides }: { role: "editor" | "creator"; overrides?
 		validationRevision: 0,
 		onChange: (value) => {
 			draftChanges(value);
-			setWorking({ ...working, ...value });
+			setWorking((current) =>
+				typeof value === "function"
+					? value(current)
+					: { ...current, ...value },
+			);
 		},
 		onPublicationChanged: async () => {},
 		onStartReviewLinkPick: noop,
@@ -508,4 +512,57 @@ it.each(["note", "attachment"])("resolves a child %s conflict without requiring 
 	}} />));
 	expect(container.querySelector('[aria-label="Resolve draft conflicts"]')).not.toBeNull();
 	expect(container.querySelector('[aria-label="Review requirements"]')).toBeNull();
+});
+
+it("keeps a creator edit submittable on an item type without an institution field", async () => {
+	const dataset = {
+		itemType: "Dataset",
+		title: "Rainfall records",
+		creators: [{ creatorType: "author", name: "Learning Lab" }],
+		tags: [],
+		collections: [],
+	};
+	await act(async () =>
+		root.render(
+			<Inspector
+				role="creator"
+				initial={dataset}
+				overrides={{
+					detail: {
+						...submitted,
+						itemType: "Dataset",
+						title: dataset.title,
+						editable: true,
+						draft: { ...submitted.draft!, patch: dataset, payload: dataset },
+					},
+					definitions: [
+						{
+							itemType: "Dataset",
+							fields: [{ field: "title" }],
+							creatorTypes: [
+								{ creatorType: "author", primary: true },
+							],
+						},
+					],
+				}}
+			/>,
+		),
+	);
+	const requirements = () =>
+		container.querySelector('[aria-label="Review requirements"]')
+			?.textContent ?? "";
+	expect(requirements()).toContain("Ready for review");
+	const name = container.querySelector<HTMLInputElement>(
+		'input[aria-label="Organisation name"]',
+	);
+	expect(name?.value).toBe("Learning Lab");
+	await act(async () => {
+		Object.getOwnPropertyDescriptor(
+			HTMLInputElement.prototype,
+			"value",
+		)!.set!.call(name, "Learning Lab Kenya");
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+	expect(requirements()).not.toContain("Institution");
+	expect(requirements()).toContain("Ready for review");
 });
