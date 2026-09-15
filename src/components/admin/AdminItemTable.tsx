@@ -128,7 +128,7 @@ function PlainCell({
 			{Icon ? (
 				<HugeiconsIcon icon={Icon} aria-hidden className="shrink-0 opacity-45" size={13} />
 			) : null}
-			{title ? <TruncatedText text={title} tabIndex={-1} /> : children}
+			{title ? <TruncatedText text={title} focusable managed /> : children}
 		</span>
 	);
 }
@@ -158,7 +158,7 @@ function RelationCell({
 					key={key}
 					className="min-w-0 max-w-28 shrink rounded-md bg-black/[0.045] px-1.5 py-0.5 dark:bg-white/[0.06]"
 				>
-					<TruncatedText text={label} tabIndex={-1} />
+					<TruncatedText text={label} focusable managed />
 				</span>
 			))}
 			{remaining.length > 0 ? (

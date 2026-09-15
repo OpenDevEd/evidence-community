@@ -71,9 +71,9 @@ function LinkRow({
 			data-admin-link-origin={row.origin}
 			description={
 				<span className="flex min-w-0 items-center gap-1.5">
-					{row.itemType && <TruncatedText text={humanizeAdminField(row.itemType)} className="font-medium" tabIndex={onOpen ? undefined : 0} />}
+					{row.itemType && <TruncatedText text={humanizeAdminField(row.itemType)} className="font-medium" focusable={!onOpen} />}
 					<span className="shrink-0 font-mono text-[10px] text-black/30 dark:text-white/30" aria-label={`Item key ${row.key}`}>{row.key}</span>
-					{row.sourceLabel && <TruncatedText text={row.sourceLabel} tabIndex={onOpen ? undefined : 0} />}
+					{row.sourceLabel && <TruncatedText text={row.sourceLabel} focusable={!onOpen} />}
 				</span>
 			}
 			status={changeLabel || row.deleted ? (

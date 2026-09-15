@@ -473,7 +473,7 @@ function PreviewRow({
 			<td className="p-2 tabular-nums">{cells.year}</td>
 			<td className="p-2">{cells.itemType}</td>
 			<td className="max-w-40 p-2">
-				<TruncatedText text={record.source} tabIndex={0} />
+				<TruncatedText text={record.source} focusable />
 			</td>
 			<td className={`p-2 ${stateTone[status.tone]}`}>
 				{status.label}

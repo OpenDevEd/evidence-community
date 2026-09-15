@@ -245,6 +245,34 @@ function AdminWritebackSummary({
 }
 
 /** Per-source status and recovery actions. */
+/** States whose meaning is already clear from the label; no tooltip, so no keyboard stop. */
+const SILENT_STATES = new Set<keyof typeof appearance>(["sending", "queued", "removed", "locked"]);
+
+function SourceStatusPill({ state, sourceLabel }: { state: keyof typeof appearance; sourceLabel: string }) {
+	const config = appearance[state];
+	const silent = SILENT_STATES.has(state);
+	return (
+		<Tooltip
+			isDisabled={silent}
+			content={`${config.label}. ${config.description}`}
+			classNames={{
+				content:
+					"max-w-[min(16rem,calc(100vw-2rem))] whitespace-normal break-words text-xs leading-5",
+			}}
+			placement="left"
+		>
+			<span
+				tabIndex={silent ? undefined : 0}
+				aria-label={`${sourceLabel}: ${config.label}`}
+				className={`inline-flex shrink-0 items-center gap-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-focus ${config.className}`}
+			>
+				<HugeiconsIcon icon={config.icon} size={13} className={config.spin ? "animate-spin" : undefined} />
+				{config.label}
+			</span>
+		</Tooltip>
+	);
+}
+
 export function AdminSourcesWritebackStatus({
 	canLoadRemote,
 	sources,
@@ -320,8 +348,6 @@ export function AdminSourcesWritebackStatus({
 					{sources.map((source) => {
 						const entry = writeback.entries[source.sourceKey];
 						const sourceState = entry?.status?.state ?? "idle";
-						const sourceConfig = appearance[sourceState];
-						const SourceIcon = sourceConfig.icon;
 						const armed =
 							pendingChoice?.sourceKey === source.sourceKey &&
 							sourceState === "conflict"
@@ -329,7 +355,6 @@ export function AdminSourcesWritebackStatus({
 								: null;
 						const busy = writeback.busySource === source.sourceKey;
 						const controlsDisabled = busy || !canPublish;
-						const statusTooltipDisabled = ["sending", "queued", "removed", "locked"].includes(sourceState);
 						return (
 							<li
 								className="space-y-2"
@@ -347,32 +372,7 @@ export function AdminSourcesWritebackStatus({
 									<p className="min-w-0 flex-1 text-xs font-medium leading-5 text-black/85 dark:text-white/90">
 										{source.sourceLabel}
 									</p>
-									<Tooltip
-										isDisabled={statusTooltipDisabled}
-										content={`${sourceConfig.label}. ${sourceConfig.description}`}
-										classNames={{
-											content:
-												"max-w-[min(16rem,calc(100vw-2rem))] whitespace-normal break-words text-xs leading-5",
-										}}
-										placement="left"
-									>
-										<span
-											tabIndex={statusTooltipDisabled ? undefined : 0}
-											aria-label={`${source.sourceLabel}: ${sourceConfig.label}`}
-											className={`inline-flex shrink-0 items-center gap-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-focus ${sourceConfig.className}`}
-										>
-											<HugeiconsIcon
-												icon={SourceIcon}
-												size={13}
-												className={
-													sourceConfig.spin
-														? "animate-spin"
-														: undefined
-												}
-											/>
-											{sourceConfig.label}
-										</span>
-									</Tooltip>
+									<SourceStatusPill state={sourceState} sourceLabel={source.sourceLabel} />
 								</div>
 								{entry?.error || entry?.status?.error ? (
 									<p
