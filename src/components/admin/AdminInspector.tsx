@@ -1729,8 +1729,8 @@ export function AdminInspector({
 														: "Delete draft"
 												}
 												size="xs"
-												variant="transparent"
-												className="h-9 gap-2 rounded-xl px-2 text-xs text-black/50 hover:text-danger dark:text-white/50 dark:hover:text-red-300"
+												variant="muted"
+												color="danger"
 												isDisabled={
 													busy ||
 													(reviewPending &&
