@@ -44,14 +44,14 @@ export function AdminDocumentHeader({
 						{detail.title}
 					</h2>
 					<div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-						<span className="text-[11px] text-black/45 dark:text-white/45">
+						<span className="text-[11px] font-medium text-black/45 dark:text-white/45">
 							{humanizeAdminField(detail.itemType)}
 						</span>
 						<Button
 							aria-label={`Copy item key ${detail.key}`}
 							variant="transparent"
 							size="xs"
-							className="h-6 min-w-0 gap-1.5 rounded-md px-1 text-[10px] text-black/45 dark:text-white/45"
+							className="h-6 min-w-0 gap-1.5 rounded-md px-1 text-[10px] text-black/30 hover:text-black/60 dark:text-white/30 dark:hover:text-white/70"
 							onPress={() => {
 								void navigator.clipboard
 									.writeText(detail.key)
