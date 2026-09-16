@@ -107,7 +107,9 @@ test("[publication:zenodo] archives automatically and retains both providers aft
     inspector = await openPublicationRecord(page);
     await expectCrossrefSynced(page);
     await inspector.getByRole("button", {name: "Submitted version", exact: true}).click();
-    await expect(inspector.getByText("Submitted version published. Later draft edits stay private.", {exact: true})).toBeVisible();
+    const progress = inspector.getByRole("region", {name: "Publication progress"});
+    await expect(progress.getByText("Published", {exact: true})).toBeVisible();
+    await expect(progress.getByText("The submitted version is public. Later draft edits stay private.", {exact: true})).toBeVisible();
 	await expect
 		.poll(
 			async () => {
