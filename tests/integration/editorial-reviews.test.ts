@@ -10,7 +10,7 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
 import { getAdminItemListPage } from "../../src/lib/admin/item-list-query";
 import { parseAdminItemListRequest } from "../../src/lib/admin/item-list-contract";
-import { getAdminPdfCover } from "../../src/lib/admin/file-cover-query";
+import { getAdminPdfObject } from "../../src/lib/admin/file-cover-query";
 import { getAdminReviewSnapshot } from "../../src/lib/admin/review-query";
 import { AdminValidationError } from "../../src/lib/admin/errors";
 import { itemReview } from "../../src/db/schema/review";
@@ -216,7 +216,11 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
 		const actor = { userId: "review-test-creator", role: "creator" } as const;
 		const captured = await submitItemReview(db, reviewParent.itemKey, actor);
+        const getAdminPdfCover = async (...[database, storage, key, revision, reviewId]: [typeof db, typeof reviewStorage, string, number, string?]) => (await getAdminPdfObject(database, storage, key, revision, "cover", reviewId)).bytes;
         const originalCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision);
+        const submittedPdf = await getAdminPdfObject(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision, "file", captured.id);
+        assert.equal(submittedPdf.filename, reviewStage.fileDraft.filename);
+        assert.deepEqual(submittedPdf.bytes, reviewStorage.privateFiles.get(reviewStage.upload.path), "The submitted PDF is not the frozen upload");
         const submittedCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision, captured.id);
         assert.deepEqual(submittedCover, originalCover);
         await assert.rejects(getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision + 1, captured.id), /not found/i);

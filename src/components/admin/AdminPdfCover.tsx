@@ -5,7 +5,7 @@ import {
 	Add01Icon,
 	AlertCircleIcon,
 	FileAttachmentIcon,
-	SquareLock01Icon,
+	LinkSquare01Icon,
 	Exchange01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -31,9 +31,9 @@ function coverPresentation(
 ) {
 	if (submitted)
 		return {
-			label: "Submitted PDF",
-			footer: "Submitted",
-			icon: SquareLock01Icon,
+			label: "Open submitted PDF",
+			footer: "Open",
+			icon: LinkSquare01Icon,
 		};
 	if (error)
 		return {
@@ -50,8 +50,10 @@ function coverPresentation(
 	return { label: "Add PDF", footer: "Add PDF", icon: Add01Icon };
 }
 
-function coverSource(
+/** The staged draft's object when there is one, otherwise the published copy. */
+function pdfObjectSource(
 	file: ReturnType<typeof documentAttachment>,
+	object: "cover" | "pdf",
 	reviewId?: string,
 ) {
 	const draft = file?.fileDraft;
@@ -60,9 +62,11 @@ function coverSource(
 			revision: String(draft.uploadRevision),
 		});
 		if (reviewId) query.set("review", reviewId);
-		return `/api/admin/items/${file.key}/file/cover?${query}`;
+		return `/api/admin/items/${file.key}/file/${object}?${query}`;
 	}
-	return file?.filePublication?.coverPublicUrl;
+	return object === "cover"
+		? file?.filePublication?.coverPublicUrl
+		: file?.filePublication?.publicUrl;
 }
 
 function PdfCoverImage({
@@ -141,6 +145,51 @@ function PdfCoverContent({
 	);
 }
 
+type DocumentFile = ReturnType<typeof documentAttachment>;
+
+function attachmentHasPdf(file: DocumentFile) {
+	return Boolean(file?.fileDraft?.readyAt || file?.filePublication || file?.sourceFileUrl);
+}
+
+function coverFilename(file: DocumentFile) {
+	return file?.fileDraft?.filename ?? file?.filePublication?.filename ?? "PDF cover";
+}
+
+function coverModel(detail: AdminItemDetail, submitted: boolean, reviewId?: string, error?: string) {
+	const file = documentAttachment(detail);
+	const hasPdf = attachmentHasPdf(file);
+	return {
+		hasPdf,
+		url: pdfObjectSource(file, "cover", submitted ? reviewId : undefined),
+		pdfUrl: submitted ? pdfObjectSource(file, "pdf", reviewId) : undefined,
+		filename: coverFilename(file),
+		presentation: coverPresentation(hasPdf && file?.sourceConnectionKey === "native", submitted, error),
+	};
+}
+
+const SURFACE = "group relative flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-black/10 bg-white text-black/35 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-white/35";
+
+/** The cover surface as a link (submitted), a button (editable) or a plain image (nothing to do). */
+function CoverFrame({ href, onOpen, blocked = false, label, children }: { href?: string; onOpen?: () => void; blocked?: boolean; label: string; children: ReactNode }) {
+	if (href)
+		return (
+			<a href={href} target="_blank" rel="noreferrer" aria-label={label} className={`${SURFACE} transition-colors hover:border-accent/50 focus-visible:outline-focus`}>
+				{children}
+			</a>
+		);
+	if (onOpen)
+		return (
+			<button type="button" aria-label={label} disabled={blocked} onClick={onOpen} className={`${SURFACE} transition-colors enabled:hover:border-accent/50 focus-visible:outline-focus disabled:cursor-default disabled:opacity-50 dark:enabled:hover:border-accent/50`}>
+				{children}
+			</button>
+		);
+	return (
+		<div className={SURFACE} role="img" aria-label={label}>
+			{children}
+		</div>
+	);
+}
+
 export function AdminPdfCover({
 	detail,
 	disabled,
@@ -150,64 +199,22 @@ export function AdminPdfCover({
 	error,
 	onUpload,
 }: CoverProps) {
-	const file = documentAttachment(detail);
-	const hasPdf = Boolean(
-		file?.fileDraft?.readyAt ||
-		file?.filePublication ||
-		file?.sourceFileUrl,
+	const { hasPdf, url, pdfUrl, filename, presentation } = coverModel(detail, submitted, reviewId, error);
+	const cover = <PdfCoverContent url={url} filename={filename} hasPdf={hasPdf} error={error} progress={progress} />;
+	const footer = (
+		<span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center gap-1 bg-black/[0.03] text-[10px] font-medium text-black/60 dark:bg-white/[0.04] dark:text-white/60">
+			<HugeiconsIcon icon={presentation.icon} size={12} />
+			{progress ? "Please wait" : presentation.footer}
+		</span>
 	);
-	const url = coverSource(file, submitted ? reviewId : undefined);
-	const filename =
-		file?.fileDraft?.filename ??
-		file?.filePublication?.filename ??
-		"PDF cover";
-	const presentation = coverPresentation(
-		hasPdf && file?.sourceConnectionKey === "native",
-		submitted,
-		error,
-	);
-	const cover = (
-		<PdfCoverContent
-			url={url}
-			filename={filename}
-			hasPdf={hasPdf}
-			error={error}
-			progress={progress}
-		/>
-	);
-	const surfaceClassName = "group relative flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-black/10 bg-white text-black/35 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-white/35";
-	if (isUnrestoredRecord(detail)) {
-		return (
-			<div className={surfaceClassName} role="img" aria-label={hasPdf ? "PDF cover" : "No PDF"}>
-				{cover}
-			</div>
-		);
-	}
+	if (isUnrestoredRecord(detail) || (submitted && !pdfUrl))
+		return <CoverFrame label={hasPdf ? "PDF cover" : "No PDF"}>{cover}</CoverFrame>;
+	if (submitted)
+		return <CoverFrame href={pdfUrl} label={presentation.label}>{cover}{footer}</CoverFrame>;
 	const blocked = disabled || Boolean(progress);
 	return (
-		<PdfFileInput
-			attachmentKey={detail.key}
-			disabled={blocked}
-			onUpload={(_, picked) => onUpload(picked)}
-		>
-			{(open) => (
-				<button
-					type="button"
-					aria-label={presentation.label}
-					disabled={blocked}
-					onClick={open}
-					className={`${surfaceClassName} transition-colors enabled:hover:border-accent/50 focus-visible:outline-focus disabled:cursor-default disabled:opacity-50 dark:enabled:hover:border-accent/50`}
-				>
-					{cover}
-					<span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center gap-1 bg-black/[0.03] text-[10px] font-medium text-black/60 dark:bg-white/[0.04] dark:text-white/60">
-						<HugeiconsIcon
-							icon={presentation.icon}
-							size={12}
-						/>
-						{progress ? "Please wait" : presentation.footer}
-					</span>
-				</button>
-			)}
+		<PdfFileInput attachmentKey={detail.key} disabled={blocked} onUpload={(_, picked) => onUpload(picked)}>
+			{(open) => <CoverFrame onOpen={open} blocked={blocked} label={presentation.label}>{cover}{footer}</CoverFrame>}
 		</PdfFileInput>
 	);
 }

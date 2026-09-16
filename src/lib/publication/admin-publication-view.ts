@@ -403,7 +403,7 @@ function jobSummary(
 		processedAt: iso(job.processedAt),
 		deadLetteredAt: iso(job.deadLetteredAt),
 		supersededAt: iso(job.supersededAt),
-		lastError: job.lastError,
+		lastError: describeJobError(job.lastError),
 		receipt: job.resultReceipt,
 	};
 }
@@ -423,10 +423,9 @@ function identifierSummaries(
 	);
 }
 
-function planIssues(plan: PublicationSyncPlan | null) {
-	if (plan?.status !== "needs_attention") return [];
-	if (plan.issues?.length) return plan.issues.map((issue) => issue.message);
-	const messages: Record<typeof plan.reason, string> = {
+type NeedsAttentionReason = Extract<PublicationSyncPlan, { status: "needs_attention" }>["reason"];
+
+const PLAN_REASON_MESSAGES: Record<NeedsAttentionReason, string> = {
 		MISSING_MANAGED_CROSSREF_DOI:
 			"Activate and verify the Crossref DOI required by this publication",
 		MISSING_EXTERNAL_DOI:
@@ -445,8 +444,18 @@ function planIssues(plan: PublicationSyncPlan | null) {
 			"Approve this exact PDF as a minor correction before publishing it",
 		ZENODO_FILE_CORRECTION_WINDOW_CLOSED:
 			"The allowed time for this Zenodo PDF correction has ended",
-	};
-	return [messages[plan.reason]];
+};
+
+function planIssues(plan: PublicationSyncPlan | null) {
+	if (plan?.status !== "needs_attention") return [];
+	if (plan.issues?.length) return plan.issues.map((issue) => issue.message);
+	return [PLAN_REASON_MESSAGES[plan.reason]];
+}
+
+/** The worker stores "Record is unsafe to sync: <reason>" for a plan that needed attention; show the reason's message instead. */
+function describeJobError(error: string | null) {
+	const reason = error?.match(/^Record is unsafe to sync: (\w+)$/)?.[1];
+	return reason && reason in PLAN_REASON_MESSAGES ? PLAN_REASON_MESSAGES[reason as NeedsAttentionReason] : error;
 }
 
 function environment(config: PublicationConfig, provider: PublicationProvider) {
@@ -885,7 +894,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			capabilities: {
 				canActivate:
 					!target && blockers.length === 0 && displayState !== "external",
-				canRetry: Boolean(target && job?.deadLetteredAt) && displayState === "failed",
+				canRetry: Boolean(target && job?.deadLetteredAt) && displayState === "failed" && planState.status !== "needs_attention",
 				actionLabel:
 					provider === "crossref"
 						? "Activate Crossref DOI"

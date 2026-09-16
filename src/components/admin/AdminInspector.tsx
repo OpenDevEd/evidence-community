@@ -1,7 +1,7 @@
 "use client";
 import { ordinaryItemTags } from "@/lib/item-display";
 import { hasTag } from "@/lib/tags";
-import { AdminItemDisplay } from "./AdminItemDisplay";
+import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
 import { AdminPdfCover } from "./AdminPdfCover";
@@ -19,6 +19,7 @@ import {
 	Add01Icon,
 	AlertCircleIcon,
 	ArchiveIcon,
+	ArchiveRestoreIcon,
 	ArrowLeft01Icon,
 	ArrowRight01Icon,
 	AttachmentIcon,
@@ -35,6 +36,7 @@ import {
 	LinkSquare01Icon,
 	SquareLock01Icon,
 	PencilIcon,
+	RefreshIcon,
 	Undo02Icon,
 	SentIcon,
 	Tag01Icon,
@@ -350,7 +352,7 @@ function SaveIndicator({
 							: "Needs attention")}
 			{state === "conflict" ? (
 				<IconButton
-					icon={Undo02Icon}
+					icon={RefreshIcon}
 					label="Reload server draft"
 					onPress={onReload}
 				/>
@@ -698,14 +700,12 @@ function MetadataEditor({
 }
 
 const TagsEditor = memo(function TagsEditor({
-	separateDisplayTags,
 	errors,
 	onChange,
 	payload,
 	readOnly,
 	recordKey,
 }: {
-	separateDisplayTags: boolean;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
@@ -720,7 +720,7 @@ const TagsEditor = memo(function TagsEditor({
 				(entry): entry is string => typeof entry === "string",
 			)
 		: [];
-	const visibleTags = separateDisplayTags ? ordinaryItemTags(tags, content.tags) : tags;
+	const visibleTags = ordinaryItemTags(tags, content.tags);
 	const tag = value.trim();
 	const alreadyAdded = hasTag(tags, tag);
 	const addTag = () => {
@@ -1293,7 +1293,6 @@ export function AdminInspector({
 	versionControls,
 	versionNotice,
 	liveDetail,
-	onViewSubmitted,
 	editorNotice,
 	versionActions,
 	versionStatus,
@@ -1347,7 +1346,6 @@ export function AdminInspector({
 	versionControls?: ReactNode;
 	versionNotice?: ReactNode;
 	liveDetail?: AdminItemDetail;
-	onViewSubmitted?: () => void;
 	editorNotice?: ReactNode;
 	versionActions?: ReactNode;
 	versionStatus?: ReactNode;
@@ -1506,8 +1504,7 @@ export function AdminInspector({
 		);
 	}
 
-	const tagsForEditor = (tags: string[]) =>
-		detail.parentItem ? [...tags] : ordinaryItemTags(tags, content.tags);
+	const tagsForEditor = (tags: string[]) => ordinaryItemTags(tags, content.tags);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
@@ -1529,6 +1526,20 @@ export function AdminInspector({
 		(Boolean(detail.parentItem) || !detail.draft);
 	const showPrimaryAction =
 		!detail.parentItem || !detail.draft || restoring || !detail.editable;
+	const primaryAction = {
+		duplicate: { label: "Duplicate as native", icon: Copy01Icon, onPress: onDuplicate },
+		restore: { label: "Restore", icon: ArchiveRestoreIcon, onPress: onRestore },
+		edit: { label: "Edit", icon: PencilIcon, onPress: onOpenDraft },
+		submit: { label: "Submit for review", icon: SentIcon, onPress: onPublish },
+	}[
+		!detail.editable && !readOnlyVersion
+			? "duplicate"
+			: restoring
+				? "restore"
+				: !detail.draft
+					? "edit"
+					: "submit"
+	];
 	const primaryDisabled =
 		busy ||
 		readOnlyVersion ||
@@ -1577,8 +1588,7 @@ export function AdminInspector({
 								>
 									Open item
 								</Button>
-								<Tooltip content="Copy public item link">
-									<Button
+								<Button
 										aria-label="Copy public item link"
 										isIconOnly
 										size="xs"
@@ -1605,7 +1615,6 @@ export function AdminInspector({
 											size={13}
 										/>
 									</Button>
-								</Tooltip>
 							</div>
 						)}
 					</>
@@ -1708,14 +1717,8 @@ export function AdminInspector({
 						}
 						footer={
 							<div className="flex w-full flex-wrap items-center gap-2 [&_button]:h-9 [&_button]:rounded-xl [&_button]:text-xs">
-                                {onViewSubmitted && (
-                                    <Button size="xs" variant="muted" onPress={onViewSubmitted} className="min-w-0 flex-1 justify-between gap-2 px-3" endContent={<HugeiconsIcon icon={ArrowRight01Icon} size={14} />}>
-                                        View submitted version
-                                    </Button>
-                                )}
-								{readOnlyVersion
-									? versionActions && versionWithdraw
-									: detail.draft && (
+								{!readOnlyVersion &&
+									detail.draft && (
 											<Button
 												aria-label={
 													detail.published
@@ -1723,8 +1726,8 @@ export function AdminInspector({
 														: "Delete draft"
 												}
 												size="xs"
-												variant="transparent"
-												className="h-9 gap-2 rounded-xl px-2 text-xs text-black/50 hover:text-danger dark:text-white/50 dark:hover:text-red-300"
+												variant="muted"
+												color="danger"
 												isDisabled={
 													busy ||
 													(reviewPending &&
@@ -1827,6 +1830,13 @@ export function AdminInspector({
 							/>
 						)}
 						{detail.parentItem && (
+							<AttachmentDisplay
+								tags={Array.isArray(payload.tags) ? payload.tags.filter((tag): tag is string => typeof tag === "string") : []}
+								readOnly={readOnly}
+								onChange={(tags) => patchPayload({ tags })}
+							/>
+						)}
+						{detail.parentItem && (
 							<span className="flex items-center gap-1.5 text-[11px] text-black/45 dark:text-white/45">
 								<HugeiconsIcon
 									icon={CheckmarkBadge01Icon}
@@ -1841,9 +1851,9 @@ export function AdminInspector({
 				}
 
 				actions={
-					versionActions ?? (
-						<>
-							{showPrimaryAction && (
+					<>
+						{versionActions ??
+							(showPrimaryAction && (
 								<Button
 									size="xs"
 									color={
@@ -1854,42 +1864,19 @@ export function AdminInspector({
 									}
 									className="h-9 min-w-0 flex-1 gap-1.5 rounded-xl px-3 font-semibold"
 									isDisabled={primaryDisabled}
-									onPress={
-										!detail.editable
-											? onDuplicate
-											: restoring
-												? onRestore
-												: !detail.draft
-													? onOpenDraft
-													: onPublish
-									}
+									onPress={primaryAction.onPress}
 									startContent={
 										<HugeiconsIcon
-											icon={
-												!detail.editable
-													? Copy01Icon
-													: restoring
-														? Undo02Icon
-														: !detail.draft
-															? PencilIcon
-															: SentIcon
-											}
+											icon={primaryAction.icon}
 											size={14}
 										/>
 									}
 								>
-									{!detail.editable && !readOnlyVersion
-										? "Duplicate as native"
-										: restoring
-											? "Restore"
-											: !detail.draft
-												? "Edit"
-												: "Submit for review"}
+									{primaryAction.label}
 								</Button>
-							)}
-							{versionWithdraw}
-						</>
-					)
+							))}
+						{versionWithdraw}
+					</>
 				}
 			/>
 
@@ -2057,7 +2044,6 @@ export function AdminInspector({
 					title="Tags"
 				>
 					<TagsEditor
-						separateDisplayTags={!detail.parentItem}
 						errors={validationErrors}
 						onChange={patchPayload}
 						payload={tagsPayload}

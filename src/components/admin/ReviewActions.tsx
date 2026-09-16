@@ -8,7 +8,7 @@ import {
 	ModalHeader,
 } from "@nextui-org/react";
 import {
-	SentIcon,
+	CheckmarkCircle02Icon,
 	Tick01Icon,
 	Cancel01Icon,
 	Comment01Icon,
@@ -69,7 +69,7 @@ export function ReviewActions({
 						color="accent"
 						className="h-9 min-w-0 flex-1 rounded-xl px-3 font-semibold"
 						startContent={
-							<HugeiconsIcon icon={SentIcon} size={14} />
+							<HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} />
 						}
 						isDisabled={disabled || publishBlocked}
 						onPress={() => {
