@@ -19,6 +19,7 @@ import {
 	Add01Icon,
 	AlertCircleIcon,
 	ArchiveIcon,
+	ArchiveRestoreIcon,
 	ArrowLeft01Icon,
 	ArrowRight01Icon,
 	AttachmentIcon,
@@ -35,6 +36,7 @@ import {
 	LinkSquare01Icon,
 	SquareLock01Icon,
 	PencilIcon,
+	RefreshIcon,
 	Undo02Icon,
 	SentIcon,
 	Tag01Icon,
@@ -350,7 +352,7 @@ function SaveIndicator({
 							: "Needs attention")}
 			{state === "conflict" ? (
 				<IconButton
-					icon={Undo02Icon}
+					icon={RefreshIcon}
 					label="Reload server draft"
 					onPress={onReload}
 				/>
@@ -1293,7 +1295,6 @@ export function AdminInspector({
 	versionControls,
 	versionNotice,
 	liveDetail,
-	onViewSubmitted,
 	editorNotice,
 	versionActions,
 	versionStatus,
@@ -1347,7 +1348,6 @@ export function AdminInspector({
 	versionControls?: ReactNode;
 	versionNotice?: ReactNode;
 	liveDetail?: AdminItemDetail;
-	onViewSubmitted?: () => void;
 	editorNotice?: ReactNode;
 	versionActions?: ReactNode;
 	versionStatus?: ReactNode;
@@ -1529,6 +1529,20 @@ export function AdminInspector({
 		(Boolean(detail.parentItem) || !detail.draft);
 	const showPrimaryAction =
 		!detail.parentItem || !detail.draft || restoring || !detail.editable;
+	const primaryAction = {
+		duplicate: { label: "Duplicate as native", icon: Copy01Icon, onPress: onDuplicate },
+		restore: { label: "Restore", icon: ArchiveRestoreIcon, onPress: onRestore },
+		edit: { label: "Edit", icon: PencilIcon, onPress: onOpenDraft },
+		submit: { label: "Submit for review", icon: SentIcon, onPress: onPublish },
+	}[
+		!detail.editable && !readOnlyVersion
+			? "duplicate"
+			: restoring
+				? "restore"
+				: !detail.draft
+					? "edit"
+					: "submit"
+	];
 	const primaryDisabled =
 		busy ||
 		readOnlyVersion ||
@@ -1708,14 +1722,8 @@ export function AdminInspector({
 						}
 						footer={
 							<div className="flex w-full flex-wrap items-center gap-2 [&_button]:h-9 [&_button]:rounded-xl [&_button]:text-xs">
-                                {onViewSubmitted && (
-                                    <Button size="xs" variant="muted" onPress={onViewSubmitted} className="min-w-0 flex-1 justify-between gap-2 px-3" endContent={<HugeiconsIcon icon={ArrowRight01Icon} size={14} />}>
-                                        View submitted version
-                                    </Button>
-                                )}
-								{readOnlyVersion
-									? versionActions && versionWithdraw
-									: detail.draft && (
+								{!readOnlyVersion &&
+									detail.draft && (
 											<Button
 												aria-label={
 													detail.published
@@ -1841,9 +1849,9 @@ export function AdminInspector({
 				}
 
 				actions={
-					versionActions ?? (
-						<>
-							{showPrimaryAction && (
+					<>
+						{versionActions ??
+							(showPrimaryAction && (
 								<Button
 									size="xs"
 									color={
@@ -1854,42 +1862,19 @@ export function AdminInspector({
 									}
 									className="h-9 min-w-0 flex-1 gap-1.5 rounded-xl px-3 font-semibold"
 									isDisabled={primaryDisabled}
-									onPress={
-										!detail.editable
-											? onDuplicate
-											: restoring
-												? onRestore
-												: !detail.draft
-													? onOpenDraft
-													: onPublish
-									}
+									onPress={primaryAction.onPress}
 									startContent={
 										<HugeiconsIcon
-											icon={
-												!detail.editable
-													? Copy01Icon
-													: restoring
-														? Undo02Icon
-														: !detail.draft
-															? PencilIcon
-															: SentIcon
-											}
+											icon={primaryAction.icon}
 											size={14}
 										/>
 									}
 								>
-									{!detail.editable && !readOnlyVersion
-										? "Duplicate as native"
-										: restoring
-											? "Restore"
-											: !detail.draft
-												? "Edit"
-												: "Submit for review"}
+									{primaryAction.label}
 								</Button>
-							)}
-							{versionWithdraw}
-						</>
-					)
+							))}
+						{versionWithdraw}
+					</>
 				}
 			/>
 

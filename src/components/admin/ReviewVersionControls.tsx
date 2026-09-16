@@ -291,27 +291,33 @@ export function ReviewWithdrawButton({
 	submittedBy,
 	withdrawing,
 	onWithdraw,
+	compact = false,
 }: {
 	pending: boolean;
 	submittedBy?: string;
 	withdrawing: boolean;
 	onWithdraw: () => void;
+	/** Icon only, for when the bar also holds the publish and request-changes buttons. */
+	compact?: boolean;
 }) {
 	const session = useAdminSession();
 	const canWithdraw = session.canPublish || submittedBy === session.userId;
-	return (
+	const button = (
 		<Button
 			size="xs"
-			variant="default"
-			className="h-9 shrink-0 rounded-xl border-black/[0.06] bg-black/[0.035] px-3 shadow-none dark:border-white/[0.08] dark:bg-white/[0.07]"
+			variant="muted"
+			aria-label="Withdraw"
+			className={compact ? "h-9 w-9 shrink-0 rounded-xl px-0" : "h-9 shrink-0 rounded-xl px-3"}
+			isIconOnly={compact}
 			isDisabled={!pending || !canWithdraw || withdrawing}
 			isLoading={withdrawing}
 			onPress={onWithdraw}
-			startContent={<HugeiconsIcon icon={Undo02Icon} size={14} />}
+			startContent={compact ? undefined : <HugeiconsIcon icon={Undo02Icon} size={14} />}
 		>
-			Withdraw
+			{compact ? <HugeiconsIcon icon={Undo02Icon} size={14} /> : "Withdraw"}
 		</Button>
 	);
+	return compact ? <Tooltip content="Withdraw" delay={500}><span>{button}</span></Tooltip> : button;
 }
 
 export function ReviewDraftNotice({

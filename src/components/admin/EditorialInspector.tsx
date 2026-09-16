@@ -51,13 +51,9 @@ export function EditorialInspector(props: Props) {
 	);
 }
 
-function viewSubmittedAction(
-	snapshot: AdminReviewSnapshot | undefined,
-	viewingSubmitted: boolean,
-	select: (submitted: boolean) => void,
-) {
-	if (!snapshot || viewingSubmitted) return undefined;
-	return () => select(true);
+/** Withdraw shares the action bar with publish and request-changes only for a publisher on a pending submitted version. */
+function withdrawCompact(viewingSubmitted: boolean, pending: boolean, canPublish: boolean) {
+	return viewingSubmitted && pending && canPublish;
 }
 
 function returnedReviewNote(snapshot: AdminReviewSnapshot | undefined) {
@@ -85,11 +81,6 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 	);
 	const header = {
 		liveDetail: props.detail,
-		onViewSubmitted: viewSubmittedAction(
-			snapshot,
-			viewingSubmitted,
-			version.selectVersion,
-		),
 		versionStatus: (
 			<ReviewStatusLabel
 				snapshot={snapshot}
@@ -103,6 +94,7 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 				submittedBy={snapshot?.submittedBy}
 				withdrawing={version.withdrawing}
 				onWithdraw={version.withdraw}
+				compact={model.withdrawCompact}
 			/>
 		),
 		reviewId: snapshot?.reviewId,
@@ -356,6 +348,7 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		pending,
 		error,
 		session,
+		withdrawCompact: withdrawCompact(viewingSubmitted, pending, session.canPublish),
 		corrections,
 		changed,
 		conflictRef,

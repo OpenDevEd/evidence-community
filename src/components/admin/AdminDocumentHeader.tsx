@@ -105,7 +105,7 @@ export function AdminDocumentHeader({
 					<PopoverContent
 						data-admin-record-status
 						aria-label="Record status and sources"
-						className="flex max-h-[inherit] w-[360px] max-w-[calc(100vw-24px)] items-stretch justify-start overflow-y-auto rounded-2xl [&>*]:shrink-0 border border-black/[0.08] bg-white p-0 shadow-xl dark:border-white/10 dark:bg-card"
+						className="flex max-h-[inherit] w-[360px] max-w-[calc(100vw-24px)] items-stretch justify-start overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-0 shadow-xl dark:border-white/10 dark:bg-card"
 					>
 						{menu}
 					</PopoverContent>
