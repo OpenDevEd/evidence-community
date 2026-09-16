@@ -305,8 +305,8 @@ it("lets Creators edit the working draft while keeping the submitted version rea
 	expect(requests).toEqual([]);
 });
 
-it("keeps attachment display tags removable through a field patch", async () => {
-	const tags = ["hide", "internal", "_comingsoon", "research"];
+it("manages attachment system tags through the display toggle, not chips", async () => {
+	const tags = ["hide", "internal", "_comingsoon", "_publish", "research"];
 	const attachmentPayload = {
 		...payload,
 		itemType: "Attachment",
@@ -350,21 +350,22 @@ it("keeps attachment display tags removable through a field patch", async () => 
 		),
 	);
 
-	const closeButtons = [
-		...container.querySelectorAll<HTMLElement>(
-			'[aria-label^="Remove tag "]',
-		),
-	];
+	// Only the ordinary tag is a chip; hide, internal, _comingsoon and _publish are the library's own.
 	expect(
-		closeButtons.map((button) => button.getAttribute("aria-label")),
-	).toEqual(
-		expect.arrayContaining(tags.map((tag) => `Remove tag ${tag}`)),
+		[...container.querySelectorAll<HTMLElement>('[aria-label^="Remove tag "]')].map((button) => button.getAttribute("aria-label")),
+	).toEqual(["Remove tag research"]);
+
+	await act(async () =>
+		container.querySelector<HTMLButtonElement>('[aria-label="Record status and sources"]')!.click(),
 	);
-	const hide = closeButtons.find(
-		(button) => button.getAttribute("aria-label") === "Remove tag hide",
+	await act(async () =>
+		document.querySelector<HTMLButtonElement>('[data-admin-status-accordion="Library display"] button')!.click(),
 	);
-	expect(hide).toBeTruthy();
-	await act(async () => hide!.click());
+	const hideSwitch = [...document.querySelectorAll<HTMLLabelElement>("label")]
+		.find((label) => label.textContent?.includes("Hide from library"))
+		?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+	expect(hideSwitch?.checked).toBe(true);
+	await act(async () => hideSwitch!.click());
 
 	const update = change.mock.calls[0]?.[0] as
 		| Record<string, unknown>
@@ -375,25 +376,10 @@ it("keeps attachment display tags removable through a field patch", async () => 
 		typeof update === "function" ? update(current) : update,
 	).toEqual({
 		...current,
-		tags: ["internal", "_comingsoon", "research"],
+		tags: ["internal", "_comingsoon", "_publish", "research"],
 	});
-
-	const tagInput = container.querySelector<HTMLInputElement>(
-		'input[placeholder="Add a tag"]',
-	);
-	await act(async () => {
-		Object.getOwnPropertyDescriptor(
-			HTMLInputElement.prototype,
-			"value",
-		)!.set!.call(tagInput, "  RESEARCH ");
-		tagInput!.dispatchEvent(new Event("input", { bubbles: true }));
-	});
-	expect(
-		container.querySelector<HTMLButtonElement>('[aria-label="Add tag"]')
-			?.disabled,
-	).toBe(true);
-	expect(container.textContent).toContain("This tag is already added.");
 });
+
 
 it("loads the live attachment status for a frozen submitted attachment and retries failures", async () => {
 	const childPayload = {

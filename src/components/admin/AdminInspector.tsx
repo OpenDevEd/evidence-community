@@ -1,7 +1,7 @@
 "use client";
 import { ordinaryItemTags } from "@/lib/item-display";
 import { hasTag } from "@/lib/tags";
-import { AdminItemDisplay } from "./AdminItemDisplay";
+import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
 import { AdminPdfCover } from "./AdminPdfCover";
@@ -700,14 +700,12 @@ function MetadataEditor({
 }
 
 const TagsEditor = memo(function TagsEditor({
-	separateDisplayTags,
 	errors,
 	onChange,
 	payload,
 	readOnly,
 	recordKey,
 }: {
-	separateDisplayTags: boolean;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
@@ -722,7 +720,7 @@ const TagsEditor = memo(function TagsEditor({
 				(entry): entry is string => typeof entry === "string",
 			)
 		: [];
-	const visibleTags = separateDisplayTags ? ordinaryItemTags(tags, content.tags) : tags;
+	const visibleTags = ordinaryItemTags(tags, content.tags);
 	const tag = value.trim();
 	const alreadyAdded = hasTag(tags, tag);
 	const addTag = () => {
@@ -1506,8 +1504,7 @@ export function AdminInspector({
 		);
 	}
 
-	const tagsForEditor = (tags: string[]) =>
-		detail.parentItem ? [...tags] : ordinaryItemTags(tags, content.tags);
+	const tagsForEditor = (tags: string[]) => ordinaryItemTags(tags, content.tags);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
@@ -1833,6 +1830,13 @@ export function AdminInspector({
 							/>
 						)}
 						{detail.parentItem && (
+							<AttachmentDisplay
+								tags={Array.isArray(payload.tags) ? payload.tags.filter((tag): tag is string => typeof tag === "string") : []}
+								readOnly={readOnly}
+								onChange={(tags) => patchPayload({ tags })}
+							/>
+						)}
+						{detail.parentItem && (
 							<span className="flex items-center gap-1.5 text-[11px] text-black/45 dark:text-white/45">
 								<HugeiconsIcon
 									icon={CheckmarkBadge01Icon}
@@ -2040,7 +2044,6 @@ export function AdminInspector({
 					title="Tags"
 				>
 					<TagsEditor
-						separateDisplayTags={!detail.parentItem}
 						errors={validationErrors}
 						onChange={patchPayload}
 						payload={tagsPayload}

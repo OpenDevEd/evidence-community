@@ -1,5 +1,7 @@
 "use client";
 
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { ordinaryItemTags } from "@/lib/item-display";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
@@ -643,6 +645,7 @@ export function AdminItemTable({
 		[sources],
 	);
 	const editableSourceKeys = useMemo(() => editableCollectionSourceKeys(sources), [sources]);
+	const { content } = useLibraryConfig();
 	const columns = useMemo<ColumnDef<AdminTableItem>[]>(
 		() => [
 			{
@@ -772,7 +775,7 @@ export function AdminItemTable({
 			{
 				cell: ({ row }) => (
 					<RelationCell
-						entries={row.original.tags.map((label, index) => ({
+						entries={ordinaryItemTags(row.original.tags, content.tags).map((label, index) => ({
 							key: `${label}:${index}`,
 							label,
 						}))}
@@ -826,6 +829,7 @@ export function AdminItemTable({
 			someVisibleSelected,
 			sourceLabels,
 			profiles,
+			content.tags,
 		],
 	);
 

@@ -77,53 +77,14 @@ export function AdminItemDisplay({
 					</span>
 				}
 			>
-				<div
-					role="group"
-					aria-label="Appearance controls"
-					className="mb-3 space-y-1"
-				>
-					{ITEM_DISPLAY_OPTIONS.map(({ key, label, description }) => (
-						<Tooltip
-							isDisabled={key === "comingSoon"}
-							key={key}
-							content={description}
-							placement="left"
-							classNames={{
-								content:
-									"max-w-64 whitespace-normal text-xs leading-5",
-							}}
-						>
-							<Switch
-								color="accent"
-								isSelected={hasAnyTag(tags, content.tags[key])}
-								isDisabled={
-									readOnly || !content.tags[key].length
-								}
-								onValueChange={(enabled) => {
-									onChange(
-										setItemDisplayTag(
-											tags,
-											content.tags[key],
-											enabled,
-										),
-									);
-									setVersion("draft");
-								}}
-								classNames={{
-									base: "flex h-10 w-full max-w-none justify-between rounded-lg px-1 py-2",
-									label: "ms-0 flex items-center gap-2 text-xs font-medium text-black/75 dark:text-white/75",
-									wrapper: "shrink-0",
-								}}
-							>
-								<HugeiconsIcon
-									icon={displayIcons[key]}
-									size={15}
-								/>
-								{label}
-							</Switch>
-						</Tooltip>
-					))}
-				</div>
+				<DisplayToggles
+					tags={tags}
+					readOnly={readOnly}
+					onChange={(next) => {
+						onChange(next);
+						setVersion("draft");
+					}}
+				/>
 				<ItemDisplayPreview
 					title={title}
 					publishedDetail={publishedDetail}
@@ -134,6 +95,71 @@ export function AdminItemDisplay({
 					version={version}
 					setVersion={setVersion}
 				/>
+			</AdminStatusAccordion>
+		</section>
+	);
+}
+
+type DisplayKey = (typeof ITEM_DISPLAY_OPTIONS)[number]["key"];
+
+function DisplayToggles({
+	tags,
+	readOnly,
+	onChange,
+	keys = ITEM_DISPLAY_OPTIONS.map(({ key }) => key),
+}: {
+	tags: readonly string[];
+	readOnly: boolean;
+	onChange: (tags: string[]) => void;
+	keys?: readonly DisplayKey[];
+}) {
+	const { content } = useLibraryConfig();
+	return (
+		<div role="group" aria-label="Appearance controls" className="mb-3 space-y-1">
+			{ITEM_DISPLAY_OPTIONS.filter(({ key }) => keys.includes(key)).map(({ key, label, description }) => (
+				<Tooltip
+					isDisabled={key === "comingSoon"}
+					key={key}
+					content={description}
+					placement="left"
+					classNames={{ content: "max-w-64 whitespace-normal text-xs leading-5" }}
+				>
+					<Switch
+						color="accent"
+						isSelected={hasAnyTag(tags, content.tags[key])}
+						isDisabled={readOnly || !content.tags[key].length}
+						onValueChange={(enabled) => onChange(setItemDisplayTag(tags, content.tags[key], enabled))}
+						classNames={{
+							base: "flex h-10 w-full max-w-none justify-between rounded-lg px-1 py-2",
+							label: "ms-0 flex items-center gap-2 text-xs font-medium text-black/75 dark:text-white/75",
+							wrapper: "shrink-0",
+						}}
+					>
+						<HugeiconsIcon icon={displayIcons[key]} size={15} />
+						{label}
+					</Switch>
+				</Tooltip>
+			))}
+		</div>
+	);
+}
+
+/** Attachments only hide or show; the record's other display states do not apply to a file. */
+export function AttachmentDisplay({ tags, readOnly, onChange }: { tags: readonly string[]; readOnly: boolean; onChange: (tags: string[]) => void }) {
+	const { content } = useLibraryConfig();
+	const hidden = hasAnyTag(tags, content.tags.hidden);
+	return (
+		<section aria-label="Library display">
+			<AdminStatusAccordion
+				title="Library display"
+				summary={
+					<span className="inline-flex items-center gap-1">
+						<HugeiconsIcon icon={hidden ? displayIcons.hidden : ViewIcon} size={12} />
+						{hidden ? "Hidden" : "Visible"}
+					</span>
+				}
+			>
+				<DisplayToggles tags={tags} readOnly={readOnly} onChange={onChange} keys={["hidden"]} />
 			</AdminStatusAccordion>
 		</section>
 	);

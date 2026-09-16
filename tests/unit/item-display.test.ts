@@ -23,7 +23,7 @@ describe("tag-backed item display", () => {
 	it("does not invent a persisted tag when the behavior has no configured aliases", () => {
 		expect(setItemDisplayTag(["topic"], [], true)).toEqual(["topic"]);
 	});
-	it("keeps publication and subject tags in the generic editor, excluding only configured display behaviors", () => {
+	it("keeps only subject tags in the generic editor; every configured library tag is a system tag", () => {
 		const config = libraryConfigSchema.shape.content.parse({}).tags;
 		expect(
 			ordinaryItemTags(
@@ -34,9 +34,11 @@ describe("tag-backed item display", () => {
 					"HIDE",
 					"internal",
 					"_comingsoon",
+					"_category_description",
+					"_redirects",
 				],
 				config,
 			),
-		).toEqual(["topic", "_publish", "publishPDF"]);
+		).toEqual(["topic"]);
 	});
 });
