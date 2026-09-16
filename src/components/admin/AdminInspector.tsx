@@ -1591,8 +1591,7 @@ export function AdminInspector({
 								>
 									Open item
 								</Button>
-								<Tooltip content="Copy public item link">
-									<Button
+								<Button
 										aria-label="Copy public item link"
 										isIconOnly
 										size="xs"
@@ -1619,7 +1618,6 @@ export function AdminInspector({
 											size={13}
 										/>
 									</Button>
-								</Tooltip>
 							</div>
 						)}
 					</>
