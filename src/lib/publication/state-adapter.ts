@@ -17,6 +17,31 @@ import type { PublicationRepositorySnapshot } from "./repository";
 type PublicationConfig = LibraryServerConfig["services"]["publication"];
 type PublicationEnvironment = "test" | "sandbox" | "production";
 
+/**
+ * Stands in for the payload hash after a drifted audit cleared it. It never matches a real
+ * hash, so the planner refreshes the metadata, and the adapters never store it.
+ */
+export const DRIFTED_PAYLOAD_HASH = "drifted";
+
+/** A drifted audit clears the payload hash but the archived files stay known, so the planner must not treat them as changed. */
+function zenodoLastSuccess(
+	row: PublicationRepositorySnapshot["states"][number] | undefined,
+) {
+	if (!row) return undefined;
+	const metadata = Boolean(row.lastPayloadHash && row.lastPayloadSnapshot);
+	if (!metadata && !row.lastFileManifestHash) return undefined;
+	return {
+		payloadHash: metadata ? (row.lastPayloadHash as string) : DRIFTED_PAYLOAD_HASH,
+		...(metadata ? { payloadSnapshot: row.lastPayloadSnapshot } : {}),
+		...(row.lastFileManifestHash
+			? { fileManifestHash: row.lastFileManifestHash }
+			: {}),
+		...(row.lastFileManifestSnapshot
+			? { fileManifestSnapshot: row.lastFileManifestSnapshot }
+			: {}),
+	};
+}
+
 export function targetFor(
 	snapshot: PublicationRepositorySnapshot,
 	provider: PublicationProvider,
@@ -173,22 +198,8 @@ export function providerState(
 								.map((approval) => String(approval.id)),
 					}
 				: {}),
-			...(row?.lastPayloadHash && row.lastPayloadSnapshot
-				? {
-						lastSuccess: {
-							payloadHash: row.lastPayloadHash,
-							payloadSnapshot: row.lastPayloadSnapshot,
-							...(row.lastFileManifestHash
-								? { fileManifestHash: row.lastFileManifestHash }
-								: {}),
-							...(row.lastFileManifestSnapshot
-								? {
-										fileManifestSnapshot:
-											row.lastFileManifestSnapshot,
-									}
-								: {}),
-						},
-					}
+			...(zenodoLastSuccess(row)
+				? { lastSuccess: zenodoLastSuccess(row) }
 				: {}),
 			...(row?.zenodoRecordId && row.zenodoParentId
 				? {

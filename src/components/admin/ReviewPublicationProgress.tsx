@@ -37,7 +37,7 @@ export function ReviewPublicationProgress({snapshot}: {snapshot: Pick<AdminRevie
    status: provider.status.label,
   })),
  ];
- const failure = state.actionError ?? state.error ?? providers.filter(provider => ["failed", "blocked"].includes(provider.displayState)).map(provider => provider.exact.job?.lastError ?? provider.status.description).join("; ");
+ const failure = state.actionError ?? state.error ?? providers.filter(provider => ["failed", "blocked"].includes(provider.displayState)).map(provider => provider.blockers[0] ?? provider.exact.job?.lastError ?? provider.status.description).join("; ");
  const retryable = providers.filter(provider => provider.capabilities.canRetry);
  const retry = async () => {
   for (const provider of retryable) {

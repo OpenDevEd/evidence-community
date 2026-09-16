@@ -58,6 +58,7 @@ import { readPublicationRepositorySnapshot } from "./repository";
 import { settlePublicationProviderAudit } from "./provider-audit";
 import {
 	currentManagedDoi,
+	DRIFTED_PAYLOAD_HASH,
 	providerState,
 	targetFor,
 	publicationPlanData,
@@ -802,14 +803,16 @@ function zenodoPatchValues(
 		zenodo && "orphanDraftCleanup" in zenodo
 			? zenodo.orphanDraftCleanup
 			: previousState?.zenodo?.orphanDraftCleanup;
-	const failure = "failure" in patch ? patch.failure : previousState?.failure;
 	const savedIdentifierPolicy =
 		zenodo?.identifierPolicy ??
 		previousState?.zenodo?.identifierPolicy ??
 		identifierPolicy;
 	return {
 		identifierPolicy: savedIdentifierPolicy,
-		lastPayloadHash: lastSuccess?.payloadHash ?? null,
+		lastPayloadHash:
+			lastSuccess?.payloadHash === DRIFTED_PAYLOAD_HASH
+				? null
+				: (lastSuccess?.payloadHash ?? null),
 		lastPayloadSnapshot:
 			(lastSuccess?.payloadSnapshot as
 				Record<string, unknown> | undefined) ??
@@ -836,6 +839,18 @@ function zenodoPatchValues(
 		zenodoConceptDoi: identifiers?.conceptDoi ?? null,
 		zenodoFirstPublishedAt: firstPublishedAt ?? null,
 		orphanDraftDepositionId: orphanDraftCleanup?.depositionId ?? null,
+		...zenodoFailureValues(patch, previousState, now),
+	};
+}
+
+/** Only the failure columns; a settlement without Zenodo results leaves the published state alone. */
+function zenodoFailureValues(
+	patch: ProviderSyncStatePatch,
+	previousState: ProviderSyncState | undefined,
+	now: Date,
+) {
+	const failure = "failure" in patch ? patch.failure : previousState?.failure;
+	return {
 		lastFailureClass:
 			failure?.provider === "zenodo" ? failure.failureClass : null,
 		lastFailureSummary:
@@ -951,18 +966,24 @@ async function settleZenodoState(
 			workerId: input.workerId,
 			observedAt: input.settledAt,
 		});
-		const values = zenodoPatchValues(
-			input.patch,
-			input.previousState,
-			input.identifierPolicy,
-			input.settledAt,
-		);
+		const published = input.patch.zenodo
+			? zenodoPatchValues(
+					input.patch,
+					input.previousState,
+					input.identifierPolicy,
+					input.settledAt,
+				)
+			: null;
+		const values =
+			published ??
+			zenodoFailureValues(input.patch, input.previousState, input.settledAt);
 		await transaction
 			.insert(publicationSyncState)
 			.values({
 				itemKey: input.itemKey,
 				provider: "zenodo",
 				environment: input.environment,
+				identifierPolicy: input.identifierPolicy,
 				...values,
 			})
 			.onConflictDoUpdate({
@@ -974,24 +995,24 @@ async function settleZenodoState(
 				set: values,
 			});
 		if (
-			values.zenodoRecordId &&
-			values.zenodoParentId &&
-			values.zenodoFirstPublishedAt
+			published?.zenodoRecordId &&
+			published.zenodoParentId &&
+			published.zenodoFirstPublishedAt
 		) {
 			await saveZenodoIdentifiers(transaction, {
 				environment: input.environment,
 				itemKey: input.itemKey,
 				identifierPolicy: input.identifierPolicy,
 				identifiers: {
-					latestRecordId: values.zenodoRecordId,
-					parentId: values.zenodoParentId,
-					...(values.zenodoVersionDoi
-						? { versionDoi: values.zenodoVersionDoi }
+					latestRecordId: published.zenodoRecordId,
+					parentId: published.zenodoParentId,
+					...(published.zenodoVersionDoi
+						? { versionDoi: published.zenodoVersionDoi }
 						: {}),
-					...(values.zenodoConceptDoi
-						? { conceptDoi: values.zenodoConceptDoi }
+					...(published.zenodoConceptDoi
+						? { conceptDoi: published.zenodoConceptDoi }
 						: {}),
-					publishedAt: values.zenodoFirstPublishedAt,
+					publishedAt: published.zenodoFirstPublishedAt,
 					links: {},
 				},
 				observedAt: input.settledAt,

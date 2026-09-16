@@ -978,6 +978,52 @@ describe("identifiers view", () => {
 		expect(view.providers.zenodo.capabilities.canRetry).toBe(false);
 	});
 
+	it("does not offer manual retry when the plan needs attention", () => {
+		const archived = archivedUnderOwnDoi("10.9999/external");
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				...archived,
+				files: [
+					{
+						itemKey: "FILE0001",
+						revision: 1,
+						filename: "paper.pdf",
+						contentType: "application/pdf",
+						sizeBytes: 123,
+						sha256: "a".repeat(64),
+					} as Snapshot["files"][number],
+				],
+				states: archived.states.map((state) => ({
+					...state,
+					lastPayloadHash: "b".repeat(64),
+					lastPayloadSnapshot: {},
+					// The archived PDF no longer matches the published files and no correction was approved.
+					lastFileManifestHash: "c".repeat(64),
+					lastFailureClass: "ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED",
+					lastFailureSummary:
+						"Record is unsafe to sync: ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED",
+					consecutiveFailures: 2,
+				})),
+				jobs: [
+					job({
+						provider: "zenodo",
+						environment: "sandbox",
+						attempts: 2,
+						lastError:
+							"Record is unsafe to sync: ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED",
+						deadLetteredAt: new Date("2026-08-22T10:30:00Z"),
+					}),
+				],
+			}),
+			config,
+		});
+		expect(view.providers.zenodo.exact.plan.status).toBe("needs_attention");
+		expect(view.providers.zenodo.displayState).toBe("failed");
+		expect(view.providers.zenodo.capabilities.canRetry).toBe(false);
+		expect(view.providers.zenodo.blockers[0]).toMatch(/PDF/);
+	});
+
 	function archivedUnderOwnDoi(recordDoi: string) {
 		return snapshot({
 			record: record({ DOI: recordDoi }),

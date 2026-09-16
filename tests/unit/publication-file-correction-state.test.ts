@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import type { PublicationRepositorySnapshot } from "@/lib/publication/repository";
-import { providerState } from "@/lib/publication/state-adapter";
+import { DRIFTED_PAYLOAD_HASH, providerState } from "@/lib/publication/state-adapter";
 import { zenodoPdfCorrectionIdentifier } from "@/lib/admin/native-file-service";
 
 describe("Zenodo PDF correction state", () => {
@@ -23,6 +23,62 @@ describe("Zenodo PDF correction state", () => {
 			role: "version",
 		});
 		expect(zenodoPdfCorrectionIdentifier("mint-zenodo", libraryConfigSchema.parse(maximalLibraryConfig).services.publication)).toBeNull();
+	});
+
+	it("keeps the archived files known after a metadata drift clears the payload hash", () => {
+		const snapshot: PublicationRepositorySnapshot = {
+			record: null,
+			tags: [],
+			attachments: [],
+			files: [],
+			targets: [],
+			identifiers: [],
+			states: [
+				{
+					itemKey: "PUBWRKAA",
+					provider: "zenodo",
+					environment: "sandbox",
+					identifierPolicy: "reuse-crossref",
+					lastPayloadHash: null,
+					lastPayloadSnapshot: null,
+					lastFileManifestHash: "a".repeat(64),
+					lastFileManifestSnapshot: { files: [] },
+					pendingStage: null,
+					pendingPayloadHash: null,
+					pendingPayloadSnapshot: null,
+					pendingBatchId: null,
+					pendingFilename: null,
+					pendingSubmittedAt: null,
+					pendingReason: null,
+					zenodoRecordId: "7001",
+					zenodoParentId: "7000",
+					zenodoVersionDoi: "10.5555/library.000001",
+					zenodoConceptDoi: null,
+					orphanDraftDepositionId: null,
+					lastFailureClass: null,
+					lastFailureSummary: null,
+					consecutiveFailures: 0,
+					updatedAt: new Date("2030-08-21T02:00:00.000Z"),
+					zenodoFirstPublishedAt: new Date("2030-08-20T12:00:00.000Z"),
+					unpublishedDraftDepositionId: null,
+				},
+			],
+			jobs: [],
+			fileCorrectionApprovals: [],
+			journals: [],
+			namespace: null,
+		};
+
+		const state = providerState(snapshot, "zenodo", {
+			crossref: { environment: "test" },
+			zenodo: { environment: "sandbox" },
+		} as Parameters<typeof providerState>[2]);
+
+		expect(state?.zenodo?.lastSuccess).toEqual({
+			payloadHash: DRIFTED_PAYLOAD_HASH,
+			fileManifestHash: "a".repeat(64),
+			fileManifestSnapshot: { files: [] },
+		});
 	});
 
 	it("marks a superseded journal approval unavailable before remote publish", () => {
