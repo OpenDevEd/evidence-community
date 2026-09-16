@@ -330,9 +330,19 @@ export function AdminSourcesWritebackStatus({
 							sources={sources}
 							writeback={writeback}
 						/>
-					) : undefined
+					) : (
+						<span className="inline-flex items-center gap-1.5 text-black/55 dark:text-white/55">
+							<HugeiconsIcon icon={UnplugIcon} size={12} />
+							No connected sources
+						</span>
+					)
 				}
 			>
+				{!restriction && sources.length === 0 && (
+					<p className="py-1 text-xs leading-5 text-black/60 dark:text-white/60">
+						This record is not connected to any source. Changes stay in this library{manageAction ? " unless you connect one with Manage" : ""}.
+					</p>
+				)}
 
 				{restriction && (
 					<div className="mb-3 flex items-start gap-2.5 py-1 text-black/60 dark:text-white/60">
