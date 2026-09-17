@@ -4,7 +4,7 @@ export type RuntimeInstitution = LibraryPublicConfig["institutions"][number];
 
 /** Two spellings with the same key are the same institution. */
 export function institutionNameKey(name: string): string {
-	return name.trim().toLocaleLowerCase("en");
+	return name.normalize("NFC").trim().toLocaleLowerCase("en");
 }
 
 /** Zotero stores this list in one pipe-separated institution/university field. */

@@ -44,6 +44,7 @@ import {
 } from "./admin-api";
 
 const COUNTRIES_KEY = "admin-institution-countries";
+const INSTITUTIONS_KEY = "admin-institutions";
 const FLAG = "h-3 w-4";
 
 type Option = {
@@ -68,27 +69,35 @@ const place = (match: Pick<OpenAlexInstitution, "city" | "countryCode">) =>
 function useInstitutionCountries(names: readonly string[]) {
 	const keys = names.map(institutionNameKey).sort();
 	const { mutate } = useSWRConfig();
-	const [failed, setFailed] = useState(false);
+	const [failedName, setFailedName] = useState<string | null>(null);
 	const { data } = useSWR(
 		keys.length > 0 ? [COUNTRIES_KEY, ...keys] : null,
 		() => fetchAdminInstitutionCountries(names),
-		{ revalidateOnFocus: false },
+		// Adding a name changes the key. Known countries must not blink out.
+		{ revalidateOnFocus: false, keepPreviousData: true },
 	);
 	return {
-		failed,
+		failedName,
 		countryFor: (name: string) => data?.[institutionNameKey(name)],
 		openalexIds: new Set(
 			Object.values(data ?? {}).map((country) => country.openalexId),
 		),
 		save: async (name: string, country: InstitutionCountry | null) => {
-			setFailed(false);
+			setFailedName(null);
 			try {
 				await saveAdminInstitutionCountry(name, country);
 			} catch {
-				setFailed(true);
+				setFailedName(name);
 			}
 			await mutate(
 				(key) => Array.isArray(key) && key[0] === COUNTRIES_KEY,
+			);
+			// Cached dropdown pages carry the old flag. Drop them so the next
+			// search reads the new one.
+			await mutate(
+				(key) => Array.isArray(key) && key[0] === INSTITUTIONS_KEY,
+				undefined,
+				{ revalidate: false },
 			);
 		},
 	};
@@ -149,7 +158,7 @@ function useInstitutionSearch({
 			if (!open || disabled || (index > 0 && !previous?.nextCursor))
 				return null;
 			return [
-				"admin-institutions",
+				INSTITUTIONS_KEY,
 				query,
 				index === 0 ? null : previous!.nextCursor,
 			];
@@ -254,15 +263,6 @@ export function InstitutionInput({
 		updateInput("");
 		setSelectedKey(key);
 	};
-	const saveCountry = async (
-		name: string,
-		country: InstitutionCountry | null,
-	) => {
-		await countries.save(name, country);
-		// Library rows show the flag too.
-		void found.library.mutate();
-	};
-
 	return (
 		<div className="space-y-2" data-field-kind="institution-list">
 			<InstitutionChips
@@ -279,7 +279,7 @@ export function InstitutionInput({
 					)
 				}
 				onCountryChange={(name, country) =>
-					void saveCountry(name, country)
+					void countries.save(name, country)
 				}
 			/>
 			<Autocomplete
@@ -327,7 +327,7 @@ export function InstitutionInput({
 					if (!option) return;
 					add(option.name, option.key);
 					if (option.match?.countryCode)
-						void saveCountry(option.name, {
+						void countries.save(option.name, {
 							countryCode: option.match.countryCode,
 							openalexId: option.match.id,
 							city: option.match.city || null,
@@ -511,16 +511,26 @@ function InstitutionChips({
 							<button
 								type="button"
 								aria-expanded={panel === name}
+								aria-controls={
+									panel === name ? `${id}-country-panel` : undefined
+								}
 								onClick={() =>
 									setPanel(panel === name ? null : name)
 								}
 								className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
 							>
 								{country ? (
-									<CountryFlag
-										countryCode={country.countryCode}
-										className={FLAG}
-									/>
+									<>
+										<span aria-hidden className="flex">
+											<CountryFlag
+												countryCode={country.countryCode}
+												className={FLAG}
+											/>
+										</span>
+										<span className="sr-only">
+											{countryFocusNames[country.countryCode]}
+										</span>
+									</>
 								) : (
 									<HugeiconsIcon
 										icon={Building03Icon}
@@ -540,6 +550,12 @@ function InstitutionChips({
 					);
 				})}
 			</div>
+			{countries.failedName && (
+				<p role="alert" className="text-xs text-danger">
+					The country for {countries.failedName} could not be saved.
+					Try again.
+				</p>
+			)}
 			{panel && hasInstitution(names, panel) && (
 				<InstitutionCountryPanel
 					key={panel}
@@ -547,7 +563,6 @@ function InstitutionChips({
 					name={panel}
 					country={countries.countryFor(panel)}
 					disabled={disabled}
-					failed={countries.failed}
 					onChange={(country) => onCountryChange(panel, country)}
 				/>
 			)}
@@ -565,18 +580,16 @@ function InstitutionCountryPanel({
 	name,
 	country,
 	disabled,
-	failed,
 	onChange,
 }: {
 	id: string;
 	name: string;
 	country: InstitutionCountry | undefined;
 	disabled: boolean;
-	failed: boolean;
 	onChange: (country: InstitutionCountry | null) => void;
 }) {
 	return (
-		<div className={PANEL_FRAME}>
+		<div id={`${id}-panel`} className={PANEL_FRAME}>
 			{country ? (
 				<KnownCountry
 					name={name}
@@ -596,11 +609,6 @@ function InstitutionCountryPanel({
 						<CountryChooser id={id} name={name} onChoose={onChange} />
 					)}
 				</>
-			)}
-			{failed && (
-				<p role="alert" className="mt-2 text-xs text-danger">
-					The country could not be saved. Try again.
-				</p>
 			)}
 		</div>
 	);
@@ -677,8 +685,9 @@ function CountryChooser({
 	name: string;
 	onChoose: (country: InstitutionCountry) => void;
 }) {
+	// OpenAlex needs three letters. A shorter name simply has no match.
 	const matches = useSWR(
-		["admin-openalex-institutions", name],
+		name.trim().length >= 3 ? ["admin-openalex-institutions", name] : null,
 		([, term]: [string, string]) => fetchOpenAlexInstitutions(term),
 		{ revalidateOnFocus: false, shouldRetryOnError: false },
 	);

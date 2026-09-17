@@ -151,9 +151,11 @@ export async function searchOpenAlexInstitutions(
 				signal,
 			),
 		);
+	// Anything that is not an institution id would break the filter below.
 	const ids = suggested.results
-		.slice(0, OPENALEX_RESULTS)
-		.map((row) => openAlexId(row.id));
+		.map((row) => openAlexId(row.id))
+		.filter((id) => /^I\d+$/.test(id))
+		.slice(0, OPENALEX_RESULTS);
 	if (ids.length === 0) return [];
 	const records = z
 		.object({
