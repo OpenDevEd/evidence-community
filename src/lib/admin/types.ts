@@ -4,6 +4,8 @@ export type AdminFileState = "none" | "processing" | "staged" | "published";
 
 export type AdminCreator = {
 	authorProfileId?: string;
+	/** Where the author worked. The country comes from `institutionCountry`. */
+	institutions?: { display_name?: string }[];
 	creatorType: string;
 	firstName?: string;
 	lastName?: string;

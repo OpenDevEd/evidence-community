@@ -45,7 +45,10 @@ import {
 } from "@/lib/utils";
 import { Button } from "../../nextui/Button";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
-import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import {
+	findInstitutionWithLogo,
+	INSTITUTION_FILTER_FIELD,
+} from "@/config/library-config/institutions";
 import {
 	useLibraryConfig,
 	useLibraryFeature,
@@ -465,7 +468,7 @@ function FiltersList({
 
 	const [institutions] = useFacetList(
 		facetDistribution!,
-		"institution",
+		INSTITUTION_FILTER_FIELD,
 		(institution) =>
 			InstitutionParser(
 				institution,
@@ -545,7 +548,7 @@ function FiltersList({
 					onSelectionChange={handleInstitutionSelect}
 					facetDistribution={facetDistribution}
 					list={institutions}
-					facetName="institution"
+					facetName={INSTITUTION_FILTER_FIELD}
 				/>
 			)
 		);

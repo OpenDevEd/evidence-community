@@ -442,6 +442,13 @@
       "when": 1789640179892,
       "tag": "0062_institution-country",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789642664282,
+      "tag": "0063_author-affiliation-projection",
+      "breakpoints": true
     }
   ]
 }

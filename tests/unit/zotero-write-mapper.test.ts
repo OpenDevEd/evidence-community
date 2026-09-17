@@ -11,12 +11,14 @@ import {
 } from "@/lib/source-writeback/zotero/mapper";
 
 describe("Zotero writeback mapping", () => {
-	it("omits library profile associations from Zotero creators without changing their names", () => {
+	it("omits library profile associations and affiliations from Zotero creators without changing their names", () => {
 		const creator = {
 			creatorType: "author",
 			firstName: "Caitlin",
 			lastName: "Mills",
 			authorProfileId: "rs70m0zm30n946czwg6ek8z8j98e3j1p",
+			// Zotero rejects a creator field it does not know.
+			institutions: [{ display_name: "University of Nairobi" }],
 		};
 		const result = createZoteroItemPayload(
 			{ itemType: "Report", creators: [creator] },

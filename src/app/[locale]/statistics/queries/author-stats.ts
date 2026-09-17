@@ -4,6 +4,10 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
 import { COUNTRIES } from "@/constants/misc";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
+import {
+	affiliationCountryJoin,
+	institutionCountryCode,
+} from "./institution-country-sql";
 
 export type AuthorCountryStats = {
 	countryCode: string;
@@ -69,7 +73,7 @@ export async function getAuthorCountries(
 		.from(
 			sql`(
 			SELECT DISTINCT
-				institution_data->>'country_code' as country_code,
+				${institutionCountryCode} as country_code,
 				coalesce(
 					nullif(trim(
 						coalesce(creator_data->>'firstName', '') || 
@@ -84,6 +88,7 @@ export async function getAuthorCountries(
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
+			${affiliationCountryJoin}
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
@@ -91,9 +96,7 @@ export async function getAuthorCountries(
 			AND creator_data ? 'institutions'
 			AND jsonb_typeof(creator_data->'institutions') = 'array'
 			AND jsonb_array_length(creator_data->'institutions') > 0
-			AND institution_data ? 'country_code'
-			AND institution_data->>'country_code' IS NOT NULL
-			AND institution_data->>'country_code' != ''
+			AND ${institutionCountryCode} IS NOT NULL
 		) as country_author_items`,
 		)
 		.where(
@@ -371,7 +374,7 @@ export async function getDetailedAuthorStats(
 				${citationCount} as item_citations,
 				${item.date} as item_date,
 				institution_data->>'display_name' as institution_name,
-				institution_data->>'country_code' as country_code
+				${institutionCountryCode} as country_code
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(
@@ -381,6 +384,7 @@ export async function getDetailedAuthorStats(
 					else '[{}]'::jsonb
 				end
 			) as institution_data
+			${affiliationCountryJoin}
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL

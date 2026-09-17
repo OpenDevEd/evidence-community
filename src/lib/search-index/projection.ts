@@ -16,6 +16,10 @@ import {
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
+import {
+	INSTITUTION_FILTER_FIELD,
+	institutionNameKey,
+} from "@/config/library-config/institutions";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
@@ -159,6 +163,18 @@ function jsonValue(value: unknown): unknown {
 		);
 	}
 	return value;
+}
+
+function institutionNamesByItem(
+	rows: readonly { itemKey: string; institutionName: string }[],
+) {
+	const names = new Map<string, string[]>();
+	for (const row of rows)
+		names.set(row.itemKey, [
+			...(names.get(row.itemKey) ?? []),
+			row.institutionName,
+		]);
+	return (itemKey: string) => names.get(itemKey) ?? [];
 }
 
 function cleanRow(row: ItemRow) {
@@ -359,12 +375,11 @@ async function buildSearchProjectionPlanForKeys(
 		keys.push(row.collectionKey);
 		collectionsByItem.set(row.itemKey, keys);
 	}
-	const institutionsByItem = new Map<string, string[]>();
-	for (const row of institutionRows) {
-		const names = institutionsByItem.get(row.itemKey) ?? [];
-		names.push(row.institutionName);
-		institutionsByItem.set(row.itemKey, names);
-	}
+	// The record's own institutions, and those plus its authors' affiliations.
+	const institutionsOf = institutionNamesByItem(
+		institutionRows.filter((row) => row.source === "record"),
+	);
+	const connectedInstitutionsOf = institutionNamesByItem(institutionRows);
 	const [linksByItem, citationMetricsByItem] = await Promise.all([
 		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
@@ -421,7 +436,16 @@ async function buildSearchProjectionPlanForKeys(
 				deleted: parent.deleted ?? 0,
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,
-				institution: institutionsByItem.get(parent.key) ?? [],
+				institution: institutionsOf(parent.key),
+				// A name on the record and on an author is one facet value.
+				[INSTITUTION_FILTER_FIELD]: [
+					...new Map(
+						connectedInstitutionsOf(parent.key).map((name) => [
+							institutionNameKey(name),
+							name,
+						]),
+					).values(),
+				],
 				links: linksByItem.get(parent.key) ?? {
 					cites: [],
 					citedBy: [],

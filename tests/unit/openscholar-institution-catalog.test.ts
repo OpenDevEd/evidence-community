@@ -118,7 +118,7 @@ describe("institution counts query", () => {
 		const { params, sql } = compile({});
 
 		expect(sql).toMatch(
-			/order by\s+count\(\*\) desc, "itemInstitution"\."institutionName" asc/iu,
+			/order by\s+count\(DISTINCT "itemInstitution"\."itemKey"\) desc, "itemInstitution"\."institutionName" asc/iu,
 		);
 		expect(sql).not.toMatch(/offset/iu);
 		expect(sql).not.toMatch(/having/iu);
@@ -155,8 +155,8 @@ describe("institution counts query", () => {
 		const { params, sql } = compile({ cursor });
 
 		expect(sql).toMatch(/having/iu);
-		expect(sql).toContain("count(*) <");
-		expect(sql).toContain("count(*) =");
+		expect(sql).toContain("count(DISTINCT \"itemInstitution\".\"itemKey\") <");
+		expect(sql).toContain("count(DISTINCT \"itemInstitution\".\"itemKey\") =");
 		expect(sql).toContain('"institutionName" >');
 		expect(params).toContain(7);
 		expect(params).toContain("Amber Institute");
@@ -173,9 +173,9 @@ describe("institution counts query", () => {
 
 		const { params, sql } = compile({ cursor, direction: "asc" });
 
-		expect(sql).toMatch(/order by\s+count\(\*\) asc/iu);
-		expect(sql).toContain("count(*) >");
-		expect(sql).not.toContain("count(*) <");
+		expect(sql).toMatch(/order by\s+count\(DISTINCT "itemInstitution"\."itemKey"\) asc/iu);
+		expect(sql).toContain("count(DISTINCT \"itemInstitution\".\"itemKey\") >");
+		expect(sql).not.toContain("count(DISTINCT \"itemInstitution\".\"itemKey\") <");
 		expect(sql).toContain('"institutionName" >');
 		expect(params).toContain(7);
 	});
@@ -209,8 +209,8 @@ describe("institution counts query", () => {
 		expect(sql).toMatch(
 			/order by\s+"itemInstitution"\."institutionName" asc/iu,
 		);
-		expect(sql).not.toContain("count(*) desc");
-		expect(sql).not.toContain("count(*) <");
+		expect(sql).not.toContain("count(DISTINCT \"itemInstitution\".\"itemKey\") desc");
+		expect(sql).not.toContain("count(DISTINCT \"itemInstitution\".\"itemKey\") <");
 		expect(params).toContain("Amber Institute");
 	});
 });

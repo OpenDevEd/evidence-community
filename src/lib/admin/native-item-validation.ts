@@ -44,6 +44,14 @@ function creatorSchema(allowIncomplete: boolean) {
 		.object({
 			creatorType: z.string().min(1),
 			authorProfileId: z.string().trim().min(1).max(128).optional(),
+			// The country lives in institutionCountry. Anything else an
+			// imported affiliation carries is dropped.
+			institutions: z
+				.array(
+					z.object({ display_name: z.string().trim().min(1).max(500) }),
+				)
+				.max(50)
+				.optional(),
 			firstName: z.string().optional(),
 			lastName: z.string().optional(),
 			name: z.string().optional(),

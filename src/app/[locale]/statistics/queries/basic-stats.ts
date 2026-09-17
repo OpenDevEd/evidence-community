@@ -190,6 +190,7 @@ export async function getFieldCompleteness(
 			institutionFilled: sql<number>`count(case when exists (
 				select 1 from ${itemInstitution}
 				where ${itemInstitution.itemKey} = ${item.key}
+				and ${itemInstitution.source} = 'record'
 			) then 1 end)`,
 			creatorsFilled: sql<number>`count(case when ${item.creators} is not null then 1 end)`,
 			pagesFilled: sql<number>`count(case when ${item.pages} is not null and ${item.pages} != '' then 1 end)`,

@@ -2,6 +2,14 @@ import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeInstitution = LibraryPublicConfig["institutions"][number];
 
+/**
+ * The search field behind the institution filter and facet: the record's own
+ * institutions plus its authors' affiliations. Only the search index holds the
+ * combined list. `institution` stays the record's own list for display and
+ * exports.
+ */
+export const INSTITUTION_FILTER_FIELD = "institutionsWithAuthors";
+
 /** Two spellings with the same key are the same institution. */
 export function institutionNameKey(name: string): string {
 	return name.normalize("NFC").trim().toLocaleLowerCase("en");

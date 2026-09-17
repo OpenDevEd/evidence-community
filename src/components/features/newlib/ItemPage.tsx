@@ -57,6 +57,7 @@ import { useQueryState } from "nuqs";
 import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
+import { useInstitutionCountryCodes } from "@/lib/use-institution-countries";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
@@ -187,9 +188,11 @@ function SidebarCard({
 function ItemAuthor({
 	author,
 	profile,
+	countryOf,
 }: {
 	author?: Author;
 	profile?: AuthorProfile;
+	countryOf?: (institution: string) => string | undefined;
 }) {
 	const [referrer] = useQueryState("referrer");
 	const t = useTranslations("creatorType");
@@ -200,7 +203,13 @@ function ItemAuthor({
 	const displayName = profile?.name ?? (author ? formatAuthor(author) : undefined);
 
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
-	const affiliationCount = author?.institutions?.length || 0;
+	// The country belongs to the institution name, set once for the library.
+	const affiliations = (author?.institutions ?? []).map((entry) => ({
+		...entry,
+		country_code:
+			entry.country_code ?? countryOf?.(entry.display_name ?? ""),
+	}));
+	const affiliationCount = affiliations.length;
 
 	const subtitle = (
 		<>
@@ -295,8 +304,7 @@ function ItemAuthor({
 					</motion.div>
 
 					{/* Institutions List */}
-					{author?.institutions &&
-						author?.institutions?.length > 0 && (
+					{affiliations.length > 0 && (
 							<motion.div
 								className="w-full flex flex-col gap-2"
 								initial={{ opacity: 0, y: 10 }}
@@ -306,7 +314,7 @@ function ItemAuthor({
 								<h4 className="text-sm font-medium text-black/70 dark:text-white/70">
 									Affiliations
 								</h4>
-								{author.institutions.map((institution, idx) => (
+								{affiliations.map((institution, idx) => (
 									<motion.div
 										key={idx}
 										className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5"
@@ -371,6 +379,14 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const authors = item?.creators as Author[] | undefined;
 	const { profiles } = useAuthorProfiles(authors);
+	// One lookup for the whole record, not one per author.
+	const countryOf = useInstitutionCountryCodes(
+		(authors ?? []).flatMap((author) =>
+			(author.institutions ?? []).flatMap((entry) =>
+				entry.display_name ? [entry.display_name] : [],
+			),
+		),
+	);
 	if (!authors?.length && !loading) return null;
 
 	return (
@@ -383,6 +399,7 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 						<ItemAuthor
 							key={index}
 							author={author}
+							countryOf={countryOf}
 							profile={
 								author.authorProfileId
 									? profiles.get(author.authorProfileId)

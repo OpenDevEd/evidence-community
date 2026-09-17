@@ -24,13 +24,24 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { Spinner } from "@/components/nextui/Spinner";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
-import { hasInstitution } from "@/config/library-config/institutions";
+import {
+	formatInstitutionNames,
+	hasInstitution,
+	parseInstitutionNames,
+} from "@/config/library-config/institutions";
 import type { AdminCreator } from "@/lib/admin/types";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { InspectorChoices } from "./InspectorChoices";
+import { InstitutionInput } from "./InstitutionInput";
 import { humanizeAdminField } from "./admin-schema";
 
 export type CreatorMode = "profile" | "manual";
+
+/** The author's own affiliations, and how a profile's affiliation joins them. */
+type AffiliationProps = {
+	institutions: readonly string[];
+	onAddInstitution?: (name: string) => void;
+};
 
 export function AuthorAffiliation({
 	affiliation,
@@ -74,8 +85,6 @@ type CreatorCardProps = {
 	onPick: () => void;
 	onMove: (direction: -1 | 1) => void;
 	onRemove: () => void;
-	onAddInstitution?: (name: string) => void;
-	institutions: readonly string[];
 };
 
 /** The same editor frame supports manually entered and linked creators. */
@@ -91,14 +100,28 @@ export function CreatorCard({
 	onPick,
 	onMove,
 	onRemove,
-	onAddInstitution,
-	institutions,
 	readOnly = false,
 	errors = {},
 	profileLoading = false,
 	onRetryProfile,
 }: CreatorCardProps) {
 	const rowError = errors[`creators.${index}`];
+	const affiliations = (creator.institutions ?? []).flatMap((entry) =>
+		entry.display_name ? [entry.display_name] : [],
+	);
+	const setAffiliations = (names: readonly string[]) => {
+		const { institutions: _previous, ...rest } = creator;
+		onChange(
+			names.length > 0
+				? {
+						...rest,
+						institutions: names.map((display_name) => ({
+							display_name,
+						})),
+					}
+				: rest,
+		);
+	};
 	const fieldError = (field: string) => errors[`creators.${index}.${field}`];
 	return (
 		<section
@@ -152,8 +175,14 @@ export function CreatorCard({
 					profile={profile}
 					mode={mode}
 					readOnly={readOnly}
-					institutions={institutions}
-					onAddInstitution={onAddInstitution}
+					institutions={affiliations}
+					onAddInstitution={(name) =>
+						setAffiliations(
+							parseInstitutionNames(
+								formatInstitutionNames([...affiliations, name]),
+							),
+						)
+					}
 					onPick={onPick}
 					profileLoading={profileLoading}
 					onRetryProfile={onRetryProfile}
@@ -161,6 +190,24 @@ export function CreatorCard({
 					index={index}
 					onChange={onChange}
 				/>
+				<div className="mt-2.5 space-y-1.5">
+					<label
+						htmlFor={`admin-creator-${index}-affiliations`}
+						className="block text-xs font-medium text-black/50 dark:text-white/50"
+					>
+						Affiliations
+					</label>
+					<InstitutionInput
+						id={`admin-creator-${index}-affiliations`}
+						label={`Affiliations of creator ${index + 1}`}
+						value={formatInstitutionNames(affiliations)}
+						onValueChange={(value) =>
+							setAffiliations(parseInstitutionNames(value))
+						}
+						disabled={readOnly}
+						error={fieldError("institutions")}
+					/>
+				</div>
 			</div>
 			<div className="flex items-center gap-2 border-t border-black/[0.055] px-2.5 py-2 dark:border-white/[0.06]">
 				<Select
@@ -249,10 +296,8 @@ function LinkedCreatorProfile({
 	institutions,
 	onAddInstitution,
 	onPick,
-}: Pick<
-	CreatorCardProps,
-	"readOnly" | "institutions" | "onAddInstitution" | "onPick"
-> & { profile: AuthorProfile }) {
+}: Pick<CreatorCardProps, "readOnly" | "onPick"> &
+	AffiliationProps & { profile: AuthorProfile }) {
 	const institutionAdded = hasInstitution(institutions, profile.affiliation);
 	return (
 		<>
@@ -281,8 +326,8 @@ function LinkedCreatorProfile({
 						<Tooltip
 							content={
 								institutionAdded
-									? "Added to item institutions"
-									: "Add to item institutions"
+									? "Added to this author's affiliations"
+									: "Add to this author's affiliations"
 							}
 						>
 							<Button
@@ -291,8 +336,8 @@ function LinkedCreatorProfile({
 								variant="transparent"
 								aria-label={
 									institutionAdded
-										? `${profile.affiliation} added to institutions`
-										: `Add ${profile.affiliation} as an institution`
+										? `${profile.affiliation} added to affiliations`
+										: `Add ${profile.affiliation} as an affiliation`
 								}
 								isDisabled={readOnly || institutionAdded}
 								onPress={() =>
@@ -546,15 +591,14 @@ function CreatorIdentity({
 	| "profile"
 	| "mode"
 	| "readOnly"
-	| "institutions"
-	| "onAddInstitution"
 	| "onPick"
 	| "profileLoading"
 	| "onRetryProfile"
 	| "errors"
 	| "index"
 	| "onChange"
->) {
+> &
+	AffiliationProps) {
 	return mode === "profile" ? (
 		profile ? (
 			<LinkedCreatorProfile

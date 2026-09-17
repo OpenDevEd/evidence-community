@@ -7,7 +7,24 @@ function creatorIdentity(creator: AdminCreator) {
 	]);
 }
 
-/** Source providers cannot assign profiles; carry existing links only across unambiguous authors. */
+/**
+ * True when a source would see the same creators. Profile links and
+ * affiliations belong to the library, so a change to those alone is not a
+ * reason to write the record back.
+ */
+export function sameBibliographicCreators(left: unknown, right: unknown) {
+	if (!Array.isArray(left) || !Array.isArray(right)) return false;
+	return (
+		left.length === right.length &&
+		left.every(
+			(creator, index) =>
+				creatorIdentity(creator as AdminCreator) ===
+				creatorIdentity(right[index] as AdminCreator),
+		)
+	);
+}
+
+/** Source providers cannot assign profiles or affiliations; carry existing ones only across unambiguous authors. */
 export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	incoming: T[] | null | undefined,
 	previous: readonly AdminCreator[] | null | undefined,
@@ -29,10 +46,12 @@ export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	return incoming.map((creator, index) => {
 		const next = {...creator};
 		delete next.authorProfileId;
+		delete next.institutions;
 		const identity = creatorIdentity(creator);
 		const matches = unchangedOrder ? [previous![index]!] : previousByIdentity.get(identity);
-		if (matches?.length === 1 && (unchangedOrder || incomingCounts.get(identity) === 1) && matches[0]!.authorProfileId) {
-			next.authorProfileId = matches[0]!.authorProfileId;
+		if (matches?.length === 1 && (unchangedOrder || incomingCounts.get(identity) === 1)) {
+			if (matches[0]!.authorProfileId) next.authorProfileId = matches[0]!.authorProfileId;
+			if (matches[0]!.institutions?.length) next.institutions = matches[0]!.institutions;
 		}
 		return next;
 	});

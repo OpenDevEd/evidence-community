@@ -4,18 +4,11 @@ import { memo, useState } from "react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
-import {
-	formatInstitutionNames,
-	parseInstitutionNames,
-} from "@/config/library-config/institutions";
 import type { AdminCreator } from "@/lib/admin/types";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import { creatorFromProfile, type AuthorProfile } from "@/lib/authors/profiles";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
-import {
-	adminFieldDescriptors,
-	type AdminSchemaDefinition,
-} from "./admin-schema";
+import type { AdminSchemaDefinition } from "./admin-schema";
 import { CreatorCard, type CreatorMode } from "./CreatorCard";
 import { AuthorPickerDialog } from "./AuthorPickerDialog";
 
@@ -64,14 +57,6 @@ export const CreatorsEditor = memo(function CreatorsEditor({
 			creators: creators.map((row, i) => (i === index ? creator : row)),
 		});
 	const roles = definition?.creatorTypes ?? [];
-	const institutionField =
-		definition &&
-		adminFieldDescriptors(definition).find(
-			({ field }) => field === "institution" || field === "university",
-		)?.field;
-	const institutions = parseInstitutionNames(
-		institutionField ? String(payload[institutionField] ?? "") : "",
-	);
 	return (
 		<div className="space-y-3">
 			{creators.map((creator, index) => {
@@ -93,20 +78,6 @@ export const CreatorsEditor = memo(function CreatorsEditor({
 							catalog.isLoading
 						}
 						onRetryProfile={() => void catalog.mutate()}
-						institutions={institutions}
-						onAddInstitution={
-							institutionField
-								? (name) =>
-										onChange({
-											...payload,
-											[institutionField]:
-												formatInstitutionNames([
-													...institutions,
-													name,
-												]),
-										})
-								: undefined
-						}
 						onChange={(next) =>
 							replace(
 								index,

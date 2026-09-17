@@ -73,6 +73,10 @@ function normalizeCreators(value: unknown) {
 		.map((creator) => ({
 			creatorType: textValue(creator.creatorType).trim(),
 			authorProfileId: textValue(creator.authorProfileId).trim(),
+			institutions: (Array.isArray(creator.institutions)
+				? creator.institutions
+				: []
+			).map((entry) => textValue(entry?.display_name).trim()),
 			firstName: textValue(creator.firstName).trim(),
 			lastName: textValue(creator.lastName).trim(),
 			name: textValue(creator.name).trim(),
