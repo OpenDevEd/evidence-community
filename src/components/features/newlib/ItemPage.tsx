@@ -185,6 +185,67 @@ function SidebarCard({
 	);
 }
 
+/** Where the author worked for this record, with each institution's country. */
+function AuthorAffiliations({
+	affiliations,
+}: {
+	affiliations: readonly { display_name?: string; country_code?: string }[];
+}) {
+	if (affiliations.length === 0) return null;
+	return (
+		<motion.div
+			className="w-full flex flex-col gap-2"
+			initial={{ opacity: 0, y: 10 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ delay: 0.3 }}
+		>
+			<h4 className="text-sm font-medium text-black/70 dark:text-white/70">
+				Affiliations
+			</h4>
+			{affiliations.map((institution, idx) => (
+				<motion.div
+					key={idx}
+					className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5"
+					initial={{ opacity: 0, x: -20 }}
+					animate={{ opacity: 1, x: 0 }}
+					transition={{
+						delay: 0.4 + idx * 0.1,
+						type: "spring",
+						stiffness: 100,
+					}}
+				>
+					<div className="flex-1">
+						<p className="text-sm text-black dark:text-white">
+							{institution.display_name}
+						</p>
+						{institution.country_code && (
+							<motion.div
+								className="flex items-center gap-1 mt-1"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ delay: 0.5 + idx * 0.1 }}
+							>
+								<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
+									<Image
+										src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
+										alt={institution.country_code}
+										className="w-full h-full object-cover"
+										width={16}
+										height={12}
+									/>
+								</div>
+								<span className="text-xs text-black/60 dark:text-white/60">
+									{`${COUNTRIES[institution.country_code]} (${institution.country_code})`}
+								</span>
+							</motion.div>
+						)}
+					</div>
+				</motion.div>
+			))}
+		</motion.div>
+	);
+}
+
 function ItemAuthor({
 	author,
 	profile,
@@ -219,7 +280,7 @@ function ItemAuthor({
 						{creatorTypeLabel}
 					</div>
 				)}
-				{!profile && affiliationCount > 0 && (
+				{affiliationCount > 0 && (
 					<div className="text-xs text-black/40 dark:text-white/40">
 						{affiliationCount} {tUI("itemAffiliationsCount")}
 					</div>
@@ -258,7 +319,20 @@ function ItemAuthor({
 	);
 
 	if (profile) {
-		return <AuthorProfileHover profile={profile}>{row}</AuthorProfileHover>;
+		return (
+			<AuthorProfileHover
+				profile={profile}
+				// The profile says where the author works now. The record says
+				// where they worked when they wrote it.
+				details={
+					affiliationCount > 0 ? (
+						<AuthorAffiliations affiliations={affiliations} />
+					) : undefined
+				}
+			>
+				{row}
+			</AuthorProfileHover>
+		);
 	}
 
 	return (
@@ -303,69 +377,7 @@ function ItemAuthor({
 						</div>
 					</motion.div>
 
-					{/* Institutions List */}
-					{affiliations.length > 0 && (
-							<motion.div
-								className="w-full flex flex-col gap-2"
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								transition={{ delay: 0.3 }}
-							>
-								<h4 className="text-sm font-medium text-black/70 dark:text-white/70">
-									Affiliations
-								</h4>
-								{affiliations.map((institution, idx) => (
-									<motion.div
-										key={idx}
-										className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5"
-										initial={{ opacity: 0, x: -20 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{
-											delay: 0.4 + idx * 0.1,
-											type: "spring",
-											stiffness: 100,
-										}}
-									>
-										<div className="flex-1">
-											<p className="text-sm text-black dark:text-white">
-												{institution.display_name}
-											</p>
-											{institution.country_code && (
-												<motion.div
-													className="flex items-center gap-1 mt-1"
-													initial={{
-														opacity: 0,
-													}}
-													animate={{
-														opacity: 1,
-													}}
-													transition={{
-														delay: 0.5 + idx * 0.1,
-													}}
-												>
-													<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-														<Image
-															src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
-															alt={
-																institution.country_code
-															}
-															className="w-full h-full object-cover"
-															width={16}
-															height={12}
-														/>
-													</div>
-													<span className="text-xs text-black/60 dark:text-white/60">
-														{`${COUNTRIES[institution.country_code]} (${
-															institution.country_code
-														})`}
-													</span>
-												</motion.div>
-											)}
-										</div>
-									</motion.div>
-								))}
-							</motion.div>
-						)}
+					<AuthorAffiliations affiliations={affiliations} />
 				</div>
 			}
 		>

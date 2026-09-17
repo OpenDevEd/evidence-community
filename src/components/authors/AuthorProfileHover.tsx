@@ -3,7 +3,7 @@
 import { Tooltip } from "@nextui-org/react";
 import { useReducedMotion } from "framer-motion";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
-import { useState, type ReactElement } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { ArrowUpRight01Icon, Building03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -12,9 +12,12 @@ import type { AuthorProfile } from "@/lib/authors/profiles";
 
 export function AuthorProfileHover({
 	profile,
+	details,
 	children,
 }: {
 	profile: AuthorProfile;
+	/** Anything the page knows about this author that the profile does not. */
+	details?: ReactNode;
 	children: ReactElement;
 }) {
 	const [open, setOpen] = useState(false);
@@ -64,6 +67,7 @@ export function AuthorProfileHover({
 								{profile.bio}
 							</p>
 						)}
+						{details && <div className="mt-4">{details}</div>}
 					</div>
 					<div className="border-t border-black/[0.07] bg-black/[0.025] p-3 dark:border-white/[0.07] dark:bg-white/[0.025]">
 						<Button
