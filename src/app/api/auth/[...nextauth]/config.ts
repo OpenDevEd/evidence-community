@@ -11,10 +11,7 @@ import { NextRequest } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { buildAuthOptions } from "@/lib/auth-options";
-import {
-	authorizeForConfig,
-	getProfileForConfig,
-} from "@/lib/auth-service";
+import { authorizeForConfig, getProfileForConfig } from "@/lib/auth-service";
 import {
 	featureUnavailableResponse,
 	getConfigForEnabledFeature,
@@ -50,17 +47,12 @@ export async function getAuthOptions(): Promise<NextAuthConfig> {
 		return buildAuthOptions(config);
 	}
 
-	const adapter = DrizzleAdapter(
-		await getDatabaseForConfig(config),
-	);
+	const adapter = DrizzleAdapter(await getDatabaseForConfig(config));
 
 	return buildAuthOptions(config, {
 		adapter,
 		async authorize(credentials) {
-			const user = await authorizeForConfig(
-				credentials,
-				config,
-			);
+			const user = await authorizeForConfig(credentials, config);
 			return "error" in user ? null : user;
 		},
 		getProfile: (userId, session) =>
@@ -70,10 +62,7 @@ export async function getAuthOptions(): Promise<NextAuthConfig> {
 
 const runtimeAuth = NextAuth(getAuthOptions);
 
-function withConfiguredOrigin(
-	request: NextRequest,
-	baseUrl: string,
-) {
+function withConfiguredOrigin(request: NextRequest, baseUrl: string) {
 	const requestUrl = new URL(request.url);
 	const configuredUrl = new URL(
 		requestUrl.pathname + requestUrl.search,
@@ -88,10 +77,18 @@ export async function auth(): Promise<Session | null> {
 	return runtimeAuth.auth();
 }
 
+/** With login disabled there is no session to read, which is not an error for the session client. */
+function noSessionResponse() {
+	return Response.json(null, { headers: { "Cache-Control": "no-store" } });
+}
+
 export const handlers = {
 	async GET(request: Parameters<typeof runtimeAuth.handlers.GET>[0]) {
 		const config = await getConfigForEnabledFeature("login");
-		if (!config) return featureUnavailableResponse();
+		if (!config)
+			return new URL(request.url).pathname.endsWith("/session")
+				? noSessionResponse()
+				: featureUnavailableResponse();
 		return runtimeAuth.handlers.GET(
 			withConfiguredOrigin(request, config.identity.baseUrl),
 		);
