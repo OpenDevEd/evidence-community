@@ -46,6 +46,8 @@ import {
 const COUNTRIES_KEY = "admin-institution-countries";
 const INSTITUTIONS_KEY = "admin-institutions";
 const FLAG = "h-3 w-4";
+/** Headings and rows share one key space. The prefix keeps them apart. */
+const SECTION_KEY = "section:";
 
 type Option = {
 	key: string;
@@ -192,13 +194,17 @@ function useInstitutionSearch({
 	);
 	const sections: Section[] = [
 		{
-			key: "library",
+			key: `${SECTION_KEY}library`,
 			title: "In this library",
 			items: options.filter((option) => option.kind === "library"),
 		},
-		{ key: "openalex", title: "From OpenAlex", items: openAlex.options },
 		{
-			key: "create",
+			key: `${SECTION_KEY}openalex`,
+			title: "From OpenAlex",
+			items: openAlex.options,
+		},
+		{
+			key: `${SECTION_KEY}create`,
 			items: options.filter((option) => option.kind === "create"),
 		},
 	].filter((section) => section.items.length > 0);
@@ -263,6 +269,15 @@ export function InstitutionInput({
 		updateInput("");
 		setSelectedKey(key);
 	};
+	const choose = (option: Option) => {
+		add(option.name, option.key);
+		if (option.match?.countryCode)
+			void countries.save(option.name, {
+				countryCode: option.match.countryCode,
+				openalexId: option.match.id,
+				city: option.match.city || null,
+			});
+	};
 	return (
 		<div className="space-y-2" data-field-kind="institution-list">
 			<InstitutionChips
@@ -324,14 +339,22 @@ export function InstitutionInput({
 					const option = found.sections
 						.flatMap((section) => section.items)
 						.find((item) => item.key === key);
-					if (!option) return;
-					add(option.name, option.key);
-					if (option.match?.countryCode)
-						void countries.save(option.name, {
-							countryCode: option.match.countryCode,
-							openalexId: option.match.id,
-							city: option.match.city || null,
-						});
+					if (option) return choose(option);
+					// Enter with no row highlighted reports the heading the
+					// list highlights instead. That means "add what I typed":
+					// through the row of that exact name when there is one,
+					// so its country comes with it.
+					if (!String(key).startsWith(SECTION_KEY)) return;
+					const typed = institutionNameKey(input);
+					const exact = found.sections
+						.flatMap((section) => section.items)
+						.find(
+							(item) =>
+								item.kind !== "create" &&
+								institutionNameKey(item.name) === typed,
+						);
+					if (exact) choose(exact);
+					else if (found.canAdd) add(found.existing?.name ?? input);
 				}}
 				menuTrigger="focus"
 				placeholder="Find or add an institution"
@@ -436,7 +459,7 @@ const OPTION_NOTE: Record<
 	library: () => undefined,
 	openalex: (option) =>
 		(option.match && place(option.match)) || "No location on OpenAlex",
-	create: () => "Not from OpenAlex. You can set its country afterwards.",
+	create: () => "You can set its country afterwards.",
 };
 
 function OptionMark({ option }: { option: Option }) {
@@ -486,7 +509,9 @@ function InstitutionChips({
 							size="sm"
 							variant="flat"
 							classNames={{
-								base: `h-auto min-h-8 max-w-full rounded-lg py-1 pl-1 ${panel === name ? "bg-black/[0.09] dark:bg-white/[0.12]" : "bg-black/[0.045] dark:bg-white/[0.06]"}`,
+								// NextUI's chip refuses to be narrower than its text.
+								// A long name must shrink and truncate instead.
+								base: `h-auto min-h-8 min-w-0 max-w-full rounded-lg py-1 pl-1 ${panel === name ? "bg-black/[0.09] dark:bg-white/[0.12]" : "bg-black/[0.045] dark:bg-white/[0.06]"}`,
 								content: "min-w-0 truncate px-0 text-xs",
 							}}
 							endContent={
@@ -601,12 +626,19 @@ function InstitutionCountryPanel({
 					<p className="text-sm font-medium">
 						No country yet for {name}
 					</p>
-					<p className={QUIET}>
-						This applies to every record that names it. The name on
-						the record stays as it is.
-					</p>
+					{/* The rest explains a choice. A read-only view offers none. */}
 					{!disabled && (
-						<CountryChooser id={id} name={name} onChoose={onChange} />
+						<>
+							<p className={QUIET}>
+								This applies to every record that names it. The
+								name on the record stays as it is.
+							</p>
+							<CountryChooser
+								id={id}
+								name={name}
+								onChoose={onChange}
+							/>
+						</>
 					)}
 				</>
 			)}
