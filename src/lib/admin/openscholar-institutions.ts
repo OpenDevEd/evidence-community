@@ -29,6 +29,9 @@ function containsPattern(value: string) {
  * records name each one. Unlike the public institutions page this is not
  * limited to the most common country: OpenScholar pickers need the full list.
  *
+ * A record counts once for an institution, whether the record names it, one of
+ * its authors does, or both.
+ *
  * The rows come from the `itemInstitution` projection, which the same trigger
  * that maintains `adminItemListProjection` keeps in step with the records.
  * Reading a projection means a search uses the trigram index and a page never
@@ -58,11 +61,11 @@ export function buildInstitutionCountsQuery(
 				: sql` HAVING ${itemInstitution.institutionName} < ${cursor.name}`;
 		}
 		const pastCount = ascending
-			? sql`count(*) > ${cursor.count}`
-			: sql`count(*) < ${cursor.count}`;
+			? sql`count(DISTINCT ${itemInstitution.itemKey}) > ${cursor.count}`
+			: sql`count(DISTINCT ${itemInstitution.itemKey}) < ${cursor.count}`;
 		return sql` HAVING (
 			${pastCount}
-			OR (count(*) = ${cursor.count} AND ${itemInstitution.institutionName} > ${cursor.name})
+			OR (count(DISTINCT ${itemInstitution.itemKey}) = ${cursor.count} AND ${itemInstitution.institutionName} > ${cursor.name})
 		)`;
 	})();
 
@@ -73,12 +76,12 @@ export function buildInstitutionCountsQuery(
 				: sql`${itemInstitution.institutionName} DESC`;
 		}
 		return ascending
-			? sql`count(*) ASC, ${itemInstitution.institutionName} ASC`
-			: sql`count(*) DESC, ${itemInstitution.institutionName} ASC`;
+			? sql`count(DISTINCT ${itemInstitution.itemKey}) ASC, ${itemInstitution.institutionName} ASC`
+			: sql`count(DISTINCT ${itemInstitution.itemKey}) DESC, ${itemInstitution.institutionName} ASC`;
 	})();
 
 	return sql`
-		SELECT ${itemInstitution.institutionName} AS name, count(*) AS count
+		SELECT ${itemInstitution.institutionName} AS name, count(DISTINCT ${itemInstitution.itemKey}) AS count
 		FROM ${itemInstitution}${search}
 		GROUP BY ${itemInstitution.institutionName}${keyset}
 		ORDER BY ${order}

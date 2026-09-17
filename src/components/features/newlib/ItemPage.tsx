@@ -57,12 +57,16 @@ import { useQueryState } from "nuqs";
 import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
+import { useInstitutionCountryCodes } from "@/lib/use-institution-countries";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
-import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import {
+	findInstitutionWithLogo,
+	institutionsNotUnderAuthors,
+} from "@/config/library-config/institutions";
 import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
@@ -200,7 +204,18 @@ function ItemAuthor({
 	const displayName = profile?.name ?? (author ? formatAuthor(author) : undefined);
 
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
-	const affiliationCount = author?.institutions?.length || 0;
+	const countryOf = useInstitutionCountryCodes(
+		(author?.institutions ?? []).flatMap((entry) =>
+			entry.display_name ? [entry.display_name] : [],
+		),
+	);
+	// The country belongs to the institution name, set once for the library.
+	const affiliations = (author?.institutions ?? []).map((entry) => ({
+		...entry,
+		country_code:
+			entry.country_code ?? countryOf(entry.display_name ?? ""),
+	}));
+	const affiliationCount = affiliations.length;
 
 	const subtitle = (
 		<>
@@ -295,8 +310,7 @@ function ItemAuthor({
 					</motion.div>
 
 					{/* Institutions List */}
-					{author?.institutions &&
-						author?.institutions?.length > 0 && (
+					{affiliations.length > 0 && (
 							<motion.div
 								className="w-full flex flex-col gap-2"
 								initial={{ opacity: 0, y: 10 }}
@@ -306,7 +320,7 @@ function ItemAuthor({
 								<h4 className="text-sm font-medium text-black/70 dark:text-white/70">
 									Affiliations
 								</h4>
-								{author.institutions.map((institution, idx) => (
+								{affiliations.map((institution, idx) => (
 									<motion.div
 										key={idx}
 										className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5"
@@ -441,13 +455,16 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const { filters } = useLibraryConfig();
-	const institutions = (item?.institution as string[]) || [];
+	const institutions = institutionsNotUnderAuthors(
+		(item?.institution as string[]) || [],
+		item?.creators,
+	);
 	if (!institutions?.length && !loading) return null;
 
 	return (
 		<SidebarCard
 			title={localizeOrUseIfCapitalized(filters.institution.label, t)}
-			count={item?.institution?.length}
+			count={institutions.length}
 		>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (

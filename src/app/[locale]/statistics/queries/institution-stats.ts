@@ -1,6 +1,11 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { sql, desc } from "drizzle-orm";
+import { itemInstitution } from "@/db/schema/tables/itemInstitution";
+import { sql, desc, type SQL } from "drizzle-orm";
+import {
+	institutionCountryCode,
+	institutionCountryJoin,
+} from "./institution-country-sql";
 import { calculateHIndex } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
@@ -39,6 +44,25 @@ function citationSummary(stat: {
 	};
 }
 
+/**
+ * One row for each record and institution connected to it: the record's own
+ * institutions and its authors' affiliations, read from the projection.
+ * DISTINCT keeps an institution named in both places to one row.
+ */
+function institutionItems(citationCount: SQL) {
+	return sql`(
+			SELECT DISTINCT
+				${itemInstitution.institutionName} as institution_name,
+				${institutionCountryCode} as country_code,
+				${item.key} as item_key,
+				${item.date} as item_date,
+				${citationCount} as item_citations
+			FROM ${itemInstitution}
+			JOIN ${item} ON ${item.key} = ${itemInstitution.itemKey}
+			${institutionCountryJoin(sql`${itemInstitution.institutionName}`)}
+		)`;
+}
+
 export async function getInstitutionStats(
 	db: Database,
 	measure: CitationMeasure,
@@ -53,28 +77,7 @@ export async function getInstitutionStats(
 			avgCitationsPerItem: sql<number>`coalesce(avg(item_citations), 0)`,
 			citationCounts: sql<number[]>`array_agg(item_citations)`,
 		})
-		.from(
-			sql`(
-			SELECT DISTINCT
-				institution_data->>'display_name' as institution_name,
-				institution_data->>'country_code' as country_code,
-				${item.key} as item_key,
-				${citationCount} as item_citations
-			FROM ${item},
-			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
-			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
-			AND ${item.creators} IS NOT NULL
-			AND jsonb_array_length(${item.creators}) > 0
-			AND creator_data ? 'institutions'
-			AND jsonb_typeof(creator_data->'institutions') = 'array'
-			AND jsonb_array_length(creator_data->'institutions') > 0
-			AND institution_data ? 'display_name'
-			AND institution_data->>'display_name' IS NOT NULL
-			AND institution_data->>'display_name' != ''
-		) as institution_items`,
-		)
+		.from(sql`${institutionItems(citationCount)} as institution_items`)
 		.where(sql`institution_name IS NOT NULL AND institution_name != ''`)
 		.groupBy(sql`institution_name, country_code`)
 		.orderBy(desc(sql`count(*)`));
@@ -104,41 +107,13 @@ export async function getInstitutionStatsByYear(
 		.from(
 			sql`(
 			SELECT
-				institution_data->>'display_name' as institution_name,
-				institution_data->>'country_code' as country_code,
-				extract(year from 
-					case 
-						when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-						then to_date(item_date, 'YYYY-MM-DD')
-						else null
-					end
-				)::text as year_extracted,
+				institution_name,
+				country_code,
+				extract(year from to_date(item_date, 'YYYY-MM-DD'))::text as year_extracted,
 				item_key,
 				item_citations
-			FROM (
-				SELECT DISTINCT
-					${item.key} as item_key,
-					${item.date} as item_date,
-					${citationCount} as item_citations,
-					creator_data,
-					institution_data
-				FROM ${item},
-				LATERAL jsonb_array_elements(${item.creators}) as creator_data,
-				LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
-				WHERE ${item.deleted} = 0 
-				AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
-				AND ${item.creators} IS NOT NULL
-				AND jsonb_array_length(${item.creators}) > 0
-				AND creator_data ? 'institutions'
-				AND jsonb_typeof(creator_data->'institutions') = 'array'
-				AND jsonb_array_length(creator_data->'institutions') > 0
-				AND institution_data ? 'display_name'
-				AND institution_data->>'display_name' IS NOT NULL
-				AND institution_data->>'display_name' != ''
-				AND ${item.date} IS NOT NULL
-				AND ${item.date} != ''
-				AND ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-			) as items_with_institutions
+			FROM ${institutionItems(citationCount)} as institution_items
+			WHERE item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 		) as institution_year_items`,
 		)
 		.where(

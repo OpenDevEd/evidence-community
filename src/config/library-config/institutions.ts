@@ -2,6 +2,14 @@ import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeInstitution = LibraryPublicConfig["institutions"][number];
 
+/**
+ * The search field behind the institution filter and facet: the record's own
+ * institutions plus its authors' affiliations. Only the search index holds the
+ * combined list. `institution` stays the record's own list for display and
+ * exports.
+ */
+export const INSTITUTION_FILTER_FIELD = "institutionsWithAuthors";
+
 /** Two spellings with the same key are the same institution. */
 export function institutionNameKey(name: string): string {
 	return name.normalize("NFC").trim().toLocaleLowerCase("en");
@@ -30,6 +38,24 @@ export function hasInstitution(
 	return institutions.some(
 		(institution) =>
 			institutionNameKey(institution) === normalizedName,
+	);
+}
+
+/** A record's own institutions that are not already shown under one of its authors. */
+export function institutionsNotUnderAuthors(
+	institutions: readonly string[],
+	creators:
+		| readonly { institutions?: readonly { display_name?: string }[] }[]
+		| null
+		| undefined,
+): string[] {
+	const underAuthors = (creators ?? []).flatMap((creator) =>
+		(creator.institutions ?? []).flatMap((entry) =>
+			entry.display_name ? [entry.display_name] : [],
+		),
+	);
+	return institutions.filter(
+		(institution) => !hasInstitution(underAuthors, institution),
 	);
 }
 

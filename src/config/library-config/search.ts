@@ -2,6 +2,7 @@ import {
 	PLATFORM_SEARCH_SCOPE_OPTIONS,
 	type PlatformSearchScope,
 } from "./catalogs";
+import { INSTITUTION_FILTER_FIELD } from "./institutions";
 import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeSearch = Omit<LibraryPublicConfig["search"], "embeddings">;
@@ -55,7 +56,7 @@ export function getRuntimeSearchFacets(
 ) {
 	const facets = ["collectionsAncestry"];
 	if (filters.institution.mode !== "hidden") {
-		facets.push("institution");
+		facets.push(INSTITUTION_FILTER_FIELD);
 	}
 	if (filters.years.enabled) {
 		facets.push("year");

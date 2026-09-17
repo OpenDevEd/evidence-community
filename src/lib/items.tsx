@@ -12,7 +12,10 @@ import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
-import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import {
+	findInstitutionWithLogo,
+	institutionsNotUnderAuthors,
+} from "@/config/library-config/institutions";
 import {
 	useLibraryConfig,
 	useLibraryFeature,
@@ -44,7 +47,7 @@ type Creator = {
 	firstName?: string;
 	lastName?: string;
 	name?: string;
-	institutions?: { id: string; display_name: string; country_code: string }[];
+	institutions?: { display_name?: string }[];
 };
 
 type MatchWrapperProps = {
@@ -558,14 +561,16 @@ function ItemCreators({ value, t, pathname }: FormatterProps) {
 	);
 }
 
-function ItemInstitution({ value, t, pathname }: FormatterProps) {
+function ItemInstitution({ value, item, t, pathname }: FormatterProps) {
 	const { filters, institutions: configuredInstitutions } =
 		useLibraryConfig();
 	const isInstitutionFilterEnabled = filters.institution.mode !== "hidden";
 	if (!value) return false;
 
-	// Handle both string and array values
-	const institutions = Array.isArray(value) ? value : [value];
+	const institutions = institutionsNotUnderAuthors(
+		Array.isArray(value) ? value : [value],
+		item.creators,
+	);
 
 	if (institutions.length === 0) return false;
 

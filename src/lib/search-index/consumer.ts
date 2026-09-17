@@ -37,6 +37,7 @@ import {
 	buildEmbedderSettings,
 	type SearchEmbedderConfiguration,
 } from "./embedder-settings";
+import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -948,14 +949,14 @@ export async function ensureSearchIndex(
 				sortFacetValuesBy: {
 					collectionsAncestry: "count",
 					country: "count",
-					institution: "count",
+					[INSTITUTION_FILTER_FIELD]: "count",
 				},
 			},
 			filterableAttributes: [
 				"itemType",
 				"deleted",
 				"tags",
-				"institution",
+				INSTITUTION_FILTER_FIELD,
 				"country",
 				"fullNames",
 				"collections",

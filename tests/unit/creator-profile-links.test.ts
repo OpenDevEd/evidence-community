@@ -15,3 +15,11 @@ it("does not guess a profile when names change or duplicate authors are ambiguou
 	expect(preserveCreatorProfileLinks([author], previous)).toEqual([author]);
 	expect(preserveCreatorProfileLinks([{...author, name: "Different person"}], previous)).toEqual([{...author, name: "Different person"}]);
 });
+
+it("carries an author's affiliations across a source update, like the profile link", () => {
+	const institutions = [{display_name: "University of Nairobi"}];
+	const caitlin = {creatorType: "author", firstName: "Caitlin", lastName: "Mills"};
+	const alex = {creatorType: "author", name: "Alex Rivera"};
+	expect(preserveCreatorProfileLinks([alex, caitlin], [{...caitlin, institutions}, alex])).toEqual([alex, {...caitlin, institutions}]);
+	expect(preserveCreatorProfileLinks([{...caitlin, lastName: "Miller"}], [{...caitlin, institutions}])).toEqual([{...caitlin, lastName: "Miller"}]);
+});

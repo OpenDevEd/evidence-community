@@ -29,6 +29,7 @@ import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
 import { meilisearchEquals } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
+import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 
 export const LIST_ITEM_FIELDS = [
 	"itemType",
@@ -181,7 +182,9 @@ function buildSearchFilters({
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 		range ? formatRange(range) : null,
-		...institution.map((value) => meilisearchEquals("institution", value)),
+		...institution.map((value) =>
+			meilisearchEquals(INSTITUTION_FILTER_FIELD, value),
+		),
 		...createCountryFilters(country),
 		author ? meilisearchEquals("fullNames", author) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,

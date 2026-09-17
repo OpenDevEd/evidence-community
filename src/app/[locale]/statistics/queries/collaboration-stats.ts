@@ -2,6 +2,10 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql } from "drizzle-orm";
 import { COUNTRIES } from "@/constants/misc";
+import {
+	affiliationCountryJoin,
+	institutionCountryCode,
+} from "./institution-country-sql";
 
 export type CollaborationStats = {
 	totalItems: number;
@@ -52,10 +56,11 @@ export async function getCollaborationStats(db: Database, authorCountries: { cou
 		.from(sql`(
 			SELECT DISTINCT
 				${item.key} as item_key,
-				institution_data->>'country_code' as country_code
+				${institutionCountryCode} as country_code
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
+			${affiliationCountryJoin}
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
@@ -63,9 +68,7 @@ export async function getCollaborationStats(db: Database, authorCountries: { cou
 			AND creator_data ? 'institutions'
 			AND jsonb_typeof(creator_data->'institutions') = 'array'
 			AND jsonb_array_length(creator_data->'institutions') > 0
-			AND institution_data ? 'country_code'
-			AND institution_data->>'country_code' IS NOT NULL
-			AND institution_data->>'country_code' != ''
+			AND ${institutionCountryCode} IS NOT NULL
 		) as item_countries`)
 		.where(sql`country_code IS NOT NULL AND country_code != ''`)
 		.groupBy(sql`item_key`);
