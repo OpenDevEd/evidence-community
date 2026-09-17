@@ -1,7 +1,12 @@
 "use client";
 
 import { mutate } from "swr";
-import type { OpenScholarInstitutionPage } from "@/lib/admin/openscholar-institutions";
+import type {
+	AdminInstitutionPage,
+	InstitutionCountries,
+	InstitutionCountry,
+	OpenAlexInstitution,
+} from "@/lib/admin/institution-countries";
 import type { SavedReview, PublishingChoice, PublishingChoiceState, ReviewRecord } from "@/lib/admin/review-contract";
 import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 
@@ -163,7 +168,33 @@ function invalidSearchIndexResponse() {
 export function fetchAdminInstitutions(query: string, cursor: string | null) {
 	const params = new URLSearchParams({ query, pageSize: "20", sort: "name" });
 	if (cursor) params.set("cursor", cursor);
-	return requestJson<OpenScholarInstitutionPage>(`/api/admin/institutions?${params}`);
+	return requestJson<AdminInstitutionPage>(`/api/admin/institutions?${params}`);
+}
+
+export function fetchAdminInstitutionCountries(names: readonly string[]) {
+	const params = new URLSearchParams(names.map((name) => ["name", name]));
+	return requestJson<InstitutionCountries>(
+		`/api/admin/institutions/countries?${params}`,
+	);
+}
+
+export async function fetchOpenAlexInstitutions(query: string) {
+	const params = new URLSearchParams({ query });
+	const page = await requestJson<{ items: OpenAlexInstitution[] }>(
+		`/api/admin/institutions/openalex?${params}`,
+	);
+	return page.items;
+}
+
+/** Null removes the country from the name. */
+export function saveAdminInstitutionCountry(
+	name: string,
+	country: InstitutionCountry | null,
+) {
+	return requestJson<void>("/api/admin/institutions/countries", {
+		method: country ? "PUT" : "DELETE",
+		body: JSON.stringify({ name, ...country }),
+	});
 }
 
 function invalidSourceWritebackResponse() {

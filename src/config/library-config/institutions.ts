@@ -2,7 +2,8 @@ import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeInstitution = LibraryPublicConfig["institutions"][number];
 
-function normalizeInstitutionName(name: string): string {
+/** Two spellings with the same key are the same institution. */
+export function institutionNameKey(name: string): string {
 	return name.trim().toLocaleLowerCase("en");
 }
 
@@ -11,7 +12,7 @@ export function parseInstitutionNames(value: string): string[] {
 	const names = new Map<string, string>();
 	for (const entry of value.split("|")) {
 		const name = entry.trim();
-		const key = normalizeInstitutionName(name);
+		const key = institutionNameKey(name);
 		if (name && !names.has(key)) names.set(key, name);
 	}
 	return [...names.values()];
@@ -25,10 +26,10 @@ export function hasInstitution(
 	institutions: readonly string[],
 	name: string,
 ): boolean {
-	const normalizedName = normalizeInstitutionName(name);
+	const normalizedName = institutionNameKey(name);
 	return institutions.some(
 		(institution) =>
-			normalizeInstitutionName(institution) === normalizedName,
+			institutionNameKey(institution) === normalizedName,
 	);
 }
 
@@ -49,14 +50,14 @@ export function findInstitutionWithLogo(
 					Boolean(institution.logoUrl),
 			)
 			.map((institution) => [
-				normalizeInstitutionName(institution.name),
+				institutionNameKey(institution.name),
 				institution,
 			]),
 	);
 
 	for (const name of names) {
 		const institution = institutionsByName.get(
-			normalizeInstitutionName(name),
+			institutionNameKey(name),
 		);
 		if (institution) return institution;
 	}
