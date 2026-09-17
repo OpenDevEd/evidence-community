@@ -7,6 +7,23 @@ function creatorIdentity(creator: AdminCreator) {
 	]);
 }
 
+/**
+ * True when a source would see the same creators. Profile links and
+ * affiliations belong to the library, so a change to those alone is not a
+ * reason to write the record back.
+ */
+export function sameBibliographicCreators(left: unknown, right: unknown) {
+	if (!Array.isArray(left) || !Array.isArray(right)) return false;
+	return (
+		left.length === right.length &&
+		left.every(
+			(creator, index) =>
+				creatorIdentity(creator as AdminCreator) ===
+				creatorIdentity(right[index] as AdminCreator),
+		)
+	);
+}
+
 /** Source providers cannot assign profiles or affiliations; carry existing ones only across unambiguous authors. */
 export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	incoming: T[] | null | undefined,

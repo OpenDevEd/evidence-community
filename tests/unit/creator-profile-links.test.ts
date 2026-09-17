@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { preserveCreatorProfileLinks } from "@/lib/admin/creator-profile-links";
+import { preserveCreatorProfileLinks, sameBibliographicCreators } from "@/lib/admin/creator-profile-links";
 
 it("keeps local links when source authors reorder but never trusts source profile IDs", () => {
 	const caitlin = {creatorType: "author", firstName: "Caitlin", lastName: "Mills"};
@@ -22,4 +22,12 @@ it("carries an author's affiliations across a source update, like the profile li
 	const alex = {creatorType: "author", name: "Alex Rivera"};
 	expect(preserveCreatorProfileLinks([alex, caitlin], [{...caitlin, institutions}, alex])).toEqual([alex, {...caitlin, institutions}]);
 	expect(preserveCreatorProfileLinks([{...caitlin, lastName: "Miller"}], [{...caitlin, institutions}])).toEqual([{...caitlin, lastName: "Miller"}]);
+});
+
+it("sees no source change when only a profile link or an affiliation changes", () => {
+	const caitlin = {creatorType: "author", firstName: "Caitlin", lastName: "Mills"};
+	expect(sameBibliographicCreators([caitlin], [{...caitlin, authorProfileId: "p1", institutions: [{display_name: "University of Nairobi"}]}])).toBe(true);
+	expect(sameBibliographicCreators([caitlin], [{...caitlin, lastName: "Miller"}])).toBe(false);
+	expect(sameBibliographicCreators([caitlin], [caitlin, caitlin])).toBe(false);
+	expect(sameBibliographicCreators(undefined, [caitlin])).toBe(false);
 });

@@ -811,7 +811,7 @@ for (const missingTitle of [false, true]) {
 test("filters institution suggestions by typed name", async ({ page }) => {
 	test.skip(!expectedInstitutionFacet, "Institution filter is disabled for this library.");
 	await page.route("**/api/facets**", (route) => route.fulfill({ json: {
-		facetDistribution: { institution: { "North University": 2, "South Institute": 1 } },
+		facetDistribution: { institutionsWithAuthors: { "North University": 2, "South Institute": 1 } },
 	} }));
 	await page.setViewportSize({ width: 1600, height: 1000 });
 	await page.goto("/en-GB/lib");
@@ -866,7 +866,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 		expectedCountryFacet,
 	);
 	if (!expectedInstitutionFacet) {
-		expect(Object.hasOwn(facetDistribution, "institution")).toBe(false);
+		expect(Object.hasOwn(facetDistribution, "institutionsWithAuthors")).toBe(false);
 	}
 
 	const itemsResponse = await request.get(

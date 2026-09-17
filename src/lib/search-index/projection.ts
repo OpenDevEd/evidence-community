@@ -18,7 +18,7 @@ import { item } from "@/db/schema/tables/item";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import {
 	INSTITUTION_FILTER_FIELD,
-	parseInstitutionNames,
+	institutionNameKey,
 } from "@/config/library-config/institutions";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
@@ -437,9 +437,15 @@ async function buildSearchProjectionPlanForKeys(
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,
 				institution: institutionsOf(parent.key),
-				[INSTITUTION_FILTER_FIELD]: parseInstitutionNames(
-					connectedInstitutionsOf(parent.key).join("|"),
-				),
+				// A name on the record and on an author is one facet value.
+				[INSTITUTION_FILTER_FIELD]: [
+					...new Map(
+						connectedInstitutionsOf(parent.key).map((name) => [
+							institutionNameKey(name),
+							name,
+						]),
+					).values(),
+				],
 				links: linksByItem.get(parent.key) ?? {
 					cites: [],
 					citedBy: [],

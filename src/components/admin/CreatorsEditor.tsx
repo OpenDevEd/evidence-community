@@ -8,10 +8,7 @@ import type { AdminCreator } from "@/lib/admin/types";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import { creatorFromProfile, type AuthorProfile } from "@/lib/authors/profiles";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
-import {
-	adminFieldDescriptors,
-	type AdminSchemaDefinition,
-} from "./admin-schema";
+import type { AdminSchemaDefinition } from "./admin-schema";
 import { CreatorCard, type CreatorMode } from "./CreatorCard";
 import { AuthorPickerDialog } from "./AuthorPickerDialog";
 

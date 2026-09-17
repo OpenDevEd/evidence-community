@@ -191,9 +191,11 @@ function SidebarCard({
 function ItemAuthor({
 	author,
 	profile,
+	countryOf,
 }: {
 	author?: Author;
 	profile?: AuthorProfile;
+	countryOf?: (institution: string) => string | undefined;
 }) {
 	const [referrer] = useQueryState("referrer");
 	const t = useTranslations("creatorType");
@@ -204,16 +206,11 @@ function ItemAuthor({
 	const displayName = profile?.name ?? (author ? formatAuthor(author) : undefined);
 
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
-	const countryOf = useInstitutionCountryCodes(
-		(author?.institutions ?? []).flatMap((entry) =>
-			entry.display_name ? [entry.display_name] : [],
-		),
-	);
 	// The country belongs to the institution name, set once for the library.
 	const affiliations = (author?.institutions ?? []).map((entry) => ({
 		...entry,
 		country_code:
-			entry.country_code ?? countryOf(entry.display_name ?? ""),
+			entry.country_code ?? countryOf?.(entry.display_name ?? ""),
 	}));
 	const affiliationCount = affiliations.length;
 
@@ -385,6 +382,14 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const authors = item?.creators as Author[] | undefined;
 	const { profiles } = useAuthorProfiles(authors);
+	// One lookup for the whole record, not one per author.
+	const countryOf = useInstitutionCountryCodes(
+		(authors ?? []).flatMap((author) =>
+			(author.institutions ?? []).flatMap((entry) =>
+				entry.display_name ? [entry.display_name] : [],
+			),
+		),
+	);
 	if (!authors?.length && !loading) return null;
 
 	return (
@@ -397,6 +402,7 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 						<ItemAuthor
 							key={index}
 							author={author}
+							countryOf={countryOf}
 							profile={
 								author.authorProfileId
 									? profiles.get(author.authorProfileId)

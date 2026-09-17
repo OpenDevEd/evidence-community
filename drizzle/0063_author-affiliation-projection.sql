@@ -1,3 +1,7 @@
+-- Writers to "item" also write "itemInstitution" through a trigger. Taking this
+-- lock first keeps them out for the whole change, so the backfill reads a
+-- settled table and no writer can deadlock against the key swap below.
+LOCK TABLE "item" IN SHARE MODE;--> statement-breakpoint
 ALTER TABLE "itemInstitution" ADD COLUMN "source" text DEFAULT 'record' NOT NULL;--> statement-breakpoint
 ALTER TABLE "itemInstitution" DROP CONSTRAINT "itemInstitution_itemKey_institutionName_pk";--> statement-breakpoint
 ALTER TABLE "itemInstitution" ADD CONSTRAINT "itemInstitution_itemKey_institutionName_source_pk" PRIMARY KEY("itemKey","institutionName","source");--> statement-breakpoint
@@ -79,6 +83,26 @@ CROSS JOIN LATERAL jsonb_array_elements(
 WHERE i.deleted = 0
 	AND (i."parentItem" IS NULL OR i."parentItem" = '')
 	AND btrim(COALESCE(affiliation ->> 'display_name', '')) <> ''
+ON CONFLICT DO NOTHING;--> statement-breakpoint
+
+-- Affiliations imported with a country code keep their country: it moves to
+-- the library's table, which is where the statistics and the item page read it.
+INSERT INTO "institutionCountry" ("nameKey", "countryCode", "openalexId")
+SELECT DISTINCT ON (lower(btrim(normalize(affiliation ->> 'display_name', NFC))))
+	lower(btrim(normalize(affiliation ->> 'display_name', NFC))),
+	affiliation ->> 'country_code',
+	substring(affiliation ->> 'id' from 'I[0-9]+$')
+FROM "item" i
+CROSS JOIN LATERAL jsonb_array_elements(
+	CASE WHEN jsonb_typeof(i.creators) = 'array' THEN i.creators ELSE '[]'::jsonb END
+) AS creator
+CROSS JOIN LATERAL jsonb_array_elements(
+	CASE WHEN jsonb_typeof(creator -> 'institutions') = 'array'
+		THEN creator -> 'institutions' ELSE '[]'::jsonb END
+) AS affiliation
+WHERE btrim(COALESCE(affiliation ->> 'display_name', '')) <> ''
+	AND affiliation ->> 'country_code' ~ '^[A-Z]{2}$'
+ORDER BY lower(btrim(normalize(affiliation ->> 'display_name', NFC))), i.key
 ON CONFLICT DO NOTHING;--> statement-breakpoint
 
 -- The institution filter reads a new search field. Only a rebuild adds it to

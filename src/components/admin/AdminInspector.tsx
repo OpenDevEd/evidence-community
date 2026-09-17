@@ -1476,7 +1476,7 @@ export function AdminInspector({
 	const changeField = useCallback((field: string, value: string) => {
 		patchPayload({ [field]: value });
 	}, [patchPayload]);
-	const creatorsPayload = useMemo(() => ({ creators: payload.creators, institution: payload.institution, university: payload.university }), [payload.creators, payload.institution, payload.university]);
+	const creatorsPayload = useMemo(() => ({ creators: payload.creators }), [payload.creators]);
 	const tagsPayload = useMemo(() => ({ tags: payload.tags }), [payload.tags]);
 	const collectionsPayload = useMemo(() => ({ collections: payload.collections }), [payload.collections]);
 	const linksPayload = useMemo(() => ({ links: payload.links }), [payload.links]);

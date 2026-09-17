@@ -1995,8 +1995,10 @@ function removeCollectionTree(profile: Profile) {
 }
 
 // Institutions the picker must page through. Zephyr is named by three records
-// and Borough by two, so the count order and the name order differ, while the
-// search fixture also contributes Amber Institute once.
+// and Borough by two, so the count order and the name order differ. Authors'
+// affiliations count too: every fixture's author shares one, the search
+// fixture names Amber Institute, and the publication fixture's author adds
+// Amber Institute again and Indigo College.
 const INSTITUTION_FIXTURES = [
 	{ institution: "Zephyr University", key: "ZEPHYRA2" },
 	{ institution: "Zephyr University", key: "ZEPHYRA3" },
@@ -2006,16 +2008,20 @@ const INSTITUTION_FIXTURES = [
 ] as const;
 
 const INSTITUTIONS_BY_COUNT = [
+	{ count: 5, name: "Unrelated author affiliation" },
 	{ count: 3, name: "Amber Evidence Library" },
 	{ count: 3, name: "Zephyr University" },
+	{ count: 2, name: "Amber Institute" },
 	{ count: 2, name: "Borough College" },
-	{ count: 1, name: "Amber Institute" },
+	{ count: 1, name: "Indigo College" },
 ];
 
 const INSTITUTIONS_BY_NAME = [
 	{ count: 3, name: "Amber Evidence Library" },
-	{ count: 1, name: "Amber Institute" },
+	{ count: 2, name: "Amber Institute" },
 	{ count: 2, name: "Borough College" },
+	{ count: 1, name: "Indigo College" },
+	{ count: 5, name: "Unrelated author affiliation" },
 	{ count: 3, name: "Zephyr University" },
 ];
 
@@ -2127,10 +2133,14 @@ async function verifyInstitutionCursorRules(profile: Profile) {
 const LIFECYCLE_KEY = "LIFECYC2";
 const LIFECYCLE_INSTITUTION = "Lifecycle Institute";
 
-function institutionNamesFor(profile: Profile, key: string) {
+function institutionNamesFor(
+	profile: Profile,
+	key: string,
+	source: "record" | "author" = "record",
+) {
 	return postgresScalar(
 		profile.name,
-		`SELECT coalesce(string_agg("institutionName", ', ' ORDER BY "institutionName"), '') FROM "itemInstitution" WHERE "itemKey" = '${key}'`,
+		`SELECT coalesce(string_agg("institutionName", ', ' ORDER BY "institutionName"), '') FROM "itemInstitution" WHERE "itemKey" = '${key}' AND "source" = '${source}'`,
 	);
 }
 
@@ -2166,8 +2176,8 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 		const change = (statement: string) =>
 			postgresScalar(profile.name, statement);
 		const names = () => institutionNamesFor(profile, LIFECYCLE_KEY);
-		// The creator has a different affiliation. It must not leak into the
-		// record-level institution projection.
+		// The creator has a different affiliation. It is listed as the
+		// author's and must not leak into the record's own institutions.
 		assert.equal(names(), LIFECYCLE_INSTITUTION, "a new record is listed");
 		change(
 			`UPDATE "item" SET creators = '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"Changed author affiliation"}]}]'::jsonb WHERE key = '${LIFECYCLE_KEY}'`,
@@ -2176,6 +2186,11 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 			names(),
 			LIFECYCLE_INSTITUTION,
 			"author affiliations do not change a record institution",
+		);
+		assert.equal(
+			institutionNamesFor(profile, LIFECYCLE_KEY, "author"),
+			"Changed author affiliation",
+			"an author's affiliation is listed as the author's",
 		);
 
 		change(
@@ -2241,7 +2256,8 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 				profile.name,
 				`SELECT count(*) FROM "itemInstitution" WHERE "itemKey" = '${LIFECYCLE_KEY}'`,
 			),
-			"1",
+			// The record's institution and the author's affiliation.
+			"2",
 			"refreshing twice must not duplicate a row",
 		);
 	} finally {

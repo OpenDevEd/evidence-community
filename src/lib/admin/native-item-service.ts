@@ -1,4 +1,5 @@
 import type { ConflictingDraft } from "./errors";
+import { sameBibliographicCreators } from "@/lib/admin/creator-profile-links";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { isNotNull } from "drizzle-orm";
 import {
@@ -1256,10 +1257,21 @@ export async function publishItemDraftWithContext(
 				revision: parentRevision,
 			});
 		}
-		const changedFields = Object.keys(options.review
+		const publishedPatch: Record<string, unknown> = options.review
 			? createItemDraftPatch(basePayload, options.review.approved.payload)
-			: draft!.patch).filter(
-			(field) => field !== "collections" && !LIBRARY_OWNED_PAYLOAD_FIELDS.has(field),
+			: draft!.patch;
+		const changedFields = Object.keys(publishedPatch).filter(
+			(field) =>
+				field !== "collections" &&
+				!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) &&
+				// A new profile link or affiliation is nothing a source can hold.
+				!(
+					field === "creators" &&
+					sameBibliographicCreators(
+						basePayload.creators,
+						publishedPatch.creators,
+					)
+				),
 		);
 		// A changed "related" set changes what the source shows as Related, so the
 		// record's relations must be written back. "Cites" never reaches a source.
