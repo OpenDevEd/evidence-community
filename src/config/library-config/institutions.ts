@@ -41,24 +41,6 @@ export function hasInstitution(
 	);
 }
 
-/** A record's own institutions that are not already shown under one of its authors. */
-export function institutionsNotUnderAuthors(
-	institutions: readonly string[],
-	creators:
-		| readonly { institutions?: readonly { display_name?: string }[] }[]
-		| null
-		| undefined,
-): string[] {
-	const underAuthors = (creators ?? []).flatMap((creator) =>
-		(creator.institutions ?? []).flatMap((entry) =>
-			entry.display_name ? [entry.display_name] : [],
-		),
-	);
-	return institutions.filter(
-		(institution) => !hasInstitution(underAuthors, institution),
-	);
-}
-
 export function findInstitutionWithLogo(
 	configuredInstitutions: readonly RuntimeInstitution[],
 	itemInstitutions: string | readonly string[] | null | undefined,

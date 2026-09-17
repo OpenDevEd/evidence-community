@@ -63,10 +63,7 @@ import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
-import {
-	findInstitutionWithLogo,
-	institutionsNotUnderAuthors,
-} from "@/config/library-config/institutions";
+import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
@@ -461,16 +458,13 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const { filters } = useLibraryConfig();
-	const institutions = institutionsNotUnderAuthors(
-		(item?.institution as string[]) || [],
-		item?.creators,
-	);
+	const institutions = (item?.institution as string[]) || [];
 	if (!institutions?.length && !loading) return null;
 
 	return (
 		<SidebarCard
 			title={localizeOrUseIfCapitalized(filters.institution.label, t)}
-			count={institutions.length}
+			count={item?.institution?.length}
 		>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
