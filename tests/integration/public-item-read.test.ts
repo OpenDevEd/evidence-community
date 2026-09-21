@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -31,27 +31,14 @@ config.content.tags.hidden = ["hidden"];
 
 afterEach(() => vi.unstubAllGlobals());
 
-// Only external citation services are replaced; the source record and renderer are real.
-function stubCitationServices() {
-	vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
-		if (String(url).includes("/export?format=csljson")) {
-			const [record] = JSON.parse(String(init?.body));
-			return Response.json([{ id: "PUBAAAAA", type: "report", title: record.title, DOI: record.DOI }]);
-		}
-		if (String(url).endsWith("apa.csl")) {
-			return new Response('<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text"><info><title>Test title citation</title><id>https://example.org/test</id></info><citation><layout><text variable="title"/></layout></citation><bibliography><layout><text variable="title"/><text variable="DOI" prefix=" "/></layout></bibliography></style>');
-		}
-		if (String(url).includes("locales-en-GB.xml")) {
-			return new Response('<locale xmlns="http://purl.org/net/xbiblio/csl" xml:lang="en-GB"><terms/></locale>');
-		}
-		throw new Error(`Unexpected external request: ${url}`);
-	}));
-}
+// Citation reads use the real formatter and must not need an external service.
+beforeEach(() => vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Unexpected network request"); })));
 
 async function citation(key: string) {
 	const response = await readCitation(new NextRequest(`https://library.example.org/api/item/${key}/citation`), { params: Promise.resolve({ key }) });
 	expect(response.headers.get("cache-control")).toBe("no-store");
-	return (await response.json()).citation;
+	expect(response.status).toBe(200);
+	return (await response.json()).citations?.apa ?? null;
 }
 
 function read(key: string) {
@@ -59,7 +46,6 @@ function read(key: string) {
 }
 
 it("reads committed publications before indexing, and immediately respects edits, removal and hidden records", async () => {
-	stubCitationServices();
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
 		vi.mocked(getLibraryConfig).mockResolvedValue(config);
@@ -140,7 +126,6 @@ it("reports an unavailable database as a retryable failure instead of a missing 
 });
 
 it("uses current registered identifiers across public records, citations, cards and library exports", async () => {
-	stubCitationServices();
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		const config = publicationTestConfig();
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);

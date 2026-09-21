@@ -1,4 +1,4 @@
-import { CITATION_RECORD_COLUMNS } from "@/lib/library-export-records";
+import { CITATION_RECORD_COLUMNS } from "@/lib/citation-record-columns";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readPublicDoiAttachments, readPublicIdentifiers } from "@/lib/publication/public-identifiers";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";

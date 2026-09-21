@@ -1,13 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getTableColumns } from "drizzle-orm";
 
-vi.mock("server-only", () => ({}));
-vi.mock("@/db", () => ({
-	getDatabaseForConfig: vi.fn(),
-}));
-
-import { CITATION_RECORD_COLUMNS } from "@/lib/library-export-records";
+import { CITATION_RECORD_COLUMNS } from "@/lib/citation-record-columns";
 import { item } from "@/db/schema/tables/item";
 
 const realColumns = new Set(Object.keys(getTableColumns(item)));
