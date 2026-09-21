@@ -45,8 +45,7 @@ vi.mock("@/config/library-config/server", () => ({
 }));
 
 vi.mock("@/lib/runtime-feature", () => ({
-	getConfigForEnabledFeature:
-		harness.getConfigForEnabledFeature,
+	getConfigForEnabledFeature: harness.getConfigForEnabledFeature,
 	featureUnavailableResponse: () =>
 		Response.json(
 			{ error: "Not found" },
@@ -85,10 +84,22 @@ describe("runtime authentication route gate", () => {
 
 		await expect(getAuthOptions()).resolves.toBe(options);
 		expect(harness.buildAuthOptions).toHaveBeenCalledWith(config);
-		expect(
-			harness.getDatabaseForConfig,
-		).not.toHaveBeenCalled();
+		expect(harness.getDatabaseForConfig).not.toHaveBeenCalled();
 		expect(harness.drizzleAdapter).not.toHaveBeenCalled();
+	});
+
+	it("answers the session endpoint with null when login is disabled", async () => {
+		harness.getConfigForEnabledFeature.mockResolvedValue(null);
+		const request = new Request(
+			"https://library.example.org/api/auth/session",
+		);
+
+		const response = await handlers.GET(request as never);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		await expect(response.json()).resolves.toBeNull();
+		expect(harness.getHandler).not.toHaveBeenCalled();
 	});
 
 	it("hides handlers and returns no session when login is disabled", async () => {
@@ -97,19 +108,16 @@ describe("runtime authentication route gate", () => {
 			"https://library.example.org/api/auth/providers",
 		);
 
-		const [session, getResponse, postResponse] =
-			await Promise.all([
-				auth(),
-				handlers.GET(request as never),
-				handlers.POST(request as never),
-			]);
+		const [session, getResponse, postResponse] = await Promise.all([
+			auth(),
+			handlers.GET(request as never),
+			handlers.POST(request as never),
+		]);
 
 		expect(session).toBeNull();
 		expect(getResponse.status).toBe(404);
 		expect(postResponse.status).toBe(404);
-		expect(getResponse.headers.get("cache-control")).toBe(
-			"no-store",
-		);
+		expect(getResponse.headers.get("cache-control")).toBe("no-store");
 		expect(harness.auth).not.toHaveBeenCalled();
 		expect(harness.getHandler).not.toHaveBeenCalled();
 		expect(harness.postHandler).not.toHaveBeenCalled();
@@ -122,9 +130,7 @@ describe("runtime authentication route gate", () => {
 			},
 		});
 		harness.auth.mockResolvedValue({ user: { id: "user-one" } });
-		harness.getHandler.mockResolvedValue(
-			Response.json({ enabled: true }),
-		);
+		harness.getHandler.mockResolvedValue(Response.json({ enabled: true }));
 		const request = new Request(
 			"https://library.example.org/api/auth/providers",
 		);
@@ -136,9 +142,7 @@ describe("runtime authentication route gate", () => {
 		expect(response.status).toBe(200);
 		expect(harness.auth).toHaveBeenCalledOnce();
 		expect(harness.getHandler).toHaveBeenCalledOnce();
-		expect(
-			harness.getHandler.mock.calls[0][0].url,
-		).toBe(
+		expect(harness.getHandler.mock.calls[0][0].url).toBe(
 			"https://configured.example.org/api/auth/providers",
 		);
 	});
@@ -149,23 +153,20 @@ describe("runtime authentication route gate", () => {
 				baseUrl: "https://configured.example.org",
 			},
 		});
-		harness.postHandler.mockImplementation(
-			async (request: Request) =>
-				Response.json({
-					body: await request.text(),
-					contentType:
-						request.headers.get("content-type"),
-					method: request.method,
-					url: request.url,
-				}),
+		harness.postHandler.mockImplementation(async (request: Request) =>
+			Response.json({
+				body: await request.text(),
+				contentType: request.headers.get("content-type"),
+				method: request.method,
+				url: request.url,
+			}),
 		);
 		const request = new Request(
 			"https://alias.example.org/api/auth/signin/google",
 			{
 				method: "POST",
 				headers: {
-					"content-type":
-						"application/x-www-form-urlencoded",
+					"content-type": "application/x-www-form-urlencoded",
 				},
 				body: "csrfToken=runtime-proof",
 			},
