@@ -23,7 +23,7 @@ export type CitationData = {
 	[field: string]: string | number | CitationName[] | CitationDate | undefined;
 };
 
-export type CitationItem = Pick<Item | ListItem, "key" | "title" | "itemType" | "revision" | "DOI">;
+export type CitationItem = Pick<Item | ListItem, "key" | "title" | "itemType"> & Partial<Item | ListItem>;
 
 export function canCiteItem(item: CitationItem | undefined): item is CitationItem {
 	return Boolean(item?.key && item.title?.trim() && !["Attachment", "Note"].includes(item.itemType));

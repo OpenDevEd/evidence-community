@@ -90,7 +90,7 @@ function formatAccessDate(props: FormatterProps) {
 }
 
 function Citation({ item }: FormatterProps) {
-	return canCiteItem(item) ? <CitationPanel item={item} /> : null;
+	return canCiteItem(item) ? <CitationPanel item={item} completeRecord /> : null;
 }
 
 function createRegexParser(wrappers: WrapperConfig[], tag: string = "p") {

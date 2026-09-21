@@ -713,7 +713,7 @@ function ProcessHTML(html: string) {
 export function ItemCitation({ item }: { item: Item | undefined }) {
 	const { citations } = useLibraryConfig();
 	if (!citations.enabled || !canCiteItem(item)) return null;
-	return <CitationPanel key={item.key} item={item} showHeading />;
+	return <CitationPanel key={item.key} item={item} showHeading completeRecord />;
 }
 
 type CanonicalWebsiteLink = {

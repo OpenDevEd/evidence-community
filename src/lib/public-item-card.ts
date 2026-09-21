@@ -1,3 +1,4 @@
+import { CITATION_RECORD_COLUMNS } from "@/lib/library-export-records";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readPublicDoiAttachments, readPublicIdentifiers } from "@/lib/publication/public-identifiers";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
@@ -11,12 +12,14 @@ export async function getPublicItemCards(
 	database: Pick<Database, "query" | "select">,
 	keys: readonly string[],
 	config: LibraryServerConfig,
+	includeCitationFields = false,
 ) {
 	if (!keys.length) return [];
 	const hiddenTags = config.content.tags.hidden;
 	const records = await database.query.item.findMany({
 		where: and(inArray(item.key, [...keys]), publicParentVisibility(database, hiddenTags)),
 		columns: {
+			...(includeCitationFields ? Object.fromEntries(CITATION_RECORD_COLUMNS.map(column => [column, true as const])) : {}),
 			key: true,
 			revision: true,
 			title: true,

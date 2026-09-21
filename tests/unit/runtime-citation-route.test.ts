@@ -6,10 +6,11 @@ vi.mock("@/i18n/server", () => ({ getRuntimeRequestLocale: async () => "en-GB" }
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: async () => ({
 	citations: { enabled: state.enabled, showUrl: state.showUrl }, identity: { baseUrl: "https://library.example.org" },
 }) }));
-vi.mock("@/app/api/cache", () => ({ getCachedItem: async () => {
+vi.mock("@/db", () => ({ getDatabaseForConfig: async () => ({}) }));
+vi.mock("@/lib/public-item-card", () => ({ getPublicItemCards: async () => {
 	if (state.fail) throw new Error("Database unavailable");
-	return { item: { key: "REPORT01", itemType: "Report", title: state.title, date: "2025",
-		creators: [{ name: "UNICEF", creatorType: "author" }] } };
+	return [{ key: "REPORT01", itemType: "Report", title: state.title, date: "2025",
+		creators: [{ name: "UNICEF", creatorType: "author" }] }];
 } }));
 
 import { GET } from "@/app/api/item/[key]/citation/route";

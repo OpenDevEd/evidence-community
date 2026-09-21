@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import useSWR from "swr";
+import useSWR, { preload } from "swr";
 import { Popover, PopoverContent, PopoverTrigger, SelectItem } from "@nextui-org/react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { QuoteUpIcon } from "@hugeicons/core-free-icons";
@@ -14,6 +14,8 @@ import { ItemPropertyRowWrapper } from "@/components/features/newlib/ItemPropert
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { CITATION_FORMATS, type CitationFormat, type CitationResponse } from "@/lib/citation-formats";
 import { canCiteItem, type CitationItem } from "@/lib/citation-formats";
+import { citationSource, loadCitations, type CitationRequest } from "@/lib/citation-client";
+import { buildSiteUrl } from "@/lib/site-url";
 
 function CitationContent({ loading, failed, text, format, retry }: {
 	loading: boolean; failed: boolean; text?: string; format: CitationFormat; retry: () => void;
@@ -26,20 +28,15 @@ function CitationContent({ loading, failed, text, format, retry }: {
 	return <p className={`max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-black/70 dark:text-white/70 ${format === "bibtex" ? "font-mono text-xs" : "text-sm leading-relaxed"}`} aria-live="polite">{text}</p>;
 }
 
-export function CitationPanel({ item, showHeading = false }: { item: CitationItem; showHeading?: boolean }) {
+export function CitationPanel({ item, showHeading = false, completeRecord = false }: { item: CitationItem; showHeading?: boolean; completeRecord?: boolean }) {
 	const t = useTranslations("ui");
 	const locale = useLocale();
-	const { citations: settings } = useLibraryConfig();
+	const { citations: settings, identity } = useLibraryConfig();
 	const [format, setFormat] = useState<CitationFormat>("apa");
-	const { data, error, isLoading, mutate } = useSWR<CitationResponse>(
-		settings.enabled ? ["citations", item.key, item.revision, item.DOI, locale, settings.showUrl] : null,
-		async () => {
-			const response = await fetch(`/api/item/${encodeURIComponent(item.key)}/citation`, { headers: { "Accept-Language": locale } });
-			if (!response.ok) throw new Error("Citation request failed");
-			return response.json();
-		},
-		{ revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false },
-	);
+	const source = citationSource(item, completeRecord);
+	const request: CitationRequest = ["citations", source, locale, settings.showUrl ? buildSiteUrl(`/lib/${item.key}`, identity.baseUrl) : undefined];
+	const { data, error, isLoading, mutate } = useSWR<CitationResponse>(settings.enabled ? request : null, loadCitations,
+		{ revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false });
 	if (!settings.enabled || (!isLoading && !error && !data?.citations)) return null;
 	const text = data?.citations?.[format];
 	const controls = (
@@ -63,13 +60,19 @@ export function CitationPanel({ item, showHeading = false }: { item: CitationIte
 
 export function CitationControl({ item }: { item: CitationItem | undefined }) {
 	const t = useTranslations("ui");
-	const { citations } = useLibraryConfig();
+	const { citations, identity } = useLibraryConfig();
+	const locale = useLocale();
 	const [open, setOpen] = useState(false);
 	if (!citations.enabled || !canCiteItem(item)) return null;
+	const prepare = () => {
+		const request: CitationRequest = ["citations", citationSource(item, false), locale,
+			citations.showUrl ? buildSiteUrl(`/lib/${item.key}`, identity.baseUrl) : undefined];
+		void preload(request, loadCitations).catch(() => { /* The panel exposes retry if the request fails. */ });
+	};
 	return (
 		<Popover isOpen={open} onOpenChange={setOpen} placement="bottom-end">
 			<PopoverTrigger>
-				<Button size="sm" aria-label={t("cite")} startContent={<HugeiconsIcon icon={QuoteUpIcon} className="size-4" />}
+				<Button onPointerEnter={prepare} onFocus={prepare} size="sm" aria-label={t("cite")} startContent={<HugeiconsIcon icon={QuoteUpIcon} className="size-4" />}
 					className="px-0 min-w-0 aspect-square @[720px]:aspect-auto @[720px]:px-3">
 					<span className="hidden @[720px]:inline">{t("cite")}</span>
 				</Button>
