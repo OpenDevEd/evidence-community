@@ -39,7 +39,7 @@ function CitationActions({ format, onFormatChange, text }: {
 				trigger: "h-8 min-h-8 min-w-24 rounded-lg pl-2.5 pr-7 shadow-none",
 				innerWrapper: "w-full",
 				value: "text-sm font-normal",
-				selectorIcon: "!size-3.5 right-2.5",
+				selectorIcon: "!size-3.5 right-2.5 text-black/60 dark:text-white/60",
 				popoverContent: "min-w-60",
 			}}
 			popoverProps={{ placement: "bottom-end" }}
