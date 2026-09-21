@@ -1043,14 +1043,13 @@ const contentSchema = z
 	.prefault({});
 
 const citationsSchema = z
-	.object({
+	.strictObject({
+		enabled: z.boolean().default(true),
 		showUrl: z.boolean().default(false),
 	})
-	.strict()
 	.prefault({});
 
-// The public copy adds whether a citation server is configured, so the
-// item page can leave the citation row out instead of loading and hiding it.
+// Citations are generated locally; availability is a library setting.
 const publicCitationsSchema = z
 	.object({
 		enabled: z.boolean(),

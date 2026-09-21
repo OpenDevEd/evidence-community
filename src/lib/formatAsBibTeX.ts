@@ -3,7 +3,6 @@ import { Cite } from "@citation-js/core";
 import { withZoteroFieldNames } from "@/lib/item-field-codec";
 import "@citation-js/plugin-bibtex";
 import "@citation-js/plugin-ris";
-import "@citation-js/plugin-csl";
 
 const zotero2bibtexTypeMap = {
 	Book: "book",
@@ -1451,15 +1450,6 @@ export class BibTeXExporter {
 	async toRIS() {
 		const cite = await this.cite;
 		return cite.format("ris");
-	}
-
-	async toCitation() {
-		const cite = await this.cite;
-		return cite.format("bibliography", {
-			format: "html",
-			template: "apa",
-			lang: "en-US",
-		});
 	}
 
 	async toBibTeX() {

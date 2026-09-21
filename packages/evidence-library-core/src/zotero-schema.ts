@@ -28,7 +28,11 @@ export type ZoteroItemTypeDefinition = {
 };
 
 export type ZoteroSchema = {
-	csl: Record<string, unknown>;
+	csl: {
+		types: Record<string, string[]>;
+		fields: { text: Record<string, string[]>; date: Record<string, string> };
+		names: Record<string, string>;
+	};
 	itemTypes: ZoteroItemTypeDefinition[];
 	meta: {
 		fields: Record<string, ZoteroFieldMetadata>;

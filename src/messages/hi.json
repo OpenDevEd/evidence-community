@@ -1,5 +1,9 @@
 {
   "ui": {
+    "cite": "उद्धृत करें",
+    "citationStyle": "उद्धरण शैली",
+    "copyCitation": "उद्धरण कॉपी करें",
+    "citationLoadFailed": "यह उद्धरण लोड नहीं हो सका।",
     "resultsLabel": "परिणाम",
     "exportFailed": "यह सामग्री तैयार नहीं हो सकी",
     "copyFailed": "कॉपी नहीं हो सका",

@@ -1,5 +1,9 @@
 {
   "ui": {
+    "cite": "引用",
+    "citationStyle": "引用格式",
+    "copyCitation": "复制引用",
+    "citationLoadFailed": "无法加载此引用。",
     "resultsLabel": "结果",
     "exportFailed": "无法准备此内容",
     "copyFailed": "无法复制",

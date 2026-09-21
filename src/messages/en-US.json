@@ -1,5 +1,9 @@
 {
   "ui": {
+    "cite": "Cite",
+    "citationStyle": "Citation style",
+    "copyCitation": "Copy citation",
+    "citationLoadFailed": "Could not load this citation.",
     "resultsLabel": "Results",
     "exportFailed": "Could not prepare this content",
     "copyFailed": "Could not copy",

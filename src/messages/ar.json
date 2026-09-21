@@ -1,5 +1,9 @@
 {
   "ui": {
+    "cite": "استشهاد",
+    "citationStyle": "نمط الاستشهاد",
+    "copyCitation": "نسخ الاستشهاد",
+    "citationLoadFailed": "تعذّر تحميل هذا الاستشهاد.",
     "resultsLabel": "النتائج",
     "exportFailed": "تعذّر تجهيز هذا المحتوى",
     "copyFailed": "تعذّر النسخ",

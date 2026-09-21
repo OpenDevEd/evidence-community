@@ -157,7 +157,7 @@ export async function getProfileSearchFilter(
 
 export async function convertItem(
 	item: Item | Item[],
-	format: "ris" | "bibtex" | "citation",
+	format: "ris" | "bibtex",
 ) {
 	const itemsList = Array.isArray(item) ? item : [item];
 	const texts: string[] = [];
@@ -176,10 +176,6 @@ export async function convertItem(
 				texts.push(ret);
 			}
 
-			if (format === "citation") {
-				const ret = await BibTeX.toCitation();
-				texts.push(ret);
-			}
 		} catch (error) {}
 	});
 

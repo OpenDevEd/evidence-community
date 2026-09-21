@@ -170,6 +170,7 @@ const config: Config = {
 			},
 			minWidth: {
 				"workbench-field": "260px",
+				"author-popover": "300px",
 			},
 			width: {
 				"admin-filter": "min(420px, calc(100vw - 24px))",

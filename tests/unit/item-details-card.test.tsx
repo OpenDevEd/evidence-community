@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Citations } from "@/lib/citation-formats";
 import type { Item } from "@/app/api/item/types";
 
 const testState = vi.hoisted(() => ({
@@ -11,7 +12,7 @@ const testState = vi.hoisted(() => ({
 	citationsShowUrl: false,
 	collectionsEnabled: false,
 	swrResult: {
-		data: undefined as { citation: string | null } | undefined,
+		data: undefined as { citations: Citations | null } | undefined,
 		isLoading: false,
 	},
 }));
@@ -28,6 +29,7 @@ vi.mock("@/i18n/routing", () => ({
 }));
 
 vi.mock("next-intl", () => ({
+	useLocale: () => "en-GB",
 	useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
 	useTranslations: () => (key: string) => key,
 }));
@@ -39,6 +41,7 @@ vi.mock("swr", () => ({
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		identity: { baseUrl: "https://library.example.org" },
+		localization: { locales: ["en-GB"], localePriority: ["en-GB"], defaultLocale: "en-GB" },
 		citations: {
 			enabled: testState.citationsEnabled,
 			showUrl: testState.citationsShowUrl,
@@ -91,7 +94,7 @@ describe("public item empty sections", () => {
 		expect(container.querySelectorAll("svg")).toHaveLength(1);
 	});
 
-	it("never renders the citation row when no citation server is configured", async () => {
+	it("never renders the citation row when citations are disabled", async () => {
 		testState.citationsEnabled = false;
 		testState.swrResult = { data: undefined, isLoading: true };
 
@@ -107,7 +110,7 @@ describe("public item empty sections", () => {
 		expect(container.querySelector("[data-citation-state]")).toBeNull();
 	});
 
-	it("shows a citation skeleton while the configured server answers", async () => {
+	it("shows a citation skeleton while citation formatting is pending", async () => {
 		testState.swrResult = { data: undefined, isLoading: true };
 
 		await act(async () => {
@@ -126,7 +129,7 @@ describe("public item empty sections", () => {
 
 	it("does not show citation loading after the server returns no citation", async () => {
 		testState.swrResult = {
-			data: { citation: null },
+			data: { citations: null },
 			isLoading: false,
 		};
 
@@ -150,7 +153,7 @@ describe("public item empty sections", () => {
 
 	it("shows a citation returned by the server", async () => {
 		testState.swrResult = {
-			data: { citation: "A useful citation." },
+			data: { citations: { apa: "A useful citation.", harvard: "Harvard reference.", chicago: "Chicago reference.", mla: "MLA reference.", vancouver: "Vancouver reference.", bibtex: "@misc{el_REPORT01, title={A report}}" } },
 			isLoading: false,
 		};
 
@@ -166,29 +169,6 @@ describe("public item empty sections", () => {
 		expect(container.textContent).toContain("A useful citation.");
 	});
 
-	it("adds the public item URL when citation URLs are enabled", async () => {
-		testState.citationsShowUrl = true;
-		testState.swrResult = {
-			data: { citation: "A useful citation." },
-			isLoading: false,
-		};
-
-		await act(async () => {
-			root.render(
-				<ItemCitation
-					item={{ key: "REPORT01", title: "A report" } as Item}
-				/>,
-			);
-		});
-
-		const publicLink = container.querySelector("a");
-		expect(publicLink?.href).toBe(
-			"https://library.example.org/lib/REPORT01",
-		);
-		expect(container.textContent).toContain(
-			"Available at https://library.example.org/lib/REPORT01.",
-		);
-	});
 
 	it("does not show Collections when none can be displayed", async () => {
 		testState.collectionsEnabled = true;

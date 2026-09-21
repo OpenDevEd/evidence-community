@@ -1,5 +1,9 @@
 {
   "ui": {
+    "cite": "Citar",
+    "citationStyle": "Estilo de citação",
+    "copyCitation": "Copiar referência",
+    "citationLoadFailed": "Não foi possível carregar esta referência.",
     "resultsLabel": "Resultados",
     "exportFailed": "Não foi possível preparar este conteúdo",
     "copyFailed": "Não foi possível copiar",

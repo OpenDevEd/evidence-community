@@ -1,6 +1,8 @@
+import { CitationPanel } from "@/components/features/items/CitationControl";
+import { canCiteItem } from "@/lib/citation-formats";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { SearchRemoveIcon } from "@hugeicons/core-free-icons";
-import { ReactNode, useRef, useMemo, memo, useState, useEffect } from "react";
+import { ReactNode, useMemo, memo, useState, useEffect } from "react";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
@@ -87,57 +89,8 @@ function formatAccessDate(props: FormatterProps) {
 	return formatDate(props);
 }
 
-function Citation({ value, loading, item }: FormatterProps) {
-	const contentRef = useRef(null);
-	const { citations } = useLibraryConfig();
-	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
-		citation: string | null;
-	}>(item?.key ? `/item/${item.key}/citation` : null, fetcher, {
-		revalidateOnFocus: false,
-		revalidateOnReconnect: false,
-		revalidateIfStale: false,
-	});
-
-	const resolvedCitation = citationResponse?.citation || value || "";
-	const isLoading = loading || isCitationFetching;
-
-	let sanitizedHtml = (resolvedCitation || "").trim();
-
-	if (citations.showUrl && item?.key && sanitizedHtml) {
-		const url = typeof window !== "undefined" ? window.location.origin : "";
-		const finalURL = new URL(url + "/lib/" + item.key);
-		const link = ` Available at <a href="${finalURL}" target="_blank" rel="noopener noreferrer">${finalURL}</a>`;
-
-		if (/<\/div>\s*$/.test(sanitizedHtml)) {
-			sanitizedHtml = sanitizedHtml.replace(
-				/(?:\.\s*)?<\/div>\s*$/,
-				`.${link}</div>`,
-			);
-		} else {
-			sanitizedHtml = sanitizedHtml.replace(/(?:\.\s*)?$/, `.${link}`);
-		}
-	}
-
-	sanitizedHtml = sanitizedHtml.replace(/<\/?div/g, "<p");
-
-	return (
-		<Skeleton isLoaded={!isLoading} className="w-full min-h-16 rounded-2xl">
-			<motion.div
-				initial={{ height: "5rem" }}
-				animate={isLoading ? { height: "5rem" } : { height: "auto" }}
-				transition={{ duration: 0.2, ease: "easeOut" }}
-				className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all"
-			>
-				<p
-					ref={contentRef}
-					dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-				/>
-				<div className="shrink-0">
-					<CopyButton isIconOnly contentRef={contentRef} />
-				</div>
-			</motion.div>
-		</Skeleton>
-	);
+function Citation({ item }: FormatterProps) {
+	return canCiteItem(item) ? <CitationPanel item={item} /> : null;
 }
 
 function createRegexParser(wrappers: WrapperConfig[], tag: string = "p") {

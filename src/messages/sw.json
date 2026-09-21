@@ -1,5 +1,9 @@
 {
   "ui": {
+    "cite": "Nukuu",
+    "citationStyle": "Mtindo wa kunukuu",
+    "copyCitation": "Nakili rejeleo",
+    "citationLoadFailed": "Imeshindikana kupakia rejeleo hili.",
     "resultsLabel": "Matokeo",
     "exportFailed": "Imeshindikana kuandaa maudhui haya",
     "copyFailed": "Imeshindikana kunakili",
