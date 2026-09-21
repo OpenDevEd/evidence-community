@@ -8,7 +8,6 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { Select } from "@/components/nextui/Select";
-import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/items/CopyButton";
 import { ItemPropertyRowWrapper } from "@/components/features/newlib/ItemPropertyRow";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -21,7 +20,7 @@ function CitationContent({ loading, failed, text, format, retry }: {
 	loading: boolean; failed: boolean; text?: string; format: CitationFormat; retry: () => void;
 }) {
 	const t = useTranslations("ui");
-	if (loading) return <Skeleton isLoaded={false} className="min-h-20 w-full rounded-xl" />;
+	if (loading) return <p role="status" className="text-sm text-black/50 dark:text-white/50">{t("loadingData")}</p>;
 	if (failed) return <div role="alert" className="space-y-2 text-sm">
 		<p>{t("citationLoadFailed")}</p><Button size="sm" onPress={retry}>{t("retry")}</Button>
 	</div>;
