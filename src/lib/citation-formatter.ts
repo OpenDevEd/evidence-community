@@ -1,7 +1,6 @@
 import assets from "./citation-assets/csl.json";
 import { CSL } from "citeproc-ts";
-import { Cite } from "@citation-js/core";
-import "@citation-js/plugin-bibtex";
+import { formatCitationExport } from "@/lib/citation-export";
 import { CITATION_FORMATS, type CitationData, type Citations, type CitationStyle } from "@/lib/citation-formats";
 
 import { loadCitationStyleAssets } from "./citation-styles";
@@ -14,8 +13,7 @@ export async function formatCitations(data: CitationData, language: string, libr
 	const locale = locales[language] ?? language;
 	const entries = await Promise.all(CITATION_FORMATS.map(async (format) => {
 		if (format.id === "bibtex") {
-			const record = libraryUrl ? { ...data, URL: libraryUrl } : data;
-			return [format.id, new Cite([record]).format("bibtex", { format: "text" }).trim()] as const;
+			return [format.id, formatCitationExport(data, "bibtex", libraryUrl)] as const;
 		}
         return [format.id, renderCitation(data, locale, assets.styles[format.style], localeAssets, libraryUrl)] as const;
 	}));

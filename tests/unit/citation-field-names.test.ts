@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Cite } from "@citation-js/core";
 
-import { BibTeXExporter } from "@/lib/formatAsBibTeX";
+import { exportCitationItems } from "@/lib/citation-export";
 import { withZoteroFieldNames } from "@/lib/item-field-codec";
 
 /**
@@ -60,7 +60,7 @@ describe("stored field names become Zotero field names", () => {
 // reader actually downloads.
 describe("real citation output for a stored report", () => {
 	it("exports ordered creator roles without an empty leading name", async () => {
-		const bibtex = await new BibTeXExporter({
+		const bibtex = exportCitationItems([{
 			...storedReport(),
 			creators: [
 				{ firstName: "Amina", lastName: "Amber", creatorType: "author" },
@@ -69,24 +69,24 @@ describe("real citation output for a stored report", () => {
 				{ firstName: "Alex", lastName: "Lee", creatorType: "seriesEditor" },
 				{ firstName: "Mina", lastName: "Ito", creatorType: "translator" },
 			],
-		} as never).toBibTeX();
+		}], "bibtex");
 
-		expect(bibtex).toContain("\tauthor = {Amber, Amina and Cher}");
+		expect(bibtex).toContain("\tauthor = {Amber, Amina and {Cher}}");
 		expect(bibtex).toContain("\teditor = {Park, Sam and Lee, Alex}");
 		expect(bibtex).toContain("\ttranslator = {Ito, Mina}");
 	});
 
 	it("keeps an organization as one author instead of treating it as the publisher", async () => {
-		const exporter = new BibTeXExporter({
+		const item = {
 			...storedReport(),
 			publisher: undefined,
 			creators: [
 				{ name: "UNESCO and Evidence Group", creatorType: "author" },
 				{ firstName: "Caitlin", lastName: "Mills", creatorType: "author" },
 			],
-		} as never);
-		const bibtex = await exporter.toBibTeX();
-		const ris = await exporter.toRIS();
+		};
+		const bibtex = exportCitationItems([item], "bibtex");
+		const ris = exportCitationItems([item], "ris");
 
 		const [record] = (await Cite.async(bibtex)).data;
 		expect(record.author).toHaveLength(2);
@@ -97,32 +97,30 @@ describe("real citation output for a stored report", () => {
 	});
 
 	it("escapes TeX characters in creator names while preserving RIS text", async () => {
-		const name = "Research & Development 50% $5 #1_A";
-		const exporter = new BibTeXExporter({
+		const name = String.raw`Research & Development 50% $5 #1_A \\ ^ ~ {Lab}`;
+		const item = {
 			...storedReport(),
 			creators: [{ name, creatorType: "author" }],
-		} as never);
-		const bibtex = await exporter.toBibTeX();
+		};
+		const bibtex = exportCitationItems([item], "bibtex");
 		const authorLine = bibtex.split("\n").find((line) => line.startsWith("\tauthor = "));
-		for (const escaped of [String.raw`\&`, String.raw`\%`, String.raw`\$`, String.raw`\#`, String.raw`\_`]) {
+		for (const escaped of [String.raw`\&`, String.raw`\%`, String.raw`\$`, String.raw`\#`, String.raw`\_`, String.raw`\textbackslash{}`, String.raw`\textasciicircum{}`, String.raw`\textasciitilde{}`, String.raw`\{`, String.raw`\}`]) {
 			expect(authorLine).toContain(escaped);
 		}
-		expect(await exporter.toRIS()).toContain(`AU  - ${name}`);
+		expect(exportCitationItems([item], "ris")).toContain(`AU  - ${name}`);
 	});
 
 	it("keeps the number and language in BibTeX", async () => {
-		const bibtex = await new BibTeXExporter(
-			storedReport() as never,
-		).toBibTeX();
+		const bibtex = exportCitationItems([storedReport()], "bibtex");
 
-		expect(bibtex).toContain("@techreport{RPT12345");
+		expect(bibtex).toContain("@techreport{el_RPT12345");
 		expect(bibtex).toContain("R-42");
 		expect(bibtex).toContain("fr");
 		expect(bibtex).toContain("Amber Institute");
 	});
 
 	it("keeps the number and language in RIS", async () => {
-		const ris = await new BibTeXExporter(storedReport() as never).toRIS();
+		const ris = exportCitationItems([storedReport()], "ris");
 
 		expect(ris).toContain("R-42");
 		expect(ris).toContain("fr");
@@ -132,39 +130,26 @@ describe("real citation output for a stored report", () => {
 		// A report's publisher is written as `institution`, and the search
 		// index also carries an `institution` value. The entry must still name
 		// the field once.
-		const bibtex = await new BibTeXExporter({
+		const bibtex = exportCitationItems([{
 			...storedReport(),
 			institution: ["Amber Institute"],
-		} as never).toBibTeX();
+		}], "bibtex");
 
 		const institutionLines = [
 			...bibtex.matchAll(/\n\tinstitution = /gu),
 		];
 		expect(institutionLines).toHaveLength(1);
 	});
-
-	it("loses the number and language without the field names", async () => {
-		// Proof that the naming step is what carries these fields through:
-		// the same record with its stored names alone drops both.
-		const { number, languageName, ...withoutNames } = storedReport();
-		const exporter = new BibTeXExporter(withoutNames as never);
-		Object.assign(exporter.item, { number, languageName });
-
-		const bibtex = await exporter.toBibTeX();
-
-		expect(bibtex).not.toContain("R-42");
-		expect(bibtex).not.toContain("language");
-	});
 });
 
 it("exports the resolved public DOI without choosing again from attachment or Extra metadata", async () => {
 	for (const DOI of [null, "10.5555/current"]) {
-		const exporter = new BibTeXExporter({
+		const item = {
 			...storedReport(), DOI, extra: "DOI: 10.5555/extra",
 			attachmentsData: [{ url: "https://doi.org/10.5555/attachment", tags: ["_r:doi"] }],
-		} as never);
-		const bibtex = await exporter.toBibTeX();
-		const ris = await exporter.toRIS();
+		};
+		const bibtex = exportCitationItems([item], "bibtex");
+		const ris = exportCitationItems([item], "ris");
 		if (DOI) {
 			expect(bibtex).toContain("doi = {10.5555/current}");
 			expect(ris).toContain("DO  - 10.5555/current");

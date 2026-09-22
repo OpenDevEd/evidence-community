@@ -1,4 +1,15 @@
-# NextUI behavior fixes
+# Dependency patches
+
+## Citation.js export fixes
+
+The BibTeX 0.9.0 patch keeps Unicode text, escapes TeX characters in literal
+names, and includes abstracts, languages, keywords and translators through the
+package's existing field converters. The RIS 0.9.0 patch preserves report
+editors and translators and removes hard line wrapping that split words during
+reimport. Both installed module builds are patched. Citation formatting and
+export tests exercise the generated files and reimport their metadata.
+
+## NextUI
 
 These patches backport HeroUI v2 fixes to the locked NextUI packages. They keep
 the current component styles and application wrappers. `npm ci` applies them

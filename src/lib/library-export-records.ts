@@ -9,13 +9,12 @@ import {
 	max,
 	desc,
 	gt,
-	inArray,
 	sql,
 } from "drizzle-orm";
 
 import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { readItemTags } from "@/lib/item-tags";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Item } from "@/app/api/item/types";
 
@@ -50,36 +49,6 @@ function publicRecordCondition(
 	config: LibraryServerConfig,
 ) {
 	return publicParentVisibility(database, config.content.tags.hidden);
-}
-
-async function attachTags(
-	database: Database,
-	records: Record<string, unknown>[],
-) {
-	if (records.length === 0) return records as Item[];
-
-	const rows = await database
-		.select({ itemKey: itemToTag.itemKey, tagName: itemToTag.tagName })
-		.from(itemToTag)
-		.where(
-			inArray(
-				itemToTag.itemKey,
-				records.map((record) => String(record.key)),
-			),
-		);
-
-	const tagsByKey = new Map<string, string[]>();
-	for (const row of rows) {
-		const tags = tagsByKey.get(row.itemKey);
-		if (tags) tags.push(row.tagName);
-		else tagsByKey.set(row.itemKey, [row.tagName]);
-	}
-
-	for (const record of records) {
-		record.tags = tagsByKey.get(String(record.key)) ?? [];
-	}
-
-	return records as Item[];
 }
 
 /**
@@ -135,8 +104,8 @@ export async function readCitationRecordsPage(
 		limit,
 	);
 
-	const [tagged, identifiers, doiAttachments] = await Promise.all([
-		attachTags(database, records as Record<string, unknown>[]),
+	const [tags, identifiers, doiAttachments] = await Promise.all([
+		readItemTags(database, records.map(record => String(record.key))),
 		readPublicIdentifiers(
 			database,
 			records.map((record) => ({ ...record, key: String(record.key) })),
@@ -144,14 +113,15 @@ export async function readCitationRecordsPage(
 		),
 		readPublicDoiAttachments(database, records.map(record => String(record.key)), config.content.tags.hidden),
 	]);
-	return tagged.map((record) => ({
+	return records.map((record) => ({
 		...record,
+		tags: tags.get(String(record.key)) ?? [],
 		publicationIdentifiers: identifiers.get(record.key),
 		DOI: resolvePublicDoi({
 			...record, attachments: doiAttachments.get(record.key),
 			publicationIdentifiers: identifiers.get(record.key),
 		}),
-	}));
+	})) as Item[];
 }
 
 export async function readNewestRecords(

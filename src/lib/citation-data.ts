@@ -66,6 +66,7 @@ export function itemToCitationData(item: Record<string, unknown>): CitationData 
 	const type = Object.entries(schema.types).find(([, types]) => types.includes(itemType))?.[0];
 	if (!type) return null;
 	const fields = withZoteroFieldNames(item);
+	const keyword = Array.isArray(item.tags) ? item.tags.map(stringValue).filter(Boolean).sort().join(", ") : "";
 	return { ...citationTextFields(fields), ...citationDates(fields), ...citationNames(item.creators),
-		id: key, type, title, "citation-key": `el_${key}` };
+		...(keyword ? { keyword } : {}), id: key, type, title, "citation-key": `el_${key}` };
 }

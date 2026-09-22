@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Cite } from "@citation-js/core";
 import { itemToCitationData } from "@/lib/citation-data";
 import { formatCitations } from "@/lib/citation-formatter";
 
@@ -57,4 +58,25 @@ describe("record citations", () => {
 		expect(itemToCitationData({ key: "EMPTY001", itemType: "Report", title: "  " })).toBeNull();
 		expect(itemToCitationData({ key: "FILE0001", itemType: "Attachment", title: "PDF" })).toBeNull();
 	});
+});
+
+
+it("keeps Unicode and TeX-sensitive organization names in reusable BibTeX", async () => {
+	const name = "研究 & Development 50% $5 #1_A";
+	const data = itemToCitationData({ ...article, title: "Éducation au Sénégal et 教育", creators: [{ name, creatorType: "author" }] })!;
+	const { bibtex } = await formatCitations(data, "en-GB");
+	const [parsed] = new Cite(bibtex).data;
+	expect(parsed.title).toBe("Éducation au Sénégal et 教育");
+	expect(parsed.author).toEqual([{ family: name }]);
+});
+
+it("preserves export metadata alongside formatted citations", async () => {
+	const data = itemToCitationData({
+		...article, languageName: "fr", abstractNote: "Evidence from schools.", tags: ["Kenya", "Education"],
+		creators: [{ firstName: "Mina", lastName: "Ito", creatorType: "translator" }],
+	})!;
+	const { bibtex } = await formatCitations(data, "en-GB");
+	const [parsed] = new Cite(bibtex).data;
+	expect(parsed).toMatchObject({ language: "fr", abstract: "Evidence from schools.", translator: [{ given: "Mina", family: "Ito" }] });
+	expect(String(parsed.keyword).split(/,\s*/)).toEqual(["Education", "Kenya"]);
 });

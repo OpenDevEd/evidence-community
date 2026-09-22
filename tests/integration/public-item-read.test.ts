@@ -20,6 +20,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { GET } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
 import { readCitationRecordsPage } from "@/lib/library-export-records";
+import { exportCitationItems } from "@/lib/citation-export";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
@@ -62,8 +63,9 @@ it("reads committed publications before indexing, and immediately respects edits
 			await client.query('INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'native\', $1)', [key]);
 			await client.query('INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "deleted", "title", "fullTextPDF") VALUES ($1, \'native\', $1, $2, $3, $4, $5, $6)', [key, itemType, parentItem, deleted, title, parentItem ? `${title} text` : null]);
 		}
-		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\')');
-		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\')');
+		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\'), (\'Education\')');
+		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\'), (\'PUBAAAAA\', \'Education\')');
+		await client.query(`UPDATE item SET extra = 'Research summary' WHERE key = 'PUBAAAAA'`);
 		await client.query(`INSERT INTO tag (name) VALUES ('_r:doi')`);
 		await client.query(`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('CHILDDDD', '_r:doi'), ('SECRETAA', '_r:doi'), ('DELETEDD', '_r:doi')`);
 		await client.query(`UPDATE item SET url = 'https://doi.org/10.5555/' || lower(key) WHERE "parentItem" = 'PUBAAAAA'`);
@@ -80,7 +82,14 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(publication.DOI).toBe("10.5555/childddd");
 		expect(await citation("PUBAAAAA")).toContain("10.5555/childddd");
 		expect((await getPublicItemCards(database, ["PUBAAAAA", "HIDDENNN", "CHILDDDD"], config)).map(card => [card.key, card.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
-		expect((await readCitationRecordsPage(config, null, 10)).map(record => [record.key, record.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
+		const exportRecords = await readCitationRecordsPage(config, null, 10);
+		expect(exportRecords.map(record => [record.key, record.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
+		const citationResponse = await readCitation(new NextRequest("https://library.example.org/api/item/PUBAAAAA/citation"), { params: Promise.resolve({ key: "PUBAAAAA" }) });
+		const citationData = await citationResponse.json();
+		expect(citationData.record).toMatchObject({ keyword: "Education", note: "Research summary" });
+		expect([publication, exportRecords[0]].map(record =>
+			exportCitationItems([record], "bibtex", config.citations.showUrl ? config.identity.baseUrl : undefined),
+		)).toEqual([citationData.citations.bibtex, citationData.citations.bibtex]);
 		expect(publication.collections).toEqual([child.key]);
 		expect(publication.collectionsAncestry).toEqual([child.key, root.key].sort());
 		expect(await citation("PUBAAAAA")).toContain("Published title");
