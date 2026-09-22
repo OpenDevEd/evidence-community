@@ -273,7 +273,13 @@ export function CitationControl({ item }: { item: CitationItem | undefined }) {
 		});
 	};
 	return (
-		<Popover isOpen={open} onOpenChange={setOpen} placement="bottom-end">
+		<Popover
+			isOpen={open}
+			onOpenChange={setOpen}
+			placement="bottom-end"
+			// Focus changes in the nested style menu may scroll the page.
+			shouldCloseOnScroll={false}
+		>
 			<PopoverTrigger>
 				<Button
 					onPointerEnter={prepare}

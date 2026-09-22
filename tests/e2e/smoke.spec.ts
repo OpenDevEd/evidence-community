@@ -725,6 +725,9 @@ test("copies the selected citation style from a result card without opening the 
 	const text = panel.locator('[aria-live="polite"]');
 	for (const style of ["APA 7", "BibTeX"]) {
 		await panel.getByRole("button", { name: /^Citation style/ }).click();
+		// Focusing the nested menu can scroll the page to keep it in view.
+		await expect(page.getByRole("combobox", { name: /Search styles or journals/ })).toBeFocused();
+		await page.evaluate(() => window.scrollBy({ top: 64, behavior: "instant" }));
 		await page.getByRole("option", { name: style, exact: true }).click();
 		const copy = panel.getByRole("button", { name: "Copy citation", exact: true });
 		await expect(copy).toBeEnabled();
@@ -741,6 +744,14 @@ test("copies the selected citation style from a result card without opening the 
 		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(displayed);
 	}
 	await expect(page).toHaveURL(resultsUrl);
+	await panel.getByRole("button", { name: /^Citation style/ }).click();
+	await expect(page.getByRole("listbox", { name: "Citation style" })).toBeVisible();
+	await expect(page.getByRole("combobox", { name: /Search styles or journals/ })).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("listbox", { name: "Citation style" })).toHaveCount(0);
+	await expect(panel.getByRole("button", { name: "Copy citation", exact: true })).toBeVisible();
+	await page.getByRole("textbox", { name: "Search", exact: true }).click();
+	await expect(panel).toHaveCount(0);
 });
 
 test("reports a clipboard failure and retries copying clean citation text", async ({ page, context }) => {
