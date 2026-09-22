@@ -87,9 +87,12 @@ The command list in `package.json` is authoritative.
   `npm test -- <test-file>`.
 - Run the matching type, lint, schema, browser, or real-service check only when
   its boundary changed.
-- Run `npm run check:changed` once before a code PR.
-- Use `npm run test:acceptance` only for a change that needs the disposable
-  runtime. Always finish with `npm run test:acceptance:cleanup`.
+- A PR creation or update uses those targeted checks, not a full local
+  `npm run check:changed` run.
+- Verify changed runtime behavior with the focused browser or service check.
+  The full `npm run test:acceptance` suite belongs to the pre-merge CI gate, or
+  an explicitly requested full-suite diagnosis. Clean up disposable acceptance
+  environments with `npm run test:acceptance:cleanup`.
 - Real database, Meilisearch, storage, source, Zotero, and publication commands
   are integration checks. Run only the command that owns the changed contract.
 - Documentation-only work needs link checks and `git diff --check`, not the
@@ -97,8 +100,9 @@ The command list in `package.json` is authoritative.
 
 GitHub CI runs on the isolated self-hosted runners documented in
 `docs/self-hosted-ci.md`. It owns the full final static lanes, runtime
-acceptance, and aggregate merge gate on the exact PR head. Local lanes do not
-repeat the full suite.
+acceptance, and aggregate merge gate on the exact PR head. Follow the CI
+section in `AGENTS.md`: ordinary edits finish after targeted verification;
+automatic CI runs in the background. Local lanes do not repeat the full suite.
 
 The runtime job uses four Playwright workers. Read the aggregate `CI` result
 for the exact head before merging. The current GitHub plan cannot enforce that
