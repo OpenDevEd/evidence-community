@@ -1,10 +1,10 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
+import { Popover, PopoverContent, PopoverTrigger, type InputProps } from "@nextui-org/react";
 import {
 	ArrowDown01Icon,
 	Search01Icon,
@@ -134,7 +134,12 @@ function StyleMenu({
 			{ align: "auto" },
 		);
 	};
-	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+	const onKeyDown = (event: Parameters<NonNullable<InputProps["onKeyDown"]>>[0]) => {
+		if (event.key === "Escape") {
+			// React Aria input handlers stop propagation unless explicitly continued.
+			event.continuePropagation();
+			return;
+		}
 		if (event.nativeEvent.isComposing || !matches.length) return;
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault();
@@ -279,6 +284,7 @@ export function CitationStylePicker({
 			isOpen={open}
 			onOpenChange={setOpen}
 			placement="bottom-end"
+			shouldCloseOnScroll={false}
 			classNames={{ base: "max-h-[inherit]" }}
 			motionProps={{ className: "max-h-[inherit]" }}
 		>
