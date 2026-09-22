@@ -1229,6 +1229,10 @@
 			"default": {},
 			"type": "object",
 			"properties": {
+				"enabled": {
+					"default": true,
+					"type": "boolean"
+				},
 				"showUrl": {
 					"default": false,
 					"type": "boolean"

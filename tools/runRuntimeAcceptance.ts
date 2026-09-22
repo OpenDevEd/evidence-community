@@ -1561,10 +1561,9 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL:
 			messages.ui[config.filters.institution.label] ??
 			config.filters.institution.label,
-		PLAYWRIGHT_EXPECTED_CITATIONS_ENABLED: String(Boolean(config.services.zotero.translationUrl)),
+		PLAYWRIGHT_EXPECTED_CITATIONS_ENABLED: String(config.citations.enabled),
 		PLAYWRIGHT_EXPECTED_CITATION_URL: String(
-			config.citations.showUrl &&
-				Boolean(config.services.zotero.translationUrl),
+			config.citations.showUrl && config.citations.enabled,
 		),
 		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
 			config.search.embedder !== null && config.features.relatedResources,

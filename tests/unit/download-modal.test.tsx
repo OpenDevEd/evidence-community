@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const testState = vi.hoisted(() => ({
 	downloadsEnabled: true,
+	citationsEnabled: true,
 	exports: { ris: true, bibtex: true, atom: false },
 }));
 
@@ -13,6 +14,7 @@ vi.mock("server-only", () => ({}));
 
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: string) => key,
+	useLocale: () => "en-GB",
 }));
 
 vi.mock("@/lib/actions", () => ({
@@ -22,7 +24,10 @@ vi.mock("@/lib/actions", () => ({
 // The downloads switch decides whether a reader sees the button. The RIS and
 // BibTeX switches decide which formats the dialog offers.
 vi.mock("@/context/LibraryConfigProvider", () => ({
-	useLibraryConfig: () => ({ exports: testState.exports }),
+	useLibraryConfig: () => ({
+		exports: testState.exports,
+		citations: { enabled: testState.citationsEnabled },
+	}),
 	useLibraryFeature: (feature: string) =>
 		feature === "downloads" && testState.downloadsEnabled,
 }));
@@ -32,14 +37,15 @@ import {
 	DownloadModal,
 } from "@/components/features/newlib/DownloadModal";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-	true;
+(
+	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("single-record download options", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 
-	async function renderModal() {
+	async function renderModal(citationPath?: string) {
 		await act(async () => {
 			root.render(
 				<DownloadModal
@@ -48,6 +54,7 @@ describe("single-record download options", () => {
 					onClose={vi.fn()}
 					action={vi.fn(async () => "TY  - JOUR")}
 					fileName="ABCD1234"
+					citationPath={citationPath}
 				/>,
 			);
 		});
@@ -59,7 +66,9 @@ describe("single-record download options", () => {
 
 	beforeEach(() => {
 		testState.downloadsEnabled = true;
+		testState.citationsEnabled = true;
 		testState.exports = { ris: true, bibtex: true, atom: false };
+		localStorage.clear();
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
@@ -70,6 +79,7 @@ describe("single-record download options", () => {
 			root.unmount();
 		});
 		container.remove();
+		localStorage.clear();
 	});
 
 	it("shows the download button when downloads are switched on", async () => {
@@ -81,9 +91,7 @@ describe("single-record download options", () => {
 			);
 		});
 
-		expect(container.querySelector("button")?.textContent).toBe(
-			"Download",
-		);
+		expect(container.querySelector("button")?.textContent).toBe("Download");
 	});
 
 	it("hides the download button when downloads are switched off", async () => {
@@ -126,5 +134,44 @@ describe("single-record download options", () => {
 
 		expect(options).toHaveLength(1);
 		expect(options[0]).toContain("RIS");
+	});
+
+	it("offers formatted downloads with the saved citation style", async () => {
+		localStorage.setItem("citation-style", JSON.stringify("vancouver"));
+		await renderModal("/api/item/ABCD1234/export/citation");
+
+		const citationSection = document.querySelector(
+			'section[aria-label="itemCitationTitle"]',
+		);
+		expect(citationSection?.textContent).toContain("Vancouver");
+		expect(citationSection?.textContent).toContain(
+			"downloadFormattedCitation",
+		);
+		expect(citationSection?.textContent).toContain("downloadPlainCitation");
+	});
+
+	it("keeps formatted downloads available when reference-manager exports are off", async () => {
+		testState.exports = { ris: false, bibtex: false, atom: false };
+		const options = await renderModal("/api/exports/citation");
+
+		expect(options).toHaveLength(0);
+		expect(
+			document.querySelector('section[aria-label="itemCitationTitle"]'),
+		).not.toBeNull();
+		expect(
+			document.querySelector(
+				'section[aria-label="referenceManagerFormats"]',
+			),
+		).toBeNull();
+	});
+
+	it("hides formatted downloads when citations are disabled", async () => {
+		testState.citationsEnabled = false;
+		const options = await renderModal("/api/item/ABCD1234/export/citation");
+
+		expect(options).toHaveLength(2);
+		expect(
+			document.querySelector('section[aria-label="itemCitationTitle"]'),
+		).toBeNull();
 	});
 });

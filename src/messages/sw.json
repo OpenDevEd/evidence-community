@@ -1,5 +1,12 @@
 {
   "ui": {
+    "downloadFormattedCitation": "Iliyoumbizwa (.html)",
+    "downloadPlainCitation": "Maandishi pekee (.txt)",
+    "referenceManagerFormats": "Kidhibiti cha marejeleo",
+    "cite": "Nukuu",
+    "citationStyle": "Mtindo wa kunukuu",
+    "copyCitation": "Nakili rejeleo",
+    "citationLoadFailed": "Imeshindikana kupakia rejeleo hili.",
     "resultsLabel": "Matokeo",
     "exportFailed": "Imeshindikana kuandaa maudhui haya",
     "copyFailed": "Imeshindikana kunakili",
@@ -484,7 +491,12 @@
     "percentOfTotal": "{percentage}% ya jumla",
     "viewDetails": "Tazama maelezo",
     "openGapMap": "Fungua ramani ya mapengo",
-    "openGapMapAriaLabel": "Fungua ramani ya mapengo {label}"
+    "openGapMapAriaLabel": "Fungua ramani ya mapengo {label}",
+    "searchCitationStyles": "Tafuta mitindo au majarida…",
+    "citationStylesFailed": "Imeshindwa kupakia mitindo.",
+    "noCitationStyles": "Hakuna mitindo inayolingana.",
+    "commonCitationStyles": "Mitindo ya kawaida",
+    "otherCitationStyles": "Mitindo mingine"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

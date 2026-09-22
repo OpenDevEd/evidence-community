@@ -1,0 +1,110 @@
+diff --git a/node_modules/@citation-js/plugin-ris/lib-mjs/ris.js b/node_modules/@citation-js/plugin-ris/lib-mjs/ris.js
+index 7ddf851..dab27d3 100644
+--- a/node_modules/@citation-js/plugin-ris/lib-mjs/ris.js
++++ b/node_modules/@citation-js/plugin-ris/lib-mjs/ris.js
+@@ -120,7 +120,7 @@ export function format(data, {
+       if (tag === 'TY') {
+         continue;
+       }
+-      tags.push(...[].concat(entry[tag]).map(value => `${tag}  - ${value.toString().replace(/(.{70})/g, '$1\n')}`));
++      tags.push(...[].concat(entry[tag]).map(value => `${tag}  - ${value.toString().replace(/\r?\n/g, ' ')}`));
+     }
+     tags.unshift(`TY  - ${entry.TY}`);
+     tags.push('ER  - ');
+diff --git a/node_modules/@citation-js/plugin-ris/lib-mjs/spec/new.json b/node_modules/@citation-js/plugin-ris/lib-mjs/spec/new.json
+index 86f4c37..75d61eb 100644
+--- a/node_modules/@citation-js/plugin-ris/lib-mjs/spec/new.json
++++ b/node_modules/@citation-js/plugin-ris/lib-mjs/spec/new.json
+@@ -182,13 +182,15 @@
+     "when": {
+       "source": {
+         "TY": [
+-          "BOOK"
++          "BOOK",
++          "RPRT"
+         ]
+       },
+       "target": {
+         "type": [
+           "book",
+-          "review-book"
++          "review-book",
++          "report"
+         ]
+       }
+     }
+@@ -225,7 +227,8 @@
+           "EDBOOK",
+           "ENCYC",
+           "GRANT",
+-          "PAMP"
++          "PAMP",
++          "RPRT"
+         ]
+       },
+       "target": {
+@@ -237,7 +240,8 @@
+           "entry-dictionary",
+           "entry-encyclopedia",
+           "pamphlet",
+-          "review-book"
++          "review-book",
++          "report"
+         ]
+       }
+     }
+diff --git a/node_modules/@citation-js/plugin-ris/lib/ris.js b/node_modules/@citation-js/plugin-ris/lib/ris.js
+index 6a0c115..0d78853 100644
+--- a/node_modules/@citation-js/plugin-ris/lib/ris.js
++++ b/node_modules/@citation-js/plugin-ris/lib/ris.js
+@@ -131,7 +131,7 @@ function format(data, {
+       if (tag === 'TY') {
+         continue;
+       }
+-      tags.push(...[].concat(entry[tag]).map(value => `${tag}  - ${value.toString().replace(/(.{70})/g, '$1\n')}`));
++      tags.push(...[].concat(entry[tag]).map(value => `${tag}  - ${value.toString().replace(/\r?\n/g, ' ')}`));
+     }
+     tags.unshift(`TY  - ${entry.TY}`);
+     tags.push('ER  - ');
+diff --git a/node_modules/@citation-js/plugin-ris/lib/spec/new.json b/node_modules/@citation-js/plugin-ris/lib/spec/new.json
+index 86f4c37..75d61eb 100644
+--- a/node_modules/@citation-js/plugin-ris/lib/spec/new.json
++++ b/node_modules/@citation-js/plugin-ris/lib/spec/new.json
+@@ -182,13 +182,15 @@
+     "when": {
+       "source": {
+         "TY": [
+-          "BOOK"
++          "BOOK",
++          "RPRT"
+         ]
+       },
+       "target": {
+         "type": [
+           "book",
+-          "review-book"
++          "review-book",
++          "report"
+         ]
+       }
+     }
+@@ -225,7 +227,8 @@
+           "EDBOOK",
+           "ENCYC",
+           "GRANT",
+-          "PAMP"
++          "PAMP",
++          "RPRT"
+         ]
+       },
+       "target": {
+@@ -237,7 +240,8 @@
+           "entry-dictionary",
+           "entry-encyclopedia",
+           "pamphlet",
+-          "review-book"
++          "review-book",
++          "report"
+         ]
+       }
+     }

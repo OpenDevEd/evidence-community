@@ -7,7 +7,7 @@ import { InferSelectModel } from "drizzle-orm";
 import { Session } from "next-auth";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { BibTeXExporter } from "@/lib/formatAsBibTeX";
+import { exportCitationItems } from "@/lib/citation-export";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -157,35 +157,11 @@ export async function getProfileSearchFilter(
 
 export async function convertItem(
 	item: Item | Item[],
-	format: "ris" | "bibtex" | "citation",
+	format: "ris" | "bibtex",
 ) {
 	const itemsList = Array.isArray(item) ? item : [item];
-	const texts: string[] = [];
-
-	const promises = itemsList.map(async (item) => {
-		try {
-			const BibTeX = new BibTeXExporter(item);
-
-			if (format === "ris") {
-				const ret = await BibTeX.toRIS();
-				texts.push(ret);
-			}
-
-			if (format === "bibtex") {
-				const ret = await BibTeX.toBibTeX();
-				texts.push(ret);
-			}
-
-			if (format === "citation") {
-				const ret = await BibTeX.toCitation();
-				texts.push(ret);
-			}
-		} catch (error) {}
-	});
-
-	await Promise.allSettled(promises);
-
-	return texts.join("\n\n");
+	const config = await getLibraryConfig();
+	return exportCitationItems(itemsList, format, config.citations.showUrl ? config.identity.baseUrl : undefined);
 }
 
 export async function getLikedPosts(likes: Session["user"]["likes"]) {

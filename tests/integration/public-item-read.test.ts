@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -20,6 +20,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { GET } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
 import { readCitationRecordsPage } from "@/lib/library-export-records";
+import { exportCitationItems } from "@/lib/citation-export";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
@@ -31,27 +32,14 @@ config.content.tags.hidden = ["hidden"];
 
 afterEach(() => vi.unstubAllGlobals());
 
-// Only external citation services are replaced; the source record and renderer are real.
-function stubCitationServices() {
-	vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
-		if (String(url).includes("/export?format=csljson")) {
-			const [record] = JSON.parse(String(init?.body));
-			return Response.json([{ id: "PUBAAAAA", type: "report", title: record.title, DOI: record.DOI }]);
-		}
-		if (String(url).endsWith("apa.csl")) {
-			return new Response('<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text"><info><title>Test title citation</title><id>https://example.org/test</id></info><citation><layout><text variable="title"/></layout></citation><bibliography><layout><text variable="title"/><text variable="DOI" prefix=" "/></layout></bibliography></style>');
-		}
-		if (String(url).includes("locales-en-GB.xml")) {
-			return new Response('<locale xmlns="http://purl.org/net/xbiblio/csl" xml:lang="en-GB"><terms/></locale>');
-		}
-		throw new Error(`Unexpected external request: ${url}`);
-	}));
-}
+// Citation reads use the real formatter and must not need an external service.
+beforeEach(() => vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Unexpected network request"); })));
 
 async function citation(key: string) {
 	const response = await readCitation(new NextRequest(`https://library.example.org/api/item/${key}/citation`), { params: Promise.resolve({ key }) });
 	expect(response.headers.get("cache-control")).toBe("no-store");
-	return (await response.json()).citation;
+	expect(response.status).toBe(200);
+	return (await response.json()).citations?.apa.text ?? null;
 }
 
 function read(key: string) {
@@ -59,7 +47,6 @@ function read(key: string) {
 }
 
 it("reads committed publications before indexing, and immediately respects edits, removal and hidden records", async () => {
-	stubCitationServices();
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
 		vi.mocked(getLibraryConfig).mockResolvedValue(config);
@@ -76,8 +63,9 @@ it("reads committed publications before indexing, and immediately respects edits
 			await client.query('INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'native\', $1)', [key]);
 			await client.query('INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "deleted", "title", "fullTextPDF") VALUES ($1, \'native\', $1, $2, $3, $4, $5, $6)', [key, itemType, parentItem, deleted, title, parentItem ? `${title} text` : null]);
 		}
-		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\')');
-		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\')');
+		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\'), (\'Education\')');
+		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\'), (\'PUBAAAAA\', \'Education\')');
+		await client.query(`UPDATE item SET extra = 'Research summary' WHERE key = 'PUBAAAAA'`);
 		await client.query(`INSERT INTO tag (name) VALUES ('_r:doi')`);
 		await client.query(`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('CHILDDDD', '_r:doi'), ('SECRETAA', '_r:doi'), ('DELETEDD', '_r:doi')`);
 		await client.query(`UPDATE item SET url = 'https://doi.org/10.5555/' || lower(key) WHERE "parentItem" = 'PUBAAAAA'`);
@@ -94,7 +82,14 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(publication.DOI).toBe("10.5555/childddd");
 		expect(await citation("PUBAAAAA")).toContain("10.5555/childddd");
 		expect((await getPublicItemCards(database, ["PUBAAAAA", "HIDDENNN", "CHILDDDD"], config)).map(card => [card.key, card.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
-		expect((await readCitationRecordsPage(config, null, 10)).map(record => [record.key, record.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
+		const exportRecords = await readCitationRecordsPage(config, null, 10);
+		expect(exportRecords.map(record => [record.key, record.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
+		const citationResponse = await readCitation(new NextRequest("https://library.example.org/api/item/PUBAAAAA/citation"), { params: Promise.resolve({ key: "PUBAAAAA" }) });
+		const citationData = await citationResponse.json();
+		expect(citationData.record).toMatchObject({ keyword: "Education", note: "Research summary" });
+		expect([publication, exportRecords[0]].map(record =>
+			exportCitationItems([record], "bibtex", config.citations.showUrl ? config.identity.baseUrl : undefined),
+		)).toEqual([citationData.citations.bibtex.text, citationData.citations.bibtex.text]);
 		expect(publication.collections).toEqual([child.key]);
 		expect(publication.collectionsAncestry).toEqual([child.key, root.key].sort());
 		expect(await citation("PUBAAAAA")).toContain("Published title");
@@ -140,7 +135,6 @@ it("reports an unavailable database as a retryable failure instead of a missing 
 });
 
 it("uses current registered identifiers across public records, citations, cards and library exports", async () => {
-	stubCitationServices();
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		const config = publicationTestConfig();
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);

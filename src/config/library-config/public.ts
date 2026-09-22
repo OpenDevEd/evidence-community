@@ -45,7 +45,7 @@ export function projectPublicLibraryConfig(
 		filters: config.filters,
 		content: config.content,
 		citations: {
-			enabled: Boolean(config.services.zotero.translationUrl),
+			enabled: config.citations.enabled,
 			showUrl: config.citations.showUrl,
 		},
 		features: config.features,

@@ -10,9 +10,15 @@ import {
 	buildLibraryExportFilename,
 	readAtomFeedRecords,
 	streamLibraryCitations,
+	readLibraryCitationData,
 } from "@/lib/library-exports";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { connection } from "next/server";
+import { connection, NextRequest } from "next/server";
+import { getRuntimeRequestLocale } from "@/i18n/server";
+import {
+	resolveCitationDownload,
+	citationDownloadResponse,
+} from "@/lib/citation-download";
 
 function notFound() {
 	return Response.json(
@@ -36,16 +42,30 @@ function isFormatAvailable(
 }
 
 export async function GET(
-	_request: Request,
+	request: Request,
 	{ params }: { params: Promise<{ format: string }> },
 ) {
 	// Every export reads live records, so nothing here may be prerendered.
 	await connection();
 
 	const { format } = await params;
-	if (!isLibraryExportFormat(format)) return notFound();
-
 	const config = await getLibraryConfig();
+	if (format === "citation") {
+		if (!config.features.downloads || !config.citations.enabled)
+			return notFound();
+		const selection = await resolveCitationDownload(request);
+		if (!selection) return notFound();
+		const records = await readLibraryCitationData(config);
+		return citationDownloadResponse(records, selection, {
+			locale: await getRuntimeRequestLocale(new NextRequest(request)),
+			numbered: true,
+			fileName: config.identity.shortName,
+			libraryBaseUrl: config.citations.showUrl
+				? config.identity.baseUrl
+				: undefined,
+		});
+	}
+	if (!isLibraryExportFormat(format)) return notFound();
 	if (!isFormatAvailable(config, format)) return notFound();
 
 	const headers = new Headers({

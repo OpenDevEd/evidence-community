@@ -1,5 +1,12 @@
 {
   "ui": {
+    "downloadFormattedCitation": "Formatiert (.html)",
+    "downloadPlainCitation": "Nur Text (.txt)",
+    "referenceManagerFormats": "Literaturverwaltung",
+    "cite": "Zitieren",
+    "citationStyle": "Zitierstil",
+    "copyCitation": "Quellenangabe kopieren",
+    "citationLoadFailed": "Die Quellenangabe konnte nicht geladen werden.",
     "resultsLabel": "Ergebnisse",
     "exportFailed": "Dieser Inhalt konnte nicht vorbereitet werden",
     "copyFailed": "Kopieren nicht möglich",
@@ -483,7 +490,12 @@
     "percentOfTotal": "{percentage}% des Gesamten",
     "viewDetails": "Details anzeigen",
     "openGapMap": "Gap-Map öffnen",
-    "openGapMapAriaLabel": "Gap-Map {label} öffnen"
+    "openGapMapAriaLabel": "Gap-Map {label} öffnen",
+    "searchCitationStyles": "Stile oder Zeitschriften suchen…",
+    "citationStylesFailed": "Stile konnten nicht geladen werden.",
+    "noCitationStyles": "Keine passenden Stile.",
+    "commonCitationStyles": "Häufige Stile",
+    "otherCitationStyles": "Weitere Stile"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

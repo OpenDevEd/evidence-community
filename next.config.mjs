@@ -7,7 +7,7 @@ const withNextIntl = createNextIntlPlugin();
 const nextConfig = {
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheComponents: true,
-	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
+	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "citeproc-ts"],
 	typescript: {
 		ignoreBuildErrors:
 			process.env.EVIDENCE_LIBRARY_RELEASE_BUILD === "1",

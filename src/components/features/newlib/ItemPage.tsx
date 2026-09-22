@@ -67,7 +67,9 @@ import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
-import { buildSiteUrl } from "@/lib/site-url";
+import { CitationPanel } from "@/components/features/items/CitationControl";
+import { canCiteItem } from "@/lib/citation-formats";
+import { ItemPropertyRowWrapper } from "@/components/features/newlib/ItemPropertyRow";
 import BrandIcon from "@/components/icons/BrandIcon";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
@@ -77,20 +79,6 @@ import { creatorDisplayName } from "@/lib/creator-display-name";
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
 });
-
-const decodeHTMLEntities = (text: string) => {
-	return text
-		.replace(/&amp;/g, "&")
-		.replace(/&quot;/g, '"')
-		.replace(/&apos;/g, "'")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
-		.replace(/&#x([0-9A-F]+);/gi, (_, hex) =>
-			String.fromCharCode(parseInt(hex, 16)),
-		)
-		.replace(/<[^>]*>?/g, "");
-};
 
 interface ItemRowProps {
 	icon: React.ReactNode;
@@ -342,7 +330,7 @@ function ItemAuthor({
 			className="rounded-2xl bg-card_light dark:bg-card"
 			placement="left"
 			content={
-				<div className="py-2 px-1 min-w-[300px]">
+				<div className="py-2 px-1 min-w-author-popover">
 					{/* Author Header */}
 					<motion.div
 						className="flex items-center gap-3 mb-4"
@@ -696,34 +684,6 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 	);
 }
 
-function ItemPropertyRowWrapper({
-	children,
-	title,
-	copyText,
-	className,
-}: {
-	children: React.ReactNode;
-	title: string;
-	copyText?: string;
-	className?: string;
-}) {
-	const tUI = useTranslations("ui");
-	return (
-		<div className={twMerge("flex flex-col gap-4", className)}>
-			<div className="flex items-center justify-between">
-				<h3 className="text-xl font-medium">{title}</h3>
-				{copyText && (
-					<CopyButton
-						textToCopy={copyText}
-						ariaLabel={tUI("copyField", { field: title })}
-					/>
-				)}
-			</div>
-			{children}
-		</div>
-	);
-}
-
 function ItemAbstract({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	return (
@@ -751,124 +711,9 @@ function ProcessHTML(html: string) {
 }
 
 export function ItemCitation({ item }: { item: Item | undefined }) {
-	const t = useTranslations("ui");
-	const { citations, identity } = useLibraryConfig();
-	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
-		citation: string | null;
-	}>(
-		citations.enabled && item?.key
-			? [`/item/${item.key}/citation`, item.revision, item.DOI ?? null]
-			: null,
-		([url]: [string, number, string | null]) => fetcher(url),
-		{
-			revalidateOnFocus: false,
-			revalidateOnReconnect: false,
-			revalidateIfStale: false,
-		},
-	);
-	const resolvedCitation = isCitationFetching
-		? item?.citation || ""
-		: citationResponse?.citation || "";
-
-	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
-		if (
-			isCitationFetching ||
-			resolvedCitation === "<div>Loading...</div>"
-		) {
-			return { isLoading: true };
-		}
-
-		const rawCitation = resolvedCitation;
-		const cleanCitationText = rawCitation.replace(/<[^>]+>/g, "");
-		const decodedCitation = cleanCitationText
-			? decodeHTMLEntities(cleanCitationText).replace(/\s+/g, " ").trim()
-			: undefined;
-
-		if (!citations.showUrl || !item?.key || !decodedCitation) {
-			return {
-				citationCopy: decodedCitation,
-				citationHtml: ProcessHTML(rawCitation.trim()),
-				isLoading: false,
-			};
-		}
-
-		const urlStr = buildSiteUrl(`/lib/${item.key}`, identity.baseUrl);
-		const linkHtml = `<a href="${urlStr}" target="_blank" rel="noopener noreferrer" class="text-link hover:underline">${urlStr}</a>`;
-
-		// Copy Text Logic
-		let copy = decodedCitation;
-		if (!copy.endsWith(".")) copy += ".";
-		copy += ` Available at ${urlStr}.`;
-
-		// Display HTML Logic
-		const html = rawCitation.trim();
-		const divRegex = /<\/div>\s*$/;
-		const hasDiv = divRegex.test(html);
-		const baseHtml = html.replace(divRegex, "");
-
-		const processedBase = ProcessHTML(baseHtml);
-
-		const separator = cleanCitationText.trim().endsWith(".") ? "" : ".";
-		let finalHtml = `${processedBase}${separator} Available at ${linkHtml}.`;
-
-		if (hasDiv) {
-			finalHtml = `${finalHtml}</div>`;
-		}
-
-		return {
-			citationCopy: copy,
-			citationHtml: finalHtml,
-			isLoading: false,
-		};
-	}, [
-		citations.showUrl,
-		identity.baseUrl,
-		isCitationFetching,
-		item?.key,
-		resolvedCitation,
-	]);
-	// No citation server configured: the row never appears.
-	if (!citations.enabled) return null;
-	if (!isLoading && !citationHtml && !citationCopy) return null;
-
-	return (
-		<ItemPropertyRowWrapper
-			title={t("itemCitationTitle")}
-			copyText={citationCopy}
-		>
-			<AnimatePresence>
-				{isLoading ? (
-					<motion.div
-						data-citation-state="loading"
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						transition={{ duration: 0.3 }}
-					>
-						<Skeleton
-							isLoaded={false}
-							className="rounded-2xl w-full min-h-16"
-						/>
-					</motion.div>
-				) : (
-					<motion.div
-						data-citation-state="ready"
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						transition={{ duration: 0.3 }}
-					>
-						<p
-							dangerouslySetInnerHTML={{
-								__html: citationHtml || "",
-							}}
-							className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
-						/>
-					</motion.div>
-				)}
-			</AnimatePresence>
-		</ItemPropertyRowWrapper>
-	);
+	const { citations } = useLibraryConfig();
+	if (!citations.enabled || !canCiteItem(item)) return null;
+	return <CitationPanel key={item.key} item={item} showHeading completeRecord />;
 }
 
 type CanonicalWebsiteLink = {

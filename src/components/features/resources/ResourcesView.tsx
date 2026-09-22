@@ -502,7 +502,7 @@ function ContentActions() {
 	const { status } = useContext(CacheContext) as CacheContextType;
 	const totalItems = status.totalItems;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const { exports, identity } = useLibraryConfig();
+	const { exports, identity, citations } = useLibraryConfig();
 	const isDownloadEnabled = useLibraryFeature("downloads");
 	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
 	const availableFormats = getEnabledCitationFormats(exports);
@@ -517,6 +517,7 @@ function ContentActions() {
 				onOpenChange={onOpenChange}
 				onClose={onClose}
 				hrefForFormat={getLibraryExportPath}
+				citationPath="/api/exports/citation"
 				formats={availableFormats}
 				fileName={identity.shortName}
 				description={t(
@@ -526,7 +527,7 @@ function ContentActions() {
 					{ count: downloadableRecords, total: totalItems },
 				)}
 			/>
-			{isDownloadEnabled && availableFormats.length > 0 && (
+			{isDownloadEnabled && (availableFormats.length > 0 || citations.enabled) && (
 				<Button
 					data-download-record-count={downloadableRecords}
 					endContent={

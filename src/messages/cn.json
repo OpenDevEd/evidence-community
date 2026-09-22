@@ -1,5 +1,12 @@
 {
   "ui": {
+    "downloadFormattedCitation": "格式化文本 (.html)",
+    "downloadPlainCitation": "纯文本 (.txt)",
+    "referenceManagerFormats": "文献管理工具",
+    "cite": "引用",
+    "citationStyle": "引用格式",
+    "copyCitation": "复制引用",
+    "citationLoadFailed": "无法加载此引用。",
     "resultsLabel": "结果",
     "exportFailed": "无法准备此内容",
     "copyFailed": "无法复制",
@@ -483,7 +490,12 @@
     "percentOfTotal": "{percentage}% 总计",
     "viewDetails": "查看详情",
     "openGapMap": "打开证据缺口图谱",
-    "openGapMapAriaLabel": "打开{label}证据缺口图谱"
+    "openGapMapAriaLabel": "打开{label}证据缺口图谱",
+    "searchCitationStyles": "搜索样式或期刊…",
+    "citationStylesFailed": "无法加载样式。",
+    "noCitationStyles": "没有匹配的样式。",
+    "commonCitationStyles": "常用格式",
+    "otherCitationStyles": "其他格式"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

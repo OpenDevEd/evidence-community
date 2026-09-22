@@ -1,5 +1,12 @@
 {
   "ui": {
+    "downloadFormattedCitation": "Formatado (.html)",
+    "downloadPlainCitation": "Texto simples (.txt)",
+    "referenceManagerFormats": "Gestor de referências",
+    "cite": "Citar",
+    "citationStyle": "Estilo de citação",
+    "copyCitation": "Copiar referência",
+    "citationLoadFailed": "Não foi possível carregar esta referência.",
     "resultsLabel": "Resultados",
     "exportFailed": "Não foi possível preparar este conteúdo",
     "copyFailed": "Não foi possível copiar",
@@ -483,7 +490,12 @@
     "percentOfTotal": "{percentage}% do total",
     "viewDetails": "Ver detalhes",
     "openGapMap": "Abrir mapa de lacunas",
-    "openGapMapAriaLabel": "Abrir mapa de lacunas {label}"
+    "openGapMapAriaLabel": "Abrir mapa de lacunas {label}",
+    "searchCitationStyles": "Pesquisar estilos ou revistas…",
+    "citationStylesFailed": "Não foi possível carregar os estilos.",
+    "noCitationStyles": "Nenhum estilo encontrado.",
+    "commonCitationStyles": "Estilos comuns",
+    "otherCitationStyles": "Outros estilos"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

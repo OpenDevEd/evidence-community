@@ -1,3 +1,4 @@
+import { CITATION_RECORD_COLUMNS } from "@/lib/citation-record-columns";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readPublicDoiAttachments, readPublicIdentifiers } from "@/lib/publication/public-identifiers";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
@@ -8,97 +9,14 @@ import {
 	max,
 	desc,
 	gt,
-	inArray,
 	sql,
 } from "drizzle-orm";
 
 import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { readItemTags } from "@/lib/item-tags";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Item } from "@/app/api/item/types";
-
-/**
- * The only record columns an export may read. This is an allow-list on
- * purpose: stored full text (`fullTextPDF`), cover images
- * (`PDFCoverPageImage`, `PDFCoverPageWidth`, `PDFCoverPageHeight`), note and
- * annotation bodies, and file details are never loaded, however the search
- * index or the database happens to be configured.
- */
-export const CITATION_RECORD_COLUMNS = [
-	"key",
-	"itemType",
-	"title",
-	"shortTitle",
-	"abstractNote",
-	"authority",
-	"creators",
-	"medium",
-	"artworkSize",
-	"date",
-	"originalDate",
-	"archive",
-	"archiveLocation",
-	"libraryCatalog",
-	"callNumber",
-	"url",
-	"accessDate",
-	"rights",
-	"extra",
-	"seriesTitle",
-	"numberOfVolumes",
-	"volume",
-	"place",
-	"eventPlace",
-	"originalPlace",
-	"runningTime",
-	"ISBN",
-	"code",
-	"section",
-	"session",
-	"history",
-	"series",
-	"seriesNumber",
-	"edition",
-	"publisher",
-	"originalPublisher",
-	"numPages",
-	"pages",
-	"reporter",
-	"versionNumber",
-	"system",
-	"programmingLanguage",
-	"conferenceName",
-	"DOI",
-	"PMCID",
-	"PMID",
-	"committee",
-	"publicationTitle",
-	"issue",
-	"seriesText",
-	"journalAbbreviation",
-	"ISSN",
-	"scale",
-	"country",
-	"assignee",
-	"filingDate",
-	"applicationNumber",
-	"priorityNumbers",
-	"references",
-	"meetingName",
-	"codeNumber",
-	"type",
-	"citationKey",
-	"number",
-	"status",
-	"partNumber",
-	"partTitle",
-	"citation",
-	"languageName",
-	"dateAdded",
-	"dateModified",
-	"updatedAt",
-] as const satisfies readonly (keyof typeof item.$inferSelect)[];
 
 /** The extra columns the Atom feed needs on top of nothing else. */
 const FEED_RECORD_COLUMNS = [
@@ -131,36 +49,6 @@ function publicRecordCondition(
 	config: LibraryServerConfig,
 ) {
 	return publicParentVisibility(database, config.content.tags.hidden);
-}
-
-async function attachTags(
-	database: Database,
-	records: Record<string, unknown>[],
-) {
-	if (records.length === 0) return records as Item[];
-
-	const rows = await database
-		.select({ itemKey: itemToTag.itemKey, tagName: itemToTag.tagName })
-		.from(itemToTag)
-		.where(
-			inArray(
-				itemToTag.itemKey,
-				records.map((record) => String(record.key)),
-			),
-		);
-
-	const tagsByKey = new Map<string, string[]>();
-	for (const row of rows) {
-		const tags = tagsByKey.get(row.itemKey);
-		if (tags) tags.push(row.tagName);
-		else tagsByKey.set(row.itemKey, [row.tagName]);
-	}
-
-	for (const record of records) {
-		record.tags = tagsByKey.get(String(record.key)) ?? [];
-	}
-
-	return records as Item[];
 }
 
 /**
@@ -216,8 +104,8 @@ export async function readCitationRecordsPage(
 		limit,
 	);
 
-	const [tagged, identifiers, doiAttachments] = await Promise.all([
-		attachTags(database, records as Record<string, unknown>[]),
+	const [tags, identifiers, doiAttachments] = await Promise.all([
+		readItemTags(database, records.map(record => String(record.key))),
 		readPublicIdentifiers(
 			database,
 			records.map((record) => ({ ...record, key: String(record.key) })),
@@ -225,14 +113,15 @@ export async function readCitationRecordsPage(
 		),
 		readPublicDoiAttachments(database, records.map(record => String(record.key)), config.content.tags.hidden),
 	]);
-	return tagged.map((record) => ({
+	return records.map((record) => ({
 		...record,
+		tags: tags.get(String(record.key)) ?? [],
 		publicationIdentifiers: identifiers.get(record.key),
 		DOI: resolvePublicDoi({
 			...record, attachments: doiAttachments.get(record.key),
 			publicationIdentifiers: identifiers.get(record.key),
 		}),
-	}));
+	})) as Item[];
 }
 
 export async function readNewestRecords(

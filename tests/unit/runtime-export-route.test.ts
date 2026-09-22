@@ -1,3 +1,4 @@
+vi.mock("server-only", () => ({}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { XMLParser, XMLValidator } from "fast-xml-parser";
@@ -58,9 +59,9 @@ function configWith(changes: {
 	return libraryConfigSchema.parse(draft);
 }
 
-function requestFor(format: string) {
+function requestFor(format: string, query = "") {
 	return GET(
-		new Request(`https://library.example.org/api/exports/${format}`),
+		new Request(`https://library.example.org/api/exports/${format}?${query}`),
 		{ params: Promise.resolve({ format }) },
 	);
 }
@@ -77,7 +78,7 @@ function libraryHolding(...keys: string[]) {
 			sorted
 				.filter((key) => (afterKey === null ? true : key > afterKey))
 				.slice(0, limit)
-				.map((key) => ({ key, title: `Record ${key}` })),
+				.map((key) => ({ key, itemType: "Report", title: `Record ${key}`, date: "2026", creators: [{ firstName: "Jane", lastName: "Smith", creatorType: "author" }] })),
 	);
 }
 
@@ -199,4 +200,34 @@ describe("whole-library Atom feed", () => {
 		expect(response.status).toBe(404);
 		expect(mocks.readNewestRecords).not.toHaveBeenCalled();
 	});
+});
+
+
+describe("formatted bibliography downloads", () => {
+ it("numbers the whole library in one Vancouver bibliography", async () => {
+  libraryHolding("AAAA1111", "BBBB2222");
+  const response = await requestFor("citation", "style=vancouver&format=txt");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+  expect(await response.text()).toMatch(/^1\. Smith J\. Record AAAA1111[\s\S]*\n\n2\. Smith J\. Record BBBB2222/);
+ });
+ it("downloads an additional numeric style from its bundled asset", async () => {
+  libraryHolding("AAAA1111", "BBBB2222");
+  const response = await requestFor("citation", "style=ieee&format=html");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+  const html = await response.text();
+  expect(html).toContain("[1]");
+  expect(html).toContain("[2]");
+  expect(html).toContain("Record AAAA1111");
+  expect(html).toContain("Record BBBB2222");
+ });
+ it("rejects unknown styles and disabled citation downloads", async () => {
+  expect((await requestFor("citation", "style=../../secret&format=html")).status).toBe(404);
+  expect((await requestFor("citation", "style=apa&format=pdf")).status).toBe(404);
+  const config = configWith({});
+  config.citations.enabled = false;
+  mocks.getLibraryConfig.mockResolvedValue(config);
+  expect((await requestFor("citation", "style=apa&format=txt")).status).toBe(404);
+ });
 });

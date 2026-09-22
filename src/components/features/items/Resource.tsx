@@ -1,3 +1,4 @@
+import { CitationControl } from "./CitationControl";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
@@ -259,6 +260,7 @@ function ResourceInteractions({
 							itemData={itemData}
 							revalidateResults={revalidateResults}
 						/>
+						<CitationControl item={itemData} />
 						<CopyButton
 							itemData={itemData}
 							text={t("copyLink")}

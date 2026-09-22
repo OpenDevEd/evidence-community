@@ -705,12 +705,48 @@ for (const profileAvailable of [true, false]) {
 	});
 }
 
+test("copies the selected citation style from a result card without opening the item", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
+	await dismissConsent(page);
+	const card = page.getByRole("listitem").filter({
+		has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }),
+	}).first();
+	await expect(card).toBeVisible();
+	const cite = card.getByRole("button", { name: "Cite", exact: true });
+	if (!expectedCitationsEnabled) {
+		await expect(cite).toHaveCount(0);
+		return;
+	}
+	const resultsUrl = page.url();
+	await cite.click();
+	const panel = page.getByRole("dialog");
+	const text = panel.locator('[aria-live="polite"]');
+	for (const style of ["APA 7", "BibTeX"]) {
+		await panel.getByRole("button", { name: /^Citation style/ }).click();
+		await page.getByRole("option", { name: style, exact: true }).click();
+		const copy = panel.getByRole("button", { name: "Copy citation", exact: true });
+		await expect(copy).toBeEnabled();
+		const displayed = (await text.innerText()).trim();
+		if (style === "BibTeX") {
+			expect(displayed).toMatch(/^@\w+\{/);
+			expect(displayed).toContain(expectedSearchItemKey);
+		} else {
+			expect(displayed).toContain(expectedSearchItemTitle);
+			expect(displayed).not.toMatch(/^@\w+\{/);
+		}
+		await page.evaluate(() => navigator.clipboard.writeText(""));
+		await copy.click();
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(displayed);
+	}
+	await expect(page).toHaveURL(resultsUrl);
+});
+
 test("reports a clipboard failure and retries copying clean citation text", async ({ page, context }) => {
 	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-	await page.route(`**/item/${expectedSearchItemKey}/citation`, (route) => route.fulfill({ json: {
-		citation: '<div class="csl-bib-body">\n  <div class="csl-entry">Mills, C. (2026). <i>Learning &amp; evidence.</i></div>\n</div>\n',
-	} }));
+
 	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
 	await dismissConsent(page);
 	const heading = page.getByRole("heading", { name: "Citation", exact: true });
@@ -718,7 +754,10 @@ test("reports a clipboard failure and retries copying clean citation text", asyn
 		await expect(heading).toHaveCount(0);
 		return;
 	}
-	const citation = heading.locator("..");
+	const citation = heading.locator("../..");
+	const citationText = citation.locator('[aria-live="polite"]');
+	await expect(citationText).toContainText(expectedSearchItemTitle);
+	const displayed = (await citationText.textContent())?.trim();
 	await page.evaluate(() => {
 		Object.defineProperty(navigator.clipboard, "writeText", {
 			configurable: true,
@@ -728,14 +767,10 @@ test("reports a clipboard failure and retries copying clean citation text", asyn
 			},
 		});
 	});
-	await citation.getByRole("button").click();
+	await citation.getByRole("button", { name: "Copy citation", exact: true }).click();
 	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
-	await citation.getByRole("button").click();
-	const suffix = expectedCitationUrl
-		? ` Available at ${new URL(`/lib/${expectedSearchItemKey}`, expectedPublicBaseUrl)}.`
-		: "";
-	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
-		.toBe(`Mills, C. (2026). Learning & evidence.${suffix}`);
+	await citation.getByRole("button", { name: "Copy citation", exact: true }).click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(displayed);
 });
 
 test("keeps clipboard feedback tied to the latest attempt", async ({ page, context }) => {
@@ -744,7 +779,7 @@ test("keeps clipboard feedback tied to the latest attempt", async ({ page, conte
 	await page.goto(`/en-GB/lib/${expectedSearchItemKey}`);
 	await dismissConsent(page);
 	const citation = page.getByRole("heading", { name: "Citation", exact: true }).locator("..");
-	const copy = citation.getByRole("button");
+	const copy = citation.getByRole("button", { name: /^(Copy citation|Copied!)$/i });
 	await page.clock.pauseAt(new Date());
 	const attempts = await page.evaluateHandle(() => {
 		const pending: { resolve: () => void; reject: () => void }[] = [];
@@ -760,7 +795,7 @@ test("keeps clipboard feedback tied to the latest attempt", async ({ page, conte
 	await expect(page.locator("[data-sonner-toast] [data-type=error]")).toBeVisible();
 	await attempts.evaluate(pending => pending[0].resolve());
 	await page.clock.runFor(100);
-	await expect(copy).toHaveAccessibleName("Copy Citation");
+	await expect(copy).toHaveAccessibleName("Copy citation");
 	await copy.click();
 	await attempts.evaluate(pending => pending[2].resolve());
 	await page.clock.runFor(100);

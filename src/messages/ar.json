@@ -1,5 +1,12 @@
 {
   "ui": {
+    "downloadFormattedCitation": "منسّق (.html)",
+    "downloadPlainCitation": "نص عادي (.txt)",
+    "referenceManagerFormats": "مدير المراجع",
+    "cite": "استشهاد",
+    "citationStyle": "نمط الاستشهاد",
+    "copyCitation": "نسخ الاستشهاد",
+    "citationLoadFailed": "تعذّر تحميل هذا الاستشهاد.",
     "resultsLabel": "النتائج",
     "exportFailed": "تعذّر تجهيز هذا المحتوى",
     "copyFailed": "تعذّر النسخ",
@@ -483,7 +490,12 @@
     "percentOfTotal": "{percentage}% من الإجمالي",
     "viewDetails": "عرض التفاصيل",
     "openGapMap": "فتح خريطة الفجوات",
-    "openGapMapAriaLabel": "فتح خريطة الفجوات {label}"
+    "openGapMapAriaLabel": "فتح خريطة الفجوات {label}",
+    "searchCitationStyles": "ابحث عن أنماط أو مجلات…",
+    "citationStylesFailed": "تعذر تحميل الأنماط.",
+    "noCitationStyles": "لا توجد أنماط مطابقة.",
+    "commonCitationStyles": "الأنماط الشائعة",
+    "otherCitationStyles": "الأنماط الأخرى"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

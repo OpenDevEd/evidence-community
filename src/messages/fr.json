@@ -1,5 +1,12 @@
 {
   "ui": {
+    "downloadFormattedCitation": "Mise en forme (.html)",
+    "downloadPlainCitation": "Texte brut (.txt)",
+    "referenceManagerFormats": "Gestionnaire de références",
+    "cite": "Citer",
+    "citationStyle": "Style de citation",
+    "copyCitation": "Copier la référence",
+    "citationLoadFailed": "Impossible de charger cette référence.",
     "resultsLabel": "Résultats",
     "exportFailed": "Impossible de préparer ce contenu",
     "copyFailed": "Copie impossible",
@@ -483,7 +490,12 @@
     "percentOfTotal": "{percentage}% du total",
     "viewDetails": "Voir les détails",
     "openGapMap": "Ouvrir le gap map",
-    "openGapMapAriaLabel": "Ouvrir le gap map {label}"
+    "openGapMapAriaLabel": "Ouvrir le gap map {label}",
+    "searchCitationStyles": "Rechercher un style ou une revue…",
+    "citationStylesFailed": "Impossible de charger les styles.",
+    "noCitationStyles": "Aucun style correspondant.",
+    "commonCitationStyles": "Styles courants",
+    "otherCitationStyles": "Autres styles"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

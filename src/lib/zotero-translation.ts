@@ -31,31 +31,11 @@ export class ZoteroTranslationError extends Error {
 
 function getZoteroTranslationUrl(
 	translationUrl: string,
-	endpoint: "export" | "import" | "search",
+	endpoint: "import" | "search",
 ) {
 	const url = new URL(translationUrl);
 	url.pathname = `${url.pathname.replace(/\/+$/u, "")}/${endpoint}`;
 	return url;
-}
-
-export function getZoteroExportUrl(
-	translationUrl: string,
-	format: "csljson",
-) {
-	const url = getZoteroTranslationUrl(translationUrl, "export");
-	url.searchParams.set("format", format);
-	return url;
-}
-
-function ensureCiteprocEligibleItem(item: Record<string, unknown>) {
-	if ("author" in item || "title" in item || "issued" in item) {
-		return item;
-	}
-
-	return {
-		...item,
-		title: "Untitled",
-	};
 }
 
 /** Posts to the translation server and returns its JSON array. */
@@ -119,35 +99,6 @@ async function postZoteroTranslation(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-export async function translateZoteroItemToCSL(
-	zoteroItem: unknown,
-	itemId: string,
-	translationUrl: string | undefined,
-) {
-	if (!translationUrl) return null;
-
-	const data = await postZoteroTranslation(
-		getZoteroExportUrl(translationUrl, "csljson"),
-		JSON.stringify([zoteroItem]),
-		"application/json",
-		`item ${itemId}`,
-	);
-
-	const firstItem = data[0];
-	if (firstItem === undefined) return null;
-
-	if (!isRecord(firstItem)) {
-		throw new ZoteroTranslationError(
-			`Zotero translation returned an invalid item for ${itemId}`,
-			{
-				code: "TRANSLATION_RESPONSE_INVALID",
-			},
-		);
-	}
-
-	return ensureCiteprocEligibleItem(firstItem);
 }
 
 /** Looks up one identifier (DOI, PMID, ISBN) and returns the Zotero items found. */

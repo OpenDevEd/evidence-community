@@ -13,6 +13,8 @@ import {
 	readNewestRecords,
 } from "@/lib/library-export-records";
 import { buildSiteUrl } from "@/lib/site-url";
+import { itemToCitationData } from "@/lib/citation-data";
+import type { CitationData } from "@/lib/citation-formats";
 
 // How many records are read from the database per round trip while the file
 // is being written.
@@ -58,7 +60,10 @@ export async function convertRecordsToCitations(
 	);
 
 	const failedIndex = converted.findIndex((entry) => !entry.trim());
-	if (failedIndex !== -1) throw new Error(`Unable to export publication ${records[failedIndex].key}`);
+	if (failedIndex !== -1)
+		throw new Error(
+			`Unable to export publication ${records[failedIndex].key}`,
+		);
 	return converted;
 }
 
@@ -70,43 +75,65 @@ export async function convertRecordsToCitations(
  * a record added or removed during the write cannot duplicate or skip another
  * record. Writing stops after `LIBRARY_EXPORT_RECORD_CAP` records.
  */
+async function* citationRecordPages(readPage: CitationRecordReader) {
+	let afterKey: string | null = null;
+	let read = 0;
+	while (read < LIBRARY_EXPORT_RECORD_CAP) {
+		const records = await readPage(
+			afterKey,
+			Math.min(
+				LIBRARY_EXPORT_PAGE_SIZE,
+				LIBRARY_EXPORT_RECORD_CAP - read,
+			),
+		);
+		if (!records.length) return;
+		read += records.length;
+		afterKey = String(records[records.length - 1].key);
+		yield records;
+	}
+}
+
 export function streamCitationRecords(
 	readPage: CitationRecordReader,
 	format: BibliographicExportFormat,
 ) {
 	const encoder = new TextEncoder();
-	let afterKey: string | null = null;
-	let written = 0;
-
+	const pages = citationRecordPages(readPage);
 	return new ReadableStream<Uint8Array>({
 		async pull(controller) {
-			const remaining = LIBRARY_EXPORT_RECORD_CAP - written;
-			if (remaining <= 0) {
+			const page = await pages.next();
+			if (page.done) {
 				controller.close();
 				return;
 			}
-
-			const records = await readPage(
-				afterKey,
-				Math.min(LIBRARY_EXPORT_PAGE_SIZE, remaining),
-			);
-
-			if (records.length === 0) {
-				controller.close();
-				return;
-			}
-
-			written += records.length;
-			afterKey = String(records[records.length - 1].key);
-
-			const entries = await convertRecordsToCitations(records, format);
-			if (entries.length > 0) {
+			const entries = await convertRecordsToCitations(page.value, format);
+			if (entries.length)
 				controller.enqueue(
 					encoder.encode(`${entries.join("\n\n")}\n\n`),
 				);
-			}
+		},
+		async cancel() {
+			await pages.return();
 		},
 	});
+}
+
+/** CSL needs the complete set to sort, disambiguate names and assign reference numbers. */
+export async function readLibraryCitationData(
+	config: LibraryServerConfig,
+): Promise<CitationData[]> {
+	const data: CitationData[] = [];
+	for await (const records of citationRecordPages((afterKey, limit) =>
+		readCitationRecordsPage(config, afterKey, limit),
+	)) {
+		for (const record of records) {
+			const citation = itemToCitationData(record);
+			if (!citation)
+				throw new Error(`Unable to export publication ${record.key}`);
+			data.push(citation);
+		}
+	}
+	return data;
 }
 
 export function streamLibraryCitations(

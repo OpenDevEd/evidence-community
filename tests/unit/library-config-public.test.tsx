@@ -119,7 +119,7 @@ describe("public library configuration", () => {
 		expect(publicConfig.search).not.toHaveProperty("embedder");
 		expect(publicConfig.search.embeddings).toBe(true);
 		expect(publicConfig.citations).toEqual({
-			enabled: Boolean(serverConfig.services.zotero.translationUrl),
+			enabled: serverConfig.citations.enabled,
 			showUrl: serverConfig.citations.showUrl,
 		});
 		expect(publicConfig.authentication).toEqual({

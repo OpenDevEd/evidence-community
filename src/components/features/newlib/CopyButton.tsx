@@ -11,6 +11,7 @@ import { twMerge } from "tailwind-merge";
 
 interface CopyButtonProps {
     textToCopy: string;
+    isDisabled?: boolean;
     className?: string;
     children?: ReactElement<ButtonProps>;
     ariaLabel?: string;
@@ -57,7 +58,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
     );
 }
 
-export default function CopyButton({ textToCopy, className, children, ariaLabel, label }: CopyButtonProps) {
+export default function CopyButton({ textToCopy, className, children, ariaLabel, label, isDisabled }: CopyButtonProps) {
     const { copy, copied } = useClipboardFeedback();
     const t = useTranslations("ui");
     const handleCopy = () => copy(textToCopy);
@@ -66,6 +67,7 @@ export default function CopyButton({ textToCopy, className, children, ariaLabel,
         return cloneElement(children, {
             ...children.props,
             onPress: handleCopy,
+            isDisabled: isDisabled || children.props.isDisabled,
             startContent: <CopyIcon copied={copied} />,
             ...((copied || ariaLabel) ? { "aria-label": copied ? t("copied") : ariaLabel } : {}),
             children: label ?? children.props.children
@@ -75,6 +77,7 @@ export default function CopyButton({ textToCopy, className, children, ariaLabel,
     return (
         <Button
             isIconOnly
+            isDisabled={isDisabled}
             variant="light"
             size="sm"
             className={twMerge("rounded-full", className)}

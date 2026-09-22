@@ -12,8 +12,8 @@ import { schema } from "@/db/database-schema";
 import {
 	buildCitationRecordsQuery,
 	buildNewestRecordsQuery,
-	CITATION_RECORD_COLUMNS,
 } from "@/lib/library-export-records";
+import { CITATION_RECORD_COLUMNS } from "@/lib/citation-record-columns";
 
 // Drizzle only touches the client when a query runs, so an empty client is
 // enough to compile a query to real SQL.
