@@ -1,7 +1,7 @@
 export const AI_MODELS = [
 	{
-		id: "openai/gpt-5.6-luna",
-		name: "GPT-5.6 Luna",
+		id: "openai/gpt-6-luna",
+		name: "GPT-6 Luna",
 		company: "OpenAI",
 		hidden: false,
 		maximumReasoningEffort: "max",
@@ -82,8 +82,8 @@ export const AI_MODELS = [
 
 export type AIModelId = (typeof AI_MODELS)[number]["id"];
 
-export const DEFAULT_AI_MODEL_ID: AIModelId = "openai/gpt-5.6-luna";
-export const STARTER_QUESTIONS_MODEL_ID: AIModelId = "openai/gpt-5.6-luna";
+export const DEFAULT_AI_MODEL_ID: AIModelId = "openai/gpt-6-luna";
+export const STARTER_QUESTIONS_MODEL_ID: AIModelId = "openai/gpt-6-luna";
 
 const AI_MODEL_IDS = new Set<string>(AI_MODELS.map((model) => model.id));
 const SELECTABLE_AI_MODEL_IDS = new Set<string>(

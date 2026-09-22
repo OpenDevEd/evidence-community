@@ -8,7 +8,7 @@ import { AI_MODELS, type AIModelId } from "@/lib/ai/models";
 type ModelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 const icons: Record<AIModelId, ModelIcon> = {
-	"openai/gpt-5.6-luna": ChatGPT,
+	"openai/gpt-6-luna": ChatGPT,
 	"google/gemini-3.7-flash": Gemini,
 	"x-ai/grok-4.6": Grok,
 	"anthropic/claude-sonnet-5": Claude,
