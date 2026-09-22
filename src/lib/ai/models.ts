@@ -6,7 +6,7 @@ export type AIModelId = string;
 export type AIModel = { name: string; company: string };
 
 /** Fixed by the starter-question generation contract, not a selectable catalog. */
-export const CONTRACT_STARTER_QUESTIONS_MODEL_ID = "openai/gpt-5.6-luna";
+export const CONTRACT_STARTER_QUESTIONS_MODEL_ID = "openai/gpt-6-luna";
 
 export function isAIModelId(value: unknown): value is AIModelId {
 	const parsed = modelIdSchema.safeParse(value);

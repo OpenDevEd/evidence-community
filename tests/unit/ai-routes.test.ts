@@ -305,7 +305,7 @@ describe("AI routes", () => {
 		await questions(post("/api/ai/questions", { prompt: "ITEM0001" }));
 
 		expect(mocks.generateText.mock.calls[0]?.[0].model).toEqual({
-			id: "openai/gpt-5.6-luna",
+			id: "openai/gpt-6-luna",
 		});
 	});
 

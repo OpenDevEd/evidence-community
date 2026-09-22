@@ -146,6 +146,6 @@ describe("choosing the model a request runs on", () => {
 		);
 
 		expect(resolved.provider).toBe("openrouter");
-		expect(resolved.modelId).toBe("openai/gpt-5.6-luna");
+		expect(resolved.modelId).toBe("openai/gpt-6-luna");
 	});
 });
