@@ -705,6 +705,44 @@ for (const profileAvailable of [true, false]) {
 	});
 }
 
+test("copies the selected citation style from a result card without opening the item", async ({ page, context }) => {
+	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
+	await dismissConsent(page);
+	const card = page.getByRole("listitem").filter({
+		has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }),
+	}).first();
+	await expect(card).toBeVisible();
+	const cite = card.getByRole("button", { name: "Cite", exact: true });
+	if (!expectedCitationsEnabled) {
+		await expect(cite).toHaveCount(0);
+		return;
+	}
+	const resultsUrl = page.url();
+	await cite.click();
+	const panel = page.getByRole("dialog");
+	const text = panel.locator('[aria-live="polite"]');
+	for (const style of ["APA 7", "BibTeX"]) {
+		await panel.getByRole("button", { name: /^Citation style/ }).click();
+		await page.getByRole("option", { name: style, exact: true }).click();
+		const copy = panel.getByRole("button", { name: "Copy citation", exact: true });
+		await expect(copy).toBeEnabled();
+		const displayed = (await text.innerText()).trim();
+		if (style === "BibTeX") {
+			expect(displayed).toMatch(/^@\w+\{/);
+			expect(displayed).toContain(expectedSearchItemKey);
+		} else {
+			expect(displayed).toContain(expectedSearchItemTitle);
+			expect(displayed).not.toMatch(/^@\w+\{/);
+		}
+		await page.evaluate(() => navigator.clipboard.writeText(""));
+		await copy.click();
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(displayed);
+	}
+	await expect(page).toHaveURL(resultsUrl);
+});
+
 test("reports a clipboard failure and retries copying clean citation text", async ({ page, context }) => {
 	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
