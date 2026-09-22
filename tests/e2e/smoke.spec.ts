@@ -717,8 +717,9 @@ test("reports a clipboard failure and retries copying clean citation text", asyn
 		return;
 	}
 	const citation = heading.locator("../..");
-	await expect(citation.locator("p")).toContainText(expectedSearchItemTitle);
-	const displayed = await citation.locator("p").textContent();
+	const citationText = citation.locator('[aria-live="polite"]');
+	await expect(citationText).toContainText(expectedSearchItemTitle);
+	const displayed = (await citationText.textContent())?.trim();
 	await page.evaluate(() => {
 		Object.defineProperty(navigator.clipboard, "writeText", {
 			configurable: true,

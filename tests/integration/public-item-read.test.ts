@@ -39,7 +39,7 @@ async function citation(key: string) {
 	const response = await readCitation(new NextRequest(`https://library.example.org/api/item/${key}/citation`), { params: Promise.resolve({ key }) });
 	expect(response.headers.get("cache-control")).toBe("no-store");
 	expect(response.status).toBe(200);
-	return (await response.json()).citations?.apa ?? null;
+	return (await response.json()).citations?.apa.text ?? null;
 }
 
 function read(key: string) {

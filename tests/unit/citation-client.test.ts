@@ -11,14 +11,14 @@ describe("citations from the loaded record", () => {
   const fetch = vi.fn(() => { throw new Error("Network unavailable"); });
   vi.stubGlobal("fetch", fetch);
   const result = await loadCitations(["citations", { record: itemToCitationData(item) }, "en-GB", "https://library.example.org/lib/REPORT01"]);
-  expect(result.citations?.apa).toBe("Smith, J. (2025). Schools in Kenya. Education Press. Available at https://library.example.org/lib/REPORT01.");
-  expect(result.citations?.bibtex).toContain("url = {https://library.example.org/lib/REPORT01}");
+  expect(result.citations?.apa.text).toBe("Smith, J. (2025). Schools in Kenya. Education Press. Available at https://library.example.org/lib/REPORT01.");
+  expect(result.citations?.bibtex.text).toContain("url = {https://library.example.org/lib/REPORT01}");
   expect(fetch).not.toHaveBeenCalled();
  });
  it("formats updated metadata instead of reusing an older record citation", async () => {
   await loadCitations(["citations", { record: itemToCitationData(item) }, "en-GB", undefined]);
   const result = await loadCitations(["citations", { record: itemToCitationData({ ...item, title: "Updated school evidence" }) }, "en-GB", undefined]);
-  expect(result.citations?.apa).toContain("Updated school evidence.");
-  expect(result.citations?.apa).not.toContain("Schools in Kenya.");
+  expect(result.citations?.apa.text).toContain("Updated school evidence.");
+  expect(result.citations?.apa.text).not.toContain("Schools in Kenya.");
  });
 });
