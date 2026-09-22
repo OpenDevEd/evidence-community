@@ -4,14 +4,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Citations, CitationData } from "@/lib/citation-formats";
+import type { Citations, CitationData, FormattedCitation } from "@/lib/citation-formats";
 import type { Item } from "@/app/api/item/types";
 
 const testState = vi.hoisted(() => ({
 	citationsEnabled: true,
 	citationsShowUrl: false,
 	collectionsEnabled: false,
-	extraResult: { data: undefined as string | undefined, isLoading: false },
+	extraResult: { data: undefined as FormattedCitation | undefined, isLoading: false },
 	swrResult: {
 		data: undefined as
 			| { citations: Citations | null; record?: CitationData }
@@ -181,12 +181,12 @@ describe("public item empty sections", () => {
 		testState.swrResult = {
 			data: {
 				citations: {
-					apa: "A useful citation.",
-					harvard: "Harvard reference.",
-					chicago: "Chicago reference.",
-					mla: "MLA reference.",
-					vancouver: "Vancouver reference.",
-					bibtex: "@misc{el_REPORT01, title={A report}}",
+					apa: { text: "A useful citation.", html: null },
+					harvard: { text: "Harvard reference.", html: null },
+					chicago: { text: "Chicago reference.", html: null },
+					mla: { text: "MLA reference.", html: null },
+					vancouver: { text: "Vancouver reference.", html: null },
+					bibtex: { text: "@misc{el_REPORT01, title={A report}}", html: null },
 				},
 			},
 			isLoading: false,
@@ -209,12 +209,12 @@ describe("public item empty sections", () => {
 		testState.swrResult = {
 			data: {
 				citations: {
-					apa: "The original citation.",
-					harvard: "Harvard.",
-					chicago: "Chicago.",
-					mla: "MLA.",
-					vancouver: "Vancouver.",
-					bibtex: "BibTeX.",
+					apa: { text: "The original citation.", html: null },
+					harvard: { text: "Harvard.", html: null },
+					chicago: { text: "Chicago.", html: null },
+					mla: { text: "MLA.", html: null },
+					vancouver: { text: "Vancouver.", html: null },
+					bibtex: { text: "BibTeX.", html: null },
 				},
 				record: {
 					id: "REPORT01",
@@ -249,7 +249,7 @@ describe("public item empty sections", () => {
 		).toBe(true);
 
 		testState.extraResult = {
-			data: "The Nature citation.",
+			data: { text: "The Nature citation.", html: "<i>The Nature citation.</i>" },
 			isLoading: false,
 		};
 		await act(async () => root.render(<ItemCitation item={item} />));

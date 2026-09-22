@@ -15,12 +15,12 @@ describe("record citations", () => {
 		const data = itemToCitationData(article)!;
 		expect(data.issued).toEqual({ "date-parts": [[2026, 9]] });
 		const citations = await formatCitations(data, "en-GB");
-		expect(citations.apa).toBe("Smith, J. (2026). Evidence & education. Journal of Education, 42(3), 101–109. https://doi.org/10.1234/example");
-		expect(citations.chicago).toContain('Smith, Jane. 2026.');
-		expect(citations.harvard).toContain("Smith, J. (2026)");
-		expect(citations.mla).toContain("Smith, Jane.");
-		expect(citations.vancouver).toContain("Smith J.");
-		expect(citations.vancouver).toContain("42(3):101–9");
+		expect(citations.apa.text).toBe("Smith, J. (2026). Evidence & education. Journal of Education, 42(3), 101–109. https://doi.org/10.1234/example");
+		expect(citations.chicago.text).toContain('Smith, Jane. 2026.');
+		expect(citations.harvard.text).toContain("Smith, J. (2026)");
+		expect(citations.mla.text).toContain("Smith, Jane.");
+		expect(citations.vancouver.text).toContain("Smith J.");
+		expect(citations.vancouver.text).toContain("42(3):101–9");
 	});
 
 	it("preserves corporate authors, editor roles and canonical report fields", () => {
@@ -41,17 +41,17 @@ describe("record citations", () => {
 	it("uses the record identity for a stable BibTeX key and escapes metadata", async () => {
 		const data = itemToCitationData({ ...article, title: "A {test}: 50% & more" })!;
 		const citations = await formatCitations(data, "en-GB");
-		expect(citations.bibtex).toMatch(/^@article\{el_ARTICLE1,/);
-		expect(citations.bibtex).toContain("50\\% \\& more");
-		expect(citations.bibtex).toContain("10.1234/example");
-		expect(citations.bibtex).not.toContain("<div");
+		expect(citations.bibtex.text).toMatch(/^@article\{el_ARTICLE1,/);
+		expect(citations.bibtex.text).toContain("50\\% \\& more");
+		expect(citations.bibtex.text).toContain("10.1234/example");
+		expect(citations.bibtex.text).not.toContain("<div");
 	});
 
 	it("does not invent a date or author when the source has neither", async () => {
 		const data = itemToCitationData({ key: "WEBPAGE1", itemType: "Webpage", title: "Undated evidence" })!;
 		expect(data.issued).toBeUndefined();
 		const citations = await formatCitations(data, "en-GB");
-		expect(citations.apa).toBe("Undated evidence. (n.d.).");
+		expect(citations.apa.text).toBe("Undated evidence. (n.d.).");
 	});
 
 	it("does not expose a citation for attachments or a missing title", () => {
@@ -65,7 +65,7 @@ it("keeps Unicode and TeX-sensitive organization names in reusable BibTeX", asyn
 	const name = "研究 & Development 50% $5 #1_A";
 	const data = itemToCitationData({ ...article, title: "Éducation au Sénégal et 教育", creators: [{ name, creatorType: "author" }] })!;
 	const { bibtex } = await formatCitations(data, "en-GB");
-	const [parsed] = new Cite(bibtex).data;
+	const [parsed] = new Cite(bibtex.text).data;
 	expect(parsed.title).toBe("Éducation au Sénégal et 教育");
 	expect(parsed.author).toEqual([{ family: name }]);
 });
@@ -76,7 +76,21 @@ it("preserves export metadata alongside formatted citations", async () => {
 		creators: [{ firstName: "Mina", lastName: "Ito", creatorType: "translator" }],
 	})!;
 	const { bibtex } = await formatCitations(data, "en-GB");
-	const [parsed] = new Cite(bibtex).data;
+	const [parsed] = new Cite(bibtex.text).data;
 	expect(parsed).toMatchObject({ language: "fr", abstract: "Evidence from schools.", translator: [{ given: "Mina", family: "Ito" }] });
 	expect(String(parsed.keyword).split(/,\s*/)).toEqual(["Education", "Kenya"]);
+});
+
+
+it("preserves styled bibliography text and clickable DOI links alongside plain text", async () => {
+  const { formatCitations } = await import("@/lib/citation-formatter");
+  const { apa } = await formatCitations({
+    id: "rich", "citation-key": "rich", type: "article-journal", title: "Evidence & education",
+    author: [{ family: "Smith", given: "Jane" }], issued: { "date-parts": [[2026]] },
+    "container-title": "Journal of Education", volume: "42", DOI: "10.1234/evidence",
+  }, "en-GB");
+  expect(apa.html).toContain("<i>Journal of Education</i>");
+  expect(apa.html).toContain('href="https://doi.org/10.1234/evidence"');
+  expect(apa.text).toContain("Evidence & education");
+  expect(apa.text).not.toMatch(/<[^>]+>/);
 });

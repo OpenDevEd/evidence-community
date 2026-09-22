@@ -23,7 +23,7 @@ export function citationSource(item: CitationItem, completeRecord: boolean): Cit
 
 export async function loadAdditionalCitation([, record, locale, style, libraryUrl]: readonly [
   "citation-style", import("./citation-formats").CitationData, string, import("./citation-formats").CitationStyle, string | undefined,
-]): Promise<string> {
+]): Promise<import("./citation-formats").FormattedCitation> {
   const { formatAdditionalCitation } = await import("./citation-formatter");
   return formatAdditionalCitation(record, locale, style, libraryUrl);
 }

@@ -20,7 +20,7 @@ describe("citation downloads", () => {
 	it.each([undefined, "https://library.example"])("matches the picker BibTeX with library base URL %s", async baseUrl => {
 		const citations = await formatCitations(itemToCitationData(report)!, "en-GB", baseUrl ? `${baseUrl}/lib/REPORT01` : undefined);
 		const download = exportCitationItems([report], "bibtex", baseUrl);
-		expect(download).toBe(citations.bibtex);
+		expect(download).toBe(citations.bibtex.text);
 		expect(new Cite(download).data[0]).toMatchObject({ "citation-key": "el_REPORT01", DOI: report.DOI, URL: baseUrl ? `${baseUrl}/lib/REPORT01` : report.url });
 	});
 

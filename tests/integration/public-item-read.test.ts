@@ -89,7 +89,7 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(citationData.record).toMatchObject({ keyword: "Education", note: "Research summary" });
 		expect([publication, exportRecords[0]].map(record =>
 			exportCitationItems([record], "bibtex", config.citations.showUrl ? config.identity.baseUrl : undefined),
-		)).toEqual([citationData.citations.bibtex, citationData.citations.bibtex]);
+		)).toEqual([citationData.citations.bibtex.text, citationData.citations.bibtex.text]);
 		expect(publication.collections).toEqual([child.key]);
 		expect(publication.collectionsAncestry).toEqual([child.key, root.key].sort());
 		expect(await citation("PUBAAAAA")).toContain("Published title");

@@ -8,6 +8,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { CitationStylePicker } from "./CitationStylePicker";
+import { CitationText } from "./CitationText";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { ItemPropertyRowWrapper } from "@/components/features/newlib/ItemPropertyRow";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -15,6 +16,7 @@ import {
 	CITATION_FORMATS,
 	type CitationStyle,
 	type CitationResponse,
+	type FormattedCitation,
 } from "@/lib/citation-formats";
 import { canCiteItem, type CitationItem } from "@/lib/citation-formats";
 import {
@@ -29,24 +31,18 @@ import { buildSiteUrl } from "@/lib/site-url";
 function CitationContent({
 	loading,
 	failed,
-	text,
-	format,
+	citation,
 	retry,
 }: {
 	loading: boolean;
 	failed: boolean;
-	text?: string;
-	format?: string;
+	citation?: FormattedCitation;
 	retry: () => void;
 }) {
 	const t = useTranslations("ui");
-	const [displayed, setDisplayed] = useState({ text, format });
-	if (
-		text !== undefined &&
-		(text !== displayed.text || format !== displayed.format)
-	)
-		setDisplayed({ text, format });
-	if (loading && !failed && !displayed.text)
+	const [displayed, setDisplayed] = useState(citation);
+	if (citation && citation !== displayed) setDisplayed(citation);
+	if (loading && !failed && !displayed)
 		return (
 			<p
 				role="status"
@@ -65,13 +61,13 @@ function CitationContent({
 			</div>
 		);
 	return (
-		<p
-			className={`max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-black/70 dark:text-white/70 ${displayed.format === "bibtex" ? "font-mono text-xs" : "text-sm leading-relaxed"}`}
+		<div
+			className="max-h-72 overflow-y-auto text-black/70 dark:text-white/70"
 			aria-live="polite"
 			aria-busy={loading}
 		>
-			{displayed.text}
-		</p>
+			{displayed && <CitationText citation={displayed} />}
+		</div>
 	);
 }
 
@@ -135,12 +131,12 @@ function useCitationResult(
 		},
 	);
 	const current = record ? extra : base;
-	const text =
+	const citation =
 		format.asset !== undefined
 			? extra.data
 			: base.data?.citations?.[format.id];
 	return {
-		text,
+		citation,
 		loading: current.isLoading,
 		failed: Boolean(current.error),
 		available: base.data?.citations !== null,
@@ -166,7 +162,7 @@ function CitationPanelLayout({
 	const t = useTranslations("ui");
 	return (
 		<div
-			className="w-full space-y-3"
+			className={`w-full space-y-3 ${showHeading ? "text-base" : "text-sm"}`}
 			data-citation-state={
 				failed ? "error" : loading ? "loading" : "ready"
 			}
@@ -215,7 +211,7 @@ export function CitationPanel({
 			: undefined,
 	];
 	const {
-		text: formattedText,
+		citation: formattedCitation,
 		loading: formatting,
 		failed,
 		available,
@@ -225,14 +221,14 @@ export function CitationPanel({
 		format ?? CITATION_FORMATS[0],
 		settings.enabled,
 	);
-	const text = format ? formattedText : undefined;
+	const citation = format ? formattedCitation : undefined;
 	const loading = !format || formatting;
 	if (!settings.enabled || !available) return null;
 	const controls = (
 		<CitationActions
 			format={format}
 			onFormatChange={setFormat}
-			text={text}
+			text={citation?.text}
 			disabled={loading || failed || Boolean(styleError)}
 		/>
 	);
@@ -241,8 +237,7 @@ export function CitationPanel({
 			key={item.key}
 			loading={loading}
 			failed={failed || Boolean(styleError)}
-			text={text}
-			format={format?.id}
+			citation={citation}
 			retry={styleError ? retryStyle : retry}
 		/>
 	);

@@ -22,10 +22,10 @@ beforeEach(() => Object.assign(state, { enabled: true, showUrl: false, title: "S
 describe("runtime citation route", () => {
 	it("formats the current published metadata without a translation server and does not cache old record text", async () => {
 		const first = await request();
-		expect((await first.json()).citations.apa).toBe("UNICEF. (2025). Schools in Kenya.");
+		expect((await first.json()).citations.apa.text).toBe("UNICEF. (2025). Schools in Kenya.");
 		state.title = "Updated school evidence";
 		const updated = await request();
-		expect((await updated.json()).citations.apa).toBe("UNICEF. (2025). Updated school evidence.");
+		expect((await updated.json()).citations.apa.text).toBe("UNICEF. (2025). Updated school evidence.");
 		expect(updated.headers.get("cache-control")).toBe("no-store");
 		expect(updated.headers.get("vary")).toBe("Accept-Language");
 	});
@@ -36,8 +36,8 @@ describe("runtime citation route", () => {
 	it("includes the configured public URL in both citations and BibTeX when requested", async () => {
 		state.showUrl = true;
 		const { citations } = await (await request()).json();
-		expect(citations.apa).toContain("Available at https://library.example.org/lib/REPORT01.");
-		expect(citations.bibtex).toContain("url = {https://library.example.org/lib/REPORT01}");
+		expect(citations.apa.text).toContain("Available at https://library.example.org/lib/REPORT01.");
+		expect(citations.bibtex.text).toContain("url = {https://library.example.org/lib/REPORT01}");
 	});
 	it("returns no citation when the record has no title", async () => {
 		state.title = "";
