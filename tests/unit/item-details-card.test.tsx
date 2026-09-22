@@ -4,15 +4,18 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Citations } from "@/lib/citation-formats";
+import type { Citations, CitationData } from "@/lib/citation-formats";
 import type { Item } from "@/app/api/item/types";
 
 const testState = vi.hoisted(() => ({
 	citationsEnabled: true,
 	citationsShowUrl: false,
 	collectionsEnabled: false,
+	extraResult: { data: undefined as string | undefined, isLoading: false },
 	swrResult: {
-		data: undefined as { citations: Citations | null } | undefined,
+		data: undefined as
+			| { citations: Citations | null; record?: CitationData }
+			| undefined,
 		isLoading: false,
 	},
 }));
@@ -35,13 +38,33 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("swr", () => ({
-	default: (key: unknown) => Array.isArray(key) && key[0] === "citations" ? testState.swrResult : { data: undefined, isLoading: false },
+	default: (key: unknown) => {
+		if (Array.isArray(key) && key[0] === "citations")
+			return testState.swrResult;
+		if (Array.isArray(key) && key[0] === "citation-style")
+			return testState.extraResult;
+		if (key === "citation-styles")
+			return {
+				data: [
+					{
+						id: "nature",
+						label: "Nature",
+						asset: "/citation-styles/nature.json.gz",
+					},
+				],
+			};
+		return { data: undefined, isLoading: false };
+	},
 }));
 
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		identity: { baseUrl: "https://library.example.org" },
-		localization: { locales: ["en-GB"], localePriority: ["en-GB"], defaultLocale: "en-GB" },
+		localization: {
+			locales: ["en-GB"],
+			localePriority: ["en-GB"],
+			defaultLocale: "en-GB",
+		},
 		citations: {
 			enabled: testState.citationsEnabled,
 			showUrl: testState.citationsShowUrl,
@@ -59,14 +82,17 @@ import {
 } from "@/components/features/newlib/ItemPage";
 import { ItemHeaderYear } from "@/components/features/newlib/ItemHeader";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-	true;
+(
+	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("public item empty sections", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 
 	beforeEach(() => {
+		localStorage.clear();
+		testState.extraResult = { data: undefined, isLoading: false };
 		testState.citationsEnabled = true;
 		testState.citationsShowUrl = false;
 		testState.collectionsEnabled = false;
@@ -153,7 +179,16 @@ describe("public item empty sections", () => {
 
 	it("shows a citation returned by the server", async () => {
 		testState.swrResult = {
-			data: { citations: { apa: "A useful citation.", harvard: "Harvard reference.", chicago: "Chicago reference.", mla: "MLA reference.", vancouver: "Vancouver reference.", bibtex: "@misc{el_REPORT01, title={A report}}" } },
+			data: {
+				citations: {
+					apa: "A useful citation.",
+					harvard: "Harvard reference.",
+					chicago: "Chicago reference.",
+					mla: "MLA reference.",
+					vancouver: "Vancouver reference.",
+					bibtex: "@misc{el_REPORT01, title={A report}}",
+				},
+			},
 			isLoading: false,
 		};
 
@@ -169,6 +204,73 @@ describe("public item empty sections", () => {
 		expect(container.textContent).toContain("A useful citation.");
 	});
 
+	it("retains citation text while a saved style changes and restores that style on remount", async () => {
+		const item = { key: "REPORT01", title: "A report" } as Item;
+		testState.swrResult = {
+			data: {
+				citations: {
+					apa: "The original citation.",
+					harvard: "Harvard.",
+					chicago: "Chicago.",
+					mla: "MLA.",
+					vancouver: "Vancouver.",
+					bibtex: "BibTeX.",
+				},
+				record: {
+					id: "REPORT01",
+					type: "report",
+					title: "A report",
+					"citation-key": "REPORT01",
+				},
+			},
+			isLoading: false,
+		};
+		await act(async () => root.render(<ItemCitation item={item} />));
+		expect(container.textContent).toContain("The original citation.");
+
+		testState.extraResult = { data: undefined, isLoading: true };
+		await act(async () => {
+			localStorage.setItem("citation-style", JSON.stringify("nature"));
+			window.dispatchEvent(
+				new StorageEvent("storage", { key: "citation-style" }),
+			);
+		});
+		expect(
+			container.querySelector(
+				'button[aria-label="citationStyle: Nature"]',
+			),
+		).not.toBeNull();
+		expect(container.textContent).toContain("The original citation.");
+		expect(container.querySelector('[role="status"]')).toBeNull();
+		expect(
+			container.querySelector<HTMLButtonElement>(
+				'button[aria-label="copyCitation"]',
+			)?.disabled,
+		).toBe(true);
+
+		testState.extraResult = {
+			data: "The Nature citation.",
+			isLoading: false,
+		};
+		await act(async () => root.render(<ItemCitation item={item} />));
+		expect(container.textContent).toContain("The Nature citation.");
+		expect(container.textContent).not.toContain("The original citation.");
+		expect(
+			container.querySelector<HTMLButtonElement>(
+				'button[aria-label="copyCitation"]',
+			)?.disabled,
+		).toBe(false);
+
+		await act(async () => root.unmount());
+		root = createRoot(container);
+		await act(async () => root.render(<ItemCitation item={item} />));
+		expect(
+			container.querySelector(
+				'button[aria-label="citationStyle: Nature"]',
+			),
+		).not.toBeNull();
+		expect(container.textContent).toContain("The Nature citation.");
+	});
 
 	it("does not show Collections when none can be displayed", async () => {
 		testState.collectionsEnabled = true;
@@ -192,7 +294,9 @@ describe("public item empty sections", () => {
 			);
 		});
 
-		expect(container.textContent).not.toContain("itemTopicsCollectionsTitle");
+		expect(container.textContent).not.toContain(
+			"itemTopicsCollectionsTitle",
+		);
 	});
 
 	it("shows a public child collection", async () => {
@@ -225,6 +329,7 @@ describe("public item empty sections", () => {
 	afterEach(async () => {
 		await act(async () => root.unmount());
 		container.remove();
+		localStorage.clear();
 	});
 
 	it("does not appear when the record has no publication details", async () => {

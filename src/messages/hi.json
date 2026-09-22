@@ -490,7 +490,9 @@
     "openGapMapAriaLabel": "गैप मैप {label} खोलें",
     "searchCitationStyles": "शैलियाँ या पत्रिकाएँ खोजें…",
     "citationStylesFailed": "शैलियाँ लोड नहीं हो सकीं।",
-    "noCitationStyles": "कोई मिलती-जुलती शैली नहीं मिली।"
+    "noCitationStyles": "कोई मिलती-जुलती शैली नहीं मिली।",
+    "commonCitationStyles": "प्रचलित शैलियाँ",
+    "otherCitationStyles": "अन्य शैलियाँ"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

@@ -479,7 +479,9 @@
     "openGapMapAriaLabel": "Open {label} gap map",
     "searchCitationStyles": "Search styles or journals…",
     "citationStylesFailed": "Could not load styles.",
-    "noCitationStyles": "No matching styles."
+    "noCitationStyles": "No matching styles.",
+    "commonCitationStyles": "Common styles",
+    "otherCitationStyles": "Other styles"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

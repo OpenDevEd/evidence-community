@@ -490,7 +490,9 @@
     "openGapMapAriaLabel": "Abrir mapa de lacunas {label}",
     "searchCitationStyles": "Pesquisar estilos ou revistas…",
     "citationStylesFailed": "Não foi possível carregar os estilos.",
-    "noCitationStyles": "Nenhum estilo encontrado."
+    "noCitationStyles": "Nenhum estilo encontrado.",
+    "commonCitationStyles": "Estilos comuns",
+    "otherCitationStyles": "Outros estilos"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

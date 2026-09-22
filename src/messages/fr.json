@@ -490,7 +490,9 @@
     "openGapMapAriaLabel": "Ouvrir le gap map {label}",
     "searchCitationStyles": "Rechercher un style ou une revue…",
     "citationStylesFailed": "Impossible de charger les styles.",
-    "noCitationStyles": "Aucun style correspondant."
+    "noCitationStyles": "Aucun style correspondant.",
+    "commonCitationStyles": "Styles courants",
+    "otherCitationStyles": "Autres styles"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

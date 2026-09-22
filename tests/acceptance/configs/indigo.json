@@ -178,6 +178,7 @@
     }
   },
   "citations": {
+    "enabled": false,
     "showUrl": false
   },
   "features": {

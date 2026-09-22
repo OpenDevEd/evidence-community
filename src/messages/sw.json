@@ -491,7 +491,9 @@
     "openGapMapAriaLabel": "Fungua ramani ya mapengo {label}",
     "searchCitationStyles": "Tafuta mitindo au majarida…",
     "citationStylesFailed": "Imeshindwa kupakia mitindo.",
-    "noCitationStyles": "Hakuna mitindo inayolingana."
+    "noCitationStyles": "Hakuna mitindo inayolingana.",
+    "commonCitationStyles": "Mitindo ya kawaida",
+    "otherCitationStyles": "Mitindo mingine"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

@@ -490,7 +490,9 @@
     "openGapMapAriaLabel": "فتح خريطة الفجوات {label}",
     "searchCitationStyles": "ابحث عن أنماط أو مجلات…",
     "citationStylesFailed": "تعذر تحميل الأنماط.",
-    "noCitationStyles": "لا توجد أنماط مطابقة."
+    "noCitationStyles": "لا توجد أنماط مطابقة.",
+    "commonCitationStyles": "الأنماط الشائعة",
+    "otherCitationStyles": "الأنماط الأخرى"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
