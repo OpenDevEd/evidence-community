@@ -74,3 +74,17 @@ it("links a bare DOI in Vancouver without changing the style's visible label", a
   expect(link.getAttribute("href")).toBe("https://doi.org/10.1234/evidence");
   expect(link.textContent).toBe("10.1234/evidence");
 });
+
+
+it("exports the same safe typography and links in a standalone HTML document", async () => {
+ const { buildCitationDocument } = await import("@/lib/citation-document");
+ const { apa } = await formatCitations(record, "en-GB");
+ const doc = new DOMParser().parseFromString(buildCitationDocument(apa, "html", "APA 7"), "text/html");
+ expect(doc.querySelector("i")?.textContent).toBe("Journal of Education");
+ expect(doc.querySelector("a")?.getAttribute("href")).toBe("https://doi.org/10.1234/evidence");
+ expect(doc.body.textContent).toBe(apa.text);
+ const unsafe = new DOMParser().parseFromString(buildCitationDocument({ text: "Safe text", html: '<script>alert(1)</script><a href="javascript:alert(1)" onclick="alert(1)">Safe text</a>' }, "html", "<script>title</script>"), "text/html");
+ expect(unsafe.querySelector("script,[onclick],a")).toBeNull();
+ expect(unsafe.body.textContent).toBe("Safe text");
+ expect(buildCitationDocument(apa, "txt", "APA 7")).toBe(apa.text);
+});

@@ -1,5 +1,8 @@
 {
   "ui": {
+    "downloadFormattedCitation": "स्वरूपित (.html)",
+    "downloadPlainCitation": "सादा पाठ (.txt)",
+    "referenceManagerFormats": "संदर्भ प्रबंधक",
     "cite": "उद्धृत करें",
     "citationStyle": "उद्धरण शैली",
     "copyCitation": "उद्धरण कॉपी करें",

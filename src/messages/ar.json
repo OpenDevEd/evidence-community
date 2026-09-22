@@ -1,5 +1,8 @@
 {
   "ui": {
+    "downloadFormattedCitation": "منسّق (.html)",
+    "downloadPlainCitation": "نص عادي (.txt)",
+    "referenceManagerFormats": "مدير المراجع",
     "cite": "استشهاد",
     "citationStyle": "نمط الاستشهاد",
     "copyCitation": "نسخ الاستشهاد",

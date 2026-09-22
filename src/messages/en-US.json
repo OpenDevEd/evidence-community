@@ -1,5 +1,8 @@
 {
   "ui": {
+    "downloadFormattedCitation": "Formatted (.html)",
+    "downloadPlainCitation": "Plain text (.txt)",
+    "referenceManagerFormats": "Reference manager",
     "cite": "Cite",
     "citationStyle": "Citation style",
     "copyCitation": "Copy citation",

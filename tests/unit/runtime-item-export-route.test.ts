@@ -1,3 +1,4 @@
+vi.mock("server-only", () => ({}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NextRequest } from "next/server";
@@ -38,10 +39,10 @@ function configWithBothFormats() {
 	return libraryConfigSchema.parse(draft);
 }
 
-function requestFor(key: string, format: "ris" | "bibtex") {
+function requestFor(key: string, format: string, query = "") {
 	return GET(
 		new NextRequest(
-			`https://library.example.org/api/item/${key}/export/${format}`,
+			`https://library.example.org/api/item/${key}/export/${format}?${query}`,
 		),
 		{ params: Promise.resolve({ key, format }) },
 	);
@@ -106,4 +107,16 @@ describe("single-record export route", () => {
 
 		expect((await requestFor("ABCD1234", "ris")).status).toBe(200);
 	});
+});
+
+
+it("downloads a standalone citation without a reference number", async () => {
+ mockedGetCachedItemSmall.mockResolvedValue({ item: {
+  key: "ABCD1234", itemType: "Report", title: "2026 evidence", date: "2026",
+  creators: [{ firstName: "Jane", lastName: "Smith", creatorType: "author" }],
+ } } as never);
+ const response = await requestFor("ABCD1234", "citation", "style=vancouver&format=txt");
+ expect(response.status).toBe(200);
+ expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+ expect(await response.text()).toMatch(/^Smith J\. 2026 evidence/);
 });

@@ -94,3 +94,30 @@ it("preserves styled bibliography text and clickable DOI links alongside plain t
   expect(apa.text).toContain("Evidence & education");
   expect(apa.text).not.toMatch(/<[^>]+>/);
 });
+
+
+it("omits reference numbering from a standalone numeric citation without stripping title numbers", async () => {
+ const { formatCitations } = await import("@/lib/citation-formatter");
+ const { vancouver } = await formatCitations({
+  id: "standalone", "citation-key": "standalone", type: "report", title: "2026 education outcomes",
+  author: [{ family: "Smith", given: "Jane" }], issued: { "date-parts": [[2026]] },
+ }, "en-GB");
+ expect(vancouver.text).toMatch(/^Smith J\./);
+ expect(vancouver.text).toContain("2026 education outcomes");
+ expect(vancouver.html?.replace(/<[^>]+>/g, "").trim()).toMatch(/^Smith J\./);
+});
+
+it("keeps numbers across a complete bibliography and leaves the source style unchanged", async () => {
+ const { formatBibliography } = await import("@/lib/citation-formatter");
+ const { default: assets } = await import("@/lib/citation-assets/csl.json");
+ const first = itemToCitationData(article)!;
+ const second = { ...first, id: "ARTICLE2", title: "Second study" };
+ const style = assets.styles["nlm-citation-sequence"];
+ const single = formatBibliography([first], "en-GB", style, {}, false);
+ const bulk = formatBibliography([first, second], "en-GB", style, {}, true, "https://library.example.org");
+ expect(single.text).toMatch(/^Smith J\./);
+ expect(bulk.text).toMatch(/^1\. Smith J\./);
+ expect(bulk.text).toMatch(/\n\n2\. Smith J\. Second study/);
+ expect(bulk.html).toContain('href="https://library.example.org/lib/ARTICLE2"');
+ expect(bulk.text.match(/Available at/g)).toHaveLength(2);
+});

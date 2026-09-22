@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
+import { twMerge } from "tailwind-merge";
 import { CITATION_FORMATS, type CitationStyle } from "@/lib/citation-formats";
 import {
 	loadCitationStyles,
@@ -68,9 +69,11 @@ function StyleOption({
 function StyleMenu({
 	selected,
 	onSelect,
+  excludeBibtex,
 }: {
 	selected: CitationStyle | undefined;
 	onSelect: (style: CitationStyle) => void;
+  excludeBibtex: boolean;
 }) {
 	// TanStack Virtual measures rows outside React; its instance must stay reactive.
 	"use no memo";
@@ -85,8 +88,8 @@ function StyleMenu({
 		{ revalidateOnFocus: false, revalidateIfStale: false },
 	);
 	const matches = useMemo(
-		() => searchCitationStyles(data ?? CITATION_FORMATS, query),
-		[data, query],
+		() => searchCitationStyles(data ?? CITATION_FORMATS, query).filter(style => !excludeBibtex || style.id !== "bibtex"),
+		[data, query, excludeBibtex],
 	);
 	const rows = useMemo(() => {
 		const entries = matches.map((style, index) => ({ style, index }));
@@ -259,9 +262,15 @@ function StyleMenu({
 export function CitationStylePicker({
 	selected,
 	onSelect,
+  excludeBibtex = false,
+  className,
+  isDisabled = false,
 }: {
 	selected: CitationStyle | undefined;
 	onSelect: (style: CitationStyle) => void;
+  excludeBibtex?: boolean;
+  className?: string;
+  isDisabled?: boolean;
 }) {
 	const t = useTranslations("ui");
 	const [open, setOpen] = useState(false);
@@ -276,13 +285,14 @@ export function CitationStylePicker({
 			<PopoverTrigger>
 				<Button
 					size="sm"
+          isDisabled={isDisabled}
 					aria-label={
 						selected
 							? `${t("citationStyle")}: ${selected.label}`
 							: t("citationStyle")
 					}
 					title={selected?.label ?? t("citationStyle")}
-					className="h-8 min-h-8 min-w-24 max-w-40 sm:max-w-64 justify-between gap-3 rounded-lg px-2.5 text-sm font-normal shadow-none"
+					className={twMerge("h-8 min-h-8 min-w-24 max-w-40 sm:max-w-64 justify-between gap-3 rounded-lg px-2.5 text-sm font-normal shadow-none", className)}
 				>
 					<span className="truncate">
 						{selected?.label ?? t("citationStyle")}
@@ -296,6 +306,7 @@ export function CitationStylePicker({
 			<PopoverContent className="w-96 max-w-[calc(100vw-2rem)] max-h-[inherit] items-stretch overflow-hidden rounded-2xl border border-black/10 bg-white p-0 shadow-lg dark:border-white/10 dark:bg-secondary">
 				{open && (
 					<StyleMenu
+            excludeBibtex={excludeBibtex}
 						selected={selected}
 						onSelect={(style) => {
 							onSelect(style);

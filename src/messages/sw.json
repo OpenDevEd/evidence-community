@@ -1,5 +1,8 @@
 {
   "ui": {
+    "downloadFormattedCitation": "Iliyoumbizwa (.html)",
+    "downloadPlainCitation": "Maandishi pekee (.txt)",
+    "referenceManagerFormats": "Kidhibiti cha marejeleo",
     "cite": "Nukuu",
     "citationStyle": "Mtindo wa kunukuu",
     "copyCitation": "Nakili rejeleo",
