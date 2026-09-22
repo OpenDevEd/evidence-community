@@ -8,8 +8,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ key
 	const locale = await getRuntimeRequestLocale(request);
 	const headers = { "Cache-Control": "no-store", Vary: "Accept-Language" };
 	try {
-		const citations = await getCitationsForItemKey(key, locale);
-		return NextResponse.json<CitationResponse>({ citations }, { headers });
+		const result = await getCitationsForItemKey(key, locale);
+		return NextResponse.json<CitationResponse>(result, { headers });
 	} catch (error) {
 		console.error("Public citation read failed", { key, error });
 		return NextResponse.json({ error: "Unable to load citations" }, { status: 503, headers });

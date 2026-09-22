@@ -487,7 +487,10 @@
     "percentOfTotal": "{percentage}% कुल का",
     "viewDetails": "विवरण देखें",
     "openGapMap": "गैप मैप खोलें",
-    "openGapMapAriaLabel": "गैप मैप {label} खोलें"
+    "openGapMapAriaLabel": "गैप मैप {label} खोलें",
+    "searchCitationStyles": "शैलियाँ या पत्रिकाएँ खोजें…",
+    "citationStylesFailed": "शैलियाँ लोड नहीं हो सकीं।",
+    "noCitationStyles": "कोई मिलती-जुलती शैली नहीं मिली।"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

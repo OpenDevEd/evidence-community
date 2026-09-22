@@ -488,7 +488,10 @@
     "percentOfTotal": "{percentage}% ya jumla",
     "viewDetails": "Tazama maelezo",
     "openGapMap": "Fungua ramani ya mapengo",
-    "openGapMapAriaLabel": "Fungua ramani ya mapengo {label}"
+    "openGapMapAriaLabel": "Fungua ramani ya mapengo {label}",
+    "searchCitationStyles": "Tafuta mitindo au majarida…",
+    "citationStylesFailed": "Imeshindwa kupakia mitindo.",
+    "noCitationStyles": "Hakuna mitindo inayolingana."
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

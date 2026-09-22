@@ -35,7 +35,7 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("swr", () => ({
-	default: () => testState.swrResult,
+	default: (key: unknown) => Array.isArray(key) && key[0] === "citations" ? testState.swrResult : { data: undefined, isLoading: false },
 }));
 
 vi.mock("@/context/LibraryConfigProvider", () => ({

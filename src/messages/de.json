@@ -487,7 +487,10 @@
     "percentOfTotal": "{percentage}% des Gesamten",
     "viewDetails": "Details anzeigen",
     "openGapMap": "Gap-Map öffnen",
-    "openGapMapAriaLabel": "Gap-Map {label} öffnen"
+    "openGapMapAriaLabel": "Gap-Map {label} öffnen",
+    "searchCitationStyles": "Stile oder Zeitschriften suchen…",
+    "citationStylesFailed": "Stile konnten nicht geladen werden.",
+    "noCitationStyles": "Keine passenden Stile."
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

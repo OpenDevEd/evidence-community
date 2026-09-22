@@ -487,7 +487,10 @@
     "percentOfTotal": "{percentage}% من الإجمالي",
     "viewDetails": "عرض التفاصيل",
     "openGapMap": "فتح خريطة الفجوات",
-    "openGapMapAriaLabel": "فتح خريطة الفجوات {label}"
+    "openGapMapAriaLabel": "فتح خريطة الفجوات {label}",
+    "searchCitationStyles": "ابحث عن أنماط أو مجلات…",
+    "citationStylesFailed": "تعذر تحميل الأنماط.",
+    "noCitationStyles": "لا توجد أنماط مطابقة."
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

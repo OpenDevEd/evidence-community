@@ -487,7 +487,10 @@
     "percentOfTotal": "{percentage}% 总计",
     "viewDetails": "查看详情",
     "openGapMap": "打开证据缺口图谱",
-    "openGapMapAriaLabel": "打开{label}证据缺口图谱"
+    "openGapMapAriaLabel": "打开{label}证据缺口图谱",
+    "searchCitationStyles": "搜索样式或期刊…",
+    "citationStylesFailed": "无法加载样式。",
+    "noCitationStyles": "没有匹配的样式。"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

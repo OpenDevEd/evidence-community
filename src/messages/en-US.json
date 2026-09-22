@@ -476,7 +476,10 @@
     "percentOfTotal": "{percentage}% of total",
     "viewDetails": "View Details",
     "openGapMap": "Open Gap Map",
-    "openGapMapAriaLabel": "Open {label} gap map"
+    "openGapMapAriaLabel": "Open {label} gap map",
+    "searchCitationStyles": "Search styles or journals…",
+    "citationStylesFailed": "Could not load styles.",
+    "noCitationStyles": "No matching styles."
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

@@ -31,7 +31,7 @@ describe("runtime citation route", () => {
 	});
 	it("honors the citation visibility setting", async () => {
 		state.enabled = false;
-		expect(await (await request()).json()).toEqual({ citations: null });
+		expect(await (await request()).json()).toEqual({ citations: null, record: null });
 	});
 	it("includes the configured public URL in both citations and BibTeX when requested", async () => {
 		state.showUrl = true;
@@ -41,7 +41,7 @@ describe("runtime citation route", () => {
 	});
 	it("returns no citation when the record has no title", async () => {
 		state.title = "";
-		expect(await (await request()).json()).toEqual({ citations: null });
+		expect(await (await request()).json()).toEqual({ citations: null, record: null });
 	});
 	it("returns a retryable uncached error on a data outage", async () => {
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});

@@ -3,21 +3,21 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR, { preload } from "swr";
-import { Popover, PopoverContent, PopoverTrigger, SelectItem } from "@nextui-org/react";
+import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
-import { Select } from "@/components/nextui/Select";
+import { CitationStylePicker } from "./CitationStylePicker";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { ItemPropertyRowWrapper } from "@/components/features/newlib/ItemPropertyRow";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { CITATION_FORMATS, type CitationFormat, type CitationResponse } from "@/lib/citation-formats";
+import { CITATION_FORMATS, type CitationStyle, type CitationResponse } from "@/lib/citation-formats";
 import { canCiteItem, type CitationItem } from "@/lib/citation-formats";
-import { citationSource, loadCitations, type CitationRequest } from "@/lib/citation-client";
+import { citationSource, loadCitations, loadAdditionalCitation, type CitationRequest } from "@/lib/citation-client";
 import { buildSiteUrl } from "@/lib/site-url";
 
 function CitationContent({ loading, failed, text, format, retry }: {
-	loading: boolean; failed: boolean; text?: string; format: CitationFormat; retry: () => void;
+	loading: boolean; failed: boolean; text?: string; format: string; retry: () => void;
 }) {
 	const t = useTranslations("ui");
 	if (loading) return <p role="status" className="text-sm text-black/50 dark:text-white/50">{t("loadingData")}</p>;
@@ -28,47 +28,41 @@ function CitationContent({ loading, failed, text, format, retry }: {
 }
 
 function CitationActions({ format, onFormatChange, text }: {
-	format: CitationFormat; onFormatChange: (format: CitationFormat) => void; text?: string;
+	format: CitationStyle; onFormatChange: (format: CitationStyle) => void; text?: string;
 }) {
 	const t = useTranslations("ui");
-	const label = CITATION_FORMATS.find(option => option.id === format)?.label;
 	return <div className="flex max-w-full items-center justify-between gap-1">
-		<Select aria-label={t("citationStyle")} title={label} selectedKeys={[format]} size="sm" placement="left"
-			classNames={{
-				base: "w-auto max-w-52",
-				trigger: "h-8 min-h-8 min-w-24 rounded-lg pl-2.5 pr-7 shadow-none",
-				innerWrapper: "w-full",
-				value: "text-sm font-normal",
-				selectorIcon: "!size-3.5 right-2.5 text-black/60 dark:text-white/60",
-				popoverContent: "min-w-60",
-			}}
-			popoverProps={{ placement: "bottom-end" }}
-			onSelectionChange={(keys) => {
-				const selected = CITATION_FORMATS.find(option => keys !== "all" && keys.has(option.id));
-				if (selected) onFormatChange(selected.id);
-			}}>
-			{CITATION_FORMATS.map(option => <SelectItem key={option.id}>{option.label}</SelectItem>)}
-		</Select>
+		<CitationStylePicker selected={format} onSelect={onFormatChange} />
 		<span className="inline-flex size-8 shrink-0">
 			{text && <CopyButton key={text} textToCopy={text} ariaLabel={t("copyCitation")} />}
 		</span>
 	</div>;
 }
 
+function useCitationResult(request: CitationRequest, format: CitationStyle, enabled: boolean) {
+	const base = useSWR<CitationResponse>(enabled ? request : null, loadCitations,
+		{ revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false });
+	const record = format.asset && base.data?.record;
+	const extra = useSWR(record ? ["citation-style", record, request[2], format, request[3]] as const : null, loadAdditionalCitation,
+		{ revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false });
+	const current = record ? extra : base;
+	const text = format.asset !== undefined ? extra.data : base.data?.citations?.[format.id];
+	return { text, loading: current.isLoading, failed: Boolean(current.error), available: base.data?.citations !== null,
+		retry: () => { void current.mutate(); } };
+}
+
 export function CitationPanel({ item, showHeading = false, completeRecord = false }: { item: CitationItem; showHeading?: boolean; completeRecord?: boolean }) {
 	const t = useTranslations("ui");
 	const locale = useLocale();
 	const { citations: settings, identity } = useLibraryConfig();
-	const [format, setFormat] = useState<CitationFormat>("apa");
+	const [format, setFormat] = useState<CitationStyle>(CITATION_FORMATS[0]);
 	const source = citationSource(item, completeRecord);
 	const request: CitationRequest = ["citations", source, locale, settings.showUrl ? buildSiteUrl(`/lib/${item.key}`, identity.baseUrl) : undefined];
-	const { data, error, isLoading, mutate } = useSWR<CitationResponse>(settings.enabled ? request : null, loadCitations,
-		{ revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false });
-	if (!settings.enabled || (!isLoading && !error && !data?.citations)) return null;
-	const text = data?.citations?.[format];
+	const { text, loading, failed, available, retry } = useCitationResult(request, format, settings.enabled);
+	if (!settings.enabled || !available) return null;
 	const controls = <CitationActions format={format} onFormatChange={setFormat} text={text} />;
-	const content = <CitationContent loading={isLoading} failed={Boolean(error)} text={text} format={format} retry={() => void mutate()} />;
-	return <div className="w-full space-y-3" data-citation-state={isLoading ? "loading" : error ? "error" : "ready"}>
+	const content = <CitationContent loading={loading} failed={failed} text={text} format={format.id} retry={retry} />;
+	return <div className="w-full space-y-3" data-citation-state={loading ? "loading" : failed ? "error" : "ready"}>
 		{showHeading ? <ItemPropertyRowWrapper title={t("itemCitationTitle")} actions={controls}>{content}</ItemPropertyRowWrapper> : <>{controls}{content}</>}
 	</div>;
 }
