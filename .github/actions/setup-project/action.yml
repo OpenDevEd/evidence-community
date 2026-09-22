@@ -15,3 +15,4 @@ runs:
       run: |
         npm ci --prefer-offline --no-audit --no-fund --ignore-scripts
         npm rebuild @parcel/watcher @swc/core bcrypt esbuild sharp
+        npm run postinstall
