@@ -52,7 +52,7 @@ Selectable models:
 | UI name          | Target model     |
 | ---------------- | ---------------- |
 | Gemini 3.7 Flash | Gemini 3.7 Flash |
-| GPT-5.6 Luna     | GPT-5.6 Luna     |
+| GPT-6 Luna       | GPT-6 Luna       |
 | Grok 4.6         | Grok 4.6         |
 
 Hidden configured models, confirmed by the user on 2026-08-18:
@@ -68,7 +68,7 @@ Hidden configured models, confirmed by the user on 2026-08-18:
 
 Resolve each target to its current provider or OpenRouter model ID from the stored OpenScholar model list during implementation, and verify direct PDF input, streaming, and tool calling before enabling it. Do not guess or preserve stale IDs.
 
-`openai/gpt-5.6-luna` is the default and the fixed cheap model for generated starter questions. GPT-5.6 Sol, Terra, Pro/batch variants, and Claude models other than the two hidden entries above are excluded.
+`openai/gpt-6-luna` is the default and the fixed cheap model for generated starter questions. GPT-5.6 Sol, Terra, Pro/batch variants, and Claude models other than the two hidden entries above are excluded.
 
 The user's selected model handles Summary, Explain, chat, Quick Answer, Deep Research, and Smart Screening. Starter-question generation is the only fixed-model exception.
 
@@ -186,7 +186,7 @@ Conceptual input:
 ### Suggested starter questions
 
 - Keep automatic generation when publication chat opens.
-- Use fixed GPT-5.6 Luna regardless of the user's selected model.
+- Use fixed GPT-6 Luna regardless of the user's selected model.
 - Revised by the user on 2026-08-21: starter questions use publication metadata plus abstract only. They do not read PDFs (cheaper and faster) and never use embeddings.
 - Return exactly five localized questions.
 - A failure must not prevent the chat modal from opening or being used.
@@ -208,7 +208,7 @@ Conceptual input:
 - Deep Research searches default to full-text-only. If those results are missing or insufficient, the model may retry without the filter, but metadata-only results remain discovery leads and must not be presented as page-verified evidence.
 - If search produces no results, the agent may return a clear no-results answer without a PDF read.
 - Let the model choose search queries and publications. Do not recreate a bespoke planner/relevance/synthesis pipeline or separate orchestration service.
-- Keep provider-default reasoning for the initial search-query step. Use each model's verified maximum reasoning effort when selecting publications to read and for subsequent synthesis after a PDF read: `max` for GPT-5.6 Luna, `xhigh` for Grok 4.6, and `high` for Gemini 3.7 Flash. Reverify these values when the gateway or model IDs change.
+- Keep provider-default reasoning for the initial search-query step. Use each model's verified maximum reasoning effort when selecting publications to read and for subsequent synthesis after a PDF read: `max` for GPT-6 Luna, `xhigh` for Grok 4.6, and `high` for Gemini 3.7 Flash. Reverify these values when the gateway or model IDs change.
 - If invoked programmatically, hidden Claude Sonnet 5 and Claude Opus 5 use verified `max` reasoning effort for those same Deep Research steps.
 - In publication context, begin with the current publication and keep the research focused on it unless wider evidence is required.
 

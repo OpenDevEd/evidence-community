@@ -65,7 +65,7 @@ import { toolActivitySummary, type ResearchToolPart } from "./tool-activity";
 import { screeningSelection } from "./screening-selection";
 
 const SELECTABLE_MODEL_IDS = [
-	"openai/gpt-5.6-luna",
+	"openai/gpt-6-luna",
 	"google/gemini-3.7-flash",
 	"x-ai/grok-4.6",
 ] as const;
@@ -81,15 +81,15 @@ test("Claude models are configured but hidden, and Luna remains the default", ()
 		AI_MODELS.filter(({ hidden }) => !hidden).map(({ id }) => id),
 		SELECTABLE_MODEL_IDS,
 	);
-	assert.equal(DEFAULT_AI_MODEL_ID, "openai/gpt-5.6-luna");
-	assert.equal(STARTER_QUESTIONS_MODEL_ID, "openai/gpt-5.6-luna");
+	assert.equal(DEFAULT_AI_MODEL_ID, "openai/gpt-6-luna");
+	assert.equal(STARTER_QUESTIONS_MODEL_ID, "openai/gpt-6-luna");
 	assert.equal(isAIModelId("openai/gpt-5.6-sol"), false);
 	assert.equal(isAIModelId(CLAUDE_SONNET_MODEL_ID), true);
 	assert.equal(isAIModelId(CLAUDE_OPUS_MODEL_ID), true);
 	assert.equal(isSelectableAIModelId(CLAUDE_SONNET_MODEL_ID), false);
 	assert.equal(isSelectableAIModelId(CLAUDE_OPUS_MODEL_ID), false);
 	assert.equal(isAIModelId("openai/gpt-5.6-terra"), false);
-	assert.equal(maximumReasoningEffort("openai/gpt-5.6-luna"), "max");
+	assert.equal(maximumReasoningEffort("openai/gpt-6-luna"), "max");
 	assert.equal(maximumReasoningEffort("google/gemini-3.7-flash"), "high");
 	assert.equal(maximumReasoningEffort("x-ai/grok-4.6"), "xhigh");
 	assert.equal(maximumReasoningEffort(CLAUDE_SONNET_MODEL_ID), "max");
@@ -662,7 +662,7 @@ test("search context normalisation never throws on transient URL states", () => 
 });
 
 test("preferred OpenRouter providers are requested per model with fallbacks", () => {
-	const luna = createOpenRouterModelSettings("openai/gpt-5.6-luna") as {
+	const luna = createOpenRouterModelSettings("openai/gpt-6-luna") as {
 		provider?: { order: string[]; allow_fallbacks: boolean };
 	};
 	assert.deepEqual(luna.provider, {
