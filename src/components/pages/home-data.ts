@@ -154,9 +154,9 @@ async function latestJourney(followed: string | undefined, directory: LibraryHom
 		// Two approvals saved in the same millisecond still give one answer.
 		.orderBy(desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.limit(1);
-	if (!row?.resolvedAt || !row.title) return null;
+	if (!row?.resolvedAt) return null;
 	const reviewer = directory.find((person) => person.id === row.resolvedBy);
-	return { key: row.key, title: row.title, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
+	return { key: row.key, title: row.title || row.key, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
 }
 
 /** First pages of the given publications' PDFs, from their attachments. */

@@ -27,7 +27,7 @@ vi.mock("@/config/library-config/server", () => ({
 		},
 	}),
 }));
-vi.mock("@/db", () => ({ getDatabase: vi.fn(async () => ({})) }));
+vi.mock("@/db", () => ({ getDatabaseForConfig: vi.fn(async () => ({})) }));
 vi.mock("@/lib/admin/reviewed-publication-catalog", () => ({ listReviewedPublications }));
 vi.mock("@/components/pages/home-data", () => ({ loadQuestionFacts }));
 

@@ -369,7 +369,7 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 							value={question}
 							onValueChange={setQuestion}
 							onKeyDown={(event) => {
-								if (event.key === "Enter") submit();
+								if (event.key === "Enter" && !event.nativeEvent.isComposing) submit();
 							}}
 							onFocus={() => setFocused(true)}
 							onBlur={() => setFocused(false)}
@@ -1082,7 +1082,7 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 	/** The listing's query for one of its filters, or nothing where the library has that filter switched off. */
 	const listing = (on: boolean, params: { collections?: string[]; country?: string[]; institution?: string[]; range?: string }) => (on ? serializeSearchParams(params).slice(1) : undefined);
 	const countries = Object.keys(data.countries).length;
-	const series = yearSeries(data);
+	const series = yearSeries(data, Number(today.slice(0, 4)));
 	const peak = series.reduce((best, point, index) => (point.value > (series[best]?.value ?? -1) ? index : best), 0);
 
 	const types = [...data.itemTypes].sort((a, b) => b.count - a.count).slice(0, 6).map((row) => ({ name: humanType(row.itemType).replace(/^./, (first) => first.toUpperCase()), count: row.count }));
@@ -1132,11 +1132,13 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 }
 
 /** Years as a continuous series, so a year without publications still has its place on the axis. */
-function yearSeries(data: HomeData) {
-	const counts = new Map(data.years.map((row) => [row.year, row.count]));
+/** At most a century, ending no later than next year: stray dates such as 9999 would otherwise stretch the chart over thousands of empty years. */
+function yearSeries(data: HomeData, thisYear: number) {
+	const counts = new Map(data.years.filter((row) => row.year <= thisYear + 1).map((row) => [row.year, row.count]));
 	if (!counts.size) return [];
-	const firstYear = Math.min(...counts.keys());
-	return Array.from({ length: Math.max(...counts.keys()) - firstYear + 1 }, (_, index) => ({ label: String(firstYear + index), value: counts.get(firstYear + index) ?? 0 }));
+	const lastYear = Math.max(...counts.keys());
+	const firstYear = Math.max(Math.min(...counts.keys()), lastYear - 99);
+	return Array.from({ length: lastYear - firstYear + 1 }, (_, index) => ({ label: String(firstYear + index), value: counts.get(firstYear + index) ?? 0 }));
 }
 
 
