@@ -1076,7 +1076,7 @@ function countFacts(data: HomeData) {
 
 
 /** Everything the explorer band shows: one tab strip over every measure, the linked panel and the facts row. */
-function Explorer({ data, shapes, tones, ramp }: { data: HomeData; shapes: MapShape[]; tones: Tones; ramp: Tone[] }) {
+function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes: MapShape[]; tones: Tones; ramp: Tone[]; today: string }) {
 	const [tab, setTab] = useState<string | null>(null);
 	const { filters, search } = useLibraryConfig();
 	/** The listing's query for one of its filters, or nothing where the library has that filter switched off. */
@@ -1106,7 +1106,7 @@ function Explorer({ data, shapes, tones, ramp }: { data: HomeData; shapes: MapSh
 	const yearRows: Row[] = series.map((point) => ({ name: point.label, count: point.value, filter: listing(filters.years.enabled, { range: point.label }) })).reverse();
 	const flip = (index: number) => series.length - 1 - index;
 	const allViews: View[] = [
-		{ key: "years", title: "By year", icon: Calendar03Icon, rows: yearRows, initial: flip(peak), reading: (row, index) => (index === flip(peak) ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedLast /></div> },
+		{ key: "years", title: "By year", icon: Calendar03Icon, rows: yearRows, initial: flip(peak), reading: (row, index) => (index === flip(peak) ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedLast={series.at(-1)?.label === today.slice(0, 4)} /></div> },
 		parts({ key: "types", title: "By type", icon: Layers01Icon, reading: (row) => (row.name === "Other" ? <>{counted(row)} publications are of <strong>another type</strong></> : <><strong>{percent(row.count, data.publications)}%</strong> are <strong>{plural(row.name)}</strong></>) }, otherTypes > 0 ? [...types, { name: "Other", count: otherTypes }] : types, data.publications),
 		{ key: "countries", title: "By country", icon: Globe02Icon, rows: countryRows, reading: (row, index) => (index === 0 ? <><strong>{row.name}</strong> leads {countries} countries, with {counted(row)} publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} about <strong>{row.name}</strong></>), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
 		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, data.collections.map((collection) => ({ name: collection.title, count: collection.count, filter: listing(true, { collections: [collection.key] }) })), data.publications),
@@ -1248,7 +1248,7 @@ function Bands({ name, siteUrl, contact, today, about, data, tones, ramp, shapes
 				<>
 					<Heading>Explore the data</Heading>
 					<Suspense fallback={<div className="h-[120rem] lg:h-[71rem]" />}>
-						<WithData data={data}>{(figures) => <Explorer data={figures} shapes={shapes} tones={tones} ramp={ramp} />}</WithData>
+						<WithData data={data}>{(figures) => <Explorer data={figures} shapes={shapes} tones={tones} ramp={ramp} today={today} />}</WithData>
 					</Suspense>
 				</>
 			),

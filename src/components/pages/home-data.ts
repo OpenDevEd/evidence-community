@@ -46,6 +46,7 @@ function topicsAndPlaces(stats: Stats | null, facets: Awaited<ReturnType<typeof 
 		collections: collections
 			.filter((collection) => !collection.parentCollection)
 			.map((collection) => ({ key: collection.key, title: collection.title || collection.name || collection.key, count: collectionCounts[collection.key] ?? 0 }))
+			.filter((collection) => collection.count > 0)
 			.sort((a, b) => b.count - a.count)
 			.slice(0, 8),
 		topics: (stats?.topicStats ?? [])
