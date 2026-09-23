@@ -114,7 +114,7 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
 		// was found go on the shelf either way.
 		recent: shelf.filter((row) => covers[row.key]).slice(0, 6),
 		journey,
-		attachments: stats ? { total: stats.attachmentStats.totalAttachments, itemsWith: stats.attachmentStats.itemsWithAttachments, percentage: stats.attachmentStats.attachmentPercentage } : null,
+		attachments: stats ? { total: stats.attachmentStats.totalAttachments, itemsWith: stats.attachmentStats.itemsWithAttachments, withPdf: stats.attachmentStats.itemsWithPdf, percentage: stats.attachmentStats.attachmentPercentage } : null,
 		citations: stats ? { total: stats.citationStats.totalCitations, itemsWith: stats.citationStats.itemsWithCitations, average: stats.citationStats.avgCitationsPerItem, max: stats.citationStats.maxCitations, percentage: stats.citationStats.citationPercentage, hIndex: stats.citationStats.hIndex } : null,
 		collaboration: stats ? { rate: stats.collaborationStats.overallCollaborationRate, collaborative: stats.collaborationStats.collaborativeItems } : null,
 		productivity: stats ? { multiple: stats.authorProductivityStats.authorsWithMultipleWorks, average: stats.authorProductivityStats.avgItemsPerAuthor, max: stats.authorProductivityStats.maxItemsPerAuthor } : null,

@@ -3,6 +3,8 @@
 import { Suspense, use, useEffect, useId, useRef, useState } from "react";
 import type { Element } from "hast";
 import { animate, MotionConfig, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { useHydrated } from "@/hooks/useHydrated";
+import { getRuntimeLinkHref } from "@/config/library-config/links";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
@@ -66,7 +68,8 @@ export type HomeData = {
 	ai: boolean;
 	/** The latest published digests, newest first. */
 	digests: { library: string; timezone: string; editions: DigestSummary[] } | null;
-	attachments: { total: number; itemsWith: number; percentage: number } | null;
+	/** `withPdf`: publications with a PDF among their attachments. */
+	attachments: { total: number; itemsWith: number; withPdf: number; percentage: number } | null;
 	citations: { total: number; itemsWith: number; average: number; max: number; percentage: number; hIndex: number } | null;
 	collaboration: { rate: number; collaborative: number } | null;
 	productivity: { multiple: number; average: number; max: number } | null;
@@ -117,9 +120,25 @@ export type HomeContent = {
 	headings?: Partial<Record<"curation" | "team" | "involvement", string>>;
 };
 
+/**
+ * Whether the reader asked for less motion, once the page is hydrated. The server cannot know, so the first render
+ * assumes motion on both sides and the setting applies from the next one; `motion-reduce:` styles cover the frame
+ * in between.
+ */
+function useLessMotion() {
+	const hydrated = useHydrated();
+	const reduce = useReducedMotion();
+	return hydrated && Boolean(reduce);
+}
+
 type Rendered = { children?: React.ReactNode; node?: Element };
 
-const link = ({ children, node }: Rendered) => <Link href={String(node?.properties.href ?? "")} className="font-medium text-accent underline decoration-1 underline-offset-4">{children}</Link>;
+/** A link in an owner's answer; one to this library's own address becomes a path, so it keeps the reader's language. */
+function AnswerLink({ children, node }: Rendered) {
+	const { identity } = useLibraryConfig();
+	return <Link href={getRuntimeLinkHref(String(node?.properties.href ?? ""), identity.baseUrl)} className="font-medium text-accent underline decoration-1 underline-offset-4">{children}</Link>;
+}
+const link = AnswerLink;
 const bold = ({ children }: Rendered) => <strong className="font-semibold opacity-100">{children}</strong>;
 const body = {
 	p: ({ children }: Rendered) => <p className="mb-4 max-w-[40rem] text-[17px] leading-[1.75] opacity-85 last:mb-0">{children}</p>,
@@ -258,7 +277,7 @@ function CiteSlip({ name, url, today }: { name: string; url: string; today: stri
  */
 /** Types the example questions into an empty, idle box one after another; a plain hint for reduced motion. */
 function useTypedHint(examples: string[], idle: string, active: boolean) {
-	const reduce = useReducedMotion();
+	const reduce = useLessMotion();
 	const [hint, setHint] = useState<string | null>(null);
 	const joined = examples.join("\n");
 	const typing = Boolean(joined) && active && !reduce;
@@ -626,7 +645,7 @@ const ARCH = "M0 0 H1600 V120 C 1300 0, 300 0, 0 120 Z";
 /** Full-width band in a configured tone; the seam at its top is drawn in the previous band's colour. */
 function Band({ tone, previous, inverse = false, children }: { tone: Tone; previous: Tone; inverse?: boolean; children: React.ReactNode }) {
 	const ref = useRef<HTMLElement>(null);
-	const reduce = useReducedMotion();
+	const reduce = useLessMotion();
 	// The seam starts shallow and bends to its full curve as the band comes up the screen.
 	const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "start 35%"] });
 	const depth = useTransform(scrollYProgress, [0, 1], [reduce ? 1 : 0.25, 1]);
@@ -634,7 +653,7 @@ function Band({ tone, previous, inverse = false, children }: { tone: Tone; previ
 		<section ref={ref} data-inverse={inverse} className={`group/band relative isolate pb-16 pt-24 lg:pb-24 lg:pt-36 ${toneClass}`} style={toneStyle(tone, previous)}>
 			<div aria-hidden className={`pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 ${toneClass}`}>
 				{/* One pixel above the band's edge: where the edge falls between pixels, Firefox would otherwise show a hairline of this band's colour above the curve. */}
-				<motion.div style={{ scaleY: depth, originY: 0 }} className="absolute inset-x-0 -top-px h-14 lg:h-24">
+				<motion.div style={{ scaleY: depth, originY: 0 }} className="absolute inset-x-0 -top-px h-14 motion-reduce:![transform:none] lg:h-24">
 					<svg viewBox="0 0 1600 120" preserveAspectRatio="none" className="h-full w-full text-[var(--band-from)] dark:text-[var(--band-from-dark)]">
 						<path d={ARCH} fill="currentColor" />
 					</svg>
@@ -709,7 +728,7 @@ const listMotion = { initial: "hidden", whileInView: "shown", viewport: seen, va
 function CountUp({ text }: { text: string }) {
 	const ref = useRef<HTMLSpanElement>(null);
 	const inView = useInView(ref, seen);
-	const reduce = useReducedMotion();
+	const reduce = useLessMotion();
 	useEffect(() => {
 		const node = ref.current;
 		const match = text.match(/\d[\d,]*(?:\.\d+)?/);
@@ -749,7 +768,7 @@ function niceCeiling(value: number) {
 
 /** Change over time: one smooth 2px line over a flat wash, two recessive gridlines, and a crosshair that reads out the point under the pointer. Fills its parent's height. */
 function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { points: { label: string; value: number }[]; link: Linkage; unit: string; labelEvery?: number; dottedLast?: boolean }) {
-	const reduce = useReducedMotion();
+	const reduce = useLessMotion();
 	const clipId = useId();
 	const top = niceCeiling(Math.max(...points.map((point) => point.value)));
 	const x = (index: number) => (points.length > 1 ? (100 * index) / (points.length - 1) : 50);
@@ -767,7 +786,7 @@ function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { poi
 				{[top, top / 2].map((value) => (
 					<div key={value} className={`absolute inset-x-0 ${rule}`} style={{ top: `${y(value)}%` }}><span className={`absolute bottom-1 left-0 text-xs tabular-nums ${muted}`}>{number.format(value)}</span></div>
 				))}
-				<motion.div className="absolute inset-0 text-accent" initial={reduce ? false : { clipPath: "inset(0 100% 0 0)" }} whileInView={{ clipPath: "inset(0 0% 0 0)" }} viewport={{ once: true }} transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}>
+				<motion.div className="absolute inset-0 text-accent motion-reduce:![clip-path:none]" initial={{ clipPath: "inset(0 100% 0 0)" }} whileInView={{ clipPath: "inset(0 0% 0 0)" }} viewport={{ once: true }} transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}>
 					<svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
 						{split !== null && (
 							<defs>
@@ -839,7 +858,7 @@ function squarify(values: number[], box: Rect): Rect[] {
 
 /** Part-to-whole as a treemap in the accent ramp, largest darkest, each cell with its own readable text colour and a 2px gap to its neighbours. The cell on show lifts above the rest instead of wearing an outline. */
 function Treemap({ rows, total, toneOf, link }: { rows: Row[]; total: number; toneOf: (index: number) => Tone; link: Linkage }) {
-	const reduce = useReducedMotion();
+	const reduce = useLessMotion();
 	const rects = squarify(rows.map((row) => row.count), { x: 0, y: 0, w: 100, h: 100 });
 	return (
 		<div className="relative h-full w-full" onPointerLeave={() => link.onPreview(null)}>
@@ -847,7 +866,7 @@ function Treemap({ rows, total, toneOf, link }: { rows: Row[]; total: number; to
 				const rect = rects[index]!;
 				const current = index === link.shown;
 				return (
-					<motion.div key={row.name} className={`absolute ${current ? "z-10" : ""}`} style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} initial={reduce ? false : { opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ ...spring, delay: index * 0.04 }}>
+					<motion.div key={row.name} className={`absolute motion-reduce:!opacity-100 motion-reduce:![transform:none] ${current ? "z-10" : ""}`} style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ ...spring, delay: index * 0.04 }}>
 						<button type="button" aria-pressed={current} aria-label={`${row.name}: ${number.format(row.count)}, ${percent(row.count, total)}%`} onPointerEnter={() => link.onPreview(index)} onFocus={() => link.onPreview(index)} onBlur={() => link.onPreview(null)} onClick={() => link.onSelect(index)} className={`absolute flex flex-col justify-end overflow-hidden rounded-xl p-3 text-left outline-none transition-all duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[rgb(var(--ink-rgb))] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-reduce:transition-none ${toneClass} ${current ? "-inset-0.5 shadow-[0_8px_24px_rgb(0_0_0/0.2)]" : `inset-px ${link.previewing ? "opacity-50" : ""}`}`} style={toneStyle(toneOf(index))}>
 							{rect.w > 12 && rect.h > 16 && <span className={`min-w-0 flex-col ${rect.w > 28 ? "flex" : "hidden sm:flex"}`}><span className="truncate text-sm font-semibold">{row.name}</span><span className="font-heading text-2xl font-semibold leading-none tabular-nums">{number.format(row.count)}<span className="ml-1.5 text-sm font-normal opacity-75">{percent(row.count, total)}%</span></span></span>}
 						</button>
@@ -952,7 +971,7 @@ function Facts({ data }: { data: HomeData }) {
 	const of = (part: number) => `${number.format(part)} of ${number.format(data.publications)}`;
 	// A fact whose figure is zero says the library has no such data yet, not something about its publications.
 	const facts = [
-		data.attachments?.itemsWith && { icon: Pdf01Icon, value: `${percent(data.attachments.itemsWith, data.publications)}%`, label: "have the PDF attached", detail: of(data.attachments.itemsWith) },
+		data.attachments?.withPdf && { icon: Pdf01Icon, value: `${percent(data.attachments.withPdf, data.publications)}%`, label: "have the PDF attached", detail: of(data.attachments.withPdf) },
 		data.citations?.itemsWith && { icon: QuoteUpIcon, value: `${percent(data.citations.itemsWith, data.publications)}%`, label: "are cited by another publication", detail: of(data.citations.itemsWith) },
 		data.collaboration?.collaborative && { icon: Globe02Icon, value: `${percent(data.collaboration.collaborative, data.publications)}%`, label: "are international collaborations", detail: of(data.collaboration.collaborative) },
 		data.citations?.total && { icon: Analytics01Icon, value: number.format(data.citations.total), label: "citations in total", detail: `${number.format(data.citations.average)} per publication` },
@@ -1046,7 +1065,7 @@ type Props = { name: string; siteUrl: string; contact: Contact; today: string; a
  */
 export default function HomePage({ name, siteUrl, contact, today, about, data, tones, ramp, shapes }: Props) {
 	const t = useTranslations("homePage");
-	const reduce = useReducedMotion();
+	const reduce = useLessMotion();
 	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
 	const { identity, notifications, citations } = useLibraryConfig();
 	const reachable = Boolean(contact.email) || contact.page;
