@@ -41,4 +41,15 @@ describe("Evidence Library maintenance response", () => {
 		);
 		expect(await response.text()).toContain("being updated");
 	});
+
+	it("answers the released-domain path with a non-cacheable not found page", async () => {
+		const baseUrl = await withServer();
+		const response = await fetch(`${baseUrl}/released?from=old-host`);
+
+		expect(response.status).toBe(404);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("content-type")).toBe(
+			"text/html; charset=utf-8",
+		);
+	});
 });

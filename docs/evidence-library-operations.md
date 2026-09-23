@@ -124,8 +124,9 @@ Compose file. Set one environment value:
 
 `PORT` defaults to `3000`. Assign the verifier's public HTTPS domain to
 `runtime-verifier:3000`. Port `3001` serves the temporary maintenance response
-inside the shared proxy network and must not receive a public domain or host
-port. Do not assign a domain or host port to `docker-socket-proxy`.
+and, at `/released`, the 404 page for released custom domains. It is reached
+only through the verifier's Traefik routes inside the shared proxy network and
+must not receive a public domain or host port. Do not assign a domain or host port to `docker-socket-proxy`.
 
 The executable is also available as a package command:
 
@@ -205,6 +206,29 @@ during a deployment. Coolify label routers default to their rule length, so
 they stay below both. Finalization writes the domains file from its
 `customOrigins` before it deletes the guard route, so custom hosts always have
 a route and a renamed Coolify service is picked up at every deployment.
+
+Coolify's label router for a removed host keeps sending it to the library until
+the next deployment recreates the container. So the domains operation reads the
+previous file first. Every host it routed or released that is missing from the
+new list becomes a released host. Released hosts get their own `http` and
+`https` routers, `<name>-released-http` and `<name>-released-https`, at
+priority 50000. That beats every label router and loses to any custom route,
+so re-adding the host, here or on another library, takes it back. They rewrite
+the path to `/released` on the maintenance port, which answers 404 "This
+address is not in use" with `Cache-Control: no-store`. The file keeps the 20
+most recently released hosts. Older ones fall back to their label router until
+the next deployment. A file with released hosts but no custom hosts holds only
+the released routers. Finalization writes no released routers, because the
+deployment has just replaced the labels. If the previous file is not the
+verifier's own JSON, the operation changes nothing and answers 500
+`runtime_domains_route_unreadable`.
+
+| Router                          | Priority          |
+| ------------------------------- | ----------------- |
+| Temporary guard                 | 200000            |
+| Custom domains                  | 100000            |
+| Released custom domains         | 50000             |
+| Coolify labels                  | Rule length       |
 
 Every route host must be a lowercase DNS name with at least two labels: only
 letters, digits, and inner hyphens, 63 characters per label and 253 in total,

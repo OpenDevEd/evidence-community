@@ -1,6 +1,11 @@
-import { createServer, type Server } from "node:http";
+import {
+	createServer,
+	type IncomingMessage,
+	type Server,
+	type ServerResponse,
+} from "node:http";
 
-const page = `<!doctype html>
+const updatePage = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -27,6 +32,41 @@ const page = `<!doctype html>
 </html>
 `;
 
+// Released custom domains reach this path through the verifier's route file.
+export const LIBRARY_RELEASED_PAGE_PATH = "/released";
+const releasedPage = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Not found</title>
+</head>
+<body>
+  <main>
+    <h1>This address is not in use</h1>
+  </main>
+</body>
+</html>
+`;
+
+function sendPage(
+	request: IncomingMessage,
+	response: ServerResponse,
+	status: number,
+	page: string,
+	headers: Record<string, string> = {},
+) {
+	response.writeHead(status, {
+		...headers,
+		"Cache-Control": "no-store",
+		"Content-Length": Buffer.byteLength(page).toString(),
+		"Content-Type": "text/html; charset=utf-8",
+		"X-Robots-Tag": "noindex, nofollow",
+	});
+	response.end(request.method === "HEAD" ? undefined : page);
+}
+
 export function createLibraryMaintenanceServer(): Server {
 	return createServer((request, response) => {
 		if (request.method !== "GET" && request.method !== "HEAD") {
@@ -38,13 +78,10 @@ export function createLibraryMaintenanceServer(): Server {
 			response.end();
 			return;
 		}
-		response.writeHead(503, {
-			"Cache-Control": "no-store",
-			"Content-Length": Buffer.byteLength(page).toString(),
-			"Content-Type": "text/html; charset=utf-8",
-			"Retry-After": "30",
-			"X-Robots-Tag": "noindex, nofollow",
-		});
-		response.end(request.method === "HEAD" ? undefined : page);
+		if (request.url?.split("?", 1)[0] === LIBRARY_RELEASED_PAGE_PATH) {
+			sendPage(request, response, 404, releasedPage);
+			return;
+		}
+		sendPage(request, response, 503, updatePage, { "Retry-After": "30" });
 	});
 }
