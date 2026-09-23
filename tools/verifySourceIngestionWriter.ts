@@ -2326,10 +2326,13 @@ async function verify() {
 			getSourceCitationMetrics(db, openAlexA),
 			db
 				.select({
-					count: citationCountForItem({
-						kind: "library",
-						key: "library",
-					}),
+					count: citationCountForItem(
+						{
+							kind: "library",
+							key: "library",
+						},
+						[],
+					),
 				})
 				.from(item)
 				.where(eq(item.key, openAlexB))
@@ -2386,6 +2389,8 @@ async function verify() {
 			key: "source:openalex-citations-writer",
 			sourceConnectionKey: "openalex-citations-writer",
 		};
+		// Topics are the collections a library shows, named by title.
+		const citationTopics = new Map([[openAlexBatchOne.collectionKeys.CITATION_TOPIC!, { title: "Citation topic" }]]);
 		const [
 			openAlexCitationStats,
 			openAlexCitationsByYear,
@@ -2396,17 +2401,15 @@ async function verify() {
 			openAlexTopics,
 			openAlexTopicsByYear,
 		] = await Promise.all([
-			getCitationStats(db, sourceCitationMeasure),
-			getCitationsByYear(db, sourceCitationMeasure),
-			getInstitutionStats(db, sourceCitationMeasure),
-			getInstitutionStatsByYear(db, sourceCitationMeasure),
-			getAuthorCountries(db, sourceCitationMeasure),
-			getDetailedAuthorStats(db, sourceCitationMeasure),
-			getTopicStats(db, sourceCitationMeasure),
-			getTopicStatsByYear(db, sourceCitationMeasure),
+			getCitationStats(db, sourceCitationMeasure, []),
+			getCitationsByYear(db, sourceCitationMeasure, []),
+			getInstitutionStats(db, sourceCitationMeasure, []),
+			getInstitutionStatsByYear(db, sourceCitationMeasure, []),
+			getAuthorCountries(db, sourceCitationMeasure, []),
+			getDetailedAuthorStats(db, sourceCitationMeasure, []),
+			getTopicStats(db, sourceCitationMeasure, citationTopics, []),
+			getTopicStatsByYear(db, sourceCitationMeasure, citationTopics, []),
 		]);
-		const citationTopicKey =
-			openAlexBatchOne.collectionKeys.CITATION_TOPIC!;
 		assert(
 			openAlexCitationStats.totalCitations === 21 &&
 				openAlexCitationStats.maxCitations >= 17 &&
@@ -2434,12 +2437,12 @@ async function verify() {
 				) &&
 				openAlexTopics.topicStats.some(
 					(row) =>
-						row.fullPath === citationTopicKey &&
+						row.fullPath === "Citation topic" &&
 						row.totalCitations === 21,
 				) &&
 				openAlexTopicsByYear.some(
 					(row) =>
-						row.fullPath === citationTopicKey &&
+						row.fullPath === "Citation topic" &&
 						row.year === "2026" &&
 						row.totalCitations === 21,
 				),

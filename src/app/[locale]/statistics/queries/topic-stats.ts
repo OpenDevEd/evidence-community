@@ -2,10 +2,12 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
-import { calculateHIndex } from "./utils";
+import { calculateHIndex, visibleItem, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type TopicStats = {
+	/** The collection keys from the top down: titles need not be unique, so topics are told apart by these. */
+	id: string;
 	topic: string;
 	level: number;
 	parentTopic?: string;
@@ -31,8 +33,11 @@ export type TopicOverview = {
 };
 
 export type TopicYearStats = {
+	id: string;
 	topic: string;
 	fullPath: string;
+	level: number;
+	parentTopic?: string;
 	year: string;
 	itemCount: number;
 	totalCitations: number;
@@ -40,22 +45,40 @@ export type TopicYearStats = {
 	hIndex: number;
 };
 
-function topicPaths(collection: string) {
-	const parts = collection
-		.split("/")
-		.map((part) => part.trim())
-		.filter(Boolean);
-	return parts.map((topic, index) => ({
+/** The collections a library shows, by key: the public title and the shown collection it sits in. */
+export type ShownCollections = ReadonlyMap<string, { title: string; parent?: string }>;
+
+/** Joins titles into a path; a title may itself contain "/", so paths use a separator titles do not. */
+const PATH_SEPARATOR = " \u203a ";
+
+/**
+ * Topics are the collections a publication is in, named by their public titles along the shown collections above
+ * them. A collection the library does not show is not a topic, so internal folders and bare keys never appear.
+ */
+export function topicPaths(collectionKey: string, shown: ShownCollections) {
+	const keys: string[] = [];
+	const titles: string[] = [];
+	for (let key: string | undefined = collectionKey; key && titles.length < 20; key = shown.get(key)?.parent) {
+		const entry = shown.get(key);
+		if (!entry) break;
+		keys.unshift(key);
+		titles.unshift(entry.title);
+	}
+	return titles.map((topic, index) => ({
+		id: keys.slice(0, index + 1).join("/"),
+		parentId: index > 0 ? keys.slice(0, index).join("/") : undefined,
 		topic,
-		fullPath: parts.slice(0, index + 1).join("/"),
+		fullPath: titles.slice(0, index + 1).join(PATH_SEPARATOR),
 		level: index + 1,
-		parentPath: index > 0 ? parts.slice(0, index).join("/") : undefined,
+		parentTopic: index > 0 ? titles[index - 1] : undefined,
 	}));
 }
 
 export async function getTopicStats(
 	db: Database,
 	measure: CitationMeasure,
+	shown: ShownCollections,
+	hiddenTags: readonly string[],
 ): Promise<{ topicStats: TopicStats[]; topicOverview: TopicOverview }> {
 	const topicStatsResult = await db
 		.select({
@@ -63,22 +86,23 @@ export async function getTopicStats(
 				string[]
 			>`array_agg(${itemToCollection.collectionKey})`,
 			itemKey: item.key,
-			citationCount: citationCountForItem(measure),
+			citationCount: citationCountForItem(measure, hiddenTags),
 		})
 		.from(item)
 		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
-		.where(and(eq(item.deleted, 0), sql`${item.parentItem} IS NULL`))
+		.where(visibleItem(db, hiddenTags))
 		.groupBy(item.key);
 
 	// Process hierarchical topic structure
 	const topicMap = new Map<
 		string,
 		{
+		topic: string;
 		fullPath: string;
 		level: number;
 		parentTopic?: string;
-		itemKeys: Set<string>;
-		citationCounts: number[];
+		/** Each publication once with its citations, however many of the topic's collections it is in. */
+		citations: Map<string, number>;
 		children: Set<string>;
 		}
 	>();
@@ -89,25 +113,23 @@ export async function getTopicStats(
 		
 		row.collections.forEach((collection: string) => {
 			// Build hierarchical paths
-			for (const path of topicPaths(collection)) {
-				if (!topicMap.has(path.fullPath)) {
-					topicMap.set(path.fullPath, {
+			for (const path of topicPaths(collection, shown)) {
+				if (!topicMap.has(path.id)) {
+					topicMap.set(path.id, {
+						topic: path.topic,
 						fullPath: path.fullPath,
 						level: path.level,
-						parentTopic: path.parentPath,
-						itemKeys: new Set(),
-						citationCounts: [],
+						parentTopic: path.parentTopic,
+						citations: new Map(),
 						children: new Set(),
 					});
 				}
 				
-				const topicData = topicMap.get(path.fullPath)!;
-				topicData.itemKeys.add(row.itemKey);
-				topicData.citationCounts.push(row.citationCount || 0);
+				topicMap.get(path.id)!.citations.set(row.itemKey, Number(row.citationCount || 0));
 				
 				// Add child relationship
-				if (path.parentPath && topicMap.has(path.parentPath)) {
-					topicMap.get(path.parentPath)!.children.add(path.fullPath);
+				if (path.parentId && topicMap.has(path.parentId)) {
+					topicMap.get(path.parentId)!.children.add(path.id);
 				}
 			}
 		});
@@ -115,51 +137,47 @@ export async function getTopicStats(
 
 	// Calculate statistics for each topic
 	const topicStats: TopicStats[] = Array.from(topicMap.entries())
-		.map(([path, data]) => {
-		const uniqueItemKeys = Array.from(data.itemKeys);
-		const uniqueCitationCounts = data.citationCounts; // Already filtered to unique items per topic
+		.map(([id, data]) => {
+		const uniqueCitationCounts = [...data.citations.values()];
 			const totalCitations = uniqueCitationCounts.reduce(
 				(sum, count) => sum + count,
 				0,
 			);
 			const avgCitations =
-				uniqueItemKeys.length > 0
-					? totalCitations / uniqueItemKeys.length
+				data.citations.size > 0
+					? totalCitations / data.citations.size
 					: 0;
 		const hIndex = calculateHIndex(uniqueCitationCounts);
-		
-			const topicName = path.split("/").pop() || path;
-		
+
 		return {
-			topic: topicName,
+			id,
+			topic: data.topic,
 			level: data.level,
-				parentTopic: data.parentTopic
-					? data.parentTopic.split("/").pop()
-					: undefined,
-			fullPath: path,
-			itemCount: uniqueItemKeys.length,
+				parentTopic: data.parentTopic,
+			fullPath: data.fullPath,
+			itemCount: data.citations.size,
 			totalCitations,
 			avgCitationsPerItem: Number(avgCitations.toFixed(2)),
 			hIndex,
 			isLeaf: data.children.size === 0,
-				children: Array.from(data.children).map(
-					(childPath) => childPath.split("/").pop() || childPath,
-				),
+				// Children by name for display; the set holds their ids, so two children sharing a name both count.
+				children: Array.from(data.children, (child) => topicMap.get(child)?.topic ?? child),
 		};
 		})
 		.sort((a, b) => b.itemCount - a.itemCount);
 
 	// Calculate topic overview statistics
 	const maxDepth = Math.max(
+		0,
 		...Array.from(topicMap.values()).map((t) => t.level),
 	);
 	const topLevelTopics = Array.from(topicMap.values()).filter(
 		(t) => t.level === 1,
 	).length;
-	const totalUniqueItems = new Set();
-	topicStatsResult.forEach((row) => totalUniqueItems.add(row.itemKey));
+	// Only publications in a shown topic: one whose collections are all hidden is in no topic.
+	// The mean of the topics' own counts, as the year view computes it.
 	const avgItemsPerTopic =
-		topicStats.length > 0 ? totalUniqueItems.size / topicStats.length : 0;
+		topicStats.length > 0 ? topicStats.reduce((sum, topic) => sum + topic.itemCount, 0) / topicStats.length : 0;
 
 	// Calculate distribution by level
 	const levelCounts = new Map<number, number>();
@@ -193,6 +211,8 @@ export async function getTopicStats(
 export async function getTopicStatsByYear(
 	db: Database,
 	measure: CitationMeasure,
+	shown: ShownCollections,
+	hiddenTags: readonly string[],
 ): Promise<TopicYearStats[]> {
 	const topicsByYearResult = await db
 		.select({
@@ -200,18 +220,17 @@ export async function getTopicStatsByYear(
 				string[]
 			>`array_agg(${itemToCollection.collectionKey})`,
 			itemKey: item.key,
-			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
-			citationCount: citationCountForItem(measure),
+			year: sql<string>`${yearOf(item.date)}::text`,
+			citationCount: citationCountForItem(measure, hiddenTags),
 		})
 		.from(item)
 		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL`,
+				visibleItem(db, hiddenTags),
 				isNotNull(item.date),
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
-				sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD')) >= 2000`,
+				sql`${item.date} ~ '^[0-9]{4}'`,
+				sql`${yearOf(item.date)} >= 2000`,
 			),
 			)
 		.groupBy(item.key, item.date);
@@ -220,11 +239,13 @@ export async function getTopicStatsByYear(
 	const topicYearMap = new Map<
 		string,
 		{
+		id: string;
 		topic: string;
 		fullPath: string;
+		level: number;
+		parentTopic?: string;
 		year: string;
-		itemKeys: Set<string>;
-		citationCounts: number[];
+		citations: Map<string, number>;
 		}
 	>();
 
@@ -235,22 +256,22 @@ export async function getTopicStatsByYear(
 		
 		row.collections.forEach((collection: string) => {
 			// Build hierarchical paths for each level
-			for (const path of topicPaths(collection)) {
-				const key = `${path.fullPath}-${row.year}`;
+			for (const path of topicPaths(collection, shown)) {
+				const key = `${path.id}-${row.year}`;
 				
 				if (!topicYearMap.has(key)) {
 					topicYearMap.set(key, {
+						id: path.id,
 						topic: path.topic,
 						fullPath: path.fullPath,
+						level: path.level,
+						parentTopic: path.parentTopic,
 						year: row.year,
-						itemKeys: new Set(),
-						citationCounts: [],
+						citations: new Map(),
 					});
 				}
 				
-				const topicData = topicYearMap.get(key)!;
-				topicData.itemKeys.add(row.itemKey);
-				topicData.citationCounts.push(row.citationCount || 0);
+				topicYearMap.get(key)!.citations.set(row.itemKey, Number(row.citationCount || 0));
 			}
 		});
 	});
@@ -258,22 +279,25 @@ export async function getTopicStatsByYear(
 	// Calculate statistics for each topic-year combination
 	const topicYearStats: TopicYearStats[] = Array.from(topicYearMap.values())
 		.map((data) => {
-		const uniqueItemKeys = Array.from(data.itemKeys);
-			const totalCitations = data.citationCounts.reduce(
+		const citationCounts = [...data.citations.values()];
+			const totalCitations = citationCounts.reduce(
 				(sum, count) => sum + count,
 				0,
 			);
 			const avgCitations =
-				uniqueItemKeys.length > 0
-					? totalCitations / uniqueItemKeys.length
+				data.citations.size > 0
+					? totalCitations / data.citations.size
 					: 0;
-		const hIndex = calculateHIndex(data.citationCounts);
+		const hIndex = calculateHIndex(citationCounts);
 		
 		return {
+			id: data.id,
 			topic: data.topic,
 			fullPath: data.fullPath,
+			level: data.level,
+			parentTopic: data.parentTopic,
 			year: data.year,
-			itemCount: uniqueItemKeys.length,
+			itemCount: data.citations.size,
 			totalCitations,
 			avgCitationsPerItem: Number(avgCitations.toFixed(2)),
 				hIndex,

@@ -1,7 +1,8 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { calculateHIndex } from "./utils";
+import { calculateHIndex, yearOf } from "./utils";
+import { visibleItem } from "./utils";
 import { COUNTRIES } from "@/constants/misc";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import {
@@ -61,8 +62,9 @@ export type AuthorCollaborationStats = {
 export async function getAuthorCountries(
 	db: Database,
 	measure: CitationMeasure,
+	hiddenTags: readonly string[],
 ): Promise<AuthorCountryStats[]> {
-	const citationCount = citationCountForItem(measure);
+	const citationCount = citationCountForItem(measure, hiddenTags);
 	const authorCountriesResult = await db
 		.select({
 			countryCode: sql<string>`country_code`,
@@ -89,8 +91,7 @@ export async function getAuthorCountries(
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
 			${affiliationCountryJoin}
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+			WHERE ${visibleItem(db, hiddenTags)}
 			AND ${item.creators} IS NOT NULL
 			AND jsonb_array_length(${item.creators}) > 0
 			AND creator_data ? 'institutions'
@@ -124,6 +125,7 @@ export async function getAuthorCountries(
 
 export async function getAuthorProductivityStats(
 	db: Database,
+	hiddenTags: readonly string[],
 ): Promise<AuthorProductivityStats> {
 	const globalAuthorProductivityResult = await db
 		.select({
@@ -153,8 +155,7 @@ export async function getAuthorProductivityStats(
 				count(distinct ${item.key}) as item_count
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+			WHERE ${visibleItem(db, hiddenTags)}
 			AND ${item.creators} IS NOT NULL
 			AND jsonb_array_length(${item.creators}) > 0
 			GROUP BY author_name
@@ -253,6 +254,7 @@ export async function getAuthorProductivityStats(
 
 export async function getAuthorCollaborationStats(
 	db: Database,
+	hiddenTags: readonly string[],
 ): Promise<AuthorCollaborationStats> {
 	const globalCollaborationResult = await db
 		.select({
@@ -276,8 +278,7 @@ export async function getAuthorCollaborationStats(
 				max(jsonb_array_length(${item.creators}) - 1) as max_collaborators
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+			WHERE ${visibleItem(db, hiddenTags)}
 			AND ${item.creators} IS NOT NULL
 			AND jsonb_array_length(${item.creators}) > 0
 			GROUP BY author_name
@@ -318,8 +319,9 @@ export async function getAuthorCollaborationStats(
 export async function getDetailedAuthorStats(
 	db: Database,
 	measure: CitationMeasure,
+	hiddenTags: readonly string[],
 ): Promise<AuthorStats[]> {
-	const citationCount = citationCountForItem(measure);
+	const citationCount = citationCountForItem(measure, hiddenTags);
 	const detailedAuthorStatsResult = await db
 		.select({
 			authorName: sql<string>`author_name`,
@@ -333,27 +335,9 @@ export async function getDetailedAuthorStats(
 			creatorTypes: sql<string[]>`array_agg(distinct creator_type)`,
 			countries: sql<string[]>`array_agg(distinct country_code)`,
 			institutions: sql<string[]>`array_agg(distinct institution_name)`,
-			firstPublicationYear: sql<number>`min(extract(year from 
-				case 
-					when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(item_date, 'YYYY-MM-DD')
-					else null
-				end
-			))`,
-			lastPublicationYear: sql<number>`max(extract(year from 
-				case 
-					when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(item_date, 'YYYY-MM-DD')
-					else null
-				end
-			))`,
-			mostRecentYear: sql<number>`max(extract(year from 
-				case 
-					when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(item_date, 'YYYY-MM-DD')
-					else null
-				end
-			))`,
+			firstPublicationYear: sql<number>`min(${yearOf(sql.raw("item_date"))})`,
+			lastPublicationYear: sql<number>`max(${yearOf(sql.raw("item_date"))})`,
+			mostRecentYear: sql<number>`max(${yearOf(sql.raw("item_date"))})`,
 		})
 		.from(
 			sql`(
@@ -385,8 +369,7 @@ export async function getDetailedAuthorStats(
 				end
 			) as institution_data
 			${affiliationCountryJoin}
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+			WHERE ${visibleItem(db, hiddenTags)}
 			AND ${item.creators} IS NOT NULL
 			AND jsonb_array_length(${item.creators}) > 0
 			AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''

@@ -1,3 +1,4 @@
+import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
 import { asc, eq, sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "@/db";
@@ -17,7 +18,11 @@ export type CitationMeasureOption = {
 	sourceLabel?: string;
 };
 
-export function citationCountForItem(measure: CitationMeasure): SQL<number> {
+/**
+ * How often a publication is cited. Under the library's own measure only citations a reader can see count: the citing
+ * record must be a publication in the library, not a note or attachment, not deleted and not hidden by a hidden tag.
+ */
+export function citationCountForItem(measure: CitationMeasure, hiddenTags: readonly string[]): SQL<number> {
 	if (measure.kind === "source") {
 		return sql<number>`coalesce((
 			select metric."citedByCount"
@@ -35,6 +40,13 @@ export function citationCountForItem(measure: CitationMeasure): SQL<number> {
 		where citation_link."toKey" = "item"."key"
 			and citation_link."kind" = 'cites'
 			and citation_source."deleted" = 0
+			and coalesce(citation_source."parentItem", '') = ''
+			and citation_source."itemType"::text not in (${sql.join(EXCLUDED_ITEM_TYPES.map((type) => sql`${type}`), sql`, `)})
+			${hiddenTags.length ? sql`and not exists (
+				select 1 from "itemToTag" citing_tag
+				where citing_tag."itemKey" = citation_source."key"
+					and lower(citing_tag."tagName") in (${sql.join(hiddenTags.map((tag) => sql`${tag.toLowerCase()}`), sql`, `)})
+			)` : sql``}
 	), 0)`;
 }
 

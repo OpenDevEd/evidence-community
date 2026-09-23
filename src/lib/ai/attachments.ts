@@ -1,7 +1,5 @@
 import "server-only";
 
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import type { FilePart, TextPart, ToolModelMessage } from "ai";
 
 import { getCachedItem } from "@/app/api/cache";
@@ -11,8 +9,8 @@ import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { buildPdfDownloadPath, pdfFilename } from "./citations";
 import type { AIModelId, AIProvider } from "./models";
 import { openRouterCacheBreakpoint } from "./openrouter";
+import { fetchPublicFile, publicRequest } from "@/lib/public-fetch";
 
-const MAX_REDIRECTS = 5;
 const PDF_FETCH_TIMEOUT_MS = 30_000;
 const PDF_PROBE_TIMEOUT_MS = 8_000;
 
@@ -63,57 +61,6 @@ function pdfByteLength(file: LoadedPdf) {
 		: (file.source.size ?? 0);
 }
 
-const PRIVATE_IPV4_RANGES = [
-	(parts: number[]) => parts[0] === 0,
-	(parts: number[]) => parts[0] === 10,
-	(parts: number[]) => parts[0] === 127,
-	(parts: number[]) => parts[0] === 169 && parts[1] === 254,
-	(parts: number[]) => parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31,
-	(parts: number[]) => parts[0] === 192 && parts[1] === 168,
-];
-
-const PRIVATE_IPV6_PREFIXES = ["fc", "fd", "fe8", "fe9", "fea", "feb"];
-
-function isPrivateIpV4(address: string) {
-	const parts = address.split(".").map(Number);
-	return PRIVATE_IPV4_RANGES.some((inRange) => inRange(parts));
-}
-
-function isPrivateIpV6(address: string) {
-	const normalized = address.toLowerCase();
-	return (
-		normalized === "::1" ||
-		PRIVATE_IPV6_PREFIXES.some((prefix) => normalized.startsWith(prefix))
-	);
-}
-
-function isPrivateIp(address: string) {
-	const version = isIP(address);
-	if (version === 4) return isPrivateIpV4(address);
-	if (version === 6) return isPrivateIpV6(address);
-	return true;
-}
-
-/** A record's file link is stored data, so it may not point at the internet. */
-async function assertPublicHttpUrl(url: URL) {
-	if (url.protocol !== "https:" && url.protocol !== "http:") {
-		throw new Error("Unsupported PDF URL protocol");
-	}
-
-	const hostname = url.hostname.toLowerCase();
-	if (hostname === "localhost" || hostname.endsWith(".local")) {
-		throw new Error("Private PDF URL is not allowed");
-	}
-
-	const addresses = await lookup(hostname, { all: true });
-	if (
-		!addresses.length ||
-		addresses.some(({ address }) => isPrivateIp(address))
-	) {
-		throw new Error("Private PDF URL is not allowed");
-	}
-}
-
 /**
  * A quick HEAD request guards against a dead or non-PDF link, which would
  * otherwise fail the whole model call instead of this one attachment.
@@ -122,12 +69,9 @@ async function probePublicPdfUrl(
 	url: URL,
 ): Promise<{ ok: boolean; size?: number }> {
 	try {
-		await assertPublicHttpUrl(url);
-		const response = await fetch(url, {
+		const response = await publicRequest(url, {
 			method: "HEAD",
 			headers: { "User-Agent": "Evidence-Library/1.0" },
-			redirect: "follow",
-			cache: "no-store",
 			signal: AbortSignal.timeout(PDF_PROBE_TIMEOUT_MS),
 		});
 		if (!response.ok) return { ok: false };
@@ -145,33 +89,8 @@ async function probePublicPdfUrl(
 	}
 }
 
-async function fetchPublicPdf(url: URL, redirects = 0): Promise<Uint8Array> {
-	if (redirects > MAX_REDIRECTS) {
-		throw new Error("Too many PDF redirects");
-	}
-
-	await assertPublicHttpUrl(url);
-	const response = await fetch(url, {
-		headers: {
-			Accept: "application/pdf",
-			"User-Agent": "Evidence-Library/1.0",
-		},
-		redirect: "manual",
-		cache: "no-store",
-		signal: AbortSignal.timeout(PDF_FETCH_TIMEOUT_MS),
-	});
-
-	if (response.status >= 300 && response.status < 400) {
-		const location = response.headers.get("location");
-		if (!location) throw new Error("PDF redirect had no destination");
-		return fetchPublicPdf(new URL(location, url), redirects + 1);
-	}
-
-	if (!response.ok) {
-		throw new Error(`PDF download returned ${response.status}`);
-	}
-
-	const data = new Uint8Array(await response.arrayBuffer());
+async function fetchPublicPdf(url: URL): Promise<Uint8Array> {
+	const { data } = await fetchPublicFile(url, { accept: "application/pdf", timeoutMs: PDF_FETCH_TIMEOUT_MS });
 	const signature = new TextDecoder("ascii").decode(data.slice(0, 5));
 	if (signature !== "%PDF-") {
 		throw new Error("Attachment did not contain a PDF");

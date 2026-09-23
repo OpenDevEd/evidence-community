@@ -1,9 +1,12 @@
+import { publicItemVisibility } from "@/lib/public-item-visibility";
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
-import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
+import { isNotNull, and, inArray, ne, sql, desc } from "drizzle-orm";
+import { yearOf } from "./utils";
+import { visibleItem } from "./utils";
 
 export type ItemTypeStats = {
 	itemType: string;
@@ -25,6 +28,8 @@ export type FieldStats = {
 export type AttachmentStats = {
 	totalAttachments: number;
 	itemsWithAttachments: number;
+	/** Publications with a PDF among their attachments. */
+	itemsWithPdf: number;
 	attachmentPercentage: number;
 };
 
@@ -35,14 +40,13 @@ export type CitationYearStats = {
 	avgCitationsPerItem: number;
 };
 
-export async function getTotalItems(db: Database): Promise<number> {
+export async function getTotalItems(db: Database, hiddenTags: readonly string[]): Promise<number> {
 	const totalItemsResult = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -51,55 +55,32 @@ export async function getTotalItems(db: Database): Promise<number> {
 	return Number(totalItems);
 }
 
-export async function getAvailableYears(db: Database): Promise<string[]> {
-	const availableYearsResult = await db
+/** Publications per year, from every date that starts with a year, as the listing's year filter counts them. */
+function yearCounts(db: Database, hiddenTags: readonly string[]) {
+	return db
 		.select({
-			year: sql<string>`extract(year from 
-				case 
-					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(${item.date}, 'YYYY-MM-DD')
-					else null
-				end
-			)::text`,
+			year: sql<string>`${yearOf(item.date)}::text`,
 			count: sql<number>`count(*)`,
 		})
 		.from(item)
-		.where(
-			and(
-				eq(item.deleted, 0),
-				isNotNull(item.date),
-				ne(item.date, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`, // Only valid date format
-			),
-		)
-		.groupBy(
-			sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`,
-		)
-		.having(sql`count(*) >= 10`) // Only include years with at least 10 publications
-		.orderBy(
-			desc(sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`),
-		)
-		.limit(20); // Limit to last 20 years with data
+		.where(and(visibleItem(db, hiddenTags), sql`${item.date} ~ '^[0-9]{4}'`))
+		.groupBy(sql`${yearOf(item.date)}`)
+		.$dynamic();
+}
 
-	return availableYearsResult.map((stat) => stat.year || "");
+/** The latest twenty years with at least ten publications. */
+export async function getAvailableYears(db: Database, hiddenTags: readonly string[]): Promise<string[]> {
+	const rows = await yearCounts(db, hiddenTags)
+		.having(sql`count(*) >= 10`)
+		.orderBy(desc(sql`${yearOf(item.date)}`))
+		.limit(20);
+	return rows.map((stat) => stat.year || "");
 }
 
 export async function getItemTypeStats(
 	db: Database,
 	totalItems: number,
+	hiddenTags: readonly string[],
 ): Promise<ItemTypeStats[]> {
 	const itemTypeStatsResult = await db
 		.select({
@@ -109,8 +90,7 @@ export async function getItemTypeStats(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.itemType)
@@ -128,49 +108,11 @@ export async function getItemTypeStats(
 	return itemTypes;
 }
 
-export async function getYearDistribution(db: Database): Promise<YearStats[]> {
-	const yearStatsResult = await db
-		.select({
-			year: sql<string>`extract(year from 
-				case 
-					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(${item.date}, 'YYYY-MM-DD')
-					else null
-				end
-			)::text`,
-			count: sql<number>`count(*)`,
-		})
-		.from(item)
-		.where(
-			and(
-				eq(item.deleted, 0),
-				isNotNull(item.date),
-				ne(item.date, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`, // Only valid date format
-			),
-		)
-		.groupBy(
-			sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`,
-		)
-		.orderBy(
-			desc(sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`),
-		)
+export async function getYearDistribution(db: Database, hiddenTags: readonly string[]): Promise<YearStats[]> {
+	const rows = await yearCounts(db, hiddenTags)
+		.orderBy(desc(sql`${yearOf(item.date)}`))
 		.limit(20);
-
-	return yearStatsResult.map((stat) => ({
+	return rows.map((stat) => ({
 		year: stat.year || "",
 		count: Number(stat.count),
 	}));
@@ -179,6 +121,7 @@ export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 export async function getFieldCompleteness(
 	db: Database,
 	totalItems: number,
+	hiddenTags: readonly string[],
 ): Promise<FieldStats[]> {
 	const fieldCompletenessResult = await db
 		.select({
@@ -205,8 +148,7 @@ export async function getFieldCompleteness(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -340,14 +282,17 @@ export async function getFieldCompleteness(
 export async function getAttachmentStats(
 	db: Database,
 	totalItems: number,
+	hiddenTags: readonly string[],
 ): Promise<AttachmentStats> {
 	const attachmentStatsResult = await db
 		.select({
 			totalAttachments: sql<number>`count(case when ${item.parentItem} is not null and ${item.parentItem} != '' then 1 end)`,
 			itemsWithAttachments: sql<number>`count(distinct case when ${item.parentItem} is not null and ${item.parentItem} != '' then ${item.parentItem} end)`,
+			itemsWithPdf: sql<number>`count(distinct case when ${item.contentType} = 'application/pdf' then ${item.parentItem} end)`,
 		})
 		.from(item)
-		.where(eq(item.deleted, 0));
+		// Visible attachments of visible publications: one under a hidden publication is not the library's to count.
+		.where(and(publicItemVisibility(db, hiddenTags), inArray(item.parentItem, db.select({ key: item.key }).from(item).where(visibleItem(db, hiddenTags)))));
 
 	const attachmentStats = {
 		totalAttachments: Number(
@@ -356,6 +301,7 @@ export async function getAttachmentStats(
 		itemsWithAttachments: Number(
 			attachmentStatsResult[0]?.itemsWithAttachments || 0,
 		),
+		itemsWithPdf: Number(attachmentStatsResult[0]?.itemsWithPdf || 0),
 		attachmentPercentage:
 			totalItems > 0
 				? Number(
@@ -374,7 +320,7 @@ export async function getAttachmentStats(
 	return attachmentStats;
 }
 
-export async function getPublishersAndJournals(db: Database): Promise<{
+export async function getPublishersAndJournals(db: Database, hiddenTags: readonly string[]): Promise<{
 	topPublishers: { publisher: string; count: number }[];
 	topJournals: { journal: string; count: number }[];
 	languageDistribution: { language: string; count: number }[];
@@ -387,10 +333,9 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.publisher),
 				ne(item.publisher, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.publisher)
@@ -406,10 +351,9 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.publicationTitle),
 				ne(item.publicationTitle, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.publicationTitle)
@@ -425,10 +369,9 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.languageName),
 				ne(item.languageName, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.languageName)
@@ -453,6 +396,7 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 
 export async function getRecentActivity(
 	db: Database,
+	hiddenTags: readonly string[],
 ): Promise<{ date: string; count: number }[]> {
 	const recentActivityResult = await db
 		.select({
@@ -462,8 +406,7 @@ export async function getRecentActivity(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 				sql`${item.dateAdded} >= CURRENT_DATE - INTERVAL '30 days'`,
 			),
 		)
@@ -479,11 +422,12 @@ export async function getRecentActivity(
 export async function getCitationsByYear(
 	db: Database,
 	measure: CitationMeasure,
+	hiddenTags: readonly string[],
 ): Promise<CitationYearStats[]> {
-	const citationCount = citationCountForItem(measure);
+	const citationCount = citationCountForItem(measure, hiddenTags);
 	const citationsByYearResult = await db
 		.select({
-			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+			year: sql<string>`${yearOf(item.date)}::text`,
 			itemCount: sql<number>`count(*)`,
 			totalCitations: sql<number>`coalesce(sum(${citationCount}), 0)`,
 			avgCitationsPerItem: sql<number>`coalesce(avg(${citationCount}), 0)`,
@@ -491,19 +435,18 @@ export async function getCitationsByYear(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				visibleItem(db, hiddenTags),
 				isNotNull(item.date),
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
-				sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD')) >= 2000`,
+				sql`${item.date} ~ '^[0-9]{4}'`,
+				sql`${yearOf(item.date)} >= 2000`,
 			),
 		)
 		.groupBy(
-			sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+			sql`${yearOf(item.date)}::text`,
 		)
 		.orderBy(
 			desc(
-				sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+				sql`${yearOf(item.date)}::text`,
 			),
 		);
 

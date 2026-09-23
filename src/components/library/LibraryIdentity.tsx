@@ -1,9 +1,10 @@
 "use client";
 
-/* Runtime asset hosts cannot be known to next/image at build time. */
+/* Logos stay plain images so their loading can be watched from the first paint; their files still reach Next's optimizer through /brand. */
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useState, type ReactNode } from "react";
+import { getImageProps } from "next/image";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
@@ -20,7 +21,8 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
  * dark swaps which one is shown. Every file that settles is remembered, so a
  * colour scheme that has been shown once never asks the bar to hold room for
  * it again. Readiness is worked out while the page is being drawn, so it
- * cannot flicker for a frame after a switch.
+ * cannot flicker for a frame after a switch. Files are remembered with their
+ * colour scheme: one address used for both is two differently sized files.
  */
 export function useLibraryLogo() {
 	const { identity } = useLibraryConfig();
@@ -30,8 +32,8 @@ export function useLibraryLogo() {
 	);
 	const shownSource =
 		resolvedTheme === "dark"
-			? identity.assets.logoDark
-			: identity.assets.logoLight;
+			? `dark:${identity.assets.logoDark}`
+			: `light:${identity.assets.logoLight}`;
 	const onLogoSettled = useCallback((source: string) => {
 		setSettledSources((current) =>
 			current.has(source) ? current : new Set(current).add(source),
@@ -53,58 +55,91 @@ function LibraryLogoImages({
 	onSettled?: (source: string) => void;
 }) {
 	const { identity } = useLibraryConfig();
-	const t = useTranslations("ui");
 	/**
 	 * Both files are reported, not only the one on screen. The hidden one is
 	 * the picture the other colour scheme uses, and remembering it is what
 	 * stops the bar holding room for it a second time.
 	 */
-	const reportSettled = useCallback(
-		(element: HTMLImageElement | null) => {
-			const source = element?.getAttribute("src");
-			if (source) onSettled?.(source);
-		},
-		[onSettled],
+	return (
+		<>
+			<LogoImage
+				source={identity.assets.logoLight}
+				theme="light"
+				className={twMerge("dark:hidden", className)}
+				onSettled={onSettled}
+			/>
+			<LogoImage
+				source={identity.assets.logoDark}
+				theme="dark"
+				className={twMerge("hidden dark:block", className)}
+				onSettled={onSettled}
+			/>
+		</>
 	);
+}
+
+/** Wide enough for the widest logo box (the footer's, 14rem); Next picks the 1x and 2x files from it. */
+const LOGO_WIDTH = 224;
+
+/**
+ * One logo file, reported by its configured address once it arrives or fails.
+ * A PNG or WebP goes through Next's optimizer by way of /brand, at the size it
+ * is drawn; any other file, or one the optimizer cannot serve, loads from its
+ * own address.
+ */
+function LogoImage({
+	source,
+	theme,
+	className,
+	onSettled,
+}: {
+	source: string;
+	theme: "light" | "dark";
+	className: string;
+	onSettled?: (source: string) => void;
+}) {
+	const { identity, revision } = useLibraryConfig();
+	const t = useTranslations("ui");
+	const [direct, setDirect] = useState(false);
+	// Only a PNG or WebP at a full address can be resized; an SVG, or anything else, loads as it is.
+	const extension = URL.canParse(source) ? new URL(source).pathname.match(/\.(png|webp)$/iu)?.[0] : undefined;
+	const optimized =
+		direct || !extension
+			? null
+			: getImageProps({
+					// The extension keeps the address out of the proxy, which takes every path without one.
+					src: `/brand/${encodeURIComponent(revision)}/logo-${theme}${extension}`,
+					alt: "",
+					width: LOGO_WIDTH,
+					height: LOGO_WIDTH,
+				}).props;
+	const throughOptimizer = optimized !== null;
+	const settle = useCallback(() => onSettled?.(`${theme}:${source}`), [onSettled, source, theme]);
 	/**
 	 * A picture that was already in the browser's store finishes before the
-	 * page is wired up, so its load event never reaches us. Ask each one as it
-	 * is put on the page, which happens before anything is drawn.
+	 * page is wired up, so its load or error event never reaches us. Ask it as
+	 * it is put on the page, which happens before anything is drawn.
 	 */
 	const checkAlreadyThere = useCallback(
 		(element: HTMLImageElement | null) => {
-			if (element?.complete) reportSettled(element);
+			if (!element?.complete) return;
+			if (throughOptimizer && element.naturalWidth === 0) setDirect(true);
+			else settle();
 		},
-		[reportSettled],
+		[throughOptimizer, settle],
 	);
 
 	return (
-		<>
-			<img
-				{...LIBRARY_LOGO_ATTRIBUTES}
-				ref={checkAlreadyThere}
-				alt={t("logoAlt", {
-					company: identity.name,
-					theme: "light",
-				})}
-				className={twMerge("dark:hidden", className)}
-				onError={(event) => reportSettled(event.currentTarget)}
-				onLoad={(event) => reportSettled(event.currentTarget)}
-				src={identity.assets.logoLight}
-			/>
-			<img
-				{...LIBRARY_LOGO_ATTRIBUTES}
-				ref={checkAlreadyThere}
-				alt={t("logoAlt", {
-					company: identity.name,
-					theme: "dark",
-				})}
-				className={twMerge("hidden dark:block", className)}
-				onError={(event) => reportSettled(event.currentTarget)}
-				onLoad={(event) => reportSettled(event.currentTarget)}
-				src={identity.assets.logoDark}
-			/>
-		</>
+		<img
+			{...LIBRARY_LOGO_ATTRIBUTES}
+			ref={checkAlreadyThere}
+			alt={t("logoAlt", { company: identity.name, theme })}
+			className={className}
+			onError={() => (optimized ? setDirect(true) : settle())}
+			onLoad={settle}
+			src={optimized?.src ?? source}
+			srcSet={optimized?.srcSet}
+		/>
 	);
 }
 

@@ -62,10 +62,30 @@ export function brandAssetUrls() {
 	).split("|");
 }
 
+/** Which colour scheme's logo a configured address is: the acceptance run lists the dark logo, then the light one. */
+export function logoThemeOf(configured: string): "dark" | "light" | undefined {
+	const [dark, light] = (process.env.PLAYWRIGHT_EXPECTED_LOGO_URLS ?? "").split("|");
+	if (configured === dark) return "dark";
+	if (configured === light) return "light";
+	return undefined;
+}
+
+/**
+ * Whether the page is asking for a configured file. A raster logo comes through the image optimizer
+ * (/_next/image?url=/brand/<revision>/logo-<theme>.<ext>), which the server fetches, so that request stands for the
+ * configured logo of its colour scheme.
+ */
+export function requestsFile(url: URL, configured: string) {
+	if (url.toString() === configured) return true;
+	if (url.pathname !== "/_next/image") return false;
+	const theme = /^\/brand\/[^/]+\/logo-(light|dark)\./u.exec(url.searchParams.get("url") ?? "")?.[1];
+	return theme !== undefined && theme === logoThemeOf(configured);
+}
+
 export async function serveShape(page: Page, shape: LogoShape) {
 	const urls = brandAssetUrls();
 	await page.route(
-		(url) => urls.includes(url.toString()),
+		(url) => urls.some((configured) => requestsFile(url, configured)),
 		(route) =>
 			route.fulfill({
 				body: logoSvg(shape),

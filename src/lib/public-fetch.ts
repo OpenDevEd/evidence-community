@@ -1,0 +1,142 @@
+import "server-only";
+
+import { lookup as lookupCallback, type LookupAddress } from "node:dns";
+import { lookup } from "node:dns/promises";
+import { BlockList, isIP } from "node:net";
+import { Agent, fetch as undiciFetch, type RequestInit, type Response } from "undici";
+
+const MAX_REDIRECTS = 5;
+
+/**
+ * Addresses outside the public internet, from the IANA special-purpose registries: private, loopback, link-local,
+ * shared, benchmarking, documentation, reserved, multicast, and their IPv6 counterparts, including deprecated
+ * site-local and IPv4 embedded in IPv6.
+ */
+const NOT_PUBLIC = new BlockList();
+for (const [network, prefix] of [
+	["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12],
+	["192.0.0.0", 24], ["192.0.2.0", 24], ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15],
+	["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4],
+] as const) NOT_PUBLIC.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [
+	// IPv4 written as IPv6 (::ffff:0:0/96) is not listed: the block list checks every IPv4 address in that form, so
+	// listing it would refuse all of them. Such addresses are judged as the IPv4 address they carry instead.
+	["::", 128], ["::1", 128], ["64:ff9b:1::", 48], ["100::", 64], ["2001::", 23], ["2001:db8::", 32],
+	["2002::", 16], ["3fff::", 20], ["5f00::", 16], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8],
+] as const) NOT_PUBLIC.addSubnet(network, prefix, "ipv6");
+
+/** Whether an address is outside the public internet. An IPv4 address written as IPv6 is judged as that IPv4 address. */
+export function isPrivateIp(address: string) {
+	const version = isIP(address);
+	if (version === 4) return NOT_PUBLIC.check(address, "ipv4");
+	if (version !== 6) return true;
+	const mapped = mappedIpv4(address);
+	return mapped ? NOT_PUBLIC.check(mapped, "ipv4") : NOT_PUBLIC.check(address, "ipv6");
+}
+
+/**
+ * The IPv4 address carried inside an IPv6 one, written either way ("::ffff:127.0.0.1" or "::ffff:7f00:1"): IPv4-mapped
+ * addresses, and the NAT64 prefix 64:ff9b::/96, which a translating network turns back into that IPv4 address.
+ */
+function mappedIpv4(address: string) {
+	const carrier = /^(?:(?:0{0,4}:){0,5}:?ffff|64:ff9b::)/iu.exec(address)?.[0];
+	if (!carrier) return undefined;
+	const rest = address.slice(carrier.length).replace(/^:/u, "");
+	const dotted = /^(\d+\.\d+\.\d+\.\d+)$/u.exec(rest)?.[1];
+	if (dotted) return dotted;
+	const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(rest);
+	if (!hex) return undefined;
+	const [high, low] = [Number.parseInt(hex[1]!, 16), Number.parseInt(hex[2]!, 16)];
+	return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+}
+
+/**
+ * Connects only to addresses its own lookup accepted, so a name cannot resolve to a public address for the check and
+ * to a private one for the connection.
+ */
+const publicOnly = new Agent({
+	connect: {
+		lookup(hostname, options, callback) {
+			lookupCallback(hostname, { all: true }, (error, addresses) => {
+				if (error) return callback(error, "", 0);
+				if (!addresses.length || addresses.some(({ address }) => isPrivateIp(address))) {
+					return callback(new Error("Private URL is not allowed"), "", 0);
+				}
+				if (options.all) return (callback as (error: null, addresses: LookupAddress[]) => void)(null, addresses);
+				callback(null, addresses[0]!.address, addresses[0]!.family);
+			});
+		},
+	},
+});
+
+/** An address from stored data or settings may only reach the public internet, never this network. */
+async function assertPublicHttpUrl(url: URL) {
+	if (url.protocol !== "https:" && url.protocol !== "http:") {
+		throw new Error("Unsupported URL protocol");
+	}
+
+	const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+	if (hostname === "localhost" || hostname.endsWith(".local")) {
+		throw new Error("Private URL is not allowed");
+	}
+
+	const addresses = await lookup(hostname, { all: true });
+	if (
+		!addresses.length ||
+		addresses.some(({ address }) => isPrivateIp(address))
+	) {
+		throw new Error("Private URL is not allowed");
+	}
+}
+
+/** A request to a public address; every redirect is checked the same way before it is followed. */
+export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect" | "dispatcher">, redirects = 0): Promise<Response> {
+	if (redirects > MAX_REDIRECTS) throw new Error("Too many redirects");
+	await assertPublicHttpUrl(url);
+	const response = await undiciFetch(url, { ...init, redirect: "manual", dispatcher: publicOnly });
+	if (response.status >= 300 && response.status < 400) {
+		// Release the connection first: a redirect's body could otherwise hold it open until the timeout.
+		await response.body?.cancel();
+		const location = response.headers.get("location");
+		if (!location) throw new Error("Redirect had no destination");
+		return publicRequest(new URL(location, url), init, redirects + 1);
+	}
+	return response;
+}
+
+/** Downloads a file from a public address, stopping at the time and size limits. */
+export async function fetchPublicFile(
+	url: URL,
+	{ accept, timeoutMs, maxBytes = Number.POSITIVE_INFINITY }: { accept: string; timeoutMs: number; maxBytes?: number },
+): Promise<{ data: Uint8Array; contentType: string }> {
+	const response = await publicRequest(url, {
+		headers: { Accept: accept, "User-Agent": "Evidence-Library/1.0" },
+		signal: AbortSignal.timeout(timeoutMs),
+	});
+	if (!response.ok) throw new Error(`Download returned ${response.status}`);
+	if (Number(response.headers?.get("content-length")) > maxBytes) throw new Error("File is too large");
+	const contentType = response.headers?.get("content-type") ?? "";
+	if (!response.body) {
+		const data = new Uint8Array(await response.arrayBuffer());
+		if (data.byteLength > maxBytes) throw new Error("File is too large");
+		return { data, contentType };
+	}
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	const reader = response.body.getReader();
+	for (let part = await reader.read(); !part.done; part = await reader.read()) {
+		size += part.value.byteLength;
+		if (size > maxBytes) {
+			await reader.cancel();
+			throw new Error("File is too large");
+		}
+		chunks.push(part.value);
+	}
+	const data = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		data.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return { data, contentType };
+}

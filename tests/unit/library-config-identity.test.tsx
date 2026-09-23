@@ -123,8 +123,11 @@ describe("runtime library identity", () => {
 		expect(minimalMarkup).toContain(
 			"Logo for Minimal Evidence Library in light mode",
 		);
+		// A PNG or WebP logo reaches the optimizer through /brand; an SVG loads from its own address.
 		expect(maximalMarkup).toContain(
-			"https://assets.example.org/maximal/logo-light.webp",
+			encodeURIComponent(
+				`/brand/${encodeURIComponent(maximalConfig.revision)}/logo-light.webp`,
+			),
 		);
 		expect(maximalMarkup).toContain(
 			"https://assets.example.org/maximal/logo-dark.svg",

@@ -35,6 +35,20 @@ const itemVariants = {
 	show: { y: 0, opacity: 1 },
 };
 
+/** Rows for one institution or topic, summed per year into the chart's shape. */
+function perYear(rows: readonly { year: string; totalCitations: number; itemCount: number }[]) {
+	const years = new Map<string, { totalCitations: number; itemCount: number }>();
+	for (const row of rows) {
+		const sum = years.get(row.year) ?? { totalCitations: 0, itemCount: 0 };
+		years.set(row.year, { totalCitations: sum.totalCitations + row.totalCitations, itemCount: sum.itemCount + row.itemCount });
+	}
+	return Array.from(years, ([year, sum]) => ({
+		year,
+		...sum,
+		avgCitationsPerItem: sum.itemCount > 0 ? sum.totalCitations / sum.itemCount : 0,
+	}));
+}
+
 export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByYear }: CitationsByYearProps) {
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
@@ -56,16 +70,18 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 
 	// Get all topics with their counts (don't limit here)
 	const allTopics = useMemo(() => {
-		const topicCounts = new Map<string, number>();
+		const topicCounts = new Map<string, { topic: string; level: number; count: number }>();
 		topicsByYear.forEach(item => {
-			const current = topicCounts.get(item.fullPath) || 0;
-			topicCounts.set(item.fullPath, current + item.itemCount);
+			const current = topicCounts.get(item.id);
+			topicCounts.set(item.id, { topic: item.topic, level: item.level, count: (current?.count ?? 0) + item.itemCount });
 		});
 		
 		return Array.from(topicCounts.entries())
-			.map(([path, count]) => ({ 
-				value: path, 
-				label: `${path.split('/').pop() || path} (${count.toLocaleString()})`, 
+			.map(([id, { topic, level, count }]) => ({ 
+				value: id, 
+				topic,
+				level,
+				label: `${topic} (${count.toLocaleString()})`, 
 				count 
 			}))
 			.sort((a, b) => b.count - a.count);
@@ -108,43 +124,9 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 		let data = citationsByYear;
 		
 		if (selectedInstitution !== "all") {
-			// Filter and aggregate by institution
-			const filtered = institutionsByYear.filter(item => item.institution === selectedInstitution);
-			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
-			
-			filtered.forEach(item => {
-				const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
-				yearMap.set(item.year, {
-					totalCitations: existing.totalCitations + item.totalCitations,
-					itemCount: existing.itemCount + item.itemCount
-				});
-			});
-			
-			data = Array.from(yearMap.entries()).map(([year, stats]) => ({
-				year,
-				totalCitations: stats.totalCitations,
-				itemCount: stats.itemCount,
-				avgCitationsPerItem: stats.itemCount > 0 ? stats.totalCitations / stats.itemCount : 0
-			}));
+			data = perYear(institutionsByYear.filter(item => item.institution === selectedInstitution));
 		} else if (selectedTopic !== "all") {
-			// Filter and aggregate by topic
-			const filtered = topicsByYear.filter(item => item.fullPath === selectedTopic);
-			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
-			
-			filtered.forEach(item => {
-				const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
-				yearMap.set(item.year, {
-					totalCitations: existing.totalCitations + item.totalCitations,
-					itemCount: existing.itemCount + item.itemCount
-				});
-			});
-			
-			data = Array.from(yearMap.entries()).map(([year, stats]) => ({
-				year,
-				totalCitations: stats.totalCitations,
-				itemCount: stats.itemCount,
-				avgCitationsPerItem: stats.itemCount > 0 ? stats.totalCitations / stats.itemCount : 0
-			}));
+			data = perYear(topicsByYear.filter(item => item.id === selectedTopic));
 		}
 		
 		return data
@@ -281,9 +263,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 									{t("allTopics")}
 								</AutocompleteItem>
 								{filteredTopics.map((topic) => {
-									const pathParts = topic.value.split('/');
-									const level = pathParts.length;
-									const displayName = pathParts[pathParts.length - 1];
+									const { level, topic: displayName } = topic;
 									
 									return (
 										<AutocompleteItem 
