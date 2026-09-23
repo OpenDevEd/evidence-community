@@ -163,21 +163,57 @@ and one application can return at most 24 containers. Bad Docker data and proxy
 errors return the fixed `runtime_inspection_failed` response. Docker error text
 never reaches the caller.
 
-OpenScholar also uses five fixed route operations:
+OpenScholar also uses six fixed route operations:
 
 | Path                               | Effect                                                                                                               |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `/v1/library-runtime/maintenance`  | Routes a first activation to the maintenance response.                                                               |
 | `/v1/library-runtime/protection`   | Copies the active config, starts or reuses one temporary web guard, then routes all current and pending hosts to it. |
 | `/v1/library-runtime/activation`   | Tries the ready replacement while retaining the guard as its fallback.                                               |
-| `/v1/library-runtime/finalization` | Removes the guard and copied config, then returns traffic to the deployment router.                                  |
-| `/v1/library-runtime/removal`      | Removes the route, guard, and copied config during teardown.                                                         |
+| `/v1/library-runtime/finalization` | Writes the permanent custom-domain route, then removes the guard, copied config, and guard route.                    |
+| `/v1/library-runtime/domains`      | Replaces the permanent custom-domain route between deployments.                                                      |
+| `/v1/library-runtime/removal`      | Removes both routes, the guard, and copied config during teardown.                                                   |
 
 The first four receive `applicationUuid`, `commit`, `runtimeImage`, `revision`,
 one or two `platformOrigins`, and up to twenty transition `customOrigins`.
+Domains receives only `applicationUuid` and up to twenty `customOrigins`, and
+answers `{"status":"routed","customOrigins":[...]}` with the normalized origins.
 Removal receives only `applicationUuid`. Callers cannot supply a container
 name, command, image outside the pinned runtime reference, file path, network,
 upstream address, or Traefik rule.
+
+### Permanent custom-domain routes
+
+Custom domains do not use Coolify domain labels, so attaching or detaching one
+needs no redeploy. The verifier writes
+`ode-evidence-library-domains-<applicationUuid>.yaml` to the Traefik dynamic
+directory, and Traefik reloads it in about two seconds. Its HTTPS router sends
+the custom hosts to Coolify's platform-address service, `https-0-<uuid>...@docker`.
+The verifier reads that name from the web container's labels each time,
+because Coolify versions name it differently. It uses the one running web
+container, which must be healthy when it has a health check, and ignores exited
+ones. It fails with `runtime_web_not_ready` when there is no such container and
+with
+`runtime_web_route_missing` when the label is absent, instead of writing a
+dangling route. An empty list deletes the file. If 20 seconds have passed
+since the request arrived, it changes nothing and answers 503
+`runtime_route_deadline`. OpenScholar stops waiting after 30 seconds, so a late
+write could otherwise replace a newer host set.
+
+Its routers use priority 100000. The temporary guard route uses 200000 and wins
+during a deployment. Coolify label routers default to their rule length, so
+they stay below both. Finalization writes the domains file from its
+`customOrigins` before it deletes the guard route, so custom hosts always have
+a route and a renamed Coolify service is picked up at every deployment.
+
+Every route host must be a lowercase DNS name with at least two labels: only
+letters, digits, and inner hyphens, 63 characters per label and 253 in total,
+with no trailing dot. Punycode names are allowed. Traefik renders dynamic files
+as Go templates, so braces or backticks in a host would break the file. The
+verifier writes every route file by atomic replacement from
+machine-rendered JSON. Never hand-edit these files: while any file in the
+dynamic directory is malformed, Traefik ignores all later file-provider
+changes.
 
 The guard is only the current `web` image plus a copied active configuration.
 It joins the same private application network and the shared proxy network. It
