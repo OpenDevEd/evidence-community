@@ -55,27 +55,29 @@ type RuntimeVerifierServerOptions = {
 	token: string;
 };
 
+const knownPaths = new Map([
+	[readinessPath, "readiness"],
+	[maintenancePath, "maintenance"],
+	[protectionPath, "protection"],
+	[activationPath, "activation"],
+	[finalizationPath, "finalization"],
+	[removalPath, "removal"],
+	[domainsPath, "domains"],
+] as const);
+
 function requireKnownPath(request: IncomingMessage) {
 	const url = new URL(request.url ?? "/", "http://localhost");
-	if (url.search) {
+	const operation = url.search
+		? undefined
+		: knownPaths.get(url.pathname as Parameters<typeof knownPaths.get>[0]);
+	if (!operation) {
 		throw new HttpContractError({
 			code: "not_found",
 			message: "The requested endpoint does not exist.",
 			status: 404,
 		});
 	}
-	if (url.pathname === readinessPath) return "readiness" as const;
-	if (url.pathname === maintenancePath) return "maintenance" as const;
-	if (url.pathname === protectionPath) return "protection" as const;
-	if (url.pathname === activationPath) return "activation" as const;
-	if (url.pathname === finalizationPath) return "finalization" as const;
-	if (url.pathname === removalPath) return "removal" as const;
-	if (url.pathname === domainsPath) return "domains" as const;
-	throw new HttpContractError({
-		code: "not_found",
-		message: "The requested endpoint does not exist.",
-		status: 404,
-	});
+	return operation;
 }
 
 type RuntimeOperation = ReturnType<typeof requireKnownPath>;
