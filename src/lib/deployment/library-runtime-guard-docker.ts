@@ -362,36 +362,80 @@ function requireApplicationNetworks(networks: Record<string, unknown>) {
 	return names.sort();
 }
 
+// Coolify can leave exited web containers next to the running replacement.
 function requireApplicationContainerId(value: unknown) {
-	if (!Array.isArray(value) || value.length !== 1) {
+	const running = Array.isArray(value)
+		? value.filter((summary) => requireRecord(summary).State === "running")
+		: [];
+	if (running.length !== 1) {
 		return guardError(
 			"runtime_web_not_ready",
 			"The Evidence Library must have one running web service.",
 		);
 	}
-	return requireContainerId(requireRecord(value[0]).Id);
+	return requireContainerId(requireRecord(running[0]).Id);
+}
+
+function webMismatch(): never {
+	return guardError(
+		"runtime_web_mismatch",
+		"The running Evidence Library web service does not match its active release.",
+	);
+}
+
+function requireCoolifyWebLabels(
+	container: InspectedContainer,
+	applicationUuid: string,
+) {
+	const labels = requireLabels(container.config.Labels);
+	if (
+		labels[composeProjectLabel] !== applicationUuid ||
+		labels[composeServiceLabel] !== "web" ||
+		labels[managedLabel] !== "true" ||
+		labels[managedTypeLabel] !== "application"
+	) {
+		return webMismatch();
+	}
+	return labels;
 }
 
 function requireApplicationWebIdentity(
 	container: InspectedContainer,
 	input: LibraryRuntimeRouteInput,
 ) {
-	const labels = requireLabels(container.config.Labels);
+	const labels = requireCoolifyWebLabels(container, input.applicationUuid);
 	if (
-		labels[composeProjectLabel] !== input.applicationUuid ||
-		labels[composeServiceLabel] !== "web" ||
-		labels[managedLabel] !== "true" ||
-		labels[managedTypeLabel] !== "application" ||
 		labels[LIBRARY_COMPOSE_RELEASE_LABEL] !== input.commit ||
 		container.config.Image !== input.runtimeImage
 	) {
-		return guardError(
-			"runtime_web_mismatch",
-			"The running Evidence Library web service does not match its active release.",
-		);
+		return webMismatch();
 	}
 	requireRunning(container.state, true);
 	return container;
+}
+
+/**
+ * Coolify names the platform address `https-0-<uuid>`, with a hashed service
+ * suffix such as `-web-2567` in newer versions. Read it, never rebuild it.
+ */
+function requirePlatformService(
+	labels: Readonly<Record<string, string>>,
+	applicationUuid: string,
+) {
+	const pattern = new RegExp(
+		`^traefik\\.http\\.services\\.(https-0-${applicationUuid}(?:-[a-z0-9-]+)?)\\.loadbalancer\\.server\\.port$`,
+		"u",
+	);
+	const services = Object.keys(labels).flatMap(
+		(label) => pattern.exec(label)?.[1] ?? [],
+	);
+	if (services.length !== 1) {
+		return guardError(
+			"runtime_web_route_missing",
+			"The Evidence Library web service has no Coolify platform route.",
+		);
+	}
+	return services[0];
 }
 
 export function createDockerLibraryRuntimeGuard(
@@ -444,8 +488,8 @@ export function createDockerLibraryRuntimeGuard(
 			: inspectContainer(await readJson(response));
 	};
 
-	const readApplicationWeb = async (input: LibraryRuntimeRouteInput) => {
-		if (!isCoolifyApplicationUuid(input.applicationUuid)) {
+	const inspectApplicationWeb = async (applicationUuid: string) => {
+		if (!isCoolifyApplicationUuid(applicationUuid)) {
 			return guardError(
 				"invalid_request",
 				"applicationUuid must identify one Evidence Library.",
@@ -458,7 +502,7 @@ export function createDockerLibraryRuntimeGuard(
 			"filters",
 			JSON.stringify({
 				label: [
-					`${composeProjectLabel}=${input.applicationUuid}`,
+					`${composeProjectLabel}=${applicationUuid}`,
 					`${composeServiceLabel}=web`,
 				],
 			}),
@@ -477,6 +521,11 @@ export function createDockerLibraryRuntimeGuard(
 				"The Evidence Library web service disappeared during inspection.",
 			);
 		}
+		return container;
+	};
+
+	const readApplicationWeb = async (input: LibraryRuntimeRouteInput) => {
+		const container = await inspectApplicationWeb(input.applicationUuid);
 		requireApplicationWebIdentity(container, input);
 		const archiveUrl = new URL(
 			`${dockerApiVersion}/containers/${container.id}/archive`,
@@ -734,6 +783,15 @@ export function createDockerLibraryRuntimeGuard(
 		},
 
 		readApplicationWeb,
+
+		async readApplicationWebService(applicationUuid) {
+			const container = await inspectApplicationWeb(applicationUuid);
+			requireRunning(container.state, container.state.Health != null);
+			return requirePlatformService(
+				requireCoolifyWebLabels(container, applicationUuid),
+				applicationUuid,
+			);
+		},
 
 		async readGuard(input) {
 			const container = await inspect(

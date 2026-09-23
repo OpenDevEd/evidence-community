@@ -34,6 +34,7 @@ const protectionPath = "/v1/library-runtime/protection";
 const activationPath = "/v1/library-runtime/activation";
 const finalizationPath = "/v1/library-runtime/finalization";
 const removalPath = "/v1/library-runtime/removal";
+const domainsPath = "/v1/library-runtime/domains";
 const maximumBodyBytes = 4 * 1_024;
 
 type ReadinessRequest = {
@@ -54,26 +55,29 @@ type RuntimeVerifierServerOptions = {
 	token: string;
 };
 
+const knownPaths = new Map([
+	[readinessPath, "readiness"],
+	[maintenancePath, "maintenance"],
+	[protectionPath, "protection"],
+	[activationPath, "activation"],
+	[finalizationPath, "finalization"],
+	[removalPath, "removal"],
+	[domainsPath, "domains"],
+] as const);
+
 function requireKnownPath(request: IncomingMessage) {
 	const url = new URL(request.url ?? "/", "http://localhost");
-	if (url.search) {
+	const operation = url.search
+		? undefined
+		: knownPaths.get(url.pathname as Parameters<typeof knownPaths.get>[0]);
+	if (!operation) {
 		throw new HttpContractError({
 			code: "not_found",
 			message: "The requested endpoint does not exist.",
 			status: 404,
 		});
 	}
-	if (url.pathname === readinessPath) return "readiness" as const;
-	if (url.pathname === maintenancePath) return "maintenance" as const;
-	if (url.pathname === protectionPath) return "protection" as const;
-	if (url.pathname === activationPath) return "activation" as const;
-	if (url.pathname === finalizationPath) return "finalization" as const;
-	if (url.pathname === removalPath) return "removal" as const;
-	throw new HttpContractError({
-		code: "not_found",
-		message: "The requested endpoint does not exist.",
-		status: 404,
-	});
+	return operation;
 }
 
 type RuntimeOperation = ReturnType<typeof requireKnownPath>;
@@ -156,24 +160,20 @@ function requireRouteRequestRecord(body: unknown) {
 	);
 }
 
+function requireCustomOriginStrings(value: unknown) {
+	const message = "customOrigins must be an array of HTTPS origins.";
+	if (!Array.isArray(value)) return invalidRequest(message);
+	return value.map((origin) =>
+		typeof origin === "string" ? origin : invalidRequest(message),
+	);
+}
+
 function parseRouteRequest(serialized: string): LibraryRuntimeRouteInput {
 	const record = requireRouteRequestRecord(parseJson(serialized));
-	if (!Array.isArray(record.customOrigins)) {
-		return invalidRequest(
-			"customOrigins must be an array of HTTPS origins.",
-		);
-	}
 	return {
 		applicationUuid: requireApplicationUuid(record.applicationUuid),
 		commit: requireCommit(record.commit),
-		customOrigins: record.customOrigins.map((origin) => {
-			if (typeof origin !== "string") {
-				return invalidRequest(
-					"customOrigins must be an array of HTTPS origins.",
-				);
-			}
-			return origin;
-		}),
+		customOrigins: requireCustomOriginStrings(record.customOrigins),
 		platformOrigins: Array.isArray(record.platformOrigins)
 			? record.platformOrigins.map((origin) => {
 					if (typeof origin !== "string") {
@@ -193,6 +193,19 @@ function parseRouteRequest(serialized: string): LibraryRuntimeRouteInput {
 						"revision must identify one configuration revision.",
 					),
 		runtimeImage: requireRuntimeImage(record.runtimeImage),
+	};
+}
+
+function parseDomainsRequest(serialized: string, receivedAt: number) {
+	const record = requireExactRequestRecord(
+		parseJson(serialized),
+		["applicationUuid", "customOrigins"],
+		"Send only applicationUuid and customOrigins.",
+	);
+	return {
+		applicationUuid: requireApplicationUuid(record.applicationUuid),
+		customOrigins: requireCustomOriginStrings(record.customOrigins),
+		receivedAt,
 	};
 }
 
@@ -265,28 +278,43 @@ async function runReadiness(
 	}
 }
 
+async function runOperation(
+	operation: Exclude<RuntimeOperation, "readiness">,
+	serialized: string,
+	guard: LibraryRuntimeGuardManager,
+	receivedAt: number,
+) {
+	switch (operation) {
+		case "removal":
+			return await guard.remove(parseRemovalRequest(serialized));
+		case "domains":
+			return await guard.routeDomains(
+				parseDomainsRequest(serialized, receivedAt),
+			);
+		case "maintenance":
+			return await guard.prepare(parseRouteRequest(serialized));
+		case "protection":
+			return await guard.protect(parseRouteRequest(serialized));
+		case "activation":
+			return await guard.activate(parseRouteRequest(serialized));
+		case "finalization":
+			return await guard.finalize(parseRouteRequest(serialized));
+	}
+}
+
 async function runGuardOperation(
 	response: ServerResponse,
 	operation: Exclude<RuntimeOperation, "readiness">,
 	serialized: string,
 	guard: LibraryRuntimeGuardManager,
+	receivedAt: number,
 ) {
 	try {
-		const result =
-			operation === "removal"
-				? await guard.remove(parseRemovalRequest(serialized))
-				: operation === "maintenance"
-					? await guard.prepare(parseRouteRequest(serialized))
-					: operation === "protection"
-						? await guard.protect(parseRouteRequest(serialized))
-						: operation === "activation"
-							? await guard.activate(
-									parseRouteRequest(serialized),
-								)
-							: await guard.finalize(
-									parseRouteRequest(serialized),
-								);
-		sendJson(response, 200, result);
+		sendJson(
+			response,
+			200,
+			await runOperation(operation, serialized, guard, receivedAt),
+		);
 	} catch (error: unknown) {
 		if (error instanceof LibraryRuntimeGuardError) {
 			sendJson(response, error.status, {
@@ -303,6 +331,7 @@ async function handleRequest(
 	response: ServerResponse,
 	options: RuntimeVerifierServerOptions,
 ) {
+	const receivedAt = Date.now();
 	const operation = requireKnownPath(request);
 	requireMethod(request, "POST");
 	requireAuthorization(request, options.token);
@@ -316,7 +345,13 @@ async function handleRequest(
 		);
 		return;
 	}
-	await runGuardOperation(response, operation, serialized, options.guard);
+	await runGuardOperation(
+		response,
+		operation,
+		serialized,
+		options.guard,
+		receivedAt,
+	);
 }
 
 export function createLibraryRuntimeVerifierServer(

@@ -95,6 +95,10 @@ function createGuard(
 		prepare: vi.fn(async () => ({ status: "maintenance" as const })),
 		protect: vi.fn(async () => ({ status: "protected" as const })),
 		remove: vi.fn(async () => ({ status: "removed" as const })),
+		routeDomains: vi.fn(async () => ({
+			customOrigins: [],
+			status: "routed" as const,
+		})),
 		...overrides,
 	};
 }
@@ -192,6 +196,85 @@ describe("library runtime verifier HTTP contract", () => {
 			createGuard({ remove }),
 		);
 		expect(remove).toHaveBeenCalledWith(applicationUuid);
+	});
+
+	it("routes the requested custom domains", async () => {
+		const routeDomains = vi.fn(async () => ({
+			customOrigins: ["https://library.example.org"],
+			status: "routed" as const,
+		}));
+		const sentAt = Date.now();
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					authorizedJson({
+						applicationUuid,
+						customOrigins: ["https://library.example.org"],
+					}),
+				);
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual({
+					customOrigins: ["https://library.example.org"],
+					status: "routed",
+				});
+
+				const unauthorized = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					{
+						...authorizedJson({ applicationUuid, customOrigins: [] }),
+						headers: { "Content-Type": "application/json" },
+					},
+				);
+				expect(unauthorized.status).toBe(401);
+
+				const extraField = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					authorizedJson({ ...routeBody() }),
+				);
+				expect(extraField.status).toBe(400);
+				expect(await extraField.json()).toMatchObject({
+					error: { code: "invalid_request" },
+				});
+			},
+			createGuard({ routeDomains }),
+		);
+		expect(routeDomains).toHaveBeenCalledOnce();
+		expect(routeDomains).toHaveBeenCalledWith({
+			applicationUuid,
+			customOrigins: ["https://library.example.org"],
+			receivedAt: expect.any(Number),
+		});
+		const [{ receivedAt }] = routeDomains.mock.calls[0] as unknown as [
+			{ receivedAt: number },
+		];
+		expect(receivedAt).toBeGreaterThanOrEqual(sentAt);
+		expect(receivedAt).toBeLessThanOrEqual(Date.now());
+	});
+
+	it("answers 503 when the domains route misses its deadline", async () => {
+		const routeDomains = vi.fn(async () => {
+			throw new LibraryRuntimeGuardError(
+				"runtime_route_deadline",
+				"The custom-domain route was not changed because the request took too long.",
+				503,
+			);
+		});
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					authorizedJson({ applicationUuid, customOrigins: [] }),
+				);
+				expect(response.status).toBe(503);
+				expect(await response.json()).toMatchObject({
+					error: { code: "runtime_route_deadline" },
+				});
+			},
+			createGuard({ routeDomains }),
+		);
 	});
 
 	it("returns a bounded guard failure without changing its code", async () => {
