@@ -36,7 +36,7 @@ const cursorSchema = z.object({ v: z.literal(1), at: z.iso.datetime({ offset: tr
 /** A publication an editor has published through review, as OpenScholar's Home card lists them. `reviewer` is the approving editor's OpenScholar account. */
 export type ReviewedPublication = { key: string; title: string; publishedAt: string; reviewer: string };
 
-export function encodeReviewedPublicationCursor(cursor: { at: string; key: string }) {
+function encodeReviewedPublicationCursor(cursor: { at: string; key: string }) {
 	return Buffer.from(JSON.stringify({ v: 1, ...cursor }), "utf8").toString("base64url");
 }
 

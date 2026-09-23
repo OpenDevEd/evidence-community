@@ -1723,7 +1723,7 @@ const processingSchema = z
 	.prefault({});
 
 /** What a step of the curation timeline shows: a typed step is dated from the followed publication's review. */
-export const HOME_STEP_TYPES = ["arrival", "check", "publication", "text"] as const;
+const HOME_STEP_TYPES = ["arrival", "check", "publication", "text"] as const;
 
 /** A person in OpenScholar, as the platform fills them in when the library is published. */
 const homePersonSchema = z
