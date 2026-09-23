@@ -95,6 +95,10 @@ function createGuard(
 		prepare: vi.fn(async () => ({ status: "maintenance" as const })),
 		protect: vi.fn(async () => ({ status: "protected" as const })),
 		remove: vi.fn(async () => ({ status: "removed" as const })),
+		routeDomains: vi.fn(async () => ({
+			customOrigins: [],
+			status: "routed" as const,
+		})),
 		...overrides,
 	};
 }
@@ -192,6 +196,54 @@ describe("library runtime verifier HTTP contract", () => {
 			createGuard({ remove }),
 		);
 		expect(remove).toHaveBeenCalledWith(applicationUuid);
+	});
+
+	it("routes the requested custom domains", async () => {
+		const routeDomains = vi.fn(async () => ({
+			customOrigins: ["https://library.example.org"],
+			status: "routed" as const,
+		}));
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					authorizedJson({
+						applicationUuid,
+						customOrigins: ["https://library.example.org"],
+					}),
+				);
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual({
+					customOrigins: ["https://library.example.org"],
+					status: "routed",
+				});
+
+				const unauthorized = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					{
+						...authorizedJson({ applicationUuid, customOrigins: [] }),
+						headers: { "Content-Type": "application/json" },
+					},
+				);
+				expect(unauthorized.status).toBe(401);
+
+				const extraField = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					authorizedJson({ ...routeBody() }),
+				);
+				expect(extraField.status).toBe(400);
+				expect(await extraField.json()).toMatchObject({
+					error: { code: "invalid_request" },
+				});
+			},
+			createGuard({ routeDomains }),
+		);
+		expect(routeDomains).toHaveBeenCalledOnce();
+		expect(routeDomains).toHaveBeenCalledWith({
+			applicationUuid,
+			customOrigins: ["https://library.example.org"],
+		});
 	});
 
 	it("returns a bounded guard failure without changing its code", async () => {

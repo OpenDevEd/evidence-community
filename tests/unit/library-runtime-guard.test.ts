@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -56,6 +56,9 @@ function fakeDocker(): LibraryRuntimeGuardDocker {
 			port: 3000,
 			probeOrigin: "https://library.example.org",
 		})),
+		readApplicationWebService: vi.fn(
+			async () => `https-0-${applicationUuid}-web-2567`,
+		),
 		readGuard: vi.fn(async () => null),
 		readOwnedGuard: vi.fn(async () => ({
 			ipAddress: "172.19.0.41",
@@ -82,8 +85,20 @@ async function fixture(docker = fakeDocker()) {
 			routeDirectory,
 			`ode-evidence-library-${applicationUuid}.yaml`,
 		),
+		domainsPath: path.join(
+			routeDirectory,
+			`ode-evidence-library-domains-${applicationUuid}.yaml`,
+		),
 		stateDirectory,
 	};
+}
+
+async function readRoute(filePath: string) {
+	return JSON.parse(await readFile(filePath, "utf8"));
+}
+
+async function expectMissing(filePath: string) {
+	await expect(access(filePath)).rejects.toMatchObject({ code: "ENOENT" });
 }
 
 describe("Evidence Library runtime guard", () => {
@@ -193,19 +208,206 @@ describe("Evidence Library runtime guard", () => {
 		expect(docker.removeGuard).not.toHaveBeenCalled();
 	});
 
-	it("removes the dynamic route before deleting the guard", async () => {
+	it("removes both dynamic routes before deleting the guard", async () => {
 		const docker = fakeDocker();
-		const { manager, routePath } = await fixture(docker);
+		const { domainsPath, manager, routePath } = await fixture(docker);
 		await manager.protect(input);
+		await manager.routeDomains({
+			applicationUuid,
+			customOrigins: input.customOrigins,
+		});
 		docker.removeGuard = vi.fn(async () => {
-			await expect(readFile(routePath, "utf8")).rejects.toMatchObject({
-				code: "ENOENT",
-			});
+			await expectMissing(routePath);
+			await expectMissing(domainsPath);
 		});
 
 		await expect(manager.remove(applicationUuid)).resolves.toEqual({
 			status: "removed",
 		});
+		expect(docker.removeGuard).toHaveBeenCalledOnce();
+	});
+
+	it("routes custom domains to Coolify's platform service below the guard", async () => {
+		const { domainsPath, manager } = await fixture();
+
+		await expect(
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins: [
+					"https://Library.Example.org",
+					"https://evidence.example.com",
+				],
+			}),
+		).resolves.toEqual({
+			customOrigins: [
+				"https://library.example.org",
+				"https://evidence.example.com",
+			],
+			status: "routed",
+		});
+		const name = `ode-el-${applicationUuid}-domains`;
+		const rule =
+			"Host(`library.example.org`) || Host(`evidence.example.com`)";
+		expect(await readRoute(domainsPath)).toEqual({
+			http: {
+				middlewares: {
+					[`${name}-https-redirect`]: {
+						redirectScheme: { permanent: true, scheme: "https" },
+					},
+				},
+				routers: {
+					[`${name}-http`]: {
+						entryPoints: ["http"],
+						middlewares: [`${name}-https-redirect`],
+						priority: 100_000,
+						rule,
+						service: "noop@internal",
+					},
+					[`${name}-https`]: {
+						entryPoints: ["https"],
+						middlewares: [
+							"ode-shield-rate-direct@file",
+							"ode-shield-inflight@file",
+							"ode-library-shield@file",
+						],
+						priority: 100_000,
+						rule,
+						service: `https-0-${applicationUuid}-web-2567@docker`,
+						tls: { certResolver: "letsencrypt" },
+					},
+				},
+			},
+		});
+	});
+
+	it("keeps the permanent route below the guard route", async () => {
+		const { domainsPath, manager, routePath } = await fixture();
+		await manager.routeDomains({
+			applicationUuid,
+			customOrigins: input.customOrigins,
+		});
+		await manager.protect(input);
+
+		const guard = await readRoute(routePath);
+		const domains = await readRoute(domainsPath);
+		const prefix = `ode-el-${applicationUuid}`;
+		expect(
+			domains.http.routers[`${prefix}-domains-https`].priority,
+		).toBeLessThan(guard.http.routers[`${prefix}-custom-https`].priority);
+		expect(
+			domains.http.routers[`${prefix}-domains-http`].priority,
+		).toBeLessThan(guard.http.routers[`${prefix}-http`].priority);
+	});
+
+	it("deletes the permanent route when no custom domains remain", async () => {
+		const { domainsPath, manager } = await fixture();
+		await manager.routeDomains({
+			applicationUuid,
+			customOrigins: input.customOrigins,
+		});
+
+		await expect(
+			manager.routeDomains({ applicationUuid, customOrigins: [] }),
+		).resolves.toEqual({ customOrigins: [], status: "routed" });
+		await expectMissing(domainsPath);
+		await expect(
+			manager.routeDomains({ applicationUuid, customOrigins: [] }),
+		).resolves.toEqual({ customOrigins: [], status: "routed" });
+	});
+
+	it.each([
+		["an HTTP origin", ["http://library.example.org"]],
+		["a port", ["https://library.example.org:8443"]],
+		["a path", ["https://library.example.org/library"]],
+		["user information", ["https://user@library.example.org"]],
+		[
+			"a duplicate host",
+			["https://library.example.org", "https://LIBRARY.example.org"],
+		],
+		[
+			"more than twenty origins",
+			Array.from(
+				{ length: 21 },
+				(_, index) => `https://library-${index}.example.org`,
+			),
+		],
+	])("refuses %s without writing a route", async (_label, customOrigins) => {
+		const { docker, domainsPath, manager } = await fixture();
+
+		await expect(
+			manager.routeDomains({ applicationUuid, customOrigins }),
+		).rejects.toMatchObject({ code: "invalid_request", status: 400 });
+		expect(docker.readApplicationWebService).not.toHaveBeenCalled();
+		await expectMissing(domainsPath);
+	});
+
+	it("refuses an unknown application", async () => {
+		const { docker, manager } = await fixture();
+
+		await expect(
+			manager.routeDomains({
+				applicationUuid: "../../etc",
+				customOrigins: input.customOrigins,
+			}),
+		).rejects.toMatchObject({ code: "invalid_request", status: 400 });
+		expect(docker.readApplicationWebService).not.toHaveBeenCalled();
+	});
+
+	it("writes the permanent route from the new web service before removing the guard route", async () => {
+		const docker = fakeDocker();
+		const { domainsPath, manager, routePath } = await fixture(docker);
+		await manager.routeDomains({
+			applicationUuid,
+			customOrigins: ["https://old.example.org"],
+		});
+		await manager.protect(input);
+		docker.readApplicationWebService = vi.fn(
+			async () => `https-0-${applicationUuid}-web-9999`,
+		);
+		docker.removeGuard = vi.fn(async () => {
+			await access(routePath);
+			const domains = await readRoute(domainsPath);
+			expect(
+				domains.http.routers[`ode-el-${applicationUuid}-domains-https`],
+			).toMatchObject({
+				rule: "Host(`library.example.org`)",
+				service: `https-0-${applicationUuid}-web-9999@docker`,
+			});
+		});
+
+		await expect(manager.finalize(input)).resolves.toEqual({
+			status: "finalized",
+		});
+		expect(docker.removeGuard).toHaveBeenCalledOnce();
+		await expectMissing(routePath);
+	});
+
+	it("deletes the permanent route at finalization when no custom domains remain", async () => {
+		const { domainsPath, manager } = await fixture();
+		await manager.routeDomains({
+			applicationUuid,
+			customOrigins: input.customOrigins,
+		});
+
+		await manager.finalize({ ...input, customOrigins: [] });
+		await expectMissing(domainsPath);
+	});
+
+	it("keeps the guard route when the web service has no platform route", async () => {
+		const docker = fakeDocker();
+		const { domainsPath, manager, routePath } = await fixture(docker);
+		await manager.protect(input);
+		const protectedRoute = await readFile(routePath, "utf8");
+		docker.readApplicationWebService = vi.fn(async () => {
+			throw new Error("platform route missing");
+		});
+
+		await expect(manager.finalize(input)).rejects.toThrow(
+			"platform route missing",
+		);
+		expect(await readFile(routePath, "utf8")).toBe(protectedRoute);
+		await expectMissing(domainsPath);
+		expect(docker.removeGuard).not.toHaveBeenCalled();
 	});
 
 	it("renders separate Cloudflare and direct-domain middleware chains", () => {

@@ -34,6 +34,7 @@ const protectionPath = "/v1/library-runtime/protection";
 const activationPath = "/v1/library-runtime/activation";
 const finalizationPath = "/v1/library-runtime/finalization";
 const removalPath = "/v1/library-runtime/removal";
+const domainsPath = "/v1/library-runtime/domains";
 const maximumBodyBytes = 4 * 1_024;
 
 type ReadinessRequest = {
@@ -69,6 +70,7 @@ function requireKnownPath(request: IncomingMessage) {
 	if (url.pathname === activationPath) return "activation" as const;
 	if (url.pathname === finalizationPath) return "finalization" as const;
 	if (url.pathname === removalPath) return "removal" as const;
+	if (url.pathname === domainsPath) return "domains" as const;
 	throw new HttpContractError({
 		code: "not_found",
 		message: "The requested endpoint does not exist.",
@@ -156,24 +158,20 @@ function requireRouteRequestRecord(body: unknown) {
 	);
 }
 
+function requireCustomOriginStrings(value: unknown) {
+	const message = "customOrigins must be an array of HTTPS origins.";
+	if (!Array.isArray(value)) return invalidRequest(message);
+	return value.map((origin) =>
+		typeof origin === "string" ? origin : invalidRequest(message),
+	);
+}
+
 function parseRouteRequest(serialized: string): LibraryRuntimeRouteInput {
 	const record = requireRouteRequestRecord(parseJson(serialized));
-	if (!Array.isArray(record.customOrigins)) {
-		return invalidRequest(
-			"customOrigins must be an array of HTTPS origins.",
-		);
-	}
 	return {
 		applicationUuid: requireApplicationUuid(record.applicationUuid),
 		commit: requireCommit(record.commit),
-		customOrigins: record.customOrigins.map((origin) => {
-			if (typeof origin !== "string") {
-				return invalidRequest(
-					"customOrigins must be an array of HTTPS origins.",
-				);
-			}
-			return origin;
-		}),
+		customOrigins: requireCustomOriginStrings(record.customOrigins),
 		platformOrigins: Array.isArray(record.platformOrigins)
 			? record.platformOrigins.map((origin) => {
 					if (typeof origin !== "string") {
@@ -193,6 +191,18 @@ function parseRouteRequest(serialized: string): LibraryRuntimeRouteInput {
 						"revision must identify one configuration revision.",
 					),
 		runtimeImage: requireRuntimeImage(record.runtimeImage),
+	};
+}
+
+function parseDomainsRequest(serialized: string) {
+	const record = requireExactRequestRecord(
+		parseJson(serialized),
+		["applicationUuid", "customOrigins"],
+		"Send only applicationUuid and customOrigins.",
+	);
+	return {
+		applicationUuid: requireApplicationUuid(record.applicationUuid),
+		customOrigins: requireCustomOriginStrings(record.customOrigins),
 	};
 }
 
@@ -265,6 +275,27 @@ async function runReadiness(
 	}
 }
 
+async function runOperation(
+	operation: Exclude<RuntimeOperation, "readiness">,
+	serialized: string,
+	guard: LibraryRuntimeGuardManager,
+) {
+	switch (operation) {
+		case "removal":
+			return await guard.remove(parseRemovalRequest(serialized));
+		case "domains":
+			return await guard.routeDomains(parseDomainsRequest(serialized));
+		case "maintenance":
+			return await guard.prepare(parseRouteRequest(serialized));
+		case "protection":
+			return await guard.protect(parseRouteRequest(serialized));
+		case "activation":
+			return await guard.activate(parseRouteRequest(serialized));
+		case "finalization":
+			return await guard.finalize(parseRouteRequest(serialized));
+	}
+}
+
 async function runGuardOperation(
 	response: ServerResponse,
 	operation: Exclude<RuntimeOperation, "readiness">,
@@ -272,21 +303,7 @@ async function runGuardOperation(
 	guard: LibraryRuntimeGuardManager,
 ) {
 	try {
-		const result =
-			operation === "removal"
-				? await guard.remove(parseRemovalRequest(serialized))
-				: operation === "maintenance"
-					? await guard.prepare(parseRouteRequest(serialized))
-					: operation === "protection"
-						? await guard.protect(parseRouteRequest(serialized))
-						: operation === "activation"
-							? await guard.activate(
-									parseRouteRequest(serialized),
-								)
-							: await guard.finalize(
-									parseRouteRequest(serialized),
-								);
-		sendJson(response, 200, result);
+		sendJson(response, 200, await runOperation(operation, serialized, guard));
 	} catch (error: unknown) {
 		if (error instanceof LibraryRuntimeGuardError) {
 			sendJson(response, error.status, {

@@ -40,7 +40,10 @@ function tarFile(name: string, content: string) {
 	return result;
 }
 
-function applicationInspection(configJson: string) {
+function applicationInspection(
+	configJson: string,
+	routeLabels: Record<string, string> = {},
+) {
 	return {
 		Config: {
 			Image: runtimeImage,
@@ -50,6 +53,7 @@ function applicationInspection(configJson: string) {
 				"coolify.managed": "true",
 				"coolify.type": "application",
 				[LIBRARY_COMPOSE_RELEASE_LABEL]: commit,
+				...routeLabels,
 			},
 		},
 		Id: containerId,
@@ -269,4 +273,67 @@ describe("Docker Evidence Library runtime guard", () => {
 			code: "runtime_revision_mismatch",
 		});
 	});
+
+	it.each([
+		["current", `https-0-${applicationUuid}-web-2567`],
+		["legacy unsuffixed", `https-0-${applicationUuid}`],
+	])(
+		"reads the %s Coolify platform service name from the web labels",
+		async (_label, service) => {
+			const docker = createDockerLibraryRuntimeGuard({
+				dockerProxyUrl: "http://docker-proxy:2375",
+				fetch: webLabelFetch({
+					[`traefik.http.routers.${service}.service`]: service,
+					[`traefik.http.services.${service}.loadbalancer.server.port`]:
+						"3000",
+					[`traefik.http.services.https-1-${applicationUuid}-web-2567.loadbalancer.server.port`]:
+						"3000",
+					[`traefik.http.services.http-0-${applicationUuid}-web-2567.loadbalancer.server.port`]:
+						"3000",
+				}),
+			});
+
+			await expect(
+				docker.readApplicationWebService(applicationUuid),
+			).resolves.toBe(service);
+		},
+	);
+
+	it("refuses a web service without a Coolify platform service", async () => {
+		const docker = createDockerLibraryRuntimeGuard({
+			dockerProxyUrl: "http://docker-proxy:2375",
+			fetch: webLabelFetch({
+				[`traefik.http.services.https-1-${applicationUuid}-web-2567.loadbalancer.server.port`]:
+					"3000",
+			}),
+		});
+
+		await expect(
+			docker.readApplicationWebService(applicationUuid),
+		).rejects.toMatchObject({ code: "runtime_web_route_missing", status: 409 });
+	});
+
+	it("refuses when the library has no web container", async () => {
+		const docker = createDockerLibraryRuntimeGuard({
+			dockerProxyUrl: "http://docker-proxy:2375",
+			fetch: (async () => json([])) as typeof fetch,
+		});
+
+		await expect(
+			docker.readApplicationWebService(applicationUuid),
+		).rejects.toMatchObject({ code: "runtime_web_not_ready", status: 409 });
+	});
 });
+
+function webLabelFetch(routeLabels: Record<string, string>) {
+	return (async (request: string | URL | Request) => {
+		const url = new URL(request.toString());
+		if (url.pathname === "/v1.41/containers/json") {
+			return json([{ Id: containerId }]);
+		}
+		if (url.pathname === `/v1.41/containers/${containerId}/json`) {
+			return json(applicationInspection("{}", routeLabels));
+		}
+		throw new Error(`Unexpected request: ${url}`);
+	}) as typeof fetch;
+}
