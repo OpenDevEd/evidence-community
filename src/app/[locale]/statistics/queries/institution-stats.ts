@@ -114,7 +114,7 @@ export async function getInstitutionStatsByYear(
 				item_key,
 				item_citations
 			FROM ${institutionItems(citationCount)} as institution_items
-			WHERE item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+			WHERE item_date ~ '^[0-9]{4}'
 		) as institution_year_items`,
 		)
 		.where(

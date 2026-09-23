@@ -65,7 +65,7 @@ export async function getAvailableYears(db: Database): Promise<string[]> {
 				isNotNull(item.date),
 				ne(item.date, ""),
 				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`, // Only valid date format
+				sql`${item.date} ~ '^[0-9]{4}'`, // Any date that starts with its year, as the listing's year filter counts it
 			),
 		)
 		.groupBy(
@@ -124,7 +124,7 @@ export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 				isNotNull(item.date),
 				ne(item.date, ""),
 				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`, // Only valid date format
+				sql`${item.date} ~ '^[0-9]{4}'`, // Any date that starts with its year, as the listing's year filter counts it
 			),
 		)
 		.groupBy(
@@ -459,7 +459,7 @@ export async function getCitationsByYear(
 				eq(item.deleted, 0),
 				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 				isNotNull(item.date),
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
+				sql`${item.date} ~ '^[0-9]{4}'`,
 				sql`${yearOf(item.date)} >= 2000`,
 			),
 		)
