@@ -34,11 +34,17 @@ export function isPrivateIp(address: string) {
 	return mapped ? NOT_PUBLIC.check(mapped, "ipv4") : NOT_PUBLIC.check(address, "ipv6");
 }
 
-/** The IPv4 address inside an IPv4-mapped IPv6 address, written either way: "::ffff:127.0.0.1" or "::ffff:7f00:1". */
+/**
+ * The IPv4 address carried inside an IPv6 one, written either way ("::ffff:127.0.0.1" or "::ffff:7f00:1"): IPv4-mapped
+ * addresses, and the NAT64 prefix 64:ff9b::/96, which a translating network turns back into that IPv4 address.
+ */
 function mappedIpv4(address: string) {
-	const dotted = /^(?:0{0,4}:){0,5}:?ffff:(\d+\.\d+\.\d+\.\d+)$/iu.exec(address)?.[1];
+	const carrier = /^(?:(?:0{0,4}:){0,5}:?ffff|64:ff9b::)/iu.exec(address)?.[0];
+	if (!carrier) return undefined;
+	const rest = address.slice(carrier.length).replace(/^:/u, "");
+	const dotted = /^(\d+\.\d+\.\d+\.\d+)$/u.exec(rest)?.[1];
 	if (dotted) return dotted;
-	const hex = /^(?:0{0,4}:){0,5}:?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(address);
+	const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(rest);
 	if (!hex) return undefined;
 	const [high, low] = [Number.parseInt(hex[1]!, 16), Number.parseInt(hex[2]!, 16)];
 	return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
