@@ -219,7 +219,7 @@ export async function getTopicStatsByYear(
 			and(
 				topLevelItem,
 				isNotNull(item.date),
-				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
+				sql`${item.date} ~ '^[0-9]{4}'`,
 				sql`${yearOf(item.date)} >= 2000`,
 			),
 			)
