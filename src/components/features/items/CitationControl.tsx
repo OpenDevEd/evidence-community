@@ -55,32 +55,42 @@ function CitationContent({
 	}, []);
 	const [displayed, setDisplayed] = useState(citation);
 	if (citation && citation !== displayed) setDisplayed(citation);
-	const showSpinner = !failed && !displayed;
+	const showSpinner = loading && !failed && !displayed;
 	return (
 		<LazyMotion features={domAnimation}>
 			<m.div
 				initial={false}
 				animate={{ height: height ?? "auto" }}
-				transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
-				className="relative overflow-hidden"
+				transition={{
+					duration: reducedMotion ? 0 : 0.24,
+					ease: [0.22, 1, 0.36, 1],
+				}}
+				data-loading={showSpinner}
+				className="group/citation relative overflow-hidden"
 			>
 				<div
 					role="status"
 					aria-label={t("loadingData")}
 					aria-hidden={!showSpinner}
-					className={`absolute inset-x-0 top-0 flex h-12 items-center justify-center transition-[opacity,visibility] duration-150 motion-reduce:transition-none ${showSpinner ? "visible opacity-100" : "invisible opacity-0"}`}
+					className="invisible absolute inset-x-0 top-0 flex h-12 items-center justify-center opacity-0 transition-[opacity,visibility] duration-150 group-data-[loading=true]/citation:visible group-data-[loading=true]/citation:opacity-100 motion-reduce:transition-none"
 				>
-					<Spinner size="sm" aria-hidden="true" classNames={{
-						circle1: showSpinner ? "motion-reduce:animate-none" : "animate-none",
-						circle2: showSpinner ? "motion-reduce:animate-none" : "animate-none",
-					}} />
+					<Spinner
+						size="sm"
+						aria-hidden="true"
+						classNames={{
+							circle1: "group-data-[loading=false]/citation:animate-none motion-reduce:animate-none",
+							circle2: "group-data-[loading=false]/citation:animate-none motion-reduce:animate-none",
+						}}
+					/>
 				</div>
-				<div ref={measure} className={showSpinner ? "h-12" : undefined}>
-					<div className={`transition-opacity duration-150 motion-reduce:transition-none ${showSpinner ? "opacity-0" : "opacity-100"}`}>
+				<div ref={measure} className="group-data-[loading=true]/citation:h-12">
+					<div className="opacity-100 transition-opacity duration-150 group-data-[loading=true]/citation:opacity-0 motion-reduce:transition-none">
 						{failed ? (
 							<div role="alert" className="space-y-2 text-sm">
 								<p>{t("citationLoadFailed")}</p>
-								<Button size="sm" onPress={retry}>{t("retry")}</Button>
+								<Button size="sm" onPress={retry}>
+									{t("retry")}
+								</Button>
 							</div>
 						) : (
 							<div
