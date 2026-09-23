@@ -195,7 +195,10 @@ container, which must be healthy when it has a health check, and ignores exited
 ones. It fails with `runtime_web_not_ready` when there is no such container and
 with
 `runtime_web_route_missing` when the label is absent, instead of writing a
-dangling route. An empty list deletes the file.
+dangling route. An empty list deletes the file. If 20 seconds have passed
+since the request arrived, it changes nothing and answers 503
+`runtime_route_deadline`. OpenScholar stops waiting after 30 seconds, so a late
+write could otherwise replace a newer host set.
 
 Its routers use priority 100000. The temporary guard route uses 200000 and wins
 during a deployment. Coolify label routers default to their rule length, so

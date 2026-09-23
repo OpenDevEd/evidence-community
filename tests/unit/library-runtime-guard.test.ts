@@ -70,7 +70,7 @@ function fakeDocker(): LibraryRuntimeGuardDocker {
 	};
 }
 
-async function fixture(docker = fakeDocker()) {
+async function fixture(docker = fakeDocker(), now?: () => number) {
 	const root = await temporaryDirectory();
 	const routeDirectory = path.join(root, "routes");
 	const stateDirectory = path.join(root, "state");
@@ -79,6 +79,7 @@ async function fixture(docker = fakeDocker()) {
 		manager: createLibraryRuntimeGuardManager({
 			docker,
 			maintenanceUrl: "http://runtime-verifier:3001",
+			now,
 			routeDirectory,
 			stateDirectory,
 		}),
@@ -215,6 +216,7 @@ describe("Evidence Library runtime guard", () => {
 		await manager.protect(input);
 		await manager.routeDomains({
 			applicationUuid,
+			receivedAt: Date.now(),
 			customOrigins: input.customOrigins,
 		});
 		docker.removeGuard = vi.fn(async () => {
@@ -234,6 +236,7 @@ describe("Evidence Library runtime guard", () => {
 		await expect(
 			manager.routeDomains({
 				applicationUuid,
+				receivedAt: Date.now(),
 				customOrigins: [
 					"https://Library.Example.org",
 					"https://evidence.example.com",
@@ -285,6 +288,7 @@ describe("Evidence Library runtime guard", () => {
 		const { domainsPath, manager, routePath } = await fixture();
 		await manager.routeDomains({
 			applicationUuid,
+			receivedAt: Date.now(),
 			customOrigins: input.customOrigins,
 		});
 		await manager.protect(input);
@@ -304,15 +308,24 @@ describe("Evidence Library runtime guard", () => {
 		const { domainsPath, manager } = await fixture();
 		await manager.routeDomains({
 			applicationUuid,
+			receivedAt: Date.now(),
 			customOrigins: input.customOrigins,
 		});
 
 		await expect(
-			manager.routeDomains({ applicationUuid, customOrigins: [] }),
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins: [],
+				receivedAt: Date.now(),
+			}),
 		).resolves.toEqual({ customOrigins: [], status: "routed" });
 		await expectMissing(domainsPath);
 		await expect(
-			manager.routeDomains({ applicationUuid, customOrigins: [] }),
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins: [],
+				receivedAt: Date.now(),
+			}),
 		).resolves.toEqual({ customOrigins: [], status: "routed" });
 	});
 
@@ -345,10 +358,67 @@ describe("Evidence Library runtime guard", () => {
 		const { docker, domainsPath, manager } = await fixture();
 
 		await expect(
-			manager.routeDomains({ applicationUuid, customOrigins }),
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins,
+				receivedAt: Date.now(),
+			}),
 		).rejects.toMatchObject({ code: "invalid_request", status: 400 });
 		expect(docker.readApplicationWebService).not.toHaveBeenCalled();
 		await expectMissing(domainsPath);
+	});
+
+	it.each([
+		["a new host set", ["https://new.example.org"]],
+		["an empty host set", []],
+	])(
+		"does not write %s after the 20-second deadline",
+		async (_label, customOrigins) => {
+			let clock = 1_000_000;
+			const docker = fakeDocker();
+			const { domainsPath, manager } = await fixture(docker, () => clock);
+			await manager.routeDomains({
+				applicationUuid,
+				customOrigins: ["https://old.example.org"],
+				receivedAt: clock,
+			});
+			const current = await readFile(domainsPath, "utf8");
+			const receivedAt = clock;
+			docker.readApplicationWebService = vi.fn(async () => {
+				clock += 20_001;
+				return `https-0-${applicationUuid}-web-2567`;
+			});
+			if (customOrigins.length === 0) clock += 20_001;
+
+			await expect(
+				manager.routeDomains({ applicationUuid, customOrigins, receivedAt }),
+			).rejects.toMatchObject({
+				code: "runtime_route_deadline",
+				status: 503,
+			});
+			expect(await readFile(domainsPath, "utf8")).toBe(current);
+		},
+	);
+
+	it("writes a route that finishes inside the deadline", async () => {
+		let clock = 1_000_000;
+		const docker = fakeDocker();
+		const { domainsPath, manager } = await fixture(docker, () => clock);
+		docker.readApplicationWebService = vi.fn(async () => {
+			clock += 19_999;
+			return `https-0-${applicationUuid}-web-2567`;
+		});
+
+		await expect(
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins: input.customOrigins,
+				receivedAt: clock,
+			}),
+		).resolves.toMatchObject({ status: "routed" });
+		expect(await readFile(domainsPath, "utf8")).toContain(
+			"Host(`library.example.org`)",
+		);
 	});
 
 	it("accepts punycode hosts", async () => {
@@ -357,6 +427,7 @@ describe("Evidence Library runtime guard", () => {
 		await expect(
 			manager.routeDomains({
 				applicationUuid,
+				receivedAt: Date.now(),
 				customOrigins: ["https://Bücher.example"],
 			}),
 		).resolves.toEqual({
@@ -403,6 +474,7 @@ describe("Evidence Library runtime guard", () => {
 		await expect(
 			manager.routeDomains({
 				applicationUuid: "../../etc",
+				receivedAt: Date.now(),
 				customOrigins: input.customOrigins,
 			}),
 		).rejects.toMatchObject({ code: "invalid_request", status: 400 });
@@ -414,6 +486,7 @@ describe("Evidence Library runtime guard", () => {
 		const { domainsPath, manager, routePath } = await fixture(docker);
 		await manager.routeDomains({
 			applicationUuid,
+			receivedAt: Date.now(),
 			customOrigins: ["https://old.example.org"],
 		});
 		await manager.protect(input);
@@ -442,6 +515,7 @@ describe("Evidence Library runtime guard", () => {
 		const { domainsPath, manager } = await fixture();
 		await manager.routeDomains({
 			applicationUuid,
+			receivedAt: Date.now(),
 			customOrigins: input.customOrigins,
 		});
 

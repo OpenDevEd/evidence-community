@@ -203,6 +203,7 @@ describe("library runtime verifier HTTP contract", () => {
 			customOrigins: ["https://library.example.org"],
 			status: "routed" as const,
 		}));
+		const sentAt = Date.now();
 		await withServer(
 			async () => readyContainers(),
 			async (baseUrl) => {
@@ -243,7 +244,37 @@ describe("library runtime verifier HTTP contract", () => {
 		expect(routeDomains).toHaveBeenCalledWith({
 			applicationUuid,
 			customOrigins: ["https://library.example.org"],
+			receivedAt: expect.any(Number),
 		});
+		const [{ receivedAt }] = routeDomains.mock.calls[0] as unknown as [
+			{ receivedAt: number },
+		];
+		expect(receivedAt).toBeGreaterThanOrEqual(sentAt);
+		expect(receivedAt).toBeLessThanOrEqual(Date.now());
+	});
+
+	it("answers 503 when the domains route misses its deadline", async () => {
+		const routeDomains = vi.fn(async () => {
+			throw new LibraryRuntimeGuardError(
+				"runtime_route_deadline",
+				"The custom-domain route was not changed because the request took too long.",
+				503,
+			);
+		});
+		await withServer(
+			async () => readyContainers(),
+			async (baseUrl) => {
+				const response = await fetch(
+					`${baseUrl}/v1/library-runtime/domains`,
+					authorizedJson({ applicationUuid, customOrigins: [] }),
+				);
+				expect(response.status).toBe(503);
+				expect(await response.json()).toMatchObject({
+					error: { code: "runtime_route_deadline" },
+				});
+			},
+			createGuard({ routeDomains }),
+		);
 	});
 
 	it("returns a bounded guard failure without changing its code", async () => {

@@ -22,6 +22,8 @@ const guardRoutePriority = 200_000;
 // Below the temporary guard so it wins during deployments, far above Coolify's
 // label routers, whose default priority is their rule length.
 const domainsRoutePriority = 100_000;
+// Under OpenScholar's 30-second client timeout. Docker calls time out at 5s.
+const domainsRouteDeadlineMs = 20_000;
 
 export type LibraryRuntimeRouteInput = {
 	applicationUuid: string;
@@ -80,6 +82,7 @@ export type LibraryRuntimeGuardManagerOptions = {
 	maintenanceUrl: string;
 	routeDirectory: string;
 	stateDirectory: string;
+	now?: () => number;
 };
 
 function invalidInput(message: string): never {
@@ -442,6 +445,7 @@ export function createLibraryRuntimeGuardManager(
 	const maintenanceUrl = requireMaintenanceUrl(options.maintenanceUrl);
 	const routeDirectory = path.resolve(options.routeDirectory);
 	const stateDirectory = path.resolve(options.stateDirectory);
+	const now = options.now ?? Date.now;
 
 	const paths = (applicationUuid: string) => {
 		const statePath = path.join(stateDirectory, applicationUuid);
@@ -461,13 +465,27 @@ export function createLibraryRuntimeGuardManager(
 			`ode-evidence-library-domains-${applicationUuid}.yaml`,
 		);
 
+	// OpenScholar stops waiting after 30 seconds and lets a newer request
+	// start. A late write could replace that newer host set with a stale one.
+	const requireBeforeDeadline = (deadline?: number) => {
+		if (deadline !== undefined && now() > deadline) {
+			throw new LibraryRuntimeGuardError(
+				"runtime_route_deadline",
+				"The custom-domain route was not changed because the request took too long.",
+				503,
+			);
+		}
+	};
+
 	// Callers pass checked input. An empty list removes the permanent route.
 	const writeDomainsRoute = async (
 		applicationUuid: string,
 		customOrigins: readonly string[],
+		deadline?: number,
 	) => {
 		const targetPath = domainsPath(applicationUuid);
 		if (customOrigins.length === 0) {
+			requireBeforeDeadline(deadline);
 			await unlinkIfPresent(targetPath);
 			return;
 		}
@@ -477,6 +495,7 @@ export function createLibraryRuntimeGuardManager(
 			recursive: true,
 			mode: guardStateDirectoryMode,
 		});
+		requireBeforeDeadline(deadline);
 		await replaceFileAtomically({
 			content: renderLibraryDomainsRoute({
 				applicationUuid,
@@ -592,15 +611,21 @@ export function createLibraryRuntimeGuardManager(
 			return { status: "finalized" as const };
 		},
 
+		/** `receivedAt` is when the request arrived, in `now()` milliseconds. */
 		async routeDomains(input: {
 			applicationUuid: string;
 			customOrigins: readonly string[];
+			receivedAt: number;
 		}) {
 			const applicationUuid = requireApplicationUuid(input.applicationUuid);
 			const customOrigins = requireUniqueOrigins(
 				requireCustomOrigins(input.customOrigins),
 			);
-			await writeDomainsRoute(applicationUuid, customOrigins);
+			await writeDomainsRoute(
+				applicationUuid,
+				customOrigins,
+				input.receivedAt + domainsRouteDeadlineMs,
+			);
 			return { customOrigins, status: "routed" as const };
 		},
 

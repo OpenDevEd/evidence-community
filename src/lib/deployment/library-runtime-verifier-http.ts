@@ -194,7 +194,7 @@ function parseRouteRequest(serialized: string): LibraryRuntimeRouteInput {
 	};
 }
 
-function parseDomainsRequest(serialized: string) {
+function parseDomainsRequest(serialized: string, receivedAt: number) {
 	const record = requireExactRequestRecord(
 		parseJson(serialized),
 		["applicationUuid", "customOrigins"],
@@ -203,6 +203,7 @@ function parseDomainsRequest(serialized: string) {
 	return {
 		applicationUuid: requireApplicationUuid(record.applicationUuid),
 		customOrigins: requireCustomOriginStrings(record.customOrigins),
+		receivedAt,
 	};
 }
 
@@ -279,12 +280,15 @@ async function runOperation(
 	operation: Exclude<RuntimeOperation, "readiness">,
 	serialized: string,
 	guard: LibraryRuntimeGuardManager,
+	receivedAt: number,
 ) {
 	switch (operation) {
 		case "removal":
 			return await guard.remove(parseRemovalRequest(serialized));
 		case "domains":
-			return await guard.routeDomains(parseDomainsRequest(serialized));
+			return await guard.routeDomains(
+				parseDomainsRequest(serialized, receivedAt),
+			);
 		case "maintenance":
 			return await guard.prepare(parseRouteRequest(serialized));
 		case "protection":
@@ -301,9 +305,14 @@ async function runGuardOperation(
 	operation: Exclude<RuntimeOperation, "readiness">,
 	serialized: string,
 	guard: LibraryRuntimeGuardManager,
+	receivedAt: number,
 ) {
 	try {
-		sendJson(response, 200, await runOperation(operation, serialized, guard));
+		sendJson(
+			response,
+			200,
+			await runOperation(operation, serialized, guard, receivedAt),
+		);
 	} catch (error: unknown) {
 		if (error instanceof LibraryRuntimeGuardError) {
 			sendJson(response, error.status, {
@@ -320,6 +329,7 @@ async function handleRequest(
 	response: ServerResponse,
 	options: RuntimeVerifierServerOptions,
 ) {
+	const receivedAt = Date.now();
 	const operation = requireKnownPath(request);
 	requireMethod(request, "POST");
 	requireAuthorization(request, options.token);
@@ -333,7 +343,13 @@ async function handleRequest(
 		);
 		return;
 	}
-	await runGuardOperation(response, operation, serialized, options.guard);
+	await runGuardOperation(
+		response,
+		operation,
+		serialized,
+		options.guard,
+		receivedAt,
+	);
 }
 
 export function createLibraryRuntimeVerifierServer(
