@@ -5,8 +5,8 @@ import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
 import { nextDigestDate } from "./schedule";
 
-export const ARCHIVE_PAGE_SIZE = 20;
-export const EDITION_PAGE_SIZE = 12;
+const ARCHIVE_PAGE_SIZE = 20;
+const EDITION_PAGE_SIZE = 12;
 
 export type DigestSummary = {slug: string; publishedAt: string; date: string; title: string; summary: string; publicationCount: number; cover: string | null};
 /** An edition with one page of its listed publications; `listed` can be lower than `publicationCount`. */

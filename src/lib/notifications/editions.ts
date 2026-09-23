@@ -15,7 +15,7 @@ function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicIte
 }
 
 /** Most publications an edition lists; the rest of its window is counted, never carried over. */
-export const EDITION_LISTED_LIMIT = 1000;
+const EDITION_LISTED_LIMIT = 1000;
 
 // Publications this stream has not covered yet, up to the end of the window.
 // That includes commits that landed after an earlier window closed and items
