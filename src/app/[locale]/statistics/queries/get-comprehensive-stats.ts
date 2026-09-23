@@ -136,14 +136,11 @@ export async function getComprehensiveStats(
  * own names.
  */
 function shownCollections(collections: readonly Collection[]): ShownCollections {
-	const shown = new Map<string, { title: string; parent?: string }>();
-	const visit = (list: readonly Collection[]) => {
-		for (const collection of list) {
-			const title = collection.parentCollection ? collection.name : collection.title || collection.name;
-			shown.set(collection.key, { title: title || collection.key, parent: collection.parentCollection || undefined });
-			if (collection.children?.length) visit(collection.children);
-		}
-	};
-	visit(collections);
-	return shown;
+	// The cached collections are already flat, every level listed.
+	return new Map(collections.map((collection) => [collection.key, { title: publicTitle(collection), parent: collection.parentCollection || undefined }]));
+}
+
+function publicTitle(collection: Collection) {
+	const title = collection.parentCollection ? collection.name : collection.title || collection.name;
+	return title || collection.key;
 }

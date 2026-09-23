@@ -35,6 +35,20 @@ const itemVariants = {
 	show: { y: 0, opacity: 1 },
 };
 
+/** Rows for one institution or topic, summed per year into the chart's shape. */
+function perYear(rows: readonly { year: string; totalCitations: number; itemCount: number }[]) {
+	const years = new Map<string, { totalCitations: number; itemCount: number }>();
+	for (const row of rows) {
+		const sum = years.get(row.year) ?? { totalCitations: 0, itemCount: 0 };
+		years.set(row.year, { totalCitations: sum.totalCitations + row.totalCitations, itemCount: sum.itemCount + row.itemCount });
+	}
+	return Array.from(years, ([year, sum]) => ({
+		year,
+		...sum,
+		avgCitationsPerItem: sum.itemCount > 0 ? sum.totalCitations / sum.itemCount : 0,
+	}));
+}
+
 export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByYear }: CitationsByYearProps) {
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
@@ -110,43 +124,9 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 		let data = citationsByYear;
 		
 		if (selectedInstitution !== "all") {
-			// Filter and aggregate by institution
-			const filtered = institutionsByYear.filter(item => item.institution === selectedInstitution);
-			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
-			
-			filtered.forEach(item => {
-				const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
-				yearMap.set(item.year, {
-					totalCitations: existing.totalCitations + item.totalCitations,
-					itemCount: existing.itemCount + item.itemCount
-				});
-			});
-			
-			data = Array.from(yearMap.entries()).map(([year, stats]) => ({
-				year,
-				totalCitations: stats.totalCitations,
-				itemCount: stats.itemCount,
-				avgCitationsPerItem: stats.itemCount > 0 ? stats.totalCitations / stats.itemCount : 0
-			}));
+			data = perYear(institutionsByYear.filter(item => item.institution === selectedInstitution));
 		} else if (selectedTopic !== "all") {
-			// Filter and aggregate by topic
-			const filtered = topicsByYear.filter(item => item.id === selectedTopic);
-			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
-			
-			filtered.forEach(item => {
-				const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
-				yearMap.set(item.year, {
-					totalCitations: existing.totalCitations + item.totalCitations,
-					itemCount: existing.itemCount + item.itemCount
-				});
-			});
-			
-			data = Array.from(yearMap.entries()).map(([year, stats]) => ({
-				year,
-				totalCitations: stats.totalCitations,
-				itemCount: stats.itemCount,
-				avgCitationsPerItem: stats.itemCount > 0 ? stats.totalCitations / stats.itemCount : 0
-			}));
+			data = perYear(topicsByYear.filter(item => item.id === selectedTopic));
 		}
 		
 		return data

@@ -55,10 +55,7 @@ export default function MobileMenu({
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
 			<div ref={triggerRef} className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
-				{/* Not usable until the page is ready, without the `disabled` attribute: Firefox restores that attribute from the
-				    last visit on reload, before the page is ready, and hydration then fails. Out of the tab order and inert to
-				    presses until then. */}
-				<Button variant="invisible" aria-disabled={!hydrated || undefined} tabIndex={hydrated ? undefined : -1} className={hydrated ? undefined : "pointer-events-none opacity-disabled"} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={hydrated ? toggleMenu : undefined} onKeyDown={closeOnEscape}>
+				<Button variant="invisible" {...untilReady(hydrated, toggleMenu)} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onKeyDown={closeOnEscape}>
 					<MenuIcon isOpen={isOpen} />
 				</Button>
 			</div>
@@ -114,4 +111,13 @@ export default function MobileMenu({
 			</ul>
 		</>
 	);
+}
+
+/**
+ * The menu button is not usable until the page is ready, without the `disabled` attribute: Firefox restores that
+ * attribute from the last visit on reload, before the page is ready, and hydration then fails. Until then it is out of
+ * the tab order and ignores presses.
+ */
+function untilReady(hydrated: boolean, onPress: () => void) {
+	return hydrated ? { onPress } : { "aria-disabled": true, tabIndex: -1, className: "pointer-events-none opacity-disabled" };
 }

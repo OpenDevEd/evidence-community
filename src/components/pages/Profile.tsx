@@ -634,8 +634,7 @@ export default function Profile({ data }: { data: any }) {
 									"bg-primary dark:bg-secondary rounded-r-full p-4"
 							)}
 						>
-							<Image
-								unoptimized
+							<Image unoptimized
 								src={displayData.image ?? `/icons/profile.png`}
 								alt={t("userAvatarAlt", {
 									name:
