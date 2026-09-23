@@ -22,6 +22,9 @@ describe("public addresses", () => {
 		expect(isPrivateIp("::ffff:7f00:1")).toBe(true);
 		expect(isPrivateIp("0:0:0:0:0:ffff:a9fe:a9fe")).toBe(true);
 		expect(isPrivateIp("::ffff:5db8:d822")).toBe(false);
+		expect(isPrivateIp("64:ff9b::a9fe:a9fe")).toBe(true);
+		expect(isPrivateIp("64:ff9b::10.0.0.1")).toBe(true);
+		expect(isPrivateIp("64:ff9b::5db8:d822")).toBe(false);
 		expect(isPrivateIp("::ffff:93.184.216.34")).toBe(false);
 	});
 
