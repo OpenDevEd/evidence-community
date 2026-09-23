@@ -55,7 +55,9 @@ export default function MobileMenu({
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
 			<div ref={triggerRef} className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
-				<Button variant="invisible" isDisabled={!hydrated} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={toggleMenu} onKeyDown={closeOnEscape}>
+				{/* Not pressable until the page is ready, by style rather than the `disabled` attribute: Firefox restores that
+				    attribute from the last visit on reload, before the page is ready, and hydration then fails. */}
+				<Button variant="invisible" aria-disabled={!hydrated || undefined} className={hydrated ? undefined : "pointer-events-none opacity-disabled"} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={toggleMenu} onKeyDown={closeOnEscape}>
 					<MenuIcon isOpen={isOpen} />
 				</Button>
 			</div>
