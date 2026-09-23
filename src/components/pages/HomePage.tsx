@@ -1260,7 +1260,7 @@ function Bands({ name, siteUrl, contact, today, about, data, tones, ramp, shapes
 		},
 		hasCuration(about.curation) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} heading={heading("curation")} data={data} /> },
 		// The library's citation, with the owner's closing answer beside it; with citations off and no answer, no band.
-		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} name={name} siteUrl={siteUrl} today={today} /> },
+		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} cites={citations.enabled} name={name} siteUrl={siteUrl} today={today} /> },
 		hasTeam(about, involvement) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} editors={about.editors} involvement={involvement} contact={contact} heading={heading} /> },
 	].filter((band): band is { key: string; tone: Tone; body: React.JSX.Element } => Boolean(band));
 
@@ -1282,15 +1282,15 @@ function hasTeam(about: HomeContent, involvement: HomeContent["involvement"]) {
 	return Boolean(about.team || about.editors?.length || involvement?.suggestions || involvement?.editors);
 }
 
-/** The owner's closing answer, if any, beside how to cite the library. */
-function Cite({ extra, name, siteUrl, today }: { extra: HomeContent["extra"]; name: string; siteUrl: string; today: string }) {
+/** The owner's closing answer, if any, beside how to cite the library; with citations off, the answer alone at full width. */
+function Cite({ extra, cites, name, siteUrl, today }: { extra: HomeContent["extra"]; cites: boolean; name: string; siteUrl: string; today: string }) {
 	const answer = extra?.text.trim() ? extra.text : undefined;
 	return (
 		<>
-			<Heading>{extra?.title?.trim() || "Cite the library"}</Heading>
-			<div className={answer ? twoColumns : ""}>
+			<Heading>{extra?.title?.trim() || (cites ? "Cite the library" : name)}</Heading>
+			<div className={answer && cites ? twoColumns : ""}>
 				{answer && <div className="max-w-[40rem]"><RichText text={answer} /></div>}
-				<CiteSlip name={name} url={siteUrl} today={today} />
+				{cites && <CiteSlip name={name} url={siteUrl} today={today} />}
 			</div>
 		</>
 	);
