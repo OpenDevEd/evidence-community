@@ -362,14 +362,18 @@ function requireApplicationNetworks(networks: Record<string, unknown>) {
 	return names.sort();
 }
 
+// Coolify can leave exited web containers next to the running replacement.
 function requireApplicationContainerId(value: unknown) {
-	if (!Array.isArray(value) || value.length !== 1) {
+	const running = Array.isArray(value)
+		? value.filter((summary) => requireRecord(summary).State === "running")
+		: [];
+	if (running.length !== 1) {
 		return guardError(
 			"runtime_web_not_ready",
 			"The Evidence Library must have one running web service.",
 		);
 	}
-	return requireContainerId(requireRecord(value[0]).Id);
+	return requireContainerId(requireRecord(running[0]).Id);
 }
 
 function webMismatch(): never {
@@ -782,6 +786,7 @@ export function createDockerLibraryRuntimeGuard(
 
 		async readApplicationWebService(applicationUuid) {
 			const container = await inspectApplicationWeb(applicationUuid);
+			requireRunning(container.state, container.state.Health != null);
 			return requirePlatformService(
 				requireCoolifyWebLabels(container, applicationUuid),
 				applicationUuid,

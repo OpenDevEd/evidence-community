@@ -86,6 +86,21 @@ function invalidInput(message: string): never {
 	throw new LibraryRuntimeGuardError("invalid_request", message, 400);
 }
 
+const dnsLabel = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+const dnsHostnamePattern = new RegExp(`^(?:${dnsLabel}\\.)+${dnsLabel}$`, "u");
+
+/**
+ * Traefik renders dynamic files as Go templates and puts hosts inside
+ * backtick rules, so only plain lowercase DNS names may reach a route.
+ */
+function isRouteHostname(hostname: string) {
+	return (
+		hostname.length <= 253 &&
+		dnsHostnamePattern.test(hostname) &&
+		isIP(hostname) === 0
+	);
+}
+
 function requireHttpsOrigin(value: string) {
 	let url: URL;
 	try {
@@ -98,7 +113,8 @@ function requireHttpsOrigin(value: string) {
 		url.href !== `${url.origin}/` ||
 		url.username ||
 		url.password ||
-		url.port
+		url.port ||
+		!isRouteHostname(url.hostname)
 	) {
 		return invalidInput("Library origins must be HTTPS origins.");
 	}
@@ -214,8 +230,23 @@ function requireRouteTarget(target: LibraryRuntimeRouteTarget) {
 
 function hostRule(origins: readonly string[]) {
 	return origins
-		.map((origin) => `Host(\`${new URL(origin).hostname}\`)`)
+		.map((origin) => {
+			const { hostname } = new URL(origin);
+			if (!isRouteHostname(hostname)) {
+				throw new Error("A route host is not a plain DNS name.");
+			}
+			return `Host(\`${hostname}\`)`;
+		})
 		.join(" || ");
+}
+
+// A malformed dynamic file stops Traefik from applying any later file change.
+function renderRouteFile(route: unknown) {
+	const content = `${JSON.stringify(route, null, 2)}\n`;
+	if (content.includes("{{") || content.includes("}}")) {
+		throw new Error("A route file must not contain template delimiters.");
+	}
+	return content;
 }
 
 const customDomainMiddlewares = [
@@ -342,28 +373,24 @@ export function renderLibraryRuntimeRoute(input: {
 			};
 		}
 	}
-	return `${JSON.stringify(
-		{
-			http: {
-				middlewares: {
-					[`${serviceName}-https-redirect`]: {
-						redirectScheme: { permanent: true, scheme: "https" },
-					},
-					[`${serviceName}-route-marker`]: {
-						headers: {
-							customResponseHeaders: {
-								[routeMarkerHeader]: `${input.commit}:${input.revision}`,
-							},
+	return renderRouteFile({
+		http: {
+			middlewares: {
+				[`${serviceName}-https-redirect`]: {
+					redirectScheme: { permanent: true, scheme: "https" },
+				},
+				[`${serviceName}-route-marker`]: {
+					headers: {
+						customResponseHeaders: {
+							[routeMarkerHeader]: `${input.commit}:${input.revision}`,
 						},
 					},
 				},
-				routers,
-				services,
 			},
+			routers,
+			services,
 		},
-		null,
-		2,
-	)}\n`;
+	});
 }
 
 /**
@@ -377,34 +404,30 @@ export function renderLibraryDomainsRoute(input: {
 }) {
 	const name = `ode-el-${input.applicationUuid}-domains`;
 	const rule = hostRule(input.customOrigins);
-	return `${JSON.stringify(
-		{
-			http: {
-				middlewares: {
-					[`${name}-https-redirect`]: {
-						redirectScheme: { permanent: true, scheme: "https" },
-					},
-				},
-				routers: {
-					[`${name}-http`]: {
-						entryPoints: ["http"],
-						middlewares: [`${name}-https-redirect`],
-						priority: domainsRoutePriority,
-						rule,
-						service: "noop@internal",
-					},
-					[`${name}-https`]: router(
-						rule,
-						`${input.dockerService}@docker`,
-						customDomainMiddlewares,
-						domainsRoutePriority,
-					),
+	return renderRouteFile({
+		http: {
+			middlewares: {
+				[`${name}-https-redirect`]: {
+					redirectScheme: { permanent: true, scheme: "https" },
 				},
 			},
+			routers: {
+				[`${name}-http`]: {
+					entryPoints: ["http"],
+					middlewares: [`${name}-https-redirect`],
+					priority: domainsRoutePriority,
+					rule,
+					service: "noop@internal",
+				},
+				[`${name}-https`]: router(
+					rule,
+					`${input.dockerService}@docker`,
+					customDomainMiddlewares,
+					domainsRoutePriority,
+				),
+			},
 		},
-		null,
-		2,
-	)}\n`;
+	});
 }
 
 async function unlinkIfPresent(filePath: string) {

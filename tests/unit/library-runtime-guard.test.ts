@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	createLibraryRuntimeGuardManager,
+	renderLibraryDomainsRoute,
 	renderLibraryRuntimeRoute,
 	type LibraryRuntimeGuardDocker,
 } from "@/lib/deployment/library-runtime-guard";
@@ -320,6 +321,15 @@ describe("Evidence Library runtime guard", () => {
 		["a port", ["https://library.example.org:8443"]],
 		["a path", ["https://library.example.org/library"]],
 		["user information", ["https://user@library.example.org"]],
+		["a Traefik template delimiter", ["https://{{.example.org"]],
+		["a closing template delimiter", ["https://a}}.example.org"]],
+		["a backtick", ["https://ex`ample.org"]],
+		["an underscore", ["https://a_b.example.org"]],
+		["an empty label", ["https://a..example.org"]],
+		["a trailing dot", ["https://library.example.org."]],
+		["a single-label host", ["https://localhost"]],
+		["an IP address", ["https://192.0.2.1"]],
+		["a label longer than 63 characters", [`https://${"a".repeat(64)}.org`]],
 		[
 			"a duplicate host",
 			["https://library.example.org", "https://LIBRARY.example.org"],
@@ -339,6 +349,52 @@ describe("Evidence Library runtime guard", () => {
 		).rejects.toMatchObject({ code: "invalid_request", status: 400 });
 		expect(docker.readApplicationWebService).not.toHaveBeenCalled();
 		await expectMissing(domainsPath);
+	});
+
+	it("accepts punycode hosts", async () => {
+		const { manager } = await fixture();
+
+		await expect(
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins: ["https://Bücher.example"],
+			}),
+		).resolves.toEqual({
+			customOrigins: ["https://xn--bcher-kva.example"],
+			status: "routed",
+		});
+	});
+
+	it("refuses a template host in the guard route without writing it", async () => {
+		const { manager, routePath } = await fixture();
+
+		await expect(
+			manager.prepare({
+				...input,
+				platformOrigins: ["https://{{.opendev.space"],
+			}),
+		).rejects.toMatchObject({ code: "invalid_request", status: 400 });
+		await expectMissing(routePath);
+	});
+
+	it("never renders a host that could break the Traefik file", () => {
+		expect(() =>
+			renderLibraryDomainsRoute({
+				applicationUuid,
+				customOrigins: ["https://{{.example.org"],
+				dockerService: `https-0-${applicationUuid}`,
+			}),
+		).toThrow("A route host is not a plain DNS name.");
+		expect(() =>
+			renderLibraryRuntimeRoute({
+				applicationUuid,
+				commit,
+				customOrigins: ["https://ex`ample.org"],
+				maintenanceUrl: "http://runtime-verifier:3001",
+				platformOrigins: input.platformOrigins,
+				revision: input.revision,
+			}),
+		).toThrow("A route host is not a plain DNS name.");
 	});
 
 	it("refuses an unknown application", async () => {

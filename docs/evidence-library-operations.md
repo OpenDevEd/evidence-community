@@ -190,8 +190,10 @@ needs no redeploy. The verifier writes
 directory, and Traefik reloads it in about two seconds. Its HTTPS router sends
 the custom hosts to Coolify's platform-address service, `https-0-<uuid>...@docker`.
 The verifier reads that name from the web container's labels each time,
-because Coolify versions name it differently. It fails with
-`runtime_web_not_ready` when there is not exactly one web container and with
+because Coolify versions name it differently. It uses the one running web
+container, which must be healthy when it has a health check, and ignores exited
+ones. It fails with `runtime_web_not_ready` when there is no such container and
+with
 `runtime_web_route_missing` when the label is absent, instead of writing a
 dangling route. An empty list deletes the file.
 
@@ -201,7 +203,11 @@ they stay below both. Finalization writes the domains file from its
 `customOrigins` before it deletes the guard route, so custom hosts always have
 a route and a renamed Coolify service is picked up at every deployment.
 
-The verifier writes every route file by atomic replacement from
+Every route host must be a lowercase DNS name with at least two labels: only
+letters, digits, and inner hyphens, 63 characters per label and 253 in total,
+with no trailing dot. Punycode names are allowed. Traefik renders dynamic files
+as Go templates, so braces or backticks in a host would break the file. The
+verifier writes every route file by atomic replacement from
 machine-rendered JSON. Never hand-edit these files: while any file in the
 dynamic directory is malformed, Traefik ignores all later file-provider
 changes.

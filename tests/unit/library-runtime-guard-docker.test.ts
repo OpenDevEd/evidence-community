@@ -100,7 +100,7 @@ function dockerFetchFixture(configJson: string) {
 	const connectedNetworks = new Set<string>();
 	let createBody: Record<string, unknown> | undefined;
 	const handlers = new Map<string, (init?: RequestInit) => Response>([
-		["/v1.41/containers/json", () => json([{ Id: containerId }])],
+		["/v1.41/containers/json", () => json([{ Id: containerId, State: "running" }])],
 		[
 			`/v1.41/containers/${containerId}/json`,
 			() => json(applicationInspection(configJson)),
@@ -255,7 +255,7 @@ describe("Docker Evidence Library runtime guard", () => {
 		const fetchRequest = vi.fn(async (request: string | URL | Request) => {
 			const url = new URL(request.toString());
 			if (url.pathname.endsWith("/containers/json")) {
-				return json([{ Id: containerId }]);
+				return json([{ Id: containerId, State: "running" }]);
 			}
 			if (url.pathname.endsWith(`/containers/${containerId}/json`)) {
 				return json(applicationInspection(configJson));
@@ -282,15 +282,21 @@ describe("Docker Evidence Library runtime guard", () => {
 		async (_label, service) => {
 			const docker = createDockerLibraryRuntimeGuard({
 				dockerProxyUrl: "http://docker-proxy:2375",
-				fetch: webLabelFetch({
-					[`traefik.http.routers.${service}.service`]: service,
-					[`traefik.http.services.${service}.loadbalancer.server.port`]:
-						"3000",
-					[`traefik.http.services.https-1-${applicationUuid}-web-2567.loadbalancer.server.port`]:
-						"3000",
-					[`traefik.http.services.http-0-${applicationUuid}-web-2567.loadbalancer.server.port`]:
-						"3000",
-				}),
+				fetch: webLabelFetch([
+					{
+						id: containerId,
+						labels: {
+							[`traefik.http.routers.${service}.service`]: service,
+							[platformServiceLabel(service)]: "3000",
+							[platformServiceLabel(
+								`https-1-${applicationUuid}-web-2567`,
+							)]: "3000",
+							[platformServiceLabel(
+								`http-0-${applicationUuid}-web-2567`,
+							)]: "3000",
+						},
+					},
+				]),
 			});
 
 			await expect(
@@ -299,41 +305,117 @@ describe("Docker Evidence Library runtime guard", () => {
 		},
 	);
 
-	it("refuses a web service without a Coolify platform service", async () => {
+	it("reads the running web service next to an exited one", async () => {
 		const docker = createDockerLibraryRuntimeGuard({
 			dockerProxyUrl: "http://docker-proxy:2375",
-			fetch: webLabelFetch({
-				[`traefik.http.services.https-1-${applicationUuid}-web-2567.loadbalancer.server.port`]:
-					"3000",
-			}),
+			fetch: webLabelFetch([
+				{
+					id: guardId,
+					labels: {
+						[platformServiceLabel(`https-0-${applicationUuid}`)]:
+							"3000",
+					},
+					state: "exited",
+				},
+				{
+					health: null,
+					id: containerId,
+					labels: {
+						[platformServiceLabel(
+							`https-0-${applicationUuid}-web-2567`,
+						)]: "3000",
+					},
+				},
+			]),
 		});
 
 		await expect(
 			docker.readApplicationWebService(applicationUuid),
-		).rejects.toMatchObject({ code: "runtime_web_route_missing", status: 409 });
+		).resolves.toBe(`https-0-${applicationUuid}-web-2567`);
 	});
 
-	it("refuses when the library has no web container", async () => {
+	it.each<[string, Partial<WebContainer>[]]>([
+		["no web container", []],
+		["only an exited web container", [{ state: "exited" }]],
+		["a starting web container", [{ health: "starting" }]],
+		["an unhealthy web container", [{ health: "unhealthy" }]],
+	])("refuses %s", async (_label, containers) => {
 		const docker = createDockerLibraryRuntimeGuard({
 			dockerProxyUrl: "http://docker-proxy:2375",
-			fetch: (async () => json([])) as typeof fetch,
+			fetch: webLabelFetch(
+				containers.map((container) => ({
+					id: containerId,
+					labels: {
+						[platformServiceLabel(
+							`https-0-${applicationUuid}-web-2567`,
+						)]: "3000",
+					},
+					...container,
+				})),
+			),
 		});
 
 		await expect(
 			docker.readApplicationWebService(applicationUuid),
 		).rejects.toMatchObject({ code: "runtime_web_not_ready", status: 409 });
 	});
+
+	it("refuses a web service without a Coolify platform service", async () => {
+		const docker = createDockerLibraryRuntimeGuard({
+			dockerProxyUrl: "http://docker-proxy:2375",
+			fetch: webLabelFetch([
+				{
+					id: containerId,
+					labels: {
+						[platformServiceLabel(
+							`https-1-${applicationUuid}-web-2567`,
+						)]: "3000",
+					},
+				},
+			]),
+		});
+
+		await expect(
+			docker.readApplicationWebService(applicationUuid),
+		).rejects.toMatchObject({ code: "runtime_web_route_missing", status: 409 });
+	});
 });
 
-function webLabelFetch(routeLabels: Record<string, string>) {
+function platformServiceLabel(service: string) {
+	return `traefik.http.services.${service}.loadbalancer.server.port`;
+}
+
+type WebContainer = {
+	health?: string | null;
+	id: string;
+	labels: Record<string, string>;
+	state?: string;
+};
+
+function webLabelFetch(containers: readonly WebContainer[]) {
 	return (async (request: string | URL | Request) => {
 		const url = new URL(request.toString());
 		if (url.pathname === "/v1.41/containers/json") {
-			return json([{ Id: containerId }]);
+			return json(
+				containers.map(({ id, state = "running" }) => ({
+					Id: id,
+					State: state,
+				})),
+			);
 		}
-		if (url.pathname === `/v1.41/containers/${containerId}/json`) {
-			return json(applicationInspection("{}", routeLabels));
-		}
-		throw new Error(`Unexpected request: ${url}`);
+		const container = containers.find(
+			({ id }) => url.pathname === `/v1.41/containers/${id}/json`,
+		);
+		if (!container) throw new Error(`Unexpected request: ${url}`);
+		const health =
+			container.health === undefined ? "healthy" : container.health;
+		return json({
+			...applicationInspection("{}", container.labels),
+			Id: container.id,
+			State: {
+				...(health ? { Health: { Status: health } } : {}),
+				Status: container.state ?? "running",
+			},
+		});
 	}) as typeof fetch;
 }
