@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+// A name that resolves publicly when checked and privately when connected to: the connection must still be refused.
+vi.mock("node:dns/promises", () => ({ lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]) }));
+vi.mock("node:dns", () => ({
+	lookup: (_hostname: string, _options: unknown, callback: (error: null, addresses: { address: string; family: number }[]) => void) =>
+		callback(null, [{ address: "169.254.169.254", family: 4 }]),
+}));
 
-import { isPrivateIp } from "@/lib/public-fetch";
+import { isPrivateIp, publicRequest } from "@/lib/public-fetch";
 
 describe("public addresses", () => {
 	it("refuses private, loopback, link-local, shared and multicast addresses", () => {
@@ -22,5 +28,10 @@ describe("public addresses", () => {
 	it("lets public addresses through", () => {
 		expect(isPrivateIp("93.184.216.34")).toBe(false);
 		expect(isPrivateIp("2606:4700::6810:84e5")).toBe(false);
+	});
+
+	it("refuses a connection whose own lookup gives a private address, after the check passed", async () => {
+		await expect(publicRequest(new URL("https://rebinding.example/logo.png"), {})).rejects.toThrow();
+		await expect(publicRequest(new URL("https://rebinding.example/logo.png"), {}).catch((error: Error) => String(error.cause ?? error))).resolves.toMatch(/Private URL is not allowed/u);
 	});
 });
