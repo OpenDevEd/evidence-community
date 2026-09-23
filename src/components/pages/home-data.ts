@@ -86,6 +86,28 @@ function languageName(value: string) {
 }
 
 
+/** The library's counts from its cached statistics; without them every count is empty. */
+function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries" | "countryPaths" | "collections" | "topics" | "covers" | "recent" | "journey" | "cited" | "ai" | "digests"> {
+	if (!stats) return { publications: 0, authors: 0, years: [], itemTypes: [], institutions: [], languages: [], publishers: [], journals: [], attachments: null, citations: null, collaboration: null, productivity: null, updated: now };
+	const { attachmentStats: attachments, citationStats: citations, collaborationStats: collaboration, authorProductivityStats: productivity } = stats;
+	return {
+		publications: stats.itemTypes.reduce((sum, row) => sum + row.count, 0),
+		authors: stats.creatorStats.uniqueCreators,
+		years: stats.yearDistribution.map((row) => ({ year: Number(row.year), count: row.count })).filter((row) => Number.isFinite(row.year) && row.year > 0),
+		itemTypes: stats.itemTypes.map((row) => ({ itemType: row.itemType, count: row.count })),
+		institutions: named(stats.institutions.map((row) => ({ name: row.institution, count: row.itemCount }))),
+		languages: named(stats.languageDistribution.map((row) => ({ name: languageName(row.language), count: row.count }))),
+		publishers: named(stats.topPublishers.map((row) => ({ name: row.publisher, count: row.count }))),
+		journals: named(stats.topJournals.map((row) => ({ name: row.journal, count: row.count }))),
+		attachments: { total: attachments.totalAttachments, itemsWith: attachments.itemsWithAttachments, withPdf: attachments.itemsWithPdf, percentage: attachments.attachmentPercentage },
+		citations: { total: citations.totalCitations, itemsWith: citations.itemsWithCitations, average: citations.avgCitationsPerItem, max: citations.maxCitations, percentage: citations.citationPercentage, hIndex: citations.hIndex },
+		collaboration: { rate: collaboration.overallCollaborationRate, collaborative: collaboration.collaborativeItems },
+		productivity: { multiple: productivity.authorsWithMultipleWorks, average: productivity.avgItemsPerAuthor, max: productivity.maxItemsPerAuthor },
+		// When the figures were counted, which for cached statistics is not today.
+		updated: new Date(stats.computedAt),
+	};
+}
+
 export async function loadHomeData(now: Date, locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
 	const [stats, withPdf, facets, collections, cited, digests, journey] = await Promise.all([
 		getComprehensiveStats().catch(fallback("statistics", null)),
@@ -100,29 +122,16 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
 	const shelf = withPdf?.items ?? [];
 	const covers = await coversOf([...shelf.map((row) => row.key), ...cited.map((row) => row.key), ...(journey ? [journey.key] : [])]).catch(fallback("covers", {} as Record<string, string>));
 	return {
-		publications: stats?.itemTypes.reduce((sum, row) => sum + row.count, 0) ?? 0,
-		authors: stats?.creatorStats.uniqueCreators ?? 0,
-		years: (stats?.yearDistribution ?? []).map((row) => ({ year: Number(row.year), count: row.count })).filter((row) => Number.isFinite(row.year) && row.year > 0),
-		itemTypes: (stats?.itemTypes ?? []).map((row) => ({ itemType: row.itemType, count: row.count })),
-		institutions: named((stats?.institutions ?? []).map((row) => ({ name: row.institution, count: row.itemCount }))),
+		...figuresFrom(stats, now),
 		...topicsAndPlaces(stats, facets, collections),
-		languages: named((stats?.languageDistribution ?? []).map((row) => ({ name: languageName(row.language), count: row.count }))),
-		publishers: named((stats?.topPublishers ?? []).map((row) => ({ name: row.publisher, count: row.count }))),
-		journals: named((stats?.topJournals ?? []).map((row) => ({ name: row.journal, count: row.count }))),
 		covers,
 		// A library can switch the full-text scope off, which returns every record; only records whose first page
 		// was found go on the shelf either way.
 		recent: shelf.filter((row) => covers[row.key]).slice(0, 6),
 		journey,
-		attachments: stats ? { total: stats.attachmentStats.totalAttachments, itemsWith: stats.attachmentStats.itemsWithAttachments, withPdf: stats.attachmentStats.itemsWithPdf, percentage: stats.attachmentStats.attachmentPercentage } : null,
-		citations: stats ? { total: stats.citationStats.totalCitations, itemsWith: stats.citationStats.itemsWithCitations, average: stats.citationStats.avgCitationsPerItem, max: stats.citationStats.maxCitations, percentage: stats.citationStats.citationPercentage, hIndex: stats.citationStats.hIndex } : null,
-		collaboration: stats ? { rate: stats.collaborationStats.overallCollaborationRate, collaborative: stats.collaborationStats.collaborativeItems } : null,
-		productivity: stats ? { multiple: stats.authorProductivityStats.authorsWithMultipleWorks, average: stats.authorProductivityStats.avgItemsPerAuthor, max: stats.authorProductivityStats.maxItemsPerAuthor } : null,
 		cited,
 		ai: isLibraryFeatureEnabled((await getLibraryConfig()).features, "aiSearch"),
 		digests,
-		// When the figures were counted, which for cached statistics is not today.
-		updated: stats ? new Date(stats.computedAt) : now,
 	};
 }
 

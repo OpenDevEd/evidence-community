@@ -193,72 +193,83 @@ const parts: { shows: Part; title: string; text: string; has: (data: HomeData) =
 ];
 
 function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeData; surface: Tone; questions?: string[] }) {
-	const locale = useLocale();
 	switch (shows) {
 		case "publications":
-			return (
-				<ol className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
-					{data.recent.slice(0, 6).map((item) => (
-						<li key={item.key}>
-							<Link href={`/lib/${item.key}`} className="group block outline-offset-4">
-								<span className="block shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-									<PdfCover src={data.covers[item.key]} alt="" sizes="(min-width: 1024px) 208px, (min-width: 640px) 33vw, 50vw" />
-								</span>
-								<span className="mt-3 line-clamp-3 text-sm font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</span>
-								{item.datePublished && <span className="mt-1 block text-xs tabular-nums opacity-60">{shortDate.format(new Date(item.datePublished))}</span>}
-							</Link>
-						</li>
-					))}
-				</ol>
-			);
+			return <LatestPublications data={data} />;
 		case "ai":
 			return <AskPreview data={data} surface={surface} questions={questions} />;
 		case "citations":
-			return (
-				<ol className="grid gap-x-10 gap-y-8 sm:grid-cols-3">
-					{data.cited.map((row) => (
-						<li key={row.key}>
-							<Link href={`/lib/${row.key}`} className="group flex gap-5 outline-offset-4">
-								<span className="block w-24 shrink-0 shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-									<PdfCover src={data.covers[row.key]} alt="" sizes="96px" />
-								</span>
-								<span className="min-w-0 pt-1">
-									<span className="block font-heading text-4xl font-semibold leading-none tabular-nums">{number.format(row.citations)}</span>
-									<span className="mt-1 block text-sm opacity-60">{row.citations === 1 ? "citation" : "citations"}</span>
-									<span className="mt-3 line-clamp-3 text-base font-medium leading-snug transition-colors group-hover:text-accent">{row.title}</span>
-								</span>
-							</Link>
-						</li>
-					))}
-				</ol>
-			);
-		case "digests": {
-			const [latest] = data.digests?.editions ?? [];
-			if (!data.digests || !latest) return null;
-			return (
-				<div className="grid gap-12 lg:grid-cols-[28rem_minmax(0,1fr)] lg:gap-20">
-					<div className="pr-4 pt-2">
-						<DigestCover edition={latest} libraryName={data.digests.library} timezone={data.digests.timezone} href={`/${locale}/digests/${latest.slug}`} locale={locale} titleAs="h3" />
-					</div>
-					{data.digests.editions.length > 1 && (
-						<div>
-							<h3 className="text-sm font-semibold opacity-75">Earlier issues</h3>
-							<ol className="mt-3">
-								{data.digests.editions.slice(1).map((edition) => (
-									<li key={edition.slug} className="border-b border-[rgb(var(--ink-rgb)/0.1)] py-4 last:border-b-0">
-										<Link href={`/digests/${edition.slug}`} className="group block outline-offset-4">
-											<span className="block text-sm tabular-nums opacity-60">{shortDate.format(new Date(edition.publishedAt))}</span>
-											<span className="mt-1 block font-heading text-lg font-medium leading-snug transition-colors group-hover:text-accent">{edition.title}</span>
-										</Link>
-									</li>
-								))}
-							</ol>
-						</div>
-					)}
-				</div>
-			);
-		}
+			return <MostCited data={data} />;
+		case "digests":
+			return <LatestDigests digests={data.digests} />;
 	}
+}
+
+function LatestPublications({ data }: { data: HomeData }) {
+	return (
+		<ol className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
+			{data.recent.slice(0, 6).map((item) => (
+				<li key={item.key}>
+					<Link href={`/lib/${item.key}`} className="group block outline-offset-4">
+						<span className="block shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+							<PdfCover src={data.covers[item.key]} alt="" sizes="(min-width: 1024px) 208px, (min-width: 640px) 33vw, 50vw" />
+						</span>
+						<span className="mt-3 line-clamp-3 text-sm font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</span>
+						{item.datePublished && <span className="mt-1 block text-xs tabular-nums opacity-60">{shortDate.format(new Date(item.datePublished))}</span>}
+					</Link>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+function MostCited({ data }: { data: HomeData }) {
+	return (
+		<ol className="grid gap-x-10 gap-y-8 sm:grid-cols-3">
+			{data.cited.map((row) => (
+				<li key={row.key}>
+					<Link href={`/lib/${row.key}`} className="group flex gap-5 outline-offset-4">
+						<span className="block w-24 shrink-0 shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+							<PdfCover src={data.covers[row.key]} alt="" sizes="96px" />
+						</span>
+						<span className="min-w-0 pt-1">
+							<span className="block font-heading text-4xl font-semibold leading-none tabular-nums">{number.format(row.citations)}</span>
+							<span className="mt-1 block text-sm opacity-60">{row.citations === 1 ? "citation" : "citations"}</span>
+							<span className="mt-3 line-clamp-3 text-base font-medium leading-snug transition-colors group-hover:text-accent">{row.title}</span>
+						</span>
+					</Link>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
+	const locale = useLocale();
+	const [latest, ...earlier] = digests?.editions ?? [];
+	if (!digests || !latest) return null;
+	return (
+		<div className="grid gap-12 lg:grid-cols-[28rem_minmax(0,1fr)] lg:gap-20">
+			<div className="pr-4 pt-2">
+				<DigestCover edition={latest} libraryName={digests.library} timezone={digests.timezone} href={`/${locale}/digests/${latest.slug}`} locale={locale} titleAs="h3" />
+			</div>
+			{earlier.length > 0 && (
+				<div>
+					<h3 className="text-sm font-semibold opacity-75">Earlier issues</h3>
+					<ol className="mt-3">
+						{earlier.map((edition) => (
+							<li key={edition.slug} className="border-b border-[rgb(var(--ink-rgb)/0.1)] py-4 last:border-b-0">
+								<Link href={`/digests/${edition.slug}`} className="group block outline-offset-4">
+									<span className="block text-sm tabular-nums opacity-60">{shortDate.format(new Date(edition.publishedAt))}</span>
+									<span className="mt-1 block font-heading text-lg font-medium leading-snug transition-colors group-hover:text-accent">{edition.title}</span>
+								</Link>
+							</li>
+						))}
+					</ol>
+				</div>
+			)}
+		</div>
+	);
 }
 
 /**
@@ -438,26 +449,34 @@ const longDay = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", y
 /** Timeline columns on wide screens, one per step; below that the steps run down one vertical track. */
 const TIMELINE_COLUMNS: Record<number, string> = { 1: "", 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
 
+type Happening = { when?: string; body?: React.ReactNode };
+
 /** What a step's type shows, from the publication the timeline follows (or the editor chosen for it). */
-function happened(step: Step, journey: HomeData["journey"]): { when?: string; body?: React.ReactNode } {
+function happened(step: Step, journey: HomeData["journey"]): Happening {
 	switch (step.type) {
 		case "arrival":
 			return journey ? { when: journey.submittedAt, body: <>Arrived for review</> } : {};
-		case "check": {
-			const editor = step.editor ?? journey?.reviewer;
-			const body = editor ? (
-				<span className="flex items-center gap-3">
-					<AuthorAvatar src={editor.photo ?? undefined} alt="" size="md" className="shrink-0" />
-					<span>Checked by <strong className="font-semibold">{editor.name}</strong></span>
-				</span>
-			) : undefined;
-			return { when: journey?.publishedAt, body };
-		}
+		case "check":
+			return checked(step.editor ?? journey?.reviewer, journey);
 		case "publication":
-			return journey ? { when: journey.publishedAt, body: <>Published{journey.doi && <> with the DOI <a href={`https://doi.org/${journey.doi}`} className="font-semibold underline decoration-1 underline-offset-4">{journey.doi}</a></>}</> } : {};
+			return journey ? published(journey) : {};
 		default:
 			return {};
 	}
+}
+
+function checked(editor: { name: string; photo?: string | null } | null | undefined, journey: HomeData["journey"]): Happening {
+	const body = editor ? (
+		<span className="flex items-center gap-3">
+			<AuthorAvatar src={editor.photo ?? undefined} alt="" size="md" className="shrink-0" />
+			<span>Checked by <strong className="font-semibold">{editor.name}</strong></span>
+		</span>
+	) : undefined;
+	return { when: journey?.publishedAt, body };
+}
+
+function published(journey: NonNullable<HomeData["journey"]>): Happening {
+	return { when: journey.publishedAt, body: <>Published{journey.doi && <> with the DOI <a href={`https://doi.org/${journey.doi}`} className="font-semibold underline decoration-1 underline-offset-4">{journey.doi}</a></>}</> };
 }
 
 /**
@@ -471,21 +490,7 @@ function Timeline({ steps, journey, cover }: { steps: Step[]; journey: HomeData[
 		<motion.ol {...listMotion} className={`relative grid gap-x-10 gap-y-10 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
 			<span aria-hidden className={`${track} bg-[rgb(var(--ink-rgb)/0.18)]`} />
 			<motion.span aria-hidden initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={seen} transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1], delay: 0.2 }} className={`${track} origin-left bg-[rgb(var(--color-accent-700))]`} />
-			{steps.map((step, index) => {
-				const { when, body } = happened(step, journey);
-				return (
-					<motion.li key={`${step.title}-${index}`} variants={arrive} className="relative pl-10 lg:pl-0">
-						{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
-						<span aria-hidden className={`absolute left-[7px] top-4 w-0.5 bg-[rgb(var(--color-accent-700))] lg:hidden ${index === steps.length - 1 ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
-						{/* On wide screens the dates share one row above the track, so every node sits on the line. */}
-						{dated ? <p className={`font-heading text-base font-semibold leading-6 tabular-nums lg:h-6 ${when ? "" : "hidden lg:block"}`}>{when ? <time dateTime={when}>{longDay.format(new Date(when))}</time> : null}</p> : null}
-						<span aria-hidden className={`absolute left-0 top-1 block size-4 rounded-full border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)] lg:relative lg:left-auto lg:top-auto ${dated ? "lg:mt-3" : ""}`} />
-						<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
-						{body ? <div className="mt-3 text-base leading-7">{body}</div> : null}
-						{step.text ? <p className={`mt-3 leading-6 ${body ? "text-sm opacity-75" : "text-base"}`}>{step.text}</p> : null}
-					</motion.li>
-				);
-			})}
+			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} journey={journey} dated={dated} last={index === steps.length - 1} />)}
 		</motion.ol>
 	);
 	if (!journey) return timeline;
@@ -505,6 +510,28 @@ function Timeline({ steps, journey, cover }: { steps: Step[]; journey: HomeData[
 			{timeline}
 		</div>
 	);
+}
+
+/** One step on the track: its date, its node, its name, what happened and its words. */
+function TimelineStep({ step, journey, dated, last }: { step: Step; journey: HomeData["journey"]; dated: boolean; last: boolean }) {
+	const { when, body } = happened(step, journey);
+	return (
+		<motion.li variants={arrive} className="relative pl-10 lg:pl-0">
+			{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
+			<span aria-hidden className={`absolute left-[7px] top-4 w-0.5 bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
+			{/* On wide screens the dates share one row above the track, so every node sits on the line. */}
+			{dated ? <StepDate when={when} /> : null}
+			<span aria-hidden className={`absolute left-0 top-1 block size-4 rounded-full border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)] lg:relative lg:left-auto lg:top-auto ${dated ? "lg:mt-3" : ""}`} />
+			<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
+			{body ? <div className="mt-3 text-base leading-7">{body}</div> : null}
+			{step.text ? <p className={`mt-3 leading-6 ${body ? "text-sm opacity-75" : "text-base"}`}>{step.text}</p> : null}
+		</motion.li>
+	);
+}
+
+/** A step's date; an undated step keeps the row empty on wide screens so its node stays on the track. */
+function StepDate({ when }: { when?: string }) {
+	return <p className={`font-heading text-base font-semibold leading-6 tabular-nums lg:h-6 ${when ? "" : "hidden lg:block"}`}>{when ? <time dateTime={when}>{longDay.format(new Date(when))}</time> : null}</p>;
 }
 
 /**
@@ -604,6 +631,19 @@ const MARQUEE_MINIMUM = 6;
 
 /** The closing band: who runs the library set large, and the ways in as buttons in the band's own colours. */
 function Team({ team, editors, involvement, contact, heading }: { team?: string; editors?: HomeContent["editors"]; involvement?: HomeContent["involvement"]; contact: Contact; heading: (key: "team" | "involvement") => string }) {
+	const people = Boolean(team || editors?.length);
+	return (
+		<>
+			<Heading>{heading(people ? "team" : "involvement")}</Heading>
+			{team && <Reading className={leadFor(team)}><RichText text={team} as={statement} /></Reading>}
+			{editors?.length ? <EditorMarquee editors={editors} /> : null}
+			<Involvement involvement={involvement} contact={contact} spaced={people} />
+		</>
+	);
+}
+
+/** The ways in, where the library has them on; `spaced` sets them apart from the people above. */
+function Involvement({ involvement, contact, spaced }: { involvement?: HomeContent["involvement"]; contact: Contact; spaced: boolean }) {
 	const t = useTranslations("homePage");
 	// The buttons only exist where they lead somewhere: an email, else the contact page (checked by the caller).
 	const write = (subject: string) => (contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent(subject)}` : "/contact");
@@ -611,19 +651,13 @@ function Team({ team, editors, involvement, contact, heading }: { team?: string;
 		involvement?.suggestions && { label: t("suggest"), icon: Mail01Icon, href: write(t("suggestSubject")) },
 		involvement?.editors && { label: t("join"), icon: UserAdd01Icon, href: write(t("joinSubject")) },
 	].filter((button): button is { label: string; icon: IconSvgElement; href: string } => Boolean(button));
+	if (buttons.length === 0) return null;
 	return (
-		<>
-			<Heading>{heading(team || editors?.length ? "team" : "involvement")}</Heading>
-			{team && <Reading className={leadFor(team)}><RichText text={team} as={statement} /></Reading>}
-			{editors && editors.length > 0 && <EditorMarquee editors={editors} />}
-			{buttons.length > 0 && (
-				<div className={`${team || editors?.length ? "mt-12 lg:mt-16" : ""} flex flex-wrap gap-3`}>
-					{buttons.map((button, index) => (
-						<Button key={button.label} as={button.href.startsWith("/") ? Link : "a"} href={button.href} size="md" startContent={<HugeiconsIcon icon={button.icon} aria-hidden size={18} />} className={index === 0 ? "bg-[rgb(var(--ink-rgb))] font-semibold dark:bg-[rgb(var(--ink-rgb))] text-[var(--band-bg)] dark:text-[var(--band-bg-dark)]" : "border border-[rgb(var(--ink-rgb)/0.35)] bg-transparent font-semibold text-current"}>{button.label}</Button>
-					))}
-				</div>
-			)}
-		</>
+		<div className={`${spaced ? "mt-12 lg:mt-16" : ""} flex flex-wrap gap-3`}>
+			{buttons.map((button, index) => (
+				<Button key={button.label} as={button.href.startsWith("/") ? Link : "a"} href={button.href} size="md" startContent={<HugeiconsIcon icon={button.icon} aria-hidden size={18} />} className={index === 0 ? "bg-[rgb(var(--ink-rgb))] font-semibold dark:bg-[rgb(var(--ink-rgb))] text-[var(--band-bg)] dark:text-[var(--band-bg-dark)]" : "border border-[rgb(var(--ink-rgb)/0.35)] bg-transparent font-semibold text-current"}>{button.label}</Button>
+			))}
+		</div>
 	);
 }
 
@@ -774,8 +808,6 @@ function niceCeiling(value: number) {
 
 /** Change over time: one smooth 2px line over a flat wash, two recessive gridlines, and a crosshair that reads out the point under the pointer. Fills its parent's height. */
 function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { points: { label: string; value: number }[]; link: Linkage; unit: string; labelEvery?: number; dottedLast?: boolean }) {
-	const reduce = useLessMotion();
-	const clipId = useId();
 	const top = niceCeiling(Math.max(...points.map((point) => point.value)));
 	const x = (index: number) => (points.length > 1 ? (100 * index) / (points.length - 1) : 50);
 	const split = dottedLast && points.length > 1 ? x(points.length - 2) : null;
@@ -787,38 +819,51 @@ function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { poi
 		return Math.max(0, Math.min(points.length - 1, Math.round(((event.clientX - box.left) / box.width) * (points.length - 1))));
 	};
 	return (
-		<div className="flex h-full flex-col" role="img" aria-label={`Publications per ${unit}, ${points[0]?.label} to ${points[points.length - 1]?.label}`}>
+		<div className="flex h-full flex-col" role="img" aria-label={`Publications per ${unit}, ${points[0]?.label} to ${points.at(-1)?.label}`}>
 			<div className="relative min-h-0 flex-1 cursor-crosshair touch-pan-y" onPointerMove={(event) => link.onPreview(indexAt(event))} onPointerLeave={() => link.onPreview(null)} onClick={(event) => link.onSelect(indexAt(event))}>
 				{[top, top / 2].map((value) => (
 					<div key={value} className={`absolute inset-x-0 ${rule}`} style={{ top: `${y(value)}%` }}><span className={`absolute bottom-1 left-0 text-xs tabular-nums ${muted}`}>{number.format(value)}</span></div>
 				))}
-				<motion.div className="absolute inset-0 text-accent motion-reduce:![clip-path:none]" initial={{ clipPath: "inset(0 100% 0 0)" }} whileInView={{ clipPath: "inset(0 0% 0 0)" }} viewport={{ once: true }} transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}>
-					<svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
-						{split !== null && (
-							<defs>
-								<clipPath id={`${clipId}-solid`}><rect x={-1} y={-1} width={split + 1} height={102} /></clipPath>
-								<clipPath id={`${clipId}-dotted`}><rect x={split} y={-1} width={101 - split} height={102} /></clipPath>
-							</defs>
-						)}
-						<path d={`${line} L100 100 L0 100 Z`} fill="currentColor" opacity={0.16} />
-						<path d={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" clipPath={split !== null ? `url(#${clipId}-solid)` : undefined} />
-						{split !== null && <path d={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeDasharray="0 6" vectorEffect="non-scaling-stroke" clipPath={`url(#${clipId}-dotted)`} />}
-					</svg>
-				</motion.div>
+				<TrendLine line={line} split={split} />
 				<div className="absolute inset-x-0 bottom-0 border-t border-[rgb(var(--ink-rgb)/0.25)]" />
-				{shown && (
-					<div className="pointer-events-none absolute inset-y-0" style={{ left: `${x(link.shown)}%` }}>
-						<div className="absolute inset-y-0 -ml-px border-l border-[rgb(var(--ink-rgb)/0.35)]" />
-						<div className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--band-bg)] bg-accent dark:border-[var(--band-bg-dark)]" style={{ top: `${y(shown.value)}%` }} />
-						<p className={`absolute top-0 whitespace-nowrap bg-[var(--band-bg)] px-2 text-sm dark:bg-[var(--band-bg-dark)] ${x(link.shown) > 75 ? "right-0" : x(link.shown) < 25 ? "left-0" : "-translate-x-1/2"}`}><span className="font-bold tabular-nums">{number.format(shown.value)}</span> <span className={muted}>{shown.label}</span></p>
-					</div>
-				)}
+				{shown && <Readout point={shown} left={x(link.shown)} top={y(shown.value)} />}
 			</div>
 			<div className="relative mt-2 h-4">
 				{points.map((point, index) => (index % labelEvery === 0 || index === points.length - 1) && (index === points.length - 1 || points.length - 1 - index >= labelEvery) && (
 					<span key={point.label} className={`absolute text-xs tabular-nums ${muted} ${index === 0 ? "" : index === points.length - 1 ? "-translate-x-full" : "-translate-x-1/2"}`} style={{ left: `${x(index)}%` }}>{point.label}</span>
 				))}
 			</div>
+		</div>
+	);
+}
+
+/** The trend's line and wash, drawn in from the left once seen; from `split` on the line is dotted, for a year still being counted. */
+function TrendLine({ line, split }: { line: string; split: number | null }) {
+	const clipId = useId();
+	return (
+		<motion.div className="absolute inset-0 text-accent motion-reduce:![clip-path:none]" initial={{ clipPath: "inset(0 100% 0 0)" }} whileInView={{ clipPath: "inset(0 0% 0 0)" }} viewport={{ once: true }} transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}>
+			<svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
+				{split !== null && (
+					<defs>
+						<clipPath id={`${clipId}-solid`}><rect x={-1} y={-1} width={split + 1} height={102} /></clipPath>
+						<clipPath id={`${clipId}-dotted`}><rect x={split} y={-1} width={101 - split} height={102} /></clipPath>
+					</defs>
+				)}
+				<path d={`${line} L100 100 L0 100 Z`} fill="currentColor" opacity={0.16} />
+				<path d={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" clipPath={split !== null ? `url(#${clipId}-solid)` : undefined} />
+				{split !== null && <path d={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeDasharray="0 6" vectorEffect="non-scaling-stroke" clipPath={`url(#${clipId}-dotted)`} />}
+			</svg>
+		</motion.div>
+	);
+}
+
+/** The crosshair on the point on show, with its value; near an edge the label keeps inside the chart. */
+function Readout({ point, left, top }: { point: { label: string; value: number }; left: number; top: number }) {
+	return (
+		<div className="pointer-events-none absolute inset-y-0" style={{ left: `${left}%` }}>
+			<div className="absolute inset-y-0 -ml-px border-l border-[rgb(var(--ink-rgb)/0.35)]" />
+			<div className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--band-bg)] bg-accent dark:border-[var(--band-bg-dark)]" style={{ top: `${top}%` }} />
+			<p className={`absolute top-0 whitespace-nowrap bg-[var(--band-bg)] px-2 text-sm dark:bg-[var(--band-bg-dark)] ${left > 75 ? "right-0" : left < 25 ? "left-0" : "-translate-x-1/2"}`}><span className="font-bold tabular-nums">{number.format(point.value)}</span> <span className={muted}>{point.label}</span></p>
 		</div>
 	);
 }
@@ -830,36 +875,51 @@ function squarify(values: number[], box: Rect): Rect[] {
 	const total = values.reduce((sum, value) => sum + value, 0);
 	if (total <= 0 || values.length === 0) return values.map(() => ({ x: box.x, y: box.y, w: 0, h: 0 }));
 	const scale = (box.w * box.h) / total;
+	const areas = values.map((value) => value * scale);
 	const out: Rect[] = [];
-	let { x, y, w, h } = box;
+	let rest = box;
 	let index = 0;
-	while (index < values.length) {
-		const horizontal = w >= h;
-		const side = horizontal ? h : w;
-		let run = 0;
-		let count = 0;
-		let worst = Infinity;
-		for (let next = index; next < values.length; next += 1) {
-			const area = values[next]! * scale;
-			const candidate = run + area;
-			const thickness = candidate / side;
-			const ratio = Math.max(...values.slice(index, next + 1).map((value) => { const cell = value * scale; const length = cell / thickness; return Math.max(thickness / length, length / thickness); }));
-			if (ratio > worst && count > 0) break;
-			worst = ratio;
-			run = candidate;
-			count += 1;
-		}
-		const thickness = run / side;
-		let offset = 0;
-		for (let cell = index; cell < index + count; cell += 1) {
-			const length = (values[cell]! * scale) / thickness;
-			out.push(horizontal ? { x, y: y + offset, w: thickness, h: length } : { x: x + offset, y, w: length, h: thickness });
-			offset += length;
-		}
-		if (horizontal) { x += thickness; w -= thickness; } else { y += thickness; h -= thickness; }
+	while (index < areas.length) {
+		const horizontal = rest.w >= rest.h;
+		const { count, run } = nextStrip(areas, index, horizontal ? rest.h : rest.w);
+		const thickness = run / (horizontal ? rest.h : rest.w);
+		out.push(...layStrip(areas.slice(index, index + count), rest, horizontal, thickness));
+		rest = horizontal ? { ...rest, x: rest.x + thickness, w: rest.w - thickness } : { ...rest, y: rest.y + thickness, h: rest.h - thickness };
 		index += count;
 	}
 	return out;
+}
+
+/** How many cells from `start` go in the next strip along a side this long: cells are added while the least square one keeps getting squarer. */
+function nextStrip(areas: number[], start: number, side: number) {
+	let run = 0;
+	let count = 0;
+	let worst = Infinity;
+	for (let next = start; next < areas.length; next += 1) {
+		const candidate = run + areas[next]!;
+		const ratio = worstRatio(areas.slice(start, next + 1), candidate / side);
+		if (ratio > worst && count > 0) break;
+		worst = ratio;
+		run = candidate;
+		count += 1;
+	}
+	return { count, run };
+}
+
+/** The long side over the short side of the least square cell, for cells of these areas in a strip this thick. */
+function worstRatio(areas: number[], thickness: number) {
+	return Math.max(...areas.map((area) => { const length = area / thickness; return Math.max(thickness / length, length / thickness); }));
+}
+
+/** Cells of these areas side by side in one strip along the box's left or top edge. */
+function layStrip(areas: number[], box: Rect, horizontal: boolean, thickness: number): Rect[] {
+	let offset = 0;
+	return areas.map((area) => {
+		const length = area / thickness;
+		const cell = horizontal ? { x: box.x, y: box.y + offset, w: thickness, h: length } : { x: box.x + offset, y: box.y, w: length, h: thickness };
+		offset += length;
+		return cell;
+	});
 }
 
 /** Part-to-whole as a treemap in the accent ramp, largest darkest, each cell with its own readable text colour and a 2px gap to its neighbours. The cell on show lifts above the rest instead of wearing an outline. */
@@ -941,15 +1001,11 @@ type View = {
 
 /** One panel for every view: the finding as a sentence, a fixed-height chart beside its list, then publications behind the row on show. Every part has a fixed height, so neither tabs nor rows move the page. */
 function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; surface: Tone }) {
-	const locale = useLocale();
 	const [selected, setSelected] = useState(view.initial ?? 0);
 	const [preview, setPreview] = useState<number | null>(null);
 	const shown = preview ?? selected;
 	const row = view.rows[shown]!;
 	const link: Linkage = { shown, previewing: preview !== null, onPreview: setPreview, onSelect: setSelected };
-	// The row's own newest publications, the first of what "See all" opens. While they load the space stays empty, never
-	// showing another row's publications under this row's name.
-	const { data: examples } = useSWR<ItemsGetResponse>(row.filter ? `/items?${row.filter}&sort=desc&limit=2` : null, fetcher);
 	return (
 		<>
 			<div className={`rounded-2xl p-5 lg:p-8 ${toneClass}`} style={toneStyle(surface)}>
@@ -960,30 +1016,32 @@ function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; su
 			</div>
 				<p className={`mt-8 pt-4 text-sm ${rule} ${muted}`}>Counted from the library on {dateFormat.format(data.updated)}.</p>
 			</div>
-			{row.filter && (
-				<div className="mt-8">
-					<div className="mb-4 flex items-baseline justify-between gap-6">
-						<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
-						<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/${locale}/lib?${row.filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
-					</div>
-					<PublicationList items={examples?.items ?? []} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
-				</div>
-			)}
+			{row.filter && <RowPublications row={row} filter={row.filter} />}
 		</>
 	);
 }
 
+/** The row's own newest publications, the first of what "See all" opens. */
+function RowPublications({ row, filter }: { row: Row; filter: string }) {
+	const locale = useLocale();
+	// While they load the space stays empty, never showing another row's publications under this row's name.
+	const { data: examples } = useSWR<ItemsGetResponse>(`/items?${filter}&sort=desc&limit=2`, fetcher);
+	return (
+		<div className="mt-8">
+			<div className="mb-4 flex items-baseline justify-between gap-6">
+				<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
+				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/${locale}/lib?${filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
+			</div>
+			<PublicationList items={examples?.items ?? []} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
+		</div>
+	);
+}
+
+type Fact = { icon: IconSvgElement; value: string; label: string; detail: string };
+
 function Facts({ data }: { data: HomeData }) {
-	const of = (part: number) => `${number.format(part)} of ${number.format(data.publications)}`;
-	// A fact whose figure is zero says the library has no such data yet, not something about its publications.
-	const facts = [
-		data.attachments?.withPdf && { icon: Pdf01Icon, value: `${percent(data.attachments.withPdf, data.publications)}%`, label: "have the PDF attached", detail: of(data.attachments.withPdf) },
-		data.citations?.itemsWith && { icon: QuoteUpIcon, value: `${percent(data.citations.itemsWith, data.publications)}%`, label: "are cited by another publication", detail: of(data.citations.itemsWith) },
-		data.collaboration?.collaborative && { icon: Globe02Icon, value: `${percent(data.collaboration.collaborative, data.publications)}%`, label: "are international collaborations", detail: of(data.collaboration.collaborative) },
-		data.citations?.total && { icon: Analytics01Icon, value: number.format(data.citations.total), label: "citations in total", detail: `${number.format(data.citations.average)} per publication` },
-		data.citations?.hIndex && { icon: Layers01Icon, value: number.format(data.citations.hIndex), label: "h-index of the library", detail: `most cited has ${number.format(data.citations.max)}` },
-		data.productivity?.multiple && { icon: UserMultipleIcon, value: number.format(data.productivity.multiple), label: "authors with several publications", detail: `${number.format(data.productivity.average)} per author` },
-	].filter((fact): fact is { icon: IconSvgElement; value: string; label: string; detail: string } => Boolean(fact));
+	// A fact whose figure is zero says the library has no such data yet, not something about its publications, so it is left out.
+	const facts = [...shareFacts(data), ...countFacts(data)].filter((fact): fact is Fact => Boolean(fact));
 	if (facts.length === 0) return null;
 	return (
 		<motion.dl {...listMotion} className={`mt-14 grid grid-cols-2 gap-x-8 gap-y-10 pt-12 sm:grid-cols-3 lg:grid-cols-6 ${rule}`}>
@@ -995,6 +1053,25 @@ function Facts({ data }: { data: HomeData }) {
 			))}
 		</motion.dl>
 	);
+}
+
+/** The facts that are a share of the library: the percentage, over how many of all the publications. */
+function shareFacts(data: HomeData) {
+	const share = (icon: IconSvgElement, part: number | undefined, label: string) => part && { icon, value: `${percent(part, data.publications)}%`, label, detail: `${number.format(part)} of ${number.format(data.publications)}` };
+	return [
+		share(Pdf01Icon, data.attachments?.withPdf, "have the PDF attached"),
+		share(QuoteUpIcon, data.citations?.itemsWith, "are cited by another publication"),
+		share(Globe02Icon, data.collaboration?.collaborative, "are international collaborations"),
+	];
+}
+
+/** The facts that are counts, each with its own detail. */
+function countFacts(data: HomeData) {
+	return [
+		data.citations?.total && { icon: Analytics01Icon, value: number.format(data.citations.total), label: "citations in total", detail: `${number.format(data.citations.average)} per publication` },
+		data.citations?.hIndex && { icon: Layers01Icon, value: number.format(data.citations.hIndex), label: "h-index of the library", detail: `most cited has ${number.format(data.citations.max)}` },
+		data.productivity?.multiple && { icon: UserMultipleIcon, value: number.format(data.productivity.multiple), label: "authors with several publications", detail: `${number.format(data.productivity.average)} per author` },
+	];
 }
 
 
@@ -1078,20 +1155,82 @@ type Props = { name: string; siteUrl: string; contact: Contact; today: string; a
  * Everything the library wrote and the page's structure render at once; the parts built from the library's figures
  * stream in behind their own boundaries as the data arrives, each in a box that already has its final size.
  */
-export default function HomePage({ name, siteUrl, contact, today, about, data, tones, ramp, shapes }: Props) {
-	const t = useTranslations("homePage");
+export default function HomePage(props: Props) {
+	return (
+		<MotionConfig reducedMotion="user">
+			<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
+				<Hero name={props.name} intro={props.about.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
+				<Bands {...props} />
+			</PageContainer>
+		</MotionConfig>
+	);
+}
+
+function Hero({ name, intro, data, tone, shapes }: { name: string; intro?: string; data: Promise<HomeData>; tone: Tone; shapes: MapShape[] }) {
+	return (
+		<section className={`relative isolate pb-16 pt-10 lg:pb-24 lg:pt-16 ${toneClass}`} style={toneStyle(tone)}>
+			<HeroBackdrop data={data} shapes={shapes} />
+			<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroShelf data={figures} />}</WithData></Suspense>
+			<HeroText name={name} intro={intro} />
+		</section>
+	);
+}
+
+/** The map behind the hero, the row of first pages below xl, and the wash that keeps the text readable over them. */
+function HeroBackdrop({ data, shapes }: { data: Promise<HomeData>; shapes: MapShape[] }) {
 	const reduce = useLessMotion();
-	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
-	const { identity, notifications, citations } = useLibraryConfig();
-	const reachable = Boolean(contact.email) || contact.page;
-	const ownLogo = hasOwnLogo(identity.assets);
-	// The digest button offers a subscription, so it goes when the library sends no digests.
-	const digestsOn = notifications.enabled;
 	// The map behind the hero drifts at a fraction of the scroll, so the page reads as layered.
 	const { scrollY } = useScroll();
 	const drift = useTransform(scrollY, [0, 900], [0, reduce ? 0 : -120]);
+	return (
+		<div aria-hidden className={`pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden ${toneClass}`}>
+			{/* The map fills the hero and drifts up as the page scrolls, so its southern coasts are never pushed out of view. */}
+			<motion.div className="absolute inset-0" style={{ y: drift }}>
+				<Suspense fallback={<HomeMap shapes={shapes} countries={{}} cover className="absolute inset-0 text-accent opacity-40" />}>
+					<WithData data={data}>{(figures) => <HomeMap shapes={shapes} countries={figures.countries} cover className="absolute inset-0 text-accent opacity-40" />}</WithData>
+				</Suspense>
+			</motion.div>
+			<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroRow data={figures} />}</WithData></Suspense>
+			{/* A wash of the page colour behind the text, so the map shows only faintly where people read; it fades out before the covers. */}
+			<div className="absolute inset-0 bg-[linear-gradient(to_right,var(--band-bg)_0%,var(--band-bg)_22%,transparent_62%)] dark:bg-[linear-gradient(to_right,var(--band-bg-dark)_0%,var(--band-bg-dark)_22%,transparent_62%)] opacity-90 max-xl:bg-[linear-gradient(to_bottom,transparent_0%,transparent_10rem,var(--band-bg)_14rem)] max-xl:dark:bg-[linear-gradient(to_bottom,transparent_0%,transparent_10rem,var(--band-bg-dark)_14rem)] sm:max-xl:bg-[linear-gradient(to_bottom,transparent_0%,transparent_18rem,var(--band-bg)_21rem)] sm:max-xl:dark:bg-[linear-gradient(to_bottom,transparent_0%,transparent_18rem,var(--band-bg-dark)_21rem)]" />
+		</div>
+	);
+}
+
+/** Name and tagline read as one unit; the intro is supporting text, set apart and softer; then the actions. */
+function HeroText({ name, intro }: { name: string; intro?: string }) {
+	const { identity, notifications } = useLibraryConfig();
+	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
+	const ownLogo = hasOwnLogo(identity.assets);
+	return (
+		<div className="relative flex min-h-[26rem] flex-col items-start justify-end pt-44 sm:pt-60 lg:min-h-[32rem] xl:pt-36">
+			<div className="flex flex-col gap-5">
+				{/* With its own logo, the logo is the heading; the name stays the page's heading for screen readers and search. */}
+				{ownLogo ? (
+					<div className="animate-hero-rise motion-reduce:animate-none" aria-hidden>
+						<LibraryLogo place="hero" />
+					</div>
+				) : null}
+				<h1 className={ownLogo ? "sr-only" : "max-w-[16ch] animate-hero-rise text-balance text-5xl font-bold leading-[0.98] tracking-[-0.03em] motion-reduce:animate-none sm:text-6xl"}>{name}</h1>
+				{identity.tagline && <p className="max-w-[31rem] animate-hero-rise text-balance font-heading text-xl font-medium leading-snug tracking-tight text-[rgb(var(--ink-rgb)/0.72)] [animation-delay:90ms] motion-reduce:animate-none sm:text-2xl">{identity.tagline}</p>}
+			</div>
+			{intro && <div className="mt-8 max-w-[34rem] animate-hero-rise text-[17px] leading-7 text-[rgb(var(--ink-rgb)/0.75)] [animation-delay:140ms] motion-reduce:animate-none [&_p]:mb-0 [&_p]:max-w-none [&_p]:text-[length:inherit] [&_p]:leading-[inherit] [&_p]:opacity-100 [&_strong]:text-[rgb(var(--ink-rgb))]"><RichText text={intro} /></div>}
+			<div className="mt-10 flex animate-hero-rise flex-wrap gap-3 [animation-delay:180ms] motion-reduce:animate-none">
+				<Button as={Link} href="/lib" color="accent" variant="solid" size="md" startContent={<HugeiconsIcon icon={Search01Icon} aria-hidden size={18} />}>Explore the library</Button>
+				{/* The digest button offers a subscription, so it goes when the library sends no digests. */}
+				{notifications.enabled ? <Button as={Link} href="/digests" variant="muted" size="md" startContent={<HugeiconsIcon icon={Notification03Icon} aria-hidden size={18} />}>Get the digest</Button> : null}
+			</div>
+		</div>
+	);
+}
+
+/** Each answered question gets a band of its own, in the order the page reads; a blank one drops out and the seams close up. */
+function Bands({ name, siteUrl, contact, today, about, data, tones, ramp, shapes }: Props) {
+	const t = useTranslations("homePage");
+	const { citations } = useLibraryConfig();
 	const heading = (key: keyof NonNullable<HomeContent["headings"]>) => about.headings?.[key]?.trim() || t(key);
-	// Each answered question gets a band of its own, in the order the page reads; a blank one drops out and the seams close up.
+	// The ways in are offered only where they lead somewhere: an email, else the contact page.
+	const involvement = contact.email || contact.page ? about.involvement : undefined;
 	const bands = [
 		{
 			key: "inside",
@@ -1114,64 +1253,40 @@ export default function HomePage({ name, siteUrl, contact, today, about, data, t
 				</>
 			),
 		},
-		(about.curation?.text || about.curation?.steps?.length) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} heading={heading("curation")} data={data} /> },
+		hasCuration(about.curation) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} heading={heading("curation")} data={data} /> },
 		// The library's citation, with the owner's closing answer beside it; with citations off and no answer, no band.
-		(citations.enabled || about.extra?.text.trim()) && {
-			key: "cite",
-			tone: tones.card,
-			body: (
-				<>
-					<Heading>{about.extra?.title?.trim() || "Cite the library"}</Heading>
-					<div className={about.extra?.text.trim() ? twoColumns : ""}>
-						{about.extra?.text.trim() && <div className="max-w-[40rem]"><RichText text={about.extra.text} /></div>}
-						<CiteSlip name={name} url={siteUrl} today={today} />
-					</div>
-				</>
-			),
-		},
-		(about.team || about.editors?.length || (reachable && (about.involvement?.suggestions || about.involvement?.editors))) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} editors={about.editors} involvement={reachable ? about.involvement : undefined} contact={contact} heading={heading} /> },
+		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} name={name} siteUrl={siteUrl} today={today} /> },
+		hasTeam(about, involvement) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} editors={about.editors} involvement={involvement} contact={contact} heading={heading} /> },
 	].filter((band): band is { key: string; tone: Tone; body: React.JSX.Element } => Boolean(band));
 
 	return (
-		<MotionConfig reducedMotion="user">
-			<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
-				<section className={`relative isolate pb-16 pt-10 lg:pb-24 lg:pt-16 ${toneClass}`} style={toneStyle(tones.page)}>
-					<div aria-hidden className={`pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden ${toneClass}`}>
-						{/* The map fills the hero and drifts up as the page scrolls, so its southern coasts are never pushed out of view. */}
-						<motion.div className="absolute inset-0" style={{ y: drift }}>
-							<Suspense fallback={<HomeMap shapes={shapes} countries={{}} cover className="absolute inset-0 text-accent opacity-40" />}>
-								<WithData data={data}>{(figures) => <HomeMap shapes={shapes} countries={figures.countries} cover className="absolute inset-0 text-accent opacity-40" />}</WithData>
-							</Suspense>
-						</motion.div>
-						<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroRow data={figures} />}</WithData></Suspense>
-						{/* A wash of the page colour behind the text, so the map shows only faintly where people read; it fades out before the covers. */}
-						<div className="absolute inset-0 bg-[linear-gradient(to_right,var(--band-bg)_0%,var(--band-bg)_22%,transparent_62%)] dark:bg-[linear-gradient(to_right,var(--band-bg-dark)_0%,var(--band-bg-dark)_22%,transparent_62%)] opacity-90 max-xl:bg-[linear-gradient(to_bottom,transparent_0%,transparent_10rem,var(--band-bg)_14rem)] max-xl:dark:bg-[linear-gradient(to_bottom,transparent_0%,transparent_10rem,var(--band-bg-dark)_14rem)] sm:max-xl:bg-[linear-gradient(to_bottom,transparent_0%,transparent_18rem,var(--band-bg)_21rem)] sm:max-xl:dark:bg-[linear-gradient(to_bottom,transparent_0%,transparent_18rem,var(--band-bg-dark)_21rem)]" />
-					</div>
-					<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroShelf data={figures} />}</WithData></Suspense>
-				{/* Name and tagline read as one unit; the intro is supporting text, set apart and softer; then the actions. */}
-				<div className="relative flex min-h-[26rem] flex-col items-start justify-end pt-44 sm:pt-60 lg:min-h-[32rem] xl:pt-36">
-						<div className="flex flex-col gap-5">
-							{/* With its own logo, the logo is the heading; the name stays the page's heading for screen readers and search. */}
-							{ownLogo ? (
-								<div className="animate-hero-rise motion-reduce:animate-none" aria-hidden>
-									<LibraryLogo place="hero" />
-								</div>
-							) : null}
-							<h1 className={ownLogo ? "sr-only" : "max-w-[16ch] animate-hero-rise text-balance text-5xl font-bold leading-[0.98] tracking-[-0.03em] motion-reduce:animate-none sm:text-6xl"}>{name}</h1>
-							{identity.tagline && <p className="max-w-[31rem] animate-hero-rise text-balance font-heading text-xl font-medium leading-snug tracking-tight text-[rgb(var(--ink-rgb)/0.72)] [animation-delay:90ms] motion-reduce:animate-none sm:text-2xl">{identity.tagline}</p>}
-						</div>
-						{about.intro && <div className="mt-8 max-w-[34rem] animate-hero-rise text-[17px] leading-7 text-[rgb(var(--ink-rgb)/0.75)] [animation-delay:140ms] motion-reduce:animate-none [&_p]:mb-0 [&_p]:max-w-none [&_p]:text-[length:inherit] [&_p]:leading-[inherit] [&_p]:opacity-100 [&_strong]:text-[rgb(var(--ink-rgb))]"><RichText text={about.intro} /></div>}
-						<div className="mt-10 flex animate-hero-rise flex-wrap gap-3 [animation-delay:180ms] motion-reduce:animate-none">
-							<Button as={Link} href="/lib" color="accent" variant="solid" size="md" startContent={<HugeiconsIcon icon={Search01Icon} aria-hidden size={18} />}>Explore the library</Button>
-							{digestsOn ? <Button as={Link} href="/digests" variant="muted" size="md" startContent={<HugeiconsIcon icon={Notification03Icon} aria-hidden size={18} />}>Get the digest</Button> : null}
-						</div>
-					</div>
-				</section>
+		<>
+			{bands.map((band, index) => <Band key={band.key} tone={band.tone} previous={bands[index - 1]?.tone ?? tones.page} inverse={band.tone === tones.deep || band.tone === tones.tertiary}>{band.body}</Band>)}
 
-				{bands.map((band, index) => <Band key={band.key} tone={band.tone} previous={bands[index - 1]?.tone ?? tones.page} inverse={band.tone === tones.deep || band.tone === tones.tertiary}>{band.body}</Band>)}
+			<FooterSeam previous={bands.at(-1)?.tone ?? tones.card} />
+		</>
+	);
+}
 
-				<FooterSeam previous={bands.at(-1)?.tone ?? tones.card} />
-			</PageContainer>
-		</MotionConfig>
+function hasCuration(curation: HomeContent["curation"]) {
+	return Boolean(curation?.text || curation?.steps?.length);
+}
+
+/** The team band has people to show, words about them, or a way in that leads somewhere. */
+function hasTeam(about: HomeContent, involvement: HomeContent["involvement"]) {
+	return Boolean(about.team || about.editors?.length || involvement?.suggestions || involvement?.editors);
+}
+
+/** The owner's closing answer, if any, beside how to cite the library. */
+function Cite({ extra, name, siteUrl, today }: { extra: HomeContent["extra"]; name: string; siteUrl: string; today: string }) {
+	const answer = extra?.text.trim() ? extra.text : undefined;
+	return (
+		<>
+			<Heading>{extra?.title?.trim() || "Cite the library"}</Heading>
+			<div className={answer ? twoColumns : ""}>
+				{answer && <div className="max-w-[40rem]"><RichText text={answer} /></div>}
+				<CiteSlip name={name} url={siteUrl} today={today} />
+			</div>
+		</>
 	);
 }
