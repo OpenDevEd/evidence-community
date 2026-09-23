@@ -4,7 +4,7 @@ import { item } from "@/db/schema/tables/item";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
-import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
+import { eq, isNotNull, and, inArray, ne, sql, desc, gte } from "drizzle-orm";
 import { yearOf } from "./utils";
 import { visibleItem } from "./utils";
 
@@ -312,7 +312,8 @@ export async function getAttachmentStats(
 			itemsWithAttachments: sql<number>`count(distinct case when ${item.parentItem} is not null and ${item.parentItem} != '' then ${item.parentItem} end)`,
 		})
 		.from(item)
-		.where(publicItemVisibility(db, hiddenTags));
+		// Visible attachments of visible publications: one under a hidden publication is not the library's to count.
+		.where(and(publicItemVisibility(db, hiddenTags), inArray(item.parentItem, db.select({ key: item.key }).from(item).where(visibleItem(db, hiddenTags)))));
 
 	const attachmentStats = {
 		totalAttachments: Number(
