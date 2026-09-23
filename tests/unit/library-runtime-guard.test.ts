@@ -1,4 +1,11 @@
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+	access,
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -304,21 +311,127 @@ describe("Evidence Library runtime guard", () => {
 		).toBeLessThan(guard.http.routers[`${prefix}-http`].priority);
 	});
 
-	it("deletes the permanent route when no custom domains remain", async () => {
+	it("releases removed hosts below custom routes and above Coolify labels", async () => {
+		const { domainsPath, manager } = await fixture();
+		const route = (customOrigins: string[]) =>
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins,
+				receivedAt: Date.now(),
+			});
+		const name = `ode-el-${applicationUuid}-domains`;
+		// Traefik gives a label router its rule length as priority.
+		const longestCoolifyRule = `Host(\`${"a".repeat(253)}\`) && PathPrefix(\`/\`)`;
+
+		await route(["https://kept.example.org", "https://gone.example.org"]);
+		await route(["https://kept.example.org"]);
+
+		const { middlewares, routers, services } = (await readRoute(domainsPath))
+			.http;
+		expect(routers[`${name}-https`].rule).toBe("Host(`kept.example.org`)");
+		for (const entryPoint of ["http", "https"]) {
+			const released = routers[`${name}-released-${entryPoint}`];
+			expect(released).toMatchObject({
+				entryPoints: [entryPoint],
+				rule: "Host(`gone.example.org`)",
+				service: `${name}-released`,
+			});
+			expect(released.priority).toBeLessThan(
+				routers[`${name}-https`].priority,
+			);
+			expect(released.priority).toBeGreaterThan(longestCoolifyRule.length);
+			expect(released.middlewares).toContain(`${name}-released-page`);
+		}
+		expect(routers[`${name}-released-https`].tls).toEqual({
+			certResolver: "letsencrypt",
+		});
+		expect(middlewares[`${name}-released-page`]).toEqual({
+			replacePath: { path: "/released" },
+		});
+		expect(services[`${name}-released`]).toEqual({
+			loadBalancer: { servers: [{ url: "http://runtime-verifier:3001" }] },
+		});
+
+		await route([]);
+		const releasedOnly = (await readRoute(domainsPath)).http.routers;
+		expect(Object.keys(releasedOnly).sort()).toEqual([
+			`${name}-released-http`,
+			`${name}-released-https`,
+		]);
+		expect(releasedOnly[`${name}-released-https`].rule).toBe(
+			"Host(`kept.example.org`) || Host(`gone.example.org`)",
+		);
+	});
+
+	it("moves a re-added host back to the custom route and keeps other released hosts", async () => {
+		const { domainsPath, manager } = await fixture();
+		const route = (customOrigins: string[]) =>
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins,
+				receivedAt: Date.now(),
+			});
+		const name = `ode-el-${applicationUuid}-domains`;
+
+		await route(["https://one.example.org", "https://two.example.org"]);
+		await route([]);
+		await route(["https://two.example.org"]);
+
+		const { routers } = (await readRoute(domainsPath)).http;
+		expect(routers[`${name}-https`].rule).toBe("Host(`two.example.org`)");
+		expect(routers[`${name}-released-https`].rule).toBe(
+			"Host(`one.example.org`)",
+		);
+	});
+
+	it("keeps only the twenty most recently released hosts", async () => {
+		const { domainsPath, manager } = await fixture();
+		const origins = (prefix: string) =>
+			Array.from(
+				{ length: 20 },
+				(_, index) => `https://${prefix}-${index}.example.org`,
+			);
+		const route = (customOrigins: string[]) =>
+			manager.routeDomains({
+				applicationUuid,
+				customOrigins,
+				receivedAt: Date.now(),
+			});
+
+		await route(origins("older"));
+		await route(origins("newer"));
+		await route([]);
+
+		const { routers } = (await readRoute(domainsPath)).http;
+		expect(routers[`ode-el-${applicationUuid}-domains-released-https`].rule).toBe(
+			origins("newer")
+				.map((origin) => `Host(\`${new URL(origin).hostname}\`)`)
+				.join(" || "),
+		);
+	});
+
+	it("drops released hosts at finalization and deletes a file with no hosts", async () => {
 		const { domainsPath, manager } = await fixture();
 		await manager.routeDomains({
 			applicationUuid,
+			customOrigins: ["https://gone.example.org", ...input.customOrigins],
 			receivedAt: Date.now(),
+		});
+		await manager.routeDomains({
+			applicationUuid,
 			customOrigins: input.customOrigins,
+			receivedAt: Date.now(),
 		});
 
-		await expect(
-			manager.routeDomains({
-				applicationUuid,
-				customOrigins: [],
-				receivedAt: Date.now(),
-			}),
-		).resolves.toEqual({ customOrigins: [], status: "routed" });
+		await manager.finalize(input);
+		expect(
+			Object.keys((await readRoute(domainsPath)).http.routers).sort(),
+		).toEqual([
+			`ode-el-${applicationUuid}-domains-http`,
+			`ode-el-${applicationUuid}-domains-https`,
+		]);
+
+		await manager.finalize({ ...input, customOrigins: [] });
 		await expectMissing(domainsPath);
 		await expect(
 			manager.routeDomains({
@@ -327,7 +440,44 @@ describe("Evidence Library runtime guard", () => {
 				receivedAt: Date.now(),
 			}),
 		).resolves.toEqual({ customOrigins: [], status: "routed" });
+		await expectMissing(domainsPath);
 	});
+
+	it.each([
+		["text that is not JSON", "not json\n"],
+		["a file without routers", '{"http":{}}\n'],
+		[
+			"a template host",
+			JSON.stringify({
+				http: {
+					routers: {
+						[`ode-el-${applicationUuid}-domains-https`]: {
+							rule: "Host(`{{.example.org`)",
+						},
+					},
+				},
+			}),
+		],
+	])(
+		"refuses to replace a previous route holding %s",
+		async (_label, content) => {
+			const { domainsPath, manager } = await fixture();
+			await mkdir(path.dirname(domainsPath), { recursive: true });
+			await writeFile(domainsPath, content);
+
+			await expect(
+				manager.routeDomains({
+					applicationUuid,
+					customOrigins: input.customOrigins,
+					receivedAt: Date.now(),
+				}),
+			).rejects.toMatchObject({
+				code: "runtime_domains_route_unreadable",
+				status: 500,
+			});
+			expect(await readFile(domainsPath, "utf8")).toBe(content);
+		},
+	);
 
 	it.each([
 		["an HTTP origin", ["http://library.example.org"]],
@@ -452,8 +602,19 @@ describe("Evidence Library runtime guard", () => {
 		expect(() =>
 			renderLibraryDomainsRoute({
 				applicationUuid,
-				customOrigins: ["https://{{.example.org"],
-				dockerService: `https-0-${applicationUuid}`,
+				custom: {
+					dockerService: `https-0-${applicationUuid}`,
+					origins: ["https://{{.example.org"],
+				},
+				maintenanceUrl: "http://runtime-verifier:3001",
+				releasedHosts: [],
+			}),
+		).toThrow("A route host is not a plain DNS name.");
+		expect(() =>
+			renderLibraryDomainsRoute({
+				applicationUuid,
+				maintenanceUrl: "http://runtime-verifier:3001",
+				releasedHosts: ["ex`ample.org"],
 			}),
 		).toThrow("A route host is not a plain DNS name.");
 		expect(() =>
@@ -509,18 +670,6 @@ describe("Evidence Library runtime guard", () => {
 		});
 		expect(docker.removeGuard).toHaveBeenCalledOnce();
 		await expectMissing(routePath);
-	});
-
-	it("deletes the permanent route at finalization when no custom domains remain", async () => {
-		const { domainsPath, manager } = await fixture();
-		await manager.routeDomains({
-			applicationUuid,
-			receivedAt: Date.now(),
-			customOrigins: input.customOrigins,
-		});
-
-		await manager.finalize({ ...input, customOrigins: [] });
-		await expectMissing(domainsPath);
 	});
 
 	it("keeps the guard route when the web service has no platform route", async () => {
