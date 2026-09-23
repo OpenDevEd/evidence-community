@@ -7,12 +7,14 @@ import PageContainer from "@/components/layout/PageContainer";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Mail01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 
-export default function SubscriptionAction({token, action, locale}: {token: string; action: "confirm" | "unsubscribe"; locale: string}) {
+// The token is only needed when the reader presses the button, so the page never waits for it.
+export default function SubscriptionAction({token: pending, action, locale}: {token: Promise<string>; action: "confirm" | "unsubscribe"; locale: string}) {
   const [state, setState] = useState<"ready" | "saving" | "done">("ready");
   const [error, setError] = useState("");
   async function save() {
     setState("saving"); setError("");
     try {
+      const token = await pending;
       await changeSubscription(action === "confirm" ? {action, token} : {action: "preferences", token, digest: false, instant: false});
       setState("done");
     } catch (error) {setError(subscriptionError(error));setState("ready");}
