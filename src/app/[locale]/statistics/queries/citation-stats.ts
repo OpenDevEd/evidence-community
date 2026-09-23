@@ -96,7 +96,7 @@ export async function getMostCitedItems(db: Database, measure: CitationMeasure, 
 		.where(and(visibleItem(db, hiddenTags), sql`${citationCount} > 0`))
 		.orderBy(desc(citationCount))
 		.limit(limit);
-	return rows.map((row) => ({ key: row.key, title: row.title ?? "", citations: Number(row.citations) }));
+	return rows.map((row) => ({ key: row.key, title: row.title || row.key, citations: Number(row.citations) }));
 }
 
 export async function getCreatorStats(db: Database, hiddenTags: readonly string[]): Promise<CreatorStats> {

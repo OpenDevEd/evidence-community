@@ -15,6 +15,7 @@ import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { itemReview } from "@/db/schema/review";
 import { listDigestEditions } from "@/lib/notifications/public";
 import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-visibility";
+import { normalizeDoi } from "@/lib/doi";
 
 type Stats = Awaited<ReturnType<typeof getComprehensiveStats>>;
 
@@ -155,7 +156,7 @@ async function latestJourney(followed: string | undefined, directory: LibraryHom
 		.limit(1);
 	if (!row?.resolvedAt || !row.title) return null;
 	const reviewer = directory.find((person) => person.id === row.resolvedBy);
-	return { key: row.key, title: row.title, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: row.doi || null };
+	return { key: row.key, title: row.title, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
 }
 
 /** First pages of the given publications' PDFs, from their attachments. */
