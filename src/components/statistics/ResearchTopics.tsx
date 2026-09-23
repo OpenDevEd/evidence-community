@@ -89,6 +89,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 			itemCount: number;
 			totalCitations: number;
 			level: number;
+			parentTopic?: string;
 			citationCounts: number[];
 		}>();
 
@@ -104,7 +105,6 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 						existing.citationCounts.push(Math.floor(yearTopic.totalCitations / yearTopic.itemCount));
 					}
 				} else {
-					const level = yearTopic.fullPath.split('/').length;
 					// Initialize citation counts array for H-index calculation
 					const citationCounts: number[] = [];
 					for (let i = 0; i < yearTopic.itemCount; i++) {
@@ -116,7 +116,8 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 						fullPath: yearTopic.fullPath,
 						itemCount: yearTopic.itemCount,
 						totalCitations: yearTopic.totalCitations,
-						level,
+						level: yearTopic.level,
+						parentTopic: yearTopic.parentTopic,
 						citationCounts
 					});
 				}
@@ -125,7 +126,6 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 		// Convert to TopicStats format with calculated fields
 		return Array.from(yearTopicsMap.values()).map(data => {
 			const avgCitations = data.itemCount > 0 ? data.totalCitations / data.itemCount : 0;
-			const pathParts = data.fullPath.split('/');
 			
 			// Find original topic data to preserve children and isLeaf information
 			const originalTopic = topicStats.find(t => t.fullPath === data.fullPath);
@@ -133,7 +133,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 			return {
 				topic: data.topic,
 				level: data.level,
-				parentTopic: data.level > 1 ? pathParts[pathParts.length - 2] : undefined,
+				parentTopic: data.parentTopic,
 				fullPath: data.fullPath,
 				itemCount: data.itemCount,
 				totalCitations: data.totalCitations,

@@ -2,7 +2,7 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
-import { calculateHIndex, yearOf } from "./utils";
+import { calculateHIndex, topLevelItem, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type TopicStats = {
@@ -33,6 +33,8 @@ export type TopicOverview = {
 export type TopicYearStats = {
 	topic: string;
 	fullPath: string;
+	level: number;
+	parentTopic?: string;
 	year: string;
 	itemCount: number;
 	totalCitations: number;
@@ -81,7 +83,7 @@ export async function getTopicStats(
 		})
 		.from(item)
 		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
-		.where(and(eq(item.deleted, 0), sql`${item.parentItem} IS NULL`))
+		.where(topLevelItem)
 		.groupBy(item.key);
 
 	// Process hierarchical topic structure
@@ -92,8 +94,8 @@ export async function getTopicStats(
 		fullPath: string;
 		level: number;
 		parentTopic?: string;
-		itemKeys: Set<string>;
-		citationCounts: number[];
+		/** Each publication once with its citations, however many of the topic's collections it is in. */
+		citations: Map<string, number>;
 		children: Set<string>;
 		}
 	>();
@@ -111,15 +113,12 @@ export async function getTopicStats(
 						fullPath: path.fullPath,
 						level: path.level,
 						parentTopic: path.parentTopic,
-						itemKeys: new Set(),
-						citationCounts: [],
+						citations: new Map(),
 						children: new Set(),
 					});
 				}
 				
-				const topicData = topicMap.get(path.fullPath)!;
-				topicData.itemKeys.add(row.itemKey);
-				topicData.citationCounts.push(row.citationCount || 0);
+				topicMap.get(path.fullPath)!.citations.set(row.itemKey, Number(row.citationCount || 0));
 				
 				// Add child relationship
 				if (path.parentPath && topicMap.has(path.parentPath)) {
@@ -132,15 +131,14 @@ export async function getTopicStats(
 	// Calculate statistics for each topic
 	const topicStats: TopicStats[] = Array.from(topicMap.entries())
 		.map(([path, data]) => {
-		const uniqueItemKeys = Array.from(data.itemKeys);
-		const uniqueCitationCounts = data.citationCounts; // Already filtered to unique items per topic
+		const uniqueCitationCounts = [...data.citations.values()];
 			const totalCitations = uniqueCitationCounts.reduce(
 				(sum, count) => sum + count,
 				0,
 			);
 			const avgCitations =
-				uniqueItemKeys.length > 0
-					? totalCitations / uniqueItemKeys.length
+				data.citations.size > 0
+					? totalCitations / data.citations.size
 					: 0;
 		const hIndex = calculateHIndex(uniqueCitationCounts);
 
@@ -149,7 +147,7 @@ export async function getTopicStats(
 			level: data.level,
 				parentTopic: data.parentTopic,
 			fullPath: path,
-			itemCount: uniqueItemKeys.length,
+			itemCount: data.citations.size,
 			totalCitations,
 			avgCitationsPerItem: Number(avgCitations.toFixed(2)),
 			hIndex,
@@ -219,8 +217,7 @@ export async function getTopicStatsByYear(
 		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL`,
+				topLevelItem,
 				isNotNull(item.date),
 				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
 				sql`${yearOf(item.date)} >= 2000`,
@@ -234,9 +231,10 @@ export async function getTopicStatsByYear(
 		{
 		topic: string;
 		fullPath: string;
+		level: number;
+		parentTopic?: string;
 		year: string;
-		itemKeys: Set<string>;
-		citationCounts: number[];
+		citations: Map<string, number>;
 		}
 	>();
 
@@ -254,15 +252,14 @@ export async function getTopicStatsByYear(
 					topicYearMap.set(key, {
 						topic: path.topic,
 						fullPath: path.fullPath,
+						level: path.level,
+						parentTopic: path.parentTopic,
 						year: row.year,
-						itemKeys: new Set(),
-						citationCounts: [],
+						citations: new Map(),
 					});
 				}
 				
-				const topicData = topicYearMap.get(key)!;
-				topicData.itemKeys.add(row.itemKey);
-				topicData.citationCounts.push(row.citationCount || 0);
+				topicYearMap.get(key)!.citations.set(row.itemKey, Number(row.citationCount || 0));
 			}
 		});
 	});
@@ -270,22 +267,24 @@ export async function getTopicStatsByYear(
 	// Calculate statistics for each topic-year combination
 	const topicYearStats: TopicYearStats[] = Array.from(topicYearMap.values())
 		.map((data) => {
-		const uniqueItemKeys = Array.from(data.itemKeys);
-			const totalCitations = data.citationCounts.reduce(
+		const citationCounts = [...data.citations.values()];
+			const totalCitations = citationCounts.reduce(
 				(sum, count) => sum + count,
 				0,
 			);
 			const avgCitations =
-				uniqueItemKeys.length > 0
-					? totalCitations / uniqueItemKeys.length
+				data.citations.size > 0
+					? totalCitations / data.citations.size
 					: 0;
-		const hIndex = calculateHIndex(data.citationCounts);
+		const hIndex = calculateHIndex(citationCounts);
 		
 		return {
 			topic: data.topic,
 			fullPath: data.fullPath,
+			level: data.level,
+			parentTopic: data.parentTopic,
 			year: data.year,
-			itemCount: uniqueItemKeys.length,
+			itemCount: data.citations.size,
 			totalCitations,
 			avgCitationsPerItem: Number(avgCitations.toFixed(2)),
 				hIndex,

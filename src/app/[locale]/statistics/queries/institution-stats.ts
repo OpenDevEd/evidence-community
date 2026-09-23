@@ -6,7 +6,7 @@ import {
 	institutionCountryCode,
 	institutionCountryJoin,
 } from "./institution-country-sql";
-import { calculateHIndex, yearOf } from "./utils";
+import { calculateHIndex, topLevelItem, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type InstitutionStats = {
@@ -60,6 +60,7 @@ function institutionItems(citationCount: SQL) {
 			FROM ${itemInstitution}
 			JOIN ${item} ON ${item.key} = ${itemInstitution.itemKey}
 			${institutionCountryJoin(sql`${itemInstitution.institutionName}`)}
+			WHERE ${topLevelItem}
 		)`;
 }
 

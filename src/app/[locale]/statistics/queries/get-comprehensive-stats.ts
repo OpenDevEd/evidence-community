@@ -29,6 +29,9 @@ import { getCachedCollections } from "@/app/api/cache";
 import type { Collection } from "@/app/api/collections/types";
 import type { ShownCollections } from "./topic-stats";
 
+/** Part of the cache key: raise it when the statistics change what they count, so a deployment never serves figures cached by the code before it. */
+const STATISTICS_VERSION = 2;
+
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
 ): Promise<ComprehensiveStats> {
@@ -38,10 +41,11 @@ export async function getComprehensiveStats(
 		db,
 		requestedCitationMeasure,
 	);
-	const shown = shownCollections(await getCachedCollections(config).catch(() => []));
+	// No fallback: statistics computed without the collections would be cached with every topic missing.
+	const shown = shownCollections(await getCachedCollections(config));
 	const stats = await withMeilisearchCache(
 		config,
-		`${config.revision}-comprehensive-stats-${measure.key}`,
+		`${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${measure.key}`,
 		async () => {
 			const totalItems = await getTotalItems(db);
 
@@ -123,12 +127,17 @@ export async function getComprehensiveStats(
 	};
 }
 
-/** Every collection the library shows, nested ones included, by key with its public title and parent. */
+/**
+ * Every collection the library shows, nested ones included, by key with its public name and parent. A shown root is
+ * named by its configured title; the hierarchy copies that title onto every collection below it, so those go by their
+ * own names.
+ */
 function shownCollections(collections: readonly Collection[]): ShownCollections {
 	const shown = new Map<string, { title: string; parent?: string }>();
 	const visit = (list: readonly Collection[]) => {
 		for (const collection of list) {
-			shown.set(collection.key, { title: collection.title || collection.name || collection.key, parent: collection.parentCollection || undefined });
+			const title = collection.parentCollection ? collection.name : collection.title || collection.name;
+			shown.set(collection.key, { title: title || collection.key, parent: collection.parentCollection || undefined });
 			if (collection.children?.length) visit(collection.children);
 		}
 	};
