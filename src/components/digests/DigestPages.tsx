@@ -7,7 +7,7 @@ import Link from "next/link";
 import PageContainer from "@/components/layout/PageContainer";
 import { Calendar03Icon, ArrowRight01Icon, BookOpen01Icon } from "@hugeicons/core-free-icons";
 import type { DigestArchivePage, DigestEdition, DigestSummary } from "@/lib/notifications/public";
-import Image from "next/image";
+import { CoverImage } from "@/components/features/items/CoverImage";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
@@ -195,7 +195,7 @@ return (
           </article>
           {/* One real cover from the edition, pinned over the corner like a clipped photo. */}
           {cover && <span aria-hidden="true" className="absolute -right-4 -top-5 h-36 w-[6.75rem] rotate-6 overflow-hidden rounded-md bg-white shadow-xl ring-1 ring-[#352b24]/15 transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:rotate-[9deg] motion-reduce:transition-none">
-            <Image src={cover} alt="" fill sizes="108px" className="object-cover object-top" />
+            <CoverImage src={cover} alt="" fill sizes="108px" className="object-cover object-top" />
           </span>}
         </Link>);
 }
