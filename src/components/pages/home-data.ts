@@ -113,7 +113,8 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
 		cited,
 		ai: isLibraryFeatureEnabled((await getLibraryConfig()).features, "aiSearch"),
 		digests,
-		updated: now,
+		// When the figures were counted, which for cached statistics is not today.
+		updated: stats ? new Date(stats.computedAt) : now,
 	};
 }
 

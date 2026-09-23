@@ -1,9 +1,15 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm";
-import { item } from "@/db/schema/tables/item";
+import type { Database } from "@/db";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
 
-/** A publication itself, as the statistics count it: not deleted, and not an attachment or note under another record. */
-export const topLevelItem = sql`(${item.deleted} = 0 AND (${item.parentItem} IS NULL OR ${item.parentItem} = ''))`;
+/**
+ * A publication as the statistics count it: one a reader could find in the library. Not deleted, not hidden by one
+ * of the library's hidden tags, not a note or attachment, and not under another record.
+ */
+export function visibleItem(db: Pick<Database, "select">, hiddenTags: readonly string[]): SQL {
+	return sql`(${publicParentVisibility(db, hiddenTags)})`;
+}
 
 /**
  * The year of a stored date, read from its first four digits and never parsed, so no text in the column (such as

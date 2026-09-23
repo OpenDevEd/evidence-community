@@ -2,7 +2,7 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
-import { calculateHIndex, topLevelItem, yearOf } from "./utils";
+import { calculateHIndex, visibleItem, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type TopicStats = {
@@ -78,6 +78,7 @@ export async function getTopicStats(
 	db: Database,
 	measure: CitationMeasure,
 	shown: ShownCollections,
+	hiddenTags: readonly string[],
 ): Promise<{ topicStats: TopicStats[]; topicOverview: TopicOverview }> {
 	const topicStatsResult = await db
 		.select({
@@ -85,11 +86,11 @@ export async function getTopicStats(
 				string[]
 			>`array_agg(${itemToCollection.collectionKey})`,
 			itemKey: item.key,
-			citationCount: citationCountForItem(measure),
+			citationCount: citationCountForItem(measure, hiddenTags),
 		})
 		.from(item)
 		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
-		.where(topLevelItem)
+		.where(visibleItem(db, hiddenTags))
 		.groupBy(item.key);
 
 	// Process hierarchical topic structure
@@ -128,7 +129,7 @@ export async function getTopicStats(
 				
 				// Add child relationship
 				if (path.parentId && topicMap.has(path.parentId)) {
-					topicMap.get(path.parentId)!.children.add(path.topic);
+					topicMap.get(path.parentId)!.children.add(path.id);
 				}
 			}
 		});
@@ -159,7 +160,8 @@ export async function getTopicStats(
 			avgCitationsPerItem: Number(avgCitations.toFixed(2)),
 			hIndex,
 			isLeaf: data.children.size === 0,
-				children: Array.from(data.children),
+				// Children by name for display; the set holds their ids, so two children sharing a name both count.
+				children: Array.from(data.children, (child) => topicMap.get(child)?.topic ?? child),
 		};
 		})
 		.sort((a, b) => b.itemCount - a.itemCount);
@@ -173,9 +175,9 @@ export async function getTopicStats(
 		(t) => t.level === 1,
 	).length;
 	// Only publications in a shown topic: one whose collections are all hidden is in no topic.
-	const totalUniqueItems = new Set(Array.from(topicMap.values()).flatMap((topic) => [...topic.citations.keys()]));
+	// The mean of the topics' own counts, as the year view computes it.
 	const avgItemsPerTopic =
-		topicStats.length > 0 ? totalUniqueItems.size / topicStats.length : 0;
+		topicStats.length > 0 ? topicStats.reduce((sum, topic) => sum + topic.itemCount, 0) / topicStats.length : 0;
 
 	// Calculate distribution by level
 	const levelCounts = new Map<number, number>();
@@ -210,6 +212,7 @@ export async function getTopicStatsByYear(
 	db: Database,
 	measure: CitationMeasure,
 	shown: ShownCollections,
+	hiddenTags: readonly string[],
 ): Promise<TopicYearStats[]> {
 	const topicsByYearResult = await db
 		.select({
@@ -218,13 +221,13 @@ export async function getTopicStatsByYear(
 			>`array_agg(${itemToCollection.collectionKey})`,
 			itemKey: item.key,
 			year: sql<string>`${yearOf(item.date)}::text`,
-			citationCount: citationCountForItem(measure),
+			citationCount: citationCountForItem(measure, hiddenTags),
 		})
 		.from(item)
 		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
 		.where(
 			and(
-				topLevelItem,
+				visibleItem(db, hiddenTags),
 				isNotNull(item.date),
 				sql`${item.date} ~ '^[0-9]{4}'`,
 				sql`${yearOf(item.date)} >= 2000`,

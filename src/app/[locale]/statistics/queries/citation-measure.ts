@@ -17,7 +17,11 @@ export type CitationMeasureOption = {
 	sourceLabel?: string;
 };
 
-export function citationCountForItem(measure: CitationMeasure): SQL<number> {
+/**
+ * How often a publication is cited. Under the library's own measure only citations a reader can see count: a citing
+ * record that is deleted or carries one of the library's hidden tags does not.
+ */
+export function citationCountForItem(measure: CitationMeasure, hiddenTags: readonly string[]): SQL<number> {
 	if (measure.kind === "source") {
 		return sql<number>`coalesce((
 			select metric."citedByCount"
@@ -35,6 +39,11 @@ export function citationCountForItem(measure: CitationMeasure): SQL<number> {
 		where citation_link."toKey" = "item"."key"
 			and citation_link."kind" = 'cites'
 			and citation_source."deleted" = 0
+			${hiddenTags.length ? sql`and not exists (
+				select 1 from "itemToTag" citing_tag
+				where citing_tag."itemKey" = citation_source."key"
+					and lower(citing_tag."tagName") in (${sql.join(hiddenTags.map((tag) => sql`${tag.toLowerCase()}`), sql`, `)})
+			)` : sql``}
 	), 0)`;
 }
 

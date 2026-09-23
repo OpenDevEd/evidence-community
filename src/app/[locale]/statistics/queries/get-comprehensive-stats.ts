@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
 	type ComprehensiveStats,
 	getInstitutionStats,
@@ -30,24 +31,28 @@ import type { Collection } from "@/app/api/collections/types";
 import type { ShownCollections } from "./topic-stats";
 
 /** Part of the cache key: raise it when the statistics change what they count, so a deployment never serves figures cached by the code before it. */
-const STATISTICS_VERSION = 3;
+const STATISTICS_VERSION = 4;
 
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
 ): Promise<ComprehensiveStats> {
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
+	// Statistics count what a reader could find in the library, nothing hidden from it.
+	const hidden = config.content.tags.hidden;
 	const { measure, options } = await resolveCitationMeasure(
 		db,
 		requestedCitationMeasure,
 	);
 	// No fallback: statistics computed without the collections would be cached with every topic missing.
 	const shown = shownCollections(await getCachedCollections(config));
+	// Topics are named from the shown collections, so renaming or moving one counts afresh.
+	const collectionsFingerprint = createHash("sha256").update(JSON.stringify([...shown])).digest("hex").slice(0, 16);
 	const stats = await withMeilisearchCache(
 		config,
-		`${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${measure.key}`,
+		`${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${collectionsFingerprint}-${measure.key}`,
 		async () => {
-			const totalItems = await getTotalItems(db);
+			const totalItems = await getTotalItems(db, hidden);
 
 			const [
 				institutions,
@@ -69,32 +74,30 @@ export async function getComprehensiveStats(
 				topicsByYear,
 				citationsByYear,
 			] = await Promise.all([
-				getInstitutionStats(db, measure),
-				getInstitutionStatsByYear(db, measure),
-				getAvailableYears(db),
-				getItemTypeStats(db, totalItems),
-				getYearDistribution(db),
-				getCitationStats(db, measure),
-				getCreatorStats(db),
-				getFieldCompleteness(db, totalItems),
-				getAttachmentStats(db, totalItems),
-				getPublishersAndJournals(db),
-				getRecentActivity(db),
-				getAuthorCountries(db, measure),
-				getAuthorProductivityStats(db),
-				getAuthorCollaborationStats(db),
-				getDetailedAuthorStats(db, measure),
-				getTopicStats(db, measure, shown),
-				getTopicStatsByYear(db, measure, shown),
-				getCitationsByYear(db, measure),
+				getInstitutionStats(db, measure, hidden),
+				getInstitutionStatsByYear(db, measure, hidden),
+				getAvailableYears(db, hidden),
+				getItemTypeStats(db, totalItems, hidden),
+				getYearDistribution(db, hidden),
+				getCitationStats(db, measure, hidden),
+				getCreatorStats(db, hidden),
+				getFieldCompleteness(db, totalItems, hidden),
+				getAttachmentStats(db, totalItems, hidden),
+				getPublishersAndJournals(db, hidden),
+				getRecentActivity(db, hidden),
+				getAuthorCountries(db, measure, hidden),
+				getAuthorProductivityStats(db, hidden),
+				getAuthorCollaborationStats(db, hidden),
+				getDetailedAuthorStats(db, measure, hidden),
+				getTopicStats(db, measure, shown, hidden),
+				getTopicStatsByYear(db, measure, shown, hidden),
+				getCitationsByYear(db, measure, hidden),
 			]);
 
-			const collaborationStats = await getCollaborationStats(
-				db,
-				authorCountries,
-			);
+			const collaborationStats = await getCollaborationStats(db, authorCountries, hidden);
 
 			return {
+				computedAt: new Date().toISOString(),
 				institutions,
 				institutionsByYear,
 				topicsByYear,

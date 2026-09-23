@@ -2,46 +2,46 @@ import "server-only";
 
 import { lookup as lookupCallback, type LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import { Agent, fetch as undiciFetch, type RequestInit, type Response } from "undici";
 
 const MAX_REDIRECTS = 5;
 
-const PRIVATE_IPV4_RANGES = [
-	(parts: number[]) => parts[0] === 0,
-	(parts: number[]) => parts[0] === 10,
-	(parts: number[]) => parts[0] === 100 && parts[1]! >= 64 && parts[1]! <= 127,
-	(parts: number[]) => parts[0] === 127,
-	(parts: number[]) => parts[0] === 169 && parts[1] === 254,
-	(parts: number[]) => parts[0] === 172 && parts[1]! >= 16 && parts[1]! <= 31,
-	(parts: number[]) => parts[0] === 192 && parts[1] === 168,
-	(parts: number[]) => parts[0] === 198 && (parts[1] === 18 || parts[1] === 19),
-	(parts: number[]) => parts[0]! >= 224,
-];
+/**
+ * Addresses outside the public internet, from the IANA special-purpose registries: private, loopback, link-local,
+ * shared, benchmarking, documentation, reserved, multicast, and their IPv6 counterparts, including deprecated
+ * site-local and IPv4 embedded in IPv6.
+ */
+const NOT_PUBLIC = new BlockList();
+for (const [network, prefix] of [
+	["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12],
+	["192.0.0.0", 24], ["192.0.2.0", 24], ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15],
+	["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4],
+] as const) NOT_PUBLIC.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [
+	// IPv4 written as IPv6 (::ffff:0:0/96) is not listed: the block list checks every IPv4 address in that form, so
+	// listing it would refuse all of them. Such addresses are judged as the IPv4 address they carry instead.
+	["::", 128], ["::1", 128], ["64:ff9b:1::", 48], ["100::", 64], ["2001::", 23], ["2001:db8::", 32],
+	["2002::", 16], ["3fff::", 20], ["5f00::", 16], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8],
+] as const) NOT_PUBLIC.addSubnet(network, prefix, "ipv6");
 
-const PRIVATE_IPV6_PREFIXES = ["fc", "fd", "fe8", "fe9", "fea", "feb", "ff"];
-
-function isPrivateIpV4(address: string) {
-	const parts = address.split(".").map(Number);
-	return PRIVATE_IPV4_RANGES.some((inRange) => inRange(parts));
-}
-
-function isPrivateIpV6(address: string) {
-	const normalized = address.toLowerCase();
-	// An IPv4 address written as IPv6 ("::ffff:127.0.0.1") is that IPv4 address; the hex form is refused outright.
-	if (normalized.startsWith("::ffff:")) {
-		const mapped = normalized.slice("::ffff:".length);
-		return isIP(mapped) === 4 ? isPrivateIpV4(mapped) : true;
-	}
-	return normalized === "::" || normalized === "::1" || PRIVATE_IPV6_PREFIXES.some((prefix) => normalized.startsWith(prefix));
-}
-
-/** Whether an address is outside the public internet: private, loopback, link-local, shared, reserved or multicast. */
+/** Whether an address is outside the public internet. An IPv4 address written as IPv6 is judged as that IPv4 address. */
 export function isPrivateIp(address: string) {
 	const version = isIP(address);
-	if (version === 4) return isPrivateIpV4(address);
-	if (version === 6) return isPrivateIpV6(address);
-	return true;
+	if (version === 4) return NOT_PUBLIC.check(address, "ipv4");
+	if (version !== 6) return true;
+	const mapped = mappedIpv4(address);
+	return mapped ? NOT_PUBLIC.check(mapped, "ipv4") : NOT_PUBLIC.check(address, "ipv6");
+}
+
+/** The IPv4 address inside an IPv4-mapped IPv6 address, written either way: "::ffff:127.0.0.1" or "::ffff:7f00:1". */
+function mappedIpv4(address: string) {
+	const dotted = /^(?:0{0,4}:){0,5}:?ffff:(\d+\.\d+\.\d+\.\d+)$/iu.exec(address)?.[1];
+	if (dotted) return dotted;
+	const hex = /^(?:0{0,4}:){0,5}:?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(address);
+	if (!hex) return undefined;
+	const [high, low] = [Number.parseInt(hex[1]!, 16), Number.parseInt(hex[2]!, 16)];
+	return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
 }
 
 /**
@@ -89,6 +89,8 @@ export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect"
 	await assertPublicHttpUrl(url);
 	const response = await undiciFetch(url, { ...init, redirect: "manual", dispatcher: publicOnly });
 	if (response.status >= 300 && response.status < 400) {
+		// Release the connection first: a redirect's body could otherwise hold it open until the timeout.
+		await response.body?.cancel();
 		const location = response.headers.get("location");
 		if (!location) throw new Error("Redirect had no destination");
 		return publicRequest(new URL(location, url), init, redirects + 1);

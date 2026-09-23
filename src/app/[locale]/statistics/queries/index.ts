@@ -82,6 +82,8 @@ export { getTopicStats, getTopicStatsByYear } from "./topic-stats";
 
 // Comprehensive stats type that combines all statistics
 export type ComprehensiveStats = {
+	/** When these figures were counted; they are cached, so this can be well before the request. */
+	computedAt: string;
 	citationMeasure: {
 		selectedKey: string;
 		options: CitationMeasureOption[];

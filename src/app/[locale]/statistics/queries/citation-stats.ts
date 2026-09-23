@@ -2,7 +2,7 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
-import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { visibleItem } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type CitationStats = {
@@ -25,8 +25,9 @@ export type CreatorStats = {
 export async function getCitationStats(
 	db: Database,
 	measure: CitationMeasure,
+	hiddenTags: readonly string[],
 ): Promise<CitationStats> {
-	const citationCount = citationCountForItem(measure);
+	const citationCount = citationCountForItem(measure, hiddenTags);
 	const citationStatsResult = await db
 		.select({
 			totalItems: sql<number>`count(*)`,
@@ -38,8 +39,7 @@ export async function getCitationStats(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -51,8 +51,7 @@ export async function getCitationStats(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -90,17 +89,17 @@ export async function getCitationStats(
 
 /** The most cited publications a reader can see, under a citation measure, for the home page's citations preview. */
 export async function getMostCitedItems(db: Database, measure: CitationMeasure, limit: number, hiddenTags: readonly string[]) {
-	const citationCount = citationCountForItem(measure);
+	const citationCount = citationCountForItem(measure, hiddenTags);
 	const rows = await db
 		.select({ key: item.key, title: item.title, citations: citationCount })
 		.from(item)
-		.where(and(publicParentVisibility(db, hiddenTags), sql`${citationCount} > 0`))
+		.where(and(visibleItem(db, hiddenTags), sql`${citationCount} > 0`))
 		.orderBy(desc(citationCount))
 		.limit(limit);
 	return rows.map((row) => ({ key: row.key, title: row.title ?? "", citations: Number(row.citations) }));
 }
 
-export async function getCreatorStats(db: Database): Promise<CreatorStats> {
+export async function getCreatorStats(db: Database, hiddenTags: readonly string[]): Promise<CreatorStats> {
 	const creatorStatsResult = await db
 		.select({
 			totalCreators: sql<number>`sum(
@@ -128,8 +127,7 @@ export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -152,8 +150,7 @@ export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 				) as author_name
 			FROM ${item},
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+			WHERE ${visibleItem(db, hiddenTags)}
 			AND ${item.creators} IS NOT NULL
 			AND jsonb_array_length(${item.creators}) > 0
 		) as all_authors`,

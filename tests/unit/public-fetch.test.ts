@@ -6,7 +6,7 @@ import { isPrivateIp } from "@/lib/public-fetch";
 
 describe("public addresses", () => {
 	it("refuses private, loopback, link-local, shared and multicast addresses", () => {
-		for (const address of ["10.1.2.3", "127.0.0.1", "169.254.169.254", "172.16.0.1", "192.168.1.1", "100.64.0.1", "0.0.0.0", "224.0.0.1", "::1", "::", "fd00::1", "fe80::1"]) {
+		for (const address of ["10.1.2.3", "127.0.0.1", "169.254.169.254", "172.16.0.1", "192.168.1.1", "100.64.0.1", "0.0.0.0", "224.0.0.1", "198.18.0.1", "192.0.2.1", "240.0.0.1", "::1", "::", "fd00::1", "fe80::1", "fec0::5", "2001:db8::1", "ff02::1"]) {
 			expect(isPrivateIp(address), address).toBe(true);
 		}
 	});
@@ -14,6 +14,8 @@ describe("public addresses", () => {
 	it("reads an IPv4 address written as IPv6 as that IPv4 address", () => {
 		expect(isPrivateIp("::ffff:127.0.0.1")).toBe(true);
 		expect(isPrivateIp("::ffff:7f00:1")).toBe(true);
+		expect(isPrivateIp("0:0:0:0:0:ffff:a9fe:a9fe")).toBe(true);
+		expect(isPrivateIp("::ffff:5db8:d822")).toBe(false);
 		expect(isPrivateIp("::ffff:93.184.216.34")).toBe(false);
 	});
 

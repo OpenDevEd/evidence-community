@@ -1,3 +1,4 @@
+import { publicItemVisibility } from "@/lib/public-item-visibility";
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
@@ -5,6 +6,7 @@ import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
 import { yearOf } from "./utils";
+import { visibleItem } from "./utils";
 
 export type ItemTypeStats = {
 	itemType: string;
@@ -36,14 +38,13 @@ export type CitationYearStats = {
 	avgCitationsPerItem: number;
 };
 
-export async function getTotalItems(db: Database): Promise<number> {
+export async function getTotalItems(db: Database, hiddenTags: readonly string[]): Promise<number> {
 	const totalItemsResult = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -52,7 +53,7 @@ export async function getTotalItems(db: Database): Promise<number> {
 	return Number(totalItems);
 }
 
-export async function getAvailableYears(db: Database): Promise<string[]> {
+export async function getAvailableYears(db: Database, hiddenTags: readonly string[]): Promise<string[]> {
 	const availableYearsResult = await db
 		.select({
 			year: sql<string>`${yearOf(item.date)}::text`,
@@ -61,10 +62,9 @@ export async function getAvailableYears(db: Database): Promise<string[]> {
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.date),
 				ne(item.date, ""),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 				sql`${item.date} ~ '^[0-9]{4}'`, // Any date that starts with its year, as the listing's year filter counts it
 			),
 		)
@@ -83,6 +83,7 @@ export async function getAvailableYears(db: Database): Promise<string[]> {
 export async function getItemTypeStats(
 	db: Database,
 	totalItems: number,
+	hiddenTags: readonly string[],
 ): Promise<ItemTypeStats[]> {
 	const itemTypeStatsResult = await db
 		.select({
@@ -92,8 +93,7 @@ export async function getItemTypeStats(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.itemType)
@@ -111,7 +111,7 @@ export async function getItemTypeStats(
 	return itemTypes;
 }
 
-export async function getYearDistribution(db: Database): Promise<YearStats[]> {
+export async function getYearDistribution(db: Database, hiddenTags: readonly string[]): Promise<YearStats[]> {
 	const yearStatsResult = await db
 		.select({
 			year: sql<string>`${yearOf(item.date)}::text`,
@@ -120,10 +120,9 @@ export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.date),
 				ne(item.date, ""),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 				sql`${item.date} ~ '^[0-9]{4}'`, // Any date that starts with its year, as the listing's year filter counts it
 			),
 		)
@@ -144,6 +143,7 @@ export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 export async function getFieldCompleteness(
 	db: Database,
 	totalItems: number,
+	hiddenTags: readonly string[],
 ): Promise<FieldStats[]> {
 	const fieldCompletenessResult = await db
 		.select({
@@ -170,8 +170,7 @@ export async function getFieldCompleteness(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		);
 
@@ -305,6 +304,7 @@ export async function getFieldCompleteness(
 export async function getAttachmentStats(
 	db: Database,
 	totalItems: number,
+	hiddenTags: readonly string[],
 ): Promise<AttachmentStats> {
 	const attachmentStatsResult = await db
 		.select({
@@ -312,7 +312,7 @@ export async function getAttachmentStats(
 			itemsWithAttachments: sql<number>`count(distinct case when ${item.parentItem} is not null and ${item.parentItem} != '' then ${item.parentItem} end)`,
 		})
 		.from(item)
-		.where(eq(item.deleted, 0));
+		.where(publicItemVisibility(db, hiddenTags));
 
 	const attachmentStats = {
 		totalAttachments: Number(
@@ -339,7 +339,7 @@ export async function getAttachmentStats(
 	return attachmentStats;
 }
 
-export async function getPublishersAndJournals(db: Database): Promise<{
+export async function getPublishersAndJournals(db: Database, hiddenTags: readonly string[]): Promise<{
 	topPublishers: { publisher: string; count: number }[];
 	topJournals: { journal: string; count: number }[];
 	languageDistribution: { language: string; count: number }[];
@@ -352,10 +352,9 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.publisher),
 				ne(item.publisher, ""),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.publisher)
@@ -371,10 +370,9 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.publicationTitle),
 				ne(item.publicationTitle, ""),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.publicationTitle)
@@ -390,10 +388,9 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
 				isNotNull(item.languageName),
 				ne(item.languageName, ""),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 			),
 		)
 		.groupBy(item.languageName)
@@ -418,6 +415,7 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 
 export async function getRecentActivity(
 	db: Database,
+	hiddenTags: readonly string[],
 ): Promise<{ date: string; count: number }[]> {
 	const recentActivityResult = await db
 		.select({
@@ -427,8 +425,7 @@ export async function getRecentActivity(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 				sql`${item.dateAdded} >= CURRENT_DATE - INTERVAL '30 days'`,
 			),
 		)
@@ -444,8 +441,9 @@ export async function getRecentActivity(
 export async function getCitationsByYear(
 	db: Database,
 	measure: CitationMeasure,
+	hiddenTags: readonly string[],
 ): Promise<CitationYearStats[]> {
-	const citationCount = citationCountForItem(measure);
+	const citationCount = citationCountForItem(measure, hiddenTags);
 	const citationsByYearResult = await db
 		.select({
 			year: sql<string>`${yearOf(item.date)}::text`,
@@ -456,8 +454,7 @@ export async function getCitationsByYear(
 		.from(item)
 		.where(
 			and(
-				eq(item.deleted, 0),
-				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
+				visibleItem(db, hiddenTags),
 				isNotNull(item.date),
 				sql`${item.date} ~ '^[0-9]{4}'`,
 				sql`${yearOf(item.date)} >= 2000`,
