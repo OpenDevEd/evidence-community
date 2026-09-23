@@ -20,7 +20,7 @@ export type EmailSubscriber = Pick<
 >;
 export type EmailEdition = Pick<
 	typeof notificationEdition.$inferSelect,
-	"id" | "title" | "stream" | "windowStart" | "windowEnd" | "markdown"
+	"id" | "title" | "stream" | "windowStart" | "windowEnd" | "markdown" | "publicationCount"
 > & {
 	publications: Pick<
 		(typeof notificationEdition.$inferSelect)["publications"][number],
@@ -110,7 +110,7 @@ async function editionContent(
 		emailButton(label, href, identity.accent);
 	let content: string,
 		detail: { dateRange: string; publicationCount: number } | undefined;
-	const title = edition.title ?? `${edition.publications.length} new publications`;
+	const title = edition.title ?? `${edition.publicationCount} new publications`;
 	const subject = `${config.identity.shortName}: ${title}`;
 	const editionUrl = new URL(
 		`/${config.localization.defaultLocale}/digests/${edition.id}`,
@@ -135,7 +135,7 @@ async function editionContent(
 		);
 		detail = {
 			dateRange: date.formatRange(edition.windowStart, edition.windowEnd),
-			publicationCount: edition.publications.length,
+			publicationCount: edition.publicationCount,
 		};
 	} else {
 		content = `<p style="${emailStyles.paragraph}">New additions to ${escapeHtml(identity.name)}.</p>${edition.publications
@@ -143,7 +143,7 @@ async function editionContent(
 				const url = escapeHtml(publicationUrl(publication.key));
 				return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 16px;background:#f7f7f3;border-radius:12px"><tr><td style="padding:22px"><p style="font-size:12px;font-weight:700;color:#797b73;margin:0 0 8px">${escapeHtml(publication.publicationType)}</p><a href="${url}" style="font-size:20px;line-height:1.35;font-weight:700;text-decoration:none;color:#202822">${escapeHtml(publication.title)}</a>${publication.creators.length ? `<p style="font-size:13px;color:#797b73;margin:8px 0 14px">${escapeHtml(publication.creators.join(", "))}</p>` : ""}${publication.abstract ? `<p style="font-size:14px;line-height:1.7;color:#555653;margin:0 0 16px">${escapeHtml(publication.abstract)}</p>` : ""}<a href="${url}" style="font-size:13px;font-weight:700;${emailStyles.link}">Read publication</a></td></tr></table>`;
 			})
-			.join("")}`;
+			.join("")}${edition.publicationCount > edition.publications.length ? `<p style="${emailStyles.paragraph}">And ${edition.publicationCount - edition.publications.length} more in the library.</p>` : ""}`;
 	}
 	const body =
 		edition.stream === "digest"

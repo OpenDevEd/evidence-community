@@ -22,7 +22,7 @@ it("keeps confirmation, preference and unsubscribe links specific to the recipie
 
 it("renders every publication and digest citation with absolute links while escaping untrusted metadata", async () => {
   const publication = {key: "ABCDEFGH", title: 'Report <script>alert(1)</script>', creators: ['Someone <img src=x>'], abstract: 'Abstract <iframe src=x>', publicationType: "Report"};
-  const edition: EmailEdition = {id: "saved-edition", title: 'A <script>title</script>', stream: "hourly", windowStart: new Date("2026-09-07"), windowEnd: new Date("2026-09-14"), markdown: null, publications: [publication]};
+  const edition: EmailEdition = {id: "saved-edition", title: 'A <script>title</script>', stream: "hourly", windowStart: new Date("2026-09-07"), windowEnd: new Date("2026-09-14"), markdown: null, publications: [publication], publicationCount: 1};
   const hourly = await notificationMessage(config, subscriber, edition, "hourly:reader");
   expect(hourly.html).toContain(`${config.identity.baseUrl}/lib/ABCDEFGH`);
   expect(hourly.html).toContain('Report &lt;script&gt;alert(1)&lt;/script&gt;');
