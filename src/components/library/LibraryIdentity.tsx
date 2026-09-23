@@ -83,8 +83,8 @@ const LOGO_WIDTH = 288;
 /**
  * One logo file, reported by its configured address once it arrives or fails.
  * A PNG or WebP goes through Next's optimizer by way of /brand, at the size it
- * is drawn; an SVG, or a file the optimizer cannot serve, loads from its own
- * address.
+ * is drawn; any other file, or one the optimizer cannot serve, loads from its
+ * own address.
  */
 function LogoImage({
 	source,
@@ -100,9 +100,10 @@ function LogoImage({
 	const { identity, revision } = useLibraryConfig();
 	const t = useTranslations("ui");
 	const [direct, setDirect] = useState(false);
-	const extension = new URL(source).pathname.match(/\.\w+$/u)?.[0] ?? "";
+	// Only a PNG or WebP at a full address can be resized; an SVG, or anything else, loads as it is.
+	const extension = URL.canParse(source) ? new URL(source).pathname.match(/\.(png|webp)$/iu)?.[0] : undefined;
 	const optimized =
-		direct || extension === ".svg"
+		direct || !extension
 			? null
 			: getImageProps({
 					// The extension keeps the address out of the proxy, which takes every path without one.

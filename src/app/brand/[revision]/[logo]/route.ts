@@ -14,7 +14,9 @@ function notFound() {
  * LibraryIdentity). Only the active revision's two configured logo files answer, under their own extension, so an
  * address for a later revision cannot be cached early with today's logo.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ revision: string; logo: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ revision: string; logo: string }> }) {
+	// One address per file: a query string would be a new cache entry and a new download each time.
+	if (new URL(request.url).search) return notFound();
 	const { revision, logo } = await params;
 	const config = await getLibraryConfig();
 	const { assets } = config.identity;

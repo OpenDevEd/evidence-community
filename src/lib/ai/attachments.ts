@@ -9,7 +9,7 @@ import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { buildPdfDownloadPath, pdfFilename } from "./citations";
 import type { AIModelId, AIProvider } from "./models";
 import { openRouterCacheBreakpoint } from "./openrouter";
-import { assertPublicHttpUrl, fetchPublicFile } from "@/lib/public-fetch";
+import { fetchPublicFile, publicRequest } from "@/lib/public-fetch";
 
 const PDF_FETCH_TIMEOUT_MS = 30_000;
 const PDF_PROBE_TIMEOUT_MS = 8_000;
@@ -69,12 +69,9 @@ async function probePublicPdfUrl(
 	url: URL,
 ): Promise<{ ok: boolean; size?: number }> {
 	try {
-		await assertPublicHttpUrl(url);
-		const response = await fetch(url, {
+		const response = await publicRequest(url, {
 			method: "HEAD",
 			headers: { "User-Agent": "Evidence-Library/1.0" },
-			redirect: "follow",
-			cache: "no-store",
 			signal: AbortSignal.timeout(PDF_PROBE_TIMEOUT_MS),
 		});
 		if (!response.ok) return { ok: false };

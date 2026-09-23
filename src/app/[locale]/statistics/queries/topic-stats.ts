@@ -6,6 +6,8 @@ import { calculateHIndex, topLevelItem, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type TopicStats = {
+	/** The collection keys from the top down: titles need not be unique, so topics are told apart by these. */
+	id: string;
 	topic: string;
 	level: number;
 	parentTopic?: string;
@@ -31,6 +33,7 @@ export type TopicOverview = {
 };
 
 export type TopicYearStats = {
+	id: string;
 	topic: string;
 	fullPath: string;
 	level: number;
@@ -53,17 +56,20 @@ const PATH_SEPARATOR = " \u203a ";
  * them. A collection the library does not show is not a topic, so internal folders and bare keys never appear.
  */
 export function topicPaths(collectionKey: string, shown: ShownCollections) {
+	const keys: string[] = [];
 	const titles: string[] = [];
 	for (let key: string | undefined = collectionKey; key && titles.length < 20; key = shown.get(key)?.parent) {
 		const entry = shown.get(key);
 		if (!entry) break;
+		keys.unshift(key);
 		titles.unshift(entry.title);
 	}
 	return titles.map((topic, index) => ({
+		id: keys.slice(0, index + 1).join("/"),
+		parentId: index > 0 ? keys.slice(0, index).join("/") : undefined,
 		topic,
 		fullPath: titles.slice(0, index + 1).join(PATH_SEPARATOR),
 		level: index + 1,
-		parentPath: index > 0 ? titles.slice(0, index).join(PATH_SEPARATOR) : undefined,
 		parentTopic: index > 0 ? titles[index - 1] : undefined,
 	}));
 }
@@ -107,8 +113,8 @@ export async function getTopicStats(
 		row.collections.forEach((collection: string) => {
 			// Build hierarchical paths
 			for (const path of topicPaths(collection, shown)) {
-				if (!topicMap.has(path.fullPath)) {
-					topicMap.set(path.fullPath, {
+				if (!topicMap.has(path.id)) {
+					topicMap.set(path.id, {
 						topic: path.topic,
 						fullPath: path.fullPath,
 						level: path.level,
@@ -118,11 +124,11 @@ export async function getTopicStats(
 					});
 				}
 				
-				topicMap.get(path.fullPath)!.citations.set(row.itemKey, Number(row.citationCount || 0));
+				topicMap.get(path.id)!.citations.set(row.itemKey, Number(row.citationCount || 0));
 				
 				// Add child relationship
-				if (path.parentPath && topicMap.has(path.parentPath)) {
-					topicMap.get(path.parentPath)!.children.add(path.topic);
+				if (path.parentId && topicMap.has(path.parentId)) {
+					topicMap.get(path.parentId)!.children.add(path.topic);
 				}
 			}
 		});
@@ -130,7 +136,7 @@ export async function getTopicStats(
 
 	// Calculate statistics for each topic
 	const topicStats: TopicStats[] = Array.from(topicMap.entries())
-		.map(([path, data]) => {
+		.map(([id, data]) => {
 		const uniqueCitationCounts = [...data.citations.values()];
 			const totalCitations = uniqueCitationCounts.reduce(
 				(sum, count) => sum + count,
@@ -143,10 +149,11 @@ export async function getTopicStats(
 		const hIndex = calculateHIndex(uniqueCitationCounts);
 
 		return {
+			id,
 			topic: data.topic,
 			level: data.level,
 				parentTopic: data.parentTopic,
-			fullPath: path,
+			fullPath: data.fullPath,
 			itemCount: data.citations.size,
 			totalCitations,
 			avgCitationsPerItem: Number(avgCitations.toFixed(2)),
@@ -165,8 +172,8 @@ export async function getTopicStats(
 	const topLevelTopics = Array.from(topicMap.values()).filter(
 		(t) => t.level === 1,
 	).length;
-	const totalUniqueItems = new Set();
-	topicStatsResult.forEach((row) => totalUniqueItems.add(row.itemKey));
+	// Only publications in a shown topic: one whose collections are all hidden is in no topic.
+	const totalUniqueItems = new Set(Array.from(topicMap.values()).flatMap((topic) => [...topic.citations.keys()]));
 	const avgItemsPerTopic =
 		topicStats.length > 0 ? totalUniqueItems.size / topicStats.length : 0;
 
@@ -229,6 +236,7 @@ export async function getTopicStatsByYear(
 	const topicYearMap = new Map<
 		string,
 		{
+		id: string;
 		topic: string;
 		fullPath: string;
 		level: number;
@@ -246,10 +254,11 @@ export async function getTopicStatsByYear(
 		row.collections.forEach((collection: string) => {
 			// Build hierarchical paths for each level
 			for (const path of topicPaths(collection, shown)) {
-				const key = `${path.fullPath}-${row.year}`;
+				const key = `${path.id}-${row.year}`;
 				
 				if (!topicYearMap.has(key)) {
 					topicYearMap.set(key, {
+						id: path.id,
 						topic: path.topic,
 						fullPath: path.fullPath,
 						level: path.level,
@@ -279,6 +288,7 @@ export async function getTopicStatsByYear(
 		const hIndex = calculateHIndex(citationCounts);
 		
 		return {
+			id: data.id,
 			topic: data.topic,
 			fullPath: data.fullPath,
 			level: data.level,
