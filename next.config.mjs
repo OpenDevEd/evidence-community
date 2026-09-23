@@ -23,7 +23,8 @@ const nextConfig = {
 		// /brand (see CoverImage and LibraryIdentity). Every other image is marked
 		// unoptimized: runtime configuration can reference any public asset host,
 		// so one image build stays valid for every library.
-		localPatterns: [{ pathname: "/covers/**" }, { pathname: "/brand/**" }],
+		// No query string, so each file has one optimized copy per size.
+		localPatterns: [{ pathname: "/covers/**", search: "" }, { pathname: "/brand/**", search: "" }],
 		// Next's steps plus 512, so a cover drawn about 200 px wide on a 2x screen is not sent at 640.
 		imageSizes: [32, 48, 64, 96, 128, 256, 384, 512],
 	},

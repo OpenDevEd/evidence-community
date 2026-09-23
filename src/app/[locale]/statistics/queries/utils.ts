@@ -1,5 +1,9 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm";
+import { item } from "@/db/schema/tables/item";
+
+/** A publication itself, as the statistics count it: not deleted, and not an attachment or note under another record. */
+export const topLevelItem = sql`(${item.deleted} = 0 AND (${item.parentItem} IS NULL OR ${item.parentItem} = ''))`;
 
 /**
  * The year of a stored date, read from its first four digits and never parsed, so no text in the column (such as
