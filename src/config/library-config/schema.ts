@@ -1783,8 +1783,8 @@ const homeSchema = z
 			.default([]),
 		/** Every owner and editor, so a review can be credited to the person who approved it. Never sent to browsers. */
 		directory: z.array(homePersonSchema).max(500).default([]),
-		/** Example questions for the Ask box; blank slots use questions made from the library's own topics. */
-		questions: z.array(singleLineStringSchema(120)).max(3).default([]),
+		/** Example questions for the Ask box, slot by slot; a blank slot uses the question made from the library's own topics. */
+		questions: z.array(plainTextSchema(120)).max(3).default([]),
 		/** The publication the curation timeline follows; without one, the latest an editor published. */
 		followed: singleLineStringSchema(64).optional(),
 		involvement: z

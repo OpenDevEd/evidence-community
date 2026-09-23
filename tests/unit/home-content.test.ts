@@ -16,6 +16,11 @@ describe("home page content", () => {
 		expect(parsed.success).toBe(true);
 	});
 
+	it("keeps a blank question slot for the question the page makes", () => {
+		const home = libraryConfigSchema.parse({ ...maximalLibraryConfig, home: { questions: ["", "Mine?"] } }).home!;
+		expect(contentFrom(home, stepTitles).questions).toEqual(["", "Mine?"]);
+	});
+
 	it("needs a title on a text-only step, but not on a typed one", () => {
 		expect(parseHome({ curation: { steps: [{ type: "arrival" }] } }).success).toBe(true);
 		const untitled = parseHome({ curation: { steps: [{ type: "text", text: "Words" }] } });

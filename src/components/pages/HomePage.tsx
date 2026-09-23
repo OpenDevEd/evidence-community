@@ -935,7 +935,7 @@ function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; su
 				<div className="mt-8">
 					<div className="mb-4 flex items-baseline justify-between gap-6">
 						<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
-						<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${row.filter}`}>See all {number.format(row.count)}</TextLink></div>
+						<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${row.filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
 					</div>
 					<PublicationList items={examples?.items ?? []} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
 				</div>
