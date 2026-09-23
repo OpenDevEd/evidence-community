@@ -57,7 +57,8 @@ async function listPublications(db: DatabaseTransaction, config: LibraryServerCo
     const card = cards.get(key);
     if (!card) continue;
     const metadata = digestMetadata(card);
-    metadataBytes += Buffer.byteLength(JSON.stringify(metadata));
+    // The limit covers the serialized array, so count its brackets and commas too.
+    metadataBytes += Buffer.byteLength(JSON.stringify(metadata)) + (publications.length ? 1 : 2);
     if (metadataBytes > 1_500_000) break;
     publications.push({ ...metadata, item: card });
   }

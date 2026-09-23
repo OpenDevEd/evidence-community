@@ -28,6 +28,9 @@ it("renders every publication and digest citation with absolute links while esca
   expect(hourly.html).toContain('Report &lt;script&gt;alert(1)&lt;/script&gt;');
   expect(hourly.html).toContain('Someone &lt;img src=x&gt;');
   expect(hourly.html).not.toMatch(/<(script|iframe)\b/);
+  const capped = await notificationMessage(config, subscriber, {...edition, publicationCount: 3}, "hourly:reader");
+  expect(capped.html).toContain("And 2 more in the library.");
+  expect(capped.text).toContain("And 2 more in the library.");
   const digest = await notificationMessage(config, subscriber, {...edition, stream: "digest", markdown: '## Finding\n\nSee [1](/lib/ABCDEFGH). <script>bad()</script>\n\n[bad](javascript:alert(1))'}, "digest:reader");
   expect(digest.html).toContain(`href="${config.identity.baseUrl}/lib/ABCDEFGH"`);
   expect(digest.html).toContain(`/digests/saved-edition`);

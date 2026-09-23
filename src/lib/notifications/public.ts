@@ -3,13 +3,15 @@ import { and, count, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
+import { item } from "@/db/schema/tables/item";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { nextDigestDate } from "./schedule";
 
 const ARCHIVE_PAGE_SIZE = 20;
 const EDITION_PAGE_SIZE = 12;
 
 export type DigestSummary = {slug: string; publishedAt: string; date: string; title: string; summary: string; publicationCount: number; cover: string | null};
-/** An edition with one page of its listed publications; `listed` can be lower than `publicationCount`. */
+/** An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`. */
 export type DigestEdition = DigestSummary & {markdown: string; listed: number; page: number; pages: number; keys: string[]};
 export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages: number};
 
@@ -73,20 +75,22 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
-  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, listed: sql<number>`jsonb_array_length(${notificationEdition.publications})`})
+  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown})
     .from(notificationEdition).where(and(visibleEdition, eq(notificationEdition.id, uuid))).limit(1);
   if (!row) return undefined;
-  const pages = Math.max(1, Math.ceil(row.listed / EDITION_PAGE_SIZE));
+  // Pages hold only the listed records that are public now, so hiding one
+  // later never leaves a short or empty page. Only one page of keys leaves the database.
+  const listedNow = sql`
+    FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) WITH ORDINALITY AS stored(entry, position)
+    JOIN ${item} ON ${item.key} = stored.entry->>'key'
+    WHERE ${notificationEdition.id} = ${uuid} AND ${publicParentVisibility(db, config.content.tags.hidden)}`;
+  const {rows: [{listed}]} = await db.execute<{listed: number}>(sql`SELECT count(*)::int AS listed ${listedNow}`);
+  const pages = Math.max(1, Math.ceil(listed / EDITION_PAGE_SIZE));
   const current = Math.min(page, pages);
-  // Only this page's keys leave the database, not the whole stored list.
   const {rows: keys} = await db.execute<{key: string}>(sql`
-    SELECT entry->>'key' AS key
-    FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) WITH ORDINALITY AS listed(entry, position)
-    WHERE ${notificationEdition.id} = ${uuid}
-    ORDER BY position
-    LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}
-  `);
-  return {...editionSummary(row, locale, config), markdown: row.markdown!, listed: row.listed, page: current, pages, keys: keys.map(entry => entry.key)};
+    SELECT stored.entry->>'key' AS key ${listedNow}
+    ORDER BY stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
+  return {...editionSummary(row, locale, config), markdown: row.markdown!, listed, page: current, pages, keys: keys.map(entry => entry.key)};
 }
 
 export async function getNextDigestEdition(db: Database, config: LibraryServerConfig): Promise<string | null> {

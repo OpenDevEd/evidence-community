@@ -283,6 +283,9 @@ it("covers every publication in the window, lists the first thousand and carries
     await client.query(`UPDATE "notificationEdition" SET "publishedAt" = now(), title = 'Large', summary = 'Large', markdown = 'Large' WHERE id = $1`, [edition.id]);
     // A page past the end shows the last page, which lists only this page's keys.
     expect(await getDigestEdition(db, config, "en-GB", edition.id, 999)).toMatchObject({publicationCount: 1001, listed: 1000, page: 84, pages: 84, keys: edition.publications.slice(996).map(p => p.key)});
+    // Records deleted after publishing drop out of the pages instead of leaving gaps.
+    await client.query(`UPDATE item SET deleted = 1 WHERE key = ANY($1)`, [edition.publications.slice(0, 4).map(p => p.key)]);
+    expect(await getDigestEdition(db, config, "en-GB", edition.id, 1)).toMatchObject({listed: 996, pages: 83, keys: edition.publications.slice(4, 16).map(p => p.key)});
   });
 }, 120_000);
 
