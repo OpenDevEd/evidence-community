@@ -91,6 +91,7 @@ describe("public item empty sections", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 		localStorage.clear();
 		testState.extraResult = { data: undefined, isLoading: false };
 		testState.citationsEnabled = true;
@@ -136,7 +137,7 @@ describe("public item empty sections", () => {
 		expect(container.querySelector("[data-citation-state]")).toBeNull();
 	});
 
-	it("shows a citation skeleton while citation formatting is pending", async () => {
+	it("shows citation loading while citation formatting is pending", async () => {
 		testState.swrResult = { data: undefined, isLoading: true };
 
 		await act(async () => {
@@ -241,7 +242,9 @@ describe("public item empty sections", () => {
 			),
 		).not.toBeNull();
 		expect(container.textContent).toContain("The original citation.");
-		expect(container.querySelector('[role="status"]')).toBeNull();
+		expect(
+			container.querySelector('[role="status"]:not([aria-hidden="true"])'),
+		).toBeNull();
 		expect(
 			container.querySelector<HTMLButtonElement>(
 				'button[aria-label="copyCitation"]',
@@ -330,6 +333,7 @@ describe("public item empty sections", () => {
 		await act(async () => root.unmount());
 		container.remove();
 		localStorage.clear();
+		vi.unstubAllGlobals();
 	});
 
 	it("does not appear when the record has no publication details", async () => {
