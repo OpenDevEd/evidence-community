@@ -136,7 +136,10 @@ type Rendered = { children?: React.ReactNode; node?: Element };
 /** A link in an owner's answer; one to this library's own address becomes a path, so it keeps the reader's language. */
 function AnswerLink({ children, node }: Rendered) {
 	const { identity } = useLibraryConfig();
-	return <Link href={getRuntimeLinkHref(String(node?.properties.href ?? ""), identity.baseUrl)} className="font-medium text-accent underline decoration-1 underline-offset-4">{children}</Link>;
+	const href = String(node?.properties.href ?? "");
+	// An address that does not parse ("https://") is shown as its words rather than breaking the page.
+	if (!URL.canParse(href, identity.baseUrl)) return <>{children}</>;
+	return <Link href={getRuntimeLinkHref(href, identity.baseUrl)} className="font-medium text-accent underline decoration-1 underline-offset-4">{children}</Link>;
 }
 const link = AnswerLink;
 const bold = ({ children }: Rendered) => <strong className="font-semibold opacity-100">{children}</strong>;
