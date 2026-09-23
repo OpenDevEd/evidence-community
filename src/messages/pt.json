@@ -893,5 +893,17 @@
         "documents": "Documentos de políticas",
         "sections": "Seções da política",
         "copyEmail": "Copiar e-mail"
-    }
+    },
+  "homePage": {
+    "curation": "Como a biblioteca é organizada",
+    "team": "Quem está por trás",
+    "involvement": "Participe",
+    "suggest": "Sugerir uma publicação",
+    "suggestSubject": "Sugestão de publicação",
+    "join": "Seja editor",
+    "joinSubject": "Quero ser editor",
+    "stepArrival": "Enviado",
+    "stepCheck": "Verificado por um editor",
+    "stepPublication": "Publicado"
+  }
 }

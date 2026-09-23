@@ -691,6 +691,18 @@ automatically before the next operation.
   record key rather than a row number, a record added or removed while the file
   is being written cannot make another record appear twice or be missed. The
   file is named after the library short name.
+- `features.homePage` gives the library a front page at `/`. While it is off,
+  `/` redirects to `/lib`, and the sitemap leaves `/` out.
+- `home` holds the front page's answers from OpenScholar's Home card: the
+  introduction, the curation statement and up to five typed steps, the team
+  sentence and the people shown, up to three example questions, the publication
+  the steps follow, the involvement buttons, a closing section and renamed
+  headings. Longer answers are Markdown limited to bold, italic, links and
+  bulleted lists. OpenScholar fills in each person's name and photo when the
+  library is published, plus a `directory` of every owner and editor that names
+  whoever approved the followed publication; the directory never reaches the
+  browser. Without `home` the page shows a generated introduction and the
+  suggestion button.
 - The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
   `exports.atom`. It lists the 50 most recently added records.
 - Exports read a fixed list of citation columns. Stored full text, cover

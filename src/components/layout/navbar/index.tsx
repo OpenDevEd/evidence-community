@@ -23,6 +23,7 @@ import {
 } from "@/config/navbar.config";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { normalizePathname } from "@/lib/path";
+import { pageRunsUnderHeader } from "@/lib/runtime-routing";
 
 import type {
 	NavbarContext as NavbarContextType,
@@ -51,10 +52,12 @@ export default function Navbar() {
 
 	const { engaged: chatEngaged } = useInlineChatLayout();
 	const normalizedPathname = normalizePathname(pathname);
-	const isMapPage = normalizedPathname.includes("/map");
+	const floatsOverPage = pageRunsUnderHeader(pathname);
 
 	// The navbar search routes to the library listing, so hide it on pages that
 	// already own a search bar (the listing, the map, and a user's profile).
+	// It also stays in the page flow, so it cannot follow a header that floats
+	// over the page (the home page): there it would sit under the header.
 	const isSearchOwningPath =
 		normalizedPathname === "/lib" ||
 		normalizedPathname.startsWith("/map") ||
@@ -64,7 +67,8 @@ export default function Navbar() {
 			libraryConfig.features,
 			"navbarSearch",
 		) &&
-		!isSearchOwningPath;
+		!isSearchOwningPath &&
+		!floatsOverPage;
 
 	// Get enabled elements based on runtime configuration and session.
 	const enabledElements = getEnabledElements(
@@ -112,7 +116,7 @@ export default function Navbar() {
 				styleVariant === "wide"
 					? "bg-white dark:bg-secondary"
 					: "max-w-site xl:px-14",
-				isMapPage &&
+				floatsOverPage &&
 					(styleVariant !== "wide"
 						? "xl:absolute xl:top-6 xl:scale-75"
 						: "xl:absolute"),
@@ -120,7 +124,7 @@ export default function Navbar() {
 				// page; while the chat is open it sticks at the same offset,
 				// so the header and the chat do not jump apart on scroll.
 				chatEngaged &&
-					!isMapPage &&
+					!floatsOverPage &&
 					(styleVariant !== "wide"
 						? "xl:sticky xl:top-split xl:scale-75"
 						: "xl:sticky xl:top-0")

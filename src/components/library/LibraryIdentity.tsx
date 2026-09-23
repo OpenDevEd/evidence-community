@@ -77,8 +77,8 @@ function LibraryLogoImages({
 	);
 }
 
-/** Wide enough for the widest logo box (the footer's, 14rem); Next picks the 1x and 2x files from it. */
-const LOGO_WIDTH = 224;
+/** Wide enough for the widest logo box (the home page's, 18rem); Next picks the 1x and 2x files from it. */
+const LOGO_WIDTH = 288;
 
 /**
  * One logo file, reported by its configured address once it arrives or fails.
@@ -193,7 +193,14 @@ const LIBRARY_LOGO_SIZES = {
 	// The header shrinks before the navigation does, so a wide logo can never
 	// push the buttons beside it off the bar.
 	header: "h-9 min-w-0 max-w-logo-header shrink xl:h-10",
+	// The home page's hero, above the library's name: the one place the logo is shown large.
+	hero: "h-12 max-w-[18rem] sm:h-14",
 } as const;
+
+/** OpenScholar's own logo stands in until a library uploads one; it is served from the platform's folder. */
+export function hasOwnLogo(assets: { logoLight?: string; logoDark: string }) {
+	return ![assets.logoLight, assets.logoDark].some((source) => source?.includes("/openscholar/platform/"));
+}
 
 type LibraryLogoPlace = keyof typeof LIBRARY_LOGO_SIZES;
 

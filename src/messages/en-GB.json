@@ -893,5 +893,17 @@
         "documents": "Policy documents",
         "sections": "Policy sections",
         "copyEmail": "Copy email"
-    }
+    },
+  "homePage": {
+    "curation": "How the library is curated",
+    "team": "Who is behind it",
+    "involvement": "Get involved",
+    "suggest": "Suggest a publication",
+    "suggestSubject": "Suggesting a publication",
+    "join": "Join as an editor",
+    "joinSubject": "Joining as an editor",
+    "stepArrival": "Submitted",
+    "stepCheck": "Checked by an editor",
+    "stepPublication": "Published"
+  }
 }

@@ -5,7 +5,6 @@ import { AiOutlineCompass } from "react-icons/ai";
 import { IoGrid } from "react-icons/io5";
 import { BiHelpCircle } from "react-icons/bi";
 import { HiOutlineViewList } from "react-icons/hi";
-import { BsStars } from "react-icons/bs";
 import { SkipLink } from "@/components/layout/SkipLink";
 
 import { Button } from "@/components/nextui/Button";
@@ -15,7 +14,7 @@ import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import { Spinner, useDisclosure } from "@nextui-org/react";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { type ReactNode, use, useEffect, useRef, useState } from "react";
+import { type ReactNode, use, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
@@ -39,43 +38,9 @@ import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
+import { AskAIButton } from "@/components/features/ai/AskAIButton";
+import { forgetWaitingQuestion, waitingQuestion } from "@/components/features/ai/handed-over-question";
 
-/** Hands whatever is in the search field to the assistant. */
-function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
-	const tAI = useTranslations("ai");
-	const [revealed, setRevealed] = useState(false);
-	// Firefox needs a painted frame before the entrance begins.
-	useEffect(() => {
-		let revealFrame = 0;
-		const paintFrame = requestAnimationFrame(() => {
-			revealFrame = requestAnimationFrame(() => setRevealed(true));
-		});
-		return () => {
-			cancelAnimationFrame(paintFrame);
-			cancelAnimationFrame(revealFrame);
-		};
-	}, []);
-	if (!revealed) return null;
-
-	return (
-		// A plain button: press handling inside the search field's own
-		// content breaks the one the rest of the site uses.
-		<button
-			type="button"
-			onMouseDown={(event) => event.preventDefault()}
-			onClick={onAsk}
-			// Smaller on a phone, where the search field is shorter and
-			// there is no keyboard to show a shortcut for.
-			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 motion-reduce:animate-none lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:pl-3 lg:pr-1.5 lg:text-sm"
-		>
-			<BsStars className="size-3.5 shrink-0 lg:size-4" />
-			{tAI("askAI")}
-			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
-				{hint}
-			</kbd>
-		</button>
-	);
-}
 
 /** The search field and the filters beside it. */
 function LibraryFilters({
@@ -387,6 +352,13 @@ export function ContentInteractions({
 	const askInline = useAskInlineChat(searchContext);
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();
+	// A question handed over from another page (the home page's "Ask the
+	// library"): ask it once the chat can take it, then forget it.
+	useEffect(() => {
+		const question = waitingQuestion();
+		if (!question || !isAISearchEnabled || itemsContext.userData) return;
+		if (askInline(question)) forgetWaitingQuestion();
+	}, [askInline, isAISearchEnabled, itemsContext.userData]);
 
 	return (
 		<div className="relative">

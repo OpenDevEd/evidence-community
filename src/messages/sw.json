@@ -894,5 +894,17 @@
         "documents": "Nyaraka za sera",
         "sections": "Sehemu za sera",
         "copyEmail": "Nakili barua pepe"
-    }
+    },
+  "homePage": {
+    "curation": "Jinsi maktaba inavyoratibiwa",
+    "team": "Walio nyuma yake",
+    "involvement": "Shiriki",
+    "suggest": "Pendekeza chapisho",
+    "suggestSubject": "Kupendekeza chapisho",
+    "join": "Jiunge kama mhariri",
+    "joinSubject": "Kujiunga kama mhariri",
+    "stepArrival": "Imewasilishwa",
+    "stepCheck": "Imekaguliwa na mhariri",
+    "stepPublication": "Imechapishwa"
+  }
 }

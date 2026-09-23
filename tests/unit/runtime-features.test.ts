@@ -30,6 +30,7 @@ const featureIds = [
 	"yearsDropdown",
 	"downloads",
 	"atomFeed",
+	"homePage",
 ] as const satisfies readonly LibraryFeatureId[];
 
 const schema = createLibraryConfigSchema({

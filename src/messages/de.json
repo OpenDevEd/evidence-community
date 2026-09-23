@@ -893,5 +893,17 @@
         "documents": "Richtliniendokumente",
         "sections": "Abschnitte der Richtlinie",
         "copyEmail": "E-Mail-Adresse kopieren"
-    }
+    },
+  "homePage": {
+    "curation": "Wie die Bibliothek kuratiert wird",
+    "team": "Wer dahintersteht",
+    "involvement": "Mitmachen",
+    "suggest": "Publikation vorschlagen",
+    "suggestSubject": "Vorschlag einer Publikation",
+    "join": "Als Redakteur mitwirken",
+    "joinSubject": "Mitwirkung als Redakteur",
+    "stepArrival": "Eingereicht",
+    "stepCheck": "Von der Redaktion geprüft",
+    "stepPublication": "Veröffentlicht"
+  }
 }

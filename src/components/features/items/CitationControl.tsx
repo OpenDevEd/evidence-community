@@ -229,10 +229,13 @@ export function CitationPanel({
 	item,
 	showHeading = false,
 	completeRecord = false,
+	link,
 }: {
 	item: CitationItem;
 	showHeading?: boolean;
 	completeRecord?: boolean;
+	/** Where the cited thing lives, when it is not a publication page in the library (the library itself). */
+	link?: string;
 }) {
 	const locale = useLocale();
 	const { citations: settings, identity } = useLibraryConfig();
@@ -248,7 +251,7 @@ export function CitationPanel({
 		source,
 		locale,
 		settings.showUrl
-			? buildSiteUrl(`/lib/${item.key}`, identity.baseUrl)
+			? (link ?? buildSiteUrl(`/lib/${item.key}`, identity.baseUrl))
 			: undefined,
 	];
 	const {

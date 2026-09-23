@@ -87,6 +87,18 @@ export async function getCitationStats(
 	return citationStats;
 }
 
+/** The most cited publications under a citation measure, for the home page's citations preview. */
+export async function getMostCitedItems(db: Database, measure: CitationMeasure, limit: number) {
+	const citationCount = citationCountForItem(measure);
+	const rows = await db
+		.select({ key: item.key, title: item.title, citations: citationCount })
+		.from(item)
+		.where(and(eq(item.deleted, 0), sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`, sql`${citationCount} > 0`))
+		.orderBy(desc(citationCount))
+		.limit(limit);
+	return rows.map((row) => ({ key: row.key, title: row.title ?? "", citations: Number(row.citations) }));
+}
+
 export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 	const creatorStatsResult = await db
 		.select({

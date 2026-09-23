@@ -254,6 +254,8 @@ export async function getPublicItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	options: {
 		includeHeavyFields?: boolean;
+		/** Fewer results than a listing page, from the start of the list: a preview. */
+		limit?: number;
 	} = {},
 ): Promise<SearchItemsResult> {
 	const libraryConfig = await getLibraryConfig();
@@ -276,8 +278,8 @@ export async function getPublicItems(
 
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
-			offset: (pageNum - 1) * limitNum,
-			limit: limitNum,
+			offset: options.limit ? 0 : (pageNum - 1) * limitNum,
+			limit: options.limit ? Math.min(Math.max(1, Math.floor(options.limit)), limitNum) : limitNum,
 			attributesToSearchOn,
 			attributesToRetrieve,
 			...(sortOption ? { sort: [sortOption] } : {}),
