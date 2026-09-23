@@ -7,7 +7,15 @@ export const notificationItem = pgTable("notificationItem", {
   itemKey: varchar("itemKey", {length: 8}).primaryKey(),
   firstPublishedAt: date("firstPublishedAt"),
   eligible: boolean("eligible").notNull().default(false),
-}, table => [index("notificationItem_first_publication_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true`)]);
+  // The edition of each stream that covered this publication, listed or only counted.
+  hourlyEditionId: uuid("hourlyEditionId").references(() => notificationEdition.id, {onDelete: "set null"}),
+  digestEditionId: uuid("digestEditionId").references(() => notificationEdition.id, {onDelete: "set null"}),
+}, table => [
+  index("notificationItem_first_publication_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true`),
+  // Only publications no edition has covered yet are ever scanned.
+  index("notificationItem_hourly_pending_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true AND ${table.hourlyEditionId} IS NULL`),
+  index("notificationItem_digest_pending_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true AND ${table.digestEditionId} IS NULL`),
+]);
 
 export const notificationState = pgTable("notificationState", {
   singleton: boolean("singleton").primaryKey().default(true),
@@ -38,6 +46,9 @@ export const notificationEdition = pgTable("notificationEdition", {
   windowStart: date("windowStart").notNull(),
   windowEnd: date("windowEnd").notNull(),
   publications: jsonb("publications").$type<NotificationPublication[]>().notNull(),
+  // Every publication the window covered, including those past the listed cap.
+  publicationCount: integer("publicationCount").notNull().default(0),
+  cover: text("cover"),
   title: text("title"),
   summary: text("summary"),
   markdown: text("markdown"),

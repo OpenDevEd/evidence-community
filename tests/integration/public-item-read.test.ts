@@ -24,6 +24,7 @@ import { exportCitationItems } from "@/lib/citation-export";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
+import { readPublicItems } from "@/lib/search-index/projection";
 import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 
@@ -78,6 +79,10 @@ it("reads committed publications before indexing, and immediately respects edits
 		const response = await read("PUBAAAAA");
 		expect(response.status).toBe(200);
 		const publication = (await response.json()).item;
+		// The batch read drops hidden and unpublished records and matches the single read.
+		const batch = await readPublicItems(database, ["HIDDENNN", "PUBAAAAA", draft.itemKey], config);
+		expect(batch.map(item => item.key)).toEqual(["PUBAAAAA"]);
+		expect(batch[0].collectionsAncestry).toEqual(publication.collectionsAncestry);
 		expect(publication.title).toBe("Published title");
 		expect(publication.DOI).toBe("10.5555/childddd");
 		expect(await citation("PUBAAAAA")).toContain("10.5555/childddd");

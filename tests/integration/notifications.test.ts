@@ -12,7 +12,7 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 import { createNativeItemDraft, publishItemDraft, openItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { notificationDelivery, notificationEdition, notificationItem, notificationState, notificationSubscriber } from "@/db/schema/notifications";
 import { prepareNotificationEditions, generateNotificationEdition } from "@/lib/notifications/editions";
-import { getDigestPageData } from "@/lib/notifications/public";
+import { getDigestEdition, getNextDigestEdition, listDigestEditions, listEarlierDigests } from "@/lib/notifications/public";
 import { runNotificationCycle } from "@/lib/notifications/worker";
 import { deliverNotification } from "@/lib/notifications/delivery";
 import { requestSubscription, confirmSubscription, updateSubscription } from "@/lib/notifications/subscriptions";
@@ -155,13 +155,13 @@ it("publishes only saved digest editions, preserving their metadata and hiding u
       {stream: "digest", windowStart, windowEnd: new Date("2026-09-15T00:00:00Z"), publications: [], title: "Private title"},
       {stream: "hourly", windowStart, windowEnd, publications: [], title: "Email only", publishedAt: windowEnd},
     ]);
-    const archive = await getDigestPageData(db, config, "en-GB", published.id);
-    expect(archive.editions.map(edition => edition.slug)).toEqual([published.id]);
-    expect(archive.edition).toMatchObject({title: "Saved title", summary: "Saved summary", markdown: "Saved body"});
+    expect((await listDigestEditions(db, config, "en-GB")).editions.map(edition => edition.slug)).toEqual([published.id]);
+    expect(await getDigestEdition(db, config, "en-GB", published.id)).toMatchObject({title: "Saved title", summary: "Saved summary", markdown: "Saved body"});
+    expect(await listEarlierDigests(db, config, "en-GB", published.id)).toEqual([]);
     const [unfinished] = await db.select().from(notificationEdition).where(eq(notificationEdition.title, "Private title"));
-    expect((await getDigestPageData(db, config, "en-GB", unfinished.id)).edition).toBeUndefined();
-    expect((await getDigestPageData(db, config, "en-GB", "not-a-uuid")).edition).toBeUndefined();
-    expect((await getDigestPageData(db, {...config, notifications: {...config.notifications, enabled: false}}, "en-GB")).nextEdition).toBeNull();
+    expect(await getDigestEdition(db, config, "en-GB", unfinished.id)).toBeUndefined();
+    expect(await getDigestEdition(db, config, "en-GB", "not-a-uuid")).toBeUndefined();
+    expect(await getNextDigestEdition(db, {...config, notifications: {...config.notifications, enabled: false}})).toBeNull();
   });
 }, 120_000);
 
@@ -259,7 +259,7 @@ it("preserves subscriber tokens, published editions and cutoffs when renaming di
 }, 120_000);
 
 
-it("snapshots a thousand publications with bounded queries and carries the remainder into the next digest", async () => {
+it("covers every publication in the window, lists the first thousand and carries none into the next digest", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const start = new Date("2026-09-09T00:00:00Z");
     await prepareNotificationEditions(db, config, start);
@@ -269,15 +269,37 @@ it("snapshots a thousand publications with bounded queries and carries the remai
     let queries = 0;
     const measured = drizzle({ client, schema, logger: { logQuery() { queries++; } } });
     const first = await prepareNotificationEditions(measured, config, new Date("2026-09-10T12:00:00Z"), {manualDigest: true});
-    expect(first).toMatchObject({status: "queued", publicationCount: 1000});
+    expect(first).toMatchObject({status: "queued", publicationCount: 1001});
     expect(queries).toBeLessThan(20);
     const [edition] = await db.select().from(notificationEdition);
+    expect(edition).toMatchObject({publicationCount: 1001});
+    expect(edition.publications).toHaveLength(1000);
     expect(edition.publications[0]).toMatchObject({key: "BAAAAAAB", doi: "10.5555/baaaaaab", item: {DOI: "10.5555/baaaaaab"}});
     expect(edition.publications.at(-1)?.key).toBe("BAAABAAA");
-    const second = await prepareNotificationEditions(db, config, new Date("2026-09-10T13:00:00Z"), {manualDigest: true});
-    expect(second).toMatchObject({status: "queued", publicationCount: 1});
-    const editions = await db.select().from(notificationEdition);
-    expect(editions.flatMap(row => row.publications.map(p => p.key))).toHaveLength(1001);
-    expect(new Set(editions.flatMap(row => row.publications.map(p => p.key))).size).toBe(1001);
+    // The publication past the cap is covered, not carried into the next edition.
+    const covered = await db.select({key: notificationItem.itemKey}).from(notificationItem).where(eq(notificationItem.digestEditionId, edition.id));
+    expect(covered).toHaveLength(1001);
+    expect(await prepareNotificationEditions(db, config, new Date("2026-09-10T13:00:00Z"), {manualDigest: true})).toEqual({status: "empty"});
+    await client.query(`UPDATE "notificationEdition" SET "publishedAt" = now(), title = 'Large', summary = 'Large', markdown = 'Large' WHERE id = $1`, [edition.id]);
+    // A page past the end shows the last page, which lists only this page's keys.
+    expect(await getDigestEdition(db, config, "en-GB", edition.id, 999)).toMatchObject({publicationCount: 1001, listed: 1000, page: 84, pages: 84, keys: edition.publications.slice(996).map(p => p.key)});
+    // Records deleted after publishing drop out of the pages instead of leaving gaps.
+    await client.query(`UPDATE item SET deleted = 1 WHERE key = ANY($1)`, [edition.publications.slice(0, 4).map(p => p.key)]);
+    expect(await getDigestEdition(db, config, "en-GB", edition.id, 1)).toMatchObject({listed: 996, pages: 83, keys: edition.publications.slice(4, 16).map(p => p.key)});
+  });
+}, 120_000);
+
+// Execute the real backfill over editions saved before counts, covers and coverage existed.
+it("backfills counts, covers and coverage from saved editions", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await client.query(`INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") VALUES ('CAAAAAAA', 'native', 'CAAAAAAA'), ('CAAAAAAB', 'native', 'CAAAAAAB')`);
+    await client.query(`INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", title) VALUES ('CAAAAAAA', 'native', 'CAAAAAAA', 'Report', 'First'), ('CAAAAAAB', 'native', 'CAAAAAAB', 'Report', 'Second')`);
+    const saved = (key: string, cover: string | null) => ({key, title: key, creators: [], date: null, abstract: null, publicationType: "Report", doi: null, item: {key, PDFCoverPageImage: cover}});
+    const [edition] = await db.insert(notificationEdition).values({stream: "digest", windowStart: new Date("2026-09-01T00:00:00Z"), windowEnd: new Date("2026-09-08T00:00:00Z"), publications: [saved("CAAAAAAA", null), saved("CAAAAAAB", "https://covers.example/second.png")] as never}).returning();
+    const backfill = readFileSync("drizzle/0064_digest-edition-coverage.sql", "utf8").split("--> statement-breakpoint").filter(statement => statement.trim().startsWith("UPDATE"));
+    for (const statement of backfill) await client.query(statement);
+    expect((await db.select().from(notificationEdition))[0]).toMatchObject({publicationCount: 2, cover: "https://covers.example/second.png"});
+    const items = await db.select({key: notificationItem.itemKey, digest: notificationItem.digestEditionId, hourly: notificationItem.hourlyEditionId}).from(notificationItem);
+    expect(items.filter(row => row.key.startsWith("C"))).toEqual(expect.arrayContaining([{key: "CAAAAAAA", digest: edition.id, hourly: null}, {key: "CAAAAAAB", digest: edition.id, hourly: null}]));
   });
 }, 120_000);

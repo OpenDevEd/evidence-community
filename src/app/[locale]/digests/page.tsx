@@ -1,18 +1,13 @@
-import { Suspense } from "react";
-import { connection } from "next/server";
-import { getLibraryConfig } from "@/config/library-config/server";
-import { getDatabaseForConfig } from "@/db";
-import { getDigestPageData } from "@/lib/notifications/public";
+import { getLatestDigest, getNextDigestEdition, listDigestEditions, pageNumber } from "@/lib/notifications/public";
 import DigestPages from "@/components/digests/DigestPages";
-import DigestLoading from "@/components/digests/DigestLoading";
+import { readDigests } from "./read";
 
-async function Archive({params}: {params: Promise<{locale: string}>}) {
-  await connection();
-  const {locale} = await params;
-  const config = await getLibraryConfig();
-  const data = await getDigestPageData(await getDatabaseForConfig(config), config, locale);
-  return <DigestPages data={data} />;
-}
-export default function Page(props: {params: Promise<{locale: string}>}) {
-  return <Suspense fallback={<DigestLoading />}><Archive {...props} /></Suspense>;
+type Props = {params: Promise<{locale: string}>; searchParams: Promise<{page?: string}>};
+export default function Page({params, searchParams}: Props) {
+  const locale = params.then(value => value.locale);
+  const page = searchParams.then(value => pageNumber(value.page));
+  return <DigestPages view="archive"
+    latest={readDigests(locale, getLatestDigest)}
+    editions={readDigests(locale, async (db, config, locale) => listDigestEditions(db, config, locale, await page))}
+    nextEdition={readDigests(locale, (db, config) => getNextDigestEdition(db, config))} />;
 }
