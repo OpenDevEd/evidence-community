@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
+import { LazyMotion, domAnimation, m, useReducedMotion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR, { preload } from "swr";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
+import { Spinner } from "@/components/nextui/Spinner";
 import { CitationStylePicker } from "./CitationStylePicker";
 import { CitationText } from "./CitationText";
 import CopyButton from "@/components/features/newlib/CopyButton";
@@ -40,34 +42,59 @@ function CitationContent({
 	retry: () => void;
 }) {
 	const t = useTranslations("ui");
+	const reducedMotion = useReducedMotion();
+	const [height, setHeight] = useState<number>();
+	const measure = useCallback((element: HTMLDivElement | null) => {
+		if (!element) return;
+		setHeight(element.offsetHeight);
+		const observer = new ResizeObserver(([entry]) => {
+			setHeight(entry.borderBoxSize[0].blockSize);
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, []);
 	const [displayed, setDisplayed] = useState(citation);
 	if (citation && citation !== displayed) setDisplayed(citation);
-	if (loading && !failed && !displayed)
-		return (
-			<p
-				role="status"
-				className="text-sm text-black/50 dark:text-white/50"
-			>
-				{t("loadingData")}
-			</p>
-		);
-	if (failed)
-		return (
-			<div role="alert" className="space-y-2 text-sm">
-				<p>{t("citationLoadFailed")}</p>
-				<Button size="sm" onPress={retry}>
-					{t("retry")}
-				</Button>
-			</div>
-		);
+	const showSpinner = !failed && !displayed;
 	return (
-		<div
-			className="max-h-72 overflow-y-auto text-black/70 dark:text-white/70"
-			aria-live="polite"
-			aria-busy={loading}
-		>
-			{displayed && <CitationText citation={displayed} />}
-		</div>
+		<LazyMotion features={domAnimation}>
+			<m.div
+				initial={false}
+				animate={{ height: height ?? "auto" }}
+				transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+				className="relative overflow-hidden"
+			>
+				<div
+					role="status"
+					aria-label={t("loadingData")}
+					aria-hidden={!showSpinner}
+					className={`absolute inset-x-0 top-0 flex h-12 items-center justify-center transition-[opacity,visibility] duration-150 motion-reduce:transition-none ${showSpinner ? "visible opacity-100" : "invisible opacity-0"}`}
+				>
+					<Spinner size="sm" aria-hidden="true" classNames={{
+						circle1: showSpinner ? "motion-reduce:animate-none" : "animate-none",
+						circle2: showSpinner ? "motion-reduce:animate-none" : "animate-none",
+					}} />
+				</div>
+				<div ref={measure} className={showSpinner ? "h-12" : undefined}>
+					<div className={`transition-opacity duration-150 motion-reduce:transition-none ${showSpinner ? "opacity-0" : "opacity-100"}`}>
+						{failed ? (
+							<div role="alert" className="space-y-2 text-sm">
+								<p>{t("citationLoadFailed")}</p>
+								<Button size="sm" onPress={retry}>{t("retry")}</Button>
+							</div>
+						) : (
+							<div
+								className="max-h-72 overflow-y-auto text-black/70 dark:text-white/70"
+								aria-live="polite"
+								aria-busy={loading}
+							>
+								{displayed && <CitationText citation={displayed} />}
+							</div>
+						)}
+					</div>
+				</div>
+			</m.div>
+		</LazyMotion>
 	);
 }
 
@@ -85,7 +112,11 @@ function CitationActions({
 	const t = useTranslations("ui");
 	return (
 		<div className="flex max-w-full items-center justify-between gap-1">
-			<CitationStylePicker selected={format} onSelect={onFormatChange} />
+			<CitationStylePicker
+				selected={format}
+				onSelect={onFormatChange}
+				className="min-w-0 max-w-none flex-1 sm:max-w-none"
+			/>
 			<span className="inline-flex size-8 shrink-0">
 				<CopyButton
 					key={text}
