@@ -2,7 +2,7 @@
 
 import { BiBookOpen } from "react-icons/bi";
 import { LuDownload, LuExternalLink } from "react-icons/lu";
-import Image from "next/image";
+import { CoverImage } from "@/components/features/items/CoverImage";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -337,7 +337,7 @@ function PdfCover({
 	return (
 		<div className="relative h-24 w-16 shrink-0 overflow-hidden rounded-xl border border-black/[0.06] bg-accent/10 dark:border-white/10">
 			{coverImage ? (
-				<Image
+				<CoverImage
 					src={coverImage}
 					alt={t("pdfPreviewAlt", { filename })}
 					fill

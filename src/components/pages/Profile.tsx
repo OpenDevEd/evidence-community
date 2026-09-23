@@ -635,6 +635,7 @@ export default function Profile({ data }: { data: any }) {
 							)}
 						>
 							<Image
+								unoptimized
 								src={displayData.image ?? `/icons/profile.png`}
 								alt={t("userAvatarAlt", {
 									name:

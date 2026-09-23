@@ -117,6 +117,7 @@ const FlagImage = ({ country, isHovered }: FlagImageProps) => (
 			transition={{ type: "spring", stiffness: 400, damping: 10 }}
 		>
 			<Image
+				unoptimized
 				src={`https://flagcdn.com/w160/${country.toLowerCase()}.png`}
 				alt={`${country} flag`}
 				fill

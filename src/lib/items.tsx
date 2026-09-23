@@ -438,6 +438,7 @@ function ItemCountry({
 						>
 							<div className="flex gap-2 items-center">
 								<Image
+									unoptimized
 									src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
 									alt={country}
 									width={16}

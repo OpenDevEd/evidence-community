@@ -19,6 +19,7 @@ export function CountryFlag({ countryCode, className = "w-6 h-4" }: CountryFlagP
 	return (
 		<div className={`${className} rounded-sm overflow-hidden shadow-sm flex-shrink-0`}>
 			<Image
+				unoptimized
 				src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
 				alt={countryCode}
 				className="w-full h-full object-cover"

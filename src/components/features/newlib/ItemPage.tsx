@@ -215,6 +215,7 @@ function AuthorAffiliations({
 							>
 								<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
 									<Image
+										unoptimized
 										src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
 										alt={institution.country_code}
 										className="w-full h-full object-cover"
