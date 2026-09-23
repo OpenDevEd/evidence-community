@@ -254,6 +254,8 @@ export async function getPublicItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	options: {
 		includeHeavyFields?: boolean;
+		/** Fewer results than a listing page, from the start of the list: a preview. */
+		limit?: number;
 	} = {},
 ): Promise<SearchItemsResult> {
 	const libraryConfig = await getLibraryConfig();
@@ -267,6 +269,8 @@ export async function getPublicItems(
 		attributesToSearchOn,
 	} = resolveSearchRequest(searchParams, libraryConfig);
 
+	const pageSize = options.limit ? Math.min(Math.max(1, Math.floor(options.limit)), limitNum) : limitNum;
+	const page = options.limit ? 1 : pageNum;
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
 		? displayedAttributes
@@ -276,8 +280,8 @@ export async function getPublicItems(
 
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
-			offset: (pageNum - 1) * limitNum,
-			limit: limitNum,
+			offset: (page - 1) * pageSize,
+			limit: pageSize,
 			attributesToSearchOn,
 			attributesToRetrieve,
 			...(sortOption ? { sort: [sortOption] } : {}),
@@ -297,10 +301,10 @@ export async function getPublicItems(
 
 	return {
 		items,
-		currentPage: pageNum,
+		currentPage: page,
 		totalItems: totalCount,
-		perPage: limitNum,
-		totalPages: Math.ceil(totalCount / limitNum),
+		perPage: pageSize,
+		totalPages: Math.ceil(totalCount / pageSize),
 	};
 }
 

@@ -893,5 +893,17 @@
         "documents": "नीति दस्तावेज़",
         "sections": "नीति के अनुभाग",
         "copyEmail": "ईमेल कॉपी करें"
-    }
+    },
+  "homePage": {
+    "curation": "लाइब्रेरी कैसे तैयार की जाती है",
+    "team": "इसके पीछे कौन है",
+    "involvement": "जुड़ें",
+    "suggest": "प्रकाशन सुझाएँ",
+    "suggestSubject": "प्रकाशन का सुझाव",
+    "join": "संपादक बनें",
+    "joinSubject": "संपादक के रूप में जुड़ना",
+    "stepArrival": "जमा किया गया",
+    "stepCheck": "संपादक द्वारा जाँचा गया",
+    "stepPublication": "प्रकाशित"
+  }
 }

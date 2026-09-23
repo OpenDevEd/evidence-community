@@ -188,7 +188,8 @@
 		"authorFilter": true,
 		"yearsDropdown": true,
 		"downloads": true,
-		"atomFeed": true
+		"atomFeed": true,
+		"homePage": false
 	},
 	"collections": [
 		{

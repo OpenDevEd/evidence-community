@@ -3,6 +3,7 @@ import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
 import {
@@ -75,7 +76,15 @@ export default async function sitemap(props: {
 
 	let policyEntries: MetadataRoute.Sitemap = [];
 	let gapmapEntries: MetadataRoute.Sitemap = [];
+	let homeEntries: MetadataRoute.Sitemap = [];
 	if (identifier === 0) {
+		// Listed only while it is a page of its own; otherwise `/` is a redirect to the listing.
+		if (isLibraryFeatureEnabled(libraryConfig.features, "homePage")) {
+			homeEntries = [{
+				url: buildLocalizedSiteUrl("/", localization.defaultLocale, localization, baseUrl),
+				alternates: { languages: buildLanguageAlternates("/", localization, baseUrl) },
+			}];
+		}
 		const policyPages = Object.entries(POLICY_DESTINATIONS) as [PolicyDocumentKind, (typeof POLICY_DESTINATIONS)[PolicyDocumentKind]][];
 		try {
 			const documents = await Promise.all(
@@ -138,5 +147,5 @@ export default async function sitemap(props: {
 				),
 	}));
 
-	return [...policyEntries, ...gapmapEntries, ...itemEntries];
+	return [...homeEntries, ...policyEntries, ...gapmapEntries, ...itemEntries];
 }

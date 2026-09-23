@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { twMerge } from "tailwind-merge";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { pageRunsUnderHeader } from "@/lib/runtime-routing";
 
 /**
  * The space above the header. The small style floats the header below the top
@@ -33,8 +34,8 @@ export default function MainWrapper({
 			className={twMerge(
 				"h-full w-full bg-background_light dark:bg-background flex flex-col items-center justify-items-center min-h-screen",
 				headroom(theme.layout === "small", engaged),
-				// The map fills the page on its own.
-				pathname.includes("/map") && "!p-0",
+				// The map and the About hero run to the top of the window on their own.
+				pageRunsUnderHeader(pathname) && "!p-0",
 			)}
 		>
 			{children}

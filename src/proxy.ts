@@ -2,6 +2,7 @@ import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import { loadLibraryConfig } from "./config/library-config/source";
+import { isLibraryFeatureEnabled } from "./config/library-config/features";
 import { getRuntimePageAvailability } from "./config/library-config/pages";
 import type { LibraryServerConfig } from "./config/library-config/schema";
 import {
@@ -427,7 +428,11 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.redirect(canonicalRedirect, 307);
 	}
 
-	if (request.nextUrl.pathname === "/") {
+	// Without a home page of its own the library opens on the listing.
+	if (
+		request.nextUrl.pathname === "/" &&
+		!isLibraryFeatureEnabled(libraryConfig.features, "homePage")
+	) {
 		const url = request.nextUrl.clone();
 		url.pathname = "/lib";
 		return NextResponse.redirect(url);

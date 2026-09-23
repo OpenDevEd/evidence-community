@@ -893,5 +893,17 @@
         "documents": "政策文件",
         "sections": "政策章节",
         "copyEmail": "复制电子邮件地址"
-    }
+    },
+  "homePage": {
+    "curation": "本库如何整理",
+    "team": "关于我们",
+    "involvement": "参与其中",
+    "suggest": "推荐文献",
+    "suggestSubject": "推荐文献",
+    "join": "成为编辑",
+    "joinSubject": "申请成为编辑",
+    "stepArrival": "已提交",
+    "stepCheck": "经编辑审核",
+    "stepPublication": "已发布"
+  }
 }

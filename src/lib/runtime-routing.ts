@@ -1,4 +1,5 @@
 import { getPlatformPathLocale } from "@/i18n/runtime";
+import { normalizePathname } from "@/lib/path";
 
 function firstForwardedValue(value: string | null) {
 	return value?.split(",")[0]?.trim() || null;
@@ -53,6 +54,17 @@ export function getUnlocalizedPathname(pathname: string) {
 
 	const unlocalizedPathname = pathname.slice(locale.length + 1);
 	return unlocalizedPathname || "/";
+}
+
+/**
+ * Pages whose first section runs to the top of the window: the map and the
+ * home page hero. The header floats over them at its smaller size and the page
+ * drops its top padding. While the home page is off `/` is never rendered, so
+ * it needs no check here.
+ */
+export function pageRunsUnderHeader(pathname: string): boolean {
+	const path = getUnlocalizedPathname(normalizePathname(pathname));
+	return path === "/" || path.includes("/map");
 }
 
 /**
