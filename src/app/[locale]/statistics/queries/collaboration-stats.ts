@@ -1,3 +1,4 @@
+import { visibleItem } from "./utils";
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql } from "drizzle-orm";
@@ -46,7 +47,7 @@ export type CollaborationStats = {
 	};
 };
 
-export async function getCollaborationStats(db: Database, authorCountries: { countryCode: string; countryName: string; authorCount: number; itemCount: number; hIndex: number }[]): Promise<CollaborationStats> {
+export async function getCollaborationStats(db: Database, authorCountries: { countryCode: string; countryName: string; authorCount: number; itemCount: number; hIndex: number }[], hiddenTags: readonly string[]): Promise<CollaborationStats> {
 	// First, get all items with their associated countries
 	const itemsWithCountriesResult = await db
 		.select({
@@ -61,8 +62,7 @@ export async function getCollaborationStats(db: Database, authorCountries: { cou
 			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
 			${affiliationCountryJoin}
-			WHERE ${item.deleted} = 0 
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+			WHERE ${visibleItem(db, hiddenTags)}
 			AND ${item.creators} IS NOT NULL
 			AND jsonb_array_length(${item.creators}) > 0
 			AND creator_data ? 'institutions'

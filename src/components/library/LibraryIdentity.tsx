@@ -21,7 +21,8 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
  * dark swaps which one is shown. Every file that settles is remembered, so a
  * colour scheme that has been shown once never asks the bar to hold room for
  * it again. Readiness is worked out while the page is being drawn, so it
- * cannot flicker for a frame after a switch.
+ * cannot flicker for a frame after a switch. Files are remembered with their
+ * colour scheme: one address used for both is two differently sized files.
  */
 export function useLibraryLogo() {
 	const { identity } = useLibraryConfig();
@@ -31,8 +32,8 @@ export function useLibraryLogo() {
 	);
 	const shownSource =
 		resolvedTheme === "dark"
-			? identity.assets.logoDark
-			: identity.assets.logoLight;
+			? `dark:${identity.assets.logoDark}`
+			: `light:${identity.assets.logoLight}`;
 	const onLogoSettled = useCallback((source: string) => {
 		setSettledSources((current) =>
 			current.has(source) ? current : new Set(current).add(source),
@@ -113,7 +114,7 @@ function LogoImage({
 					height: LOGO_WIDTH,
 				}).props;
 	const throughOptimizer = optimized !== null;
-	const settle = useCallback(() => onSettled?.(source), [onSettled, source]);
+	const settle = useCallback(() => onSettled?.(`${theme}:${source}`), [onSettled, source, theme]);
 	/**
 	 * A picture that was already in the browser's store finishes before the
 	 * page is wired up, so its load or error event never reaches us. Ask it as

@@ -56,15 +56,17 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 
 	// Get all topics with their counts (don't limit here)
 	const allTopics = useMemo(() => {
-		const topicCounts = new Map<string, { topic: string; count: number }>();
+		const topicCounts = new Map<string, { topic: string; level: number; count: number }>();
 		topicsByYear.forEach(item => {
 			const current = topicCounts.get(item.id);
-			topicCounts.set(item.id, { topic: item.topic, count: (current?.count ?? 0) + item.itemCount });
+			topicCounts.set(item.id, { topic: item.topic, level: item.level, count: (current?.count ?? 0) + item.itemCount });
 		});
 		
 		return Array.from(topicCounts.entries())
-			.map(([id, { topic, count }]) => ({ 
+			.map(([id, { topic, level, count }]) => ({ 
 				value: id, 
+				topic,
+				level,
 				label: `${topic} (${count.toLocaleString()})`, 
 				count 
 			}))
@@ -281,9 +283,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 									{t("allTopics")}
 								</AutocompleteItem>
 								{filteredTopics.map((topic) => {
-									const pathParts = topic.value.split('/');
-									const level = pathParts.length;
-									const displayName = pathParts[pathParts.length - 1];
+									const { level, topic: displayName } = topic;
 									
 									return (
 										<AutocompleteItem 

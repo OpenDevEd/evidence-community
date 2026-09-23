@@ -2326,10 +2326,13 @@ async function verify() {
 			getSourceCitationMetrics(db, openAlexA),
 			db
 				.select({
-					count: citationCountForItem({
-						kind: "library",
-						key: "library",
-					}),
+					count: citationCountForItem(
+						{
+							kind: "library",
+							key: "library",
+						},
+						[],
+					),
 				})
 				.from(item)
 				.where(eq(item.key, openAlexB))
@@ -2398,14 +2401,14 @@ async function verify() {
 			openAlexTopics,
 			openAlexTopicsByYear,
 		] = await Promise.all([
-			getCitationStats(db, sourceCitationMeasure),
-			getCitationsByYear(db, sourceCitationMeasure),
-			getInstitutionStats(db, sourceCitationMeasure),
-			getInstitutionStatsByYear(db, sourceCitationMeasure),
-			getAuthorCountries(db, sourceCitationMeasure),
-			getDetailedAuthorStats(db, sourceCitationMeasure),
-			getTopicStats(db, sourceCitationMeasure, citationTopics),
-			getTopicStatsByYear(db, sourceCitationMeasure, citationTopics),
+			getCitationStats(db, sourceCitationMeasure, []),
+			getCitationsByYear(db, sourceCitationMeasure, []),
+			getInstitutionStats(db, sourceCitationMeasure, []),
+			getInstitutionStatsByYear(db, sourceCitationMeasure, []),
+			getAuthorCountries(db, sourceCitationMeasure, []),
+			getDetailedAuthorStats(db, sourceCitationMeasure, []),
+			getTopicStats(db, sourceCitationMeasure, citationTopics, []),
+			getTopicStatsByYear(db, sourceCitationMeasure, citationTopics, []),
 		]);
 		assert(
 			openAlexCitationStats.totalCitations === 21 &&
