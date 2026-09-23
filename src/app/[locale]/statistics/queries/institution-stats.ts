@@ -6,7 +6,7 @@ import {
 	institutionCountryCode,
 	institutionCountryJoin,
 } from "./institution-country-sql";
-import { calculateHIndex } from "./utils";
+import { calculateHIndex, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type InstitutionStats = {
@@ -109,7 +109,7 @@ export async function getInstitutionStatsByYear(
 			SELECT
 				institution_name,
 				country_code,
-				extract(year from to_date(item_date, 'YYYY-MM-DD'))::text as year_extracted,
+				${yearOf(sql.raw("item_date"))}::text as year_extracted,
 				item_key,
 				item_citations
 			FROM ${institutionItems(citationCount)} as institution_items

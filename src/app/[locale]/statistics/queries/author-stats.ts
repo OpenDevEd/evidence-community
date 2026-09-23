@@ -1,7 +1,7 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { calculateHIndex } from "./utils";
+import { calculateHIndex, yearOf } from "./utils";
 import { COUNTRIES } from "@/constants/misc";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import {
@@ -333,27 +333,9 @@ export async function getDetailedAuthorStats(
 			creatorTypes: sql<string[]>`array_agg(distinct creator_type)`,
 			countries: sql<string[]>`array_agg(distinct country_code)`,
 			institutions: sql<string[]>`array_agg(distinct institution_name)`,
-			firstPublicationYear: sql<number>`min(extract(year from 
-				case 
-					when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(item_date, 'YYYY-MM-DD')
-					else null
-				end
-			))`,
-			lastPublicationYear: sql<number>`max(extract(year from 
-				case 
-					when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(item_date, 'YYYY-MM-DD')
-					else null
-				end
-			))`,
-			mostRecentYear: sql<number>`max(extract(year from 
-				case 
-					when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(item_date, 'YYYY-MM-DD')
-					else null
-				end
-			))`,
+			firstPublicationYear: sql<number>`min(${yearOf(sql.raw("item_date"))})`,
+			lastPublicationYear: sql<number>`max(${yearOf(sql.raw("item_date"))})`,
+			mostRecentYear: sql<number>`max(${yearOf(sql.raw("item_date"))})`,
 		})
 		.from(
 			sql`(

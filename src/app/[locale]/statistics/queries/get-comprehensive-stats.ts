@@ -25,6 +25,9 @@ import { withMeilisearchCache } from "@/lib/cache-utils";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import { resolveCitationMeasure } from "./citation-measure";
+import { getCachedCollections } from "@/app/api/cache";
+import type { Collection } from "@/app/api/collections/types";
+import type { ShownCollections } from "./topic-stats";
 
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
@@ -35,6 +38,7 @@ export async function getComprehensiveStats(
 		db,
 		requestedCitationMeasure,
 	);
+	const shown = shownCollections(await getCachedCollections(config).catch(() => []));
 	const stats = await withMeilisearchCache(
 		config,
 		`${config.revision}-comprehensive-stats-${measure.key}`,
@@ -76,8 +80,8 @@ export async function getComprehensiveStats(
 				getAuthorProductivityStats(db),
 				getAuthorCollaborationStats(db),
 				getDetailedAuthorStats(db, measure),
-				getTopicStats(db, measure),
-				getTopicStatsByYear(db, measure),
+				getTopicStats(db, measure, shown),
+				getTopicStatsByYear(db, measure, shown),
 				getCitationsByYear(db, measure),
 			]);
 
@@ -117,4 +121,17 @@ export async function getComprehensiveStats(
 		...stats,
 		citationMeasure: { selectedKey: measure.key, options },
 	};
+}
+
+/** Every collection the library shows, nested ones included, by key with its public title and parent. */
+function shownCollections(collections: readonly Collection[]): ShownCollections {
+	const shown = new Map<string, { title: string; parent?: string }>();
+	const visit = (list: readonly Collection[]) => {
+		for (const collection of list) {
+			shown.set(collection.key, { title: collection.title || collection.name || collection.key, parent: collection.parentCollection || undefined });
+			if (collection.children?.length) visit(collection.children);
+		}
+	};
+	visit(collections);
+	return shown;
 }

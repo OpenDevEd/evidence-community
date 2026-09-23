@@ -143,8 +143,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 					/>
 				)}
 
-				{/* Author Countries */}
-				{stats.authorCountries && stats.creatorStats && (
+				{/* Author Countries: its averages divide by the countries, so no countries, no section. */}
+				{stats.authorCountries && stats.authorCountries.length > 0 && stats.creatorStats && (
 					<AuthorCountries 
 						authorCountries={stats.authorCountries}
 						creatorStats={stats.creatorStats}
@@ -166,8 +166,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 					/>
 				)}
 
-				{/* Research Topics */}
-				{stats.topicStats && stats.topicOverview && (
+				{/* Research Topics: the collections the library shows; none shown, no section. */}
+				{stats.topicStats && stats.topicStats.length > 0 && stats.topicOverview && (
 					<ResearchTopics 
 						topicStats={stats.topicStats}
 						topicOverview={stats.topicOverview}

@@ -1,6 +1,6 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
@@ -38,7 +38,7 @@ export async function getCitationStats(
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		);
 
@@ -51,7 +51,7 @@ export async function getCitationStats(
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		);
 
@@ -116,7 +116,7 @@ export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		);
 

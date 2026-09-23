@@ -4,6 +4,7 @@ import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
+import { yearOf } from "./utils";
 
 export type ItemTypeStats = {
 	itemType: string;
@@ -42,7 +43,7 @@ export async function getTotalItems(db: Database): Promise<number> {
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		);
 
@@ -54,13 +55,7 @@ export async function getTotalItems(db: Database): Promise<number> {
 export async function getAvailableYears(db: Database): Promise<string[]> {
 	const availableYearsResult = await db
 		.select({
-			year: sql<string>`extract(year from 
-				case 
-					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(${item.date}, 'YYYY-MM-DD')
-					else null
-				end
-			)::text`,
+			year: sql<string>`${yearOf(item.date)}::text`,
 			count: sql<number>`count(*)`,
 		})
 		.from(item)
@@ -69,28 +64,16 @@ export async function getAvailableYears(db: Database): Promise<string[]> {
 				eq(item.deleted, 0),
 				isNotNull(item.date),
 				ne(item.date, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`, // Only valid date format
 			),
 		)
 		.groupBy(
-			sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`,
+			sql`${yearOf(item.date)}`,
 		)
 		.having(sql`count(*) >= 10`) // Only include years with at least 10 publications
 		.orderBy(
-			desc(sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`),
+			desc(sql`${yearOf(item.date)}`),
 		)
 		.limit(20); // Limit to last 20 years with data
 
@@ -110,7 +93,7 @@ export async function getItemTypeStats(
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		)
 		.groupBy(item.itemType)
@@ -131,13 +114,7 @@ export async function getItemTypeStats(
 export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 	const yearStatsResult = await db
 		.select({
-			year: sql<string>`extract(year from 
-				case 
-					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-					then to_date(${item.date}, 'YYYY-MM-DD')
-					else null
-				end
-			)::text`,
+			year: sql<string>`${yearOf(item.date)}::text`,
 			count: sql<number>`count(*)`,
 		})
 		.from(item)
@@ -146,27 +123,15 @@ export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 				eq(item.deleted, 0),
 				isNotNull(item.date),
 				ne(item.date, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`, // Only valid date format
 			),
 		)
 		.groupBy(
-			sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`,
+			sql`${yearOf(item.date)}`,
 		)
 		.orderBy(
-			desc(sql`extract(year from
-			case 
-				when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-				then to_date(${item.date}, 'YYYY-MM-DD')
-				else null
-			end
-		)`),
+			desc(sql`${yearOf(item.date)}`),
 		)
 		.limit(20);
 
@@ -206,7 +171,7 @@ export async function getFieldCompleteness(
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		);
 
@@ -390,7 +355,7 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 				eq(item.deleted, 0),
 				isNotNull(item.publisher),
 				ne(item.publisher, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		)
 		.groupBy(item.publisher)
@@ -409,7 +374,7 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 				eq(item.deleted, 0),
 				isNotNull(item.publicationTitle),
 				ne(item.publicationTitle, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		)
 		.groupBy(item.publicationTitle)
@@ -428,7 +393,7 @@ export async function getPublishersAndJournals(db: Database): Promise<{
 				eq(item.deleted, 0),
 				isNotNull(item.languageName),
 				ne(item.languageName, ""),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 			),
 		)
 		.groupBy(item.languageName)
@@ -483,7 +448,7 @@ export async function getCitationsByYear(
 	const citationCount = citationCountForItem(measure);
 	const citationsByYearResult = await db
 		.select({
-			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+			year: sql<string>`${yearOf(item.date)}::text`,
 			itemCount: sql<number>`count(*)`,
 			totalCitations: sql<number>`coalesce(sum(${citationCount}), 0)`,
 			avgCitationsPerItem: sql<number>`coalesce(avg(${citationCount}), 0)`,
@@ -492,18 +457,18 @@ export async function getCitationsByYear(
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+				sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`,
 				isNotNull(item.date),
 				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
-				sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD')) >= 2000`,
+				sql`${yearOf(item.date)} >= 2000`,
 			),
 		)
 		.groupBy(
-			sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+			sql`${yearOf(item.date)}::text`,
 		)
 		.orderBy(
 			desc(
-				sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+				sql`${yearOf(item.date)}::text`,
 			),
 		);
 
