@@ -250,8 +250,7 @@ export function FilterChips() {
 										title={label}
 										startContent={
 											countryName && (
-												<Image
-													unoptimized
+												<Image unoptimized
 													src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
 													alt={value}
 													width={16}

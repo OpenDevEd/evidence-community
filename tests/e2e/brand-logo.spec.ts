@@ -8,6 +8,8 @@ import {
 	logoBoxes,
 	logoShapes,
 	logoSvg,
+	logoThemeOf,
+	requestsFile,
 	serveShape,
 	type LogoShape,
 } from "./brand-logo-boxes";
@@ -134,14 +136,20 @@ test("holds the widest a logo may be until the logo people see arrives", async (
 	// must not make the header give up the room it is holding.
 	if (hiddenUrl !== visibleUrl) {
 		release(hiddenUrl);
+		// The hidden logo is the other scheme's picture, requested directly or through the optimizer.
+		const hiddenTheme = logoThemeOf(hiddenUrl);
 		await expect
 			.poll(() =>
-				page
-					.locator(`img[src="${hiddenUrl}"]`)
-					.first()
-					.evaluate((element: HTMLImageElement) =>
-						element.complete ? element.naturalWidth || 1 : 0,
-					),
+				page.evaluate(
+					({ url, theme }) => {
+						const image = [...document.querySelectorAll("img")].find((element) => {
+							const source = element.getAttribute("src") ?? "";
+							return source === url || (theme !== undefined && decodeURIComponent(source).includes(`/logo-${theme}.`));
+						});
+						return image?.complete ? image.naturalWidth || 1 : 0;
+					},
+					{ url: hiddenUrl, theme: hiddenTheme },
+				),
 			)
 			.toBeGreaterThan(0);
 		await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
@@ -170,10 +178,11 @@ function holdLogoFiles(page: Page, shape: LogoShape) {
 		);
 	}
 
+	const heldFor = (url: URL) => [...held.keys()].find((configured) => requestsFile(url, configured));
 	const route = page.route(
-		(url) => held.has(url.toString()),
+		(url) => heldFor(url) !== undefined,
 		async (handler) => {
-			await held.get(handler.request().url());
+			await held.get(heldFor(new URL(handler.request().url()))!);
 			await handler.fulfill({
 				body: logoSvg(shape),
 				contentType: "image/svg+xml",

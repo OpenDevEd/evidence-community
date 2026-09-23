@@ -400,8 +400,7 @@ function CountryParser(
 		label,
 		startContent: countryName && (
 			<div className="flex size-5 aspect-square justify-center items-center gap-2">
-				<Image
-					unoptimized
+				<Image unoptimized
 					src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
 					alt={countryCode}
 					width={20}

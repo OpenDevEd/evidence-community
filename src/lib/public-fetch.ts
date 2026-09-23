@@ -64,7 +64,7 @@ const publicOnly = new Agent({
 });
 
 /** An address from stored data or settings may only reach the public internet, never this network. */
-export async function assertPublicHttpUrl(url: URL) {
+async function assertPublicHttpUrl(url: URL) {
 	if (url.protocol !== "https:" && url.protocol !== "http:") {
 		throw new Error("Unsupported URL protocol");
 	}

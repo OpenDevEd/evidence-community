@@ -144,7 +144,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				)}
 
 				{/* Author Countries: its averages divide by the countries, so no countries, no section. */}
-				{stats.authorCountries && stats.authorCountries.length > 0 && stats.creatorStats && (
+				{hasRows(stats.authorCountries) && stats.creatorStats && (
 					<AuthorCountries 
 						authorCountries={stats.authorCountries}
 						creatorStats={stats.creatorStats}
@@ -167,7 +167,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				)}
 
 				{/* Research Topics: the collections the library shows; none shown, no section. */}
-				{stats.topicStats && stats.topicStats.length > 0 && stats.topicOverview && (
+				{hasRows(stats.topicStats) && stats.topicOverview && (
 					<ResearchTopics 
 						topicStats={stats.topicStats}
 						topicOverview={stats.topicOverview}
@@ -187,4 +187,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 			</motion.div>
 		</PageContainer>
 	);
-} 
+}
+
+/** A section of rows with none to show says nothing, so it is left out. */
+function hasRows(rows: readonly unknown[] | null | undefined): rows is readonly unknown[] {
+	return Boolean(rows?.length);
+}

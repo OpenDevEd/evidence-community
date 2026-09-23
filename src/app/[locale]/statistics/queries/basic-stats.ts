@@ -4,7 +4,7 @@ import { item } from "@/db/schema/tables/item";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
-import { eq, isNotNull, and, inArray, ne, sql, desc, gte } from "drizzle-orm";
+import { isNotNull, and, inArray, ne, sql, desc } from "drizzle-orm";
 import { yearOf } from "./utils";
 import { visibleItem } from "./utils";
 
@@ -55,31 +55,26 @@ export async function getTotalItems(db: Database, hiddenTags: readonly string[])
 	return Number(totalItems);
 }
 
-export async function getAvailableYears(db: Database, hiddenTags: readonly string[]): Promise<string[]> {
-	const availableYearsResult = await db
+/** Publications per year, from every date that starts with a year, as the listing's year filter counts them. */
+function yearCounts(db: Database, hiddenTags: readonly string[]) {
+	return db
 		.select({
 			year: sql<string>`${yearOf(item.date)}::text`,
 			count: sql<number>`count(*)`,
 		})
 		.from(item)
-		.where(
-			and(
-				isNotNull(item.date),
-				ne(item.date, ""),
-				visibleItem(db, hiddenTags),
-				sql`${item.date} ~ '^[0-9]{4}'`, // Any date that starts with its year, as the listing's year filter counts it
-			),
-		)
-		.groupBy(
-			sql`${yearOf(item.date)}`,
-		)
-		.having(sql`count(*) >= 10`) // Only include years with at least 10 publications
-		.orderBy(
-			desc(sql`${yearOf(item.date)}`),
-		)
-		.limit(20); // Limit to last 20 years with data
+		.where(and(visibleItem(db, hiddenTags), sql`${item.date} ~ '^[0-9]{4}'`))
+		.groupBy(sql`${yearOf(item.date)}`)
+		.$dynamic();
+}
 
-	return availableYearsResult.map((stat) => stat.year || "");
+/** The latest twenty years with at least ten publications. */
+export async function getAvailableYears(db: Database, hiddenTags: readonly string[]): Promise<string[]> {
+	const rows = await yearCounts(db, hiddenTags)
+		.having(sql`count(*) >= 10`)
+		.orderBy(desc(sql`${yearOf(item.date)}`))
+		.limit(20);
+	return rows.map((stat) => stat.year || "");
 }
 
 export async function getItemTypeStats(
@@ -114,29 +109,10 @@ export async function getItemTypeStats(
 }
 
 export async function getYearDistribution(db: Database, hiddenTags: readonly string[]): Promise<YearStats[]> {
-	const yearStatsResult = await db
-		.select({
-			year: sql<string>`${yearOf(item.date)}::text`,
-			count: sql<number>`count(*)`,
-		})
-		.from(item)
-		.where(
-			and(
-				isNotNull(item.date),
-				ne(item.date, ""),
-				visibleItem(db, hiddenTags),
-				sql`${item.date} ~ '^[0-9]{4}'`, // Any date that starts with its year, as the listing's year filter counts it
-			),
-		)
-		.groupBy(
-			sql`${yearOf(item.date)}`,
-		)
-		.orderBy(
-			desc(sql`${yearOf(item.date)}`),
-		)
+	const rows = await yearCounts(db, hiddenTags)
+		.orderBy(desc(sql`${yearOf(item.date)}`))
 		.limit(20);
-
-	return yearStatsResult.map((stat) => ({
+	return rows.map((stat) => ({
 		year: stat.year || "",
 		count: Number(stat.count),
 	}));
