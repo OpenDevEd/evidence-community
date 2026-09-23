@@ -84,6 +84,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 
 		// Group topics by fullPath for the selected year, collecting citation counts
 		const yearTopicsMap = new Map<string, {
+			id: string;
 			topic: string;
 			fullPath: string;
 			itemCount: number;
@@ -96,7 +97,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 		topicsByYear
 			.filter(t => t.year === selectedYear)
 			.forEach(yearTopic => {
-				const existing = yearTopicsMap.get(yearTopic.fullPath);
+				const existing = yearTopicsMap.get(yearTopic.id);
 				if (existing) {
 					existing.itemCount += yearTopic.itemCount;
 					existing.totalCitations += yearTopic.totalCitations;
@@ -111,7 +112,8 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 						citationCounts.push(Math.floor(yearTopic.totalCitations / yearTopic.itemCount));
 					}
 					
-					yearTopicsMap.set(yearTopic.fullPath, {
+					yearTopicsMap.set(yearTopic.id, {
+						id: yearTopic.id,
 						topic: yearTopic.topic,
 						fullPath: yearTopic.fullPath,
 						itemCount: yearTopic.itemCount,
@@ -128,9 +130,10 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 			const avgCitations = data.itemCount > 0 ? data.totalCitations / data.itemCount : 0;
 			
 			// Find original topic data to preserve children and isLeaf information
-			const originalTopic = topicStats.find(t => t.fullPath === data.fullPath);
+			const originalTopic = topicStats.find(t => t.id === data.id);
 			
 			return {
+				id: data.id,
 				topic: data.topic,
 				level: data.level,
 				parentTopic: data.parentTopic,

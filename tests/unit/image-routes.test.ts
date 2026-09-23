@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const { lookup } = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup }));
+const fetchMock = vi.hoisted(() => vi.fn());
+vi.mock("undici", () => ({ Agent: class {}, fetch: fetchMock }));
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: async () => ({
 		revision: "r5",
@@ -14,10 +16,9 @@ vi.mock("@/config/library-config/server", () => ({
 import { GET as getLogo } from "@/app/brand/[revision]/[logo]/route";
 import { GET as getCover } from "@/app/covers/[...path]/route";
 
-const fetchMock = vi.fn();
 const image = (type: string) => new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": type } });
-const logo = (revision: string, file: string) => getLogo(new Request("https://library.example.org"), { params: Promise.resolve({ revision, logo: file }) });
-const cover = (...path: string[]) => getCover(new Request("https://library.example.org"), { params: Promise.resolve({ path }) });
+const logo = (revision: string, file: string, search = "") => getLogo(new Request(`https://library.example.org/brand/${revision}/${file}${search}`), { params: Promise.resolve({ revision, logo: file }) });
+const cover = (...path: string[]) => getCover(new Request(`https://library.example.org/covers/${path.join("/")}`), { params: Promise.resolve({ path }) });
 
 beforeEach(() => {
 	vi.stubGlobal("fetch", fetchMock);
@@ -35,6 +36,14 @@ describe("logo route", () => {
 		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 	});
 
+	it("answers nothing with a query string, which would be a new cache entry each time", async () => {
+		fetchMock.mockResolvedValue(image("image/png"));
+		expect((await logo("r5", "logo-light.png", "?nonce=1")).status).toBe(404);
+		expect(fetchMock).not.toHaveBeenCalled();
+		const response = await getCover(new Request("https://library.example.org/covers/store.example.org/library-public/cover.png?nonce=1"), { params: Promise.resolve({ path: ["store.example.org", "library-public", "cover.png"] }) });
+		expect(response.status).toBe(404);
+	});
+
 	it("answers nothing for another revision, another extension, or an SVG", async () => {
 		fetchMock.mockResolvedValue(image("image/png"));
 		expect((await logo("r6", "logo-light.png")).status).toBe(404);
@@ -46,6 +55,7 @@ describe("logo route", () => {
 
 	it("never follows a redirect into a private network", async () => {
 		fetchMock.mockResolvedValue(new Response(null, { status: 302, headers: { location: "http://internal.example/secret.png" } }));
+		// A redirect to a literal private address is refused too.
 		lookup.mockImplementation(async (host: string) => [{ address: host === "internal.example" ? "10.0.0.5" : "93.184.216.34", family: 4 }]);
 		expect((await logo("r5", "logo-light.png")).status).toBe(404);
 		expect(fetchMock).toHaveBeenCalledTimes(1);

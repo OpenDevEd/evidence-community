@@ -14,6 +14,12 @@ describe("topic paths", () => {
 		]);
 	});
 
+	it("tells apart collections that share a title by their keys", () => {
+		const twins = new Map([["A", { title: "Education" }], ["B", { title: "Education" }]]);
+		expect([topicPaths("A", twins)[0]?.id, topicPaths("B", twins)[0]?.id]).toEqual(["A", "B"]);
+		expect(topicPaths("LIT", shown).map((path) => [path.id, path.parentId])).toEqual([["EDU", undefined], ["EDU/LIT", "EDU"]]);
+	});
+
 	it("leaves out a collection the library does not show", () => {
 		expect(topicPaths("INTERNAL", shown)).toEqual([]);
 	});

@@ -11,7 +11,9 @@ function notFound() {
  * A cover from the library's public storage, served from this site so Next's image optimizer can resize it (see
  * CoverImage). The path names the storage host and bucket the cover was stored in; only the library's own answer.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
+	// One address per file: a query string would be a new cache entry and a new download each time.
+	if (new URL(request.url).search) return notFound();
 	const [host, bucket, ...path] = (await params).path;
 	const { url, publicBucket } = (await getLibraryConfig()).services.storage;
 	if (host !== new URL(url).host || bucket !== publicBucket || path.length === 0 || path.some((segment) => segment === "." || segment === "..")) return notFound();

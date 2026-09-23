@@ -56,16 +56,16 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 
 	// Get all topics with their counts (don't limit here)
 	const allTopics = useMemo(() => {
-		const topicCounts = new Map<string, number>();
+		const topicCounts = new Map<string, { topic: string; count: number }>();
 		topicsByYear.forEach(item => {
-			const current = topicCounts.get(item.fullPath) || 0;
-			topicCounts.set(item.fullPath, current + item.itemCount);
+			const current = topicCounts.get(item.id);
+			topicCounts.set(item.id, { topic: item.topic, count: (current?.count ?? 0) + item.itemCount });
 		});
 		
 		return Array.from(topicCounts.entries())
-			.map(([path, count]) => ({ 
-				value: path, 
-				label: `${path.split('/').pop() || path} (${count.toLocaleString()})`, 
+			.map(([id, { topic, count }]) => ({ 
+				value: id, 
+				label: `${topic} (${count.toLocaleString()})`, 
 				count 
 			}))
 			.sort((a, b) => b.count - a.count);
@@ -128,7 +128,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 			}));
 		} else if (selectedTopic !== "all") {
 			// Filter and aggregate by topic
-			const filtered = topicsByYear.filter(item => item.fullPath === selectedTopic);
+			const filtered = topicsByYear.filter(item => item.id === selectedTopic);
 			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
 			
 			filtered.forEach(item => {
