@@ -691,6 +691,9 @@ const muted = "opacity-60";
 const rule = "border-t border-[rgb(var(--ink-rgb)/0.1)]";
 const percent = (part: number, whole: number) => Math.round((100 * part) / Math.max(1, whole));
 
+/** The row standing for every publication a view's top rows leave out, those with no value recorded included. */
+const OTHER_OR_NONE = "Other or none";
+
 /** A row of the explorer. `filter` is the listing's query for its publications, where the listing can filter by it. */
 type Row = { name: string; count: number; filter?: string; flag?: string };
 
@@ -1007,6 +1010,15 @@ function Explorer({ data, shapes, tones, ramp }: { data: HomeData; shapes: MapSh
 
 	const types = [...data.itemTypes].sort((a, b) => b.count - a.count).slice(0, 6).map((row) => ({ name: humanType(row.itemType).replace(/^./, (first) => first.toUpperCase()), count: row.count }));
 	const otherTypes = data.publications - types.reduce((sum, row) => sum + row.count, 0);
+	/**
+	 * The rows plus one for every publication they leave out, so the tiles share out the whole library as the
+	 * percentages do. Only for views where each publication counts once: a publication in two collections would
+	 * make the tiles add up to more than the library.
+	 */
+	const withRest = (rows: Row[]) => {
+		const rest = data.publications - rows.reduce((sum, row) => sum + row.count, 0);
+		return rest > 0 ? [...rows, { name: OTHER_OR_NONE, count: rest }] : rows;
+	};
 
 	const rampOf = (rows: Row[]) => (index: number) => ramp[Math.round((index * (ramp.length - 1)) / Math.max(1, rows.length - 1))]!;
 	/** A part-to-whole view: treemap in the ramp, shares counted against the library unless the rows are a top list. */
@@ -1022,10 +1034,10 @@ function Explorer({ data, shapes, tones, ramp }: { data: HomeData; shapes: MapSh
 		{ key: "countries", title: "By country", icon: Globe02Icon, rows: countryRows, reading: (row, index) => (index === 0 ? <><strong>{row.name}</strong> leads {countries} countries, with {counted(row)} publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} about <strong>{row.name}</strong></>), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
 		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, data.collections.map((collection) => ({ name: collection.title, count: collection.count, filter: listing(true, { collections: [collection.key] }) })), data.publications),
 		parts({ key: "topics", title: "Topics", icon: Tag01Icon, reading: (row) => <>{counted(row)} publications are about <strong>{row.name.toLowerCase()}</strong></> }, data.topics.map((row) => ({ ...row, filter: listing(true, { collections: [row.key] }) }))),
-		parts({ key: "languages", title: "Languages", icon: LanguageSkillIcon, reading: (row) => <><strong>{percent(row.count, data.publications)}%</strong> are written in <strong>{row.name}</strong></> }, data.languages, data.publications),
+		parts({ key: "languages", title: "Languages", icon: LanguageSkillIcon, reading: (row) => (row.name === OTHER_OR_NONE ? <><strong>{percent(row.count, data.publications)}%</strong> are in <strong>another language</strong> or have none recorded</> : <><strong>{percent(row.count, data.publications)}%</strong> are written in <strong>{row.name}</strong></>) }, withRest(data.languages), data.publications),
 		parts({ key: "institutions", title: "Institutions", icon: UniversityIcon, reading: (row) => <>{counted(row)} publications have an author at <strong>{row.name}</strong></> }, data.institutions.map((row) => ({ ...row, filter: listing(filters.institution.mode !== "hidden", { institution: [row.name] }) }))),
-		parts({ key: "publishers", title: "Publishers", icon: Building03Icon, reading: (row) => <><strong>{row.name}</strong> published {counted(row)} of them</> }, data.publishers),
-		parts({ key: "journals", title: "Journals", icon: Book02Icon, reading: (row) => <>{counted(row)} appeared in <strong>{row.name}</strong></> }, data.journals),
+		parts({ key: "publishers", title: "Publishers", icon: Building03Icon, reading: (row) => (row.name === OTHER_OR_NONE ? <>{counted(row)} have <strong>another publisher</strong> or none recorded</> : <><strong>{row.name}</strong> published {counted(row)} of them</>) }, withRest(data.publishers), data.publications),
+		parts({ key: "journals", title: "Journals", icon: Book02Icon, reading: (row) => (row.name === OTHER_OR_NONE ? <>{counted(row)} appeared in <strong>another journal</strong> or none</> : <>{counted(row)} appeared in <strong>{row.name}</strong></>) }, withRest(data.journals), data.publications),
 	];
 	const views = allViews.filter((item) => item.rows.some((row) => row.count > 0));
 	const view = views.find((item) => item.key === tab) ?? views[0];
