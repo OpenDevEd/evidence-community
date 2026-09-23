@@ -31,7 +31,7 @@ import type { Collection } from "@/app/api/collections/types";
 import type { ShownCollections } from "./topic-stats";
 
 /** Part of the cache key: raise it when the statistics change what they count, so a deployment never serves figures cached by the code before it. */
-const STATISTICS_VERSION = 4;
+const STATISTICS_VERSION = 5;
 
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,

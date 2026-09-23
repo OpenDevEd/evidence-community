@@ -28,6 +28,8 @@ export type FieldStats = {
 export type AttachmentStats = {
 	totalAttachments: number;
 	itemsWithAttachments: number;
+	/** Publications with a PDF among their attachments. */
+	itemsWithPdf: number;
 	attachmentPercentage: number;
 };
 
@@ -310,6 +312,7 @@ export async function getAttachmentStats(
 		.select({
 			totalAttachments: sql<number>`count(case when ${item.parentItem} is not null and ${item.parentItem} != '' then 1 end)`,
 			itemsWithAttachments: sql<number>`count(distinct case when ${item.parentItem} is not null and ${item.parentItem} != '' then ${item.parentItem} end)`,
+			itemsWithPdf: sql<number>`count(distinct case when ${item.contentType} = 'application/pdf' then ${item.parentItem} end)`,
 		})
 		.from(item)
 		// Visible attachments of visible publications: one under a hidden publication is not the library's to count.
@@ -322,6 +325,7 @@ export async function getAttachmentStats(
 		itemsWithAttachments: Number(
 			attachmentStatsResult[0]?.itemsWithAttachments || 0,
 		),
+		itemsWithPdf: Number(attachmentStatsResult[0]?.itemsWithPdf || 0),
 		attachmentPercentage:
 			totalItems > 0
 				? Number(
