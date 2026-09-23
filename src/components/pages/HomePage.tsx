@@ -214,7 +214,7 @@ function LatestPublications({ data }: { data: HomeData }) {
 						<span className="block shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 							<PdfCover src={data.covers[item.key]} alt="" sizes="(min-width: 1024px) 208px, (min-width: 640px) 33vw, 50vw" />
 						</span>
-						<span className="mt-3 line-clamp-3 text-sm font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</span>
+						<span className="mt-3 line-clamp-3 text-sm font-medium leading-snug transition-colors group-hover:text-accent">{item.title || item.key}</span>
 						{item.datePublished && <span className="mt-1 block text-xs tabular-nums opacity-60">{shortDate.format(new Date(item.datePublished))}</span>}
 					</Link>
 				</li>
@@ -402,9 +402,11 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 /** One row per part the library has: what it is on the left, a live look at it on the right, drawn from the library itself. */
 function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; questions?: string[] }) {
 	const locale = useLocale();
+	const shown = parts.filter((part) => part.has(data));
+	if (!shown.length) return <p className="text-lg opacity-70">The library’s publications will appear here once they are added.</p>;
 	return (
 		<motion.ul {...listMotion}>
-			{parts.filter((part) => part.has(data)).map((part) => {
+			{shown.map((part) => {
 				const destination = destinations[part.shows];
 				return (
 					<motion.li key={part.shows} variants={arrive} className="border-t border-[rgb(var(--ink-rgb)/0.1)] py-12 first:border-t-0 first:pt-0 lg:py-14 lg:first:pt-0">
@@ -574,7 +576,7 @@ function HeroShelf({ data }: { data: HomeData }) {
 			{[...publications, ...publications].map((publication, index) => {
 				const copy = index >= publications.length;
 				return (
-					<Link key={`${publication.key}-${index}`} href={`/lib/${publication.key}`} aria-hidden={copy || undefined} tabIndex={copy ? -1 : undefined} aria-label={copy ? undefined : publication.title ?? undefined} className={`block pb-5 outline-offset-4 ${copy ? "motion-reduce:hidden" : ""}`}>
+					<Link key={`${publication.key}-${index}`} href={`/lib/${publication.key}`} aria-hidden={copy || undefined} tabIndex={copy ? -1 : undefined} aria-label={copy ? undefined : publication.title || publication.key} className={`block pb-5 outline-offset-4 ${copy ? "motion-reduce:hidden" : ""}`}>
 						<span className="block overflow-hidden rounded-xl shadow-lg [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 							<PdfCover src={data.covers[publication.key]} alt="" sizes="176px" />
 						</span>
@@ -1118,6 +1120,7 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 	];
 	const views = allViews.filter((item) => item.rows.some((row) => row.count > 0));
 	const view = views.find((item) => item.key === tab) ?? views[0];
+	if (!view) return <p className="text-lg opacity-70">Figures about the library will appear here once it has publications.</p>;
 
 	return (
 		<>
@@ -1125,7 +1128,7 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 			<Tabs aria-label="Explore the data" color="card" size="lg" selectedKey={view?.key} onSelectionChange={(key) => setTab(String(key))} classNames={{ base: "max-w-full", tabList: "max-w-full overflow-x-auto", tab: "w-auto flex-none md:px-5", panel: "hidden" }}>
 				{views.map((item) => <Tab key={item.key} title={<span className="flex items-center gap-2"><HugeiconsIcon icon={item.icon} aria-hidden size={16} />{item.title}</span>} />)}
 			</Tabs>
-			{view && <div role="tabpanel" aria-label={view.title} className="pt-4"><ExplorerPanel key={view.key} view={view} data={data} surface={tones.card} /></div>}
+			<div role="tabpanel" aria-label={view.title} className="pt-4"><ExplorerPanel key={view.key} view={view} data={data} surface={tones.card} /></div>
 			<Facts data={data} />
 		</>
 	);
