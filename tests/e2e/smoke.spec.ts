@@ -4,6 +4,7 @@ import type { ItemsGetResponse } from "../../src/app/api/items/types";
 import type { ItemGetResponse } from "../../src/app/api/item/types";
 import { creatorDisplayName } from "../../src/lib/creator-display-name";
 
+import { requestsFile } from "./brand-logo-boxes";
 import { dismissConsent } from "./consent";
 import { verifySourceCitationMeasure } from "./citation-measure";
 
@@ -222,7 +223,7 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 }) => {
 	if (expectedLoadedLogo) {
 		await page.route(
-			(url) => expectedLogoUrls.includes(url.toString()),
+			(url) => expectedLogoUrls.some((configured) => requestsFile(url, configured)),
 			(route) =>
 				route.fulfill({
 					body: Buffer.from(
@@ -237,8 +238,11 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 
 	await expect(page).toHaveTitle(expectedIdentityName);
 
+	// The configured logo, either at its own address or, for a PNG or WebP, through the image optimizer.
 	const visibleLogo = page.locator("img[data-library-logo]:visible").first();
-	await expect(visibleLogo).toHaveAttribute("src", expectedLogoUrl);
+	await expect
+		.poll(async () => requestsFile(new URL((await visibleLogo.getAttribute("src")) ?? "", page.url()), expectedLogoUrl))
+		.toBe(true);
 	if (expectedLoadedLogo) {
 		await expect
 			.poll(() =>
