@@ -2,6 +2,7 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 
 export type CitationStats = {
@@ -87,13 +88,13 @@ export async function getCitationStats(
 	return citationStats;
 }
 
-/** The most cited publications under a citation measure, for the home page's citations preview. */
-export async function getMostCitedItems(db: Database, measure: CitationMeasure, limit: number) {
+/** The most cited publications a reader can see, under a citation measure, for the home page's citations preview. */
+export async function getMostCitedItems(db: Database, measure: CitationMeasure, limit: number, hiddenTags: readonly string[]) {
 	const citationCount = citationCountForItem(measure);
 	const rows = await db
 		.select({ key: item.key, title: item.title, citations: citationCount })
 		.from(item)
-		.where(and(eq(item.deleted, 0), sql`(${item.parentItem} IS NULL OR ${item.parentItem} = '')`, sql`${citationCount} > 0`))
+		.where(and(publicParentVisibility(db, hiddenTags), sql`${citationCount} > 0`))
 		.orderBy(desc(citationCount))
 		.limit(limit);
 	return rows.map((row) => ({ key: row.key, title: row.title ?? "", citations: Number(row.citations) }));

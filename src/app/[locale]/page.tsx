@@ -118,6 +118,7 @@ export default async function Home({ params }: Props) {
 			name={config.identity.name}
 			siteUrl={config.identity.baseUrl}
 			contactEmail={config.contact.email ?? null}
+			today={new Date().toISOString().slice(0, 10)}
 			about={about}
 			data={data}
 		/>

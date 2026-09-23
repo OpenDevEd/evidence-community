@@ -48,7 +48,8 @@ export type HomeData = {
 	institutions: { name: string; count: number }[];
 	countries: Record<string, number>;
 	collections: { key: string; title: string; count: number }[];
-	topics: { name: string; count: number }[];
+	/** The top-level topics, each the collection it is, so same-named collections stay apart. */
+	topics: { name: string; count: number; key: string }[];
 	languages: { name: string; count: number }[];
 	publishers: { name: string; count: number }[];
 	journals: { name: string; count: number }[];
@@ -144,7 +145,8 @@ const leadFor = (text: string) => (text.length > 180 ? "max-w-[40ch] text-2xl le
 /** The parts every library has, shown under "Inside the library" with a live look at each. Not configurable. */
 type Part = "publications" | "ai" | "citations" | "digests";
 
-const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" });
+// Dates are formatted in UTC, so the server and every browser print the same day.
+const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 /** A conic light spun on the spot; the Ask console draws it behind its question box as a ring and as a glow. */
 const turningLight = <span aria-hidden className="absolute left-1/2 top-1/2 -ml-[80%] -mt-[80%] aspect-square w-[160%] animate-spin bg-[conic-gradient(from_0deg,transparent_0deg,rgb(var(--color-accent-300))_50deg,rgb(var(--color-accent-500))_110deg,transparent_170deg,transparent_360deg)] [animation-duration:5s] motion-reduce:animate-none" />;
 
@@ -216,7 +218,7 @@ function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeD
 			return (
 				<div className="grid gap-12 lg:grid-cols-[28rem_minmax(0,1fr)] lg:gap-20">
 					<div className="pr-4 pt-2">
-						<DigestCover edition={latest} libraryName={data.digests.library} timezone={data.digests.timezone} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />
+						<DigestCover edition={latest} libraryName={data.digests.library} timezone={data.digests.timezone} href={`/${locale}/digests/${latest.slug}`} locale={locale} titleAs="h3" />
 					</div>
 					{data.digests.editions.length > 1 && (
 						<div>
@@ -243,10 +245,10 @@ function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeD
  * How to cite the library itself, through the same citation panel as every publication (styles, picker, copy). The
  * library is described as a web page read today, built from its name and address, so no library has to write it.
  */
-function CiteSlip({ name, url }: { name: string; url: string }) {
+function CiteSlip({ name, url, today }: { name: string; url: string; today: string }) {
 	const { citations } = useLibraryConfig();
 	if (!citations.enabled) return null;
-	const library: CitationItem = { key: "library", title: name, itemType: "Webpage", url, accessDate: new Date().toISOString().slice(0, 10) };
+	const library: CitationItem = { key: "library", title: name, itemType: "Webpage", url, accessDate: today };
 	// The block a publication page shows, so citing the library looks like citing anything else in it.
 	return <CitationPanel item={library} showHeading completeRecord link={url} />;
 }
@@ -368,6 +370,7 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 
 /** One row per part the library has: what it is on the left, a live look at it on the right, drawn from the library itself. */
 function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; questions?: string[] }) {
+	const locale = useLocale();
 	return (
 		<motion.ul {...listMotion}>
 			{parts.filter((part) => part.has(data)).map((part) => {
@@ -379,7 +382,7 @@ function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; q
 								<h2 className="text-[1.75rem] font-bold leading-tight tracking-tight lg:text-3xl">{part.title}</h2>
 								<p className="mt-2 max-w-[40rem] text-base leading-7 opacity-75">{part.text}</p>
 							</div>
-							{destination && <TextLink href={destination.href}>{destination.label}</TextLink>}
+							{destination && <TextLink href={`/${locale}${destination.href}`}>{destination.label}</TextLink>}
 						</div>
 						<Preview shows={part.shows} data={data} surface={surface} questions={questions} />
 					</motion.li>
@@ -410,7 +413,7 @@ function Curation({ curation, heading, data }: { curation: NonNullable<HomeConte
 
 type Step = NonNullable<NonNullable<HomeContent["curation"]>["steps"]>[number];
 
-const longDay = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric" });
+const longDay = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 /** Timeline columns on wide screens, one per step; below that the steps run down one vertical track. */
 const TIMELINE_COLUMNS: Record<number, string> = { 1: "", 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
@@ -662,7 +665,7 @@ const twoColumns = "grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap
 
 const number = new Intl.NumberFormat("en");
 const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-const dateFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" });
+const dateFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const muted = "opacity-60";
 const rule = "border-t border-[rgb(var(--ink-rgb)/0.1)]";
 const percent = (part: number, whole: number) => Math.round((100 * part) / Math.max(1, whole));
@@ -914,13 +917,15 @@ type View = {
 
 /** One panel for every view: the finding as a sentence, a fixed-height chart beside its list, then publications behind the row on show. Every part has a fixed height, so neither tabs nor rows move the page. */
 function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; surface: Tone }) {
+	const locale = useLocale();
 	const [selected, setSelected] = useState(view.initial ?? 0);
 	const [preview, setPreview] = useState<number | null>(null);
 	const shown = preview ?? selected;
 	const row = view.rows[shown]!;
 	const link: Linkage = { shown, previewing: preview !== null, onPreview: setPreview, onSelect: setSelected };
-	// The row's own newest publications, the first of what "See all" opens; the last row's stay up while the next loads.
-	const { data: examples } = useSWR<ItemsGetResponse>(row.filter ? `/items?${row.filter}&sort=desc&limit=2` : null, fetcher, { keepPreviousData: true });
+	// The row's own newest publications, the first of what "See all" opens. While they load the space stays empty, never
+	// showing another row's publications under this row's name.
+	const { data: examples } = useSWR<ItemsGetResponse>(row.filter ? `/items?${row.filter}&sort=desc&limit=2` : null, fetcher);
 	return (
 		<>
 			<div className={`rounded-2xl p-5 lg:p-8 ${toneClass}`} style={toneStyle(surface)}>
@@ -935,7 +940,7 @@ function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; su
 				<div className="mt-8">
 					<div className="mb-4 flex items-baseline justify-between gap-6">
 						<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
-						<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${row.filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
+						<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/${locale}/lib?${row.filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
 					</div>
 					<PublicationList items={examples?.items ?? []} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
 				</div>
@@ -975,7 +980,6 @@ function Explorer({ data, shapes, tones, ramp }: { data: HomeData; shapes: MapSh
 	const { filters, search } = useLibraryConfig();
 	/** The listing's query for one of its filters, or nothing where the library has that filter switched off. */
 	const listing = (on: boolean, params: { collections?: string[]; country?: string[]; institution?: string[]; range?: string }) => (on ? serializeSearchParams(params).slice(1) : undefined);
-	const collectionKeys = new Map(data.collections.map((collection) => [collection.title, collection.key]));
 	const countries = Object.keys(data.countries).length;
 	const series = yearSeries(data);
 	const peak = series.reduce((best, point, index) => (point.value > (series[best]?.value ?? -1) ? index : best), 0);
@@ -996,7 +1000,7 @@ function Explorer({ data, shapes, tones, ramp }: { data: HomeData; shapes: MapSh
 		parts({ key: "types", title: "By type", icon: Layers01Icon, reading: (row) => (row.name === "Other" ? <>{counted(row)} publications are of <strong>another type</strong></> : <><strong>{percent(row.count, data.publications)}%</strong> are <strong>{plural(row.name)}</strong></>) }, otherTypes > 0 ? [...types, { name: "Other", count: otherTypes }] : types, data.publications),
 		{ key: "countries", title: "By country", icon: Globe02Icon, rows: countryRows, reading: (row, index) => (index === 0 ? <><strong>{row.name}</strong> leads {countries} countries, with {counted(row)} publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} about <strong>{row.name}</strong></>), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
 		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, data.collections.map((collection) => ({ name: collection.title, count: collection.count, filter: listing(true, { collections: [collection.key] }) })), data.publications),
-		parts({ key: "topics", title: "Topics", icon: Tag01Icon, reading: (row) => <>{counted(row)} publications are about <strong>{row.name.toLowerCase()}</strong></> }, data.topics.map((row) => ({ ...row, filter: listing(collectionKeys.has(row.name), { collections: [collectionKeys.get(row.name)!] }) }))),
+		parts({ key: "topics", title: "Topics", icon: Tag01Icon, reading: (row) => <>{counted(row)} publications are about <strong>{row.name.toLowerCase()}</strong></> }, data.topics.map((row) => ({ ...row, filter: listing(true, { collections: [row.key] }) }))),
 		parts({ key: "languages", title: "Languages", icon: LanguageSkillIcon, reading: (row) => <><strong>{percent(row.count, data.publications)}%</strong> are written in <strong>{row.name}</strong></> }, data.languages, data.publications),
 		parts({ key: "institutions", title: "Institutions", icon: UniversityIcon, reading: (row) => <>{counted(row)} publications have an author at <strong>{row.name}</strong></> }, data.institutions.map((row) => ({ ...row, filter: listing(filters.institution.mode !== "hidden", { institution: [row.name] }) }))),
 		parts({ key: "publishers", title: "Publishers", icon: Building03Icon, reading: (row) => <><strong>{row.name}</strong> published {counted(row)} of them</> }, data.publishers),
@@ -1031,13 +1035,14 @@ function WithData({ data, children }: { data: Promise<HomeData>; children: (data
 	return <>{children(use(data))}</>;
 }
 
-type Props = { name: string; siteUrl: string; contactEmail: string | null; about: HomeContent; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
+/** `today` is the server's date, so the citation's access date is the same in the server's page and the browser's. */
+type Props = { name: string; siteUrl: string; contactEmail: string | null; today: string; about: HomeContent; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
 
 /**
  * Everything the library wrote and the page's structure render at once; the parts built from the library's figures
  * stream in behind their own boundaries as the data arrives, each in a box that already has its final size.
  */
-export default function HomePage({ name, siteUrl, contactEmail, about, data, tones, ramp, shapes }: Props) {
+export default function HomePage({ name, siteUrl, contactEmail, today, about, data, tones, ramp, shapes }: Props) {
 	const t = useTranslations("homePage");
 	const reduce = useReducedMotion();
 	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
@@ -1082,7 +1087,7 @@ export default function HomePage({ name, siteUrl, contactEmail, about, data, ton
 					<Heading>{about.extra?.title?.trim() || "Cite the library"}</Heading>
 					<div className={about.extra?.text.trim() ? twoColumns : ""}>
 						{about.extra?.text.trim() && <div className="max-w-[40rem]"><RichText text={about.extra.text} /></div>}
-						<CiteSlip name={name} url={siteUrl} />
+						<CiteSlip name={name} url={siteUrl} today={today} />
 					</div>
 				</>
 			),

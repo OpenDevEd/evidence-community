@@ -14,6 +14,7 @@ import { item } from "@/db/schema/tables/item";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { itemReview } from "@/db/schema/review";
 import { listDigestEditions } from "@/lib/notifications/public";
+import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-visibility";
 
 type Stats = Awaited<ReturnType<typeof getComprehensiveStats>>;
 
@@ -39,7 +40,11 @@ function topicsAndPlaces(stats: Stats | null, facets: Awaited<ReturnType<typeof 
 			.map((collection) => ({ key: collection.key, title: collection.title || collection.name || collection.key, count: collectionCounts[collection.key] ?? 0 }))
 			.sort((a, b) => b.count - a.count)
 			.slice(0, 8),
-		topics: named((stats?.topicStats ?? []).filter((row) => row.level <= 1).map((row) => ({ name: row.topic, count: row.itemCount }))),
+		topics: (stats?.topicStats ?? [])
+			.filter((row) => row.level <= 1 && row.itemCount > 0)
+			.map((row) => ({ name: row.topic, count: row.itemCount, key: row.id }))
+			.sort((a, b) => b.count - a.count)
+			.slice(0, 6),
 	};
 }
 
@@ -119,13 +124,15 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
  * author outside the library, so only the date is shown for them.
  */
 async function latestJourney(followed: string | undefined, directory: LibraryHomeConfig["directory"]): Promise<HomeData["journey"]> {
-	const db = await getDatabaseForConfig(await getLibraryConfig());
+	const config = await getLibraryConfig();
+	const db = await getDatabaseForConfig(config);
 	const [row] = await db
 		.select({ key: itemReview.itemKey, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt, resolvedBy: itemReview.resolvedBy, title: item.title, doi: item.DOI })
 		.from(itemReview)
 		.innerJoin(item, eq(item.key, itemReview.itemKey))
-		.where(and(eq(itemReview.state, "published"), eq(item.deleted, 0), followed ? eq(itemReview.itemKey, followed) : undefined))
-		.orderBy(desc(itemReview.resolvedAt))
+		.where(and(eq(itemReview.state, "published"), publicParentVisibility(db, config.content.tags.hidden), followed ? eq(itemReview.itemKey, followed) : undefined))
+		// Two approvals saved in the same millisecond still give one answer.
+		.orderBy(desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.limit(1);
 	if (!row?.resolvedAt || !row.title) return null;
 	const reviewer = directory.find((person) => person.id === row.resolvedBy);
@@ -135,18 +142,20 @@ async function latestJourney(followed: string | undefined, directory: LibraryHom
 /** First pages of the given publications' PDFs, from their attachments. */
 async function coversOf(keys: string[]): Promise<Record<string, string>> {
 	if (keys.length === 0) return {};
-	const db = await getDatabaseForConfig(await getLibraryConfig());
+	const config = await getLibraryConfig();
+	const db = await getDatabaseForConfig(config);
 	const rows = await db
 		.select({ parent: item.parentItem, cover: item.PDFCoverPageImage })
 		.from(item)
-		.where(and(inArray(item.parentItem, keys), eq(item.deleted, 0), isNotNull(item.PDFCoverPageImage)));
+		.where(and(inArray(item.parentItem, keys), publicItemVisibility(db, config.content.tags.hidden), isNotNull(item.PDFCoverPageImage)));
 	return Object.fromEntries(rows.flatMap((row) => (row.parent && row.cover ? [[row.parent, row.cover]] : [])));
 }
 
 async function mostCited() {
-	const db = await getDatabaseForConfig(await getLibraryConfig());
+	const config = await getLibraryConfig();
+	const db = await getDatabaseForConfig(config);
 	const { measure } = await resolveCitationMeasure(db, undefined);
-	return getMostCitedItems(db, measure, 3);
+	return getMostCitedItems(db, measure, 3, config.content.tags.hidden);
 }
 
 async function latestDigests(locale: string): Promise<HomeData["digests"]> {

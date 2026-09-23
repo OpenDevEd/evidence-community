@@ -57,7 +57,8 @@ export async function listReviewedPublications(database: Database, input: unknow
 		.selectDistinctOn([itemReview.itemKey], { key: itemReview.itemKey, resolvedAt: itemReview.resolvedAt, resolvedBy: itemReview.resolvedBy })
 		.from(itemReview)
 		.where(and(eq(itemReview.state, "published"), request.ids ? inArray(itemReview.itemKey, request.ids) : undefined))
-		.orderBy(itemReview.itemKey, desc(itemReview.resolvedAt))
+		// The latest approval per publication, and one answer even when two were saved in the same millisecond.
+		.orderBy(itemReview.itemKey, desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.as("latest");
 	const cursor = request.cursor ? decodeCursor(request.cursor) : null;
 	const pageSize = request.ids ? request.ids.length : request.pageSize;
