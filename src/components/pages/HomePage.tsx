@@ -112,8 +112,6 @@ export type HomeContent = {
 	editors?: { name: string; title?: string; location?: string; photo?: string }[];
 	/** Up to three example questions for the Ask box; an empty slot keeps the one made from the library's topics. */
 	questions?: string[];
-	/** The publication the steps follow, by key; without one they follow the latest reviewed publication. */
-	followed?: string;
 	involvement?: { suggestions: boolean; editors: boolean };
 	extra?: { title?: string; text: string };
 	headings?: Partial<Record<"curation" | "team" | "involvement", string>>;
@@ -583,9 +581,10 @@ function EditorMarquee({ editors }: { editors: NonNullable<HomeContent["editors"
 const MARQUEE_MINIMUM = 6;
 
 /** The closing band: who runs the library set large, and the ways in as buttons in the band's own colours. */
-function Team({ team, editors, involvement, contactEmail, heading }: { team?: string; editors?: HomeContent["editors"]; involvement?: HomeContent["involvement"]; contactEmail: string | null; heading: (key: "team" | "involvement") => string }) {
+function Team({ team, editors, involvement, contact, heading }: { team?: string; editors?: HomeContent["editors"]; involvement?: HomeContent["involvement"]; contact: Contact; heading: (key: "team" | "involvement") => string }) {
 	const t = useTranslations("homePage");
-	const write = (subject: string) => (contactEmail ? `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}` : "/contact");
+	// The buttons only exist where they lead somewhere: an email, else the contact page (checked by the caller).
+	const write = (subject: string) => (contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent(subject)}` : "/contact");
 	const buttons = [
 		involvement?.suggestions && { label: t("suggest"), icon: Mail01Icon, href: write(t("suggestSubject")) },
 		involvement?.editors && { label: t("join"), icon: UserAdd01Icon, href: write(t("joinSubject")) },
@@ -1035,18 +1034,22 @@ function WithData({ data, children }: { data: Promise<HomeData>; children: (data
 	return <>{children(use(data))}</>;
 }
 
+/** How readers reach the library: its public email, and whether it serves a contact page. */
+type Contact = { email: string | null; page: boolean };
+
 /** `today` is the server's date, so the citation's access date is the same in the server's page and the browser's. */
-type Props = { name: string; siteUrl: string; contactEmail: string | null; today: string; about: HomeContent; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
+type Props = { name: string; siteUrl: string; contact: Contact; today: string; about: HomeContent; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
 
 /**
  * Everything the library wrote and the page's structure render at once; the parts built from the library's figures
  * stream in behind their own boundaries as the data arrives, each in a box that already has its final size.
  */
-export default function HomePage({ name, siteUrl, contactEmail, today, about, data, tones, ramp, shapes }: Props) {
+export default function HomePage({ name, siteUrl, contact, today, about, data, tones, ramp, shapes }: Props) {
 	const t = useTranslations("homePage");
 	const reduce = useReducedMotion();
 	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
-	const { identity, notifications } = useLibraryConfig();
+	const { identity, notifications, citations } = useLibraryConfig();
+	const reachable = Boolean(contact.email) || contact.page;
 	const ownLogo = hasOwnLogo(identity.assets);
 	// The digest button offers a subscription, so it goes when the library sends no digests.
 	const digestsOn = notifications.enabled;
@@ -1078,8 +1081,8 @@ export default function HomePage({ name, siteUrl, contactEmail, today, about, da
 			),
 		},
 		(about.curation?.text || about.curation?.steps?.length) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} heading={heading("curation")} data={data} /> },
-		// Every library can be cited, so this band is always there; the admin's "anything else" answer sits beside the slip.
-		{
+		// The library's citation, with the owner's closing answer beside it; with citations off and no answer, no band.
+		(citations.enabled || about.extra?.text.trim()) && {
 			key: "cite",
 			tone: tones.card,
 			body: (
@@ -1092,7 +1095,7 @@ export default function HomePage({ name, siteUrl, contactEmail, today, about, da
 				</>
 			),
 		},
-		(about.team || about.editors?.length || about.involvement?.suggestions || about.involvement?.editors) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} editors={about.editors} involvement={about.involvement} contactEmail={contactEmail} heading={heading} /> },
+		(about.team || about.editors?.length || (reachable && (about.involvement?.suggestions || about.involvement?.editors))) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} editors={about.editors} involvement={reachable ? about.involvement : undefined} contact={contact} heading={heading} /> },
 	].filter((band): band is { key: string; tone: Tone; body: React.JSX.Element } => Boolean(band));
 
 	return (

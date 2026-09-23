@@ -5,6 +5,7 @@ import type { Database } from "@/db";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { AdminValidationError } from "./errors";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
 
 const PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -49,9 +50,10 @@ function decodeCursor(encoded: string) {
 
 /**
  * The library's reviewed publications, newest approval first, for the Home card's "publication followed" picker:
- * one row per publication (its latest approval), searchable by title, or named by key to show the one chosen.
+ * one row per publication (its latest approval), searchable by title, or named by key to show the one chosen. Only
+ * publications a reader can see are offered, since the home page would not show a hidden one.
  */
-export async function listReviewedPublications(database: Database, input: unknown): Promise<{ items: ReviewedPublication[]; nextCursor: string | null }> {
+export async function listReviewedPublications(database: Database, input: unknown, hiddenTags: readonly string[]): Promise<{ items: ReviewedPublication[]; nextCursor: string | null }> {
 	const request = requestSchema.parse(input);
 	const latest = database
 		.selectDistinctOn([itemReview.itemKey], { key: itemReview.itemKey, resolvedAt: itemReview.resolvedAt, resolvedBy: itemReview.resolvedBy })
@@ -68,7 +70,7 @@ export async function listReviewedPublications(database: Database, input: unknow
 		.innerJoin(item, eq(item.key, latest.key))
 		.where(
 			and(
-				eq(item.deleted, 0),
+				publicParentVisibility(database, hiddenTags),
 				request.query ? ilike(item.title, `%${request.query.replace(/[\\%_]/gu, (character) => `\\${character}`)}%`) : undefined,
 				cursor ? sql`(${latest.resolvedAt}, ${latest.key}) < (${cursor.at}::timestamptz, ${cursor.key})` : undefined,
 			),

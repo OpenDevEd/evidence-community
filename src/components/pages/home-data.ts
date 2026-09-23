@@ -18,6 +18,14 @@ import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-
 
 type Stats = Awaited<ReturnType<typeof getComprehensiveStats>>;
 
+/** A part of the page that failed shows empty rather than breaking the page, and the failure is logged. */
+function fallback<T>(part: string, value: T) {
+	return (error: unknown) => {
+		console.error(`Home page: the ${part} could not be read`, error);
+		return value;
+	};
+}
+
 /** Different stored values can read as one name ("en" and "English" are both English); their counts are one row. */
 function named(rows: { name: string; count: number }[]) {
 	const merged = new Map<string, number>();
@@ -51,9 +59,9 @@ function topicsAndPlaces(stats: Stats | null, facets: Awaited<ReturnType<typeof 
 /** Only what the Ask box's example questions are made from, for OpenScholar's Home card. */
 export async function loadQuestionFacts() {
 	const [stats, facets, collections] = await Promise.all([
-		getComprehensiveStats().catch(() => null),
-		getPublicFacets({}).catch(() => null),
-		getCachedCollections().catch(() => []),
+		getComprehensiveStats().catch(fallback("statistics", null)),
+		getPublicFacets({}).catch(fallback("facets", null)),
+		getCachedCollections().catch(fallback("collections", [])),
 	]);
 	return topicsAndPlaces(stats, facets, collections);
 }
@@ -80,17 +88,17 @@ function languageName(value: string) {
 
 export async function loadHomeData(now: Date, locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
 	const [stats, withPdf, facets, collections, cited, digests, journey] = await Promise.all([
-		getComprehensiveStats().catch(() => null),
+		getComprehensiveStats().catch(fallback("statistics", null)),
 		// The shelf shows first pages, so it lists the newest records with a PDF: the "full text only" scope.
-		getPublicItems({ sort: "desc", scope: "documents" }).catch(() => null),
-		getPublicFacets({}).catch(() => null),
-		getCachedCollections().catch(() => []),
-		mostCited().catch(() => []),
-		latestDigests(locale).catch(() => null),
-		latestJourney(home?.followed, home?.directory ?? []).catch(() => null),
+		getPublicItems({ sort: "desc", scope: "documents" }).catch(fallback("newest publications", null)),
+		getPublicFacets({}).catch(fallback("facets", null)),
+		getCachedCollections().catch(fallback("collections", [])),
+		mostCited().catch(fallback("most cited", [])),
+		latestDigests(locale).catch(fallback("digests", null)),
+		latestJourney(home?.followed, home?.directory ?? []).catch(fallback("followed publication", null)),
 	]);
 	const shelf = withPdf?.items ?? [];
-	const covers = await coversOf([...shelf.map((row) => row.key), ...cited.map((row) => row.key), ...(journey ? [journey.key] : [])]).catch(() => ({}) as Record<string, string>);
+	const covers = await coversOf([...shelf.map((row) => row.key), ...cited.map((row) => row.key), ...(journey ? [journey.key] : [])]).catch(fallback("covers", {} as Record<string, string>));
 	return {
 		publications: stats?.itemTypes.reduce((sum, row) => sum + row.count, 0) ?? 0,
 		authors: stats?.creatorStats.uniqueCreators ?? 0,

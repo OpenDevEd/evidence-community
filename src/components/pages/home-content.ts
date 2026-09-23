@@ -29,7 +29,6 @@ export function contentFrom(home: LibraryHomeConfig, stepTitles: Record<"arrival
 		team: home.team,
 		editors: home.people.map(({ name, title, location, photo }) => ({ name, title, location, photo })),
 		questions: home.questions,
-		followed: home.followed,
 		involvement: home.involvement,
 		extra: home.extra,
 		headings: home.headings,

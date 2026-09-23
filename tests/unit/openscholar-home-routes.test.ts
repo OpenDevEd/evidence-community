@@ -15,6 +15,7 @@ const { listReviewedPublications, loadQuestionFacts } = vi.hoisted(() => ({
 
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: async () => ({
+		content: { tags: { hidden: ["hide"] } },
 		authentication: {
 			openScholar: {
 				convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
@@ -53,7 +54,7 @@ describe("OpenScholar home page reads", () => {
 	it("pass the search, cursor, page size and keys to the reviewed publications list", async () => {
 		const response = await getReviewed(request("/api/openscholar/reviewed-publications?query=coach&cursor=abc&pageSize=10"));
 		expect(response.status).toBe(200);
-		expect(listReviewedPublications).toHaveBeenCalledWith({}, { cursor: "abc", ids: null, pageSize: "10", query: "coach" });
+		expect(listReviewedPublications).toHaveBeenCalledWith({}, { cursor: "abc", ids: null, pageSize: "10", query: "coach" }, ["hide"]);
 		expect((await response.json()).items[0].reviewer).toBe("user_amina");
 	});
 

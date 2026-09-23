@@ -353,11 +353,22 @@ export function ContentInteractions({
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();
 	// A question handed over from another page (the home page's "Ask the
-	// library"): ask it once the chat can take it, then forget it.
+	// library"): ask it once the chat can take it, then forget it. If the chat
+	// is still answering an earlier question, try again each second until it is
+	// free; subscribing to the chat would redraw the whole listing per token.
 	useEffect(() => {
-		const question = waitingQuestion();
-		if (!question || !isAISearchEnabled || itemsContext.userData) return;
-		if (askInline(question)) forgetWaitingQuestion();
+		if (!waitingQuestion() || !isAISearchEnabled || itemsContext.userData) return;
+		const ask = () => {
+			const question = waitingQuestion();
+			if (question && !askInline(question)) return false;
+			forgetWaitingQuestion();
+			return true;
+		};
+		if (ask()) return;
+		const retry = setInterval(() => {
+			if (ask()) clearInterval(retry);
+		}, 1000);
+		return () => clearInterval(retry);
 	}, [askInline, isAISearchEnabled, itemsContext.userData]);
 
 	return (
