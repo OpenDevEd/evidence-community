@@ -98,3 +98,16 @@ h6 {
 		}
 	}
 }
+
+/* Markdown headings. Streamdown spaces blocks 1rem apart with `space-y-4`; a
+   heading gets more room above than below so it opens its own section. The
+   `:not([hidden])` parts mirror `space-y-4` so these rules outrank it. */
+.ai-markdown > :not([hidden]) ~ :is(h1, h2, h3):not([hidden]) {
+	margin-top: 2em;
+}
+.ai-markdown > :not([hidden]) ~ :is(h4, h5, h6):not([hidden]) {
+	margin-top: 1.5em;
+}
+.ai-markdown > :is(h1, h2, h3, h4, h5, h6):not([hidden]) + :not([hidden]) {
+	margin-top: 0.75rem;
+}

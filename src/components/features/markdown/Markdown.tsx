@@ -225,7 +225,7 @@ function Quote({
 	children: ReactNode;
 }) {
 	return (
-		<Tag className="not-prose relative my-6 block pl-9 pr-2 font-serif text-[1.08em] italic leading-[1.7] tracking-[0.005em] text-black/80 before:pointer-events-none before:absolute before:-top-3 before:left-0 before:font-serif before:text-[3rem] before:font-bold before:not-italic before:leading-none before:text-accent/40 before:content-['“'] dark:text-white/80 dark:before:text-accent/50 [&>p]:my-0 [&>p+p]:mt-3">
+		<Tag className="not-prose my-6 block pl-6 italic leading-[1.7] text-black/75 dark:text-white/75 [&>p]:my-0 [&>p+p]:mt-3">
 			{children}
 		</Tag>
 	);
@@ -272,7 +272,7 @@ export function AIMarkdown({
 				<h1
 					className={twMerge(
 						className,
-						"mb-[1.08em] mt-[2.67em] text-[1.75em] font-bold leading-tight text-accent first:mt-0",
+						"text-[1.75em] font-bold leading-tight text-accent",
 					)}
 					{...rest}
 				>
@@ -283,7 +283,7 @@ export function AIMarkdown({
 				<h2
 					className={twMerge(
 						className,
-						"mb-[0.92em] mt-[1.58em] border-b border-accent pb-1 text-[1.333em] font-bold leading-tight text-black first:mt-0 dark:text-white",
+						"border-b border-accent pb-1 text-[1.333em] font-bold leading-tight text-black dark:text-white",
 					)}
 					{...rest}
 				>
@@ -294,7 +294,7 @@ export function AIMarkdown({
 				<h3
 					className={twMerge(
 						className,
-						"mb-[0.92em] mt-[1.58em] border-b border-black/10 pb-0.5 text-[1.167em] font-bold leading-tight text-black first:mt-0 dark:border-white/15 dark:text-white",
+						"border-b border-black/10 pb-0.5 text-[1.167em] font-bold leading-tight text-black dark:border-white/15 dark:text-white",
 					)}
 					{...rest}
 				>
@@ -305,7 +305,7 @@ export function AIMarkdown({
 				<h4
 					className={twMerge(
 						className,
-						"my-[0.33em] text-[1.083em] font-bold leading-tight text-black first:mt-0 dark:text-white",
+						"text-[1.083em] font-bold leading-tight text-black dark:text-white",
 					)}
 					{...rest}
 				>
@@ -316,7 +316,7 @@ export function AIMarkdown({
 				<h5
 					className={twMerge(
 						className,
-						"my-[1.08em] text-[1em] font-bold leading-tight text-black first:mt-0 dark:text-white",
+						"text-[1em] font-bold leading-tight text-black dark:text-white",
 					)}
 					{...rest}
 				>
@@ -327,7 +327,7 @@ export function AIMarkdown({
 				<h6
 					className={twMerge(
 						className,
-						"mb-[0.42em] mt-[1.33em] text-[1em] font-bold leading-tight text-black first:mt-0 dark:text-white",
+						"text-[1em] font-bold leading-tight text-black dark:text-white",
 					)}
 					{...rest}
 				>
@@ -335,6 +335,7 @@ export function AIMarkdown({
 				</h6>
 			),
 			blockquote: ({ children }) => <Quote>{children}</Quote>,
+			// Both list kinds hang their markers in the same indent.
 			ol: ({ children, className }) => (
 				<ol
 					className={twMerge(
@@ -344,6 +345,16 @@ export function AIMarkdown({
 				>
 					{children}
 				</ol>
+			),
+			ul: ({ children, className }) => (
+				<ul
+					className={twMerge(
+						className,
+						"list-disc list-outside pl-6",
+					)}
+				>
+					{children}
+				</ul>
 			),
 			span: ({ children, className }) =>
 				className === "PageHighlight" ? (
