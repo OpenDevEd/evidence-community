@@ -55,7 +55,12 @@ import {
 } from "@/context/LibraryConfigProvider";
 import { YearFilter } from "./YearFilter";
 import useSWR from "swr";
-import { fetchTopicCatalog, fetchTopicNodeClosure } from "@/lib/topics/client";
+import useSWRInfinite from "swr/infinite";
+import {
+	fetchAllTopicCatalogPages,
+	fetchTopicCatalog,
+	fetchTopicNodeClosure,
+} from "@/lib/topics/client";
 import type { TopicNode } from "@/lib/topics/contract";
 import { toggleTopicSelection } from "@/lib/topics/selection";
 
@@ -72,6 +77,11 @@ function FacetPicker({
 	searchList,
 	fixedHeight = false,
 	onSearchChange,
+	hasMore = false,
+	isLoadingMore = false,
+	onLoadMore,
+	searchError = false,
+	onSearchRetry,
 }: {
 	label: string;
 	placeholder: string;
@@ -83,6 +93,11 @@ function FacetPicker({
 	searchList?: FacetListItem[];
 	fixedHeight?: boolean;
 	onSearchChange?: (value: string) => void;
+	hasMore?: boolean;
+	isLoadingMore?: boolean;
+	onLoadMore?: () => void;
+	searchError?: boolean;
+	onSearchRetry?: () => void;
 }) {
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
@@ -191,6 +206,36 @@ function FacetPicker({
 					// 	)
 					// }
 					itemHeight={48}
+					listboxProps={{
+						bottomContent:
+							search && (searchError || hasMore) ? (
+								<Button
+									size="xs"
+									variant="transparent"
+									className="h-8 w-full gap-1.5 text-xs"
+									isDisabled={isLoadingMore}
+									onPress={
+										searchError
+											? onSearchRetry
+											: onLoadMore
+									}
+									startContent={
+										!searchError && isLoadingMore ? (
+											<span
+												aria-hidden
+												className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+											/>
+										) : undefined
+									}
+								>
+									{searchError
+										? "Try again"
+										: isLoadingMore
+											? "Loading"
+											: "Show more"}
+								</Button>
+							) : null,
+					}}
 				>
 					{Object.entries(groupedBySection).map(
 						([section, items]) => (
@@ -493,7 +538,7 @@ function TopicFilter({
 		["topic-filter-tree", selected.join(",")],
 		async () => {
 			const [root, chosen] = await Promise.all([
-				fetchTopicCatalog({ parent: null }),
+				fetchAllTopicCatalogPages({ parent: null }),
 				selected.length
 					? fetchTopicCatalog({ ids: selected })
 					: Promise.resolve(null),
@@ -503,7 +548,7 @@ function TopicFilter({
 				selectedNodes
 					.filter((node) => node.childCount > 0)
 					.map((node) =>
-						fetchTopicCatalog({ parent: node.id }).then(
+						fetchAllTopicCatalogPages({ parent: node.id }).then(
 							(response) => response.nodes,
 						),
 					),
@@ -513,12 +558,27 @@ function TopicFilter({
 		{ revalidateOnFocus: false, keepPreviousData: true },
 	);
 	const query = search.trim();
-	const matches = useSWR(
-		query ? ["topic-filter-search", query] : null,
-		() => fetchTopicCatalog({ query }).then((response) => response.nodes),
-		{ revalidateOnFocus: false, keepPreviousData: true },
+	const matches = useSWRInfinite(
+		(index, previous) => {
+			if (!query || (index > 0 && !previous?.nextCursor)) return null;
+			return [
+				"topic-filter-search",
+				query,
+				index === 0 ? null : previous!.nextCursor,
+			];
+		},
+		([, term, cursor]: [string, string, string | null]) =>
+			fetchTopicCatalog({ query: term, cursor }),
+		{
+			revalidateOnFocus: false,
+			revalidateFirstPage: false,
+			keepPreviousData: true,
+		},
 	);
-	const nodes = uniqueTopicNodes([tree.data ?? [], matches.data ?? []]);
+	const matchNodes = uniqueTopicNodes(
+		matches.data?.map((page) => page.nodes) ?? [],
+	);
+	const nodes = uniqueTopicNodes([tree.data ?? [], matchNodes]);
 
 	if (tree.error) {
 		return (
@@ -538,7 +598,7 @@ function TopicFilter({
 		);
 	}
 
-	const rows = (query ? (matches.data ?? []) : (tree.data ?? []))
+	const rows = (query ? matchNodes : (tree.data ?? []))
 		.slice()
 		.sort((left, right) =>
 			left.path.join(" > ").localeCompare(right.path.join(" > ")),
@@ -584,6 +644,11 @@ function TopicFilter({
 			list={rows}
 			searchList={rows}
 			onSearchChange={setSearch}
+			hasMore={Boolean(matches.data?.at(-1)?.nextCursor)}
+			isLoadingMore={matches.isValidating}
+			onLoadMore={() => void matches.setSize(matches.size + 1)}
+			searchError={Boolean(matches.error)}
+			onSearchRetry={() => void matches.mutate()}
 		/>
 	);
 }

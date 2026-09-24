@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import {
 	ModalContent,
 	ModalFooter,
@@ -22,7 +22,10 @@ import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { InspectorListRemove } from "./InspectorListRow";
-import { fetchTopicCatalog } from "@/lib/topics/client";
+import {
+	fetchAllTopicCatalogPages,
+	fetchTopicCatalog,
+} from "@/lib/topics/client";
 import type { TopicNode } from "@/lib/topics/contract";
 
 const LEVEL_NAMES = {
@@ -111,15 +114,42 @@ export function TopicPickerDialog({
 	const [chosen, setChosen] = useState<TopicNode[]>([...initial]);
 	const query = search.trim();
 	const parent = trail.at(-1) ?? null;
-	const catalog = useSWR(
-		["topic-picker", query || null, query ? null : (parent?.id ?? null)],
-		() =>
-			fetchTopicCatalog(
-				query ? { query } : { parent: parent?.id ?? null },
-			),
-		{ revalidateOnFocus: false, keepPreviousData: true },
+	const catalog = useSWRInfinite(
+		(index, previous) => {
+			if (index > 0 && (!query || !previous?.nextCursor)) return null;
+			return [
+				"topic-picker",
+				query || null,
+				query ? null : (parent?.id ?? null),
+				index === 0 ? null : previous!.nextCursor,
+			];
+		},
+		([, term, parentId, cursor]: [
+			string,
+			string | null,
+			string | null,
+			string | null,
+		]) =>
+			term
+				? fetchTopicCatalog({ query: term, cursor })
+				: fetchAllTopicCatalogPages({ parent: parentId }),
+		{
+			revalidateOnFocus: false,
+			revalidateFirstPage: false,
+			keepPreviousData: true,
+		},
 	);
-	const results = catalog.data?.nodes ?? [];
+	const results = [
+		...new Map(
+			(catalog.data?.flatMap((page) => page.nodes) ?? []).map((node) => [
+				node.id,
+				node,
+			]),
+		).values(),
+	];
+	const hasMore = Boolean(query && catalog.data?.at(-1)?.nextCursor);
+	const loadingMore =
+		catalog.isValidating && catalog.size > (catalog.data?.length ?? 0);
 	const chosenIds = new Set(chosen.map((topic) => topic.id));
 
 	function toggle(topic: TopicNode) {
@@ -265,7 +295,7 @@ export function TopicPickerDialog({
 							aria-label="Topics"
 							className="h-[340px] min-h-40 overflow-y-auto overscroll-contain p-2 sm:h-[388px]"
 						>
-							{catalog.error ? (
+							{catalog.error && results.length === 0 ? (
 								<div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
 									<p className="text-sm font-medium">
 										Could not load topics
@@ -301,16 +331,41 @@ export function TopicPickerDialog({
 									</p>
 								</div>
 							) : (
-								results.map((topic) => (
-									<TopicRow
-										key={topic.id}
-										topic={topic}
-										selected={chosenIds.has(topic.id)}
-										showPath={Boolean(query)}
-										onOpen={open}
-										onToggle={toggle}
-									/>
-								))
+								<>
+									{results.map((topic) => (
+										<TopicRow
+											key={topic.id}
+											topic={topic}
+											selected={chosenIds.has(topic.id)}
+											showPath={Boolean(query)}
+											onOpen={open}
+											onToggle={toggle}
+										/>
+									))}
+									{query && (catalog.error || hasMore) ? (
+										<div className="px-2 py-1">
+											<Button
+												size="xs"
+												variant="transparent"
+												className="h-8 w-full text-xs"
+												isDisabled={loadingMore}
+												onPress={() =>
+													catalog.error
+														? void catalog.mutate()
+														: void catalog.setSize(
+																catalog.size + 1,
+															)
+												}
+											>
+												{catalog.error
+													? "Try again"
+													: loadingMore
+														? "Loading"
+														: "Show more"}
+											</Button>
+										</div>
+									) : null}
+								</>
 							)}
 						</div>
 					</div>
