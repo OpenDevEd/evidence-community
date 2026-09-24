@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
-import { getItem } from "./item/[key]/route";
+import { getItem, withoutFullText } from "./item/[key]/route";
 import { and, eq } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
@@ -65,12 +65,9 @@ export async function getCachedCollections(config?: LibraryServerConfig) {
 // Share the database read within one render, without keeping an older public revision.
 export const getCachedItem = cache(getItem);
 
-export const getCachedItemSmall = cache(async (key: string) => {
-	const result = await getCachedItem(key);
-	if (!result.item) return result;
-	const { fullTextPDFs, ...item } = result.item;
-	return { item };
-});
+export const getCachedItemSmall = cache(async (key: string) =>
+	withoutFullText(await getCachedItem(key)),
+);
 
 // --- User data (revalidate: 60s) ---
 

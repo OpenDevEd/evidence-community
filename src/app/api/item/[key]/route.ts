@@ -46,6 +46,13 @@ export async function getItem(key: string) {
 	};
 }
 
+/** Browsers never show PDF full text, so public reads leave it out. */
+export function withoutFullText<T extends { item?: { fullTextPDFs?: unknown } | null }>(result: T): T {
+	if (!result.item) return result;
+	const { fullTextPDFs: _fullText, ...item } = result.item;
+	return { ...result, item };
+}
+
 export async function GET(
 	request: NextRequest,
 	props: { params: Promise<{ key: string }> },
@@ -62,7 +69,7 @@ export async function GET(
 			const database = await getDatabaseForConfig(config);
 			result = { item: await getPublicItemCard(database, key, config) };
 		} else {
-			result = await getItem(key);
+			result = withoutFullText(await getItem(key));
 		}
 		return NextResponse.json(result, {
 			status: result.item ? 200 : 404,
