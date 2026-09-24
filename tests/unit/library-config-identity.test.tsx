@@ -113,17 +113,20 @@ describe("runtime library identity", () => {
 		},
 	);
 
-	it("describes the library by its tagline when it has no description", () => {
-		const identity = {
-			...minimalConfig.identity,
-			description: undefined,
-			tagline: "Research on education technology",
-		};
+	it.each([undefined, "", "  "])(
+		"describes the library by its tagline when its description is %j",
+		(description) => {
+			const identity = {
+				...minimalConfig.identity,
+				description,
+				tagline: "Research on education technology",
+			};
 
-		expect(buildLibraryMetadata(identity).description).toBe(
-			"Research on education technology",
-		);
-	});
+			expect(buildLibraryMetadata(identity).description).toBe(
+				"Research on education technology",
+			);
+		},
+	);
 
 	it("renders different configured logo URLs and names from the same component", () => {
 		const minimalMarkup = renderIdentity(minimalConfig);

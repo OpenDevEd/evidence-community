@@ -20,8 +20,8 @@ export async function generateMetadata(): Promise<Metadata> {
 	const { description, name, tagline } = config.identity;
 	return {
 		// The tagline tells search engines what the library holds.
-		title: tagline ? `${name}: ${tagline}` : name,
-		description: description ?? tagline ?? name,
+		title: tagline?.trim() ? `${name}: ${tagline.trim()}` : name,
+		description: description?.trim() || tagline?.trim() || name,
 	};
 }
 

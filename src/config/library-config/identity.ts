@@ -38,7 +38,8 @@ export function buildLibraryMetadata(
 				]
 			: []),
 	];
-	const pageDescription = description ?? tagline ?? name;
+	// A blank description or tagline says nothing, so it gives way to the next.
+	const pageDescription = description?.trim() || tagline?.trim() || name;
 	const shareImages = assets.shareImage ? [assets.shareImage] : undefined;
 
 	return {
