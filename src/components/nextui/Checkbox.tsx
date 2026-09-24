@@ -7,7 +7,7 @@ import {
 	type InputHTMLAttributes,
 	type ReactNode,
 } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 type CheckboxSize = "sm" | "lg" | "xl";
 

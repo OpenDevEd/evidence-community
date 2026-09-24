@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import OpenScholar from "@/components/icons/OpenScholar";
 
 /** Small "Powered by OpenScholar" attribution shown under the chat composer. */

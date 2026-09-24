@@ -1,6 +1,6 @@
 import { BsStars } from "react-icons/bs";
 import GenericHeader from "../modals/GenericHeader";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 export default function AIHeader({
 	onClose,

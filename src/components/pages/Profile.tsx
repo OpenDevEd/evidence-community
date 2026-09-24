@@ -11,7 +11,7 @@ import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
 import { setter, fetcherDELETE } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Textarea } from "../nextui/Textarea";
 import { Input } from "../nextui/Input";
 import {

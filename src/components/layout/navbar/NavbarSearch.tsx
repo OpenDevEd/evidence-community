@@ -15,7 +15,7 @@ import { useQueryStates } from "nuqs";
 import dynamic from "next/dynamic";
 import { useRouter, Link, usePathname } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import useSWR from "swr";
 import { Spinner, Tooltip, useDisclosure } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import CopyButton from "@/components/features/newlib/CopyButton";
 
 export function ItemPropertyRowWrapper({

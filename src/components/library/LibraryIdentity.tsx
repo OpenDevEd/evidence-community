@@ -7,7 +7,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import { getImageProps } from "next/image";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 import { LIBRARY_LOGO_ATTRIBUTES } from "@/config/library-config/identity";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";

@@ -5,7 +5,7 @@ import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
 import { Link, Spinner } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { PdfCover } from "./PdfCover";
 import { Button } from "@/components/nextui/Button";
 import { useLocale, useTranslations } from "next-intl";

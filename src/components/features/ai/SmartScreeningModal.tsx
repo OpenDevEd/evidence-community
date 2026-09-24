@@ -11,7 +11,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { useLocalStorage } from "usehooks-ts";
 
 import { toast } from "@/components/layout/Toast";

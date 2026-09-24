@@ -13,7 +13,7 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { CITATION_FORMATS, type CitationStyle } from "@/lib/citation-formats";
 import {
 	loadCitationStyles,

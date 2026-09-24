@@ -19,7 +19,7 @@ import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Spinner } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { planRelationTabs, type RelationTabKey } from "./relation-tabs";
 
 function CountBadge({ count, isLoading, className = "" }: { count: number; isLoading: boolean; className?: string }) {

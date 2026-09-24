@@ -3,7 +3,7 @@
 import { Avatar, type AvatarProps } from "@nextui-org/react";
 import { UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 /** Author portraits always fall back to a person, never generated initials. */
 export function AuthorAvatar(props: AvatarProps) {

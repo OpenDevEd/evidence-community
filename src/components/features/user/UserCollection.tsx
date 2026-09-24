@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Add01Icon, BookBookmark01Icon } from "@hugeicons/core-free-icons";
 import { Session } from "next-auth";
 import { useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Tooltip } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";
 import { useTranslations } from "next-intl";

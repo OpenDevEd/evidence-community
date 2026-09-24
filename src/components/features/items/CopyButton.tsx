@@ -6,7 +6,7 @@ import { Item, ListItem } from "@/app/api/item/types";
 import { forwardRef } from "react";
 import { Button } from "@/components/nextui/Button";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 const CopyButton = forwardRef<
 	any,
 	{

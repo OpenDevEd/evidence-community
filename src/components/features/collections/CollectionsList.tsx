@@ -16,7 +16,7 @@ import {
 	Listbox,
 	ListboxItem,
 } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Skeleton } from "../../nextui/Skeleton";
 import CollectionCategory from "./CollectionCategory";
 import {

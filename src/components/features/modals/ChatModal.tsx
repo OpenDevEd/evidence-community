@@ -8,7 +8,7 @@ import React, { type ComponentType } from "react";
 import { IoChevronDown } from "react-icons/io5";
 import { PiXBold } from "react-icons/pi";
 import { RiResetLeftFill } from "react-icons/ri";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
 import ModelSelector from "@/components/features/ai/ModelSelector";

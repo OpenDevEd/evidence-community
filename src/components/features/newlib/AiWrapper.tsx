@@ -27,7 +27,7 @@ import {
 	useLibraryConfig,
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { analyticsIdField } from "@/lib/ai/chat-request";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";

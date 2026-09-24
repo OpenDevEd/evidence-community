@@ -15,7 +15,7 @@ import {
 } from "@/lib/ai/transcript-export";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { toast } from "@/components/layout/Toast";
 import { trackContentAction } from "@/lib/analytics";

@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";

@@ -2,7 +2,7 @@ import { ModalHeader } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";
 import { LuX } from "react-icons/lu";
 import { SectionTitle } from "@/components/typography/SectionTitle";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { useTranslations } from "next-intl";
 
 export default function GenericHeader({

@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { useDisclosure } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { usePathname } from "@/i18n/routing";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";

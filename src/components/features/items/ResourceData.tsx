@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import React from "react";
 
 export default function ResourceData({

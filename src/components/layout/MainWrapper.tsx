@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { pageRunsUnderHeader } from "@/lib/runtime-routing";

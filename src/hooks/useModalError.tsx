@@ -3,7 +3,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useMemo, useCallback } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { animate as animateFramer, AnimatePresence, motion, type MotionProps } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useTranslations } from "next-intl";
