@@ -24,6 +24,7 @@ import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { minimalLibraryConfig } from "../fixtures/library-config";
+import { homeRich } from "@/components/pages/HomeRichText";
 
 const config = projectPublicLibraryConfig(libraryConfigSchema.parse(minimalLibraryConfig));
 
@@ -48,6 +49,9 @@ const about: HomeContent = {
 	involvement: { suggestions: true, editors: true },
 	headings: { curation: "How we choose" },
 };
+
+// The page renders these on the server; the component receives them ready.
+const rich = homeRich(about, "https://library.example.org");
 
 const data: HomeData = {
 	publications: 120,
@@ -102,7 +106,7 @@ describe("the library's home page", () => {
 		await act(async () => {
 			root.render(
 				<LibraryConfigProvider config={config}>
-					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={about} data={Promise.resolve(data)} tones={tones} ramp={[tone, tone]} shapes={[]} />
+					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={about} rich={rich} data={Promise.resolve(data)} tones={tones} ramp={[tone, tone]} shapes={[]} />
 				</LibraryConfigProvider>,
 			);
 		});

@@ -457,10 +457,4 @@ export function AIMarkdown({
 	);
 }
 
-export function MarkdownExcerpt({ children, className }: { children: string; className?: string }) {
-	return (
-		<Streamdown className={className} mode="static" controls={false} allowedElements={[]} unwrapDisallowed>
-			{children}
-		</Streamdown>
-	);
-}
+export { MarkdownExcerpt } from "./MarkdownExcerpt";

@@ -10,6 +10,7 @@ import { redirect } from "@/i18n/routing";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { connection } from "next/server";
+import { homeRich } from "@/components/pages/HomeRichText";
 
 // The library's home page, shown at `/` while `features.homePage` is on; otherwise `/` opens the listing.
 
@@ -115,6 +116,7 @@ export default async function Home({ params }: Props) {
 	return (
 		<HomePage
 			{...tonesFrom(config.theme.colors)}
+			rich={homeRich(about, config.identity.baseUrl)}
 			shapes={shapes}
 			name={config.identity.name}
 			siteUrl={config.identity.baseUrl}

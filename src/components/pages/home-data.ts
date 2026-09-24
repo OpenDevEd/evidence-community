@@ -5,7 +5,8 @@ import { getPublicFacets, getPublicItems } from "@/lib/search";
 import { getCachedCollections } from "@/app/api/cache";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
-import type { LibraryHomeConfig } from "@/config/library-config/schema";
+import type { LibraryHomeConfig, LibraryServerConfig } from "@/config/library-config/schema";
+import { cacheLife } from "next/cache";
 import { getComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
 import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
@@ -129,7 +130,8 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
 		covers,
 		// A library can switch the full-text scope off, which returns every record; only records whose first page
 		// was found go on the shelf either way.
-		recent: shelf.filter((row) => covers[row.key]).slice(0, 6),
+		// Up to eighteen, so the hero's three columns each show their own first pages; the publications row shows six.
+		recent: shelf.filter((row) => covers[row.key]).slice(0, 18),
 		journey,
 		cited,
 		ai: isLibraryFeatureEnabled((await getLibraryConfig()).features, "aiSearch"),
@@ -173,6 +175,16 @@ async function coversOf(keys: string[]): Promise<Record<string, string>> {
 
 async function mostCited() {
 	const config = await getLibraryConfig();
+	return mostCitedFor(config.revision, config);
+}
+
+/**
+ * The query weighs every citation in the library, far the slowest part of the page, so its answer is kept per
+ * configuration revision and refreshed in the background every ten minutes.
+ */
+async function mostCitedFor(_revision: string, config: LibraryServerConfig) {
+	"use cache";
+	cacheLife({ revalidate: 600 });
 	const db = await getDatabaseForConfig(config);
 	const { measure } = await resolveCitationMeasure(db, undefined);
 	return getMostCitedItems(db, measure, 3, config.content.tags.hidden);
