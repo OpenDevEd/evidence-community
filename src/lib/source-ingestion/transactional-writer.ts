@@ -1,3 +1,7 @@
+import { updateOpenAlexReferences } from "./openalex/references";
+import { itemSourceValue, sourceTopicAssignment } from "@/db/schema/topics";
+import { sourceOverridesByItem } from "@/lib/admin/source-fields";
+import { importedTopics, effectiveSourceTopics } from "@/lib/topics/assignments";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
@@ -79,7 +83,7 @@ const COLLECTION_UPSERT_CHUNK_SIZE = 1_000;
 const itemColumns = getTableColumns(item);
 const sourceWritableItemFields = Object.keys(itemColumns).filter(
 	(field) =>
-		!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) && !new Set([
+		(!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) || field === "topics") && !new Set([
 			"createdAt",
 			"deleted",
 			"deletedAt",
@@ -208,6 +212,7 @@ function sourceItemValues(
 		sourceWritableItemFields.map((field) => [field, null]),
 	) as Partial<ItemInsert>;
 	Object.assign(values, validated.item);
+	values.topics ??= [];
 	values.dateAdded = record.sourceDates?.addedAt ?? null;
 	values.dateModified = record.sourceDates?.modifiedAt ?? null;
 
@@ -1388,12 +1393,28 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey);
 		};
 
+		const overridesByItem = await sourceOverridesByItem(transaction, batchItemKeys);
+		const previousSourceValues = batchItemKeys.length ? await transaction.select().from(itemSourceValue).where(inArray(itemSourceValue.itemKey, batchItemKeys)) : [];
+		const topicImportKeys = new Set(previousSourceValues.filter(row => row.importedTopics).map(row => row.itemKey));
+		const importedTopicRows = new Map<string, ReturnType<typeof importedTopics>>();
+		for (const record of itemUpserts) {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const existing = existingItemByKey.get(key);
+			const normalized = normalizedItems.get(record.sourceRecordKey)!;
+			if (connection.provider === "openalex" && !record.parentSourceRecordKey && (!existing || topicImportKeys.has(key))) {
+				const assignments = importedTopics(record.raw);
+				importedTopicRows.set(key, assignments);
+				topicImportKeys.add(key);
+				normalized.item.topics = effectiveSourceTopics(assignments);
+			} else normalized.item.topics = existing?.topics ?? [];
+		}
+
 		const effectiveItemStateByRecordKey = new Map(
 			itemUpserts.map((record) => {
 				const key = itemKeys.get(record.sourceRecordKey)!;
 				const existing = existingItemByKey.get(key);
 				const dirtyFields = new Set(
-					sourceLinkByItemKey.get(key)?.dirtyFields ?? [],
+					[...(sourceLinkByItemKey.get(key)?.dirtyFields ?? []), ...Object.keys(overridesByItem.get(key) ?? {})],
 				);
 				const normalized = normalizedItems.get(record.sourceRecordKey)!;
 				const existingPublication =
@@ -1472,13 +1493,28 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return previous !== undefined && (!Number.isFinite(incoming) || incoming < previous) ? [key] : [];
 		}));
 		const currentItemUpserts = itemUpserts.filter((record) => !staleItemKeys.has(itemKeys.get(record.sourceRecordKey)!));
+		for (const record of currentItemUpserts) {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const normalized = normalizedItems.get(record.sourceRecordKey)!;
+			const state = {itemKey: key, sourceConnectionKey: batch.sourceConnectionKey,
+				payload: {...normalized.item, tags: normalized.tags, collections: effectiveItemStateByRecordKey.get(record.sourceRecordKey)!.collections,
+					parentItem: parentItemKeys.get(record.sourceRecordKey) ?? null},
+				remoteVersion: record.remoteVersion, fetchedAt: batch.fetchedAt, importedTopics: topicImportKeys.has(key)};
+			await transaction.insert(itemSourceValue).values(state).onConflictDoUpdate({target: [itemSourceValue.itemKey, itemSourceValue.sourceConnectionKey], set: state});
+			if (importedTopicRows.has(key)) {
+				await transaction.delete(sourceTopicAssignment).where(and(eq(sourceTopicAssignment.itemKey, key), eq(sourceTopicAssignment.sourceConnectionKey, batch.sourceConnectionKey)));
+				const assignments = importedTopicRows.get(key)!;
+				if (assignments.length) await transaction.insert(sourceTopicAssignment).values(assignments.map(topic => ({...topic, itemKey: key,
+					sourceConnectionKey: batch.sourceConnectionKey, sourceVersion: record.remoteVersion, fetchedAt: batch.fetchedAt})));
+			}
+		}
 		const changedItemUpserts = currentItemUpserts.filter((record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
 			if (!existing) return true;
 			if (existing.deleted === 1) {
 				return (
-					existing.sourceConnectionKey === batch.sourceConnectionKey
+					(connection.provider === "openalex" || existing.sourceConnectionKey === batch.sourceConnectionKey) && !overridesByItem.get(key)?.deleted
 				);
 			}
 			const snapshot = snapshotByItemKey.get(key);
@@ -2075,18 +2111,27 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		let citationLinkChange: { changedItemKeys: string[] } =
 			connection.provider === "zotero"
 				? { changedItemKeys: [] }
-				: await replaceSourceLinks(transaction, {
-						sourceConnectionKey: batch.sourceConnectionKey,
-						kind: "cites",
-						fromKeys: [
-							...citationTargetsByRecordKey.keys(),
-							...itemDeletes.map((record) => record.sourceRecordKey),
-						].flatMap((sourceRecordKey) => {
-							const itemKey = itemKeys.get(sourceRecordKey);
-							return itemKey ? [itemKey] : [];
-						}),
-						links: citationLinkRows,
-					});
+				: connection.provider === "openalex"
+					? {
+							changedItemKeys: await updateOpenAlexReferences(
+								transaction,
+								batch.sourceConnectionKey,
+								currentItemUpserts,
+								itemKeys,
+							),
+						}
+					: await replaceSourceLinks(transaction, {
+							sourceConnectionKey: batch.sourceConnectionKey,
+							kind: "cites",
+							fromKeys: [
+								...citationTargetsByRecordKey.keys(),
+								...itemDeletes.map((record) => record.sourceRecordKey),
+							].flatMap((sourceRecordKey) => {
+								const itemKey = itemKeys.get(sourceRecordKey);
+								return itemKey ? [itemKey] : [];
+							}),
+							links: citationLinkRows,
+						});
 
 		const aliasRows = itemUpserts.flatMap((record) =>
 			record.aliases.map((alias) => ({

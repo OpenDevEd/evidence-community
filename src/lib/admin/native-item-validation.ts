@@ -5,6 +5,8 @@ import {
 } from "@opendeved/evidence-library-core/zotero-schema";
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
+import { topicIdSchema } from "@/lib/topics/contract";
+import { sourceResolutionsSchema } from "./source-field-contract";
 import { countryFocusSchema } from "@/lib/country-focus";
 
 import { creatorType } from "@/db/schema/enums/creatorType";
@@ -319,6 +321,7 @@ function parseNativeItemDraft(
 	const itemValues: Record<string, unknown> = {
 		itemType: normalizedItemType,
 		...countryFocusFields(payload.countryFocus, options.source),
+		...(payload.topics === undefined ? {} : { topics: [...new Set(z.array(topicIdSchema).max(100).parse(payload.topics))].sort() }),
 		...normalizeDraftFields(
 			payload,
 			[
@@ -336,6 +339,7 @@ function parseNativeItemDraft(
 		),
 	};
 	const normalizedPayload = { ...itemValues };
+	if (!options.source && payload.sourceResolutions !== undefined) normalizedPayload.sourceResolutions = sourceResolutionsSchema.parse(payload.sourceResolutions);
 
 	if (payload.creators !== undefined) {
 		const creators = parseDraftCreators(

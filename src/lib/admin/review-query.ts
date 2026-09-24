@@ -1,3 +1,4 @@
+import { readSourceFields } from "./source-fields";
 import "server-only";
 import { itemIdentity, type itemDraft } from "@opendeved/evidence-library-core";
 import { eq, inArray } from "drizzle-orm";
@@ -121,6 +122,8 @@ export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
 				};
 				return {
 					...itemSummary(null, draft, null, null, payload),
+					sourceFields: await readSourceFields(db, record.itemKey),
+					importedTopics: [],
 					kind: identity.kind,
 					importMethod: identity.importMethod,
 					revision:

@@ -22,6 +22,7 @@ export async function getPublicItemCards(
 		columns: {
 			...(includeCitationFields ? Object.fromEntries(CITATION_RECORD_COLUMNS.map(column => [column, true as const])) : {}),
 			key: true,
+			topics: true,
 			revision: true,
 			title: true,
 			itemType: true,
@@ -60,6 +61,7 @@ export async function getPublicItemCards(
 	}
 	return records.map(({ deleted: _deleted, parentItem: _parent, extra, ...card }) => ({
 		...card,
+		topics: config.topics.enabled ? card.topics : [],
 		...(includeCitationFields ? { extra, tags: tags.get(card.key) ?? [] } : {}),
 		...(!card.PDFCoverPageImage ? coverByParent.get(card.key) : undefined),
 		DOI: resolvePublicDoi({ ...card, extra, attachments: doiAttachments.get(card.key), publicationIdentifiers: identifiers.get(card.key) }),

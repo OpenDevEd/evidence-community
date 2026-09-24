@@ -1,3 +1,4 @@
+import type { SourceFieldConflict } from "./source-field-contract";
 export type AdminRecordState = "deleted" | "draft" | "edited" | "published";
 
 export type AdminFileState = "none" | "processing" | "staged" | "published";
@@ -117,6 +118,8 @@ export type AdminItemLinks = {
 };
 
 export type AdminItemDetail = AdminItemSummary & {
+	sourceFields: SourceFieldConflict[];
+	importedTopics: {topicId: string; score: number; primary: boolean}[];
 	kind: "created" | "imported";
 	importMethod: "doi" | "file" | null;
 	attachments: AdminAttachment[];

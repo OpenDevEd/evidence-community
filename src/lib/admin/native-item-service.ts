@@ -1,3 +1,6 @@
+import { itemFieldOverride } from "@/db/schema/topics";
+import { sourceResolutionsSchema } from "./source-field-contract";
+import { publishSourceFieldOverrides, resolveSourceFieldChoices } from "./source-fields";
 import type { ConflictingDraft } from "./errors";
 import { sameBibliographicCreators } from "@/lib/admin/creator-profile-links";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
@@ -8,9 +11,11 @@ import {
 	itemIdentity,
 	itemSourceLink,
 	outbox,
+	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import {
 	and,
+	or,
 	eq,
 	inArray,
 	isNull,
@@ -1031,7 +1036,7 @@ export async function publishItemDraftWithContext(
 		const basePayload = await loadPublishedItemPayload(transaction, itemKey, current ?? null);
 		const workingPayload = draft ? applyItemDraftPatch(basePayload, draft.patch) : null;
 		const validated = validateNativeItemDraft(
-			options.review?.approved.payload ?? workingPayload,
+			await resolveSourceFieldChoices(transaction, itemKey, (options.review?.approved.payload ?? workingPayload)!),
 			{ requireTitle: true },
 		);
 		await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
@@ -1085,10 +1090,13 @@ export async function publishItemDraftWithContext(
 			}
 		}
 
+		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload);
+		await transaction.delete(itemFieldOverride).where(and(eq(itemFieldOverride.itemKey, itemKey), eq(itemFieldOverride.field, "deleted")));
 		const nextRevision = currentRevision + 1;
 		const now = new Date();
 		const values = {
 			...publishedItemValues(validated),
+			topics: validated.item.topics ?? [],
 			key: itemKey,
 			sourceConnectionKey: access.identity.sourceConnectionKey,
 			sourceRecordKey:
@@ -1260,8 +1268,10 @@ export async function publishItemDraftWithContext(
 		const publishedPatch: Record<string, unknown> = options.review
 			? createItemDraftPatch(basePayload, options.review.approved.payload)
 			: draft!.patch;
+		const sourceChoices = sourceResolutionsSchema.parse(validated.payload.sourceResolutions ?? {});
 		const changedFields = Object.keys(publishedPatch).filter(
 			(field) =>
+				sourceChoices[field]?.choice !== "source" &&
 				field !== "collections" &&
 				!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) &&
 				// A new profile link or affiliation is nothing a source can hold.
@@ -1397,7 +1407,7 @@ async function unpublishNativeItemAttempt(
 			.where(
 				and(
 					eq(item.key, itemKey),
-					eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+					or(eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY), inArray(item.sourceConnectionKey, transaction.select({key: sourceConnection.key}).from(sourceConnection).where(eq(sourceConnection.provider, "openalex")))),
 				),
 			)
 			.limit(1);
@@ -1510,6 +1520,9 @@ async function unpublishNativeItemAttempt(
 
 		const nextRevision = current.revision + 1;
 		const now = new Date();
+		const [originLink] = await transaction.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey)).limit(1);
+		if (originLink) await transaction.insert(itemFieldOverride).values({itemKey, field: "deleted", value: 1, sourceValue: 0,
+			sourceConnectionKey: originLink.sourceConnectionKey, sourceVersion: originLink.remoteVersion}).onConflictDoUpdate({target: [itemFieldOverride.itemKey, itemFieldOverride.field], set: {value: 1, updatedAt: now}});
 		const [unpublished] = await transaction
 			.update(item)
 			.set({

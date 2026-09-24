@@ -10,6 +10,7 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: [
+			"tests/integration/topics-lifecycle.test.ts",
 			"tests/integration/openalex-source.test.ts",
 			"tests/integration/openalex-attachment-processor.test.ts",
 			"tools/verifyCrossrefActivation.ts",

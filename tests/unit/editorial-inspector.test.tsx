@@ -30,6 +30,7 @@ const payload = {
 	collections: [],
 };
 const submitted: AdminReviewSnapshot = {
+ sourceFields: [], importedTopics: [],
 	key: "BOOK2345",
 	kind: "imported",
 	importMethod: "doi",

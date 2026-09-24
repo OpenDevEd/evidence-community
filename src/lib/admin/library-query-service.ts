@@ -1,3 +1,5 @@
+import { readSourceFields } from "./source-fields";
+import { sourceTopicAssignment } from "@/db/schema/topics";
 import "server-only";
 
 import {
@@ -357,7 +359,7 @@ export async function getAdminItemDetail(
 	itemKey: string,
 ): Promise<AdminItemDetail> {
 	const config = await getLibraryConfig();
-	const [published, draft, fileDraft, filePublication, writeback, identity, removal] =
+	const [published, draft, fileDraft, filePublication, writeback, identity, removal, sourceFields, importedTopics] =
 		await Promise.all([
 			db
 				.select()
@@ -386,6 +388,8 @@ export async function getAdminItemDetail(
 			resolveItemWritebackTargets(db, itemKey, config),
 			db.select().from(itemIdentity).where(eq(itemIdentity.key, itemKey)).limit(1).then((rows) => rows[0]),
 			db.select().from(itemFileRemoval).where(eq(itemFileRemoval.itemKey, itemKey)).limit(1).then((rows) => rows[0]),
+			readSourceFields(db, itemKey),
+			config.topics.enabled ? db.select({topicId: sourceTopicAssignment.topicId, score: sourceTopicAssignment.score, primary: sourceTopicAssignment.primary}).from(sourceTopicAssignment).where(eq(sourceTopicAssignment.itemKey, itemKey)) : Promise.resolve([]),
 		]);
 	if (!identity || (!published && !draft)) throw new ItemNotFoundError(itemKey);
 
@@ -467,6 +471,8 @@ export async function getAdminItemDetail(
 
 	return {
 		...summary,
+		sourceFields: sourceFields.filter(field => config.topics.enabled || field.field !== "topics"),
+		importedTopics,
 		kind: identity.kind,
 		importMethod: identity.importMethod,
 		fileState:
