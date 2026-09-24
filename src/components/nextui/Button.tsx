@@ -40,6 +40,7 @@ export const Button = extendVariants(NextUIButton, {
     size: {
       lg: "px-3 gap-2 xl:px-6 xl:gap-3 [&[data-loading=true]>div>div]:!size-5 [&[data-loading=true]>div>div>i]:!border-2",
       md: "px-3 gap-2 xl:px-6 xl:gap-3 h-10 [&[data-loading=true]>div>div]:!size-4 [&[data-loading=true]>div>div>i]:!border-2",
+      sm: "[&[data-loading=true]>div>div]:!size-4 [&[data-loading=true]>div>div>i]:!border-2",
       xs: "text-xs px-3 h-8 gap-1 [&[data-loading=true]>div>div]:!size-3.5 [&[data-loading=true]>div>div>i]:!border-2",
     },
 
