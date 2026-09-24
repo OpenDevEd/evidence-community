@@ -79,7 +79,6 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
-          <Suspense fallback={<Skeleton className="mt-7 h-5 w-44 rounded-lg" />}><LatestEditionLink latest={latest} base={base} /></Suspense>
           {settings.enabled && <Suspense fallback={<Skeleton className="mt-5 h-5 w-80 max-w-full rounded-lg" />}><NextEdition nextEdition={nextEdition} settings={settings} locale={locale} /></Suspense>}
         </div>
         <Suspense fallback={<Skeleton className="mx-auto h-[337px] w-full max-w-md rounded-2xl" />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
@@ -92,11 +91,6 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         {settings.enabled && <aside className="space-y-5 lg:sticky lg:top-12"><Subscription initial={newReader} schedule={settings.schedule} /></aside>}
       </div>
   </PageContainer>;
-}
-function LatestEditionLink({latest, base}: {latest: Promise<DigestSummary | null>; base: string}) {
-  const edition = use(latest);
-  if (!edition) return null;
-  return <Link href={`${base}/${edition.slug}`} prefetch className="mt-7 inline-flex items-center gap-2 rounded-lg text-sm font-semibold text-accent outline-offset-4 transition-colors hover:text-accent/80">Read the latest edition<Icon value={ArrowRight01Icon} size={18} /></Link>;
 }
 function NextEdition({nextEdition, settings, locale}: {nextEdition: Promise<string | null>; settings: DigestSettings; locale: string}) {
   const value = use(nextEdition);
