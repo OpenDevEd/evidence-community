@@ -98,9 +98,14 @@ async function getCachedDisplayedAttributes(
 	cacheLife({ revalidate: 60 });
 	cacheTag("attributes-" + configRevision);
 	const { index } = await getMeilisearchForConfig(libraryConfig);
-	return index.getDisplayedAttributes();
+	const displayed = await index.getDisplayedAttributes();
+	if (!displayed.includes("*")) return displayed;
+	// "*" cannot leave a field out, so name every stored field instead.
+	const { fieldDistribution } = await index.getStats();
+	return [...new Set(Object.keys(fieldDistribution).map((field) => field.split(".")[0]))];
 }
 
+/** Every public field except PDF full text, which is searched but never sent. */
 export async function getMainAttributes(config?: LibraryServerConfig) {
 	const libraryConfig = config ?? (await getLibraryConfig());
 	const attributes = await getCachedDisplayedAttributes(
@@ -108,7 +113,7 @@ export async function getMainAttributes(config?: LibraryServerConfig) {
 		libraryConfig,
 	);
 	return attributes.filter(
-		(attribute) => !attribute.endsWith("fullTextPDFs"),
+		(attribute) => attribute !== "fullTextPDFs" && !attribute.startsWith("fullTextPDFs."),
 	);
 }
 
