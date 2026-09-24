@@ -3164,6 +3164,7 @@ function prepareAcceptanceRuntime(profiles: Profile[]) {
 
 function buildAcceptanceImage() {
 	if (skipBuild) return;
+	const previous = imageId(image);
 	run("docker", [
 		"buildx",
 		"bake",
@@ -3174,6 +3175,16 @@ function buildAcceptanceImage() {
 		`runtime.tags=${image}`,
 		"acceptance",
 	]);
+	// The new build takes the tag and leaves the old image untagged. Nothing uses it again, and on the CI runner one
+	// was left behind per run until the disk filled. A removal that fails (another tag still uses it) changes nothing.
+	if (previous && previous !== imageId(image)) {
+		spawnSync("docker", ["image", "rm", previous], { cwd: rootDirectory, env: commandEnvironment, stdio: "ignore" });
+	}
+}
+
+function imageId(reference: string) {
+	const result = spawnSync("docker", ["image", "inspect", "--format", "{{.Id}}", reference], { cwd: rootDirectory, env: commandEnvironment, encoding: "utf8" });
+	return result.status === 0 ? result.stdout.trim() : null;
 }
 
 async function startAcceptanceInfrastructure(profiles: Profile[]) {
