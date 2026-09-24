@@ -602,7 +602,7 @@ export async function readPublicItems(
 			const document = documents.get(key);
 			if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return [];
 			const result = document as Item;
-			result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags.hidden);
+			result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags);
 			const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
 			result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
 			return [result];

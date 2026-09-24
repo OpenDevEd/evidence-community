@@ -120,7 +120,7 @@ export function toLightweightItem(
 	return {
 		...item,
 		attachmentsData: itemPageAttachments(
-			filterPublicAttachments(item.attachmentsData, tags.hidden),
+			filterPublicAttachments(item.attachmentsData, tags),
 			tags.publish,
 		),
 	};
@@ -286,7 +286,7 @@ export async function getPublicItems(
 	const { tags } = libraryConfig.content;
 	const items = (searchResults.hits as ListItem[]).map((item) =>
 		includeHeavyFields
-			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags.hidden) }
+			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }
 			: toLightweightItem(item, tags),
 	);
 

@@ -64,7 +64,11 @@ it("reads committed publications before indexing, and immediately respects edits
 			await client.query('INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'native\', $1)', [key]);
 			await client.query('INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "deleted", "title", "fullTextPDF") VALUES ($1, \'native\', $1, $2, $3, $4, $5, $6)', [key, itemType, parentItem, deleted, title, parentItem ? `${title} text` : null]);
 		}
-		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\'), (\'Education\')');
+		// Only a note with a publish tag is public; a working note's text must never be sent.
+		await client.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('NTEPUBAA', 'native', 'NTEPUBAA'), ('NTEPRIVA', 'native', 'NTEPRIVA')`);
+		await client.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "deleted", "note") VALUES ('NTEPUBAA', 'native', 'NTEPUBAA', 'Note', 'PUBAAAAA', 0, '<p>Shown note</p>'), ('NTEPRIVA', 'native', 'NTEPRIVA', 'Note', 'PUBAAAAA', 0, '<p>Private note</p>')`);
+		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\'), (\'Education\'), (\'publish-record\'), (\'_cites\')');
+		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'NTEPUBAA\', \'publish-record\'), (\'NTEPRIVA\', \'_cites\')');
 		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\'), (\'SECRETAA\', \'Hidden\'), (\'PUBAAAAA\', \'Education\')');
 		await client.query(`UPDATE item SET extra = 'Research summary' WHERE key = 'PUBAAAAA'`);
 		await client.query(`INSERT INTO tag (name) VALUES ('_r:doi')`);
@@ -103,7 +107,8 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(links.get("HIDDENNN")?.related).toEqual(["PUBAAAAA"]);
 		expect(publication.institution).toEqual(["Learning Lab"]);
 		expect(publication.links).toEqual({ cites: [], citedBy: [], related: [] });
-		expect(publication.attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["CHILDDDD"]);
+		expect(publication.attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["CHILDDDD", "NTEPUBAA"]);
+		expect(JSON.stringify(publication)).not.toContain("Private note");
 		expect(publication.fullTextPDFs).toBeUndefined();
 		expect((await getItem("PUBAAAAA")).item?.fullTextPDFs).toEqual([{ key: "CHILDDDD", fullTextPDF: [{ page: 1, text: "Published PDF text" }] }]);
 		expect(response.headers.get("cache-control")).toBe("no-store");

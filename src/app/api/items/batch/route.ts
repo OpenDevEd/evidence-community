@@ -33,7 +33,7 @@ async function getPaginatedItems(
 		return {
 			items: items.map((item) =>
 				includeHeavyFields
-					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags.hidden) }
+					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }
 					: toLightweightItem(item, tags),
 			),
 			total: result.estimatedTotalHits || result.hits.length,

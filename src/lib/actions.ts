@@ -164,15 +164,6 @@ export async function convertItem(
 	return exportCitationItems(itemsList, format, config.citations.showUrl ? config.identity.baseUrl : undefined);
 }
 
-export async function getLikedPosts(likes: Session["user"]["likes"]) {
-	const libraryConfig = await getLibraryConfig();
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-	const res = await index.getDocuments({
-		filter: meilisearchIn("key", Object.keys(likes)),
-	});
-
-	return res.results;
-}
 export async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	extraProperties: Parameters<
@@ -237,7 +228,7 @@ export async function searchIndex(
 					) as Collection[];
 			}
 
-			item.attachmentsData = filterPublicAttachments(item.attachmentsData, libraryConfig.content.tags.hidden);
+			item.attachmentsData = filterPublicAttachments(item.attachmentsData, libraryConfig.content.tags);
 
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,
