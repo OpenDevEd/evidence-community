@@ -86,7 +86,7 @@ again.
 
 `.github/scripts/release-notes.mjs` turns the first-parent commits since the
 previous release into notes for library owners. It reads each pull request's
-title and body with the workflow token, asks `openai/gpt-5.6-luna` through
+title and body with the workflow token, asks `openai/gpt-6-luna` through
 OpenRouter at maximum reasoning for a strict JSON answer, and prints the
 release body. The `OPENROUTER_API_KEY` repository secret is the only setup.
 

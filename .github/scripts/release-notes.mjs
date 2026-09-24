@@ -14,7 +14,7 @@ import { pathToFileURL } from "node:url";
 
 const GITHUB_ORIGIN = "https://api.github.com";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/responses";
-export const MODEL = "openai/gpt-5.6-luna";
+export const MODEL = "openai/gpt-6-luna";
 const MAX_ENTRIES = 40;
 const MAX_ENTRY_CHARS = 4000;
 // Maximum reasoning can take several minutes on a long range.

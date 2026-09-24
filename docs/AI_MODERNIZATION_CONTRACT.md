@@ -54,7 +54,7 @@ Model selection, revised by the user on 2026-09-11:
 - Runtime schema and request parsing validate model-id syntax. Request resolution also requires an enabled provider with that exact model in the library's selection.
 - Hand-written runtime configurations can use provider model ids directly and omit display metadata.
 - OpenRouter routes newly configured models using its current provider defaults. Anthropic models retain explicit one-hour cache breakpoints. Luna retains its verified regional endpoint preference.
-- Generated starter questions and library digests keep the fixed `openai/gpt-5.6-luna` contract. Digest generation uses `max` reasoning.
+- Generated starter questions and library digests keep the fixed `openai/gpt-6-luna` contract. Digest generation uses `max` reasoning.
 
 The user's selected model handles Summary, Explain, chat, Quick Answer, Deep Research, and Smart Screening. Starter questions and library digests are fixed-model exceptions.
 
@@ -172,7 +172,7 @@ Conceptual input:
 ### Suggested starter questions
 
 - Keep automatic generation when publication chat opens.
-- Use fixed GPT-5.6 Luna regardless of the user's selected model.
+- Use fixed GPT-6 Luna regardless of the user's selected model.
 - Revised by the user on 2026-08-21: starter questions use publication metadata plus abstract only. They do not read PDFs (cheaper and faster) and never use embeddings.
 - Return exactly five localized questions.
 - A failure must not prevent the chat modal from opening or being used.

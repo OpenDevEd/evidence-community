@@ -31,7 +31,7 @@ describe("gateway settings for a request", () => {
 		expect(
 			openRouterMaximumReasoningSettings(
 				"openrouter",
-				"openai/gpt-5.6-luna",
+				"openai/gpt-6-luna",
 				{},
 			),
 		).toMatchObject({ extraBody: { reasoning: { effort: "max" } } });
@@ -39,7 +39,7 @@ describe("gateway settings for a request", () => {
 	it("prefers the hosts a model needs and reports its cost", () => {
 		const settings = openRouterModelSettings(
 			"openrouter",
-			"openai/gpt-5.6-luna",
+			"openai/gpt-6-luna",
 		);
 
 		expect(settings).toMatchObject({
@@ -67,7 +67,7 @@ describe("gateway settings for a request", () => {
 			openrouter: { cacheControl: { type: "ephemeral", ttl: "1h" } },
 		});
 		expect(
-			openRouterCacheBreakpoint("openrouter", "openai/gpt-5.6-luna"),
+			openRouterCacheBreakpoint("openrouter", "openai/gpt-6-luna"),
 		).toBeUndefined();
 	});
 

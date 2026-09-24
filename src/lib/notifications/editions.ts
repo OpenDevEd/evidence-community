@@ -189,4 +189,4 @@ async function requestDigest(config: LibraryServerConfig, edition: typeof notifi
   return z.object({ digest: digestResponseSchema }).parse(output).digest;
 }
 import { z } from "zod";
-const digestResponseSchema = z.object({ title: z.string().min(1), summary: z.string().min(1), markdown: z.string().min(1), model: z.literal("openai/gpt-5.6-luna"), reasoning: z.literal("max") });
+const digestResponseSchema = z.object({ title: z.string().min(1), summary: z.string().min(1), markdown: z.string().min(1), model: z.string().min(1), reasoning: z.literal("max") });
