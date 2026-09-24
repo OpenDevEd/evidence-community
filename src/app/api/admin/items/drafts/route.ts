@@ -1,3 +1,4 @@
+import { getLibraryConfig } from "@/config/library-config/server";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
 		const draft = await createNativeItemDraft(
 			await getDatabase(),
 			await readAdminJson(request),
+			{writebackConfig: await getLibraryConfig()},
 		);
 		return NextResponse.json(
 			{ draft: adminCanonicalDraftToItemFields(draft) },

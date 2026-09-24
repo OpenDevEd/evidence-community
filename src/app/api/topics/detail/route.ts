@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { readTopicDetail } from "@/lib/topics/catalog";
+import { readTopicDetail, TopicServiceError } from "@/lib/topics/catalog";
 import { topicIdSchema } from "@/lib/topics/contract";
 
 export async function GET(request: NextRequest) {
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   if (!id.success) return NextResponse.json({error: {code: "invalid_input", retryable: false}}, {status: 400, headers});
   try { return NextResponse.json(await readTopicDetail(id.data, {database: await getDatabase(), config}), {headers}); }
   catch (error) {
+    if (error instanceof TopicServiceError && error.status === 404) return NextResponse.json({error: {code: "topic_not_found", retryable: false}}, {status: 404, headers});
     console.error("Topic detail request failed", {topicId: id.data, error});
     return NextResponse.json({error: {code: "topics_unavailable", retryable: true}}, {status: 503, headers});
   }

@@ -6,9 +6,13 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { topicCatalogCache } from "@/db/schema/topics";
 import { topicCatalogRequestSchema, topicCatalogResponseSchema, topicDetailResponseSchema, topicNodeSchema, type TopicNode } from "./contract";
 
-export type TopicCatalogContext = { database: Pick<Database, "select" | "insert">; config: LibraryServerConfig; fetch?: typeof fetch };
+export type TopicCatalogContext = { database: Pick<Database, "select" | "insert">; config: Pick<LibraryServerConfig, "authentication">; fetch?: typeof fetch };
 const FRESH_MS = 24 * 3600_000;
 const STALE_MS = 7 * FRESH_MS;
+
+export class TopicServiceError extends Error {
+  constructor(public readonly status: number) { super(`Topics service returned ${status}`); this.name = "TopicServiceError"; }
+}
 
 async function serviceRequest(path: string, body: object, context: TopicCatalogContext) {
   const service = context.config.authentication.openScholar;
@@ -16,7 +20,7 @@ async function serviceRequest(path: string, body: object, context: TopicCatalogC
     method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}`},
     body: JSON.stringify({...body, contractVersion: 1, libraryId: service.libraryId}), signal: AbortSignal.timeout(10000),
   });
-  if (!response.ok) throw new Error(`Topics service returned ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  if (!response.ok) { await response.body?.cancel(); throw new TopicServiceError(response.status); }
   const text = new TextDecoder().decode(await readBoundedResponse(response, 2_000_000, 10000, 10000));
   return JSON.parse(text) as unknown;
 }
@@ -49,8 +53,9 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
     try {
       const response = await readTopicCatalog({ids: batch}, context);
       for (const node of response.nodes) result.set(node.id, node);
-      for (const id of batch) if (!result.has(id)) throw new Error(`Unknown topic catalog node ${id}`);
+      for (const id of batch) if (!result.has(id)) throw new TopicServiceError(404);
     } catch (error) {
+      if (error instanceof TopicServiceError && error.status === 404) throw error;
       console.error("Topic catalog lookup failed", {libraryId: context.config.authentication.openScholar.libraryId, ids: batch, error});
       for (const id of batch) {
         const row = byId.get(id);
@@ -83,6 +88,7 @@ export async function readTopicDetail(topicId: string, context: TopicCatalogCont
     await saveCache(context, cacheId, "detail", detail);
     return detail;
   } catch (error) {
+    if (error instanceof TopicServiceError && error.status === 404) throw error;
     console.error("Topic detail lookup failed", {libraryId: context.config.authentication.openScholar.libraryId, topicId, error});
     if (cached && Date.now() - cached.fetchedAt.getTime() < STALE_MS) return topicDetailResponseSchema.parse(cached.payload);
     throw error;

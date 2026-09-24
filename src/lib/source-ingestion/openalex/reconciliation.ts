@@ -33,7 +33,8 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
         AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" other JOIN "sourceConnection" c ON c.key = other."sourceConnectionKey"
           WHERE other."itemKey" = i.key AND NOT other."remoteDeleted" AND c.status <> 'removed')
         AND (EXISTS (SELECT 1 FROM "itemFieldOverride" o WHERE o."itemKey" = i.key)
-          OR EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key)
+          OR EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key))
+          OR EXISTS (SELECT 1 FROM "itemFieldOverride" o JOIN "item" child ON child.key = o."itemKey" WHERE child."parentItem" = i.key)
           OR EXISTS (SELECT 1 FROM "itemReview" r WHERE r."itemKey" = COALESCE(i."parentItem", i.key) AND r.state = 'pending')
           OR EXISTS (SELECT 1 FROM "itemSourceLink" dirty WHERE dirty."itemKey" = i.key AND dirty."dirtyFields" <> '[]'::jsonb))
       ON CONFLICT ("sourceConnectionKey", "sourceRecordKey") DO UPDATE SET "code" = EXCLUDED."code", "message" = EXCLUDED."message", "updatedAt" = now(), "dismissedAt" = NULL

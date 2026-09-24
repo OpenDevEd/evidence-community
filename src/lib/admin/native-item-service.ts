@@ -1,3 +1,5 @@
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { resolveTopicNodes, TopicServiceError } from "@/lib/topics/catalog";
 import { itemFieldOverride } from "@/db/schema/topics";
 import { sourceResolutionsSchema } from "./source-field-contract";
 import { publishSourceFieldOverrides, resolveSourceFieldChoices } from "./source-fields";
@@ -93,8 +95,30 @@ type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
 export type ItemWritebackPolicyOptions = {
-	writebackConfig?: SourceWritebackConfiguration;
+	writebackConfig?: SourceWritebackConfiguration & Partial<Pick<LibraryServerConfig, "topics" | "authentication">>;
 };
+
+async function validateTopicChange(
+  database: Executor,
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+  options: ItemWritebackPolicyOptions,
+) {
+  const before = Array.isArray(previous.topics) ? previous.topics as string[] : [];
+  const after = Array.isArray(next.topics) ? next.topics as string[] : [];
+  if (JSON.stringify([...before].sort()) === JSON.stringify([...after].sort())) return;
+  const config = options.writebackConfig;
+  if (!config?.topics?.enabled) throw new AdminValidationError("Topics are turned off for this library.", {topics: "Enable Topics in library configuration before changing them."});
+  if (!after.length) return;
+  if (!config.authentication) throw new AdminValidationError("The topic catalog is not configured.");
+  try {
+    const nodes = await resolveTopicNodes(after, {database, config: {authentication: config.authentication}});
+    if (nodes.some(node => node.level !== "topic")) throw new TopicServiceError(404);
+  } catch (error) {
+    if (error instanceof TopicServiceError && error.status === 404) throw new AdminValidationError("Choose topics from the catalog.", {topics: "One or more topics no longer exist."});
+    throw new AdminValidationError("The topic catalog is unavailable. Try again before saving your topics.");
+  }
+}
 
 export type ItemPublishOptions = ItemWritebackPolicyOptions & {
 	/** Internal review approval input, never accepted from a publication request. */
@@ -549,12 +573,13 @@ async function publishItemLinks(
 	};
 }
 
-export async function createNativeItemDraft(db: Database, payload: unknown) {
+export async function createNativeItemDraft(db: Database, payload: unknown, options: ItemWritebackPolicyOptions = {}) {
 	const validated = validateNativeItemDraft(payload, {
 		allowIncompleteCreators: true,
 	});
 
 	return db.transaction(async (transaction) => {
+		await validateTopicChange(transaction, {}, validated.payload, options);
 		await assertValidItemCollectionMembershipsInDatabase(
 			transaction,
 			null,
@@ -789,6 +814,7 @@ export async function saveItemDraftInTransaction(
 		expectedPayload: baselinePayload,
 		payload: submittedPayload,
 	});
+	await validateTopicChange(transaction, currentPayload, validated.payload, options);
 	await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
 	const patch = createItemDraftPatch(basePayload, validated.payload);
 	assertNoSelfLinks(itemKey, validated.links);
@@ -1039,6 +1065,7 @@ export async function publishItemDraftWithContext(
 			await resolveSourceFieldChoices(transaction, itemKey, (options.review?.approved.payload ?? workingPayload)!),
 			{ requireTitle: true },
 		);
+		await validateTopicChange(transaction, basePayload, validated.payload, options);
 		await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
 		if (validated.item.parentItem !== parentItemKey) {
 			throw new ItemDraftConflictError(itemKey);
