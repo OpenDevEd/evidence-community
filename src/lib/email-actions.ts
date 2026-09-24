@@ -3,7 +3,7 @@
 import { getLibraryConfig } from "@/config/library-config/server";
 import { libraryRequestMessage } from "@/lib/emails/request";
 import { isEmailChannelEnabled, sendEmailForConfig } from "@/lib/nodemailer";
-import { validateContactRequest, validateTakedownRequest } from "@/lib/utils";
+import { validateContactRequest, validateTakedownRequest } from "@/lib/request-validation";
 
 export async function sendTakedownRequest(
 	email: string,

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const areLinksValid = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/actions", () => ({ areLinksValid }));
 
-import { contactRequestSchema, parseRequestLinks, takedownRequestSchema, validateTakedownRequest } from "@/lib/utils";
+import { parseRequestLinks } from "@/lib/utils";
+import { contactRequestSchema, takedownRequestSchema, validateTakedownRequest } from "@/lib/request-validation";
 
 const request = {
 	email: "reader@example.org",

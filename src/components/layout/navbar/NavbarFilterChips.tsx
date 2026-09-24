@@ -1,6 +1,6 @@
 "use client";
 
-import { FilterChips } from "@/components/features/resources/ResourcesView";
+import { FilterChips } from "@/components/features/resources/FilterChips";
 
 /**
  * Active-filter chips under the navbar search bar.

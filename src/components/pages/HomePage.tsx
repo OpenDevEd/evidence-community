@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, use, useEffect, useId, useRef, useState } from "react";
-import type { Element } from "hast";
+import dynamic from "next/dynamic";
 import { animate, MotionConfig, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
@@ -11,8 +11,6 @@ import { serializeSearchParams } from "@/lib/searchParams";
 import { fetcher } from "@/lib/utils";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import { exampleQuestions } from "./home-content";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Link, useRouter } from "@/i18n/routing";
 import { BsStars } from "react-icons/bs";
 import { Input } from "@/components/nextui/Input";
@@ -26,17 +24,40 @@ import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { TextLink } from "@/components/digests/DigestPrimitives";
 import { DigestCover } from "@/components/digests/DigestCover";
 import type { DigestSummary } from "@/lib/notifications/public";
-import { CitationPanel } from "@/components/features/items/CitationControl";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import type { CitationItem } from "@/lib/citation-formats";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
-import Resource from "@/components/features/items/Resource";
 import type { ListItem } from "@/app/api/item/types";
 import HomeMap, { type MapShape } from "./HomeMap";
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, Layers01Icon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
+
+// Below the fold and heavy: the citation formatter with its styles, and the listing's result card. They load when the
+// reader nears them (see WhenNear), not with the page.
+const loadCitationPanel = () => import("@/components/features/items/CitationControl");
+const loadResource = () => import("@/components/features/items/Resource");
+// The panel formats the library's citation as it mounts, with the formatter it loads on first use: both come early.
+const preloadCitations = () => Promise.all([loadCitationPanel(), import("@/lib/citation-formatter")]);
+const CitationPanel = dynamic(() => loadCitationPanel().then((module) => module.CitationPanel), { ssr: false });
+const Resource = dynamic(() => loadResource(), { ssr: false });
+
+/**
+ * Loads a deferred part's code once the browser is idle after the page, so reaching it later mounts at once: the
+ * citation styles take tens of milliseconds to evaluate, which would otherwise land in the middle of a scroll.
+ */
+function useIdlePreload(load: () => Promise<unknown>) {
+	useEffect(() => {
+		const start = () => void load().catch(() => {});
+		if (typeof window.requestIdleCallback === "function") {
+			const handle = window.requestIdleCallback(start, { timeout: 4000 });
+			return () => window.cancelIdleCallback(handle);
+		}
+		const timer = window.setTimeout(start, 1500);
+		return () => window.clearTimeout(timer);
+	}, [load]);
+}
 
 // The library's home page: a map-backed hero, arched bands, and one explorer
 // for every statistic the library exposes.
@@ -120,6 +141,9 @@ export type HomeContent = {
 	headings?: Partial<Record<"curation" | "team" | "involvement", string>>;
 };
 
+/** The answers written in the bold-and-links editor, already rendered on the server (see HomeRichText). */
+export type HomeRich = Partial<Record<"intro" | "curation" | "team" | "extra", React.ReactNode>>;
+
 /**
  * Whether the reader asked for less motion, once the page is hydrated. The server cannot know, so the first render
  * assumes motion on both sides and the setting applies from the next one; `motion-reduce:` styles cover the frame
@@ -129,31 +153,6 @@ function useLessMotion() {
 	const hydrated = useHydrated();
 	const reduce = useReducedMotion();
 	return hydrated && Boolean(reduce);
-}
-
-type Rendered = { children?: React.ReactNode; node?: Element };
-
-/** A link in an owner's answer; one to this library's own address becomes a path, so it keeps the reader's language. */
-function AnswerLink({ children, node }: Rendered) {
-	const { identity } = useLibraryConfig();
-	const href = String(node?.properties.href ?? "");
-	// An address that does not parse ("https://") is shown as its words rather than breaking the page.
-	if (!URL.canParse(href, identity.baseUrl)) return <>{children}</>;
-	return <Link href={getRuntimeLinkHref(href, identity.baseUrl)} className="font-medium text-accent underline decoration-1 underline-offset-4">{children}</Link>;
-}
-const link = AnswerLink;
-const bold = ({ children }: Rendered) => <strong className="font-semibold opacity-100">{children}</strong>;
-const body = {
-	p: ({ children }: Rendered) => <p className="mb-4 max-w-[40rem] text-[17px] leading-[1.75] opacity-85 last:mb-0">{children}</p>,
-	ul: ({ children }: Rendered) => <ul className="mb-4 max-w-[40rem] list-disc space-y-1 pl-5 text-[17px] leading-[1.75] opacity-85 marker:text-current last:mb-0 [&_p]:mb-0 [&_p]:opacity-100">{children}</ul>,
-	a: link,
-	strong: bold,
-};
-const statement = { p: ({ children }: Rendered) => <p className="mb-4 last:mb-0">{children}</p>, a: link, strong: bold };
-
-/** Text from the bold-and-links editor. Anything else in it is unwrapped to its words; bare addresses become links. */
-function RichText({ text, as = body }: { text: string; as?: Partial<typeof body> }) {
-	return <ReactMarkdown remarkPlugins={[remarkGfm]} allowedElements={["p", "strong", "em", "a", "ul", "li"]} unwrapDisallowed components={as}>{text}</ReactMarkdown>;
 }
 
 /** A band's lead sentence, set large under its header; the same size wherever it appears. */
@@ -277,11 +276,16 @@ function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
  * library is described as a web page read today, built from its name and address, so no library has to write it.
  */
 function CiteSlip({ name, url, today }: { name: string; url: string; today: string }) {
+	useIdlePreload(preloadCitations);
 	const { citations } = useLibraryConfig();
 	if (!citations.enabled) return null;
 	const library: CitationItem = { key: "library", title: name, itemType: "Webpage", url, accessDate: today };
 	// The block a publication page shows, so citing the library looks like citing anything else in it.
-	return <CitationPanel item={library} showHeading completeRecord link={url} />;
+	return (
+		<WhenNear placeholder={<div className="min-h-[9rem]" />}>
+			<CitationPanel item={library} showHeading completeRecord link={url} />
+		</WhenNear>
+	);
 }
 
 
@@ -328,18 +332,31 @@ function useTypedHint(examples: string[], idle: string, active: boolean) {
 }
 
 /**
- * The library as a field of dots, one per publication up to a screenful, lighting up in a slow sweep: the assistant
- * reading the collection. Faded in the middle, where the question box sits; still for reduced motion.
+ * The library as a field of dots, a row for about every 44 publications up to a screenful, lighting up in a slow sweep:
+ * the assistant reading the collection. Faded in the middle, where the question box sits; still for reduced motion.
+ * The dots are two painted patterns, dim and lit, and only a window over the lit one moves, so the sweep runs on the
+ * compositor instead of animating hundreds of dots.
  */
 function LibraryField({ publications }: { publications: number }) {
-	// Roughly one row's worth, so the delay by position sweeps across the panel from left to right.
-	const row = 44;
-	const count = Math.min(publications, row * 13);
+	const rows = Math.min(13, Math.ceil(Math.min(publications, 44 * 13) / 44));
+	// Five-pixel dots 24px apart, as the grid of the design; the lit ones glow.
+	const dots = (lit: boolean) => ({
+		backgroundImage: lit
+			? "radial-gradient(circle, rgb(var(--color-accent-300)) 2.5px, rgb(var(--color-accent-400) / 0.45) 3.5px, transparent 7px)"
+			: "radial-gradient(circle, rgb(var(--color-accent-300)) 2.5px, transparent 3px)",
+		backgroundSize: "29px 29px",
+		backgroundPosition: "center",
+	});
+	if (rows === 0) return null;
 	return (
-		<div aria-hidden className="pointer-events-none absolute inset-0 grid content-center justify-center gap-6 p-6 [grid-template-columns:repeat(auto-fill,5px)] [mask-image:radial-gradient(ellipse_at_center,transparent_10%,black_45%)]">
-			{Array.from({ length: count }, (_, index) => (
-				<span key={index} className="size-[5px] animate-read-dot rounded-full bg-[rgb(var(--color-accent-300))] shadow-[0_0_8px_rgb(var(--color-accent-400))] motion-reduce:animate-none motion-reduce:opacity-30" style={{ animationDelay: `${((index % row) / row) * 2.4 + ((index * 7) % 11) * 0.09}s` }} />
-			))}
+		<div aria-hidden className="pointer-events-none absolute inset-0 flex items-center p-6 [mask-image:radial-gradient(ellipse_at_center,transparent_10%,black_45%)]">
+			<div className="relative w-full overflow-hidden" style={{ height: rows * 29 }}>
+				<div className="absolute inset-0 opacity-20 motion-reduce:opacity-30" style={dots(false)} />
+				{/* The window is 40% of the field wide; its contents are the whole field, moved back as it moves on. */}
+				<div className="absolute inset-y-0 left-0 w-2/5 animate-read-sweep overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_40%,black_60%,transparent)] motion-reduce:hidden">
+					<div className="absolute inset-y-0 left-0 w-[250%] animate-read-sweep-back" style={dots(true)} />
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -426,13 +443,13 @@ function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; q
 }
 
 /** On the accent band: the editors' statement set large, then the path an entry takes, side by side under big numerals. */
-function Curation({ curation, heading, data }: { curation: NonNullable<HomeContent["curation"]>; heading: string; data: Promise<HomeData> }) {
+function Curation({ curation, statement, heading, data }: { curation: NonNullable<HomeContent["curation"]>; statement: React.ReactNode; heading: string; data: Promise<HomeData> }) {
 	const steps = curation.steps?.length ? curation.steps : null;
 	if (!curation.text && !steps) return null;
 	return (
 		<>
 			<Heading>{heading}</Heading>
-			{curation.text && <Reading className={leadFor(curation.text)}><RichText text={curation.text} as={statement} /></Reading>}
+			{curation.text && <Reading className={leadFor(curation.text)}>{statement}</Reading>}
 			{steps && (
 				<div className={curation.text ? "mt-16 lg:mt-20" : ""}>
 					<Suspense fallback={<Timeline steps={steps} journey={null} />}>
@@ -542,7 +559,8 @@ function StepDate({ when }: { when?: string }) {
  * background, under the wash that keeps the text readable, so it fades out as it reaches the text.
  */
 function HeroRow({ data }: { data: HomeData }) {
-	const covered = data.recent.filter((publication) => data.covers[publication.key]);
+	// One row shows each first page once per turn already; six keep the phone's download small.
+	const covered = data.recent.filter((publication) => data.covers[publication.key]).slice(0, 6);
 	if (covered.length < 4) return null;
 	const row = [...covered, ...covered];
 	return (
@@ -569,10 +587,16 @@ function HeroRow({ data }: { data: HomeData }) {
 function HeroShelf({ data }: { data: HomeData }) {
 	const covered = data.recent.filter((publication) => data.covers[publication.key]);
 	if (covered.length < 4) return null;
-	// Every column carries every cover, each starting further along, so three columns never show the same row.
-	const turned = (by: number) => [...covered.slice(by % covered.length), ...covered.slice(0, by % covered.length)];
+	// Each column takes its own run of first pages, so no two show the same one while the library has enough; a column
+	// needs four to fill its height as it loops, and with fewer pages the runs start apart so they overlap least.
+	const perColumn = Math.max(4, Math.ceil(covered.length / 3));
+	const run = (index: number) => {
+		const start = Math.floor((index * covered.length) / 3);
+		return Array.from({ length: perColumn }, (_, offset) => covered[(start + offset) % covered.length]!);
+	};
 	const column = (publications: ListItem[], down: boolean) => (
-		<div className={`flex w-44 shrink-0 flex-col animate-marquee-up group-hover/shelf:[animation-play-state:paused] motion-reduce:animate-none ${down ? "[animation-direction:reverse]" : ""}`} style={{ animationDuration: `${publications.length * 12}s` }}>
+		// Its own height, not the row's: the loop moves it by half of it, one copy of its pages.
+		<div className={`flex w-44 shrink-0 flex-col self-start animate-marquee-up group-hover/shelf:[animation-play-state:paused] motion-reduce:animate-none ${down ? "[animation-direction:reverse]" : ""}`} style={{ animationDuration: `${publications.length * 12}s` }}>
 			{[...publications, ...publications].map((publication, index) => {
 				const copy = index >= publications.length;
 				return (
@@ -588,9 +612,9 @@ function HeroShelf({ data }: { data: HomeData }) {
 	return (
 				<div className="group/shelf absolute bottom-6 top-0 hidden w-[40rem] xl:-right-14 animate-hero-rise overflow-hidden [animation-delay:300ms] [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,black_20%,black_74%,transparent),linear-gradient(to_right,transparent,black_30%)] motion-reduce:animate-none xl:block">
 			<div className="flex h-full -rotate-[8deg] justify-end gap-5 pr-2">
-				{column(turned(0), false)}
-				<div className="pt-28">{column(turned(2), true)}</div>
-				<div className="pt-10">{column(turned(4), false)}</div>
+				{column(run(0), false)}
+				<div className="pt-28">{column(run(1), true)}</div>
+				<div className="pt-10">{column(run(2), false)}</div>
 			</div>
 		</div>
 	);
@@ -632,12 +656,12 @@ function EditorMarquee({ editors }: { editors: NonNullable<HomeContent["editors"
 const MARQUEE_MINIMUM = 6;
 
 /** The closing band: who runs the library set large, and the ways in as buttons in the band's own colours. */
-function Team({ team, editors, involvement, contact, heading }: { team?: string; editors?: HomeContent["editors"]; involvement?: HomeContent["involvement"]; contact: Contact; heading: (key: "team" | "involvement") => string }) {
+function Team({ team, teamText, editors, involvement, contact, heading }: { team?: string; teamText: React.ReactNode; editors?: HomeContent["editors"]; involvement?: HomeContent["involvement"]; contact: Contact; heading: (key: "team" | "involvement") => string }) {
 	const people = Boolean(team || editors?.length);
 	return (
 		<>
 			<Heading>{heading(people ? "team" : "involvement")}</Heading>
-			{team && <Reading className={leadFor(team)}><RichText text={team} as={statement} /></Reading>}
+			{team && <Reading className={leadFor(team)}>{teamText}</Reading>}
 			{editors?.length ? <EditorMarquee editors={editors} /> : null}
 			<Involvement involvement={involvement} contact={contact} spaced={people} />
 		</>
@@ -684,6 +708,7 @@ const ARCH = "M0 0 H1600 V120 C 1300 0, 300 0, 0 120 Z";
 /** Full-width band in a configured tone; the seam at its top is drawn in the previous band's colour. */
 function Band({ tone, previous, inverse = false, children }: { tone: Tone; previous: Tone; inverse?: boolean; children: React.ReactNode }) {
 	const ref = useRef<HTMLElement>(null);
+	usePauseOffscreen(ref);
 	const reduce = useLessMotion();
 	// The seam starts shallow and bends to its full curve as the band comes up the screen.
 	const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "start 35%"] });
@@ -701,6 +726,28 @@ function Band({ tone, previous, inverse = false, children }: { tone: Tone; previ
 			<motion.div initial="hidden" whileInView="shown" viewport={seen} variants={rise}>{children}</motion.div>
 		</section>
 	);
+}
+
+/** Renders its children once they come within about a screen of the viewport; until then the placeholder holds their room. */
+function WhenNear({ children, placeholder }: { children: React.ReactNode; placeholder: React.ReactNode }) {
+	const ref = useRef<HTMLDivElement>(null);
+	const near = useInView(ref, { once: true, margin: "800px 0px" });
+	return <div ref={ref}>{near ? children : placeholder}</div>;
+}
+
+/**
+ * Marks a section while it is well off screen, so the stylesheet pauses the endless animations inside it (the shelf,
+ * the sweeps, the marquees): they otherwise keep the browser busy on every frame for parts nobody can see. Set on the
+ * element directly, so scrolling never re-renders the page.
+ */
+function usePauseOffscreen(ref: React.RefObject<HTMLElement | null>) {
+	useEffect(() => {
+		const element = ref.current;
+		if (!element || typeof IntersectionObserver === "undefined") return;
+		const observer = new IntersectionObserver(([entry]) => element.toggleAttribute("data-offscreen", !entry!.isIntersecting), { rootMargin: "100px 0px" });
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, [ref]);
 }
 
 /**
@@ -1024,7 +1071,17 @@ function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; su
 }
 
 /** The row's own newest publications, the first of what "See all" opens. */
-function RowPublications({ row, filter }: { row: Row; filter: string }) {
+/** A row's latest publications, asked for once the explorer nears the screen. */
+function RowPublications(props: { row: Row; filter: string }) {
+	useIdlePreload(loadResource);
+	return (
+		<WhenNear placeholder={<div className="mt-8 min-h-[30rem] md:min-h-[15rem]" />}>
+			<RowExamples {...props} />
+		</WhenNear>
+	);
+}
+
+function RowExamples({ row, filter }: { row: Row; filter: string }) {
 	const locale = useLocale();
 	// While they load the space stays empty, never showing another row's publications under this row's name.
 	const { data: examples } = useSWR<ItemsGetResponse>(`/items?${filter}&sort=desc&limit=2`, fetcher);
@@ -1154,7 +1211,7 @@ function WithData({ data, children }: { data: Promise<HomeData>; children: (data
 type Contact = { email: string | null; page: boolean };
 
 /** `today` is the server's date, so the citation's access date is the same in the server's page and the browser's. */
-type Props = { name: string; siteUrl: string; contact: Contact; today: string; about: HomeContent; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
+type Props = { name: string; siteUrl: string; contact: Contact; today: string; about: HomeContent; rich: HomeRich; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
 
 /**
  * Everything the library wrote and the page's structure render at once; the parts built from the library's figures
@@ -1164,16 +1221,18 @@ export default function HomePage(props: Props) {
 	return (
 		<MotionConfig reducedMotion="user">
 			<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
-				<Hero name={props.name} intro={props.about.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
+				<Hero name={props.name} intro={props.rich.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
 				<Bands {...props} />
 			</PageContainer>
 		</MotionConfig>
 	);
 }
 
-function Hero({ name, intro, data, tone, shapes }: { name: string; intro?: string; data: Promise<HomeData>; tone: Tone; shapes: MapShape[] }) {
+function Hero({ name, intro, data, tone, shapes }: { name: string; intro?: React.ReactNode; data: Promise<HomeData>; tone: Tone; shapes: MapShape[] }) {
+	const ref = useRef<HTMLElement>(null);
+	usePauseOffscreen(ref);
 	return (
-		<section className={`relative isolate pb-16 pt-10 lg:pb-24 lg:pt-16 ${toneClass}`} style={toneStyle(tone)}>
+		<section ref={ref} className={`relative isolate pb-16 pt-10 lg:pb-24 lg:pt-16 ${toneClass}`} style={toneStyle(tone)}>
 			<HeroBackdrop data={data} shapes={shapes} />
 			<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroShelf data={figures} />}</WithData></Suspense>
 			<HeroText name={name} intro={intro} />
@@ -1203,7 +1262,7 @@ function HeroBackdrop({ data, shapes }: { data: Promise<HomeData>; shapes: MapSh
 }
 
 /** Name and tagline read as one unit; the intro is supporting text, set apart and softer; then the actions. */
-function HeroText({ name, intro }: { name: string; intro?: string }) {
+function HeroText({ name, intro }: { name: string; intro?: React.ReactNode }) {
 	const { identity, notifications } = useLibraryConfig();
 	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
 	const ownLogo = hasOwnLogo(identity.assets);
@@ -1219,7 +1278,7 @@ function HeroText({ name, intro }: { name: string; intro?: string }) {
 				<h1 className={ownLogo ? "sr-only" : "max-w-[16ch] animate-hero-rise text-balance text-5xl font-bold leading-[0.98] tracking-[-0.03em] motion-reduce:animate-none sm:text-6xl"}>{name}</h1>
 				{identity.tagline && <p className="max-w-[31rem] animate-hero-rise text-balance font-heading text-xl font-medium leading-snug tracking-tight text-[rgb(var(--ink-rgb)/0.72)] [animation-delay:90ms] motion-reduce:animate-none sm:text-2xl">{identity.tagline}</p>}
 			</div>
-			{intro && <div className="mt-8 max-w-[34rem] animate-hero-rise text-[17px] leading-7 text-[rgb(var(--ink-rgb)/0.75)] [animation-delay:140ms] motion-reduce:animate-none [&_p]:mb-0 [&_p]:max-w-none [&_p]:text-[length:inherit] [&_p]:leading-[inherit] [&_p]:opacity-100 [&_strong]:text-[rgb(var(--ink-rgb))]"><RichText text={intro} /></div>}
+			{intro && <div className="mt-8 max-w-[34rem] animate-hero-rise text-[17px] leading-7 text-[rgb(var(--ink-rgb)/0.75)] [animation-delay:140ms] motion-reduce:animate-none [&_p]:mb-0 [&_p]:max-w-none [&_p]:text-[length:inherit] [&_p]:leading-[inherit] [&_p]:opacity-100 [&_strong]:text-[rgb(var(--ink-rgb))]">{intro}</div>}
 			<div className="mt-10 flex animate-hero-rise flex-wrap gap-3 [animation-delay:180ms] motion-reduce:animate-none">
 				<Button as={Link} href="/lib" color="accent" variant="solid" size="md" startContent={<HugeiconsIcon icon={Search01Icon} aria-hidden size={18} />}>Explore the library</Button>
 				{/* The digest button offers a subscription, so it goes when the library sends no digests. */}
@@ -1230,7 +1289,7 @@ function HeroText({ name, intro }: { name: string; intro?: string }) {
 }
 
 /** Each answered question gets a band of its own, in the order the page reads; a blank one drops out and the seams close up. */
-function Bands({ name, siteUrl, contact, today, about, data, tones, ramp, shapes }: Props) {
+function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, shapes }: Props) {
 	const t = useTranslations("homePage");
 	const { citations } = useLibraryConfig();
 	const heading = (key: keyof NonNullable<HomeContent["headings"]>) => about.headings?.[key]?.trim() || t(key);
@@ -1258,10 +1317,10 @@ function Bands({ name, siteUrl, contact, today, about, data, tones, ramp, shapes
 				</>
 			),
 		},
-		hasCuration(about.curation) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} heading={heading("curation")} data={data} /> },
+		hasCuration(about.curation) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} statement={rich.curation} heading={heading("curation")} data={data} /> },
 		// The library's citation, with the owner's closing answer beside it; with citations off and no answer, no band.
-		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} cites={citations.enabled} name={name} siteUrl={siteUrl} today={today} /> },
-		hasTeam(about, involvement) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} editors={about.editors} involvement={involvement} contact={contact} heading={heading} /> },
+		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} answerText={rich.extra} cites={citations.enabled} name={name} siteUrl={siteUrl} today={today} /> },
+		hasTeam(about, involvement) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} teamText={rich.team} editors={about.editors} involvement={involvement} contact={contact} heading={heading} /> },
 	].filter((band): band is { key: string; tone: Tone; body: React.JSX.Element } => Boolean(band));
 
 	return (
@@ -1283,13 +1342,13 @@ function hasTeam(about: HomeContent, involvement: HomeContent["involvement"]) {
 }
 
 /** The owner's closing answer, if any, beside how to cite the library; with citations off, the answer alone at full width. */
-function Cite({ extra, cites, name, siteUrl, today }: { extra: HomeContent["extra"]; cites: boolean; name: string; siteUrl: string; today: string }) {
+function Cite({ extra, answerText, cites, name, siteUrl, today }: { extra: HomeContent["extra"]; answerText: React.ReactNode; cites: boolean; name: string; siteUrl: string; today: string }) {
 	const answer = extra?.text.trim() ? extra.text : undefined;
 	return (
 		<>
 			<Heading>{extra?.title?.trim() || (cites ? "Cite the library" : name)}</Heading>
 			<div className={answer && cites ? twoColumns : ""}>
-				{answer && <div className="max-w-[40rem]"><RichText text={answer} /></div>}
+				{answer && <div className="max-w-[40rem]">{answerText}</div>}
 				{cites && <CiteSlip name={name} url={siteUrl} today={today} />}
 			</div>
 		</>

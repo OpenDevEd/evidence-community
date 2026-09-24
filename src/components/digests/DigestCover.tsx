@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight01Icon, BookOpen01Icon } from "@hugeicons/core-free-icons";
 import type { DigestSummary } from "@/lib/notifications/public";
 import { CoverImage } from "@/components/features/items/CoverImage";
-import { MarkdownExcerpt } from "@/components/features/markdown/Markdown";
+import { MarkdownExcerpt } from "@/components/features/markdown/MarkdownExcerpt";
 import styles from "./DigestPages.module.css";
 import { Icon } from "./DigestPrimitives";
 
