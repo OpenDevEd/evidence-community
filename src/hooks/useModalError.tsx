@@ -4,15 +4,15 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useMemo, useCallback } from "react";
 import { twMerge } from "tailwind-merge";
-import { animate as animateFramer, AnimatePresence, AnimationProps, motion } from "framer-motion";
+import { animate as animateFramer, AnimatePresence, motion, type MotionProps } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useTranslations } from "next-intl";
 
 interface UseModalErrorProps {
 	animationDuration?: number;
-	initial?: AnimationProps["initial"];
-	animate?: AnimationProps["animate"];
-	exit?: AnimationProps["exit"];
+	initial?: MotionProps["initial"];
+	animate?: MotionProps["animate"];
+	exit?: MotionProps["exit"];
 }
 
 export function useModalError({
