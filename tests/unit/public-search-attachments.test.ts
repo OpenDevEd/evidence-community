@@ -11,6 +11,7 @@ const service = vi.hoisted(() => ({ search: vi.fn(), getDisplayedAttributes: asy
 vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: service }) }));
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getPublicItems } from "@/lib/search";
+import { POST as readBatch } from "@/app/api/items/batch/route";
 
 it("removes hidden and deleted attachments from full search results used by exports", async () => {
 	const config = libraryConfigSchema.parse(maximalLibraryConfig);
@@ -53,4 +54,23 @@ it("gives list results only the attachments the item page shows, without unpubli
 		{ ...common, key: "PUBNOTEA", itemType: "Note", tags: ["_publish"], note: "<p>Shown</p>" },
 	]);
 	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toContain("attachmentsData");
+});
+
+it("removes hidden and deleted attachments from full batch results used by the assistant", async () => {
+	const config = libraryConfigSchema.parse(maximalLibraryConfig);
+	config.content.tags.hidden = ["hidden"];
+	vi.mocked(getLibraryConfig).mockResolvedValue(config);
+	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
+		key: "PUBAAAAA", title: "Published record", attachmentsData: [
+			{ key: "VISIBLEA", deleted: 0, tags: [], PDFCoverPageImage: "public.png" },
+			{ key: "HIDDENAA", deleted: 0, tags: ["hidden"], PDFCoverPageImage: "hidden.png" },
+			{ key: "DELETEDD", deleted: 1, tags: [], PDFCoverPageImage: "deleted.png" },
+		],
+	}] });
+	const response = await readBatch(new Request("http://localhost/api/items/batch", {
+		method: "POST",
+		body: JSON.stringify({ keys: ["PUBAAAAA"], includeHeavyFields: true }),
+	}) as never);
+	const { items } = await response.json();
+	expect(items[0].attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["VISIBLEA"]);
 });

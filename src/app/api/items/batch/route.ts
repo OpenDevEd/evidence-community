@@ -5,7 +5,7 @@ import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
 
 async function getPaginatedItems(
 	keys: string[],
@@ -29,10 +29,13 @@ async function getPaginatedItems(
 		});
 
 		const items = result.hits as ListItem[];
+		const { tags } = libraryConfig.content;
 		return {
-			items: includeHeavyFields
-				? items
-				: items.map((item) => toLightweightItem(item, libraryConfig.content.tags)),
+			items: items.map((item) =>
+				includeHeavyFields
+					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags.hidden) }
+					: toLightweightItem(item, tags),
+			),
 			total: result.estimatedTotalHits || result.hits.length,
 		};
 	} catch (error: any) {

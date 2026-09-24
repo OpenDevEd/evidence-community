@@ -17,7 +17,7 @@ vi.mock("@/i18n/server", () => ({ getRuntimeRequestLocale: async () => "en-GB" }
 
 import { getDatabaseForConfig } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { GET } from "@/app/api/item/[key]/route";
+import { GET, getItem } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
 import { readCitationRecordsPage } from "@/lib/library-export-records";
 import { exportCitationItems } from "@/lib/citation-export";
@@ -104,7 +104,8 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(publication.institution).toEqual(["Learning Lab"]);
 		expect(publication.links).toEqual({ cites: [], citedBy: [], related: [] });
 		expect(publication.attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["CHILDDDD"]);
-		expect(publication.fullTextPDFs).toEqual([{ key: "CHILDDDD", fullTextPDF: [{ page: 1, text: "Published PDF text" }] }]);
+		expect(publication.fullTextPDFs).toBeUndefined();
+		expect((await getItem("PUBAAAAA")).item?.fullTextPDFs).toEqual([{ key: "CHILDDDD", fullTextPDF: [{ page: 1, text: "Published PDF text" }] }]);
 		expect(response.headers.get("cache-control")).toBe("no-store");
 		await client.query(`UPDATE item SET "DOI" = '10.5555/conflicting-parent' WHERE key = 'PUBAAAAA'`);
 		expect((await (await read("PUBAAAAA")).json()).item.DOI).toBeNull();
