@@ -1,8 +1,8 @@
 import { extendTailwindMerge } from "tailwind-merge";
 
-/** The theme's own font sizes and shadows (tailwind.config.ts `fontSize` and `boxShadow`); a test keeps these lists in step. */
-export const CUSTOM_FONT_SIZES = ["inspector-title", "catalogue-label", "citation"] as const;
-export const CUSTOM_SHADOWS = [
+/** The theme's own font sizes and shadows (tailwind.config.ts `fontSize` and `boxShadow`); a new one belongs here too. */
+const CUSTOM_FONT_SIZES = ["inspector-title", "catalogue-label", "citation"] as const;
+const CUSTOM_SHADOWS = [
 	"filter-control",
 	"filter-control-dark",
 	"card-soft",
