@@ -23,12 +23,9 @@ import type { SmartScreeningField } from "@/types/ai";
 import { generateObject } from "ai";
 import {
 	COUNTRY_HIERARCHY,
-	countryFacetOptions,
 	Entry,
 } from "@/constants/misc";
-import { FacetDistribution } from "meilisearch";
-import { addRegionsToFacetDistribution } from "./country";
-import { getMainAttributes, resolveSearchRequest } from "@/lib/search";
+import { getMainAttributes, publicFacetDistribution, resolveSearchRequest } from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeSearchFacets } from "@/config/library-config/search";
 import { AIError } from "@/lib/ai/errors";
@@ -85,9 +82,7 @@ export async function getItems(
 
 	return searchIndex(
 		searchParams,
-		{
-			facets,
-		},
+		facets,
 		[
 			...collections.map((collection: string) =>
 				meilisearchEquals("collectionsAncestry", collection),
@@ -164,18 +159,15 @@ export async function convertItem(
 	return exportCitationItems(itemsList, format, config.citations.showUrl ? config.identity.baseUrl : undefined);
 }
 
-export async function searchIndex(
+/**
+ * Not exported: an exported function here becomes a server action anyone can
+ * call, and caller-chosen search options could return attachment fields
+ * (such as highlighted note text) that the public filter below never sees.
+ */
+async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	extraProperties: Parameters<
-		Awaited<ReturnType<typeof getMeilisearchForConfig>>["index"]["search"]
-	>[1] = {},
-	extraFilters: NonNullable<
-		Parameters<
-			Awaited<
-				ReturnType<typeof getMeilisearchForConfig>
-			>["index"]["search"]
-		>[1]
-	>["filter"] = [],
+	facets: string[],
+	extraFilters: string[],
 ) {
 	const items = async () => {
 		const libraryConfig = await getLibraryConfig();
@@ -190,10 +182,7 @@ export async function searchIndex(
 		} = resolveSearchRequest(searchParams, libraryConfig);
 		const { index: searchIndex } =
 			await getMeilisearchForConfig(libraryConfig);
-		const finalFilters = [
-			...baseFilters,
-			...(Array.isArray(extraFilters) ? extraFilters : []),
-		];
+		const finalFilters = [...baseFilters, ...extraFilters];
 
 		const allAttributes = await getMainAttributes(libraryConfig);
 
@@ -204,7 +193,7 @@ export async function searchIndex(
 				attributesToSearchOn,
 				attributesToRetrieve: allAttributes,
 				...(sortOption ? { sort: [sortOption] } : {}),
-				...extraProperties,
+				facets,
 				filter: finalFilters,
 			}),
 			getCachedCollections(libraryConfig),
@@ -239,31 +228,16 @@ export async function searchIndex(
 
 		await Promise.all(itemPromises);
 
-		// Pass country selections to addRegionsToFacetDistribution
 		return {
 			items: items as Item[],
 			currentPage: pageNum,
 			totalItems: totalCount,
 			perPage: limitNum,
 			totalPages: Math.ceil(totalCount / limitNum),
-			facetDistribution: addRegionsToFacetDistribution(
-				Object.assign(
-					{},
-					searchResults.facetDistribution,
-					countryFacetOptions
-						.filter(
-							(facet) =>
-								Array.isArray(extraProperties.facets) &&
-								extraProperties.facets.includes(facet.key),
-						)
-						.reduce((acc, facet) => {
-							acc[facet.key + "_uncategorized"] =
-								searchResults.facetDistribution?.[facet.key] ||
-								{};
-							return acc;
-						}, {} as FacetDistribution),
-				),
-				{ country },
+			facetDistribution: publicFacetDistribution(
+				searchResults.facetDistribution,
+				facets,
+				country,
 			),
 		};
 	};
