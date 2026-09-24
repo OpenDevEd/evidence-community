@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
 import { getCountryAncestry } from "@/lib/utils";

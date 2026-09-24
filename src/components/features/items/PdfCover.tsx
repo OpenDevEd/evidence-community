@@ -3,7 +3,7 @@
 import { useState, type Ref } from "react";
 import { CoverImage } from "./CoverImage";
 import { Skeleton } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 /** A publication's first page, as the library extracted it from its PDF; an accent block stands in when there is none. `sizes` is how wide it is drawn (a publication page's by default). */
 export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width: 640px) 208px, 330px" }: { src?: string | null; alt: string; ref?: Ref<HTMLImageElement>; onLoad?: () => void; className?: string; sizes?: string }) {

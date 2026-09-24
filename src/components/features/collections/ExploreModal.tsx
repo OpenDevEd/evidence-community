@@ -4,7 +4,7 @@ import { Modal, ModalContent } from "@nextui-org/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useReducedMotion } from "framer-motion";
 import { getLangDir } from "rtl-detect";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import GenericHeader from "@/components/features/modals/GenericHeader";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import { useFiltersContext } from "@/context/FiltersProvider";

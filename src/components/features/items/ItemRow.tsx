@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
 import { valueFormatter } from "@/lib/items";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";

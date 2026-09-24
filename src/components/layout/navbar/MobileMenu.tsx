@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslations } from "next-intl";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import NavLinks, { useNavigationLinks } from "./NavLinks";
 import { useHydrated } from "@/hooks/useHydrated";

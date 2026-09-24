@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { PropsOf } from "@nextui-org/react";
 import { Input } from "@/components/nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";

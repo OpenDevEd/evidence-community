@@ -5,7 +5,7 @@ import { Login01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { DropdownItem } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import type { NavbarElementProps } from "@/types/navbar";

@@ -2,7 +2,7 @@
 
 import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import type { ComponentProps } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 // Adapted from Vercel AI Elements' Inline Citation component. The project uses
 // its own design tokens rather than shadcn's Badge/HoverCard wrappers, while

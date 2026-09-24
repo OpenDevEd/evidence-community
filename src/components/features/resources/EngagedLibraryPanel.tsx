@@ -7,7 +7,7 @@ import { useChat } from "@ai-sdk/react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
 import { useDisclosure } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";

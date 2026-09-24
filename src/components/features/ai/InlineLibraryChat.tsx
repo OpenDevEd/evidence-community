@@ -8,7 +8,7 @@ import { RiResetLeftFill } from "react-icons/ri";
 import { useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { ScreeningLimitConfirmation } from "@/components/features/ai/ScreeningLimitConfirmation";

@@ -3,7 +3,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { MapsIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { useGapMaps } from "@/context/Providers";
 import { Link } from "@/i18n/routing";
 import type { NavbarStyleVariant } from "@/types/navbar";

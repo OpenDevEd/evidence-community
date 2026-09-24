@@ -1,5 +1,5 @@
 import { Modal, type ModalProps } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 export default function DialogModal({
 	classNames,

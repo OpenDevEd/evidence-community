@@ -7,7 +7,7 @@ import { visit } from "unist-util-visit";
 // extra package is needed for one type.
 type Node = Parameters<typeof visit>[0];
 import { ComponentProps, PropsWithChildren, ReactNode, useMemo } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { defaultRehypePlugins, Streamdown, type Components } from "streamdown";
 import Link from "next/link";
 import Resource from "../items/Resource";

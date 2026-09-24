@@ -5,7 +5,7 @@ import { GiArchiveResearch } from "react-icons/gi";
 import { FaSort } from "react-icons/fa";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { SORT_OPTIONS } from "@/constants/items";

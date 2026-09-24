@@ -3,7 +3,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { useContext, useEffect, useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";

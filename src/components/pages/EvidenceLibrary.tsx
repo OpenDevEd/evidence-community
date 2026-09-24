@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { getLangDir } from "rtl-detect";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import PageContainer from "../layout/PageContainer";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";

@@ -26,7 +26,7 @@ import {
 } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { getLangDir } from "rtl-detect";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import {
 	AnimatePresence,
 	MotionConfig,
