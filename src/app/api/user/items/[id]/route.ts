@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import { getItems, getProfileSearchFilter, searchIndex } from "@/lib/actions";
+import { getItems, getProfileSearchFilter } from "@/lib/actions";
 import { z } from "zod";
 import { defaultParams } from "@/lib/utils";
 import {

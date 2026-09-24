@@ -246,7 +246,7 @@ it("excludes hidden attachment DOIs from search result exports", () => {
 	const attachments = filterPublicAttachments([
 		{ deleted: 0, url: "https://doi.org/10.5555/hidden", tags: ["_r:doi", "Hidden"] },
 		{ deleted: 1, url: "https://doi.org/10.5555/deleted", tags: ["_r:doi"] },
-	], ["hidden"]);
+	], { hidden: ["hidden"], publish: [] });
 	expect(attachments).toEqual([]);
 	expect(resolvePublicDoi({ attachments })).toBeNull();
 });

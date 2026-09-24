@@ -120,7 +120,7 @@ export function toLightweightItem(
 	return {
 		...item,
 		attachmentsData: itemPageAttachments(
-			filterPublicAttachments(item.attachmentsData, tags.hidden),
+			filterPublicAttachments(item.attachmentsData, tags),
 			tags.publish,
 		),
 	};
@@ -286,7 +286,7 @@ export async function getPublicItems(
 	const { tags } = libraryConfig.content;
 	const items = (searchResults.hits as ListItem[]).map((item) =>
 		includeHeavyFields
-			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags.hidden) }
+			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }
 			: toLightweightItem(item, tags),
 	);
 
@@ -327,21 +327,33 @@ export async function getPublicFacets(
 	});
 
 	return {
-		facetDistribution: addRegionsToFacetDistribution(
-			Object.assign(
-				{},
-				searchResults.facetDistribution,
-				countryFacetOptions
-					.filter((facet) => facets.includes(facet.key))
-					.reduce((acc, facet) => {
-						acc[facet.key + "_uncategorized"] =
-							searchResults.facetDistribution?.[facet.key] || {};
-						return acc;
-					}, {} as FacetDistribution),
-			),
-			{ country },
+		facetDistribution: publicFacetDistribution(
+			searchResults.facetDistribution,
+			facets,
+			country,
 		),
 	};
+}
+
+/** Facet counts with each country facet's raw values kept beside its regions. */
+export function publicFacetDistribution(
+	distribution: FacetDistribution | undefined,
+	facets: readonly string[],
+	country: string[],
+) {
+	return addRegionsToFacetDistribution(
+		Object.assign(
+			{},
+			distribution,
+			countryFacetOptions
+				.filter((facet) => facets.includes(facet.key))
+				.reduce((acc, facet) => {
+					acc[facet.key + "_uncategorized"] = distribution?.[facet.key] || {};
+					return acc;
+				}, {} as FacetDistribution),
+		),
+		{ country },
+	);
 }
 
 export async function getItemsPaginationMeta(

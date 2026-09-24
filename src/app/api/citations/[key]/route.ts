@@ -10,7 +10,7 @@ import {
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
 
 export type CitationYearData = {
 	year: string;
@@ -31,18 +31,18 @@ export type CitationsResponse = {
 
 async function getSourceItem(
 	key: string,
-	hiddenTags: readonly string[],
 	libraryConfig: LibraryServerConfig,
 ): Promise<Item | null> {
 	try {
 		const { index } = await getMeilisearchForConfig(libraryConfig);
 		const result = await index.getDocument(key);
+		const { tags } = libraryConfig.content;
 
-		if (!result || result.deleted || hasAnyTag(result.tags, hiddenTags)) {
+		if (!result || result.deleted || hasAnyTag(result.tags, tags.hidden)) {
 			return null;
 		}
 
-		return result as Item;
+		return { ...result, attachmentsData: filterPublicAttachments(result.attachmentsData, tags) } as Item;
 	} catch (error: any) {
 		if (error?.response?.status !== 404) {
 			console.warn("Error fetching source item from meilisearch:", error);
@@ -55,7 +55,6 @@ async function getCitingItems(
 	keys: string[],
 	page: number,
 	perPage: number,
-	hiddenTags: readonly string[],
 	libraryConfig: LibraryServerConfig,
 ): Promise<{
 	items: Item[];
@@ -83,9 +82,10 @@ async function getCitingItems(
 			facets: ["country", "year"],
 		});
 
-		const filteredItems = (result.hits as Item[]).filter(
-			(item) => !item.deleted && !hasAnyTag(item.tags, hiddenTags),
-		);
+		const { tags } = libraryConfig.content;
+		const filteredItems = (result.hits as Item[])
+			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
+			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }));
 
 		return {
 			items: filteredItems,
@@ -123,7 +123,7 @@ export async function GET(
 	const hiddenTags = libraryConfig.content.tags.hidden;
 
 	// Get the source item first
-	const sourceItem = await getSourceItem(key, hiddenTags, libraryConfig);
+	const sourceItem = await getSourceItem(key, libraryConfig);
 
 	if (!sourceItem) {
 		return NextResponse.json<CitationsResponse>({
@@ -159,7 +159,6 @@ export async function GET(
 		citedByKeys,
 			page,
 			perPage,
-			hiddenTags,
 			libraryConfig,
 		);
 
