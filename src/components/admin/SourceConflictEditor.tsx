@@ -1,8 +1,12 @@
 "use client";
 
 import { Button } from "@/components/nextui/Button";
+import { ConflictValue } from "./DraftConflict";
+import { adminFieldLabel } from "@/lib/admin/errors";
 import type { SourceFieldConflict } from "@/lib/admin/source-field-contract";
 import type { AdminItemDetail } from "@/lib/admin/types";
+import { fetchTopicCatalog } from "@/lib/topics/client";
+import useSWR from "swr";
 
 export type SourceResolution = {
 	choice: "keep" | "source";
@@ -10,29 +14,77 @@ export type SourceResolution = {
 	fingerprint: string;
 };
 
-function sourceValueLabel(
-	field: SourceFieldConflict,
-	value: unknown,
-	importedTopics: AdminItemDetail["importedTopics"],
-) {
-	if (field.field === "topics" && Array.isArray(value)) {
-		const scores = new Map(
-			importedTopics.map((topic) => [topic.topicId, topic]),
+function topicIds(value: unknown) {
+	return Array.isArray(value)
+		? value.filter((entry): entry is string => typeof entry === "string")
+		: [];
+}
+
+function TopicConflictValue({
+	value,
+importedTopics,
+	names,
+}: {
+	value: unknown;
+	importedTopics: AdminItemDetail["importedTopics"];
+	names: ReadonlyMap<string, string>;
+}) {
+	const ids = topicIds(value);
+	if (!ids.length) return <ConflictValue field="topics" value={value} />;
+	const scores = new Map<string, (typeof importedTopics)[number]>();
+	for (const topic of importedTopics) {
+		const previous = scores.get(topic.topicId);
+		scores.set(
+			topic.topicId,
+			previous
+				? {
+						topicId: topic.topicId,
+						score: Math.max(previous.score, topic.score),
+						primary: previous.primary || topic.primary,
+					}
+				: topic,
 		);
-		return value
-			.filter((topicId): topicId is string => typeof topicId === "string")
-			.map((topicId) => {
-				const topic = scores.get(topicId);
-				return topic
-					? `${topicId} (OpenAlex score ${topic.score.toFixed(2)}${topic.primary ? ", primary" : ""})`
-					: topicId;
-			})
-			.join(", ");
 	}
-	if (Array.isArray(value)) return value.join(", ");
-	if (value === null || value === undefined || value === "") return "Empty";
-	if (typeof value === "object") return JSON.stringify(value);
-	return String(value);
+	return (
+		<span className="flex flex-col gap-1">
+			{ids.map((topicId) => {
+				const topic = scores.get(topicId);
+				return (
+					<span key={topicId}>
+						{names.get(topicId) ?? topicId}
+						{topic ? (
+							<span className="ml-2 text-black/45 dark:text-white/45">
+								OpenAlex score {topic.score.toFixed(2)}
+								{topic.primary ? " · Primary" : ""}
+							</span>
+						) : null}
+					</span>
+				);
+			})}
+		</span>
+	);
+}
+
+function SourceConflictValue({
+	field,
+	value,
+	importedTopics,
+	topicNames,
+}: {
+	field: string;
+	value: unknown;
+	importedTopics: AdminItemDetail["importedTopics"];
+	topicNames: ReadonlyMap<string, string>;
+}) {
+	return field === "topics" ? (
+		<TopicConflictValue
+			value={value}
+			importedTopics={importedTopics}
+			names={topicNames}
+		/>
+	) : (
+		<ConflictValue field={field} value={value} />
+	);
 }
 
 export function SourceConflictEditor({
@@ -49,6 +101,26 @@ export function SourceConflictEditor({
 	resolutions: Record<string, SourceResolution>;
 }) {
 	const conflicts = fields.filter((field) => field.conflicting);
+	const conflictTopicIds = [
+		...new Set(
+			conflicts
+				.filter((field) => field.field === "topics")
+				.flatMap((field) => [
+					...topicIds(field.value),
+					...topicIds(field.sourceValue),
+				]),
+		),
+	].sort();
+	const topics = useSWR(
+		conflictTopicIds.length
+			? ["source-conflict-topics", conflictTopicIds.join(",")]
+			: null,
+		() => fetchTopicCatalog({ ids: conflictTopicIds }),
+		{ revalidateOnFocus: false },
+	);
+	const topicNames = new Map(
+		topics.data?.nodes.map((topic) => [topic.id, topic.name]),
+	);
 	if (!conflicts.length) return null;
 
 	return (
@@ -73,27 +145,33 @@ export function SourceConflictEditor({
 						key={`${field.field}:${field.sourceConnectionKey}`}
 						className="rounded-xl border border-black/10 p-3 dark:border-white/10"
 					>
-						<p className="font-medium capitalize">{field.field}</p>
+						<p className="font-medium">{adminFieldLabel(field.field)}</p>
 						<div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
 							<div className="rounded-lg bg-black/[0.03] p-2 dark:bg-white/[0.04]">
 								<p className="text-xs font-medium text-black/45 dark:text-white/45">
 									Current value
 								</p>
-								<p className="mt-1 break-words">
-									{sourceValueLabel(field, field.value, importedTopics)}
-								</p>
+								<div className="mt-1 break-words">
+									<SourceConflictValue
+										field={field.field}
+										value={field.value}
+										importedTopics={importedTopics}
+										topicNames={topicNames}
+									/>
+								</div>
 							</div>
 							<div className="rounded-lg bg-black/[0.03] p-2 dark:bg-white/[0.04]">
 								<p className="text-xs font-medium text-black/45 dark:text-white/45">
 									Source value
 								</p>
-								<p className="mt-1 break-words">
-									{sourceValueLabel(
-										field,
-										field.sourceValue,
-										importedTopics,
-									)}
-								</p>
+								<div className="mt-1 break-words">
+									<SourceConflictValue
+										field={field.field}
+										value={field.sourceValue}
+										importedTopics={importedTopics}
+										topicNames={topicNames}
+									/>
+								</div>
 							</div>
 						</div>
 						<div className="mt-3 flex gap-2">

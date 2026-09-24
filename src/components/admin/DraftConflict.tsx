@@ -31,7 +31,13 @@ function formFieldName(field: string, payload: Record<string, unknown>) {
 	);
 }
 
-function ConflictValue({ field, value }: { field: string; value: unknown }) {
+export function ConflictValue({
+	field,
+	value,
+}: {
+	field: string;
+	value: unknown;
+}) {
 	if (field === "countryFocus") return describeCountryFocus(value);
 	if (
 		value == null ||
@@ -72,12 +78,33 @@ function ObjectConflictValue({
 			lastName:
 				typeof creator.lastName === "string" ? creator.lastName : undefined,
 		});
+		const affiliations = [
+			...(Array.isArray(creator.institutions)
+				? creator.institutions.flatMap((entry) => {
+						if (typeof entry === "string") return [entry];
+						if (!entry || typeof entry !== "object") return [];
+						const displayName = (entry as Record<string, unknown>)
+							.display_name;
+						return typeof displayName === "string" ? [displayName] : [];
+					})
+				: []),
+			...(typeof creator.affiliation === "string"
+				? [creator.affiliation]
+				: []),
+		].filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
 		return (
-			<span>
-				{name || "Unnamed creator"}
-				{typeof creator.creatorType === "string" && (
-					<span className="ml-2 text-black/45 dark:text-white/45">
-						{adminFieldLabel(creator.creatorType)}
+			<span className="flex flex-col gap-0.5">
+				<span>
+					{name || "Unnamed creator"}
+					{typeof creator.creatorType === "string" && (
+						<span className="ml-2 text-black/45 dark:text-white/45">
+							{adminFieldLabel(creator.creatorType)}
+						</span>
+					)}
+				</span>
+				{affiliations.length > 0 && (
+					<span className="text-black/45 dark:text-white/45">
+						{affiliations.join(" · ")}
 					</span>
 				)}
 			</span>
