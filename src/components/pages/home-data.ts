@@ -10,7 +10,7 @@ import { cacheLife } from "next/cache";
 import { getComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
 import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
-import { getDatabaseForConfig } from "@/db";
+import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { itemReview } from "@/db/schema/review";
@@ -151,6 +151,10 @@ async function latestJourney(followed: string | undefined, directory: LibraryHom
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
 	const hidden = config.content.tags.hidden;
+	return (await reviewedJourney(db, hidden, followed, directory)) ?? addedJourney(db, hidden, followed ?? (await listReviewedPublications(db, { pageSize: "1" }, hidden)).items[0]?.key);
+}
+
+async function reviewedJourney(db: Database, hidden: readonly string[], followed: string | undefined, directory: LibraryHomeConfig["directory"]): Promise<HomeData["journey"]> {
 	const [row] = await db
 		.select({ key: itemReview.itemKey, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt, resolvedBy: itemReview.resolvedBy, title: item.title, doi: item.DOI })
 		.from(itemReview)
@@ -159,20 +163,22 @@ async function latestJourney(followed: string | undefined, directory: LibraryHom
 		// Two approvals saved in the same millisecond still give one answer.
 		.orderBy(desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.limit(1);
-	if (row?.resolvedAt) {
-		const reviewer = directory.find((person) => person.id === row.resolvedBy);
-		return { key: row.key, title: row.title || row.key, reviewed: true, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
-	}
-	const key = followed ?? (await listReviewedPublications(db, { pageSize: "1" }, hidden)).items[0]?.key;
+	if (!row?.resolvedAt) return null;
+	const reviewer = directory.find((person) => person.id === row.resolvedBy);
+	return { key: row.key, title: row.title || row.key, reviewed: true, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
+}
+
+/** A publication that went public as it was added, with no review to date its steps. */
+async function addedJourney(db: Database, hidden: readonly string[], key: string | undefined): Promise<HomeData["journey"]> {
 	if (!key) return null;
-	const [added] = await db
+	const [row] = await db
 		.select({ key: item.key, title: item.title, dateAdded: item.dateAdded, doi: item.DOI })
 		.from(item)
 		.where(and(eq(item.key, key), publicParentVisibility(db, hidden)))
 		.limit(1);
-	if (!added?.dateAdded) return null;
-	const when = added.dateAdded.toISOString();
-	return { key: added.key, title: added.title || added.key, reviewed: false, submittedAt: when, reviewer: null, publishedAt: when, doi: normalizeDoi(added.doi) };
+	if (!row?.dateAdded) return null;
+	const when = row.dateAdded.toISOString();
+	return { key: row.key, title: row.title || row.key, reviewed: false, submittedAt: when, reviewer: null, publishedAt: when, doi: normalizeDoi(row.doi) };
 }
 
 /** First pages of the given publications' PDFs, from their attachments. */

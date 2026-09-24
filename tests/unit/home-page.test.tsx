@@ -102,11 +102,11 @@ describe("the library's home page", () => {
 		vi.unstubAllGlobals();
 	});
 
-	async function render(contact: { email: string | null; page: boolean }) {
+	async function render(contact: { email: string | null; page: boolean }, figures: HomeData = data) {
 		await act(async () => {
 			root.render(
 				<LibraryConfigProvider config={config}>
-					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={about} rich={rich} data={Promise.resolve(data)} tones={tones} ramp={[tone, tone]} shapes={[]} />
+					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={about} rich={rich} data={Promise.resolve(figures)} tones={tones} ramp={[tone, tone]} shapes={[]} />
 				</LibraryConfigProvider>,
 			);
 		});
@@ -129,6 +129,16 @@ describe("the library's home page", () => {
 		expect(container.textContent).toContain("Amina Yusuf");
 		expect(container.textContent).toContain("Editor in chief");
 		expect(container.textContent).toContain("How does coaching change teaching?");
+	});
+
+	it("follows a publication that was only added, without a review date", async () => {
+		const added = "2026-06-02T00:00:00.000Z";
+		await render({ email: null, page: false }, { ...data, journey: { ...data.journey!, reviewed: false, reviewer: null, submittedAt: added, publishedAt: added } });
+
+		expect(container.textContent).toContain("Added to the library");
+		expect(container.textContent).not.toContain("Arrived for review");
+		// Only its arrival is dated: nobody checked it on a known day.
+		expect([...container.querySelectorAll("ol time")].map((time) => time.getAttribute("dateTime"))).toEqual([added]);
 	});
 
 	it("shows a link it cannot follow as its words", async () => {

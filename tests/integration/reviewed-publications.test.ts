@@ -66,5 +66,9 @@ it("lists each publication with a PDF once, reviewed or not, newest first, with 
 		await db.insert(tag).values({ name: "Hide" }).onConflictDoNothing();
 		await db.insert(itemToTag).values({ itemKey: third, tagName: "Hide" });
 		assert.deepEqual((await listReviewedPublications(db, {}, HIDDEN)).items.map((row) => row.key), [first, synced, second]);
+		// Nor is one whose only PDF is hidden: it would have no public file or cover.
+		const [pdfOfSecond] = await db.select({ key: item.key }).from(item).where(eq(item.parentItem, second));
+		await db.insert(itemToTag).values({ itemKey: pdfOfSecond!.key, tagName: "Hide" });
+		assert.deepEqual((await listReviewedPublications(db, {}, HIDDEN)).items.map((row) => row.key), [first, synced]);
 	});
 }, 120_000);

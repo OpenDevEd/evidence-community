@@ -6,7 +6,7 @@ import type { Database } from "@/db";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { AdminValidationError } from "./errors";
-import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-visibility";
 
 const PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -84,7 +84,7 @@ export async function listReviewedPublications(database: Database, input: unknow
 					database
 						.select({ key: pdf.key })
 						.from(pdf)
-						.where(and(eq(pdf.parentItem, item.key), sql`lower(${pdf.contentType}) = 'application/pdf'`, sql`coalesce(${pdf.deleted}, 0) <> 1`)),
+						.where(and(eq(pdf.parentItem, item.key), sql`lower(${pdf.contentType}) = 'application/pdf'`, publicItemVisibility(database, hiddenTags, pdf))),
 				),
 				or(isNotNull(latest.resolvedAt), isNotNull(item.dateAdded)),
 				request.query ? ilike(item.title, `%${request.query.replace(/[\\%_]/gu, (character) => `\\${character}`)}%`) : undefined,

@@ -473,27 +473,26 @@ type Happening = { when?: string; body?: React.ReactNode };
 
 /** What a step's type shows, from the publication the timeline follows (or the editor chosen for it). */
 function happened(step: Step, journey: HomeData["journey"]): Happening {
-	switch (step.type) {
-		case "arrival":
-			return journey ? { when: journey.submittedAt, body: journey.reviewed ? <>Arrived for review</> : <>Added to the library</> } : {};
-		case "check":
-			// Without a review nobody checked it on a known day: the step keeps the editor chosen for it, undated.
-			return checked(step.editor ?? journey?.reviewer, journey?.reviewed ? journey : null);
-		case "publication":
-			return journey ? published(journey) : {};
-		default:
-			return {};
-	}
+	if (step.type === "check") return checked(step, journey);
+	if (!journey) return {};
+	if (step.type === "arrival") return { when: journey.submittedAt, body: arrived(journey) };
+	return step.type === "publication" ? published(journey) : {};
 }
 
-function checked(editor: { name: string; photo?: string | null } | null | undefined, journey: HomeData["journey"]): Happening {
+function arrived(journey: NonNullable<HomeData["journey"]>) {
+	return journey.reviewed ? <>Arrived for review</> : <>Added to the library</>;
+}
+
+/** Without a review nobody checked the publication on a known day: the step keeps the editor chosen for it, undated. */
+function checked(step: Step, journey: HomeData["journey"]): Happening {
+	const editor = step.editor ?? journey?.reviewer;
 	const body = editor ? (
 		<span className="flex items-center gap-3">
 			<AuthorAvatar src={editor.photo ?? undefined} alt="" size="md" className="shrink-0" />
 			<span>Checked by <strong className="font-semibold">{editor.name}</strong></span>
 		</span>
 	) : undefined;
-	return { when: journey?.publishedAt, body };
+	return { when: journey?.reviewed ? journey.publishedAt : undefined, body };
 }
 
 function published(journey: NonNullable<HomeData["journey"]>): Happening {
