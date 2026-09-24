@@ -181,7 +181,6 @@ export function FilterChips() {
 								>
 									<Chip
 										key={`${facet.queryParam}-${value}`}
-										divKey={`${facet.queryParam}-${value}`}
 										group={t(facet.label)}
 										title={label}
 										startContent={
