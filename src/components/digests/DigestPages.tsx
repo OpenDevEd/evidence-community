@@ -120,6 +120,10 @@ function ArchiveList({editions, nextEdition, settings, base, locale}: {editions:
 /** Before the first edition: the first row is kept for it, dated when it is scheduled, and the rows after it wait faintly below. */
 function EmptyArchive({next, settings, locale}: {next: string | null; settings: DigestSettings; locale: string}) {
   const date = next ? new Date(next) : null;
+  // A library that sends no digests is not promised an edition.
+  const [title, text] = settings.enabled
+    ? ["Editions will collect here", `Each digest sums up the publications added since the one before. ${firstEdition(date, settings, locale)}`]
+    : ["No editions yet", "This library is not sending digests at the moment."];
   const tile = "rounded-xl px-1 py-3 text-center";
   const row = "grid grid-cols-[56px_minmax(0,1fr)] items-start gap-4 rounded-2xl p-5 sm:grid-cols-[64px_minmax(0,1fr)] sm:gap-5";
   return <div>
@@ -128,8 +132,8 @@ function EmptyArchive({next, settings, locale}: {next: string | null; settings: 
         ? <time dateTime={date.toISOString()} className={`${tile} bg-accent/10 text-accent`}><span className="block text-2xl font-semibold leading-none tabular-nums">{date.toLocaleDateString(locale, {day: "numeric", timeZone: settings.timezone})}</span><span className="mt-2 block text-xs">{date.toLocaleDateString(locale, {month: "short", timeZone: settings.timezone})}</span></time>
         : <span aria-hidden="true" className={`${tile} grid h-[4.25rem] place-items-center bg-accent/10 text-accent`}><Icon value={Notification03Icon} size={22} /></span>}
       <div>
-        <h2 className="text-xl font-semibold leading-snug">Editions will collect here</h2>
-        <p className={`mt-2 text-sm leading-6 ${muted}`}>Each digest sums up the publications added since the one before.{date ? ` The first goes out on ${date.toLocaleDateString(locale, {weekday: "long", day: "numeric", month: "long", timeZone: settings.timezone})}.` : " The first will appear after new publications are added."}</p>
+        <h2 className="text-xl font-semibold leading-snug">{title}</h2>
+        <p className={`mt-2 text-sm leading-6 ${muted}`}>{text}</p>
       </div>
     </div>
     <div aria-hidden="true" className="mt-3 space-y-3 [mask-image:linear-gradient(to_bottom,black,transparent)]">
@@ -139,6 +143,10 @@ function EmptyArchive({next, settings, locale}: {next: string | null; settings: 
       </div>)}
     </div>
   </div>;
+}
+
+function firstEdition(date: Date | null, settings: DigestSettings, locale: string) {
+  return date ? `The first goes out on ${date.toLocaleDateString(locale, {weekday: "long", day: "numeric", month: "long", timeZone: settings.timezone})}.` : "The first will appear after new publications are added.";
 }
 
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
@@ -201,5 +209,5 @@ function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest:
   const next = use(nextEdition);
   return edition
     ? <DigestCover edition={edition} libraryName={settings.libraryName} timezone={settings.timezone} href={`${base}/${edition.slug}`} locale={locale} />
-    : <FirstEditionCover libraryName={settings.libraryName} next={settings.enabled ? next : null} timezone={settings.timezone} locale={locale} />;
+    : <FirstEditionCover libraryName={settings.libraryName} sending={settings.enabled} next={settings.enabled ? next : null} timezone={settings.timezone} locale={locale} />;
 }

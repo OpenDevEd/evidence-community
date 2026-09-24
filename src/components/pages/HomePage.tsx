@@ -628,15 +628,16 @@ function EditorMarquee({ editors }: { editors: NonNullable<HomeContent["editors"
 	// A handful of people fill less than a screen, so a loop would show them twice side by side: they stand in a row.
 	const moving = editors.length >= MARQUEE_MINIMUM;
 	const row = (copy: boolean) => (
-		<ul aria-hidden={copy || undefined} className={`flex shrink-0 ${copy ? "motion-reduce:hidden" : ""}`}>
+		// Passing by, each person keeps one line; standing on a narrow screen, the line under the name wraps instead.
+		<ul aria-hidden={copy || undefined} className={`flex ${moving ? "shrink-0" : "min-w-0"} ${copy ? "motion-reduce:hidden" : ""}`}>
 			{editors.map((editor) => (
-				<li key={editor.name} className="flex shrink-0 items-center gap-4 pr-16">
+				<li key={editor.name} className={`flex items-center gap-4 pr-16 ${moving ? "shrink-0" : "min-w-0"}`}>
 					<AuthorAvatar src={editor.photo} alt="" size="lg" className="shrink-0" />
-					<span className="whitespace-nowrap">
+					<span className={moving ? "whitespace-nowrap" : "min-w-0"}>
 						<span className="block font-heading text-lg font-semibold leading-tight">{editor.name}</span>
 						{/* One line under the name, so everyone stands the same height; the place is quieter than the role. */}
 						{(editor.title || editor.location) && (
-							<span className="mt-1 flex items-center gap-3">
+							<span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
 								{editor.title && <span className="text-sm opacity-90">{editor.title}</span>}
 								{editor.location && <span className="inline-flex items-center gap-1 text-xs opacity-75"><HugeiconsIcon icon={Location01Icon} aria-hidden size={13} />{editor.location}</span>}
 							</span>

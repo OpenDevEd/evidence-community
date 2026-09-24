@@ -37,21 +37,21 @@ export function DigestCover({edition, libraryName, timezone, href, locale, title
 }
 
 /** Before the first edition: a single blank sheet where the stack will be, so the digests page's header keeps its shape. */
-export function FirstEditionCover({libraryName, next, timezone, locale}: {libraryName: string; next: string | null; timezone: string; locale: string}) {
+export function FirstEditionCover({libraryName, sending, next, timezone, locale}: {libraryName: string; /** Whether the library sends digests at all; without it no edition is promised. */ sending: boolean; next: string | null; timezone: string; locale: string}) {
   const date = next ? new Date(next) : null;
   return (
         <div className="relative isolate mx-auto w-full max-w-md">
           <div aria-hidden="true" className={`${styles.middleSheet} absolute inset-0 -z-10 rounded-2xl border-2 border-dashed border-[#a8623f]/45`} />
-          <article className="relative flex min-h-[300px] flex-col overflow-hidden rounded-2xl bg-[#eee4d5] text-[#352b24] shadow-xl">
+          <article className="relative flex min-h-[337px] flex-col overflow-hidden rounded-2xl bg-[#eee4d5] text-[#352b24] shadow-xl">
             <div className="flex items-center gap-4 px-7 pt-6"><span className="inline-flex items-center gap-2 text-xs font-medium text-[#352b24]/65"><Icon value={BookOpen01Icon} size={16} />{libraryName}</span></div>
             <div className="relative flex flex-1 items-center gap-6 px-7 py-7">
               {date
                 ? <div className="shrink-0 self-start pt-1" aria-hidden="true"><span className="block text-[76px] font-bold leading-[0.85] tracking-[-0.08em] text-[#ac5937]/45">{date.toLocaleDateString(locale, {day: "2-digit", timeZone: timezone})}</span><span className="mt-3 block text-center text-xs font-medium text-[#352b24]/65">{date.toLocaleDateString(locale, {month: "long", year: "numeric", timeZone: timezone})}</span></div>
                 : <span aria-hidden="true" className="flex size-[76px] shrink-0 items-center justify-center self-start rounded-2xl bg-[#ac5937]/10 text-[#ac5937]"><Icon value={Notification03Icon} size={32} /></span>}
-              <h2 className="relative max-w-[230px] text-[28px] font-semibold leading-[1.12] tracking-tight">The first edition is on its way</h2>
+              <h2 className="relative max-w-[230px] text-[28px] font-semibold leading-[1.12] tracking-tight">{sending ? "The first edition is on its way" : "No digests for now"}</h2>
             </div>
-            <p className="-mt-2 mb-6 px-7 text-sm leading-6 text-[#352b24]/70">It will summarise the new publications in this library.</p>
-            <div className="relative flex items-center justify-between gap-4 bg-[#352b24]/10 px-7 py-4"><span className="text-xs text-[#352b24]/70">No editions yet</span><span className="text-sm font-medium">Coming soon</span></div>
+            <p className="-mt-2 mb-6 px-7 text-sm leading-6 text-[#352b24]/70">{sending ? "It will summarise the new publications in this library." : "This library is not sending digests at the moment."}</p>
+            <div className="relative flex items-center justify-between gap-4 bg-[#352b24]/10 px-7 py-4"><span className="text-xs text-[#352b24]/70">No editions yet</span><span className="text-sm font-medium">{sending ? "Coming soon" : "Not scheduled"}</span></div>
           </article>
         </div>);
 }
