@@ -24,7 +24,7 @@ import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { minimalLibraryConfig } from "../fixtures/library-config";
-import { HomeRichText } from "@/components/pages/HomeRichText";
+import { homeRich } from "@/components/pages/HomeRichText";
 
 const config = projectPublicLibraryConfig(libraryConfigSchema.parse(minimalLibraryConfig));
 
@@ -51,11 +51,7 @@ const about: HomeContent = {
 };
 
 // The page renders these on the server; the component receives them ready.
-const rich = {
-	intro: <HomeRichText text={about.intro!} baseUrl="https://library.example.org" />,
-	curation: <HomeRichText text={about.curation!.text!} baseUrl="https://library.example.org" statement />,
-	team: <HomeRichText text={about.team!} baseUrl="https://library.example.org" statement />,
-};
+const rich = homeRich(about, "https://library.example.org");
 
 const data: HomeData = {
 	publications: 120,

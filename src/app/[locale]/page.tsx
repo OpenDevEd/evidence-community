@@ -10,7 +10,7 @@ import { redirect } from "@/i18n/routing";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { connection } from "next/server";
-import { HomeRichText } from "@/components/pages/HomeRichText";
+import { homeRich } from "@/components/pages/HomeRichText";
 
 // The library's home page, shown at `/` while `features.homePage` is on; otherwise `/` opens the listing.
 
@@ -113,17 +113,10 @@ export default async function Home({ params }: Props) {
 	// Not awaited: the page renders now and each part built from these figures streams in when they arrive.
 	const data = loadHomeData(new Date(), locale, config.home);
 	const { shapes } = await getWorldMap();
-	const baseUrl = config.identity.baseUrl;
-	const rich = {
-		intro: about.intro && <HomeRichText text={about.intro} baseUrl={baseUrl} />,
-		curation: about.curation?.text && <HomeRichText text={about.curation.text} baseUrl={baseUrl} statement />,
-		team: about.team && <HomeRichText text={about.team} baseUrl={baseUrl} statement />,
-		extra: about.extra?.text.trim() && <HomeRichText text={about.extra.text} baseUrl={baseUrl} />,
-	};
 	return (
 		<HomePage
 			{...tonesFrom(config.theme.colors)}
-			rich={rich}
+			rich={homeRich(about, config.identity.baseUrl)}
 			shapes={shapes}
 			name={config.identity.name}
 			siteUrl={config.identity.baseUrl}

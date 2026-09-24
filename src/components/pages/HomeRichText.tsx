@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Link } from "@/i18n/routing";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
+import type { HomeContent, HomeRich } from "./HomePage";
 
 type Rendered = { children?: ReactNode; node?: Element };
 
@@ -30,4 +31,10 @@ export function HomeRichText({ text, baseUrl, statement = false }: { text: strin
 				strong,
 			};
 	return <ReactMarkdown remarkPlugins={[remarkGfm]} allowedElements={["p", "strong", "em", "a", "ul", "li"]} unwrapDisallowed components={components}>{text}</ReactMarkdown>;
+}
+
+/** The page's answers from the bold-and-links editor, rendered; a blank one is left out, and its section with it. */
+export function homeRich(about: HomeContent, baseUrl: string): HomeRich {
+	const render = (text: string | undefined, statement = false) => (text?.trim() ? <HomeRichText text={text} baseUrl={baseUrl} statement={statement} /> : undefined);
+	return { intro: render(about.intro), curation: render(about.curation?.text, true), team: render(about.team, true), extra: render(about.extra?.text) };
 }
