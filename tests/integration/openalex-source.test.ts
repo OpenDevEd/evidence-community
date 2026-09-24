@@ -19,6 +19,7 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const settings = {
+	name: "AI in education",
 	approvedQuery: {
 		version: "v1",
 		approvedAt: "2026-09-24T10:00:00Z",
@@ -222,6 +223,7 @@ it("rejects rewriting an approved query and cannot commit a page fetched under a
 						apiKey: "test-key",
 						settings: {
 							...settings,
+							name: "AI in education",
 							approvedQuery: {
 								...settings.approvedQuery,
 								version,

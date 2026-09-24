@@ -11,6 +11,7 @@ import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const settings = (search: string) => ({
+	name: "AI in education",
 	approvedQuery: {
 		version: "v1",
 		approvedAt: "2026-09-24T10:00:00Z",

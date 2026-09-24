@@ -190,6 +190,7 @@ describe("OpenAlex PDF processing", () => {
 					.update(sourceConnection)
 					.set({
 						config: {
+							name: "AI in education",
 							approvedQuery: {
 								version: "v1",
 								approvedAt: "2026-09-24T00:00:00Z",
