@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListItem } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
+import { getMainAttributes, LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -25,7 +25,9 @@ async function getPaginatedItems(
 			filter: `key IN [${keys.map((k) => `"${k}"`).join(", ")}]`,
 			limit: perPage,
 			offset: offset,
-			...(includeHeavyFields ? {} : { attributesToRetrieve: [...LIST_ITEM_FIELDS] }),
+			attributesToRetrieve: includeHeavyFields
+				? await getMainAttributes(libraryConfig)
+				: [...LIST_ITEM_FIELDS],
 		});
 
 		const items = result.hits as ListItem[];

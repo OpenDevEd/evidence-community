@@ -112,7 +112,9 @@ export async function getMainAttributes(config?: LibraryServerConfig) {
 		libraryConfig.revision,
 		libraryConfig,
 	);
-	return attributes.filter((attribute) => attribute !== "fullTextPDFs");
+	return attributes.filter(
+		(attribute) => attribute !== "fullTextPDFs" && !attribute.startsWith("fullTextPDFs."),
+	);
 }
 
 /** A list result keeps only its public attachments that the item page reads. */

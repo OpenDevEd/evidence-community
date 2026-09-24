@@ -9,7 +9,7 @@ vi.mock("@/app/api/cache", () => ({ getCachedCollections: async () => [] }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
 const service = vi.hoisted(() => ({
 	search: vi.fn(),
-	getDisplayedAttributes: async () => ["*"],
+	getDisplayedAttributes: vi.fn(async () => ["*"]),
 	getStats: async () => ({ fieldDistribution: { key: 1, title: 1, attachmentsData: 1, "attachmentsData.key": 1, fullTextPDFs: 1, "fullTextPDFs.fullTextPDF.text": 1 } }),
 }));
 vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: service }) }));
@@ -78,4 +78,13 @@ it("removes hidden and deleted attachments from full batch results used by the a
 	}) as never);
 	const { items } = await response.json();
 	expect(items[0].attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["VISIBLEA"]);
+	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toEqual(["key", "title", "attachmentsData"]);
+});
+
+it("never retrieves PDF full text when the index names nested full-text fields", async () => {
+	vi.mocked(getLibraryConfig).mockResolvedValue(libraryConfigSchema.parse(maximalLibraryConfig));
+	service.getDisplayedAttributes.mockResolvedValueOnce(["key", "title", "fullTextPDFs.fullTextPDF.text", "fullTextPDFs"]);
+	service.search.mockResolvedValue({ estimatedTotalHits: 0, hits: [] });
+	await getPublicItems({}, { includeHeavyFields: true });
+	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toEqual(["key", "title"]);
 });

@@ -11,7 +11,7 @@ import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
-import { getMainAttributes, LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
+import { getMainAttributes } from "@/lib/search";
 
 export type CitationYearData = {
 	year: string;
@@ -83,13 +83,13 @@ async function getCitingItems(
 			limit: perPage,
 			offset: offset,
 			facets: ["country", "year"],
-			attributesToRetrieve: [...LIST_ITEM_FIELDS],
+			attributesToRetrieve: await getMainAttributes(libraryConfig),
 		});
 
 		const { tags } = libraryConfig.content;
 		const filteredItems = (result.hits as Item[])
 			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
-			.map((item) => toLightweightItem(item, tags) as Item);
+			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }));
 
 		return {
 			items: filteredItems,
