@@ -14,6 +14,7 @@ import {
 import { ItemNotFoundError } from "./native-item-service";
 import { payloadStringList } from "./item-payload";
 import type { AdminItemDetail } from "./types";
+import { getLibraryConfig } from "@/config/library-config/server";
 
 function snapshotFileDraft(
 	file: (typeof itemReviewFile.$inferSelect)["file"] | undefined,
@@ -54,7 +55,13 @@ function snapshotFileState(
 	};
 }
 
-export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
+export async function getAdminReviewSnapshot(
+	db: Database,
+	reviewId: string,
+	options: { topicsEnabled?: boolean } = {},
+) {
+	const topicsEnabled =
+		options.topicsEnabled ?? (await getLibraryConfig()).topics.enabled;
 	const [review] = await db
 		.select()
 		.from(itemReview)
@@ -120,9 +127,12 @@ export async function getAdminReviewSnapshot(db: Database, reviewId: string) {
 					cites: [],
 					related: [],
 				};
+				const sourceFields = await readSourceFields(db, record.itemKey);
 				return {
 					...itemSummary(null, draft, null, null, payload),
-					sourceFields: await readSourceFields(db, record.itemKey),
+					sourceFields: sourceFields.filter(
+						(field) => topicsEnabled || field.field !== "topics",
+					),
 					importedTopics: [],
 					kind: identity.kind,
 					importMethod: identity.importMethod,

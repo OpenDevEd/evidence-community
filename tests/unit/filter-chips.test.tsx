@@ -17,6 +17,13 @@ vi.mock("@/i18n/routing", () => ({
 	Link: ({ children }: { children: unknown }) => children,
 }));
 
+const libraryState = vi.hoisted(() => ({ topicsEnabled: true }));
+vi.mock("@/context/LibraryConfigProvider", () => ({
+	useLibraryConfig: () => ({
+		topics: { enabled: libraryState.topicsEnabled },
+	}),
+}));
+
 const filters = {
 	queryParams: {
 		collections: [] as string[],
@@ -38,6 +45,7 @@ vi.mock("@/context/FiltersProvider", () => ({
 }));
 
 import { FilterChips } from "@/components/features/resources/ResourcesView";
+import { getFilterChipState } from "@/components/features/resources/FilterChips";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -51,9 +59,11 @@ describe("the chips showing which filters are on", () => {
 		filters.queryParams = {
 			collections: [],
 			institution: [],
+			topics: [],
 			author: "",
 			range: "",
 		};
+		libraryState.topicsEnabled = true;
 		filters.selectedCollections = [];
 		container = document.createElement("div");
 		document.body.append(container);
@@ -76,6 +86,33 @@ describe("the chips showing which filters are on", () => {
 		await render();
 
 		expect(clearButton()).toBeNull();
+	});
+
+	it("counts the topic frontier instead of every saved ancestor", () => {
+		const state = getFilterChipState(
+			{
+				...filters.queryParams,
+				topics: ["domains/1", "fields/2", "subfields/3", "T4"],
+			},
+			undefined,
+			{ enabled: true, frontier: ["T4"] },
+		);
+
+		expect(state.filtersCount).toBe(1);
+	});
+
+	it("ignores topic URL state while Topics are off", async () => {
+		libraryState.topicsEnabled = false;
+		filters.queryParams.topics = [
+			"domains/1",
+			"fields/2",
+			"subfields/3",
+			"T4",
+		];
+		await render();
+
+		expect(clearButton()).toBeNull();
+		expect(container.textContent).not.toContain("Topic");
 	});
 
 	it("writes a single year plainly", async () => {

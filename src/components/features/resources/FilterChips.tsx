@@ -19,6 +19,7 @@ import {
 	selectionFrontier,
 	toggleTopicSelection,
 } from "@/lib/topics/selection";
+import type { TopicNode } from "@/lib/topics/contract";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -99,11 +100,19 @@ function yearChipTitle(range: string): string {
 export function getFilterChipState(
 	queryParams: Record<string, any>,
 	handleClearFilters?: () => void,
+	topicState: {
+		enabled?: boolean;
+		frontier?: readonly string[];
+	} = {},
 ) {
+	const topicFilters =
+		topicState.enabled === false
+			? []
+			: (topicState.frontier ?? queryParams.topics ?? []);
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution?.length || 0) +
-		(queryParams.topics?.length || 0) +
+		topicFilters.length +
 		(queryParams.author ? 1 : 0) +
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
@@ -121,19 +130,17 @@ export function getFilterChipState(
 }
 
 function TopicChips({
+	frontier,
+	nodes,
 	onChange,
 	selected,
 }: {
+	frontier: readonly string[];
+	nodes: readonly TopicNode[] | undefined;
 	onChange: (topics: string[]) => void;
 	selected: string[];
 }) {
-	const { data: nodes } = useSWR(
-		selected.length ? ["topic-filter-chips", selected.join(",")] : null,
-		() => fetchTopicNodeClosure(selected),
-		{ revalidateOnFocus: false },
-	);
 	const byId = new Map(nodes?.map((node) => [node.id, node]));
-	const frontier = nodes ? selectionFrontier(selected, nodes) : selected;
 
 	return frontier.map((id) => {
 		const node = byId.get(id);
@@ -171,9 +178,23 @@ export function FilterChips() {
 	const itemsContext = useFiltersContext();
 	const { topics } = useLibraryConfig();
 	const t = useTranslations("ui");
+	const selectedTopics = topics.enabled
+		? (itemsContext.queryParams.topics ?? [])
+		: [];
+	const { data: topicNodes } = useSWR(
+		selectedTopics.length
+			? ["topic-filter-chips", selectedTopics.join(",")]
+			: null,
+		() => fetchTopicNodeClosure(selectedTopics),
+		{ revalidateOnFocus: false },
+	);
+	const topicFrontier = topicNodes
+		? selectionFrontier(selectedTopics, topicNodes)
+		: selectedTopics;
 	const { filtersCount, clearButton } = getFilterChipState(
 		itemsContext.queryParams,
 		itemsContext.handleClearFilters,
+		{ enabled: topics.enabled, frontier: topicFrontier },
 	);
 
 	return (
@@ -188,11 +209,12 @@ export function FilterChips() {
 			    on sm+ they wrap as before. */}
 			<div className="relative flex min-w-0 flex-1 gap-2 overflow-x-auto [&>div]:shrink-0 [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden">
 				<AnimatePresence initial={false} mode="popLayout">
-					{topics.enabled &&
-					itemsContext.queryParams.topics.length > 0 ? (
+					{selectedTopics.length > 0 ? (
 						<TopicChips
+							frontier={topicFrontier}
+							nodes={topicNodes}
 							onChange={itemsContext.handleTopicsChange}
-							selected={itemsContext.queryParams.topics}
+							selected={selectedTopics}
 						/>
 					) : null}
 					{itemsContext.queryParams?.range && (

@@ -9,6 +9,50 @@ import { Button } from "@/components/nextui/Button";
 import { fetchTopicCatalog } from "@/lib/topics/client";
 import { InspectorListRemove, InspectorListRow } from "./InspectorListRow";
 import { TopicPickerDialog } from "./TopicPickerDialog";
+import type { TopicNode } from "@/lib/topics/contract";
+
+type ImportedTopic = {
+	topicId: string;
+	score: number;
+	primary: boolean;
+};
+
+export function deduplicateImportedTopics(topics: readonly ImportedTopic[]) {
+	const byId = new Map<string, ImportedTopic>();
+	for (const topic of topics) {
+		const previous = byId.get(topic.topicId);
+		byId.set(
+			topic.topicId,
+			previous
+				? {
+						topicId: topic.topicId,
+						score: Math.max(previous.score, topic.score),
+						primary: previous.primary || topic.primary,
+					}
+				: topic,
+		);
+	}
+	return [...byId.values()].sort(
+		(left, right) =>
+			Number(right.primary) - Number(left.primary) ||
+			right.score - left.score ||
+			left.topicId.localeCompare(right.topicId),
+	);
+}
+
+export function mergeTopicPickerSelection(
+	savedIds: readonly string[],
+	resolved: readonly TopicNode[],
+	chosen: readonly TopicNode[],
+) {
+	const resolvedIds = new Set(resolved.map((topic) => topic.id));
+	return [
+		...new Set([
+			...savedIds.filter((id) => !resolvedIds.has(id)),
+			...chosen.map((topic) => topic.id),
+		]),
+	].sort();
+}
 
 export function TopicsEditor({
 	importedTopics = [],
@@ -16,19 +60,16 @@ export function TopicsEditor({
 	topics,
 	onChange,
 }: {
-	importedTopics?: readonly {
-		topicId: string;
-		score: number;
-		primary: boolean;
-	}[];
+	importedTopics?: readonly ImportedTopic[];
 	readOnly: boolean;
 	topics: readonly string[];
 	onChange: (topics: string[]) => void;
 }) {
 	const [picking, setPicking] = useState(false);
 	const ids = [...new Set(topics)].sort();
+	const displayedImportedTopics = deduplicateImportedTopics(importedTopics);
 	const importedIds = [
-		...new Set(importedTopics.map((topic) => topic.topicId)),
+		...new Set(displayedImportedTopics.map((topic) => topic.topicId)),
 	];
 	const catalogIds = [...new Set([...ids, ...importedIds])];
 	const catalog = useSWR(
@@ -90,13 +131,13 @@ export function TopicsEditor({
 					No topics yet.
 				</p>
 			)}
-			{importedTopics.length ? (
+			{displayedImportedTopics.length ? (
 				<div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
 					<p className="text-xs font-medium text-black/55 dark:text-white/55">
 						Imported from OpenAlex
 					</p>
 					<ul className="mt-2 space-y-2">
-						{importedTopics.map((imported) => {
+						{displayedImportedTopics.map((imported) => {
 							const node = nodesById.get(imported.topicId);
 							const selected = ids.includes(imported.topicId);
 							return (
@@ -154,7 +195,13 @@ export function TopicsEditor({
 					initial={selectedNodes}
 					onClose={() => setPicking(false)}
 					onConfirm={(chosen) => {
-						onChange(chosen.map((topic) => topic.id));
+						onChange(
+							mergeTopicPickerSelection(
+								ids,
+								selectedNodes,
+								chosen,
+							),
+						);
 						setPicking(false);
 					}}
 				/>

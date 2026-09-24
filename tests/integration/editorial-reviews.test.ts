@@ -16,6 +16,8 @@ import { AdminValidationError } from "../../src/lib/admin/errors";
 import { itemReview } from "../../src/db/schema/review";
 import { item } from "../../src/db/schema/tables/item";
 import { itemFilePublication } from "../../src/db/schema/source";
+import { itemFieldOverride } from "../../src/db/schema/topics";
+import { NATIVE_SOURCE_CONNECTION_KEY } from "../../src/lib/admin/constants";
 import { publicationTarget, publicationSyncJob } from "../../src/db/schema/publication";
 import { getItemPublishingChoice, correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../../src/lib/admin/review-service";
 import { createNativeItemDraft, publishItemDraft as publishNativeItemDraft, saveItemDraft as saveNativeItemDraft, getItemDraft as getNativeItemDraft, openItemDraft as openNativeItemDraft, discardItemDraft, removeNativeItem, unpublishNativeItem } from "../../src/lib/admin/native-item-service";
@@ -23,6 +25,40 @@ import { stageNativePdfUpload, completeNativePdfUpload, discardNativePdfDraft, s
 const reviewConfig = libraryConfigSchema.parse({...maximalLibraryConfig, sources: []});
 const PUBLICATION_TAGS = ["publish-record"] as const;
 const noFileActor = {userId: "no-file-creator", role: "creator"} as const;
+it("hides topic source conflicts from reviews while Topics are off", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const draft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Review source fields",
+		});
+		await db.insert(itemFieldOverride).values([
+			{
+				itemKey: draft.itemKey,
+				field: "topics",
+				value: ["T12260"],
+				sourceValue: [],
+				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
+			},
+			{
+				itemKey: draft.itemKey,
+				field: "title",
+				value: "Review source fields",
+				sourceValue: "Source title",
+				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
+			},
+		]);
+		const review = await submitItemReview(db, draft.itemKey, noFileActor);
+		const snapshot = await getAdminReviewSnapshot(db, review.id, {
+			topicsEnabled: false,
+		});
+
+		assert.deepEqual(
+			snapshot.sourceFields.map((field) => field.field),
+			["title"],
+		);
+	});
+}, 120_000);
+
 it('allows no identifiers by default and after clearing a choice, and publishes the frozen None snapshot without provider work', async () => {
  await withIsolatedPublicationDatabase(async db => {
   const storage = new MemoryFileStorage();
@@ -244,7 +280,9 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
         await assert.rejects(getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision), /not found/i);
         const approvedReview = await approveItemReview(db, reviewStorage, { reviewId: captured.id, expectedRevision: captured.revision, publicationTags: PUBLICATION_TAGS }, { userId: "review-test-editor", role: "editor" }, reviewConfig);
 		assert(approvedReview.review.state === "published", "Review approval did not finish");
-		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id);
+		const displayedSnapshot = await getAdminReviewSnapshot(db, captured.id, {
+			topicsEnabled: true,
+		});
         const [publishedReviewRoot] = await db.select().from(item).where(eq(item.key, reviewParent.itemKey));
         assert(publishedReviewRoot && displayedSnapshot.revision === publishedReviewRoot.revision && displayedSnapshot.revision > 0, "Submitted inspector lost the published revision");
 		const displayedFile = displayedSnapshot.frozenAttachments.find((attachment) => attachment.key === reviewAttachment.itemKey);
