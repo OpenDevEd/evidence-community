@@ -85,6 +85,7 @@ describe("public library configuration", () => {
 				"schemaVersion",
 				"search",
 				"theme",
+				"topics",
 				"updatedAt",
 			].sort(),
 		);

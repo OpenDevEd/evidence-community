@@ -1132,6 +1132,19 @@
 			},
 			"additionalProperties": false
 		},
+		"topics": {
+			"default": {
+				"enabled": false
+			},
+			"type": "object",
+			"properties": {
+				"enabled": {
+					"default": false,
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": false
+		},
 		"content": {
 			"default": {},
 			"type": "object",
