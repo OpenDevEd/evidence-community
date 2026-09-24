@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -68,12 +68,13 @@ export async function listReviewedPublications(database: Database, input: unknow
 		.orderBy(itemReview.itemKey, desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.as("latest");
 	const pdf = alias(item, "pdf");
-	// Reviews are stamped with a time zone and additions are not; both are UTC.
-	const at = sql`coalesce(${latest.resolvedAt}, ${item.dateAdded} at time zone 'UTC')`;
+	// Reviews are stamped with a time zone and additions are not; both are UTC. A record whose source gave no date
+	// added counts from when it arrived here.
+	const at = sql`coalesce(${latest.resolvedAt}, ${item.dateAdded} at time zone 'UTC', ${item.createdAt})`;
 	const cursor = request.cursor ? decodeCursor(request.cursor) : null;
 	const pageSize = request.ids ? request.ids.length : request.pageSize;
 	const rows = await database
-		.select({ key: item.key, title: item.title, resolvedAt: latest.resolvedAt, resolvedBy: latest.resolvedBy, dateAdded: item.dateAdded })
+		.select({ key: item.key, title: item.title, resolvedAt: latest.resolvedAt, resolvedBy: latest.resolvedBy, dateAdded: item.dateAdded, createdAt: item.createdAt })
 		.from(item)
 		.leftJoin(latest, eq(latest.key, item.key))
 		.where(
@@ -86,17 +87,19 @@ export async function listReviewedPublications(database: Database, input: unknow
 						.from(pdf)
 						.where(and(eq(pdf.parentItem, item.key), sql`lower(${pdf.contentType}) = 'application/pdf'`, publicItemVisibility(database, hiddenTags, pdf))),
 				),
-				or(isNotNull(latest.resolvedAt), isNotNull(item.dateAdded)),
 				request.query ? ilike(item.title, `%${request.query.replace(/[\\%_]/gu, (character) => `\\${character}`)}%`) : undefined,
 				cursor ? sql`(${at}, ${item.key}) < (${cursor.at}::timestamptz, ${cursor.key})` : undefined,
 			),
 		)
 		.orderBy(desc(at), desc(item.key))
 		.limit(pageSize + 1);
-	const page = rows.slice(0, pageSize).flatMap((row) => {
-		const when = row.resolvedAt ?? row.dateAdded;
-		return when ? [{ key: row.key, title: row.title || row.key, publishedAt: when.toISOString(), reviewer: row.resolvedBy ?? "", reviewed: Boolean(row.resolvedAt) }] : [];
-	});
+	const page = rows.slice(0, pageSize).map((row) => ({
+		key: row.key,
+		title: row.title || row.key,
+		publishedAt: (row.resolvedAt ?? row.dateAdded ?? row.createdAt).toISOString(),
+		reviewer: row.resolvedBy ?? "",
+		reviewed: Boolean(row.resolvedAt),
+	}));
 	const last = page.at(-1);
 	return { items: page, nextCursor: rows.length > pageSize && last ? encodeReviewedPublicationCursor({ at: last.publishedAt, key: last.key }) : null };
 }

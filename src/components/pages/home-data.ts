@@ -172,12 +172,12 @@ async function reviewedJourney(db: Database, hidden: readonly string[], followed
 async function addedJourney(db: Database, hidden: readonly string[], key: string | undefined): Promise<HomeData["journey"]> {
 	if (!key) return null;
 	const [row] = await db
-		.select({ key: item.key, title: item.title, dateAdded: item.dateAdded, doi: item.DOI })
+		.select({ key: item.key, title: item.title, dateAdded: item.dateAdded, createdAt: item.createdAt, doi: item.DOI })
 		.from(item)
 		.where(and(eq(item.key, key), publicParentVisibility(db, hidden)))
 		.limit(1);
-	if (!row?.dateAdded) return null;
-	const when = row.dateAdded.toISOString();
+	if (!row) return null;
+	const when = (row.dateAdded ?? row.createdAt).toISOString();
 	return { key: row.key, title: row.title || row.key, reviewed: false, submittedAt: when, reviewer: null, publishedAt: when, doi: normalizeDoi(row.doi) };
 }
 

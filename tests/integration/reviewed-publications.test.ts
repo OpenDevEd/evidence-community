@@ -49,13 +49,19 @@ it("lists each publication with a PDF once, reviewed or not, newest first, with 
 		const synced = await insertItem({ itemType: "Report", title: "Synced from Zotero", dateAdded: new Date(Date.now() - 36 * 3_600_000) });
 		await withPdf(synced);
 		await insertItem({ itemType: "Report", title: "Metadata only", dateAdded: new Date() });
+		// A synced record whose source gave no date added counts from when it arrived.
+		const undated = await insertItem({ itemType: "Report", title: "Undated record", createdAt: new Date(Date.now() - 60 * 3_600_000) });
+		await withPdf(undated);
 
 		const page = await listReviewedPublications(db, { pageSize: "2" }, HIDDEN);
 		assert.deepEqual(page.items.map((row) => [row.key, row.reviewer, row.reviewed]), [[first, "user_lucia", true], [third, "user_amina", true]]);
 		assert.ok(page.nextCursor);
 		const rest = await listReviewedPublications(db, { pageSize: "2", cursor: page.nextCursor }, HIDDEN);
 		assert.deepEqual(rest.items.map((row) => [row.key, row.title, row.reviewer]), [[synced, "Synced from Zotero", ""], [second, "Literacy at 50% scale", "user_omar"]]);
-		assert.equal(rest.nextCursor, null);
+		assert.ok(rest.nextCursor);
+		const last = await listReviewedPublications(db, { pageSize: "2", cursor: rest.nextCursor }, HIDDEN);
+		assert.deepEqual(last.items.map((row) => [row.key, row.reviewed]), [[undated, false]]);
+		assert.equal(last.nextCursor, null);
 
 		assert.deepEqual((await listReviewedPublications(db, { query: "50%" }, HIDDEN)).items.map((row) => row.key), [second]);
 		// A % in the search is the character, not a wildcard: "at%scale" would otherwise match "at 50% scale".
@@ -65,10 +71,10 @@ it("lists each publication with a PDF once, reviewed or not, newest first, with 
 		// A publication hidden by one of the library's hidden tags is not offered: the home page would not show it.
 		await db.insert(tag).values({ name: "Hide" }).onConflictDoNothing();
 		await db.insert(itemToTag).values({ itemKey: third, tagName: "Hide" });
-		assert.deepEqual((await listReviewedPublications(db, {}, HIDDEN)).items.map((row) => row.key), [first, synced, second]);
+		assert.deepEqual((await listReviewedPublications(db, {}, HIDDEN)).items.map((row) => row.key), [first, synced, second, undated]);
 		// Nor is one whose only PDF is hidden: it would have no public file or cover.
 		const [pdfOfSecond] = await db.select({ key: item.key }).from(item).where(eq(item.parentItem, second));
 		await db.insert(itemToTag).values({ itemKey: pdfOfSecond!.key, tagName: "Hide" });
-		assert.deepEqual((await listReviewedPublications(db, {}, HIDDEN)).items.map((row) => row.key), [first, synced]);
+		assert.deepEqual((await listReviewedPublications(db, {}, HIDDEN)).items.map((row) => row.key), [first, synced, undated]);
 	});
 }, 120_000);
