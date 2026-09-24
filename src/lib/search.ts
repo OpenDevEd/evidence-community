@@ -30,8 +30,14 @@ import { formatRange } from "./utils";
 import { meilisearchEquals } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
+import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 
-export const LIST_ITEM_FIELDS = [
+/**
+ * Result cards also open the item page before the full record loads, so they
+ * carry every citation field and the citation does not change once it arrives.
+ */
+export const LIST_ITEM_FIELDS = [...new Set([
+	...CITATION_RECORD_COLUMNS,
 	"itemType",
 	"key",
 	"provider",
@@ -65,7 +71,7 @@ export const LIST_ITEM_FIELDS = [
 	"url",
 	"accessDate",
 	"libraryCatalog",
-] as const;
+])];
 
 type SearchCountOnlyResult = {
 	currentPage: number;
