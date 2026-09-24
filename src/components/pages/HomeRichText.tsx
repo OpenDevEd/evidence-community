@@ -13,7 +13,7 @@ type Rendered = { children?: ReactNode; node?: Element };
  * in it is unwrapped to its words; bare addresses become links. Rendered on the server, so the page does not ship a
  * Markdown parser to every reader.
  */
-export function HomeRichText({ text, baseUrl, statement = false }: { text: string; baseUrl: string; statement?: boolean }) {
+function HomeRichText({ text, baseUrl, statement = false }: { text: string; baseUrl: string; statement?: boolean }) {
 	// A link in an owner's answer; one to this library's own address becomes a path, so it keeps the reader's language.
 	const a = ({ children, node }: Rendered) => {
 		const href = String(node?.properties.href ?? "");

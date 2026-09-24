@@ -17,14 +17,12 @@ import { getCountryInfo } from "@/lib/utils";
 function Chip({
 	group,
 	title,
-	divKey,
 	callback,
 	classNames = {},
 	startContent,
 }: {
 	group: string | undefined;
 	title: string | undefined;
-	divKey: string;
 	callback: () => void;
 	classNames?: {
 		group?: string;
@@ -146,9 +144,6 @@ export function FilterChips() {
 						>
 							<Chip
 								key={"year-" + itemsContext.queryParams.range}
-								divKey={
-									"year-" + itemsContext.queryParams.range
-								}
 								group={t("year")}
 								title={yearChipTitle(
 									itemsContext.queryParams.range,
@@ -228,7 +223,6 @@ export function FilterChips() {
 										key={"institution-" + institution}
 										group={"Institution"}
 										title={institution}
-										divKey={"institution-" + institution}
 										callback={() =>
 											itemsContext.handleInstitutionSelect?.(
 												institution,
@@ -267,7 +261,6 @@ export function FilterChips() {
 												collectionData?.name ||
 												collection
 											}
-											divKey={collection}
 											callback={() =>
 												itemsContext.handleCheckboxChange?.(
 													collection,
@@ -288,9 +281,6 @@ export function FilterChips() {
 						>
 							<Chip
 								key={
-									"author-" + itemsContext.queryParams.author
-								}
-								divKey={
 									"author-" + itemsContext.queryParams.author
 								}
 								group={"Author"}
