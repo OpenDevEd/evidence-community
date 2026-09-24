@@ -30,6 +30,40 @@ import type {
 	NavbarStyleVariant,
 } from "@/types/navbar";
 
+/** The bar's surface in each style. */
+const BAR_STYLE: Record<NavbarStyleVariant, string> = {
+	small: "",
+	wide: "bg-transparent max-w-site mx-auto xl:px-14",
+};
+
+/**
+ * The bar while the chat is open beside the results. Only where the split
+ * view exists: on a phone the chat sits above the results and the header
+ * keeps its size. The small style shrinks by scaling the whole header; the
+ * wide band must stay full width, so its bar loses height instead, down to
+ * the same three quarters.
+ */
+const BAR_BESIDE_CHAT: Record<NavbarStyleVariant, string> = {
+	small: "lg:h-14 lg:py-2",
+	wide: "lg:h-14 lg:py-2 xl:h-navbar-split xl:py-4",
+};
+
+/** The bar inside the header: its size, surface and corners. */
+function barClassName(
+	styleVariant: NavbarStyleVariant,
+	chatEngaged: boolean,
+	showNavbarSearch: boolean,
+) {
+	return twMerge(
+		"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
+		BAR_STYLE[styleVariant],
+		chatEngaged && BAR_BESIDE_CHAT[styleVariant],
+		// When the search bar is docked beneath the navbar (non-wide
+		// style), square the bottom so the two read as one unit.
+		styleVariant !== "wide" && showNavbarSearch && "xl:rounded-b-none",
+	);
+}
+
 export default function Navbar() {
 	const t = useTranslations("ui");
 	const pathname = usePathname();
@@ -131,18 +165,10 @@ export default function Navbar() {
 			)}
 		>
 			<div
-				className={twMerge(
-					"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
-					// Only where the split view exists: on a phone the chat
-					// sits above the results and the header keeps its size.
-					chatEngaged && "lg:h-14 lg:py-2",
-					styleVariant === "wide" &&
-						"bg-transparent max-w-site mx-auto xl:px-14",
-					// When the search bar is docked beneath the navbar (non-wide
-					// style), square the bottom so the two read as one unit.
-					styleVariant !== "wide" &&
-						showNavbarSearch &&
-						"xl:rounded-b-none"
+				className={barClassName(
+					styleVariant,
+					chatEngaged,
+					showNavbarSearch,
 				)}
 			>
 				<Logo />
