@@ -164,3 +164,20 @@ it("rejects edits while disabled and unknown topics, retains private assignments
     expect(await db.select().from(sourceTopicAssignment).where(eq(sourceTopicAssignment.itemKey, key))).toEqual([]);
   });
 });
+
+it("shows the latest source conflict when an overlapping query supplies the update", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await seedTopics(db);
+    await db.insert(sourceConnection).values(["oa", "other"].map(key => ({key, provider: "openalex" as const, scopeKind: "query" as const, config: settings})));
+    const first = await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {}, nextCursor: {v: 1}, mappingProfileVersion: "openalex-v1", fetchedAt: new Date(), items: mapOpenAlexWork(work(1)).items});
+    const key = first.itemKeys.W123!;
+    await edit(db, key, {title: "Editorial title"});
+    await publishItemDraft(db, key, policy);
+    await writeSourceIngestionBatch(db, {sourceConnectionKey: "other", expectedCursor: {}, nextCursor: {v: 2}, mappingProfileVersion: "openalex-v1", fetchedAt: new Date(), items: mapOpenAlexWork(work(2)).items});
+    const conflict = (await readSourceFields(db, key)).find(field => field.field === "title")!;
+    expect(conflict).toMatchObject({sourceConnectionKey: "other", sourceValue: "Source 2", conflicting: true});
+    await edit(db, key, {sourceResolutions: {title: {choice: "source", sourceConnectionKey: conflict.sourceConnectionKey, fingerprint: conflict.fingerprint}}});
+    await publishItemDraft(db, key, policy);
+    expect((await db.select().from(item).where(eq(item.key, key)))[0]?.title).toBe("Source 2");
+  });
+});

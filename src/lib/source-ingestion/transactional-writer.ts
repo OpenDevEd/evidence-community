@@ -2075,8 +2075,8 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		);
 
 		// Provider references become source-owned citation links only when the
-		// target already resolves in this library. Unknown provider IDs stay only
-		// in the raw source snapshot and are retried by a later sync.
+		// target resolves in this library. OpenAlex keeps unresolved references
+		// so importing a target from another query can complete them later.
 		const citationTargetsByRecordKey = new Map(
 			currentItemUpserts
 				.filter((record) => !record.parentSourceRecordKey)
@@ -2088,7 +2088,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const citationSourceKeys = [
 			...new Set([...citationTargetsByRecordKey.values()].flat()),
 		].filter((key) => !itemKeys.has(key));
-		const citationIdentity = await loadIdentityMap(
+		const citationIdentity = connection.provider === "openalex" && citationSourceKeys.length ? new Map((await transaction.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey})
+            .from(itemSourceLink).innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+            .where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.sourceRecordKey, citationSourceKeys)))).map(row => [row.record, row.key])) : await loadIdentityMap(
 			transaction,
 			"item",
 			batch.sourceConnectionKey,

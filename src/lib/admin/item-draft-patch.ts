@@ -1,5 +1,6 @@
 import { getTableColumns } from "drizzle-orm";
 
+import { isTopLevelAdminItemType } from "./item-fields";
 import { item } from "@/db/schema/tables/item";
 import {
 	applyItemDraftPatch,
@@ -55,6 +56,7 @@ export function publishedAdminItemPayload(
 	const payload: Record<string, unknown> = {};
 	for (const field of editableItemDatabaseFields) {
 		if (field === "url" && hasPublishedFile) continue;
+		if ((field === "topics" || field === "countryFocus") && !isTopLevelAdminItemType(published.itemType)) continue;
 		const value = published[field as keyof typeof published];
 		if (value !== null && value !== undefined) {
 			payload[field] = value;

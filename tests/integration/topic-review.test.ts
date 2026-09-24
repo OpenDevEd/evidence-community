@@ -1,3 +1,6 @@
+import { sourceConnection } from "@/db/schema/source";
+import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
+import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -189,4 +192,22 @@ it("publishes a manual record without a DOI using catalog topic IDs", async () =
 			topics: ["T12260", "T12345"],
 		});
 	});
+});
+
+
+it("publishes a topic review for an imported work with a URL-only PDF child", async () => {
+ await withIsolatedPublicationDatabase(async db => {
+  await seedTopics(db);
+  await db.insert(sourceConnection).values({key: "oa", provider: "openalex", scopeKind: "query", config: {}});
+  const mapped = mapOpenAlexWork({id: "W888", title: "Education with a source PDF", type: "article", updated_date: "2026-09-24T10:00:00Z", best_oa_location: {is_oa: true, pdf_url: "https://example.org/education.pdf"}});
+  const imported = await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {}, nextCursor: {v: 1}, mappingProfileVersion: "openalex-v1", fetchedAt: new Date(), items: mapped.items});
+  const key = imported.itemKeys.W888!;
+  const draft = await openItemDraft(db, key, enabledPolicy);
+  await saveItemDraft(db, {itemKey: key, expectedDraftRevision: draft.draftRevision, expectedPayload: draft.payload, payload: {...draft.payload, topics: ["T12260"]}}, enabledPolicy);
+  const submitted = await submitItemReview(db, key, creator);
+  await approveReview(db, submitted);
+  expect((await db.select().from(item).where(eq(item.key, key)))[0]?.topics).toEqual(["T12260"]);
+  const child = (await db.select().from(item).where(eq(item.parentItem, key)))[0];
+  expect(child).toMatchObject({itemType: "Attachment", topics: [], url: "https://example.org/education.pdf", deleted: 0});
+ });
 });

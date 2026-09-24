@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
-import { itemSourceLink } from "@/db/schema/source";
+import { itemSourceLink, sourceConnection } from "@/db/schema/source";
 import { itemFieldOverride, itemSourceValue } from "@/db/schema/topics";
 import { sourcePayloadHash } from "@/lib/source-ingestion/fingerprint";
 import type { JsonValue } from "@/lib/source-ingestion/batch-schema";
@@ -14,16 +14,23 @@ export function sourceFieldFingerprint(value: unknown) {
   return sourcePayloadHash((value ?? null) as JsonValue);
 }
 
+async function sourceValues(db: Reader, itemKey: string) {
+  return db.select({...getTableColumns(itemSourceValue), provider: sourceConnection.provider}).from(itemSourceValue)
+    .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceValue.sourceConnectionKey))
+    .where(eq(itemSourceValue.itemKey, itemKey)).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
+}
+
 export async function readSourceFields(db: Reader, itemKey: string): Promise<SourceFieldConflict[]> {
   const [overrides, sources] = await Promise.all([
     db.select().from(itemFieldOverride).where(eq(itemFieldOverride.itemKey, itemKey)),
-    db.select().from(itemSourceValue).where(eq(itemSourceValue.itemKey, itemKey)).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey)),
+    sourceValues(db, itemKey),
   ]);
   return overrides.filter(override => override.field !== "deleted").map(override => {
-    const source = sources.find(row => row.sourceConnectionKey === override.sourceConnectionKey);
+    const original = sources.find(row => row.sourceConnectionKey === override.sourceConnectionKey);
+    const source = original?.provider === "openalex" ? sources.find(row => row.provider === "openalex") : original;
     const sourceValue = source?.payload[override.field] ?? null;
     return {field: override.field, value: override.value, sourceValue,
-      sourceConnectionKey: override.sourceConnectionKey, sourceVersion: source?.remoteVersion ?? null,
+      sourceConnectionKey: source?.sourceConnectionKey ?? override.sourceConnectionKey, sourceVersion: source?.remoteVersion ?? null,
       fingerprint: sourceFieldFingerprint(sourceValue),
       conflicting: sourceFieldFingerprint(sourceValue) !== sourceFieldFingerprint(override.sourceValue)};
   });
@@ -49,12 +56,11 @@ export async function resolveSourceFieldChoices(db: Reader, itemKey: string, pay
 }
 
 export async function publishSourceFieldOverrides(db: DatabaseTransaction, itemKey: string, before: Record<string, unknown>, after: Record<string, unknown>) {
-  let sources = await db.select().from(itemSourceValue).where(eq(itemSourceValue.itemKey, itemKey))
-    .orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
+  let sources = await sourceValues(db, itemKey);
   if (!sources.length) {
     const links = await db.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey));
     for (const link of links) await db.insert(itemSourceValue).values({itemKey, sourceConnectionKey: link.sourceConnectionKey, payload: before, remoteVersion: link.remoteVersion, importedTopics: false}).onConflictDoNothing();
-    sources = await db.select().from(itemSourceValue).where(eq(itemSourceValue.itemKey, itemKey)).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
+    sources = await sourceValues(db, itemKey);
     if (!sources.length) return;
   }
   const previous = new Map((await db.select().from(itemFieldOverride).where(eq(itemFieldOverride.itemKey, itemKey))).map(row => [row.field, row]));

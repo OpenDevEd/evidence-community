@@ -1,3 +1,4 @@
+import { normalizeDoi } from "@/lib/doi";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -39,7 +40,7 @@ export async function runTopicAssociationCycle(database: Database, config: Libra
         libraryId: config.authentication.openScholar.libraryId, itemKey: job.itemKey, generation: Number(job.generation),
         publishedRevision: Math.max(Number(job.revision), card?.revision ?? 0), state: card ? "published" : "unpublished",
         topicIds: card?.topics ?? [], openalexId: source?.id && /^W[1-9]\d*$/.test(source.id) ? source.id : null,
-        doi: card?.DOI ?? null, metadata: card ? {title: (card.title ?? "").slice(0, 10000), date: card.date?.slice(0, 500) ?? null,
+        doi: normalizeDoi(card?.DOI), metadata: card ? {title: (card.title ?? "").slice(0, 10000), date: card.date?.slice(0, 500) ?? null,
           itemType: card.itemType, creators: (card.creators ?? []).map(creator => (creator.name ?? [creator.firstName, creator.lastName].filter(Boolean).join(" ")).slice(0, 1000)),
           abstract: card.abstractNote?.slice(0, 100000) ?? null} : null,
       });
