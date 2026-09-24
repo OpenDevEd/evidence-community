@@ -50,7 +50,7 @@ export function FirstEditionCover({libraryName, sending, next, timezone, locale}
                 : <span aria-hidden="true" className="flex size-[76px] shrink-0 items-center justify-center self-start rounded-2xl bg-[#ac5937]/10 text-[#ac5937]"><Icon value={Notification03Icon} size={32} /></span>}
               <h2 className="relative max-w-[230px] text-[28px] font-semibold leading-[1.12] tracking-tight">{sending ? "The first edition is on its way" : "No digests for now"}</h2>
             </div>
-            <p className="-mt-2 mb-6 px-7 text-sm leading-6 text-[#352b24]/70">{sending ? "It will summarise the new publications in this library." : "This library is not sending digests at the moment."}</p>
+            <p className="-mt-2 mb-6 px-7 text-sm leading-6 text-[#352b24]/70">{sending ? "It goes out on the first send date after new publications are added." : "This library is not sending digests at the moment."}</p>
             <div className="relative flex items-center justify-between gap-4 bg-[#352b24]/10 px-7 py-4"><span className="text-xs text-[#352b24]/70">No editions yet</span><span className="text-sm font-medium">{sending ? "Coming soon" : "Not scheduled"}</span></div>
           </article>
         </div>);

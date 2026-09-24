@@ -146,7 +146,8 @@ function EmptyArchive({next, settings, locale}: {next: string | null; settings: 
 }
 
 function firstEdition(date: Date | null, settings: DigestSettings, locale: string) {
-  return date ? `The first goes out on ${date.toLocaleDateString(locale, {weekday: "long", day: "numeric", month: "long", timeZone: settings.timezone})}.` : "The first will appear after new publications are added.";
+  // A send date with nothing new is skipped, so the date is only when the first one is due.
+  return date ? `The first is due on ${date.toLocaleDateString(locale, {weekday: "long", day: "numeric", month: "long", timeZone: settings.timezone})}, if new publications have been added by then.` : "The first will appear after new publications are added.";
 }
 
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
