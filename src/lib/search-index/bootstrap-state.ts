@@ -70,3 +70,13 @@ export async function setSearchIndexRebuildPending(
 	if (!row) throw new Error("Library status row is missing.");
 	return row.pending;
 }
+
+/** Persist the configuration used by the projection; a failed rebuild stays pending. */
+export async function prepareSearchProjection(database: Database, topicsEnabled: boolean) {
+  const signature = JSON.stringify({topics: topicsEnabled});
+  const [row] = await database.select().from(status).where(eq(status.id, 1)).limit(1);
+  if (!row) throw new Error("Library status row is missing.");
+  if (row.searchProjectionSignature === signature) return row.searchIndexRebuildPending;
+  await database.update(status).set({searchProjectionSignature: signature, searchIndexRebuildPending: true, updatedAt: new Date()}).where(eq(status.id, 1));
+  return true;
+}

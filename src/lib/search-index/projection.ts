@@ -510,7 +510,7 @@ async function buildSearchProjectionPlanForKeys(
 				},
 				metadataSearch: metadataSearchValues(parent),
 				topicAncestors: topicAncestry(parent.topics),
-				topics: uniqueSorted(parent.topics),
+				topics: config?.topics.enabled ? uniqueSorted(parent.topics) : [],
 				key: parent.key,
 				provider,
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),

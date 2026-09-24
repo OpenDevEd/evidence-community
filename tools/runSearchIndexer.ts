@@ -8,7 +8,7 @@ import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory"
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
-	searchIndexRebuildIsPending,
+	prepareSearchProjection,
 	resolveIdleLastError,
 	resolveRebuildTaskTimeoutMs,
 	setSearchIndexRebuildPending,
@@ -120,8 +120,9 @@ async function main() {
 			? (await requeueSearchOutboxDeadLetters(databaseResource.database))
 					.length
 			: 0;
-		let rebuildPending = await searchIndexRebuildIsPending(
+		let rebuildPending = await prepareSearchProjection(
 			databaseResource.database,
+			config.topics.enabled,
 		);
 		if (command.rebuild && !rebuildPending) {
 			await setSearchIndexRebuildPending(databaseResource.database, true);

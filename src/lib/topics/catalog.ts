@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { topicCatalogCache } from "@/db/schema/topics";
-import { topicCatalogRequestSchema, topicCatalogResponseSchema, topicDetailResponseSchema, topicNodeSchema, type TopicNode } from "./contract";
+import { topicCatalogRequestSchema, topicCatalogResponseSchema, topicDetailResponseSchema, topicNodeSchema, topicNodeIdSchema, type TopicNode } from "./contract";
 
 export type TopicCatalogContext = { database: Pick<Database, "select" | "insert">; config: Pick<LibraryServerConfig, "authentication">; fetch?: typeof fetch };
 const FRESH_MS = 24 * 3600_000;
@@ -37,9 +37,9 @@ export async function readTopicCatalog(request: Omit<z.input<typeof topicCatalog
   return response;
 }
 
-export async function resolveTopicNodes(ids: readonly string[], context: TopicCatalogContext): Promise<TopicNode[]> {
+export async function resolveTopicNodes(ids: readonly string[], context: TopicCatalogContext, options: {allowUnknown?: boolean} = {}): Promise<TopicNode[]> {
   if (!ids.length) return [];
-  const unique = [...new Set(ids)];
+  const unique = [...new Set(ids)].filter(id => !options.allowUnknown || topicNodeIdSchema.safeParse(id).success);
   const cached = await context.database.select().from(topicCatalogCache).where(and(eq(topicCatalogCache.kind, "node"), inArray(topicCatalogCache.id, unique)));
   const byId = new Map(cached.map(row => [row.id, row]));
   const result = new Map<string, TopicNode>();
@@ -53,7 +53,7 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
     try {
       const response = await readTopicCatalog({ids: batch}, context);
       for (const node of response.nodes) result.set(node.id, node);
-      for (const id of batch) if (!result.has(id)) throw new TopicServiceError(404);
+      for (const id of batch) if (!options.allowUnknown && !result.has(id)) throw new TopicServiceError(404);
     } catch (error) {
       if (error instanceof TopicServiceError && error.status === 404) throw error;
       console.error("Topic catalog lookup failed", {libraryId: context.config.authentication.openScholar.libraryId, ids: batch, error});
@@ -64,14 +64,14 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
       }
     }
   }
-  return unique.map(id => result.get(id)!);
+  return unique.flatMap(id => result.has(id) ? [result.get(id)!] : []);
 }
 
-export async function resolveTopicAncestry(ids: readonly string[], context: TopicCatalogContext) {
+export async function resolveTopicAncestry(ids: readonly string[], context: TopicCatalogContext, options: {allowUnknown?: boolean} = {}) {
   const all = new Map<string, TopicNode>();
   let pending = [...new Set(ids)];
   for (let depth = 0; pending.length && depth < 4; depth++) {
-    const nodes = await resolveTopicNodes(pending, context);
+    const nodes = await resolveTopicNodes(pending, context, options);
     for (const node of nodes) all.set(node.id, node);
     pending = [...new Set(nodes.flatMap(node => node.parent && !all.has(node.parent) ? [node.parent] : []))];
   }

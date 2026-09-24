@@ -1434,6 +1434,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				return [
 					record.sourceRecordKey,
 					{
+						sourceCollections: incomingCollections,
 						collections: dirtyFields.has("collections")
 							? (existingCollectionsByItemKey.get(key) ?? [])
 							: [
@@ -1496,8 +1497,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		for (const record of currentItemUpserts) {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const normalized = normalizedItems.get(record.sourceRecordKey)!;
+			const sourceItem = {...normalized.item};
+			if (!importedTopicRows.has(key)) delete sourceItem.topics;
 			const state = {itemKey: key, sourceConnectionKey: batch.sourceConnectionKey,
-				payload: {...normalized.item, tags: normalized.tags, collections: effectiveItemStateByRecordKey.get(record.sourceRecordKey)!.collections,
+				payload: {...sourceItem, tags: normalized.tags, collections: effectiveItemStateByRecordKey.get(record.sourceRecordKey)!.sourceCollections,
 					parentItem: parentItemKeys.get(record.sourceRecordKey) ?? null},
 				remoteVersion: record.remoteVersion, fetchedAt: batch.fetchedAt, importedTopics: topicImportKeys.has(key)};
 			await transaction.insert(itemSourceValue).values(state).onConflictDoUpdate({target: [itemSourceValue.itemKey, itemSourceValue.sourceConnectionKey], set: state});

@@ -1,6 +1,7 @@
 import {
 	topicCatalogResponseSchema,
 	topicDetailResponseSchema,
+	topicNodeIdSchema,
 	type TopicNode,
 } from "./contract";
 
@@ -60,6 +61,7 @@ function combineTopicCatalogPages(
 }
 
 export async function fetchTopicCatalog(input: TopicCatalogInput) {
+	if (input.ids) input = {...input, ids: input.ids.filter(id => topicNodeIdSchema.safeParse(id).success)};
 	if (!input.ids || input.ids.length <= CATALOG_PAGE_SIZE) {
 		return fetchTopicCatalogPage(input);
 	}

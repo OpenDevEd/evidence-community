@@ -470,6 +470,13 @@
       "when": 1790254835776,
       "tag": "0066_topics_and_source_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790258293157,
+      "tag": "0067_topic_search_configuration",
+      "breakpoints": true
     }
   ]
 }

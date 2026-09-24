@@ -24,7 +24,7 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
-import { Fragment, useContext, useMemo, useState } from "react";
+import { Fragment, useContext, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
@@ -99,6 +99,7 @@ function FacetPicker({
 	searchError?: boolean;
 	onSearchRetry?: () => void;
 }) {
+	const inputRef = useRef<HTMLInputElement>(null);
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
 	const displayedList =
@@ -122,7 +123,9 @@ function FacetPicker({
 	const allSectionNames = Object.keys(groupedBySection);
 
 	return (
-		<div className="w-full flex flex-col gap-2">
+		<div className="w-full flex flex-col gap-2" onKeyDownCapture={(event) => {
+			if (event.key === "Escape") requestAnimationFrame(() => inputRef.current?.focus({preventScroll: true}));
+		}}>
 			{/* <div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 				<span>{label}</span>
 			</div> */}
@@ -162,6 +165,7 @@ function FacetPicker({
 						}
 					}}
 					inputProps={{
+						ref: inputRef,
 						classNames: {
 							inputWrapper:
 								"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
@@ -604,10 +608,7 @@ function TopicFilter({
 			left.path.join(" > ").localeCompare(right.path.join(" > ")),
 		)
 		.map((node): FacetListItem => {
-			const count = counts
-				? (counts[node.id] ??
-					(selected.includes(node.id) ? 0 : undefined))
-				: undefined;
+			const count = counts ? (counts[node.id] ?? 0) : undefined;
 			return {
 				key: node.id,
 				label: node.name,

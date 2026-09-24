@@ -16,7 +16,7 @@ import { AdminValidationError } from "../../src/lib/admin/errors";
 import { itemReview } from "../../src/db/schema/review";
 import { item } from "../../src/db/schema/tables/item";
 import { itemFilePublication } from "../../src/db/schema/source";
-import { itemFieldOverride } from "../../src/db/schema/topics";
+import { itemFieldOverride, itemSourceValue } from "../../src/db/schema/topics";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "../../src/lib/admin/constants";
 import { publicationTarget, publicationSyncJob } from "../../src/db/schema/publication";
 import { getItemPublishingChoice, correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../../src/lib/admin/review-service";
@@ -31,6 +31,7 @@ it("hides topic source conflicts from reviews while Topics are off", async () =>
 			itemType: "Report",
 			title: "Review source fields",
 		});
+		await db.insert(itemSourceValue).values({itemKey: draft.itemKey, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY, payload: {title: "Source title", topics: []}, importedTopics: false});
 		await db.insert(itemFieldOverride).values([
 			{
 				itemKey: draft.itemKey,

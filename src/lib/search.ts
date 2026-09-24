@@ -117,7 +117,10 @@ export async function getMainAttributes(config?: LibraryServerConfig) {
 		libraryConfig,
 	);
 	return attributes.filter(
-		(attribute) => attribute !== "fullTextPDFs" && !attribute.startsWith("fullTextPDFs."),
+		(attribute) =>
+			attribute !== "fullTextPDFs" &&
+			!attribute.startsWith("fullTextPDFs.") &&
+			(libraryConfig.topics.enabled || (attribute !== "topics" && attribute !== "topicAncestors")),
 	);
 }
 
@@ -272,7 +275,7 @@ export async function resolveSearchTopicNodes(
 	if (!selected.length) return [];
 	const database = await getDatabaseForConfig(libraryConfig);
 	const context = { database, config: libraryConfig };
-	const ids = await resolveTopicAncestry(selected, context);
+	const ids = await resolveTopicAncestry(selected, context, {allowUnknown: true});
 	return resolveTopicNodes(ids, context);
 }
 
@@ -306,7 +309,7 @@ export async function getPublicItems(
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
 		? displayedAttributes
-		: [...LIST_ITEM_FIELDS];
+		: LIST_ITEM_FIELDS.filter(attribute => libraryConfig.topics.enabled || attribute !== "topics");
 
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 
@@ -373,7 +376,7 @@ export async function getPublicFacets(
 		searchParams,
 		libraryConfig,
 	);
-	const { search, facetFilters, attributesToSearchOn, country } =
+	const { search, finalFilters, facetFilters, attributesToSearchOn, country } =
 		resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
 	const facets = getRuntimeSearchFacets(
@@ -384,13 +387,19 @@ export async function getPublicFacets(
 
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 
-	const searchResults = await index.search(search, {
-		offset: 0,
-		limit: 0,
-		attributesToSearchOn,
-		facets,
-		filter: facetFilters,
-	});
+	const [searchResults, topicResults] = await Promise.all([
+		index.search(search, {
+			offset: 0, limit: 0, attributesToSearchOn, facets, filter: finalFilters,
+		}),
+		facets.includes("topicAncestors") && finalFilters.length !== facetFilters.length
+			? index.search(search, {
+				offset: 0, limit: 0, attributesToSearchOn, facets: ["topicAncestors"], filter: facetFilters,
+			})
+			: null,
+	]);
+	if (topicResults?.facetDistribution) {
+		searchResults.facetDistribution = {...searchResults.facetDistribution, ...topicResults.facetDistribution};
+	}
 
 	return {
 		facetDistribution: publicFacetDistribution(

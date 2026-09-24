@@ -103,14 +103,15 @@ async function validateTopicChange(
   previous: Record<string, unknown>,
   next: Record<string, unknown>,
   options: ItemWritebackPolicyOptions,
+  publishingSavedDraft = false,
 ) {
   const before = Array.isArray(previous.topics) ? previous.topics as string[] : [];
   const after = Array.isArray(next.topics) ? next.topics as string[] : [];
   if (JSON.stringify([...before].sort()) === JSON.stringify([...after].sort())) return;
   const config = options.writebackConfig;
-  if (!config?.topics?.enabled) throw new AdminValidationError("Topics are turned off for this library.", {topics: "Enable Topics in library configuration before changing them."});
+  if (!config?.topics?.enabled && !publishingSavedDraft) throw new AdminValidationError("Topics are turned off for this library.", {topics: "Enable Topics in library configuration before changing them."});
   if (!after.length) return;
-  if (!config.authentication) throw new AdminValidationError("The topic catalog is not configured.");
+  if (!config?.authentication) throw new AdminValidationError("The topic catalog is not configured.");
   try {
     const nodes = await resolveTopicNodes(after, {database, config: {authentication: config.authentication}});
     if (nodes.some(node => node.level !== "topic")) throw new TopicServiceError(404);
@@ -1065,7 +1066,7 @@ export async function publishItemDraftWithContext(
 			await resolveSourceFieldChoices(transaction, itemKey, (options.review?.approved.payload ?? workingPayload)!),
 			{ requireTitle: true },
 		);
-		await validateTopicChange(transaction, basePayload, validated.payload, options);
+		await validateTopicChange(transaction, basePayload, validated.payload, options, true);
 		await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
 		if (validated.item.parentItem !== parentItemKey) {
 			throw new ItemDraftConflictError(itemKey);

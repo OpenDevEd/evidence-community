@@ -26,7 +26,11 @@ async function reconcileVisibility(database: Database, config: LibraryServerConf
 
 export async function runTopicAssociationCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal, request: typeof fetch = fetch) {
   await reconcileVisibility(database, config);
-  return runAssociationDeliveryCycle(database, "topicAssociationDelivery", async (job, leaseToken) => {
+  const deadline = Date.now() + 5_000;
+  let processed = false;
+  do {
+  if (signal?.aborted) break;
+  const claimed = await runAssociationDeliveryCycle(database, "topicAssociationDelivery", async (job, leaseToken) => {
     const payload = await database.transaction(async tx => {
       const [current] = await tx.select().from(topicAssociationDelivery).where(and(eq(topicAssociationDelivery.itemKey, job.itemKey), eq(topicAssociationDelivery.leaseToken, leaseToken))).for("update").limit(1);
       if (!current) return null;
@@ -41,7 +45,7 @@ export async function runTopicAssociationCycle(database: Database, config: Libra
         publishedRevision: Math.max(Number(job.revision), card?.revision ?? 0), state: card ? "published" : "unpublished",
         topicIds: card?.topics ?? [], openalexId: source?.id && /^W[1-9]\d*$/.test(source.id) ? source.id : null,
         doi: normalizeDoi(card?.DOI), metadata: card ? {title: (card.title ?? "").slice(0, 10000), date: card.date?.slice(0, 500) ?? null,
-          itemType: card.itemType, creators: (card.creators ?? []).map(creator => (creator.name ?? [creator.firstName, creator.lastName].filter(Boolean).join(" ")).slice(0, 1000)),
+          itemType: card.itemType, creators: (card.creators ?? []).slice(0, 1000).map(creator => (creator.name ?? [creator.firstName, creator.lastName].filter(Boolean).join(" ")).slice(0, 1000)),
           abstract: card.abstractNote?.slice(0, 100000) ?? null} : null,
       });
       await tx.update(topicAssociationDelivery).set({payload: data}).where(eq(topicAssociationDelivery.itemKey, job.itemKey));
@@ -57,4 +61,8 @@ export async function runTopicAssociationCycle(database: Database, config: Libra
     const receipt = topicAssociationReceiptSchema.parse(await response.json());
     if (receipt.idempotencyKey !== payload.idempotencyKey || receipt.generation !== payload.generation) throw new Error("Topic association receipt did not match the delivery");
   });
+  if (!claimed) break;
+  processed = true;
+  } while (Date.now() < deadline);
+  return processed;
 }

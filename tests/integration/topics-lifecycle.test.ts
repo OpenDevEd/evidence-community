@@ -5,6 +5,10 @@ import { item } from "@/db/schema/tables/item";
 import { itemDraft, itemSourceLink, sourceConnection, sourceRecordIssue } from "@/db/schema/source";
 import { itemFieldOverride, itemSourceValue, topicCatalogCache, sourceTopicAssignment, topicAssociationDelivery } from "@/db/schema/topics";
 import { createNativeItemDraft, openItemDraft, saveItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
+import { readPublicItem } from "@/lib/search-index/projection";
+import { prepareSearchProjection, setSearchIndexRebuildPending } from "@/lib/search-index/bootstrap-state";
+import { resolveTopicNodes } from "@/lib/topics/catalog";
+import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { readSourceFields } from "@/lib/admin/source-fields";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
@@ -15,7 +19,7 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import type { Database } from "@/db/database-schema";
 
-const settings = {approvedQuery: {version: "v1", approvedAt: "2026-09-24T10:00:00Z", query: {search: "schools"}}, downloadPdfs: false};
+const settings = {name: "Schools", approvedQuery: {version: "v1", approvedAt: "2026-09-24T10:00:00Z", query: {search: "schools"}}, downloadPdfs: false};
 const config = libraryConfigSchema.parse({...maximalLibraryConfig, topics: {enabled: true}});
 const policy = {writebackConfig: {...config, sources: [{key: "oa", writebackEnabled: false}]}};
 async function seedTopics(db: Database) {
@@ -25,10 +29,10 @@ const work = (version: number, id = "W123", title = `Source ${version}`) => ({
   id, type: "article", title, updated_date: `2026-09-${String(10 + version).padStart(2, "0")}T10:00:00Z`,
   topics: [{id: "T12260", score: 0.8}, {id: "T12345", score: 0.1}], primary_topic: {id: "T12260"},
 });
-async function edit(db: Database, key: string, patch: Record<string, unknown>) {
-  const draft = await openItemDraft(db, key, policy);
+async function edit(db: Database, key: string, patch: Record<string, unknown>, editPolicy = policy) {
+  const draft = await openItemDraft(db, key, editPolicy);
   return saveItemDraft(db, {itemKey: key, expectedDraftGeneration: draft.generation, expectedDraftRevision: draft.draftRevision,
-    expectedPayload: draft.payload, payload: {...draft.payload, ...patch}}, policy);
+    expectedPayload: draft.payload, payload: {...draft.payload, ...patch}}, editPolicy);
 }
 
 it("keeps whole-field overrides through source updates, resolves both choices through publishing, and preserves manual no-DOI topics", async () => {
@@ -146,12 +150,12 @@ it("rejects edits while disabled and unknown topics, retains private assignments
     try { await expect(createNativeItemDraft(db, {itemType: "Report", title: "Unknown", topics: ["T999999"]}, policy)).rejects.toThrow("Choose topics"); }
     finally { unknownFetch.mockRestore(); }
     const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Manual", topics: ["T12260"]}, policy);
-    await expect(publishItemDraft(db, draft.itemKey, off)).rejects.toThrow("turned off");
-    await publishItemDraft(db, draft.itemKey, policy);
+    await publishItemDraft(db, draft.itemKey, off);
     const existing = await openItemDraft(db, draft.itemKey, off);
     await saveItemDraft(db, {itemKey: draft.itemKey, expectedDraftRevision: existing.draftRevision, expectedPayload: existing.payload, payload: {...existing.payload, title: "Other edit"}}, off);
     await publishItemDraft(db, draft.itemKey, off);
     expect((await db.select().from(item).where(eq(item.key, draft.itemKey)))[0]?.topics).toEqual(["T12260"]);
+    expect((await readPublicItem(db, draft.itemKey, off.writebackConfig))?.topics).toEqual([]);
     await db.insert(sourceConnection).values({key: "oa", provider: "openalex", scopeKind: "query", config: settings});
     const first = await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {}, nextCursor: {v: 1}, mappingProfileVersion: "openalex-v1", fetchedAt: new Date(), items: mapOpenAlexWork(work(1)).items});
     const key = first.itemKeys.W123!;
@@ -179,5 +183,69 @@ it("shows the latest source conflict when an overlapping query supplies the upda
     await edit(db, key, {sourceResolutions: {title: {choice: "source", sourceConnectionKey: conflict.sourceConnectionKey, fingerprint: conflict.fingerprint}}});
     await publishItemDraft(db, key, policy);
     expect((await db.select().from(item).where(eq(item.key, key)))[0]?.title).toBe("Source 2");
+  });
+});
+
+
+it("rebuilds existing search documents when topic visibility changes and retains the request across failures", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    expect(await prepareSearchProjection(db, false)).toBe(true);
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, false)).toBe(false);
+    expect(await prepareSearchProjection(db, true)).toBe(true);
+    expect(await prepareSearchProjection(db, true)).toBe(true);
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, true)).toBe(false);
+    expect(await prepareSearchProjection(db, false)).toBe(true);
+  });
+});
+
+it("ignores invalid or removed topic URL IDs without relaxing topic assignment validation", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await seedTopics(db);
+    const request: typeof fetch = async () => Response.json({contractVersion: 1, nodes: [], revision: "test", nextCursor: null, publicBaseUrl: "https://openscholar.example"});
+    const context = {database: db, config, fetch: request};
+    expect((await resolveTopicNodes(["invalid", "T999999", "T12260"], context, {allowUnknown: true})).map(node => node.id)).toEqual(["T12260"]);
+    await expect(resolveTopicNodes(["T999999"], context)).rejects.toMatchObject({status: 404});
+  });
+});
+
+it("keeps provider values separate from local collections and manual topics, and accepts a writeback echo without a false conflict", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await seedTopics(db);
+    await db.insert(sourceConnection).values({key: "oa", provider: "zotero", scopeKind: "group", externalScopeKey: "123", config: {}});
+    const first = await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {}, nextCursor: {v: 1}, mappingProfileVersion: "test", fetchedAt: new Date(), items: mapOpenAlexWork(work(1)).items});
+    const key = first.itemKeys.W123!;
+    const zoteroPolicy = {writebackConfig: {...config, sources: [{key: "oa", writebackEnabled: true}]}};
+    const collection = await createNativeCollection(db, {name: "Editor collection"});
+    await edit(db, key, {title: "Editor title", topics: ["T12345"], collections: [collection.key]}, zoteroPolicy);
+    await publishItemDraft(db, key, zoteroPolicy);
+    await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {v: 1}, nextCursor: {v: 2}, mappingProfileVersion: "test", fetchedAt: new Date(), items: mapOpenAlexWork(work(2, "W123", "Editor title")).items});
+    const fields = await readSourceFields(db, key);
+    expect(fields.find(field => field.field === "title")?.conflicting).toBe(false);
+    expect(fields.find(field => field.field === "collections")).toMatchObject({sourceValue: [], value: [collection.key], conflicting: false});
+    expect(fields.find(field => field.field === "topics")).toBeUndefined();
+    expect((await db.select().from(item).where(eq(item.key, key)))[0]?.topics).toEqual(["T12345"]);
+  });
+});
+
+it("drains multiple topic deliveries in one cycle and bounds very long creator lists", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await seedTopics(db);
+    const keys: string[] = [];
+    for (const title of ["First", "Second", "Third"]) {
+      const draft = await createNativeItemDraft(db, {itemType: "Report", title, topics: ["T12260"]}, policy);
+      await publishItemDraft(db, draft.itemKey, policy);
+      keys.push(draft.itemKey);
+    }
+    await db.update(item).set({creators: Array.from({length: 1001}, (_, index) => ({creatorType: "author", name: `Author ${index}`, fieldMode: 1}))}).where(eq(item.key, keys[0]!));
+    const delivered: Array<{itemKey: string; metadata: {creators: string[]}}> = [];
+    await runTopicAssociationCycle(db, config, undefined, async (_url, init) => {
+      const body = JSON.parse(String(init?.body)); delivered.push(body);
+      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
+    });
+    expect(delivered.map(body => body.itemKey).sort()).toEqual(keys.sort());
+    expect(Math.max(...delivered.map(body => body.metadata.creators.length))).toBe(1000);
+    expect((await db.select().from(topicAssociationDelivery)).every(row => row.nextAttemptAt === null && row.lastError === null)).toBe(true);
   });
 });

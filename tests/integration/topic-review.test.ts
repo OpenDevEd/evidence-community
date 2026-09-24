@@ -11,7 +11,7 @@ import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { topicCatalogCache } from "@/db/schema/topics";
 import { libraryConfigSchema } from "@/config/library-config/schema";
-import { AdminValidationError } from "@/lib/admin/errors";
+import { readPublicItem } from "@/lib/search-index/projection";
 import {
 	createNativeItemDraft,
 	getItemDraft,
@@ -146,13 +146,7 @@ it("keeps a changed submitted topic assignment private when Topics are disabled"
 		);
 		const submitted = await submitItemReview(db, created.itemKey, creator);
 
-		await expect(
-			approveReview(db, submitted, disabledConfig),
-		).rejects.toSatisfy(
-			(error: unknown) =>
-				error instanceof AdminValidationError &&
-				Boolean(error.fields.topics),
-		);
+		await approveReview(db, submitted, disabledConfig);
 		const [published] = await db
 			.select()
 			.from(item)
@@ -162,8 +156,9 @@ it("keeps a changed submitted topic assignment private when Topics are disabled"
 			.from(itemReview)
 			.where(eq(itemReview.id, submitted.id));
 
-		expect(published?.topics).toEqual(["T12260"]);
-		expect(review?.state).toBe("pending");
+		expect(published?.topics).toEqual(["T12345"]);
+		expect(review?.state).toBe("published");
+		expect((await readPublicItem(db, created.itemKey, disabledConfig))?.topics).toEqual([]);
 	});
 });
 

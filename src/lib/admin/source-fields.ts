@@ -25,14 +25,15 @@ export async function readSourceFields(db: Reader, itemKey: string): Promise<Sou
     db.select().from(itemFieldOverride).where(eq(itemFieldOverride.itemKey, itemKey)),
     sourceValues(db, itemKey),
   ]);
-  return overrides.filter(override => override.field !== "deleted").map(override => {
+  return overrides.filter(override => override.field !== "deleted").flatMap(override => {
     const original = sources.find(row => row.sourceConnectionKey === override.sourceConnectionKey);
     const source = original?.provider === "openalex" ? sources.find(row => row.provider === "openalex") : original;
-    const sourceValue = source?.payload[override.field] ?? null;
-    return {field: override.field, value: override.value, sourceValue,
+    if (!source || !Object.hasOwn(source.payload, override.field)) return [];
+    const sourceValue = source.payload[override.field] ?? null;
+    return [{field: override.field, value: override.value, sourceValue,
       sourceConnectionKey: source?.sourceConnectionKey ?? override.sourceConnectionKey, sourceVersion: source?.remoteVersion ?? null,
       fingerprint: sourceFieldFingerprint(sourceValue),
-      conflicting: sourceFieldFingerprint(sourceValue) !== sourceFieldFingerprint(override.sourceValue)};
+      conflicting: sourceFieldFingerprint(sourceValue) !== sourceFieldFingerprint(override.sourceValue) && sourceFieldFingerprint(sourceValue) !== sourceFieldFingerprint(override.value)}];
   });
 }
 
@@ -59,7 +60,9 @@ export async function publishSourceFieldOverrides(db: DatabaseTransaction, itemK
   let sources = await sourceValues(db, itemKey);
   if (!sources.length) {
     const links = await db.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey));
-    for (const link of links) await db.insert(itemSourceValue).values({itemKey, sourceConnectionKey: link.sourceConnectionKey, payload: before, remoteVersion: link.remoteVersion, importedTopics: false}).onConflictDoNothing();
+    const sourcePayload = {...before};
+    delete sourcePayload.topics;
+    for (const link of links) await db.insert(itemSourceValue).values({itemKey, sourceConnectionKey: link.sourceConnectionKey, payload: sourcePayload, remoteVersion: link.remoteVersion, importedTopics: false}).onConflictDoNothing();
     sources = await sourceValues(db, itemKey);
     if (!sources.length) return;
   }
@@ -78,6 +81,7 @@ export async function publishSourceFieldOverrides(db: DatabaseTransaction, itemK
     }
     const prior = previous.get(field);
     const source = sources.find(row => row.sourceConnectionKey === (resolution?.sourceConnectionKey ?? prior?.sourceConnectionKey)) ?? sources[0]!;
+    if (field !== "deleted" && !Object.hasOwn(source.payload, field)) continue;
     const values = {itemKey, field, value: after[field] ?? null,
       sourceValue: resolution ? source.payload[field] ?? null : prior ? prior.sourceValue : source.payload[field] ?? null,
       sourceConnectionKey: source.sourceConnectionKey, sourceVersion: source.remoteVersion, updatedAt: new Date()};
