@@ -17,6 +17,7 @@ import { itemReview } from "@/db/schema/review";
 import { listDigestEditions } from "@/lib/notifications/public";
 import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-visibility";
 import { normalizeDoi } from "@/lib/doi";
+import { listReviewedPublications } from "@/lib/admin/reviewed-publication-catalog";
 
 type Stats = Awaited<ReturnType<typeof getComprehensiveStats>>;
 
@@ -143,22 +144,35 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
  * The publication the steps follow (the chosen one, else the most recent submission an editor published): when it
  * came in, who approved it and when, and its DOI. Reviews record the approving editor's OpenScholar account, named
  * from the directory OpenScholar fills in; someone no longer on the team goes unnamed. The submitter is often an
- * author outside the library, so only the date is shown for them.
+ * author outside the library, so only the date is shown for them. Not every library reviews: a chosen publication
+ * that was never reviewed, or with nothing reviewed the newest one with a PDF, is followed from when it was added.
  */
 async function latestJourney(followed: string | undefined, directory: LibraryHomeConfig["directory"]): Promise<HomeData["journey"]> {
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
+	const hidden = config.content.tags.hidden;
 	const [row] = await db
 		.select({ key: itemReview.itemKey, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt, resolvedBy: itemReview.resolvedBy, title: item.title, doi: item.DOI })
 		.from(itemReview)
 		.innerJoin(item, eq(item.key, itemReview.itemKey))
-		.where(and(eq(itemReview.state, "published"), publicParentVisibility(db, config.content.tags.hidden), followed ? eq(itemReview.itemKey, followed) : undefined))
+		.where(and(eq(itemReview.state, "published"), publicParentVisibility(db, hidden), followed ? eq(itemReview.itemKey, followed) : undefined))
 		// Two approvals saved in the same millisecond still give one answer.
 		.orderBy(desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.limit(1);
-	if (!row?.resolvedAt) return null;
-	const reviewer = directory.find((person) => person.id === row.resolvedBy);
-	return { key: row.key, title: row.title || row.key, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
+	if (row?.resolvedAt) {
+		const reviewer = directory.find((person) => person.id === row.resolvedBy);
+		return { key: row.key, title: row.title || row.key, reviewed: true, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
+	}
+	const key = followed ?? (await listReviewedPublications(db, { pageSize: "1" }, hidden)).items[0]?.key;
+	if (!key) return null;
+	const [added] = await db
+		.select({ key: item.key, title: item.title, dateAdded: item.dateAdded, doi: item.DOI })
+		.from(item)
+		.where(and(eq(item.key, key), publicParentVisibility(db, hidden)))
+		.limit(1);
+	if (!added?.dateAdded) return null;
+	const when = added.dateAdded.toISOString();
+	return { key: added.key, title: added.title || added.key, reviewed: false, submittedAt: when, reviewer: null, publishedAt: when, doi: normalizeDoi(added.doi) };
 }
 
 /** First pages of the given publications' PDFs, from their attachments. */
