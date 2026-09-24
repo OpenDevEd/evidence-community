@@ -7,27 +7,32 @@ vi.mock("@/lib/actions", () => ({ areLinksValid: vi.fn() }));
 vi.mock("next/cache", () => ({ cacheLife() {}, cacheTag() {} }));
 vi.mock("@/app/api/cache", () => ({ getCachedCollections: async () => [] }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
-const service = vi.hoisted(() => ({ search: vi.fn(), getDisplayedAttributes: async () => ["*"] }));
+const service = vi.hoisted(() => ({
+	search: vi.fn(),
+	getDisplayedAttributes: async () => ["*"],
+	getStats: async () => ({ fieldDistribution: { key: 1, title: 1, attachmentsData: 1, "attachmentsData.key": 1, fullTextPDFs: 1, "fullTextPDFs.fullTextPDF.text": 1 } }),
+}));
 vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: service }) }));
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getPublicItems } from "@/lib/search";
 import { POST as readBatch } from "@/app/api/items/batch/route";
 
-it("removes hidden and deleted attachments from full search results used by exports", async () => {
+it("removes hidden and deleted attachments, file note text and PDF full text from full search results", async () => {
 	const config = libraryConfigSchema.parse(maximalLibraryConfig);
 	config.content.tags.hidden = ["hidden"];
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
 	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
 		key: "PUBAAAAA", title: "Published record", attachmentsData: [
-			{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf" },
+			{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf", itemType: "Attachment", note: "<p>Kept on the file</p>" },
 			{ key: "HIDDENAA", deleted: 0, tags: ["Hidden", "_r:doi"], url: "https://doi.org/10.5555/hidden" },
 			{ key: "DELETEDD", deleted: 1, tags: [], url: "https://example.org/deleted.pdf" },
 		],
 	}] });
 	const result = await getPublicItems({}, { includeHeavyFields: true });
 	expect(result.items[0].attachmentsData).toEqual([
-		{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf" },
+		{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf", itemType: "Attachment", note: null },
 	]);
+	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toEqual(["key", "title", "attachmentsData"]);
 });
 
 it("gives list results only the attachments the item page shows, without unpublished note text", async () => {

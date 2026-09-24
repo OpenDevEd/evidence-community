@@ -7,7 +7,11 @@ vi.mock("next/cache", () => ({ cacheLife() {}, cacheTag() {} }));
 vi.mock("@/app/api/auth/[...nextauth]/config", () => ({ auth: vi.fn() }));
 vi.mock("@/app/api/cache", () => ({ getCachedCollections: async () => [] }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
-const service = vi.hoisted(() => ({ search: vi.fn(), getDisplayedAttributes: async () => ["*"] }));
+const service = vi.hoisted(() => ({
+	search: vi.fn(),
+	getDisplayedAttributes: async () => ["*"],
+	getStats: async () => ({ fieldDistribution: { key: 1, title: 1, attachmentsData: 1, "attachmentsData.key": 1, fullTextPDFs: 1, "fullTextPDFs.fullTextPDF.text": 1 } }),
+}));
 vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: service }) }));
 import { getLibraryConfig } from "@/config/library-config/server";
 import * as actions from "@/lib/actions";

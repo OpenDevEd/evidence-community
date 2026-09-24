@@ -11,6 +11,7 @@ import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
+import { getMainAttributes, LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
 
 export type CitationYearData = {
 	year: string;
@@ -35,7 +36,9 @@ async function getSourceItem(
 ): Promise<Item | null> {
 	try {
 		const { index } = await getMeilisearchForConfig(libraryConfig);
-		const result = await index.getDocument(key);
+		const result = await index.getDocument(key, {
+			fields: await getMainAttributes(libraryConfig),
+		});
 		const { tags } = libraryConfig.content;
 
 		if (!result || result.deleted || hasAnyTag(result.tags, tags.hidden)) {
@@ -80,12 +83,13 @@ async function getCitingItems(
 			limit: perPage,
 			offset: offset,
 			facets: ["country", "year"],
+			attributesToRetrieve: [...LIST_ITEM_FIELDS],
 		});
 
 		const { tags } = libraryConfig.content;
 		const filteredItems = (result.hits as Item[])
 			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
-			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }));
+			.map((item) => toLightweightItem(item, tags) as Item);
 
 		return {
 			items: filteredItems,

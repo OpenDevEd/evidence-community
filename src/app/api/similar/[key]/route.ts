@@ -9,7 +9,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { Item } from "@/app/api/item/types";
-import { filterPublicAttachments } from "@/lib/tags";
+import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
 
 // Meilisearch reports a missing embedder with the first code and a failing
 // embedding provider with the second. Both mean "not ready", not a bug.
@@ -129,10 +129,8 @@ export async function GET(
 		throw error;
 	}
 
-	const hits = (result.hits as Item[]).map((hit) => ({
-		...hit,
-		attachmentsData: filterPublicAttachments(hit.attachmentsData, config.content.tags),
-	}));
+	// Similar records open the item page from this copy, so they carry the same fields as list results.
+	const hits = (result.hits as Item[]).map((hit) => toLightweightItem(hit, config.content.tags));
 	return NextResponse.json({ ...result, hits }, {
 		headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
 	});
@@ -159,5 +157,6 @@ function searchSimilar(
 				: null,
 		].filter(Boolean) as string[],
 		limit: 6,
+		attributesToRetrieve: [...LIST_ITEM_FIELDS],
 	});
 }
