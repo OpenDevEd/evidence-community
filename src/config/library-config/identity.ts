@@ -18,7 +18,7 @@ export const LIBRARY_LOGO_SELECTOR = `[${LIBRARY_LOGO_DATA_ATTRIBUTE}]`;
 export function buildLibraryMetadata(
 	identity: LibraryIdentityConfig,
 ): Metadata {
-	const { assets, baseUrl, description, name, shortName } = identity;
+	const { assets, baseUrl, description, name, shortName, tagline } = identity;
 	const icons = [
 		...Array.from(new Set([assets.favicon, ...assets.icons])),
 		...(assets.faviconLight
@@ -38,7 +38,7 @@ export function buildLibraryMetadata(
 				]
 			: []),
 	];
-	const pageDescription = description ?? name;
+	const pageDescription = description ?? tagline ?? name;
 	const shareImages = assets.shareImage ? [assets.shareImage] : undefined;
 
 	return {

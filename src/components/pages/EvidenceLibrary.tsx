@@ -129,8 +129,6 @@ function SearchTabContent({
 }) {
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
-	const { identity } = useLibraryConfig();
-	const searchTitle = identity.tagline?.trim() || t("searchTitle");
 
 	const {
 		isOpen: isExploreOpen,
@@ -158,7 +156,7 @@ function SearchTabContent({
 						{t("goToFilters")}
 					</SkipLink>
 					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-						{header || (showHeader && <SearchTitle title={searchTitle} />)}
+						{header || (showHeader && <SearchTitle title={t("searchTitle")} />)}
 					</h1>
 					<Button
 						startContent={

@@ -17,9 +17,11 @@ import { homeRich } from "@/components/pages/HomeRichText";
 export async function generateMetadata(): Promise<Metadata> {
 	await connection();
 	const config = await getLibraryConfig();
+	const { description, name, tagline } = config.identity;
 	return {
-		title: config.identity.name,
-		description: config.identity.description ?? config.identity.name,
+		// The tagline tells search engines what the library holds.
+		title: tagline ? `${name}: ${tagline}` : name,
+		description: description ?? tagline ?? name,
 	};
 }
 
