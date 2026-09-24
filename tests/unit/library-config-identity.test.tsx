@@ -113,6 +113,21 @@ describe("runtime library identity", () => {
 		},
 	);
 
+	it.each([undefined, "", "  "])(
+		"describes the library by its tagline when its description is %j",
+		(description) => {
+			const identity = {
+				...minimalConfig.identity,
+				description,
+				tagline: "Research on education technology",
+			};
+
+			expect(buildLibraryMetadata(identity).description).toBe(
+				"Research on education technology",
+			);
+		},
+	);
+
 	it("renders different configured logo URLs and names from the same component", () => {
 		const minimalMarkup = renderIdentity(minimalConfig);
 		const maximalMarkup = renderIdentity(maximalConfig);

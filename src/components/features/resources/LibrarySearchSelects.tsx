@@ -122,10 +122,12 @@ export function ScopeComponent({
 			classNames={
 				!itemsContext.userData
 					? {
+							// On its own line (the map's list) the scope has the
+							// whole row, so its label is not cut short.
 							base: twMerge(
-								"lg:max-w-72 max-w-full",
-								itemsContext.config.interactionsStyle ===
-									"one-line" && "flex-1",
+								"max-w-full",
+								itemsContext.config.interactionsStyle !==
+									"one-line" && "lg:max-w-72",
 								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(

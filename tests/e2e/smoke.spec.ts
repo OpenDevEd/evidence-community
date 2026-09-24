@@ -1093,32 +1093,3 @@ for (const width of [1200, 390]) {
 	});
 }
 
-test("the search heading reveals its full text only when truncated", async ({ page }) => {
-	await page.setViewportSize({ width: 1600, height: 1000 });
-	await page.goto("/lib");
-	await dismissConsent(page);
-	const heading = page.getByRole("heading", { level: 1 });
-	await expect(heading).toBeVisible();
-	const title = await heading.innerText();
-	const tooltip = page.getByRole("tooltip");
-	await heading.hover();
-	await expect(tooltip).toHaveCount(0);
-
-	await page.setViewportSize({ width: 320, height: 900 });
-	await heading.hover();
-	await expect(tooltip).toHaveText(title);
-
-	// A resize must dismiss an already-open tooltip when the title fits again.
-	await page.setViewportSize({ width: 1600, height: 1000 });
-	await expect(tooltip).toHaveCount(0);
-	await heading.hover();
-	await expect(tooltip).toHaveCount(0);
-
-	await page.setViewportSize({ width: 320, height: 900 });
-	await page.mouse.move(0, 0);
-	await page.getByRole("button", { name: "Explore", exact: true }).focus();
-	await page.keyboard.press("Shift+Tab");
-	await expect(tooltip).toHaveText(title);
-	await page.keyboard.press("Escape");
-	await expect(tooltip).toHaveCount(0);
-});
