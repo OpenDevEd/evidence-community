@@ -158,6 +158,8 @@ const config: Config = {
 			},
 			height: {
 				navbar: "6.5rem",
+				// The wide header while the chat is open: three quarters of it.
+				"navbar-split": "4.875rem",
 				"generative-modal": "45rem",
 				// The chat beside the results fills the viewport minus the
 				// header stack above it, which differs per breakpoint.

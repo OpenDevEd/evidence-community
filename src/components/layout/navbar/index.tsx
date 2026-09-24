@@ -138,6 +138,12 @@ export default function Navbar() {
 					chatEngaged && "lg:h-14 lg:py-2",
 					styleVariant === "wide" &&
 						"bg-transparent max-w-site mx-auto xl:px-14",
+					// The small style shrinks by scaling the whole header; the
+					// wide band must stay full width, so its bar loses height
+					// instead, down to the same three quarters.
+					chatEngaged &&
+						styleVariant === "wide" &&
+						"xl:h-navbar-split xl:py-4",
 					// When the search bar is docked beneath the navbar (non-wide
 					// style), square the bottom so the two read as one unit.
 					styleVariant !== "wide" &&

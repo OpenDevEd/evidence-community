@@ -508,12 +508,16 @@ function MainContent() {
 
 export default function EvidenceLibrary() {
 	const { engaged } = useInlineChatLayout();
+	const { theme } = useLibraryConfig();
 	return (
 		<PageContainer
 			className={twMerge(
 				"transition-page-space duration-split ease-split motion-reduce:transition-none",
 
 				engaged && "overflow-visible pt-4 lg:pt-5 xl:pt-0",
+				// The small header leaves this gap under itself as it scales
+				// down; the wide one really shrinks, so the page keeps it.
+				engaged && theme.layout === "wide" && "xl:pt-split",
 			)}
 		>
 			<div className="flex gap-[var(--library-gap)] [--library-gap:2rem] xl:[--library-gap:2.5rem] flex-col lg:flex-row lg:[container-type:inline-size]">
