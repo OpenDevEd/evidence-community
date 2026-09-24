@@ -31,7 +31,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
 import type { ListItem } from "@/app/api/item/types";
 import HomeMap, { type MapShape } from "./HomeMap";
-import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, Layers01Icon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, Layers01Icon, Location01Icon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
 // Below the fold and heavy: the citation formatter with its styles, and the listing's result card. They load when the
@@ -634,8 +634,13 @@ function EditorMarquee({ editors }: { editors: NonNullable<HomeContent["editors"
 					<AuthorAvatar src={editor.photo} alt="" size="lg" className="shrink-0" />
 					<span className="whitespace-nowrap">
 						<span className="block font-heading text-lg font-semibold leading-tight">{editor.name}</span>
-						{editor.title && <span className="mt-1 block text-sm opacity-75">{editor.title}</span>}
-						{editor.location && <span className="block text-sm opacity-75">{editor.location}</span>}
+						{/* One line under the name, so everyone stands the same height; the place is quieter than the role. */}
+						{(editor.title || editor.location) && (
+							<span className="mt-1 flex items-center gap-3">
+								{editor.title && <span className="text-sm opacity-90">{editor.title}</span>}
+								{editor.location && <span className="inline-flex items-center gap-1 text-xs opacity-75"><HugeiconsIcon icon={Location01Icon} aria-hidden size={13} />{editor.location}</span>}
+							</span>
+						)}
 					</span>
 				</li>
 			))}
