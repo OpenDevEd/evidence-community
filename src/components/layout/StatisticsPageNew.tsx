@@ -20,6 +20,7 @@ import {
 	ResearchTopics,
 	CitationsByYear,
 } from "@/components/statistics";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 type StatisticsPageProps = {
 	stats: ComprehensiveStats;
@@ -43,6 +44,7 @@ const itemVariants = {
 export default function StatisticsPage({ stats }: StatisticsPageProps) {
 	"use no memo";
 	const t = useTranslations("ui");
+	const { topics } = useLibraryConfig();
 	const citationMeasureLabel = (
 		option: (typeof stats.citationMeasure.options)[number],
 	) =>
@@ -116,7 +118,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 					<CitationsByYear 
 						citationsByYear={stats.citationsByYear}
 						institutionsByYear={stats.institutionsByYear}
-						topicsByYear={stats.topicsByYear}
+						topicsByYear={topics.enabled ? stats.openAlexTopicsByYear : []}
 					/>
 				)}
 
@@ -169,9 +171,18 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				{/* Research Topics: the collections the library shows; none shown, no section. */}
 				{hasRows(stats.topicStats) && stats.topicOverview && (
 					<ResearchTopics 
+						kind="collections"
 						topicStats={stats.topicStats}
 						topicOverview={stats.topicOverview}
-						topicsByYear={stats.topicsByYear}
+						topicsByYear={stats.collectionsByYear}
+					/>
+				)}
+
+				{topics.enabled && hasRows(stats.openAlexTopicStats) && stats.openAlexTopicOverview && (
+					<ResearchTopics
+						topicStats={stats.openAlexTopicStats}
+						topicOverview={stats.openAlexTopicOverview}
+						topicsByYear={stats.openAlexTopicsByYear}
 					/>
 				)}
 

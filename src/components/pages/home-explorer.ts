@@ -27,7 +27,7 @@ function yearSeries(data: Pick<HomeData, "years">, thisYear: number) {
 /** The rows of every view that can open a filtered listing; years run newest first and open on the busiest one. */
 export function listedRows(data: Figures, { filters, search }: Listing, today: string) {
 	/** The listing's query for one of its filters, or nothing where the library has that filter switched off. */
-	const listing = (on: boolean, params: { collections?: string[]; country?: string[]; institution?: string[]; range?: string }) => (on ? serializeSearchParams(params).slice(1) : undefined);
+	const listing = (on: boolean, params: { collections?: string[]; country?: string[]; institution?: string[]; range?: string; topics?: string[] }) => (on ? serializeSearchParams(params).slice(1) : undefined);
 	const series = yearSeries(data, Number(today.slice(0, 4)));
 	const peak = series.reduce((best, point, index) => (point.value > (series[best]?.value ?? -1) ? index : best), 0);
 	return {
@@ -37,12 +37,12 @@ export function listedRows(data: Figures, { filters, search }: Listing, today: s
 		years: series.map((point): Row => ({ name: point.label, count: point.value, filter: listing(filters.years.enabled, { range: point.label }) })).reverse(),
 		countries: Object.entries(data.countries).sort((a, b) => b[1] - a[1]).map(([code, count]): Row => ({ name: regionNames.of(code) ?? code, count, flag: code, filter: listing(search.country && Boolean(data.countryPaths[code]), { country: [data.countryPaths[code]!] }) })),
 		collections: data.collections.map((collection): Row => ({ name: collection.title, count: collection.count, filter: listing(true, { collections: [collection.key] }) })),
-		topics: data.topics.map((row): Row => ({ ...row, filter: listing(true, { collections: [row.key] }) })),
+		topics: data.topics.map((row): Row => ({ ...row, filter: listing(true, { topics: [row.key] }) })),
 		institutions: data.institutions.map((row): Row => ({ ...row, filter: listing(filters.institution.mode !== "hidden", { institution: [row.name] }) })),
 	};
 }
 
-/** The filter of the row each view opens on, for the views that have one; a top-level topic is also a collection. */
+/** The filter of the row each view opens on, for the views that have one. */
 export function firstFilters(rows: ReturnType<typeof listedRows>) {
 	return [...new Set([rows.years[rows.busiest], rows.countries[0], rows.collections[0], rows.topics[0], rows.institutions[0]].flatMap((row) => (row?.filter && row.count > 0 ? [row.filter] : [])))];
 }

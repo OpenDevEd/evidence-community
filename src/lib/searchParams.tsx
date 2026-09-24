@@ -30,6 +30,9 @@ export const searchParamsLoader = {
 	country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
+	topics: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+		scroll: true,
+	}),
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),

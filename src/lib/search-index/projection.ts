@@ -30,6 +30,7 @@ import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { readPublicIdentifiers } from "@/lib/publication/public-identifiers";
+import { resolveTopicAncestry, resolveTopicNodes } from "@/lib/topics/catalog";
 
 export type SearchProjectionEvent = {
 	entityKey: string;
@@ -47,6 +48,8 @@ export type ItemSearchDocument = Record<string, unknown> & {
 	sourceExternalScopeKey: string | null;
 	sourceRecordKey: string;
 	tags: string[];
+	topicAncestors: string[];
+	topics: string[];
 };
 
 export type SearchProjectionPlan = {
@@ -54,9 +57,20 @@ export type SearchProjectionPlan = {
 	documents: ItemSearchDocument[];
 };
 
-type CollectionRow = Pick<typeof collection.$inferSelect, "key" | "parentCollection" | "deleted">;
+type CollectionRow = Pick<
+	typeof collection.$inferSelect,
+	"key" | "parentCollection" | "deleted"
+>;
 type ItemRow = typeof item.$inferSelect;
-export type PublicationProjectionConfig = LibraryServerConfig["services"]["publication"];
+export type PublicationProjectionConfig =
+	LibraryServerConfig["services"]["publication"];
+type SearchProjectionConfig = PublicationProjectionConfig | LibraryServerConfig;
+
+function isLibraryServerConfig(
+	config: SearchProjectionConfig,
+): config is LibraryServerConfig {
+	return "services" in config;
+}
 
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
@@ -285,11 +299,18 @@ async function resolveTopLevelItemKeys(
 
 async function buildSearchProjectionPlanForKeys(
 	database: SearchProjectionDatabase,
-	publication: PublicationProjectionConfig,
+	projectionConfig: SearchProjectionConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 	hiddenTags: readonly string[] = [],
+	catalogDatabase?: Database,
 ): Promise<SearchProjectionPlan> {
+	const config = isLibraryServerConfig(projectionConfig)
+		? projectionConfig
+		: null;
+	const publication: PublicationProjectionConfig = config
+		? config.services.publication
+		: (projectionConfig as PublicationProjectionConfig);
 	if (topLevelKeys.length === 0) {
 		return { deleteKeys: [], documents: [] };
 	}
@@ -323,12 +344,7 @@ async function buildSearchProjectionPlanForKeys(
 		...activeParentKeys,
 		...children.map((child) => child.key),
 	];
-	const [
-		tagRows,
-		membershipRows,
-		institutionRows,
-		identifiersByItem,
-	] =
+	const [tagRows, membershipRows, institutionRows, identifiersByItem] =
 		allDocumentItemKeys.length > 0
 			? await Promise.all([
 					database
@@ -359,7 +375,11 @@ async function buildSearchProjectionPlanForKeys(
 							asc(itemInstitution.itemKey),
 							asc(itemInstitution.institutionName),
 						),
-					readPublicIdentifiers(database, activeParents.map(({ item }) => item), publication),
+					readPublicIdentifiers(
+						database,
+						activeParents.map(({ item }) => item),
+						publication,
+					),
 				])
 			: [[], [], [], new Map()];
 
@@ -392,6 +412,33 @@ async function buildSearchProjectionPlanForKeys(
 		childrenByParent.set(child.parentItem, siblings);
 	}
 	const collectionsByKey = new Map(collections.map((row) => [row.key, row]));
+	const directTopicIds = uniqueSorted(
+		activeParents.flatMap(({ item: parent }) => parent.topics),
+	);
+	const topicNodes =
+		config?.topics.enabled && catalogDatabase && directTopicIds.length > 0
+			? await resolveTopicNodes(
+					await resolveTopicAncestry(directTopicIds, {
+						database: catalogDatabase,
+						config,
+					}),
+					{ database: catalogDatabase, config },
+				)
+			: [];
+	const topicsById = new Map(topicNodes.map((node) => [node.id, node]));
+	const topicAncestry = (topicIds: readonly string[]) => {
+		const ids = new Set<string>();
+		for (const topicId of topicIds) {
+			let current = topicsById.get(topicId);
+			while (current && !ids.has(current.id)) {
+				ids.add(current.id);
+				current = current.parent
+					? topicsById.get(current.parent)
+					: undefined;
+			}
+		}
+		return uniqueSorted(ids);
+	};
 
 	const documents = activeParents.map(
 		({ item: parent, provider, sourceExternalScopeKey }) => {
@@ -399,15 +446,13 @@ async function buildSearchProjectionPlanForKeys(
 				collectionsByItem.get(parent.key) ?? [],
 			);
 			const parentChildren = childrenByParent.get(parent.key) ?? [];
-			const attachments = parentChildren.map(
-				(child) => ({
-					...cleanRow({
-						...child,
-						fullTextPDF: null,
-					}),
-					tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
+			const attachments = parentChildren.map((child) => ({
+				...cleanRow({
+					...child,
+					fullTextPDF: null,
 				}),
-			);
+				tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
+			}));
 			const fullTextPDFs = parentChildren
 				.filter((child) => child.deleted !== 1)
 				.map((child) => ({
@@ -420,9 +465,21 @@ async function buildSearchProjectionPlanForKeys(
 			return {
 				...cleanRow(parent),
 				DOI: resolvePublicDoi({
-					...parent, publicationIdentifiers,
-					attachments: parentChildren.filter(child => child.deleted !== 1 && !hasAnyTag(tagsByItem.get(child.key), hiddenTags))
-						.map(child => ({ url: child.url, tags: tagsByItem.get(child.key) })),
+					...parent,
+					publicationIdentifiers,
+					attachments: parentChildren
+						.filter(
+							(child) =>
+								child.deleted !== 1 &&
+								!hasAnyTag(
+									tagsByItem.get(child.key),
+									hiddenTags,
+								),
+						)
+						.map((child) => ({
+							url: child.url,
+							tags: tagsByItem.get(child.key),
+						})),
 				}),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
@@ -452,6 +509,8 @@ async function buildSearchProjectionPlanForKeys(
 					related: [],
 				},
 				metadataSearch: metadataSearchValues(parent),
+				topicAncestors: topicAncestry(parent.topics),
+				topics: uniqueSorted(parent.topics),
 				key: parent.key,
 				provider,
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
@@ -472,7 +531,7 @@ async function buildSearchProjectionPlanForKeys(
 
 async function* plansForKeys(
 	database: Database,
-	publication: PublicationProjectionConfig,
+	projectionConfig: SearchProjectionConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 	batchSize: number,
@@ -485,9 +544,11 @@ async function* plansForKeys(
 			(transaction) =>
 				buildSearchProjectionPlanForKeys(
 					transaction,
-					publication,
+					projectionConfig,
 					keyChunk,
 					collections,
+					[],
+					database,
 				),
 		);
 	}
@@ -495,7 +556,7 @@ async function* plansForKeys(
 
 export async function* generateSearchProjectionPlans(
 	database: Database,
-	publication: PublicationProjectionConfig,
+	projectionConfig: SearchProjectionConfig,
 	events: readonly SearchProjectionEvent[],
 	batchSize = 500,
 	signal?: AbortSignal,
@@ -528,12 +589,19 @@ export async function* generateSearchProjectionPlans(
 				};
 			},
 		);
-	yield* plansForKeys(database, publication, topLevelKeys, collections, batchSize, signal);
+	yield* plansForKeys(
+		database,
+		projectionConfig,
+		topLevelKeys,
+		collections,
+		batchSize,
+		signal,
+	);
 }
 
 export async function* generateFullSearchProjectionPlans(
 	database: Database,
-	publication: PublicationProjectionConfig,
+	projectionConfig: SearchProjectionConfig,
 	batchSize = 500,
 	signal?: AbortSignal,
 ) {
@@ -555,7 +623,7 @@ export async function* generateFullSearchProjectionPlans(
 		);
 	yield* plansForKeys(
 		database,
-		publication,
+		projectionConfig,
 		topLevelRows.map(({ key }) => key),
 		collections,
 		batchSize,
@@ -582,13 +650,18 @@ export async function readPublicItems(
 	config: LibraryServerConfig,
 ): Promise<Item[]> {
 	if (!keys.length) return [];
-	return database.transaction(async (transaction) => {
-		const { rows: collections } = await transaction.execute<CollectionRow>(sql`
+	return database.transaction(
+		async (transaction) => {
+			const { rows: collections } =
+				await transaction.execute<CollectionRow>(sql`
 			WITH RECURSIVE ancestors AS (
 				SELECT current.key, current."parentCollection", current.deleted
 				FROM ${collection} current
 				JOIN ${itemToCollection} membership ON membership."collectionKey" = current.key
-				WHERE membership."itemKey" IN (${sql.join(keys.map((key) => sql`${key}`), sql`, `)})
+				WHERE membership."itemKey" IN (${sql.join(
+					keys.map((key) => sql`${key}`),
+					sql`, `,
+				)})
 				UNION
 				SELECT parent.key, parent."parentCollection", parent.deleted
 				FROM ${collection} parent
@@ -596,16 +669,38 @@ export async function readPublicItems(
 			)
 			SELECT * FROM ancestors
 		`);
-		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, keys, collections, config.content.tags.hidden);
-		const documents = new Map(plan.documents.map((document) => [document.key, document]));
-		return keys.flatMap((key) => {
-			const document = documents.get(key);
-			if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return [];
-			const result = document as Item;
-			result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags);
-			const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
-			result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
-			return [result];
-		});
-	}, { isolationLevel: "repeatable read", accessMode: "read only" });
+			const plan = await buildSearchProjectionPlanForKeys(
+				transaction,
+				config,
+				keys,
+				collections,
+				config.content.tags.hidden,
+				database,
+			);
+			const documents = new Map(
+				plan.documents.map((document) => [document.key, document]),
+			);
+			return keys.flatMap((key) => {
+				const document = documents.get(key);
+				if (
+					!document ||
+					hasAnyTag(document.tags, config.content.tags.hidden)
+				)
+					return [];
+				const result = document as unknown as Item;
+				result.attachmentsData = filterPublicAttachments(
+					result.attachmentsData,
+					config.content.tags,
+				);
+				const attachmentKeys = new Set(
+					result.attachmentsData?.map((attachment) => attachment.key),
+				);
+				result.fullTextPDFs = result.fullTextPDFs?.filter(
+					(attachment) => attachmentKeys.has(attachment.key),
+				);
+				return [result];
+			});
+		},
+		{ isolationLevel: "repeatable read", accessMode: "read only" },
+	);
 }

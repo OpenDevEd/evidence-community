@@ -133,6 +133,9 @@ export default function ExploreModal({
 								handleCountrySelect={
 									itemsContext.handleCountrySelect
 								}
+								handleTopicsChange={
+									itemsContext.handleTopicsChange
+								}
 							/>
 						</div>
 					</>

@@ -26,6 +26,7 @@ type ResearchTopicsProps = {
 	topicStats: TopicStats[];
 	topicOverview: TopicOverview;
 	topicsByYear?: TopicYearStats[];
+	kind?: "collections" | "topics";
 };
 
 const itemVariants = {
@@ -33,7 +34,7 @@ const itemVariants = {
 	show: { y: 0, opacity: 1 },
 };
 
-export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: ResearchTopicsProps) {
+export function ResearchTopics({ topicStats, topicOverview, topicsByYear, kind = "topics" }: ResearchTopicsProps) {
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
 	const [topicsPage, setTopicsPage] = useState(1);
@@ -205,7 +206,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 	const topicsPages = Math.ceil(filteredTopics.length / rowsPerPage);
 
 	return (
-		<SectionCard title={t("researchTopics")} icon={TagsIcon}>
+		<SectionCard title={kind === "collections" ? t("collections") : t("researchTopics")} icon={TagsIcon}>
 			<div className="space-y-8">
 				{/* Topic Overview Stats */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -214,7 +215,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 							{yearFilteredTopics.length.toLocaleString()}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("totalTopics")}
+							{kind === "collections" ? t("collections") : t("totalTopics")}
 						</div>
 						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
 							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("allHierarchicalLevels")}
@@ -225,10 +226,10 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 							{yearFilteredTopics.filter(t => t.level === 1).length.toLocaleString()}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("topLevelTopics")}
+							{kind === "collections" ? "Top-level collections" : t("topLevelTopics")}
 						</div>
 						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("mainResearchAreas")}
+							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : kind === "collections" ? "Highest collection level" : t("mainResearchAreas")}
 						</div>
 					</motion.div>
 					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
@@ -251,10 +252,10 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 								: topicOverview.avgItemsPerTopic}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("avgItemsPerTopic")}
+							{kind === "collections" ? "Average items per collection" : t("avgItemsPerTopic")}
 						</div>
 						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("publicationsPerTopic")}
+							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : kind === "collections" ? "Publications per collection" : t("publicationsPerTopic")}
 						</div>
 					</motion.div>
 				</div>
@@ -265,7 +266,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 							<HugeiconsIcon icon={Layers01Icon} className="text-accent" />
-							{t("topicDistributionByLevel")}
+							{kind === "collections" ? "Collection distribution by level" : t("topicDistributionByLevel")}
 						</h3>
 						<Card color="card" className="p-6">
 							<div className="h-96">
@@ -299,7 +300,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 											labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
 											itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
 											formatter={(value: number, name: string, props: any) => [
-												`${value.toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
+												`${value.toLocaleString()} ${kind === "collections" ? t("collections").toLowerCase() : t("topicsLowercase")} (${props.payload.percentage}%)`,
 												t("levelNumber", { number: props.payload.level })
 											]}
 										/>
@@ -314,7 +315,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 					<motion.div variants={itemVariants} className="space-y-4">
 						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 							<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
-							{t("topTopicsByImpact")}
+							{kind === "collections" ? "Top collections by impact" : t("topTopicsByImpact")}
 						</h3>
 						<Card color="card" className="p-6">
 							<div className="space-y-4 h-96 overflow-y-auto">
@@ -379,7 +380,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 						<HugeiconsIcon icon={Bookmark02Icon} className="text-accent" />
-						{t("topLevelResearchAreas")}
+						{kind === "collections" ? "Top-level collections" : t("topLevelResearchAreas")}
 					</h3>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 						{yearFilteredTopics.filter(topic => topic.level === 1).slice(0, 12).map((topic, index) => (
@@ -408,7 +409,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 											</span>
 											<span>•</span>
 											<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-												{topic.children.length} {t("subtopicsLowercase")}
+												{topic.children.length} {kind === "collections" ? "child collections" : t("subtopicsLowercase")}
 											</span>
 											<span>•</span>
 											<span className="text-purple-600 dark:text-purple-400 font-medium">
@@ -434,18 +435,18 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 						<HugeiconsIcon icon={TagsIcon} className="text-accent" />
-						{t("allResearchTopics")}
+						{kind === "collections" ? t("collections") : t("allResearchTopics")}
 					</h3>
 					<div className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<Input
-								label={t("searchTopics")}
+								label={kind === "collections" ? t("searchCollections") : t("searchTopics")}
 								value={topicsSearch}
 								onChange={(e) => {
 									setTopicsSearch(e.target.value);
 									setTopicsPage(1);
 								}}
-								placeholder={t("searchByTopicNameOrPath")}
+								placeholder={kind === "collections" ? "Search by collection name or path" : t("searchByTopicNameOrPath")}
 								startContent={<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />}
 							/>
 							{topicsByYear && availableYears.length > 0 && (
@@ -509,12 +510,12 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 						</div>
 						<Table
 							color="statistics"
-							aria-label={t("topicsStatisticsTable")}
+							aria-label={kind === "collections" ? "Collection statistics" : t("topicsStatisticsTable")}
 							sortDescriptor={topicsSortDescriptor}
 							onSortChange={(descriptor: any) => setTopicsSortDescriptor(descriptor)}
 						>
 							<TableHeader>
-								<TableColumn key="topic" allowsSorting>{t("topicColumn")}</TableColumn>
+								<TableColumn key="topic" allowsSorting>{kind === "collections" ? t("collections") : t("topicColumn")}</TableColumn>
 								<TableColumn key="level" allowsSorting>{t("levelColumn")}</TableColumn>
 								<TableColumn key="itemCount" allowsSorting>{t("itemsColumn")}</TableColumn>
 								<TableColumn key="totalCitations" allowsSorting>{t("citationsColumn")}</TableColumn>

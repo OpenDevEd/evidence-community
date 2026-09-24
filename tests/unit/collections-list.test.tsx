@@ -25,6 +25,7 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 			institution: { mode: "hidden", label: "Institutions" },
 		},
 		institutions: [],
+		topics: { enabled: false },
 	}),
 }));
 
@@ -66,6 +67,7 @@ describe("collection choices for filtered results", () => {
 			selectedCollections={[]} range="" queryParams={loadSearchParams({})}
 			handleCheckboxChange={vi.fn()} handleCountrySelect={vi.fn()}
 			handleRangeChange={vi.fn()} handleInstitutionSelect={vi.fn()}
+			handleTopicsChange={vi.fn()}
 		/>));
 	}
 

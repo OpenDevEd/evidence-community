@@ -20,6 +20,7 @@ import {
 	getCollaborationStats,
 	getTopicStats,
 	getTopicStatsByYear,
+	getOpenAlexTopicStats,
 	getCitationsByYear,
 } from "./index";
 import { withMeilisearchCache } from "@/lib/cache-utils";
@@ -31,7 +32,7 @@ import type { Collection } from "@/app/api/collections/types";
 import type { ShownCollections } from "./topic-stats";
 
 /** Part of the cache key: raise it when the statistics change what they count, so a deployment never serves figures cached by the code before it. */
-const STATISTICS_VERSION = 5;
+const STATISTICS_VERSION = 6;
 
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
@@ -47,7 +48,10 @@ export async function getComprehensiveStats(
 	// No fallback: statistics computed without the collections would be cached with every topic missing.
 	const shown = shownCollections(await getCachedCollections(config));
 	// Topics are named from the shown collections, so renaming or moving one counts afresh.
-	const collectionsFingerprint = createHash("sha256").update(JSON.stringify([...shown])).digest("hex").slice(0, 16);
+	const collectionsFingerprint = createHash("sha256")
+		.update(JSON.stringify([...shown]))
+		.digest("hex")
+		.slice(0, 16);
 	const stats = await withMeilisearchCache(
 		config,
 		`${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${collectionsFingerprint}-${measure.key}`,
@@ -71,7 +75,8 @@ export async function getComprehensiveStats(
 				authorCollaborationStats,
 				detailedAuthorStats,
 				topicData,
-				topicsByYear,
+				collectionsByYear,
+				openAlexTopicData,
 				citationsByYear,
 			] = await Promise.all([
 				getInstitutionStats(db, measure, hidden),
@@ -91,16 +96,22 @@ export async function getComprehensiveStats(
 				getDetailedAuthorStats(db, measure, hidden),
 				getTopicStats(db, measure, shown, hidden),
 				getTopicStatsByYear(db, measure, shown, hidden),
+				getOpenAlexTopicStats(db, config, measure, hidden),
 				getCitationsByYear(db, measure, hidden),
 			]);
 
-			const collaborationStats = await getCollaborationStats(db, authorCountries, hidden);
+			const collaborationStats = await getCollaborationStats(
+				db,
+				authorCountries,
+				hidden,
+			);
 
 			return {
 				computedAt: new Date().toISOString(),
 				institutions,
 				institutionsByYear,
-				topicsByYear,
+				collectionsByYear,
+				openAlexTopicsByYear: openAlexTopicData.topicsByYear,
 				availableYears,
 				itemTypes,
 				yearDistribution,
@@ -120,6 +131,8 @@ export async function getComprehensiveStats(
 				recentActivity,
 				topicStats: topicData.topicStats,
 				topicOverview: topicData.topicOverview,
+				openAlexTopicStats: openAlexTopicData.topicStats,
+				openAlexTopicOverview: openAlexTopicData.topicOverview,
 				citationsByYear,
 			};
 		},
@@ -135,12 +148,24 @@ export async function getComprehensiveStats(
  * named by its configured title; the hierarchy copies that title onto every collection below it, so those go by their
  * own names.
  */
-function shownCollections(collections: readonly Collection[]): ShownCollections {
+function shownCollections(
+	collections: readonly Collection[],
+): ShownCollections {
 	// The cached collections are already flat, every level listed.
-	return new Map(collections.map((collection) => [collection.key, { title: publicTitle(collection), parent: collection.parentCollection || undefined }]));
+	return new Map(
+		collections.map((collection) => [
+			collection.key,
+			{
+				title: publicTitle(collection),
+				parent: collection.parentCollection || undefined,
+			},
+		]),
+	);
 }
 
 function publicTitle(collection: Collection) {
-	const title = collection.parentCollection ? collection.name : collection.title || collection.name;
+	const title = collection.parentCollection
+		? collection.name
+		: collection.title || collection.name;
 	return title || collection.key;
 }

@@ -50,7 +50,8 @@ const SWR_OPTIONS = {
  */
 export function useFilters() {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
-	const { features, filters, search } = useLibraryConfig();
+	const config = useLibraryConfig();
+	const { features, filters, search } = config;
 	const runtimeParams = useMemo(
 		() => ({
 			...params,
@@ -59,8 +60,9 @@ export function useFilters() {
 			institution:
 				filters.institution.mode === "hidden" ? [] : params.institution,
 			country: search.country ? params.country : [],
+			topics: config.topics.enabled ? params.topics : [],
 		}),
-		[filters, params, search],
+		[config.topics.enabled, filters, params, search],
 	);
 
 	// Raw search params, only needed downstream for atom-feed serialization.
@@ -81,10 +83,11 @@ export function useFilters() {
 	// and map listings, or anywhere the navbar search (with its Explore button)
 	// is shown. Everywhere else we skip the request so lifting this provider to
 	// the whole app doesn't fan facet queries out across every page.
-	const filterSurfaceEnabled = !admin && (
-		normalizedPathname === "/lib" ||
-		normalizedPathname.startsWith("/map") ||
-		isLibraryFeatureEnabled(features, "navbarSearch"));
+	const filterSurfaceEnabled =
+		!admin &&
+		(normalizedPathname === "/lib" ||
+			normalizedPathname.startsWith("/map") ||
+			isLibraryFeatureEnabled(features, "navbarSearch"));
 
 	const { data: noteData, isLoading: isNoteLoading } =
 		useSWR<CollectionNoteGetResponse>(
@@ -208,6 +211,11 @@ export function useFilters() {
 		[params.country, setParams],
 	);
 
+	const handleTopicsChange = useCallback(
+		(topics: string[]) => setParams({ topics, page: 1 }),
+		[setParams],
+	);
+
 	const handleClearFilters = useCallback(() => {
 		setParams({
 			author: "",
@@ -215,6 +223,7 @@ export function useFilters() {
 			country: [],
 			collections: [],
 			range: "",
+			topics: [],
 		});
 	}, [setParams]);
 
@@ -228,7 +237,11 @@ export function useFilters() {
 		data: collectionsData,
 		error: collectionsError,
 		isLoading: isCollectionsLoading,
-	} = useSWR<CollectionsGetResponse>(admin ? null : "/collections", fetcher, SWR_OPTIONS);
+	} = useSWR<CollectionsGetResponse>(
+		admin ? null : "/collections",
+		fetcher,
+		SWR_OPTIONS,
+	);
 
 	const selectedCollections = runtimeParams.collections;
 
@@ -277,6 +290,7 @@ export function useFilters() {
 		handleAuthorSelect,
 		handleInstitutionSelect,
 		handleCountrySelect,
+		handleTopicsChange,
 		handleClearFilters,
 		handleCheckboxChange,
 		collectionsData,

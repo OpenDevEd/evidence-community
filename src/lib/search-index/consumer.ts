@@ -38,6 +38,7 @@ import {
 	type SearchEmbedderConfiguration,
 } from "./embedder-settings";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -56,7 +57,7 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
-	publication: PublicationProjectionConfig;
+	publication: PublicationProjectionConfig | LibraryServerConfig;
 	batchClient?: Meilisearch["batches"];
 	database: Database;
 	heartbeatIntervalMs?: number;
@@ -952,6 +953,7 @@ export async function ensureSearchIndex(
 				sortFacetValuesBy: {
 					collectionsAncestry: "count",
 					country: "count",
+					topicAncestors: "count",
 					[INSTITUTION_FILTER_FIELD]: "count",
 				},
 			},
@@ -977,6 +979,7 @@ export async function ensureSearchIndex(
 						"fullNames",
 						"collections",
 						"collectionsAncestry",
+						"topicAncestors",
 						"key",
 						"provider",
 						"sourceConnectionKey",
@@ -1041,7 +1044,7 @@ export async function applySearchIndexEmbedder(
 export async function rebuildSearchIndex(
 	database: Database,
 	service: MeilisearchService,
-	publication: PublicationProjectionConfig,
+	publication: PublicationProjectionConfig | LibraryServerConfig,
 	options: {
 		maxDocumentBatchBytes?: number;
 		signal?: AbortSignal;

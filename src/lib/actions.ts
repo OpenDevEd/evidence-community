@@ -25,7 +25,12 @@ import {
 	COUNTRY_HIERARCHY,
 	Entry,
 } from "@/constants/misc";
-import { getMainAttributes, publicFacetDistribution, resolveSearchRequest } from "@/lib/search";
+import {
+	getMainAttributes,
+	publicFacetDistribution,
+	resolveSearchRequest,
+	resolveSearchTopicNodes,
+} from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeSearchFacets } from "@/config/library-config/search";
 import { AIError } from "@/lib/ai/errors";
@@ -78,6 +83,7 @@ export async function getItems(
 	const facets = getRuntimeSearchFacets(
 		libraryConfig.search,
 		libraryConfig.filters,
+		libraryConfig.topics.enabled,
 	);
 
 	return searchIndex(
@@ -156,7 +162,11 @@ export async function convertItem(
 ) {
 	const itemsList = Array.isArray(item) ? item : [item];
 	const config = await getLibraryConfig();
-	return exportCitationItems(itemsList, format, config.citations.showUrl ? config.identity.baseUrl : undefined);
+	return exportCitationItems(
+		itemsList,
+		format,
+		config.citations.showUrl ? config.identity.baseUrl : undefined,
+	);
 }
 
 /**
@@ -171,6 +181,10 @@ async function searchIndex(
 ) {
 	const items = async () => {
 		const libraryConfig = await getLibraryConfig();
+		const topicNodes = await resolveSearchTopicNodes(
+			searchParams,
+			libraryConfig,
+		);
 		const {
 			attributesToSearchOn,
 			country,
@@ -179,7 +193,7 @@ async function searchIndex(
 			pageNum,
 			search,
 			sortOption,
-		} = resolveSearchRequest(searchParams, libraryConfig);
+		} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 		const { index: searchIndex } =
 			await getMeilisearchForConfig(libraryConfig);
 		const finalFilters = [...baseFilters, ...extraFilters];

@@ -27,11 +27,14 @@ import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getMeilisearchForConfig } from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
-import { meilisearchEquals } from "./meilisearch-filter";
+import { meilisearchEquals, meilisearchIn } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { itemPageAttachments } from "./attachment-visibility";
+import { getDatabaseForConfig } from "@/db";
+import { resolveTopicAncestry, resolveTopicNodes } from "./topics/catalog";
+import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
 
 /**
  * Result cards also open the item page before the full record loads, so they
@@ -63,6 +66,7 @@ export const LIST_ITEM_FIELDS = [...new Set([
 	"tags",
 	"collections",
 	"collectionsAncestry",
+	"topics",
 	"citationMetrics",
 	"createdAt",
 	"updatedAt",
@@ -198,7 +202,9 @@ export function resolveSearchRequest(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & {
 		search: RuntimeSearch;
+		topics?: { enabled: boolean };
 	},
+	topicNodes: readonly TopicSelectionNode[] = [],
 ) {
 	const pageNum = Math.max(1, Number(searchParams.page || 1));
 	const search = searchParams.search || "";
@@ -213,7 +219,7 @@ export function resolveSearchRequest(
 	const country = libraryConfig.search.country
 		? searchParams.country || []
 		: [];
-	const finalFilters = buildSearchFilters({
+	const facetFilters = buildSearchFilters({
 		author: searchParams.author || "",
 		collections: searchParams.collections || [],
 		country,
@@ -225,6 +231,13 @@ export function resolveSearchRequest(
 		),
 		scope,
 	});
+	const topicIds = libraryConfig.topics?.enabled
+		? selectionFrontier(searchParams.topics ?? [], topicNodes)
+		: [];
+	const finalFilters = [
+		...facetFilters,
+		...(topicIds.length ? [meilisearchIn("topicAncestors", topicIds)] : []),
+	];
 
 	const sortOption = resolveSortOption(
 		search,
@@ -243,9 +256,24 @@ export function resolveSearchRequest(
 		limitNum,
 		sortOption,
 		finalFilters,
+		facetFilters,
 		attributesToSearchOn,
 		country,
 	};
+}
+
+export async function resolveSearchTopicNodes(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	libraryConfig: LibraryServerConfig,
+) {
+	const selected = libraryConfig.topics.enabled
+		? (searchParams.topics ?? [])
+		: [];
+	if (!selected.length) return [];
+	const database = await getDatabaseForConfig(libraryConfig);
+	const context = { database, config: libraryConfig };
+	const ids = await resolveTopicAncestry(selected, context);
+	return resolveTopicNodes(ids, context);
 }
 
 export async function getPublicItems(
@@ -258,6 +286,10 @@ export async function getPublicItems(
 ): Promise<SearchItemsResult> {
 	const libraryConfig = await getLibraryConfig();
 	const displayedAttributes = await getMainAttributes(libraryConfig);
+	const topicNodes = await resolveSearchTopicNodes(
+		searchParams,
+		libraryConfig,
+	);
 	const {
 		search,
 		pageNum,
@@ -265,9 +297,11 @@ export async function getPublicItems(
 		sortOption,
 		finalFilters,
 		attributesToSearchOn,
-	} = resolveSearchRequest(searchParams, libraryConfig);
+	} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
-	const pageSize = options.limit ? Math.min(Math.max(1, Math.floor(options.limit)), limitNum) : limitNum;
+	const pageSize = options.limit
+		? Math.min(Math.max(1, Math.floor(options.limit)), limitNum)
+		: limitNum;
 	const page = options.limit ? 1 : pageNum;
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
@@ -335,12 +369,17 @@ export async function getPublicFacets(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 ): Promise<SearchFacetsResult> {
 	const libraryConfig = await getLibraryConfig();
-	const { search, finalFilters, attributesToSearchOn, country } =
-		resolveSearchRequest(searchParams, libraryConfig);
+	const topicNodes = await resolveSearchTopicNodes(
+		searchParams,
+		libraryConfig,
+	);
+	const { search, facetFilters, attributesToSearchOn, country } =
+		resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
 	const facets = getRuntimeSearchFacets(
 		libraryConfig.search,
 		libraryConfig.filters,
+		libraryConfig.topics.enabled,
 	);
 
 	const { index } = await getMeilisearchForConfig(libraryConfig);
@@ -350,7 +389,7 @@ export async function getPublicFacets(
 		limit: 0,
 		attributesToSearchOn,
 		facets,
-		filter: finalFilters,
+		filter: facetFilters,
 	});
 
 	return {
@@ -387,6 +426,10 @@ export async function getItemsPaginationMeta(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 ): Promise<SearchCountOnlyResult> {
 	const libraryConfig = await getLibraryConfig();
+	const topicNodes = await resolveSearchTopicNodes(
+		searchParams,
+		libraryConfig,
+	);
 	const {
 		search,
 		pageNum,
@@ -394,7 +437,7 @@ export async function getItemsPaginationMeta(
 		sortOption,
 		finalFilters,
 		attributesToSearchOn,
-	} = resolveSearchRequest(searchParams, libraryConfig);
+	} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 
