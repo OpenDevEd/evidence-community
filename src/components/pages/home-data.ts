@@ -151,7 +151,8 @@ async function latestJourney(followed: string | undefined, directory: LibraryHom
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
 	const hidden = config.content.tags.hidden;
-	return (await reviewedJourney(db, hidden, followed, directory)) ?? addedJourney(db, hidden, followed ?? (await listReviewedPublications(db, { pageSize: "1" }, hidden)).items[0]?.key);
+	// An unreviewed publication is followed only while it still has a public PDF, as the picker required.
+	return (await reviewedJourney(db, hidden, followed, directory)) ?? addedJourney(db, hidden, (await listReviewedPublications(db, followed ? { ids: followed } : { pageSize: "1" }, hidden)).items[0]?.key);
 }
 
 async function reviewedJourney(db: Database, hidden: readonly string[], followed: string | undefined, directory: LibraryHomeConfig["directory"]): Promise<HomeData["journey"]> {
