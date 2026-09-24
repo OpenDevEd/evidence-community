@@ -1,6 +1,6 @@
 # Self-hosted CI
 
-Last checked: **2026-08-30**
+Last checked: **2026-09-24**
 
 GitHub schedules and reports every CI job. An isolated Ubuntu 24.04 KVM guest
 named `new-el-ci` executes the jobs on the development Hetzner server.
@@ -11,16 +11,22 @@ No hosted runner service is part of the workflow.
 | Count | Label | CPU boundary | Memory limit | Work |
 |---:|---|---:|---:|---|
 | 4 | `evidence-library-light` | 2 fixed guest CPUs each | 8 GiB each | lint, types, schemas, unit tests, Fallow, the final result and release notes |
-| 1 | `evidence-library-runtime` | guest CPUs 8 through 23 | 32 GiB | Docker build and runtime acceptance |
+| 3 | `evidence-library-runtime` | guest CPUs 8 through 23 | 32 GiB each | Docker build and runtime acceptance |
 | 1 | `evidence-library-release` | guest CPUs 8 through 23 | 32 GiB | select, publish and record the exact green runtime commit |
 
 The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk. The
 four light runners use guest CPUs 0 through 7. The runtime and release users
-are both limited to CPUs 8 through 23, so their combined Docker work cannot use
+are all limited to CPUs 8 through 23, so their combined Docker work cannot use
 more than those 16 cores. Their runner listeners share the
 `evidence-library-heavy.slice` limit. Each user owns a separate rootless Docker
 daemon and persistent BuildKit builder: `evidence-library-runtime` for tests
 and `evidence-library-release` for publication.
+
+The runtime runners are `new-el-ci-runtime`, `-2` and `-3`, run by the users
+`gha-runtime`, `gha-runtime-2` and `gha-runtime-3`. A single runtime job used
+about 6 GiB of memory and left the guest CPUs more than 90% idle while its
+browser tests ran, so three can run at once. Acceptance ports are chosen at run
+time, so the jobs do not collide.
 
 Keep rootless Docker's user managers under `user.slice`. Moving either manager
 to the listener slice stops Docker from creating container scopes. Put the
