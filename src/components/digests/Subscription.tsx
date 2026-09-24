@@ -16,9 +16,10 @@ function PreferenceChoices({ value, onChange, schedule, busy }: { value: Prefere
     {([
       { key: "digest", icon: Calendar03Icon, label: "Library digests", help: schedule },
       { key: "instant", icon: BookOpen01Icon, label: "New publications", help: "Updates when publications are added" },
-    ] as const).map(option => <Switch key={option.key} name={option.key} aria-labelledby={`updates-${option.key}-label`} aria-describedby={`updates-${option.key}-help`} color="accent" isDisabled={busy} isSelected={value[option.key]} onValueChange={checked => onChange({ ...value, [option.key]: checked })} classNames={{base: "h-auto w-full max-w-none gap-3", label: "flex min-w-0 flex-1 items-center gap-3"}}>
-      <span className={muted}><Icon value={option.icon} /></span>
-      <span className="min-w-0 flex-1"><span id={`updates-${option.key}-label`} className="text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</span><span id={`updates-${option.key}-help`} className={`mt-0.5 block text-xs font-normal ${muted}`}>{option.help}</span></span>
+    ] as const).map(option => <Switch key={option.key} name={option.key} aria-labelledby={`updates-${option.key}-label`} aria-describedby={`updates-${option.key}-help`} color="accent" isDisabled={busy} isSelected={value[option.key]} onValueChange={checked => onChange({ ...value, [option.key]: checked })} classNames={{base: "h-auto w-full max-w-none items-start gap-3", wrapper: "mt-0.5", label: "min-w-0 flex-1"}}>
+      {/* The icon belongs to the title row; the description runs full width beneath it. */}
+      <span className="flex items-center gap-2"><span className={muted}><Icon value={option.icon} size={16} /></span><span id={`updates-${option.key}-label`} className="text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</span></span>
+      <span id={`updates-${option.key}-help`} className={`mt-1 block text-xs font-normal ${muted}`}>{option.help}</span>
     </Switch>)}
   </div>;
 }

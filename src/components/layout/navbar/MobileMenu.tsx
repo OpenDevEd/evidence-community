@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslations } from "next-intl";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import NavLinks, { useNavigationLinks } from "./NavLinks";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -55,7 +55,7 @@ export default function MobileMenu({
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
 			<div ref={triggerRef} className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
-				<Button variant="invisible" isDisabled={!hydrated} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onPress={toggleMenu} onKeyDown={closeOnEscape}>
+				<Button variant="invisible" {...untilReady(hydrated, toggleMenu)} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onKeyDown={closeOnEscape}>
 					<MenuIcon isOpen={isOpen} />
 				</Button>
 			</div>
@@ -111,4 +111,13 @@ export default function MobileMenu({
 			</ul>
 		</>
 	);
+}
+
+/**
+ * The menu button is not usable until the page is ready, without the `disabled` attribute: Firefox restores that
+ * attribute from the last visit on reload, before the page is ready, and hydration then fails. Until then it is out of
+ * the tab order and ignores presses.
+ */
+function untilReady(hydrated: boolean, onPress: () => void) {
+	return hydrated ? { onPress } : { "aria-disabled": true, tabIndex: -1, className: "pointer-events-none opacity-disabled" };
 }

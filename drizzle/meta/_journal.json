@@ -449,6 +449,13 @@
       "when": 1789642664282,
       "tag": "0063_author-affiliation-projection",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790165573129,
+      "tag": "0064_digest-edition-coverage",
+      "breakpoints": true
     }
   ]
 }

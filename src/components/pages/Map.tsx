@@ -17,7 +17,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Card } from "@/components/nextui/Card";
 import { SearchBar } from "@/components/features/SearchBar";
 import { SORT_OPTIONS } from "@/constants/items";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { BREAKPOINTS } from "@/../design-tokens";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";

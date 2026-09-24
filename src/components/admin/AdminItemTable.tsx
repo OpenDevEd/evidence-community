@@ -38,7 +38,7 @@ import {
 	type ReactNode,
 	type SetStateAction,
 } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";

@@ -1,4 +1,4 @@
-import { mkdir, rmdir, unlink } from "node:fs/promises";
+import { mkdir, readFile, rmdir, unlink } from "node:fs/promises";
 import { isIP } from "node:net";
 import path from "node:path";
 
@@ -9,6 +9,7 @@ import {
 } from "@/lib/runtime-routing";
 
 import { isCoolifyApplicationUuid } from "./coolify-application";
+import { LIBRARY_RELEASED_PAGE_PATH } from "./library-maintenance-http";
 
 const runtimeImagePattern =
 	/^ghcr\.io\/opendeved\/evidence-library-runtime@sha256:[a-f0-9]{64}$/u;
@@ -18,6 +19,20 @@ const guardStateDirectoryMode = 0o700;
 const guardConfigMode = 0o440;
 const routeMode = 0o600;
 const routeMarkerHeader = "X-OpenScholar-Route";
+const guardRoutePriority = 200_000;
+// Below the temporary guard so it wins during deployments, far above Coolify's
+// label routers, whose default priority is their rule length.
+const domainsRoutePriority = 100_000;
+// A host removed between deployments keeps its stale Coolify label router
+// until the container is recreated. This priority beats every label router,
+// whose rule is at most a few hundred characters, and loses to every custom
+// route, so re-adding the host here or on another library takes it back.
+const releasedRoutePriority = 50_000;
+// Keeps the route file bounded. The oldest released hosts drop out first and
+// fall back to their label router until the next deployment clears it.
+const maximumReleasedHosts = 20;
+// Under OpenScholar's 30-second client timeout. Docker calls time out at 5s.
+const domainsRouteDeadlineMs = 20_000;
 
 export type LibraryRuntimeRouteInput = {
 	applicationUuid: string;
@@ -49,6 +64,8 @@ export type LibraryRuntimeGuardDocker = {
 	readApplicationWeb: (
 		input: LibraryRuntimeRouteInput,
 	) => Promise<LibraryRuntimeGuardSource>;
+	/** Returns Coolify's Docker-provider service name for the platform address. */
+	readApplicationWebService: (applicationUuid: string) => Promise<string>;
 	readGuard: (
 		input: LibraryRuntimeRouteInput,
 	) => Promise<LibraryRuntimeRouteTarget | null>;
@@ -74,10 +91,26 @@ export type LibraryRuntimeGuardManagerOptions = {
 	maintenanceUrl: string;
 	routeDirectory: string;
 	stateDirectory: string;
+	now?: () => number;
 };
 
 function invalidInput(message: string): never {
 	throw new LibraryRuntimeGuardError("invalid_request", message, 400);
+}
+
+const dnsLabel = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+const dnsHostnamePattern = new RegExp(`^(?:${dnsLabel}\\.)+${dnsLabel}$`, "u");
+
+/**
+ * Traefik renders dynamic files as Go templates and puts hosts inside
+ * backtick rules, so only plain lowercase DNS names may reach a route.
+ */
+function isRouteHostname(hostname: string) {
+	return (
+		hostname.length <= 253 &&
+		dnsHostnamePattern.test(hostname) &&
+		isIP(hostname) === 0
+	);
 }
 
 function requireHttpsOrigin(value: string) {
@@ -92,7 +125,8 @@ function requireHttpsOrigin(value: string) {
 		url.href !== `${url.origin}/` ||
 		url.username ||
 		url.password ||
-		url.port
+		url.port ||
+		!isRouteHostname(url.hostname)
 	) {
 		return invalidInput("Library origins must be HTTPS origins.");
 	}
@@ -117,12 +151,33 @@ function requireMaintenanceUrl(value: string) {
 	return url.origin;
 }
 
-function requireRuntimeRouteIdentity(input: LibraryRuntimeRouteInput) {
-	if (!isCoolifyApplicationUuid(input.applicationUuid)) {
+function requireApplicationUuid(applicationUuid: string) {
+	if (!isCoolifyApplicationUuid(applicationUuid)) {
 		return invalidInput(
 			"applicationUuid must identify one Evidence Library.",
 		);
 	}
+	return applicationUuid;
+}
+
+function requireUniqueOrigins(origins: string[]) {
+	if (new Set(origins).size !== origins.length) {
+		return invalidInput("Library origins must be unique.");
+	}
+	return origins;
+}
+
+function requireCustomOrigins(customOrigins: readonly string[]) {
+	if (!Array.isArray(customOrigins) || customOrigins.length > 20) {
+		return invalidInput(
+			"customOrigins must contain at most twenty HTTPS origins.",
+		);
+	}
+	return customOrigins.map(requireHttpsOrigin);
+}
+
+function requireRuntimeRouteIdentity(input: LibraryRuntimeRouteInput) {
+	requireApplicationUuid(input.applicationUuid);
 	if (!commitPattern.test(input.commit)) {
 		return invalidInput("commit must be a lowercase Git commit.");
 	}
@@ -140,14 +195,7 @@ function requireRuntimeRouteIdentity(input: LibraryRuntimeRouteInput) {
 }
 
 function requireRuntimeRouteOrigins(input: LibraryRuntimeRouteInput) {
-	if (
-		!Array.isArray(input.customOrigins) ||
-		input.customOrigins.length > 20
-	) {
-		return invalidInput(
-			"customOrigins must contain at most twenty HTTPS origins.",
-		);
-	}
+	const customOrigins = requireCustomOrigins(input.customOrigins);
 	if (
 		!Array.isArray(input.platformOrigins) ||
 		input.platformOrigins.length < 1 ||
@@ -158,11 +206,7 @@ function requireRuntimeRouteOrigins(input: LibraryRuntimeRouteInput) {
 		);
 	}
 	const platformOrigins = input.platformOrigins.map(requireHttpsOrigin);
-	const customOrigins = input.customOrigins.map(requireHttpsOrigin);
-	const origins = [...platformOrigins, ...customOrigins];
-	if (new Set(origins).size !== origins.length) {
-		return invalidInput("Library origins must be unique.");
-	}
+	requireUniqueOrigins([...platformOrigins, ...customOrigins]);
 	return { customOrigins, platformOrigins };
 }
 
@@ -196,17 +240,46 @@ function requireRouteTarget(target: LibraryRuntimeRouteTarget) {
 	};
 }
 
-function hostRule(origins: readonly string[]) {
-	return origins
-		.map((origin) => `Host(\`${new URL(origin).hostname}\`)`)
+function hostnameRule(hostnames: readonly string[]) {
+	return hostnames
+		.map((hostname) => {
+			if (!isRouteHostname(hostname)) {
+				throw new Error("A route host is not a plain DNS name.");
+			}
+			return `Host(\`${hostname}\`)`;
+		})
 		.join(" || ");
 }
 
-function router(rule: string, service: string, middlewares: readonly string[]) {
+function hostRule(origins: readonly string[]) {
+	return hostnameRule(origins.map((origin) => new URL(origin).hostname));
+}
+
+// A malformed dynamic file stops Traefik from applying any later file change.
+function renderRouteFile(route: unknown) {
+	const content = `${JSON.stringify(route, null, 2)}\n`;
+	if (content.includes("{{") || content.includes("}}")) {
+		throw new Error("A route file must not contain template delimiters.");
+	}
+	return content;
+}
+
+const customDomainMiddlewares = [
+	"ode-shield-rate-direct@file",
+	"ode-shield-inflight@file",
+	"ode-library-shield@file",
+];
+
+function router(
+	rule: string,
+	service: string,
+	middlewares: readonly string[],
+	priority = guardRoutePriority,
+) {
 	return {
 		entryPoints: ["https"],
 		middlewares,
-		priority: 200_000,
+		priority,
 		rule,
 		service,
 		tls: { certResolver: "letsencrypt" },
@@ -256,7 +329,7 @@ export function renderLibraryRuntimeRoute(input: {
 		[`${serviceName}-http`]: {
 			entryPoints: ["http"],
 			middlewares: [`${serviceName}-https-redirect`],
-			priority: 200_000,
+			priority: guardRoutePriority,
 			rule: allRule,
 			service: "noop@internal",
 		},
@@ -265,12 +338,7 @@ export function renderLibraryRuntimeRoute(input: {
 		routers[`${serviceName}-custom-https`] = router(
 			customRule,
 			selectedService,
-			[
-				`${serviceName}-route-marker`,
-				"ode-shield-rate-direct@file",
-				"ode-shield-inflight@file",
-				"ode-library-shield@file",
-			],
+			[`${serviceName}-route-marker`, ...customDomainMiddlewares],
 		);
 	}
 	const services: Record<string, unknown> = {
@@ -320,28 +388,186 @@ export function renderLibraryRuntimeRoute(input: {
 			};
 		}
 	}
-	return `${JSON.stringify(
-		{
-			http: {
-				middlewares: {
-					[`${serviceName}-https-redirect`]: {
-						redirectScheme: { permanent: true, scheme: "https" },
-					},
-					[`${serviceName}-route-marker`]: {
-						headers: {
-							customResponseHeaders: {
-								[routeMarkerHeader]: `${input.commit}:${input.revision}`,
-							},
+	return renderRouteFile({
+		http: {
+			middlewares: {
+				[`${serviceName}-https-redirect`]: {
+					redirectScheme: { permanent: true, scheme: "https" },
+				},
+				[`${serviceName}-route-marker`]: {
+					headers: {
+						customResponseHeaders: {
+							[routeMarkerHeader]: `${input.commit}:${input.revision}`,
 						},
 					},
 				},
-				routers,
-				services,
+			},
+			routers,
+			services,
+		},
+	});
+}
+
+type DomainsRouteParts = {
+	middlewares: Record<string, unknown>;
+	routers: Record<string, unknown>;
+	services?: Record<string, unknown>;
+};
+
+const domainsRouteName = (applicationUuid: string) =>
+	`ode-el-${applicationUuid}-domains`;
+
+function customDomainsRoute(
+	name: string,
+	custom?: { dockerService: string; origins: readonly string[] },
+): DomainsRouteParts {
+	if (!custom) return { middlewares: {}, routers: {} };
+	const rule = hostRule(custom.origins);
+	return {
+		middlewares: {
+			[`${name}-https-redirect`]: {
+				redirectScheme: { permanent: true, scheme: "https" },
 			},
 		},
-		null,
-		2,
-	)}\n`;
+		routers: {
+			[`${name}-http`]: {
+				entryPoints: ["http"],
+				middlewares: [`${name}-https-redirect`],
+				priority: domainsRoutePriority,
+				rule,
+				service: "noop@internal",
+			},
+			[`${name}-https`]: router(
+				rule,
+				`${custom.dockerService}@docker`,
+				customDomainMiddlewares,
+				domainsRoutePriority,
+			),
+		},
+	};
+}
+
+function releasedHostsRoute(
+	name: string,
+	releasedHosts: readonly string[],
+	maintenanceUrl: string,
+): DomainsRouteParts {
+	if (releasedHosts.length === 0) return { middlewares: {}, routers: {} };
+	const rule = hostnameRule(releasedHosts);
+	const service = `${name}-released`;
+	const middlewares = [
+		"ode-shield-rate-direct@file",
+		"ode-shield-inflight@file",
+		`${name}-released-page`,
+	];
+	return {
+		middlewares: {
+			[`${name}-released-page`]: {
+				replacePath: { path: LIBRARY_RELEASED_PAGE_PATH },
+			},
+		},
+		routers: {
+			[`${name}-released-http`]: {
+				entryPoints: ["http"],
+				middlewares,
+				priority: releasedRoutePriority,
+				rule,
+				service,
+			},
+			[`${name}-released-https`]: router(
+				rule,
+				service,
+				middlewares,
+				releasedRoutePriority,
+			),
+		},
+		services: {
+			[service]: { loadBalancer: { servers: [{ url: maintenanceUrl }] } },
+		},
+	};
+}
+
+/**
+ * Renders the permanent custom-domain route. It sends custom hosts straight to
+ * Coolify's Docker-provider service, so attaching a domain needs no redeploy.
+ * Released hosts get the verifier's not-found page instead of the library.
+ */
+export function renderLibraryDomainsRoute(input: {
+	applicationUuid: string;
+	custom?: { dockerService: string; origins: readonly string[] };
+	maintenanceUrl: string;
+	releasedHosts: readonly string[];
+}) {
+	const name = domainsRouteName(input.applicationUuid);
+	const custom = customDomainsRoute(name, input.custom);
+	const released = releasedHostsRoute(
+		name,
+		input.releasedHosts,
+		input.maintenanceUrl,
+	);
+	return renderRouteFile({
+		http: {
+			middlewares: { ...custom.middlewares, ...released.middlewares },
+			routers: { ...custom.routers, ...released.routers },
+			...(released.services && { services: released.services }),
+		},
+	});
+}
+
+function unreadableDomainsRoute(): never {
+	throw new LibraryRuntimeGuardError(
+		"runtime_domains_route_unreadable",
+		"The custom-domain route was not changed because its current file could not be read.",
+		500,
+	);
+}
+
+const hostTermPattern = /^Host\(`([^`]+)`\)$/u;
+
+function ruleHostnames(rule: unknown) {
+	if (rule === undefined) return [];
+	if (typeof rule !== "string") return unreadableDomainsRoute();
+	return rule.split(" || ").map((term) => {
+		const hostname = hostTermPattern.exec(term)?.[1];
+		return hostname && isRouteHostname(hostname)
+			? hostname
+			: unreadableDomainsRoute();
+	});
+}
+
+// The file is the verifier's own JSON. Anything else means someone edited it,
+// so refuse rather than guess which hosts it routed.
+function parseDomainsRoute(content: string, name: string) {
+	let routers: Record<string, { rule?: unknown } | null> | null;
+	try {
+		routers = JSON.parse(content).http.routers;
+	} catch {
+		return unreadableDomainsRoute();
+	}
+	if (typeof routers !== "object" || routers === null) {
+		return unreadableDomainsRoute();
+	}
+	const custom = ruleHostnames(routers[`${name}-https`]?.rule);
+	const released = ruleHostnames(routers[`${name}-released-https`]?.rule);
+	if (custom.length + released.length === 0) return unreadableDomainsRoute();
+	return [...custom, ...released];
+}
+
+/** Lists previously routed hosts, newest release first. */
+async function readPreviousDomainHosts(filePath: string, name: string) {
+	const content = await readFile(filePath, "utf8").catch(
+		(error: NodeJS.ErrnoException) => {
+			if (error.code === "ENOENT") return null;
+			throw error;
+		},
+	);
+	return content === null ? [] : parseDomainsRoute(content, name);
+}
+
+async function unlinkIfPresent(filePath: string) {
+	await unlink(filePath).catch((error: NodeJS.ErrnoException) => {
+		if (error.code !== "ENOENT") throw error;
+	});
 }
 
 export function createLibraryRuntimeGuardManager(
@@ -350,6 +576,7 @@ export function createLibraryRuntimeGuardManager(
 	const maintenanceUrl = requireMaintenanceUrl(options.maintenanceUrl);
 	const routeDirectory = path.resolve(options.routeDirectory);
 	const stateDirectory = path.resolve(options.stateDirectory);
+	const now = options.now ?? Date.now;
 
 	const paths = (applicationUuid: string) => {
 		const statePath = path.join(stateDirectory, applicationUuid);
@@ -361,6 +588,85 @@ export function createLibraryRuntimeGuardManager(
 			),
 			statePath,
 		};
+	};
+
+	const domainsPath = (applicationUuid: string) =>
+		path.join(
+			routeDirectory,
+			`ode-evidence-library-domains-${applicationUuid}.yaml`,
+		);
+
+	// OpenScholar stops waiting after 30 seconds and lets a newer request
+	// start. A late write could replace that newer host set with a stale one.
+	const requireBeforeDeadline = (deadline?: number) => {
+		if (deadline !== undefined && now() > deadline) {
+			throw new LibraryRuntimeGuardError(
+				"runtime_route_deadline",
+				"The custom-domain route was not changed because the request took too long.",
+				503,
+			);
+		}
+	};
+
+	const readReleasedHosts = async (
+		applicationUuid: string,
+		customOrigins: readonly string[],
+	) => {
+		const current = new Set(
+			customOrigins.map((origin) => new URL(origin).hostname),
+		);
+		const previous = await readPreviousDomainHosts(
+			domainsPath(applicationUuid),
+			domainsRouteName(applicationUuid),
+		);
+		return [...new Set(previous)]
+			.filter((hostname) => !current.has(hostname))
+			.slice(0, maximumReleasedHosts);
+	};
+
+	const readCustomRoute = async (
+		applicationUuid: string,
+		origins: readonly string[],
+	) =>
+		origins.length === 0
+			? undefined
+			: {
+					dockerService:
+						await options.docker.readApplicationWebService(
+							applicationUuid,
+						),
+					origins,
+				};
+
+	// Callers pass checked input. A route with no hosts is deleted.
+	const writeDomainsRoute = async (
+		applicationUuid: string,
+		customOrigins: readonly string[],
+		releasedHosts: readonly string[],
+		deadline?: number,
+	) => {
+		const targetPath = domainsPath(applicationUuid);
+		if (customOrigins.length + releasedHosts.length === 0) {
+			requireBeforeDeadline(deadline);
+			await unlinkIfPresent(targetPath);
+			return;
+		}
+		const custom = await readCustomRoute(applicationUuid, customOrigins);
+		await mkdir(routeDirectory, {
+			recursive: true,
+			mode: guardStateDirectoryMode,
+		});
+		requireBeforeDeadline(deadline);
+		await replaceFileAtomically({
+			content: renderLibraryDomainsRoute({
+				applicationUuid,
+				custom,
+				maintenanceUrl,
+				releasedHosts,
+			}),
+			mode: routeMode,
+			targetPath,
+		});
 	};
 
 	const writeRoute = async (
@@ -449,40 +755,52 @@ export function createLibraryRuntimeGuardManager(
 		async finalize(input: LibraryRuntimeRouteInput) {
 			const checked = requireLibraryRuntimeRouteInput(input);
 			await options.docker.readApplicationWeb(checked);
-			await options.docker.removeGuard(checked.applicationUuid);
-			await unlink(paths(checked.applicationUuid).configPath).catch(
-				(error: NodeJS.ErrnoException) => {
-					if (error.code !== "ENOENT") throw error;
-				},
+			// Write the permanent route before the guard route disappears, so
+			// custom hosts are never left without a route. The deployment
+			// recreated Coolify's labels, so released hosts need no block.
+			await writeDomainsRoute(
+				checked.applicationUuid,
+				checked.customOrigins,
+				[],
 			);
+			await options.docker.removeGuard(checked.applicationUuid);
+			await unlinkIfPresent(paths(checked.applicationUuid).configPath);
 			await rmdir(paths(checked.applicationUuid).statePath).catch(
 				(error: NodeJS.ErrnoException) => {
 					if (error.code !== "ENOENT" && error.code !== "ENOTEMPTY")
 						throw error;
 				},
 			);
-			await unlink(paths(checked.applicationUuid).routePath).catch(
-				(error: NodeJS.ErrnoException) => {
-					if (error.code !== "ENOENT") throw error;
-				},
-			);
+			await unlinkIfPresent(paths(checked.applicationUuid).routePath);
 			return { status: "finalized" as const };
 		},
 
+		/** `receivedAt` is when the request arrived, in `now()` milliseconds. */
+		async routeDomains(input: {
+			applicationUuid: string;
+			customOrigins: readonly string[];
+			receivedAt: number;
+		}) {
+			const applicationUuid = requireApplicationUuid(input.applicationUuid);
+			const customOrigins = requireUniqueOrigins(
+				requireCustomOrigins(input.customOrigins),
+			);
+			await writeDomainsRoute(
+				applicationUuid,
+				customOrigins,
+				await readReleasedHosts(applicationUuid, customOrigins),
+				input.receivedAt + domainsRouteDeadlineMs,
+			);
+			return { customOrigins, status: "routed" as const };
+		},
+
 		async remove(applicationUuid: string) {
-			if (!isCoolifyApplicationUuid(applicationUuid)) {
-				return invalidInput(
-					"applicationUuid must identify one Evidence Library.",
-				);
-			}
+			requireApplicationUuid(applicationUuid);
 			const { configPath, routePath, statePath } = paths(applicationUuid);
-			await unlink(routePath).catch((error: NodeJS.ErrnoException) => {
-				if (error.code !== "ENOENT") throw error;
-			});
+			await unlinkIfPresent(routePath);
+			await unlinkIfPresent(domainsPath(applicationUuid));
 			await options.docker.removeGuard(applicationUuid);
-			await unlink(configPath).catch((error: NodeJS.ErrnoException) => {
-				if (error.code !== "ENOENT") throw error;
-			});
+			await unlinkIfPresent(configPath);
 			await rmdir(statePath).catch((error: NodeJS.ErrnoException) => {
 				if (error.code !== "ENOENT" && error.code !== "ENOTEMPTY")
 					throw error;

@@ -1075,6 +1075,8 @@ const featuresSchema = z
 		yearsDropdown: z.boolean().default(false),
 		downloads: z.boolean().default(false),
 		atomFeed: z.boolean().default(false),
+		// The library's own front page at `/`. While it is off, `/` sends visitors to the listing.
+		homePage: z.boolean().default(false),
 	})
 	.strict()
 	.prefault({});
@@ -1720,6 +1722,98 @@ const processingSchema = z
 	.strict()
 	.prefault({});
 
+/** What a step of the curation timeline shows: a typed step is dated from the followed publication's review. */
+const HOME_STEP_TYPES = ["arrival", "check", "publication", "text"] as const;
+
+/** A person in OpenScholar, as the platform fills them in when the library is published. */
+const homePersonSchema = z
+	.object({
+		/** Their OpenScholar account, which reviews record as `resolvedBy`. */
+		id: singleLineStringSchema(64),
+		name: singleLineStringSchema(120),
+		photo: publicHttpsUrlSchema.optional(),
+	})
+	.strict();
+
+/**
+ * The home page's answers, written in OpenScholar's Home card. Longer answers are Markdown limited to bold, italic,
+ * links and bulleted lists; a blank answer hides its part. Without this section the page shows only what is true of
+ * every library.
+ */
+const homeSchema = z
+	.object({
+		intro: nonEmptyStringSchema(600).optional(),
+		curation: z
+			.object({
+				text: nonEmptyStringSchema(400).optional(),
+				steps: z
+					.array(
+						z
+							.object({
+								type: z.enum(HOME_STEP_TYPES),
+								/** Blank on a typed step: the page names it after its type. */
+								title: singleLineStringSchema(60).optional(),
+								text: nonEmptyStringSchema(240).optional(),
+								/** A check step shows this person instead of whoever approved the followed publication. */
+								editor: singleLineStringSchema(64).optional(),
+							})
+							.strict()
+							.refine((step) => step.type !== "text" || step.title, {
+								message: "A text-only step needs a title",
+								path: ["title"],
+							}),
+					)
+					.max(5)
+					.default([]),
+			})
+			.strict()
+			.prefault({}),
+		team: nonEmptyStringSchema(300).optional(),
+		/** The people shown in the team band, in order. */
+		people: z
+			.array(
+				homePersonSchema
+					.extend({
+						title: singleLineStringSchema(60).optional(),
+						location: singleLineStringSchema(60).optional(),
+					})
+					.strict(),
+			)
+			.max(24)
+			.default([]),
+		/** Every owner and editor, so a review can be credited to the person who approved it. Never sent to browsers. */
+		directory: z.array(homePersonSchema).max(500).default([]),
+		/** Example questions for the Ask box, slot by slot; a blank slot uses the question made from the library's own topics. */
+		questions: z.array(plainTextSchema(120)).max(3).default([]),
+		/** The publication the curation timeline follows; without one, the latest an editor published. */
+		followed: singleLineStringSchema(64).optional(),
+		involvement: z
+			.object({
+				suggestions: z.boolean().default(true),
+				editors: z.boolean().default(false),
+			})
+			.strict()
+			.prefault({}),
+		extra: z
+			.object({
+				title: singleLineStringSchema(60).optional(),
+				text: nonEmptyStringSchema(1200),
+			})
+			.strict()
+			.optional(),
+		headings: z
+			.object({
+				curation: singleLineStringSchema(60).optional(),
+				team: singleLineStringSchema(60).optional(),
+				involvement: singleLineStringSchema(60).optional(),
+			})
+			.strict()
+			.prefault({}),
+	})
+	.strict();
+
+export type LibraryHomeConfig = z.output<typeof homeSchema>;
+
 const serverConfigShape = {
 	schemaVersion: z.literal(1),
 	revision: revisionSchema,
@@ -1749,6 +1843,7 @@ const serverConfigShape = {
 	notifications: notificationsSchema,
 	generation: generationSchema,
 	processing: processingSchema,
+	home: homeSchema.optional(),
 };
 
 export type LibraryConfigCatalogs = {

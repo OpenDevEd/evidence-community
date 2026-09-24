@@ -11,7 +11,7 @@ import {
 	PiPaperPlaneTiltFill,
 	PiPlayFill,
 } from "react-icons/pi";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";

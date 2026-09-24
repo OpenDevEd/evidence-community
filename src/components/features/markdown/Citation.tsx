@@ -2,7 +2,7 @@
 
 import { BiBookOpen } from "react-icons/bi";
 import { LuDownload, LuExternalLink } from "react-icons/lu";
-import Image from "next/image";
+import { CoverImage } from "@/components/features/items/CoverImage";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -33,12 +33,13 @@ import { abstractPlainText } from "@/lib/abstract-text";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { downloadFile } from "@/lib/download";
 import { fetcher } from "@/lib/utils";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 const pdfHrefPattern = /^\/lib\/([^/?#]+)\/download\/([^/?#]+)(?:[?#].*)?$/;
 
+// Sized with an arbitrary length: NextUI merges these with its own tailwind-merge, which drops `text-citation`.
 const copyLinkClassNames = {
-	button: "!h-7 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-1.5 text-citation text-black/40 shadow-none hover:!bg-black/[0.045] hover:!text-black/65 dark:text-white/40 dark:hover:!bg-white/[0.07] dark:hover:!text-white/70",
+	button: "!h-7 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-1.5 text-[length:theme(fontSize.citation)] text-black/40 shadow-none hover:!bg-black/[0.045] hover:!text-black/65 dark:text-white/40 dark:hover:!bg-white/[0.07] dark:hover:!text-white/70",
 	icon: "size-3",
 	text: "leading-none",
 };
@@ -337,7 +338,7 @@ function PdfCover({
 	return (
 		<div className="relative h-24 w-16 shrink-0 overflow-hidden rounded-xl border border-black/[0.06] bg-accent/10 dark:border-white/10">
 			{coverImage ? (
-				<Image
+				<CoverImage
 					src={coverImage}
 					alt={t("pdfPreviewAlt", { filename })}
 					fill

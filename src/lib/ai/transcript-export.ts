@@ -7,6 +7,7 @@ import {
 } from "ai";
 import { parsePageCitation } from "./citations";
 import { escapeHtml } from "@/lib/escape-html";
+import { markdownToPlainText } from "@/lib/markdown-text";
 import {
 	isScreeningResultsData,
 	screeningExportContent,
@@ -67,21 +68,6 @@ function normalizeEvidenceMarkdown(content: string, origin?: string) {
 	return normalized.trim();
 }
 
-function markdownToPlainText(markdown: string) {
-	return markdown
-		.replace(/```[^\n]*\n([\s\S]*?)```/g, "$1")
-		.replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-		.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-		.replace(/^#{1,6}\s+/gm, "")
-		.replace(/^>\s?/gm, "")
-		.replace(/\*\*([^*]+)\*\*/g, "$1")
-		.replace(/__([^_]+)__/g, "$1")
-		.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1")
-		.replace(/(?<!_)_([^_]+)_(?!_)/g, "$1")
-		.replace(/~~([^~]+)~~/g, "$1")
-		.replace(/`([^`]+)`/g, "$1")
-		.trim();
-}
 
 
 function parseScreeningMessage(message: UIMessage) {

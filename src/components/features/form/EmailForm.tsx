@@ -11,7 +11,8 @@ import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence, motion } from "framer-motion";
 import { areLinksValid } from "@/lib/actions";
 import { Spinner } from "@nextui-org/react";
-import { contactRequestSchema, parseRequestLinks, takedownRequestSchema } from "@/lib/utils";
+import { parseRequestLinks } from "@/lib/utils";
+import { contactRequestSchema, takedownRequestSchema } from "@/lib/request-validation";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 

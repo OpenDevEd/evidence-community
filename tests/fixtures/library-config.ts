@@ -264,6 +264,7 @@ export const maximalLibraryConfig = {
 		yearsDropdown: true,
 		downloads: true,
 		atomFeed: true,
+		homePage: true,
 	},
 	collections: [
 		{
@@ -409,6 +410,31 @@ export const maximalLibraryConfig = {
 	generation: {
 		sitemap: true,
 		redirects: true,
+	},
+	home: {
+		intro: "Research on **education technology**, gathered by the editors.",
+		curation: {
+			text: "Every publication is checked before it is shown.",
+			steps: [
+				{ type: "arrival" },
+				{ type: "check", title: "Read by an editor", editor: "user_editor_one" },
+				{ type: "text", title: "Summarised", text: "Each gets a plain-language summary." },
+				{ type: "publication" },
+			],
+		},
+		team: "Run by researchers and practitioners.",
+		people: [
+			{ id: "user_editor_one", name: "Amina Yusuf", photo: "https://img.example.org/amina.png", title: "Editor in chief", location: "Nairobi, Kenya" },
+		],
+		directory: [
+			{ id: "user_editor_one", name: "Amina Yusuf", photo: "https://img.example.org/amina.png" },
+			{ id: "user_editor_two", name: "Omar Haddad" },
+		],
+		questions: ["What works for early literacy?"],
+		followed: "ABCD1234",
+		involvement: { suggestions: true, editors: true },
+		extra: { title: "Using the library", text: "Records are open under **CC BY 4.0**." },
+		headings: { team: "The editors" },
 	},
 	processing: {
 		structureRules: [

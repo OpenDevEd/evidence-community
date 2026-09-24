@@ -4,9 +4,9 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
-import { Link, Skeleton, Spinner } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
-import Image from "next/image";
+import { Link, Spinner } from "@nextui-org/react";
+import { twMerge } from "@/lib/tw-merge";
+import { PdfCover } from "./PdfCover";
 import { Button } from "@/components/nextui/Button";
 import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
@@ -105,23 +105,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 
 	const attachmentImage = (
 		<>
-			{data?.PDFCoverPageImage ? (
-				<Skeleton isLoaded={loaded} className="rounded-xl w-full">
-					<Image
-						ref={imageRef}
-						src={data?.PDFCoverPageImage || ""}
-						alt={t("pdfPreviewAlt", {
-							filename: data?.filename || t("document"),
-						})}
-						width={512}
-						height={512}
-						onLoad={() => setLoaded(true)}
-						className="rounded-xl bg-accent w-full"
-					/>
-				</Skeleton>
-			) : (
-				<div className="aspect-3/4 w-full rounded-xl bg-accent" />
-			)}
+			<PdfCover
+				ref={imageRef}
+				src={data?.PDFCoverPageImage}
+				alt={t("pdfPreviewAlt", {
+					filename: data?.filename || t("document"),
+				})}
+				onLoad={() => setLoaded(true)}
+			/>
 		</>
 	);
 

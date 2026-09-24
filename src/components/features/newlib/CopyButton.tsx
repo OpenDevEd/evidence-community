@@ -7,7 +7,7 @@ import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { ReactElement, cloneElement } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 interface CopyButtonProps {
     textToCopy: string;

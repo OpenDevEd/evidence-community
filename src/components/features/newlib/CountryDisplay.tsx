@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
 import { getCountryAncestry } from "@/lib/utils";
@@ -116,7 +116,7 @@ const FlagImage = ({ country, isHovered }: FlagImageProps) => (
 			whileHover={{ scale: 1.1 }}
 			transition={{ type: "spring", stiffness: 400, damping: 10 }}
 		>
-			<Image
+			<Image unoptimized
 				src={`https://flagcdn.com/w160/${country.toLowerCase()}.png`}
 				alt={`${country} flag`}
 				fill

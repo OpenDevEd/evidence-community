@@ -19,7 +19,7 @@ vi.mock("@/lib/nodemailer", () => ({
 	sendEmailForConfig: harness.sendEmailForConfig,
 }));
 
-vi.mock("@/lib/utils", () => ({
+vi.mock("@/lib/request-validation", () => ({
 	validateContactRequest: harness.validateContactRequest,
 	validateTakedownRequest: harness.validateTakedownRequest,
 }));

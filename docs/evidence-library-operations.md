@@ -124,8 +124,9 @@ Compose file. Set one environment value:
 
 `PORT` defaults to `3000`. Assign the verifier's public HTTPS domain to
 `runtime-verifier:3000`. Port `3001` serves the temporary maintenance response
-inside the shared proxy network and must not receive a public domain or host
-port. Do not assign a domain or host port to `docker-socket-proxy`.
+and, at `/released`, the 404 page for released custom domains. It is reached
+only through the verifier's Traefik routes inside the shared proxy network and
+must not receive a public domain or host port. Do not assign a domain or host port to `docker-socket-proxy`.
 
 The executable is also available as a package command:
 
@@ -163,21 +164,80 @@ and one application can return at most 24 containers. Bad Docker data and proxy
 errors return the fixed `runtime_inspection_failed` response. Docker error text
 never reaches the caller.
 
-OpenScholar also uses five fixed route operations:
+OpenScholar also uses six fixed route operations:
 
 | Path                               | Effect                                                                                                               |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `/v1/library-runtime/maintenance`  | Routes a first activation to the maintenance response.                                                               |
 | `/v1/library-runtime/protection`   | Copies the active config, starts or reuses one temporary web guard, then routes all current and pending hosts to it. |
 | `/v1/library-runtime/activation`   | Tries the ready replacement while retaining the guard as its fallback.                                               |
-| `/v1/library-runtime/finalization` | Removes the guard and copied config, then returns traffic to the deployment router.                                  |
-| `/v1/library-runtime/removal`      | Removes the route, guard, and copied config during teardown.                                                         |
+| `/v1/library-runtime/finalization` | Writes the permanent custom-domain route, then removes the guard, copied config, and guard route.                    |
+| `/v1/library-runtime/domains`      | Replaces the permanent custom-domain route between deployments.                                                      |
+| `/v1/library-runtime/removal`      | Removes both routes, the guard, and copied config during teardown.                                                   |
 
 The first four receive `applicationUuid`, `commit`, `runtimeImage`, `revision`,
 one or two `platformOrigins`, and up to twenty transition `customOrigins`.
+Domains receives only `applicationUuid` and up to twenty `customOrigins`, and
+answers `{"status":"routed","customOrigins":[...]}` with the normalized origins.
 Removal receives only `applicationUuid`. Callers cannot supply a container
 name, command, image outside the pinned runtime reference, file path, network,
 upstream address, or Traefik rule.
+
+### Permanent custom-domain routes
+
+Custom domains do not use Coolify domain labels, so attaching or detaching one
+needs no redeploy. The verifier writes
+`ode-evidence-library-domains-<applicationUuid>.yaml` to the Traefik dynamic
+directory, and Traefik reloads it in about two seconds. Its HTTPS router sends
+the custom hosts to Coolify's platform-address service, `https-0-<uuid>...@docker`.
+The verifier reads that name from the web container's labels each time,
+because Coolify versions name it differently. It uses the one running web
+container, which must be healthy when it has a health check, and ignores exited
+ones. It fails with `runtime_web_not_ready` when there is no such container and
+with
+`runtime_web_route_missing` when the label is absent, instead of writing a
+dangling route. An empty list deletes the file. If 20 seconds have passed
+since the request arrived, it changes nothing and answers 503
+`runtime_route_deadline`. OpenScholar stops waiting after 30 seconds, so a late
+write could otherwise replace a newer host set.
+
+Its routers use priority 100000. The temporary guard route uses 200000 and wins
+during a deployment. Coolify label routers default to their rule length, so
+they stay below both. Finalization writes the domains file from its
+`customOrigins` before it deletes the guard route, so custom hosts always have
+a route and a renamed Coolify service is picked up at every deployment.
+
+Coolify's label router for a removed host keeps sending it to the library until
+the next deployment recreates the container. So the domains operation reads the
+previous file first. Every host it routed or released that is missing from the
+new list becomes a released host. Released hosts get their own `http` and
+`https` routers, `<name>-released-http` and `<name>-released-https`, at
+priority 50000. That beats every label router and loses to any custom route,
+so re-adding the host, here or on another library, takes it back. They rewrite
+the path to `/released` on the maintenance port, which answers 404 "This
+address is not in use" with `Cache-Control: no-store`. The file keeps the 20
+most recently released hosts. Older ones fall back to their label router until
+the next deployment. A file with released hosts but no custom hosts holds only
+the released routers. Finalization writes no released routers, because the
+deployment has just replaced the labels. If the previous file is not the
+verifier's own JSON, the operation changes nothing and answers 500
+`runtime_domains_route_unreadable`.
+
+| Router                          | Priority          |
+| ------------------------------- | ----------------- |
+| Temporary guard                 | 200000            |
+| Custom domains                  | 100000            |
+| Released custom domains         | 50000             |
+| Coolify labels                  | Rule length       |
+
+Every route host must be a lowercase DNS name with at least two labels: only
+letters, digits, and inner hyphens, 63 characters per label and 253 in total,
+with no trailing dot. Punycode names are allowed. Traefik renders dynamic files
+as Go templates, so braces or backticks in a host would break the file. The
+verifier writes every route file by atomic replacement from
+machine-rendered JSON. Never hand-edit these files: while any file in the
+dynamic directory is malformed, Traefik ignores all later file-provider
+changes.
 
 The guard is only the current `web` image plus a copied active configuration.
 It joins the same private application network and the shared proxy network. It
@@ -691,6 +751,18 @@ automatically before the next operation.
   record key rather than a row number, a record added or removed while the file
   is being written cannot make another record appear twice or be missed. The
   file is named after the library short name.
+- `features.homePage` gives the library a front page at `/`. While it is off,
+  `/` redirects to `/lib`, and the sitemap leaves `/` out.
+- `home` holds the front page's answers from OpenScholar's Home card: the
+  introduction, the curation statement and up to five typed steps, the team
+  sentence and the people shown, up to three example questions, the publication
+  the steps follow, the involvement buttons, a closing section and renamed
+  headings. Longer answers are Markdown limited to bold, italic, links and
+  bulleted lists. OpenScholar fills in each person's name and photo when the
+  library is published, plus a `directory` of every owner and editor that names
+  whoever approved the followed publication; the directory never reaches the
+  browser. Without `home` the page shows a generated introduction and the
+  suggestion button.
 - The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
   `exports.atom`. It lists the 50 most recently added records.
 - Exports read a fixed list of citation columns. Stored full text, cover

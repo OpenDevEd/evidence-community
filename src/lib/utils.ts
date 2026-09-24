@@ -2,46 +2,10 @@ import { Item } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
-import { COUNTRIES, COUNTRY_PARAMS, CSL_SKIP_WORDS } from "@/constants/misc";
-import { z } from "zod";
-import { areLinksValid } from "./actions";
-import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
-import balanced from "balanced-match";
+import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 
 export function parseRequestLinks(value: string) {
 	return value.split("\n").map((link) => link.trim()).filter(Boolean);
-}
-
-export const contactRequestSchema = z.object({
-	email: z.string().email(),
-	description: z.string().trim().min(20),
-});
-
-export const takedownRequestSchema = contactRequestSchema.extend({
-	links: z.array(z.string().trim().url()).min(1),
-});
-
-export async function validateTakedownRequest(email: string, links: string[], description: string): Promise<{ error: string } | { success: boolean }> {
-	const result = takedownRequestSchema.safeParse({ email, links, description });
-	if (!result.success) {
-		return { error: result.error.message };
-	}
-
-	const linksValid = await areLinksValid(result.data.links);
-	if (!linksValid.every((result) => result.status === "fulfilled" && result.value)) {
-		return { error: "Invalid links" };
-	}
-
-	return { success: true };
-}
-
-export async function validateContactRequest(email: string, description: string): Promise<{ error: string } | { success: boolean }> {
-	const result = contactRequestSchema.safeParse({ email, description });
-	if (!result.success) {
-		return { error: result.error.message };
-	}
-
-	return { success: true };
 }
 
 export function getCountryInfo(country: string) {
@@ -162,15 +126,6 @@ export function getExtraValues(extraUnsplit: string) {
 	return finalMap;
 }
 
-export function unescapeXML(safe: string) {
-	return safe
-		.replace(/&amp;/g, "&")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&quot;/g, '"')
-		.replace(/&apos;/g, "'");
-}
-
 export function convertToImageURL(url: string) {
 	return url;
 }
@@ -187,129 +142,10 @@ export function getCountryAncestry(country: string) {
 	return ancestry;
 }
 
-type ZoteroItem = Record<string, unknown> & { itemType: string };
 
-export function ItemToZoteroJSON(item: Item): ZoteroItem {
-	const { attachmentsData, citation, createdAt, updatedAt, deleted, deletedAt, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateSortKey, year, datePublished, provider, sourceExternalScopeKey, sourceConnectionKey, sourceRecordKey, revision, tags, ...rest } = item;
-
-	const finalCountry = Array.isArray(item.country) ? item.country.join("|") : item.country;
-	const finalInstitution = Array.isArray(item.institution) ? item.institution.join("|") : item.institution;
-
-	const zoteroItem: ZoteroItem = {
-		...rest,
-		itemType: item.itemType[0]!.toLowerCase() + item.itemType.slice(1),
-	};
-	for (const { field, semanticField } of describeZoteroItemTypeFields(
-		zoteroItem.itemType,
-	)) {
-		const internalField =
-			semanticField === "language" ? "languageName" : semanticField;
-		const value = item[internalField as keyof Item];
-		delete zoteroItem[internalField];
-		if (value !== null && value !== undefined) zoteroItem[field] = value;
-	}
-
-	const country = finalCountry?.split("|").map(c => c.trim());
-	zoteroItem.country = country ? country[0] : null;
-
-	const institution = finalInstitution?.split("|").map(c => c.trim());
-	if (institution?.[0] && "institution" in zoteroItem) {
-		zoteroItem.institution = institution[0];
-	}
-
-	return zoteroItem;
-}
-
-export function isSentenceCase(val: any) {
-	const matches = val.match(/^\W*(\w+)(.*?)$/);
-	if (matches && matches.length > 2) {
-		const [_, firstWord] = matches;
-		let remainingWords = matches[2];
-		const firstLetter = firstWord.substr(0, 1);
-		if (firstLetter.toUpperCase() !== firstLetter) {
-			// first letter of first word is not uppercase
-			return false;
-		}
-		// count how many words are lowercased, ignoring short words and SKIP_WORDS
-		let lowerCaseWords = 0;
-		let totalWords = 0;
-		remainingWords = remainingWords.match(/(\w+)/g);
-		if (remainingWords) {
-			remainingWords
-				.filter((word: string) => word.length >= 4 || !CSL_SKIP_WORDS.includes(word))
-				.forEach((word: string) => {
-					totalWords++;
-					const firstLetter = word.substr(0, 1);
-					if (firstLetter.toLowerCase() === firstLetter) {
-						lowerCaseWords++;
-					}
-				});
-		}
-		const ratio = lowerCaseWords / totalWords;
-		return ratio >= 0.5;
-	}
-}
-
-export function processSentenceCase(val: any) {
-	if (isSentenceCase(val)) {
-		return val;
-	}
-	const matches = val.match(/(([^.!?]+)[.!?]+)|([^.!?]+$)/g);
-	if (matches) {
-		return matches.map((s: string) => {
-			// skip special characters at the beginning of the sentence
-			const match = s.trim().match(/^(['"¡¿"'„«(]*)(.*)$/);
-			if (!match) return s;
-			const [_, pre, sentence] = match;
-			// uppercase first actual letter of the sentence, lowercase rest
-			return pre + sentence[0].toUpperCase() + sentence.slice(1).toLowerCase();
-		})
-			.join(' ');
-	} else {
-		return val;
-	}
-};
+;
 
 
-export function processSentenceCaseAPAField(value: string): string {
-	var match;
-	var sentencesInBrackets = [];
-	var rootSentences = '';
-	// extract all content in balanced parentheses
-	while ((match = balanced('(', ')', value))) {
-		match.body = processSentenceCase(match.body);
-		// process sentences within parentheses
-		sentencesInBrackets.push(match);
-		rootSentences += match.pre;
-		value = match.post;
-	}
-	rootSentences += value;
-	// process "root" sentences separately
-	rootSentences = processSentenceCase(rootSentences);
+;
 
-	// re-insert content from parentheses at correct indexes
-	var pointer = 0;
-	sentencesInBrackets.forEach(sentenceInBrackets => {
-		const pre = rootSentences.substr(0, pointer + sentenceInBrackets.start);
-		const post = rootSentences.substr(pointer + sentenceInBrackets.start);
-
-		rootSentences = `${pre}(${sentenceInBrackets.body})${post}`;
-		pointer += sentenceInBrackets.end + 1;
-	});
-	return rootSentences;
-};
-
-export function processSentenceCaseAPAItems(item: ZoteroItem) {
-	const whitelist = [
-		'title',
-		'shortTitle',
-	];
-
-	(Object.keys(item) as Array<keyof ZoteroItem>).forEach((k) => {
-		if (typeof (item[k]) === 'string' && whitelist.includes(k)) {
-			(item as any)[k] = processSentenceCaseAPAField(item[k] as string);
-		}
-	});
-
-	return item;
-};
+;

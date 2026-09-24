@@ -129,3 +129,22 @@ describe("public domain requests through the proxy", () => {
 		);
 	});
 });
+
+describe("the address without a path", () => {
+	it("opens the listing while the library has no home page", async () => {
+		const response = await proxy(adminRequest("/"));
+
+		expect(response.status).toBe(307);
+		expect(new URL(response.headers.get("location")!).pathname).toBe("/lib");
+	});
+
+	it("is left alone once the home page is on", async () => {
+		const config = libraryConfigSchema.parse(structuredClone(minimalLibraryConfig));
+		config.features.homePage = true;
+		mocks.loadLibraryConfig.mockResolvedValue(config);
+
+		const response = await proxy(adminRequest("/"));
+
+		expect(response.headers.get("location")).toBeNull();
+	});
+});

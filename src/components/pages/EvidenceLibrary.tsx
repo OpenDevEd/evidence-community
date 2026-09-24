@@ -1,11 +1,9 @@
 "use client";
 
-import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { AiOutlineCompass } from "react-icons/ai";
 import { IoGrid } from "react-icons/io5";
 import { BiHelpCircle } from "react-icons/bi";
 import { HiOutlineViewList } from "react-icons/hi";
-import { BsStars } from "react-icons/bs";
 import { SkipLink } from "@/components/layout/SkipLink";
 
 import { Button } from "@/components/nextui/Button";
@@ -15,12 +13,12 @@ import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import { Spinner, useDisclosure } from "@nextui-org/react";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { type ReactNode, use, useEffect, useRef, useState } from "react";
+import { type ReactNode, use, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { getLangDir } from "rtl-detect";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import PageContainer from "../layout/PageContainer";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
@@ -39,43 +37,9 @@ import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
 import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
+import { AskAIButton } from "@/components/features/ai/AskAIButton";
+import { forgetWaitingQuestion, waitingQuestion } from "@/components/features/ai/handed-over-question";
 
-/** Hands whatever is in the search field to the assistant. */
-function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
-	const tAI = useTranslations("ai");
-	const [revealed, setRevealed] = useState(false);
-	// Firefox needs a painted frame before the entrance begins.
-	useEffect(() => {
-		let revealFrame = 0;
-		const paintFrame = requestAnimationFrame(() => {
-			revealFrame = requestAnimationFrame(() => setRevealed(true));
-		});
-		return () => {
-			cancelAnimationFrame(paintFrame);
-			cancelAnimationFrame(revealFrame);
-		};
-	}, []);
-	if (!revealed) return null;
-
-	return (
-		// A plain button: press handling inside the search field's own
-		// content breaks the one the rest of the site uses.
-		<button
-			type="button"
-			onMouseDown={(event) => event.preventDefault()}
-			onClick={onAsk}
-			// Smaller on a phone, where the search field is shorter and
-			// there is no keyboard to show a shortcut for.
-			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 motion-reduce:animate-none lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:pl-3 lg:pr-1.5 lg:text-sm"
-		>
-			<BsStars className="size-3.5 shrink-0 lg:size-4" />
-			{tAI("askAI")}
-			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
-				{hint}
-			</kbd>
-		</button>
-	);
-}
 
 /** The search field and the filters beside it. */
 function LibraryFilters({
@@ -134,10 +98,6 @@ function LibraryFilters({
 	);
 }
 
-function SearchTitle({ title }: { title: string }) {
-	return <TruncatedText text={title} focusable />;
-}
-
 function SearchTabContent({
 	askAI,
 	header,
@@ -164,8 +124,6 @@ function SearchTabContent({
 }) {
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
-	const { identity } = useLibraryConfig();
-	const searchTitle = identity.tagline?.trim() || t("searchTitle");
 
 	const {
 		isOpen: isExploreOpen,
@@ -193,7 +151,7 @@ function SearchTabContent({
 						{t("goToFilters")}
 					</SkipLink>
 					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-						{header || (showHeader && <SearchTitle title={searchTitle} />)}
+						{header || (showHeader && t("searchTitle"))}
 					</h1>
 					<Button
 						startContent={
@@ -387,6 +345,24 @@ export function ContentInteractions({
 	const askInline = useAskInlineChat(searchContext);
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();
+	// A question handed over from another page (the home page's "Ask the
+	// library"): ask it once the chat can take it, then forget it. If the chat
+	// is still answering an earlier question, try again each second until it is
+	// free; subscribing to the chat would redraw the whole listing per token.
+	useEffect(() => {
+		if (!waitingQuestion() || !isAISearchEnabled || itemsContext.userData) return;
+		const ask = () => {
+			const question = waitingQuestion();
+			if (question && !askInline(question)) return false;
+			forgetWaitingQuestion();
+			return true;
+		};
+		if (ask()) return;
+		const retry = setInterval(() => {
+			if (ask()) clearInterval(retry);
+		}, 1000);
+		return () => clearInterval(retry);
+	}, [askInline, isAISearchEnabled, itemsContext.userData]);
 
 	return (
 		<div className="relative">
@@ -525,12 +501,16 @@ function MainContent() {
 
 export default function EvidenceLibrary() {
 	const { engaged } = useInlineChatLayout();
+	const { theme } = useLibraryConfig();
 	return (
 		<PageContainer
 			className={twMerge(
 				"transition-page-space duration-split ease-split motion-reduce:transition-none",
 
 				engaged && "overflow-visible pt-4 lg:pt-5 xl:pt-0",
+				// The small header leaves this gap under itself as it scales
+				// down; the wide one really shrinks, so the page keeps it.
+				engaged && theme.layout === "wide" && "xl:pt-split",
 			)}
 		>
 			<div className="flex gap-[var(--library-gap)] [--library-gap:2rem] xl:[--library-gap:2.5rem] flex-col lg:flex-row lg:[container-type:inline-size]">

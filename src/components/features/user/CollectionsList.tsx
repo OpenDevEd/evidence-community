@@ -3,7 +3,7 @@
 import { Session } from "next-auth";
 import { useMemo, useRef, useState } from "react";
 import { COLLECTION_PER_PAGE } from "@/constants/user";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Input } from "@/components/nextui/Input";
 import { InferSelectModel } from "drizzle-orm";

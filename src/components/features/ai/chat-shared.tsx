@@ -8,7 +8,7 @@ import {
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 
 const SCROLL_EDGE_THRESHOLD = 64;

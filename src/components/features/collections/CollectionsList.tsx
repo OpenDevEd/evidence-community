@@ -16,7 +16,7 @@ import {
 	Listbox,
 	ListboxItem,
 } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Skeleton } from "../../nextui/Skeleton";
 import CollectionCategory from "./CollectionCategory";
 import {
@@ -400,7 +400,7 @@ function CountryParser(
 		label,
 		startContent: countryName && (
 			<div className="flex size-5 aspect-square justify-center items-center gap-2">
-				<Image
+				<Image unoptimized
 					src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
 					alt={countryCode}
 					width={20}

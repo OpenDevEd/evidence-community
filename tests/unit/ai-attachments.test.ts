@@ -15,7 +15,8 @@ import {
 	type LoadedPublication,
 } from "@/lib/ai/attachments";
 
-const fetchMock = vi.fn();
+const fetchMock = vi.hoisted(() => vi.fn());
+vi.mock("undici", () => ({ Agent: class {}, fetch: fetchMock }));
 
 function pdfBytes(size: number) {
 	const data = new Uint8Array(size);

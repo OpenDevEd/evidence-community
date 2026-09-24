@@ -6,7 +6,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { DropdownItem } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";

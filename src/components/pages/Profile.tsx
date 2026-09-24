@@ -11,7 +11,7 @@ import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
 import { setter, fetcherDELETE } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Textarea } from "../nextui/Textarea";
 import { Input } from "../nextui/Input";
 import {
@@ -634,7 +634,7 @@ export default function Profile({ data }: { data: any }) {
 									"bg-primary dark:bg-secondary rounded-r-full p-4"
 							)}
 						>
-							<Image
+							<Image unoptimized
 								src={displayData.image ?? `/icons/profile.png`}
 								alt={t("userAvatarAlt", {
 									name:

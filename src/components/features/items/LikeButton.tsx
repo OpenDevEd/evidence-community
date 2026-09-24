@@ -6,7 +6,7 @@ import { useState, forwardRef } from "react";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 

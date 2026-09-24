@@ -84,18 +84,20 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 
 		// Group topics by fullPath for the selected year, collecting citation counts
 		const yearTopicsMap = new Map<string, {
+			id: string;
 			topic: string;
 			fullPath: string;
 			itemCount: number;
 			totalCitations: number;
 			level: number;
+			parentTopic?: string;
 			citationCounts: number[];
 		}>();
 
 		topicsByYear
 			.filter(t => t.year === selectedYear)
 			.forEach(yearTopic => {
-				const existing = yearTopicsMap.get(yearTopic.fullPath);
+				const existing = yearTopicsMap.get(yearTopic.id);
 				if (existing) {
 					existing.itemCount += yearTopic.itemCount;
 					existing.totalCitations += yearTopic.totalCitations;
@@ -104,19 +106,20 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 						existing.citationCounts.push(Math.floor(yearTopic.totalCitations / yearTopic.itemCount));
 					}
 				} else {
-					const level = yearTopic.fullPath.split('/').length;
 					// Initialize citation counts array for H-index calculation
 					const citationCounts: number[] = [];
 					for (let i = 0; i < yearTopic.itemCount; i++) {
 						citationCounts.push(Math.floor(yearTopic.totalCitations / yearTopic.itemCount));
 					}
 					
-					yearTopicsMap.set(yearTopic.fullPath, {
+					yearTopicsMap.set(yearTopic.id, {
+						id: yearTopic.id,
 						topic: yearTopic.topic,
 						fullPath: yearTopic.fullPath,
 						itemCount: yearTopic.itemCount,
 						totalCitations: yearTopic.totalCitations,
-						level,
+						level: yearTopic.level,
+						parentTopic: yearTopic.parentTopic,
 						citationCounts
 					});
 				}
@@ -125,15 +128,15 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 		// Convert to TopicStats format with calculated fields
 		return Array.from(yearTopicsMap.values()).map(data => {
 			const avgCitations = data.itemCount > 0 ? data.totalCitations / data.itemCount : 0;
-			const pathParts = data.fullPath.split('/');
 			
 			// Find original topic data to preserve children and isLeaf information
-			const originalTopic = topicStats.find(t => t.fullPath === data.fullPath);
+			const originalTopic = topicStats.find(t => t.id === data.id);
 			
 			return {
+				id: data.id,
 				topic: data.topic,
 				level: data.level,
-				parentTopic: data.level > 1 ? pathParts[pathParts.length - 2] : undefined,
+				parentTopic: data.parentTopic,
 				fullPath: data.fullPath,
 				itemCount: data.itemCount,
 				totalCitations: data.totalCitations,

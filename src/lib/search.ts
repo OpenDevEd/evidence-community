@@ -30,8 +30,15 @@ import { formatRange } from "./utils";
 import { meilisearchEquals } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
+import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
+import { itemPageAttachments } from "./attachment-visibility";
 
-export const LIST_ITEM_FIELDS = [
+/**
+ * Result cards also open the item page before the full record loads, so they
+ * carry every citation field and the citation does not change once it arrives.
+ */
+export const LIST_ITEM_FIELDS = [...new Set([
+	...CITATION_RECORD_COLUMNS,
 	"itemType",
 	"key",
 	"provider",
@@ -65,7 +72,8 @@ export const LIST_ITEM_FIELDS = [
 	"url",
 	"accessDate",
 	"libraryCatalog",
-] as const;
+	"attachmentsData",
+])];
 
 type SearchCountOnlyResult = {
 	currentPage: number;
@@ -104,34 +112,21 @@ export async function getMainAttributes(config?: LibraryServerConfig) {
 	);
 }
 
-function toLightweightItem(item: any): ListItem {
-	const nextItem = { ...item } as ListItem;
-
-	if (nextItem.attachmentsData) {
-		nextItem.attachmentsData = nextItem.attachmentsData.map(
-			(attachment: any) => {
-				const {
-					note,
-					fullTextPDF,
-					fullTextPDFs,
-					PDFCoverPageImage,
-					PDFCoverPageWidth,
-					PDFCoverPageHeight,
-					...rest
-				} = attachment || {};
-				return rest;
-			},
-		);
-	}
-
-	if (nextItem.fullTextPDFs) {
-		nextItem.fullTextPDFs = undefined;
-	}
-
-	return nextItem;
+/** A list result keeps only its public attachments that the item page reads. */
+export function toLightweightItem(
+	item: ListItem,
+	tags: Pick<LibraryPublicConfig["content"]["tags"], "hidden" | "publish">,
+): ListItem {
+	return {
+		...item,
+		attachmentsData: itemPageAttachments(
+			filterPublicAttachments(item.attachmentsData, tags),
+			tags.publish,
+		),
+	};
 }
 
-function applyCollectionsData(items: ListItem[], collections: Collection[], hiddenTags: readonly string[]) {
+function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 	const collectionMap = new Map(
 		collections.map((collection) => [collection.key, collection]),
 	);
@@ -143,8 +138,6 @@ function applyCollectionsData(items: ListItem[], collections: Collection[], hidd
 				(collectionData): collectionData is Collection =>
 					!!collectionData,
 			);
-
-		item.attachmentsData = filterPublicAttachments(item.attachmentsData, hiddenTags);
 	}
 }
 
@@ -254,6 +247,8 @@ export async function getPublicItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	options: {
 		includeHeavyFields?: boolean;
+		/** Fewer results than a listing page, from the start of the list: a preview. */
+		limit?: number;
 	} = {},
 ): Promise<SearchItemsResult> {
 	const libraryConfig = await getLibraryConfig();
@@ -267,6 +262,8 @@ export async function getPublicItems(
 		attributesToSearchOn,
 	} = resolveSearchRequest(searchParams, libraryConfig);
 
+	const pageSize = options.limit ? Math.min(Math.max(1, Math.floor(options.limit)), limitNum) : limitNum;
+	const page = options.limit ? 1 : pageNum;
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
 		? displayedAttributes
@@ -276,8 +273,8 @@ export async function getPublicItems(
 
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
-			offset: (pageNum - 1) * limitNum,
-			limit: limitNum,
+			offset: (page - 1) * pageSize,
+			limit: pageSize,
 			attributesToSearchOn,
 			attributesToRetrieve,
 			...(sortOption ? { sort: [sortOption] } : {}),
@@ -286,21 +283,24 @@ export async function getPublicItems(
 		getCachedCollections(libraryConfig),
 	]);
 
+	const { tags } = libraryConfig.content;
 	const items = (searchResults.hits as ListItem[]).map((item) =>
-		includeHeavyFields ? item : toLightweightItem(item),
+		includeHeavyFields
+			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }
+			: toLightweightItem(item, tags),
 	);
 
-	applyCollectionsData(items, collections as Collection[], libraryConfig.content.tags.hidden);
+	applyCollectionsData(items, collections as Collection[]);
 
 	const totalCount =
 		searchResults.estimatedTotalHits || searchResults.hits.length;
 
 	return {
 		items,
-		currentPage: pageNum,
+		currentPage: page,
 		totalItems: totalCount,
-		perPage: limitNum,
-		totalPages: Math.ceil(totalCount / limitNum),
+		perPage: pageSize,
+		totalPages: Math.ceil(totalCount / pageSize),
 	};
 }
 
@@ -327,21 +327,33 @@ export async function getPublicFacets(
 	});
 
 	return {
-		facetDistribution: addRegionsToFacetDistribution(
-			Object.assign(
-				{},
-				searchResults.facetDistribution,
-				countryFacetOptions
-					.filter((facet) => facets.includes(facet.key))
-					.reduce((acc, facet) => {
-						acc[facet.key + "_uncategorized"] =
-							searchResults.facetDistribution?.[facet.key] || {};
-						return acc;
-					}, {} as FacetDistribution),
-			),
-			{ country },
+		facetDistribution: publicFacetDistribution(
+			searchResults.facetDistribution,
+			facets,
+			country,
 		),
 	};
+}
+
+/** Facet counts with each country facet's raw values kept beside its regions. */
+export function publicFacetDistribution(
+	distribution: FacetDistribution | undefined,
+	facets: readonly string[],
+	country: string[],
+) {
+	return addRegionsToFacetDistribution(
+		Object.assign(
+			{},
+			distribution,
+			countryFacetOptions
+				.filter((facet) => facets.includes(facet.key))
+				.reduce((acc, facet) => {
+					acc[facet.key + "_uncategorized"] = distribution?.[facet.key] || {};
+					return acc;
+				}, {} as FacetDistribution),
+		),
+		{ country },
+	);
 }
 
 export async function getItemsPaginationMeta(

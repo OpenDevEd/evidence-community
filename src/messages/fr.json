@@ -893,5 +893,17 @@
         "documents": "Documents de politique",
         "sections": "Sections de la politique",
         "copyEmail": "Copier l’adresse e-mail"
-    }
+    },
+  "homePage": {
+    "curation": "Comment la bibliothèque est constituée",
+    "team": "Qui est derrière",
+    "involvement": "Participer",
+    "suggest": "Suggérer une publication",
+    "suggestSubject": "Suggestion de publication",
+    "join": "Devenir éditeur",
+    "joinSubject": "Devenir éditeur",
+    "stepArrival": "Soumis",
+    "stepCheck": "Vérifié par un éditeur",
+    "stepPublication": "Publié"
+  }
 }

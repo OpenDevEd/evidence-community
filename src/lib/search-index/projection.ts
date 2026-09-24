@@ -569,13 +569,26 @@ export async function readPublicItem(
 	key: string,
 	config: LibraryServerConfig,
 ): Promise<Item | null> {
+	return (await readPublicItems(database, [key], config))[0] ?? null;
+}
+
+/**
+ * Several committed records in one read, in the order given. Records that are
+ * not public are left out, so a page of cards costs one projection, not one each.
+ */
+export async function readPublicItems(
+	database: Database,
+	keys: readonly string[],
+	config: LibraryServerConfig,
+): Promise<Item[]> {
+	if (!keys.length) return [];
 	return database.transaction(async (transaction) => {
 		const { rows: collections } = await transaction.execute<CollectionRow>(sql`
 			WITH RECURSIVE ancestors AS (
 				SELECT current.key, current."parentCollection", current.deleted
 				FROM ${collection} current
 				JOIN ${itemToCollection} membership ON membership."collectionKey" = current.key
-				WHERE membership."itemKey" = ${key}
+				WHERE membership."itemKey" IN (${sql.join(keys.map((key) => sql`${key}`), sql`, `)})
 				UNION
 				SELECT parent.key, parent."parentCollection", parent.deleted
 				FROM ${collection} parent
@@ -583,13 +596,16 @@ export async function readPublicItem(
 			)
 			SELECT * FROM ancestors
 		`);
-		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, [key], collections, config.content.tags.hidden);
-		const document = plan.documents.find((document) => document.key === key);
-		if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return null;
-		const result = document as Item;
-		result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags.hidden);
-		const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
-		result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
-		return result;
+		const plan = await buildSearchProjectionPlanForKeys(transaction, config.services.publication, keys, collections, config.content.tags.hidden);
+		const documents = new Map(plan.documents.map((document) => [document.key, document]));
+		return keys.flatMap((key) => {
+			const document = documents.get(key);
+			if (!document || hasAnyTag(document.tags, config.content.tags.hidden)) return [];
+			const result = document as Item;
+			result.attachmentsData = filterPublicAttachments(result.attachmentsData, config.content.tags);
+			const attachmentKeys = new Set(result.attachmentsData?.map((attachment) => attachment.key));
+			result.fullTextPDFs = result.fullTextPDFs?.filter((attachment) => attachmentKeys.has(attachment.key));
+			return [result];
+		});
 	}, { isolationLevel: "repeatable read", accessMode: "read only" });
 }

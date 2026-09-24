@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { useDisclosure } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { usePathname } from "@/i18n/routing";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -23,11 +23,46 @@ import {
 } from "@/config/navbar.config";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { normalizePathname } from "@/lib/path";
+import { pageRunsUnderHeader } from "@/lib/runtime-routing";
 
 import type {
 	NavbarContext as NavbarContextType,
 	NavbarStyleVariant,
 } from "@/types/navbar";
+
+/** The bar's surface in each style. */
+const BAR_STYLE: Record<NavbarStyleVariant, string> = {
+	small: "",
+	wide: "bg-transparent max-w-site mx-auto xl:px-14",
+};
+
+/**
+ * The bar while the chat is open beside the results. Only where the split
+ * view exists: on a phone the chat sits above the results and the header
+ * keeps its size. The small style shrinks by scaling the whole header; the
+ * wide band must stay full width, so its bar loses height instead, down to
+ * the same three quarters.
+ */
+const BAR_BESIDE_CHAT: Record<NavbarStyleVariant, string> = {
+	small: "lg:h-14 lg:py-2",
+	wide: "lg:h-14 lg:py-2 xl:h-navbar-split xl:py-4",
+};
+
+/** The bar inside the header: its size, surface and corners. */
+function barClassName(
+	styleVariant: NavbarStyleVariant,
+	chatEngaged: boolean,
+	showNavbarSearch: boolean,
+) {
+	return twMerge(
+		"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
+		BAR_STYLE[styleVariant],
+		chatEngaged && BAR_BESIDE_CHAT[styleVariant],
+		// When the search bar is docked beneath the navbar (non-wide
+		// style), square the bottom so the two read as one unit.
+		styleVariant !== "wide" && showNavbarSearch && "xl:rounded-b-none",
+	);
+}
 
 export default function Navbar() {
 	const t = useTranslations("ui");
@@ -51,10 +86,12 @@ export default function Navbar() {
 
 	const { engaged: chatEngaged } = useInlineChatLayout();
 	const normalizedPathname = normalizePathname(pathname);
-	const isMapPage = normalizedPathname.includes("/map");
+	const floatsOverPage = pageRunsUnderHeader(pathname);
 
 	// The navbar search routes to the library listing, so hide it on pages that
 	// already own a search bar (the listing, the map, and a user's profile).
+	// It also stays in the page flow, so it cannot follow a header that floats
+	// over the page (the home page): there it would sit under the header.
 	const isSearchOwningPath =
 		normalizedPathname === "/lib" ||
 		normalizedPathname.startsWith("/map") ||
@@ -64,7 +101,8 @@ export default function Navbar() {
 			libraryConfig.features,
 			"navbarSearch",
 		) &&
-		!isSearchOwningPath;
+		!isSearchOwningPath &&
+		!floatsOverPage;
 
 	// Get enabled elements based on runtime configuration and session.
 	const enabledElements = getEnabledElements(
@@ -112,7 +150,7 @@ export default function Navbar() {
 				styleVariant === "wide"
 					? "bg-white dark:bg-secondary"
 					: "max-w-site xl:px-14",
-				isMapPage &&
+				floatsOverPage &&
 					(styleVariant !== "wide"
 						? "xl:absolute xl:top-6 xl:scale-75"
 						: "xl:absolute"),
@@ -120,25 +158,17 @@ export default function Navbar() {
 				// page; while the chat is open it sticks at the same offset,
 				// so the header and the chat do not jump apart on scroll.
 				chatEngaged &&
-					!isMapPage &&
+					!floatsOverPage &&
 					(styleVariant !== "wide"
 						? "xl:sticky xl:top-split xl:scale-75"
 						: "xl:sticky xl:top-0")
 			)}
 		>
 			<div
-				className={twMerge(
-					"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
-					// Only where the split view exists: on a phone the chat
-					// sits above the results and the header keeps its size.
-					chatEngaged && "lg:h-14 lg:py-2",
-					styleVariant === "wide" &&
-						"bg-transparent max-w-site mx-auto xl:px-14",
-					// When the search bar is docked beneath the navbar (non-wide
-					// style), square the bottom so the two read as one unit.
-					styleVariant !== "wide" &&
-						showNavbarSearch &&
-						"xl:rounded-b-none"
+				className={barClassName(
+					styleVariant,
+					chatEngaged,
+					showNavbarSearch,
 				)}
 			>
 				<Logo />

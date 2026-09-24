@@ -5,7 +5,7 @@ import { GiArchiveResearch } from "react-icons/gi";
 import { FaSort } from "react-icons/fa";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -122,10 +122,12 @@ export function ScopeComponent({
 			classNames={
 				!itemsContext.userData
 					? {
+							// On its own line (the map's list) the scope has the
+							// whole row, so its label is not cut short.
 							base: twMerge(
-								"lg:max-w-72 max-w-full",
-								itemsContext.config.interactionsStyle ===
-									"one-line" && "flex-1",
+								"max-w-full",
+								itemsContext.config.interactionsStyle !==
+									"one-line" && "lg:max-w-72",
 								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(

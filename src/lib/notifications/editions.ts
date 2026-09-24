@@ -2,7 +2,7 @@ import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { item } from "@/db/schema/tables/item";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, gt, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, notInArray, sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { notificationEdition, notificationItem, notificationState } from "@/db/schema/notifications";
@@ -14,23 +14,52 @@ function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicIte
   return { key: card.key, title: (card.title || "Untitled publication").slice(0, 2000), creators: (card.creators ?? []).slice(0, 100).map(c => (c.name || [c.firstName, c.lastName].filter(Boolean).join(" ")).slice(0, 500)).filter(Boolean), date: card.date?.slice(0, 100) ?? null, abstract: card.abstractNote?.slice(0, 16000) ?? null, publicationType: card.itemType, doi: card.DOI?.slice(0, 500) ?? null };
 }
 
-async function collectPublications(db: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, end: Date, stream: NotificationStream) {
-  const rows = await db.select({ key: notificationItem.itemKey }).from(notificationItem).innerJoin(item, eq(item.key, notificationItem.itemKey)).where(and(
+/** Most publications an edition lists; the rest of its window is counted, never carried over. */
+const EDITION_LISTED_LIMIT = 1000;
+
+// Publications this stream has not covered yet, up to the end of the window.
+// That includes commits that landed after an earlier window closed and items
+// revealed since, but never what an earlier edition counted past its cap.
+function uncovered(db: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow) {
+  return and(
     publicParentVisibility(db, config.content.tags.hidden),
-    eq(notificationItem.eligible, true), gt(notificationItem.firstPublishedAt, enabledAt), lte(notificationItem.firstPublishedAt, end),
-    sql`NOT EXISTS (SELECT 1 FROM "notificationEdition" e WHERE e."stream" = ${stream}
-      AND e."publications" @> jsonb_build_array(jsonb_build_object('key', ${notificationItem.itemKey})))`,
-  )).orderBy(notificationItem.firstPublishedAt, notificationItem.itemKey).limit(1000);
+    eq(notificationItem.eligible, true), notInArray(item.itemType, ["Attachment", "Note"]),
+    isNull(window.stream === "digest" ? notificationItem.digestEditionId : notificationItem.hourlyEditionId),
+    gt(notificationItem.firstPublishedAt, enabledAt), lte(notificationItem.firstPublishedAt, window.end),
+  );
+}
+
+/**
+ * Marks every candidate as covered by this edition and returns how many there
+ * were plus the first ones to list. One statement, so a commit landing mid-way
+ * is either covered and counted here or left for the next edition.
+ */
+async function coverCandidates(db: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow, editionId: string) {
+  const column = window.stream === "digest" ? sql.identifier("digestEditionId") : sql.identifier("hourlyEditionId");
+  const candidates = db.select({ key: notificationItem.itemKey }).from(notificationItem).innerJoin(item, eq(item.key, notificationItem.itemKey)).where(uncovered(db, config, enabledAt, window));
+  const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
+    WITH covered AS (
+      UPDATE "notificationItem" SET ${column} = ${editionId}
+      WHERE "itemKey" IN (${candidates})
+      RETURNING "itemKey", "firstPublishedAt"
+    )
+    SELECT (SELECT count(*)::int FROM covered) AS total,
+      ARRAY(SELECT "itemKey" FROM covered ORDER BY "firstPublishedAt", "itemKey" LIMIT ${EDITION_LISTED_LIMIT}) AS keys
+  `);
+  return { total: result.total, keys: result.keys ?? [] };
+}
+
+async function listPublications(db: DatabaseTransaction, config: LibraryServerConfig, keys: string[]) {
   const publications: NotificationPublication[] = [];
   let metadataBytes = 0;
-  const cards = new Map((await getPublicItemCards(db, rows.map(row => row.key), config)).map(card => [card.key, card]));
-  for (const row of rows) {
-    const card = cards.get(row.key);
-    if (!card || card.itemType === "Attachment" || card.itemType === "Note") continue;
+  const cards = new Map((await getPublicItemCards(db, keys, config)).map(card => [card.key, card]));
+  for (const key of keys) {
+    const card = cards.get(key);
+    if (!card) continue;
     const metadata = digestMetadata(card);
-    metadataBytes += Buffer.byteLength(JSON.stringify(metadata));
-    // Remaining unannounced items stay eligible for the next edition.
-    if (publications.length >= 1000 || metadataBytes > 1_500_000) break;
+    // The limit covers the serialized array, so count its brackets and commas too.
+    metadataBytes += Buffer.byteLength(JSON.stringify(metadata)) + (publications.length ? 1 : 2);
+    if (metadataBytes > 1_500_000) break;
     publications.push({ ...metadata, item: card });
   }
   return publications;
@@ -60,12 +89,18 @@ async function prepareWindow(
   manualDigest: boolean,
 ): Promise<DigestPreparation> {
   if (window.end <= window.start) return { status: "empty" };
-  const publications = await collectPublications(tx, config, enabledAt, window.end, window.stream);
-  if (!publications.length && manualDigest) return { status: "empty" };
+  const editionId = randomUUID();
+  await tx.insert(notificationEdition).values({ id: editionId, stream: window.stream, windowStart: window.start, windowEnd: window.end, publications: [] });
+  const { total, keys } = await coverCandidates(tx, config, enabledAt, window, editionId);
+  const publications = await listPublications(tx, config, keys);
   let result: DigestPreparation = { status: "empty" };
-  if (publications.length) {
-    const [edition] = await tx.insert(notificationEdition).values({ stream: window.stream, windowStart: window.start, windowEnd: window.end, publications }).returning({ id: notificationEdition.id });
-    if (window.stream === "digest") result = { status: "queued", editionId: edition.id, publicationCount: publications.length };
+  if (!publications.length) {
+    await tx.delete(notificationEdition).where(eq(notificationEdition.id, editionId));
+    if (manualDigest) return result;
+  } else {
+    const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
+    await tx.update(notificationEdition).set({ publications, publicationCount: total, cover }).where(eq(notificationEdition.id, editionId));
+    if (window.stream === "digest") result = { status: "queued", editionId, publicationCount: total };
   }
   await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { digestThrough: window.end, nextDigestAt: nextDigestDate(config.notifications.schedule, window.end) });
   return result;
@@ -120,7 +155,7 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
   if (!edition) return false;
   try {
     const output = edition.stream === "digest" ? await requestDigest(config, edition, signal) : {
-      title: "New publications", summary: `${edition.publications.length} new ${edition.publications.length === 1 ? "publication" : "publications"}`, markdown: null, model: null, reasoning: null,
+      title: "New publications", summary: `${edition.publicationCount} new ${edition.publicationCount === 1 ? "publication" : "publications"}`, markdown: null, model: null, reasoning: null,
     };
     await db.transaction(async tx => {
       const saved = await tx.update(notificationEdition).set({ ...output, publishedAt: new Date(), nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned).returning({ id: notificationEdition.id });

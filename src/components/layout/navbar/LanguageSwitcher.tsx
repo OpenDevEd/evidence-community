@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { DropdownItem, DropdownTrigger } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { DropdownMenu } from "@nextui-org/react";

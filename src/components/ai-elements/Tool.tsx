@@ -9,7 +9,7 @@ import {
 	PiWarningCircleFill,
 } from "react-icons/pi";
 import type { ComponentProps, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 
 type ToolState = (ToolUIPart | DynamicToolUIPart)["state"];
 

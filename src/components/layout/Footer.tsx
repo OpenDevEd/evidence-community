@@ -29,6 +29,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { hasContactDetails } from "@/config/library-config/pages";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import { isPolicyPage } from "@/lib/legal-links";
+import { pageRunsUnderHeader } from "@/lib/runtime-routing";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
 
 type SocialProvider =
@@ -107,12 +108,20 @@ export default function Footer() {
 	const hasContact = hasContactDetails(contact);
 
 	if (isMapPage) return null;
+	// The home page ends in curved bands; the footer rises into the last one with the same curve, across the
+	// whole window, through the room that band leaves at its foot.
+	const curved = pageRunsUnderHeader(pathname);
 
 	return (
 		<footer
 			id="footer"
 			className="relative row-start-3 flex w-full flex-col items-center gap-12 bg-card_light px-6 py-12 print:hidden dark:bg-card lg:px-14"
 		>
+			{curved ? (
+				<svg aria-hidden viewBox="0 0 1600 120" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-[calc(100%-1px)] h-14 w-full text-card_light dark:text-card lg:h-24">
+					<path d="M0 120 C 300 0, 1300 0, 1600 120 Z" fill="currentColor" />
+				</svg>
+			) : null}
 			<div className="grid w-full max-w-site grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-4">
 				<section className="flex flex-col items-center gap-6 sm:items-start">
 					<Logo />

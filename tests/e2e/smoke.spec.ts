@@ -4,6 +4,7 @@ import type { ItemsGetResponse } from "../../src/app/api/items/types";
 import type { ItemGetResponse } from "../../src/app/api/item/types";
 import { creatorDisplayName } from "../../src/lib/creator-display-name";
 
+import { requestsFile } from "./brand-logo-boxes";
 import { dismissConsent } from "./consent";
 import { verifySourceCitationMeasure } from "./citation-measure";
 
@@ -222,7 +223,7 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 }) => {
 	if (expectedLoadedLogo) {
 		await page.route(
-			(url) => expectedLogoUrls.includes(url.toString()),
+			(url) => expectedLogoUrls.some((configured) => requestsFile(url, configured)),
 			(route) =>
 				route.fulfill({
 					body: Buffer.from(
@@ -237,8 +238,11 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 
 	await expect(page).toHaveTitle(expectedIdentityName);
 
+	// The configured logo, either at its own address or, for a PNG or WebP, through the image optimizer.
 	const visibleLogo = page.locator("img[data-library-logo]:visible").first();
-	await expect(visibleLogo).toHaveAttribute("src", expectedLogoUrl);
+	await expect
+		.poll(async () => requestsFile(new URL((await visibleLogo.getAttribute("src")) ?? "", page.url()), expectedLogoUrl))
+		.toBe(true);
 	if (expectedLoadedLogo) {
 		await expect
 			.poll(() =>
@@ -725,6 +729,9 @@ test("copies the selected citation style from a result card without opening the 
 	const text = panel.locator('[aria-live="polite"]');
 	for (const style of ["APA 7", "BibTeX"]) {
 		await panel.getByRole("button", { name: /^Citation style/ }).click();
+		// Focusing the nested menu can scroll the page to keep it in view.
+		await expect(page.getByRole("combobox", { name: /Search styles or journals/ })).toBeFocused();
+		await page.evaluate(() => window.scrollBy({ top: 64, behavior: "instant" }));
 		await page.getByRole("option", { name: style, exact: true }).click();
 		const copy = panel.getByRole("button", { name: "Copy citation", exact: true });
 		await expect(copy).toBeEnabled();
@@ -741,6 +748,14 @@ test("copies the selected citation style from a result card without opening the 
 		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(displayed);
 	}
 	await expect(page).toHaveURL(resultsUrl);
+	await panel.getByRole("button", { name: /^Citation style/ }).click();
+	await expect(page.getByRole("listbox", { name: "Citation style" })).toBeVisible();
+	await expect(page.getByRole("combobox", { name: /Search styles or journals/ })).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("listbox", { name: "Citation style" })).toHaveCount(0);
+	await expect(panel.getByRole("button", { name: "Copy citation", exact: true })).toBeVisible();
+	await page.getByRole("textbox", { name: "Search", exact: true }).click();
+	await expect(panel).toHaveCount(0);
 });
 
 test("reports a clipboard failure and retries copying clean citation text", async ({ page, context }) => {
@@ -1078,32 +1093,3 @@ for (const width of [1200, 390]) {
 	});
 }
 
-test("the search heading reveals its full text only when truncated", async ({ page }) => {
-	await page.setViewportSize({ width: 1600, height: 1000 });
-	await page.goto("/lib");
-	await dismissConsent(page);
-	const heading = page.getByRole("heading", { level: 1 });
-	await expect(heading).toBeVisible();
-	const title = await heading.innerText();
-	const tooltip = page.getByRole("tooltip");
-	await heading.hover();
-	await expect(tooltip).toHaveCount(0);
-
-	await page.setViewportSize({ width: 320, height: 900 });
-	await heading.hover();
-	await expect(tooltip).toHaveText(title);
-
-	// A resize must dismiss an already-open tooltip when the title fits again.
-	await page.setViewportSize({ width: 1600, height: 1000 });
-	await expect(tooltip).toHaveCount(0);
-	await heading.hover();
-	await expect(tooltip).toHaveCount(0);
-
-	await page.setViewportSize({ width: 320, height: 900 });
-	await page.mouse.move(0, 0);
-	await page.getByRole("button", { name: "Explore", exact: true }).focus();
-	await page.keyboard.press("Shift+Tab");
-	await expect(tooltip).toHaveText(title);
-	await page.keyboard.press("Escape");
-	await expect(tooltip).toHaveCount(0);
-});

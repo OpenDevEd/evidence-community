@@ -5,7 +5,7 @@ import { LuHash, LuType, LuCheck, LuX, LuUser } from "react-icons/lu";
 import { Spinner } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
 import React, { useMemo } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";

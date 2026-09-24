@@ -113,6 +113,21 @@ describe("runtime library identity", () => {
 		},
 	);
 
+	it.each([undefined, "", "  "])(
+		"describes the library by its tagline when its description is %j",
+		(description) => {
+			const identity = {
+				...minimalConfig.identity,
+				description,
+				tagline: "Research on education technology",
+			};
+
+			expect(buildLibraryMetadata(identity).description).toBe(
+				"Research on education technology",
+			);
+		},
+	);
+
 	it("renders different configured logo URLs and names from the same component", () => {
 		const minimalMarkup = renderIdentity(minimalConfig);
 		const maximalMarkup = renderIdentity(maximalConfig);
@@ -123,8 +138,11 @@ describe("runtime library identity", () => {
 		expect(minimalMarkup).toContain(
 			"Logo for Minimal Evidence Library in light mode",
 		);
+		// A PNG or WebP logo reaches the optimizer through /brand; an SVG loads from its own address.
 		expect(maximalMarkup).toContain(
-			"https://assets.example.org/maximal/logo-light.webp",
+			encodeURIComponent(
+				`/brand/${encodeURIComponent(maximalConfig.revision)}/logo-light.webp`,
+			),
 		);
 		expect(maximalMarkup).toContain(
 			"https://assets.example.org/maximal/logo-dark.svg",

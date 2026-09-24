@@ -893,5 +893,17 @@
         "documents": "وثائق السياسات",
         "sections": "أقسام السياسة",
         "copyEmail": "نسخ البريد الإلكتروني"
-    }
+    },
+  "homePage": {
+    "curation": "كيف تُنظَّم المكتبة",
+    "team": "من يقف وراءها",
+    "involvement": "شارك معنا",
+    "suggest": "اقترح منشورًا",
+    "suggestSubject": "اقتراح منشور",
+    "join": "انضم كمحرر",
+    "joinSubject": "الانضمام كمحرر",
+    "stepArrival": "أُرسل",
+    "stepCheck": "راجعه محرر",
+    "stepPublication": "نُشر"
+  }
 }

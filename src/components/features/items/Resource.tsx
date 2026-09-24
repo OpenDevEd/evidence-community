@@ -7,7 +7,7 @@ import {
 	MapsIcon,
 	QuoteUpIcon,
 } from "@hugeicons/core-free-icons";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import {
 	fetcher,

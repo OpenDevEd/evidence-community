@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
@@ -58,7 +58,11 @@ import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import { useInstitutionCountryCodes } from "@/lib/use-institution-countries";
-import { hasAnyTag } from "@/lib/tags";
+import {
+	isPublishedLink,
+	isPublishedNote,
+	isVisiblePdfAttachment,
+} from "@/lib/attachment-visibility";
 import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
@@ -214,7 +218,7 @@ function AuthorAffiliations({
 								transition={{ delay: 0.5 + idx * 0.1 }}
 							>
 								<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-									<Image
+									<Image unoptimized
 										src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
 										alt={institution.country_code}
 										className="w-full h-full object-cover"
@@ -1084,11 +1088,7 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 function ItemAttachments({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const validAttachments = item?.attachmentsData?.filter(
-		(attachment) =>
-			attachment.PDFCoverPageImage ||
-			attachment.tags?.some(
-				(tag) => tag.toLowerCase() === "_auto-process",
-			),
+		isVisiblePdfAttachment,
 	);
 
 	if (!validAttachments?.length) return null;
@@ -1185,17 +1185,11 @@ function useNotesDescription() {
 
 function ItemNotes({ item }: { item: Item | undefined }) {
 	const { content } = useLibraryConfig();
-	const notes = item?.attachmentsData?.filter(
-		(attachment) =>
-			attachment.itemType === "Note" &&
-			attachment.note &&
-			hasAnyTag(attachment.tags, content.tags.publish),
+	const notes = item?.attachmentsData?.filter((attachment) =>
+		isPublishedNote(attachment, content.tags.publish),
 	);
-	const links = item?.attachmentsData?.filter(
-		(attachment) =>
-			attachment.linkMode === "linked_url" &&
-			attachment.url &&
-			hasAnyTag(attachment.tags, content.tags.publish),
+	const links = item?.attachmentsData?.filter((attachment) =>
+		isPublishedLink(attachment, content.tags.publish),
 	);
 
 	const notesDescription = useNotesDescription();

@@ -42,6 +42,7 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 		windowStart: new Date("2026-09-07T00:00:00Z"),
 		windowEnd: new Date("2026-09-14T00:00:00Z"),
 		publications,
+		publicationCount: publications.length,
 		markdown:
 			"These additions look at what helps learners stay engaged, and how teachers can make feedback easier to act on.\n\n## Making room for attention\n\nAttention is part of the learning environment. [Designing for attention in the age of AI](/lib/RHSRAM6J) examines the choices that shape engagement, including when digital tools help and when they interrupt.\n\n## Feedback learners can use\n\nThe other additions connect timely feedback with everyday practice. Short cycles of reflection and revision give learners space to try again, while consistent classroom routines make that work easier to sustain. [2](/lib/YPLK86VH), [3](/lib/K24D9DI3)",
 	};

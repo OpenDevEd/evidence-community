@@ -80,6 +80,7 @@ const config: Config = {
 		"./src/components/**/*.{js,ts,jsx,tsx,mdx}",
 		"./src/app/**/*.{js,ts,jsx,tsx,mdx}",
 		"./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
+		"./node_modules/streamdown/dist/*.js",
 		"./src/**/*.{js,ts,jsx,tsx}",
 	],
 	theme: {
@@ -157,6 +158,8 @@ const config: Config = {
 			},
 			height: {
 				navbar: "6.5rem",
+				// The wide header while the chat is open: three quarters of it.
+				"navbar-split": "4.875rem",
 				"generative-modal": "45rem",
 				// The chat beside the results fills the viewport minus the
 				// header stack above it, which differs per breakpoint.
@@ -247,6 +250,32 @@ const config: Config = {
 					"50%": { backgroundPosition: "100% 50%" },
 					"100%": { backgroundPosition: "0% 50%" },
 				},
+				"fade-in": {
+					"0%": { opacity: "0" },
+					"100%": { opacity: "1" },
+				},
+				marquee: {
+					"0%": { transform: "translateX(0)" },
+					"100%": { transform: "translateX(-50%)" },
+				},
+				// A window moves across the field while what it shows moves back by the same amount, so the lit dots stay
+				// on the dim ones. Both are transforms, which the compositor runs without restyling the page.
+				"read-sweep": {
+					"0%": { transform: "translateX(-100%)" },
+					"100%": { transform: "translateX(250%)" },
+				},
+				"read-sweep-back": {
+					"0%": { transform: "translateX(40%)" },
+					"100%": { transform: "translateX(-100%)" },
+				},
+				"marquee-up": {
+					"0%": { transform: "translateY(0)" },
+					"100%": { transform: "translateY(-50%)" },
+				},
+				"hero-rise": {
+					"0%": { opacity: "0", transform: "translateY(28px)" },
+					"100%": { opacity: "1", transform: "translateY(0)" },
+				},
 				"rise-in": {
 					"0%": {
 						opacity: "0",
@@ -262,8 +291,17 @@ const config: Config = {
 				"gradient-x": "gradient-x 2s ease infinite",
 				// "backwards" rather than "both", so the last frame stops
 				// applying once it is done and hover still moves the button.
+				"fade-in": "fade-in 0.6s ease-out backwards",
 				"rise-in":
 					"rise-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards",
+				// CSS rather than JavaScript, so the page's first paint already plays it.
+				"hero-rise": "hero-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) backwards",
+				// Content drawn twice, moved by one copy: an endless row. Set the duration where it is used.
+				marquee: "marquee 40s linear infinite",
+				"marquee-up": "marquee-up 60s linear infinite",
+				// The library's dots lighting up as the assistant reads, in one sweep across the field.
+				"read-sweep": "read-sweep 4.5s linear infinite",
+				"read-sweep-back": "read-sweep-back 4.5s linear infinite",
 			},
 		},
 	},

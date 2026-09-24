@@ -7,7 +7,7 @@ import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Accordion, AccordionItem, Divider, Link } from "@nextui-org/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/lib/tw-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
@@ -437,7 +437,7 @@ function ItemCountry({
 							color="tertiary"
 						>
 							<div className="flex gap-2 items-center">
-								<Image
+								<Image unoptimized
 									src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
 									alt={country}
 									width={16}
