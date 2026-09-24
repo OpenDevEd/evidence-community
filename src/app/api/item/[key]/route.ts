@@ -5,7 +5,7 @@ import { getDatabaseForConfig } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Collection } from "../../collections/types";
-import { getCachedCollections } from "../../cache";
+import { getCachedCollections, getCachedItemSmall } from "../../cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
@@ -62,7 +62,8 @@ export async function GET(
 			const database = await getDatabaseForConfig(config);
 			result = { item: await getPublicItemCard(database, key, config) };
 		} else {
-			result = await getItem(key);
+			// Browsers never show PDF full text, so the public record leaves it out.
+			result = await getCachedItemSmall(key);
 		}
 		return NextResponse.json(result, {
 			status: result.item ? 200 : 404,

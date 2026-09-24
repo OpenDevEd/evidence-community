@@ -42,6 +42,18 @@ const ZENODO_RECORD_TAGS = new Set([
 	"_r:zenododeposit",
 ]);
 
+/** Attachments that feed the DOI and Zenodo links on the item page. */
+export function isIdentifierAttachment(attachment: {
+	tags?: readonly string[] | null;
+}) {
+	return Boolean(
+		attachment.tags?.some((tag) => {
+			const normalized = tag.trim().toLowerCase();
+			return normalized === "_r:doi" || ZENODO_RECORD_TAGS.has(normalized);
+		}),
+	);
+}
+
 type ImportedZenodoIdentifiers = {
 	versionDoi?: string;
 	conceptDoi?: string;

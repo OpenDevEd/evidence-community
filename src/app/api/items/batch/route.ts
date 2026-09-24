@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListItem } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { LIST_ITEM_FIELDS } from "@/lib/search";
+import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -28,8 +28,11 @@ async function getPaginatedItems(
 			...(includeHeavyFields ? {} : { attributesToRetrieve: [...LIST_ITEM_FIELDS] }),
 		});
 
+		const items = result.hits as ListItem[];
 		return {
-			items: result.hits as ListItem[],
+			items: includeHeavyFields
+				? items
+				: items.map((item) => toLightweightItem(item, libraryConfig.content.tags)),
 			total: result.estimatedTotalHits || result.hits.length,
 		};
 	} catch (error: any) {

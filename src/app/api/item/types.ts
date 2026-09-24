@@ -40,14 +40,19 @@ export type Item = InferSelectModel<typeof item> & {
 	publicationIdentifiers?: PublicationIdentifierSummary;
 };
 
-export type ListAttachment = Omit<
+/** The attachment fields the public item page reads; see `itemPageAttachments`. */
+export type ListAttachment = Pick<
 	Item,
-	| "attachmentsData"
-	| "fullTextPDFs"
-	| "fullTextPDF"
+	| "key"
+	| "parentItem"
+	| "itemType"
+	| "linkMode"
+	| "title"
+	| "filename"
+	| "url"
+	| "tags"
 	| "PDFCoverPageImage"
-	| "PDFCoverPageWidth"
-	| "PDFCoverPageHeight"
+	| "note"
 >;
 
 export type ListItem = Omit<Item, "attachmentsData"> & {

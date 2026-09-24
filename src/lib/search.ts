@@ -31,6 +31,7 @@ import { meilisearchEquals } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
+import { itemPageAttachments } from "./attachment-visibility";
 
 /**
  * Result cards also open the item page before the full record loads, so they
@@ -71,6 +72,7 @@ export const LIST_ITEM_FIELDS = [...new Set([
 	"url",
 	"accessDate",
 	"libraryCatalog",
+	"attachmentsData",
 ])];
 
 type SearchCountOnlyResult = {
@@ -110,34 +112,21 @@ export async function getMainAttributes(config?: LibraryServerConfig) {
 	);
 }
 
-function toLightweightItem(item: any): ListItem {
-	const nextItem = { ...item } as ListItem;
-
-	if (nextItem.attachmentsData) {
-		nextItem.attachmentsData = nextItem.attachmentsData.map(
-			(attachment: any) => {
-				const {
-					note,
-					fullTextPDF,
-					fullTextPDFs,
-					PDFCoverPageImage,
-					PDFCoverPageWidth,
-					PDFCoverPageHeight,
-					...rest
-				} = attachment || {};
-				return rest;
-			},
-		);
-	}
-
-	if (nextItem.fullTextPDFs) {
-		nextItem.fullTextPDFs = undefined;
-	}
-
-	return nextItem;
+/** A list result keeps only its public attachments that the item page reads. */
+export function toLightweightItem(
+	item: ListItem,
+	tags: Pick<LibraryPublicConfig["content"]["tags"], "hidden" | "publish">,
+): ListItem {
+	return {
+		...item,
+		attachmentsData: itemPageAttachments(
+			filterPublicAttachments(item.attachmentsData, tags.hidden),
+			tags.publish,
+		),
+	};
 }
 
-function applyCollectionsData(items: ListItem[], collections: Collection[], hiddenTags: readonly string[]) {
+function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 	const collectionMap = new Map(
 		collections.map((collection) => [collection.key, collection]),
 	);
@@ -149,8 +138,6 @@ function applyCollectionsData(items: ListItem[], collections: Collection[], hidd
 				(collectionData): collectionData is Collection =>
 					!!collectionData,
 			);
-
-		item.attachmentsData = filterPublicAttachments(item.attachmentsData, hiddenTags);
 	}
 }
 
@@ -296,11 +283,14 @@ export async function getPublicItems(
 		getCachedCollections(libraryConfig),
 	]);
 
+	const { tags } = libraryConfig.content;
 	const items = (searchResults.hits as ListItem[]).map((item) =>
-		includeHeavyFields ? item : toLightweightItem(item),
+		includeHeavyFields
+			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags.hidden) }
+			: toLightweightItem(item, tags),
 	);
 
-	applyCollectionsData(items, collections as Collection[], libraryConfig.content.tags.hidden);
+	applyCollectionsData(items, collections as Collection[]);
 
 	const totalCount =
 		searchResults.estimatedTotalHits || searchResults.hits.length;
