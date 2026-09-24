@@ -10,13 +10,14 @@ import { cacheLife } from "next/cache";
 import { getComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
 import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
-import { getDatabaseForConfig } from "@/db";
+import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { itemReview } from "@/db/schema/review";
 import { listDigestEditions } from "@/lib/notifications/public";
 import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-visibility";
 import { normalizeDoi } from "@/lib/doi";
+import { listReviewedPublications } from "@/lib/admin/reviewed-publication-catalog";
 
 type Stats = Awaited<ReturnType<typeof getComprehensiveStats>>;
 
@@ -143,22 +144,42 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
  * The publication the steps follow (the chosen one, else the most recent submission an editor published): when it
  * came in, who approved it and when, and its DOI. Reviews record the approving editor's OpenScholar account, named
  * from the directory OpenScholar fills in; someone no longer on the team goes unnamed. The submitter is often an
- * author outside the library, so only the date is shown for them.
+ * author outside the library, so only the date is shown for them. Not every library reviews: a chosen publication
+ * that was never reviewed, or with nothing reviewed the newest one with a PDF, is followed from when it was added.
  */
 async function latestJourney(followed: string | undefined, directory: LibraryHomeConfig["directory"]): Promise<HomeData["journey"]> {
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
+	const hidden = config.content.tags.hidden;
+	// An unreviewed publication is followed only while it still has a public PDF, as the picker required.
+	return (await reviewedJourney(db, hidden, followed, directory)) ?? addedJourney(db, hidden, (await listReviewedPublications(db, followed ? { ids: followed } : { pageSize: "1" }, hidden)).items[0]?.key);
+}
+
+async function reviewedJourney(db: Database, hidden: readonly string[], followed: string | undefined, directory: LibraryHomeConfig["directory"]): Promise<HomeData["journey"]> {
 	const [row] = await db
 		.select({ key: itemReview.itemKey, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt, resolvedBy: itemReview.resolvedBy, title: item.title, doi: item.DOI })
 		.from(itemReview)
 		.innerJoin(item, eq(item.key, itemReview.itemKey))
-		.where(and(eq(itemReview.state, "published"), publicParentVisibility(db, config.content.tags.hidden), followed ? eq(itemReview.itemKey, followed) : undefined))
+		.where(and(eq(itemReview.state, "published"), publicParentVisibility(db, hidden), followed ? eq(itemReview.itemKey, followed) : undefined))
 		// Two approvals saved in the same millisecond still give one answer.
 		.orderBy(desc(itemReview.resolvedAt), desc(itemReview.submittedAt), desc(itemReview.id))
 		.limit(1);
 	if (!row?.resolvedAt) return null;
 	const reviewer = directory.find((person) => person.id === row.resolvedBy);
-	return { key: row.key, title: row.title || row.key, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
+	return { key: row.key, title: row.title || row.key, reviewed: true, submittedAt: row.submittedAt.toISOString(), reviewer: reviewer ? { name: reviewer.name, photo: reviewer.photo ?? null } : null, publishedAt: row.resolvedAt.toISOString(), doi: normalizeDoi(row.doi) };
+}
+
+/** A publication that went public as it was added, with no review to date its steps. */
+async function addedJourney(db: Database, hidden: readonly string[], key: string | undefined): Promise<HomeData["journey"]> {
+	if (!key) return null;
+	const [row] = await db
+		.select({ key: item.key, title: item.title, dateAdded: item.dateAdded, createdAt: item.createdAt, doi: item.DOI })
+		.from(item)
+		.where(and(eq(item.key, key), publicParentVisibility(db, hidden)))
+		.limit(1);
+	if (!row) return null;
+	const when = (row.dateAdded ?? row.createdAt).toISOString();
+	return { key: row.key, title: row.title || row.key, reviewed: false, submittedAt: when, reviewer: null, publishedAt: when, doi: normalizeDoi(row.doi) };
 }
 
 /** First pages of the given publications' PDFs, from their attachments. */

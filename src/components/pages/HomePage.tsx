@@ -81,8 +81,9 @@ export type HomeData = {
 	countryPaths: Record<string, string>;
 	/** First pages of the recent publications that have a PDF, by publication key. */
 	covers: Record<string, string>;
-	/** The most recent submission an editor published, followed from submission to publication. */
-	journey: { key: string; title: string; submittedAt: string; reviewer: { name: string; photo: string | null } | null; publishedAt: string; doi: string | null } | null;
+	/** The publication the curation steps follow, from submission to publication. */
+	/** `reviewed` is false for a publication that was only added: it came in and went public at once. */
+	journey: { key: string; title: string; reviewed: boolean; submittedAt: string; reviewer: { name: string; photo: string | null } | null; publishedAt: string; doi: string | null } | null;
 	/** The most cited publications, for the citations preview. */
 	cited: { key: string; title: string; citations: number }[];
 	/** Whether the library's assistant answers questions across the library (`features.aiSearch`). */
@@ -472,26 +473,26 @@ type Happening = { when?: string; body?: React.ReactNode };
 
 /** What a step's type shows, from the publication the timeline follows (or the editor chosen for it). */
 function happened(step: Step, journey: HomeData["journey"]): Happening {
-	switch (step.type) {
-		case "arrival":
-			return journey ? { when: journey.submittedAt, body: <>Arrived for review</> } : {};
-		case "check":
-			return checked(step.editor ?? journey?.reviewer, journey);
-		case "publication":
-			return journey ? published(journey) : {};
-		default:
-			return {};
-	}
+	if (step.type === "check") return checked(step, journey);
+	if (!journey) return {};
+	if (step.type === "arrival") return { when: journey.submittedAt, body: arrived(journey) };
+	return step.type === "publication" ? published(journey) : {};
 }
 
-function checked(editor: { name: string; photo?: string | null } | null | undefined, journey: HomeData["journey"]): Happening {
+function arrived(journey: NonNullable<HomeData["journey"]>) {
+	return journey.reviewed ? <>Arrived for review</> : <>Added to the library</>;
+}
+
+/** Without a review nobody checked the publication on a known day: the step keeps the editor chosen for it, undated. */
+function checked(step: Step, journey: HomeData["journey"]): Happening {
+	const editor = step.editor ?? journey?.reviewer;
 	const body = editor ? (
 		<span className="flex items-center gap-3">
 			<AuthorAvatar src={editor.photo ?? undefined} alt="" size="md" className="shrink-0" />
 			<span>Checked by <strong className="font-semibold">{editor.name}</strong></span>
 		</span>
 	) : undefined;
-	return { when: journey?.publishedAt, body };
+	return { when: journey?.reviewed ? journey.publishedAt : undefined, body };
 }
 
 function published(journey: NonNullable<HomeData["journey"]>): Happening {
