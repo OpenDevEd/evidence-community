@@ -1548,6 +1548,14 @@
 							"settings": {
 								"type": "object",
 								"properties": {
+									"apiKeyMode": {
+										"default": "platform",
+										"type": "string",
+										"enum": [
+											"platform",
+											"custom"
+										]
+									},
 									"name": {
 										"type": "string",
 										"minLength": 1,

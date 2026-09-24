@@ -13,6 +13,7 @@ export const openAlexQuerySchema = z
 
 export const openAlexConnectionConfigSchema = z
 	.object({
+		apiKeyMode: z.enum(["platform", "custom"]).default("platform"),
 		name: z.string().trim().min(1).max(80),
 		approvedQuery: z
 			.object({
