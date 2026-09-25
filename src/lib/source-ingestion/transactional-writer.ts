@@ -2375,6 +2375,8 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return rows;
 		};
 		if (parentKeysToBump.length > 0) {
+			// Links and citations can reach records outside this batch; hold their mutation locks like the batch's own.
+			await lockItemMutations(transaction, parentKeysToBump);
 			const bumpedParents = await byChunk(parentKeysToBump, (chunk) =>
 				transaction
 					.update(item)

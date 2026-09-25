@@ -24,7 +24,7 @@ const REFERENCES_COLLECTION_NAME = "✅_References";
 const ALSO_KNOWN_AS = "KerkoCite.ItemAlsoKnownAs";
 
 const ZOTERO_ITEM_URI =
-	/(?:https?:\/\/(?:www\.)?zotero\.org\/|zotero:\/\/select\/)(?:(groups|users)\/([0-9]+)|library)\/items\/([A-Z0-9]{8})/g;
+	/(?:https?:\/\/(?:www\.)?zotero\.org\/|zotero:\/\/select\/)(?:(groups|users)\/([0-9]+)|library)\/items\/([A-Z0-9]{8})(?![A-Za-z0-9])/g;
 
 /**
  * The records a `_cites` note links to, as `<library>/<key>`: `groups/2129771/ABCD2345`. `zotero://select/library/…`

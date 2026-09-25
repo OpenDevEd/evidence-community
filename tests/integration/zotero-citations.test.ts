@@ -63,7 +63,7 @@ it("reads Zotero citations from _cites notes and ✅_References folders, and fol
 					"NOTEEEEE",
 					"NOTEDDDD",
 					1,
-					'<p><a href="zotero://select/groups/2129771/items/CITEDBBB">First</a> <a href="https://www.zotero.org/groups/2405685/items/OTHERKEY">Copy</a> <a href="zotero://select/groups/9999/items/CITEDCCC">Same key</a> <a href="https://www.zotero.org/groups/2129771/items/ELSEWHER">Elsewhere</a> <a href="zotero://select/library/items/CITEDCCC">Someone\'s own library</a></p>',
+					'<p><a href="zotero://select/groups/2129771/items/CITEDBBB">First</a> <a href="https://www.zotero.org/groups/2405685/items/OTHERKEY">Copy</a> <a href="zotero://select/groups/9999/items/CITEDCCC">Same key</a> <a href="https://www.zotero.org/groups/2129771/items/ELSEWHER">Elsewhere</a> <a href="zotero://select/library/items/CITEDCCC">Someone\'s own library</a> <a href="zotero://select/groups/2129771/items/CITEDCCCX">Broken key</a></p>',
 				),
 			],
 		});
