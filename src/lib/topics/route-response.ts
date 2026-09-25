@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { getDatabase } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -22,6 +22,8 @@ export async function topicResponse<T>(
   read: (input: T, context: TopicCatalogContext) => Promise<unknown>,
   failure: (input: T, config: LibraryServerConfig) => [string, Record<string, unknown>],
 ) {
+  // The config exists only at runtime, so these routes must never prerender.
+  await connection();
   const config = await getLibraryConfig();
   if (!config.topics.enabled) return topicError("topics_disabled", 404);
   const input = parse(config);
