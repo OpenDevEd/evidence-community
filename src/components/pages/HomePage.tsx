@@ -1,14 +1,14 @@
 "use client";
 
-import { Suspense, use, useEffect, useId, useRef, useState } from "react";
+import { createContext, Suspense, use, useCallback, useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { animate, MotionConfig, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import { useLocale, useTranslations } from "next-intl";
-import useSWR from "swr";
-import { serializeSearchParams } from "@/lib/searchParams";
+import useSWR, { preload, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/utils";
+import { useLastFetchedData } from "@/context/Providers";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import { exampleQuestions } from "./home-content";
 import { Link, useRouter } from "@/i18n/routing";
@@ -31,17 +31,34 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
 import type { ListItem } from "@/app/api/item/types";
 import HomeMap, { type MapShape } from "./HomeMap";
+import { examplesKey, listedRows, regionNames, type Row } from "./home-explorer";
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, Layers01Icon, Location01Icon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
-// Below the fold and heavy: the citation formatter with its styles, and the listing's result card. They load when the
-// reader nears them (see WhenNear), not with the page.
+// Below the fold and heavy: the citation formatter with its styles. It loads when the reader nears it (see WhenNear),
+// not with the page.
 const loadCitationPanel = () => import("@/components/features/items/CitationControl");
-const loadResource = () => import("@/components/features/items/Resource");
 // The panel formats the library's citation as it mounts, with the formatter it loads on first use: both come early.
 const preloadCitations = () => Promise.all([loadCitationPanel(), import("@/lib/citation-formatter")]);
 const CitationPanel = dynamic(() => loadCitationPanel().then((module) => module.CitationPanel), { ssr: false });
-const Resource = dynamic(() => loadResource(), { ssr: false });
+// The listing's result card, in its own file: the explorer's first cards are in the server's page, and the browser
+// loads the card's code alongside it.
+const Resource = dynamic(() => import("@/components/features/items/Resource"));
+
+/**
+ * Hands a publication's list copy to its item page, which shows it at once while the full record loads, as it does
+ * coming from a result list. Only list copies are handed over: a partial record would fill in after the page opens.
+ */
+const HandOff = createContext<(item: ListItem | undefined) => void>(() => {});
+
+/** Kept apart from the page, so remembering a copy re-renders only this and not everything inside it. */
+function HandOffProvider({ children }: { children: React.ReactNode }) {
+	const { setLastFetchedData } = useLastFetchedData();
+	const handOff = useCallback((item: ListItem | undefined) => {
+		if (item) setLastFetchedData({ items: [item] } as ItemsGetResponse);
+	}, [setLastFetchedData]);
+	return <HandOff value={handOff}>{children}</HandOff>;
+}
 
 /**
  * Loads a deferred part's code once the browser is idle after the page, so reaching it later mounts at once: the
@@ -76,6 +93,7 @@ export type HomeData = {
 	languages: { name: string; count: number }[];
 	publishers: { name: string; count: number }[];
 	journals: { name: string; count: number }[];
+	/** The newest publications with a PDF, as a result list holds them. */
 	recent: ListItem[];
 	/** Each country's place in the listing's region filter ("Africa > Eastern Africa > KE"), by country code. */
 	countryPaths: Record<string, string>;
@@ -86,6 +104,10 @@ export type HomeData = {
 	journey: { key: string; title: string; reviewed: boolean; submittedAt: string; reviewer: { name: string; photo: string | null } | null; publishedAt: string; doi: string | null } | null;
 	/** The most cited publications, for the citations preview. */
 	cited: { key: string; title: string; citations: number }[];
+	/** The most cited and followed publications as a result list holds them, for their item pages to open with. */
+	copies: ListItem[];
+	/** Each explorer view's first row of publications, under the address the explorer asks for them at. */
+	examples: Record<string, ItemsGetResponse>;
 	/** Whether the library's assistant answers questions across the library (`features.aiSearch`). */
 	ai: boolean;
 	/** The latest published digests, newest first. */
@@ -206,11 +228,12 @@ function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeD
 }
 
 function LatestPublications({ data }: { data: HomeData }) {
+	const handOff = use(HandOff);
 	return (
 		<ol className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
 			{data.recent.slice(0, 6).map((item) => (
 				<li key={item.key}>
-					<Link href={`/lib/${item.key}`} className="group block outline-offset-4">
+					<Link href={`/lib/${item.key}`} onClick={() => handOff(item)} className="group block outline-offset-4">
 						<span className="block shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 							<PdfCover src={data.covers[item.key]} alt="" sizes="(min-width: 1024px) 208px, (min-width: 640px) 33vw, 50vw" />
 						</span>
@@ -224,13 +247,14 @@ function LatestPublications({ data }: { data: HomeData }) {
 }
 
 function MostCited({ data }: { data: HomeData }) {
+	const handOff = use(HandOff);
 	return (
 		<ol className="grid gap-x-10 gap-y-8 sm:grid-cols-3">
 			{data.cited.map((row) => (
 				<li key={row.key}>
-					<Link href={`/lib/${row.key}`} className="group flex gap-5 outline-offset-4">
+					<Link href={`/lib/${row.key}`} onClick={() => handOff(data.copies.find((copy) => copy.key === row.key))} className="group flex gap-5 outline-offset-4">
 						<span className="block w-24 shrink-0 shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-							<PdfCover src={data.covers[row.key]} alt="" sizes="96px" />
+							<PdfCover src={data.covers[row.key]} alt="" width={96} />
 						</span>
 						<span className="min-w-0 pt-1">
 							<span className="block font-heading text-4xl font-semibold leading-none tabular-nums">{number.format(row.citations)}</span>
@@ -454,7 +478,7 @@ function Curation({ curation, statement, heading, data }: { curation: NonNullabl
 			{steps && (
 				<div className={curation.text ? "mt-16 lg:mt-20" : ""}>
 					<Suspense fallback={<Timeline steps={steps} journey={null} />}>
-						<WithData data={data}>{(figures) => <Timeline steps={steps} journey={figures.journey} cover={figures.journey ? figures.covers[figures.journey.key] : undefined} />}</WithData>
+						<WithData data={data}>{(figures) => <Timeline steps={steps} journey={figures.journey} cover={figures.journey ? figures.covers[figures.journey.key] : undefined} copy={figures.copies.find((copy) => copy.key === figures.journey?.key)} />}</WithData>
 					</Suspense>
 				</div>
 			)}
@@ -503,7 +527,8 @@ function published(journey: NonNullable<HomeData["journey"]>): Happening {
  * The steps on one track, each a node with its date above and its name, what happened and its words below. Following
  * a reviewed publication, its first page stands at the start of the track; without one the track carries the steps.
  */
-function Timeline({ steps, journey, cover }: { steps: Step[]; journey: HomeData["journey"]; cover?: string }) {
+function Timeline({ steps, journey, cover, copy }: { steps: Step[]; journey: HomeData["journey"]; cover?: string; copy?: ListItem }) {
+	const handOff = use(HandOff);
 	const dated = steps.some((step) => happened(step, journey).when);
 	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${journey ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
 	const timeline = (
@@ -518,9 +543,9 @@ function Timeline({ steps, journey, cover }: { steps: Step[]; journey: HomeData[
 		<div className="grid gap-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-16">
 			{/* The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing
 			    over it as it comes into view; it turns to face the reader under the pointer. */}
-			<Link href={`/lib/${journey.key}`} aria-label={journey.title} className="group relative z-10 block max-w-[12rem] self-start outline-offset-4 [perspective:1100px]">
+			<Link href={`/lib/${journey.key}`} onClick={() => handOff(copy)} aria-label={journey.title} className="group relative z-10 block max-w-[12rem] self-start outline-offset-4 [perspective:1100px]">
 				<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-					<PdfCover src={cover} alt="" sizes="192px" />
+					<PdfCover src={cover} alt="" width={192} />
 					{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
 					<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
 						<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
@@ -571,7 +596,7 @@ function HeroRow({ data }: { data: HomeData }) {
 					{row.map((publication, index) => (
 						<span key={`${publication.key}-${index}`} className="block w-32 shrink-0 pr-4 sm:w-40">
 							<span className="block overflow-hidden rounded-xl shadow-lg [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-								<PdfCover src={data.covers[publication.key]} alt="" sizes="(min-width: 640px) 144px, 112px" />
+								<PdfCover src={data.covers[publication.key]} alt="" width={144} />
 							</span>
 						</span>
 					))}
@@ -586,6 +611,7 @@ function HeroRow({ data }: { data: HomeData }) {
  * From xl up, where it fits beside the text; still for reduced motion; each cover opens its publication.
  */
 function HeroShelf({ data }: { data: HomeData }) {
+	const handOff = use(HandOff);
 	const covered = data.recent.filter((publication) => data.covers[publication.key]);
 	if (covered.length < 4) return null;
 	// Each column takes its own run of first pages, so no two show the same one while the library has enough; a column
@@ -601,9 +627,9 @@ function HeroShelf({ data }: { data: HomeData }) {
 			{[...publications, ...publications].map((publication, index) => {
 				const copy = index >= publications.length;
 				return (
-					<Link key={`${publication.key}-${index}`} href={`/lib/${publication.key}`} aria-hidden={copy || undefined} tabIndex={copy ? -1 : undefined} aria-label={copy ? undefined : publication.title || publication.key} className={`block pb-5 outline-offset-4 ${copy ? "motion-reduce:hidden" : ""}`}>
+					<Link key={`${publication.key}-${index}`} href={`/lib/${publication.key}`} onClick={() => handOff(publication)} aria-hidden={copy || undefined} tabIndex={copy ? -1 : undefined} aria-label={copy ? undefined : publication.title || publication.key} className={`block pb-5 outline-offset-4 ${copy ? "motion-reduce:hidden" : ""}`}>
 						<span className="block overflow-hidden rounded-xl shadow-lg [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-							<PdfCover src={data.covers[publication.key]} alt="" sizes="176px" />
+							<PdfCover src={data.covers[publication.key]} alt="" width={176} />
 						</span>
 					</Link>
 				);
@@ -775,7 +801,6 @@ function FooterSeam({ previous }: { previous: Tone }) {
 const twoColumns = "grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20";
 
 const number = new Intl.NumberFormat("en");
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 const dateFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const muted = "opacity-60";
 const rule = "border-t border-[rgb(var(--ink-rgb)/0.1)]";
@@ -783,9 +808,6 @@ const percent = (part: number, whole: number) => Math.round((100 * part) / Math.
 
 /** The row standing for every publication a view's top rows leave out, those with no value recorded included. */
 const OTHER_OR_NONE = "Other or none";
-
-/** A row of the explorer. `filter` is the listing's query for its publications, where the listing can filter by it. */
-type Row = { name: string; count: number; filter?: string; flag?: string };
 
 /** Every band opens with this: its heading, with a note or link on the right. */
 function Heading({ children, note }: { children: React.ReactNode; note?: React.ReactNode }) {
@@ -1032,10 +1054,12 @@ function Ranked({ rows, total, toneOf, link }: { rows: Row[]; total?: number; to
  * In dark mode the card is a 4% white film, which assumes the library's neutral page beneath it; each one gets that page colour
  * as a backing, so on a tinted band it comes out the same grey as in the library instead of letting the band through.
  */
-function PublicationList({ items, className = "" }: { items: ListItem[]; className?: string }) {
+function PublicationList({ items, className = "" }: { items: (ListItem | undefined)[]; className?: string }) {
+	const handOff = use(HandOff);
 	// The cards change with every row and tab the explorer shows, so their entrance is a CSS animation on mount, which
-	// always ends visible; the band around them already rises into view as a whole.
-	return <ul className={`flex flex-col gap-4 md:grid md:grid-cols-2 ${className}`}>{items.map((item, index) => <li key={item.key} className="animate-hero-rise rounded-xl motion-reduce:animate-none dark:bg-background" style={{ animationDelay: `${index * 90}ms` }}><Resource as="div" itemData={item} abstract={false} className="h-full" hideUnapi /></li>)}</ul>;
+	// always ends visible; the band around them already rises into view as a whole. A missing item is a placeholder card.
+	// The hand-off listens while the click travels down, because the gap-map card's "View details" button stops it on the way up.
+	return <ul className={`flex flex-col gap-4 md:grid md:grid-cols-2 ${className}`}>{items.map((item, index) => <li key={item?.key ?? index} onClickCapture={() => handOff(item)} className="animate-hero-rise rounded-xl motion-reduce:animate-none dark:bg-background" style={{ animationDelay: `${index * 90}ms` }}><Resource as="div" itemData={item} isLoading={!item} abstract={false} className="h-full" hideUnapi /></li>)}</ul>;
 }
 
 /* ---------- explorer ---------- */
@@ -1072,33 +1096,48 @@ function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; su
 			</div>
 				<p className={`mt-8 pt-4 text-sm ${rule} ${muted}`}>Counted from the library on {dateFormat.format(data.updated)}.</p>
 			</div>
-			{row.filter && <RowPublications row={row} filter={row.filter} />}
+			{row.filter && <RowExamples row={row} filter={row.filter} fallback={data.examples[examplesKey(row.filter)]} />}
+			<WhenNear placeholder={null}><WarmRows rows={view.rows} from={view.initial ?? 0} examples={data.examples} /></WhenNear>
 		</>
 	);
 }
 
-/** The row's own newest publications, the first of what "See all" opens. */
-/** A row's latest publications, asked for once the explorer nears the screen. */
-function RowPublications(props: { row: Row; filter: string }) {
-	useIdlePreload(loadResource);
-	return (
-		<WhenNear placeholder={<div className="mt-8 min-h-[30rem] md:min-h-[15rem]" />}>
-			<RowExamples {...props} />
-		</WhenNear>
-	);
+/** How many rows around the one a tab opens on have their publications fetched ahead. */
+const WARM_ROWS = 8;
+
+/**
+ * Once the explorer nears the screen and the browser is idle, fetches the publications of the rows around the one the
+ * tab opens on, so moving to them shows their cards at once. Only the nearest eight: about as many as the list shows
+ * without scrolling on a wide screen, and every row a tab of types, collections or topics has, while a tab of years or
+ * countries can hold a hundred.
+ */
+function WarmRows({ rows, from, examples }: { rows: Row[]; from: number; examples: HomeData["examples"] }) {
+	const { cache } = useSWRConfig();
+	const keys = rows
+		.map((row, index) => ({ row, distance: Math.abs(index - from) }))
+		.sort((a, b) => a.distance - b.distance)
+		.flatMap(({ row }) => (row.filter && row.count > 0 ? [examplesKey(row.filter)] : []))
+		.filter((key) => !examples[key])
+		.slice(0, WARM_ROWS)
+		.join("\n");
+	const warm = useCallback(() => Promise.allSettled(keys.split("\n").filter((key) => key && cache.get(key)?.data === undefined).map((key) => preload(key, fetcher))), [keys, cache]);
+	useIdlePreload(warm);
+	return null;
 }
 
-function RowExamples({ row, filter }: { row: Row; filter: string }) {
+/** The row's own newest publications, the first of what "See all" opens. */
+function RowExamples({ row, filter, fallback }: { row: Row; filter: string; fallback?: ItemsGetResponse }) {
 	const locale = useLocale();
-	// While they load the space stays empty, never showing another row's publications under this row's name.
-	const { data: examples } = useSWR<ItemsGetResponse>(`/items?${filter}&sort=desc&limit=2`, fetcher);
+	// The server sent each tab's first row and the rows around it were fetched ahead, so neither is asked for again.
+	// Any other row shows placeholder cards while it loads, never another row's publications under its name.
+	const { data: examples, isLoading } = useSWR<ItemsGetResponse>(examplesKey(filter), fetcher, { fallbackData: fallback, revalidateIfStale: false, revalidateOnFocus: false, revalidateOnReconnect: false });
 	return (
 		<div className="mt-8">
 			<div className="mb-4 flex items-baseline justify-between gap-6">
 				<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
 				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/${locale}/lib?${filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
 			</div>
-			<PublicationList items={examples?.items ?? []} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
+			<PublicationList items={examples?.items ?? (isLoading ? [undefined, undefined] : [])} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
 		</div>
 	);
 }
@@ -1144,12 +1183,10 @@ function countFacts(data: HomeData) {
 /** Everything the explorer band shows: one tab strip over every measure, the linked panel and the facts row. */
 function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes: MapShape[]; tones: Tones; ramp: Tone[]; today: string }) {
 	const [tab, setTab] = useState<string | null>(null);
-	const { filters, search } = useLibraryConfig();
-	/** The listing's query for one of its filters, or nothing where the library has that filter switched off. */
-	const listing = (on: boolean, params: { collections?: string[]; country?: string[]; institution?: string[]; range?: string }) => (on ? serializeSearchParams(params).slice(1) : undefined);
+	const config = useLibraryConfig();
 	const countries = Object.keys(data.countries).length;
-	const series = yearSeries(data, Number(today.slice(0, 4)));
-	const peak = series.reduce((best, point, index) => (point.value > (series[best]?.value ?? -1) ? index : best), 0);
+	const listed = listedRows(data, config, today);
+	const { series, busiest } = listed;
 
 	const types = [...data.itemTypes].sort((a, b) => b.count - a.count).slice(0, 6).map((row) => ({ name: humanType(row.itemType).replace(/^./, (first) => first.toUpperCase()), count: row.count }));
 	const otherTypes = data.publications - types.reduce((sum, row) => sum + row.count, 0);
@@ -1168,17 +1205,16 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 	const parts = (view: Pick<View, "key" | "title" | "icon" | "reading">, rows: Row[], total?: number): View => ({ ...view, rows, total, toneOf: rampOf(rows), chart: (link) => <Treemap rows={rows} total={total ?? rows.reduce((sum, row) => sum + row.count, 0)} toneOf={rampOf(rows)} link={link} /> });
 	const counted = (row: Row) => <strong>{number.format(row.count)}</strong>;
 
-	const countryRows: Row[] = Object.entries(data.countries).sort((a, b) => b[1] - a[1]).map(([code, count]) => ({ name: regionNames.of(code) ?? code, count, flag: code, filter: listing(search.country && Boolean(data.countryPaths[code]), { country: [data.countryPaths[code]!] }) }));
-	const yearRows: Row[] = series.map((point) => ({ name: point.label, count: point.value, filter: listing(filters.years.enabled, { range: point.label }) })).reverse();
+	const countryRows = listed.countries;
 	const flip = (index: number) => series.length - 1 - index;
 	const allViews: View[] = [
-		{ key: "years", title: "By year", icon: Calendar03Icon, rows: yearRows, initial: flip(peak), reading: (row, index) => (index === flip(peak) ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedLast={series.at(-1)?.label === today.slice(0, 4)} /></div> },
+		{ key: "years", title: "By year", icon: Calendar03Icon, rows: listed.years, initial: busiest, reading: (row, index) => (index === busiest ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedLast={series.at(-1)?.label === today.slice(0, 4)} /></div> },
 		parts({ key: "types", title: "By type", icon: Layers01Icon, reading: (row) => (row.name === "Other" ? <>{counted(row)} publications are of <strong>another type</strong></> : <><strong>{percent(row.count, data.publications)}%</strong> are <strong>{plural(row.name)}</strong></>) }, otherTypes > 0 ? [...types, { name: "Other", count: otherTypes }] : types, data.publications),
 		{ key: "countries", title: "By country", icon: Globe02Icon, rows: countryRows, reading: (row, index) => (index === 0 ? <><strong>{row.name}</strong> leads {countries} countries, with {counted(row)} publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} about <strong>{row.name}</strong></>), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
-		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, data.collections.map((collection) => ({ name: collection.title, count: collection.count, filter: listing(true, { collections: [collection.key] }) })), data.publications),
-		parts({ key: "topics", title: "Topics", icon: Tag01Icon, reading: (row) => <>{counted(row)} publications are about <strong>{row.name.toLowerCase()}</strong></> }, data.topics.map((row) => ({ ...row, filter: listing(true, { collections: [row.key] }) }))),
+		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, listed.collections, data.publications),
+		parts({ key: "topics", title: "Topics", icon: Tag01Icon, reading: (row) => <>{counted(row)} publications are about <strong>{row.name.toLowerCase()}</strong></> }, listed.topics),
 		parts({ key: "languages", title: "Languages", icon: LanguageSkillIcon, reading: (row) => (row.name === OTHER_OR_NONE ? <><strong>{percent(row.count, data.publications)}%</strong> are in <strong>another language</strong> or have none recorded</> : <><strong>{percent(row.count, data.publications)}%</strong> are written in <strong>{row.name}</strong></>) }, withRest(data.languages), data.publications),
-		parts({ key: "institutions", title: "Institutions", icon: UniversityIcon, reading: (row) => <>{counted(row)} publications have an author at <strong>{row.name}</strong></> }, data.institutions.map((row) => ({ ...row, filter: listing(filters.institution.mode !== "hidden", { institution: [row.name] }) }))),
+		parts({ key: "institutions", title: "Institutions", icon: UniversityIcon, reading: (row) => <>{counted(row)} publications have an author at <strong>{row.name}</strong></> }, listed.institutions),
 		parts({ key: "publishers", title: "Publishers", icon: Building03Icon, reading: (row) => (row.name === OTHER_OR_NONE ? <>{counted(row)} have <strong>another publisher</strong> or none recorded</> : <><strong>{row.name}</strong> published {counted(row)} of them</>) }, withRest(data.publishers), data.publications),
 		parts({ key: "journals", title: "Journals", icon: Book02Icon, reading: (row) => (row.name === OTHER_OR_NONE ? <>{counted(row)} appeared in <strong>another journal</strong> or none</> : <>{counted(row)} appeared in <strong>{row.name}</strong></>) }, withRest(data.journals), data.publications),
 	];
@@ -1196,16 +1232,6 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 			<Facts data={data} />
 		</>
 	);
-}
-
-/** Years as a continuous series, so a year without publications still has its place on the axis. */
-/** At most a century, ending no later than next year: stray dates such as 9999 would otherwise stretch the chart over thousands of empty years. */
-function yearSeries(data: HomeData, thisYear: number) {
-	const counts = new Map(data.years.filter((row) => row.year <= thisYear + 1).map((row) => [row.year, row.count]));
-	if (!counts.size) return [];
-	const lastYear = Math.max(...counts.keys());
-	const firstYear = Math.max(Math.min(...counts.keys()), lastYear - 99);
-	return Array.from({ length: lastYear - firstYear + 1 }, (_, index) => ({ label: String(firstYear + index), value: counts.get(firstYear + index) ?? 0 }));
 }
 
 
@@ -1227,10 +1253,12 @@ type Props = { name: string; siteUrl: string; contact: Contact; today: string; a
 export default function HomePage(props: Props) {
 	return (
 		<MotionConfig reducedMotion="user">
-			<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
-				<Hero name={props.name} intro={props.rich.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
-				<Bands {...props} />
-			</PageContainer>
+			<HandOffProvider>
+				<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
+					<Hero name={props.name} intro={props.rich.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
+					<Bands {...props} />
+				</PageContainer>
+			</HandOffProvider>
 		</MotionConfig>
 	);
 }

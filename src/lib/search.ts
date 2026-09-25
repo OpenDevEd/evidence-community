@@ -309,6 +309,28 @@ export async function getPublicItems(
 	};
 }
 
+/** The public list copies of these records, as a result list holds them, in one search; hidden and deleted ones are left out. */
+export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> {
+	if (keys.length === 0) return [];
+	const libraryConfig = await getLibraryConfig();
+	const { tags } = libraryConfig.content;
+	const { index } = await getMeilisearchForConfig(libraryConfig);
+	const [searchResults, collections] = await Promise.all([
+		index.search("", {
+			limit: keys.length,
+			attributesToRetrieve: [...LIST_ITEM_FIELDS],
+			filter: [
+				`key IN ${JSON.stringify(keys)}`,
+				...buildSearchFilters({ author: "", collections: [], country: [], hiddenTags: tags.hidden, institution: [], range: null, scope: "" }),
+			],
+		}),
+		getCachedCollections(libraryConfig),
+	]);
+	const items = (searchResults.hits as ListItem[]).map((item) => toLightweightItem(item, tags));
+	applyCollectionsData(items, collections as Collection[]);
+	return items;
+}
+
 export async function getPublicFacets(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 ): Promise<SearchFacetsResult> {

@@ -70,6 +70,8 @@ const data: HomeData = {
 	covers: {},
 	journey: { key: "ITEM1", title: "Coaching teachers in Kenya", reviewed: true, submittedAt: "2026-05-01T00:00:00.000Z", reviewer: { name: "Omar Haddad", photo: null }, publishedAt: "2026-05-20T00:00:00.000Z", doi: "10.1234/coach" },
 	cited: [],
+	copies: [],
+	examples: {},
 	ai: true,
 	digests: null,
 	attachments: { total: 100, itemsWith: 90, withPdf: 60, percentage: 75 },
