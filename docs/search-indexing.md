@@ -49,7 +49,9 @@ again. Stale events cannot overwrite a newer canonical revision because every
 attempt reads current PostgreSQL state rather than reconstructing historical
 event payloads.
 
-The drain claims up to 100 events and coalesces duplicate parent/child work.
+The drain claims up to 500 events and coalesces duplicate parent/child work.
+Meilisearch repeats part of its work after every task, so a large import
+indexes about three times faster in batches of 500 than in batches of 100.
 Projection reads remain bounded to at most 500 item keys, while outgoing
 Meilisearch document requests are split by serialized size and stay below a
 20 MiB default budget. A single larger document is sent alone. If Meilisearch
@@ -111,7 +113,7 @@ docker run -d --name openscholar-local-meilisearch \
   -p 57700:7700 \
   -e MEILI_ENV=development \
   -e MEILI_MASTER_KEY=local-search-key \
-  getmeili/meilisearch:v1.37
+  getmeili/meilisearch:v1.54
 ```
 
 Point `services.search.host` in the local library configuration to
@@ -126,6 +128,10 @@ npm run search:index -- --requeue-dead-letters
 
 `--watch` polls continuously and stops cleanly on `SIGINT` or `SIGTERM`.
 `--rebuild` streams current top-level items in batches, then drains the outbox.
+It replaces records in place instead of emptying the index first, so search
+keeps answering and Meilisearch keeps the embedding of every record whose
+embedded text did not change. It sends every batch before waiting for any,
+then removes records that are no longer public.
 `--requeue-dead-letters` resets terminal events to immediately retryable state
 and can be combined with either one-shot or watch mode.
 
@@ -155,6 +161,8 @@ search key and `MEILISEARCH_MASTER_KEY` to the same private value. Meilisearch
 has no public port and joins only the private application network. The five
 runtime containers also join the external deployment network to reach shared
 PostgreSQL. Automatic destination-network attachment must stay off.
+Meilisearch runs with `MEILI_UPGRADE_DB`, so a newer pinned image migrates the
+existing search data in place when it starts.
 If the named search volume is new, the worker records a pending rebuild in
 PostgreSQL before creating the index. It clears that marker only after the full
 rebuild succeeds. An interrupted rebuild resumes before health becomes ready.

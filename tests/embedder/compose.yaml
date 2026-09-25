@@ -3,7 +3,7 @@
 # embedder stub on the host. Never add that flag to docker/compose.library.yaml.
 services:
   meilisearch:
-    image: getmeili/meilisearch:v1.37
+    image: getmeili/meilisearch:v1.54
     command:
       - meilisearch
       - --experimental-allowed-ip-networks=0.0.0.0/0

@@ -48,7 +48,7 @@ x-search-indexer-service: &search-indexer-service
     start_period: 10s
 
 x-meilisearch-service: &meilisearch-service
-  image: getmeili/meilisearch:v1.37
+  image: getmeili/meilisearch:v1.54
   init: true
   # Lets Meilisearch call the embedding stand-in inside this test network.
   # Never add this flag to docker/compose.library.yaml.

@@ -168,8 +168,8 @@ function requireMeilisearchRuntime(
 	const meilisearch = services.meilisearch;
 	requireCondition(meilisearch, "Private Meilisearch service is missing");
 	requireCondition(
-		meilisearch.image === "getmeili/meilisearch:v1.37",
-		"Meilisearch image must be pinned to v1.37",
+		meilisearch.image === "getmeili/meilisearch:v1.54",
+		"Meilisearch image must be pinned to v1.54",
 	);
 	requireCondition(
 		meilisearch.environment?.MEILI_ENV === "production",
