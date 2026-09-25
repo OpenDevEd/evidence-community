@@ -160,12 +160,13 @@ export async function generateMetadata(props: {
 	};
 }
 
-export default async function ItemPage(props: {
+// Nothing is awaited above the boundary, so a prefetched link carries the loading state and a click shows it at once,
+// filled from the list the reader came from, while the record streams in.
+export default function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
-	const params = await props.params;
 	return (
-		<Suspense fallback={<LoadingComponent itemKey={params.key} />}>
+		<Suspense fallback={<LoadingComponent />}>
 			<ServerComponent params={props.params} />
 		</Suspense>
 	);
