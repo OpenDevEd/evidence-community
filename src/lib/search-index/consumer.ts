@@ -24,7 +24,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
 import { FULL_TEXT_PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 
@@ -229,6 +229,26 @@ async function abortable<T>(promise: PromiseLike<T>, signal?: AbortSignal) {
 	});
 }
 
+/** No other event for the same entity holds an unexpired lease. */
+function noActiveEntityLease(transaction: DatabaseTransaction, claimedAt: Date) {
+	const leasedEntity = alias(outbox, "leasedEntity");
+	return notExists(
+		transaction
+			.select({ id: leasedEntity.id })
+			.from(leasedEntity)
+			.where(
+				and(
+					eq(leasedEntity.entityType, outbox.entityType),
+					eq(leasedEntity.entityKey, outbox.entityKey),
+					isNull(leasedEntity.processedAt),
+					isNull(leasedEntity.deadLetteredAt),
+					isNotNull(leasedEntity.leaseOwner),
+					gt(leasedEntity.leaseExpiresAt, claimedAt),
+				),
+			),
+	);
+}
+
 async function claimEvents(
 	options: SearchOutboxConsumerOptions,
 	leaseDurationMs: number,
@@ -238,9 +258,8 @@ async function claimEvents(
 	throwIfAborted(options.signal);
 	const claimedAt = now(options);
 	return options.database.transaction(async (transaction) => {
-		const leasedEntity = alias(outbox, "leasedEntity");
 		const candidates = await transaction
-			.select()
+			.select({ id: outbox.id })
 			.from(outbox)
 			.where(
 				and(
@@ -251,27 +270,7 @@ async function claimEvents(
 						isNull(outbox.leaseExpiresAt),
 						lte(outbox.leaseExpiresAt, claimedAt),
 					),
-					notExists(
-						transaction
-							.select({ id: leasedEntity.id })
-							.from(leasedEntity)
-							.where(
-								and(
-									eq(
-										leasedEntity.entityType,
-										outbox.entityType,
-									),
-									eq(
-										leasedEntity.entityKey,
-										outbox.entityKey,
-									),
-									isNull(leasedEntity.processedAt),
-									isNull(leasedEntity.deadLetteredAt),
-									isNotNull(leasedEntity.leaseOwner),
-									gt(leasedEntity.leaseExpiresAt, claimedAt),
-								),
-							),
-					),
+					noActiveEntityLease(transaction, claimedAt),
 				),
 			)
 			.orderBy(asc(outbox.id))
@@ -279,11 +278,25 @@ async function claimEvents(
 			.limit(limit);
 		if (candidates.length === 0) return [];
 
-		// The entity lock is taken only for the claimed rows. In the query
-		// above, a plan that reads every pending row before the limit would
-		// take one lock per pending row and run out of lock memory on a large
-		// backlog.
+		// Entity locks are taken only for the selected rows; inside the query
+		// above, a plan that reads every pending row before the limit took one
+		// lock per pending row and ran out of lock memory on a large backlog.
+		const locked = await transaction
+			.select({ id: outbox.id })
+			.from(outbox)
+			.where(
+				and(
+					inArray(
+						outbox.id,
+						candidates.map(({ id }) => id),
+					),
+					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${outbox.entityType} || ':' || ${outbox.entityKey}, 0))`,
+				),
+			);
+		if (locked.length === 0) return [];
 
+		// Checked again under the locks: another worker may have leased the
+		// same entity and committed after the rows above were selected.
 		return transaction
 			.update(outbox)
 			.set({
@@ -294,9 +307,9 @@ async function claimEvents(
 				and(
 					inArray(
 						outbox.id,
-						candidates.map(({ id }) => id),
+						locked.map(({ id }) => id),
 					),
-					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${outbox.entityType} || ':' || ${outbox.entityKey}, 0))`,
+					noActiveEntityLease(transaction, claimedAt),
 				),
 			)
 			.returning();
