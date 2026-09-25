@@ -1011,6 +1011,14 @@ async function verify() {
 			"The event released during shutdown was not retryable",
 		);
 
+		// The rebuild replaces records in place, so a document with no
+		// PostgreSQL record must be removed by the rebuild itself.
+		const orphanKey = `${parentKey}ORPHAN`;
+		await successfulTask(
+			goodService.index.addDocuments([
+				{ key: orphanKey, title: "Orphaned search copy" },
+			]),
+		);
 		const rebuilt = await rebuildSearchIndex(database, goodService, publicationConfig, {
 			taskTimeoutMs: 60_000,
 		});
@@ -1019,6 +1027,16 @@ async function verify() {
 			"The full rebuild omitted the canonical item",
 		);
 		await goodService.index.getDocument(parentKey);
+		try {
+			await goodService.index.getDocument(orphanKey);
+			throw new Error("The full rebuild kept a record PostgreSQL no longer has");
+		} catch (error) {
+			assert(
+				error instanceof MeilisearchApiError &&
+					error.cause?.code === "document_not_found",
+				`The orphan check failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+			);
+		}
 
 		// A lease lost on one event must not strand the rest of its batch.
 		// Before this check, the failure path rolled back every mark when one

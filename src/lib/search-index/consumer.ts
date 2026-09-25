@@ -831,9 +831,12 @@ export async function drainSearchOutbox(
 	let processedEvents = 0;
 	while (processedEvents < maxEvents) {
 		throwIfAborted(options.signal);
+		// Meilisearch repeats part of its work after every task, so a large
+		// import indexes several times faster in 500-event batches than in
+		// batches of 100.
 		const batchResults = await processNextSearchOutboxBatch({
 			...options,
-			batchSize: Math.min(100, maxEvents - processedEvents),
+			batchSize: Math.min(500, maxEvents - processedEvents),
 		});
 		if (!batchResults) break;
 		results.push(...batchResults);
@@ -952,21 +955,33 @@ export async function ensureSearchIndex(
 					[INSTITUTION_FILTER_FIELD]: "count",
 				},
 			},
+			// Only `year` is range-filtered, and nothing searches inside facet
+			// values. Leaving the other features off saves Meilisearch work on
+			// every indexing task; facet counts are unaffected.
+			facetSearch: false,
 			filterableAttributes: [
-				"itemType",
-				"deleted",
-				"tags",
-				INSTITUTION_FILTER_FIELD,
-				"country",
-				"fullNames",
-				"collections",
-				"collectionsAncestry",
-				"year",
-				"key",
-				"provider",
-				"sourceConnectionKey",
 				{
-					attributePatterns: [FULL_TEXT_PDF_PRESENCE_ATTRIBUTE],
+					attributePatterns: ["year"],
+					features: {
+						facetSearch: false,
+						filter: { equality: true, comparison: true },
+					},
+				},
+				{
+					attributePatterns: [
+						"itemType",
+						"deleted",
+						"tags",
+						INSTITUTION_FILTER_FIELD,
+						"country",
+						"fullNames",
+						"collections",
+						"collectionsAncestry",
+						"key",
+						"provider",
+						"sourceConnectionKey",
+						FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
+					],
 					features: {
 						facetSearch: false,
 						filter: { equality: true, comparison: false },
@@ -1037,12 +1052,14 @@ export async function rebuildSearchIndex(
 	const maxDocumentBatchBytes =
 		options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES;
 	await ensureSearchIndex(service, options);
-	await waitForSuccessfulTask(
-		service.index.deleteAllDocuments(),
-		taskTimeoutMs,
-		{ signal: options.signal, taskClient: service.index.tasks },
-	);
-	let deleted = 0;
+	// Records are replaced in place, not deleted first: search keeps answering
+	// during the rebuild, and Meilisearch keeps the embedding of every record
+	// whose embedded text did not change. Whatever is left afterwards is
+	// removed.
+	const staleKeys = await readIndexedKeys(service.index, options.signal);
+	// Every batch is sent before any is awaited, so Meilisearch can index
+	// them together instead of repeating its per-batch work for each one.
+	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
 	let indexed = 0;
 	for await (const plan of generateFullSearchProjectionPlans(
 		database,
@@ -1051,15 +1068,47 @@ export async function rebuildSearchIndex(
 		options.signal,
 	)) {
 		throwIfAborted(options.signal);
-		await applySearchProjectionPlan(
-			service.index,
-			plan,
-			taskTimeoutMs,
+		for (const documents of chunkDocumentsBySerializedBytes(
+			plan.documents,
 			maxDocumentBatchBytes,
-			{ signal: options.signal },
-		);
-		deleted += plan.deleteKeys.length;
+		)) {
+			const task = service.index.addDocuments(documents, {
+				primaryKey: "key",
+			});
+			await abortable(task, options.signal);
+			tasks.push(task);
+		}
+		for (const document of plan.documents) staleKeys.delete(document.key);
 		indexed += plan.documents.length;
 	}
-	return { deleted, indexed };
+	for (const task of tasks) {
+		await waitForSuccessfulTask(task, taskTimeoutMs, {
+			signal: options.signal,
+			taskClient: service.index.tasks,
+		});
+	}
+	if (staleKeys.size > 0) {
+		await waitForSuccessfulTask(
+			service.index.deleteDocuments([...staleKeys]),
+			taskTimeoutMs,
+			{ signal: options.signal, taskClient: service.index.tasks },
+		);
+	}
+	return { deleted: staleKeys.size, indexed };
+}
+
+async function readIndexedKeys(index: Index, signal?: AbortSignal) {
+	const keys = new Set<string>();
+	for (let offset = 0; ; offset += 1_000) {
+		const page = await abortable(
+			index.getDocuments<{ key: string }>({
+				fields: ["key"],
+				limit: 1_000,
+				offset,
+			}),
+			signal,
+		);
+		for (const document of page.results) keys.add(document.key);
+		if (page.results.length < 1_000) return keys;
+	}
 }

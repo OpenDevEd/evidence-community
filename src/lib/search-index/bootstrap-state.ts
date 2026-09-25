@@ -31,10 +31,9 @@ export function resolveRebuildTaskTimeoutMs(input: {
 }
 
 /**
- * A rebuild deletes every document before adding them again. When the
- * embedder step failed on an index that already has records, keep those
- * records and leave the rebuild pending: adding documents would need the
- * broken embedder and could leave the public index empty. An empty index
+ * When the embedder step failed on an index that already has records, keep
+ * those records and leave the rebuild pending: adding documents would need
+ * the broken embedder, so every rebuild task would fail. An empty index
  * (brand-new, or created by an earlier worker that stopped) has nothing to
  * lose, so it is still filled.
  */
