@@ -57,6 +57,7 @@ import {
 	sourceIngestionBatchSchema,
 } from "./batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
+import { replaceZoteroCitationLinks } from "./zotero/citations";
 import {
 	canonicalSourceJson,
 	sourceCollectionFingerprint,
@@ -2051,18 +2052,22 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				if (toKey !== fromKey) citationLinkRows.push({ fromKey, toKey });
 			}
 		}
-		const citationLinkChange = await replaceSourceLinks(transaction, {
-			sourceConnectionKey: batch.sourceConnectionKey,
-			kind: "cites",
-			fromKeys: [
-				...citationTargetsByRecordKey.keys(),
-				...itemDeletes.map((record) => record.sourceRecordKey),
-			].flatMap((sourceRecordKey) => {
-				const itemKey = itemKeys.get(sourceRecordKey);
-				return itemKey ? [itemKey] : [];
-			}),
-			links: citationLinkRows,
-		});
+		// Zotero sends no references; its libraries keep citations in notes and folders, read from the stored library.
+		const citationLinkChange =
+			connection.provider === "zotero"
+				? await replaceZoteroCitationLinks(transaction, batch.sourceConnectionKey)
+				: await replaceSourceLinks(transaction, {
+						sourceConnectionKey: batch.sourceConnectionKey,
+						kind: "cites",
+						fromKeys: [
+							...citationTargetsByRecordKey.keys(),
+							...itemDeletes.map((record) => record.sourceRecordKey),
+						].flatMap((sourceRecordKey) => {
+							const itemKey = itemKeys.get(sourceRecordKey);
+							return itemKey ? [itemKey] : [];
+						}),
+						links: citationLinkRows,
+					});
 
 		const aliasRows = itemUpserts.flatMap((record) =>
 			record.aliases.map((alias) => ({
