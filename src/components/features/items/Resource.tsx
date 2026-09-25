@@ -241,6 +241,9 @@ function ResourceInteractions({
 							<Button
 								as={Link}
 								href={itemHref}
+								onPointerEnter={() => preloadItemCovers(itemData)}
+								onFocus={() => preloadItemCovers(itemData)}
+								onTouchStart={() => preloadItemCovers(itemData)}
 								size="sm"
 								startContent={
 									<HugeiconsIcon
