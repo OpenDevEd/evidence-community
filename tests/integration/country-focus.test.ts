@@ -30,7 +30,7 @@ it("publishes the reviewed country set, keeps later edits private, and preserves
 			const plans = [];
 			for await (const plan of generateSearchProjectionPlans(
 				db,
-				config.services.publication,
+				config,
 				[{ entityType: "item", entityKey: key }],
 			))
 				plans.push(...plan.documents);

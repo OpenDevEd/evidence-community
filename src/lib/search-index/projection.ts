@@ -30,7 +30,7 @@ import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { readPublicIdentifiers } from "@/lib/publication/public-identifiers";
-import { resolveTopicAncestry, resolveTopicNodes } from "@/lib/topics/catalog";
+import { resolveTopicAncestry } from "@/lib/topics/catalog";
 
 export type SearchProjectionEvent = {
 	entityKey: string;
@@ -62,16 +62,6 @@ type CollectionRow = Pick<
 	"key" | "parentCollection" | "deleted"
 >;
 type ItemRow = typeof item.$inferSelect;
-export type PublicationProjectionConfig =
-	LibraryServerConfig["services"]["publication"];
-type SearchProjectionConfig = PublicationProjectionConfig | LibraryServerConfig;
-
-function isLibraryServerConfig(
-	config: SearchProjectionConfig,
-): config is LibraryServerConfig {
-	return "services" in config;
-}
-
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
 function uniqueSorted(values: Iterable<string>) {
@@ -299,18 +289,13 @@ async function resolveTopLevelItemKeys(
 
 async function buildSearchProjectionPlanForKeys(
 	database: SearchProjectionDatabase,
-	projectionConfig: SearchProjectionConfig,
+	config: LibraryServerConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 	hiddenTags: readonly string[] = [],
 	catalogDatabase?: Database,
 ): Promise<SearchProjectionPlan> {
-	const config = isLibraryServerConfig(projectionConfig)
-		? projectionConfig
-		: null;
-	const publication: PublicationProjectionConfig = config
-		? config.services.publication
-		: (projectionConfig as PublicationProjectionConfig);
+	const publication = config.services.publication;
 	if (topLevelKeys.length === 0) {
 		return { deleteKeys: [], documents: [] };
 	}
@@ -416,14 +401,11 @@ async function buildSearchProjectionPlanForKeys(
 		activeParents.flatMap(({ item: parent }) => parent.topics),
 	);
 	const topicNodes =
-		config?.topics.enabled && catalogDatabase && directTopicIds.length > 0
-			? await resolveTopicNodes(
-					await resolveTopicAncestry(directTopicIds, {
-						database: catalogDatabase,
-						config,
-					}),
-					{ database: catalogDatabase, config },
-				)
+		config.topics.enabled && catalogDatabase && directTopicIds.length > 0
+			? await resolveTopicAncestry(directTopicIds, {
+					database: catalogDatabase,
+					config,
+				})
 			: [];
 	const topicsById = new Map(topicNodes.map((node) => [node.id, node]));
 	const topicAncestry = (topicIds: readonly string[]) => {
@@ -510,7 +492,7 @@ async function buildSearchProjectionPlanForKeys(
 				},
 				metadataSearch: metadataSearchValues(parent),
 				topicAncestors: topicAncestry(parent.topics),
-				topics: config?.topics.enabled ? uniqueSorted(parent.topics) : [],
+				topics: config.topics.enabled ? uniqueSorted(parent.topics) : [],
 				key: parent.key,
 				provider,
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
@@ -531,7 +513,7 @@ async function buildSearchProjectionPlanForKeys(
 
 async function* plansForKeys(
 	database: Database,
-	projectionConfig: SearchProjectionConfig,
+	config: LibraryServerConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 	batchSize: number,
@@ -544,7 +526,7 @@ async function* plansForKeys(
 			(transaction) =>
 				buildSearchProjectionPlanForKeys(
 					transaction,
-					projectionConfig,
+					config,
 					keyChunk,
 					collections,
 					[],
@@ -556,7 +538,7 @@ async function* plansForKeys(
 
 export async function* generateSearchProjectionPlans(
 	database: Database,
-	projectionConfig: SearchProjectionConfig,
+	config: LibraryServerConfig,
 	events: readonly SearchProjectionEvent[],
 	batchSize = 500,
 	signal?: AbortSignal,
@@ -591,7 +573,7 @@ export async function* generateSearchProjectionPlans(
 		);
 	yield* plansForKeys(
 		database,
-		projectionConfig,
+		config,
 		topLevelKeys,
 		collections,
 		batchSize,
@@ -601,7 +583,7 @@ export async function* generateSearchProjectionPlans(
 
 export async function* generateFullSearchProjectionPlans(
 	database: Database,
-	projectionConfig: SearchProjectionConfig,
+	config: LibraryServerConfig,
 	batchSize = 500,
 	signal?: AbortSignal,
 ) {
@@ -623,7 +605,7 @@ export async function* generateFullSearchProjectionPlans(
 		);
 	yield* plansForKeys(
 		database,
-		projectionConfig,
+		config,
 		topLevelRows.map(({ key }) => key),
 		collections,
 		batchSize,

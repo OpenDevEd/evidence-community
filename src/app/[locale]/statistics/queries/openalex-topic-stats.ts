@@ -1,7 +1,7 @@
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { resolveTopicAncestry, resolveTopicNodes } from "@/lib/topics/catalog";
+import { resolveTopicAncestry } from "@/lib/topics/catalog";
 import { and, isNotNull, sql } from "drizzle-orm";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import type { TopicOverview, TopicStats, TopicYearStats } from "./topic-stats";
@@ -16,7 +16,7 @@ type TopicRecord = {
 
 const PATH_SEPARATOR = " › ";
 
-type TopicNodes = Awaited<ReturnType<typeof resolveTopicNodes>>;
+type TopicNodes = Awaited<ReturnType<typeof resolveTopicAncestry>>;
 type TopicNodeById = Map<string, TopicNodes[number]>;
 
 function topicChildren(nodes: TopicNodes) {
@@ -203,11 +203,7 @@ export async function getOpenAlexTopicStats(
 			),
 		);
 	const topicIds = [...new Set(rows.flatMap((row) => row.topics))];
-	const ancestryIds = await resolveTopicAncestry(topicIds, {
-		database: db,
-		config,
-	});
-	const nodes = await resolveTopicNodes(ancestryIds, {
+	const nodes = await resolveTopicAncestry(topicIds, {
 		database: db,
 		config,
 	});

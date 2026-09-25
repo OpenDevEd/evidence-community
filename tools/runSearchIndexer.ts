@@ -242,7 +242,7 @@ async function main() {
 		do {
 			try {
 				const results = await drainSearchOutbox({
-					publication: config,
+					config,
 					batchClient: service.client.batches,
 					database: databaseResource.database,
 					index: service.index,

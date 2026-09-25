@@ -20,8 +20,7 @@ vi.mock("@/lib/actions", () => ({ areLinksValid: vi.fn(async () => true) }));
 // The topic catalog lives in OpenScholar; the reader's topic is a known leaf.
 vi.mock("@/db", () => ({ getDatabaseForConfig: vi.fn(async () => ({})) }));
 vi.mock("@/lib/topics/catalog", () => ({
-	resolveTopicAncestry: vi.fn(async () => ["T12260"]),
-	resolveTopicNodes: vi.fn(async () => [{ id: "T12260", parent: null }]),
+	resolveTopicAncestry: vi.fn(async () => [{ id: "T12260", parent: null }]),
 }));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";

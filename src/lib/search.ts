@@ -33,7 +33,7 @@ import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { itemPageAttachments } from "./attachment-visibility";
 import { getDatabaseForConfig } from "@/db";
-import { resolveTopicAncestry, resolveTopicNodes } from "./topics/catalog";
+import { resolveTopicAncestry } from "./topics/catalog";
 import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
 
 /**
@@ -274,9 +274,7 @@ export async function resolveSearchTopicNodes(
 		: [];
 	if (!selected.length) return [];
 	const database = await getDatabaseForConfig(libraryConfig);
-	const context = { database, config: libraryConfig };
-	const ids = await resolveTopicAncestry(selected, context, {allowUnknown: true});
-	return resolveTopicNodes(ids, context);
+	return resolveTopicAncestry(selected, { database, config: libraryConfig }, {allowUnknown: true});
 }
 
 export async function getPublicItems(

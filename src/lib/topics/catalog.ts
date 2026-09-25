@@ -104,6 +104,7 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
   return unique.flatMap(id => result.has(id) ? [result.get(id)!] : []);
 }
 
+/** The given topics and all their ancestors, ordered by ID. */
 export async function resolveTopicAncestry(ids: readonly string[], context: TopicCatalogContext, options: {allowUnknown?: boolean} = {}) {
   const all = new Map<string, TopicNode>();
   let pending = [...new Set(ids)];
@@ -113,7 +114,7 @@ export async function resolveTopicAncestry(ids: readonly string[], context: Topi
     pending = [...new Set(nodes.flatMap(node => node.parent && !all.has(node.parent) ? [node.parent] : []))];
   }
   if (pending.length) throw new Error("Topic hierarchy exceeds four levels");
-  return [...all.keys()].sort();
+  return [...all.values()].sort((left, right) => (left.id < right.id ? -1 : 1));
 }
 
 export async function readTopicDetail(topicId: string, context: TopicCatalogContext) {

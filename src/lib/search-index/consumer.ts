@@ -1,4 +1,3 @@
-import type { PublicationProjectionConfig } from "./projection";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
@@ -57,7 +56,7 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
-	publication: PublicationProjectionConfig | LibraryServerConfig;
+	config: LibraryServerConfig;
 	batchClient?: Meilisearch["batches"];
 	database: Database;
 	heartbeatIntervalMs?: number;
@@ -689,7 +688,7 @@ async function processClaimedEvents(
 		let documentCount = 0;
 		for await (const plan of generateSearchProjectionPlans(
 			options.database,
-			options.publication,
+			options.config,
 			events,
 			500,
 			options.signal,
@@ -1044,7 +1043,7 @@ export async function applySearchIndexEmbedder(
 export async function rebuildSearchIndex(
 	database: Database,
 	service: MeilisearchService,
-	publication: PublicationProjectionConfig | LibraryServerConfig,
+	config: LibraryServerConfig,
 	options: {
 		maxDocumentBatchBytes?: number;
 		signal?: AbortSignal;
@@ -1066,7 +1065,7 @@ export async function rebuildSearchIndex(
 	let indexed = 0;
 	for await (const plan of generateFullSearchProjectionPlans(
 		database,
-		publication,
+		config,
 		500,
 		options.signal,
 	)) {
@@ -1101,7 +1100,7 @@ export async function rebuildSearchIndex(
 		// delete puts any such record back; a later publish has its own event.
 		for await (const plan of generateSearchProjectionPlans(
 			database,
-			publication,
+			config,
 			[...staleKeys].map((entityKey) => ({ entityKey, entityType: "item" })),
 			500,
 			options.signal,
