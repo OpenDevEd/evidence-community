@@ -11,6 +11,7 @@ export const AI_MODELS = [
 			// regional tag — the bare "amazon-bedrock" slug is not matched
 			// against this model's Bedrock endpoint.
 			providerOrder: ["amazon-bedrock/us-east-1"],
+			allowFallbacks: true,
 			promptCache: {
 				mode: "automatic",
 				topLevel: null,
@@ -26,6 +27,10 @@ export const AI_MODELS = [
 		maximumReasoningEffort: "high",
 		openRouter: {
 			providerOrder: ["google-ai-studio"],
+			// Gemini's thought signatures are accepted only by the Google host that
+			// produced them, and every later step and turn sends them back, so a
+			// fallback to another host mid-conversation fails the request.
+			allowFallbacks: false,
 			promptCache: {
 				mode: "automatic",
 				topLevel: null,
@@ -41,6 +46,7 @@ export const AI_MODELS = [
 		maximumReasoningEffort: "xhigh",
 		openRouter: {
 			providerOrder: [],
+			allowFallbacks: true,
 			promptCache: {
 				mode: "automatic",
 				topLevel: null,
@@ -56,6 +62,7 @@ export const AI_MODELS = [
 		maximumReasoningEffort: "max",
 		openRouter: {
 			providerOrder: [],
+			allowFallbacks: true,
 			promptCache: {
 				mode: "anthropic-explicit",
 				topLevel: { type: "ephemeral", ttl: "1h" },
@@ -71,6 +78,7 @@ export const AI_MODELS = [
 		maximumReasoningEffort: "max",
 		openRouter: {
 			providerOrder: [],
+			allowFallbacks: true,
 			promptCache: {
 				mode: "anthropic-explicit",
 				topLevel: { type: "ephemeral", ttl: "1h" },

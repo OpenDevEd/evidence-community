@@ -149,6 +149,11 @@ test("OpenRouter cache settings are stable and regeneration can refresh response
 		),
 		false,
 	);
+	// Gemini's thought signatures only work on the host that produced them.
+	assert.deepEqual(
+		createOpenRouterModelSettings("google/gemini-3.7-flash").provider,
+		{ order: ["google-ai-studio"], allow_fallbacks: false },
+	);
 	assert.deepEqual(
 		createOpenRouterModelSettings(DEFAULT_AI_MODEL_ID, { sessionId }),
 		{
