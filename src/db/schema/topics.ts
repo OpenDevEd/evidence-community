@@ -1,6 +1,7 @@
 import { itemIdentity, sourceConnection } from "@opendeved/evidence-library-core";
-import { bigint, doublePrecision, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, doublePrecision, boolean, index, jsonb, pgTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { associationDeliveryColumns } from "./author-associations";
 
 /** Normalized source values remain separate from published editorial values. */
 export const itemSourceValue = pgTable("itemSourceValue", {
@@ -33,9 +34,7 @@ export const topicAssociationDelivery = pgTable("topicAssociationDelivery", {
   itemKey: varchar("itemKey", {length: 8}).primaryKey(),
   generation: bigint("generation", {mode: "number"}).notNull().default(1),
   payload: jsonb("payload").$type<Record<string, unknown>>(),
-  revision: bigint("revision", {mode: "number"}).notNull(),
-  attempts: integer("attempts").notNull().default(0), nextAttemptAt: timestamp("nextAttemptAt", {withTimezone: true}).defaultNow(),
-  leaseToken: text("leaseToken"), leaseExpiresAt: timestamp("leaseExpiresAt", {withTimezone: true}), lastError: text("lastError"),
+  ...associationDeliveryColumns,
 }, t => [index("topicAssociationDelivery_pending_idx").on(t.nextAttemptAt).where(sql`${t.nextAttemptAt} IS NOT NULL`)]);
 
 export const topicDeliveryConfiguration = pgTable("topicDeliveryConfiguration", {
