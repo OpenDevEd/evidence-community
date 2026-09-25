@@ -16,9 +16,11 @@ import {
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
+	outboxBacklogForRebuild,
 	applySearchIndexEmbedder,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
+	rebuildForOutboxBacklog,
 	rebuildSearchIndex,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
@@ -242,8 +244,59 @@ async function main() {
 			true,
 		);
 
+		let backlogRebuildFailed = false;
+		const rebuildLargeBacklog = async () => {
+			const backlog = await outboxBacklogForRebuild(databaseResource.database);
+			if (backlog === 0) return 0;
+			await writeWorkerState(
+				{
+					currentBatchProgress: null,
+					currentBatchUid: null,
+					currentEventCount: backlog,
+					currentTaskUid: null,
+					lastCompletedAt: reporter.current().lastCompletedAt ?? null,
+					lastError: reporter.current().lastError ?? null,
+					stage: "projecting",
+				},
+				true,
+			);
+			const rebuilt = await rebuildForOutboxBacklog(
+				databaseResource.database,
+				service,
+				config,
+				{
+					signal: abortController.signal,
+					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
+						embedder: config.search.embedder,
+					}),
+				},
+			);
+			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
+			return rebuilt.acknowledged;
+		};
 		do {
 			try {
+				// A large backlog, such as a first import, is indexed faster by
+				// a rebuild; events written meanwhile are drained below. After a
+				// failed backlog rebuild only the drain runs, because only the
+				// drain can set a rejected document aside.
+				let acknowledged = 0;
+				if (!backlogRebuildFailed) {
+					try {
+						acknowledged = await rebuildLargeBacklog();
+					} catch (error) {
+						if (
+							error instanceof SearchOutboxAbortError &&
+							abortController.signal.aborted
+						) {
+							throw error;
+						}
+						backlogRebuildFailed = true;
+						console.error(
+							`Search index backlog rebuild failed; draining instead: ${error instanceof Error ? `${error.name}: ${error.message}` : error}`,
+						);
+					}
+				}
 				const results = await drainSearchOutbox({
 					config,
 					batchClient: service.client.batches,
@@ -291,14 +344,14 @@ async function main() {
 						currentEventCount: 0,
 						currentTaskUid: null,
 						lastCompletedAt:
-							results.length > 0
+							results.length + acknowledged > 0
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
 						lastError: resolveIdleLastError({
 							embedderError,
 							previousLastError:
 								previousProgress.lastError ?? null,
-							processedEvents: results.length,
+							processedEvents: results.length + acknowledged,
 						}),
 						stage: "idle",
 					},

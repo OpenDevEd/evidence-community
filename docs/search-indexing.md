@@ -56,6 +56,12 @@ It sends every Meilisearch task of a claim before waiting for any, and works on
 three claims at once, so one claim is projected while Meilisearch indexes
 another. A large import (a first Zotero or OpenAlex sync) is therefore indexed
 in a few large batches: 103,688 records took 7.9 minutes instead of 32.
+
+A very large backlog is faster to index as a rebuild. When at least 50,000
+events wait and they cover at least a quarter of the records, the worker saves
+the list of waiting events, rebuilds the index, and then acknowledges exactly
+those events: the rebuild read every record after they were committed. Events
+written during the rebuild stay queued and are drained afterwards.
 Projection reads remain bounded to at most 500 item keys, while outgoing
 Meilisearch document requests are split by serialized size and stay below a
 20 MiB default budget. A single larger document is sent alone. If Meilisearch

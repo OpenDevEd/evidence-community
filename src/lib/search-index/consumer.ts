@@ -11,6 +11,7 @@ import {
 import {
 	and,
 	asc,
+	count,
 	eq,
 	gt,
 	inArray,
@@ -24,6 +25,8 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { item } from "@/db/schema/tables/item";
+import { chunkValues } from "@/lib/chunk-values";
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
 import {
 	FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
@@ -1189,6 +1192,82 @@ export async function applySearchIndexEmbedder(
 			taskClient: service.index.tasks,
 		},
 	);
+}
+
+/**
+ * Rebuilding beats draining the outbox once this many events wait and they
+ * cover at least a quarter of the records: a first import of 1M records took
+ * 2 h through the drain and 37 min as a rebuild.
+ */
+const BACKLOG_REBUILD_MIN_EVENTS = 50_000;
+
+/** The number of waiting events when a rebuild should index them, else 0. */
+export async function outboxBacklogForRebuild(database: Database) {
+	const waiting = and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt));
+	const sample = await database
+		.select({ id: outbox.id })
+		.from(outbox)
+		.where(waiting)
+		.limit(BACKLOG_REBUILD_MIN_EVENTS);
+	if (sample.length < BACKLOG_REBUILD_MIN_EVENTS) return 0;
+	const [[{ pending }], [{ records }]] = await Promise.all([
+		database.select({ pending: count() }).from(outbox).where(waiting),
+		database
+			.select({ records: count() })
+			.from(item)
+			.where(isNull(item.parentItem)),
+	]);
+	return pending * 4 >= records ? pending : 0;
+}
+
+/**
+ * Indexes a large outbox backlog with a rebuild, then acknowledges the events
+ * that were waiting before it started. The rebuild reads every record after
+ * those events were committed, so it indexed what they describe. Events
+ * written during the rebuild stay queued for the drain.
+ */
+export async function rebuildForOutboxBacklog(
+	database: Database,
+	service: MeilisearchService,
+	config: LibraryServerConfig,
+	options: { signal?: AbortSignal; taskTimeoutMs?: number } = {},
+) {
+	const waiting = await database
+		.select({ id: outbox.id })
+		.from(outbox)
+		.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
+	const rebuilt = await rebuildSearchIndex(database, service, config, options);
+	const acknowledgedAt = new Date();
+	let acknowledged = 0;
+	for (const ids of chunkValues(
+		waiting.map(({ id }) => id),
+		10_000,
+	)) {
+		throwIfAborted(options.signal);
+		const rows = await database
+			.update(outbox)
+			.set({
+				lastError: null,
+				leaseExpiresAt: null,
+				leaseOwner: null,
+				processedAt: acknowledgedAt,
+			})
+			.where(
+				and(
+					inArray(outbox.id, ids),
+					isNull(outbox.processedAt),
+					isNull(outbox.deadLetteredAt),
+					// An event another worker is still processing stays its own.
+					or(
+						isNull(outbox.leaseExpiresAt),
+						lte(outbox.leaseExpiresAt, acknowledgedAt),
+					),
+				),
+			)
+			.returning({ id: outbox.id });
+		acknowledged += rows.length;
+	}
+	return { ...rebuilt, acknowledged };
 }
 
 export async function rebuildSearchIndex(
