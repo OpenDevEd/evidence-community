@@ -4,3 +4,6 @@ export const FULL_TEXT_PDF_PRESENCE_ATTRIBUTE = "fullTextPDFs.fullTextPDF.page";
 
 /** Meilisearch filter for records that carry searchable PDF full text. */
 export const FULL_TEXT_PDF_FILTER = `${FULL_TEXT_PDF_PRESENCE_ATTRIBUTE} EXISTS`;
+
+/** The deepest search result anyone can reach (Meilisearch `maxTotalHits`). */
+export const SEARCH_RESULT_LIMIT = 10_000_000;
