@@ -1,9 +1,8 @@
-import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
+import { isCanonicalRecordKey, outbox } from "@opendeved/evidence-library-core";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
-import { insertOutboxEvents } from "@/db/postgres";
 import { reserveCollectionIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 
@@ -436,7 +435,7 @@ export async function createNativeCollection(db: Database, input: unknown) {
 				updatedAt: now,
 			})
 			.returning();
-		await insertOutboxEvents(transaction, {
+		await transaction.insert(outbox).values({
 			entityType: "collection",
 			entityKey: key,
 			operation: "upsert",
@@ -496,7 +495,7 @@ export async function renameNativeCollection(
 				),
 			)
 			.returning();
-		await insertOutboxEvents(transaction, {
+		await transaction.insert(outbox).values({
 			entityType: "collection",
 			entityKey: collectionKey,
 			operation: "upsert",
@@ -607,7 +606,7 @@ export async function moveNativeCollection(
 		const projectionChanged =
 			current.parentCollection !== move.parentCollection;
 		if (projectionChanged) {
-			await insertOutboxEvents(transaction, {
+			await transaction.insert(outbox).values({
 				entityType: "collection",
 				entityKey: collectionKey,
 				operation: "upsert",
@@ -672,7 +671,7 @@ export async function deleteNativeCollection(
 			)
 			.returning();
 		if (updated.length > 0) {
-			await insertOutboxEvents(transaction, 
+			await transaction.insert(outbox).values(
 				updated.map((row) => ({
 					entityType: "collection" as const,
 					entityKey: row.key,
@@ -765,7 +764,7 @@ export async function restoreNativeCollection(
 			);
 			restored[restoredIndex] = restoredRoot!;
 		}
-		await insertOutboxEvents(transaction, 
+		await transaction.insert(outbox).values(
 			restored.map((row) => ({
 				entityType: "collection" as const,
 				entityKey: row.key,

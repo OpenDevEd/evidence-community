@@ -1,6 +1,7 @@
 import {
 	collectionSourceLink,
 	itemSourceLink,
+	outbox,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -12,7 +13,6 @@ import {
 	lockItemMutations,
 } from "@/db/canonical-mutation-lock";
 import type { Database } from "@/db/database-schema";
-import { insertOutboxEvents } from "@/db/postgres";
 import { reserveCollectionIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
@@ -161,7 +161,7 @@ async function emitCollectionEvents(
 	operation: "delete" | "upsert",
 ) {
 	if (rows.length === 0) return;
-	await insertOutboxEvents(transaction, 
+	await transaction.insert(outbox).values(
 		rows.map((row) => ({
 			entityKey: row.key,
 			entityType: "collection" as const,
@@ -707,7 +707,7 @@ export async function restoreAdminCollection(
 			});
 		}
 		if (indexingItems.length > 0) {
-			await insertOutboxEvents(transaction, 
+			await transaction.insert(outbox).values(
 				indexingItems.map((member) => ({
 					entityKey: member.key,
 					entityType: "item" as const,

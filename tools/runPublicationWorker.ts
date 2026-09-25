@@ -6,7 +6,6 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
-import { publishOutboxCommits } from "../src/lib/cache-invalidation";
 import { createSupabaseFileStorage } from "../src/lib/admin/file-storage";
 import {
 	readPublicationWorkerInstance,
@@ -77,7 +76,6 @@ async function main() {
 	const instancePath = resolvePublicationWorkerInstancePath();
 	const resource = createPostgresDatabaseResource(
 		config.services.database.url,
-		publishOutboxCommits(config, "publication-worker"),
 	);
 	const storage = createSupabaseFileStorage(config.services.storage);
 	let ownershipLost = false;

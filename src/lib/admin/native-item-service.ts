@@ -7,6 +7,7 @@ import {
 	itemFileDraft,
 	itemIdentity,
 	itemSourceLink,
+	outbox,
 } from "@opendeved/evidence-library-core";
 import {
 	and,
@@ -18,7 +19,6 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { insertOutboxEvents } from "@/db/postgres";
 import {
 	lockItemMutation,
 	lockItemMutations,
@@ -1193,7 +1193,7 @@ export async function publishItemDraftWithContext(
 			});
 		}
 
-		await insertOutboxEvents(transaction, {
+		await transaction.insert(outbox).values({
 			entityType: "item",
 			entityKey: itemKey,
 			operation: "upsert",
@@ -1217,7 +1217,7 @@ export async function publishItemDraftWithContext(
 				target.revision,
 				targetRevision,
 			);
-			await insertOutboxEvents(transaction, {
+			await transaction.insert(outbox).values({
 				entityType: "item",
 				entityKey: target.key,
 				operation: "upsert",
@@ -1246,7 +1246,7 @@ export async function publishItemDraftWithContext(
 				relatedParent.revision,
 				parentRevision,
 			);
-			await insertOutboxEvents(transaction, {
+			await transaction.insert(outbox).values({
 				entityType: "item",
 				entityKey: relatedParent.key,
 				operation: "upsert",
@@ -1526,7 +1526,7 @@ async function unpublishNativeItemAttempt(
 			current.revision,
 			nextRevision,
 		);
-		await insertOutboxEvents(transaction, {
+		await transaction.insert(outbox).values({
 			entityType: "item",
 			entityKey: itemKey,
 			operation: "delete",
@@ -1580,7 +1580,7 @@ async function unpublishNativeItemAttempt(
 				parent.revision,
 				parentRevision,
 			);
-			await insertOutboxEvents(transaction, {
+			await transaction.insert(outbox).values({
 				entityType: "item",
 				entityKey: parent.key,
 				operation: "upsert",

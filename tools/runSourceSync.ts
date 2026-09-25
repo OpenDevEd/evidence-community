@@ -129,7 +129,7 @@ async function runConfiguredSweep(
 
 async function main() {
 	const command = parseCommand(process.argv.slice(2));
-	const runtimeProcess = await openLibraryDatabaseProcess("source-sync");
+	const runtimeProcess = await openLibraryDatabaseProcess();
 	const { abortController, config, databaseResource } = runtimeProcess;
 	try {
 		await reconcileConfiguredSources(

@@ -5,6 +5,7 @@ import {
 	collectionSourceLink,
 	collectionSourceSnapshot,
 	itemSourceLink,
+	outbox,
 	sourceConnection,
 	sourceFileCleanup,
 	sourceRecordIssue,
@@ -21,7 +22,6 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
-import { insertOutboxEvents } from "@/db/postgres";
 import {
 	lockCollectionMutations,
 	lockItemMutations,
@@ -2447,7 +2447,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			})),
 		];
 		await insertInChunks(outboxRows, RELATION_CHUNK_SIZE, (rowChunk) =>
-			insertOutboxEvents(transaction, rowChunk),
+			transaction.insert(outbox).values(rowChunk),
 		);
 
 		const issueSourceRecordKeys = batch.items.map(

@@ -4,11 +4,15 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
 	database: { kind: "database" },
 	getReceipts: vi.fn(),
+	revalidate: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({
 	getDatabase: vi.fn(async () => mocks.database),
+}));
+vi.mock("@/lib/admin/cache", () => ({
+	revalidateIndexedReceiptCaches: mocks.revalidate,
 }));
 vi.mock("@/lib/admin/http", async () => {
 	const { NextResponse } = await import("next/server");
@@ -29,9 +33,10 @@ import { POST } from "@/app/api/admin/search-index/receipts/route";
 describe("admin search receipt route", () => {
 	beforeEach(() => {
 		mocks.getReceipts.mockReset();
+		mocks.revalidate.mockReset();
 	});
 
-	it("returns the indexing state of each requested record", async () => {
+	it("clears indexed Next.js caches before returning receipt completion", async () => {
 		const statuses = [
 			{
 				attempts: 0,
@@ -69,6 +74,7 @@ describe("admin search receipt route", () => {
 		expect(mocks.getReceipts).toHaveBeenCalledWith(mocks.database, [
 			{ entityKey: "23456789", entityType: "item", revision: 1 },
 		]);
+		expect(mocks.revalidate).toHaveBeenCalledWith(statuses);
 		expect(await response.json()).toEqual({ receipts: statuses });
 		expect(response.headers.get("cache-control")).toBe("private, no-store");
 	});

@@ -6,6 +6,7 @@ import path from "node:path";
 import {
 	itemDraft,
 	itemFileDraft,
+	outbox,
 } from "@opendeved/evidence-library-core";
 import {
 	buildPublicationFileManifestHash,
@@ -14,7 +15,6 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
-import { insertOutboxEvents } from "@/db/postgres";
 import { lockItemMutations } from "@/db/canonical-mutation-lock";
 import {
 	publicationIdentifier,
@@ -1049,7 +1049,7 @@ export async function prepareNativePdfPublication(
 					now,
 				});
 			}
-			await insertOutboxEvents(transaction, [
+			await transaction.insert(outbox).values([
 				{
 					entityType: "item",
 					entityKey: itemKey,
@@ -1394,7 +1394,7 @@ export async function unpublishNativePdfInTransaction(
 				now,
 			});
 		}
-		await insertOutboxEvents(transaction, [
+		await transaction.insert(outbox).values([
 			{
 				entityType: "item",
 				entityKey: itemKey,

@@ -2,7 +2,6 @@ import { watch, type FSWatcher } from "node:fs";
 import path from "node:path";
 
 import { createPostgresDatabaseResource } from "../../db/postgres";
-import { publishOutboxCommits } from "../../lib/cache-invalidation";
 import { loadLibraryConfig, resolveLibraryConfigPath } from "./source";
 
 export function watchLibraryConfigChanges({
@@ -60,11 +59,10 @@ export async function openLibraryConfigProcess() {
 	}
 }
 
-export async function openLibraryDatabaseProcess(source: string) {
+export async function openLibraryDatabaseProcess() {
 	const configProcess = await openLibraryConfigProcess();
 	const databaseResource = createPostgresDatabaseResource(
 		configProcess.config.services.database.url,
-		publishOutboxCommits(configProcess.config, source),
 	);
 	return {
 		...configProcess,

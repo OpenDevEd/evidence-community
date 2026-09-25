@@ -24,7 +24,6 @@ async function waitForDatabaseConnectionsToClose(
 /** Run against a fresh migrated database and remove it even when an assertion fails. */
 export async function withIsolatedPublicationDatabase(
 	verify: (database: Database, client: Client) => Promise<void>,
-	afterOutboxCommit?: Parameters<typeof createPostgresDatabaseResource>[1],
 ) {
 	const source = process.env.DATABASE_URL_POST;
 	if (!source) throw new Error("DATABASE_URL_POST is required");
@@ -38,7 +37,7 @@ export async function withIsolatedPublicationDatabase(
 	try {
 		await admin.query(`CREATE DATABASE "${databaseName}"`);
 		try {
-			const resource = createPostgresDatabaseResource(temporaryUrl.toString(), afterOutboxCommit);
+			const resource = createPostgresDatabaseResource(temporaryUrl.toString());
 			const client = new Client({ connectionString: temporaryUrl.toString() });
 			try {
 				await migrate(resource.database, { migrationsFolder: "drizzle" });

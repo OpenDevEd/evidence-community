@@ -29,7 +29,7 @@ async function main() {
 		process.argv.slice(2),
 		defaultWorkerId,
 	);
-	const runtimeProcess = await openLibraryDatabaseProcess("source-writeback");
+	const runtimeProcess = await openLibraryDatabaseProcess();
 	const { abortController, config, databaseResource } = runtimeProcess;
 	try {
 		await reconcileConfiguredSources(
