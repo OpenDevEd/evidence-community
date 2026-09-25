@@ -525,9 +525,10 @@ export default function Resource({
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
-					// A loading card has no address yet, and a new tab cannot use this page's prefetch cache.
+					// A loading card may still hold the previous results' keys, and a new tab cannot use this page's prefetch cache.
 					prefetch={
 						finalItemData?.key &&
+						!finalIsLoading &&
 						!openLinksInNewTab &&
 						(position ?? Infinity) < FULL_PREFETCH_CARDS
 							? true
