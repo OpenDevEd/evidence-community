@@ -154,6 +154,7 @@ function ResourcesList({
 								<Resource
 									openLinksInNewTab={openLinksInNewTab}
 									key={index}
+									position={index}
 									itemData={
 										itemsContext.itemsData?.items[index]
 									}

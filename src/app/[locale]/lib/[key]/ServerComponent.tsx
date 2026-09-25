@@ -1,5 +1,6 @@
 import { ItemGetResponse } from "@/app/api/item/types";
 import ItemPage from "@/components/features/newlib/ItemPage";
+import { RefreshPrefetchedItem } from "@/components/features/newlib/RefreshPrefetchedItem";
 import { notFound } from "next/navigation";
 import { getCachedItemSmall } from "@/app/api/cache";
 import { Metadata } from "next";
@@ -20,5 +21,10 @@ export default async function ServerComponent( props: {
         return notFound();
     }
 
-    return <ItemPage data={data as ItemGetResponse} loading={false} />
+    return (
+        <>
+            <RefreshPrefetchedItem itemKey={params.key} />
+            <ItemPage data={data as ItemGetResponse} loading={false} />
+        </>
+    );
 }
