@@ -1012,7 +1012,9 @@ export async function ensureSearchIndex(
 					},
 				},
 			],
-			pagination: { maxTotalHits: 1_000_000 },
+			// Every result stays reachable and counted for libraries above a
+			// million records; deep pages stay fast on the legacy search path.
+			pagination: { maxTotalHits: 10_000_000 },
 			searchableAttributes: ["*"],
 			sortableAttributes: [
 				"dateSortKey",

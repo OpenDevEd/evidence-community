@@ -164,7 +164,11 @@ has no public port and joins only the private application network. The five
 runtime containers also join the external deployment network to reach shared
 PostgreSQL. Automatic destination-network attachment must stay off.
 Meilisearch runs with `MEILI_UPGRADE_DB`, so a newer pinned image migrates the
-existing search data in place when it starts.
+existing search data in place when it starts. It also runs with
+`MEILI_EXPERIMENTAL_LEGACY_SEARCH`: Meilisearch's newer search path
+builds every result before the requested page, which made the deepest page of
+a 1M-record library take 18 s; the legacy path returns the same results in
+under 0.2 s. Check this again before each Meilisearch upgrade.
 If the named search volume is new, the worker records a pending rebuild in
 PostgreSQL before creating the index. It clears that marker only after the full
 rebuild succeeds. An interrupted rebuild resumes before health becomes ready.
