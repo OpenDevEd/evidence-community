@@ -413,11 +413,11 @@ function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; q
 	const shown = parts.filter((part) => part.has(data));
 	if (!shown.length) return <p className="text-lg opacity-70">The library’s publications will appear here once they are added.</p>;
 	return (
-		<motion.ul {...listMotion}>
+		<ul>
 			{shown.map((part) => {
 				const destination = destinations[part.shows];
 				return (
-					<motion.li key={part.shows} variants={arrive} className="border-t border-[rgb(var(--ink-rgb)/0.1)] py-12 first:border-t-0 first:pt-0 lg:py-14 lg:first:pt-0">
+					<motion.li key={part.shows} {...reveal} className="border-t border-[rgb(var(--ink-rgb)/0.1)] py-12 first:border-t-0 first:pt-0 lg:py-14 lg:first:pt-0">
 						<div className="mb-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
 							<div>
 								<h2 className="text-[1.75rem] font-bold leading-tight tracking-tight lg:text-3xl">{part.title}</h2>
@@ -429,7 +429,7 @@ function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; q
 					</motion.li>
 				);
 			})}
-		</motion.ul>
+		</ul>
 	);
 }
 
@@ -498,11 +498,11 @@ function Timeline({ steps, journey, cover, copy }: { steps: Step[]; journey: Hom
 	const dated = steps.some((step) => happened(step, journey).when);
 	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${journey ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
 	const timeline = (
-		<motion.ol {...listMotion} className={`relative grid gap-x-10 gap-y-10 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
+		<ol className={`relative grid gap-x-10 gap-y-10 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
 			<span aria-hidden className={`${track} bg-[rgb(var(--ink-rgb)/0.18)]`} />
 			<motion.span aria-hidden initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={seen} transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1], delay: 0.2 }} className={`${track} origin-left bg-[rgb(var(--color-accent-700))]`} />
 			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} journey={journey} dated={dated} last={index === steps.length - 1} />)}
-		</motion.ol>
+		</ol>
 	);
 	if (!journey) return timeline;
 	return (
@@ -527,7 +527,7 @@ function Timeline({ steps, journey, cover, copy }: { steps: Step[]; journey: Hom
 function TimelineStep({ step, journey, dated, last }: { step: Step; journey: HomeData["journey"]; dated: boolean; last: boolean }) {
 	const { when, body } = happened(step, journey);
 	return (
-		<motion.li variants={arrive} className="relative pl-10 lg:pl-0">
+		<li className="relative pl-10 lg:pl-0">
 			{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
 			<span aria-hidden className={`absolute left-[7px] top-4 w-0.5 bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
 			{/* On wide screens the dates share one row above the track, so every node sits on the line. */}
@@ -536,7 +536,7 @@ function TimelineStep({ step, journey, dated, last }: { step: Step; journey: Hom
 			<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
 			{body ? <div className="mt-3 text-base leading-7">{body}</div> : null}
 			{step.text ? <p className={`mt-3 leading-6 ${body ? "text-sm opacity-75" : "text-base"}`}>{step.text}</p> : null}
-		</motion.li>
+		</li>
 	);
 }
 
@@ -705,7 +705,7 @@ const toneClass = "bg-[var(--band-bg)] text-[var(--band-fg)] [--ink-rgb:var(--ba
 const ARCH = "M0 0 H1600 V120 C 1300 0, 300 0, 0 120 Z";
 
 /** Full-width band in a configured tone; the seam at its top is drawn in the previous band's colour. */
-function Band({ tone, previous, inverse = false, children }: { tone: Tone; previous: Tone; inverse?: boolean; children: React.ReactNode }) {
+function Band({ tone, previous, inverse = false, sections = false, children }: { tone: Tone; previous: Tone; inverse?: boolean; /** Its sections fade in one by one themselves. */ sections?: boolean; children: React.ReactNode }) {
 	const ref = useRef<HTMLElement>(null);
 	usePauseOffscreen(ref);
 	const reduce = useLessMotion();
@@ -722,7 +722,7 @@ function Band({ tone, previous, inverse = false, children }: { tone: Tone; previ
 					</svg>
 				</motion.div>
 			</div>
-			<motion.div initial="hidden" whileInView="shown" viewport={seen} variants={rise}>{children}</motion.div>
+			{sections ? children : <motion.div {...reveal}>{children}</motion.div>}
 		</section>
 	);
 }
@@ -730,7 +730,8 @@ function Band({ tone, previous, inverse = false, children }: { tone: Tone; previ
 /** Renders its children once they come within about a screen of the viewport; until then the placeholder holds their room. */
 function WhenNear({ children, placeholder }: { children: React.ReactNode; placeholder: React.ReactNode }) {
 	const ref = useRef<HTMLDivElement>(null);
-	const near = useInView(ref, { once: true, margin: "800px 0px" });
+	// Anything above the screen counts as near, so jumping past a section still draws it.
+	const near = useInView(ref, { once: true, margin: "100000px 0px 800px 0px" });
 	return <div ref={ref}>{near ? children : placeholder}</div>;
 }
 
@@ -800,13 +801,17 @@ const spring = { type: "spring", stiffness: 260, damping: 26 } as const;
 
 /* ---------- motion ---------- */
 
-/** Seen once, a little after the top edge clears the bottom of the screen. */
-const seen = { once: true, margin: "0px 0px -8% 0px" } as const;
-const rise = { hidden: { opacity: 0, y: 32 }, shown: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 140, damping: 22 } } } as const;
-const cascade = { hidden: {}, shown: { transition: { staggerChildren: 0.09 } } } as const;
-const arrive = { hidden: { opacity: 0, y: 24 }, shown: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 180, damping: 24 } } } as const;
-/** A list whose items arrive one after another the first time it scrolls into view. Its items must not change afterwards. */
-const listMotion = { initial: "hidden", whileInView: "shown", viewport: seen, variants: cascade } as const;
+/**
+ * Seen once, a little after the top edge clears the bottom of the screen. Anything already above the screen counts as
+ * seen too: a section that loads after the reader has scrolled past it just shows, instead of waiting to be scrolled
+ * back into view.
+ */
+const seen = { once: true, margin: "100000px 0px -8% 0px" } as const;
+/**
+ * A section that fades up by itself the first time it scrolls into view. Nothing waits on a parent's cue, so a section
+ * that arrives after the page has loaded, or while it is already on screen, still animates in.
+ */
+const reveal = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: seen, transition: { type: "spring", stiffness: 180, damping: 24 } } as const;
 
 /** A figure that counts up from zero the first time it is seen. The server HTML, and anyone who prefers less motion, get the final value. */
 function CountUp({ text }: { text: string }) {
@@ -885,7 +890,7 @@ function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { poi
 function TrendLine({ line, split }: { line: string; split: number | null }) {
 	const clipId = useId();
 	return (
-		<motion.div className="absolute inset-0 text-accent motion-reduce:![clip-path:none]" initial={{ clipPath: "inset(0 100% 0 0)" }} whileInView={{ clipPath: "inset(0 0% 0 0)" }} viewport={{ once: true }} transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}>
+		<motion.div className="absolute inset-0 text-accent motion-reduce:![clip-path:none]" initial={{ clipPath: "inset(0 100% 0 0)" }} whileInView={{ clipPath: "inset(0 0% 0 0)" }} viewport={seen} transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}>
 			<svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
 				{split !== null && (
 					<defs>
@@ -976,7 +981,7 @@ function Treemap({ rows, total, toneOf, link }: { rows: Row[]; total: number; to
 				const rect = rects[index]!;
 				const current = index === link.shown;
 				return (
-					<motion.div key={row.name} className={`absolute motion-reduce:!opacity-100 motion-reduce:![transform:none] ${current ? "z-10" : ""}`} style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ ...spring, delay: index * 0.04 }}>
+					<motion.div key={row.name} className={`absolute motion-reduce:!opacity-100 motion-reduce:![transform:none] ${current ? "z-10" : ""}`} style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={seen} transition={{ ...spring, delay: index * 0.04 }}>
 						<button type="button" aria-pressed={current} aria-label={`${row.name}: ${number.format(row.count)}, ${percent(row.count, total)}%`} onPointerEnter={() => link.onPreview(index)} onFocus={() => link.onPreview(index)} onBlur={() => link.onPreview(null)} onClick={() => link.onSelect(index)} className={`absolute flex flex-col justify-end overflow-hidden rounded-xl p-3 text-left outline-none transition-all duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[rgb(var(--ink-rgb))] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-reduce:transition-none ${toneClass} ${current ? "-inset-0.5 shadow-[0_8px_24px_rgb(0_0_0/0.2)]" : `inset-px ${link.previewing ? "opacity-50" : ""}`}`} style={toneStyle(toneOf(index))}>
 							{rect.w > 12 && rect.h > 16 && <span className={`min-w-0 flex-col ${rect.w > 28 ? "flex" : "hidden sm:flex"}`}><span className="truncate text-sm font-semibold">{row.name}</span><span className="font-heading text-2xl font-semibold leading-none tabular-nums">{number.format(row.count)}<span className="ml-1.5 text-sm font-normal opacity-75">{percent(row.count, total)}%</span></span></span>}
 						</button>
@@ -1116,14 +1121,14 @@ function Facts({ data }: { data: HomeData }) {
 	const facts = [...shareFacts(data), ...countFacts(data)].filter((fact): fact is Fact => Boolean(fact));
 	if (facts.length === 0) return null;
 	return (
-		<motion.dl {...listMotion} className={`mt-14 grid grid-cols-2 gap-x-8 gap-y-10 pt-12 sm:grid-cols-3 lg:grid-cols-6 ${rule}`}>
+		<dl className={`mt-14 grid grid-cols-2 gap-x-8 gap-y-10 pt-12 sm:grid-cols-3 lg:grid-cols-6 ${rule}`}>
 			{facts.map((fact) => (
-				<motion.div key={fact.label} variants={arrive} className="flex flex-col-reverse justify-end gap-2">
+				<div key={fact.label} className="flex flex-col-reverse justify-end gap-2">
 					<dt><span className="flex items-start gap-1.5 text-sm font-medium leading-snug"><HugeiconsIcon icon={fact.icon} aria-hidden size={16} className="mt-0.5 shrink-0" />{fact.label}</span><span className={`mt-1 block text-xs ${muted}`}>{fact.detail}</span></dt>
 					<dd className="font-heading text-4xl font-semibold leading-none tracking-tight tabular-nums"><CountUp text={fact.value} /></dd>
-				</motion.div>
+				</div>
 			))}
-		</motion.dl>
+		</dl>
 	);
 }
 
@@ -1321,6 +1326,7 @@ function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, 
 		{
 			key: "inside",
 			tone: tones.card,
+			sections: true,
 			body: (
 				<Suspense fallback={<div className="h-[220rem] lg:h-[124.3rem]" />}>
 					<WithData data={data}>{(figures) => <Inside data={figures} surface={tones.tertiary} questions={about.questions} />}</WithData>
@@ -1334,7 +1340,7 @@ function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, 
 				<>
 					<Heading>Explore the data</Heading>
 					<Suspense fallback={<div className="h-[120rem] lg:h-[71rem]" />}>
-						<WithData data={data}>{(figures) => <Explorer data={figures} shapes={shapes} tones={tones} ramp={ramp} today={today} />}</WithData>
+						<WithData data={data}>{(figures) => <motion.div {...reveal}><Explorer data={figures} shapes={shapes} tones={tones} ramp={ramp} today={today} /></motion.div>}</WithData>
 					</Suspense>
 				</>
 			),
@@ -1343,11 +1349,11 @@ function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, 
 		// The library's citation, with the owner's closing answer beside it; with citations off and no answer, no band.
 		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} answerText={rich.extra} cites={citations.enabled} name={name} siteUrl={siteUrl} today={today} /> },
 		hasTeam(about, involvement) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} teamText={rich.team} editors={about.editors} involvement={involvement} contact={contact} heading={heading} /> },
-	].filter((band): band is { key: string; tone: Tone; body: React.JSX.Element } => Boolean(band));
+	].filter((band): band is { key: string; tone: Tone; sections?: boolean; body: React.JSX.Element } => Boolean(band));
 
 	return (
 		<>
-			{bands.map((band, index) => <Band key={band.key} tone={band.tone} previous={bands[index - 1]?.tone ?? tones.page} inverse={band.tone === tones.deep || band.tone === tones.tertiary}>{band.body}</Band>)}
+			{bands.map((band, index) => <Band key={band.key} tone={band.tone} previous={bands[index - 1]?.tone ?? tones.page} inverse={band.tone === tones.deep || band.tone === tones.tertiary} sections={band.sections}>{band.body}</Band>)}
 
 			<FooterSeam previous={bands.at(-1)?.tone ?? tones.card} />
 		</>
