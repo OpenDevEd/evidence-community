@@ -72,6 +72,17 @@ export function openRouterModelSettings(
 					},
 				}
 			: {}),
+		// Gemini's thought signatures are accepted only by the Google host that
+		// produced them, and every later step and turn sends them back. OpenRouter
+		// may route each request to a different Google host, so Gemini uses one.
+		...(modelPublisher(modelId) === "google"
+			? {
+					provider: {
+						only: ["google-ai-studio"],
+						allow_fallbacks: false,
+					},
+				}
+			: {}),
 		...(breakpoint ? { cache_control: breakpoint } : {}),
 		...(options.sessionId
 			? { extraBody: { session_id: options.sessionId } }
