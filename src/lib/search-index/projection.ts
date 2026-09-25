@@ -675,7 +675,6 @@ export async function readPublicItems(
 				keys,
 				collections,
 				config.content.tags.hidden,
-				database,
 			);
 			const documents = new Map(
 				plan.documents.map((document) => [document.key, document]),
