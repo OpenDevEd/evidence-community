@@ -12,7 +12,6 @@ import { useLastFetchedData } from "@/context/Providers";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import { exampleQuestions } from "./home-content";
 import { Link, useRouter } from "@/i18n/routing";
-import { BsStars } from "react-icons/bs";
 import { Input } from "@/components/nextui/Input";
 import { AskAIButton } from "@/components/features/ai/AskAIButton";
 import { handOverQuestion } from "@/components/features/ai/handed-over-question";
@@ -33,7 +32,7 @@ import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
 import type { ListItem } from "@/app/api/item/types";
 import HomeMap, { type MapShape } from "./HomeMap";
 import { examplesKey, listedRows, regionNames, type Row } from "./home-explorer";
-import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, Layers01Icon, Location01Icon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
 // Below the fold and heavy: the citation formatter with its styles. It loads when the reader nears it (see WhenNear),
@@ -199,7 +198,6 @@ const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short"
 const turningLight = <span aria-hidden className="absolute left-1/2 top-1/2 -ml-[80%] -mt-[80%] aspect-square w-[160%] animate-spin bg-[conic-gradient(from_0deg,transparent_0deg,rgb(var(--color-accent-300))_50deg,rgb(var(--color-accent-500))_110deg,transparent_170deg,transparent_360deg)] [animation-duration:5s] motion-reduce:animate-none" />;
 
 /** The example questions on the Ask console: a pill that brightens under the pointer; the text keeps the band's colour. */
-const chip = "inline-flex items-center gap-2 rounded-full border border-[rgb(var(--ink-rgb)/0.14)] bg-[rgb(var(--ink-rgb)/0.06)] py-2 pl-3 pr-4 text-sm font-medium outline-offset-2 backdrop-blur-sm transition-colors hover:border-[rgb(var(--ink-rgb)/0.35)] hover:bg-[rgb(var(--ink-rgb)/0.14)]";
 /** A list entry in a preview: spacing only; the rules belong to the rows around it. */
 const previewItem = "py-2.5 first:pt-0 last:pb-0";
 const previewLink = "group flex gap-6 outline-offset-4";
@@ -322,48 +320,6 @@ function CiteSlip({ name, url, today }: { name: string; url: string; today: stri
 
 
 /**
- * The assistant, ready to use: a question box that opens the library with the question asked, and three examples
- * built from the library's own topics and countries so they fit whatever it holds.
- */
-/** Types the example questions into an empty, idle box one after another; a plain hint for reduced motion. */
-function useTypedHint(examples: string[], idle: string, active: boolean) {
-	const reduce = useLessMotion();
-	const [hint, setHint] = useState<string | null>(null);
-	const joined = examples.join("\n");
-	const typing = Boolean(joined) && active && !reduce;
-	useEffect(() => {
-		if (!typing) return;
-		const list = joined.split("\n");
-		let example = 0;
-		let length = 0;
-		let erasing = false;
-		let timer = 0;
-		const tick = () => {
-			const current = list[example]!;
-			length += erasing ? -1 : 1;
-			setHint(current.slice(0, length));
-			if (!erasing && length === current.length) {
-				erasing = true;
-				timer = window.setTimeout(tick, 2000);
-			} else if (erasing && length === 0) {
-				erasing = false;
-				example = (example + 1) % list.length;
-				timer = window.setTimeout(tick, 400);
-			} else timer = window.setTimeout(tick, erasing ? 16 : 45);
-		};
-		timer = window.setTimeout(tick, 900);
-		return () => window.clearTimeout(timer);
-	}, [joined, typing]);
-	const [caret, setCaret] = useState(true);
-	useEffect(() => {
-		if (!typing) return;
-		const blink = window.setInterval(() => setCaret((shown) => !shown), 530);
-		return () => window.clearInterval(blink);
-	}, [typing]);
-	return typing && hint !== null ? `${hint}${caret ? "▍" : ""}` : idle;
-}
-
-/**
  * The library as a field of dots, a row for about every 44 publications up to a screenful, lighting up in a slow sweep:
  * the assistant reading the collection. Faded in the middle, where the question box sits; still for reduced motion.
  * The dots are two painted patterns, dim and lit, and only a window over the lit one moves, so the sweep runs on the
@@ -393,17 +349,19 @@ function LibraryField({ publications }: { publications: number }) {
 	);
 }
 
+/**
+ * The assistant, ready to use: a question box that opens the library with the question asked, and three examples
+ * built from the library's own topics and countries so they fit whatever it holds.
+ */
 function AskPreview({ data, surface, questions }: { data: HomeData; surface: Tone; questions?: string[] }) {
 	const router = useRouter();
 	const [question, setQuestion] = useState("");
-	const [focused, setFocused] = useState(false);
 	const examples = exampleQuestions(data, (code) => regionNames.of(code) ?? code, questions).filter((example): example is string => Boolean(example));
 	const submit = () => {
 		if (!question.trim()) return;
 		handOverQuestion(question.trim());
 		router.push("/lib");
 	};
-	const hint = useTypedHint(examples, "Ask anything about the research here", !question && !focused);
 	return (
 		<div className={`relative isolate overflow-hidden rounded-3xl px-6 py-12 sm:px-10 lg:py-16 ${toneClass}`} style={toneStyle(surface)}>
 			<LibraryField publications={data.publications} />
@@ -420,9 +378,7 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 							onKeyDown={(event) => {
 								if (event.key === "Enter" && !event.nativeEvent.isComposing) submit();
 							}}
-							onFocus={() => setFocused(true)}
-							onBlur={() => setFocused(false)}
-							placeholder={hint}
+							placeholder="Ask anything about the research here"
 							size="lg"
 							// Solid on hover: the shared field's hover tint would let the turning light show through it. Its own text
 							// colour: it sits on the dark panel, whose white text it would otherwise take on.
@@ -432,13 +388,18 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 					</div>
 				</div>
 				{examples.length > 0 && (
-					<ul className="mt-6 flex flex-wrap content-start justify-center gap-2.5">
+					// Each example is drawn as the chat will show it once asked: the reader's own message, right-aligned beside
+					// its mark, so a click reads as sending it.
+					<ul className="mt-5 flex flex-col items-end gap-2.5">
 						{examples.map((example) => (
-							<li key={example}>
-								<Link href="/lib" data-asks-library onClick={() => handOverQuestion(example)} className={chip}>
-									<BsStars aria-hidden className="size-3.5 shrink-0 text-[rgb(var(--color-accent-400))]" />
-									{example}
+							<li key={example} className="flex max-w-full items-start gap-2">
+								<Link href="/lib" data-asks-library onClick={() => handOverQuestion(example)} className="group flex items-start gap-2.5 rounded-xl bg-white px-4 py-2.5 text-[15px] font-medium leading-snug text-black outline-offset-2 transition-transform duration-200 hover:-translate-y-px motion-reduce:transition-none dark:bg-secondary dark:text-white">
+									<span>{example}</span>
+									<HugeiconsIcon icon={SentIcon} aria-hidden size={16} className="mt-0.5 shrink-0 text-accent opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
 								</Link>
+								<span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-white">
+									<HugeiconsIcon icon={BubbleChatQuestionIcon} size={16} />
+								</span>
 							</li>
 						))}
 					</ul>
