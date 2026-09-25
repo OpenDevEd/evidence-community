@@ -9,6 +9,7 @@ type AttachmentVisibilityFields = {
 };
 
 type ItemPageAttachmentFields = AttachmentVisibilityFields & {
+	tags?: string[] | null;
 	itemType?: string | null;
 	linkMode?: string | null;
 	note?: string | null;
@@ -71,6 +72,7 @@ export function itemPageAttachments(
 			title: attachment.title,
 			filename: attachment.filename,
 			url: attachment.url,
+			contentType: attachment.contentType,
 			tags: attachment.tags,
 			PDFCoverPageImage: attachment.PDFCoverPageImage,
 			note: isPublishedNote(attachment, publishTags) ? attachment.note : null,

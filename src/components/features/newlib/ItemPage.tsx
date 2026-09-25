@@ -25,7 +25,6 @@ import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
 import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
-import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
 import {
