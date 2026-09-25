@@ -6,6 +6,7 @@ import { adminFieldLabel } from "@/lib/admin/errors";
 import type { SourceFieldConflict } from "@/lib/admin/source-field-contract";
 import type { AdminItemDetail } from "@/lib/admin/types";
 import { fetchTopicCatalog } from "@/lib/topics/client";
+import { deduplicateImportedTopics } from "./TopicsEditor";
 import useSWR from "swr";
 
 export type SourceResolution = {
@@ -31,20 +32,12 @@ importedTopics,
 }) {
 	const ids = topicIds(value);
 	if (!ids.length) return <ConflictValue field="topics" value={value} />;
-	const scores = new Map<string, (typeof importedTopics)[number]>();
-	for (const topic of importedTopics) {
-		const previous = scores.get(topic.topicId);
-		scores.set(
+	const scores = new Map(
+		deduplicateImportedTopics(importedTopics).map((topic) => [
 			topic.topicId,
-			previous
-				? {
-						topicId: topic.topicId,
-						score: Math.max(previous.score, topic.score),
-						primary: previous.primary || topic.primary,
-					}
-				: topic,
-		);
-	}
+			topic,
+		]),
+	);
 	return (
 		<span className="flex flex-col gap-1">
 			{ids.map((topicId) => {

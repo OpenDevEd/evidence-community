@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	expandTopicAncestry,
 	selectionFrontier,
 	toggleTopicSelection,
 	type TopicSelectionNode,
@@ -77,16 +76,6 @@ describe("topic selection", () => {
 	it("drops unknown URL values from the effective frontier", () => {
 		expect(selectionFrontier(["T12260", "unknown"], nodes)).toEqual([
 			"T12260",
-		]);
-	});
-
-	it("expands leaf assignments to distinct hierarchy ids for indexing", () => {
-		expect(expandTopicAncestry(["T12260", "T13565"], nodes)).toEqual([
-			"domains/3",
-			"fields/17",
-			"subfields/1702",
-			"T12260",
-			"T13565",
 		]);
 	});
 });

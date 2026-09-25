@@ -19,15 +19,6 @@ function ancestry(id: string, nodes: ReadonlyMap<string, TopicSelectionNode>) {
 	return path;
 }
 
-/** All selected nodes and their known ancestors, once each. */
-export function expandTopicAncestry(
-	ids: readonly string[],
-	nodes: readonly TopicSelectionNode[],
-) {
-	const byId = nodeMap(nodes);
-	return [...new Set(ids.flatMap((id) => ancestry(id, byId)))];
-}
-
 /** The deepest selected nodes on each branch. These are OR-ed by search. */
 export function selectionFrontier(
 	selected: readonly string[],

@@ -10,6 +10,7 @@ import { isUnrestoredRecord, type PdfUploadStep } from "./admin-pdf";
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
 import { TopicsEditor } from "./TopicsEditor";
+import { topicIdSchema } from "@/lib/topics/contract";
 import { SourceConflictEditor, type SourceResolution } from "./SourceConflictEditor";
 import { describeCountryFocus } from "@/lib/country-focus";
 import { CountryFocusInput } from "./CountryFocusInput";
@@ -1484,7 +1485,7 @@ export function AdminInspector({
 	const collectionsPayload = useMemo(() => ({ collections: payload.collections }), [payload.collections]);
 	const linksPayload = useMemo(() => ({ links: payload.links }), [payload.links]);
 	const topicIds = Array.isArray(payload.topics)
-		? payload.topics.filter((topic): topic is string => typeof topic === "string" && /^T[1-9]\d*$/u.test(topic))
+		? payload.topics.filter((topic): topic is string => topicIdSchema.safeParse(topic).success)
 		: [];
 	const sourceResolutions = payload.sourceResolutions && typeof payload.sourceResolutions === "object" && !Array.isArray(payload.sourceResolutions)
 		? payload.sourceResolutions as Record<string, SourceResolution>

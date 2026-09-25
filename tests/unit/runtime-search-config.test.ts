@@ -70,6 +70,7 @@ describe("runtime search configuration", () => {
 						label: "Institutions",
 					},
 				},
+				false,
 			),
 		).toEqual(["collectionsAncestry", "year"]);
 		expect(

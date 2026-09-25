@@ -53,7 +53,7 @@ export function getRuntimeSearchAttributes(
 export function getRuntimeSearchFacets(
 	search: RuntimeSearch,
 	filters: RuntimeFilters,
-	topicsEnabled = false,
+	topicsEnabled: boolean,
 ) {
 	const facets = ["collectionsAncestry"];
 	if (topicsEnabled) {
