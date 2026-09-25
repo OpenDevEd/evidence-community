@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { HomeData } from "./HomePage";
-import { getPublicFacets, getPublicItems } from "@/lib/search";
+import { getPublicFacets, getPublicItems, getPublicItemsByKeys } from "@/lib/search";
+import { defaultParams } from "@/lib/utils";
+import { examplesKey, firstFilters, listedRows } from "./home-explorer";
 import { getCachedCollections } from "@/app/api/cache";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -91,7 +93,7 @@ function languageName(value: string) {
 
 
 /** The library's counts from its cached statistics; without them every count is empty. */
-function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries" | "countryPaths" | "collections" | "topics" | "covers" | "recent" | "journey" | "cited" | "ai" | "digests"> {
+function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries" | "countryPaths" | "collections" | "topics" | "covers" | "recent" | "journey" | "cited" | "copies" | "examples" | "ai" | "digests"> {
 	if (!stats) return { publications: 0, authors: 0, years: [], itemTypes: [], institutions: [], languages: [], publishers: [], journals: [], attachments: null, citations: null, collaboration: null, productivity: null, updated: now };
 	const { attachmentStats: attachments, citationStats: citations, collaborationStats: collaboration, authorProductivityStats: productivity } = stats;
 	return {
@@ -124,20 +126,36 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
 		latestJourney(home?.followed, home?.directory ?? []).catch(fallback("followed publication", null)),
 	]);
 	const shelf = withPdf?.items ?? [];
-	const covers = await coversOf([...shelf.map((row) => row.key), ...cited.map((row) => row.key), ...(journey ? [journey.key] : [])]).catch(fallback("covers", {} as Record<string, string>));
+	const config = await getLibraryConfig();
+	const figures = { ...figuresFrom(stats, now), ...topicsAndPlaces(stats, facets, collections) };
+	const listed = [...cited.map((row) => row.key), ...(journey ? [journey.key] : [])];
+	const [covers, copies, examples] = await Promise.all([
+		coversOf([...shelf.map((row) => row.key), ...listed]).catch(fallback("covers", {} as Record<string, string>)),
+		getPublicItemsByKeys(listed).catch(fallback("most cited and followed publications", [])),
+		rowExamples(firstFilters(listedRows(figures, config, now.toISOString()))).catch(fallback("explorer publications", {})),
+	]);
 	return {
-		...figuresFrom(stats, now),
-		...topicsAndPlaces(stats, facets, collections),
+		...figures,
 		covers,
+		copies,
+		examples,
 		// A library can switch the full-text scope off, which returns every record; only records whose first page
 		// was found go on the shelf either way.
 		// Up to eighteen, so the hero's three columns each show their own first pages; the publications row shows six.
 		recent: shelf.filter((row) => covers[row.key]).slice(0, 18),
 		journey,
 		cited,
-		ai: isLibraryFeatureEnabled((await getLibraryConfig()).features, "aiSearch"),
+		ai: isLibraryFeatureEnabled(config.features, "aiSearch"),
 		digests,
 	};
+}
+
+/**
+ * The newest two publications of the row each explorer view opens on, as the explorer would ask the listing for them,
+ * so the first cards of every view come with the page. One small search per view, side by side.
+ */
+async function rowExamples(filters: string[]): Promise<HomeData["examples"]> {
+	return Object.fromEntries(await Promise.all(filters.map(async (filter) => [examplesKey(filter), await getPublicItems(defaultParams(new URLSearchParams(`${filter}&sort=desc`)), { limit: 2 })] as const)));
 }
 
 /**

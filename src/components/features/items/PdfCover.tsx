@@ -5,8 +5,12 @@ import { CoverImage } from "./CoverImage";
 import { Skeleton } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
 
-/** A publication's first page, as the library extracted it from its PDF; an accent block stands in when there is none. `sizes` is how wide it is drawn (a publication page's by default). */
-export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width: 640px) 208px, 330px" }: { src?: string | null; alt: string; ref?: Ref<HTMLImageElement>; onLoad?: () => void; className?: string; sizes?: string }) {
+/**
+ * A publication's first page, as the library extracted it from its PDF; an accent block stands in when there is none.
+ * `sizes` is how wide it is drawn (a publication page's by default). A cover always drawn at one `width` in CSS pixels
+ * says so instead: its image then offers two copies, for normal and sharp screens, rather than every size there is.
+ */
+export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width: 640px) 208px, 330px", width }: { src?: string | null; alt: string; ref?: Ref<HTMLImageElement>; onLoad?: () => void; className?: string; sizes?: string; width?: number }) {
 	const [loaded, setLoaded] = useState(false);
 	if (!src) return <div className={twMerge("aspect-[3/4] w-full rounded-xl bg-accent", className)} />;
 	return (
@@ -15,9 +19,9 @@ export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width
 				ref={ref}
 				src={src}
 				alt={alt}
-				width={512}
-				height={512}
-				sizes={sizes}
+				width={width ?? 512}
+				height={width ?? 512}
+				sizes={width ? undefined : sizes}
 				onLoad={() => {
 					setLoaded(true);
 					onLoad?.();
