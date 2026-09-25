@@ -4,12 +4,10 @@ import { hasAnyTag } from "@/lib/tags";
 
 type AttachmentVisibilityFields = {
 	PDFCoverPageImage?: string | null;
-	url?: string | null;
-	contentType?: string | null;
+	tags?: string[] | null;
 };
 
 type ItemPageAttachmentFields = AttachmentVisibilityFields & {
-	tags?: string[] | null;
 	itemType?: string | null;
 	linkMode?: string | null;
 	note?: string | null;
@@ -21,7 +19,9 @@ export function isVisiblePdfAttachment(
 ) {
 	return Boolean(
 		attachment.PDFCoverPageImage ||
-			(attachment.contentType === "application/pdf" && /^https?:\/\//u.test(attachment.url ?? "")),
+			attachment.tags?.some(
+				(tag) => tag.toLowerCase() === "_auto-process",
+			),
 	);
 }
 
@@ -72,7 +72,6 @@ export function itemPageAttachments(
 			title: attachment.title,
 			filename: attachment.filename,
 			url: attachment.url,
-			contentType: attachment.contentType,
 			tags: attachment.tags,
 			PDFCoverPageImage: attachment.PDFCoverPageImage,
 			note: isPublishedNote(attachment, publishTags) ? attachment.note : null,
