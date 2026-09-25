@@ -12,6 +12,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { cookies } from "next/headers";
+import { hasLiveView } from "@/lib/admin/access";
 
 import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
@@ -29,10 +30,11 @@ async function BaseContent({
 	locale: string;
 	storedConsent: string | null;
 }>) {
-	const [status, messages, t] = await Promise.all([
+	const [status, messages, t, liveView] = await Promise.all([
 		getCachedStatus(),
 		getMessages(),
 		getTranslations({ locale, namespace: "ui" }),
+		hasLiveView(),
 	]);
 
 	return (
@@ -48,6 +50,7 @@ async function BaseContent({
 				<FiltersProvider>
 					<MainWrapper>
 						<SiteChrome
+							liveView={liveView}
 							skipNavigationLabel={t("skipNavAriaLabel")}
 							skipToContentLabel={t("skipToContent")}
 							skipToFooterLabel={t("skipToFooter")}
