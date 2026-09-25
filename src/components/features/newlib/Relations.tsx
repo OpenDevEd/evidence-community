@@ -13,8 +13,7 @@ import { ListItem } from "@/app/api/item/types";
 import Resource from "../items/Resource";
 import { useTranslations } from "next-intl";
 import { ItemsBatchResponse } from "@/app/api/items/batch/route";
-import { use, useState } from "react";
-import { EntranceContext } from "@/components/features/newlib/entrance";
+import { useState } from "react";
 import { Tabs, Tab } from "@/components/nextui/Tabs";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
@@ -56,7 +55,7 @@ function RelationsList({
 		<AuthorProfilesContext value={profiles}>
 			<div className="flex flex-col gap-6">
 				<ul className="flex flex-col md:grid grid-cols-2 gap-4">
-					<AnimatePresence mode="popLayout" initial={use(EntranceContext)}>
+					<AnimatePresence mode="popLayout">
 						{isLoading
 							? // Show loading skeletons
 							  Array.from({ length: 4 }).map((_, index) => (
