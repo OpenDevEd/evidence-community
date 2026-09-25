@@ -9,8 +9,8 @@ describe("source topic assignments", () => {
     expect(importedTopics(raw)).toEqual([{topicId: "T12260", score: 0.5, primary: true}, {topicId: "T99", score: 0.49, primary: false}]);
     expect(effectiveSourceTopics(importedTopics(raw))).toEqual(["T12260"]);
   });
-  it("rejects malformed assignments instead of guessing identifiers or scores", () => {
-    expect(() => importedTopics({topics: [{id: "made up", score: 1}]})).toThrow();
-    expect(() => importedTopics({topics: [{id: "T1", score: 1.1}]})).toThrow();
+  it("drops malformed assignments instead of guessing identifiers or scores, keeping the valid ones", () => {
+    expect(importedTopics({topics: [{id: "made up", score: 1}, {id: "T1", score: 1.1}, {id: "T2", score: 0.7}]}))
+      .toEqual([{topicId: "T2", score: 0.7, primary: false}]);
   });
 });
