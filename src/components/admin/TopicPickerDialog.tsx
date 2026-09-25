@@ -100,39 +100,34 @@ function TopicRow({
 	);
 }
 
-export function TopicPickerDialog({
-	initial,
-	onClose,
-	onConfirm,
-}: {
-	initial: readonly TopicNode[];
-	onClose: () => void;
-	onConfirm: (topics: TopicNode[]) => void;
-}) {
-	const [search, setSearch] = useState("");
-	const [trail, setTrail] = useState<TopicNode[]>([]);
-	const [chosen, setChosen] = useState<TopicNode[]>([...initial]);
-	const query = search.trim();
-	const parent = trail.at(-1) ?? null;
+type TopicCatalogKey = [string, string | null, string | null, string | null];
+
+function fetchTopicCatalogKey([, term, parentId, cursor]: TopicCatalogKey) {
+	return term
+		? fetchTopicCatalog({ query: term, cursor })
+		: fetchAllTopicCatalogPages({ parent: parentId });
+}
+
+type TopicCatalogPage = Awaited<ReturnType<typeof fetchTopicCatalogKey>>;
+
+/** A search pages through its matches; browsing loads a whole level at once. */
+function topicCatalogKey(query: string, parentId: string | null) {
+	return (
+		index: number,
+		previous: TopicCatalogPage | null,
+	): TopicCatalogKey | null => {
+		if (index === 0) {
+			return ["topic-picker", query || null, query ? null : parentId, null];
+		}
+		if (!query || !previous?.nextCursor) return null;
+		return ["topic-picker", query, null, previous.nextCursor];
+	};
+}
+
+function useTopicCatalog(query: string, parentId: string | null) {
 	const catalog = useSWRInfinite(
-		(index, previous) => {
-			if (index > 0 && (!query || !previous?.nextCursor)) return null;
-			return [
-				"topic-picker",
-				query || null,
-				query ? null : (parent?.id ?? null),
-				index === 0 ? null : previous!.nextCursor,
-			];
-		},
-		([, term, parentId, cursor]: [
-			string,
-			string | null,
-			string | null,
-			string | null,
-		]) =>
-			term
-				? fetchTopicCatalog({ query: term, cursor })
-				: fetchAllTopicCatalogPages({ parent: parentId }),
+		topicCatalogKey(query, parentId),
+		fetchTopicCatalogKey,
 		{
 			revalidateOnFocus: false,
 			revalidateFirstPage: false,
@@ -150,6 +145,235 @@ export function TopicPickerDialog({
 	const hasMore = Boolean(query && catalog.data?.at(-1)?.nextCursor);
 	const loadingMore =
 		catalog.isValidating && catalog.size > (catalog.data?.length ?? 0);
+	return { catalog, results, hasMore, loadingMore };
+}
+
+type TopicCatalog = ReturnType<typeof useTopicCatalog>;
+
+function TopicTrail({
+	query,
+	searching,
+	resultCount,
+	trail,
+	onJump,
+}: {
+	query: string;
+	searching: boolean;
+	resultCount: number;
+	trail: TopicNode[];
+	onJump: (trail: TopicNode[]) => void;
+}) {
+	if (query) {
+		return (
+			<span className="text-black/50 dark:text-white/50">
+				{searching
+					? "Searching"
+					: `${resultCount} matches for “${query}”`}
+			</span>
+		);
+	}
+	return [null, ...trail].map((node, index) => {
+		const last = index === trail.length;
+		return (
+			<span
+				key={node?.id ?? "all"}
+				className="flex items-center gap-1"
+			>
+				{index > 0 && (
+					<HugeiconsIcon
+						icon={ArrowRight01Icon}
+						aria-hidden
+						className="text-black/25 dark:text-white/25"
+						size={12}
+					/>
+				)}
+				<button
+					type="button"
+					aria-current={
+						last
+							? "location"
+							: undefined
+					}
+					disabled={last}
+					onClick={() =>
+						onJump(
+							trail.slice(0, index),
+						)
+					}
+					className={`rounded-md px-1.5 py-1 ${last ? "font-semibold text-black/80 dark:text-white/85" : "text-black/50 hover:bg-black/[0.05] hover:text-black/75 dark:text-white/50 dark:hover:bg-white/[0.06]"}`}
+				>
+					{node ? node.name : "All areas"}
+				</button>
+			</span>
+		);
+	});
+}
+
+function MoreTopics({
+	query,
+	topicCatalog: { catalog, hasMore, loadingMore },
+}: {
+	query: string;
+	topicCatalog: TopicCatalog;
+}) {
+	if (!query || !(catalog.error || hasMore)) return null;
+	return (
+		<div className="px-2 py-1">
+			<Button
+				size="xs"
+				variant="transparent"
+				className="h-8 w-full text-xs"
+				isDisabled={loadingMore}
+				onPress={() =>
+					catalog.error
+						? void catalog.mutate()
+						: void catalog.setSize(
+								catalog.size + 1,
+							)
+				}
+			>
+				{catalog.error
+					? "Try again"
+					: loadingMore
+						? "Loading"
+						: "Show more"}
+			</Button>
+		</div>
+	);
+}
+
+function TopicResults({
+	query,
+	topicCatalog,
+	chosenIds,
+	onOpen,
+	onToggle,
+}: {
+	query: string;
+	topicCatalog: TopicCatalog;
+	chosenIds: Set<string>;
+	onOpen: (topic: TopicNode) => void;
+	onToggle: (topic: TopicNode) => void;
+}) {
+	const { catalog, results } = topicCatalog;
+	if (catalog.error && results.length === 0) {
+		return (
+			<div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
+				<p className="text-sm font-medium">
+					Could not load topics
+				</p>
+				<Button
+					size="xs"
+					variant="transparent"
+					onPress={() => void catalog.mutate()}
+				>
+					Try again
+				</Button>
+			</div>
+		);
+	}
+	if (catalog.isLoading && !catalog.data) {
+		return (
+			<div className="flex h-full items-center justify-center">
+				<Spinner
+					size="sm"
+					aria-label="Loading topics"
+				/>
+			</div>
+		);
+	}
+	if (results.length === 0) {
+		return (
+			<div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
+				<HugeiconsIcon
+					icon={Search01Icon}
+					size={28}
+					className="text-black/30 dark:text-white/30"
+				/>
+				<p className="text-sm font-medium">
+					No topics found
+				</p>
+				<p className="max-w-60 text-xs leading-relaxed text-black/50 dark:text-white/50">
+					Try a broader word, or browse from All
+					areas.
+				</p>
+			</div>
+		);
+	}
+	return (
+		<>
+			{results.map((topic) => (
+				<TopicRow
+					key={topic.id}
+					topic={topic}
+					selected={chosenIds.has(topic.id)}
+					showPath={Boolean(query)}
+					onOpen={onOpen}
+					onToggle={onToggle}
+				/>
+			))}
+			<MoreTopics query={query} topicCatalog={topicCatalog} />
+		</>
+	);
+}
+
+function ChosenTopics({
+	chosen,
+	onRemove,
+}: {
+	chosen: TopicNode[];
+	onRemove: (topic: TopicNode) => void;
+}) {
+	if (chosen.length === 0) {
+		return (
+			<p className="px-4 text-xs leading-relaxed text-black/45 dark:text-white/45">
+				Nothing chosen yet. Open an area on the left and
+				tick the topics that fit.
+			</p>
+		);
+	}
+	return (
+		<ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+			{chosen.map((topic) => (
+				<li
+					key={topic.id}
+					className="flex items-center gap-1 rounded-xl bg-white py-1.5 pl-3 pr-1.5 dark:bg-white/[0.05]"
+				>
+					<span className="min-w-0 flex-1">
+						<TruncatedText
+							text={topic.name}
+							className="text-[13px] font-medium leading-4"
+						/>
+						<TruncatedText
+							text={topicParentPath(topic)}
+							className="text-[11px] leading-4 text-black/45 dark:text-white/45"
+						/>
+					</span>
+					<InspectorListRemove
+						label={`Remove ${topic.name}`}
+						onRemove={() => onRemove(topic)}
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+
+export function TopicPickerDialog({
+	initial,
+	onClose,
+	onConfirm,
+}: {
+	initial: readonly TopicNode[];
+	onClose: () => void;
+	onConfirm: (topics: TopicNode[]) => void;
+}) {
+	const [search, setSearch] = useState("");
+	const [trail, setTrail] = useState<TopicNode[]>([]);
+	const [chosen, setChosen] = useState<TopicNode[]>([...initial]);
+	const query = search.trim();
+	const parent = trail.at(-1) ?? null;
+	const topicCatalog = useTopicCatalog(query, parent?.id ?? null);
 	const chosenIds = new Set(chosen.map((topic) => topic.id));
 
 	function toggle(topic: TopicNode) {
@@ -247,126 +471,25 @@ export function TopicPickerDialog({
 							aria-label="Topic level"
 							className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-black/[0.055] px-4 text-xs dark:border-white/[0.06]"
 						>
-							{query ? (
-								<span className="text-black/50 dark:text-white/50">
-									{catalog.isLoading
-										? "Searching"
-										: `${results.length} matches for “${query}”`}
-								</span>
-							) : (
-								[null, ...trail].map((node, index) => {
-									const last = index === trail.length;
-									return (
-										<span
-											key={node?.id ?? "all"}
-											className="flex items-center gap-1"
-										>
-											{index > 0 && (
-												<HugeiconsIcon
-													icon={ArrowRight01Icon}
-													aria-hidden
-													className="text-black/25 dark:text-white/25"
-													size={12}
-												/>
-											)}
-											<button
-												type="button"
-												aria-current={
-													last
-														? "location"
-														: undefined
-												}
-												disabled={last}
-												onClick={() =>
-													setTrail(
-														trail.slice(0, index),
-													)
-												}
-												className={`rounded-md px-1.5 py-1 ${last ? "font-semibold text-black/80 dark:text-white/85" : "text-black/50 hover:bg-black/[0.05] hover:text-black/75 dark:text-white/50 dark:hover:bg-white/[0.06]"}`}
-											>
-												{node ? node.name : "All areas"}
-											</button>
-										</span>
-									);
-								})
-							)}
+							<TopicTrail
+								query={query}
+								searching={topicCatalog.catalog.isLoading}
+								resultCount={topicCatalog.results.length}
+								trail={trail}
+								onJump={setTrail}
+							/>
 						</nav>
 						<div
 							aria-label="Topics"
 							className="h-[340px] min-h-40 overflow-y-auto overscroll-contain p-2 sm:h-[388px]"
 						>
-							{catalog.error && results.length === 0 ? (
-								<div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
-									<p className="text-sm font-medium">
-										Could not load topics
-									</p>
-									<Button
-										size="xs"
-										variant="transparent"
-										onPress={() => void catalog.mutate()}
-									>
-										Try again
-									</Button>
-								</div>
-							) : catalog.isLoading && !catalog.data ? (
-								<div className="flex h-full items-center justify-center">
-									<Spinner
-										size="sm"
-										aria-label="Loading topics"
-									/>
-								</div>
-							) : results.length === 0 ? (
-								<div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
-									<HugeiconsIcon
-										icon={Search01Icon}
-										size={28}
-										className="text-black/30 dark:text-white/30"
-									/>
-									<p className="text-sm font-medium">
-										No topics found
-									</p>
-									<p className="max-w-60 text-xs leading-relaxed text-black/50 dark:text-white/50">
-										Try a broader word, or browse from All
-										areas.
-									</p>
-								</div>
-							) : (
-								<>
-									{results.map((topic) => (
-										<TopicRow
-											key={topic.id}
-											topic={topic}
-											selected={chosenIds.has(topic.id)}
-											showPath={Boolean(query)}
-											onOpen={open}
-											onToggle={toggle}
-										/>
-									))}
-									{query && (catalog.error || hasMore) ? (
-										<div className="px-2 py-1">
-											<Button
-												size="xs"
-												variant="transparent"
-												className="h-8 w-full text-xs"
-												isDisabled={loadingMore}
-												onPress={() =>
-													catalog.error
-														? void catalog.mutate()
-														: void catalog.setSize(
-																catalog.size + 1,
-															)
-												}
-											>
-												{catalog.error
-													? "Try again"
-													: loadingMore
-														? "Loading"
-														: "Show more"}
-											</Button>
-										</div>
-									) : null}
-								</>
-							)}
+							<TopicResults
+								query={query}
+								topicCatalog={topicCatalog}
+								chosenIds={chosenIds}
+								onOpen={open}
+								onToggle={toggle}
+							/>
 						</div>
 					</div>
 					<aside
@@ -376,36 +499,7 @@ export function TopicPickerDialog({
 						<p className="flex h-10 shrink-0 items-center px-4 text-xs font-medium text-black/55 dark:text-white/55">
 							Chosen for this record
 						</p>
-						{chosen.length === 0 ? (
-							<p className="px-4 text-xs leading-relaxed text-black/45 dark:text-white/45">
-								Nothing chosen yet. Open an area on the left and
-								tick the topics that fit.
-							</p>
-						) : (
-							<ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-								{chosen.map((topic) => (
-									<li
-										key={topic.id}
-										className="flex items-center gap-1 rounded-xl bg-white py-1.5 pl-3 pr-1.5 dark:bg-white/[0.05]"
-									>
-										<span className="min-w-0 flex-1">
-											<TruncatedText
-												text={topic.name}
-												className="text-[13px] font-medium leading-4"
-											/>
-											<TruncatedText
-												text={topicParentPath(topic)}
-												className="text-[11px] leading-4 text-black/45 dark:text-white/45"
-											/>
-										</span>
-										<InspectorListRemove
-											label={`Remove ${topic.name}`}
-											onRemove={() => toggle(topic)}
-										/>
-									</li>
-								))}
-							</ul>
-						)}
+						<ChosenTopics chosen={chosen} onRemove={toggle} />
 					</aside>
 				</div>
 				<ModalFooter className="flex shrink-0 items-center justify-between gap-3 px-5 py-4 sm:px-6">

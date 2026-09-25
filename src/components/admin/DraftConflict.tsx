@@ -62,6 +62,52 @@ export function ConflictValue({
 	return String(value);
 }
 
+function textField(value: unknown) {
+	return typeof value === "string" ? value : undefined;
+}
+
+function institutionName(entry: unknown) {
+	if (typeof entry === "string") return [entry];
+	if (!entry || typeof entry !== "object") return [];
+	const displayName = (entry as Record<string, unknown>).display_name;
+	return typeof displayName === "string" ? [displayName] : [];
+}
+
+function creatorAffiliations(creator: Record<string, unknown>) {
+	return [
+		...(Array.isArray(creator.institutions)
+			? creator.institutions.flatMap(institutionName)
+			: []),
+		...(typeof creator.affiliation === "string" ? [creator.affiliation] : []),
+	].filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
+}
+
+function CreatorConflictValue({ creator }: { creator: Record<string, unknown> }) {
+	const name = creatorDisplayName({
+		name: textField(creator.name),
+		firstName: textField(creator.firstName),
+		lastName: textField(creator.lastName),
+	});
+	const affiliations = creatorAffiliations(creator);
+	return (
+		<span className="flex flex-col gap-0.5">
+			<span>
+				{name || "Unnamed creator"}
+				{typeof creator.creatorType === "string" && (
+					<span className="ml-2 text-black/45 dark:text-white/45">
+						{adminFieldLabel(creator.creatorType)}
+					</span>
+				)}
+			</span>
+			{affiliations.length > 0 && (
+				<span className="text-black/45 dark:text-white/45">
+					{affiliations.join(" · ")}
+				</span>
+			)}
+		</span>
+	);
+}
+
 function ObjectConflictValue({
 	field,
 	value,
@@ -69,47 +115,10 @@ function ObjectConflictValue({
 	field: string;
 	value: object;
 }) {
-	if (field === "creators") {
-		const creator = value as Record<string, unknown>;
-		const name = creatorDisplayName({
-			name: typeof creator.name === "string" ? creator.name : undefined,
-			firstName:
-				typeof creator.firstName === "string" ? creator.firstName : undefined,
-			lastName:
-				typeof creator.lastName === "string" ? creator.lastName : undefined,
-		});
-		const affiliations = [
-			...(Array.isArray(creator.institutions)
-				? creator.institutions.flatMap((entry) => {
-						if (typeof entry === "string") return [entry];
-						if (!entry || typeof entry !== "object") return [];
-						const displayName = (entry as Record<string, unknown>)
-							.display_name;
-						return typeof displayName === "string" ? [displayName] : [];
-					})
-				: []),
-			...(typeof creator.affiliation === "string"
-				? [creator.affiliation]
-				: []),
-		].filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
+	if (field === "creators")
 		return (
-			<span className="flex flex-col gap-0.5">
-				<span>
-					{name || "Unnamed creator"}
-					{typeof creator.creatorType === "string" && (
-						<span className="ml-2 text-black/45 dark:text-white/45">
-							{adminFieldLabel(creator.creatorType)}
-						</span>
-					)}
-				</span>
-				{affiliations.length > 0 && (
-					<span className="text-black/45 dark:text-white/45">
-						{affiliations.join(" · ")}
-					</span>
-				)}
-			</span>
+			<CreatorConflictValue creator={value as Record<string, unknown>} />
 		);
-	}
 	if (field === "tags" && "tag" in value)
 		return <ConflictValue field="tag" value={value.tag} />;
 	return (

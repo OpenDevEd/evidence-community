@@ -66,6 +66,64 @@ import { toggleTopicSelection } from "@/lib/topics/selection";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
+/** Paging for a search the server answers a page at a time. */
+type FacetSearchPaging = {
+	hasMore: boolean;
+	isLoadingMore: boolean;
+	onLoadMore: () => void;
+	error: boolean;
+	onRetry: () => void;
+};
+
+function showsSearchPaging(
+	search: string,
+	paging: FacetSearchPaging | undefined,
+): paging is FacetSearchPaging {
+	return Boolean(search && paging && (paging.error || paging.hasMore));
+}
+
+function SearchPagingButton({ paging }: { paging: FacetSearchPaging }) {
+	const { error, isLoadingMore } = paging;
+	return (
+		<Button
+			size="xs"
+			variant="transparent"
+			className="h-8 w-full gap-1.5 text-xs"
+			isDisabled={isLoadingMore}
+			onPress={
+				error
+					? paging.onRetry
+					: paging.onLoadMore
+			}
+			startContent={
+				!error && isLoadingMore ? (
+					<span
+						aria-hidden
+						className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+					/>
+				) : undefined
+			}
+		>
+			{error
+				? "Try again"
+				: isLoadingMore
+					? "Loading"
+					: "Show more"}
+		</Button>
+	);
+}
+
+function searchedFacetItems(
+	list: FacetListItem[],
+	searchList: FacetListItem[] | undefined,
+	search: string,
+) {
+	if (search.length === 0) return list;
+	return (searchList ?? list).filter((item) =>
+		item.label.toLowerCase().includes(search.toLowerCase()),
+	);
+}
+
 function FacetPicker({
 	label,
 	placeholder,
@@ -77,11 +135,7 @@ function FacetPicker({
 	searchList,
 	fixedHeight = false,
 	onSearchChange,
-	hasMore = false,
-	isLoadingMore = false,
-	onLoadMore,
-	searchError = false,
-	onSearchRetry,
+	searchPaging,
 }: {
 	label: string;
 	placeholder: string;
@@ -93,21 +147,12 @@ function FacetPicker({
 	searchList?: FacetListItem[];
 	fixedHeight?: boolean;
 	onSearchChange?: (value: string) => void;
-	hasMore?: boolean;
-	isLoadingMore?: boolean;
-	onLoadMore?: () => void;
-	searchError?: boolean;
-	onSearchRetry?: () => void;
+	searchPaging?: FacetSearchPaging;
 }) {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
-	const displayedList =
-		search.length > 0
-			? (searchList ?? list).filter((item) =>
-					item.label.toLowerCase().includes(search.toLowerCase()),
-				)
-			: list;
+	const displayedList = searchedFacetItems(list, searchList, search);
 
 	const groupedBySection = displayedList.reduce(
 		(acc, item) => {
@@ -211,34 +256,9 @@ function FacetPicker({
 					// }
 					itemHeight={48}
 					listboxProps={{
-						bottomContent:
-							search && (searchError || hasMore) ? (
-								<Button
-									size="xs"
-									variant="transparent"
-									className="h-8 w-full gap-1.5 text-xs"
-									isDisabled={isLoadingMore}
-									onPress={
-										searchError
-											? onSearchRetry
-											: onLoadMore
-									}
-									startContent={
-										!searchError && isLoadingMore ? (
-											<span
-												aria-hidden
-												className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
-											/>
-										) : undefined
-									}
-								>
-									{searchError
-										? "Try again"
-										: isLoadingMore
-											? "Loading"
-											: "Show more"}
-								</Button>
-							) : null,
+						bottomContent: showsSearchPaging(search, searchPaging) ? (
+							<SearchPagingButton paging={searchPaging} />
+						) : null,
 					}}
 				>
 					{Object.entries(groupedBySection).map(
@@ -645,11 +665,13 @@ function TopicFilter({
 			list={rows}
 			searchList={rows}
 			onSearchChange={setSearch}
-			hasMore={Boolean(matches.data?.at(-1)?.nextCursor)}
-			isLoadingMore={matches.isValidating}
-			onLoadMore={() => void matches.setSize(matches.size + 1)}
-			searchError={Boolean(matches.error)}
-			onSearchRetry={() => void matches.mutate()}
+			searchPaging={{
+				hasMore: Boolean(matches.data?.at(-1)?.nextCursor),
+				isLoadingMore: matches.isValidating,
+				onLoadMore: () => void matches.setSize(matches.size + 1),
+				error: Boolean(matches.error),
+				onRetry: () => void matches.mutate(),
+			}}
 		/>
 	);
 }

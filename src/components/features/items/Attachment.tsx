@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, type RefObject } from "react";
 import { Item } from "@/app/api/item/types";
 import { Link } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
@@ -25,12 +25,8 @@ function downloadLink(url: string, filename: string) {
 		.catch(console.error);
 }
 
-export default function Attachment({ data, item }: { data: Item; item: Item }) {
-	const { data: session } = useSession();
-	const locale = useLocale();
-
-	const [loaded, setLoaded] = useState(false);
-	const canHover = loaded || !data?.PDFCoverPageImage;
+/** Heights that let the cover slide up on hover, measured again on resize and once the cover loads. */
+function useCoverHeights(loaded: boolean) {
 	const imageRef = useRef<HTMLImageElement>(null);
 	const parentRef = useRef<HTMLLIElement>(null);
 	const [imageHeight, setImageHeight] = useState<number | undefined>(
@@ -39,23 +35,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 	const [parentHeight, setParentHeight] = useState<number | undefined>(
 		undefined,
 	);
-	const t = useTranslations("ui");
-	const hasImage = data.PDFCoverPageImage;
-	const trackAttachment = (
-		action: "view" | "download" | "open",
-		source: "internal" | "external",
-	) => {
-		trackAttachmentInteraction({
-			action,
-			source,
-			parentType: item.itemType,
-			locale,
-			isAuthenticated: Boolean(session),
-		});
-	};
-
-	const isExternal = !data.PDFCoverPageImage && data.linkMode === "linked_url";
-	const pdfUrl = data.url ?? undefined;
 
 	// Update height measurements when window resizes
 	useEffect(() => {
@@ -74,80 +53,142 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		return () => window.removeEventListener("resize", updateHeights);
 	}, [loaded]); // Re-run when image is loaded
 
-	const downloadURL = `/lib/${data.parentItem}/download/${data.key}`;
+	return { imageRef, parentRef, imageHeight, parentHeight };
+}
 
-	const attachmentImage = (
-		<>
+function AttachmentCover({
+	data,
+	imageRef,
+	imageHeight,
+	parentHeight,
+	canHover,
+	onLoad,
+}: {
+	data: Item;
+	imageRef: RefObject<HTMLImageElement | null>;
+	imageHeight: number | undefined;
+	parentHeight: number | undefined;
+	canHover: boolean;
+	onLoad: () => void;
+}) {
+	const t = useTranslations("ui");
+	return (
+		<div
+			data-height={imageHeight}
+			style={
+				{
+					"--image-height": `${
+						-(imageHeight ?? 0) +
+						(parentHeight ?? 0) -
+						4 * 4
+					}px`,
+				} as any
+			}
+			className={twMerge(
+				"mx-auto w-full max-w-[200px]",
+				"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
+				canHover && "md:hover:top-[var(--image-height)]",
+			)}
+		>
 			<PdfCover
 				ref={imageRef}
 				src={data?.PDFCoverPageImage}
 				alt={t("pdfPreviewAlt", {
 					filename: data?.filename || t("document"),
 				})}
-				onLoad={() => setLoaded(true)}
+				onLoad={onLoad}
 			/>
-		</>
+		</div>
 	);
+}
 
-	const attachmentTitle = (
-		<h4 className="text-lg font-medium line-clamp-2 lg:line-clamp-none">
-			<Link
-				href={isExternal ? pdfUrl : downloadURL}
-				target="_blank"
-				className="dark:text-current text-current text-wrap-anywhere text-lg"
-				onClick={() =>
-					trackAttachment(
-						isExternal ? "open" : "view",
-						isExternal ? "external" : "internal",
-					)
-				}
-			>
-				{data.filename || data.title || t("document")}
-			</Link>
-		</h4>
-	);
+function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
+	const { data: session } = useSession();
+	const locale = useLocale();
+	const t = useTranslations("ui");
+	const trackAttachment = (
+		action: "view" | "download" | "open",
+		source: "internal" | "external",
+	) => {
+		trackAttachmentInteraction({
+			action,
+			source,
+			parentType: item.itemType,
+			locale,
+			isAuthenticated: Boolean(session),
+		});
+	};
 
-	const attachmentButtons = (
-		<div className="flex gap-2 flex-wrap md:flex-nowrap">
-			{!isExternal ? (
-				<>
-					<Button
-						size="sm"
-						onPress={() => {
-							trackAttachment("view", "internal");
-							window.open(downloadURL, "_blank");
-						}}
-						startContent={<HugeiconsIcon icon={ViewIcon} className="size-5" />}
-					>
-						{t("viewAttachment")}
-					</Button>
+	const isExternal = !data.PDFCoverPageImage && data.linkMode === "linked_url";
+	const pdfUrl = data.url ?? undefined;
+	const downloadURL = `/lib/${data.parentItem}/download/${data.key}`;
+
+	return (
+		<>
+			<h4 className="text-lg font-medium line-clamp-2 lg:line-clamp-none">
+				<Link
+					href={isExternal ? pdfUrl : downloadURL}
+					target="_blank"
+					className="dark:text-current text-current text-wrap-anywhere text-lg"
+					onClick={() =>
+						trackAttachment(
+							isExternal ? "open" : "view",
+							isExternal ? "external" : "internal",
+						)
+					}
+				>
+					{data.filename || data.title || t("document")}
+				</Link>
+			</h4>
+			<div className="flex gap-2 flex-wrap md:flex-nowrap">
+				{!isExternal ? (
+					<>
+						<Button
+							size="sm"
+							onPress={() => {
+								trackAttachment("view", "internal");
+								window.open(downloadURL, "_blank");
+							}}
+							startContent={<HugeiconsIcon icon={ViewIcon} className="size-5" />}
+						>
+							{t("viewAttachment")}
+						</Button>
+						<Button
+							size="sm"
+							color="accent"
+							startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
+							onPress={() => {
+								trackAttachment("download", "internal");
+								downloadLink(data.url || "", data.filename || "");
+							}}
+						>
+							{t("downloadAttachment")}
+						</Button>
+					</>
+				) : (
 					<Button
 						size="sm"
 						color="accent"
 						startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
 						onPress={() => {
-							trackAttachment("download", "internal");
-							downloadLink(data.url || "", data.filename || "");
+							trackAttachment("open", "external");
+							window.open(pdfUrl, "_blank");
 						}}
 					>
-						{t("downloadAttachment")}
+						{t("openDocument")}
 					</Button>
-				</>
-			) : (
-				<Button
-					size="sm"
-					color="accent"
-					startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
-					onPress={() => {
-						trackAttachment("open", "external");
-						window.open(pdfUrl, "_blank");
-					}}
-				>
-					{t("openDocument")}
-				</Button>
-			)}
-		</div>
+				)}
+			</div>
+		</>
 	);
+}
+
+export default function Attachment({ data, item }: { data: Item; item: Item }) {
+	const [loaded, setLoaded] = useState(false);
+	const canHover = loaded || !data?.PDFCoverPageImage;
+	const { imageRef, parentRef, imageHeight, parentHeight } =
+		useCoverHeights(loaded);
+	const hasImage = data.PDFCoverPageImage;
 
 	return (
 		<Card
@@ -161,25 +202,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 			color="card"
 		>
 			{hasImage && (
-				<div
-					data-height={imageHeight}
-					style={
-						{
-							"--image-height": `${
-								-(imageHeight ?? 0) +
-								(parentHeight ?? 0) -
-								4 * 4
-							}px`,
-						} as any
-					}
-					className={twMerge(
-						"mx-auto w-full max-w-[200px]",
-						"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
-						canHover && "md:hover:top-[var(--image-height)]",
-					)}
-				>
-					{attachmentImage}
-				</div>
+				<AttachmentCover
+					data={data}
+					imageRef={imageRef}
+					imageHeight={imageHeight}
+					parentHeight={parentHeight}
+					canHover={canHover}
+					onLoad={() => setLoaded(true)}
+				/>
 			)}
 			<div
 				className={twMerge(
@@ -189,8 +219,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						: "",
 				)}
 			>
-				{attachmentTitle}
-				{attachmentButtons}
+				<AttachmentDetails data={data} item={item} />
 			</div>
 		</Card>
 	);
