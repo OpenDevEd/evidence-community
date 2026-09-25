@@ -2079,7 +2079,7 @@ export default function AdminWorkbench({
 			>
 				<Link
 					aria-label="Open library"
-					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-30 items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus xl:mr-1 xl:w-30 xl:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
+					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-[120px] items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus xl:mr-1 xl:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
 					<LibraryLogo className="max-w-full" place="admin" />

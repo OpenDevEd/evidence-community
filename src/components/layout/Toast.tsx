@@ -35,9 +35,9 @@ function Toast(props: ToastProps) {
         </div>
       </div>
       {button && (
-      <div className="ml-5 shrink-0 rounded-md text-sm font-medium focus:ring-2  focus:ring-offset-2 focus:outline-hidden">
+      <div className="ml-5 shrink-0 text-sm font-medium">
         <button
-          className="rounded bg-indigo-50 px-3 py-1 text-sm font-semibold  hover:bg-indigo-100"
+          className="rounded bg-indigo-50 px-3 py-1 text-sm font-semibold hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2"
           onClick={() => {
             button.onClick();
             sonnerToast.dismiss(id);

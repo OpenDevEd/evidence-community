@@ -205,9 +205,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						} as any
 					}
 					className={twMerge(
-						"mx-auto w-full max-w-50",
+						"mx-auto w-full max-w-[200px]",
 						"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
-						canHover && "md:hover:top-(--image-height)",
+						canHover && "md:hover:top-[var(--image-height)]",
 					)}
 				>
 					{attachmentImage}

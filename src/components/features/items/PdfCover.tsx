@@ -16,7 +16,13 @@ export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width
 	return (
 		<Skeleton isLoaded={loaded} className="w-full rounded-xl">
 			<CoverImage
-				ref={ref}
+				ref={(element) => {
+					// A cover the browser already holds, for example when the item page draws it again after its quick first
+					// render, is complete as soon as it is attached: show it before the first paint instead of the placeholder.
+					if (element?.complete && element.naturalWidth > 0) setLoaded(true);
+					if (typeof ref === "function") ref(element);
+					else if (ref) ref.current = element;
+				}}
 				src={src}
 				alt={alt}
 				width={width ?? 512}
