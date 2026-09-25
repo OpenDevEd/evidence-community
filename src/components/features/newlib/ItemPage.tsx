@@ -1246,6 +1246,10 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 	);
 }
 
+// Items drawn from the list the reader came from. The full record then replaces that page with new components, and
+// their entrance animations would play a second time, so the full record's page skips them.
+const drawnFromListCopy = new Set<string>();
+
 export default function ItemPage({
 	data,
 	loading: loadingProp,
@@ -1254,6 +1258,13 @@ export default function ItemPage({
 	loading: boolean;
 }) {
 	const loading = data?.item ? false : loadingProp;
+	const itemKey = data?.item?.key;
+	const [alreadyShown] = useState(() => !loadingProp && itemKey !== undefined && drawnFromListCopy.has(itemKey));
+	useEffect(() => {
+		if (!itemKey) return;
+		if (loadingProp) drawnFromListCopy.add(itemKey);
+		else drawnFromListCopy.delete(itemKey);
+	}, [itemKey, loadingProp]);
 
 	useEffect(() => {
 		// Zotero Connector listens for this browser event to refresh its page snapshot.
@@ -1265,6 +1276,7 @@ export default function ItemPage({
 	const item = (loading ? undefined : data?.item)!;
 
 	return (
+		<AnimatePresence initial={!alreadyShown}>
 		<PageContainer>
 			{item && <abbr className="unapi-id" title={item.key}></abbr>}
 			<LoadingContext.Provider value={{ loading }}>
@@ -1275,7 +1287,7 @@ export default function ItemPage({
 					</div>
 					<div className="flex flex-col lg:grid grid-cols-12 gap-8">
 						<div className="col-span-8 xl:col-span-9 ">
-							<AnimatePresence>
+							<AnimatePresence initial={!alreadyShown}>
 								{loading ? (
 									<motion.div className="flex justify-center items-center min-h-screen">
 										<Spinner />
@@ -1327,5 +1339,6 @@ export default function ItemPage({
 				</div>
 			</LoadingContext.Provider>
 		</PageContainer>
+		</AnimatePresence>
 	);
 }

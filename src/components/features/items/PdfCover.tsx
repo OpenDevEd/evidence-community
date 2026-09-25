@@ -12,14 +12,19 @@ import { twMerge } from "@/lib/tw-merge";
  */
 export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width: 640px) 208px, 330px", width }: { src?: string | null; alt: string; ref?: Ref<HTMLImageElement>; onLoad?: () => void; className?: string; sizes?: string; width?: number }) {
 	const [loaded, setLoaded] = useState(false);
+	// A cover the browser already holds appears as it is; only a cover still arriving fades in.
+	const [heldAlready, setHeldAlready] = useState(false);
 	if (!src) return <div className={twMerge("aspect-[3/4] w-full rounded-xl bg-accent", className)} />;
 	return (
-		<Skeleton isLoaded={loaded} className="w-full rounded-xl">
+		<Skeleton isLoaded={loaded} disableAnimation={heldAlready} className="w-full rounded-xl">
 			<CoverImage
 				ref={(element) => {
 					// A cover the browser already holds, for example when the item page draws it again after its quick first
 					// render, is complete as soon as it is attached: show it before the first paint instead of the placeholder.
-					if (element?.complete && element.naturalWidth > 0) setLoaded(true);
+					if (element?.complete && element.naturalWidth > 0) {
+						setHeldAlready(true);
+						setLoaded(true);
+					}
 					if (typeof ref === "function") ref(element);
 					else if (ref) ref.current = element;
 				}}
