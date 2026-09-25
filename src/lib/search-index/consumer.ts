@@ -54,7 +54,9 @@ const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
 /** Queued rebuild batches; each holds an open file in Meilisearch. */
 const REBUILD_TASKS_IN_FLIGHT = 500;
 /** Events one drain claim takes; a large import indexes in fewer, bigger batches. */
-const DRAIN_BATCH_SIZE = 2_000;
+const DRAIN_BATCH_SIZE = 5_000;
+/** Claims one drain works on at once. */
+const DRAIN_CONCURRENCY = 3;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 
 type ClaimedEvent = typeof outbox.$inferSelect;
@@ -260,6 +262,13 @@ async function claimEvents(
 	throwIfAborted(options.signal);
 	const claimedAt = now(options);
 	return options.database.transaction(async (transaction) => {
+		// Claims in one library run one at a time. The lease check below then
+		// sees every lease committed before it, so two workers never lease the
+		// same entity, with one lock per claim instead of one per claimed row
+		// (the lock table is shared by every database on the server).
+		await transaction.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended('search-outbox-claim', 0))`,
+		);
 		const candidates = await transaction
 			.select({ id: outbox.id })
 			.from(outbox)
@@ -280,25 +289,6 @@ async function claimEvents(
 			.limit(limit);
 		if (candidates.length === 0) return [];
 
-		// Entity locks are taken only for the selected rows; inside the query
-		// above, a plan that reads every pending row before the limit took one
-		// lock per pending row and ran out of lock memory on a large backlog.
-		const locked = await transaction
-			.select({ id: outbox.id })
-			.from(outbox)
-			.where(
-				and(
-					inArray(
-						outbox.id,
-						candidates.map(({ id }) => id),
-					),
-					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${outbox.entityType} || ':' || ${outbox.entityKey}, 0))`,
-				),
-			);
-		if (locked.length === 0) return [];
-
-		// Checked again under the locks: another worker may have leased the
-		// same entity and committed after the rows above were selected.
 		return transaction
 			.update(outbox)
 			.set({
@@ -306,12 +296,9 @@ async function claimEvents(
 				leaseOwner: workerId,
 			})
 			.where(
-				and(
-					inArray(
-						outbox.id,
-						locked.map(({ id }) => id),
-					),
-					noActiveEntityLease(transaction, claimedAt),
+				inArray(
+					outbox.id,
+					candidates.map(({ id }) => id),
 				),
 			)
 			.returning();
@@ -896,22 +883,45 @@ export async function drainSearchOutbox(
 	) {
 		throw new Error("maxEvents must be an integer between 1 and 1,000,000");
 	}
-	const results: SearchOutboxProcessResult[] = [];
-	let processedEvents = 0;
-	while (processedEvents < maxEvents) {
+	// Several claims run at once, so one is projected while Meilisearch
+	// indexes another. Claims never share an entity (see claimEvents).
+	const drain = { failed: false, reserved: 0, results: [] as SearchOutboxProcessResult[] };
+	const lanes = await Promise.allSettled(
+		Array.from({ length: DRAIN_CONCURRENCY }, () =>
+			drainLane(options, maxEvents, drain),
+		),
+	);
+	const failure = lanes.find((lane) => lane.status === "rejected");
+	if (failure) throw failure.reason;
+	return drain.results;
+}
+
+async function drainLane(
+	options: SearchOutboxConsumerOptions,
+	maxEvents: number,
+	drain: { failed: boolean; reserved: number; results: SearchOutboxProcessResult[] },
+) {
+	while (!drain.failed && drain.reserved < maxEvents) {
 		throwIfAborted(options.signal);
-		const batchResults = await processNextSearchOutboxBatch({
-			...options,
-			batchSize: Math.min(DRAIN_BATCH_SIZE, maxEvents - processedEvents),
-		});
-		if (!batchResults) break;
-		results.push(...batchResults);
-		processedEvents += batchResults.reduce(
-			(total, result) => total + result.eventIds.length,
-			0,
-		);
+		const batchSize = Math.min(DRAIN_BATCH_SIZE, maxEvents - drain.reserved);
+		drain.reserved += batchSize;
+		try {
+			const batchResults = await processNextSearchOutboxBatch({
+				...options,
+				batchSize,
+			});
+			const processed = (batchResults ?? []).reduce(
+				(total, result) => total + result.eventIds.length,
+				0,
+			);
+			drain.reserved -= batchSize - processed;
+			if (!batchResults) return;
+			drain.results.push(...batchResults);
+		} catch (error) {
+			drain.failed = true;
+			throw error;
+		}
 	}
-	return results;
 }
 
 export type SearchOutboxReceiptSelector = {

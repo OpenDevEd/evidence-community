@@ -26,11 +26,13 @@ deletion cannot leave stale collection facets.
 ## Delivery guarantees
 
 Each event has a claim owner and expiry. The consumer maintains a heartbeat
-while it builds the projection and waits for Meilisearch. Competing workers use
-`FOR UPDATE SKIP LOCKED`, exclude entities already covered by an active lease,
-and take a transaction-scoped advisory lock before claiming an entity. This
-keeps two workers from applying different revisions of the same entity out of
-order. An expired claim is recoverable.
+while it builds the projection and waits for Meilisearch. Claims in one library
+take a single transaction-scoped advisory lock, so they run one at a time; each
+claim then uses `FOR UPDATE SKIP LOCKED` and skips entities already covered by
+an active lease. This keeps two workers from applying different revisions of
+the same entity out of order, with one lock per claim rather than one per
+event: PostgreSQL's lock table is shared by every library database on the
+server. An expired claim is recoverable.
 
 Meilisearch mutations are asynchronous tasks. The consumer checks the terminal
 task result and writes `processedAt` only after `succeeded`. Request failures,
@@ -49,10 +51,11 @@ again. Stale events cannot overwrite a newer canonical revision because every
 attempt reads current PostgreSQL state rather than reconstructing historical
 event payloads.
 
-The drain claims up to 2,000 events and coalesces duplicate parent/child work.
-It sends every Meilisearch task of a claim before waiting for any, so a large
-import (a first Zotero or OpenAlex sync) is indexed in a few large batches
-instead of repeating Meilisearch's per-batch work every 500 records.
+The drain claims up to 5,000 events and coalesces duplicate parent/child work.
+It sends every Meilisearch task of a claim before waiting for any, and works on
+three claims at once, so one claim is projected while Meilisearch indexes
+another. A large import (a first Zotero or OpenAlex sync) is therefore indexed
+in a few large batches: 103,688 records took 7.9 minutes instead of 32.
 Projection reads remain bounded to at most 500 item keys, while outgoing
 Meilisearch document requests are split by serialized size and stay below a
 20 MiB default budget. A single larger document is sent alone. If Meilisearch
