@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+/** The default retraction clause alone would import the whole OpenAlex corpus. */
+function narrowsResults(filter: string | undefined) {
+	return Boolean(
+		filter
+			?.split(",")
+			.some((clause) => clause.trim() && clause.trim() !== "is_retracted:false"),
+	);
+}
+
 export const openAlexQuerySchema = z
 	.object({
 		filter: z.string().trim().min(1).max(16_384).optional(),
@@ -7,7 +16,7 @@ export const openAlexQuerySchema = z
 	})
 	.strict()
 	.refine(
-		(query) => Boolean(query.filter || query.search),
+		(query) => Boolean(query.search) || narrowsResults(query.filter),
 		"An OpenAlex source requires a search or filter",
 	);
 
@@ -17,7 +26,7 @@ export const openAlexConnectionConfigSchema = z
 		name: z.string().trim().min(1).max(80),
 		// The editor retains its unexpanded query, filters and local history ID.
 		// Imports always use approvedQuery, never this UI state.
-		searchUrl: z.string().max(16_384).regex(/^\/results\/[A-Za-z0-9-]+(?:\?|$)/).optional(),
+		searchUrl: z.string().max(16_384).regex(/^\/results\/[A-Za-z0-9-]+(?:\?|$)/),
 		approvedQuery: z
 			.object({
 				version: z.string().trim().min(1).max(128),

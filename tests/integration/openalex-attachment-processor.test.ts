@@ -196,6 +196,7 @@ describe("OpenAlex PDF processing", () => {
 					.set({
 						config: {
 							name: "AI in education",
+							searchUrl: "/results/saved-search-1",
 							approvedQuery: {
 								version: "v1",
 								approvedAt: "2026-09-24T00:00:00Z",

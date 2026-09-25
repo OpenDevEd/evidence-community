@@ -20,6 +20,7 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 
 const settings = {
 	name: "AI in education",
+	searchUrl: "/results/saved-search-1",
 	approvedQuery: {
 		version: "v1",
 		approvedAt: "2026-09-24T10:00:00Z",

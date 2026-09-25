@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { configuredSourceConnectionValues } from "@/lib/source-ingestion/configuration";
+import { openAlexQuerySchema } from "@/lib/source-ingestion/openalex/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 
 describe("manifest-owned source configuration", () => {
@@ -18,6 +19,10 @@ describe("manifest-owned source configuration", () => {
 		expect(config.sources[1].settings).toHaveProperty("downloadPdfs", true);
 		expect(configuredSourceConnectionValues(config.sources[0])).not.toHaveProperty("apiKey");
 		expect(libraryConfigSchema.safeParse({ ...maximalLibraryConfig, sources: [{ ...source, writebackEnabled: true }] }).success).toBe(false);
+	});
+	it("rejects an OpenAlex query whose only filter is the default retraction filter", () => {
+		expect(openAlexQuerySchema.safeParse({ filter: "is_retracted:false" }).success).toBe(false);
+		expect(openAlexQuerySchema.safeParse({ filter: "is_retracted:false,publication_year:2024" }).success).toBe(true);
 	});
 	it("maps a Zotero source without copying its API key into database state", () => {
 		const config = libraryConfigSchema.parse(maximalLibraryConfig);

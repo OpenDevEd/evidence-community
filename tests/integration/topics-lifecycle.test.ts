@@ -20,7 +20,7 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import type { Database } from "@/db/database-schema";
 
-const settings = {name: "Schools", approvedQuery: {version: "v1", approvedAt: "2026-09-24T10:00:00Z", query: {search: "schools"}}, downloadPdfs: false};
+const settings = {name: "Schools", searchUrl: "/results/saved-search-1", approvedQuery: {version: "v1", approvedAt: "2026-09-24T10:00:00Z", query: {search: "schools"}}, downloadPdfs: false};
 const config = libraryConfigSchema.parse({...maximalLibraryConfig, topics: {enabled: true}});
 const policy = {writebackConfig: {...config, sources: [{key: "oa", writebackEnabled: false}]}};
 async function seedTopics(db: Database) {
