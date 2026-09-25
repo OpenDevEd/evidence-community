@@ -16,6 +16,8 @@ function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicIte
 
 /** Most publications an edition lists; the rest of its window is counted, never carried over. */
 const EDITION_LISTED_LIMIT = 1000;
+/** How soon to ask OpenScholar again while it writes a digest in the background. */
+const DIGEST_CHECK_MS = 15_000;
 
 // Publications this stream has not covered yet, up to the end of the window.
 // That includes commits that landed after an earlier window closed and items
@@ -157,6 +159,11 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
     const output = edition.stream === "digest" ? await requestDigest(config, edition, signal) : {
       title: "New publications", summary: `${edition.publicationCount} new ${edition.publicationCount === 1 ? "publication" : "publications"}`, markdown: null, model: null, reasoning: null,
     };
+    if (!output) {
+      // OpenScholar is still writing it. Checking back is not a failed attempt.
+      await db.update(notificationEdition).set({ nextAttemptAt: new Date(Date.now() + DIGEST_CHECK_MS), leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned);
+      return true;
+    }
     await db.transaction(async tx => {
       const saved = await tx.update(notificationEdition).set({ ...output, publishedAt: new Date(), nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned).returning({ id: notificationEdition.id });
       if (!saved.length) return;
@@ -184,6 +191,7 @@ async function requestDigest(config: LibraryServerConfig, edition: typeof notifi
     body: JSON.stringify({ libraryId: service.libraryId, editionId: edition.id, locale: config.localization.defaultLocale, periodStart: edition.windowStart.toISOString(), periodEnd: edition.windowEnd.toISOString(), publications: edition.publications.map(({ item: _item, ...metadata }) => metadata) }),
     signal: AbortSignal.any([AbortSignal.timeout(210_000), ...(signal ? [signal] : [])]),
   });
+  if (response.status === 202) return null;
   if (!response.ok) throw new Error(`OpenScholar digest generation returned ${response.status}: ${(await response.text()).slice(0, 500)}`);
   const output: unknown = await response.json();
   return z.object({ digest: digestResponseSchema }).parse(output).digest;

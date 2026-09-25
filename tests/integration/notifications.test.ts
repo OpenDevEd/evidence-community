@@ -102,6 +102,39 @@ it("keeps drafts private, batches first publications once and honors queued unsu
   });
 }, 120_000);
 
+it("checks back while OpenScholar writes a digest without spending an attempt, then publishes it", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
+    await requestSubscription(db, {email: "reader@example.org", digest: true, instant: false});
+    const [subscriber] = await db.select().from(notificationSubscriber);
+    expect(await confirmSubscription(db, subscriber.token)).toBe(true);
+    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Attention in classrooms"});
+    await publishItemDraft(db, draft.itemKey);
+    expect(await prepareNotificationEditions(db, config, new Date(), {manualDigest: true})).toMatchObject({status: "queued", publicationCount: 1});
+    const digest = {title: "Attention in learning", summary: "A new framework.", markdown: `See [Mills, 2026](/lib/${draft.itemKey})`, model: "openai/gpt-6-luna", reasoning: "max"};
+    const openScholar = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(Response.json({status: "pending"}, {status: 202}))
+      .mockResolvedValueOnce(Response.json({digest}));
+    try {
+      expect(await generateNotificationEdition(db, config)).toBe(true);
+      const [pending] = await db.select().from(notificationEdition);
+      expect(pending).toMatchObject({publishedAt: null, attempts: 0, lastError: null, leaseToken: null});
+      expect(pending.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now());
+      expect(await generateNotificationEdition(db, config)).toBe(false);
+      await client.query('UPDATE "notificationEdition" SET "nextAttemptAt" = now()');
+      expect(await generateNotificationEdition(db, config)).toBe(true);
+      const [published] = await db.select().from(notificationEdition);
+      expect(published).toMatchObject({title: digest.title, model: digest.model, attempts: 0});
+      expect(published.publishedAt).toBeInstanceOf(Date);
+      expect(await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, published.id))).toHaveLength(1);
+      const requests = openScholar.mock.calls.map(([url, init]) => ({url: String(url), editionId: JSON.parse(String(init?.body)).editionId}));
+      expect(requests).toEqual([0, 1].map(() => ({url: "https://spotted-woodpecker-546.convex.site/api/v1/evidence-libraries/digests/generate", editionId: published.id})));
+    } finally {
+      openScholar.mockRestore();
+    }
+  });
+}, 120_000);
+
 it("excludes the first Zotero sync but includes subsequent additions, including after an empty initial sync", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     await client.query(`INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "externalScopeKey", "syncCursor") VALUES ('zotero-test', 'zotero', 'group', '123456', '{}')`);
