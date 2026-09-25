@@ -393,6 +393,11 @@ function ResourceArticle({
 	);
 }
 
+// A result list's first screen holds 2 cards in list view and 4 in grid view at 1440×900, and 2 on a phone.
+// These cards prefetch their whole item page, so a click opens it without waiting on the server.
+// Next.js prefetches a link only once it nears the screen, so a phone still loads only the cards it shows.
+const FULL_PREFETCH_CARDS = 4;
+
 export default function Resource({
 	itemData,
 	abstract,
@@ -405,6 +410,7 @@ export default function Resource({
 	as = "li",
 	hideUnapi,
 	openLinksInNewTab = false,
+	position,
 }: {
 	itemData?: Item | ListItem | undefined;
 	abstract: boolean;
@@ -417,6 +423,8 @@ export default function Resource({
 	as?: "li" | "div";
 	hideUnapi?: boolean;
 	openLinksInNewTab?: boolean;
+	/** The card's place in a result list, counting from 0. */
+	position?: number;
 }) {
 	const titleId = useId();
 	const [referrer, setReferrer] = useQueryState("referrer");
@@ -517,6 +525,14 @@ export default function Resource({
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
+					// A loading card has no address yet, and a new tab cannot use this page's prefetch cache.
+					prefetch={
+						finalItemData?.key &&
+						!openLinksInNewTab &&
+						(position ?? Infinity) < FULL_PREFETCH_CARDS
+							? true
+							: undefined
+					}
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 						!finalItemData?.key && "!pointer-events-none",
