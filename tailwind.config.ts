@@ -258,15 +258,10 @@ const config: Config = {
 					"0%": { transform: "translateX(0)" },
 					"100%": { transform: "translateX(-50%)" },
 				},
-				// A window moves across the field while what it shows moves back by the same amount, so the lit dots stay
-				// on the dim ones. Both are transforms, which the compositor runs without restyling the page.
-				"read-sweep": {
-					"0%": { transform: "translateX(-100%)" },
-					"100%": { transform: "translateX(250%)" },
-				},
-				"read-sweep-back": {
-					"0%": { transform: "translateX(40%)" },
-					"100%": { transform: "translateX(-100%)" },
+				// The Ask panel's grid floor: one tile (48px) toward the reader, then round again on the next tile.
+				"horizon-grid": {
+					"0%": { transform: "translateY(0)" },
+					"100%": { transform: "translateY(48px)" },
 				},
 				"marquee-up": {
 					"0%": { transform: "translateY(0)" },
@@ -299,9 +294,7 @@ const config: Config = {
 				// Content drawn twice, moved by one copy: an endless row. Set the duration where it is used.
 				marquee: "marquee 40s linear infinite",
 				"marquee-up": "marquee-up 60s linear infinite",
-				// The library's dots lighting up as the assistant reads, in one sweep across the field.
-				"read-sweep": "read-sweep 4.5s linear infinite",
-				"read-sweep-back": "read-sweep-back 4.5s linear infinite",
+				"horizon-grid": "horizon-grid 2.4s linear infinite",
 			},
 		},
 	},
