@@ -39,6 +39,7 @@ describe("the library result set the assistant can see", () => {
 			country: [],
 			author: "",
 			collections: [],
+			topics: [],
 		});
 	});
 

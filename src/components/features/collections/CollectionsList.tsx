@@ -54,8 +54,75 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { YearFilter } from "./YearFilter";
+import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
+import {
+	fetchAllTopicCatalogPages,
+	fetchTopicCatalog,
+	fetchTopicNodeClosure,
+} from "@/lib/topics/client";
+import type { TopicNode } from "@/lib/topics/contract";
+import { toggleTopicSelection } from "@/lib/topics/selection";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
+
+/** Paging for a search the server answers a page at a time. */
+type FacetSearchPaging = {
+	hasMore: boolean;
+	isLoadingMore: boolean;
+	onLoadMore: () => void;
+	error: boolean;
+	onRetry: () => void;
+};
+
+function showsSearchPaging(
+	search: string,
+	paging: FacetSearchPaging | undefined,
+): paging is FacetSearchPaging {
+	return Boolean(search && paging && (paging.error || paging.hasMore));
+}
+
+function SearchPagingButton({ paging }: { paging: FacetSearchPaging }) {
+	const { error, isLoadingMore } = paging;
+	return (
+		<Button
+			size="xs"
+			variant="transparent"
+			className="h-8 w-full gap-1.5 text-xs"
+			isDisabled={isLoadingMore}
+			onPress={
+				error
+					? paging.onRetry
+					: paging.onLoadMore
+			}
+			startContent={
+				!error && isLoadingMore ? (
+					<span
+						aria-hidden
+						className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+					/>
+				) : undefined
+			}
+		>
+			{error
+				? "Try again"
+				: isLoadingMore
+					? "Loading"
+					: "Show more"}
+		</Button>
+	);
+}
+
+function searchedFacetItems(
+	list: FacetListItem[],
+	searchList: FacetListItem[] | undefined,
+	search: string,
+) {
+	if (search.length === 0) return list;
+	return (searchList ?? list).filter((item) =>
+		item.label.toLowerCase().includes(search.toLowerCase()),
+	);
+}
 
 function FacetPicker({
 	label,
@@ -66,6 +133,9 @@ function FacetPicker({
 	facetDistribution,
 	facetName,
 	searchList,
+	fixedHeight = false,
+	onSearchChange,
+	searchPaging,
 }: {
 	label: string;
 	placeholder: string;
@@ -75,15 +145,13 @@ function FacetPicker({
 	facetDistribution?: FacetDistribution | undefined;
 	facetName?: string;
 	searchList?: FacetListItem[];
+	fixedHeight?: boolean;
+	onSearchChange?: (value: string) => void;
+	searchPaging?: FacetSearchPaging;
 }) {
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
-	const displayedList =
-		search.length > 0
-			? (searchList ?? list).filter((item) =>
-					item.label.toLowerCase().includes(search.toLowerCase()),
-				)
-			: list;
+	const displayedList = searchedFacetItems(list, searchList, search);
 
 	const groupedBySection = displayedList.reduce(
 		(acc, item) => {
@@ -99,13 +167,23 @@ function FacetPicker({
 	const allSectionNames = Object.keys(groupedBySection);
 
 	return (
-		<div className="w-full flex flex-col gap-2">
+		<div className="w-full flex flex-col gap-2" onKeyDownCapture={(event) => {
+			// Found here rather than through a ref: a ref in inputProps replaces the
+			// one React Aria uses to keep the input visible while the list is open.
+			const picker = event.currentTarget;
+			if (event.key === "Escape") requestAnimationFrame(() => picker.querySelector("input")?.focus({preventScroll: true}));
+		}}>
 			{/* <div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 				<span>{label}</span>
 			</div> */}
 			<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 				<Autocomplete
 					className="flex-1"
+					classNames={
+						fixedHeight ? { listboxWrapper: "h-64" } : undefined
+					}
+					isVirtualized={fixedHeight ? false : undefined}
+					popoverProps={{ shouldCloseOnScroll: false }}
 					placeholder={placeholder}
 					label={label}
 					key={label}
@@ -115,7 +193,9 @@ function FacetPicker({
 						size: 0,
 					}}
 					selectedKey={isMultiSelect ? null : selectedKey}
+					inputValue={search}
 					onSelectionChange={(key) => {
+						if (isMultiSelect && key === null) return;
 						const item = displayedList!.find(
 							(item) => item.key === key,
 						);
@@ -127,6 +207,8 @@ function FacetPicker({
 							} else {
 								functionToCall(key);
 							}
+							setSearch("");
+							onSearchChange?.("");
 						}
 					}}
 					inputProps={{
@@ -144,7 +226,10 @@ function FacetPicker({
 					defaultFilter={(textValue, inputValue) => {
 						return true;
 					}}
-					onInputChange={(string) => setSearch(string)}
+					onInputChange={(value) => {
+						setSearch(value);
+						onSearchChange?.(value);
+					}}
 					disabledKeys={allSectionNames.map(
 						(name) => `section-${name}`,
 					)}
@@ -171,6 +256,11 @@ function FacetPicker({
 					// 	)
 					// }
 					itemHeight={48}
+					listboxProps={{
+						bottomContent: showsSearchPaging(search, searchPaging) ? (
+							<SearchPagingButton paging={searchPaging} />
+						) : null,
+					}}
 				>
 					{Object.entries(groupedBySection).map(
 						([section, items]) => (
@@ -201,6 +291,7 @@ function FacetPicker({
 												aria-label={item.label}
 												key={item.key}
 												style={item.style}
+												textValue={item.label}
 												selectedIcon={
 													isMultiSelect &&
 													(item.isSelected !==
@@ -215,7 +306,7 @@ function FacetPicker({
 													) : undefined
 												}
 											>
-												<span className="text-black dark:text-white line-clamp-2 flex items-center gap-2">
+												<span className="text-black dark:text-white flex min-w-0 items-center gap-2">
 													<span
 														className={twMerge(
 															"text-black/60 dark:text-white/60",
@@ -238,12 +329,22 @@ function FacetPicker({
 																	: "0"
 														})`}
 													</span>
-													{item.label}
+													<span
+														className="min-w-0 line-clamp-2 leading-5"
+														title={item.label}
+													>
+														{item.label}
+													</span>
 													{item.showArrow && (
 														<HugeiconsIcon
 															icon={
 																ArrowDown01Icon
 															}
+															className={twMerge(
+																"size-4 shrink-0",
+																!item.isSelected &&
+																	"-rotate-90 rtl:rotate-90",
+															)}
 														/>
 													)}
 												</span>
@@ -400,7 +501,8 @@ function CountryParser(
 		label,
 		startContent: countryName && (
 			<div className="flex size-5 aspect-square justify-center items-center gap-2">
-				<Image unoptimized
+				<Image
+					unoptimized
 					src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
 					alt={countryCode}
 					width={20}
@@ -443,26 +545,162 @@ function InstitutionParser(
 	};
 }
 
+function uniqueTopicNodes(groups: readonly (readonly TopicNode[])[]) {
+	return [...new Map(groups.flat().map((node) => [node.id, node])).values()];
+}
+
+function TopicFilter({
+	counts,
+	onChange,
+	selected,
+}: {
+	counts: Record<string, number> | undefined;
+	onChange: (topics: string[]) => void;
+	selected: string[];
+}) {
+	const [search, setSearch] = useState("");
+	const tree = useSWR(
+		["topic-filter-tree", selected.join(",")],
+		async () => {
+			const [root, chosen] = await Promise.all([
+				fetchAllTopicCatalogPages({ parent: null }),
+				selected.length
+					? fetchTopicCatalog({ ids: selected })
+					: Promise.resolve(null),
+			]);
+			const selectedNodes = chosen?.nodes ?? [];
+			const children = await Promise.all(
+				selectedNodes
+					.filter((node) => node.childCount > 0)
+					.map((node) =>
+						fetchAllTopicCatalogPages({ parent: node.id }).then(
+							(response) => response.nodes,
+						),
+					),
+			);
+			return uniqueTopicNodes([root.nodes, selectedNodes, ...children]);
+		},
+		{ revalidateOnFocus: false, keepPreviousData: true },
+	);
+	const query = search.trim();
+	const matches = useSWRInfinite(
+		(index, previous) => {
+			if (!query || (index > 0 && !previous?.nextCursor)) return null;
+			return [
+				"topic-filter-search",
+				query,
+				index === 0 ? null : previous!.nextCursor,
+			];
+		},
+		([, term, cursor]: [string, string, string | null]) =>
+			fetchTopicCatalog({ query: term, cursor }),
+		{
+			revalidateOnFocus: false,
+			revalidateFirstPage: false,
+			keepPreviousData: true,
+		},
+	);
+	const matchNodes = uniqueTopicNodes(
+		matches.data?.map((page) => page.nodes) ?? [],
+	);
+	const nodes = uniqueTopicNodes([tree.data ?? [], matchNodes]);
+
+	if (tree.error) {
+		return (
+			<div
+				role="status"
+				className="flex items-center gap-2 text-sm text-black/55 dark:text-white/55"
+			>
+				<span>Could not load topics.</span>
+				<Button
+					size="xs"
+					variant="transparent"
+					onPress={() => void tree.mutate()}
+				>
+					Try again
+				</Button>
+			</div>
+		);
+	}
+
+	const rows = (query ? matchNodes : (tree.data ?? []))
+		.slice()
+		.sort((left, right) =>
+			left.path.join(" > ").localeCompare(right.path.join(" > ")),
+		)
+		.map((node): FacetListItem => {
+			const count = counts ? (counts[node.id] ?? 0) : undefined;
+			return {
+				key: node.id,
+				label: node.name,
+				count,
+				hideCount: count === undefined,
+				showArrow: node.childCount > 0,
+				style: query
+					? undefined
+					: { paddingLeft: `${node.path.length * 1.25 - 0.75}rem` },
+				isSelected: selected.includes(node.id),
+				hide: query
+					? false
+					: Boolean(node.parent && !selected.includes(node.parent)),
+				onSelectionChange: () => {
+					void fetchTopicNodeClosure([...selected, node.id]).then(
+						(closure) =>
+							onChange(
+								toggleTopicSelection(selected, node.id, [
+									...nodes,
+									...closure,
+								]),
+							),
+					);
+				},
+			};
+		});
+
+	return (
+		<FacetPicker
+			fixedHeight
+			label="Topics"
+			placeholder="Select topics"
+			selectedKey={selected}
+			list={rows}
+			searchList={rows}
+			onSearchChange={setSearch}
+			searchPaging={{
+				hasMore: Boolean(matches.data?.at(-1)?.nextCursor),
+				isLoadingMore: matches.isValidating,
+				onLoadMore: () => void matches.setSize(matches.size + 1),
+				error: Boolean(matches.error),
+				onRetry: () => void matches.mutate(),
+			}}
+		/>
+	);
+}
+
 function FiltersList({
 	queryParams,
 	handleCountrySelect,
 	handleInstitutionSelect,
+	handleTopicsChange,
 	facetDistribution,
 }: {
 	queryParams: inferParserType<typeof searchParamsLoader>;
 	handleCountrySelect: (country: string) => void;
 	handleInstitutionSelect: (institution: string) => void;
+	handleTopicsChange: (topics: string[]) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
-	const { filters } = useLibraryConfig();
+	const { filters, topics } = useLibraryConfig();
 	const isInstitutionEnabled = filters.institution.mode !== "hidden";
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
 	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
 
-	const enabledCount = [isInstitutionEnabled, isCountryFocusEnabled].filter(
-		Boolean,
-	).length;
+	const enabledCount = [
+		isInstitutionEnabled,
+		isCountryFocusEnabled,
+		topics.enabled,
+	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
 
@@ -566,9 +804,23 @@ function FiltersList({
 			<>
 				{institutionFilter}
 				{countryFocusFilter}
+				{topics.enabled ? (
+					<TopicFilter
+						counts={facetDistribution?.topicAncestors}
+						onChange={handleTopicsChange}
+						selected={queryParams.topics}
+					/>
+				) : null}
 			</>
 		);
-	}, [countryFocusFilter, institutionFilter]);
+	}, [
+		countryFocusFilter,
+		facetDistribution?.topicAncestors,
+		handleTopicsChange,
+		institutionFilter,
+		queryParams.topics,
+		topics.enabled,
+	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
 	const setIsMoreFiltersOpen = (value: boolean) => {
@@ -663,6 +915,7 @@ export default function CollectionsList({
 	handleRangeChange,
 	handleInstitutionSelect,
 	handleCountrySelect,
+	handleTopicsChange,
 	isModal = false,
 	queryParams,
 }: {
@@ -675,6 +928,7 @@ export default function CollectionsList({
 	range: string;
 	handleRangeChange: (start: string | null, end: string | null) => void;
 	handleInstitutionSelect: (institution: string) => void;
+	handleTopicsChange: (topics: string[]) => void;
 	hierarchy: Collection[];
 	queryParams: inferParserType<typeof searchParamsLoader>;
 }) {
@@ -770,6 +1024,7 @@ export default function CollectionsList({
 						queryParams={queryParams}
 						handleCountrySelect={handleCountrySelect}
 						handleInstitutionSelect={handleInstitutionSelect}
+						handleTopicsChange={handleTopicsChange}
 						facetDistribution={facetDistribution}
 					/>
 				</section>

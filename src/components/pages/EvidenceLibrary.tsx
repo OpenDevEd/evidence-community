@@ -472,6 +472,7 @@ function MainContent() {
 					queryParams={props.queryParams}
 					handleInstitutionSelect={props.handleInstitutionSelect}
 					handleCountrySelect={props.handleCountrySelect}
+					handleTopicsChange={props.handleTopicsChange}
 				/>
 			</CollectionsSidebar>
 			<ItemsList props={props} />

@@ -449,6 +449,7 @@ describe("AI routes", () => {
 			country: [],
 			author: "",
 			collections: [],
+			topics: ["T12260"],
 		};
 
 		await chat(chatRequest({ searchContext }));

@@ -6,7 +6,7 @@ import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { resolveSearchRequest } from "@/lib/search";
+import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { FULL_TEXT_PDF_FILTER } from "@/lib/search-filter-constants";
 import { publicationToolModelOutput } from "./attachments";
@@ -26,7 +26,7 @@ export type { ResearchMode } from "./tool-schemas";
 
 type SearchConfig = Pick<
 	LibraryServerConfig,
-	"content" | "filters" | "revision" | "search" | "services" | "updatedAt"
+	"authentication" | "content" | "filters" | "revision" | "search" | "services" | "topics" | "updatedAt"
 >;
 
 const SEARCH_ATTRIBUTES = [
@@ -279,7 +279,11 @@ async function loadCurrentResultsWindow(
 	window: CurrentResultsWindowChoice,
 ): Promise<CurrentResultsWindow> {
 	const { index } = await getMeilisearchForConfig(config);
-	const compiled = resolveSearchRequest(searchContext, config);
+	const compiled = resolveSearchRequest(
+		searchContext,
+		config,
+		await resolveSearchTopicNodes(searchContext, config),
+	);
 	const baseOptions = {
 		attributesToSearchOn: compiled.attributesToSearchOn,
 		filter: compiled.finalFilters,

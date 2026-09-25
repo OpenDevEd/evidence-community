@@ -1,4 +1,3 @@
-import type { PublicationProjectionConfig } from "./projection";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
@@ -38,6 +37,7 @@ import {
 	type SearchEmbedderConfiguration,
 } from "./embedder-settings";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -56,7 +56,7 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
-	publication: PublicationProjectionConfig;
+	config: LibraryServerConfig;
 	batchClient?: Meilisearch["batches"];
 	database: Database;
 	heartbeatIntervalMs?: number;
@@ -688,7 +688,7 @@ async function processClaimedEvents(
 		let documentCount = 0;
 		for await (const plan of generateSearchProjectionPlans(
 			options.database,
-			options.publication,
+			options.config,
 			events,
 			500,
 			options.signal,
@@ -952,6 +952,7 @@ export async function ensureSearchIndex(
 				sortFacetValuesBy: {
 					collectionsAncestry: "count",
 					country: "count",
+					topicAncestors: "count",
 					[INSTITUTION_FILTER_FIELD]: "count",
 				},
 			},
@@ -977,6 +978,7 @@ export async function ensureSearchIndex(
 						"fullNames",
 						"collections",
 						"collectionsAncestry",
+						"topicAncestors",
 						"key",
 						"provider",
 						"sourceConnectionKey",
@@ -1041,7 +1043,7 @@ export async function applySearchIndexEmbedder(
 export async function rebuildSearchIndex(
 	database: Database,
 	service: MeilisearchService,
-	publication: PublicationProjectionConfig,
+	config: LibraryServerConfig,
 	options: {
 		maxDocumentBatchBytes?: number;
 		signal?: AbortSignal;
@@ -1063,7 +1065,7 @@ export async function rebuildSearchIndex(
 	let indexed = 0;
 	for await (const plan of generateFullSearchProjectionPlans(
 		database,
-		publication,
+		config,
 		500,
 		options.signal,
 	)) {
@@ -1098,7 +1100,7 @@ export async function rebuildSearchIndex(
 		// delete puts any such record back; a later publish has its own event.
 		for await (const plan of generateSearchProjectionPlans(
 			database,
-			publication,
+			config,
 			[...staleKeys].map((entityKey) => ({ entityKey, entityType: "item" })),
 			500,
 			options.signal,

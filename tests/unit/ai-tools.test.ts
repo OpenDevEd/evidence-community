@@ -17,6 +17,11 @@ vi.mock("@/app/api/cache", () => ({
 	getCachedItem: vi.fn(),
 }));
 vi.mock("@/lib/actions", () => ({ areLinksValid: vi.fn(async () => true) }));
+// The topic catalog lives in OpenScholar; the reader's topic is a known leaf.
+vi.mock("@/db", () => ({ getDatabaseForConfig: vi.fn(async () => ({})) }));
+vi.mock("@/lib/topics/catalog", () => ({
+	resolveTopicAncestry: vi.fn(async () => [{ id: "T12260", parent: null }]),
+}));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import {
@@ -224,6 +229,24 @@ describe("searching the library for the assistant", () => {
 			expect.objectContaining({ position: 2, key: "ITEM0002" }),
 		]);
 		expect(result.currentResults.total).toBe(2);
+	});
+
+	it("keeps the reader's topic filter when reading their results", async () => {
+		search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
+		const tools = createResearchTools(
+			"quick",
+			{ ...config, topics: { ...config.topics, enabled: true } },
+			normalizeLibrarySearchContext({ search: "radio", topics: ["T12260"] }),
+		);
+
+		await tools.searchLibrary.execute?.(
+			searchInput("quick", { queries: [], withinCurrentResults: true }),
+			{ messages: userMessages("what is on my list?") } as never,
+		);
+
+		expect(searchOptions().filter).toEqual(
+			expect.arrayContaining([expect.stringContaining("T12260")]),
+		);
 	});
 
 	it("reads each requested publication once", async () => {

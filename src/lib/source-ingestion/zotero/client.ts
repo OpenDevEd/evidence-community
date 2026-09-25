@@ -1,3 +1,4 @@
+import { readBoundedResponse } from "../read-bounded-response";
 import {
 	zoteroCollectionResponseSchema,
 	zoteroDeletedSchema,
@@ -81,80 +82,6 @@ function retryDelay(response: Response, attempt: number) {
 	return Math.min(250 * 2 ** attempt, 5_000);
 }
 
-async function readBoundedResponse(
-	response: Response,
-	maxBytes: number,
-	inactivityTimeoutMs: number,
-	totalTimeoutMs: number,
-) {
-	const contentLength = Number(response.headers.get("content-length"));
-	if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-		await response.body?.cancel();
-		throw new ZoteroApiError(
-			`Zotero attachment is ${contentLength} bytes, exceeding the ${maxBytes}-byte limit`,
-			413,
-		);
-	}
-	if (!response.body) {
-		throw new ZoteroApiError("Zotero attachment response had no body");
-	}
-
-	const reader = response.body.getReader();
-	const chunks: Uint8Array[] = [];
-	let total = 0;
-	let timeout: ReturnType<typeof setTimeout> | undefined;
-	const deadline = Date.now() + totalTimeoutMs;
-	try {
-		while (true) {
-			const remainingMs = deadline - Date.now();
-			if (remainingMs <= 0) {
-				throw new ZoteroApiError(
-					"Zotero attachment download exceeded its total deadline",
-				);
-			}
-			const read = reader.read();
-			const result = await Promise.race([
-				read,
-				new Promise<never>((_resolve, reject) => {
-					timeout = setTimeout(
-						() =>
-							reject(
-								new ZoteroApiError(
-									remainingMs <= inactivityTimeoutMs
-										? "Zotero attachment download exceeded its total deadline"
-										: "Zotero attachment download timed out",
-								),
-							),
-						Math.min(inactivityTimeoutMs, remainingMs),
-					);
-				}),
-			]);
-			if (timeout) clearTimeout(timeout);
-			if (result.done) break;
-			total += result.value.byteLength;
-			if (total > maxBytes) {
-				throw new ZoteroApiError(
-					`Zotero attachment exceeds the ${maxBytes}-byte limit`,
-					413,
-				);
-			}
-			chunks.push(result.value);
-		}
-	} catch (error) {
-		await reader.cancel().catch(() => undefined);
-		throw error;
-	} finally {
-		if (timeout) clearTimeout(timeout);
-	}
-
-	const bytes = new Uint8Array(total);
-	let offset = 0;
-	for (const chunk of chunks) {
-		bytes.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-	return bytes;
-}
 
 export class ZoteroApiClient {
 	private backoffUntil = 0;
@@ -635,6 +562,7 @@ export class ZoteroApiClient {
 				maxBytes,
 				this.options.requestTimeoutMs,
 				this.options.attachmentDownloadTimeoutMs ?? 120_000,
+				(message, status) => new ZoteroApiError(message, status),
 			),
 			contentType: response.headers.get("content-type"),
 			etag: response.headers.get("etag")?.replace(/^"|"$/gu, "") ?? null,

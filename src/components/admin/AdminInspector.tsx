@@ -9,6 +9,9 @@ import { isUnrestoredRecord, type PdfUploadStep } from "./admin-pdf";
 
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { CreatorsEditor } from "./CreatorsEditor";
+import { TopicsEditor } from "./TopicsEditor";
+import { topicIdSchema } from "@/lib/topics/contract";
+import { SourceConflictEditor, type SourceResolution } from "./SourceConflictEditor";
 import { describeCountryFocus } from "@/lib/country-focus";
 import { CountryFocusInput } from "./CountryFocusInput";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
@@ -40,6 +43,7 @@ import {
 	Undo02Icon,
 	SentIcon,
 	Tag01Icon,
+	TagsIcon,
 	Tick01Icon,
 	UserGroupIcon,
 	WorkHistoryIcon,
@@ -1399,7 +1403,7 @@ export function AdminInspector({
 	validationErrors: AdminFieldErrors;
 	validationRevision: number;
 }) {
-	const { identity, content } = useLibraryConfig();
+	const { identity, content, topics: topicsConfig } = useLibraryConfig();
 	const { canPublish } = useAdminSession();
 	const detailKey = detail?.key;
 	const definition = useMemo(
@@ -1480,6 +1484,12 @@ export function AdminInspector({
 	const tagsPayload = useMemo(() => ({ tags: payload.tags }), [payload.tags]);
 	const collectionsPayload = useMemo(() => ({ collections: payload.collections }), [payload.collections]);
 	const linksPayload = useMemo(() => ({ links: payload.links }), [payload.links]);
+	const topicIds = Array.isArray(payload.topics)
+		? payload.topics.filter((topic): topic is string => topicIdSchema.safeParse(topic).success)
+		: [];
+	const sourceResolutions = payload.sourceResolutions && typeof payload.sourceResolutions === "object" && !Array.isArray(payload.sourceResolutions)
+		? payload.sourceResolutions as Record<string, SourceResolution>
+		: {};
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const closeMenu = () => setMenuOpen(false);
@@ -1506,6 +1516,9 @@ export function AdminInspector({
 
 	const tagsForEditor = (tags: string[]) => ordinaryItemTags(tags, content.tags);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
+	const importedOpenAlex = detail.kind === "imported" && detail.writeback.available.some(
+		(target) => target.isOrigin && target.provider === "openalex",
+	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
 	const filesReadOnly = readOnlyVersion || !native || unrestored || !detail.draft || !detail.editable;
@@ -1749,7 +1762,7 @@ export function AdminInspector({
 													: "Delete draft"}
 											</Button>
 										)}
-                                {!readOnlyVersion && canPublish && native && detail.editable && detail.published && detail.state !== "deleted" && (
+                                {!readOnlyVersion && canPublish && (native || importedOpenAlex) && detail.editable && detail.published && detail.state !== "deleted" && (
                                     <Button size="xs" variant="muted" color="danger" isDisabled={busy}
                                         onPress={() => { closeMenu(); onUnpublish(); }}
                                         startContent={<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />}>
@@ -2050,8 +2063,29 @@ export function AdminInspector({
 						readOnly={readOnly}
 						recordKey={detail.key}
 					/>
-				</Section>
-				{!detail.parentItem ? (
+					</Section>
+					{detail.sourceFields.some((field) => field.conflicting) ? (
+						<Section icon={AlertCircleIcon} id="admin-source-conflicts" title="Source changes">
+							<SourceConflictEditor
+								fields={detail.sourceFields}
+								importedTopics={detail.importedTopics}
+								onChange={(resolutions) => patchPayload({ sourceResolutions: resolutions })}
+								readOnly={readOnly}
+								resolutions={sourceResolutions}
+							/>
+						</Section>
+					) : null}
+					{topicsConfig.enabled && !detail.parentItem ? (
+						<Section icon={TagsIcon} id="admin-topics" title="Topics">
+							<TopicsEditor
+								importedTopics={detail.importedTopics}
+								readOnly={readOnly}
+								topics={topicIds}
+								onChange={(topics) => patchPayload({ topics })}
+							/>
+						</Section>
+					) : null}
+					{!detail.parentItem ? (
 					<AdminLinksEditor
 						key={detail.key}
 						actions={diff.links ? (

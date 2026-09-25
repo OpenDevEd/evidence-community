@@ -54,7 +54,7 @@ function topicsAndPlaces(stats: Stats | null, facets: Awaited<ReturnType<typeof 
 			.filter((collection) => collection.count > 0)
 			.sort((a, b) => b.count - a.count)
 			.slice(0, 8),
-		topics: (stats?.topicStats ?? [])
+		topics: (stats?.openAlexTopicStats ?? [])
 			.filter((row) => row.level <= 1 && row.itemCount > 0)
 			.map((row) => ({ name: row.topic, count: row.itemCount, key: row.id }))
 			.sort((a, b) => b.count - a.count)

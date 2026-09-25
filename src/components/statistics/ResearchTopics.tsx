@@ -2,17 +2,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Bookmark02Icon, ChartIncreaseIcon, Layers01Icon, Search01Icon, TagsIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import {
-	BarChart,
-	Bar,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	ResponsiveContainer,
-} from "recharts";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -20,12 +10,16 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Card } from "@/components/nextui/Card";
 import { SectionCard } from "./SectionCard";
+import { DistributionBarChart } from "./DistributionBarChart";
 import { TopicStats, TopicOverview, TopicYearStats } from "./types";
+
+type TopicKind = "collections" | "topics";
 
 type ResearchTopicsProps = {
 	topicStats: TopicStats[];
 	topicOverview: TopicOverview;
 	topicsByYear?: TopicYearStats[];
+	kind?: TopicKind;
 };
 
 const itemVariants = {
@@ -33,9 +27,306 @@ const itemVariants = {
 	show: { y: 0, opacity: 1 },
 };
 
-export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: ResearchTopicsProps) {
+/** Levels one to three have their own colour; every deeper level shares the fourth. */
+const LEVEL_DOT_CLASSES = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-purple-500"];
+const LEVEL_BADGE_CLASSES = [
+	"bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200",
+	"bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200",
+	"bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200",
+	"bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200",
+];
+
+function levelClass(classes: readonly string[], level: number) {
+	return classes[level - 1] ?? classes[3];
+}
+
+function rankBadgeClass(index: number) {
+	return index < 3
+		? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
+		: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60";
+}
+
+const TILE_TONES = {
+	blue: { tile: "from-blue-500/10 to-blue-600/5 border border-blue-500/20", value: "text-blue-600 dark:text-blue-400" },
+	emerald: { tile: "from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20", value: "text-emerald-600 dark:text-emerald-400" },
+	amber: { tile: "from-amber-500/10 to-amber-600/5 border border-amber-500/20", value: "text-amber-600 dark:text-amber-400" },
+	purple: { tile: "from-purple-500/10 to-purple-600/5 border border-purple-500/20", value: "text-purple-600 dark:text-purple-400" },
+};
+
+function useTopicLabels(kind: TopicKind) {
 	const t = useTranslations("ui");
-	const { resolvedTheme: theme } = useTheme();
+	if (kind === "collections") {
+		return {
+			title: t("collections"),
+			total: t("collections"),
+			topLevel: "Top-level collections",
+			topLevelNote: "Highest collection level",
+			avgItems: "Average items per collection",
+			avgItemsNote: "Publications per collection",
+			distribution: "Collection distribution by level",
+			countUnit: t("collections").toLowerCase(),
+			topByImpact: "Top collections by impact",
+			topLevelAreas: "Top-level collections",
+			children: "child collections",
+			all: t("collections"),
+			search: t("searchCollections"),
+			searchPlaceholder: "Search by collection name or path",
+			table: "Collection statistics",
+			column: t("collections"),
+		};
+	}
+	return {
+		title: t("researchTopics"),
+		total: t("totalTopics"),
+		topLevel: t("topLevelTopics"),
+		topLevelNote: t("mainResearchAreas"),
+		avgItems: t("avgItemsPerTopic"),
+		avgItemsNote: t("publicationsPerTopic"),
+		distribution: t("topicDistributionByLevel"),
+		countUnit: t("topicsLowercase"),
+		topByImpact: t("topTopicsByImpact"),
+		topLevelAreas: t("topLevelResearchAreas"),
+		children: t("subtopicsLowercase"),
+		all: t("allResearchTopics"),
+		search: t("searchTopics"),
+		searchPlaceholder: t("searchByTopicNameOrPath"),
+		table: t("topicsStatisticsTable"),
+		column: t("topicColumn"),
+	};
+}
+
+type TopicLabels = ReturnType<typeof useTopicLabels>;
+
+/** The overview figures for one year are counted from its topics; for every year they come precomputed. */
+function overviewFigures(topics: TopicStats[], topicOverview: TopicOverview, selectedYear: string) {
+	if (selectedYear === "all") {
+		return { maxDepth: topicOverview.maxDepth, avgItems: topicOverview.avgItemsPerTopic };
+	}
+	return {
+		maxDepth: Math.max(...topics.map(t => t.level), 0),
+		avgItems: topics.length > 0
+			? (topics.reduce((sum, t) => sum + t.itemCount, 0) / topics.length).toFixed(1)
+			: "0",
+	};
+}
+
+function OverviewTile({
+	tone,
+	value,
+	label,
+	note,
+	inYear,
+}: {
+	tone: keyof typeof TILE_TONES;
+	value: string | number;
+	label: string;
+	note: string;
+	inYear: string | undefined;
+}) {
+	return (
+		<motion.div variants={itemVariants} className={`text-center p-6 rounded-2xl bg-gradient-to-br ${TILE_TONES[tone].tile}`}>
+			<div className={`text-3xl font-bold ${TILE_TONES[tone].value} mb-2`}>
+				{value}
+			</div>
+			<div className="text-sm font-medium text-black/60 dark:text-white/60">
+				{label}
+			</div>
+			<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+				{inYear ?? note}
+			</div>
+		</motion.div>
+	);
+}
+
+function TopicOverviewTiles({
+	topics,
+	topicOverview,
+	selectedYear,
+	labels,
+}: {
+	topics: TopicStats[];
+	topicOverview: TopicOverview;
+	selectedYear: string;
+	labels: TopicLabels;
+}) {
+	const t = useTranslations("ui");
+	const inYear = selectedYear === "all" ? undefined : t("inYear", { year: selectedYear });
+	const { maxDepth, avgItems } = overviewFigures(topics, topicOverview, selectedYear);
+	return (
+		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+			<OverviewTile
+				tone="blue"
+				value={topics.length.toLocaleString()}
+				label={labels.total}
+				note={t("allHierarchicalLevels")}
+				inYear={inYear}
+			/>
+			<OverviewTile
+				tone="emerald"
+				value={topics.filter(t => t.level === 1).length.toLocaleString()}
+				label={labels.topLevel}
+				note={labels.topLevelNote}
+				inYear={inYear}
+			/>
+			<OverviewTile
+				tone="amber"
+				value={maxDepth}
+				label={t("maxDepth")}
+				note={t("hierarchicalLevels")}
+				inYear={inYear}
+			/>
+			<OverviewTile
+				tone="purple"
+				value={avgItems}
+				label={labels.avgItems}
+				note={labels.avgItemsNote}
+				inYear={inYear}
+			/>
+		</div>
+	);
+}
+
+function LevelDistribution({ topicOverview, labels }: { topicOverview: TopicOverview; labels: TopicLabels }) {
+	const t = useTranslations("ui");
+	return (
+		<motion.div variants={itemVariants} className="space-y-4">
+			<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+				<HugeiconsIcon icon={Layers01Icon} className="text-accent" />
+				{labels.distribution}
+			</h3>
+			<DistributionBarChart
+				data={topicOverview.topicDistribution}
+				xAxis={{
+					dataKey: "level",
+					tick: { fontSize: 12 },
+					tickFormatter: (value) => `Level ${value}`,
+				}}
+				formatter={(value: number, name: string, props: any) => [
+					`${value.toLocaleString()} ${labels.countUnit} (${props.payload.percentage}%)`,
+					t("levelNumber", { number: props.payload.level })
+				]}
+			/>
+		</motion.div>
+	);
+}
+
+function TopTopicsByImpact({ topics, labels }: { topics: TopicStats[]; labels: TopicLabels }) {
+	const t = useTranslations("ui");
+	return (
+		<motion.div variants={itemVariants} className="space-y-4">
+			<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+				<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
+				{labels.topByImpact}
+			</h3>
+			<Card color="card" className="p-6">
+				<div className="space-y-4 h-96 overflow-y-auto">
+					{topics.slice(0, 20).map((topic, index) => (
+						<motion.div
+							key={index}
+							variants={itemVariants}
+							className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300"
+						>
+							<div className="flex items-center gap-3 flex-1 min-w-0">
+								<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${rankBadgeClass(index)}`}>
+									{index + 1}
+								</div>
+								<div className="flex items-center gap-2">
+									<div className={`w-2 h-2 rounded-full ${levelClass(LEVEL_DOT_CLASSES, topic.level)}`} />
+								</div>
+								<div className="flex-1 min-w-0">
+									<div className="font-semibold text-black dark:text-white text-sm truncate">
+										{topic.topic}
+									</div>
+									<div className="text-xs text-black/60 dark:text-white/60 space-x-2 truncate">
+										<span className="text-blue-600 dark:text-blue-400 font-medium">
+											{t("levelNumber", { number: topic.level })}
+										</span>
+										<span>•</span>
+										<span className="text-emerald-600 dark:text-emerald-400 font-medium">
+											{topic.itemCount.toLocaleString()} {t("itemsLowercase")}
+										</span>
+										<span>•</span>
+										<span className="text-amber-600 dark:text-amber-400 font-medium">
+											{topic.totalCitations.toLocaleString()} {t("citationsLowercase")}
+										</span>
+									</div>
+								</div>
+							</div>
+							<div className="text-right flex-shrink-0">
+								<div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+									{topic.hIndex}
+								</div>
+								<div className="text-xs text-black/60 dark:text-white/60">
+									H-Index
+								</div>
+							</div>
+						</motion.div>
+					))}
+				</div>
+			</Card>
+		</motion.div>
+	);
+}
+
+function TopLevelTopics({ topics, labels }: { topics: TopicStats[]; labels: TopicLabels }) {
+	const t = useTranslations("ui");
+	return (
+		<motion.div variants={itemVariants} className="space-y-4">
+			<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+				<HugeiconsIcon icon={Bookmark02Icon} className="text-accent" />
+				{labels.topLevelAreas}
+			</h3>
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+				{topics.filter(topic => topic.level === 1).slice(0, 12).map((topic, index) => (
+					<motion.div
+						key={index}
+						variants={itemVariants}
+						className="relative p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300 hover:scale-[1.02] group"
+					>
+						<div className="flex items-center gap-3">
+							<div className="flex items-center gap-2 flex-shrink-0">
+								<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${rankBadgeClass(index)}`}>
+									{index + 1}
+								</div>
+								<div className="w-3 h-3 rounded-full bg-blue-500" />
+							</div>
+							<div className="flex-1 min-w-0">
+								<div className="font-semibold text-black dark:text-white text-sm truncate group-hover:text-accent transition-colors">
+									{topic.topic}
+								</div>
+								<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
+									<span className="text-blue-600 dark:text-blue-400 font-medium">
+										{topic.itemCount.toLocaleString()}
+									</span>
+									<span>•</span>
+									<span className="text-emerald-600 dark:text-emerald-400 font-medium">
+										{topic.children.length} {labels.children}
+									</span>
+									<span>•</span>
+									<span className="text-purple-600 dark:text-purple-400 font-medium">
+										H:{topic.hIndex}
+									</span>
+								</div>
+							</div>
+							<div className="text-right flex-shrink-0">
+								<div className="text-sm font-bold text-accent">
+									{topic.avgCitationsPerItem.toFixed(1)}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40">
+									{t("avgCitations")}
+								</div>
+							</div>
+						</div>
+					</motion.div>
+				))}
+			</div>
+		</motion.div>
+	);
+}
+
+export function ResearchTopics({ topicStats, topicOverview, topicsByYear, kind = "topics" }: ResearchTopicsProps) {
+	const t = useTranslations("ui");
+	const labels = useTopicLabels(kind);
 	const [topicsPage, setTopicsPage] = useState(1);
 	const [topicsSearch, setTopicsSearch] = useState("");
 	const [selectedTopicLevel, setSelectedTopicLevel] = useState<string>("all");
@@ -205,247 +496,44 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 	const topicsPages = Math.ceil(filteredTopics.length / rowsPerPage);
 
 	return (
-		<SectionCard title={t("researchTopics")} icon={TagsIcon}>
+		<SectionCard title={labels.title} icon={TagsIcon}>
 			<div className="space-y-8">
 				{/* Topic Overview Stats */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
-						<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-							{yearFilteredTopics.length.toLocaleString()}
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("totalTopics")}
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("allHierarchicalLevels")}
-						</div>
-					</motion.div>
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
-						<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-							{yearFilteredTopics.filter(t => t.level === 1).length.toLocaleString()}
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("topLevelTopics")}
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("mainResearchAreas")}
-						</div>
-					</motion.div>
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
-						<div className="text-3xl font-bold text-amber-600 dark:text-amber-400 mb-2">
-							{selectedYear !== "all" ? Math.max(...yearFilteredTopics.map(t => t.level), 0) : topicOverview.maxDepth}
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("maxDepth")}
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("hierarchicalLevels")}
-						</div>
-					</motion.div>
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
-						<div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
-							{selectedYear !== "all" 
-								? (yearFilteredTopics.length > 0 
-									? (yearFilteredTopics.reduce((sum, t) => sum + t.itemCount, 0) / yearFilteredTopics.length).toFixed(1)
-									: "0")
-								: topicOverview.avgItemsPerTopic}
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							{t("avgItemsPerTopic")}
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							{selectedYear !== "all" ? t("inYear", { year: selectedYear }) : t("publicationsPerTopic")}
-						</div>
-					</motion.div>
-				</div>
+				<TopicOverviewTiles
+					topics={yearFilteredTopics}
+					topicOverview={topicOverview}
+					selectedYear={selectedYear}
+					labels={labels}
+				/>
 
 				{/* Charts Section */}
 				<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 					{/* Topic Distribution by Level */}
-					<motion.div variants={itemVariants} className="space-y-4">
-						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<HugeiconsIcon icon={Layers01Icon} className="text-accent" />
-							{t("topicDistributionByLevel")}
-						</h3>
-						<Card color="card" className="p-6">
-							<div className="h-96">
-								<ResponsiveContainer width="100%" height="100%">
-									<BarChart
-										data={topicOverview.topicDistribution}
-										margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-									>
-										<CartesianGrid strokeDasharray="3 3" className="stroke-black/10 dark:stroke-white/10" />
-										<XAxis
-											dataKey="level"
-											className="text-black/60 dark:text-white/60"
-											tick={{ fontSize: 12 }}
-											axisLine={false}
-											tickFormatter={(value) => `Level ${value}`}
-										/>
-										<YAxis
-											className="text-black/60 dark:text-white/60"
-											tick={{ fontSize: 12 }}
-											axisLine={false}
-											tickFormatter={(value) => value.toLocaleString()}
-										/>
-										<Tooltip
-											contentStyle={{
-												backgroundColor: theme === "dark" ? "#1a1a1a" : "#ffffff",
-												border: `1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
-												borderRadius: "12px",
-												boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-												padding: "12px",
-											}}
-											labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
-											itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-											formatter={(value: number, name: string, props: any) => [
-												`${value.toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
-												t("levelNumber", { number: props.payload.level })
-											]}
-										/>
-										<Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-									</BarChart>
-								</ResponsiveContainer>
-							</div>
-						</Card>
-					</motion.div>
+					<LevelDistribution topicOverview={topicOverview} labels={labels} />
 
 					{/* Top Topics by H-Index */}
-					<motion.div variants={itemVariants} className="space-y-4">
-						<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-							<HugeiconsIcon icon={ChartIncreaseIcon} className="text-accent" />
-							{t("topTopicsByImpact")}
-						</h3>
-						<Card color="card" className="p-6">
-							<div className="space-y-4 h-96 overflow-y-auto">
-								{yearFilteredTopics.slice(0, 20).map((topic, index) => (
-									<motion.div
-										key={index}
-										variants={itemVariants}
-										className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300"
-									>
-										<div className="flex items-center gap-3 flex-1 min-w-0">
-											<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
-													? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
-													: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
-												}`}>
-												{index + 1}
-											</div>
-											<div className="flex items-center gap-2">
-												<div className={`w-2 h-2 rounded-full ${topic.level === 1
-														? "bg-blue-500"
-														: topic.level === 2
-															? "bg-emerald-500"
-															: topic.level === 3
-																? "bg-amber-500"
-																: "bg-purple-500"
-													}`} />
-											</div>
-											<div className="flex-1 min-w-0">
-												<div className="font-semibold text-black dark:text-white text-sm truncate">
-													{topic.topic}
-												</div>
-												<div className="text-xs text-black/60 dark:text-white/60 space-x-2 truncate">
-													<span className="text-blue-600 dark:text-blue-400 font-medium">
-														{t("levelNumber", { number: topic.level })}
-													</span>
-													<span>•</span>
-													<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-														{topic.itemCount.toLocaleString()} {t("itemsLowercase")}
-													</span>
-													<span>•</span>
-													<span className="text-amber-600 dark:text-amber-400 font-medium">
-														{topic.totalCitations.toLocaleString()} {t("citationsLowercase")}
-													</span>
-												</div>
-											</div>
-										</div>
-										<div className="text-right flex-shrink-0">
-											<div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-												{topic.hIndex}
-											</div>
-											<div className="text-xs text-black/60 dark:text-white/60">
-												H-Index
-											</div>
-										</div>
-									</motion.div>
-								))}
-							</div>
-						</Card>
-					</motion.div>
+					<TopTopicsByImpact topics={yearFilteredTopics} labels={labels} />
 				</div>
 
 				{/* Topic Hierarchy Visualization */}
-				<motion.div variants={itemVariants} className="space-y-4">
-					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-						<HugeiconsIcon icon={Bookmark02Icon} className="text-accent" />
-						{t("topLevelResearchAreas")}
-					</h3>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-						{yearFilteredTopics.filter(topic => topic.level === 1).slice(0, 12).map((topic, index) => (
-							<motion.div
-								key={index}
-								variants={itemVariants}
-								className="relative p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300 hover:scale-[1.02] group"
-							>
-								<div className="flex items-center gap-3">
-									<div className="flex items-center gap-2 flex-shrink-0">
-										<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
-												? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
-												: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
-											}`}>
-											{index + 1}
-										</div>
-										<div className="w-3 h-3 rounded-full bg-blue-500" />
-									</div>
-									<div className="flex-1 min-w-0">
-										<div className="font-semibold text-black dark:text-white text-sm truncate group-hover:text-accent transition-colors">
-											{topic.topic}
-										</div>
-										<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
-											<span className="text-blue-600 dark:text-blue-400 font-medium">
-												{topic.itemCount.toLocaleString()}
-											</span>
-											<span>•</span>
-											<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-												{topic.children.length} {t("subtopicsLowercase")}
-											</span>
-											<span>•</span>
-											<span className="text-purple-600 dark:text-purple-400 font-medium">
-												H:{topic.hIndex}
-											</span>
-										</div>
-									</div>
-									<div className="text-right flex-shrink-0">
-										<div className="text-sm font-bold text-accent">
-											{topic.avgCitationsPerItem.toFixed(1)}
-										</div>
-										<div className="text-xs text-black/40 dark:text-white/40">
-											{t("avgCitations")}
-										</div>
-									</div>
-								</div>
-							</motion.div>
-						))}
-					</div>
-				</motion.div>
+				<TopLevelTopics topics={yearFilteredTopics} labels={labels} />
 
 				{/* Detailed Topics Table */}
 				<motion.div variants={itemVariants} className="space-y-4">
 					<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 						<HugeiconsIcon icon={TagsIcon} className="text-accent" />
-						{t("allResearchTopics")}
+						{labels.all}
 					</h3>
 					<div className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<Input
-								label={t("searchTopics")}
+								label={labels.search}
 								value={topicsSearch}
 								onChange={(e) => {
 									setTopicsSearch(e.target.value);
 									setTopicsPage(1);
 								}}
-								placeholder={t("searchByTopicNameOrPath")}
+								placeholder={labels.searchPlaceholder}
 								startContent={<HugeiconsIcon icon={Search01Icon} className="text-black/40 dark:text-white/40" />}
 							/>
 							{topicsByYear && availableYears.length > 0 && (
@@ -509,12 +597,12 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 						</div>
 						<Table
 							color="statistics"
-							aria-label={t("topicsStatisticsTable")}
+							aria-label={labels.table}
 							sortDescriptor={topicsSortDescriptor}
 							onSortChange={(descriptor: any) => setTopicsSortDescriptor(descriptor)}
 						>
 							<TableHeader>
-								<TableColumn key="topic" allowsSorting>{t("topicColumn")}</TableColumn>
+								<TableColumn key="topic" allowsSorting>{labels.column}</TableColumn>
 								<TableColumn key="level" allowsSorting>{t("levelColumn")}</TableColumn>
 								<TableColumn key="itemCount" allowsSorting>{t("itemsColumn")}</TableColumn>
 								<TableColumn key="totalCitations" allowsSorting>{t("citationsColumn")}</TableColumn>
@@ -528,14 +616,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 										<TableCell>
 											<div className="space-y-1">
 												<div className="flex items-center gap-2">
-													<div className={`w-2 h-2 rounded-full flex-shrink-0 ${topic.level === 1
-															? "bg-blue-500"
-															: topic.level === 2
-																? "bg-emerald-500"
-																: topic.level === 3
-																	? "bg-amber-500"
-																	: "bg-purple-500"
-														}`} />
+													<div className={`w-2 h-2 rounded-full flex-shrink-0 ${levelClass(LEVEL_DOT_CLASSES, topic.level)}`} />
 													<span className="font-medium truncate">
 														{topic.topic}
 													</span>
@@ -551,14 +632,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 											</div>
 										</TableCell>
 										<TableCell>
-											<span className={`px-2 py-1 rounded-full text-xs font-medium ${topic.level === 1
-													? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200"
-													: topic.level === 2
-														? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200"
-														: topic.level === 3
-															? "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
-															: "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200"
-												}`}>
+											<span className={`px-2 py-1 rounded-full text-xs font-medium ${levelClass(LEVEL_BADGE_CLASSES, topic.level)}`}>
 												{t("levelNumber", { number: topic.level })}
 											</span>
 										</TableCell>

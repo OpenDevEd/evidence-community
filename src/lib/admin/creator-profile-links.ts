@@ -24,10 +24,11 @@ export function sameBibliographicCreators(left: unknown, right: unknown) {
 	);
 }
 
-/** Source providers cannot assign profiles or affiliations; carry existing ones only across unambiguous authors. */
+/** Profile links are library-owned. Providers that supply affiliations can refresh them. */
 export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	incoming: T[] | null | undefined,
 	previous: readonly AdminCreator[] | null | undefined,
+	options: { sourceAffiliations?: boolean } = {},
 ): T[] | null | undefined {
 	if (!incoming) return incoming;
 	const unchangedOrder = previous?.length === incoming.length && incoming.every(
@@ -46,13 +47,15 @@ export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	return incoming.map((creator, index) => {
 		const next = {...creator};
 		delete next.authorProfileId;
-		delete next.institutions;
+		if (!options.sourceAffiliations) delete next.institutions;
 		const identity = creatorIdentity(creator);
 		const matches = unchangedOrder ? [previous![index]!] : previousByIdentity.get(identity);
-		if (matches?.length === 1 && (unchangedOrder || incomingCounts.get(identity) === 1)) {
-			if (matches[0]!.authorProfileId) next.authorProfileId = matches[0]!.authorProfileId;
-			if (matches[0]!.institutions?.length) next.institutions = matches[0]!.institutions;
-		}
+		if (matches?.length === 1 && (unchangedOrder || incomingCounts.get(identity) === 1)) keepLibraryFields(next, matches[0]!, options.sourceAffiliations);
 		return next;
 	});
+}
+
+function keepLibraryFields(next: AdminCreator, match: AdminCreator, sourceAffiliations?: boolean) {
+	if (match.authorProfileId) next.authorProfileId = match.authorProfileId;
+	if (!sourceAffiliations && match.institutions?.length) next.institutions = match.institutions;
 }

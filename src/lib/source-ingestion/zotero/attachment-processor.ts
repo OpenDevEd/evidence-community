@@ -1,17 +1,8 @@
 import { createHash } from "node:crypto";
 
-import { and, eq, isNull } from "drizzle-orm";
-
 import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 
 import type { Database } from "@/db/database-schema";
-import {
-	itemFilePublication,
-	itemSourceLink,
-	sourceConnection,
-	sourceFileCleanup,
-} from "@/db/schema/source";
-import { item } from "@/db/schema/tables/item";
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
 import { processPdf } from "@/lib/admin/pdf-processing";
 
@@ -23,9 +14,14 @@ import { ZoteroAttachmentPermanentError } from "./mapper";
 import { ZoteroApiError } from "./client";
 import type { ZoteroItemResponse } from "./schema";
 
-export const MAX_ZOTERO_FULL_TEXT_BYTES = 1_500_000;
-const CLEANUP_BATCH_SIZE = 100;
-const CLEANUP_MAX_ATTEMPTS = 5;
+import {
+	MAX_SOURCE_FULL_TEXT_BYTES,
+	readSourceFilePublication,
+	sourceFileFromPublication,
+	uploadSourcePublication,
+	flushSourceFileCleanup,
+	truncateUtf8,
+} from "../attachment-storage";
 const PDF_CONTENT_TYPE = "application/pdf";
 const MD5_PATTERN = /^[0-9a-f]{32}$/u;
 const ZOTERO_ITEM_KEY_PATTERN = /^[A-Z0-9]{8}$/u;
@@ -41,15 +37,6 @@ export class ZoteroAttachmentProcessingError extends Error {
 	constructor(itemKey: string, message: string, options?: ErrorOptions) {
 		super(`Zotero attachment ${itemKey}: ${message}`, options);
 		this.name = "ZoteroAttachmentProcessingError";
-	}
-}
-
-export class SourceFileCleanupError extends Error {
-	constructor(sourceConnectionKey: string, cause: unknown) {
-		super(`Could not clean stale files for source ${sourceConnectionKey}`, {
-			cause,
-		});
-		this.name = "SourceFileCleanupError";
 	}
 }
 
@@ -93,59 +80,6 @@ export function sourcePublicationPaths(
 	};
 }
 
-export function truncateUtf8(text: string, maxBytes: number) {
-	const bytes = Buffer.from(text, "utf8");
-	if (bytes.byteLength <= maxBytes) return text;
-	const decoder = new TextDecoder("utf-8", { fatal: true });
-	for (let end = maxBytes; end >= Math.max(0, maxBytes - 3); end -= 1) {
-		try {
-			return decoder.decode(bytes.subarray(0, end));
-		} catch {
-			// A UTF-8 code point may straddle the byte limit.
-		}
-	}
-	throw new Error("Could not truncate UTF-8 text at a valid boundary");
-}
-
-async function currentPublication(
-	database: Database,
-	sourceConnectionKey: string,
-	sourceRecordKey: string,
-) {
-	const [row] = await database
-		.select({
-			contentType: item.contentType,
-			coverHeight: item.PDFCoverPageHeight,
-			coverObjectPath: itemFilePublication.coverObjectPath,
-			coverUrl: item.PDFCoverPageImage,
-			coverWidth: item.PDFCoverPageWidth,
-			filename: item.filename,
-			fullText: item.fullTextPDF,
-			linkMode: item.linkMode,
-			md5: item.md5,
-			mtime: item.mtime,
-			objectPath: itemFilePublication.objectPath,
-			pageCount: itemFilePublication.pageCount,
-			sha256: itemFilePublication.sha256,
-			sizeBytes: itemFilePublication.sizeBytes,
-			url: item.url,
-		})
-		.from(itemSourceLink)
-		.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
-		.leftJoin(
-			itemFilePublication,
-			eq(itemFilePublication.itemKey, item.key),
-		)
-		.where(
-			and(
-				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
-				eq(itemSourceLink.sourceRecordKey, sourceRecordKey),
-			),
-		)
-		.limit(1);
-	return row;
-}
-
 function baseFile(item: ZoteroItemResponse) {
 	return {
 		url: null,
@@ -164,74 +98,6 @@ function baseFile(item: ZoteroItemResponse) {
 		coverHeight: null,
 		managedPublication: null,
 	};
-}
-
-export async function flushSourceFileCleanup(
-	database: Database,
-	storage: EvidenceFileStorage,
-	sourceConnectionKey: string,
-) {
-	while (true) {
-		const result = await database.transaction(async (transaction) => {
-			await transaction
-				.select({ key: sourceConnection.key })
-				.from(sourceConnection)
-				.where(eq(sourceConnection.key, sourceConnectionKey))
-				.for("update");
-			const rows = await transaction
-				.select()
-				.from(sourceFileCleanup)
-				.where(
-					and(
-						eq(
-							sourceFileCleanup.sourceConnectionKey,
-							sourceConnectionKey,
-						),
-						isNull(sourceFileCleanup.deadLetteredAt),
-					),
-				)
-				.orderBy(sourceFileCleanup.createdAt, sourceFileCleanup.id)
-				.limit(CLEANUP_BATCH_SIZE)
-				.for("update");
-			let retryableError: unknown = null;
-			for (const row of rows) {
-				try {
-					await storage.removePublic([row.objectPath]);
-					await transaction
-						.delete(sourceFileCleanup)
-						.where(eq(sourceFileCleanup.id, row.id));
-				} catch (error) {
-					const attempts = row.attempts + 1;
-					await transaction
-						.update(sourceFileCleanup)
-						.set({
-							attempts,
-							deadLetteredAt:
-								attempts >= CLEANUP_MAX_ATTEMPTS
-									? new Date()
-									: null,
-							lastError:
-								error instanceof Error
-									? error.message
-									: String(error),
-							updatedAt: new Date(),
-						})
-						.where(eq(sourceFileCleanup.id, row.id));
-					if (attempts < CLEANUP_MAX_ATTEMPTS) {
-						retryableError ??= error;
-					}
-				}
-			}
-			return { processed: rows.length, retryableError };
-		});
-		if (result.retryableError) {
-			throw new SourceFileCleanupError(
-				sourceConnectionKey,
-				result.retryableError,
-			);
-		}
-		if (result.processed === 0) return;
-	}
 }
 
 export function createZoteroAttachmentProcessor(
@@ -303,44 +169,21 @@ export function createZoteroAttachmentProcessor(
 			);
 		}
 
-		const existing = await currentPublication(
+		const existing = await readSourceFilePublication(
 			options.database,
 			context.sourceConnectionKey,
 			item.key,
 		);
-		if (
-			existing?.md5?.toLowerCase() === md5 &&
-			existing.url &&
-			existing.coverUrl &&
-			existing.coverWidth &&
-			existing.coverHeight &&
-			existing.fullText !== null &&
-			existing.objectPath &&
-			existing.coverObjectPath &&
-			existing.pageCount &&
-			existing.sha256 &&
-			existing.sizeBytes
-		) {
+		const reusable = sourceFileFromPublication(existing);
+		if (reusable && existing?.md5?.toLowerCase() === md5) {
 			return {
 				...base,
-				url: existing.url,
-				contentType: existing.contentType ?? PDF_CONTENT_TYPE,
+				...reusable,
 				filename,
 				linkMode: base.linkMode ?? existing.linkMode,
 				md5,
 				mtime: base.mtime ?? existing.mtime,
-				fullText: existing.fullText,
-				coverUrl: existing.coverUrl,
-				coverWidth: existing.coverWidth,
-				coverHeight: existing.coverHeight,
-				managedPublication: {
-					objectPath: existing.objectPath,
-					coverObjectPath: existing.coverObjectPath,
-					sizeBytes: existing.sizeBytes,
-					sha256: existing.sha256,
-					pageCount: existing.pageCount,
-					staged: false,
-				},
+				charset: base.charset,
 			};
 		}
 
@@ -396,41 +239,14 @@ export function createZoteroAttachmentProcessor(
 			item.key,
 			md5,
 		);
-		const stagedPaths = [paths.pdf, paths.cover].map((objectPath) => ({
+		await uploadSourcePublication({
+			database: options.database,
+			storage: options.storage,
 			sourceConnectionKey: context.sourceConnectionKey,
-			objectPath,
-			attempts: 0,
-			lastError: null,
-			deadLetteredAt: null,
-			updatedAt: new Date(),
-		}));
-		await options.database
-			.insert(sourceFileCleanup)
-			.values(stagedPaths)
-			.onConflictDoUpdate({
-				target: [
-					sourceFileCleanup.sourceConnectionKey,
-					sourceFileCleanup.objectPath,
-				],
-				set: {
-					attempts: 0,
-					lastError: null,
-					deadLetteredAt: null,
-					updatedAt: new Date(),
-				},
-			});
-		await Promise.all([
-			options.storage.uploadPublic(
-				paths.pdf,
-				downloaded.bytes,
-				PDF_CONTENT_TYPE,
-			),
-			options.storage.uploadPublic(
-				paths.cover,
-				processed.cover,
-				"image/png",
-			),
-		]);
+			paths,
+			bytes: downloaded.bytes,
+			cover: processed.cover,
+		});
 
 		return {
 			...base,
@@ -438,7 +254,7 @@ export function createZoteroAttachmentProcessor(
 			contentType: PDF_CONTENT_TYPE,
 			filename,
 			md5,
-			fullText: truncateUtf8(processed.text, MAX_ZOTERO_FULL_TEXT_BYTES),
+			fullText: truncateUtf8(processed.text, MAX_SOURCE_FULL_TEXT_BYTES),
 			coverUrl: options.storage.publicUrl(paths.cover),
 			coverWidth: processed.coverWidth,
 			coverHeight: processed.coverHeight,

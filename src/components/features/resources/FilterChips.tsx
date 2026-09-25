@@ -12,6 +12,14 @@ import { useFiltersContext } from "@/context/FiltersProvider";
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
+import useSWR from "swr";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { fetchTopicNodeClosure } from "@/lib/topics/client";
+import {
+	selectionFrontier,
+	toggleTopicSelection,
+} from "@/lib/topics/selection";
+import type { TopicNode } from "@/lib/topics/contract";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -92,10 +100,19 @@ function yearChipTitle(range: string): string {
 export function getFilterChipState(
 	queryParams: Record<string, any>,
 	handleClearFilters?: () => void,
+	topicState: {
+		enabled?: boolean;
+		frontier?: readonly string[];
+	} = {},
 ) {
+	const topicFilters =
+		topicState.enabled === false
+			? []
+			: (topicState.frontier ?? queryParams.topics ?? []);
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution?.length || 0) +
+		topicFilters.length +
 		(queryParams.author ? 1 : 0) +
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
@@ -112,14 +129,72 @@ export function getFilterChipState(
 	};
 }
 
+function TopicChips({
+	frontier,
+	nodes,
+	onChange,
+	selected,
+}: {
+	frontier: readonly string[];
+	nodes: readonly TopicNode[] | undefined;
+	onChange: (topics: string[]) => void;
+	selected: string[];
+}) {
+	const byId = new Map(nodes?.map((node) => [node.id, node]));
+
+	return frontier.map((id) => {
+		const node = byId.get(id);
+		return (
+			<motion.div
+				key={`topic-${id}`}
+				initial={{ opacity: 0, y: 10 }}
+				animate={{ opacity: 1, y: 0 }}
+				exit={{ opacity: 0, y: -10 }}
+				transition={{ duration: 0.2 }}
+			>
+				<Chip
+					group="Topic"
+					title={node?.name ?? id}
+					callback={() =>
+						onChange(
+							nodes
+								? toggleTopicSelection(selected, id, nodes)
+								: selected.filter((topicId) => topicId !== id),
+						)
+					}
+					classNames={{
+						button: "bg-secondary dark:bg-secondary/70",
+						title: "text-black dark:text-white",
+					}}
+				/>
+			</motion.div>
+		);
+	});
+}
+
 export function FilterChips() {
 	// Reads the shared, app-level filter state so the navbar chips and the
 	// library chips are the exact same resident instance (no remount flash).
 	const itemsContext = useFiltersContext();
+	const { topics } = useLibraryConfig();
 	const t = useTranslations("ui");
+	const selectedTopics = topics.enabled
+		? (itemsContext.queryParams.topics ?? [])
+		: [];
+	const { data: topicNodes } = useSWR(
+		selectedTopics.length
+			? ["topic-filter-chips", selectedTopics.join(",")]
+			: null,
+		() => fetchTopicNodeClosure(selectedTopics),
+		{ revalidateOnFocus: false },
+	);
+	const topicFrontier = topicNodes
+		? selectionFrontier(selectedTopics, topicNodes)
+		: selectedTopics;
 	const { filtersCount, clearButton } = getFilterChipState(
 		itemsContext.queryParams,
 		itemsContext.handleClearFilters,
+		{ enabled: topics.enabled, frontier: topicFrontier },
 	);
 
 	return (
@@ -134,6 +209,14 @@ export function FilterChips() {
 			    on sm+ they wrap as before. */}
 			<div className="relative flex min-w-0 flex-1 gap-2 overflow-x-auto [&>div]:shrink-0 [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden">
 				<AnimatePresence initial={false} mode="popLayout">
+					{selectedTopics.length > 0 ? (
+						<TopicChips
+							frontier={topicFrontier}
+							nodes={topicNodes}
+							onChange={itemsContext.handleTopicsChange}
+							selected={selectedTopics}
+						/>
+					) : null}
 					{itemsContext.queryParams?.range && (
 						<motion.div
 							key={"year-" + itemsContext.queryParams.range}
@@ -185,7 +268,8 @@ export function FilterChips() {
 										title={label}
 										startContent={
 											countryName && (
-												<Image unoptimized
+												<Image
+													unoptimized
 													src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
 													alt={value}
 													width={16}

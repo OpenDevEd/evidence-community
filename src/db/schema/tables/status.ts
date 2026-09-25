@@ -4,6 +4,7 @@ import {
 	check,
 	integer,
 	pgTable,
+	text,
 	timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -13,6 +14,7 @@ export const status = pgTable(
 		id: integer("id").primaryKey().default(1),
 		totalRecords: integer("totalRecords").notNull().default(0),
 		totalItems: integer("totalItems").notNull().default(0),
+		searchProjectionSignature: text("searchProjectionSignature"),
 		searchIndexRebuildPending: boolean("searchIndexRebuildPending")
 			.notNull()
 			.default(true),

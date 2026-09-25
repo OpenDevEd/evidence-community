@@ -48,16 +48,6 @@ export function shouldRebuildSearchIndex(input: {
 	return input.forceRebuild || input.indexCreated || input.rebuildPending;
 }
 
-export async function searchIndexRebuildIsPending(database: Database) {
-	const [row] = await database
-		.select({ pending: status.searchIndexRebuildPending })
-		.from(status)
-		.where(eq(status.id, 1))
-		.limit(1);
-	if (!row) throw new Error("Library status row is missing.");
-	return row.pending;
-}
-
 export async function setSearchIndexRebuildPending(
 	database: Database,
 	pending: boolean,
@@ -69,4 +59,14 @@ export async function setSearchIndexRebuildPending(
 		.returning({ pending: status.searchIndexRebuildPending });
 	if (!row) throw new Error("Library status row is missing.");
 	return row.pending;
+}
+
+/** Persist the configuration used by the projection; a failed rebuild stays pending. */
+export async function prepareSearchProjection(database: Database, topicsEnabled: boolean) {
+  const signature = JSON.stringify({topics: topicsEnabled});
+  const [row] = await database.select().from(status).where(eq(status.id, 1)).limit(1);
+  if (!row) throw new Error("Library status row is missing.");
+  if (row.searchProjectionSignature === signature) return row.searchIndexRebuildPending;
+  await database.update(status).set({searchProjectionSignature: signature, searchIndexRebuildPending: true, updatedAt: new Date()}).where(eq(status.id, 1));
+  return true;
 }

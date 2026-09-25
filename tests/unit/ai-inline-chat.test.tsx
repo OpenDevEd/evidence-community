@@ -350,6 +350,7 @@ describe("the chat beside the search results", () => {
 			author: "",
 			institution: [],
 			sort: "relevance",
+			topics: [],
 		};
 		expect(asked).toHaveLength(1);
 		expect(asked[0]).toMatchObject({

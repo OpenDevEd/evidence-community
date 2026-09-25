@@ -1,7 +1,11 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Building03Icon, Mortarboard01Icon } from "@hugeicons/core-free-icons";
+import {
+	Alert02Icon,
+	Building03Icon,
+	Mortarboard01Icon,
+} from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { escapeHtml } from "@/lib/escape-html";
@@ -63,6 +67,7 @@ import {
 	isPublishedNote,
 	isVisiblePdfAttachment,
 } from "@/lib/attachment-visibility";
+import { hasTag } from "@/lib/tags";
 import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
@@ -79,6 +84,7 @@ import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { AuthorProfileHover } from "@/components/authors/AuthorProfileHover";
 import { creatorDisplayName } from "@/lib/creator-display-name";
+import { ItemTopics } from "@/components/topics/ItemTopics";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -218,7 +224,8 @@ function AuthorAffiliations({
 								transition={{ delay: 0.5 + idx * 0.1 }}
 							>
 								<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-									<Image unoptimized
+									<Image
+										unoptimized
 										src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
 										alt={institution.country_code}
 										className="w-full h-full object-cover"
@@ -253,7 +260,8 @@ function ItemAuthor({
 	const creatorTypeLabel = author ? t(author?.creatorType) : undefined;
 	// Search indexes the saved creator; the profile supplies its current display.
 	const fullName = author ? creatorDisplayName(author) : undefined;
-	const displayName = profile?.name ?? (author ? formatAuthor(author) : undefined);
+	const displayName =
+		profile?.name ?? (author ? formatAuthor(author) : undefined);
 
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	// The country belongs to the institution name, set once for the library.
@@ -612,7 +620,9 @@ function ItemDetailsRow({
 					</div>
 					<CopyButton
 						textToCopy={formattedValue}
-						ariaLabel={tUI("copyField", { field: detail?.label ?? "" })}
+						ariaLabel={tUI("copyField", {
+							field: detail?.label ?? "",
+						})}
 					/>
 				</div>
 			</Skeleton>
@@ -637,7 +647,14 @@ export function ItemDetails({ item }: { item: Item | undefined }) {
 						<ItemDetailsRow key={index} detail={undefined} />
 					))
 				: details.map((detail) => (
-						<ItemDetailsRow key={detail.label} detail={{ ...detail, field: detail.label, label: tArticle(detail.label) }} />
+						<ItemDetailsRow
+							key={detail.label}
+							detail={{
+								...detail,
+								field: detail.label,
+								label: tArticle(detail.label),
+							}}
+						/>
 					))}
 		</SidebarCard>
 	);
@@ -717,7 +734,9 @@ function ProcessHTML(html: string) {
 export function ItemCitation({ item }: { item: Item | undefined }) {
 	const { citations } = useLibraryConfig();
 	if (!citations.enabled || !canCiteItem(item)) return null;
-	return <CitationPanel key={item.key} item={item} showHeading completeRecord />;
+	return (
+		<CitationPanel key={item.key} item={item} showHeading completeRecord />
+	);
 }
 
 type CanonicalWebsiteLink = {
@@ -1188,8 +1207,10 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 	const notes = item?.attachmentsData?.filter((attachment) =>
 		isPublishedNote(attachment, content.tags.publish),
 	);
-	const links = item?.attachmentsData?.filter((attachment) =>
-		isPublishedLink(attachment, content.tags.publish),
+	const links = item?.attachmentsData?.filter(
+		(attachment) =>
+			isPublishedLink(attachment, content.tags.publish) &&
+			!isVisiblePdfAttachment(attachment),
 	);
 
 	const notesDescription = useNotesDescription();
@@ -1253,6 +1274,7 @@ export default function ItemPage({
 	data: ItemGetResponse;
 	loading: boolean;
 }) {
+	const { topics } = useLibraryConfig();
 	const loading = data?.item ? false : loadingProp;
 
 	useEffect(() => {
@@ -1272,6 +1294,26 @@ export default function ItemPage({
 					<div className="flex flex-col gap-4">
 						<ItemHeader item={item} isLoading={loading} />
 						<ItemTitle item={item} />
+						{hasTag(item?.tags, "Retracted") ? (
+							<div
+								role="alert"
+								className="flex items-start gap-3 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-danger"
+							>
+								<HugeiconsIcon
+									icon={Alert02Icon}
+									className="mt-0.5 size-5 shrink-0"
+								/>
+								<div>
+									<p className="font-semibold">
+										Retracted publication
+									</p>
+									<p className="text-sm text-danger/80">
+										This publication has been marked as
+										retracted.
+									</p>
+								</div>
+							</div>
+						) : null}
 					</div>
 					<div className="flex flex-col lg:grid grid-cols-12 gap-8">
 						<div className="col-span-8 xl:col-span-9 ">
@@ -1303,6 +1345,12 @@ export default function ItemPage({
 												</>
 											)}
 										<ItemCitation item={item} />
+										{topics.enabled &&
+										item?.topics?.length ? (
+											<ItemTopics
+												topicIds={item.topics}
+											/>
+										) : null}
 										<ItemAttachments item={item} />
 										<ItemNotes item={item} />
 										<ItemCollections item={item} />

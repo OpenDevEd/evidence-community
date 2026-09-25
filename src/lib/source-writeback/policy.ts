@@ -248,6 +248,7 @@ export function importedItemEditBlockReason(
 ): SourceWritebackReason | null {
 	if (!targets.originSourceKey) return null;
 	const origin = findWritebackTarget(targets, targets.originSourceKey);
+	if (origin?.provider === "openalex") return null;
 	const reason = origin?.reason ?? "not-linked";
 	return reason === "ok" || reason === "item-locked" || reason === "not-linked"
 		? null

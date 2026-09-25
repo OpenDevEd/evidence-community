@@ -31,11 +31,13 @@ const RESEARCH_STEP_LIMIT = 12;
 type AgentConfig = Pick<
 	LibraryServerConfig,
 	| "analytics"
+	| "authentication"
 	| "content"
 	| "filters"
 	| "revision"
 	| "search"
 	| "services"
+	| "topics"
 	| "updatedAt"
 >;
 

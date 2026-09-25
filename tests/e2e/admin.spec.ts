@@ -321,6 +321,8 @@ function publishedDetail(
 		title: publishedPayload.title,
 		updatedAt: timestamp,
 		writeback: { available: [], originSourceKey: null, selected: [] },
+		sourceFields: [],
+		importedTopics: [],
 	};
 }
 
@@ -2778,6 +2780,8 @@ async function mockBookWithAttachment(
 		publishedTags: [],
 		links: emptyLinks,
 		tags: [],
+		sourceFields: [],
+		importedTopics: [],
 	};
 
 	await page.route("**/api/admin/**", async (route) => {

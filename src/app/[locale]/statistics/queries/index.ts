@@ -42,14 +42,14 @@ export type {
 	AttachmentStats,
 	CitationYearStats,
 } from "./basic-stats";
-export { 
-	getTotalItems, 
-	getAvailableYears, 
-	getItemTypeStats, 
-	getYearDistribution, 
-	getFieldCompleteness, 
-	getAttachmentStats, 
-	getPublishersAndJournals, 
+export {
+	getTotalItems,
+	getAvailableYears,
+	getItemTypeStats,
+	getYearDistribution,
+	getFieldCompleteness,
+	getAttachmentStats,
+	getPublishersAndJournals,
 	getRecentActivity,
 	getCitationsByYear,
 } from "./basic-stats";
@@ -59,16 +59,16 @@ export type { CitationStats, CreatorStats } from "./citation-stats";
 export { getCitationStats, getCreatorStats } from "./citation-stats";
 
 // Export author-related types and functions
-export type { 
-	AuthorCountryStats, 
-	AuthorStats, 
-	AuthorProductivityStats, 
+export type {
+	AuthorCountryStats,
+	AuthorStats,
+	AuthorProductivityStats,
 	AuthorCollaborationStats,
 } from "./author-stats";
-export { 
-	getAuthorCountries, 
-	getAuthorProductivityStats, 
-	getAuthorCollaborationStats, 
+export {
+	getAuthorCountries,
+	getAuthorProductivityStats,
+	getAuthorCollaborationStats,
 	getDetailedAuthorStats,
 } from "./author-stats";
 
@@ -79,6 +79,7 @@ export { getCollaborationStats } from "./collaboration-stats";
 // Export topic-related types and functions
 export type { TopicStats, TopicOverview, TopicYearStats } from "./topic-stats";
 export { getTopicStats, getTopicStatsByYear } from "./topic-stats";
+export { getOpenAlexTopicStats } from "./openalex-topic-stats";
 
 // Comprehensive stats type that combines all statistics
 export type ComprehensiveStats = {
@@ -90,7 +91,8 @@ export type ComprehensiveStats = {
 	};
 	institutions: InstitutionStats[];
 	institutionsByYear: InstitutionYearStats[];
-	topicsByYear: TopicYearStats[];
+	collectionsByYear: TopicYearStats[];
+	openAlexTopicsByYear: TopicYearStats[];
 	availableYears: string[];
 	itemTypes: ItemTypeStats[];
 	yearDistribution: YearStats[];
@@ -109,5 +111,7 @@ export type ComprehensiveStats = {
 	recentActivity: { date: string; count: number }[];
 	topicStats: TopicStats[];
 	topicOverview: TopicOverview;
+	openAlexTopicStats: TopicStats[];
+	openAlexTopicOverview: TopicOverview;
 	citationsByYear: CitationYearStats[];
-}; 
+};

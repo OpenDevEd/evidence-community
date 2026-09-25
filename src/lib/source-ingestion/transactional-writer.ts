@@ -1,3 +1,9 @@
+import { updateOpenAlexReferences } from "./openalex/references";
+import { itemSourceValue, sourceTopicAssignment } from "@/db/schema/topics";
+import { sourceOverridesByItem } from "@/lib/admin/source-fields";
+import { importedTopics, effectiveSourceTopics } from "@/lib/topics/assignments";
+import { institutionCountry } from "@/db/schema/tables/institutionCountry";
+import { institutionNameKey } from "@/config/library-config/institutions";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { preserveCreatorProfileLinks } from "@/lib/admin/creator-profile-links";
 import {
@@ -52,6 +58,7 @@ import {
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 import {
+	type SourceItemUpsert,
 	type JsonValue,
 	type SourceIngestionBatch,
 	sourceIngestionBatchSchema,
@@ -76,7 +83,7 @@ const COLLECTION_UPSERT_CHUNK_SIZE = 1_000;
 const itemColumns = getTableColumns(item);
 const sourceWritableItemFields = Object.keys(itemColumns).filter(
 	(field) =>
-		!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) && !new Set([
+		(!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) || field === "topics") && !new Set([
 			"createdAt",
 			"deleted",
 			"deletedAt",
@@ -205,6 +212,7 @@ function sourceItemValues(
 		sourceWritableItemFields.map((field) => [field, null]),
 	) as Partial<ItemInsert>;
 	Object.assign(values, validated.item);
+	values.topics ??= [];
 	values.dateAdded = record.sourceDates?.addedAt ?? null;
 	values.dateModified = record.sourceDates?.modifiedAt ?? null;
 
@@ -280,13 +288,13 @@ function sourceOwnsCanonicalItem(
 	return !existing || existing.sourceConnectionKey === sourceConnectionKey;
 }
 
-function preserveForeignOwnedFileFields(
+function preserveProtectedFileFields(
 	incoming: Partial<ItemInsert>,
 	existing: typeof item.$inferSelect | undefined,
-	sourceConnectionKey: string,
+	mayManageFile: boolean,
 	hasManagedPublication: boolean,
 ) {
-	if (!existing || sourceOwnsCanonicalItem(existing, sourceConnectionKey)) {
+	if (!existing || mayManageFile) {
 		return incoming;
 	}
 	const preserved = { ...incoming } as Record<string, unknown>;
@@ -308,6 +316,90 @@ function itemValuesDiffer(
 	return sourceWritableItemFields.some(
 		(field) =>
 			!databaseValueEqual(existingValues[field], nextValues[field]),
+	);
+}
+
+function dirtyItemFields(
+	sourceDirtyFields: readonly string[] | undefined,
+	overrides: Record<string, unknown> | undefined,
+) {
+	return new Set([...(sourceDirtyFields ?? []), ...Object.keys(overrides ?? {})]);
+}
+
+function effectiveCollections(
+	dirtyFields: ReadonlySet<string>,
+	existingCollections: string[] | undefined,
+	foreignCollections: string[] | undefined,
+	incomingCollections: string[],
+) {
+	if (dirtyFields.has("collections")) return existingCollections ?? [];
+	return [...new Set([...(foreignCollections ?? []), ...incomingCollections])].sort();
+}
+
+function effectiveParentItem(
+	keepExisting: boolean,
+	existing: typeof item.$inferSelect | undefined,
+	incomingParentItem: string | null | undefined,
+) {
+	return keepExisting ? (existing?.parentItem ?? null) : (incomingParentItem ?? null);
+}
+
+/** Library tag edits win over source tags; foreign publications keep their tags. */
+function effectiveTags(
+	dirtyFields: ReadonlySet<string>,
+	existingTags: string[] | undefined,
+	incomingTags: string[],
+	foreignPublicationTags: readonly string[] | null | undefined,
+) {
+	return [
+		...new Set([
+			...(dirtyFields.has("tags") ? (existingTags ?? []) : incomingTags),
+			...(foreignPublicationTags ?? []),
+		]),
+	].sort();
+}
+
+function sourceSnapshotChanged(
+	snapshot: Pick<typeof sourceSnapshot.$inferSelect, "payloadHash" | "mappingProfileVersion"> | undefined,
+	record: SourceItemUpsert,
+	mappingProfileVersion: SourceIngestionBatch["mappingProfileVersion"],
+) {
+	return (
+		!snapshot ||
+		snapshot.payloadHash !== sourceItemFingerprint(record) ||
+		snapshot.mappingProfileVersion !== mappingProfileVersion
+	);
+}
+
+function managedPublicationChanged(
+	mayManageFile: boolean,
+	record: SourceItemUpsert,
+	existingPublication: typeof itemFilePublication.$inferSelect | undefined,
+) {
+	if (!mayManageFile) return false;
+	const publication = record.file?.managedPublication;
+	if (!publication) return Boolean(existingPublication);
+	return (
+		!existingPublication ||
+		existingPublication.objectPath !== publication.objectPath ||
+		existingPublication.coverObjectPath !== publication.coverObjectPath ||
+		existingPublication.sizeBytes !== publication.sizeBytes ||
+		existingPublication.sha256 !== publication.sha256 ||
+		existingPublication.pageCount !== publication.pageCount
+	);
+}
+
+function effectiveItemChanged(
+	existing: typeof item.$inferSelect,
+	state: { item: Partial<ItemInsert>; parentItem: string | null; tags: string[]; collections: string[] },
+	existingTags: string[] | undefined,
+	existingCollections: string[] | undefined,
+) {
+	return (
+		itemValuesDiffer(existing, state.item) ||
+		existing.parentItem !== state.parentItem ||
+		!stringSetEqual(existingTags ?? [], state.tags) ||
+		!stringSetEqual(existingCollections ?? [], state.collections)
 	);
 }
 
@@ -812,6 +904,11 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 	);
 
 	return db.transaction(async (transaction) => {
+		const [providerRow] = await transaction.select({ provider: sourceConnection.provider }).from(sourceConnection).where(eq(sourceConnection.key, batch.sourceConnectionKey));
+		if (providerRow?.provider === "openalex") {
+			// ponytail: serialize OpenAlex pages per library; use work-level locks if parallel import throughput becomes necessary.
+			await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
+		}
 		const involvedConnectionKeys = [
 			...new Set([
 				batch.sourceConnectionKey,
@@ -849,12 +946,18 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			);
 		}
 		if (
+			(batch.expectedConfiguration && !jsonEqual(connection.config as JsonValue, batch.expectedConfiguration)) ||
 			!jsonEqual(
 				connection.syncCursor as JsonValue,
 				batch.expectedCursor as JsonValue,
 			)
 		) {
 			throw new SourceCursorConflictError(batch.sourceConnectionKey);
+		}
+
+		if (batch.institutionCountries.length) {
+			const rows = new Map(batch.institutionCountries.map(({ name, ...facts }) => [institutionNameKey(name), facts]));
+			await transaction.insert(institutionCountry).values([...rows].map(([nameKey, facts]) => ({ nameKey, ...facts }))).onConflictDoNothing();
 		}
 
 		const collectionKeys = await reserveCollectionIdentities(transaction, {
@@ -1358,21 +1461,53 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			),
 		);
 
+		const openAlexLinks = connection.provider === "openalex" && batchItemKeys.length
+			? await transaction.select({ itemKey: itemSourceLink.itemKey, remoteVersion: itemSourceLink.remoteVersion, config: sourceConnection.config, status: sourceConnection.status })
+				.from(itemSourceLink).innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+				.where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.itemKey, batchItemKeys)))
+			: [];
+		const downloadItemKeys = new Set(openAlexLinks.filter((link) => link.status !== "removed" && link.config.downloadPdfs === true).map((link) => link.itemKey));
+		const mayManageFile = (record: SourceItemUpsert) => {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const existing = existingItemByKey.get(key);
+			const publication = existingPublicationByItemKey.get(key);
+			if (connection.provider === "openalex") {
+				return Boolean(record.file?.managedPublication) || !publication || !downloadItemKeys.has(key);
+			}
+			return sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey);
+		};
+
+		// Editorial overrides and source values exist only for OpenAlex; Zotero edits flow through writeback.
+		const isOpenAlex = connection.provider === "openalex";
+		const overridesByItem = isOpenAlex ? await sourceOverridesByItem(transaction, batchItemKeys) : new Map<string, Record<string, unknown>>();
+		const previousSourceValues = isOpenAlex && batchItemKeys.length ? await transaction.select().from(itemSourceValue).where(inArray(itemSourceValue.itemKey, batchItemKeys)) : [];
+		const topicImportKeys = new Set(previousSourceValues.filter(row => row.importedTopics).map(row => row.itemKey));
+		const importedTopicRows = new Map<string, ReturnType<typeof importedTopics>>();
+		for (const record of itemUpserts) {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const existing = existingItemByKey.get(key);
+			const normalized = normalizedItems.get(record.sourceRecordKey)!;
+			if (connection.provider === "openalex" && !record.parentSourceRecordKey && (!existing || topicImportKeys.has(key))) {
+				const assignments = importedTopics(record.raw);
+				importedTopicRows.set(key, assignments);
+				topicImportKeys.add(key);
+				normalized.item.topics = effectiveSourceTopics(assignments);
+			} else normalized.item.topics = existing?.topics ?? [];
+		}
+
 		const effectiveItemStateByRecordKey = new Map(
 			itemUpserts.map((record) => {
 				const key = itemKeys.get(record.sourceRecordKey)!;
 				const existing = existingItemByKey.get(key);
-				const dirtyFields = new Set(
-					sourceLinkByItemKey.get(key)?.dirtyFields ?? [],
+				const dirtyFields = dirtyItemFields(
+					sourceLinkByItemKey.get(key)?.dirtyFields,
+					overridesByItem.get(key),
 				);
 				const normalized = normalizedItems.get(record.sourceRecordKey)!;
 				const existingPublication =
 					existingPublicationByItemKey.get(key);
 				const protectsManagedPublication =
-					!sourceOwnsCanonicalItem(
-						existing,
-						batch.sourceConnectionKey,
-					) && Boolean(existingPublication);
+					!mayManageFile(record) && Boolean(existingPublication);
 				const incomingCollections = normalized.collectionReferences.map(
 					(reference) => {
 						const connectionKey =
@@ -1386,100 +1521,102 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				return [
 					record.sourceRecordKey,
 					{
-						collections: dirtyFields.has("collections")
-							? (existingCollectionsByItemKey.get(key) ?? [])
-							: [
-									...new Set([
-										...(foreignCollectionsByItemKey.get(
-											key,
-										) ?? []),
-										...incomingCollections,
-									]),
-								].sort(),
+						sourceCollections: incomingCollections,
+						collections: effectiveCollections(
+							dirtyFields,
+							existingCollectionsByItemKey.get(key),
+							foreignCollectionsByItemKey.get(key),
+							incomingCollections,
+						),
 						dirtyFields,
-						item: preserveForeignOwnedFileFields(
+						item: preserveProtectedFileFields(
 							maskDirtyItemFields(
-								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators) },
+								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators, { sourceAffiliations: connection.provider === "openalex" }) },
 								existing,
 								dirtyFields,
 							),
 							existing,
-							batch.sourceConnectionKey,
+							mayManageFile(record),
 							protectsManagedPublication,
 						),
-						parentItem: protectsManagedPublication
-							? (existing?.parentItem ?? null)
-							: dirtyFields.has("parentItem")
-								? (existing?.parentItem ?? null)
-								: (parentItemKeys.get(record.sourceRecordKey) ??
-									null),
-						tags: [
-							...new Set([
-								...(dirtyFields.has("tags")
-									? (existingTagsByItemKey.get(key) ?? [])
-									: normalized.tags),
-								...(sourceOwnsCanonicalItem(
-									existing,
-									batch.sourceConnectionKey,
-								)
-									? []
-									: (existingPublication?.publicationTags ??
-										[])),
-							]),
-						].sort(),
+						parentItem: effectiveParentItem(
+							protectsManagedPublication || dirtyFields.has("parentItem"),
+							existing,
+							parentItemKeys.get(record.sourceRecordKey),
+						),
+						tags: effectiveTags(
+							dirtyFields,
+							existingTagsByItemKey.get(key),
+							normalized.tags,
+							sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey)
+								? undefined
+								: existingPublication?.publicationTags,
+						),
 					},
 				] as const;
 			}),
 		);
-		const changedItemUpserts = itemUpserts.filter((record) => {
+		const newestSourceVersionByItem = new Map<string, number>();
+		if (openAlexLinks.length) {
+			for (const row of openAlexLinks) {
+				const version = row.remoteVersion ? Date.parse(row.remoteVersion) : NaN;
+				if (Number.isFinite(version)) newestSourceVersionByItem.set(row.itemKey, Math.max(version, newestSourceVersionByItem.get(row.itemKey) ?? -Infinity));
+			}
+		}
+		const staleItemKeys = new Set(itemUpserts.flatMap((record) => {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const previous = newestSourceVersionByItem.get(key);
+			const incoming = record.sourceDates?.modifiedAt?.getTime() ?? Date.parse(record.remoteVersion ?? "");
+			return previous !== undefined && (!Number.isFinite(incoming) || incoming < previous) ? [key] : [];
+		}));
+		const currentItemUpserts = itemUpserts.filter((record) => !staleItemKeys.has(itemKeys.get(record.sourceRecordKey)!));
+		for (const record of isOpenAlex ? currentItemUpserts : []) {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const normalized = normalizedItems.get(record.sourceRecordKey)!;
+			const sourceItem = {...normalized.item};
+			if (!importedTopicRows.has(key)) delete sourceItem.topics;
+			const state = {itemKey: key, sourceConnectionKey: batch.sourceConnectionKey,
+				payload: {...sourceItem, tags: normalized.tags, collections: effectiveItemStateByRecordKey.get(record.sourceRecordKey)!.sourceCollections,
+					parentItem: parentItemKeys.get(record.sourceRecordKey) ?? null},
+				remoteVersion: record.remoteVersion, fetchedAt: batch.fetchedAt, importedTopics: topicImportKeys.has(key)};
+			await transaction.insert(itemSourceValue).values(state).onConflictDoUpdate({target: [itemSourceValue.itemKey, itemSourceValue.sourceConnectionKey], set: state});
+			if (importedTopicRows.has(key)) {
+				await transaction.delete(sourceTopicAssignment).where(and(eq(sourceTopicAssignment.itemKey, key), eq(sourceTopicAssignment.sourceConnectionKey, batch.sourceConnectionKey)));
+				const assignments = importedTopicRows.get(key)!;
+				if (assignments.length) await transaction.insert(sourceTopicAssignment).values(assignments.map(topic => ({...topic, itemKey: key,
+					sourceConnectionKey: batch.sourceConnectionKey, sourceVersion: record.remoteVersion, fetchedAt: batch.fetchedAt})));
+			}
+		}
+		const changedItemUpserts = currentItemUpserts.filter((record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
 			if (!existing) return true;
 			if (existing.deleted === 1) {
 				return (
-					existing.sourceConnectionKey === batch.sourceConnectionKey
+					(connection.provider === "openalex" || existing.sourceConnectionKey === batch.sourceConnectionKey) && !overridesByItem.get(key)?.deleted
 				);
 			}
-			const snapshot = snapshotByItemKey.get(key);
-			const sourceChanged =
-				!snapshot ||
-				snapshot.payloadHash !== sourceItemFingerprint(record) ||
-				snapshot.mappingProfileVersion !== batch.mappingProfileVersion;
-			if (!sourceChanged) return false;
-
+			const sourceChanged = sourceSnapshotChanged(
+				snapshotByItemKey.get(key),
+				record,
+				batch.mappingProfileVersion,
+			);
 			const state = effectiveItemStateByRecordKey.get(
 				record.sourceRecordKey,
 			)!;
-			const publication = record.file?.managedPublication;
-			const existingPublication = existingPublicationByItemKey.get(key);
-			const publicationChanged = sourceOwnsCanonicalItem(
-				existing,
-				batch.sourceConnectionKey,
-			)
-				? publication
-					? !existingPublication ||
-						existingPublication.objectPath !==
-							publication.objectPath ||
-						existingPublication.coverObjectPath !==
-							publication.coverObjectPath ||
-						existingPublication.sizeBytes !==
-							publication.sizeBytes ||
-						existingPublication.sha256 !== publication.sha256 ||
-						existingPublication.pageCount !== publication.pageCount
-					: Boolean(existingPublication)
-				: false;
+			const publicationChanged = managedPublicationChanged(
+				mayManageFile(record),
+				record,
+				existingPublicationByItemKey.get(key),
+			);
+			if (!sourceChanged) return publicationChanged;
 			return (
-				itemValuesDiffer(existing, state.item) ||
-				existing.parentItem !== state.parentItem ||
-				!stringSetEqual(
-					existingTagsByItemKey.get(key) ?? [],
-					state.tags,
-				) ||
-				!stringSetEqual(
-					existingCollectionsByItemKey.get(key) ?? [],
-					state.collections,
-				) ||
-				publicationChanged
+				effectiveItemChanged(
+					existing,
+					state,
+					existingTagsByItemKey.get(key),
+					existingCollectionsByItemKey.get(key),
+				) || publicationChanged
 			);
 		});
 		const itemEvents = new Map<
@@ -1602,10 +1739,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			if (!publication || !record.file) return [];
 			const itemKey = itemKeys.get(record.sourceRecordKey)!;
 			if (
-				!sourceOwnsCanonicalItem(
-					existingItemByKey.get(itemKey),
-					batch.sourceConnectionKey,
-				)
+				!mayManageFile(record)
 			) {
 				return [];
 			}
@@ -1623,10 +1757,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				previous?.sha256 === publication.sha256 &&
 				previous.objectPath === publication.objectPath &&
 				previous.coverObjectPath === publication.coverObjectPath;
+			if (connection.provider === "openalex" && !publication.staged && !sameContent) {
+				throw new SourceFileStagingConflictError(batch.sourceConnectionKey, [publication.objectPath, publication.coverObjectPath]);
+			}
 			return [
 				{
 					itemKey,
-					sourceConnectionKey: batch.sourceConnectionKey,
+					sourceConnectionKey: sameContent ? previous.sourceConnectionKey : batch.sourceConnectionKey,
 					parentItemKey,
 					uploadRevision: sameContent
 						? previous.uploadRevision
@@ -1659,10 +1796,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				...itemDeleteKeys,
 				...changedItemUpserts.flatMap((record) => {
 					const itemKey = itemKeys.get(record.sourceRecordKey)!;
-					return sourceOwnsCanonicalItem(
-						existingItemByKey.get(itemKey),
-						batch.sourceConnectionKey,
-					) && !record.file?.managedPublication
+					return mayManageFile(record) && !record.file?.managedPublication
 						? [itemKey]
 						: [];
 				}),
@@ -1703,30 +1837,14 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const consumedStagingRows = await transaction
 				.delete(sourceFileCleanup)
 				.where(
-					and(
-						eq(
-							sourceFileCleanup.sourceConnectionKey,
-							batch.sourceConnectionKey,
-						),
-						inArray(sourceFileCleanup.objectPath, [
-							...activePublicationPaths,
-						]),
-					),
+					inArray(sourceFileCleanup.objectPath, [...activePublicationPaths]),
 				)
-				.returning({ objectPath: sourceFileCleanup.objectPath });
+				.returning({ objectPath: sourceFileCleanup.objectPath, sourceConnectionKey: sourceFileCleanup.sourceConnectionKey });
 			const consumedPaths = new Set(
-				consumedStagingRows.map(({ objectPath }) => objectPath),
+				consumedStagingRows.filter((row) => row.sourceConnectionKey === batch.sourceConnectionKey).map(({ objectPath }) => objectPath),
 			);
 			const missingStagedPaths = changedItemUpserts.flatMap((record) => {
-				const existing = existingItemByKey.get(
-					itemKeys.get(record.sourceRecordKey)!,
-				);
-				if (
-					!sourceOwnsCanonicalItem(
-						existing,
-						batch.sourceConnectionKey,
-					)
-				) {
+				if (!mayManageFile(record)) {
 					return [];
 				}
 				const publication = record.file?.managedPublication;
@@ -1950,7 +2068,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		// them in their own table and replace this source's value for every record
 		// it sent. A null value means the source no longer reports the metric.
 		const citationMetricChangedItemKeys = new Set<string>();
-		const citationMetricUpserts = itemUpserts.flatMap((record) => {
+		const citationMetricUpserts = currentItemUpserts.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey)!;
 			const incoming = record.citationMetric;
 			const existing = citationMetricByItemKey.get(itemKey);
@@ -1977,7 +2095,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		});
 		const citationMetricDeleteKeys = batch.items.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey);
-			if (!itemKey || !citationMetricByItemKey.has(itemKey)) return [];
+			if (!itemKey || staleItemKeys.has(itemKey) || !citationMetricByItemKey.has(itemKey)) return [];
 			if (record.operation === "delete" || record.citationMetric === null) {
 				citationMetricChangedItemKeys.add(itemKey);
 				return [itemKey];
@@ -2020,10 +2138,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		);
 
 		// Provider references become source-owned citation links only when the
-		// target already resolves in this library. Unknown provider IDs stay only
-		// in the raw source snapshot and are retried by a later sync.
+		// target resolves in this library. OpenAlex keeps unresolved references
+		// so importing a target from another query can complete them later.
 		const citationTargetsByRecordKey = new Map(
-			itemUpserts
+			currentItemUpserts
 				.filter((record) => !record.parentSourceRecordKey)
 				.map((record) => [
 					record.sourceRecordKey,
@@ -2033,7 +2151,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const citationSourceKeys = [
 			...new Set([...citationTargetsByRecordKey.values()].flat()),
 		].filter((key) => !itemKeys.has(key));
-		const citationIdentity = await loadIdentityMap(
+		const citationIdentity = connection.provider === "openalex" && citationSourceKeys.length ? new Map((await transaction.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey})
+            .from(itemSourceLink).innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+            .where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.sourceRecordKey, citationSourceKeys)))).map(row => [row.record, row.key])) : await loadIdentityMap(
 			transaction,
 			"item",
 			batch.sourceConnectionKey,
@@ -2056,18 +2176,27 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		let citationLinkChange: { changedItemKeys: string[] } =
 			connection.provider === "zotero"
 				? { changedItemKeys: [] }
-				: await replaceSourceLinks(transaction, {
-						sourceConnectionKey: batch.sourceConnectionKey,
-						kind: "cites",
-						fromKeys: [
-							...citationTargetsByRecordKey.keys(),
-							...itemDeletes.map((record) => record.sourceRecordKey),
-						].flatMap((sourceRecordKey) => {
-							const itemKey = itemKeys.get(sourceRecordKey);
-							return itemKey ? [itemKey] : [];
-						}),
-						links: citationLinkRows,
-					});
+				: connection.provider === "openalex"
+					? {
+							changedItemKeys: await updateOpenAlexReferences(
+								transaction,
+								batch.sourceConnectionKey,
+								currentItemUpserts,
+								itemKeys,
+							),
+						}
+					: await replaceSourceLinks(transaction, {
+							sourceConnectionKey: batch.sourceConnectionKey,
+							kind: "cites",
+							fromKeys: [
+								...citationTargetsByRecordKey.keys(),
+								...itemDeletes.map((record) => record.sourceRecordKey),
+							].flatMap((sourceRecordKey) => {
+								const itemKey = itemKeys.get(sourceRecordKey);
+								return itemKey ? [itemKey] : [];
+							}),
+							links: citationLinkRows,
+						});
 
 		const aliasRows = itemUpserts.flatMap((record) =>
 			record.aliases.map((alias) => ({
@@ -2197,6 +2326,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const snapshotRows = batch.items.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey);
 			if (!itemKey) return [];
+			if (staleItemKeys.has(itemKey) && snapshotByItemKey.has(itemKey)) return [];
 			const expectedHash =
 				record.operation === "upsert"
 					? sourceItemFingerprint(record)
@@ -2273,28 +2403,23 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			batch.sourceConnectionKey,
 			batch.items.flatMap((record) => {
 				const itemKey = itemKeys.get(record.sourceRecordKey);
-				const link = itemKey
-					? sourceLinkByItemKey.get(itemKey)
-					: undefined;
-				const existing = itemKey
-					? existingItemByKey.get(itemKey)
-					: undefined;
+				if (!itemKey) return [];
+				const link = sourceLinkByItemKey.get(itemKey);
+				const existing = existingItemByKey.get(itemKey);
 				const remoteDeleted = record.operation === "delete";
 				const acknowledged =
 					(link?.dirtyFields.length ?? 0) === 0 &&
 					(!remoteDeleted ||
 						existing?.sourceConnectionKey ===
 							batch.sourceConnectionKey);
-				return itemKey
-					? [
-							{
-								acknowledged,
-								itemKey,
-								remoteDeleted,
-								remoteVersion: record.remoteVersion,
-							},
-						]
-					: [];
+				return [
+					{
+						acknowledged,
+						itemKey,
+						remoteDeleted,
+						remoteVersion: staleItemKeys.has(itemKey) && link?.remoteVersion ? link.remoteVersion : record.remoteVersion,
+					},
+				];
 			}),
 			now,
 		);

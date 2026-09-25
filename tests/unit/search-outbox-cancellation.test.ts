@@ -22,6 +22,8 @@ const plan = {
 			sourceExternalScopeKey: null,
 			sourceRecordKey: "ABRT2345",
 			tags: [],
+			topicAncestors: [],
+			topics: [],
 		},
 	],
 } satisfies SearchProjectionPlan;

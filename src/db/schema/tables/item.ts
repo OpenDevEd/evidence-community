@@ -44,6 +44,7 @@ export const item = pgTable(
 		authority: varchar(),
 
 		creators: jsonb().$type<Creator[]>(),
+		topics: varchar().array().notNull().default([]),
 
 		medium: varchar(),
 		artworkSize: varchar(),

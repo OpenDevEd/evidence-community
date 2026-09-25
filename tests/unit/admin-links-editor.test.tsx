@@ -23,6 +23,7 @@ const sources: AdminSource[] = [
 
 function detail(): AdminItemDetail {
 	return {
+		sourceFields: [], importedTopics: [],
 		kind: "created",
 		importMethod: null,
 		attachments: [],

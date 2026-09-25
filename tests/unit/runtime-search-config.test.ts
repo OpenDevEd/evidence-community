@@ -70,8 +70,12 @@ describe("runtime search configuration", () => {
 						label: "Institutions",
 					},
 				},
+				false,
 			),
 		).toEqual(["collectionsAncestry", "year"]);
+		expect(
+			getRuntimeSearchFacets(config.search, config.filters, true),
+		).toContain("topicAncestors");
 	});
 
 	it("accepts any four-digit year when the year filter is enabled", () => {

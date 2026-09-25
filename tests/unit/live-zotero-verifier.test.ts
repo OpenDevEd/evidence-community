@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The source runtime now reaches the OpenAlex importer, which is server-only.
+vi.mock("server-only", () => ({}));
 
 import {
 	assertLiveZoteroConnection,

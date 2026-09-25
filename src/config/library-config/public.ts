@@ -43,6 +43,7 @@ export function projectPublicLibraryConfig(
 		localization: config.localization,
 		search: projectPublicSearch(config.search),
 		filters: config.filters,
+		topics: config.topics,
 		content: config.content,
 		citations: {
 			enabled: config.citations.enabled,

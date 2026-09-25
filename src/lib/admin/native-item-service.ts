@@ -1,3 +1,8 @@
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { resolveTopicNodes, TopicServiceError } from "@/lib/topics/catalog";
+import { itemFieldOverride } from "@/db/schema/topics";
+import { sourceResolutionsSchema } from "./source-field-contract";
+import { publishSourceFieldOverrides, resolveSourceFieldChoices } from "./source-fields";
 import type { ConflictingDraft } from "./errors";
 import { sameBibliographicCreators } from "@/lib/admin/creator-profile-links";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
@@ -8,9 +13,11 @@ import {
 	itemIdentity,
 	itemSourceLink,
 	outbox,
+	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import {
 	and,
+	or,
 	eq,
 	inArray,
 	isNull,
@@ -26,7 +33,7 @@ import {
 import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
-import { itemFilePublication } from "@/db/schema/source";
+import { itemFilePublication, sourceFileCleanup } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { AdminValidationError } from "./errors";
 import { publicationTarget } from "@/db/schema/publication";
@@ -88,8 +95,39 @@ type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
 export type ItemWritebackPolicyOptions = {
-	writebackConfig?: SourceWritebackConfiguration;
+	writebackConfig?: SourceWritebackConfiguration & Partial<Pick<LibraryServerConfig, "topics" | "authentication">>;
 };
+
+async function validateTopicChange(
+  database: Executor,
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+  options: ItemWritebackPolicyOptions,
+  publishingSavedDraft = false,
+) {
+  const before = topicList(previous.topics);
+  const after = topicList(next.topics);
+  if (JSON.stringify([...before].sort()) === JSON.stringify([...after].sort())) return;
+  const config = options.writebackConfig;
+  if (!config?.topics?.enabled && !publishingSavedDraft) throw new AdminValidationError("Topics are turned off for this library.", {topics: "Enable Topics in library configuration before changing them."});
+  if (!after.length) return;
+  if (!config?.authentication) throw new AdminValidationError("The topic catalog is not configured.");
+  await assertCatalogTopics(database, after, config.authentication);
+}
+
+function topicList(value: unknown) {
+  return Array.isArray(value) ? value as string[] : [];
+}
+
+async function assertCatalogTopics(database: Executor, topics: string[], authentication: LibraryServerConfig["authentication"]) {
+  try {
+    const nodes = await resolveTopicNodes(topics, {database, config: {authentication}});
+    if (nodes.some(node => node.level !== "topic")) throw new TopicServiceError(404);
+  } catch (error) {
+    if (error instanceof TopicServiceError && error.status === 404) throw new AdminValidationError("Choose topics from the catalog.", {topics: "One or more topics no longer exist."});
+    throw new AdminValidationError("The topic catalog is unavailable. Try again before saving your topics.");
+  }
+}
 
 export type ItemPublishOptions = ItemWritebackPolicyOptions & {
 	/** Internal review approval input, never accepted from a publication request. */
@@ -544,12 +582,13 @@ async function publishItemLinks(
 	};
 }
 
-export async function createNativeItemDraft(db: Database, payload: unknown) {
+export async function createNativeItemDraft(db: Database, payload: unknown, options: ItemWritebackPolicyOptions = {}) {
 	const validated = validateNativeItemDraft(payload, {
 		allowIncompleteCreators: true,
 	});
 
 	return db.transaction(async (transaction) => {
+		await validateTopicChange(transaction, {}, validated.payload, options);
 		await assertValidItemCollectionMembershipsInDatabase(
 			transaction,
 			null,
@@ -784,6 +823,7 @@ export async function saveItemDraftInTransaction(
 		expectedPayload: baselinePayload,
 		payload: submittedPayload,
 	});
+	await validateTopicChange(transaction, currentPayload, validated.payload, options);
 	await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
 	const patch = createItemDraftPatch(basePayload, validated.payload);
 	assertNoSelfLinks(itemKey, validated.links);
@@ -1031,9 +1071,10 @@ export async function publishItemDraftWithContext(
 		const basePayload = await loadPublishedItemPayload(transaction, itemKey, current ?? null);
 		const workingPayload = draft ? applyItemDraftPatch(basePayload, draft.patch) : null;
 		const validated = validateNativeItemDraft(
-			options.review?.approved.payload ?? workingPayload,
+			await resolveSourceFieldChoices(transaction, itemKey, (options.review?.approved.payload ?? workingPayload)!),
 			{ requireTitle: true },
 		);
+		await validateTopicChange(transaction, basePayload, validated.payload, options, true);
 		await assertLockedExternalDoiUnchanged(transaction, itemKey, validated.payload);
 		if (validated.item.parentItem !== parentItemKey) {
 			throw new ItemDraftConflictError(itemKey);
@@ -1085,10 +1126,13 @@ export async function publishItemDraftWithContext(
 			}
 		}
 
+		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload);
+		await transaction.delete(itemFieldOverride).where(and(eq(itemFieldOverride.itemKey, itemKey), eq(itemFieldOverride.field, "deleted")));
 		const nextRevision = currentRevision + 1;
 		const now = new Date();
 		const values = {
 			...publishedItemValues(validated),
+			topics: validated.item.topics ?? [],
 			key: itemKey,
 			sourceConnectionKey: access.identity.sourceConnectionKey,
 			sourceRecordKey:
@@ -1260,8 +1304,10 @@ export async function publishItemDraftWithContext(
 		const publishedPatch: Record<string, unknown> = options.review
 			? createItemDraftPatch(basePayload, options.review.approved.payload)
 			: draft!.patch;
+		const sourceChoices = sourceResolutionsSchema.parse(validated.payload.sourceResolutions ?? {});
 		const changedFields = Object.keys(publishedPatch).filter(
 			(field) =>
+				sourceChoices[field]?.choice !== "source" &&
 				field !== "collections" &&
 				!LIBRARY_OWNED_PAYLOAD_FIELDS.has(field) &&
 				// A new profile link or affiliation is nothing a source can hold.
@@ -1383,6 +1429,32 @@ export type ItemUnpublishOptions = {
 	removeFromSourceKeys?: readonly string[];
 };
 
+/** Keeps a withdrawn OpenAlex record withdrawn when the next import brings it again. */
+async function keepSourceRecordDeleted(transaction: Transaction, itemKey: string, now: Date) {
+	const [originLink] = await transaction.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey)).limit(1);
+	if (originLink) await transaction.insert(itemFieldOverride).values({itemKey, field: "deleted", value: 1, sourceValue: 0,
+		sourceConnectionKey: originLink.sourceConnectionKey, sourceVersion: originLink.remoteVersion}).onConflictDoUpdate({target: [itemFieldOverride.itemKey, itemFieldOverride.field], set: {value: 1, updatedAt: now}});
+}
+
+/** The source owns these children, such as an OpenAlex PDF, so they leave with their record. */
+async function withdrawSourceChildren(transaction: Transaction, children: readonly { key: string; revision: number }[], now: Date) {
+	for (const child of children) {
+		const revision = child.revision + 1;
+		await keepSourceRecordDeleted(transaction, child.key, now);
+		await transaction.update(item).set({ deleted: 1, deletedAt: now, revision, updatedAt: now }).where(eq(item.key, child.key));
+		await advanceOpenItemDraftBaseRevision(transaction, child.key, child.revision, revision);
+		await transaction.insert(outbox).values({ entityType: "item", entityKey: child.key, operation: "delete", revision });
+		const files = await transaction.delete(itemFilePublication).where(eq(itemFilePublication.itemKey, child.key))
+			.returning({ sourceConnectionKey: itemFilePublication.sourceConnectionKey, objectPath: itemFilePublication.objectPath, coverObjectPath: itemFilePublication.coverObjectPath });
+		const paths = files.flatMap((file) => [file.objectPath, file.coverObjectPath].flatMap((objectPath) => objectPath ? [{ sourceConnectionKey: file.sourceConnectionKey, objectPath, updatedAt: now }] : []));
+		if (paths.length) await transaction.insert(sourceFileCleanup).values(paths).onConflictDoUpdate({
+			target: [sourceFileCleanup.sourceConnectionKey, sourceFileCleanup.objectPath],
+			set: { attempts: 0, deadLetteredAt: null, lastError: null, updatedAt: now },
+		});
+	}
+	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
+}
+
 async function unpublishNativeItemAttempt(
 	db: Database,
 	itemKey: string,
@@ -1397,7 +1469,7 @@ async function unpublishNativeItemAttempt(
 			.where(
 				and(
 					eq(item.key, itemKey),
-					eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+					or(eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY), inArray(item.sourceConnectionKey, transaction.select({key: sourceConnection.key}).from(sourceConnection).where(eq(sourceConnection.provider, "openalex")))),
 				),
 			)
 			.limit(1);
@@ -1474,14 +1546,17 @@ async function unpublishNativeItemAttempt(
 			throw new ItemHasActivePublicationError(itemKey);
 		}
 		const liveChildren = await transaction
-			.select({ key: item.key })
+			.select({ key: item.key, revision: item.revision, sourceConnectionKey: item.sourceConnectionKey })
 			.from(item)
 			.where(and(eq(item.parentItem, itemKey), eq(item.deleted, 0)))
 			.orderBy(item.key);
 		if ((current.parentItem ?? null) !== (candidate.parentItem ?? null)) {
 			throw new NativeItemLockSetChangedError();
 		}
-		if (liveChildren.length > 0) {
+		const sourceChildren = current.sourceConnectionKey === NATIVE_CONNECTION_KEY
+			? []
+			: liveChildren.filter((child) => child.sourceConnectionKey !== NATIVE_CONNECTION_KEY);
+		if (liveChildren.length > sourceChildren.length) {
 			throw new ItemHasChildrenError(itemKey);
 		}
 		const draftKeysToLock = [
@@ -1510,6 +1585,7 @@ async function unpublishNativeItemAttempt(
 
 		const nextRevision = current.revision + 1;
 		const now = new Date();
+		if (current.sourceConnectionKey !== NATIVE_CONNECTION_KEY) await keepSourceRecordDeleted(transaction, itemKey, now);
 		const [unpublished] = await transaction
 			.update(item)
 			.set({
@@ -1558,7 +1634,10 @@ async function unpublishNativeItemAttempt(
 				sourceConnectionKey: writebackLink.sourceConnectionKey,
 			});
 		}
-		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
+		const indexingRecords = [
+			{ key: itemKey, revision: nextRevision },
+			...(await withdrawSourceChildren(transaction, sourceChildren, now)),
+		];
 		const parent =
 			typeof current.parentItem === "string"
 				? lockedItems.find(

@@ -3,17 +3,14 @@ import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Add01Icon,
+	Alert02Icon,
 	ArrowRight01Icon,
 	MapsIcon,
 	QuoteUpIcon,
 } from "@hugeicons/core-free-icons";
 import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
-import {
-	fetcher,
-	firstNonNullOrEmpty,
-	setter,
-} from "@/lib/utils";
+import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
@@ -38,7 +35,7 @@ import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useQueryState } from "nuqs";
 import { useResourceHref } from "@/hooks/useResourceHref";
-import { hasAnyTag } from "@/lib/tags";
+import { hasAnyTag, hasTag } from "@/lib/tags";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
@@ -282,9 +279,17 @@ function ResourceInteractions({
 	);
 }
 
-function ResourceTitle({ id, item }: { id: string; item: Item | ListItem | undefined }) {
+function ResourceTitle({
+	id,
+	item,
+}: {
+	id: string;
+	item: Item | ListItem | undefined;
+}) {
 	const tItemType = useTranslations("itemType");
-	const title = item?.title?.trim() || (item ? `${tItemType(item.itemType)} ${item.key}` : "");
+	const title =
+		item?.title?.trim() ||
+		(item ? `${tItemType(item.itemType)} ${item.key}` : "");
 	return (
 		<h3
 			id={id}
@@ -336,7 +341,9 @@ function ResourceArticle({
 								icon={MapsIcon}
 								className="size-3.5 shrink-0"
 							/>
-							<span id={`${titleId}-gap-map`}>{tNav("gapMap")}</span>
+							<span id={`${titleId}-gap-map`}>
+								{tNav("gapMap")}
+							</span>
 						</span>
 					)}
 					<ResourceAuthors itemData={finalItemData} />
@@ -377,6 +384,16 @@ function ResourceArticle({
 					{hasAnyTag(finalItemData?.tags, content.tags.internal) && (
 						<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
 							{t("internal")}
+						</span>
+					)}
+
+					{hasTag(finalItemData?.tags, "Retracted") && (
+						<span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-danger bg-danger/10 px-4 py-1 font-medium text-danger @[720px]:w-auto">
+							<HugeiconsIcon
+								icon={Alert02Icon}
+								className="size-4"
+							/>
+							Retracted publication
 						</span>
 					)}
 				</div>

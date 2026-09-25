@@ -866,7 +866,6 @@ export const searchIndexWorker = pgTable(
 
 export function createItemFilePublicationTable(itemColumns: {
 	key: AnyPgColumn;
-	sourceConnectionKey: AnyPgColumn;
 }) {
 	return pgTable(
 		"itemFilePublication",
@@ -947,20 +946,19 @@ export function createItemFilePublicationTable(itemColumns: {
 			),
 			foreignKey({
 				name: "itemFilePublication_item_fk",
-				columns: [table.itemKey, table.sourceConnectionKey],
-				foreignColumns: [
-					itemColumns.key,
-					itemColumns.sourceConnectionKey,
-				],
+				columns: [table.itemKey],
+				foreignColumns: [itemColumns.key],
 			}).onDelete("cascade"),
 			foreignKey({
 				name: "itemFilePublication_parent_fk",
-				columns: [table.parentItemKey, table.sourceConnectionKey],
-				foreignColumns: [
-					itemColumns.key,
-					itemColumns.sourceConnectionKey,
-				],
+				columns: [table.parentItemKey],
+				foreignColumns: [itemColumns.key],
 			}).onDelete("cascade"),
+			foreignKey({
+				name: "itemFilePublication_source_fk",
+				columns: [table.sourceConnectionKey],
+				foreignColumns: [sourceConnection.key],
+			}),
 			unique("itemFilePublication_object_path_unique").on(
 				table.objectPath,
 			),

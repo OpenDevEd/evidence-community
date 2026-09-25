@@ -58,9 +58,9 @@ import {
 	SourceRelationshipCycleError,
 	writeSourceIngestionBatch,
 } from "../src/lib/source-ingestion/transactional-writer";
-import { flushSourceFileCleanup } from "../src/lib/source-ingestion/zotero/attachment-processor";
+import { flushSourceFileCleanup } from "../src/lib/source-ingestion/attachment-storage";
 
-const publicationConfig = libraryConfigSchema.parse(maximalLibraryConfig).services.publication;
+const libraryConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -2216,6 +2216,9 @@ async function verify() {
 				expectedCursor: {},
 				nextCursor: { page: 2 },
 			}),
+			institutionCountries: [
+				{ name: "Citation Institute", countryCode: "GB" },
+			],
 			collections: [
 				{
 					operation: "upsert",
@@ -2281,7 +2284,6 @@ async function verify() {
 						lastName: "Researcher",
 						institutions: [
 							{
-								country_code: "GB",
 								display_name: "Citation Institute",
 							},
 						],
@@ -2363,7 +2365,7 @@ async function verify() {
 			"Unresolved OpenAlex references must remain in the raw source snapshot",
 		);
 		const projectionPlans = [];
-		for await (const plan of generateSearchProjectionPlans(db, publicationConfig, [
+		for await (const plan of generateSearchProjectionPlans(db, libraryConfig, [
 			{ entityKey: openAlexA, entityType: "item" },
 			{ entityKey: openAlexB, entityType: "item" },
 		])) {

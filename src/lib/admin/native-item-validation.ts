@@ -5,6 +5,8 @@ import {
 } from "@opendeved/evidence-library-core/zotero-schema";
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
+import { topicIdSchema } from "@/lib/topics/contract";
+import { sourceResolutionsSchema } from "./source-field-contract";
 import { countryFocusSchema } from "@/lib/country-focus";
 
 import { creatorType } from "@/db/schema/enums/creatorType";
@@ -38,6 +40,8 @@ const itemTypeByZoteroName = new Map(
 	itemType.enumValues.map((value) => [value.toLowerCase(), value]),
 );
 const creatorTypes = new Set<string>(creatorType.enumValues);
+export const MAX_CREATOR_INSTITUTIONS = 50;
+export const MAX_CREATOR_INSTITUTION_NAME_LENGTH = 500;
 
 function creatorSchema(allowIncomplete: boolean) {
 	return z
@@ -48,9 +52,9 @@ function creatorSchema(allowIncomplete: boolean) {
 			// imported affiliation carries is dropped.
 			institutions: z
 				.array(
-					z.object({ display_name: z.string().trim().min(1).max(500) }),
+					z.object({ display_name: z.string().trim().min(1).max(MAX_CREATOR_INSTITUTION_NAME_LENGTH) }),
 				)
-				.max(50)
+				.max(MAX_CREATOR_INSTITUTIONS)
 				.optional(),
 			firstName: z.string().optional(),
 			lastName: z.string().optional(),
@@ -296,6 +300,17 @@ function countryFocusFields(value: unknown, source: boolean | undefined) {
 	return { countryFocus: result.data };
 }
 
+function topicFields(value: unknown) {
+	if (value === undefined) return {};
+	return { topics: [...new Set(z.array(topicIdSchema).max(100).parse(value))].sort() };
+}
+
+/** Editors resolve source conflicts; source imports never send resolutions. */
+function sourceResolutionFields(value: unknown, source: boolean | undefined) {
+	if (source || value === undefined) return {};
+	return { sourceResolutions: sourceResolutionsSchema.parse(value) };
+}
+
 function parseNativeItemDraft(
 	input: unknown,
 	options: NativeItemValidationOptions,
@@ -317,6 +332,7 @@ function parseNativeItemDraft(
 	const itemValues: Record<string, unknown> = {
 		itemType: normalizedItemType,
 		...countryFocusFields(payload.countryFocus, options.source),
+		...topicFields(payload.topics),
 		...normalizeDraftFields(
 			payload,
 			[
@@ -334,6 +350,7 @@ function parseNativeItemDraft(
 		),
 	};
 	const normalizedPayload = { ...itemValues };
+	Object.assign(normalizedPayload, sourceResolutionFields(payload.sourceResolutions, options.source));
 
 	if (payload.creators !== undefined) {
 		const creators = parseDraftCreators(

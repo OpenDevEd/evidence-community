@@ -456,6 +456,27 @@
       "when": 1790165573129,
       "tag": "0064_digest-edition-coverage",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790252445570,
+      "tag": "0065_openalex_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790254835776,
+      "tag": "0066_topics_and_source_overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790258293157,
+      "tag": "0067_topic_search_configuration",
+      "breakpoints": true
     }
   ]
 }

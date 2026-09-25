@@ -1,0 +1,301 @@
+import { createHash, randomUUID } from "node:crypto";
+import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
+import { and, eq, inArray } from "drizzle-orm";
+import type { Database } from "@/db/database-schema";
+import { sourceRecordIssue, sourceSnapshot } from "@/db/schema/source";
+import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
+import { processPdf } from "@/lib/admin/pdf-processing";
+import { fetchPublicFile } from "@/lib/public-fetch";
+import {
+	MAX_SOURCE_FULL_TEXT_BYTES,
+	flushSourceFileCleanup,
+	readSourceFilePublication,
+	sourceFileFromPublication,
+	truncateUtf8,
+	uploadSourcePublication,
+} from "../attachment-storage";
+import {
+	MAX_SOURCE_RECORD_BYTES,
+	MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH,
+	type SourceItemUpsert,
+} from "../batch-schema";
+
+function originalPdfUrl(raw: Record<string, unknown>) {
+	const location = raw.location;
+	return location &&
+		typeof location === "object" &&
+		!Array.isArray(location) &&
+		"pdf_url" in location &&
+		typeof location.pdf_url === "string"
+		? location.pdf_url.trim()
+		: null;
+}
+
+function withPublishedFile(
+	record: SourceItemUpsert,
+	file: NonNullable<SourceItemUpsert["file"]>,
+): SourceItemUpsert {
+	const result = {
+		...record,
+		metadata: { ...record.metadata, url: file.url },
+		file,
+	};
+	// JSON escaping can exceed the byte limit even after plain UTF-8 text is bounded.
+	const fullText = file.fullText ?? "";
+	let textBytes = Buffer.byteLength(fullText);
+	// ponytail: halve oversized text; exact prefix sizing can replace this if needed.
+	while (
+		Buffer.byteLength(JSON.stringify(result), "utf8") >
+			MAX_SOURCE_RECORD_BYTES &&
+		textBytes > 0
+	) {
+		textBytes = Math.floor(textBytes / 2);
+		result.file = { ...file, fullText: truncateUtf8(fullText, textBytes) };
+	}
+	if (
+		Buffer.byteLength(JSON.stringify(result), "utf8") >
+		MAX_SOURCE_RECORD_BYTES
+	) {
+		throw new Error(
+			"Processed PDF metadata exceeds the source record limit",
+		);
+	}
+	return result;
+}
+
+type ProcessorOptions = {
+	database: Database;
+	storage: EvidenceFileStorage;
+	maxPdfBytes: number;
+};
+type SourceFile = NonNullable<SourceItemUpsert["file"]>;
+type PdfRecord = SourceItemUpsert & { file: SourceFile & { url: string } };
+type Publication = Awaited<ReturnType<typeof readSourceFilePublication>>;
+/** The failure code and reusable file at the step that failed. */
+type Attempt = { issueCode: string; reusable: SourceItemUpsert["file"] };
+
+function isUnpublishedPdf(record: SourceItemUpsert): record is PdfRecord {
+	return (
+		record.metadata.itemType === "Attachment" &&
+		record.file?.contentType === "application/pdf" &&
+		Boolean(record.file.url) &&
+		!record.file.managedPublication
+	);
+}
+
+function assertPublicationIdentity(
+	record: SourceItemUpsert,
+	sourceConnectionKey: string,
+) {
+	if (
+		!isSourceConnectionKey(sourceConnectionKey) ||
+		!/^W\d+:pdf$/u.test(record.sourceRecordKey) ||
+		!record.parentSourceRecordKey
+	) {
+		throw new Error("Invalid OpenAlex attachment publication identity");
+	}
+}
+
+function reusableFile(existing: Publication, sourceRecordKey: string) {
+	const existingFile = sourceFileFromPublication(existing);
+	const existingPrefix = `sources/openalex/${existing?.publicationSourceConnectionKey}/${sourceRecordKey}/`;
+	return existingFile?.managedPublication?.objectPath.startsWith(
+		existingPrefix,
+	) &&
+		existingFile.managedPublication.coverObjectPath.startsWith(
+			existingPrefix,
+		)
+		? existingFile
+		: null;
+}
+
+/** The stored publication came from this remote version and PDF URL without an issue. */
+async function isUnchangedPublication(
+	database: Database,
+	record: PdfRecord,
+	existing: Publication,
+	sourceConnectionKey: string,
+) {
+	if (
+		!existing ||
+		record.remoteVersion === null ||
+		existing.remoteVersion !== record.remoteVersion
+	)
+		return false;
+	const [issue] = await database
+		.select()
+		.from(sourceRecordIssue)
+		.where(
+			and(
+				eq(sourceRecordIssue.sourceRecordKey, record.sourceRecordKey),
+				inArray(sourceRecordIssue.sourceConnectionKey, [
+					sourceConnectionKey,
+					existing.publicationSourceConnectionKey!,
+				]),
+			),
+		)
+		.limit(1);
+	const [snapshot] = await database
+		.select({ payload: sourceSnapshot.payload })
+		.from(sourceSnapshot)
+		.where(
+			and(
+				eq(sourceSnapshot.itemKey, existing.itemKey),
+				eq(
+					sourceSnapshot.sourceConnectionKey,
+					existing.publicationSourceConnectionKey!,
+				),
+			),
+		)
+		.limit(1);
+	return (
+		!issue &&
+		snapshot !== undefined &&
+		originalPdfUrl(snapshot.payload) === record.file.url
+	);
+}
+
+async function publishNewPdf(
+	options: ProcessorOptions,
+	record: PdfRecord,
+	sourceConnectionKey: string,
+	bytes: Uint8Array,
+	sha256: string,
+	attempt: Attempt,
+) {
+	attempt.issueCode = "openalex_pdf_invalid";
+	const processed = await processPdf(bytes);
+	// Never upload over a path queued for deletion by another import.
+	const prefix = `sources/openalex/${sourceConnectionKey}/${record.sourceRecordKey}/${sha256}/${randomUUID()}/`;
+	const paths = {
+		pdf: `${prefix}document.pdf`,
+		cover: `${prefix}cover.png`,
+	};
+	attempt.issueCode = "openalex_pdf_storage_failed";
+	const result = withPublishedFile(record, {
+		...record.file,
+		url: options.storage.publicUrl(paths.pdf),
+		filename: record.file.filename ?? `${record.parentSourceRecordKey}.pdf`,
+		linkMode: "imported_url",
+		md5: createHash("md5").update(bytes).digest("hex"),
+		fullText: truncateUtf8(processed.text, MAX_SOURCE_FULL_TEXT_BYTES),
+		coverUrl: options.storage.publicUrl(paths.cover),
+		coverWidth: processed.coverWidth,
+		coverHeight: processed.coverHeight,
+		managedPublication: {
+			objectPath: paths.pdf,
+			coverObjectPath: paths.cover,
+			sizeBytes: bytes.byteLength,
+			sha256,
+			pageCount: processed.pageCount,
+			staged: true,
+		},
+	});
+	await uploadSourcePublication({
+		database: options.database,
+		storage: options.storage,
+		sourceConnectionKey,
+		paths,
+		bytes,
+		cover: processed.cover,
+	});
+	return result;
+}
+
+async function publishPdf(
+	options: ProcessorOptions,
+	record: PdfRecord,
+	sourceConnectionKey: string,
+	attempt: Attempt,
+) {
+	assertPublicationIdentity(record, sourceConnectionKey);
+	const existing = await readSourceFilePublication(
+		options.database,
+		sourceConnectionKey,
+		record.sourceRecordKey,
+		true,
+	);
+	const reusable = reusableFile(existing, record.sourceRecordKey);
+	attempt.reusable = reusable;
+	if (
+		reusable &&
+		(await isUnchangedPublication(
+			options.database,
+			record,
+			existing,
+			sourceConnectionKey,
+		))
+	) {
+		return withPublishedFile(record, reusable);
+	}
+	attempt.issueCode = "openalex_pdf_download_failed";
+	const { data: bytes } = await fetchPublicFile(new URL(record.file.url), {
+		accept: "application/pdf",
+		timeoutMs: 120_000,
+		maxBytes: options.maxPdfBytes,
+	});
+	const sha256 = createHash("sha256").update(bytes).digest("hex");
+	if (reusable?.managedPublication?.sha256 === sha256)
+		return withPublishedFile(record, reusable);
+	return publishNewPdf(
+		options,
+		record,
+		sourceConnectionKey,
+		bytes,
+		sha256,
+		attempt,
+	);
+}
+
+function failedPdf(
+	record: SourceItemUpsert,
+	attempt: Attempt,
+	error: unknown,
+): SourceItemUpsert {
+	return {
+		...(attempt.reusable
+			? withPublishedFile(record, attempt.reusable)
+			: record),
+		processingIssue: {
+			code: attempt.issueCode,
+			message:
+				`OpenAlex PDF ${record.sourceRecordKey}: ${error instanceof Error ? error.message : String(error)}`.slice(
+					0,
+					MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH,
+				),
+		},
+	};
+}
+
+export function createOpenAlexAttachmentProcessor(options: ProcessorOptions) {
+	if (!Number.isSafeInteger(options.maxPdfBytes) || options.maxPdfBytes < 1) {
+		throw new Error("OpenAlex maxPdfBytes must be a positive integer");
+	}
+	const processor = async (
+		record: SourceItemUpsert,
+		sourceConnectionKey: string,
+	): Promise<SourceItemUpsert> => {
+		if (!isUnpublishedPdf(record)) return record;
+		const attempt: Attempt = {
+			issueCode: "openalex_pdf_storage_failed",
+			reusable: null,
+		};
+		try {
+			return await publishPdf(
+				options,
+				record,
+				sourceConnectionKey,
+				attempt,
+			);
+		} catch (error) {
+			return failedPdf(record, attempt, error);
+		}
+	};
+	processor.flushCleanup = (sourceConnectionKey: string) =>
+		flushSourceFileCleanup(
+			options.database,
+			options.storage,
+			sourceConnectionKey,
+		);
+	return processor;
+}
