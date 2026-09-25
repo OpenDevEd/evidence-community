@@ -20,6 +20,7 @@ import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
+import { markFullyPrefetched } from "@/components/features/newlib/RefreshPrefetchedItem";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
 import { useState, useEffect, useMemo, useId } from "react";
@@ -457,6 +458,17 @@ export default function Resource({
 
 	const resourceHref = useResourceHref();
 
+	// A loading card may still hold the previous results' keys, and a new tab cannot use this page's prefetch cache.
+	const fullPrefetch = Boolean(
+		finalItemData?.key &&
+			!finalIsLoading &&
+			!openLinksInNewTab &&
+			(position ?? Infinity) < FULL_PREFETCH_CARDS,
+	);
+	const fullPrefetchKey = fullPrefetch ? finalItemData?.key : undefined;
+	useEffect(() => {
+		if (fullPrefetchKey) markFullyPrefetched(fullPrefetchKey);
+	}, [fullPrefetchKey]);
 	const itemTargetHref = finalItemData?.key
 		? resourceHref(finalItemData.key, {
 				set: {
@@ -525,15 +537,7 @@ export default function Resource({
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
-					// A loading card may still hold the previous results' keys, and a new tab cannot use this page's prefetch cache.
-					prefetch={
-						finalItemData?.key &&
-						!finalIsLoading &&
-						!openLinksInNewTab &&
-						(position ?? Infinity) < FULL_PREFETCH_CARDS
-							? true
-							: undefined
-					}
+					prefetch={fullPrefetch || undefined}
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 						!finalItemData?.key && "!pointer-events-none",
