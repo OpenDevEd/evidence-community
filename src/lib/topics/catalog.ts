@@ -46,7 +46,7 @@ export function parseTopicCatalogParams(params: URLSearchParams, libraryId: stri
   });
 }
 
-export async function readTopicCatalog(request: Omit<z.input<typeof topicCatalogRequestSchema>, "contractVersion" | "libraryId">, context: TopicCatalogContext) {
+async function readTopicCatalog(request: Omit<z.input<typeof topicCatalogRequestSchema>, "contractVersion" | "libraryId">, context: TopicCatalogContext) {
   const body = topicCatalogRequestSchema.parse({...request, contractVersion: 1, libraryId: context.config.authentication.openScholar.libraryId});
   const response = topicCatalogResponseSchema.parse(await serviceRequest("/api/v1/evidence-libraries/topics/catalog", body, context));
   await saveCache(context, [{id: CATALOG_META_ID, kind: "meta", payload: {revision: response.revision, publicBaseUrl: response.publicBaseUrl}},
