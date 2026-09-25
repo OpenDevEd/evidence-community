@@ -1093,6 +1093,24 @@ export async function rebuildSearchIndex(
 			taskTimeoutMs,
 			{ signal: options.signal, taskClient: service.index.tasks },
 		);
+		// A running worker may have indexed one of these records after it was
+		// published again during the rebuild. Reading PostgreSQL only after the
+		// delete puts any such record back; a later publish has its own event.
+		for await (const plan of generateSearchProjectionPlans(
+			database,
+			publication,
+			[...staleKeys].map((entityKey) => ({ entityKey, entityType: "item" })),
+			500,
+			options.signal,
+		)) {
+			await applySearchProjectionPlan(
+				service.index,
+				plan,
+				taskTimeoutMs,
+				maxDocumentBatchBytes,
+				{ signal: options.signal },
+			);
+		}
 	}
 	return { deleted: staleKeys.size, indexed };
 }

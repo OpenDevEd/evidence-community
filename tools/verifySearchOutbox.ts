@@ -34,7 +34,10 @@ import {
 	SearchOutboxLeaseLostError,
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
-import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
+import {
+	generateSearchProjectionPlans,
+	type SearchProjectionPlan,
+} from "../src/lib/search-index/projection";
 import { FULL_TEXT_PDF_FILTER } from "../src/lib/search-filter-constants";
 import { PLATFORM_SEARCH_SCOPE_OPTIONS } from "../src/config/library-config/catalogs";
 
@@ -1037,6 +1040,49 @@ async function verify() {
 				`The orphan check failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
 			);
 		}
+
+		// A record unpublished when the rebuild reads it, then published again
+		// and indexed by a running worker before the rebuild's cleanup, must
+		// stay in search.
+		await database
+			.update(item)
+			.set({ deleted: 1, deletedAt: new Date(), revision: 9 })
+			.where(eq(item.key, parentKey));
+		const republishBeforeCleanup = new Proxy(goodService.index, {
+			get(target, property) {
+				if (property === "deleteDocuments") {
+					return async (keys: string[]) => {
+						await database
+							.update(item)
+							.set({ deleted: 0, deletedAt: null, revision: 10 })
+							.where(eq(item.key, parentKey));
+						for await (const plan of generateSearchProjectionPlans(
+							database,
+							publicationConfig,
+							[{ entityKey: parentKey, entityType: "item" }],
+						)) {
+							await applySearchProjectionPlan(target, plan);
+						}
+						return target.deleteDocuments(keys);
+					};
+				}
+				const value = Reflect.get(target, property);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
+		await rebuildSearchIndex(
+			database,
+			{ ...goodService, index: republishBeforeCleanup },
+			publicationConfig,
+			{ taskTimeoutMs: 60_000 },
+		);
+		const republished = await goodService.index.getDocument<{
+			revision: number;
+		}>(parentKey);
+		assert(
+			republished.revision === 10,
+			"The full rebuild removed a record published again during the rebuild",
+		);
 
 		// A lease lost on one event must not strand the rest of its batch.
 		// Before this check, the failure path rolled back every mark when one
