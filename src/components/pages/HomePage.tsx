@@ -253,8 +253,9 @@ function MostCited({ data }: { data: HomeData }) {
 			{data.cited.map((row) => (
 				<li key={row.key}>
 					<Link href={`/lib/${row.key}`} onClick={() => handOff(data.copies.find((copy) => copy.key === row.key))} className="group flex gap-5 outline-offset-4">
-						<span className="block w-24 shrink-0 shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-							<PdfCover src={data.covers[row.key]} alt="" width={96} />
+						{/* The cover keeps its own height: stretched to a long title beside it, its shadow would hang below the page. */}
+						<span className="block w-24 shrink-0 self-start rounded-xl shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+							<PdfCover src={data.covers[row.key]} alt="" width={96} title={row.title} />
 						</span>
 						<span className="min-w-0 pt-1">
 							<span className="block font-heading text-4xl font-semibold leading-none tabular-nums">{number.format(row.citations)}</span>
