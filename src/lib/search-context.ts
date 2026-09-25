@@ -33,6 +33,7 @@ export const librarySearchContextSchema = z
 		country: filterValuesSchema,
 		author: z.string().trim().max(300),
 		collections: filterValuesSchema,
+		topics: filterValuesSchema,
 	})
 	.strict();
 
@@ -74,6 +75,7 @@ export function normalizeLibrarySearchContext(
 		country: filterValues(value.country),
 		author: (value.author ?? "").trim().slice(0, MAX_FILTER_VALUE_LENGTH),
 		collections: filterValues(value.collections),
+		topics: filterValues(value.topics),
 	});
 }
 
@@ -89,5 +91,6 @@ export function librarySearchContextSummary(
 		publicationCountries: context.country,
 		author: context.author || undefined,
 		collections: context.collections,
+		topics: context.topics,
 	});
 }

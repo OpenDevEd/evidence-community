@@ -267,7 +267,7 @@ export function resolveSearchRequest(
 
 export async function resolveSearchTopicNodes(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	libraryConfig: LibraryServerConfig,
+	libraryConfig: Pick<LibraryServerConfig, "authentication" | "revision" | "services" | "topics" | "updatedAt">,
 ) {
 	const selected = libraryConfig.topics.enabled
 		? (searchParams.topics ?? [])
