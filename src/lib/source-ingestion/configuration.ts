@@ -24,6 +24,10 @@ export function configuredSourceConnectionValues(source: ConfiguredSource) {
 				? ("group" as const)
 				: ("query" as const),
 		externalScopeKey: source.provider === "zotero" ? source.groupId : null,
+		// Zotero sources take their name from the group during sync.
+		...(source.provider === "openalex"
+			? { displayName: source.settings.name }
+			: {}),
 		config: source.settings,
 		status: source.enabled ? ("active" as const) : ("paused" as const),
 	};
@@ -96,6 +100,9 @@ async function saveSource(
 		await transaction
 			.update(sourceConnection)
 			.set({
+				...("displayName" in values
+					? { displayName: values.displayName }
+					: {}),
 				config: values.config,
 				status: values.status,
 				updatedAt: new Date(),
