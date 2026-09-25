@@ -305,7 +305,8 @@ function AiButton({
 				variant === "default" &&
 					"fixed bottom-0 right-0 z-40 print:hidden",
 			)}
-			initial={{ opacity: 0, x: 100 }}
+			// Only the floating button slides in from the edge; the header's stands still with the buttons beside it.
+			initial={variant === "default" ? { opacity: 0, x: 100 } : false}
 			animate={{ opacity: 1, x: 0 }}
 		>
 			<div
