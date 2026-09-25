@@ -207,6 +207,11 @@ function AiMenu({
 	);
 }
 
+/** Only the floating button slides in from the edge; the header's stands still with the buttons beside it. */
+function entrance(variant: "default" | "inline" | undefined) {
+	return variant === "inline" ? false : { opacity: 0, x: 100 };
+}
+
 function AiButton({
 	data,
 	variant,
@@ -305,7 +310,7 @@ function AiButton({
 				variant === "default" &&
 					"fixed bottom-0 right-0 z-40 print:hidden",
 			)}
-			initial={{ opacity: 0, x: 100 }}
+			initial={entrance(variant)}
 			animate={{ opacity: 1, x: 0 }}
 		>
 			<div

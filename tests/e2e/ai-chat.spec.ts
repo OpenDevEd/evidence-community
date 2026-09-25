@@ -181,6 +181,21 @@ function answerStream(answer: string) {
 	);
 }
 
+/**
+ * Picks an entry from a publication's AI menu straight after the chat window closed. The window hands focus back as it
+ * goes, and a test clicks faster than a reader can: a click in that moment can open and close the menu at once, so the
+ * menu is opened again until it stays open. One that never opens still fails.
+ */
+async function reopenAIMenu(page: Page, feature: RegExp) {
+	const trigger = page.getByRole("button", { name: "AI menu", exact: true });
+	const entry = page.getByRole("menuitem", { name: feature });
+	await expect(async () => {
+		if (!(await entry.isVisible())) await trigger.click();
+		await expect(trigger).toHaveAttribute("aria-expanded", "true", { timeout: 1_000 });
+		await entry.click({ timeout: 2_000 });
+	}).toPass({ timeout: 15_000 });
+}
+
 async function openPublicationAI(page: Page, feature: RegExp) {
 	const publication = page.locator('#main-content a[href*="/lib/"]').first();
 	const href = await publication.getAttribute("href");
@@ -189,7 +204,10 @@ async function openPublicationAI(page: Page, feature: RegExp) {
 	await expect(
 		page.getByRole("main").getByRole("heading", { level: 1 }),
 	).toBeVisible();
-	await page.getByRole("button", { name: "AI menu", exact: true }).click();
+	// A reader's first click opens the menu and it stays open.
+	const trigger = page.getByRole("button", { name: "AI menu", exact: true });
+	await trigger.click();
+	await expect(trigger).toHaveAttribute("aria-expanded", "true");
 	await page.getByRole("menuitem", { name: feature }).click();
 }
 
@@ -229,12 +247,7 @@ for (const feature of ["Summarise", "Explain"]) {
 		await page
 			.getByRole("dialog", { includeHidden: true })
 			.waitFor({ state: "detached" });
-		await page
-			.getByRole("button", { name: "AI menu", exact: true })
-			.click();
-		await page
-			.getByRole("menuitem", { name: new RegExp(`^${feature}`) })
-			.click();
+		await reopenAIMenu(page, new RegExp(`^${feature}`));
 		await expect(
 			page.getByRole("heading", { name: "Findings", exact: true }),
 		).toBeVisible();
@@ -280,8 +293,7 @@ test("lets the reader delete a failed generation and start again", async ({
 			body: answerStream("The new explanation is ready."),
 		}),
 	);
-	await page.getByRole("button", { name: "AI menu", exact: true }).click();
-	await page.getByRole("menuitem", { name: /^Explain/ }).click();
+	await reopenAIMenu(page, /^Explain/);
 	await expect(
 		page.getByText("The new explanation is ready.", { exact: true }),
 	).toBeVisible();
