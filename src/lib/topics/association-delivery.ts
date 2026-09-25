@@ -25,7 +25,8 @@ async function reconcileVisibility(database: Database, config: LibraryServerConf
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('new-el:topic-visibility', 0))`);
     const [previous] = await tx.select().from(topicDeliveryConfiguration).where(eq(topicDeliveryConfiguration.key, "active")).limit(1);
     if (previous && (previous.signature === signature || previous.revisionAt.getTime() > Date.parse(config.updatedAt))) return;
-    await tx.execute(sql`INSERT INTO "topicAssociationDelivery" ("itemKey", "revision")
+    // A library that has never had Topics on has no associations in OpenScholar to clear.
+    if (previous || config.topics.enabled) await tx.execute(sql`INSERT INTO "topicAssociationDelivery" ("itemKey", "revision")
       SELECT "key", "revision" FROM "item" WHERE "parentItem" IS NULL
       ON CONFLICT ("itemKey") DO UPDATE SET "generation" = "topicAssociationDelivery"."generation" + 1,
         "revision" = EXCLUDED."revision", "payload" = NULL, "attempts" = 0, "nextAttemptAt" = now(),

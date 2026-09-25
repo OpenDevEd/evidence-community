@@ -3,7 +3,7 @@ vi.mock("server-only", () => ({}));
 import { eq } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
 import { itemDraft, itemSourceLink, sourceConnection, sourceRecordIssue } from "@/db/schema/source";
-import { itemFieldOverride, itemSourceValue, topicCatalogCache, sourceTopicAssignment, topicAssociationDelivery } from "@/db/schema/topics";
+import { itemFieldOverride, itemSourceValue, topicCatalogCache, sourceTopicAssignment, topicAssociationDelivery, topicDeliveryConfiguration } from "@/db/schema/topics";
 import { createNativeItemDraft, openItemDraft, saveItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { readPublicItem } from "@/lib/search-index/projection";
 import { prepareSearchProjection, setSearchIndexRebuildPending } from "@/lib/search-index/bootstrap-state";
@@ -141,6 +141,19 @@ it("delivers stable retry bodies and new generations for visibility changes with
   });
 });
 
+
+it("stores the settings without queuing deliveries on the first run while Topics are off", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Never topical"});
+    await publishItemDraft(db, draft.itemKey);
+    await db.delete(topicAssociationDelivery);
+    const request = vi.fn<typeof fetch>();
+    await runTopicAssociationCycle(db, {...config, topics: {enabled: false}}, undefined, request);
+    expect(await db.select().from(topicAssociationDelivery)).toEqual([]);
+    expect(request).not.toHaveBeenCalled();
+    expect(await db.select().from(topicDeliveryConfiguration)).toHaveLength(1);
+  });
+});
 
 it("rejects edits while disabled and unknown topics, retains private assignments, and never enriches pre-feature records", async () => {
   await withIsolatedPublicationDatabase(async db => {
