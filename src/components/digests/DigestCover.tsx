@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/i18n/routing";
 import { ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
 import type { DigestSummary } from "@/lib/notifications/public";
 import { CoverImage } from "@/components/features/items/CoverImage";

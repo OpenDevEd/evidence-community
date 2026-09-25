@@ -2,8 +2,8 @@
 
 import { Suspense, use } from "react";
 import { useLocale } from "next-intl";
-import { notFound, useRouter } from "next/navigation";
-import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
 import { Calendar03Icon, ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
 import type { DigestArchivePage, DigestEdition, DigestSummary } from "@/lib/notifications/public";
@@ -52,7 +52,7 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 // placeholder. Links between digest pages prefetch the whole page, data
 // included, so an edition opened from the list is already complete.
 export default function DigestPages(props: ArchiveProps | EditionProps | PreferencesProps) {
-  const locale = useLocale(); const base = `/${locale}/digests`;
+  const locale = useLocale(); const base = "/digests";
   const {identity, notifications} = useLibraryConfig();
   const settings = {libraryName: identity.name, enabled: notifications.enabled, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
   if (props.view === "preferences") return <DigestPreferences {...props} settings={settings} base={base} />;
