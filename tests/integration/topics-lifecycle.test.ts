@@ -7,7 +7,7 @@ import { itemFieldOverride, itemSourceValue, topicCatalogCache, sourceTopicAssig
 import { createNativeItemDraft, openItemDraft, saveItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { readPublicItem } from "@/lib/search-index/projection";
 import { prepareSearchProjection, setSearchIndexRebuildPending } from "@/lib/search-index/bootstrap-state";
-import { resolveTopicNodes } from "@/lib/topics/catalog";
+import { readPublicTopicCatalog, resolveTopicNodes } from "@/lib/topics/catalog";
 import { readSourceFields } from "@/lib/admin/source-fields";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
@@ -208,6 +208,18 @@ it("ignores invalid or removed topic URL IDs without relaxing topic assignment v
     const context = {database: db, config, fetch: request};
     expect((await resolveTopicNodes(["invalid", "T999999", "T12260"], context, {allowUnknown: true})).map(node => node.id)).toEqual(["T12260"]);
     await expect(resolveTopicNodes(["T999999"], context)).rejects.toMatchObject({status: 404});
+  });
+});
+
+it("answers catalog ID lookups from the stored catalog without calling OpenScholar", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    const nodes = ["T12260", "T12345"].map(id => ({id, name: `Topic ${id}`, level: "topic" as const, parent: "subfields/3304", path: ["Social Sciences"], childCount: 0}));
+    let calls = 0;
+    const context = {database: db, config, fetch: (async () => { calls += 1; return Response.json({contractVersion: 1, nodes, revision: "r1", nextCursor: null, publicBaseUrl: "https://openscholar.example"}); }) as typeof fetch};
+    const request = {contractVersion: 1 as const, libraryId: config.authentication.openScholar.libraryId, cursor: null, limit: 100};
+    await readPublicTopicCatalog({...request, parent: "subfields/3304"}, context);
+    expect(await readPublicTopicCatalog({...request, ids: ["T12345"]}, context)).toEqual({contractVersion: 1, nodes: [nodes[1]], revision: "r1", nextCursor: null, publicBaseUrl: "https://openscholar.example"});
+    expect(calls).toBe(1);
   });
 });
 

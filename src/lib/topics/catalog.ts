@@ -1,5 +1,5 @@
 import { readBoundedResponse } from "@/lib/source-ingestion/read-bounded-response";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -25,9 +25,15 @@ async function serviceRequest(path: string, body: object, context: TopicCatalogC
   return JSON.parse(text) as unknown;
 }
 
-async function saveCache(context: TopicCatalogContext, id: string, kind: string, payload: Record<string, unknown>) {
-  await context.database.insert(topicCatalogCache).values({id, kind, payload, fetchedAt: new Date()})
-    .onConflictDoUpdate({target: topicCatalogCache.id, set: {kind, payload, fetchedAt: new Date()}});
+type CacheEntry = Pick<typeof topicCatalogCache.$inferInsert, "id" | "kind" | "payload">;
+/** The catalog envelope that ID lookups answered from the cache repeat. */
+const CATALOG_META_ID = "catalog";
+const catalogMetaSchema = topicCatalogResponseSchema.pick({revision: true, publicBaseUrl: true});
+
+async function saveCache(context: TopicCatalogContext, entries: CacheEntry[]) {
+  const fetchedAt = new Date();
+  await context.database.insert(topicCatalogCache).values(entries.map(entry => ({...entry, fetchedAt})))
+    .onConflictDoUpdate({target: topicCatalogCache.id, set: {kind: sql`excluded."kind"`, payload: sql`excluded."payload"`, fetchedAt}});
 }
 
 /** Map the public catalog query string to exactly one catalog operation. */
@@ -43,8 +49,17 @@ export function parseTopicCatalogParams(params: URLSearchParams, libraryId: stri
 export async function readTopicCatalog(request: Omit<z.input<typeof topicCatalogRequestSchema>, "contractVersion" | "libraryId">, context: TopicCatalogContext) {
   const body = topicCatalogRequestSchema.parse({...request, contractVersion: 1, libraryId: context.config.authentication.openScholar.libraryId});
   const response = topicCatalogResponseSchema.parse(await serviceRequest("/api/v1/evidence-libraries/topics/catalog", body, context));
-  await Promise.all(response.nodes.map(node => saveCache(context, node.id, "node", node)));
+  await saveCache(context, [{id: CATALOG_META_ID, kind: "meta", payload: {revision: response.revision, publicBaseUrl: response.publicBaseUrl}},
+    ...response.nodes.map(node => ({id: node.id, kind: "node", payload: node}))]);
   return response;
+}
+
+/** The public route answers ID lookups from the stored catalog; only missing or old nodes reach OpenScholar. */
+export async function readPublicTopicCatalog(request: z.output<typeof topicCatalogRequestSchema>, context: TopicCatalogContext) {
+  if (!request.ids) return readTopicCatalog(request, context);
+  const nodes = await resolveTopicNodes(request.ids, context, {allowUnknown: true});
+  const [meta] = await context.database.select().from(topicCatalogCache).where(eq(topicCatalogCache.id, CATALOG_META_ID)).limit(1);
+  return {contractVersion: 1 as const, ...catalogMetaSchema.parse(meta?.payload), nodes, nextCursor: null};
 }
 
 type CachedTopic = typeof topicCatalogCache.$inferSelect;
@@ -107,7 +122,7 @@ export async function readTopicDetail(topicId: string, context: TopicCatalogCont
   if (cached && Date.now() - cached.fetchedAt.getTime() < FRESH_MS) return topicDetailResponseSchema.parse(cached.payload);
   try {
     const detail = topicDetailResponseSchema.parse(await serviceRequest("/api/v1/evidence-libraries/topics/detail", {topicId}, context));
-    await saveCache(context, cacheId, "detail", detail);
+    await saveCache(context, [{id: cacheId, kind: "detail", payload: detail}]);
     return detail;
   } catch (error) {
     if (error instanceof TopicServiceError && error.status === 404) throw error;
