@@ -15,7 +15,9 @@ const LIBRARY_LIST = /^\/lib\/?$/;
  * whole listing per token. The library list keeps this running whether or not the chat beside it is open, and Next
  * keeps a visited list alive between visits, so a question handed over later arrives as an event too.
  */
-export function useHandedOverQuestion(searchContext: LibrarySearchContext | undefined, enabled: boolean) {
+/** `searchContext` is undefined on lists that never ask it (a profile's saved records). */
+function useHandedOverQuestion(searchContext: LibrarySearchContext | undefined) {
+	const enabled = searchContext !== undefined;
 	const askInline = useAskInlineChat(searchContext);
 	const { isAISearchEnabled } = useIsAISearchEnabled();
 	// Only the library list asks it: other result lists (the map's, for one) have no chat and their own filters.
@@ -44,4 +46,10 @@ export function useHandedOverQuestion(searchContext: LibrarySearchContext | unde
 			clearInterval(retry);
 		};
 	}, [askInline, enabled, isAISearchEnabled, onLibraryList]);
+}
+
+/** Renders nothing; lets a list ask handed-over questions without adding a hook to its own component. */
+export function AskHandedOverQuestion({ searchContext }: { searchContext: LibrarySearchContext | undefined }) {
+	useHandedOverQuestion(searchContext);
+	return null;
 }
