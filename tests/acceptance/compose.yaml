@@ -59,6 +59,7 @@ x-meilisearch-service: &meilisearch-service
   environment:
     MEILI_MASTER_KEY: acceptance-master-key
     MEILI_NO_ANALYTICS: "true"
+    MEILI_EXPERIMENTAL_LEGACY_SEARCH: "true"
   healthcheck:
     test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
     interval: 2s

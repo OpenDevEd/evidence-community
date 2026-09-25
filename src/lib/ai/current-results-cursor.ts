@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { LibrarySearchContext } from "@/lib/search-context";
+import { SEARCH_RESULT_LIMIT } from "@/lib/search-filter-constants";
 
 export const CURRENT_RESULTS_WINDOW_SIZE = 200;
 
@@ -44,7 +45,7 @@ export function currentResultsOffset(
 		const validOffset =
 			Number.isInteger(parsed.offset) &&
 			(parsed.offset ?? -1) >= 0 &&
-			(parsed.offset ?? 0) <= 1_000_000;
+			(parsed.offset ?? 0) <= SEARCH_RESULT_LIMIT;
 
 		if (
 			parsed.version !== 1 ||
