@@ -13,7 +13,7 @@ describe("manifest-owned source configuration", () => {
 		};
 		const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [source, { ...source, key: "openalex-kenya", settings: { ...source.settings, downloadPdfs: true } }] });
 		expect(configuredSourceConnectionValues(config.sources[0])).toMatchObject({
-			provider: "openalex", scopeKind: "query", externalScopeKey: null,
+			provider: "openalex", scopeKind: "query", externalScopeKey: null, displayName: "AI in education",
 			config: { ...source.settings, downloadPdfs: false, apiKeyMode: "platform" },
 		});
 		expect(config.sources[1].settings).toHaveProperty("downloadPdfs", true);

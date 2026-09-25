@@ -4,7 +4,7 @@ import type { SourceProvider } from "@opendeved/evidence-library-core";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { sourceConnection } from "@/db/schema/source";
 import { itemCitationMetric } from "@/db/schema/tables/itemCitationMetric";
-import { sourceDisplayLabel } from "@/lib/admin/source-label";
+import { sourceDisplayLabel, sourceProviderName } from "@/lib/admin/source-label";
 
 type Executor = Database | DatabaseTransaction;
 
@@ -48,19 +48,29 @@ export async function getSourceCitationMetricsForKeys(
 	const metricsByItem = new Map<string, SourceCitationMetric[]>();
 	for (const row of rows) {
 		const metrics = metricsByItem.get(row.itemKey) ?? [];
-		metrics.push({
+		const openAlex = row.provider === "openalex";
+		const metric: SourceCitationMetric = {
 			sourceConnectionKey: row.sourceConnectionKey,
-			sourceLabel: sourceDisplayLabel({
-				key: row.sourceConnectionKey,
-				provider: row.provider,
-				displayName: row.displayName,
-				externalScopeKey: row.externalScopeKey,
-			}),
+			// These are OpenAlex's own counts, whichever search imported the work.
+			sourceLabel: openAlex
+				? sourceProviderName(row.provider)
+				: sourceDisplayLabel({
+						key: row.sourceConnectionKey,
+						provider: row.provider,
+						displayName: row.displayName,
+						externalScopeKey: row.externalScopeKey,
+					}),
 			provider: row.provider,
 			citedByCount: row.citedByCount,
 			referencedWorksCount: row.referencedWorksCount,
 			observedAt: row.observedAt.toISOString(),
-		});
+		};
+		// Overlapping OpenAlex searches report the same work: keep the newest count.
+		const shown = openAlex
+			? metrics.findIndex((existing) => existing.provider === "openalex")
+			: -1;
+		if (shown === -1) metrics.push(metric);
+		else if (metric.observedAt > metrics[shown]!.observedAt) metrics[shown] = metric;
 		metricsByItem.set(row.itemKey, metrics);
 	}
 	return metricsByItem;

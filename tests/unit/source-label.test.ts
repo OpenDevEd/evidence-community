@@ -44,6 +44,9 @@ describe("sourceDisplayLabel", () => {
 				provider: "mendeley",
 			}),
 		).toMatch(/Mendeley.*mendeley-x/);
+		const openAlex = { externalScopeKey: null, key: "openalex-14ce8dae", provider: "openalex" };
+		expect(sourceDisplayLabel({ ...openAlex, displayName: null })).toBe("OpenAlex");
+		expect(sourceDisplayLabel({ ...openAlex, displayName: "Tusome literacy" }, { includeIdentifier: true })).toBe("Tusome literacy (OpenAlex)");
 		expect(
 			sourceDisplayLabel({
 				displayName: "ignored",

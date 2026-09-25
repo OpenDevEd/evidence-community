@@ -21,6 +21,7 @@ import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openal
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
+import { getSourceCitationMetrics } from "@/lib/links/citation-metrics";
 import {
 	MemoryFileStorage,
 	createPdf,
@@ -35,6 +36,7 @@ function mapped(url = externalUrl, version = "2026-09-24T01:02:03Z", id = 123) {
 		id: `https://openalex.org/W${id}`,
 		title: "Research",
 		type: "article",
+		cited_by_count: 5,
 		updated_date: version,
 		best_oa_location: {
 			is_oa: true,
@@ -190,6 +192,10 @@ describe("OpenAlex PDF processing", () => {
 						fetchedAt: new Date(),
 						items: [parent, shared],
 					});
+					const [work] = await database.select({ key: item.key }).from(item).where(eq(item.itemType, "JournalArticle"));
+					expect(await getSourceCitationMetrics(database, work!.key)).toEqual([
+						expect.objectContaining({ sourceLabel: "OpenAlex", citedByCount: 5 }),
+					]);
 				}
 				await database
 					.update(sourceConnection)
