@@ -48,16 +48,6 @@ export function shouldRebuildSearchIndex(input: {
 	return input.forceRebuild || input.indexCreated || input.rebuildPending;
 }
 
-export async function searchIndexRebuildIsPending(database: Database) {
-	const [row] = await database
-		.select({ pending: status.searchIndexRebuildPending })
-		.from(status)
-		.where(eq(status.id, 1))
-		.limit(1);
-	if (!row) throw new Error("Library status row is missing.");
-	return row.pending;
-}
-
 export async function setSearchIndexRebuildPending(
 	database: Database,
 	pending: boolean,

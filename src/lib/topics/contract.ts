@@ -19,7 +19,6 @@ export const topicCatalogResponseSchema = z.object({
   contractVersion: z.literal(1), nodes: z.array(topicNodeSchema).max(100), revision: z.string(),
   nextCursor: z.string().nullable(), publicBaseUrl: z.string().url(),
 }).strict();
-export const topicDetailRequestSchema = z.object({...envelope, topicId: topicIdSchema}).strict();
 export const topicDetailResponseSchema = z.object({
   contractVersion: z.literal(1), id: topicIdSchema, name: z.string(), description: z.string(),
   keywords: z.array(z.string()), path: z.array(z.object({id: topicNodeIdSchema, name: z.string()}).strict()).max(4),
@@ -37,7 +36,6 @@ export const topicAssociationRequestSchema = z.object({
     abstract: z.string().max(100000).nullable(),
   }).strict().nullable(),
 }).strict().refine(value => value.state === "published" ? value.metadata !== null : value.topicIds.length === 0, "Invalid publication state");
-export type TopicAssociationRequest = z.infer<typeof topicAssociationRequestSchema>;
 export const topicAssociationReceiptSchema = z.object({
   contractVersion: z.literal(1), idempotencyKey: z.string(), generation: z.number().int().positive(),
   status: z.enum(["applied", "superseded"]),

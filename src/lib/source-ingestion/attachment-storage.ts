@@ -14,7 +14,7 @@ export const MAX_SOURCE_FULL_TEXT_BYTES = 1_500_000;
 const CLEANUP_BATCH_SIZE = 100;
 const CLEANUP_MAX_ATTEMPTS = 5;
 
-export class SourceFileCleanupError extends Error {
+class SourceFileCleanupError extends Error {
 	constructor(sourceConnectionKey: string, cause: unknown) {
 		super(`Could not clean stale files for source ${sourceConnectionKey}`, {
 			cause,
