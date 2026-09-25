@@ -53,6 +53,8 @@ const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
 /** Queued rebuild batches; each holds an open file in Meilisearch. */
 const REBUILD_TASKS_IN_FLIGHT = 500;
+/** Events one drain claim takes; a large import indexes in fewer, bigger batches. */
+const DRAIN_BATCH_SIZE = 2_000;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 
 type ClaimedEvent = typeof outbox.$inferSelect;
@@ -573,6 +575,26 @@ export async function applySearchProjectionPlan(
 		signal?: AbortSignal;
 	} = {},
 ) {
+	for (const task of await queueSearchProjectionPlan(
+		index,
+		plan,
+		maxDocumentBatchBytes,
+		progressOptions.signal,
+	)) {
+		await waitForSuccessfulTask(task, taskTimeoutMs, {
+			...progressOptions,
+			taskClient: index.tasks,
+		});
+	}
+}
+
+/** Sends a plan's Meilisearch tasks without waiting for them to finish. */
+async function queueSearchProjectionPlan(
+	index: Index,
+	plan: SearchProjectionPlan,
+	maxDocumentBatchBytes: number,
+	signal?: AbortSignal,
+) {
 	if (
 		!Number.isSafeInteger(maxDocumentBatchBytes) ||
 		maxDocumentBatchBytes < 1_024
@@ -581,25 +603,19 @@ export async function applySearchProjectionPlan(
 			"maxDocumentBatchBytes must be an integer of at least 1,024",
 		);
 	}
+	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
 	for (const documents of chunkDocumentsBySerializedBytes(
 		plan.documents,
 		maxDocumentBatchBytes,
 	)) {
-		await waitForSuccessfulTask(
-			index.addDocuments(documents, {
-				primaryKey: "key",
-			}),
-			taskTimeoutMs,
-			{ ...progressOptions, taskClient: index.tasks },
-		);
+		tasks.push(index.addDocuments(documents, { primaryKey: "key" }));
+		await abortable(tasks.at(-1)!, signal);
 	}
 	if (plan.deleteKeys.length > 0) {
-		await waitForSuccessfulTask(
-			index.deleteDocuments(plan.deleteKeys),
-			taskTimeoutMs,
-			{ ...progressOptions, taskClient: index.tasks },
-		);
+		tasks.push(index.deleteDocuments(plan.deleteKeys));
+		await abortable(tasks.at(-1)!, signal);
 	}
+	return tasks;
 }
 
 function chunkDocumentsBySerializedBytes(
@@ -667,6 +683,60 @@ async function markBatchFailed(
 		: cause;
 }
 
+/**
+ * Projects the claimed events and indexes them. Every plan is sent before any
+ * is awaited, so Meilisearch indexes a large claim in one batch instead of
+ * repeating its per-batch work.
+ */
+async function indexClaimedEvents(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	validated: ValidatedConsumerOptions,
+	heartbeatFailure: () => unknown,
+) {
+	const eventIds = events.map(({ id }) => id);
+	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
+	let deleteCount = 0;
+	let documentCount = 0;
+	for await (const plan of generateSearchProjectionPlans(
+		options.database,
+		options.config,
+		events,
+		500,
+		options.signal,
+	)) {
+		throwIfAborted(options.signal);
+		if (heartbeatFailure()) throw heartbeatFailure();
+		await heartbeatEvents(
+			options,
+			events,
+			validated.leaseDurationMs,
+			validated.workerId,
+		);
+		tasks.push(
+			...(await queueSearchProjectionPlan(
+				options.index,
+				plan,
+				validated.maxDocumentBatchBytes,
+				options.signal,
+			)),
+		);
+		deleteCount += plan.deleteKeys.length;
+		documentCount += plan.documents.length;
+	}
+	for (const task of tasks) {
+		if (heartbeatFailure()) throw heartbeatFailure();
+		await waitForSuccessfulTask(task, validated.taskTimeoutMs, {
+			batchClient: options.batchClient,
+			eventIds,
+			onProgress: options.onProgress,
+			signal: options.signal,
+			taskClient: options.index.tasks,
+		});
+	}
+	return { deleteCount, documentCount };
+}
+
 async function processClaimedEvents(
 	options: SearchOutboxConsumerOptions,
 	events: readonly ClaimedEvent[],
@@ -676,11 +746,9 @@ async function processClaimedEvents(
 	const {
 		heartbeatIntervalMs,
 		leaseDurationMs,
-		maxDocumentBatchBytes,
 		maxAttempts,
 		retryBaseMs,
 		retryMaxMs,
-		taskTimeoutMs,
 		workerId,
 	} = validated;
 	const abortController = new AbortController();
@@ -706,33 +774,12 @@ async function processClaimedEvents(
 			stage: "projecting",
 			taskUid: null,
 		});
-		let deleteCount = 0;
-		let documentCount = 0;
-		for await (const plan of generateSearchProjectionPlans(
-			options.database,
-			options.config,
+		const { deleteCount, documentCount } = await indexClaimedEvents(
+			options,
 			events,
-			500,
-			options.signal,
-		)) {
-			throwIfAborted(options.signal);
-			if (heartbeatFailure) throw heartbeatFailure;
-			await heartbeatEvents(options, events, leaseDurationMs, workerId);
-			await applySearchProjectionPlan(
-				options.index,
-				plan,
-				taskTimeoutMs,
-				maxDocumentBatchBytes,
-				{
-					batchClient: options.batchClient,
-					eventIds: events.map(({ id }) => id),
-					onProgress: options.onProgress,
-					signal: options.signal,
-				},
-			);
-			deleteCount += plan.deleteKeys.length;
-			documentCount += plan.documents.length;
-		}
+			validated,
+			() => heartbeatFailure,
+		);
 		if (heartbeatFailure) throw heartbeatFailure;
 		await heartbeatEvents(options, events, leaseDurationMs, workerId);
 		await acknowledgeEvents(options, events, workerId);
@@ -778,8 +825,8 @@ export async function processNextSearchOutboxBatch(
 	},
 ): Promise<SearchOutboxProcessResult[] | null> {
 	const batchSize = options.batchSize ?? 100;
-	if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 500) {
-		throw new Error("batchSize must be an integer between 1 and 500");
+	if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 5_000) {
+		throw new Error("batchSize must be an integer between 1 and 5,000");
 	}
 	const validated = validateOptions(options);
 	throwIfAborted(options.signal);
@@ -853,12 +900,9 @@ export async function drainSearchOutbox(
 	let processedEvents = 0;
 	while (processedEvents < maxEvents) {
 		throwIfAborted(options.signal);
-		// Meilisearch repeats part of its work after every task, so a large
-		// import indexes several times faster in 500-event batches than in
-		// batches of 100.
 		const batchResults = await processNextSearchOutboxBatch({
 			...options,
-			batchSize: Math.min(500, maxEvents - processedEvents),
+			batchSize: Math.min(DRAIN_BATCH_SIZE, maxEvents - processedEvents),
 		});
 		if (!batchResults) break;
 		results.push(...batchResults);

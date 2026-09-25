@@ -49,9 +49,10 @@ again. Stale events cannot overwrite a newer canonical revision because every
 attempt reads current PostgreSQL state rather than reconstructing historical
 event payloads.
 
-The drain claims up to 500 events and coalesces duplicate parent/child work.
-Meilisearch repeats part of its work after every task, so a large import
-indexes about three times faster in batches of 500 than in batches of 100.
+The drain claims up to 2,000 events and coalesces duplicate parent/child work.
+It sends every Meilisearch task of a claim before waiting for any, so a large
+import (a first Zotero or OpenAlex sync) is indexed in a few large batches
+instead of repeating Meilisearch's per-batch work every 500 records.
 Projection reads remain bounded to at most 500 item keys, while outgoing
 Meilisearch document requests are split by serialized size and stay below a
 20 MiB default budget. A single larger document is sent alone. If Meilisearch
