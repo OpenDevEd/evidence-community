@@ -1058,7 +1058,8 @@ function PublicationList({ items, className = "" }: { items: (ListItem | undefin
 	const handOff = use(HandOff);
 	// The cards change with every row and tab the explorer shows, so their entrance is a CSS animation on mount, which
 	// always ends visible; the band around them already rises into view as a whole. A missing item is a placeholder card.
-	return <ul className={`flex flex-col gap-4 md:grid md:grid-cols-2 ${className}`}>{items.map((item, index) => <li key={item?.key ?? index} onClick={() => handOff(item)} className="animate-hero-rise rounded-xl motion-reduce:animate-none dark:bg-background" style={{ animationDelay: `${index * 90}ms` }}><Resource as="div" itemData={item} isLoading={!item} abstract={false} className="h-full" hideUnapi /></li>)}</ul>;
+	// The hand-off listens while the click travels down, because the gap-map card's "View details" button stops it on the way up.
+	return <ul className={`flex flex-col gap-4 md:grid md:grid-cols-2 ${className}`}>{items.map((item, index) => <li key={item?.key ?? index} onClickCapture={() => handOff(item)} className="animate-hero-rise rounded-xl motion-reduce:animate-none dark:bg-background" style={{ animationDelay: `${index * 90}ms` }}><Resource as="div" itemData={item} isLoading={!item} abstract={false} className="h-full" hideUnapi /></li>)}</ul>;
 }
 
 /* ---------- explorer ---------- */
