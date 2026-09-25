@@ -33,7 +33,7 @@ import {
 import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
-import { itemFilePublication } from "@/db/schema/source";
+import { itemFilePublication, sourceFileCleanup } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { AdminValidationError } from "./errors";
 import { publicationTarget } from "@/db/schema/publication";
@@ -1436,6 +1436,25 @@ async function keepSourceRecordDeleted(transaction: Transaction, itemKey: string
 		sourceConnectionKey: originLink.sourceConnectionKey, sourceVersion: originLink.remoteVersion}).onConflictDoUpdate({target: [itemFieldOverride.itemKey, itemFieldOverride.field], set: {value: 1, updatedAt: now}});
 }
 
+/** The source owns these children, such as an OpenAlex PDF, so they leave with their record. */
+async function withdrawSourceChildren(transaction: Transaction, children: readonly { key: string; revision: number }[], now: Date) {
+	for (const child of children) {
+		const revision = child.revision + 1;
+		await keepSourceRecordDeleted(transaction, child.key, now);
+		await transaction.update(item).set({ deleted: 1, deletedAt: now, revision, updatedAt: now }).where(eq(item.key, child.key));
+		await advanceOpenItemDraftBaseRevision(transaction, child.key, child.revision, revision);
+		await transaction.insert(outbox).values({ entityType: "item", entityKey: child.key, operation: "delete", revision });
+		const files = await transaction.delete(itemFilePublication).where(eq(itemFilePublication.itemKey, child.key))
+			.returning({ sourceConnectionKey: itemFilePublication.sourceConnectionKey, objectPath: itemFilePublication.objectPath, coverObjectPath: itemFilePublication.coverObjectPath });
+		const paths = files.flatMap((file) => [file.objectPath, file.coverObjectPath].flatMap((objectPath) => objectPath ? [{ sourceConnectionKey: file.sourceConnectionKey, objectPath, updatedAt: now }] : []));
+		if (paths.length) await transaction.insert(sourceFileCleanup).values(paths).onConflictDoUpdate({
+			target: [sourceFileCleanup.sourceConnectionKey, sourceFileCleanup.objectPath],
+			set: { attempts: 0, deadLetteredAt: null, lastError: null, updatedAt: now },
+		});
+	}
+	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
+}
+
 async function unpublishNativeItemAttempt(
 	db: Database,
 	itemKey: string,
@@ -1527,14 +1546,17 @@ async function unpublishNativeItemAttempt(
 			throw new ItemHasActivePublicationError(itemKey);
 		}
 		const liveChildren = await transaction
-			.select({ key: item.key })
+			.select({ key: item.key, revision: item.revision, sourceConnectionKey: item.sourceConnectionKey })
 			.from(item)
 			.where(and(eq(item.parentItem, itemKey), eq(item.deleted, 0)))
 			.orderBy(item.key);
 		if ((current.parentItem ?? null) !== (candidate.parentItem ?? null)) {
 			throw new NativeItemLockSetChangedError();
 		}
-		if (liveChildren.length > 0) {
+		const sourceChildren = current.sourceConnectionKey === NATIVE_CONNECTION_KEY
+			? []
+			: liveChildren.filter((child) => child.sourceConnectionKey !== NATIVE_CONNECTION_KEY);
+		if (liveChildren.length > sourceChildren.length) {
 			throw new ItemHasChildrenError(itemKey);
 		}
 		const draftKeysToLock = [
@@ -1612,7 +1634,10 @@ async function unpublishNativeItemAttempt(
 				sourceConnectionKey: writebackLink.sourceConnectionKey,
 			});
 		}
-		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
+		const indexingRecords = [
+			{ key: itemKey, revision: nextRevision },
+			...(await withdrawSourceChildren(transaction, sourceChildren, now)),
+		];
 		const parent =
 			typeof current.parentItem === "string"
 				? lockedItems.find(

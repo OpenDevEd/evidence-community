@@ -16,6 +16,7 @@ import {
 	sourceConnection,
 	sourceFileCleanup,
 } from "@/db/schema/source";
+import { unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openalex/attachment-processor";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
@@ -499,6 +500,49 @@ describe("OpenAlex PDF processing", () => {
 			expect(
 				await database.select().from(sourceFileCleanup),
 			).toHaveLength(0);
+		});
+	}, 120_000);
+
+	it("unpublishes a record with a hosted PDF and keeps both withdrawn on the next import", async () => {
+		await withIsolatedPublicationDatabase(async (database) => {
+			await sources(database);
+			const storage = new MemoryFileStorage();
+			const processor = createOpenAlexAttachmentProcessor({
+				database,
+				storage,
+				maxPdfBytes: 1_000_000,
+			});
+			const [parent, original] = mapped();
+			vi.mocked(transport).mockResolvedValueOnce(
+				new Response(await createPdf("HOSTED PDF")),
+			);
+			const hosted = await processor(original!, "openalex-pdf-a");
+			const write = () =>
+				writeSourceIngestionBatch(database, {
+					sourceConnectionKey: "openalex-pdf-a",
+					expectedCursor: {},
+					nextCursor: {},
+					mappingProfileVersion: "test",
+					fetchedAt: new Date(),
+					items: [parent, hosted],
+				});
+			const { itemKeys } = await write();
+			const hostedPaths = [...storage.publicFiles.keys()].sort();
+			expect(hostedPaths).toHaveLength(2);
+
+			await unpublishNativeItem(database, itemKeys.W123!);
+			expect(
+				(await database.select().from(sourceFileCleanup))
+					.map((row) => row.objectPath)
+					.sort(),
+			).toEqual(hostedPaths);
+			await processor.flushCleanup("openalex-pdf-a");
+			expect(storage.publicFiles.size).toBe(0);
+			await write();
+			expect(
+				(await database.select().from(item)).map((row) => row.deleted),
+			).toEqual([1, 1]);
+			expect(await database.select().from(itemFilePublication)).toEqual([]);
 		});
 	}, 120_000);
 });
