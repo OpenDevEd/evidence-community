@@ -52,7 +52,7 @@ export const EMBEDDER_TASK_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
 /** Queued rebuild batches; each holds an open file in Meilisearch. */
-const REBUILD_TASKS_IN_FLIGHT = 100;
+const REBUILD_TASKS_IN_FLIGHT = 500;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 
 type ClaimedEvent = typeof outbox.$inferSelect;
