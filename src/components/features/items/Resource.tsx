@@ -21,6 +21,7 @@ import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { markFullyPrefetched } from "@/components/features/newlib/RefreshPrefetchedItem";
+import { preloadItemCovers } from "./PdfCover";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
 import { useState, useEffect, useMemo, useId } from "react";
@@ -240,6 +241,9 @@ function ResourceInteractions({
 							<Button
 								as={Link}
 								href={itemHref}
+								onPointerEnter={() => preloadItemCovers(itemData)}
+								onFocus={() => preloadItemCovers(itemData)}
+								onTouchStart={() => preloadItemCovers(itemData)}
 								size="sm"
 								startContent={
 									<HugeiconsIcon
@@ -465,6 +469,7 @@ export default function Resource({
 			!openLinksInNewTab &&
 			(position ?? Infinity) < FULL_PREFETCH_CARDS,
 	);
+	const prepare = () => preloadItemCovers(finalItemData);
 	const fullPrefetchKey = fullPrefetch ? finalItemData?.key : undefined;
 	useEffect(() => {
 		if (fullPrefetchKey) markFullyPrefetched(fullPrefetchKey);
@@ -538,6 +543,9 @@ export default function Resource({
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					href={finalItemData?.key ? itemTargetHref : ""}
 					prefetch={fullPrefetch || undefined}
+					onPointerEnter={prepare}
+					onFocus={prepare}
+					onTouchStart={prepare}
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 						!finalItemData?.key && "!pointer-events-none",

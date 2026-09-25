@@ -1,16 +1,38 @@
 "use client";
 
 import { useState, type Ref } from "react";
-import { CoverImage } from "./CoverImage";
+import { preload } from "react-dom";
+import { getImageProps } from "next/image";
+import { CoverImage, optimizedCover } from "./CoverImage";
 import { Skeleton } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
+import type { Item, ListItem } from "@/app/api/item/types";
 
 /**
  * A publication's first page, as the library extracted it from its PDF; without one, a plain title page stands in.
  * `sizes` is how wide it is drawn (a publication page's by default). A cover always drawn at one `width` in CSS pixels
  * says so instead: its image then offers two copies, for normal and sharp screens, rather than every size there is.
  */
-export function PdfCover({ src, alt, ref, onLoad, className, sizes = "(min-width: 640px) 208px, 330px", width, title }: { src?: string | null; alt: string; ref?: Ref<HTMLImageElement>; onLoad?: () => void; className?: string; sizes?: string; width?: number; /** Set on the stand-in page when there is no first page. */ title?: string }) {
+const PAGE_SIZES = "(min-width: 640px) 208px, 330px";
+
+/**
+ * Starts loading an item's covers at the size its page draws them, when a reader points at a link to it, so the page
+ * opens with the covers instead of placeholders.
+ */
+export function preloadItemCovers(item: Item | ListItem | undefined) {
+	for (const { PDFCoverPageImage: src } of item?.attachmentsData ?? []) {
+		if (!src) continue;
+		const optimized = optimizedCover(src);
+		if (!optimized) {
+			preload(src, { as: "image" });
+			continue;
+		}
+		const { props } = getImageProps({ src: optimized, alt: "", width: 512, height: 512, sizes: PAGE_SIZES });
+		preload(props.src, { as: "image", imageSrcSet: props.srcSet, imageSizes: props.sizes });
+	}
+}
+
+export function PdfCover({ src, alt, ref, onLoad, className, sizes = PAGE_SIZES, width, title }: { src?: string | null; alt: string; ref?: Ref<HTMLImageElement>; onLoad?: () => void; className?: string; sizes?: string; width?: number; /** Set on the stand-in page when there is no first page. */ title?: string }) {
 	const [loaded, setLoaded] = useState(false);
 	if (!src) return <TitlePage title={title} className={className} />;
 	return (

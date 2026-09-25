@@ -25,7 +25,7 @@ import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { TextLink } from "@/components/digests/DigestPrimitives";
 import { DigestCover } from "@/components/digests/DigestCover";
 import type { DigestSummary } from "@/lib/notifications/public";
-import { PdfCover } from "@/components/features/items/PdfCover";
+import { PdfCover, preloadItemCovers } from "@/components/features/items/PdfCover";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import type { CitationItem } from "@/lib/citation-formats";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -46,17 +46,22 @@ const CitationPanel = dynamic(() => loadCitationPanel().then((module) => module.
 // loads the card's code alongside it.
 const Resource = dynamic(() => import("@/components/features/items/Resource"));
 
+type ItemLinkProps = { onClick?: () => void; onPointerEnter?: () => void; onFocus?: () => void; onTouchStart?: () => void };
+
 /**
- * Hands a publication's list copy to its item page, which shows it at once while the full record loads, as it does
- * coming from a result list. Only list copies are handed over: a partial record would fill in after the page opens.
+ * Props for a link to a publication. Pointing at it loads the page's covers; clicking it hands the list copy to
+ * the item page, which shows it at once while the full record loads, as it does coming from a result list. Only list
+ * copies are handed over: a partial record would fill in after the page opens.
  */
-const HandOff = createContext<(item: ListItem | undefined) => void>(() => {});
+const HandOff = createContext<(item: ListItem | undefined) => ItemLinkProps>(() => ({}));
 
 /** Kept apart from the page, so remembering a copy re-renders only this and not everything inside it. */
 function HandOffProvider({ children }: { children: React.ReactNode }) {
 	const { setLastFetchedData } = useLastFetchedData();
-	const handOff = useCallback((item: ListItem | undefined) => {
-		if (item) setLastFetchedData({ items: [item] } as ItemsGetResponse);
+	const handOff = useCallback((item: ListItem | undefined): ItemLinkProps => {
+		if (!item) return {};
+		const start = () => preloadItemCovers(item);
+		return { onClick: () => setLastFetchedData({ items: [item] } as ItemsGetResponse), onPointerEnter: start, onFocus: start, onTouchStart: start };
 	}, [setLastFetchedData]);
 	return <HandOff value={handOff}>{children}</HandOff>;
 }
@@ -234,7 +239,7 @@ function LatestPublications({ data }: { data: HomeData }) {
 		<ol className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
 			{data.recent.slice(0, 6).map((item) => (
 				<li key={item.key}>
-					<Link href={`/lib/${item.key}`} onClick={() => handOff(item)} className="group block outline-offset-4">
+					<Link href={`/lib/${item.key}`} {...handOff(item)} className="group block outline-offset-4">
 						<span className="block shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 							<PdfCover src={data.covers[item.key]} alt="" sizes="(min-width: 1024px) 208px, (min-width: 640px) 33vw, 50vw" />
 						</span>
@@ -253,7 +258,7 @@ function MostCited({ data }: { data: HomeData }) {
 		<ol className="grid gap-x-10 gap-y-8 sm:grid-cols-3">
 			{data.cited.map((row) => (
 				<li key={row.key}>
-					<Link href={`/lib/${row.key}`} onClick={() => handOff(data.copies.find((copy) => copy.key === row.key))} className="group flex gap-5 outline-offset-4">
+					<Link href={`/lib/${row.key}`} {...handOff(data.copies.find((copy) => copy.key === row.key))} className="group flex gap-5 outline-offset-4">
 						{/* The cover keeps its own height: stretched to a long title beside it, its shadow would hang below the page. */}
 						<span className="block w-24 shrink-0 self-start rounded-xl shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 							<PdfCover src={data.covers[row.key]} alt="" width={96} title={row.title} />
@@ -545,7 +550,7 @@ function Timeline({ steps, journey, cover, copy }: { steps: Step[]; journey: Hom
 		<div className="grid gap-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-16">
 			{/* The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing
 			    over it as it comes into view; it turns to face the reader under the pointer. */}
-			<Link href={`/lib/${journey.key}`} onClick={() => handOff(copy)} aria-label={journey.title} className="group relative z-10 block max-w-[12rem] self-start outline-offset-4 [perspective:1100px]">
+			<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className="group relative z-10 block max-w-[12rem] self-start outline-offset-4 [perspective:1100px]">
 				<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 					<PdfCover src={cover} alt="" width={192} />
 					{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
@@ -629,7 +634,7 @@ function HeroShelf({ data }: { data: HomeData }) {
 			{[...publications, ...publications].map((publication, index) => {
 				const copy = index >= publications.length;
 				return (
-					<Link key={`${publication.key}-${index}`} href={`/lib/${publication.key}`} onClick={() => handOff(publication)} aria-hidden={copy || undefined} tabIndex={copy ? -1 : undefined} aria-label={copy ? undefined : publication.title || publication.key} className={`block pb-5 outline-offset-4 ${copy ? "motion-reduce:hidden" : ""}`}>
+					<Link key={`${publication.key}-${index}`} href={`/lib/${publication.key}`} {...handOff(publication)} aria-hidden={copy || undefined} tabIndex={copy ? -1 : undefined} aria-label={copy ? undefined : publication.title || publication.key} className={`block pb-5 outline-offset-4 ${copy ? "motion-reduce:hidden" : ""}`}>
 						<span className="block overflow-hidden rounded-xl shadow-lg [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 							<PdfCover src={data.covers[publication.key]} alt="" width={176} />
 						</span>
@@ -1061,7 +1066,7 @@ function PublicationList({ items, className = "" }: { items: (ListItem | undefin
 	// The cards change with every row and tab the explorer shows, so their entrance is a CSS animation on mount, which
 	// always ends visible; the band around them already rises into view as a whole. A missing item is a placeholder card.
 	// The hand-off listens while the click travels down, because the gap-map card's "View details" button stops it on the way up.
-	return <ul className={`flex flex-col gap-4 md:grid md:grid-cols-2 ${className}`}>{items.map((item, index) => <li key={item?.key ?? index} onClickCapture={() => handOff(item)} className="animate-hero-rise rounded-xl motion-reduce:animate-none dark:bg-background" style={{ animationDelay: `${index * 90}ms` }}><Resource as="div" itemData={item} isLoading={!item} abstract={false} className="h-full" hideUnapi /></li>)}</ul>;
+	return <ul className={`flex flex-col gap-4 md:grid md:grid-cols-2 ${className}`}>{items.map((item, index) => <li key={item?.key ?? index} onClickCapture={handOff(item).onClick} className="animate-hero-rise rounded-xl motion-reduce:animate-none dark:bg-background" style={{ animationDelay: `${index * 90}ms` }}><Resource as="div" itemData={item} isLoading={!item} abstract={false} className="h-full" hideUnapi /></li>)}</ul>;
 }
 
 /* ---------- explorer ---------- */

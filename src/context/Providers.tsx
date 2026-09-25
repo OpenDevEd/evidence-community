@@ -148,6 +148,8 @@ export function useLastFetchedData() {
 				const allItems = [...(prev?.items ?? []), ...data.items];
 
 				const uniqueItems = allItems.reduce((acc, item) => {
+					// A listed item moves to the end, so the list on screen is the last thing dropped past 100.
+					acc.delete(item.key);
 					acc.set(item.key, item);
 					item.citation = "<div>Loading...</div>";
 					return acc;
