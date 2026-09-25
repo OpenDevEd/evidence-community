@@ -38,7 +38,6 @@ import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
 import { AskAIButton } from "@/components/features/ai/AskAIButton";
-import { forgetWaitingQuestion, waitingQuestion } from "@/components/features/ai/handed-over-question";
 
 
 /** The search field and the filters beside it. */
@@ -345,25 +344,6 @@ export function ContentInteractions({
 	const askInline = useAskInlineChat(searchContext);
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();
-	// A question handed over from another page (the home page's "Ask the
-	// library"): ask it once the chat can take it, then forget it. If the chat
-	// is still answering an earlier question, try again each second until it is
-	// free; subscribing to the chat would redraw the whole listing per token.
-	useEffect(() => {
-		if (!waitingQuestion() || !isAISearchEnabled || itemsContext.userData) return;
-		const ask = () => {
-			const question = waitingQuestion();
-			if (question && !askInline(question)) return false;
-			forgetWaitingQuestion();
-			return true;
-		};
-		if (ask()) return;
-		const retry = setInterval(() => {
-			if (ask()) clearInterval(retry);
-		}, 1000);
-		return () => clearInterval(retry);
-	}, [askInline, isAISearchEnabled, itemsContext.userData]);
-
 	return (
 		<div className="relative">
 			<ChatModal

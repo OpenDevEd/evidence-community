@@ -16,6 +16,7 @@ import { BsStars } from "react-icons/bs";
 import { Input } from "@/components/nextui/Input";
 import { AskAIButton } from "@/components/features/ai/AskAIButton";
 import { handOverQuestion } from "@/components/features/ai/handed-over-question";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import PageContainer from "@/components/layout/PageContainer";
 import { Button } from "@/components/nextui/Button";
 import { Tab, Tabs } from "@/components/nextui/Tabs";
@@ -429,7 +430,7 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 					<ul className="mt-6 flex flex-wrap content-start justify-center gap-2.5">
 						{examples.map((example) => (
 							<li key={example}>
-								<Link href="/lib" onClick={() => handOverQuestion(example)} className={chip}>
+								<Link href="/lib" data-asks-library onClick={() => handOverQuestion(example)} className={chip}>
 									<BsStars aria-hidden className="size-3.5 shrink-0 text-[rgb(var(--color-accent-400))]" />
 									{example}
 								</Link>
@@ -1252,14 +1253,34 @@ type Props = { name: string; siteUrl: string; contact: Contact; today: string; a
  * Everything the library wrote and the page's structure render at once; the parts built from the library's figures
  * stream in behind their own boundaries as the data arrives, each in a box that already has its final size.
  */
+/** The library list, with or without a locale prefix or filters; a record's own page (/lib/<key>) is not it. */
+const LIBRARY_LIST_PATH = /^(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/lib\/?$/;
+
+/**
+ * A link from here to the library list opens the list itself, so it closes the chat beside the list if a question
+ * left it open. The questions that ask the library (marked data-asks-library) keep it open.
+ */
+function useCloseChatForListLinks() {
+	const { setEngaged } = useInlineChatLayout();
+	return (event: React.MouseEvent) => {
+		const link = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
+		if (!link || link.hasAttribute("data-asks-library")) return;
+		const { origin, pathname } = new URL(link.href);
+		if (origin === window.location.origin && LIBRARY_LIST_PATH.test(pathname)) setEngaged(false);
+	};
+}
+
 export default function HomePage(props: Props) {
+	const closeChatForListLinks = useCloseChatForListLinks();
 	return (
 		<MotionConfig reducedMotion="user">
 			<HandOffProvider>
-				<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
-					<Hero name={props.name} intro={props.rich.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
-					<Bands {...props} />
-				</PageContainer>
+				<div className="contents" onClickCapture={closeChatForListLinks}>
+					<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
+						<Hero name={props.name} intro={props.rich.intro} data={props.data} tone={props.tones.page} shapes={props.shapes} />
+						<Bands {...props} />
+					</PageContainer>
+				</div>
 			</HandOffProvider>
 		</MotionConfig>
 	);

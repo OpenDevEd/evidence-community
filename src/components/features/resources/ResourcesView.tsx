@@ -59,6 +59,7 @@ import {
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import { AskHandedOverQuestion } from "@/components/features/ai/useHandedOverQuestion";
 import InlineLibraryChat from "../ai/InlineLibraryChat";
 import { FilterChips, getFilterChipState } from "./FilterChips";
 export { FilterChips };
@@ -803,6 +804,7 @@ export function ResourcesView({
 				/>
 			}
 		>
+			<AskHandedOverQuestion searchContext={searchContext} />
 			<LibraryControls
 				engaged={engaged}
 				hasSwapped={hasSwapped}
