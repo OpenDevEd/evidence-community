@@ -10,10 +10,12 @@ import { getRecordCitationLinks } from "@/config/library-config/exports";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
+import ItemRoute from "./ItemRoute";
+import type { ItemGetResponse } from "@/app/api/item/types";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
 
-export async function getCurrentItem(key: string) {
+async function getCurrentItem(key: string) {
 	const data = await getCachedItemSmall(key);
 
 	if (data?.item && !data.item.citation) {
@@ -160,14 +162,20 @@ export async function generateMetadata(props: {
 	};
 }
 
-// Nothing is awaited above the boundary, so a prefetched link carries the loading state and a click shows it at once,
-// filled from the list the reader came from, while the record streams in.
+// Nothing is awaited here, so a click shows the page at once. ItemRoute draws the page from the list copy or the
+// record; ServerComponent answers a missing record with the not-found page.
 export default function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
+	const record = props.params.then(({ key }) => getCurrentItem(key)) as Promise<ItemGetResponse | null>;
 	return (
-		<Suspense fallback={<LoadingComponent />}>
-			<ServerComponent params={props.params} />
-		</Suspense>
+		<>
+			<Suspense fallback={<LoadingComponent />}>
+				<ItemRoute record={record} />
+			</Suspense>
+			<Suspense fallback={null}>
+				<ServerComponent params={props.params} record={record} />
+			</Suspense>
+		</>
 	);
 }

@@ -1,30 +1,13 @@
-import { ItemGetResponse } from "@/app/api/item/types";
-import ItemPage from "@/components/features/newlib/ItemPage";
-import { RefreshPrefetchedItem } from "@/components/features/newlib/RefreshPrefetchedItem";
 import { notFound } from "next/navigation";
-import { getCachedItemSmall } from "@/app/api/cache";
-import { Metadata } from "next";
-import { Item } from "@/app/api/item/types";
-import { convertToImageURL, getExtraValues } from "@/lib/utils";
-import { routing } from "@/i18n/routing";
-import { getCurrentItem } from "./page";
+import { RefreshPrefetchedItem } from "@/components/features/newlib/RefreshPrefetchedItem";
+import type { ItemGetResponse } from "@/app/api/item/types";
 
-
-
-export default async function ServerComponent( props: {
-    params: Promise<{ key: string }>;
+/** Answers a missing or hidden record with the not-found page; the page itself is drawn by ItemRoute. */
+export default async function ServerComponent(props: {
+	params: Promise<{ key: string }>;
+	record: Promise<ItemGetResponse | null>;
 }) {
-    const params = await props.params;
-    const data = await getCurrentItem(params.key);
-
-    if (!data || !data.item) {
-        return notFound();
-    }
-
-    return (
-        <>
-            <RefreshPrefetchedItem itemKey={params.key} />
-            <ItemPage data={data as ItemGetResponse} loading={false} />
-        </>
-    );
+	const [{ key }, data] = await Promise.all([props.params, props.record]);
+	if (!data?.item) notFound();
+	return <RefreshPrefetchedItem itemKey={key} />;
 }
