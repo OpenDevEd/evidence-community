@@ -1,5 +1,5 @@
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	itemFilePublication,
 	itemSourceLink,
@@ -187,6 +187,45 @@ export async function uploadSourcePublication(options: {
 		if (result.status === "rejected") throw result.reason;
 }
 
+/** Returns the error when the file should be retried. */
+async function cleanUpFile(
+	transaction: DatabaseTransaction,
+	storage: EvidenceFileStorage,
+	row: typeof sourceFileCleanup.$inferSelect,
+) {
+	try {
+		const [active] = await transaction
+			.select({ itemKey: itemFilePublication.itemKey })
+			.from(itemFilePublication)
+			.where(
+				or(
+					eq(itemFilePublication.objectPath, row.objectPath),
+					eq(itemFilePublication.coverObjectPath, row.objectPath),
+				),
+			)
+			.limit(1);
+		if (!active) await storage.removePublic([row.objectPath]);
+		await transaction
+			.delete(sourceFileCleanup)
+			.where(eq(sourceFileCleanup.id, row.id));
+		return null;
+	} catch (error) {
+		const attempts = row.attempts + 1;
+		await transaction
+			.update(sourceFileCleanup)
+			.set({
+				attempts,
+				deadLetteredAt:
+					attempts >= CLEANUP_MAX_ATTEMPTS ? new Date() : null,
+				lastError:
+					error instanceof Error ? error.message : String(error),
+				updatedAt: new Date(),
+			})
+			.where(eq(sourceFileCleanup.id, row.id));
+		return attempts < CLEANUP_MAX_ATTEMPTS ? error : null;
+	}
+}
+
 export async function flushSourceFileCleanup(
 	database: Database,
 	storage: EvidenceFileStorage,
@@ -225,48 +264,8 @@ export async function flushSourceFileCleanup(
 				.for("update");
 			let retryableError: unknown = null;
 			for (const row of rows) {
-				try {
-					const [active] = await transaction
-						.select({ itemKey: itemFilePublication.itemKey })
-						.from(itemFilePublication)
-						.where(
-							or(
-								eq(
-									itemFilePublication.objectPath,
-									row.objectPath,
-								),
-								eq(
-									itemFilePublication.coverObjectPath,
-									row.objectPath,
-								),
-							),
-						)
-						.limit(1);
-					if (!active) await storage.removePublic([row.objectPath]);
-					await transaction
-						.delete(sourceFileCleanup)
-						.where(eq(sourceFileCleanup.id, row.id));
-				} catch (error) {
-					const attempts = row.attempts + 1;
-					await transaction
-						.update(sourceFileCleanup)
-						.set({
-							attempts,
-							deadLetteredAt:
-								attempts >= CLEANUP_MAX_ATTEMPTS
-									? new Date()
-									: null,
-							lastError:
-								error instanceof Error
-									? error.message
-									: String(error),
-							updatedAt: new Date(),
-						})
-						.where(eq(sourceFileCleanup.id, row.id));
-					if (attempts < CLEANUP_MAX_ATTEMPTS) {
-						retryableError ??= error;
-					}
-				}
+				const error = await cleanUpFile(transaction, storage, row);
+				retryableError ??= error;
 			}
 			return { processed: rows.length, retryableError };
 		});

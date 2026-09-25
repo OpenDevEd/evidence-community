@@ -42,12 +42,25 @@ const itemTypes = new Map(
 );
 
 type Location = NonNullable<OpenAlexWork["primary_location"]>;
+type Source = NonNullable<Location["source"]>;
+type Authorship = NonNullable<OpenAlexWork["authorships"]>[number];
+type Institution = NonNullable<Authorship["institutions"]>[number];
 type InstitutionFact = {
 	name: string;
 	countryCode: string;
 	openalexId: string | null;
 	city: null;
 };
+
+const containerSourceTypes = new Set([
+	"JournalArticle:journal",
+	"ConferencePaper:conference",
+]);
+const publisherSourceTypes = new Set([
+	"journal",
+	"conference",
+	"ebook platform",
+]);
 
 function text(value: string | null | undefined) {
 	return value?.trim() || null;
@@ -110,107 +123,152 @@ function abstract(work: OpenAlexWork) {
 		.join(" ");
 }
 
-function metadata(work: OpenAlexWork) {
-	const itemType =
-		work.type === "article" && work.type_crossref === "proceedings-article"
-			? "ConferencePaper"
-			: (itemTypes.get(work.type ?? "") ?? "Document");
-	const zoteroType = canonicalItemTypeToZotero(itemType);
-	const fields = describeZoteroItemTypeFields(zoteroType);
-	const allowedFields = new Set(
-		fields.map(({ semanticField }) => semanticField),
-	);
-	const creatorType =
+function itemTypeFor(work: OpenAlexWork) {
+	return work.type === "article" &&
+		work.type_crossref === "proceedings-article"
+		? "ConferencePaper"
+		: (itemTypes.get(work.type ?? "") ?? "Document");
+}
+
+function primaryCreatorType(zoteroType: string) {
+	return (
 		getZoteroItemType(zoteroType)!.creatorTypes.find(
 			(creator) => creator.primary,
-		)?.creatorType ?? "author";
-	const source = work.primary_location?.source;
-	const doi = normalizeDoi(work.doi) ?? normalizeDoi(work.ids?.doi);
-	const firstPage = text(work.biblio?.first_page);
-	const lastPage = text(work.biblio?.last_page);
-	const url =
+		)?.creatorType ?? "author"
+	);
+}
+
+function landingUrl(work: OpenAlexWork, doi: string | null) {
+	return (
 		httpUrl(work.primary_location?.landing_page_url) ??
 		(doi ? `https://doi.org/${doi}` : null) ??
 		httpUrl(work.best_oa_location?.landing_page_url) ??
 		(work.locations ?? [])
 			.map((location) => httpUrl(location.landing_page_url))
 			.find(Boolean) ??
-		`https://openalex.org/${work.id.split("/").pop()}`;
-	// A repository host, book series or author affiliation does not identify the publisher.
-	const publisher =
-		fields.some(({ field }) => field === "publisher") &&
-		["journal", "conference", "ebook platform"].includes(
-			source?.type ?? "",
-		) &&
+		`https://openalex.org/${work.id.split("/").pop()}`
+	);
+}
+
+// A repository host, book series or author affiliation does not identify the publisher.
+function publisherName(source: Source) {
+	return publisherSourceTypes.has(source.type ?? "") &&
 		/^(?:https?:\/\/openalex\.org\/)?P\d+$/u.test(
-			source?.host_organization ?? "",
+			source.host_organization ?? "",
 		)
-			? text(source?.host_organization_name)
-			: null;
-	const publicationTitle =
-		(itemType === "JournalArticle" && source?.type === "journal") ||
-		(itemType === "ConferencePaper" && source?.type === "conference")
-			? text(source?.display_name)
-			: null;
-	const candidates: Record<string, string | null> = {
-		title: text(work.title) ?? text(work.display_name),
-		abstractNote: abstract(work),
-		DOI: doi,
-		date:
-			text(work.publication_date) ??
-			(work.publication_year ? String(work.publication_year) : null),
-		language: text(work.language),
-		url,
-		publicationTitle,
-		publisher,
+		? text(source.host_organization_name)
+		: null;
+}
+
+function sourceFields(
+	itemType: string,
+	source: Source | null | undefined,
+	hasPublisherField: boolean,
+): Record<string, string | null> {
+	if (!source) return {};
+	return {
+		publicationTitle: containerSourceTypes.has(`${itemType}:${source.type}`)
+			? text(source.display_name)
+			: null,
+		publisher: hasPublisherField ? publisherName(source) : null,
 		series:
-			source?.type === "book series" ? text(source.display_name) : null,
+			source.type === "book series" ? text(source.display_name) : null,
 		ISSN:
-			source?.type === "journal"
+			source.type === "journal"
 				? (text(source.issn_l) ?? text(source.issn?.[0]))
 				: null,
-		volume: text(work.biblio?.volume),
-		issue: text(work.biblio?.issue),
-		pages:
-			[...new Set([firstPage, lastPage].filter(Boolean))].join("-") ||
-			null,
+	};
+}
+
+function biblioFields(biblio: OpenAlexWork["biblio"]) {
+	const pages = [
+		...new Set(
+			[text(biblio?.first_page), text(biblio?.last_page)].filter(Boolean),
+		),
+	].join("-");
+	return {
+		volume: text(biblio?.volume),
+		issue: text(biblio?.issue),
+		pages: pages || null,
+	};
+}
+
+function medicalIds(ids: OpenAlexWork["ids"]) {
+	return {
 		PMID:
-			text(work.ids?.pmid)?.match(
+			text(ids?.pmid)?.match(
 				/^(?:https?:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/)?(\d+)\/?$/u,
 			)?.[1] ?? null,
 		PMCID:
-			text(work.ids?.pmcid)?.match(
+			text(ids?.pmcid)?.match(
 				/^(?:https?:\/\/(?:www\.)?ncbi\.nlm\.nih\.gov\/pmc\/articles\/|https?:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/)?(PMC\d+)\/?$/u,
 			)?.[1] ?? null,
 	};
-	const creators = (work.authorships ?? []).flatMap((authorship) => {
-		const name =
-			text(authorship.raw_author_name) ??
-			text(authorship.author?.display_name);
+}
+
+function publicationDate(work: OpenAlexWork) {
+	return (
+		text(work.publication_date) ??
+		(work.publication_year ? String(work.publication_year) : null)
+	);
+}
+
+function authorName(authorship: Authorship) {
+	return (
+		text(authorship.raw_author_name) ??
+		text(authorship.author?.display_name)
+	);
+}
+
+function creatorInstitutions(authorship: Authorship) {
+	const names = (authorship.institutions ?? []).flatMap((institution) => {
+		const name = text(institution.display_name);
+		return name && name.length <= MAX_CREATOR_INSTITUTION_NAME_LENGTH
+			? [name]
+			: [];
+	});
+	return [...new Set(names)]
+		.slice(0, MAX_CREATOR_INSTITUTIONS)
+		.map((display_name) => ({ display_name }));
+}
+
+function creators(work: OpenAlexWork, creatorType: string) {
+	return (work.authorships ?? []).flatMap((authorship) => {
+		const name = authorName(authorship);
 		if (!name) return [];
 		return [
 			{
 				creatorType,
 				name,
-				institutions: [
-					...new Set(
-						(authorship.institutions ?? []).flatMap(
-							(institution) => {
-								const name = text(institution.display_name);
-								return name &&
-									name.length <=
-										MAX_CREATOR_INSTITUTION_NAME_LENGTH
-									? [name]
-									: [];
-							},
-						),
-					),
-				]
-					.slice(0, MAX_CREATOR_INSTITUTIONS)
-					.map((display_name) => ({ display_name })),
+				institutions: creatorInstitutions(authorship),
 			},
 		];
 	});
+}
+
+function metadata(work: OpenAlexWork) {
+	const itemType = itemTypeFor(work);
+	const zoteroType = canonicalItemTypeToZotero(itemType);
+	const fields = describeZoteroItemTypeFields(zoteroType);
+	const allowedFields = new Set(
+		fields.map(({ semanticField }) => semanticField),
+	);
+	const doi = normalizeDoi(work.doi) ?? normalizeDoi(work.ids?.doi);
+	const candidates: Record<string, string | null> = {
+		title: text(work.title) ?? text(work.display_name),
+		abstractNote: abstract(work),
+		DOI: doi,
+		date: publicationDate(work),
+		language: text(work.language),
+		url: landingUrl(work, doi),
+		...sourceFields(
+			itemType,
+			work.primary_location?.source,
+			fields.some(({ field }) => field === "publisher"),
+		),
+		...biblioFields(work.biblio),
+		...medicalIds(work.ids),
+	};
 	const payload = jsonObjectSchema.parse(
 		validateNativeItemDraft(
 			{
@@ -221,7 +279,7 @@ function metadata(work: OpenAlexWork) {
 							value !== null && allowedFields.has(field),
 					),
 				),
-				creators,
+				creators: creators(work, primaryCreatorType(zoteroType)),
 				tags: work.is_retracted ? ["Retracted"] : [],
 			},
 			sourceRecordValidationOptions,
@@ -232,6 +290,115 @@ function metadata(work: OpenAlexWork) {
 	return payload;
 }
 
+function hasIncompleteAffiliations({ institutions }: Authorship) {
+	return (
+		(institutions?.length ?? 0) > MAX_CREATOR_INSTITUTIONS ||
+		institutions?.some(
+			({ display_name }) =>
+				(text(display_name)?.length ?? 0) >
+				MAX_CREATOR_INSTITUTION_NAME_LENGTH,
+		)
+	);
+}
+
+function authorshipIssue(authorships: Authorship[]) {
+	const messages = [
+		authorships.some(hasIncompleteAffiliations)
+			? "Affiliations exceeded the editor limits; omitted values remain in the source record."
+			: null,
+		authorships.length >= 100
+			? "OpenAlex returned at least 100 authorships; the author list may be incomplete."
+			: null,
+		authorships.some((authorship) => !authorName(authorship))
+			? "Authorships without a name were omitted from creators and preserved in the source record."
+			: null,
+	].filter(Boolean);
+	return messages.length
+		? { code: "incomplete_authorships", message: messages.join(" ") }
+		: null;
+}
+
+function citationMetric(work: OpenAlexWork) {
+	if (work.cited_by_count == null && work.referenced_works_count == null)
+		return null;
+	return {
+		citedByCount: work.cited_by_count ?? null,
+		referencedWorksCount: work.referenced_works_count ?? null,
+	};
+}
+
+function pdfAttachment(
+	work: OpenAlexWork,
+	parent: SourceItemUpsert,
+): SourceItemUpsert | null {
+	const pdf = preferredPdf(work);
+	if (!pdf) return null;
+	const sourceRecordKey = parent.sourceRecordKey;
+	return {
+		...parent,
+		sourceRecordKey: `${sourceRecordKey}:pdf`,
+		raw: jsonObjectSchema.parse({
+			openalexWorkId: work.id,
+			location: pdf,
+		}),
+		metadata: {
+			itemType: "Attachment",
+			title: `${sourceRecordKey}.pdf`,
+			url: httpUrl(pdf.pdf_url)!,
+			tags: [],
+		},
+		parentSourceRecordKey: sourceRecordKey,
+		aliases: [],
+		citationMetric: null,
+		referencedSourceRecordKeys: [],
+		processingIssue: null,
+		file: {
+			url: httpUrl(pdf.pdf_url)!,
+			contentType: "application/pdf",
+			filename: `${sourceRecordKey}.pdf`,
+			linkMode: "linked_url",
+			md5: null,
+			mtime: null,
+			charset: null,
+			fullText: null,
+			coverUrl: null,
+			coverWidth: null,
+			coverHeight: null,
+			managedPublication: null,
+		},
+	};
+}
+
+function institutionFact(institution: Institution): InstitutionFact | null {
+	const name = text(institution.display_name);
+	const countryCode = text(institution.country_code)?.toUpperCase();
+	if (
+		!name ||
+		name.length > 500 ||
+		!countryCode ||
+		!Object.hasOwn(countryFocusNames, countryCode)
+	)
+		return null;
+	const openalexId =
+		institution.id?.match(
+			/^(?:https?:\/\/openalex\.org\/)?(I\d+)$/u,
+		)?.[1] ?? null;
+	return { name, countryCode, openalexId, city: null };
+}
+
+function institutionFacts(authorships: Authorship[]) {
+	const institutions = new Map<string, InstitutionFact>();
+	for (const institution of authorships.flatMap(
+		(authorship) => authorship.institutions ?? [],
+	)) {
+		const fact = institutionFact(institution);
+		if (!fact) continue;
+		const key = institutionNameKey(fact.name);
+		if (!institutions.has(key)) institutions.set(key, fact);
+	}
+	return [...institutions.values()];
+}
+
 export function mapOpenAlexWork(input: unknown): {
 	items: SourceItemUpsert[];
 	institutions: InstitutionFact[];
@@ -240,27 +407,12 @@ export function mapOpenAlexWork(input: unknown): {
 	const work = openAlexWorkSchema.parse(raw);
 	const sourceRecordKey = work.id.split("/").pop()!;
 	const authorships = work.authorships ?? [];
-	const mappedMetadata = metadata(work);
-	const authorsMissingNames = authorships.some(
-		(authorship) =>
-			!text(authorship.raw_author_name) &&
-			!text(authorship.author?.display_name),
-	);
-	const incompleteAffiliations = authorships.some(
-		({ institutions }) =>
-			(institutions?.length ?? 0) > MAX_CREATOR_INSTITUTIONS ||
-			institutions?.some(
-				({ display_name }) =>
-					(text(display_name)?.length ?? 0) >
-					MAX_CREATOR_INSTITUTION_NAME_LENGTH,
-			),
-	);
 	const parent: SourceItemUpsert = {
 		operation: "upsert",
 		sourceRecordKey,
 		remoteVersion: date(work.updated_date)?.toISOString() ?? null,
 		raw,
-		metadata: mappedMetadata,
+		metadata: metadata(work),
 		parentSourceRecordKey: null,
 		collections: [],
 		aliases: [
@@ -269,108 +421,22 @@ export function mapOpenAlexWork(input: unknown): {
 				kind: "openalex-uri",
 			},
 		],
-		citationMetric:
-			work.cited_by_count != null || work.referenced_works_count != null
-				? {
-						citedByCount: work.cited_by_count ?? null,
-						referencedWorksCount:
-							work.referenced_works_count ?? null,
-					}
-				: null,
+		citationMetric: citationMetric(work),
 		referencedSourceRecordKeys: [
 			...new Set(
 				(work.referenced_works ?? []).map((id) => id.split("/").pop()!),
 			),
 		],
 		file: null,
-		processingIssue:
-			authorships.length >= 100 ||
-			authorsMissingNames ||
-			incompleteAffiliations
-				? {
-						code: "incomplete_authorships",
-						message: [
-							incompleteAffiliations
-								? "Affiliations exceeded the editor limits; omitted values remain in the source record."
-								: null,
-							authorships.length >= 100
-								? "OpenAlex returned at least 100 authorships; the author list may be incomplete."
-								: null,
-							authorsMissingNames
-								? "Authorships without a name were omitted from creators and preserved in the source record."
-								: null,
-						]
-							.filter(Boolean)
-							.join(" "),
-					}
-				: null,
+		processingIssue: authorshipIssue(authorships),
 		sourceDates: {
 			addedAt: date(work.created_date),
 			modifiedAt: date(work.updated_date),
 		},
 	};
-	const items = [parent];
-	const pdf = preferredPdf(work);
-	if (pdf) {
-		items.push({
-			...parent,
-			sourceRecordKey: `${sourceRecordKey}:pdf`,
-			raw: jsonObjectSchema.parse({
-				openalexWorkId: work.id,
-				location: pdf,
-			}),
-			metadata: {
-				itemType: "Attachment",
-				title: `${sourceRecordKey}.pdf`,
-				url: httpUrl(pdf.pdf_url)!,
-				tags: [],
-			},
-			parentSourceRecordKey: sourceRecordKey,
-			aliases: [],
-			citationMetric: null,
-			referencedSourceRecordKeys: [],
-			processingIssue: null,
-			file: {
-				url: httpUrl(pdf.pdf_url)!,
-				contentType: "application/pdf",
-				filename: `${sourceRecordKey}.pdf`,
-				linkMode: "linked_url",
-				md5: null,
-				mtime: null,
-				charset: null,
-				fullText: null,
-				coverUrl: null,
-				coverWidth: null,
-				coverHeight: null,
-				managedPublication: null,
-			},
-		});
-	}
-	const institutions = new Map<string, InstitutionFact>();
-	for (const institution of authorships.flatMap(
-		(authorship) => authorship.institutions ?? [],
-	)) {
-		const name = text(institution.display_name);
-		const countryCode = text(institution.country_code)?.toUpperCase();
-		if (
-			!name ||
-			name.length > 500 ||
-			!countryCode ||
-			!Object.hasOwn(countryFocusNames, countryCode)
-		)
-			continue;
-		const openalexId =
-			institution.id?.match(
-				/^(?:https?:\/\/openalex\.org\/)?(I\d+)$/u,
-			)?.[1] ?? null;
-		const key = institutionNameKey(name);
-		if (!institutions.has(key))
-			institutions.set(key, {
-				name,
-				countryCode,
-				openalexId,
-				city: null,
-			});
-	}
-	return { items, institutions: [...institutions.values()] };
+	const attachment = pdfAttachment(work, parent);
+	return {
+		items: attachment ? [parent, attachment] : [parent],
+		institutions: institutionFacts(authorships),
+	};
 }

@@ -5,6 +5,29 @@ import { sourceReference } from "@/db/schema/topics";
 import { replaceSourceLinks } from "@/lib/links/item-links";
 import type { SourceItemUpsert } from "../batch-schema";
 
+async function openAlexItemKeys(tx: DatabaseTransaction, recordKeys: string[]) {
+  const identities = new Map<string, string>();
+  for (let offset = 0; offset < recordKeys.length; offset += 1000) {
+    const found = await tx.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey}).from(itemSourceLink)
+      .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+      .where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.sourceRecordKey, recordKeys.slice(offset, offset + 1000))));
+    for (const target of found) identities.set(target.record, target.key);
+  }
+  return identities;
+}
+
+async function resolveCites(tx: DatabaseTransaction, sourceConnectionKey: string, fromKeys: string[]) {
+  const references = await tx.select().from(sourceReference).where(and(eq(sourceReference.sourceConnectionKey, sourceConnectionKey), inArray(sourceReference.itemKey, fromKeys)));
+  const identities = await openAlexItemKeys(tx, [...new Set(references.map(row => row.targetRecordKey))]);
+  const result = await replaceSourceLinks(tx, {sourceConnectionKey, kind: "cites", fromKeys,
+    links: references.flatMap(reference => {
+      const toKey = identities.get(reference.targetRecordKey);
+      return toKey && toKey !== reference.itemKey ? [{fromKey: reference.itemKey, toKey}] : [];
+    }),
+  });
+  return result.changedItemKeys;
+}
+
 /** A newly imported target resolves references saved by any overlapping query. */
 export async function updateOpenAlexReferences(tx: DatabaseTransaction, sourceKey: string, records: SourceItemUpsert[], keys: Map<string, string>) {
   const roots = records.filter(record => !record.parentSourceRecordKey);
@@ -22,23 +45,7 @@ export async function updateOpenAlexReferences(tx: DatabaseTransaction, sourceKe
     // Resolve bounded groups so a heavily cited work cannot make one huge SQL parameter list.
     const from = [...fromKeys];
     for (let offset = 0; offset < from.length; offset += 100) {
-      const batch = from.slice(offset, offset + 100);
-      const references = await tx.select().from(sourceReference).where(and(eq(sourceReference.sourceConnectionKey, sourceConnectionKey), inArray(sourceReference.itemKey, batch)));
-      const targetKeys = [...new Set(references.map(row => row.targetRecordKey))];
-      const identities = new Map<string, string>();
-      for (let targetOffset = 0; targetOffset < targetKeys.length; targetOffset += 1000) {
-        const found = await tx.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey}).from(itemSourceLink)
-          .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-          .where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.sourceRecordKey, targetKeys.slice(targetOffset, targetOffset + 1000))));
-        for (const target of found) identities.set(target.record, target.key);
-      }
-      const result = await replaceSourceLinks(tx, {sourceConnectionKey, kind: "cites", fromKeys: batch,
-        links: references.flatMap(reference => {
-          const toKey = identities.get(reference.targetRecordKey);
-          return toKey && toKey !== reference.itemKey ? [{fromKey: reference.itemKey, toKey}] : [];
-        }),
-      });
-      for (const key of result.changedItemKeys) changes.add(key);
+      for (const key of await resolveCites(tx, sourceConnectionKey, from.slice(offset, offset + 100))) changes.add(key);
     }
   }
   return [...changes];

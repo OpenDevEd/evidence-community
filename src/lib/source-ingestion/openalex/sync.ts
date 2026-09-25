@@ -32,12 +32,19 @@ export type OpenAlexSourceOptions = {
 	};
 };
 
-export async function syncOpenAlexSource(
+type Cursor = z.infer<typeof cursorSchema>;
+type OpenAlexConnectionConfig = z.infer<typeof openAlexConnectionConfigSchema>;
+type InstitutionFacts = ReturnType<typeof mapOpenAlexWork>["institutions"];
+
+const DAY_MS = 24 * 3600_000;
+const UPDATED_SINCE = "from_updated_date:";
+
+async function openAlexClient(
 	context: SourceAdapterContext,
-	options: OpenAlexSourceOptions = {},
+	config: OpenAlexConnectionConfig,
+	options: OpenAlexSourceOptions,
 ) {
 	const connection = context.sourceConnection;
-	const config = openAlexConnectionConfigSchema.parse(connection.config);
 	const apiKey = await context.credentialResolver?.(connection.key);
 	if (!apiKey)
 		throw new Error(
@@ -47,56 +54,178 @@ export async function syncOpenAlexSource(
 		throw new Error(
 			"OpenAlex PDF processing is enabled but no processor is available",
 		);
-	const client = new OpenAlexClient({
+	return new OpenAlexClient({
 		apiKey,
 		fetch: options.fetch,
 		sleep: options.sleep,
 	});
+}
+
+/** A recent, reconciled full scan lets the next run fetch only updated works. */
+function incrementalSince(saved: Cursor | null, queryVersion: string) {
+	if (
+		!saved?.completedAt ||
+		saved.queryVersion !== queryVersion ||
+		!saved.reconciledAt ||
+		Date.now() - Date.parse(saved.reconciledAt) >= DAY_MS ||
+		saved.incrementalAvailable === false
+	)
+		return null;
+	return new Date(Date.parse(saved.startedAt) - DAY_MS)
+		.toISOString()
+		.slice(0, 10);
+}
+
+function startCursor(saved: Cursor | null, queryVersion: string): Cursor {
+	const sameQuery = saved?.queryVersion === queryVersion;
+	if (saved && !saved.completedAt && sameQuery)
+		return saved.mode === "full"
+			? { ...saved, incrementalAvailable: null }
+			: saved;
+	const cursor: Cursor = {
+		queryVersion,
+		startedAt: new Date().toISOString(),
+		nextCursor: "*",
+		imported: 0,
+		completedAt: null,
+		mode: "full",
+		reconciledAt: sameQuery ? saved!.reconciledAt : null,
+		updatedSince: null,
+		incrementalAvailable: null,
+	};
+	const updatedSince = incrementalSince(saved, queryVersion);
+	return updatedSince
+		? {
+				...cursor,
+				mode: "incremental",
+				updatedSince,
+				incrementalAvailable: saved!.incrementalAvailable,
+			}
+		: cursor;
+}
+
+function pageQuery(config: OpenAlexConnectionConfig, cursor: Cursor) {
+	const query = config.approvedQuery.query;
+	if (cursor.mode !== "incremental") return query;
+	const clauses = (query.filter ?? "").split(",").filter(Boolean);
+	const previousSince = clauses
+		.find((clause) => clause.startsWith(UPDATED_SINCE))
+		?.slice(UPDATED_SINCE.length);
+	const since = [previousSince, cursor.updatedSince]
+		.filter((value): value is string => Boolean(value))
+		.sort()
+		.at(-1);
+	return {
+		...query,
+		filter: [
+			...clauses.filter((clause) => !clause.startsWith(UPDATED_SINCE)),
+			`${UPDATED_SINCE}${since}`,
+		].join(","),
+	};
+}
+
+function isEntitlementDenial(error: unknown): error is OpenAlexApiError {
+	return (
+		error instanceof OpenAlexApiError &&
+		[400, 403].includes(error.status ?? 0) &&
+		/premium|paid|from_updated_date/i.test(error.message)
+	);
+}
+
+/** Returns null when the key cannot use incremental sync. */
+async function fetchPage(
+	client: OpenAlexClient,
+	config: OpenAlexConnectionConfig,
+	cursor: Cursor,
+	sourceConnectionKey: string,
+) {
+	try {
+		return await client.works(
+			pageQuery(config, cursor),
+			cursor.nextCursor!,
+			config.downloadPdfs ? 10 : 100,
+		);
+	} catch (error) {
+		// Free keys use complete scans. Only an explicit entitlement denial changes strategy.
+		if (cursor.mode !== "incremental" || !isEntitlementDenial(error))
+			throw error;
+		console.info(
+			"OpenAlex key does not support incremental sync; scanning the approved query",
+			{ sourceConnectionKey, status: error.status },
+		);
+		return null;
+	}
+}
+
+// Process one file at a time to bound PDF buffers and renderer memory.
+async function processAttachments(
+	context: SourceAdapterContext,
+	items: SourceItemUpsert[],
+	processor: NonNullable<OpenAlexSourceOptions["attachmentProcessor"]>,
+) {
+	for (let index = 0; index < items.length; index++) {
+		if (!items[index]!.file?.url) continue;
+		await context.heartbeat();
+		items[index] = await processor(
+			items[index]!,
+			context.sourceConnection.key,
+		);
+	}
+}
+
+function writeBatch(
+	context: SourceAdapterContext,
+	expectedCursor: Record<string, JsonValue>,
+	nextCursor: Cursor,
+	batch: {
+		items: SourceItemUpsert[];
+		institutionCountries?: InstitutionFacts;
+	},
+) {
+	const connection = context.sourceConnection;
+	return writeSourceIngestionBatch(context.database, {
+		sourceConnectionKey: connection.key,
+		expectedConfiguration: connection.config,
+		expectedCursor,
+		nextCursor,
+		mappingProfileVersion: "openalex-v1",
+		fetchedAt: new Date(),
+		...batch,
+	});
+}
+
+export async function syncOpenAlexSource(
+	context: SourceAdapterContext,
+	options: OpenAlexSourceOptions = {},
+) {
+	const connection = context.sourceConnection;
+	const config = openAlexConnectionConfigSchema.parse(connection.config);
+	const client = await openAlexClient(context, config, options);
 	let expectedCursor = connection.syncCursor as Record<string, JsonValue>;
-	const saved = Object.keys(expectedCursor).length
-		? cursorSchema.parse(expectedCursor)
-		: null;
-	let cursor =
-		saved &&
-		!saved.completedAt &&
-		saved.queryVersion === config.approvedQuery.version
-			? saved
-			: {
-					queryVersion: config.approvedQuery.version,
-					startedAt: new Date().toISOString(),
-					nextCursor: "*",
-					imported: 0,
-					completedAt: null,
-                    mode: "full" as "full" | "incremental",
-                    reconciledAt: saved?.queryVersion === config.approvedQuery.version ? saved.reconciledAt : null,
-                    updatedSince: null as string | null,
-                    incrementalAvailable: saved?.incrementalAvailable ?? null,
-                };
-    if (saved?.completedAt && saved.queryVersion === config.approvedQuery.version && saved.reconciledAt && Date.now() - Date.parse(saved.reconciledAt) < 24 * 3600_000 && saved.incrementalAvailable !== false) {
-        cursor.mode = "incremental";
-        cursor.updatedSince = new Date(Date.parse(saved.startedAt) - 24 * 3600_000).toISOString().slice(0, 10);
-    } else if (cursor.mode === "full") cursor.incrementalAvailable = null;
+	let cursor = startCursor(
+		Object.keys(expectedCursor).length
+			? cursorSchema.parse(expectedCursor)
+			: null,
+		config.approvedQuery.version,
+	);
 	let pages = 0;
 	await options.attachmentProcessor?.flushCleanup(connection.key);
 	while (cursor.nextCursor) {
 		await context.heartbeat();
-        const clauses = (config.approvedQuery.query.filter ?? "").split(",").filter(Boolean);
-        const previousSince = clauses.find(clause => clause.startsWith("from_updated_date:"))?.slice("from_updated_date:".length);
-        const since = [previousSince, cursor.updatedSince].filter((value): value is string => Boolean(value)).sort().at(-1);
-        const query = cursor.mode === "incremental" ? {...config.approvedQuery.query,
-            filter: [...clauses.filter(clause => !clause.startsWith("from_updated_date:")), `from_updated_date:${since}`].join(","),
-        } : config.approvedQuery.query;
-        let page;
-        try {
-            page = await client.works(query, cursor.nextCursor, config.downloadPdfs ? 10 : 100);
-            if (cursor.mode === "incremental") cursor.incrementalAvailable = true;
-        } catch (error) {
-            // Free keys use complete scans. Only an explicit entitlement denial changes strategy.
-            if (cursor.mode !== "incremental" || !(error instanceof OpenAlexApiError) || ![400, 403].includes(error.status ?? 0) || !/premium|paid|from_updated_date/i.test(error.message)) throw error;
-            console.info("OpenAlex key does not support incremental sync; scanning the approved query", {sourceConnectionKey: connection.key, status: error.status});
-            cursor = {...cursor, mode: "full", nextCursor: "*", startedAt: new Date().toISOString(), imported: 0, updatedSince: null, incrementalAvailable: false};
-            continue;
-        }
+		const page = await fetchPage(client, config, cursor, connection.key);
+		if (!page) {
+			cursor = {
+				...cursor,
+				mode: "full",
+				nextCursor: "*",
+				startedAt: new Date().toISOString(),
+				imported: 0,
+				updatedSince: null,
+				incrementalAvailable: false,
+			};
+			continue;
+		}
+		if (cursor.mode === "incremental") cursor.incrementalAvailable = true;
 		if (
 			page.meta.next_cursor === cursor.nextCursor ||
 			(!page.results.length && page.meta.next_cursor)
@@ -107,18 +236,12 @@ export async function syncOpenAlexSource(
 		}
 		const mapped = page.results.map(mapOpenAlexWork);
 		const items = mapped.flatMap((work) => work.items);
-		// Process one file at a time to bound PDF buffers and renderer memory.
-		if (config.downloadPdfs) {
-			for (let index = 0; index < items.length; index++) {
-				if (items[index]!.file?.url) {
-					await context.heartbeat();
-					items[index] = await options.attachmentProcessor!(
-						items[index]!,
-						connection.key,
-					);
-				}
-			}
-		}
+		if (config.downloadPdfs)
+			await processAttachments(
+				context,
+				items,
+				options.attachmentProcessor!,
+			);
 		cursor = {
 			...cursor,
 			nextCursor: page.meta.next_cursor,
@@ -126,13 +249,7 @@ export async function syncOpenAlexSource(
 			completedAt: null,
 		};
 		await context.heartbeat();
-		await writeSourceIngestionBatch(context.database, {
-			sourceConnectionKey: connection.key,
-			expectedConfiguration: connection.config,
-			expectedCursor,
-			nextCursor: cursor,
-			mappingProfileVersion: "openalex-v1",
-			fetchedAt: new Date(),
+		await writeBatch(context, expectedCursor, cursor, {
 			items,
 			institutionCountries: mapped.flatMap((work) => work.institutions),
 		});
@@ -140,15 +257,25 @@ export async function syncOpenAlexSource(
 		pages++;
 		await options.attachmentProcessor?.flushCleanup(connection.key);
 	}
-	while (cursor.mode === "full" && await reconcileOpenAlexMemberships(context.database, {
-		sourceConnectionKey: connection.key, configuration: connection.config,
-		cursor: expectedCursor, startedAt: cursor.startedAt,
-	})) await context.heartbeat();
-	cursor = {...cursor, completedAt: new Date().toISOString(), reconciledAt: cursor.mode === "full" ? new Date().toISOString() : cursor.reconciledAt};
-	await writeSourceIngestionBatch(context.database, {
-		sourceConnectionKey: connection.key, expectedConfiguration: connection.config,
-		expectedCursor, nextCursor: cursor, mappingProfileVersion: "openalex-v1", fetchedAt: new Date(), items: [],
-	});
+	while (
+		cursor.mode === "full" &&
+		(await reconcileOpenAlexMemberships(context.database, {
+			sourceConnectionKey: connection.key,
+			configuration: connection.config,
+			cursor: expectedCursor,
+			startedAt: cursor.startedAt,
+		}))
+	)
+		await context.heartbeat();
+	cursor = {
+		...cursor,
+		completedAt: new Date().toISOString(),
+		reconciledAt:
+			cursor.mode === "full"
+				? new Date().toISOString()
+				: cursor.reconciledAt,
+	};
+	await writeBatch(context, expectedCursor, cursor, { items: [] });
 	return {
 		records: cursor.imported,
 		pages,
