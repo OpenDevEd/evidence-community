@@ -5,10 +5,13 @@ import { schema } from "./database-schema";
 
 const MAX_DATABASE_CONNECTIONS = 3;
 
-export function createPostgresDatabaseResource(databaseUrl: string) {
+export function createPostgresDatabaseResource(
+	databaseUrl: string,
+	maxConnections = MAX_DATABASE_CONNECTIONS,
+) {
 	const pool = new Pool({
 		connectionString: databaseUrl,
-		max: MAX_DATABASE_CONNECTIONS,
+		max: maxConnections,
 		idleTimeoutMillis: 5_000,
 		connectionTimeoutMillis: 5_000,
 	});

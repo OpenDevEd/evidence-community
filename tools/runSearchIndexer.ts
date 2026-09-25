@@ -48,8 +48,11 @@ async function main() {
 		resolveSearchIndexWorkerInstancePath(),
 		instanceId,
 	);
+	// Three drain lanes each hold a projection transaction and, with topics
+	// on, a catalog connection; heartbeats and worker state need the rest.
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,
+		8,
 	);
 	let ownershipLost = false;
 	let registeredWorker;
@@ -274,6 +277,10 @@ async function main() {
 						}
 					},
 					signal: abortController.signal,
+					// A drain claim can wait behind other claims' embeddings.
+					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
+						embedder: config.search.embedder,
+					}),
 					workerId: instanceId,
 				});
 				const previousProgress = reporter.current();

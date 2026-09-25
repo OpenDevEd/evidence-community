@@ -56,6 +56,10 @@ const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
 /** Queued rebuild batches; each holds an open file in Meilisearch. */
 const REBUILD_TASKS_IN_FLIGHT = 500;
+/** Events one drain claim takes; a large import indexes in fewer, bigger batches. */
+const DRAIN_BATCH_SIZE = 5_000;
+/** Claims one drain works on at once. */
+const DRAIN_CONCURRENCY = 3;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 
 type ClaimedEvent = typeof outbox.$inferSelect;
@@ -261,6 +265,13 @@ async function claimEvents(
 	throwIfAborted(options.signal);
 	const claimedAt = now(options);
 	return options.database.transaction(async (transaction) => {
+		// Claims in one library run one at a time. The lease check below then
+		// sees every lease committed before it, so two workers never lease the
+		// same entity, with one lock per claim instead of one per claimed row
+		// (the lock table is shared by every database on the server).
+		await transaction.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended('search-outbox-claim', 0))`,
+		);
 		const candidates = await transaction
 			.select({ id: outbox.id })
 			.from(outbox)
@@ -281,25 +292,6 @@ async function claimEvents(
 			.limit(limit);
 		if (candidates.length === 0) return [];
 
-		// Entity locks are taken only for the selected rows; inside the query
-		// above, a plan that reads every pending row before the limit took one
-		// lock per pending row and ran out of lock memory on a large backlog.
-		const locked = await transaction
-			.select({ id: outbox.id })
-			.from(outbox)
-			.where(
-				and(
-					inArray(
-						outbox.id,
-						candidates.map(({ id }) => id),
-					),
-					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${outbox.entityType} || ':' || ${outbox.entityKey}, 0))`,
-				),
-			);
-		if (locked.length === 0) return [];
-
-		// Checked again under the locks: another worker may have leased the
-		// same entity and committed after the rows above were selected.
 		return transaction
 			.update(outbox)
 			.set({
@@ -307,12 +299,9 @@ async function claimEvents(
 				leaseOwner: workerId,
 			})
 			.where(
-				and(
-					inArray(
-						outbox.id,
-						locked.map(({ id }) => id),
-					),
-					noActiveEntityLease(transaction, claimedAt),
+				inArray(
+					outbox.id,
+					candidates.map(({ id }) => id),
 				),
 			)
 			.returning();
@@ -576,6 +565,26 @@ export async function applySearchProjectionPlan(
 		signal?: AbortSignal;
 	} = {},
 ) {
+	for (const task of await queueSearchProjectionPlan(
+		index,
+		plan,
+		maxDocumentBatchBytes,
+		progressOptions.signal,
+	)) {
+		await waitForSuccessfulTask(task, taskTimeoutMs, {
+			...progressOptions,
+			taskClient: index.tasks,
+		});
+	}
+}
+
+/** Sends a plan's Meilisearch tasks without waiting for them to finish. */
+async function queueSearchProjectionPlan(
+	index: Index,
+	plan: SearchProjectionPlan,
+	maxDocumentBatchBytes: number,
+	signal?: AbortSignal,
+) {
 	if (
 		!Number.isSafeInteger(maxDocumentBatchBytes) ||
 		maxDocumentBatchBytes < 1_024
@@ -584,25 +593,19 @@ export async function applySearchProjectionPlan(
 			"maxDocumentBatchBytes must be an integer of at least 1,024",
 		);
 	}
+	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
 	for (const documents of chunkDocumentsBySerializedBytes(
 		plan.documents,
 		maxDocumentBatchBytes,
 	)) {
-		await waitForSuccessfulTask(
-			index.addDocuments(documents, {
-				primaryKey: "key",
-			}),
-			taskTimeoutMs,
-			{ ...progressOptions, taskClient: index.tasks },
-		);
+		tasks.push(index.addDocuments(documents, { primaryKey: "key" }));
+		await abortable(tasks.at(-1)!, signal);
 	}
 	if (plan.deleteKeys.length > 0) {
-		await waitForSuccessfulTask(
-			index.deleteDocuments(plan.deleteKeys),
-			taskTimeoutMs,
-			{ ...progressOptions, taskClient: index.tasks },
-		);
+		tasks.push(index.deleteDocuments(plan.deleteKeys));
+		await abortable(tasks.at(-1)!, signal);
 	}
+	return tasks;
 }
 
 function chunkDocumentsBySerializedBytes(
@@ -670,6 +673,60 @@ async function markBatchFailed(
 		: cause;
 }
 
+/**
+ * Projects the claimed events and indexes them. Every plan is sent before any
+ * is awaited, so Meilisearch indexes a large claim in one batch instead of
+ * repeating its per-batch work.
+ */
+async function indexClaimedEvents(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	validated: ValidatedConsumerOptions,
+	heartbeatFailure: () => unknown,
+) {
+	const eventIds = events.map(({ id }) => id);
+	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
+	let deleteCount = 0;
+	let documentCount = 0;
+	for await (const plan of generateSearchProjectionPlans(
+		options.database,
+		options.config,
+		events,
+		500,
+		options.signal,
+	)) {
+		throwIfAborted(options.signal);
+		if (heartbeatFailure()) throw heartbeatFailure();
+		await heartbeatEvents(
+			options,
+			events,
+			validated.leaseDurationMs,
+			validated.workerId,
+		);
+		tasks.push(
+			...(await queueSearchProjectionPlan(
+				options.index,
+				plan,
+				validated.maxDocumentBatchBytes,
+				options.signal,
+			)),
+		);
+		deleteCount += plan.deleteKeys.length;
+		documentCount += plan.documents.length;
+	}
+	for (const task of tasks) {
+		if (heartbeatFailure()) throw heartbeatFailure();
+		await waitForSuccessfulTask(task, validated.taskTimeoutMs, {
+			batchClient: options.batchClient,
+			eventIds,
+			onProgress: options.onProgress,
+			signal: options.signal,
+			taskClient: options.index.tasks,
+		});
+	}
+	return { deleteCount, documentCount };
+}
+
 async function processClaimedEvents(
 	options: SearchOutboxConsumerOptions,
 	events: readonly ClaimedEvent[],
@@ -679,11 +736,9 @@ async function processClaimedEvents(
 	const {
 		heartbeatIntervalMs,
 		leaseDurationMs,
-		maxDocumentBatchBytes,
 		maxAttempts,
 		retryBaseMs,
 		retryMaxMs,
-		taskTimeoutMs,
 		workerId,
 	} = validated;
 	const abortController = new AbortController();
@@ -709,33 +764,12 @@ async function processClaimedEvents(
 			stage: "projecting",
 			taskUid: null,
 		});
-		let deleteCount = 0;
-		let documentCount = 0;
-		for await (const plan of generateSearchProjectionPlans(
-			options.database,
-			options.config,
+		const { deleteCount, documentCount } = await indexClaimedEvents(
+			options,
 			events,
-			500,
-			options.signal,
-		)) {
-			throwIfAborted(options.signal);
-			if (heartbeatFailure) throw heartbeatFailure;
-			await heartbeatEvents(options, events, leaseDurationMs, workerId);
-			await applySearchProjectionPlan(
-				options.index,
-				plan,
-				taskTimeoutMs,
-				maxDocumentBatchBytes,
-				{
-					batchClient: options.batchClient,
-					eventIds: events.map(({ id }) => id),
-					onProgress: options.onProgress,
-					signal: options.signal,
-				},
-			);
-			deleteCount += plan.deleteKeys.length;
-			documentCount += plan.documents.length;
-		}
+			validated,
+			() => heartbeatFailure,
+		);
 		if (heartbeatFailure) throw heartbeatFailure;
 		await heartbeatEvents(options, events, leaseDurationMs, workerId);
 		await acknowledgeEvents(options, events, workerId);
@@ -781,8 +815,8 @@ export async function processNextSearchOutboxBatch(
 	},
 ): Promise<SearchOutboxProcessResult[] | null> {
 	const batchSize = options.batchSize ?? 100;
-	if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 500) {
-		throw new Error("batchSize must be an integer between 1 and 500");
+	if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 5_000) {
+		throw new Error("batchSize must be an integer between 1 and 5,000");
 	}
 	const validated = validateOptions(options);
 	throwIfAborted(options.signal);
@@ -807,26 +841,84 @@ export async function processNextSearchOutboxBatch(
 		if (!(error instanceof SearchIndexTaskError && events.length > 1)) {
 			throw error;
 		}
-
-		const results: SearchOutboxProcessResult[] = [];
-		let firstFailure: unknown;
-		for (const event of events) {
-			try {
-				results.push(
-					await processClaimedEvents(
-						options,
-						[event],
-						validated,
-						false,
-					),
-				);
-			} catch (eventError) {
-				firstFailure ??= eventError;
-			}
-		}
-		if (firstFailure) throw firstFailure;
-		return results;
+		// Meilisearch rejected a document. Halving the claim finds it in about
+		// 2 x log2(n) tasks instead of one task per event.
+		const outcome: IsolationOutcome = { failure: undefined, results: [] };
+		await isolateRejectedEvents(options, events, validated, outcome);
+		if (outcome.failure) throw outcome.failure;
+		return outcome.results;
 	}
+}
+
+type IsolationOutcome = {
+	failure: unknown;
+	results: SearchOutboxProcessResult[];
+};
+
+async function isolateRejectedEvents(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	validated: ValidatedConsumerOptions,
+	outcome: IsolationOutcome,
+) {
+	const middle = Math.ceil(events.length / 2);
+	const halves = [events.slice(0, middle), events.slice(middle)];
+	for (const [index, half] of halves.entries()) {
+		// The half still waiting keeps its leases, so no other lane or worker
+		// claims it while this half is indexed.
+		await whileLeasesRenewed(
+			options,
+			halves.slice(index + 1).flat(),
+			validated,
+			async () => {
+				try {
+					outcome.results.push(
+						await processClaimedEvents(
+							options,
+							half,
+							validated,
+							half.length > 1,
+						),
+					);
+				} catch (error) {
+					if (half.length > 1 && error instanceof SearchIndexTaskError) {
+						await isolateRejectedEvents(options, half, validated, outcome);
+					} else {
+						outcome.failure ??= error;
+					}
+				}
+			},
+		);
+	}
+}
+
+async function whileLeasesRenewed(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	validated: ValidatedConsumerOptions,
+	work: () => Promise<void>,
+) {
+	if (events.length === 0) return work();
+	const abortController = new AbortController();
+	let heartbeatFailure: unknown;
+	const loop = heartbeatLoop(
+		options,
+		events,
+		validated.heartbeatIntervalMs,
+		validated.leaseDurationMs,
+		validated.workerId,
+		abortController.signal,
+		(error) => {
+			heartbeatFailure = error;
+		},
+	);
+	try {
+		await work();
+	} finally {
+		abortController.abort();
+		await loop;
+	}
+	if (heartbeatFailure) throw heartbeatFailure;
 }
 
 export async function processNextSearchOutboxEvent(
@@ -852,25 +944,57 @@ export async function drainSearchOutbox(
 	) {
 		throw new Error("maxEvents must be an integer between 1 and 1,000,000");
 	}
-	const results: SearchOutboxProcessResult[] = [];
-	let processedEvents = 0;
-	while (processedEvents < maxEvents) {
+	// Several claims run at once, so one is projected while Meilisearch
+	// indexes another. Claims never share an entity (see claimEvents).
+	const drain = { failed: false, reserved: 0, results: [] as SearchOutboxProcessResult[] };
+	const lanes = await Promise.allSettled(
+		Array.from({ length: DRAIN_CONCURRENCY }, (_, lane) =>
+			drainLane(
+				{
+					...options,
+					// Each lane owns its leases, so heartbeats and acknowledgements
+					// never touch another lane's events.
+					workerId: `${options.workerId}:${lane + 1}`,
+					// One lane reports progress; three would rewrite the worker
+					// state on every poll.
+					onProgress: lane === 0 ? options.onProgress : undefined,
+				},
+				maxEvents,
+				drain,
+			),
+		),
+	);
+	const failure = lanes.find((lane) => lane.status === "rejected");
+	if (failure) throw failure.reason;
+	return drain.results;
+}
+
+async function drainLane(
+	options: SearchOutboxConsumerOptions,
+	maxEvents: number,
+	drain: { failed: boolean; reserved: number; results: SearchOutboxProcessResult[] },
+) {
+	while (!drain.failed && drain.reserved < maxEvents) {
 		throwIfAborted(options.signal);
-		// Meilisearch repeats part of its work after every task, so a large
-		// import indexes several times faster in 500-event batches than in
-		// batches of 100.
-		const batchResults = await processNextSearchOutboxBatch({
-			...options,
-			batchSize: Math.min(500, maxEvents - processedEvents),
-		});
-		if (!batchResults) break;
-		results.push(...batchResults);
-		processedEvents += batchResults.reduce(
-			(total, result) => total + result.eventIds.length,
-			0,
-		);
+		const batchSize = Math.min(DRAIN_BATCH_SIZE, maxEvents - drain.reserved);
+		drain.reserved += batchSize;
+		try {
+			const batchResults = await processNextSearchOutboxBatch({
+				...options,
+				batchSize,
+			});
+			const processed = (batchResults ?? []).reduce(
+				(total, result) => total + result.eventIds.length,
+				0,
+			);
+			drain.reserved -= batchSize - processed;
+			if (!batchResults) return;
+			drain.results.push(...batchResults);
+		} catch (error) {
+			drain.failed = true;
+			throw error;
+		}
 	}
-	return results;
 }
 
 export type SearchOutboxReceiptSelector = {
