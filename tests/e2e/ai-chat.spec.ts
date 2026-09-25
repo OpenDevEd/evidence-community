@@ -182,10 +182,11 @@ function answerStream(answer: string) {
 }
 
 /**
- * Picks an entry from a publication's AI menu. On a busy machine a click that lands while the page settles can open
- * and close the menu at once, so the menu is opened again until it stays open; one that never opens still fails.
+ * Picks an entry from a publication's AI menu straight after the chat window closed. The window hands focus back as it
+ * goes, and a test clicks faster than a reader can: a click in that moment can open and close the menu at once, so the
+ * menu is opened again until it stays open. One that never opens still fails.
  */
-async function chooseFromAIMenu(page: Page, feature: RegExp) {
+async function reopenAIMenu(page: Page, feature: RegExp) {
 	const trigger = page.getByRole("button", { name: "AI menu", exact: true });
 	const entry = page.getByRole("menuitem", { name: feature });
 	await expect(async () => {
@@ -203,7 +204,11 @@ async function openPublicationAI(page: Page, feature: RegExp) {
 	await expect(
 		page.getByRole("main").getByRole("heading", { level: 1 }),
 	).toBeVisible();
-	await chooseFromAIMenu(page, feature);
+	// A reader's first click opens the menu and it stays open.
+	const trigger = page.getByRole("button", { name: "AI menu", exact: true });
+	await trigger.click();
+	await expect(trigger).toHaveAttribute("aria-expanded", "true");
+	await page.getByRole("menuitem", { name: feature }).click();
 }
 
 for (const feature of ["Summarise", "Explain"]) {
@@ -242,7 +247,7 @@ for (const feature of ["Summarise", "Explain"]) {
 		await page
 			.getByRole("dialog", { includeHidden: true })
 			.waitFor({ state: "detached" });
-		await chooseFromAIMenu(page, new RegExp(`^${feature}`));
+		await reopenAIMenu(page, new RegExp(`^${feature}`));
 		await expect(
 			page.getByRole("heading", { name: "Findings", exact: true }),
 		).toBeVisible();
@@ -288,7 +293,7 @@ test("lets the reader delete a failed generation and start again", async ({
 			body: answerStream("The new explanation is ready."),
 		}),
 	);
-	await chooseFromAIMenu(page, /^Explain/);
+	await reopenAIMenu(page, /^Explain/);
 	await expect(
 		page.getByText("The new explanation is ready.", { exact: true }),
 	).toBeVisible();
