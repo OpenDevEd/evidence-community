@@ -2,22 +2,13 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { BarChartIcon, ChartIncreaseIcon, Search01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import {
-	BarChart,
-	Bar,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	ResponsiveContainer,
-} from "recharts";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Input } from "@/components/nextui/Input";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Card } from "@/components/nextui/Card";
 import { SectionCard } from "./SectionCard";
+import { DistributionBarChart } from "./DistributionBarChart";
 import { AuthorStats, AuthorProductivityStats, AuthorCollaborationStats } from "./types";
 
 type AuthorAnalyticsProps = {
@@ -37,7 +28,6 @@ export function AuthorAnalytics({
 	authorCollaborationStats 
 }: AuthorAnalyticsProps) {
 	const t = useTranslations("ui");
-	const { resolvedTheme: theme } = useTheme();
 	const [authorsPage, setAuthorsPage] = useState(1);
 	const [authorsSearch, setAuthorsSearch] = useState("");
 	const [authorsSortDescriptor, setAuthorsSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
@@ -159,49 +149,20 @@ export function AuthorAnalytics({
 							<HugeiconsIcon icon={BarChartIcon} className="text-accent" />
 							{t("globalAuthorProductivityDistribution")}
 						</h3>
-						<Card color="card" className="p-6">
-							<div className="h-96">
-								<ResponsiveContainer width="100%" height="100%">
-									<BarChart
-										data={authorProductivityStats.productivityDistribution}
-										margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-									>
-										<CartesianGrid strokeDasharray="3 3" className="stroke-black/10 dark:stroke-white/10" />
-										<XAxis
-											dataKey="range"
-											className="text-black/60 dark:text-white/60"
-											tick={{ fontSize: 11 }}
-											axisLine={false}
-											angle={-45}
-											textAnchor="end"
-											height={80}
-										/>
-										<YAxis
-											className="text-black/60 dark:text-white/60"
-											tick={{ fontSize: 12 }}
-											axisLine={false}
-											tickFormatter={(value) => value.toLocaleString()}
-										/>
-										<Tooltip
-											contentStyle={{
-												backgroundColor: theme === "dark" ? "#1a1a1a" : "#ffffff",
-												border: `1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
-												borderRadius: "12px",
-												boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-												padding: "12px",
-											}}
-											labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
-											itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-											formatter={(value: number, name: string, props: any) => [
-												`${value.toLocaleString()} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
-												t("count")
-											]}
-										/>
-										<Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-									</BarChart>
-								</ResponsiveContainer>
-							</div>
-						</Card>
+						<DistributionBarChart
+							data={authorProductivityStats.productivityDistribution}
+							xAxis={{
+								dataKey: "range",
+								tick: { fontSize: 11 },
+								angle: -45,
+								textAnchor: "end",
+								height: 80,
+							}}
+							formatter={(value: number, name: string, props: any) => [
+								`${value.toLocaleString()} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
+								t("count")
+							]}
+						/>
 					</motion.div>
 
 					{/* Top Authors by H-Index */}
