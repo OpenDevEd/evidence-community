@@ -52,6 +52,17 @@ describe("gateway settings for a request", () => {
 		expect(settings).not.toHaveProperty("cache_control");
 	});
 
+	it("keeps every Gemini request on one Google host, because its thought signatures only work there", () => {
+		expect(
+			openRouterModelSettings("openrouter", "google/gemini-3.8-flash"),
+		).toMatchObject({
+			provider: { only: ["google-ai-studio"], allow_fallbacks: false },
+		});
+		expect(
+			openRouterModelSettings("openrouter", "deepseek/deepseek-v4.1-flash"),
+		).not.toHaveProperty("provider");
+	});
+
 	it.each(["anthropic/claude-opus-5", "~anthropic/claude-sonnet-5"])("caches %s explicitly for an hour", (modelId) => {
 		const settings = openRouterModelSettings(
 			"openrouter",
