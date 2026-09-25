@@ -1,30 +1,35 @@
-import { draftMode } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
 import {
 	ADMIN_PUBLISH_PERMISSION,
-	adminSessionCookieName,
+	adminSessionCookieOptions,
+	createLiveViewToken,
 	getAdminAccessConfig,
-	verifyAdminSessionToken,
+	liveViewCookieName,
+	verifyLiveViewToken,
 } from "@/lib/admin/access";
 import { ADMIN_RESPONSE_HEADERS, handleAdminResponse } from "@/lib/admin/http";
 
 const noContent = () => new NextResponse(null, { status: 204, headers: ADMIN_RESPONSE_HEADERS });
 
-// Live view is Next's Draft Mode: this browser skips every "use cache" entry
-// and saves nothing, so visitors keep the cached pages.
+// Live view: this browser reads records live instead of from the public cache,
+// and those reads are never saved, so visitors keep the cached pages.
 export function POST(request: NextRequest) {
 	return handleAdminResponse(request, ADMIN_PUBLISH_PERMISSION, async (session) => {
-		(await draftMode()).enable();
+		const response = noContent();
+		const { secret } = await getAdminAccessConfig();
+		response.cookies.set(liveViewCookieName(), createLiveViewToken(session.clerkUserId, secret), adminSessionCookieOptions());
 		console.info("Live view turned on", { adminId: session.clerkUserId, role: session.role, at: new Date().toISOString() });
-		return noContent();
+		return response;
 	});
 }
 
 // Anyone may leave live view, so an expired session never traps a browser in it.
 export async function DELETE(request: NextRequest) {
-	(await draftMode()).disable();
-	const session = verifyAdminSessionToken(request.cookies.get(adminSessionCookieName())?.value, await getAdminAccessConfig());
-	console.info("Live view turned off", { adminId: session?.clerkUserId ?? null, at: new Date().toISOString() });
-	return noContent();
+	const { secret } = await getAdminAccessConfig();
+	const adminId = verifyLiveViewToken(request.cookies.get(liveViewCookieName())?.value, secret);
+	const response = noContent();
+	response.cookies.set(liveViewCookieName(), "", { ...adminSessionCookieOptions(), maxAge: 0 });
+	console.info("Live view turned off", { adminId, at: new Date().toISOString() });
+	return response;
 }

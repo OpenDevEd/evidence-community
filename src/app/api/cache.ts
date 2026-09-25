@@ -12,6 +12,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { RuntimeCollectionConfigurationError } from "@/lib/collections";
+import { hasLiveView } from "@/lib/admin/access";
 
 // --- Collections ---
 
@@ -92,7 +93,9 @@ async function readCachedPublicItem(key: string, _configRevision: string, _versi
 	return withoutFullText(await getItem(key));
 }
 
+// An admin in live view reads the record live, and nothing is saved to the cache.
 export const getCachedItemSmall = cache(async (key: string) => {
+	if (await hasLiveView()) return withoutFullText(await getItem(key));
 	const [config, version] = await Promise.all([getLibraryConfig(), readItemVersion(key)]);
 	return readCachedPublicItem(key, config.revision, version);
 });

@@ -29,7 +29,7 @@ export default function LiveViewNotice() {
 		>
 			<HugeiconsIcon icon={ViewIcon} aria-hidden className="shrink-0 text-accent" size={16} />
 			<span className="text-black/75 dark:text-white/75">
-				Live view: this browser skips the public cache.
+				Live view: this browser reads records live, not from the cache.
 			</span>
 			<Button isLoading={leaving} onPress={() => void leave()} size="xs" variant="muted">
 				Leave live view

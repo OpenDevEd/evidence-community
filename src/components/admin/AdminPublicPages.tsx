@@ -2,6 +2,7 @@
 
 import { GlobalIcon, GlobalRefreshIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
+import { useRouter } from "next/navigation";
 import { useState, type ComponentProps } from "react";
 import { toast } from "sonner";
 
@@ -35,6 +36,7 @@ function PublicPagesTrigger({ liveView, ...props }: ComponentProps<"button"> & {
 
 function PublicPagesPopover({ initialLiveView }: { initialLiveView: boolean }) {
 	const { role } = useAdminSession();
+	const router = useRouter();
 	const [liveView, setLiveView] = useState(initialLiveView);
 	const [busy, setBusy] = useState<"live" | "clear" | null>(null);
 	const canClear = adminRoleHasPermission(role, ADMIN_LIBRARY_PERMISSION);
@@ -62,12 +64,14 @@ function PublicPagesPopover({ initialLiveView }: { initialLiveView: boolean }) {
 							onValueChange={(on) => void run("live", async () => {
 								await setAdminLiveView(on);
 								setLiveView(on);
+								// The shared layout draws the live view notice, so fetch it again.
+								router.refresh();
 							})}
 						>
 							Live view
 						</Switch>
 						<p className={noteClass}>
-							This browser shows current data on public pages instead of the cached copy. Visitors still get the cache.
+							This browser reads records live on public pages instead of from the cache. Visitors still get the cache.
 						</p>
 					</div>
 					<div className="space-y-2">
