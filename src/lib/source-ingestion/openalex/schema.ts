@@ -15,6 +15,9 @@ export const openAlexConnectionConfigSchema = z
 	.object({
 		apiKeyMode: z.enum(["platform", "custom"]).default("platform"),
 		name: z.string().trim().min(1).max(80),
+		// The editor retains its unexpanded query, filters and local history ID.
+		// Imports always use approvedQuery, never this UI state.
+		searchUrl: z.string().max(16_384).regex(/^\/results\/[A-Za-z0-9-]+(?:\?|$)/).optional(),
 		approvedQuery: z
 			.object({
 				version: z.string().trim().min(1).max(128),
