@@ -57,6 +57,7 @@ import {
 	sourceIngestionBatchSchema,
 } from "./batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
+import { replaceZoteroCitationLinks } from "./zotero/citations";
 import {
 	canonicalSourceJson,
 	sourceCollectionFingerprint,
@@ -2051,18 +2052,22 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				if (toKey !== fromKey) citationLinkRows.push({ fromKey, toKey });
 			}
 		}
-		const citationLinkChange = await replaceSourceLinks(transaction, {
-			sourceConnectionKey: batch.sourceConnectionKey,
-			kind: "cites",
-			fromKeys: [
-				...citationTargetsByRecordKey.keys(),
-				...itemDeletes.map((record) => record.sourceRecordKey),
-			].flatMap((sourceRecordKey) => {
-				const itemKey = itemKeys.get(sourceRecordKey);
-				return itemKey ? [itemKey] : [];
-			}),
-			links: citationLinkRows,
-		});
+		// Zotero sends no references; its citations are read from the stored library once the sync's last batch is in.
+		let citationLinkChange: { changedItemKeys: string[] } =
+			connection.provider === "zotero"
+				? { changedItemKeys: [] }
+				: await replaceSourceLinks(transaction, {
+						sourceConnectionKey: batch.sourceConnectionKey,
+						kind: "cites",
+						fromKeys: [
+							...citationTargetsByRecordKey.keys(),
+							...itemDeletes.map((record) => record.sourceRecordKey),
+						].flatMap((sourceRecordKey) => {
+							const itemKey = itemKeys.get(sourceRecordKey);
+							return itemKey ? [itemKey] : [];
+						}),
+						links: citationLinkRows,
+					});
 
 		const aliasRows = itemUpserts.flatMap((record) =>
 			record.aliases.map((alias) => ({
@@ -2325,6 +2330,15 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			}),
 			now,
 		);
+		// After the source links record what the source deleted. A batch that leaves work pending is not the last one.
+		const pending = (batch.nextCursor as { pending?: unknown }).pending;
+		if (connection.provider === "zotero" && !pending) {
+			citationLinkChange = await replaceZoteroCitationLinks(transaction, {
+				key: connection.key,
+				scopeKind: connection.scopeKind,
+				externalScopeKey: connection.externalScopeKey,
+			});
+		}
 
 		const directlyChangedItemKeys = new Set(itemEvents.keys());
 		const affectedParentKeys = new Set<string>();
@@ -2353,23 +2367,29 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const parentKeysToBump = [...affectedParentKeys]
 			.filter((key) => !directlyChangedItemKeys.has(key))
 			.sort();
+		// A large library's first citation read can reach tens of thousands of records: keep each statement under
+		// PostgreSQL's limit of 65,535 parameters.
+		const byChunk = async <Row,>(keys: string[], read: (chunk: string[]) => Promise<Row[]>) => {
+			const rows: Row[] = [];
+			for (const chunk of chunkValues(keys, 10_000)) rows.push(...(await read(chunk)));
+			return rows;
+		};
 		if (parentKeysToBump.length > 0) {
-			const bumpedParents = await transaction
-				.update(item)
-				.set({
-					revision: sql`${item.revision} + 1`,
-					updatedAt: now,
-				})
-				.where(
-					and(
-						inArray(item.key, parentKeysToBump),
-						eq(item.deleted, 0),
-					),
-				)
-				.returning({
-					key: item.key,
-					revision: item.revision,
-				});
+			// Links and citations can reach records outside this batch; hold their mutation locks like the batch's own.
+			await lockItemMutations(transaction, parentKeysToBump);
+			const bumpedParents = await byChunk(parentKeysToBump, (chunk) =>
+				transaction
+					.update(item)
+					.set({
+						revision: sql`${item.revision} + 1`,
+						updatedAt: now,
+					})
+					.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))
+					.returning({
+						key: item.key,
+						revision: item.revision,
+					}),
+			);
 			for (const parent of bumpedParents) {
 				itemEvents.set(parent.key, {
 					operation: "upsert",
@@ -2378,18 +2398,17 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			}
 		}
 
-		const changedRows =
-			itemEvents.size === 0
-				? []
-				: await transaction
-						.select({
-							deleted: item.deleted,
-							key: item.key,
-							parentItem: item.parentItem,
-							revision: item.revision,
-						})
-						.from(item)
-						.where(inArray(item.key, [...itemEvents.keys()]));
+		const changedRows = await byChunk([...itemEvents.keys()], (chunk) =>
+			transaction
+				.select({
+					deleted: item.deleted,
+					key: item.key,
+					parentItem: item.parentItem,
+					revision: item.revision,
+				})
+				.from(item)
+				.where(inArray(item.key, chunk)),
+		);
 		const changedParentKeys = [
 			...new Set(
 				changedRows.flatMap((row) => {
@@ -2398,19 +2417,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				}),
 			),
 		].sort();
-		const changedParents =
-			changedParentKeys.length === 0
-				? []
-				: await transaction
-						.select({ key: item.key, revision: item.revision })
-						.from(item)
-						.where(
-							and(
-								inArray(item.key, changedParentKeys),
-								eq(item.deleted, 0),
-							),
-						)
-						.orderBy(item.key);
+		const changedParents = await byChunk(changedParentKeys, (chunk) =>
+			transaction
+				.select({ key: item.key, revision: item.revision })
+				.from(item)
+				.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))
+				.orderBy(item.key),
+		);
 		const fileChangedParentKeys = new Set([
 			...publicationUpserts.map(({ parentItemKey }) => parentItemKey),
 			...publicationDeleteItemKeys.flatMap((itemKey) => {
