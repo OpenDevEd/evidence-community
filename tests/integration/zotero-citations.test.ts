@@ -45,7 +45,8 @@ it("reads Zotero citations from _cites notes and ✅_References folders, and fol
 
 		// "Enclosed" holds the citing report; its ✅_References folder holds what it cites, and a loose note that is not a
 		// publication. A note under the second report links a publication here; one in another group that a record here
-		// says it also is; one in another group that only shares a key with a record here; and one that is nowhere.
+		// says it also is; one in another group, and one in a reader's own library, that only share a key with a record here;
+		// and one that is nowhere.
 		await batch(1, {
 			collections: [
 				{ operation: "upsert", sourceRecordKey: "ENCLOSED", remoteVersion: "1", raw: { key: "ENCLOSED" }, data: { name: "Citing report" } },
@@ -62,7 +63,7 @@ it("reads Zotero citations from _cites notes and ✅_References folders, and fol
 					"NOTEEEEE",
 					"NOTEDDDD",
 					1,
-					'<p><a href="zotero://select/groups/2129771/items/CITEDBBB">First</a> <a href="https://www.zotero.org/groups/2405685/items/OTHERKEY">Copy</a> <a href="zotero://select/groups/9999/items/CITEDCCC">Same key</a> <a href="https://www.zotero.org/groups/2129771/items/ELSEWHER">Elsewhere</a></p>',
+					'<p><a href="zotero://select/groups/2129771/items/CITEDBBB">First</a> <a href="https://www.zotero.org/groups/2405685/items/OTHERKEY">Copy</a> <a href="zotero://select/groups/9999/items/CITEDCCC">Same key</a> <a href="https://www.zotero.org/groups/2129771/items/ELSEWHER">Elsewhere</a> <a href="zotero://select/library/items/CITEDCCC">Someone\'s own library</a></p>',
 				),
 			],
 		});

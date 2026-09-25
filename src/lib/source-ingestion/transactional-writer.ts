@@ -2367,23 +2367,27 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const parentKeysToBump = [...affectedParentKeys]
 			.filter((key) => !directlyChangedItemKeys.has(key))
 			.sort();
+		// A large library's first citation read can reach tens of thousands of records: keep each statement under
+		// PostgreSQL's limit of 65,535 parameters.
+		const byChunk = async <Row,>(keys: string[], read: (chunk: string[]) => Promise<Row[]>) => {
+			const rows: Row[] = [];
+			for (const chunk of chunkValues(keys, 10_000)) rows.push(...(await read(chunk)));
+			return rows;
+		};
 		if (parentKeysToBump.length > 0) {
-			const bumpedParents = await transaction
-				.update(item)
-				.set({
-					revision: sql`${item.revision} + 1`,
-					updatedAt: now,
-				})
-				.where(
-					and(
-						inArray(item.key, parentKeysToBump),
-						eq(item.deleted, 0),
-					),
-				)
-				.returning({
-					key: item.key,
-					revision: item.revision,
-				});
+			const bumpedParents = await byChunk(parentKeysToBump, (chunk) =>
+				transaction
+					.update(item)
+					.set({
+						revision: sql`${item.revision} + 1`,
+						updatedAt: now,
+					})
+					.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))
+					.returning({
+						key: item.key,
+						revision: item.revision,
+					}),
+			);
 			for (const parent of bumpedParents) {
 				itemEvents.set(parent.key, {
 					operation: "upsert",
@@ -2392,18 +2396,17 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			}
 		}
 
-		const changedRows =
-			itemEvents.size === 0
-				? []
-				: await transaction
-						.select({
-							deleted: item.deleted,
-							key: item.key,
-							parentItem: item.parentItem,
-							revision: item.revision,
-						})
-						.from(item)
-						.where(inArray(item.key, [...itemEvents.keys()]));
+		const changedRows = await byChunk([...itemEvents.keys()], (chunk) =>
+			transaction
+				.select({
+					deleted: item.deleted,
+					key: item.key,
+					parentItem: item.parentItem,
+					revision: item.revision,
+				})
+				.from(item)
+				.where(inArray(item.key, chunk)),
+		);
 		const changedParentKeys = [
 			...new Set(
 				changedRows.flatMap((row) => {
@@ -2412,19 +2415,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				}),
 			),
 		].sort();
-		const changedParents =
-			changedParentKeys.length === 0
-				? []
-				: await transaction
-						.select({ key: item.key, revision: item.revision })
-						.from(item)
-						.where(
-							and(
-								inArray(item.key, changedParentKeys),
-								eq(item.deleted, 0),
-							),
-						)
-						.orderBy(item.key);
+		const changedParents = await byChunk(changedParentKeys, (chunk) =>
+			transaction
+				.select({ key: item.key, revision: item.revision })
+				.from(item)
+				.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))
+				.orderBy(item.key),
+		);
 		const fileChangedParentKeys = new Set([
 			...publicationUpserts.map(({ parentItemKey }) => parentItemKey),
 			...publicationDeleteItemKeys.flatMap((itemKey) => {

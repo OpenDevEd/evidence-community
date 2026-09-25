@@ -24,11 +24,20 @@ const REFERENCES_COLLECTION_NAME = "✅_References";
 const ALSO_KNOWN_AS = "KerkoCite.ItemAlsoKnownAs";
 
 const ZOTERO_ITEM_URI =
-	/(?:https?:\/\/(?:www\.)?zotero\.org\/|zotero:\/\/select\/)(groups|users)\/([0-9]+)\/items\/([A-Z0-9]{8})/g;
+	/(?:https?:\/\/(?:www\.)?zotero\.org\/|zotero:\/\/select\/)(?:(groups|users)\/([0-9]+)|library)\/items\/([A-Z0-9]{8})/g;
 
-/** The records a `_cites` note links to, as `<library>/<key>`: `groups/2129771/ABCD2345`. */
-function citedZoteroRecords(note: string | null) {
-	return [...new Set([...(note ?? "").matchAll(ZOTERO_ITEM_URI)].map(([, scope, id, key]) => `${scope}/${id}/${key}`))];
+/**
+ * The records a `_cites` note links to, as `<library>/<key>`: `groups/2129771/ABCD2345`. `zotero://select/library/…`
+ * names the personal library of whoever opens it, which is this source only when this source is a personal library.
+ */
+function citedZoteroRecords(note: string | null, personalLibrary: string | null) {
+	return [
+		...new Set(
+			[...(note ?? "").matchAll(ZOTERO_ITEM_URI)].flatMap(([, scope, id, key]) =>
+				scope ? [`${scope}/${id}/${key}`] : personalLibrary ? [`${personalLibrary}/${key}`] : [],
+			),
+		),
+	];
 }
 
 /** The records in other group libraries a record says it also is, as `groups/<id>/<key>`. */
@@ -49,6 +58,8 @@ type Pair = { fromKey: string; toKey: string };
 function zoteroCitationPairs(input: {
 	/** Library key of each record, by `groups/<id>/<key>` or `users/<id>/<key>`. */
 	keyByZoteroRecord: ReadonlyMap<string, string>;
+	/** `users/<id>` when this source is a personal library. */
+	personalLibrary: string | null;
 	/** Publications (not notes or attachments) this source holds that are not deleted. */
 	publications: ReadonlySet<string>;
 	notes: { parentKey: string; note: string | null }[];
@@ -61,7 +72,7 @@ function zoteroCitationPairs(input: {
 		pairs.set(`${fromKey}\u0000${toKey}`, { fromKey, toKey });
 	};
 	for (const { parentKey, note } of input.notes) {
-		for (const record of citedZoteroRecords(note)) add(parentKey, input.keyByZoteroRecord.get(record));
+		for (const record of citedZoteroRecords(note, input.personalLibrary)) add(parentKey, input.keyByZoteroRecord.get(record));
 	}
 	for (const { citing, cited } of input.references) {
 		for (const fromKey of citing) for (const toKey of cited) add(fromKey, toKey);
@@ -137,6 +148,7 @@ export async function replaceZoteroCitationLinks(
 	}
 	const wanted = zoteroCitationPairs({
 		keyByZoteroRecord,
+		personalLibrary: connection.scopeKind === "group" ? null : library,
 		publications: new Set(
 			records
 				.filter((record) => !record.deleted && !record.parentItem && !EXCLUDED_ITEM_TYPES.includes(record.itemType))
