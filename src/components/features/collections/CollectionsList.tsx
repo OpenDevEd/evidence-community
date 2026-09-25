@@ -24,7 +24,7 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
-import { Fragment, useContext, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
@@ -149,7 +149,6 @@ function FacetPicker({
 	onSearchChange?: (value: string) => void;
 	searchPaging?: FacetSearchPaging;
 }) {
-	const inputRef = useRef<HTMLInputElement>(null);
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
 	const displayedList = searchedFacetItems(list, searchList, search);
@@ -169,7 +168,10 @@ function FacetPicker({
 
 	return (
 		<div className="w-full flex flex-col gap-2" onKeyDownCapture={(event) => {
-			if (event.key === "Escape") requestAnimationFrame(() => inputRef.current?.focus({preventScroll: true}));
+			// Found here rather than through a ref: a ref in inputProps replaces the
+			// one React Aria uses to keep the input visible while the list is open.
+			const picker = event.currentTarget;
+			if (event.key === "Escape") requestAnimationFrame(() => picker.querySelector("input")?.focus({preventScroll: true}));
 		}}>
 			{/* <div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 				<span>{label}</span>
@@ -210,7 +212,6 @@ function FacetPicker({
 						}
 					}}
 					inputProps={{
-						ref: inputRef,
 						classNames: {
 							inputWrapper:
 								"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
