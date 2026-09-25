@@ -1429,6 +1429,13 @@ export type ItemUnpublishOptions = {
 	removeFromSourceKeys?: readonly string[];
 };
 
+/** Keeps a withdrawn OpenAlex record withdrawn when the next import brings it again. */
+async function keepSourceRecordDeleted(transaction: Transaction, itemKey: string, now: Date) {
+	const [originLink] = await transaction.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey)).limit(1);
+	if (originLink) await transaction.insert(itemFieldOverride).values({itemKey, field: "deleted", value: 1, sourceValue: 0,
+		sourceConnectionKey: originLink.sourceConnectionKey, sourceVersion: originLink.remoteVersion}).onConflictDoUpdate({target: [itemFieldOverride.itemKey, itemFieldOverride.field], set: {value: 1, updatedAt: now}});
+}
+
 async function unpublishNativeItemAttempt(
 	db: Database,
 	itemKey: string,
@@ -1556,9 +1563,7 @@ async function unpublishNativeItemAttempt(
 
 		const nextRevision = current.revision + 1;
 		const now = new Date();
-		const [originLink] = await transaction.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey)).limit(1);
-		if (originLink) await transaction.insert(itemFieldOverride).values({itemKey, field: "deleted", value: 1, sourceValue: 0,
-			sourceConnectionKey: originLink.sourceConnectionKey, sourceVersion: originLink.remoteVersion}).onConflictDoUpdate({target: [itemFieldOverride.itemKey, itemFieldOverride.field], set: {value: 1, updatedAt: now}});
+		if (current.sourceConnectionKey !== NATIVE_CONNECTION_KEY) await keepSourceRecordDeleted(transaction, itemKey, now);
 		const [unpublished] = await transaction
 			.update(item)
 			.set({

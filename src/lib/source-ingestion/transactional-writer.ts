@@ -1477,8 +1477,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey);
 		};
 
-		const overridesByItem = await sourceOverridesByItem(transaction, batchItemKeys);
-		const previousSourceValues = batchItemKeys.length ? await transaction.select().from(itemSourceValue).where(inArray(itemSourceValue.itemKey, batchItemKeys)) : [];
+		// Editorial overrides and source values exist only for OpenAlex; Zotero edits flow through writeback.
+		const isOpenAlex = connection.provider === "openalex";
+		const overridesByItem = isOpenAlex ? await sourceOverridesByItem(transaction, batchItemKeys) : new Map<string, Record<string, unknown>>();
+		const previousSourceValues = isOpenAlex && batchItemKeys.length ? await transaction.select().from(itemSourceValue).where(inArray(itemSourceValue.itemKey, batchItemKeys)) : [];
 		const topicImportKeys = new Set(previousSourceValues.filter(row => row.importedTopics).map(row => row.itemKey));
 		const importedTopicRows = new Map<string, ReturnType<typeof importedTopics>>();
 		for (const record of itemUpserts) {
@@ -1568,7 +1570,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return previous !== undefined && (!Number.isFinite(incoming) || incoming < previous) ? [key] : [];
 		}));
 		const currentItemUpserts = itemUpserts.filter((record) => !staleItemKeys.has(itemKeys.get(record.sourceRecordKey)!));
-		for (const record of currentItemUpserts) {
+		for (const record of isOpenAlex ? currentItemUpserts : []) {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const normalized = normalizedItems.get(record.sourceRecordKey)!;
 			const sourceItem = {...normalized.item};

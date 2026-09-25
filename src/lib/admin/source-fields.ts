@@ -14,10 +14,11 @@ function sourceFieldFingerprint(value: unknown) {
   return sourcePayloadHash((value ?? null) as JsonValue);
 }
 
+/** Only OpenAlex keeps source values; Zotero changes flow through writeback instead. */
 async function sourceValues(db: Reader, itemKey: string) {
-  return db.select({...getTableColumns(itemSourceValue), provider: sourceConnection.provider}).from(itemSourceValue)
+  return db.select(getTableColumns(itemSourceValue)).from(itemSourceValue)
     .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceValue.sourceConnectionKey))
-    .where(eq(itemSourceValue.itemKey, itemKey)).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
+    .where(and(eq(itemSourceValue.itemKey, itemKey), eq(sourceConnection.provider, "openalex"))).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
 }
 
 export async function readSourceFields(db: Reader, itemKey: string): Promise<SourceFieldConflict[]> {
@@ -26,8 +27,8 @@ export async function readSourceFields(db: Reader, itemKey: string): Promise<Sou
     sourceValues(db, itemKey),
   ]);
   return overrides.filter(override => override.field !== "deleted").flatMap(override => {
-    const original = sources.find(row => row.sourceConnectionKey === override.sourceConnectionKey);
-    const source = original?.provider === "openalex" ? sources.find(row => row.provider === "openalex") : original;
+    // Overlapping queries share one work, so the newest copy is the source value.
+    const source = sources.some(row => row.sourceConnectionKey === override.sourceConnectionKey) ? sources[0] : undefined;
     if (!source || !Object.hasOwn(source.payload, override.field)) return [];
     const sourceValue = source.payload[override.field] ?? null;
     const fingerprint = sourceFieldFingerprint(sourceValue);
@@ -55,17 +56,6 @@ export async function resolveSourceFieldChoices(db: Reader, itemKey: string, pay
     }
   }
   return resolved;
-}
-
-/** A linked item without stored source values uses its published values as the source baseline. */
-async function sourceValuesWithBaseline(db: DatabaseTransaction, itemKey: string, before: Record<string, unknown>) {
-  const sources = await sourceValues(db, itemKey);
-  if (sources.length) return sources;
-  const links = await db.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, itemKey));
-  const sourcePayload = {...before};
-  delete sourcePayload.topics;
-  for (const link of links) await db.insert(itemSourceValue).values({itemKey, sourceConnectionKey: link.sourceConnectionKey, payload: sourcePayload, remoteVersion: link.remoteVersion, importedTopics: false}).onConflictDoNothing();
-  return sourceValues(db, itemKey);
 }
 
 async function clearSourceOverride(db: DatabaseTransaction, itemKey: string, field: string) {
@@ -99,7 +89,7 @@ async function publishFieldOverride(db: DatabaseTransaction, itemKey: string, fi
 }
 
 export async function publishSourceFieldOverrides(db: DatabaseTransaction, itemKey: string, before: Record<string, unknown>, after: Record<string, unknown>) {
-  const sources = await sourceValuesWithBaseline(db, itemKey, before);
+  const sources = await sourceValues(db, itemKey);
   if (!sources.length) return;
   const previous = new Map((await db.select().from(itemFieldOverride).where(eq(itemFieldOverride.itemKey, itemKey))).map(row => [row.field, row]));
   const resolutions = sourceResolutionsSchema.parse(after.sourceResolutions ?? {});

@@ -8,12 +8,13 @@ import { createNativeItemDraft, openItemDraft, saveItemDraft, publishItemDraft, 
 import { readPublicItem } from "@/lib/search-index/projection";
 import { prepareSearchProjection, setSearchIndexRebuildPending } from "@/lib/search-index/bootstrap-state";
 import { resolveTopicNodes } from "@/lib/topics/catalog";
-import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { readSourceFields } from "@/lib/admin/source-fields";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { runTopicAssociationCycle } from "@/lib/topics/association-delivery";
+import { SourceWritebackAdapterRegistry } from "@/lib/source-writeback/adapter";
+import { processNextSourceWritebackJob } from "@/lib/source-writeback/consumer";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -210,22 +211,24 @@ it("ignores invalid or removed topic URL IDs without relaxing topic assignment v
   });
 });
 
-it("keeps provider values separate from local collections and manual topics, and accepts a writeback echo without a false conflict", async () => {
+it("applies a Zotero edit made after an acknowledged writeback and keeps manual topics", async () => {
   await withIsolatedPublicationDatabase(async db => {
     await seedTopics(db);
-    await db.insert(sourceConnection).values({key: "oa", provider: "zotero", scopeKind: "group", externalScopeKey: "123", config: {}});
-    const first = await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {}, nextCursor: {v: 1}, mappingProfileVersion: "test", fetchedAt: new Date(), items: mapOpenAlexWork(work(1)).items});
-    const key = first.itemKeys.W123!;
-    const zoteroPolicy = {writebackConfig: {...config, sources: [{key: "oa", writebackEnabled: true}]}};
-    const collection = await createNativeCollection(db, {name: "Editor collection"});
-    await edit(db, key, {title: "Editor title", topics: ["T12345"], collections: [collection.key]}, zoteroPolicy);
+    await db.insert(sourceConnection).values({key: "zt", provider: "zotero", scopeKind: "group", externalScopeKey: "123", config: {}});
+    const ingest = (expectedCursor: object, version: number, title?: string) => writeSourceIngestionBatch(db, {sourceConnectionKey: "zt", expectedCursor,
+      nextCursor: {v: version}, mappingProfileVersion: "test", fetchedAt: new Date(), items: mapOpenAlexWork(work(version, "W123", title)).items});
+    const key = (await ingest({}, 1)).itemKeys.W123!;
+    const zoteroPolicy = {writebackConfig: {...config, sources: [{key: "zt", writebackEnabled: true}]}};
+    await edit(db, key, {title: "Editor title", topics: ["T12345"]}, zoteroPolicy);
     await publishItemDraft(db, key, zoteroPolicy);
-    await writeSourceIngestionBatch(db, {sourceConnectionKey: "oa", expectedCursor: {v: 1}, nextCursor: {v: 2}, mappingProfileVersion: "test", fetchedAt: new Date(), items: mapOpenAlexWork(work(2, "W123", "Editor title")).items});
-    const fields = await readSourceFields(db, key);
-    expect(fields.find(field => field.field === "title")?.conflicting).toBe(false);
-    expect(fields.find(field => field.field === "collections")).toMatchObject({sourceValue: [], value: [collection.key], conflicting: false});
-    expect(fields.find(field => field.field === "topics")).toBeUndefined();
-    expect((await db.select().from(item).where(eq(item.key, key)))[0]?.topics).toEqual(["T12345"]);
+    const registry = new SourceWritebackAdapterRegistry([{provider: "zotero", readRecord: async () => null, readVersion: async () => null,
+      write: async request => ({remoteVersion: "2026-09-12T10:00:00.000Z", sourceRecordKey: request.sourceRecordKey})}]);
+    expect(await processNextSourceWritebackJob({database: db, registry, credentialResolver: async () => "key", sourceWritebackEnabled: () => true, workerId: "topics-test"}))
+      .toMatchObject({status: "processed"});
+    expect((await db.select().from(itemSourceLink).where(eq(itemSourceLink.itemKey, key)))[0]?.dirtyFields).toEqual([]);
+    await ingest({v: 1}, 3, "Zotero title");
+    expect((await db.select().from(item).where(eq(item.key, key)))[0]).toMatchObject({title: "Zotero title", topics: ["T12345"]});
+    expect(await readSourceFields(db, key)).toEqual([]);
   });
 });
 

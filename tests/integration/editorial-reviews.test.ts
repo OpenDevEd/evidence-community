@@ -15,9 +15,8 @@ import { getAdminReviewSnapshot } from "../../src/lib/admin/review-query";
 import { AdminValidationError } from "../../src/lib/admin/errors";
 import { itemReview } from "../../src/db/schema/review";
 import { item } from "../../src/db/schema/tables/item";
-import { itemFilePublication } from "../../src/db/schema/source";
+import { itemFilePublication, sourceConnection } from "../../src/db/schema/source";
 import { itemFieldOverride, itemSourceValue } from "../../src/db/schema/topics";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "../../src/lib/admin/constants";
 import { publicationTarget, publicationSyncJob } from "../../src/db/schema/publication";
 import { getItemPublishingChoice, correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../../src/lib/admin/review-service";
 import { createNativeItemDraft, publishItemDraft as publishNativeItemDraft, saveItemDraft as saveNativeItemDraft, getItemDraft as getNativeItemDraft, openItemDraft as openNativeItemDraft, discardItemDraft, removeNativeItem, unpublishNativeItem } from "../../src/lib/admin/native-item-service";
@@ -31,21 +30,22 @@ it("hides topic source conflicts from reviews while Topics are off", async () =>
 			itemType: "Report",
 			title: "Review source fields",
 		});
-		await db.insert(itemSourceValue).values({itemKey: draft.itemKey, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY, payload: {title: "Source title", topics: []}, importedTopics: false});
+		await db.insert(sourceConnection).values({key: "oa", provider: "openalex", scopeKind: "query", config: {}});
+		await db.insert(itemSourceValue).values({itemKey: draft.itemKey, sourceConnectionKey: "oa", payload: {title: "Source title", topics: []}, importedTopics: false});
 		await db.insert(itemFieldOverride).values([
 			{
 				itemKey: draft.itemKey,
 				field: "topics",
 				value: ["T12260"],
 				sourceValue: [],
-				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
+				sourceConnectionKey: "oa",
 			},
 			{
 				itemKey: draft.itemKey,
 				field: "title",
 				value: "Review source fields",
 				sourceValue: "Source title",
-				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
+				sourceConnectionKey: "oa",
 			},
 		]);
 		const review = await submitItemReview(db, draft.itemKey, noFileActor);
