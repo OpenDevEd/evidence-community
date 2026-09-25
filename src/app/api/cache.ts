@@ -65,9 +65,22 @@ export async function getCachedCollections(config?: LibraryServerConfig) {
 // Share the database read within one render, without keeping an older public revision.
 export const getCachedItem = cache(getItem);
 
-export const getCachedItemSmall = cache(async (key: string) =>
-	withoutFullText(await getCachedItem(key)),
-);
+// Kept until a writer clears `item:<key>` (see src/lib/cache-invalidation.ts).
+// "Not found" is cached too, so publishing a record must clear its tag.
+// The nested collections read adds its `collections` tag to every entry.
+async function readCachedPublicItem(key: string, _configRevision: string) {
+	"use cache";
+	cacheLife("max");
+	cacheTag(`item:${key}`, "library");
+	return withoutFullText(await getItem(key));
+}
+
+export const getCachedItemSmall = cache(async (key: string) => {
+	const config = await getLibraryConfig();
+	// Workers reach the web process only through Redis; without it nothing could clear the entry.
+	if (!config.services.redis) return withoutFullText(await getCachedItem(key));
+	return readCachedPublicItem(key, config.revision);
+});
 
 // --- User data (revalidate: 60s) ---
 

@@ -788,6 +788,15 @@ automatically before the next operation.
 - Redis reconnects after temporary socket loss. It fails closed at a 128 MB
   `noeviction` ceiling, so a full Redis also returns the controlled 503 instead
   of risking an out-of-memory container failure or uncounted AI requests.
+- Item pages keep each public record in the web process's memory until the
+  record changes. Every process that commits a record change adds its tags to
+  the Redis stream `evidence-library:cache-invalidation:v1`, and the web
+  process clears them within about 50 ms. Logs start with `[cache]`. Without
+  `services.redis` item pages read PostgreSQL on every visit.
+- If a `[cache] Publishing a cache clear failed` line appears, add the logged
+  tags by hand from the `redis` container:
+  `redis-cli XADD evidence-library:cache-invalidation:v1 '*' event '{"tags":["item:ABCD2345"],"immediate":true,"reason":"manual","source":"operator"}'`.
+  Restarting `web` also empties the cache.
 
 ## Release verification
 

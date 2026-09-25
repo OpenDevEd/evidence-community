@@ -7,6 +7,8 @@ const withNextIntl = createNextIntlPlugin();
 const nextConfig = {
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheComponents: true,
+	// Cached item pages: about 8,000 records at roughly 12 KB each is 96 MB.
+	cacheMaxMemorySize: 128 * 1024 * 1024,
 	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "citeproc-ts"],
 	typescript: {
 		ignoreBuildErrors:
