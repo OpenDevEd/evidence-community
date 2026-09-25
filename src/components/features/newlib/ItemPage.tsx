@@ -29,6 +29,7 @@ import {
 	localizeOrUseIfCapitalized,
 } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
+import { EntranceContext } from "@/components/features/newlib/entrance";
 import { planRelationTabs } from "@/components/features/newlib/relation-tabs";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
@@ -1260,10 +1261,14 @@ export default function ItemPage({
 	const loading = data?.item ? false : loadingProp;
 	const itemKey = data?.item?.key;
 	const [alreadyShown] = useState(() => !loadingProp && itemKey !== undefined && drawnFromListCopy.has(itemKey));
+	// The list copy's page marks the item while it is shown. The full record's page reads the mark as it renders,
+	// before the list copy's page is removed, and a visit left before the record arrives leaves no mark behind.
 	useEffect(() => {
-		if (!itemKey) return;
-		if (loadingProp) drawnFromListCopy.add(itemKey);
-		else drawnFromListCopy.delete(itemKey);
+		if (!itemKey || !loadingProp) return;
+		drawnFromListCopy.add(itemKey);
+		return () => {
+			drawnFromListCopy.delete(itemKey);
+		};
 	}, [itemKey, loadingProp]);
 
 	useEffect(() => {
@@ -1276,6 +1281,7 @@ export default function ItemPage({
 	const item = (loading ? undefined : data?.item)!;
 
 	return (
+		<EntranceContext value={!alreadyShown}>
 		<AnimatePresence initial={!alreadyShown}>
 		<PageContainer>
 			{item && <abbr className="unapi-id" title={item.key}></abbr>}
@@ -1340,5 +1346,6 @@ export default function ItemPage({
 			</LoadingContext.Provider>
 		</PageContainer>
 		</AnimatePresence>
+		</EntranceContext>
 	);
 }

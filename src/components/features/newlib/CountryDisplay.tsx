@@ -3,7 +3,8 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { motion, AnimatePresence, Variants } from "framer-motion";
-import { useState } from "react";
+import { use, useState } from "react";
+import { EntranceContext } from "@/components/features/newlib/entrance";
 import { twMerge } from "@/lib/tw-merge";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
@@ -245,7 +246,7 @@ export function CountryDisplay({
 			animate="show"
 			className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
 		>
-			<AnimatePresence>
+			<AnimatePresence initial={use(EntranceContext)}>
 				{countries.map((country) => {
 					const ancestry = getCountryAncestry(country);
 					return (
