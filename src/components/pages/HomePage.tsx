@@ -275,7 +275,7 @@ function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
 	return (
 		<div className="grid gap-12 lg:grid-cols-[28rem_minmax(0,1fr)] lg:gap-20">
 			<div className="pr-4 pt-2">
-				<DigestCover edition={latest} libraryName={digests.library} timezone={digests.timezone} href={`/${locale}/digests/${latest.slug}`} locale={locale} titleAs="h3" />
+				<DigestCover edition={latest} libraryName={digests.library} timezone={digests.timezone} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />
 			</div>
 			{earlier.length > 0 && (
 				<div>
@@ -457,7 +457,7 @@ function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; q
 								<h2 className="text-[1.75rem] font-bold leading-tight tracking-tight lg:text-3xl">{part.title}</h2>
 								<p className="mt-2 max-w-[40rem] text-base leading-7 opacity-75">{part.text}</p>
 							</div>
-							{destination && <TextLink href={`/${locale}${destination.href}`}>{destination.label}</TextLink>}
+							{destination && <TextLink href={destination.href}>{destination.label}</TextLink>}
 						</div>
 						<Preview shows={part.shows} data={data} surface={surface} questions={questions} />
 					</motion.li>
@@ -1135,7 +1135,8 @@ function RowExamples({ row, filter, fallback }: { row: Row; filter: string; fall
 		<div className="mt-8">
 			<div className="mb-4 flex items-baseline justify-between gap-6">
 				<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
-				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/${locale}/lib?${filter}`}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
+				{/* The default prefetch: every row shown would otherwise download its whole filtered list, which few readers open. */}
+				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${filter}`} prefetch={null}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
 			</div>
 			<PublicationList items={examples?.items ?? (isLoading ? [undefined, undefined] : [])} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
 		</div>
