@@ -128,6 +128,7 @@ async function main() {
 		let rebuildPending = await prepareSearchProjection(
 			databaseResource.database,
 			config.topics.enabled,
+			config.search.fullText,
 		);
 		if (command.rebuild && !rebuildPending) {
 			await setSearchIndexRebuildPending(databaseResource.database, true);

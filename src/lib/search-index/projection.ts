@@ -435,11 +435,15 @@ async function buildSearchProjectionPlanForKeys(
 				}),
 				tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
 			}));
+			// Without full-text search nothing can reach the page text, so only
+			// page numbers are indexed: they still mark records with a PDF.
 			const fullTextPDFs = parentChildren
 				.filter((child) => child.deleted !== 1)
 				.map((child) => ({
 					key: child.key,
-					fullTextPDF: fullTextPages(child.fullTextPDF),
+					fullTextPDF: config.search.fullText
+						? fullTextPages(child.fullTextPDF)
+						: fullTextPages(child.fullTextPDF).map(({ page }) => ({ page })),
 				}))
 				.filter((entry) => entry.fullTextPDF.length > 0);
 			const publicationIdentifiers = identifiersByItem.get(parent.key);

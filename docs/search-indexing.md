@@ -13,7 +13,10 @@ Every top-level search document contains:
 - current collection ancestry;
 - derived author names, institutions, countries, year, and sortable date;
 - child attachment metadata; and
-- active attachment full text split into page records.
+- active attachment full text split into page records. The page text is
+  indexed only when the library has full-text search on; otherwise only the
+  page numbers are kept, which still mark records that have a PDF. Switching
+  full-text search rebuilds the index.
 
 Child items are embedded in their parent document and never become standalone
 search results. A child event reprojects its parent. A tombstoned or missing
