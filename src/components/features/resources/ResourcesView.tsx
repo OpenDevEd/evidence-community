@@ -59,6 +59,7 @@ import {
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import { useHandedOverQuestion } from "@/components/features/ai/useHandedOverQuestion";
 import InlineLibraryChat from "../ai/InlineLibraryChat";
 import { FilterChips, getFilterChipState } from "./FilterChips";
 export { FilterChips };
@@ -784,6 +785,7 @@ export function ResourcesView({
 	const searchContext = itemsContext.userData
 		? undefined
 		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	useHandedOverQuestion(searchContext, !itemsContext.userData);
 	useResultsAnalytics(itemsContext);
 	const resultAbstract = engaged ? engagedAbstract : abstract;
 	const resultView = engaged ? "list" : view;

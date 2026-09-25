@@ -4,9 +4,18 @@
  * afterwards and a reload cannot ask it twice.
  */
 const KEY = "library-question";
+const HANDED_OVER = "library-question-handed-over";
 
 export function handOverQuestion(question: string) {
 	sessionStorage.setItem(KEY, question);
+	// Next keeps a visited library page alive between visits, so it cannot rely on mounting again to notice.
+	window.dispatchEvent(new Event(HANDED_OVER));
+}
+
+/** Calls `listener` whenever a question is handed over; returns the function that stops listening. */
+export function onQuestionHandedOver(listener: () => void) {
+	window.addEventListener(HANDED_OVER, listener);
+	return () => window.removeEventListener(HANDED_OVER, listener);
 }
 
 export function waitingQuestion() {
