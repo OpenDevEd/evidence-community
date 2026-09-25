@@ -25,7 +25,10 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
-import { FULL_TEXT_PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import {
+	FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
+	SEARCH_RESULT_LIMIT,
+} from "@/lib/search-filter-constants";
 
 import {
 	generateFullSearchProjectionPlans,
@@ -1066,7 +1069,9 @@ export async function ensureSearchIndex(
 					},
 				},
 			],
-			pagination: { maxTotalHits: 1_000_000 },
+			// Every result stays reachable and counted for libraries above a
+			// million records; deep pages stay fast on the legacy search path.
+			pagination: { maxTotalHits: SEARCH_RESULT_LIMIT },
 			searchableAttributes: ["*"],
 			sortableAttributes: [
 				"dateSortKey",
