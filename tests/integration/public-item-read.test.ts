@@ -111,6 +111,9 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(JSON.stringify(publication)).not.toContain("Private note");
 		expect(publication.fullTextPDFs).toBeUndefined();
 		expect((await getItem("PUBAAAAA")).item?.fullTextPDFs).toEqual([{ key: "CHILDDDD", fullTextPDF: [{ page: 1, text: "Published PDF text" }] }]);
+		// Without full-text search the page text is not indexed; page numbers still mark the PDF.
+		const withoutFullTextSearch = await readPublicItems(database, ["PUBAAAAA"], { ...config, search: { ...config.search, fullText: false } });
+		expect(withoutFullTextSearch.map(record => record.fullTextPDFs)).toEqual([[{ key: "CHILDDDD", fullTextPDF: [{ page: 1 }] }]]);
 		expect(response.headers.get("cache-control")).toBe("no-store");
 		await client.query(`UPDATE item SET "DOI" = '10.5555/conflicting-parent' WHERE key = 'PUBAAAAA'`);
 		expect((await (await read("PUBAAAAA")).json()).item.DOI).toBeNull();
