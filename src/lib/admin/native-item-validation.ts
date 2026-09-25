@@ -38,6 +38,8 @@ const itemTypeByZoteroName = new Map(
 	itemType.enumValues.map((value) => [value.toLowerCase(), value]),
 );
 const creatorTypes = new Set<string>(creatorType.enumValues);
+export const MAX_CREATOR_INSTITUTIONS = 50;
+export const MAX_CREATOR_INSTITUTION_NAME_LENGTH = 500;
 
 function creatorSchema(allowIncomplete: boolean) {
 	return z
@@ -48,9 +50,9 @@ function creatorSchema(allowIncomplete: boolean) {
 			// imported affiliation carries is dropped.
 			institutions: z
 				.array(
-					z.object({ display_name: z.string().trim().min(1).max(500) }),
+					z.object({ display_name: z.string().trim().min(1).max(MAX_CREATOR_INSTITUTION_NAME_LENGTH) }),
 				)
-				.max(50)
+				.max(MAX_CREATOR_INSTITUTIONS)
 				.optional(),
 			firstName: z.string().optional(),
 			lastName: z.string().optional(),

@@ -4,14 +4,12 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
-import { Link, Spinner } from "@nextui-org/react";
+import { Link } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
 import { PdfCover } from "./PdfCover";
 import { Button } from "@/components/nextui/Button";
 import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
-import useSWR from "swr";
-import { fetcherExternal } from "@/lib/utils";
 import { trackAttachmentInteraction } from "@/lib/analytics";
 import { useSession } from "next-auth/react";
 
@@ -25,20 +23,6 @@ function downloadLink(url: string, filename: string) {
 			link.click();
 		})
 		.catch(console.error);
-}
-
-function getAttachmentFromOpenAlex(work: any) {
-	const potentialLocations = [
-		work.locations?.find((location: any) => location.pdf_url),
-		work.locations?.find((location: any) => location.landing_page_url),
-		work.locations?.[0],
-	];
-
-	const pdfUrl = potentialLocations.find(
-		(location) => location?.pdf_url && location.is_oa,
-	)?.pdf_url;
-
-	return pdfUrl;
 }
 
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
@@ -70,19 +54,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		});
 	};
 
-	const isExternal =
-		!data.PDFCoverPageImage &&
-		data.tags?.some((tag: string) => tag.toLowerCase() === "_auto-process");
-
-	const { data: itemFromOpenAlex, isLoading: isLoadingOpenAlex } = useSWR(
-		isExternal ? "https://api.openalex.org/works/" + data.parentItem : null,
-		fetcherExternal,
-	);
-	const pdfUrl =
-		isExternal && !isLoadingOpenAlex && itemFromOpenAlex
-			? getAttachmentFromOpenAlex(itemFromOpenAlex)
-			: null;
-	const shouldShowLoading = isExternal && isLoadingOpenAlex;
+	const isExternal = !data.PDFCoverPageImage && data.linkMode === "linked_url";
+	const pdfUrl = data.url ?? undefined;
 
 	// Update height measurements when window resizes
 	useEffect(() => {
@@ -129,7 +102,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					)
 				}
 			>
-				{isExternal ? itemFromOpenAlex?.title : data.filename}
+				{data.filename || data.title || t("document")}
 			</Link>
 		</h4>
 	);
@@ -187,11 +160,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 			key={data.key}
 			color="card"
 		>
-			{shouldShowLoading && (
-				<div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-					<Spinner />
-				</div>
-			)}
 			{hasImage && (
 				<div
 					data-height={imageHeight}
@@ -219,7 +187,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					hasImage
 						? "md:h-full md:ltr:ml-28 md:rtl:mr-28 lg:ltr:ml-52 lg:rtl:mr-52"
 						: "",
-					shouldShowLoading && "opacity-0",
 				)}
 			>
 				{attachmentTitle}

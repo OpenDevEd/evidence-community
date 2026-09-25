@@ -8,7 +8,7 @@ const institutionSchema = z
 		display_name: text,
 		country_code: text,
 	})
-	.passthrough();
+	.loose();
 
 const locationSchema = z
 	.object({
@@ -26,10 +26,10 @@ const locationSchema = z
 				host_organization: text,
 				host_organization_name: text,
 			})
-			.passthrough()
+			.loose()
 			.nullish(),
 	})
-	.passthrough();
+	.loose();
 
 /** Only fields consumed by the mapper are constrained; the source payload stays intact. */
 export const openAlexWorkSchema = z
@@ -42,7 +42,7 @@ export const openAlexWorkSchema = z
 		doi: text,
 		ids: z
 			.object({ doi: text, pmid: text, pmcid: text })
-			.passthrough()
+			.loose()
 			.nullish(),
 		publication_date: text,
 		publication_year: z.number().int().min(1).max(9999).nullish(),
@@ -57,7 +57,7 @@ export const openAlexWorkSchema = z
 				first_page: text,
 				last_page: text,
 			})
-			.passthrough()
+			.loose()
 			.nullish(),
 		authorships: z
 			.array(
@@ -66,11 +66,11 @@ export const openAlexWorkSchema = z
 						raw_author_name: text,
 						author: z
 							.object({ display_name: text })
-							.passthrough()
+							.loose()
 							.nullish(),
 						institutions: z.array(institutionSchema).nullish(),
 					})
-					.passthrough(),
+					.loose(),
 			)
 			.nullish(),
 		primary_location: locationSchema.nullish(),
@@ -85,6 +85,6 @@ export const openAlexWorkSchema = z
 		created_date: text,
 		updated_date: text,
 	})
-	.passthrough();
+	.loose();
 
 export type OpenAlexWork = z.infer<typeof openAlexWorkSchema>;

@@ -4,7 +4,8 @@ import { hasAnyTag } from "@/lib/tags";
 
 type AttachmentVisibilityFields = {
 	PDFCoverPageImage?: string | null;
-	tags?: string[] | null;
+	url?: string | null;
+	contentType?: string | null;
 };
 
 type ItemPageAttachmentFields = AttachmentVisibilityFields & {
@@ -19,9 +20,7 @@ export function isVisiblePdfAttachment(
 ) {
 	return Boolean(
 		attachment.PDFCoverPageImage ||
-			attachment.tags?.some(
-				(tag) => tag.toLowerCase() === "_auto-process",
-			),
+			(attachment.contentType === "application/pdf" && /^https?:\/\//u.test(attachment.url ?? "")),
 	);
 }
 

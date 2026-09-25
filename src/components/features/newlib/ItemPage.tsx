@@ -21,6 +21,7 @@ import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
 import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
+import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
 import {
@@ -1188,8 +1189,10 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 	const notes = item?.attachmentsData?.filter((attachment) =>
 		isPublishedNote(attachment, content.tags.publish),
 	);
-	const links = item?.attachmentsData?.filter((attachment) =>
-		isPublishedLink(attachment, content.tags.publish),
+	const links = item?.attachmentsData?.filter(
+		(attachment) =>
+			isPublishedLink(attachment, content.tags.publish) &&
+			!isVisiblePdfAttachment(attachment),
 	);
 
 	const notesDescription = useNotesDescription();

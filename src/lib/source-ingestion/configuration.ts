@@ -1,11 +1,10 @@
+import { isDeepStrictEqual } from "node:util";
+import { openAlexQueryApproval } from "@/db/schema/source";
 import { sourceConnection } from "@opendeved/evidence-library-core";
-import { eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import type {
-	Database,
-	DatabaseTransaction,
-} from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 
 type ConfiguredSource = LibraryServerConfig["sources"][number];
 
@@ -20,8 +19,11 @@ export function configuredSourceConnectionValues(source: ConfiguredSource) {
 	return {
 		key: source.key,
 		provider: source.provider,
-		scopeKind: "group" as const,
-		externalScopeKey: source.groupId,
+		scopeKind:
+			source.provider === "zotero"
+				? ("group" as const)
+				: ("query" as const),
+		externalScopeKey: source.provider === "zotero" ? source.groupId : null,
 		config: source.settings,
 		status: source.enabled ? ("active" as const) : ("paused" as const),
 	};
@@ -43,25 +45,57 @@ async function reconcileInTransaction(
 	const currentByScope = new Map(
 		current
 			.filter((row) => row.externalScopeKey)
-			.map((row) => [
-				`${row.provider}:${row.externalScopeKey}`,
-				row,
-			] as const),
+			.map(
+				(row) =>
+					[`${row.provider}:${row.externalScopeKey}`, row] as const,
+			),
 	);
 
 	for (const source of sources) {
 		const existing = currentByKey.get(source.key);
+		const values = configuredSourceConnectionValues(source);
 		if (
 			existing &&
 			(existing.provider !== source.provider ||
-				existing.scopeKind !== "group" ||
-				existing.externalScopeKey !== source.groupId)
+				existing.scopeKind !== values.scopeKind ||
+				existing.externalScopeKey !== values.externalScopeKey)
 		) {
 			throw new SourceConfigurationConflictError(
 				`Source ${source.key} already points to a different library.`,
 			);
 		}
-		const scoped = currentByScope.get(`${source.provider}:${source.groupId}`);
+		if (source.provider === "openalex") {
+			const [previous] = await transaction
+				.select()
+				.from(openAlexQueryApproval)
+				.where(
+					and(
+						eq(
+							openAlexQueryApproval.sourceConnectionKey,
+							source.key,
+						),
+						eq(
+							openAlexQueryApproval.version,
+							source.settings.approvedQuery.version,
+						),
+					),
+				);
+			if (
+				previous &&
+				!isDeepStrictEqual(
+					previous.approval,
+					source.settings.approvedQuery,
+				)
+			) {
+				throw new SourceConfigurationConflictError(
+					`Source ${source.key} requires a new query approval version.`,
+				);
+			}
+		}
+		if (source.provider !== "zotero") continue;
+		const scoped = currentByScope.get(
+			`${source.provider}:${source.groupId}`,
+		);
 		if (scoped && scoped.key !== source.key) {
 			throw new SourceConfigurationConflictError(
 				`Zotero group ${source.groupId} already belongs to source ${scoped.key}.`,
@@ -94,9 +128,19 @@ async function reconcileInTransaction(
 					updatedAt: new Date(),
 				})
 				.where(eq(sourceConnection.key, source.key));
-			continue;
+		} else {
+			await transaction.insert(sourceConnection).values(values);
 		}
-		await transaction.insert(sourceConnection).values(values);
+		if (source.provider === "openalex") {
+			await transaction
+				.insert(openAlexQueryApproval)
+				.values({
+					sourceConnectionKey: source.key,
+					version: source.settings.approvedQuery.version,
+					approval: source.settings.approvedQuery,
+				})
+				.onConflictDoNothing();
+		}
 	}
 
 	return transaction

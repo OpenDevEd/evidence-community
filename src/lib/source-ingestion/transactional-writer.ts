@@ -1,3 +1,5 @@
+import { institutionCountry } from "@/db/schema/tables/institutionCountry";
+import { institutionNameKey } from "@/config/library-config/institutions";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { preserveCreatorProfileLinks } from "@/lib/admin/creator-profile-links";
 import {
@@ -52,6 +54,7 @@ import {
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 import {
+	type SourceItemUpsert,
 	type JsonValue,
 	type SourceIngestionBatch,
 	sourceIngestionBatchSchema,
@@ -280,13 +283,13 @@ function sourceOwnsCanonicalItem(
 	return !existing || existing.sourceConnectionKey === sourceConnectionKey;
 }
 
-function preserveForeignOwnedFileFields(
+function preserveProtectedFileFields(
 	incoming: Partial<ItemInsert>,
 	existing: typeof item.$inferSelect | undefined,
-	sourceConnectionKey: string,
+	mayManageFile: boolean,
 	hasManagedPublication: boolean,
 ) {
-	if (!existing || sourceOwnsCanonicalItem(existing, sourceConnectionKey)) {
+	if (!existing || mayManageFile) {
 		return incoming;
 	}
 	const preserved = { ...incoming } as Record<string, unknown>;
@@ -812,6 +815,11 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 	);
 
 	return db.transaction(async (transaction) => {
+		const [providerRow] = await transaction.select({ provider: sourceConnection.provider }).from(sourceConnection).where(eq(sourceConnection.key, batch.sourceConnectionKey));
+		if (providerRow?.provider === "openalex") {
+			// ponytail: serialize OpenAlex pages per library; use work-level locks if parallel import throughput becomes necessary.
+			await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
+		}
 		const involvedConnectionKeys = [
 			...new Set([
 				batch.sourceConnectionKey,
@@ -849,12 +857,18 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			);
 		}
 		if (
+			(batch.expectedConfiguration && !jsonEqual(connection.config as JsonValue, batch.expectedConfiguration)) ||
 			!jsonEqual(
 				connection.syncCursor as JsonValue,
 				batch.expectedCursor as JsonValue,
 			)
 		) {
 			throw new SourceCursorConflictError(batch.sourceConnectionKey);
+		}
+
+		if (batch.institutionCountries.length) {
+			const rows = new Map(batch.institutionCountries.map(({ name, ...facts }) => [institutionNameKey(name), facts]));
+			await transaction.insert(institutionCountry).values([...rows].map(([nameKey, facts]) => ({ nameKey, ...facts }))).onConflictDoNothing();
 		}
 
 		const collectionKeys = await reserveCollectionIdentities(transaction, {
@@ -1358,6 +1372,22 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			),
 		);
 
+		const openAlexLinks = connection.provider === "openalex" && batchItemKeys.length
+			? await transaction.select({ itemKey: itemSourceLink.itemKey, remoteVersion: itemSourceLink.remoteVersion, config: sourceConnection.config, status: sourceConnection.status })
+				.from(itemSourceLink).innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+				.where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.itemKey, batchItemKeys)))
+			: [];
+		const downloadItemKeys = new Set(openAlexLinks.filter((link) => link.status !== "removed" && link.config.downloadPdfs === true).map((link) => link.itemKey));
+		const mayManageFile = (record: SourceItemUpsert) => {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const existing = existingItemByKey.get(key);
+			const publication = existingPublicationByItemKey.get(key);
+			if (connection.provider === "openalex") {
+				return Boolean(record.file?.managedPublication) || !publication || !downloadItemKeys.has(key);
+			}
+			return sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey);
+		};
+
 		const effectiveItemStateByRecordKey = new Map(
 			itemUpserts.map((record) => {
 				const key = itemKeys.get(record.sourceRecordKey)!;
@@ -1369,10 +1399,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				const existingPublication =
 					existingPublicationByItemKey.get(key);
 				const protectsManagedPublication =
-					!sourceOwnsCanonicalItem(
-						existing,
-						batch.sourceConnectionKey,
-					) && Boolean(existingPublication);
+					!mayManageFile(record) && Boolean(existingPublication);
 				const incomingCollections = normalized.collectionReferences.map(
 					(reference) => {
 						const connectionKey =
@@ -1397,14 +1424,14 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 									]),
 								].sort(),
 						dirtyFields,
-						item: preserveForeignOwnedFileFields(
+						item: preserveProtectedFileFields(
 							maskDirtyItemFields(
-								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators) },
+								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators, { sourceAffiliations: connection.provider === "openalex" }) },
 								existing,
 								dirtyFields,
 							),
 							existing,
-							batch.sourceConnectionKey,
+							mayManageFile(record),
 							protectsManagedPublication,
 						),
 						parentItem: protectsManagedPublication
@@ -1431,7 +1458,21 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				] as const;
 			}),
 		);
-		const changedItemUpserts = itemUpserts.filter((record) => {
+		const newestSourceVersionByItem = new Map<string, number>();
+		if (openAlexLinks.length) {
+			for (const row of openAlexLinks) {
+				const version = row.remoteVersion ? Date.parse(row.remoteVersion) : NaN;
+				if (Number.isFinite(version)) newestSourceVersionByItem.set(row.itemKey, Math.max(version, newestSourceVersionByItem.get(row.itemKey) ?? -Infinity));
+			}
+		}
+		const staleItemKeys = new Set(itemUpserts.flatMap((record) => {
+			const key = itemKeys.get(record.sourceRecordKey)!;
+			const previous = newestSourceVersionByItem.get(key);
+			const incoming = record.sourceDates?.modifiedAt?.getTime() ?? Date.parse(record.remoteVersion ?? "");
+			return previous !== undefined && (!Number.isFinite(incoming) || incoming < previous) ? [key] : [];
+		}));
+		const currentItemUpserts = itemUpserts.filter((record) => !staleItemKeys.has(itemKeys.get(record.sourceRecordKey)!));
+		const changedItemUpserts = currentItemUpserts.filter((record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
 			if (!existing) return true;
@@ -1445,17 +1486,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				!snapshot ||
 				snapshot.payloadHash !== sourceItemFingerprint(record) ||
 				snapshot.mappingProfileVersion !== batch.mappingProfileVersion;
-			if (!sourceChanged) return false;
 
 			const state = effectiveItemStateByRecordKey.get(
 				record.sourceRecordKey,
 			)!;
 			const publication = record.file?.managedPublication;
 			const existingPublication = existingPublicationByItemKey.get(key);
-			const publicationChanged = sourceOwnsCanonicalItem(
-				existing,
-				batch.sourceConnectionKey,
-			)
+			const publicationChanged = mayManageFile(record)
 				? publication
 					? !existingPublication ||
 						existingPublication.objectPath !==
@@ -1468,6 +1505,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 						existingPublication.pageCount !== publication.pageCount
 					: Boolean(existingPublication)
 				: false;
+			if (!sourceChanged) return publicationChanged;
 			return (
 				itemValuesDiffer(existing, state.item) ||
 				existing.parentItem !== state.parentItem ||
@@ -1602,10 +1640,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			if (!publication || !record.file) return [];
 			const itemKey = itemKeys.get(record.sourceRecordKey)!;
 			if (
-				!sourceOwnsCanonicalItem(
-					existingItemByKey.get(itemKey),
-					batch.sourceConnectionKey,
-				)
+				!mayManageFile(record)
 			) {
 				return [];
 			}
@@ -1623,10 +1658,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				previous?.sha256 === publication.sha256 &&
 				previous.objectPath === publication.objectPath &&
 				previous.coverObjectPath === publication.coverObjectPath;
+			if (connection.provider === "openalex" && !publication.staged && !sameContent) {
+				throw new SourceFileStagingConflictError(batch.sourceConnectionKey, [publication.objectPath, publication.coverObjectPath]);
+			}
 			return [
 				{
 					itemKey,
-					sourceConnectionKey: batch.sourceConnectionKey,
+					sourceConnectionKey: sameContent ? previous.sourceConnectionKey : batch.sourceConnectionKey,
 					parentItemKey,
 					uploadRevision: sameContent
 						? previous.uploadRevision
@@ -1659,10 +1697,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				...itemDeleteKeys,
 				...changedItemUpserts.flatMap((record) => {
 					const itemKey = itemKeys.get(record.sourceRecordKey)!;
-					return sourceOwnsCanonicalItem(
-						existingItemByKey.get(itemKey),
-						batch.sourceConnectionKey,
-					) && !record.file?.managedPublication
+					return mayManageFile(record) && !record.file?.managedPublication
 						? [itemKey]
 						: [];
 				}),
@@ -1703,30 +1738,14 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const consumedStagingRows = await transaction
 				.delete(sourceFileCleanup)
 				.where(
-					and(
-						eq(
-							sourceFileCleanup.sourceConnectionKey,
-							batch.sourceConnectionKey,
-						),
-						inArray(sourceFileCleanup.objectPath, [
-							...activePublicationPaths,
-						]),
-					),
+					inArray(sourceFileCleanup.objectPath, [...activePublicationPaths]),
 				)
-				.returning({ objectPath: sourceFileCleanup.objectPath });
+				.returning({ objectPath: sourceFileCleanup.objectPath, sourceConnectionKey: sourceFileCleanup.sourceConnectionKey });
 			const consumedPaths = new Set(
-				consumedStagingRows.map(({ objectPath }) => objectPath),
+				consumedStagingRows.filter((row) => row.sourceConnectionKey === batch.sourceConnectionKey).map(({ objectPath }) => objectPath),
 			);
 			const missingStagedPaths = changedItemUpserts.flatMap((record) => {
-				const existing = existingItemByKey.get(
-					itemKeys.get(record.sourceRecordKey)!,
-				);
-				if (
-					!sourceOwnsCanonicalItem(
-						existing,
-						batch.sourceConnectionKey,
-					)
-				) {
+				if (!mayManageFile(record)) {
 					return [];
 				}
 				const publication = record.file?.managedPublication;
@@ -1950,7 +1969,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		// them in their own table and replace this source's value for every record
 		// it sent. A null value means the source no longer reports the metric.
 		const citationMetricChangedItemKeys = new Set<string>();
-		const citationMetricUpserts = itemUpserts.flatMap((record) => {
+		const citationMetricUpserts = currentItemUpserts.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey)!;
 			const incoming = record.citationMetric;
 			const existing = citationMetricByItemKey.get(itemKey);
@@ -1977,7 +1996,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		});
 		const citationMetricDeleteKeys = batch.items.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey);
-			if (!itemKey || !citationMetricByItemKey.has(itemKey)) return [];
+			if (!itemKey || staleItemKeys.has(itemKey) || !citationMetricByItemKey.has(itemKey)) return [];
 			if (record.operation === "delete" || record.citationMetric === null) {
 				citationMetricChangedItemKeys.add(itemKey);
 				return [itemKey];
@@ -2023,7 +2042,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		// target already resolves in this library. Unknown provider IDs stay only
 		// in the raw source snapshot and are retried by a later sync.
 		const citationTargetsByRecordKey = new Map(
-			itemUpserts
+			currentItemUpserts
 				.filter((record) => !record.parentSourceRecordKey)
 				.map((record) => [
 					record.sourceRecordKey,
@@ -2197,6 +2216,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const snapshotRows = batch.items.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey);
 			if (!itemKey) return [];
+			if (staleItemKeys.has(itemKey) && snapshotByItemKey.has(itemKey)) return [];
 			const expectedHash =
 				record.operation === "upsert"
 					? sourceItemFingerprint(record)
@@ -2291,7 +2311,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 								acknowledged,
 								itemKey,
 								remoteDeleted,
-								remoteVersion: record.remoteVersion,
+								remoteVersion: staleItemKeys.has(itemKey) && link?.remoteVersion ? link.remoteVersion : record.remoteVersion,
 							},
 						]
 					: [];

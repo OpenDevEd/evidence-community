@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getItemRaw } from "../../route";
 import { PDFDocument } from "pdf-lib";
+import { fetchPublicFile } from "@/lib/public-fetch";
+import { getLibraryConfig } from "@/config/library-config/server";
 
 async function modifyPDFMetadata(
 	pdfUrl: string,
-	title: string | null
+	title: string | null,
+	maxBytes: number,
 ): Promise<Uint8Array | null> {
 	try {
-		const pdfResponse = await fetch(pdfUrl);
-
-		if (!pdfResponse.ok) {
-			console.error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
-			return null;
-		}
-
-		const pdfBuffer = await pdfResponse.arrayBuffer();
-		const pdfDoc = await PDFDocument.load(pdfBuffer);
+		const { data } = await fetchPublicFile(new URL(pdfUrl), {
+			accept: "application/pdf",
+			timeoutMs: 30_000,
+			maxBytes,
+		});
+		const pdfDoc = await PDFDocument.load(data);
 		pdfDoc.setTitle(title || "");
 		return await pdfDoc.save();
 	} catch (error) {
@@ -30,7 +30,8 @@ export async function GET(
 ) {
 	const { key: itemKey, attachmentKey } = await props.params;
 
-	const result = await getItemRaw(itemKey);
+	const config = await getLibraryConfig();
+	const result = await getItemRaw(itemKey, config);
 
 	if (!result.item) {
 		return NextResponse.json(
@@ -61,7 +62,8 @@ export async function GET(
 	if (isPDF) {
 		const modifiedPdf = await modifyPDFMetadata(
 			attachment.url,
-			attachment.title
+			attachment.title,
+			config.services.storage.maxPdfBytes,
 		);
 
 		if (modifiedPdf) {

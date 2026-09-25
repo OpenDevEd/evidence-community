@@ -22,13 +22,6 @@ import {
 	flushSourceFileCleanup,
 	truncateUtf8,
 } from "../attachment-storage";
-export {
-	flushSourceFileCleanup,
-	truncateUtf8,
-	SourceFileCleanupError,
-} from "../attachment-storage";
-
-export const MAX_ZOTERO_FULL_TEXT_BYTES = MAX_SOURCE_FULL_TEXT_BYTES;
 const PDF_CONTENT_TYPE = "application/pdf";
 const MD5_PATTERN = /^[0-9a-f]{32}$/u;
 const ZOTERO_ITEM_KEY_PATTERN = /^[A-Z0-9]{8}$/u;
@@ -261,7 +254,7 @@ export function createZoteroAttachmentProcessor(
 			contentType: PDF_CONTENT_TYPE,
 			filename,
 			md5,
-			fullText: truncateUtf8(processed.text, MAX_ZOTERO_FULL_TEXT_BYTES),
+			fullText: truncateUtf8(processed.text, MAX_SOURCE_FULL_TEXT_BYTES),
 			coverUrl: options.storage.publicUrl(paths.cover),
 			coverWidth: processed.coverWidth,
 			coverHeight: processed.coverHeight,

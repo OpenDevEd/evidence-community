@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import {
 	itemFilePublication,
@@ -41,10 +41,13 @@ export async function readSourceFilePublication(
 	database: Database,
 	sourceConnectionKey: string,
 	sourceRecordKey: string,
+	sharedOpenAlex = false,
 ) {
 	const [row] = await database
 		.select({
 			itemKey: itemSourceLink.itemKey,
+			publicationSourceConnectionKey:
+				itemFilePublication.sourceConnectionKey,
 			remoteVersion: itemSourceLink.remoteVersion,
 			contentType: item.contentType,
 			coverHeight: item.PDFCoverPageHeight,
@@ -63,20 +66,37 @@ export async function readSourceFilePublication(
 			url: item.url,
 		})
 		.from(itemSourceLink)
+		.innerJoin(
+			sourceConnection,
+			eq(sourceConnection.key, itemSourceLink.sourceConnectionKey),
+		)
 		.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
 		.leftJoin(
 			itemFilePublication,
 			and(
 				eq(itemFilePublication.itemKey, item.key),
-				eq(
-					itemFilePublication.sourceConnectionKey,
-					sourceConnectionKey,
-				),
+				sharedOpenAlex
+					? undefined
+					: eq(
+							itemFilePublication.sourceConnectionKey,
+							sourceConnectionKey,
+						),
 			),
 		)
 		.where(
 			and(
-				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				sharedOpenAlex
+					? and(
+							eq(sourceConnection.provider, "openalex"),
+							eq(
+								itemSourceLink.sourceConnectionKey,
+								itemFilePublication.sourceConnectionKey,
+							),
+						)
+					: eq(
+							itemSourceLink.sourceConnectionKey,
+							sourceConnectionKey,
+						),
 				eq(itemSourceLink.sourceRecordKey, sourceRecordKey),
 			),
 		)
@@ -174,6 +194,15 @@ export async function flushSourceFileCleanup(
 ) {
 	while (true) {
 		const result = await database.transaction(async (transaction) => {
+			const [connection] = await transaction
+				.select({ provider: sourceConnection.provider })
+				.from(sourceConnection)
+				.where(eq(sourceConnection.key, sourceConnectionKey));
+			if (connection?.provider === "openalex") {
+				await transaction.execute(
+					sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`,
+				);
+			}
 			await transaction
 				.select({ key: sourceConnection.key })
 				.from(sourceConnection)
@@ -197,7 +226,23 @@ export async function flushSourceFileCleanup(
 			let retryableError: unknown = null;
 			for (const row of rows) {
 				try {
-					await storage.removePublic([row.objectPath]);
+					const [active] = await transaction
+						.select({ itemKey: itemFilePublication.itemKey })
+						.from(itemFilePublication)
+						.where(
+							or(
+								eq(
+									itemFilePublication.objectPath,
+									row.objectPath,
+								),
+								eq(
+									itemFilePublication.coverObjectPath,
+									row.objectPath,
+								),
+							),
+						)
+						.limit(1);
+					if (!active) await storage.removePublic([row.objectPath]);
 					await transaction
 						.delete(sourceFileCleanup)
 						.where(eq(sourceFileCleanup.id, row.id));

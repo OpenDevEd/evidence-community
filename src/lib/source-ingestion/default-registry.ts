@@ -1,4 +1,6 @@
 import { SourceAdapterRegistry, type SourceAdapter } from "./adapter";
+import { createOpenAlexSourceAdapter } from "./openalex/adapter";
+import type { OpenAlexSourceOptions } from "./openalex/sync";
 import {
 	createZoteroSourceAdapter,
 	type ZoteroSourceAdapterOptions,
@@ -7,6 +9,7 @@ import {
 export type DefaultSourceAdapterRegistryOptions = {
 	additionalAdapters?: readonly SourceAdapter[];
 	zotero: ZoteroSourceAdapterOptions;
+	openalex?: OpenAlexSourceOptions;
 };
 
 export function createDefaultSourceAdapterRegistry(
@@ -14,6 +17,7 @@ export function createDefaultSourceAdapterRegistry(
 ) {
 	return new SourceAdapterRegistry([
 		createZoteroSourceAdapter(options.zotero),
+		createOpenAlexSourceAdapter(options.openalex),
 		...(options.additionalAdapters ?? []),
 	]);
 }

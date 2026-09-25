@@ -4,6 +4,8 @@ import {
 } from "@opendeved/evidence-library-core/zotero-schema";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import {
+	MAX_CREATOR_INSTITUTIONS,
+	MAX_CREATOR_INSTITUTION_NAME_LENGTH,
 	sourceRecordValidationOptions,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
@@ -190,22 +192,26 @@ function metadata(work: OpenAlexWork) {
 			{
 				creatorType,
 				name,
-				institutions: (authorship.institutions ?? []).flatMap(
-					(institution) =>
-						text(institution.display_name)
-							? [
-									{
-										display_name: text(
-											institution.display_name,
-										)!,
-									},
-								]
-							: [],
-				),
+				institutions: [
+					...new Set(
+						(authorship.institutions ?? []).flatMap(
+							(institution) => {
+								const name = text(institution.display_name);
+								return name &&
+									name.length <=
+										MAX_CREATOR_INSTITUTION_NAME_LENGTH
+									? [name]
+									: [];
+							},
+						),
+					),
+				]
+					.slice(0, MAX_CREATOR_INSTITUTIONS)
+					.map((display_name) => ({ display_name })),
 			},
 		];
 	});
-	return jsonObjectSchema.parse(
+	const payload = jsonObjectSchema.parse(
 		validateNativeItemDraft(
 			{
 				itemType,
@@ -221,6 +227,9 @@ function metadata(work: OpenAlexWork) {
 			sourceRecordValidationOptions,
 		).payload,
 	);
+	delete payload.collections;
+	delete payload.parentItem;
+	return payload;
 }
 
 export function mapOpenAlexWork(input: unknown): {
@@ -237,10 +246,19 @@ export function mapOpenAlexWork(input: unknown): {
 			!text(authorship.raw_author_name) &&
 			!text(authorship.author?.display_name),
 	);
+	const incompleteAffiliations = authorships.some(
+		({ institutions }) =>
+			(institutions?.length ?? 0) > MAX_CREATOR_INSTITUTIONS ||
+			institutions?.some(
+				({ display_name }) =>
+					(text(display_name)?.length ?? 0) >
+					MAX_CREATOR_INSTITUTION_NAME_LENGTH,
+			),
+	);
 	const parent: SourceItemUpsert = {
 		operation: "upsert",
 		sourceRecordKey,
-		remoteVersion: text(work.updated_date),
+		remoteVersion: date(work.updated_date)?.toISOString() ?? null,
 		raw,
 		metadata: mappedMetadata,
 		parentSourceRecordKey: null,
@@ -266,10 +284,15 @@ export function mapOpenAlexWork(input: unknown): {
 		],
 		file: null,
 		processingIssue:
-			authorships.length >= 100 || authorsMissingNames
+			authorships.length >= 100 ||
+			authorsMissingNames ||
+			incompleteAffiliations
 				? {
 						code: "incomplete_authorships",
 						message: [
+							incompleteAffiliations
+								? "Affiliations exceeded the editor limits; omitted values remain in the source record."
+								: null,
 							authorships.length >= 100
 								? "OpenAlex returned at least 100 authorships; the author list may be incomplete."
 								: null,

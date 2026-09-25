@@ -24,7 +24,7 @@ async function verify() {
 	const config = await loadLibraryConfig();
 	const resource = createPostgresDatabaseResource(verifiedDatabaseUrl);
 	const database = resource.database;
-	const settings = config.sources[0]?.settings ?? {
+	const settings = config.sources.find((source) => source.provider === "zotero")?.settings ?? {
 		apiBaseUrl: "https://api.zotero.org",
 		attachmentDownloadTimeoutMs: 120_000,
 		maxConsistencyRetries: 4,
@@ -35,7 +35,7 @@ async function verify() {
 	const source = (
 		key: string,
 		groupId: string,
-		overrides: Partial<(typeof config.sources)[number]> = {},
+		overrides: Partial<Extract<(typeof config.sources)[number], {provider: "zotero"}>> = {},
 	): (typeof config.sources)[number] => ({
 		key,
 		provider: "zotero",

@@ -18,6 +18,8 @@ import {
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
 import { relations } from "drizzle-orm";
+import { jsonb, pgTable, primaryKey, varchar } from "drizzle-orm/pg-core";
+import type { OpenAlexApprovedQuery } from "@/lib/source-ingestion/openalex/schema";
 
 import { collection } from "./tables/collection";
 import { item } from "./tables/item";
@@ -44,8 +46,19 @@ export const { sourceRecordAlias, sourceSnapshot } = createSourceRecordTables();
 
 export const itemFilePublication = createItemFilePublicationTable({
 	key: item.key,
-	sourceConnectionKey: item.sourceConnectionKey,
 });
+
+export const openAlexQueryApproval = pgTable(
+	"openAlexQueryApproval",
+	{
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.references(() => sourceConnection.key),
+		version: varchar("version", { length: 128 }).notNull(),
+		approval: jsonb("approval").$type<OpenAlexApprovedQuery>().notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.sourceConnectionKey, table.version] })],
+);
 
 export const sourceConnectionRelations = relations(
 	sourceConnection,

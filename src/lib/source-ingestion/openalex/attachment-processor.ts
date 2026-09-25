@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
-import { sourceSnapshot } from "@/db/schema/source";
+import { sourceRecordIssue, sourceSnapshot } from "@/db/schema/source";
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
 import { processPdf } from "@/lib/admin/pdf-processing";
 import { fetchPublicFile } from "@/lib/public-fetch";
@@ -83,6 +83,7 @@ export function createOpenAlexAttachmentProcessor(options: {
 		)
 			return record;
 		let issueCode = "openalex_pdf_storage_failed";
+		let reusable: SourceItemUpsert["file"] = null;
 		try {
 			if (
 				!isSourceConnectionKey(sourceConnectionKey) ||
@@ -98,14 +99,16 @@ export function createOpenAlexAttachmentProcessor(options: {
 				options.database,
 				sourceConnectionKey,
 				record.sourceRecordKey,
+				true,
 			);
 			const existingFile = sourceFileFromPublication(existing);
-			const reusable =
+			const existingPrefix = `sources/openalex/${existing?.publicationSourceConnectionKey}/${record.sourceRecordKey}/`;
+			reusable =
 				existingFile?.managedPublication?.objectPath.startsWith(
-					prefix,
+					existingPrefix,
 				) &&
 				existingFile.managedPublication.coverObjectPath.startsWith(
-					prefix,
+					existingPrefix,
 				)
 					? existingFile
 					: null;
@@ -115,6 +118,22 @@ export function createOpenAlexAttachmentProcessor(options: {
 				record.remoteVersion !== null &&
 				existing.remoteVersion === record.remoteVersion
 			) {
+				const [issue] = await options.database
+					.select()
+					.from(sourceRecordIssue)
+					.where(
+						and(
+							eq(
+								sourceRecordIssue.sourceRecordKey,
+								record.sourceRecordKey,
+							),
+							inArray(sourceRecordIssue.sourceConnectionKey, [
+								sourceConnectionKey,
+								existing.publicationSourceConnectionKey!,
+							]),
+						),
+					)
+					.limit(1);
 				const [snapshot] = await options.database
 					.select({ payload: sourceSnapshot.payload })
 					.from(sourceSnapshot)
@@ -123,12 +142,13 @@ export function createOpenAlexAttachmentProcessor(options: {
 							eq(sourceSnapshot.itemKey, existing.itemKey),
 							eq(
 								sourceSnapshot.sourceConnectionKey,
-								sourceConnectionKey,
+								existing.publicationSourceConnectionKey!,
 							),
 						),
 					)
 					.limit(1);
 				if (
+					!issue &&
 					snapshot &&
 					originalPdfUrl(snapshot.payload) === record.file.url
 				) {
@@ -149,9 +169,11 @@ export function createOpenAlexAttachmentProcessor(options: {
 				return withPublishedFile(record, reusable);
 			issueCode = "openalex_pdf_invalid";
 			const processed = await processPdf(bytes);
+			// Never upload over a path queued for deletion by another import.
+			const uploadId = randomUUID();
 			const paths = {
-				pdf: `${prefix}${sha256}/document.pdf`,
-				cover: `${prefix}${sha256}/cover.png`,
+				pdf: `${prefix}${sha256}/${uploadId}/document.pdf`,
+				cover: `${prefix}${sha256}/${uploadId}/cover.png`,
 			};
 			issueCode = "openalex_pdf_storage_failed";
 			const result = withPublishedFile(record, {
@@ -189,7 +211,7 @@ export function createOpenAlexAttachmentProcessor(options: {
 			return result;
 		} catch (error) {
 			return {
-				...record,
+				...(reusable ? withPublishedFile(record, reusable) : record),
 				processingIssue: {
 					code: issueCode,
 					message:

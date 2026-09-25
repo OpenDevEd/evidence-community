@@ -26,6 +26,27 @@ function work(overrides: Record<string, unknown> = {}) {
 }
 
 describe("OpenAlex work mapping", () => {
+	it("bounds affiliations without losing the complete provider data or blocking the work", () => {
+		const institutions = [
+			...Array.from({ length: 60 }, (_, index) => ({
+				display_name: `Institution ${index}`,
+			})),
+			{ display_name: "x".repeat(501) },
+		];
+		const raw = work({
+			authorships: [{ raw_author_name: "Research Group", institutions }],
+		});
+		const [mapped] = mapOpenAlexWork(raw).items;
+		expect(mapped!.metadata.creators).toEqual([
+			{
+				creatorType: "author",
+				name: "Research Group",
+				institutions: institutions.slice(0, 50),
+			},
+		]);
+		expect(mapped!.raw).toEqual(raw);
+		expect(mapped!.processingIssue?.code).toBe("incomplete_authorships");
+	});
 	it("preserves printed names, author order, affiliation facts and the complete source payload", () => {
 		const raw = work({
 			doi: "https://doi.org/10.1234/STUDY",

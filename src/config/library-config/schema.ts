@@ -2,6 +2,7 @@ import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 import postcss, { type Root } from "postcss";
 import { z } from "zod";
 
+import { openAlexConnectionConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
 
 import {
@@ -1358,7 +1359,7 @@ const servicesSchema = z
 	})
 	.strict();
 
-const sourceConfigurationSchema = z
+const zoteroSourceConfigurationSchema = z
 	.object({
 		key: z
 			.string()
@@ -1375,13 +1376,22 @@ const sourceConfigurationSchema = z
 	})
 	.strict();
 
+const sourceConfigurationSchema = z.discriminatedUnion("provider", [
+	zoteroSourceConfigurationSchema,
+	zoteroSourceConfigurationSchema.omit({ groupId: true }).extend({
+		provider: z.literal("openalex"),
+		writebackEnabled: z.literal(false).default(false),
+		settings: openAlexConnectionConfigSchema,
+	}),
+]);
+
 const sourcesSchema = z
 	.array(sourceConfigurationSchema)
 	.max(100)
 	.default([])
 	.superRefine((sources, context) => {
 		addDuplicateIssues(sources, context, (source) => source.key);
-		addDuplicateIssues(sources, context, (source) => source.groupId);
+		addDuplicateIssues(sources, context, (source) => source.provider === "zotero" ? `zotero:${source.groupId}` : `openalex:${source.key}`);
 	});
 
 type AIProviderConfiguration = {

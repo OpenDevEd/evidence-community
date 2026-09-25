@@ -1,3 +1,4 @@
+import { MAX_SOURCE_FULL_TEXT_BYTES, truncateUtf8 } from "@/lib/source-ingestion/attachment-storage";
 import { createHash } from "node:crypto";
 
 import { PDFDocument, StandardFonts } from "pdf-lib";
@@ -13,11 +14,9 @@ import {
 	sourceIngestionBatchSchema,
 } from "@/lib/source-ingestion/batch-schema";
 import {
-	MAX_ZOTERO_FULL_TEXT_BYTES,
 	ZoteroAttachmentProcessingError,
 	createZoteroAttachmentProcessor,
 	sourcePublicationPaths,
-	truncateUtf8,
 } from "@/lib/source-ingestion/zotero/attachment-processor";
 import type { ZoteroApiClient } from "@/lib/source-ingestion/zotero/client";
 import {
@@ -68,19 +67,18 @@ class MemoryStorage implements EvidenceFileStorage {
 }
 
 function publicationDatabase(rows: Record<string, unknown>[] = []) {
+	const query = {
+		from: () => query,
+		innerJoin: () => query,
+		leftJoin: () => query,
+		where: () => query,
+		limit: async () => rows,
+	};
 	return {
 		insert: () => ({
 			values: () => ({ onConflictDoUpdate: async () => undefined }),
 		}),
-		select: () => ({
-			from: () => ({
-				innerJoin: () => ({
-					leftJoin: () => ({
-						where: () => ({ limit: async () => rows }),
-					}),
-				}),
-			}),
-		}),
+		select: () => query,
 	} as unknown as Database;
 }
 
@@ -360,11 +358,11 @@ describe("Zotero attachment bounds", () => {
 		expect(
 			Buffer.byteLength(
 				truncateUtf8(
-					"x".repeat(MAX_ZOTERO_FULL_TEXT_BYTES + 10),
-					MAX_ZOTERO_FULL_TEXT_BYTES,
+					"x".repeat(MAX_SOURCE_FULL_TEXT_BYTES + 10),
+					MAX_SOURCE_FULL_TEXT_BYTES,
 				),
 			),
-		).toBe(MAX_ZOTERO_FULL_TEXT_BYTES);
+		).toBe(MAX_SOURCE_FULL_TEXT_BYTES);
 	});
 
 	it("rejects managed publication metadata without the public bundle", () => {

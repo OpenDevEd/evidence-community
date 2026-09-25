@@ -1,3 +1,4 @@
+import { institutionCountryInputSchema } from "@/lib/admin/institution-countries";
 import {
 	isSourceConnectionKey,
 	SOURCE_CONNECTION_KEY_PATTERN,
@@ -222,6 +223,8 @@ export const sourceIngestionBatchSchema = z
 			.string()
 			.refine(isSourceConnectionKey, "Invalid source connection key"),
 		expectedCursor: jsonObjectSchema,
+		expectedConfiguration: jsonObjectSchema.optional(),
+		institutionCountries: z.array(institutionCountryInputSchema).max(20_000).default([]),
 		nextCursor: jsonObjectSchema,
 		mappingProfileVersion: z.string().trim().min(1).max(64),
 		fetchedAt: z.date(),
@@ -246,7 +249,7 @@ export const sourceIngestionBatchSchema = z
 	})
 	.strict()
 	.superRefine((batch, context) => {
-		let batchBytes = 0;
+		let batchBytes = Buffer.byteLength(JSON.stringify({ ...batch, items: [], collections: [] }), "utf8");
 		for (const [field, records] of [
 			["items", batch.items],
 			["collections", batch.collections],

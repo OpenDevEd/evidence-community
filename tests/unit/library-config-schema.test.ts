@@ -131,6 +131,7 @@ describe("library configuration fixtures", () => {
 
 	it("allows many writeback sources and no default writeback source", () => {
 		const twoWriteback = cloneLibraryConfig(maximalLibraryConfig);
+		if (twoWriteback.sources![0].provider !== "zotero") throw new Error("Expected Zotero fixture");
 		twoWriteback.sources!.push({
 			...twoWriteback.sources![0],
 			key: "zotero-second",

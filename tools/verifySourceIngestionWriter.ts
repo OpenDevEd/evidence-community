@@ -58,7 +58,7 @@ import {
 	SourceRelationshipCycleError,
 	writeSourceIngestionBatch,
 } from "../src/lib/source-ingestion/transactional-writer";
-import { flushSourceFileCleanup } from "../src/lib/source-ingestion/zotero/attachment-processor";
+import { flushSourceFileCleanup } from "../src/lib/source-ingestion/attachment-storage";
 
 const publicationConfig = libraryConfigSchema.parse(maximalLibraryConfig).services.publication;
 
@@ -2216,6 +2216,9 @@ async function verify() {
 				expectedCursor: {},
 				nextCursor: { page: 2 },
 			}),
+			institutionCountries: [
+				{ name: "Citation Institute", countryCode: "GB" },
+			],
 			collections: [
 				{
 					operation: "upsert",
@@ -2281,7 +2284,6 @@ async function verify() {
 						lastName: "Researcher",
 						institutions: [
 							{
-								country_code: "GB",
 								display_name: "Citation Institute",
 							},
 						],
