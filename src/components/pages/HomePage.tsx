@@ -319,32 +319,25 @@ function CiteSlip({ name, url, today }: { name: string; url: string; today: stri
 }
 
 
+/** Lines one tile apart across the floor, in the library's accent. */
+const horizonTiles = {
+	backgroundImage: "linear-gradient(rgb(var(--color-accent-400) / 0.45) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--color-accent-400) / 0.45) 1px, transparent 1px)",
+	backgroundSize: "48px 48px",
+};
+
 /**
- * The library as a field of dots, a row for about every 44 publications up to a screenful, lighting up in a slow sweep:
- * the assistant reading the collection. Faded in the middle, where the question box sits; still for reduced motion.
- * The dots are two painted patterns, dim and lit, and only a window over the lit one moves, so the sweep runs on the
- * compositor instead of animating hundreds of dots.
+ * A grid floor running out to a lit horizon, moving toward the reader as if flown over, behind the question box. The
+ * floor is tilted once and only a layer inside it moves, one tile at a time, so the motion stays on the compositor.
+ * Still for reduced motion.
  */
-function LibraryField({ publications }: { publications: number }) {
-	const rows = Math.min(13, Math.ceil(Math.min(publications, 44 * 13) / 44));
-	// Five-pixel dots 24px apart, as the grid of the design; the lit ones glow.
-	const dots = (lit: boolean) => ({
-		backgroundImage: lit
-			? "radial-gradient(circle, rgb(var(--color-accent-300)) 2.5px, rgb(var(--color-accent-400) / 0.45) 3.5px, transparent 7px)"
-			: "radial-gradient(circle, rgb(var(--color-accent-300)) 2.5px, transparent 3px)",
-		backgroundSize: "29px 29px",
-		backgroundPosition: "center",
-	});
-	if (rows === 0) return null;
+function HorizonGrid() {
 	return (
-		<div aria-hidden className="pointer-events-none absolute inset-0 flex items-center p-6 [mask-image:radial-gradient(ellipse_at_center,transparent_10%,black_45%)]">
-			<div className="relative w-full overflow-hidden" style={{ height: rows * 29 }}>
-				<div className="absolute inset-0 opacity-20 motion-reduce:opacity-30" style={dots(false)} />
-				{/* The window is 40% of the field wide; its contents are the whole field, moved back as it moves on. */}
-				<div className="absolute inset-y-0 left-0 w-2/5 animate-read-sweep overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_40%,black_60%,transparent)] motion-reduce:hidden">
-					<div className="absolute inset-y-0 left-0 w-[250%] animate-read-sweep-back" style={dots(true)} />
-				</div>
+		<div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+			<div className="absolute inset-x-0 top-[55%] h-px bg-[linear-gradient(to_right,transparent,rgb(var(--color-accent-300)/0.9),transparent)] shadow-[0_0_30px_6px_rgb(var(--color-accent-500)/0.5)]" />
+			<div className="absolute -inset-x-1/2 bottom-[-40%] top-[55%] origin-top overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_35%)] [transform:perspective(420px)_rotateX(62deg)]">
+				<div className="absolute inset-x-0 -top-12 bottom-0 animate-horizon-grid motion-reduce:animate-none" style={horizonTiles} />
 			</div>
+			<div className="absolute left-1/2 top-[55%] h-3/5 w-3/5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(var(--color-accent-500)/0.28),transparent)] blur-2xl" />
 		</div>
 	);
 }
@@ -363,8 +356,13 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 		router.push("/lib");
 	};
 	return (
-		<div className={`relative isolate overflow-hidden rounded-3xl px-6 py-12 sm:px-10 lg:py-16 ${toneClass}`} style={toneStyle(surface)}>
-			<LibraryField publications={data.publications} />
+		// Night over the grid: the band's colour taken most of the way to black, so any library's accent glows on it, and
+		// white text whatever the band's own text colour is.
+		<div
+			className="relative isolate overflow-hidden rounded-3xl bg-[color-mix(in_oklab,var(--band-bg)_28%,#02040b)] px-6 py-12 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(var(--color-accent-400)/0.18),0_30px_80px_-40px_rgb(var(--color-accent-500)/0.6)] [--ink-rgb:255_255_255] dark:bg-[color-mix(in_oklab,var(--band-bg-dark)_28%,#02040b)] sm:px-10 lg:py-16"
+			style={toneStyle(surface)}
+		>
+			<HorizonGrid />
 			<div className="relative mx-auto max-w-3xl">
 				{/* A turning light runs around the box: spun behind it, it shows as a thin ring, with a blurred copy as its glow. */}
 				<div className="relative">
