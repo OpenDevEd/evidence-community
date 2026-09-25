@@ -2052,10 +2052,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				if (toKey !== fromKey) citationLinkRows.push({ fromKey, toKey });
 			}
 		}
-		// Zotero sends no references; its libraries keep citations in notes and folders, read from the stored library.
-		const citationLinkChange =
+		// Zotero sends no references; its citations are read from the stored library once the sync's last batch is in.
+		let citationLinkChange: { changedItemKeys: string[] } =
 			connection.provider === "zotero"
-				? await replaceZoteroCitationLinks(transaction, batch.sourceConnectionKey)
+				? { changedItemKeys: [] }
 				: await replaceSourceLinks(transaction, {
 						sourceConnectionKey: batch.sourceConnectionKey,
 						kind: "cites",
@@ -2330,6 +2330,15 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			}),
 			now,
 		);
+		// After the source links record what the source deleted. A batch that leaves work pending is not the last one.
+		const pending = (batch.nextCursor as { pending?: unknown }).pending;
+		if (connection.provider === "zotero" && !pending) {
+			citationLinkChange = await replaceZoteroCitationLinks(transaction, {
+				key: connection.key,
+				scopeKind: connection.scopeKind,
+				externalScopeKey: connection.externalScopeKey,
+			});
+		}
 
 		const directlyChangedItemKeys = new Set(itemEvents.keys());
 		const affectedParentKeys = new Set<string>();
