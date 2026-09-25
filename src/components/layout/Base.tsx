@@ -11,7 +11,7 @@ import ConsentDefaultsScript from "@/app/_components/ConsentDefaultsScript";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
-import { cookies } from "next/headers";
+import { cookies, draftMode } from "next/headers";
 
 import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
@@ -29,10 +29,11 @@ async function BaseContent({
 	locale: string;
 	storedConsent: string | null;
 }>) {
-	const [status, messages, t] = await Promise.all([
+	const [status, messages, t, { isEnabled: liveView }] = await Promise.all([
 		getCachedStatus(),
 		getMessages(),
 		getTranslations({ locale, namespace: "ui" }),
+		draftMode(),
 	]);
 
 	return (
@@ -48,6 +49,7 @@ async function BaseContent({
 				<FiltersProvider>
 					<MainWrapper>
 						<SiteChrome
+							liveView={liveView}
 							skipNavigationLabel={t("skipNavAriaLabel")}
 							skipToContentLabel={t("skipToContent")}
 							skipToFooterLabel={t("skipToFooter")}

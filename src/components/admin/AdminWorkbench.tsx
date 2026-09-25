@@ -127,6 +127,7 @@ import {
 import { useAdminItemList } from "./useAdminItemList";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
+import { AdminPublicPages } from "./AdminPublicPages";
 import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
 	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
@@ -382,9 +383,11 @@ type BatchFeedback = {
 export default function AdminWorkbench({
 	definitions,
 	initialFilters,
+	liveView,
 }: {
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
+	liveView: boolean;
 }) {
 	const showImportLabel = useBreakpoint("lg");
 	const finePointer = useFinePointer();
@@ -2190,6 +2193,7 @@ export default function AdminWorkbench({
 							onRetry={() => void searchIndex.retry()}
 							view={searchIndex.view}
 						/>
+						<AdminPublicPages initialLiveView={liveView} />
 						<ThemeSwitcher
 							styleVariant={theme.layout}
 							toolbar

@@ -1,5 +1,5 @@
 import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema";
-import { cookies } from "next/headers";
+import { cookies, draftMode } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
@@ -74,6 +74,7 @@ export default async function AdminPage({
 		<AdminWorkbench
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
+			liveView={(await draftMode()).isEnabled}
 		/>
 		</AdminSessionProvider>
 	);
