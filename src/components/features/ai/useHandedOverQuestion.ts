@@ -2,9 +2,12 @@
 
 import { useEffect } from "react";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
+import { usePathname } from "@/i18n/routing";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { useAskInlineChat } from "./useAskInlineChat";
 import { forgetWaitingQuestion, onQuestionHandedOver, waitingQuestion } from "./handed-over-question";
+
+const LIBRARY_LIST = /^\/lib\/?$/;
 
 /**
  * Asks a question handed over from another page (the home page's "Ask the library") once the chat can take it, then
@@ -15,8 +18,10 @@ import { forgetWaitingQuestion, onQuestionHandedOver, waitingQuestion } from "./
 export function useHandedOverQuestion(searchContext: LibrarySearchContext | undefined, enabled: boolean) {
 	const askInline = useAskInlineChat(searchContext);
 	const { isAISearchEnabled } = useIsAISearchEnabled();
+	// Only the library list asks it: other result lists (the map's, for one) have no chat and their own filters.
+	const onLibraryList = LIBRARY_LIST.test(usePathname());
 	useEffect(() => {
-		if (!isAISearchEnabled || !enabled) return;
+		if (!isAISearchEnabled || !enabled || !onLibraryList) return;
 		let retry: ReturnType<typeof setInterval> | undefined;
 		const ask = () => {
 			const question = waitingQuestion();
@@ -38,5 +43,5 @@ export function useHandedOverQuestion(searchContext: LibrarySearchContext | unde
 			stopListening();
 			clearInterval(retry);
 		};
-	}, [askInline, enabled, isAISearchEnabled]);
+	}, [askInline, enabled, isAISearchEnabled, onLibraryList]);
 }
