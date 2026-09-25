@@ -13,8 +13,15 @@ const PUBLIC_STORAGE = /^https?:\/\/([^/?#]+)\/storage\/v1\/object\/public\/([^/
  */
 export function CoverImage({ src, alt, ...props }: Omit<ComponentProps<typeof Image>, "src"> & { src: string }) {
 	const [direct, setDirect] = useState(false);
-	const stored = direct ? null : PUBLIC_STORAGE.exec(src);
-	if (!stored) return <Image {...props} src={src} alt={alt} unoptimized />;
+	const optimized = direct ? null : optimizedCover(src);
+	if (!optimized) return <Image {...props} src={src} alt={alt} unoptimized />;
+	return <Image {...props} src={optimized} alt={alt} onError={() => setDirect(true)} />;
+}
+
+/** Where Next's optimizer serves a cover from, when it can. */
+export function optimizedCover(src: string) {
+	const stored = PUBLIC_STORAGE.exec(src);
+	if (!stored) return null;
 	const [, host, bucket, path] = stored;
-	return <Image {...props} src={`/covers/${host}/${bucket}/${path}`} alt={alt} onError={() => setDirect(true)} />;
+	return `/covers/${host}/${bucket}/${path}`;
 }
