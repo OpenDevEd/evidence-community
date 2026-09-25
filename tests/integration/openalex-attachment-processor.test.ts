@@ -61,6 +61,12 @@ async function sources(database: Database) {
 	]);
 }
 
+async function firstPublicationValue<
+	Key extends keyof typeof itemFilePublication.$inferSelect,
+>(database: Database, key: Key) {
+	return (await database.select().from(itemFilePublication))[0]?.[key];
+}
+
 beforeEach(() => {
 	vi.mocked(transport).mockReset();
 });
@@ -97,8 +103,7 @@ describe("OpenAlex PDF processing", () => {
 			expect(transport).toHaveBeenCalledTimes(1);
 			await write("openalex-pdf-b", [parent, shared]);
 			expect(
-				(await database.select().from(itemFilePublication))[0]
-					?.sourceConnectionKey,
+				await firstPublicationValue(database, "sourceConnectionKey"),
 			).toBe("openalex-pdf-a");
 			await database.insert(sourceFileCleanup).values(
 				[...storage.publicFiles.keys()].map((objectPath) => ({
@@ -144,10 +149,9 @@ describe("OpenAlex PDF processing", () => {
 					},
 				]),
 			).rejects.toThrow(/staged|staging/i);
-			expect(
-				(await database.select().from(itemFilePublication))[0]
-					?.publicUrl,
-			).toBe(replaced.file?.url);
+			expect(await firstPublicationValue(database, "publicUrl")).toBe(
+				replaced.file?.url,
+			);
 		});
 	}, 120_000);
 
