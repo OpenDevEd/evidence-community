@@ -105,15 +105,23 @@ async function validateTopicChange(
   options: ItemWritebackPolicyOptions,
   publishingSavedDraft = false,
 ) {
-  const before = Array.isArray(previous.topics) ? previous.topics as string[] : [];
-  const after = Array.isArray(next.topics) ? next.topics as string[] : [];
+  const before = topicList(previous.topics);
+  const after = topicList(next.topics);
   if (JSON.stringify([...before].sort()) === JSON.stringify([...after].sort())) return;
   const config = options.writebackConfig;
   if (!config?.topics?.enabled && !publishingSavedDraft) throw new AdminValidationError("Topics are turned off for this library.", {topics: "Enable Topics in library configuration before changing them."});
   if (!after.length) return;
   if (!config?.authentication) throw new AdminValidationError("The topic catalog is not configured.");
+  await assertCatalogTopics(database, after, config.authentication);
+}
+
+function topicList(value: unknown) {
+  return Array.isArray(value) ? value as string[] : [];
+}
+
+async function assertCatalogTopics(database: Executor, topics: string[], authentication: LibraryServerConfig["authentication"]) {
   try {
-    const nodes = await resolveTopicNodes(after, {database, config: {authentication: config.authentication}});
+    const nodes = await resolveTopicNodes(topics, {database, config: {authentication}});
     if (nodes.some(node => node.level !== "topic")) throw new TopicServiceError(404);
   } catch (error) {
     if (error instanceof TopicServiceError && error.status === 404) throw new AdminValidationError("Choose topics from the catalog.", {topics: "One or more topics no longer exist."});

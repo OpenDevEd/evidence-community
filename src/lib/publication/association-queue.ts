@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 /** Both publication feeds use the same lease and supersession rules. */
 export async function runAssociationDeliveryCycle(
@@ -34,4 +35,18 @@ export async function runAssociationDeliveryCycle(
       WHERE "itemKey" = ${job.itemKey} AND "leaseToken" = ${token}`);
   }
   return true;
+}
+
+/** Post one association payload to OpenScholar; a non-2xx reply throws so the queue retries. */
+export async function postOpenScholarAssociation(
+  config: LibraryServerConfig, path: string, label: string, body: unknown,
+  signal?: AbortSignal, request: typeof fetch = fetch,
+) {
+  const service = config.authentication.openScholar;
+  const response = await request(new URL(path, service.convexSiteUrl), {
+    method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}`}, body: JSON.stringify(body),
+    signal: AbortSignal.any([AbortSignal.timeout(10000), ...(signal ? [signal] : [])]),
+  });
+  if (!response.ok) throw new Error(`OpenScholar ${label} returned ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  return response;
 }

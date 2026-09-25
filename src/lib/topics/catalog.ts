@@ -30,11 +30,48 @@ async function saveCache(context: TopicCatalogContext, id: string, kind: string,
     .onConflictDoUpdate({target: topicCatalogCache.id, set: {kind, payload, fetchedAt: new Date()}});
 }
 
+/** Map the public catalog query string to exactly one catalog operation. */
+export function parseTopicCatalogParams(params: URLSearchParams, libraryId: string) {
+  return topicCatalogRequestSchema.safeParse({contractVersion: 1, libraryId,
+    ...(params.has("ids") ? {ids: params.get("ids")!.split(",")} : {}),
+    ...(params.has("query") ? {query: params.get("query")} : {}),
+    ...(params.has("parent") || (!params.has("ids") && !params.has("query")) ? {parent: params.get("parent") || null} : {}),
+    cursor: params.get("cursor"), limit: params.has("limit") ? Number(params.get("limit")) : 100,
+  });
+}
+
 export async function readTopicCatalog(request: Omit<z.input<typeof topicCatalogRequestSchema>, "contractVersion" | "libraryId">, context: TopicCatalogContext) {
   const body = topicCatalogRequestSchema.parse({...request, contractVersion: 1, libraryId: context.config.authentication.openScholar.libraryId});
   const response = topicCatalogResponseSchema.parse(await serviceRequest("/api/v1/evidence-libraries/topics/catalog", body, context));
   await Promise.all(response.nodes.map(node => saveCache(context, node.id, "node", node)));
   return response;
+}
+
+type CachedTopic = typeof topicCatalogCache.$inferSelect;
+
+function cachedNode(row: CachedTopic | undefined, maxAgeMs: number) {
+  return row && Date.now() - row.fetchedAt.getTime() < maxAgeMs ? topicNodeSchema.parse(row.payload) : undefined;
+}
+
+/** Fetch one batch; if the service fails, fall back to cache rows that are not yet stale. */
+async function resolveTopicBatch(batch: string[], byId: Map<string, CachedTopic>, result: Map<string, TopicNode>, context: TopicCatalogContext, options: {allowUnknown?: boolean}) {
+  try {
+    const response = await readTopicCatalog({ids: batch}, context);
+    for (const node of response.nodes) result.set(node.id, node);
+    for (const id of batch) if (!options.allowUnknown && !result.has(id)) throw new TopicServiceError(404);
+  } catch (error) {
+    if (error instanceof TopicServiceError && error.status === 404) throw error;
+    console.error("Topic catalog lookup failed", {libraryId: context.config.authentication.openScholar.libraryId, ids: batch, error});
+    applyStaleNodes(batch, byId, result, error);
+  }
+}
+
+function applyStaleNodes(batch: string[], byId: Map<string, CachedTopic>, result: Map<string, TopicNode>, error: unknown) {
+  for (const id of batch) {
+    const node = cachedNode(byId.get(id), STALE_MS);
+    if (!node) throw error;
+    result.set(id, node);
+  }
 }
 
 export async function resolveTopicNodes(ids: readonly string[], context: TopicCatalogContext, options: {allowUnknown?: boolean} = {}): Promise<TopicNode[]> {
@@ -44,26 +81,11 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
   const byId = new Map(cached.map(row => [row.id, row]));
   const result = new Map<string, TopicNode>();
   const missing = unique.filter(id => {
-    const row = byId.get(id);
-    if (row && Date.now() - row.fetchedAt.getTime() < FRESH_MS) { result.set(id, topicNodeSchema.parse(row.payload)); return false; }
-    return true;
+    const node = cachedNode(byId.get(id), FRESH_MS);
+    if (node) result.set(id, node);
+    return !node;
   });
-  for (let offset = 0; offset < missing.length; offset += 100) {
-    const batch = missing.slice(offset, offset + 100);
-    try {
-      const response = await readTopicCatalog({ids: batch}, context);
-      for (const node of response.nodes) result.set(node.id, node);
-      for (const id of batch) if (!options.allowUnknown && !result.has(id)) throw new TopicServiceError(404);
-    } catch (error) {
-      if (error instanceof TopicServiceError && error.status === 404) throw error;
-      console.error("Topic catalog lookup failed", {libraryId: context.config.authentication.openScholar.libraryId, ids: batch, error});
-      for (const id of batch) {
-        const row = byId.get(id);
-        if (!row || Date.now() - row.fetchedAt.getTime() >= STALE_MS) throw error;
-        result.set(id, topicNodeSchema.parse(row.payload));
-      }
-    }
-  }
+  for (let offset = 0; offset < missing.length; offset += 100) await resolveTopicBatch(missing.slice(offset, offset + 100), byId, result, context, options);
   return unique.flatMap(id => result.has(id) ? [result.get(id)!] : []);
 }
 

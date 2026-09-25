@@ -319,6 +319,90 @@ function itemValuesDiffer(
 	);
 }
 
+function dirtyItemFields(
+	sourceDirtyFields: readonly string[] | undefined,
+	overrides: Record<string, unknown> | undefined,
+) {
+	return new Set([...(sourceDirtyFields ?? []), ...Object.keys(overrides ?? {})]);
+}
+
+function effectiveCollections(
+	dirtyFields: ReadonlySet<string>,
+	existingCollections: string[] | undefined,
+	foreignCollections: string[] | undefined,
+	incomingCollections: string[],
+) {
+	if (dirtyFields.has("collections")) return existingCollections ?? [];
+	return [...new Set([...(foreignCollections ?? []), ...incomingCollections])].sort();
+}
+
+function effectiveParentItem(
+	keepExisting: boolean,
+	existing: typeof item.$inferSelect | undefined,
+	incomingParentItem: string | null | undefined,
+) {
+	return keepExisting ? (existing?.parentItem ?? null) : (incomingParentItem ?? null);
+}
+
+/** Library tag edits win over source tags; foreign publications keep their tags. */
+function effectiveTags(
+	dirtyFields: ReadonlySet<string>,
+	existingTags: string[] | undefined,
+	incomingTags: string[],
+	foreignPublicationTags: readonly string[] | null | undefined,
+) {
+	return [
+		...new Set([
+			...(dirtyFields.has("tags") ? (existingTags ?? []) : incomingTags),
+			...(foreignPublicationTags ?? []),
+		]),
+	].sort();
+}
+
+function sourceSnapshotChanged(
+	snapshot: Pick<typeof sourceSnapshot.$inferSelect, "payloadHash" | "mappingProfileVersion"> | undefined,
+	record: SourceItemUpsert,
+	mappingProfileVersion: SourceIngestionBatch["mappingProfileVersion"],
+) {
+	return (
+		!snapshot ||
+		snapshot.payloadHash !== sourceItemFingerprint(record) ||
+		snapshot.mappingProfileVersion !== mappingProfileVersion
+	);
+}
+
+function managedPublicationChanged(
+	mayManageFile: boolean,
+	record: SourceItemUpsert,
+	existingPublication: typeof itemFilePublication.$inferSelect | undefined,
+) {
+	if (!mayManageFile) return false;
+	const publication = record.file?.managedPublication;
+	if (!publication) return Boolean(existingPublication);
+	return (
+		!existingPublication ||
+		existingPublication.objectPath !== publication.objectPath ||
+		existingPublication.coverObjectPath !== publication.coverObjectPath ||
+		existingPublication.sizeBytes !== publication.sizeBytes ||
+		existingPublication.sha256 !== publication.sha256 ||
+		existingPublication.pageCount !== publication.pageCount
+	);
+}
+
+function effectiveItemChanged(
+	existing: typeof item.$inferSelect,
+	state: { item: Partial<ItemInsert>; parentItem: string | null; tags: string[]; collections: string[] },
+	existingTags: string[] | undefined,
+	existingCollections: string[] | undefined,
+) {
+	return (
+		itemValuesDiffer(existing, state.item) ||
+		existing.parentItem !== state.parentItem ||
+		!stringSetEqual(existingTags ?? [], state.tags) ||
+		!stringSetEqual(existingCollections ?? [], state.collections)
+	);
+}
+
 async function loadIdentityMap(
 	transaction: Transaction,
 	entity: "collection" | "item",
@@ -1413,8 +1497,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			itemUpserts.map((record) => {
 				const key = itemKeys.get(record.sourceRecordKey)!;
 				const existing = existingItemByKey.get(key);
-				const dirtyFields = new Set(
-					[...(sourceLinkByItemKey.get(key)?.dirtyFields ?? []), ...Object.keys(overridesByItem.get(key) ?? {})],
+				const dirtyFields = dirtyItemFields(
+					sourceLinkByItemKey.get(key)?.dirtyFields,
+					overridesByItem.get(key),
 				);
 				const normalized = normalizedItems.get(record.sourceRecordKey)!;
 				const existingPublication =
@@ -1435,16 +1520,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					record.sourceRecordKey,
 					{
 						sourceCollections: incomingCollections,
-						collections: dirtyFields.has("collections")
-							? (existingCollectionsByItemKey.get(key) ?? [])
-							: [
-									...new Set([
-										...(foreignCollectionsByItemKey.get(
-											key,
-										) ?? []),
-										...incomingCollections,
-									]),
-								].sort(),
+						collections: effectiveCollections(
+							dirtyFields,
+							existingCollectionsByItemKey.get(key),
+							foreignCollectionsByItemKey.get(key),
+							incomingCollections,
+						),
 						dirtyFields,
 						item: preserveProtectedFileFields(
 							maskDirtyItemFields(
@@ -1456,26 +1537,19 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							mayManageFile(record),
 							protectsManagedPublication,
 						),
-						parentItem: protectsManagedPublication
-							? (existing?.parentItem ?? null)
-							: dirtyFields.has("parentItem")
-								? (existing?.parentItem ?? null)
-								: (parentItemKeys.get(record.sourceRecordKey) ??
-									null),
-						tags: [
-							...new Set([
-								...(dirtyFields.has("tags")
-									? (existingTagsByItemKey.get(key) ?? [])
-									: normalized.tags),
-								...(sourceOwnsCanonicalItem(
-									existing,
-									batch.sourceConnectionKey,
-								)
-									? []
-									: (existingPublication?.publicationTags ??
-										[])),
-							]),
-						].sort(),
+						parentItem: effectiveParentItem(
+							protectsManagedPublication || dirtyFields.has("parentItem"),
+							existing,
+							parentItemKeys.get(record.sourceRecordKey),
+						),
+						tags: effectiveTags(
+							dirtyFields,
+							existingTagsByItemKey.get(key),
+							normalized.tags,
+							sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey)
+								? undefined
+								: existingPublication?.publicationTags,
+						),
 					},
 				] as const;
 			}),
@@ -1520,43 +1594,27 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					(connection.provider === "openalex" || existing.sourceConnectionKey === batch.sourceConnectionKey) && !overridesByItem.get(key)?.deleted
 				);
 			}
-			const snapshot = snapshotByItemKey.get(key);
-			const sourceChanged =
-				!snapshot ||
-				snapshot.payloadHash !== sourceItemFingerprint(record) ||
-				snapshot.mappingProfileVersion !== batch.mappingProfileVersion;
-
+			const sourceChanged = sourceSnapshotChanged(
+				snapshotByItemKey.get(key),
+				record,
+				batch.mappingProfileVersion,
+			);
 			const state = effectiveItemStateByRecordKey.get(
 				record.sourceRecordKey,
 			)!;
-			const publication = record.file?.managedPublication;
-			const existingPublication = existingPublicationByItemKey.get(key);
-			const publicationChanged = mayManageFile(record)
-				? publication
-					? !existingPublication ||
-						existingPublication.objectPath !==
-							publication.objectPath ||
-						existingPublication.coverObjectPath !==
-							publication.coverObjectPath ||
-						existingPublication.sizeBytes !==
-							publication.sizeBytes ||
-						existingPublication.sha256 !== publication.sha256 ||
-						existingPublication.pageCount !== publication.pageCount
-					: Boolean(existingPublication)
-				: false;
+			const publicationChanged = managedPublicationChanged(
+				mayManageFile(record),
+				record,
+				existingPublicationByItemKey.get(key),
+			);
 			if (!sourceChanged) return publicationChanged;
 			return (
-				itemValuesDiffer(existing, state.item) ||
-				existing.parentItem !== state.parentItem ||
-				!stringSetEqual(
-					existingTagsByItemKey.get(key) ?? [],
-					state.tags,
-				) ||
-				!stringSetEqual(
-					existingCollectionsByItemKey.get(key) ?? [],
-					state.collections,
-				) ||
-				publicationChanged
+				effectiveItemChanged(
+					existing,
+					state,
+					existingTagsByItemKey.get(key),
+					existingCollectionsByItemKey.get(key),
+				) || publicationChanged
 			);
 		});
 		const itemEvents = new Map<
@@ -2343,28 +2401,23 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			batch.sourceConnectionKey,
 			batch.items.flatMap((record) => {
 				const itemKey = itemKeys.get(record.sourceRecordKey);
-				const link = itemKey
-					? sourceLinkByItemKey.get(itemKey)
-					: undefined;
-				const existing = itemKey
-					? existingItemByKey.get(itemKey)
-					: undefined;
+				if (!itemKey) return [];
+				const link = sourceLinkByItemKey.get(itemKey);
+				const existing = existingItemByKey.get(itemKey);
 				const remoteDeleted = record.operation === "delete";
 				const acknowledged =
 					(link?.dirtyFields.length ?? 0) === 0 &&
 					(!remoteDeleted ||
 						existing?.sourceConnectionKey ===
 							batch.sourceConnectionKey);
-				return itemKey
-					? [
-							{
-								acknowledged,
-								itemKey,
-								remoteDeleted,
-								remoteVersion: staleItemKeys.has(itemKey) && link?.remoteVersion ? link.remoteVersion : record.remoteVersion,
-							},
-						]
-					: [];
+				return [
+					{
+						acknowledged,
+						itemKey,
+						remoteDeleted,
+						remoteVersion: staleItemKeys.has(itemKey) && link?.remoteVersion ? link.remoteVersion : record.remoteVersion,
+					},
+				];
 			}),
 			now,
 		);

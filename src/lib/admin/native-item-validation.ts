@@ -300,6 +300,17 @@ function countryFocusFields(value: unknown, source: boolean | undefined) {
 	return { countryFocus: result.data };
 }
 
+function topicFields(value: unknown) {
+	if (value === undefined) return {};
+	return { topics: [...new Set(z.array(topicIdSchema).max(100).parse(value))].sort() };
+}
+
+/** Editors resolve source conflicts; source imports never send resolutions. */
+function sourceResolutionFields(value: unknown, source: boolean | undefined) {
+	if (source || value === undefined) return {};
+	return { sourceResolutions: sourceResolutionsSchema.parse(value) };
+}
+
 function parseNativeItemDraft(
 	input: unknown,
 	options: NativeItemValidationOptions,
@@ -321,7 +332,7 @@ function parseNativeItemDraft(
 	const itemValues: Record<string, unknown> = {
 		itemType: normalizedItemType,
 		...countryFocusFields(payload.countryFocus, options.source),
-		...(payload.topics === undefined ? {} : { topics: [...new Set(z.array(topicIdSchema).max(100).parse(payload.topics))].sort() }),
+		...topicFields(payload.topics),
 		...normalizeDraftFields(
 			payload,
 			[
@@ -339,7 +350,7 @@ function parseNativeItemDraft(
 		),
 	};
 	const normalizedPayload = { ...itemValues };
-	if (!options.source && payload.sourceResolutions !== undefined) normalizedPayload.sourceResolutions = sourceResolutionsSchema.parse(payload.sourceResolutions);
+	Object.assign(normalizedPayload, sourceResolutionFields(payload.sourceResolutions, options.source));
 
 	if (payload.creators !== undefined) {
 		const creators = parseDraftCreators(

@@ -50,10 +50,12 @@ export function preserveCreatorProfileLinks<T extends AdminCreator>(
 		if (!options.sourceAffiliations) delete next.institutions;
 		const identity = creatorIdentity(creator);
 		const matches = unchangedOrder ? [previous![index]!] : previousByIdentity.get(identity);
-		if (matches?.length === 1 && (unchangedOrder || incomingCounts.get(identity) === 1)) {
-			if (matches[0]!.authorProfileId) next.authorProfileId = matches[0]!.authorProfileId;
-			if (!options.sourceAffiliations && matches[0]!.institutions?.length) next.institutions = matches[0]!.institutions;
-		}
+		if (matches?.length === 1 && (unchangedOrder || incomingCounts.get(identity) === 1)) keepLibraryFields(next, matches[0]!, options.sourceAffiliations);
 		return next;
 	});
+}
+
+function keepLibraryFields(next: AdminCreator, match: AdminCreator, sourceAffiliations?: boolean) {
+	if (match.authorProfileId) next.authorProfileId = match.authorProfileId;
+	if (!sourceAffiliations && match.institutions?.length) next.institutions = match.institutions;
 }

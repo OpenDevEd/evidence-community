@@ -1,5 +1,5 @@
 import type { Database } from "@/db/database-schema";
-import { runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
+import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getPublicItemCard } from "@/lib/public-item-card";
 
@@ -19,34 +19,18 @@ async function deliverAssociations(
 		config,
 	);
 
-	const service = config.authentication.openScholar;
-	const response = await fetch(
-		new URL(
-			"/api/v1/evidence-libraries/author-associations",
-			service.convexSiteUrl,
-		),
+	await postOpenScholarAssociation(
+		config,
+		"/api/v1/evidence-libraries/author-associations",
+		"association update",
 		{
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${service.machineCredential}`,
-			},
-			body: JSON.stringify({
-				libraryId: service.libraryId,
-				itemKey: job.itemKey,
-				revision: publicationRevision(job.revision, card),
-				profileIds: profileIdsFor(card),
-			}),
-			signal: AbortSignal.any([
-				AbortSignal.timeout(10000),
-				...(signal ? [signal] : []),
-			]),
+			libraryId: config.authentication.openScholar.libraryId,
+			itemKey: job.itemKey,
+			revision: publicationRevision(job.revision, card),
+			profileIds: profileIdsFor(card),
 		},
+		signal,
 	);
-	if (!response.ok)
-		throw new Error(
-			`OpenScholar association update returned ${response.status}: ${(await response.text()).slice(0, 500)}`,
-		);
 }
 
 function profileIdsFor(card: Awaited<ReturnType<typeof getPublicItemCard>>) {
