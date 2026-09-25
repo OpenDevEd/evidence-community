@@ -130,8 +130,10 @@ npm run search:index -- --requeue-dead-letters
 `--rebuild` streams current top-level items in batches, then drains the outbox.
 It replaces records in place instead of emptying the index first, so search
 keeps answering and Meilisearch keeps the embedding of every record whose
-embedded text did not change. It sends every batch before waiting for any,
-then removes records that are no longer public.
+embedded text did not change. It keeps up to 100 batches queued in
+Meilisearch so they are indexed together, then removes records that are no
+longer public. Meilisearch keeps a file open for each queued batch, so its
+container runs with a higher open-file limit.
 `--requeue-dead-letters` resets terminal events to immediately retryable state
 and can be combined with either one-shot or watch mode.
 

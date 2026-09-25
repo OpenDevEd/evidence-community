@@ -51,6 +51,8 @@ export const EMBEDDER_TASK_TIMEOUT_MS = 60 * 60 * 1_000;
 export const EMBEDDER_TASK_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
+/** Queued rebuild batches; each holds an open file in Meilisearch. */
+const REBUILD_TASKS_IN_FLIGHT = 100;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 
 type ClaimedEvent = typeof outbox.$inferSelect;
@@ -270,13 +272,17 @@ async function claimEvents(
 								),
 							),
 					),
-					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${outbox.entityType} || ':' || ${outbox.entityKey}, 0))`,
 				),
 			)
 			.orderBy(asc(outbox.id))
 			.for("update", { skipLocked: true })
 			.limit(limit);
 		if (candidates.length === 0) return [];
+
+		// The entity lock is taken only for the claimed rows. In the query
+		// above, a plan that reads every pending row before the limit would
+		// take one lock per pending row and run out of lock memory on a large
+		// backlog.
 
 		return transaction
 			.update(outbox)
@@ -285,9 +291,12 @@ async function claimEvents(
 				leaseOwner: workerId,
 			})
 			.where(
-				inArray(
-					outbox.id,
-					candidates.map(({ id }) => id),
+				and(
+					inArray(
+						outbox.id,
+						candidates.map(({ id }) => id),
+					),
+					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${outbox.entityType} || ':' || ${outbox.entityKey}, 0))`,
 				),
 			)
 			.returning();
@@ -1057,9 +1066,16 @@ export async function rebuildSearchIndex(
 	// whose embedded text did not change. Whatever is left afterwards is
 	// removed.
 	const staleKeys = await readIndexedKeys(service.index, options.signal);
-	// Every batch is sent before any is awaited, so Meilisearch can index
-	// them together instead of repeating its per-batch work for each one.
+	// Batches are sent ahead of the ones Meilisearch is still indexing, so it
+	// can index them together instead of repeating its per-batch work for
+	// each one. Meilisearch keeps a file open for every queued batch, so at
+	// most REBUILD_TASKS_IN_FLIGHT wait at once.
 	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
+	const waitForOldestTask = () =>
+		waitForSuccessfulTask(tasks.shift()!, taskTimeoutMs, {
+			signal: options.signal,
+			taskClient: service.index.tasks,
+		});
 	let indexed = 0;
 	for await (const plan of generateFullSearchProjectionPlans(
 		database,
@@ -1072,21 +1088,17 @@ export async function rebuildSearchIndex(
 			plan.documents,
 			maxDocumentBatchBytes,
 		)) {
-			const task = service.index.addDocuments(documents, {
-				primaryKey: "key",
-			});
-			await abortable(task, options.signal);
-			tasks.push(task);
+			await queueRebuildTask(
+				service.index.addDocuments(documents, { primaryKey: "key" }),
+				tasks,
+				waitForOldestTask,
+				options.signal,
+			);
 		}
 		for (const document of plan.documents) staleKeys.delete(document.key);
 		indexed += plan.documents.length;
 	}
-	for (const task of tasks) {
-		await waitForSuccessfulTask(task, taskTimeoutMs, {
-			signal: options.signal,
-			taskClient: service.index.tasks,
-		});
-	}
+	while (tasks.length > 0) await waitForOldestTask();
 	if (staleKeys.size > 0) {
 		await waitForSuccessfulTask(
 			service.index.deleteDocuments([...staleKeys]),
@@ -1113,6 +1125,17 @@ export async function rebuildSearchIndex(
 		}
 	}
 	return { deleted: staleKeys.size, indexed };
+}
+
+async function queueRebuildTask(
+	task: ReturnType<Index["addDocuments"]>,
+	tasks: Array<ReturnType<Index["addDocuments"]>>,
+	waitForOldestTask: () => Promise<unknown>,
+	signal?: AbortSignal,
+) {
+	await abortable(task, signal);
+	tasks.push(task);
+	if (tasks.length >= REBUILD_TASKS_IN_FLIGHT) await waitForOldestTask();
 }
 
 async function readIndexedKeys(index: Index, signal?: AbortSignal) {
