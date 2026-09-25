@@ -1128,6 +1128,7 @@ export async function publishItemDraftWithContext(
 
 		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload);
 		await transaction.delete(itemFieldOverride).where(and(eq(itemFieldOverride.itemKey, itemKey), eq(itemFieldOverride.field, "deleted")));
+		if (current?.deleted === 1) await restoreSourceChildren(transaction, itemKey);
 		const nextRevision = currentRevision + 1;
 		const now = new Date();
 		const values = {
@@ -1453,6 +1454,24 @@ async function withdrawSourceChildren(transaction: Transaction, children: readon
 		});
 	}
 	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
+}
+
+/**
+ * Undoes withdrawSourceChildren when the record is published again. The PDF was
+ * removed from storage, so the source brings it back: the next run of each
+ * supplying source rescans in full instead of fetching only updated works.
+ */
+async function restoreSourceChildren(transaction: Transaction, itemKey: string) {
+	const children = (await transaction.select({ key: item.key }).from(item)
+		.innerJoin(itemFieldOverride, and(eq(itemFieldOverride.itemKey, item.key), eq(itemFieldOverride.field, "deleted")))
+		.where(eq(item.parentItem, itemKey))).map(({ key }) => key);
+	if (!children.length) return;
+	await transaction.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, children), eq(itemFieldOverride.field, "deleted")));
+	const sources = transaction.select({ key: itemSourceLink.sourceConnectionKey }).from(itemSourceLink).where(inArray(itemSourceLink.itemKey, children));
+	// A run in progress keeps its cursor; the daily full rescan still covers it.
+	await transaction.update(sourceConnection)
+		.set({ syncCursor: sql`jsonb_set(${sourceConnection.syncCursor}, '{reconciledAt}', 'null'::jsonb)` })
+		.where(and(inArray(sourceConnection.key, sources), sql`${sourceConnection.syncCursor}->>'completedAt' is not null`));
 }
 
 async function unpublishNativeItemAttempt(
