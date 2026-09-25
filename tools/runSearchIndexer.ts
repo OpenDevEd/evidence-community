@@ -16,9 +16,11 @@ import {
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
+	outboxBacklogForRebuild,
 	applySearchIndexEmbedder,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
+	rebuildForOutboxBacklog,
 	rebuildSearchIndex,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
@@ -244,6 +246,38 @@ async function main() {
 
 		do {
 			try {
+				// A large backlog, such as a first import, is indexed faster by
+				// a rebuild; events written meanwhile are drained below.
+				const backlog = await outboxBacklogForRebuild(
+					databaseResource.database,
+				);
+				if (backlog > 0) {
+					await writeWorkerState(
+						{
+							currentBatchProgress: null,
+							currentBatchUid: null,
+							currentEventCount: backlog,
+							currentTaskUid: null,
+							lastCompletedAt:
+								reporter.current().lastCompletedAt ?? null,
+							lastError: reporter.current().lastError ?? null,
+							stage: "projecting",
+						},
+						true,
+					);
+					const rebuilt = await rebuildForOutboxBacklog(
+						databaseResource.database,
+						service,
+						config,
+						{
+							signal: abortController.signal,
+							taskTimeoutMs: resolveRebuildTaskTimeoutMs({
+								embedder: config.search.embedder,
+							}),
+						},
+					);
+					console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
+				}
 				const results = await drainSearchOutbox({
 					config,
 					batchClient: service.client.batches,

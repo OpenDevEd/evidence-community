@@ -28,6 +28,7 @@ import {
 	processNextSearchOutboxBatch,
 	processNextSearchOutboxEvent,
 	requeueSearchOutboxDeadLetters,
+	rebuildForOutboxBacklog,
 	rebuildSearchIndex,
 	SearchIndexTaskError,
 	SearchOutboxAbortError,
@@ -68,6 +69,8 @@ const entityKeys = [
 	secondRootKey,
 	childCollectionKey,
 ];
+const backlogKey = "BKLG2345";
+entityKeys.push(backlogKey);
 const tagName = "search-e2e";
 const goodIndexName = `search_outbox_e2e_${process.pid}`;
 const badIndexName = `search_outbox_bad_e2e_${process.pid}`;
@@ -1083,6 +1086,71 @@ async function verify() {
 			republished.revision === 10,
 			"The full rebuild removed a record published again during the rebuild",
 		);
+
+		// A backlog rebuild acknowledges the events waiting before it and
+		// leaves events written during it queued for the drain.
+		await database
+			.update(item)
+			.set({ revision: 11, title: "Backlog report" })
+			.where(eq(item.key, parentKey));
+		const [waitingEvent] = await database
+			.insert(outbox)
+			.values({ entityKey: parentKey, entityType: "item", operation: "upsert", revision: 11 })
+			.returning({ id: outbox.id });
+		assert(waitingEvent, "The backlog event was not created");
+		await database.insert(itemIdentity).values({
+			key: backlogKey,
+			sourceConnectionKey: "native",
+			sourceRecordKey: backlogKey,
+		});
+		await database.insert(item).values({
+			itemType: "Report",
+			key: backlogKey,
+			sourceConnectionKey: "native",
+			sourceRecordKey: backlogKey,
+			title: "Written during the rebuild",
+		});
+		let lateEventId: number | undefined;
+		const writeDuringRebuild = new Proxy(goodService.index, {
+			get(target, property) {
+				if (property === "addDocuments") {
+					return async (...args: Parameters<typeof target.addDocuments>) => {
+						if (lateEventId === undefined) {
+							const [lateEvent] = await database
+								.insert(outbox)
+								.values({ entityKey: backlogKey, entityType: "item", operation: "upsert", revision: 1 })
+								.returning({ id: outbox.id });
+							lateEventId = lateEvent?.id;
+						}
+						return target.addDocuments(...args);
+					};
+				}
+				const value = Reflect.get(target, property);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
+		const backlogRebuild = await rebuildForOutboxBacklog(
+			database,
+			{ ...goodService, index: writeDuringRebuild },
+			libraryConfig,
+			{ taskTimeoutMs: 60_000 },
+		);
+		assert(lateEventId !== undefined, "No event was written during the backlog rebuild");
+		const [waitingAfter] = await database.select().from(outbox).where(eq(outbox.id, waitingEvent.id));
+		const [lateAfter] = await database.select().from(outbox).where(eq(outbox.id, lateEventId));
+		assert(
+			backlogRebuild.acknowledged >= 1 && waitingAfter?.processedAt !== null,
+			"The backlog rebuild did not acknowledge the event waiting before it",
+		);
+		assert(
+			(await goodService.index.getDocument<{ title: string }>(parentKey)).title === "Backlog report",
+			"The backlog rebuild did not index the waiting event's change",
+		);
+		assert(
+			lateAfter?.processedAt === null,
+			"The backlog rebuild acknowledged an event written after it started",
+		);
+		await database.delete(outbox).where(eq(outbox.id, lateEventId));
 
 		// A lease lost on one event must not strand the rest of its batch.
 		// Before this check, the failure path rolled back every mark when one
