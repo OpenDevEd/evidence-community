@@ -55,8 +55,8 @@ function getNodeText(node: ReactNode): string {
 const headingTags = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
 type HeadingTag = (typeof headingTags)[number];
 const headingClasses: Partial<Record<HeadingTag, string>> = {
-	h1: "group mb-6 mt-14 border-t border-black/8 pt-8 text-3xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
-	h2: "group mb-5 mt-12 border-t border-black/8 pt-8 text-2xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
+	h1: "group mb-6 mt-14 border-t border-black/[0.08] pt-8 text-3xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
+	h2: "group mb-5 mt-12 border-t border-black/[0.08] pt-8 text-2xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
 	h3: "group mb-4 mt-10 text-xl font-semibold tracking-tight text-black dark:text-white",
 };
 
@@ -147,12 +147,12 @@ const markdownComponents: Components = {
 		);
 	},
 	p: ({ children }) => (
-		<p className="text-[1.02rem] leading-8 text-black/72 dark:text-white/72">
+		<p className="text-[1.02rem] leading-8 text-black/[0.72] dark:text-white/[0.72]">
 			{children}
 		</p>
 	),
 	table: ({ children }) => (
-		<div className="my-8 overflow-x-auto rounded-[1.75rem] border border-black/10 bg-background_light/800 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.45)] first:mt-0 last:mb-0 dark:border-white/10 dark:bg-card/92">
+		<div className="my-8 overflow-x-auto rounded-[1.75rem] border border-black/10 bg-background_light/80 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.45)] first:mt-0 last:mb-0 dark:border-white/10 dark:bg-card/[0.92]">
 			<table className="w-full min-w-[42rem] border-collapse text-sm !my-0">
 				{children}
 			</table>
@@ -169,7 +169,7 @@ const markdownComponents: Components = {
 		</th>
 	),
 	td: ({ children }) => (
-		<td className="border-t border-black/8 px-4 py-3 align-top text-black/72 dark:border-white/10 dark:text-white/72">
+		<td className="border-t border-black/[0.08] px-4 py-3 align-top text-black/[0.72] dark:border-white/10 dark:text-white/[0.72]">
 			{children}
 		</td>
 	),
@@ -182,10 +182,10 @@ const markdownComponents: Components = {
 		</ol>
 	),
 	li: ({ children }) => (
-		<li className="pl-1 text-black/72 dark:text-white/72">{children}</li>
+		<li className="pl-1 text-black/[0.72] dark:text-white/[0.72]">{children}</li>
 	),
 	blockquote: ({ children }) => (
-		<blockquote className="rounded-[1.5rem] border border-accent/15 bg-gradient-to-br from-accent/8 to-transparent px-5 py-4 text-black/75 not-italic dark:border-accent/20 dark:from-accent/12 dark:text-white/75">
+		<blockquote className="rounded-[1.5rem] border border-accent/15 bg-gradient-to-br from-accent/[0.08] to-transparent px-5 py-4 text-black/75 not-italic dark:border-accent/20 dark:from-accent/[0.12] dark:text-white/75">
 			{children}
 		</blockquote>
 	),
