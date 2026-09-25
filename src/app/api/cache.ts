@@ -2,7 +2,8 @@ import { cache } from "react";
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { getItem, withoutFullText } from "./item/[key]/route";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { outbox } from "@opendeved/evidence-library-core";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
@@ -65,9 +66,36 @@ export async function getCachedCollections(config?: LibraryServerConfig) {
 // Share the database read within one render, without keeping an older public revision.
 export const getCachedItem = cache(getItem);
 
-export const getCachedItemSmall = cache(async (key: string) =>
-	withoutFullText(await getCachedItem(key)),
-);
+/**
+ * The record's public version. Every public change writes an outbox row for the
+ * record (and its parent when a child changes) in the writer's own transaction.
+ * Rows are never deleted, and a re-queued row takes a new id (see
+ * enqueueItemSearchReprojection), so the sum of ids grows with each committed
+ * change, whatever order transactions commit in.
+ */
+export async function readItemVersion(key: string) {
+	const db = await getDatabase();
+	const [row] = await db
+		.select({ version: sql<string>`coalesce(sum(${outbox.id}), 0)::text` })
+		.from(outbox)
+		.where(and(eq(outbox.entityType, "item"), eq(outbox.entityKey, key)));
+	return row?.version ?? "0";
+}
+
+// A new version or config revision is a new key, so a committed change, hide
+// included, is read fresh on the next request. Old entries age out of memory.
+// "Not found" is kept too. Full text is left out.
+async function readCachedPublicItem(key: string, _configRevision: string, _version: string) {
+	"use cache";
+	cacheLife("max");
+	cacheTag(`item:${key}`, "library");
+	return withoutFullText(await getItem(key));
+}
+
+export const getCachedItemSmall = cache(async (key: string) => {
+	const [config, version] = await Promise.all([getLibraryConfig(), readItemVersion(key)]);
+	return readCachedPublicItem(key, config.revision, version);
+});
 
 // --- User data (revalidate: 60s) ---
 

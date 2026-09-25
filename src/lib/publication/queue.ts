@@ -356,6 +356,9 @@ export async function enqueueItemSearchReprojection(
 		.onConflictDoUpdate({
 			target: [outbox.entityType, outbox.entityKey, outbox.revision],
 			set: {
+				// A new id changes the record's version, so cached item pages read the change.
+				// Drizzle leaves identity columns out of its update types.
+				...({ id: sql`DEFAULT` } as object),
 				attempts: 0,
 				lastError: null,
 				nextAttemptAt: input.queuedAt,
