@@ -841,26 +841,84 @@ export async function processNextSearchOutboxBatch(
 		if (!(error instanceof SearchIndexTaskError && events.length > 1)) {
 			throw error;
 		}
-
-		const results: SearchOutboxProcessResult[] = [];
-		let firstFailure: unknown;
-		for (const event of events) {
-			try {
-				results.push(
-					await processClaimedEvents(
-						options,
-						[event],
-						validated,
-						false,
-					),
-				);
-			} catch (eventError) {
-				firstFailure ??= eventError;
-			}
-		}
-		if (firstFailure) throw firstFailure;
-		return results;
+		// Meilisearch rejected a document. Halving the claim finds it in about
+		// 2 x log2(n) tasks instead of one task per event.
+		const outcome: IsolationOutcome = { failure: undefined, results: [] };
+		await isolateRejectedEvents(options, events, validated, outcome);
+		if (outcome.failure) throw outcome.failure;
+		return outcome.results;
 	}
+}
+
+type IsolationOutcome = {
+	failure: unknown;
+	results: SearchOutboxProcessResult[];
+};
+
+async function isolateRejectedEvents(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	validated: ValidatedConsumerOptions,
+	outcome: IsolationOutcome,
+) {
+	const middle = Math.ceil(events.length / 2);
+	const halves = [events.slice(0, middle), events.slice(middle)];
+	for (const [index, half] of halves.entries()) {
+		// The half still waiting keeps its leases, so no other lane or worker
+		// claims it while this half is indexed.
+		await whileLeasesRenewed(
+			options,
+			halves.slice(index + 1).flat(),
+			validated,
+			async () => {
+				try {
+					outcome.results.push(
+						await processClaimedEvents(
+							options,
+							half,
+							validated,
+							half.length > 1,
+						),
+					);
+				} catch (error) {
+					if (half.length > 1 && error instanceof SearchIndexTaskError) {
+						await isolateRejectedEvents(options, half, validated, outcome);
+					} else {
+						outcome.failure ??= error;
+					}
+				}
+			},
+		);
+	}
+}
+
+async function whileLeasesRenewed(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	validated: ValidatedConsumerOptions,
+	work: () => Promise<void>,
+) {
+	if (events.length === 0) return work();
+	const abortController = new AbortController();
+	let heartbeatFailure: unknown;
+	const loop = heartbeatLoop(
+		options,
+		events,
+		validated.heartbeatIntervalMs,
+		validated.leaseDurationMs,
+		validated.workerId,
+		abortController.signal,
+		(error) => {
+			heartbeatFailure = error;
+		},
+	);
+	try {
+		await work();
+	} finally {
+		abortController.abort();
+		await loop;
+	}
+	if (heartbeatFailure) throw heartbeatFailure;
 }
 
 export async function processNextSearchOutboxEvent(
@@ -890,8 +948,20 @@ export async function drainSearchOutbox(
 	// indexes another. Claims never share an entity (see claimEvents).
 	const drain = { failed: false, reserved: 0, results: [] as SearchOutboxProcessResult[] };
 	const lanes = await Promise.allSettled(
-		Array.from({ length: DRAIN_CONCURRENCY }, () =>
-			drainLane(options, maxEvents, drain),
+		Array.from({ length: DRAIN_CONCURRENCY }, (_, lane) =>
+			drainLane(
+				{
+					...options,
+					// Each lane owns its leases, so heartbeats and acknowledgements
+					// never touch another lane's events.
+					workerId: `${options.workerId}:${lane + 1}`,
+					// One lane reports progress; three would rewrite the worker
+					// state on every poll.
+					onProgress: lane === 0 ? options.onProgress : undefined,
+				},
+				maxEvents,
+				drain,
+			),
 		),
 	);
 	const failure = lanes.find((lane) => lane.status === "rejected");
