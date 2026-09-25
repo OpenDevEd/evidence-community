@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { publishOutboxCommits } from "../src/lib/cache-invalidation";
 import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
@@ -50,6 +51,7 @@ async function main() {
 	);
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,
+		publishOutboxCommits(config, "search-indexer"),
 	);
 	let ownershipLost = false;
 	let registeredWorker;

@@ -15,6 +15,7 @@ export default defineConfig({
 			"tools/verifyPublicationWorker.ts",
 			"tools/verifyPublicationReconciler.ts",
 			"tools/verifyNativeFileLifecycle.ts",
+            "tests/integration/cache-invalidation.test.ts",
             "tests/integration/editorial-reviews.test.ts",
             "tests/integration/country-focus.test.ts",
             "tests/integration/notifications.test.ts",

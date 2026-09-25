@@ -17,6 +17,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { insertOutboxEvents } from "@/db/postgres";
 import { tryLockItemMutation } from "@/db/canonical-mutation-lock";
 import {
 	publicationSyncJob,
@@ -344,15 +345,13 @@ export async function enqueueItemSearchReprojection(
 	transaction: DatabaseTransaction,
 	input: { itemKey: string; revision: number; queuedAt: Date },
 ) {
-	await transaction
-		.insert(outbox)
-		.values({
-			entityType: "item",
-			entityKey: input.itemKey,
-			operation: "upsert",
-			revision: input.revision,
-			nextAttemptAt: input.queuedAt,
-		})
+	await insertOutboxEvents(transaction, {
+		entityType: "item",
+		entityKey: input.itemKey,
+		operation: "upsert",
+		revision: input.revision,
+		nextAttemptAt: input.queuedAt,
+	})
 		.onConflictDoUpdate({
 			target: [outbox.entityType, outbox.entityKey, outbox.revision],
 			set: {

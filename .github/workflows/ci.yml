@@ -107,12 +107,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-project
-      - name: Verify transactions, files, reviews and provider retries
+      - name: Verify transactions, files, reviews, provider retries and cache clearing
         env:
           DATABASE_URL_POST: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports[5432] }}/postgres
+          REDIS_URL: redis://localhost:${{ job.services.redis.ports[6379] }}
         run: npm run test:integration
 
   code-quality:

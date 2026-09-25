@@ -7,9 +7,34 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { Database, schema } from "./database-schema";
 import { RevisionAwareDatabaseFactory } from "./factory";
 import { createPostgresDatabaseResource } from "./postgres";
+import { clearCacheTags } from "@/lib/cache-clearing";
+import {
+	cacheInvalidationForOutbox,
+	publishCacheInvalidation,
+	type OutboxEvent,
+} from "@/lib/cache-invalidation";
+
+// An admin change clears the pages at once, so the admin's next read shows it,
+// and is published so the web process's reader logs it too.
+async function clearAfterOutboxCommit(events: OutboxEvent[]) {
+	const invalidation = { ...cacheInvalidationForOutbox(events, "web"), immediate: true };
+	try {
+		clearCacheTags(invalidation);
+	} catch (error) {
+		// Outside a request Next cannot clear directly; the published entry still reaches the reader.
+		console.warn("[cache] Direct clear skipped", JSON.stringify({
+			tags: invalidation.tags,
+			error: error instanceof Error ? error.message : String(error),
+		}));
+	}
+	await publishCacheInvalidation(await getLibraryConfig(), invalidation);
+}
 
 function createDatabaseResource(databaseUrl: string) {
-	const resource = createPostgresDatabaseResource(databaseUrl);
+	const resource = createPostgresDatabaseResource(
+		databaseUrl,
+		clearAfterOutboxCommit,
+	);
 	attachDatabasePool(resource.pool);
 	return resource;
 }
