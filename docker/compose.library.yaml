@@ -165,6 +165,12 @@ services:
             # moves to a newer Meilisearch, so an update neither empties search
             # nor pays to embed every record again.
             MEILI_UPGRADE_DB: "true"
+        # Meilisearch keeps a file open for every queued batch; the default
+        # limit of 1,024 is too low for a large library's first import.
+        ulimits:
+            nofile:
+                soft: 65536
+                hard: 65536
         healthcheck:
             test:
                 [
