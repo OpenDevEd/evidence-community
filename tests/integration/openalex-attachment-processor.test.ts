@@ -16,7 +16,9 @@ import {
 	sourceConnection,
 	sourceFileCleanup,
 } from "@/db/schema/source";
-import { unpublishNativeItem } from "@/lib/admin/native-item-service";
+import { openItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import { maximalLibraryConfig } from "../fixtures/library-config";
 import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openalex/attachment-processor";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
@@ -30,6 +32,7 @@ import {
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const externalUrl = "https://93.184.216.34/research.pdf";
+const policy = { writebackConfig: { ...libraryConfigSchema.parse(maximalLibraryConfig), sources: [{ key: "openalex-pdf-a", writebackEnabled: false }] } };
 
 function mapped(url = externalUrl, version = "2026-09-24T01:02:03Z", id = 123) {
 	return mapOpenAlexWork({
@@ -510,7 +513,7 @@ describe("OpenAlex PDF processing", () => {
 		});
 	}, 120_000);
 
-	it("unpublishes a record with a hosted PDF and keeps both withdrawn on the next import", async () => {
+	it("keeps a withdrawn record's hosted PDF withdrawn until the record is published again", async () => {
 		await withIsolatedPublicationDatabase(async (database) => {
 			await sources(database);
 			const storage = new MemoryFileStorage();
@@ -550,6 +553,20 @@ describe("OpenAlex PDF processing", () => {
 				(await database.select().from(item)).map((row) => row.deleted),
 			).toEqual([1, 1]);
 			expect(await database.select().from(itemFilePublication)).toEqual([]);
+
+			const completed = { completedAt: "2026-09-25T00:00:00Z", reconciledAt: "2026-09-25T00:00:00Z" };
+			await database.update(sourceConnection).set({ syncCursor: completed }).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			await openItemDraft(database, itemKeys.W123!, policy);
+			await publishItemDraft(database, itemKeys.W123!, policy);
+			const [connection] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			expect(connection!.syncCursor).toEqual({ ...completed, reconciledAt: null });
+			vi.mocked(transport).mockResolvedValueOnce(new Response(await createPdf("HOSTED PDF")));
+			await writeSourceIngestionBatch(database, {
+				sourceConnectionKey: "openalex-pdf-a", expectedCursor: connection!.syncCursor, nextCursor: {}, mappingProfileVersion: "test", fetchedAt: new Date(),
+				items: [parent, await processor(original!, "openalex-pdf-a")],
+			});
+			expect((await database.select().from(item)).map((row) => row.deleted)).toEqual([0, 0]);
+			expect(await database.select().from(itemFilePublication)).toHaveLength(1);
 		});
 	}, 120_000);
 });
