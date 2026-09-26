@@ -26,6 +26,7 @@ import type { AdminSchemaDefinition } from "./admin-schema";
 import { humanizeAdminField } from "./admin-schema";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 import { useFinePointer } from "@/hooks/useBreakpoint";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 const OPERATOR_LABELS: Record<AdminItemFilterOperator, string> = {
 	after: "After",
@@ -402,39 +403,38 @@ export function AdminItemFilters({
 				setOpen(nextOpen);
 			}}
 		>
-			<PopoverTrigger>
-				<button
-					aria-expanded={open}
-					aria-label={
-						filters.length > 0
-							? `Filters, ${filters.length} active`
-							: "Filters"
-					}
-					className={`relative grid size-10 shrink-0 place-items-center rounded-xl border text-black/55 shadow-filter-control transition-filter-control hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/55 dark:shadow-filter-control-dark dark:hover:text-white/85 ${
-						filters.length > 0
-							? "border-accent/40 bg-accent/[0.09] text-black/75 hover:border-accent/55 hover:bg-accent/[0.14] dark:border-accent/45 dark:bg-accent/[0.16] dark:text-white/85 dark:hover:bg-accent/[0.22]"
-							: "border-black/[0.08] bg-black/[0.025] hover:border-black/[0.12] hover:bg-black/[0.05] dark:border-white/[0.09] dark:bg-white/[0.045] dark:hover:border-white/[0.14] dark:hover:bg-white/[0.07]"
-					}`}
-					data-active={filters.length > 0 ? "true" : "false"}
-					data-admin-filter-trigger
-					title={
-						filters.length > 0
-							? `${filters.length} active filters`
-							: "Filter records"
-					}
-					type="button"
-				>
-					<HugeiconsIcon icon={FilterIcon} aria-hidden data-admin-filter-trigger-icon data-admin-filter-trigger-glyph="list-filter" size={17} strokeWidth={2.1} />
-					{filters.length > 0 ? (
-						<span
-							className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white ring-2 ring-background_light dark:ring-background"
-							data-admin-filter-trigger-count
+			<Tooltip content={filters.length > 0 ? `${filters.length} active filters` : "Filter records"}>
+				<span className="inline-flex">
+					<PopoverTrigger>
+						<button
+							aria-expanded={open}
+							aria-label={
+								filters.length > 0
+									? `Filters, ${filters.length} active`
+									: "Filters"
+							}
+							className={`relative grid size-10 shrink-0 place-items-center rounded-xl border text-black/55 shadow-filter-control transition-filter-control hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/55 dark:shadow-filter-control-dark dark:hover:text-white/85 ${
+								filters.length > 0
+									? "border-accent/40 bg-accent/[0.09] text-black/75 hover:border-accent/55 hover:bg-accent/[0.14] dark:border-accent/45 dark:bg-accent/[0.16] dark:text-white/85 dark:hover:bg-accent/[0.22]"
+									: "border-black/[0.08] bg-black/[0.025] hover:border-black/[0.12] hover:bg-black/[0.05] dark:border-white/[0.09] dark:bg-white/[0.045] dark:hover:border-white/[0.14] dark:hover:bg-white/[0.07]"
+							}`}
+							data-active={filters.length > 0 ? "true" : "false"}
+							data-admin-filter-trigger
+							type="button"
 						>
-							{filters.length}
-						</span>
-					) : null}
-				</button>
-			</PopoverTrigger>
+							<HugeiconsIcon icon={FilterIcon} aria-hidden data-admin-filter-trigger-icon data-admin-filter-trigger-glyph="list-filter" size={17} strokeWidth={2.1} />
+							{filters.length > 0 ? (
+								<span
+									className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white ring-2 ring-background_light dark:ring-background"
+									data-admin-filter-trigger-count
+								>
+									{filters.length}
+								</span>
+							) : null}
+						</button>
+					</PopoverTrigger>
+				</span>
+			</Tooltip>
 			<PopoverContent
 				aria-label="Filter records"
 				as="form"

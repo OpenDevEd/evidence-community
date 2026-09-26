@@ -92,6 +92,7 @@ describe("public item empty sections", () => {
 
 	beforeEach(() => {
 		vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+		Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 		localStorage.clear();
 		testState.extraResult = { data: undefined, isLoading: false };
 		testState.citationsEnabled = true;
@@ -333,6 +334,7 @@ describe("public item empty sections", () => {
 		await act(async () => root.unmount());
 		container.remove();
 		localStorage.clear();
+		Reflect.deleteProperty(document, "fonts");
 		vi.unstubAllGlobals();
 	});
 

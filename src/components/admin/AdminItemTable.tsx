@@ -164,12 +164,13 @@ function RelationCell({
 				</span>
 			))}
 			{remaining.length > 0 ? (
-				<span
-					className="shrink-0 opacity-55"
-					title={remaining.map(({ label }) => label).join(", ")}
-				>
-					+{remaining.length}
-				</span>
+				<Tooltip content={remaining.map(({ label }) => label).join(", ")}>
+					<span
+						className="shrink-0 opacity-55"
+					>
+						+{remaining.length}
+					</span>
+				</Tooltip>
 			) : null}
 		</div>
 	);
@@ -237,76 +238,78 @@ function RecordTitleCell({
 			}`}
 		>
 			{editableSourceKeys.has(record.sourceConnectionKey) ? (
-				<button
-					ref={handleRef}
-					aria-disabled={!draggable}
-					aria-haspopup="dialog"
-					aria-label={`Drag or assign ${record.title}${
-						itemKeys.length > 1
-							? ` with ${itemKeys.length - 1} other selected records`
-							: ""
-					}`}
-					className={`grid size-7 shrink-0 touch-none place-items-center rounded-md text-black/30 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/30 ${
-						draggable
-							? "cursor-grab opacity-60 hover:bg-black/[0.05] hover:text-black/70 hover:opacity-100 active:cursor-grabbing dark:hover:bg-white/[0.06] dark:hover:text-white/70"
-							: "cursor-wait opacity-25"
-					}`}
-					data-record-drag-handle={record.key}
-					onClick={(event) => {
-						event.stopPropagation();
-						const start = pointerStart.current;
-						pointerStart.current = null;
-						if (
-							!draggable ||
-							(start &&
-								Math.hypot(
-									event.clientX - start.x,
-									event.clientY - start.y,
-								) > 4)
-						) {
-							return;
-						}
-						onRequestCollectionAssignment(
-							itemKeys,
-							record.key,
-							record.sourceConnectionKey,
-						);
-					}}
-					onKeyDownCapture={(event) => {
-						if (
-							!draggable ||
-							(event.key !== "Enter" && event.key !== " ")
-						)
-							return;
-						event.preventDefault();
-						event.stopPropagation();
-						event.nativeEvent.stopImmediatePropagation();
-						onRequestCollectionAssignment(
-							itemKeys,
-							record.key,
-							record.sourceConnectionKey,
-						);
-					}}
-					onPointerDown={(event) => {
-						pointerStart.current = {
-							x: event.clientX,
-							y: event.clientY,
-						};
-					}}
-					title={`Drag or assign ${record.title}`}
-					tabIndex={-1}
-					type="button"
-				>
-					<HugeiconsIcon icon={DragDropVerticalIcon} aria-hidden size={14} />
-				</button>
+				<Tooltip content={`Drag or assign ${record.title}`} openOnFocus={false}>
+					<button
+						ref={handleRef}
+						aria-disabled={!draggable}
+						aria-haspopup="dialog"
+						aria-label={`Drag or assign ${record.title}${
+							itemKeys.length > 1
+								? ` with ${itemKeys.length - 1} other selected records`
+								: ""
+						}`}
+						className={`grid size-7 shrink-0 touch-none place-items-center rounded-md text-black/30 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/30 ${
+							draggable
+								? "cursor-grab opacity-60 hover:bg-black/[0.05] hover:text-black/70 hover:opacity-100 active:cursor-grabbing dark:hover:bg-white/[0.06] dark:hover:text-white/70"
+								: "cursor-wait opacity-25"
+						}`}
+						data-record-drag-handle={record.key}
+						onClick={(event) => {
+							event.stopPropagation();
+							const start = pointerStart.current;
+							pointerStart.current = null;
+							if (
+								!draggable ||
+								(start &&
+									Math.hypot(
+										event.clientX - start.x,
+										event.clientY - start.y,
+									) > 4)
+							) {
+								return;
+							}
+							onRequestCollectionAssignment(
+								itemKeys,
+								record.key,
+								record.sourceConnectionKey,
+							);
+						}}
+						onKeyDownCapture={(event) => {
+							if (
+								!draggable ||
+								(event.key !== "Enter" && event.key !== " ")
+							)
+								return;
+							event.preventDefault();
+							event.stopPropagation();
+							event.nativeEvent.stopImmediatePropagation();
+							onRequestCollectionAssignment(
+								itemKeys,
+								record.key,
+								record.sourceConnectionKey,
+							);
+						}}
+						onPointerDown={(event) => {
+							pointerStart.current = {
+								x: event.clientX,
+								y: event.clientY,
+							};
+						}}
+						tabIndex={-1}
+						type="button"
+					>
+						<HugeiconsIcon icon={DragDropVerticalIcon} aria-hidden size={14} />
+					</button>
+				</Tooltip>
 			) : (
-				<span
-					aria-label="Collection assignment unavailable"
-					className="grid size-7 shrink-0 place-items-center text-black/20 dark:text-white/20"
-					title="Collection assignment unavailable for this source"
-				>
-					<HugeiconsIcon icon={SquareLock01Icon} aria-hidden size={12} />
-				</span>
+				<Tooltip content="Collection assignment unavailable for this source">
+					<span
+						aria-label="Collection assignment unavailable"
+						className="grid size-7 shrink-0 place-items-center text-black/20 dark:text-white/20"
+					>
+						<HugeiconsIcon icon={SquareLock01Icon} aria-hidden size={12} />
+					</span>
+				</Tooltip>
 			)}
 			<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={15} />
 			<div className="min-w-0">

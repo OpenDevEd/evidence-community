@@ -227,20 +227,21 @@ function AdminWritebackSummary({
 		writeback,
 	);
 	return (
-		<span
-			aria-label={label}
-			title={title}
-			className={`inline-flex items-center gap-1.5 text-[11px] ${className}`}
-		>
-			<HugeiconsIcon
-				icon={Icon}
-				size={13}
-				className={
-					spin ? "animate-spin motion-reduce:animate-none" : undefined
-				}
-			/>
-			{label}
-		</span>
+		<Tooltip content={title}>
+			<span
+				aria-label={label}
+				className={`inline-flex items-center gap-1.5 text-[11px] ${className}`}
+			>
+				<HugeiconsIcon
+					icon={Icon}
+					size={13}
+					className={
+						spin ? "animate-spin motion-reduce:animate-none" : undefined
+					}
+				/>
+				{label}
+			</span>
+		</Tooltip>
 	);
 }
 

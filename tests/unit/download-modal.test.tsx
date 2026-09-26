@@ -69,6 +69,8 @@ describe("single-record download options", () => {
 		testState.citationsEnabled = true;
 		testState.exports = { ris: true, bibtex: true, atom: false };
 		localStorage.clear();
+		vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+		Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
@@ -80,6 +82,8 @@ describe("single-record download options", () => {
 		});
 		container.remove();
 		localStorage.clear();
+		Reflect.deleteProperty(document, "fonts");
+		vi.unstubAllGlobals();
 	});
 
 	it("shows the download button when downloads are switched on", async () => {

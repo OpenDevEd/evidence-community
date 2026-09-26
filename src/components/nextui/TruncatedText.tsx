@@ -7,6 +7,7 @@ import { Tooltip } from "./Tooltip";
 export function TruncatedText({
 	text,
 	className = "",
+	lines = 1,
 	focusable = false,
 	managed = false,
 	isOpen,
@@ -14,6 +15,8 @@ export function TruncatedText({
 }: {
 	text: string;
 	className?: string;
+	/** Clip after this many lines instead of one. */
+	lines?: 1 | 2;
 	focusable?: boolean;
 	managed?: boolean;
 	isOpen?: boolean;
@@ -25,7 +28,7 @@ export function TruncatedText({
 	useEffect(() => {
 		const element = ref.current;
 		if (!element) return;
-		const measure = () => setIsTruncated(element.scrollWidth > element.clientWidth);
+		const measure = () => setIsTruncated(element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight);
 		const observer = new ResizeObserver(measure);
 		observer.observe(element);
 		document.fonts.addEventListener("loadingdone", measure);
@@ -45,7 +48,7 @@ export function TruncatedText({
 			placement="bottom-start"
 			classNames={{ content: "max-w-[min(28rem,calc(100vw-2rem))] whitespace-normal break-words" }}
 		>
-			<span ref={ref} className={`block min-w-0 truncate ${className}`} data-truncated-text tabIndex={focusable && isTruncated ? (managed ? -1 : 0) : undefined}>
+			<span ref={ref} className={`min-w-0 ${lines === 2 ? "line-clamp-2" : "block truncate"} ${className}`} data-truncated-text tabIndex={focusable && isTruncated ? (managed ? -1 : 0) : undefined}>
 				{text}
 			</span>
 		</Tooltip>

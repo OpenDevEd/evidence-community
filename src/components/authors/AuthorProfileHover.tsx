@@ -1,6 +1,6 @@
 "use client";
 
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { useReducedMotion } from "framer-motion";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import { useState, type ReactElement, type ReactNode } from "react";
@@ -27,8 +27,8 @@ export function AuthorProfileHover({
 			color="default"
 			isOpen={open}
 			onOpenChange={setOpen}
-			delay={160}
-			closeDelay={180}
+			delay={HOVER_CARD_DELAY}
+			closeDelay={HOVER_CARD_CLOSE_DELAY}
 			placement="left"
 			offset={12}
 			disableAnimation={Boolean(reducedMotion)}

@@ -2,6 +2,7 @@
 
 import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import type { ComponentProps } from "react";
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 
 // Adapted from Vercel AI Elements' Inline Citation component. The project uses
@@ -26,8 +27,8 @@ export type InlineCitationCardProps = ComponentProps<
 >;
 
 export function InlineCitationCard({
-	openDelay = 250,
-	closeDelay = 80,
+	openDelay = HOVER_CARD_DELAY,
+	closeDelay = HOVER_CARD_CLOSE_DELAY,
 	children,
 	...props
 }: InlineCitationCardProps) {

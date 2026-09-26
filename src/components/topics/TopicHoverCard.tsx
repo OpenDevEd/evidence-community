@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import useSWR from "swr";
 import { FreeSoloPopover, Spinner } from "@nextui-org/react";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import { ArrowUpRight01Icon, TagsIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -75,7 +75,6 @@ export function TopicHoverCard({
 					<>
 						<p
 							className="line-clamp-3 text-sm leading-relaxed text-black/65 dark:text-white/65"
-							title={detail.data.description}
 						>
 							{detail.data.description}
 						</p>
@@ -103,7 +102,6 @@ export function TopicHoverCard({
 									href={level.href}
 									target="_blank"
 									rel="noopener noreferrer"
-									title={level.title}
 									className={`${className} rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus`}
 								>
 									{level.name}
@@ -201,8 +199,8 @@ export function TopicHoverCard({
 				isOpen={open && !interactive}
 				isDisabled={interactive}
 				onOpenChange={setOpen}
-				delay={160}
-				closeDelay={240}
+				delay={HOVER_CARD_DELAY}
+				closeDelay={HOVER_CARD_CLOSE_DELAY}
 				placement="top-start"
 				offset={10}
 				disableAnimation={Boolean(reducedMotion)}

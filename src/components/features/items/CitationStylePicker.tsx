@@ -19,6 +19,7 @@ import {
 	loadCitationStyles,
 	searchCitationStyles,
 } from "@/lib/citation-styles";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 function StyleOption({
 	style,
@@ -297,12 +298,9 @@ export function CitationStylePicker({
 							? `${t("citationStyle")}: ${selected.label}`
 							: t("citationStyle")
 					}
-					title={selected?.label ?? t("citationStyle")}
 					className={twMerge("h-8 min-h-8 min-w-24 max-w-40 sm:max-w-64 justify-between gap-3 rounded-lg px-2.5 text-sm font-normal shadow-none", className)}
 				>
-					<span className="truncate">
-						{selected?.label ?? t("citationStyle")}
-					</span>
+					<TruncatedText text={selected?.label ?? t("citationStyle")} />
 					<HugeiconsIcon
 						icon={ArrowDown01Icon}
 						className="size-3.5 shrink-0 text-black/60 dark:text-white/60"

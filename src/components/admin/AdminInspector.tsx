@@ -116,6 +116,7 @@ import { AdminMetadataField } from "./AdminMetadataField";
 import { useAdminSession } from "./AdminSessionProvider";
 import { AdminPublicationHeaderStatus } from "./AdminPublicationStatus";
 import { useAdminPublication } from "./useAdminPublication";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
 
@@ -198,21 +199,24 @@ function ChangedMarker({
 			placement="bottom-end"
 			onOpenChange={setOpen}
 		>
-			<PopoverTrigger>
-				<button
-					aria-label={`Changed: show published ${label}`}
-					className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-					title={`${label} differs from the published value`}
-					type="button"
-				>
-					<HugeiconsIcon
-						icon={PencilIcon}
-						aria-hidden
-						size={11}
-						strokeWidth={2}
-					/>
-				</button>
-			</PopoverTrigger>
+			<Tooltip content={`${label} differs from the published value`}>
+				<span className="inline-flex">
+					<PopoverTrigger>
+						<button
+							aria-label={`Changed: show published ${label}`}
+							className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+							type="button"
+						>
+							<HugeiconsIcon
+								icon={PencilIcon}
+								aria-hidden
+								size={11}
+								strokeWidth={2}
+							/>
+						</button>
+					</PopoverTrigger>
+				</span>
+			</Tooltip>
 			<PopoverContent className="w-64 rounded-xl border border-black/[0.08] bg-white p-3 shadow-lg dark:border-white/[0.09] dark:bg-card">
 				<div className="w-full">
 					<p className="text-[11px] font-medium text-black/40 dark:text-white/40">
@@ -272,7 +276,7 @@ function IconButton({
 	onPress: () => void;
 }) {
 	return (
-		<Tooltip content={label} delay={500}>
+		<Tooltip content={label}>
 			<span>
 				<Button
 					aria-label={label}
@@ -1806,24 +1810,20 @@ export function AdminInspector({
 												/>
 											}
 										>
-											<span
-												className="truncate"
-												title={String(
-													liveRecord.published?.DOI ||
-														"No DOI",
-												)}
-											>
-												{publication.error
-													? "Status unavailable"
-													: publication.isLoading
-														? "Loading…"
-														: String(
-																liveRecord
-																	.published
-																	?.DOI ||
-																	"No DOI",
-															)}
-											</span>
+											<TruncatedText
+												text={
+													publication.error
+														? "Status unavailable"
+														: publication.isLoading
+															? "Loading…"
+															: String(
+																	liveRecord
+																		.published
+																		?.DOI ||
+																		"No DOI",
+																)
+												}
+											/>
 										</Button>
 									)
 								}

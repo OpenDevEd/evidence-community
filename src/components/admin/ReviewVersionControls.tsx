@@ -33,28 +33,30 @@ export function ReviewVersionTabs({
 		<div className="shrink-0">
 			<div role="group" aria-label="Record version" className="flex">
 				{[false, true].map((value) => (
-					<button
+					<Tooltip
 						key={String(value)}
-						type="button"
-						aria-pressed={viewingSubmitted === value}
-						disabled={value && !hasSubmitted}
-						title={
-							value && !hasSubmitted
-								? "No version has been submitted yet"
-								: undefined
-						}
-						onClick={() => onSelect(value)}
-						className={`disabled:cursor-not-allowed disabled:opacity-40 relative flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-3 text-xs sm:px-3 font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${adminPanelTabState(viewingSubmitted === value)}`}
+						content="No version has been submitted yet"
+						isDisabled={!value || hasSubmitted}
 					>
-						<HugeiconsIcon
-							icon={value ? FileLockedIcon : FileEditIcon}
-							size={18}
-							strokeWidth={1.8}
-							aria-hidden
-							className="shrink-0"
-						/>
-						{value ? "Submitted version" : "Working draft"}
-					</button>
+						<span className="flex flex-1">
+							<button
+								type="button"
+								aria-pressed={viewingSubmitted === value}
+								disabled={value && !hasSubmitted}
+								onClick={() => onSelect(value)}
+								className={`disabled:cursor-not-allowed disabled:opacity-40 relative flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-3 text-xs sm:px-3 font-medium transition-background-text outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${adminPanelTabState(viewingSubmitted === value)}`}
+							>
+								<HugeiconsIcon
+									icon={value ? FileLockedIcon : FileEditIcon}
+									size={18}
+									strokeWidth={1.8}
+									aria-hidden
+									className="shrink-0"
+								/>
+								{value ? "Submitted version" : "Working draft"}
+							</button>
+						</span>
+					</Tooltip>
 				))}
 			</div>
 		</div>
@@ -317,7 +319,7 @@ export function ReviewWithdrawButton({
 			{compact ? <HugeiconsIcon icon={Undo02Icon} size={14} /> : "Withdraw"}
 		</Button>
 	);
-	return compact ? <Tooltip content="Withdraw" delay={500}><span>{button}</span></Tooltip> : button;
+	return compact ? <Tooltip content="Withdraw"><span>{button}</span></Tooltip> : button;
 }
 
 export function ReviewDraftNotice({

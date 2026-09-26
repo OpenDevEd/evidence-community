@@ -34,6 +34,7 @@ import HomeMap, { type MapShape } from "./HomeMap";
 import { examplesKey, listedRows, regionNames, type Row } from "./home-explorer";
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 // Below the fold and heavy: the citation formatter with its styles. It loads when the reader nears it (see WhenNear),
 // not with the page.
@@ -1010,7 +1011,7 @@ function Ranked({ rows, total, toneOf, link }: { rows: Row[]; total?: number; to
 					<button type="button" aria-pressed={index === link.shown} onPointerEnter={() => link.onPreview(index)} onFocus={() => link.onPreview(index)} onBlur={() => link.onPreview(null)} onClick={() => link.onSelect(index)} className={`flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition-colors focus-visible:bg-[rgb(var(--ink-rgb)/0.12)] ${index === link.shown ? "bg-[rgb(var(--ink-rgb)/0.08)]" : ""}`}>
 						{toneOf && <span aria-hidden className={`size-3 shrink-0 rounded-[4px] ${toneClass}`} style={toneStyle(toneOf(index))} />}
 						{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}
-						<span className="min-w-0 flex-1 truncate text-base font-medium" title={row.name}>{row.name}</span>
+						<TruncatedText text={row.name} className="flex-1 text-base font-medium" />
 						{total ? <span className={`text-sm tabular-nums ${muted}`}>{percent(row.count, total)}%</span> : null}
 						<span className="w-12 shrink-0 text-right text-lg font-bold tabular-nums">{number.format(row.count)}</span>
 					</button>
@@ -1105,7 +1106,7 @@ function RowExamples({ row, filter, fallback }: { row: Row; filter: string; fall
 	return (
 		<div className="mt-8">
 			<div className="mb-4 flex items-baseline justify-between gap-6">
-				<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<span className="truncate" title={row.name}>{row.name}</span></h3>
+				<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<TruncatedText text={row.name} /></h3>
 				{/* The default prefetch: every row shown would otherwise download its whole filtered list, which few readers open. */}
 				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${filter}`} prefetch={null}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
 			</div>

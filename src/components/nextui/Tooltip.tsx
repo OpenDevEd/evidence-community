@@ -7,6 +7,7 @@ import {
 	use,
 	useCallback,
 	useRef,
+	type KeyboardEvent,
 	type ReactNode,
 	type Ref,
 } from "react";
@@ -35,6 +36,14 @@ const ARIA_PLACEMENT = {
 	"right-end": "right bottom",
 } as const;
 
+/**
+ * OpenScholar's hover card timing, for a tooltip that holds links or buttons:
+ * it waits a moment before opening and stays long enough for the pointer to
+ * cross into the card. Plain tooltips open and close at once.
+ */
+export const HOVER_CARD_DELAY = 250;
+export const HOVER_CARD_CLOSE_DELAY = 80;
+
 /** The library's own tooltip colour, used unless another one is asked for. */
 const CARD_CONTENT = "bg-card_light dark:bg-card border border-white/10";
 
@@ -48,7 +57,7 @@ const MOTION = [
 	"data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-90 data-[entering]:duration-150 data-[entering]:ease-[ease]",
 	"data-[placement=top]:data-[entering]:slide-in-from-bottom-1 data-[placement=bottom]:data-[entering]:slide-in-from-top-1",
 	"data-[placement=left]:data-[entering]:slide-in-from-right-1 data-[placement=right]:data-[entering]:slide-in-from-left-1",
-	"data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95 data-[exiting]:duration-100 data-[exiting]:ease-[ease] data-[exiting]:pointer-events-none",
+	"data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95 data-[exiting]:duration-150 data-[exiting]:ease-[ease] data-[exiting]:pointer-events-none",
 ].join(" ");
 
 type TooltipProps = {
@@ -71,6 +80,11 @@ type TooltipProps = {
 	defaultOpen?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 	isDisabled?: boolean;
+	/**
+	 * Off for a trigger inside a widget that moves focus itself, such as a
+	 * grid: a tooltip opened by focus takes the Escape the widget needs.
+	 */
+	openOnFocus?: boolean;
 	/** Classes for the tooltip's content. */
 	className?: string;
 	classNames?: { base?: string; content?: string };
@@ -84,11 +98,12 @@ type TooltipProps = {
 export function Tooltip({
 	children,
 	delay = 0,
-	closeDelay = 500,
+	closeDelay = 0,
 	isOpen,
 	defaultOpen,
 	onOpenChange,
 	isDisabled,
+	openOnFocus = true,
 	...overlay
 }: TooltipProps) {
 	return (
@@ -100,7 +115,7 @@ export function Tooltip({
 			onOpenChange={onOpenChange}
 			isDisabled={isDisabled}
 		>
-			<TooltipTriggerSlot>{children}</TooltipTriggerSlot>
+			<TooltipTriggerSlot openOnFocus={openOnFocus}>{children}</TooltipTriggerSlot>
 			<TooltipStateOverrides>
 				<TooltipOverlay {...overlay} isDisabled={isDisabled} />
 			</TooltipStateOverrides>
@@ -199,12 +214,24 @@ function arrowPlacementFor(side: string | null, placement: Placement) {
  * so every tooltip keeps the element it had. Text alone becomes a paragraph,
  * as it did with NextUI.
  */
-function TooltipTriggerSlot({ children }: { children: ReactNode }) {
+function TooltipTriggerSlot({ children, openOnFocus }: { children: ReactNode; openOnFocus: boolean }) {
 	const ref = useRef<HTMLElement | null>(null);
 	// useFocusable always adds tabIndex 0; the child keeps its own, as it did
 	// with NextUI, so a tooltip never turns an icon or text into a Tab stop.
-	const { focusableProps: { tabIndex: _tabIndex, ...focusableProps } } =
+	const { focusableProps: { tabIndex: _tabIndex, onFocus, ...focusable } } =
 		useFocusable({}, ref);
+	// A press anywhere in the trigger closes the tooltip. Capture, because a
+	// wrapped button (a popover trigger in a span) stops its press events, and
+	// an open tooltip would then take the Escape meant for that popover.
+	const state = use(TooltipTriggerStateContext);
+	const focusableProps = {
+		...focusable,
+		...(openOnFocus ? { onFocus } : {}),
+		onPointerDownCapture: () => state?.close(true),
+		onKeyDownCapture: (event: KeyboardEvent) => {
+			if (event.key === "Enter" || event.key === " ") state?.close(true);
+		},
+	};
 	const childRef = isValidElement<{ ref?: Ref<HTMLElement> }>(children)
 		? children.props.ref
 		: undefined;

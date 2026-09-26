@@ -44,7 +44,7 @@ import LinkWithParams from "../LinkWithParams";
 import { HierarchyTree } from "@/components/typography/HierarchyTree";
 import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
@@ -361,6 +361,8 @@ function ItemAuthor({
 	return (
 		<Tooltip
 			color="default"
+			delay={HOVER_CARD_DELAY}
+			closeDelay={HOVER_CARD_CLOSE_DELAY}
 			isDisabled={affiliationCount === 0}
 			key={author?.name}
 			className="rounded-2xl bg-card_light dark:bg-card"
@@ -949,8 +951,8 @@ function ItemCollection({
 		<li key={collection.key}>
 			<Tooltip
 				color="default"
-				delay={160}
-				closeDelay={240}
+				delay={HOVER_CARD_DELAY}
+				closeDelay={HOVER_CARD_CLOSE_DELAY}
 				placement="top-start"
 				offset={10}
 				disableAnimation={Boolean(reducedMotion)}

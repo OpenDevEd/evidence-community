@@ -13,6 +13,7 @@ import { ADMIN_LIBRARY_PERMISSION, adminRoleHasPermission } from "@/lib/admin/pe
 
 import { adminErrorMessage, clearAdminPublicCache, setAdminLiveView } from "./admin-api";
 import { useAdminSession } from "./AdminSessionProvider";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 const triggerClass = "inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.06]";
 const noteClass = "text-xs leading-5 text-black/55 dark:text-white/55";
@@ -21,13 +22,13 @@ const noteClass = "text-xs leading-5 text-black/55 dark:text-white/55";
 function PublicPagesTrigger({ liveView, ...props }: ComponentProps<"button"> & { liveView: boolean }) {
 	if (!liveView) {
 		return (
-			<button {...props} aria-label="Public pages" className={`${triggerClass} text-black/45 hover:text-black/80 dark:text-white/45 dark:hover:text-white/80`} title="Public pages" type="button">
+			<button {...props} aria-label="Public pages" className={`${triggerClass} text-black/45 hover:text-black/80 dark:text-white/45 dark:hover:text-white/80`} type="button">
 				<HugeiconsIcon icon={GlobalIcon} aria-hidden size={15} />
 			</button>
 		);
 	}
 	return (
-		<button {...props} aria-label="Public pages: live view on" className={`${triggerClass} text-accent`} title="Public pages" type="button">
+		<button {...props} aria-label="Public pages: live view on" className={`${triggerClass} text-accent`} type="button">
 			<HugeiconsIcon icon={ViewIcon} aria-hidden size={15} />
 			<span className="whitespace-nowrap">Live view</span>
 		</button>
@@ -50,9 +51,13 @@ function PublicPagesPopover({ initialLiveView }: { initialLiveView: boolean }) {
 
 	return (
 		<Popover disableAnimation placement="bottom-end">
-			<PopoverTrigger>
-				<PublicPagesTrigger liveView={liveView} />
-			</PopoverTrigger>
+			<Tooltip content="Public pages">
+				<span className="inline-flex">
+					<PopoverTrigger>
+						<PublicPagesTrigger liveView={liveView} />
+					</PopoverTrigger>
+				</span>
+			</Tooltip>
 			<PopoverContent className="w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card">
 				<div className="w-full space-y-4 p-3">
 					<div className="space-y-1">
