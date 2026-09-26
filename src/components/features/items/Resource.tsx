@@ -151,7 +151,10 @@ function CitationCounts({
 	const resourceHref = useResourceHref();
 	const citesCount = itemData?.links?.cites.length ?? 0;
 	const citedByCount = itemData?.links?.citedBy.length ?? 0;
-	const sourceMetrics = itemData?.citationMetrics ?? [];
+	// A source that counts no citations has nothing to show.
+	const sourceMetrics = (itemData?.citationMetrics ?? []).filter(
+		(metric) => (metric.citedByCount ?? 0) > 0,
+	);
 
 	if (citesCount === 0 && citedByCount === 0 && sourceMetrics.length === 0) {
 		return null;
@@ -211,33 +214,29 @@ function CitationCounts({
 					</span>
 				</CountTooltip>
 			)}
-			{sourceMetrics.flatMap((metric) =>
-				metric.citedByCount === null
-					? []
-					: [
-							<CountTooltip
-								key={metric.sourceConnectionKey}
-								tone="source"
-								text={`${metric.citedByCount} ${metric.sourceLabel} ${t("citationsLowercase")}`}
-							>
-								<span
-									className={twMerge(
-										statClassName,
-										"min-w-0 text-cyan-700 dark:text-cyan-300",
-									)}
-								>
-									<HugeiconsIcon
-										icon={QuoteUpIcon}
-										className="size-3.5 shrink-0"
-									/>
-									<span>{metric.citedByCount}</span>
-									<span data-count-label className={twMerge(labelClassName, "@[720px]:truncate")}>
-										{metric.sourceLabel} {t("citationsLowercase")}
-									</span>
-								</span>
-							</CountTooltip>,
-						],
-			)}
+			{sourceMetrics.map((metric) => (
+				<CountTooltip
+					key={metric.sourceConnectionKey}
+					tone="source"
+					text={`${metric.citedByCount} ${metric.sourceLabel} ${t("citationsLowercase")}`}
+				>
+					<span
+						className={twMerge(
+							statClassName,
+							"min-w-0 text-cyan-700 dark:text-cyan-300",
+						)}
+					>
+						<HugeiconsIcon
+							icon={QuoteUpIcon}
+							className="size-3.5 shrink-0"
+						/>
+						<span>{metric.citedByCount}</span>
+						<span data-count-label className={twMerge(labelClassName, "@[720px]:truncate")}>
+							{metric.sourceLabel} {t("citationsLowercase")}
+						</span>
+					</span>
+				</CountTooltip>
+			))}
 		</div>
 	);
 }
