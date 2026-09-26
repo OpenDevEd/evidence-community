@@ -361,6 +361,8 @@ function ItemAuthor({
 	return (
 		<Tooltip
 			color="default"
+			delay={HOVER_CARD_DELAY}
+			closeDelay={HOVER_CARD_CLOSE_DELAY}
 			isDisabled={affiliationCount === 0}
 			key={author?.name}
 			className="rounded-2xl bg-card_light dark:bg-card"

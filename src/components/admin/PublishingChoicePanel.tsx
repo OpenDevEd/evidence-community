@@ -10,6 +10,7 @@ import type { PublishingChoice } from "@/lib/admin/review-contract";
 import type { usePublishingChoice } from "./usePublishingChoice";
 import { CrossrefIdentifierControls } from "./CrossrefIdentifierControls";
 import { PublicationArchiveFiles } from "./PublicationArchiveFiles";
+import { Tooltip } from "@/components/nextui/Tooltip";
 export function PublishingChoicePanel({
 	detail,
 	readOnly = false,
@@ -63,30 +64,32 @@ export function PublishingChoicePanel({
 				<span className="text-xs font-medium text-black/80 dark:text-white/85">
 					Register a DOI
 				</span>
-				<Switch
-					aria-label="Register a DOI"
-					color="accent"
-					isSelected={enabled}
-					isDisabled={
-						controlsDisabled ||
-						(enabled && saved.data?.canClear === false)
-					}
-					title={
-						enabled && saved.data?.canClear === false
-							? "Identifiers have already been activated for this item."
-							: undefined
-					}
-					onValueChange={(selected) => {
-						void save(
-							selected
-								? {
-										route: "zenodo",
-										identifierPolicy: "mint-zenodo",
-									}
-								: null,
-						);
-					}}
-				/>
+				<Tooltip
+					content="Identifiers have already been activated for this item."
+					isDisabled={!(enabled && saved.data?.canClear === false)}
+				>
+					<span className="inline-flex">
+						<Switch
+							aria-label="Register a DOI"
+							color="accent"
+							isSelected={enabled}
+							isDisabled={
+								controlsDisabled ||
+								(enabled && saved.data?.canClear === false)
+							}
+							onValueChange={(selected) => {
+								void save(
+									selected
+										? {
+												route: "zenodo",
+												identifierPolicy: "mint-zenodo",
+											}
+										: null,
+								);
+							}}
+						/>
+					</span>
+				</Tooltip>
 			</div>
 			{!enabled ? (
 				<p className="px-3 pb-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
