@@ -238,7 +238,7 @@ function RecordTitleCell({
 			}`}
 		>
 			{editableSourceKeys.has(record.sourceConnectionKey) ? (
-				<Tooltip content={`Drag or assign ${record.title}`}>
+				<Tooltip content={`Drag or assign ${record.title}`} openOnFocus={false}>
 					<button
 						ref={handleRef}
 						aria-disabled={!draggable}

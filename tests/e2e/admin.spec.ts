@@ -5883,10 +5883,8 @@ test("renders field types with semantic cells instead of plain text", async ({
 	await expect(collections).not.toContainText(teacherCollection.key);
 	await expect(tags).toContainText("equity");
 	await expect(tags).toContainText("teacher training");
-	await expect(tags.getByText("+1", { exact: true })).toHaveAttribute(
-		"title",
-		"rural schools",
-	);
+	await tags.getByText("+1", { exact: true }).hover();
+	await expect(page.getByRole("tooltip")).toHaveText("rural schools");
 	await expect(source).toContainText("Native");
 	await expect(source.locator("svg")).toHaveCount(1);
 	await expect(dateAdded).toContainText("Jul 31, 2026");

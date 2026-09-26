@@ -80,6 +80,11 @@ type TooltipProps = {
 	defaultOpen?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 	isDisabled?: boolean;
+	/**
+	 * Off for a trigger inside a widget that moves focus itself, such as a
+	 * grid: a tooltip opened by focus takes the Escape the widget needs.
+	 */
+	openOnFocus?: boolean;
 	/** Classes for the tooltip's content. */
 	className?: string;
 	classNames?: { base?: string; content?: string };
@@ -98,6 +103,7 @@ export function Tooltip({
 	defaultOpen,
 	onOpenChange,
 	isDisabled,
+	openOnFocus = true,
 	...overlay
 }: TooltipProps) {
 	return (
@@ -109,7 +115,7 @@ export function Tooltip({
 			onOpenChange={onOpenChange}
 			isDisabled={isDisabled}
 		>
-			<TooltipTriggerSlot>{children}</TooltipTriggerSlot>
+			<TooltipTriggerSlot openOnFocus={openOnFocus}>{children}</TooltipTriggerSlot>
 			<TooltipStateOverrides>
 				<TooltipOverlay {...overlay} isDisabled={isDisabled} />
 			</TooltipStateOverrides>
@@ -208,11 +214,11 @@ function arrowPlacementFor(side: string | null, placement: Placement) {
  * so every tooltip keeps the element it had. Text alone becomes a paragraph,
  * as it did with NextUI.
  */
-function TooltipTriggerSlot({ children }: { children: ReactNode }) {
+function TooltipTriggerSlot({ children, openOnFocus }: { children: ReactNode; openOnFocus: boolean }) {
 	const ref = useRef<HTMLElement | null>(null);
 	// useFocusable always adds tabIndex 0; the child keeps its own, as it did
 	// with NextUI, so a tooltip never turns an icon or text into a Tab stop.
-	const { focusableProps: { tabIndex: _tabIndex, ...focusable } } =
+	const { focusableProps: { tabIndex: _tabIndex, onFocus, ...focusable } } =
 		useFocusable({}, ref);
 	// A press anywhere in the trigger closes the tooltip. Capture, because a
 	// wrapped button (a popover trigger in a span) stops its press events, and
@@ -220,6 +226,7 @@ function TooltipTriggerSlot({ children }: { children: ReactNode }) {
 	const state = use(TooltipTriggerStateContext);
 	const focusableProps = {
 		...focusable,
+		...(openOnFocus ? { onFocus } : {}),
 		onPointerDownCapture: () => state?.close(true),
 		onKeyDownCapture: (event: KeyboardEvent) => {
 			if (event.key === "Enter" || event.key === " ") state?.close(true);
