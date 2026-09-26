@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { libraryConfigSchema } from "../src/config/library-config/schema";
 import { maximalLibraryConfig } from "../tests/fixtures/library-config";
 import {
@@ -1087,8 +1088,9 @@ async function verify() {
 			"The full rebuild removed a record published again during the rebuild",
 		);
 
-		// A backlog rebuild acknowledges the events waiting before it and
-		// leaves events written during it queued for the drain.
+		// A backlog rebuild acknowledges the events waiting before it. An edit
+		// made during the rebuild is indexed with its latest content, even when
+		// the rebuild read the record before the edit.
 		await database
 			.update(item)
 			.set({ revision: 11, title: "Backlog report" })
@@ -1108,19 +1110,31 @@ async function verify() {
 			key: backlogKey,
 			sourceConnectionKey: "native",
 			sourceRecordKey: backlogKey,
-			title: "Written during the rebuild",
+			title: "Created during the rebuild",
 		});
-		let lateEventId: number | undefined;
-		const writeDuringRebuild = new Proxy(goodService.index, {
+		const editEventIds: number[] = [];
+		// The first rebuild request already carries the older title; the edit
+		// lands after the rebuild read it.
+		const editDuringRebuild = new Proxy(goodService.index, {
 			get(target, property) {
 				if (property === "addDocuments") {
 					return async (...args: Parameters<typeof target.addDocuments>) => {
-						if (lateEventId === undefined) {
-							const [lateEvent] = await database
+						if (editEventIds.length === 0) {
+							await database
+								.update(item)
+								.set({ revision: 12, title: "Edited during the rebuild" })
+								.where(eq(item.key, parentKey));
+							const edits = await database
 								.insert(outbox)
-								.values({ entityKey: backlogKey, entityType: "item", operation: "upsert", revision: 1 })
+								.values([
+									{ entityKey: parentKey, entityType: "item", operation: "upsert", revision: 12 },
+									{ entityKey: backlogKey, entityType: "item", operation: "upsert", revision: 1 },
+								])
 								.returning({ id: outbox.id });
-							lateEventId = lateEvent?.id;
+							editEventIds.push(...edits.map(({ id }) => id));
+							// Give the edit lane time to index the edit before this
+							// older copy reaches Meilisearch.
+							await delay(1_500);
 						}
 						return target.addDocuments(...args);
 					};
@@ -1131,26 +1145,24 @@ async function verify() {
 		});
 		const backlogRebuild = await rebuildForOutboxBacklog(
 			database,
-			{ ...goodService, index: writeDuringRebuild },
+			{ ...goodService, index: editDuringRebuild },
 			libraryConfig,
-			{ taskTimeoutMs: 60_000 },
+			{ taskTimeoutMs: 60_000, workerId: "search-e2e-backlog" },
 		);
-		assert(lateEventId !== undefined, "No event was written during the backlog rebuild");
-		const [waitingAfter] = await database.select().from(outbox).where(eq(outbox.id, waitingEvent.id));
-		const [lateAfter] = await database.select().from(outbox).where(eq(outbox.id, lateEventId));
+		assert(editEventIds.length === 2, "No edit was made during the backlog rebuild");
+		const backlogEvents = await database
+			.select()
+			.from(outbox)
+			.where(inArray(outbox.id, [waitingEvent.id, ...editEventIds]));
 		assert(
-			backlogRebuild.acknowledged >= 1 && waitingAfter?.processedAt !== null,
-			"The backlog rebuild did not acknowledge the event waiting before it",
-		);
-		assert(
-			(await goodService.index.getDocument<{ title: string }>(parentKey)).title === "Backlog report",
-			"The backlog rebuild did not index the waiting event's change",
+			backlogRebuild.acknowledged >= 1 && backlogEvents.every((event) => event.processedAt !== null),
+			"An edit made during the backlog rebuild was not indexed while it ran",
 		);
 		assert(
-			lateAfter?.processedAt === null,
-			"The backlog rebuild acknowledged an event written after it started",
+			(await goodService.index.getDocument<{ title: string }>(parentKey)).title === "Edited during the rebuild",
+			"The backlog rebuild overwrote an edit made while it ran",
 		);
-		await database.delete(outbox).where(eq(outbox.id, lateEventId));
+		await goodService.index.getDocument(backlogKey);
 
 		// A lease lost on one event must not strand the rest of its batch.
 		// Before this check, the failure path rolled back every mark when one

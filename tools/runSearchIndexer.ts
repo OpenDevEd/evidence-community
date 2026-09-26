@@ -134,6 +134,14 @@ async function main() {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
 			rebuildPending = true;
 		}
+		// Deep result pages are fast only on Meilisearch's legacy search path
+		// (MEILI_EXPERIMENTAL_LEGACY_SEARCH, which a stored flag can override).
+		const features = await service.client.getExperimentalFeatures();
+		if ((features as { legacySearch?: boolean | null }).legacySearch !== true) {
+			console.warn(
+				"Search index: Meilisearch's legacy search path is off, so deep result pages will be slow. Set MEILI_EXPERIMENTAL_LEGACY_SEARCH=true and check GET /experimental-features.",
+			);
+		}
 		const setup = await ensureSearchIndex(service, {
 			onMissing: async () => {
 				await setSearchIndexRebuildPending(
@@ -270,6 +278,7 @@ async function main() {
 					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
 						embedder: config.search.embedder,
 					}),
+					workerId: instanceId,
 				},
 			);
 			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
