@@ -12,6 +12,7 @@ import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
@@ -21,7 +22,7 @@ import { markFullyPrefetched } from "@/components/features/newlib/RefreshPrefetc
 import { preloadItemCovers } from "./PdfCover";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { useState, useEffect, useMemo, useId } from "react";
+import { cloneElement, useState, useEffect, useMemo, useId, useRef } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
@@ -156,58 +157,140 @@ function CitationCounts({
 		return null;
 	}
 
+	// Below 720px the buttons beside these counts lose their labels, so the
+	// counts do too; the tooltip and screen readers still get the words.
+	const labelClassName = "sr-only @[720px]:not-sr-only @[720px]:whitespace-nowrap";
+	// Only the library citations open a page, so only they look like a button;
+	// the other counts are coloured text.
+	const statClassName = "inline-flex items-center gap-1.5 h-8 px-1.5 text-xs font-medium";
 	return (
 		<div
-			className="flex items-center gap-2"
+			className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
 			onClick={(e) => e.stopPropagation()}
 		>
 			{citedByCount > 0 && (
-				<Link
-					href={resourceHref(itemData?.key ?? "", {
-						base: "/citation",
-					})}
-					className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
+				<CountTooltip
+					tone="library"
+					text={`${citedByCount} ${t("libraryCitationLabel", { count: citedByCount })}`}
 				>
-					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
-					<span>{citedByCount}</span>
-					<span className="text-accent/70 hidden @[480px]:inline">
-						{t("libraryCitationLabel", { count: citedByCount })}
-					</span>
-					<HugeiconsIcon
-						icon={ArrowRight01Icon}
-						className="size-3 opacity-50 ml-0.5"
-					/>
-				</Link>
+					<Link
+						href={resourceHref(itemData?.key ?? "", {
+							base: "/citation",
+						})}
+						className="inline-flex shrink-0 items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
+					>
+						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
+						<span>{citedByCount}</span>
+						<span data-count-label className={twMerge("text-accent/70", labelClassName)}>
+							{t("libraryCitationLabel", { count: citedByCount })}
+						</span>
+						<HugeiconsIcon
+							icon={ArrowRight01Icon}
+							className="size-3 opacity-50 ml-0.5"
+						/>
+					</Link>
+				</CountTooltip>
 			)}
 			{citesCount > 0 && (
-				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">
-					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
-					<span>{citesCount}</span>
-					<span className="opacity-70 hidden @[480px]:inline">
-						{t("referenceLabel", { count: citesCount })}
+				<CountTooltip
+					tone="reference"
+					text={`${citesCount} ${t("referenceLabel", { count: citesCount })}`}
+				>
+					<span
+						className={twMerge(
+							statClassName,
+							"shrink-0 text-violet-700 dark:text-violet-300",
+						)}
+					>
+						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
+						<span>{citesCount}</span>
+						<span data-count-label className={labelClassName}>
+							{t("referenceLabel", { count: citesCount })}
+						</span>
 					</span>
-				</span>
+				</CountTooltip>
 			)}
 			{sourceMetrics.flatMap((metric) =>
 				metric.citedByCount === null
 					? []
 					: [
-							<span
+							<CountTooltip
 								key={metric.sourceConnectionKey}
-								className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 text-xs font-medium"
+								tone="source"
+								text={`${metric.citedByCount} ${metric.sourceLabel} ${t("citationsLowercase")}`}
 							>
-								<HugeiconsIcon
-									icon={QuoteUpIcon}
-									className="size-3.5"
-								/>
-								<span>{metric.citedByCount}</span>
-								<span className="hidden @[480px]:inline">
-									{metric.sourceLabel}
+								<span
+									className={twMerge(
+										statClassName,
+										"min-w-0 text-cyan-700 dark:text-cyan-300",
+									)}
+								>
+									<HugeiconsIcon
+										icon={QuoteUpIcon}
+										className="size-3.5 shrink-0"
+									/>
+									<span>{metric.citedByCount}</span>
+									<span data-count-label className={twMerge(labelClassName, "@[720px]:truncate")}>
+										{metric.sourceLabel} {t("citationsLowercase")}
+									</span>
 								</span>
-							</span>,
+							</CountTooltip>,
 						],
 			)}
 		</div>
+	);
+}
+
+// Each tooltip wears the colours of the count it explains. The tint is layered
+// over an opaque background so the card never shows through.
+const COUNT_TOOLTIP_TONES = {
+	library:
+		"bg-white dark:bg-secondary bg-[linear-gradient(theme(colors.accent.DEFAULT/0.12),theme(colors.accent.DEFAULT/0.12))] dark:bg-[linear-gradient(theme(colors.accent.DEFAULT/0.2),theme(colors.accent.DEFAULT/0.2))] text-accent",
+	reference:
+		"bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+	source:
+		"bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300",
+};
+
+/** A count's words are hidden on narrow cards or cut short with an ellipsis. */
+function countLabelIsShortened(trigger: HTMLElement | null) {
+	const label = trigger?.querySelector<HTMLElement>("[data-count-label]");
+	return !label || label.clientWidth <= 1 || label.scrollWidth > label.clientWidth;
+}
+
+/** Shows the count's full wording only when the card cannot. */
+function CountTooltip({
+	tone,
+	text,
+	children,
+}: {
+	tone: keyof typeof COUNT_TOOLTIP_TONES;
+	text: string;
+	children: React.ReactElement<{ ref?: React.Ref<HTMLElement> }>;
+}) {
+	const triggerRef = useRef<HTMLElement>(null);
+	const [isOpen, setOpen] = useState(false);
+	return (
+		<Tooltip
+			isOpen={isOpen}
+			onOpenChange={(open) =>
+				setOpen(open && countLabelIsShortened(triggerRef.current))
+			}
+			content={
+				<span className="inline-flex items-center gap-1.5">
+					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
+					{text}
+				</span>
+			}
+			classNames={{
+				content: twMerge(
+					"rounded-xl border-0 px-3 py-1.5 text-xs font-medium shadow-md",
+					COUNT_TOOLTIP_TONES[tone],
+				),
+			}}
+		>
+			{cloneElement(children, { ref: triggerRef })}
+		</Tooltip>
 	);
 }
 
@@ -233,7 +316,7 @@ function ResourceInteractions({
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
 					<CitationCounts itemData={itemData} />
-					<div className="flex-1 flex items-center justify-end z-10 gap-2">
+					<div className="ml-auto flex shrink-0 items-center justify-end z-10 gap-2 pl-2">
 						{itemHref && (
 							<Button
 								as={Link}
