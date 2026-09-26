@@ -65,6 +65,9 @@ events wait and they cover at least a quarter of the records, the worker saves
 the list of waiting events, rebuilds the index, and then acknowledges exactly
 those events: the rebuild read every record after they were committed. Events
 written during the rebuild stay queued and are drained afterwards.
+
+At startup the worker warns when Meilisearch's legacy search path is off,
+because deep result pages are then slow.
 Projection reads remain bounded to at most 500 item keys, while outgoing
 Meilisearch document requests are split by serialized size and stay below a
 20 MiB default budget. A single larger document is sent alone. If Meilisearch
