@@ -82,40 +82,15 @@ type TooltipProps = {
  * Aria positions it, opens and closes it, and animates it the way HeroUI does.
  */
 export function Tooltip({
-	content,
 	children,
-	placement = "top",
-	color = "card",
-	size = "md",
-	radius = "md",
-	shadow = "sm",
 	delay = 0,
 	closeDelay = 500,
-	offset = 7,
-	crossOffset = 0,
-	shouldFlip = true,
-	containerPadding = 12,
-	showArrow = false,
-	disableAnimation = false,
 	isOpen,
 	defaultOpen,
 	onOpenChange,
 	isDisabled,
-	className,
-	classNames,
+	...overlay
 }: TooltipProps) {
-	const slots = popover({
-		color: color === "card" ? "default" : color,
-		size,
-		radius,
-		shadow,
-		disableAnimation,
-	});
-	const contentClassName = slots.content({
-		class: [color === "card" && CARD_CONTENT, classNames?.content, className]
-			.filter(Boolean)
-			.join(" "),
-	});
 	return (
 		<TooltipTrigger
 			delay={delay}
@@ -127,41 +102,88 @@ export function Tooltip({
 		>
 			<TooltipTriggerSlot>{children}</TooltipTriggerSlot>
 			<TooltipStateOverrides>
-				<AriaTooltip
-					placement={ARIA_PLACEMENT[placement]}
-					offset={showArrow ? offset + 3 : offset}
-					crossOffset={crossOffset}
-					shouldFlip={shouldFlip}
-					containerPadding={containerPadding}
-					className={disableAnimation ? undefined : MOTION}
-				>
-					{({ placement: side }) => {
-						const arrowPlacement = arrowPlacementFor(side, placement);
-						return (
-							<div
-								data-slot="base"
-								data-open="true"
-								data-arrow={showArrow || undefined}
-								data-disabled={isDisabled || undefined}
-								data-placement={arrowPlacement}
-								className={slots.base({ class: classNames?.base })}
-							>
-								<div
-									data-slot="content"
-									data-open="true"
-									data-arrow={showArrow || undefined}
-									data-disabled={isDisabled || undefined}
-									data-placement={arrowPlacement}
-									className={contentClassName}
-								>
-									{content}
-								</div>
-							</div>
-						);
-					}}
-				</AriaTooltip>
+				<TooltipOverlay {...overlay} isDisabled={isDisabled} />
 			</TooltipStateOverrides>
 		</TooltipTrigger>
+	);
+}
+
+type OverlayProps = Omit<
+	TooltipProps,
+	"children" | "delay" | "closeDelay" | "isOpen" | "defaultOpen" | "onOpenChange"
+>;
+
+function TooltipOverlay({
+	placement = "top",
+	offset = 7,
+	crossOffset = 0,
+	shouldFlip = true,
+	containerPadding = 12,
+	showArrow = false,
+	disableAnimation = false,
+	...surface
+}: OverlayProps) {
+	return (
+		<AriaTooltip
+			placement={ARIA_PLACEMENT[placement]}
+			offset={showArrow ? offset + 3 : offset}
+			crossOffset={crossOffset}
+			shouldFlip={shouldFlip}
+			containerPadding={containerPadding}
+			className={disableAnimation ? undefined : MOTION}
+		>
+			{({ placement: side }) => (
+				<TooltipSurface
+					{...surface}
+					showArrow={showArrow}
+					disableAnimation={disableAnimation}
+					arrowPlacement={arrowPlacementFor(side, placement)}
+				/>
+			)}
+		</AriaTooltip>
+	);
+}
+
+/** The bubble itself: NextUI's base and content slots with their data attributes. */
+function TooltipSurface({
+	content,
+	color = "card",
+	size = "md",
+	radius = "md",
+	shadow = "sm",
+	showArrow,
+	disableAnimation,
+	isDisabled,
+	className,
+	classNames,
+	arrowPlacement,
+}: Omit<OverlayProps, "placement" | "offset" | "crossOffset" | "shouldFlip" | "containerPadding"> & {
+	arrowPlacement: string;
+}) {
+	const slots = popover({
+		color: color === "card" ? "default" : color,
+		size,
+		radius,
+		shadow,
+		disableAnimation,
+	});
+	const state = {
+		"data-open": "true",
+		"data-arrow": showArrow || undefined,
+		"data-disabled": isDisabled || undefined,
+		"data-placement": arrowPlacement,
+	};
+	const contentClasses = [color === "card" && CARD_CONTENT, classNames?.content, className];
+	return (
+		<div data-slot="base" {...state} className={slots.base({ class: classNames?.base })}>
+			<div
+				data-slot="content"
+				{...state}
+				className={slots.content({ class: contentClasses.filter(Boolean).join(" ") })}
+			>
+				{content}
+			</div>
+		</div>
 	);
 }
 
