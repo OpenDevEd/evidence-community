@@ -5,11 +5,13 @@ import { CloudIcon, HardDriveIcon } from "@hugeicons/core-free-icons";
 import { siZotero } from "simple-icons";
 
 import BrandIcon from "@/components/icons/BrandIcon";
+import { OpenAlexIcon } from "@/components/icons/OpenAlexIcon";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 /**
  * One icon per kind of source, used wherever sources are listed: the
- * library's own records, Zotero groups, and any other provider.
+ * library's own records, Zotero groups, OpenAlex searches, and any other
+ * provider.
  */
 export function SourceProviderIcon({
 	provider,
@@ -30,6 +32,9 @@ export function SourceProviderIcon({
 				style={props.style}
 			/>
 		);
+	}
+	if (provider === "openalex") {
+		return <OpenAlexIcon size={size} className={props.className} style={props.style} />;
 	}
 	return <HugeiconsIcon icon={CloudIcon} aria-hidden size={size} {...props} />;
 }

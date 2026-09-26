@@ -22,6 +22,7 @@ import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { OpenAlexIcon } from "@/components/icons/OpenAlexIcon";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
 import {
 	formatInstitutionNames,
@@ -57,7 +58,13 @@ type Option = {
 	countryCode?: string;
 	match?: OpenAlexInstitution;
 };
-type Section = { key: string; title?: string; items: Option[] };
+type Section = {
+	key: string;
+	title?: string;
+	/** Extra heading classes; the heading takes only text, so a logo comes from CSS. */
+	headingClassName?: string;
+	items: Option[];
+};
 
 const place = (match: Pick<OpenAlexInstitution, "city" | "countryCode">) =>
 	[match.city, match.countryCode && countryFocusNames[match.countryCode]]
@@ -201,6 +208,8 @@ function useInstitutionSearch({
 		{
 			key: `${SECTION_KEY}openalex`,
 			title: "From OpenAlex",
+			headingClassName:
+				"inline-flex items-center gap-1.5 before:size-3 before:shrink-0 before:bg-current before:content-[''] before:[mask:url(/icons/openalex.png)_center/contain_no-repeat]",
 			items: openAlex.options,
 		},
 		{
@@ -411,8 +420,7 @@ export function InstitutionInput({
 						title={section.title}
 						items={section.items}
 						classNames={{
-							heading:
-								"px-1.5 text-xs text-black/50 dark:text-white/50",
+							heading: `px-1.5 text-xs text-black/50 dark:text-white/50 ${section.headingClassName ?? ""}`,
 						}}
 					>
 						{(option) => (
@@ -671,6 +679,7 @@ function KnownCountry({
 				<p className={QUIET}>
 					{country.openalexId ? (
 						<>
+							<OpenAlexIcon size={11} className="mr-1 align-[-1px]" />
 							From OpenAlex
 							{country.city ? `, ${country.city}` : ""}.{" "}
 							<a
