@@ -66,8 +66,9 @@ the list of waiting events, rebuilds the index, and then acknowledges exactly
 those events: the rebuild read every record after they were committed. While
 the rebuild runs, one drain lane indexes events written after that list was
 saved, so admin edits during a large import appear within seconds. When the
-rebuild finishes, the records edited meanwhile are sent again from their
-current state, so an older copy sent by the rebuild cannot win.
+rebuild finishes or fails, the lane's events go back in the queue, so the next
+drain sends those records again from their current state and an older copy
+sent by the rebuild cannot win.
 
 At startup the worker warns when Meilisearch's legacy search path is off,
 because deep result pages are then slow.
