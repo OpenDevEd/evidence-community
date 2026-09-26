@@ -165,6 +165,7 @@ function CitationCounts({
 	const statClassName = "inline-flex items-center gap-1.5 h-8 px-1.5 text-xs font-medium";
 	return (
 		<div
+			data-count-row
 			className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
 			onClick={(e) => e.stopPropagation()}
 		>
@@ -252,10 +253,21 @@ const COUNT_TOOLTIP_TONES = {
 		"bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300",
 };
 
-/** A count's words are hidden on narrow cards or cut short with an ellipsis. */
+/**
+ * A count's words are hidden on narrow cards, cut short with an ellipsis, or
+ * clipped by the row when the counts beside it take the room.
+ */
 function countLabelIsShortened(trigger: HTMLElement | null) {
 	const label = trigger?.querySelector<HTMLElement>("[data-count-label]");
-	return !label || label.clientWidth <= 1 || label.scrollWidth > label.clientWidth;
+	if (!label || label.clientWidth <= 1 || label.scrollWidth > label.clientWidth) {
+		return true;
+	}
+	const row = label.closest<HTMLElement>("[data-count-row]");
+	return Boolean(
+		row &&
+			label.getBoundingClientRect().right >
+				row.getBoundingClientRect().right + 0.5,
+	);
 }
 
 /** Shows the count's full wording only when the card cannot. */
