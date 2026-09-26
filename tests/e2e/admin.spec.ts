@@ -5680,7 +5680,7 @@ test("keeps unavailable drag controls out of keyboard widget mode", async ({
 	).toBeDisabled();
 });
 
-test("keeps the record grid usable in the narrow list pane", async ({
+test("scrolls the record grid's first columns away on a phone so the others can be read", async ({
 	page,
 }) => {
 	await mockPublishedBook(page);
@@ -5728,8 +5728,15 @@ test("keeps the record grid usable in the narrow list pane", async ({
 	expect(geometry.scrollClientWidth).toBeLessThan(390);
 	expect(geometry.scrollWidth).toBeGreaterThan(geometry.scrollClientWidth);
 	expect(geometry.scrollLeft).toBeGreaterThan(0);
-	expect(geometry.selectLeft).toBeCloseTo(geometry.viewportLeft, 0);
-	expect(geometry.titleLeft).toBeCloseTo(geometry.viewportLeft + 44, 0);
+	// Below md the select and title columns scroll with the rest.
+	expect(geometry.selectLeft).toBeCloseTo(
+		geometry.viewportLeft - geometry.scrollLeft,
+		0,
+	);
+	expect(geometry.titleLeft).toBeCloseTo(
+		geometry.viewportLeft + 44 - geometry.scrollLeft,
+		0,
+	);
 	expect(geometry.titleBackground).not.toBe("rgba(0, 0, 0, 0)");
 	expect(geometry.titleOverlay).not.toBe("rgba(0, 0, 0, 0)");
 });
