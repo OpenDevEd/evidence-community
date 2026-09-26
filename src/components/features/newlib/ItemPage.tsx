@@ -201,47 +201,66 @@ function AuthorAffiliations({
 				Affiliations
 			</h4>
 			{affiliations.map((institution, idx) => (
-				<motion.div
+				<AuthorAffiliation
 					key={idx}
-					className="w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5"
-					initial={{ opacity: 0, x: -20 }}
-					animate={{ opacity: 1, x: 0 }}
-					transition={{
-						delay: 0.4 + idx * 0.1,
-						type: "spring",
-						stiffness: 100,
-					}}
-				>
-					<div className="flex-1">
-						<p className="text-sm text-black dark:text-white">
-							{institution.display_name}
-						</p>
-						{institution.country_code && (
-							<motion.div
-								className="flex items-center gap-1 mt-1"
-								initial={{ opacity: 0 }}
-								animate={{ opacity: 1 }}
-								transition={{ delay: 0.5 + idx * 0.1 }}
-							>
-								<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-									<Image
-										unoptimized
-										src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
-										alt={institution.country_code}
-										className="w-full h-full object-cover"
-										width={16}
-										height={12}
-									/>
-								</div>
-								<span className="text-xs text-black/60 dark:text-white/60">
-									{`${COUNTRIES[institution.country_code]} (${institution.country_code})`}
-								</span>
-							</motion.div>
-						)}
-					</div>
-				</motion.div>
+					index={idx}
+					institution={institution}
+				/>
 			))}
 		</motion.div>
+	);
+}
+
+/** One affiliation; it filters the search to that institution, like the record's own institutions. */
+function AuthorAffiliation({
+	institution,
+	index: idx,
+}: {
+	institution: { display_name?: string; country_code?: string };
+	index: number;
+}) {
+	const link = useInstitutionFilterLink(institution.display_name);
+	return (
+		<LinkWithParams {...link} className="block w-full opacity-100">
+			<motion.div
+				className={`w-full flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5${link.href ? " transition-colors hover:bg-black/10 dark:hover:bg-white/10" : ""}`}
+				initial={{ opacity: 0, x: -20 }}
+				animate={{ opacity: 1, x: 0 }}
+				transition={{
+					delay: 0.4 + idx * 0.1,
+					type: "spring",
+					stiffness: 100,
+				}}
+			>
+				<div className="flex-1">
+					<p className="text-sm text-black dark:text-white">
+						{institution.display_name}
+					</p>
+					{institution.country_code && (
+						<motion.div
+							className="flex items-center gap-1 mt-1"
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							transition={{ delay: 0.5 + idx * 0.1 }}
+						>
+							<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
+								<Image
+									unoptimized
+									src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
+									alt={institution.country_code}
+									className="w-full h-full object-cover"
+									width={16}
+									height={12}
+								/>
+							</div>
+							<span className="text-xs text-black/60 dark:text-white/60">
+								{`${COUNTRIES[institution.country_code]} (${institution.country_code})`}
+							</span>
+						</motion.div>
+					)}
+				</div>
+			</motion.div>
+		</LinkWithParams>
 	);
 }
 
@@ -423,33 +442,33 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 	);
 }
 
-function ItemInstitution({ institution }: { institution?: string }) {
+/** Where an institution links: the search, filtered to it, when the library shows that filter. */
+function useInstitutionFilterLink(institution: string | undefined) {
 	const [referrer] = useQueryState("referrer");
-	const { filters, institutions: configuredInstitutions } =
-		useLibraryConfig();
+	const { filters } = useLibraryConfig();
 	const isInstitutionFilterEnabled = filters.institution.mode !== "hidden";
+	return {
+		href: isInstitutionFilterEnabled ? getSafeReferrer(referrer) : undefined,
+		params:
+			institution && isInstitutionFilterEnabled
+				? {
+						institution: [institution],
+						referrer: referrer ?? undefined,
+					}
+				: {},
+	};
+}
+
+function ItemInstitution({ institution }: { institution?: string }) {
+	const { institutions: configuredInstitutions } = useLibraryConfig();
+	const link = useInstitutionFilterLink(institution);
 	const configuredInstitution = findInstitutionWithLogo(
 		configuredInstitutions,
 		institution,
 	);
 
 	return (
-		<LinkWithParams
-			href={
-				isInstitutionFilterEnabled
-					? getSafeReferrer(referrer)
-					: undefined
-			}
-			params={
-				institution && isInstitutionFilterEnabled
-					? {
-							institution: [institution],
-							referrer: referrer ?? undefined,
-						}
-					: {}
-			}
-			className="opacity-100"
-		>
+		<LinkWithParams {...link} className="opacity-100">
 			<ItemRow
 				key={institution}
 				icon={
