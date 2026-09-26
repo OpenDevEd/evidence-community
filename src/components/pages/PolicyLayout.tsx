@@ -64,7 +64,7 @@ function Updated({ date, dateTime }: { date: string; dateTime: string }) {
 function Contact({ email }: { email?: string }) {
 	return email ? (
 		<div className={styles.contact}>
-			<a href={`mailto:${email}`} title={email}>
+			<a href={`mailto:${email}`}>
 				<Icon icon={Mail01Icon} />
 				<span>{email}</span>
 			</a>

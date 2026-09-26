@@ -18,7 +18,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
 import useSWR from "swr";
 import { Spinner, useDisclosure } from "@nextui-org/react";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -541,8 +541,8 @@ export default function NavbarSearch() {
 														color="default"
 														key={item.key}
 														placement="right"
-														delay={350}
-														closeDelay={0}
+														delay={HOVER_CARD_DELAY}
+														closeDelay={HOVER_CARD_CLOSE_DELAY}
 														className="max-w-sm rounded-2xl border border-black/5 bg-card_light dark:border-white/10 dark:bg-card"
 														content={
 															<PublicationHoverPreview

@@ -63,6 +63,7 @@ import {
 } from "@/lib/topics/client";
 import type { TopicNode } from "@/lib/topics/contract";
 import { toggleTopicSelection } from "@/lib/topics/selection";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -329,12 +330,11 @@ function FacetPicker({
 																	: "0"
 														})`}
 													</span>
-													<span
-														className="min-w-0 line-clamp-2 leading-5"
-														title={item.label}
-													>
-														{item.label}
-													</span>
+													<TruncatedText
+														text={item.label}
+														lines={2}
+														className="leading-5"
+													/>
 													{item.showArrow && (
 														<HugeiconsIcon
 															icon={

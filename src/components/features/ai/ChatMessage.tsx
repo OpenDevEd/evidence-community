@@ -28,6 +28,7 @@ import { AIMarkdown } from "../markdown/Markdown";
 import Resource from "../items/Resource";
 import { ToolActivity } from "./ToolActivity";
 import { useMessageExport } from "./useChatActions";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 type Message = ResearchUIMessage;
 
@@ -106,21 +107,22 @@ function ScreeningAnswers({
 							<h3 className="min-w-0 text-xs font-medium leading-5 text-black/50 dark:text-white/50">
 								{field.label}
 							</h3>
-							<span
-								className={twMerge(
-									"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
-									isTrue &&
-										"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
-								)}
-								title={field.type}
-								role="img"
-								aria-label={field.type}
-							>
-								<ScreeningFieldIcon
-									type={field.type}
-									value={value}
-								/>
-							</span>
+							<Tooltip content={field.type}>
+								<span
+									className={twMerge(
+										"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
+										isTrue &&
+											"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
+									)}
+									role="img"
+									aria-label={field.type}
+								>
+									<ScreeningFieldIcon
+										type={field.type}
+										value={value}
+									/>
+								</span>
+							</Tooltip>
 						</div>
 						<p
 							className={twMerge(

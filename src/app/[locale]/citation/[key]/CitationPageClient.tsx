@@ -53,6 +53,7 @@ ChartJS.register(
 	ArcElement,
 );
 import { useState, useEffect, useRef, useMemo } from "react";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 function visibleExternalTooltip<T extends { visible: boolean }>(
 	context: any,
@@ -697,13 +698,10 @@ function CitationsCountryChart({
 															className="w-4 h-3 shadow-sm"
 														/>
 													)}
-													<span
-														className="font-bold text-black/80 dark:text-white/80 truncate max-w-[120px]"
-														title={countryName}
-													>
-														{countryName ||
-															t("unknownCountry")}
-													</span>
+													<TruncatedText
+														text={countryName || t("unknownCountry")}
+														className="max-w-[120px] font-bold text-black/80 dark:text-white/80"
+													/>
 												</div>
 												<span className="text-xs font-medium text-black/40 dark:text-white/40">
 													{t("percentOfTotal", {

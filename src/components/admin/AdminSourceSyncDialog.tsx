@@ -29,6 +29,7 @@ import type {
 
 import { getAdminSourceIssues, setAdminSourceIssueDismissed } from "./admin-api";
 import { SourceProviderIcon } from "./SourceProviderIcon";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 const appearance: Record<
 	AdminSourceSyncStatus,
@@ -90,22 +91,23 @@ export function AdminSourceSyncBadge({
 }) {
 	const look = appearance[sync.status];
 	return (
-		<button
-			aria-label={`${label} import: ${syncDescription(sync)}`}
-			className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium hover:bg-black/[0.05] dark:hover:bg-white/[0.06] ${look.className}`}
-			data-admin-source-sync={sync.status}
-			onClick={onClick}
-			title={syncDescription(sync)}
-			type="button"
-		>
-			<HugeiconsIcon
-				aria-hidden
-				className={look.spin ? "animate-spin" : undefined}
-				icon={look.icon}
-				size={13}
-			/>
-			{sync.issueCount > 0 ? <span>{sync.issueCount}</span> : null}
-		</button>
+		<Tooltip content={syncDescription(sync)}>
+			<button
+				aria-label={`${label} import: ${syncDescription(sync)}`}
+				className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium hover:bg-black/[0.05] dark:hover:bg-white/[0.06] ${look.className}`}
+				data-admin-source-sync={sync.status}
+				onClick={onClick}
+				type="button"
+			>
+				<HugeiconsIcon
+					aria-hidden
+					className={look.spin ? "animate-spin" : undefined}
+					icon={look.icon}
+					size={13}
+				/>
+				{sync.issueCount > 0 ? <span>{sync.issueCount}</span> : null}
+			</button>
+		</Tooltip>
 	);
 }
 

@@ -93,6 +93,7 @@ describe("the library's home page", () => {
 		vi.stubGlobal("CSS", { escape: (value: string) => value });
 		vi.stubGlobal("scrollTo", () => undefined);
 		vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+		Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
@@ -101,6 +102,7 @@ describe("the library's home page", () => {
 	afterEach(async () => {
 		await act(async () => root.unmount());
 		container.remove();
+		Reflect.deleteProperty(document, "fonts");
 		vi.unstubAllGlobals();
 	});
 

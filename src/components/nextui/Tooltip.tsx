@@ -35,6 +35,14 @@ const ARIA_PLACEMENT = {
 	"right-end": "right bottom",
 } as const;
 
+/**
+ * OpenScholar's hover card timing, for a tooltip that holds links or buttons:
+ * it waits a moment before opening and stays long enough for the pointer to
+ * cross into the card. Plain tooltips open and close at once.
+ */
+export const HOVER_CARD_DELAY = 250;
+export const HOVER_CARD_CLOSE_DELAY = 80;
+
 /** The library's own tooltip colour, used unless another one is asked for. */
 const CARD_CONTENT = "bg-card_light dark:bg-card border border-white/10";
 
@@ -48,7 +56,7 @@ const MOTION = [
 	"data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-90 data-[entering]:duration-150 data-[entering]:ease-[ease]",
 	"data-[placement=top]:data-[entering]:slide-in-from-bottom-1 data-[placement=bottom]:data-[entering]:slide-in-from-top-1",
 	"data-[placement=left]:data-[entering]:slide-in-from-right-1 data-[placement=right]:data-[entering]:slide-in-from-left-1",
-	"data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95 data-[exiting]:duration-100 data-[exiting]:ease-[ease] data-[exiting]:pointer-events-none",
+	"data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95 data-[exiting]:duration-150 data-[exiting]:ease-[ease] data-[exiting]:pointer-events-none",
 ].join(" ");
 
 type TooltipProps = {
@@ -84,7 +92,7 @@ type TooltipProps = {
 export function Tooltip({
 	children,
 	delay = 0,
-	closeDelay = 500,
+	closeDelay = 0,
 	isOpen,
 	defaultOpen,
 	onOpenChange,
