@@ -99,6 +99,14 @@ h6 {
 	}
 }
 
+/* From md up the admin fills the window, so the page itself must not scroll
+   behind it. Phones scroll the page so the admin header can move away. */
+@media (min-width: 768px) {
+	body:has([data-admin-workbench]) {
+		overflow: hidden;
+	}
+}
+
 /* Markdown headings. Streamdown spaces blocks 1rem apart with `space-y-4`; a
    heading gets more room above than below so it opens its own section. The
    `:not([hidden])` parts mirror `space-y-4` so these rules outrank it. */

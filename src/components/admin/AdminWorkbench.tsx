@@ -570,14 +570,6 @@ export default function AdminWorkbench({
 	draftPayloadRef.current = draftPayload;
 
 	useEffect(() => {
-		const previous = document.body.style.overflow;
-		document.body.style.overflow = "hidden";
-		return () => {
-			document.body.style.overflow = previous;
-		};
-	}, []);
-
-	useEffect(() => {
 		const failure = selectedKey
 			? saveFailureByKey.current.get(selectedKey)
 			: undefined;
@@ -2071,7 +2063,13 @@ export default function AdminWorkbench({
 								/>), [filters.reviewQueue, filters.filters, selectNavigationFilter, collectionFilter, busy, openCreateCollection, removeCollection, openRenameCollection, openMoveCollection, restoreCollection, sourceFilter, library.sources, stateFilter]);
 
 	return (
-		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
+		// Phones scroll the page so the header moves away; the workbench below
+		// stays one screen tall. From md up the admin fills the window and the
+		// page does not scroll (see `data-admin-workbench` in globals.css).
+		<main
+			data-admin-workbench
+			className="relative z-0 flex min-h-dvh w-full flex-col self-stretch bg-background_light text-black md:fixed md:inset-x-0 md:top-0 md:h-dvh md:min-h-0 dark:bg-background dark:text-white"
+		>
 			<h1 className="sr-only">Library administration</h1>
 			<header
 				className="admin-toolbar-grid grid shrink-0 items-center gap-2 px-3 py-3 xl:relative xl:flex xl:min-h-16"
@@ -2358,7 +2356,7 @@ export default function AdminWorkbench({
 					assignRecordsToCollection(itemKeys, collectionKey)
 				}
 			>
-				<div className="admin-workbench-grid grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3">
+				<div className="admin-workbench-grid grid h-dvh shrink-0 grid-cols-1 gap-3 px-3 pb-3 md:h-auto md:min-h-0 md:flex-1 md:shrink">
 					<aside
 						id="admin-navigation-pane"
 						aria-label="Filters and collections"
