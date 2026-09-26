@@ -201,7 +201,10 @@ function arrowPlacementFor(side: string | null, placement: Placement) {
  */
 function TooltipTriggerSlot({ children }: { children: ReactNode }) {
 	const ref = useRef<HTMLElement | null>(null);
-	const { focusableProps } = useFocusable({}, ref);
+	// useFocusable always adds tabIndex 0; the child keeps its own, as it did
+	// with NextUI, so a tooltip never turns an icon or text into a Tab stop.
+	const { focusableProps: { tabIndex: _tabIndex, ...focusableProps } } =
+		useFocusable({}, ref);
 	const childRef = isValidElement<{ ref?: Ref<HTMLElement> }>(children)
 		? children.props.ref
 		: undefined;
