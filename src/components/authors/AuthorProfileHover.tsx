@@ -1,6 +1,6 @@
 "use client";
 
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { useReducedMotion } from "framer-motion";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import { useState, type ReactElement, type ReactNode } from "react";
@@ -24,6 +24,7 @@ export function AuthorProfileHover({
 	const reducedMotion = useReducedMotion();
 	return (
 		<Tooltip
+			color="default"
 			isOpen={open}
 			onOpenChange={setOpen}
 			delay={160}

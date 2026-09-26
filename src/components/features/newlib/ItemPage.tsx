@@ -40,7 +40,7 @@ import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
 import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
@@ -337,6 +337,7 @@ function ItemAuthor({
 
 	return (
 		<Tooltip
+			color="default"
 			isDisabled={affiliationCount === 0}
 			key={author?.name}
 			className="rounded-2xl bg-card_light dark:bg-card"
@@ -834,7 +835,7 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center">
-					<Tooltip content={t("copy")} placement="top">
+					<Tooltip color="default" content={t("copy")} placement="top">
 						<CopyButton
 							textToCopy={link.value}
 							ariaLabel={`${t("copy")} ${getIdentifierDisplayTitle(link, t)}`}
@@ -912,6 +913,7 @@ function ItemCollection({
 	return (
 		<li key={collection.key}>
 			<Tooltip
+				color="default"
 				content={
 					<motion.div
 						className="px-2 py-1 min-w-collection-tooltip"
