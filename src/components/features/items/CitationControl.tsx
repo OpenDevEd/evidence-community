@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import useSWR, { preload } from "swr";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { QuoteUpIcon } from "@hugeicons/core-free-icons";
+import { MessageSquareQuoteIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/nextui/Button";
 import { Spinner } from "@/components/nextui/Spinner";
 import { CitationStylePicker } from "./CitationStylePicker";
@@ -331,7 +331,7 @@ export function CitationControl({ item }: { item: CitationItem | undefined }) {
 					size="sm"
 					aria-label={t("cite")}
 					startContent={
-						<HugeiconsIcon icon={QuoteUpIcon} className="size-4" />
+						<HugeiconsIcon icon={MessageSquareQuoteIcon} className="size-4" />
 					}
 					className="px-0 min-w-0 aspect-square @[720px]:aspect-auto @[720px]:px-3"
 				>
