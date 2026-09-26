@@ -1334,6 +1334,7 @@ export function AdminItemTable({
 										definition.sortable && sort === id;
 									const pinned =
 										id === "select" || id === "title";
+									// Phones scroll these with the rest so the other columns can be read.
 									const pinnedLeft =
 										id === "title" ? selectColumnWidth : 0;
 									return (
@@ -1357,7 +1358,7 @@ export function AdminItemTable({
 												)
 													? "z-50 ring-2 ring-inset ring-focus/80"
 													: ""
-											} ${pinned ? "sticky z-40" : ""} ${
+											} ${pinned ? "z-40 md:sticky md:left-[var(--admin-pin-left)]" : ""} ${
 												id === "title"
 													? "after:pointer-events-none after:absolute after:bottom-0 after:right-0 after:top-0 after:w-px after:bg-black/[0.07] dark:after:bg-white/[0.08]"
 													: ""
@@ -1371,13 +1372,15 @@ export function AdminItemTable({
 												)
 											}
 											role="columnheader"
-											style={{
-												height: ADMIN_ITEM_TABLE_HEADER_HEIGHT,
-												left: pinned
-													? pinnedLeft
-													: undefined,
-												width: header.getSize(),
-											}}
+											style={
+												{
+													height: ADMIN_ITEM_TABLE_HEADER_HEIGHT,
+													"--admin-pin-left": pinned
+														? `${pinnedLeft}px`
+														: undefined,
+													width: header.getSize(),
+												} as React.CSSProperties
+											}
 										>
 											{header.isPlaceholder ? null : id ===
 											  "select" ? (
@@ -1530,7 +1533,7 @@ export function AdminItemTable({
 														: ""
 												} ${
 													pinned
-														? "sticky z-20 before:pointer-events-none before:absolute before:inset-0 before:content-[''] [&>*]:relative [&>*]:z-10"
+														? "relative z-20 md:sticky md:left-[var(--admin-pin-left)] before:pointer-events-none before:absolute before:inset-0 before:content-[''] [&>*]:relative [&>*]:z-10"
 														: ""
 												} ${
 													id === "title"
@@ -1546,15 +1549,17 @@ export function AdminItemTable({
 													)
 												}
 												role="gridcell"
-												style={{
-													left:
-														id === "title"
-															? selectColumnWidth
-															: pinned
-																? 0
-																: undefined,
-													width: cell.column.getSize(),
-												}}
+												style={
+													{
+														"--admin-pin-left":
+															id === "title"
+																? `${selectColumnWidth}px`
+																: pinned
+																	? "0px"
+																	: undefined,
+														width: cell.column.getSize(),
+													} as React.CSSProperties
+												}
 											>
 												{flexRender(
 													cell.column.columnDef.cell,
