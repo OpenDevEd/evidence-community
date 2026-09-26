@@ -14,7 +14,6 @@ import {
 	count,
 	eq,
 	gt,
-	gte,
 	inArray,
 	isNotNull,
 	isNull,
@@ -69,8 +68,6 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
-	/** Claim only events with a larger id. */
-	afterEventId?: number;
 	config: LibraryServerConfig;
 	batchClient?: Meilisearch["batches"];
 	database: Database;
@@ -291,9 +288,6 @@ async function claimEvents(
 						lte(outbox.leaseExpiresAt, claimedAt),
 					),
 					noActiveEntityLease(transaction, claimedAt),
-					options.afterEventId === undefined
-						? undefined
-						: gt(outbox.id, options.afterEventId),
 				),
 			)
 			.orderBy(asc(outbox.id))
@@ -1206,8 +1200,6 @@ export async function applySearchIndexEmbedder(
  * 2 h through the drain and 37 min as a rebuild.
  */
 const BACKLOG_REBUILD_MIN_EVENTS = 50_000;
-/** How often the edit lane looks for new events during a backlog rebuild. */
-const EDIT_DRAIN_POLL_MS = 500;
 
 /** The number of waiting events when a rebuild should index them, else 0. */
 export async function outboxBacklogForRebuild(database: Database) {
@@ -1238,39 +1230,13 @@ export async function rebuildForOutboxBacklog(
 	database: Database,
 	service: MeilisearchService,
 	config: LibraryServerConfig,
-	options: { signal?: AbortSignal; taskTimeoutMs?: number; workerId: string },
+	options: { signal?: AbortSignal; taskTimeoutMs?: number } = {},
 ) {
 	const waiting = await database
 		.select({ id: outbox.id })
 		.from(outbox)
 		.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
-	// Edits made while the rebuild runs are indexed meanwhile by one drain lane.
-	const newestWaiting = waiting.reduce((newest, { id }) => Math.max(newest, id), 0);
-	const editsFrom = new Date();
-	const edits = { stop: false };
-	const editDrain = drainEditsDuringRebuild(
-		database,
-		service,
-		config,
-		options,
-		newestWaiting,
-		edits,
-	);
-	let rebuilt: Awaited<ReturnType<typeof rebuildSearchIndex>>;
-	try {
-		rebuilt = await rebuildSearchIndex(database, service, config, options);
-	} finally {
-		edits.stop = true;
-		await editDrain;
-		// The rebuild may have read an edited record before the edit and sent
-		// that older copy after it, even when it failed. The lane's events go
-		// back in the queue, so the drain that follows indexes those records
-		// again from current data, after every rebuild task.
-		await database
-			.update(outbox)
-			.set({ nextAttemptAt: new Date(), processedAt: null })
-			.where(and(gt(outbox.id, newestWaiting), gte(outbox.processedAt, editsFrom)));
-	}
+	const rebuilt = await rebuildSearchIndex(database, service, config, options);
 	const acknowledgedAt = new Date();
 	let acknowledged = 0;
 	for (const ids of chunkValues(
@@ -1302,39 +1268,6 @@ export async function rebuildForOutboxBacklog(
 		acknowledged += rows.length;
 	}
 	return { ...rebuilt, acknowledged };
-}
-
-/** Polls for events newer than the rebuild's saved list and indexes them. */
-async function drainEditsDuringRebuild(
-	database: Database,
-	service: MeilisearchService,
-	config: LibraryServerConfig,
-	options: { signal?: AbortSignal; taskTimeoutMs?: number; workerId: string },
-	afterEventId: number,
-	edits: { stop: boolean },
-) {
-	while (!edits.stop && !options.signal?.aborted) {
-		try {
-			const results = await processNextSearchOutboxBatch({
-				afterEventId,
-				batchSize: 500,
-				config,
-				database,
-				index: service.index,
-				signal: options.signal,
-				taskTimeoutMs: options.taskTimeoutMs,
-				workerId: `${options.workerId}:edits`,
-			});
-			if (results) continue;
-		} catch (error) {
-			if (options.signal?.aborted) return;
-			// A failed edit keeps its own retry schedule; the rebuild goes on.
-			console.error(
-				`Search index edit during backlog rebuild failed: ${errorMessage(error)}`,
-			);
-		}
-		await delay(EDIT_DRAIN_POLL_MS).catch(() => undefined);
-	}
 }
 
 export async function rebuildSearchIndex(

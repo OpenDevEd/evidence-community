@@ -278,7 +278,6 @@ async function main() {
 					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
 						embedder: config.search.embedder,
 					}),
-					workerId: instanceId,
 				},
 			);
 			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
