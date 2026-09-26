@@ -8,7 +8,7 @@ import {
 } from "react-simple-maps";
 import { ReactNode, useEffect, useState, useRef, memo } from "react";
 import { useTranslations } from "next-intl";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
@@ -53,18 +53,26 @@ function MouseTooltip({
 		return null;
 	}
 
+	const top = anchor?.y ?? (dragging ? dragging.y : mouse.y);
+	const left = anchor?.x ?? (dragging ? dragging.x : mouse.x);
 	return (
 		<Tooltip
-			updatePositionDeps={[mouse, zoomData]}
+			color="default"
 			isOpen={!!content}
 			content={content}
 			className="select-none"
+			// React Aria re-positions only when its inputs change, not when the
+			// trigger moves. A sub-pixel cross offset tied to the pointer makes
+			// the tooltip follow it.
+			// ponytail: a hash of the position; two points can share one, which
+			// leaves the tooltip a move behind until the next change.
+			crossOffset={((top * 7919 + left) % 1000) / 1e6}
 		>
 			<div
 				style={{
 					position: "fixed",
-					top: anchor?.y ?? (dragging ? dragging.y : mouse.y),
-					left: anchor?.x ?? (dragging ? dragging.x : mouse.x),
+					top,
+					left,
 					pointerEvents: "none",
 				}}
 				className="size-0"

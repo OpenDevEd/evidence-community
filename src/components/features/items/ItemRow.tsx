@@ -6,7 +6,7 @@ import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import React from "react";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { useQueryState } from "nuqs";
 export default function ItemRow({ item, row, router, value, customRowName, loading, tooltip, pathname }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean, tooltip?: string, pathname: string }) {
 	const t = useTranslations();
@@ -39,7 +39,7 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 				)}
 			>
 				{rowName || row}
-				{tooltip && <Tooltip content={tooltip}><HugeiconsIcon icon={HelpCircleIcon} className="size-6 hover:opacity-100 opacity-50 transition-opacity" /></Tooltip>}
+				{tooltip && <Tooltip color="default" content={tooltip}><HugeiconsIcon icon={HelpCircleIcon} className="size-6 hover:opacity-100 opacity-50 transition-opacity" /></Tooltip>}
 			</h3>	
 			{React.createElement(element, {
 				suppressHydrationWarning: true,

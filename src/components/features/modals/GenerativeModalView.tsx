@@ -3,8 +3,8 @@ import {
 	ListboxItem,
 	ModalBody,
 	ScrollShadow,
-	Tooltip,
 } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { ModalContent } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { useFormatter } from "next-intl";
@@ -151,6 +151,7 @@ function SelectedHistoryDate({
 }) {
 	return (
 		<Tooltip
+			color="default"
 			content={format.dateTime(new Date(item.date), {
 				year: "numeric",
 				month: "long",

@@ -2,7 +2,8 @@
 
 import { useId, useRef, useState } from "react";
 import useSWR from "swr";
-import { FreeSoloPopover, Tooltip, Spinner } from "@nextui-org/react";
+import { FreeSoloPopover, Spinner } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import { ArrowUpRight01Icon, TagsIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -164,6 +165,7 @@ export function TopicHoverCard({
 	return (
 		<>
 			<Tooltip
+				color="default"
 				isOpen={open && !interactive}
 				isDisabled={interactive}
 				onOpenChange={setOpen}
@@ -171,7 +173,6 @@ export function TopicHoverCard({
 				closeDelay={240}
 				placement="top-start"
 				offset={10}
-				isDismissable
 				disableAnimation={Boolean(reducedMotion)}
 				className={cardClassName}
 				content={content}

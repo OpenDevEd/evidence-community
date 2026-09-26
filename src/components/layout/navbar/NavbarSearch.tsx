@@ -17,7 +17,8 @@ import { useRouter, Link, usePathname } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
 import useSWR from "swr";
-import { Spinner, Tooltip, useDisclosure } from "@nextui-org/react";
+import { Spinner, useDisclosure } from "@nextui-org/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -537,6 +538,7 @@ export default function NavbarSearch() {
 
 												return (
 													<Tooltip
+														color="default"
 														key={item.key}
 														placement="right"
 														delay={350}
