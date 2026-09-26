@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { eq } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
+import { status } from "@/db/schema/tables/status";
 import { itemDraft, itemSourceLink, sourceConnection, sourceRecordIssue } from "@/db/schema/source";
 import { itemFieldOverride, itemSourceValue, topicCatalogCache, sourceTopicAssignment, topicAssociationDelivery, topicDeliveryConfiguration } from "@/db/schema/topics";
 import { createNativeItemDraft, openItemDraft, saveItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
@@ -216,6 +217,10 @@ it("rebuilds existing search documents when topic visibility changes and retains
     expect(await prepareSearchProjection(db, false, false)).toBe(true);
     await setSearchIndexRebuildPending(db, false);
     expect(await prepareSearchProjection(db, false, false)).toBe(false);
+    // An index an older runtime built keeps its old documents unless it rebuilds.
+    await db.update(status).set({searchProjectionSignature: JSON.stringify({topics: false, fullText: false})}).where(eq(status.id, 1));
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, false, false)).toBe(true);
   });
 });
 
