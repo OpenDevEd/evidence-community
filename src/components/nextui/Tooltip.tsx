@@ -7,6 +7,7 @@ import {
 	use,
 	useCallback,
 	useRef,
+	type KeyboardEvent,
 	type ReactNode,
 	type Ref,
 } from "react";
@@ -211,8 +212,19 @@ function TooltipTriggerSlot({ children }: { children: ReactNode }) {
 	const ref = useRef<HTMLElement | null>(null);
 	// useFocusable always adds tabIndex 0; the child keeps its own, as it did
 	// with NextUI, so a tooltip never turns an icon or text into a Tab stop.
-	const { focusableProps: { tabIndex: _tabIndex, ...focusableProps } } =
+	const { focusableProps: { tabIndex: _tabIndex, ...focusable } } =
 		useFocusable({}, ref);
+	// A press anywhere in the trigger closes the tooltip. Capture, because a
+	// wrapped button (a popover trigger in a span) stops its press events, and
+	// an open tooltip would then take the Escape meant for that popover.
+	const state = use(TooltipTriggerStateContext);
+	const focusableProps = {
+		...focusable,
+		onPointerDownCapture: () => state?.close(true),
+		onKeyDownCapture: (event: KeyboardEvent) => {
+			if (event.key === "Enter" || event.key === " ") state?.close(true);
+		},
+	};
 	const childRef = isValidElement<{ ref?: Ref<HTMLElement> }>(children)
 		? children.props.ref
 		: undefined;
