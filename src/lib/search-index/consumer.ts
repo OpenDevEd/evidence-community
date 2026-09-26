@@ -14,6 +14,7 @@ import {
 	count,
 	eq,
 	gt,
+	gte,
 	inArray,
 	isNotNull,
 	isNull,
@@ -36,7 +37,6 @@ import {
 import {
 	generateFullSearchProjectionPlans,
 	generateSearchProjectionPlans,
-	type SearchProjectionEvent,
 	type SearchProjectionPlan,
 } from "./projection";
 import {
@@ -1245,13 +1245,15 @@ export async function rebuildForOutboxBacklog(
 		.from(outbox)
 		.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
 	// Edits made while the rebuild runs are indexed meanwhile by one drain lane.
-	const edits: EditDrain = { entities: [], stop: false };
+	const newestWaiting = waiting.reduce((newest, { id }) => Math.max(newest, id), 0);
+	const editsFrom = new Date();
+	const edits = { stop: false };
 	const editDrain = drainEditsDuringRebuild(
 		database,
 		service,
 		config,
 		options,
-		waiting.reduce((newest, { id }) => Math.max(newest, id), 0),
+		newestWaiting,
 		edits,
 	);
 	let rebuilt: Awaited<ReturnType<typeof rebuildSearchIndex>>;
@@ -1260,24 +1262,14 @@ export async function rebuildForOutboxBacklog(
 	} finally {
 		edits.stop = true;
 		await editDrain;
-	}
-	// The rebuild may have read an edited record before the edit and sent that
-	// older copy after it. Records edited meanwhile are sent again from their
-	// current state, after every rebuild task.
-	for await (const plan of generateSearchProjectionPlans(
-		database,
-		config,
-		edits.entities,
-		500,
-		options.signal,
-	)) {
-		await applySearchProjectionPlan(
-			service.index,
-			plan,
-			options.taskTimeoutMs,
-			DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
-			{ signal: options.signal },
-		);
+		// The rebuild may have read an edited record before the edit and sent
+		// that older copy after it, even when it failed. The lane's events go
+		// back in the queue, so the drain that follows indexes those records
+		// again from current data, after every rebuild task.
+		await database
+			.update(outbox)
+			.set({ nextAttemptAt: new Date(), processedAt: null })
+			.where(and(gt(outbox.id, newestWaiting), gte(outbox.processedAt, editsFrom)));
 	}
 	const acknowledgedAt = new Date();
 	let acknowledged = 0;
@@ -1312,8 +1304,6 @@ export async function rebuildForOutboxBacklog(
 	return { ...rebuilt, acknowledged };
 }
 
-type EditDrain = { entities: SearchProjectionEvent[]; stop: boolean };
-
 /** Polls for events newer than the rebuild's saved list and indexes them. */
 async function drainEditsDuringRebuild(
 	database: Database,
@@ -1321,7 +1311,7 @@ async function drainEditsDuringRebuild(
 	config: LibraryServerConfig,
 	options: { signal?: AbortSignal; taskTimeoutMs?: number; workerId: string },
 	afterEventId: number,
-	edits: EditDrain,
+	edits: { stop: boolean },
 ) {
 	while (!edits.stop && !options.signal?.aborted) {
 		try {
@@ -1335,16 +1325,7 @@ async function drainEditsDuringRebuild(
 				taskTimeoutMs: options.taskTimeoutMs,
 				workerId: `${options.workerId}:edits`,
 			});
-			const eventIds = (results ?? []).flatMap(({ eventIds }) => eventIds);
-			if (eventIds.length > 0) {
-				edits.entities.push(
-					...(await database
-						.select({ entityKey: outbox.entityKey, entityType: outbox.entityType })
-						.from(outbox)
-						.where(inArray(outbox.id, eventIds))),
-				);
-				continue;
-			}
+			if (results) continue;
 		} catch (error) {
 			if (options.signal?.aborted) return;
 			// A failed edit keeps its own retry schedule; the rebuild goes on.

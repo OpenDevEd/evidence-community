@@ -6,7 +6,7 @@ import {
 	itemIdentity,
 	outbox,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { Meilisearch, MeilisearchApiError, type Task } from "meilisearch";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
@@ -1132,9 +1132,20 @@ async function verify() {
 								])
 								.returning({ id: outbox.id });
 							editEventIds.push(...edits.map(({ id }) => id));
-							// Give the edit lane time to index the edit before this
-							// older copy reaches Meilisearch.
-							await delay(1_500);
+							// The edit lane indexes both edits before this older copy
+							// reaches Meilisearch.
+							for (let wait = 0; wait < 150; wait += 1) {
+								const indexed = await database
+									.select({ id: outbox.id })
+									.from(outbox)
+									.where(and(inArray(outbox.id, editEventIds), isNotNull(outbox.processedAt)));
+								if (indexed.length === editEventIds.length) break;
+								await delay(100);
+							}
+							assert(
+								(await target.getDocument<{ title: string }>(parentKey)).title === "Edited during the rebuild",
+								"An edit made during the backlog rebuild was not indexed while it ran",
+							);
 						}
 						return target.addDocuments(...args);
 					};
@@ -1150,14 +1161,23 @@ async function verify() {
 			{ taskTimeoutMs: 60_000, workerId: "search-e2e-backlog" },
 		);
 		assert(editEventIds.length === 2, "No edit was made during the backlog rebuild");
-		const backlogEvents = await database
-			.select()
+		// The rebuild sent the older copy last, so the edits wait for the next drain.
+		const requeuedEdits = await database
+			.select({ id: outbox.id })
 			.from(outbox)
-			.where(inArray(outbox.id, [waitingEvent.id, ...editEventIds]));
+			.where(and(inArray(outbox.id, editEventIds), isNull(outbox.processedAt)));
 		assert(
-			backlogRebuild.acknowledged >= 1 && backlogEvents.every((event) => event.processedAt !== null),
-			"An edit made during the backlog rebuild was not indexed while it ran",
+			backlogRebuild.acknowledged >= 1 && requeuedEdits.length === editEventIds.length,
+			"Edits made during the backlog rebuild were not queued again after it",
 		);
+		await drainSearchOutbox({
+			config: libraryConfig,
+			batchClient: client.batches,
+			database,
+			index: goodService.index,
+			taskTimeoutMs: 60_000,
+			workerId: "search-e2e-backlog",
+		});
 		assert(
 			(await goodService.index.getDocument<{ title: string }>(parentKey)).title === "Edited during the rebuild",
 			"The backlog rebuild overwrote an edit made while it ran",
