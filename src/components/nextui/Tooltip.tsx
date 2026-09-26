@@ -126,7 +126,7 @@ export function Tooltip({
 			isDisabled={isDisabled}
 		>
 			<TooltipTriggerSlot>{children}</TooltipTriggerSlot>
-			<KeepSwapAnimation>
+			<TooltipStateOverrides>
 				<AriaTooltip
 					placement={ARIA_PLACEMENT[placement]}
 					offset={showArrow ? offset + 3 : offset}
@@ -160,7 +160,7 @@ export function Tooltip({
 						);
 					}}
 				</AriaTooltip>
-			</KeepSwapAnimation>
+			</TooltipStateOverrides>
 		</TooltipTrigger>
 	);
 }
@@ -217,14 +217,27 @@ function assignRef(target: Ref<HTMLElement> | undefined, node: HTMLElement | nul
 }
 
 /**
- * React Aria skips the animation when one tooltip replaces another; HeroUI
- * keeps it so the swap still fades.
+ * Two changes to React Aria's tooltip, through the state it reads:
+ * - It skips the animation when one tooltip replaces another; HeroUI keeps
+ *   it so the swap still fades.
+ * - It closes the tooltip when the page scrolls, which makes a tall card
+ *   impossible to scroll through. Its positioning asks for that close with
+ *   `close(true)`; moving the pointer away calls `close()`. Ignoring the
+ *   first keeps the tooltip open, moving with the page, as NextUI's did.
  */
-function KeepSwapAnimation({ children }: { children: ReactNode }) {
+function TooltipStateOverrides({ children }: { children: ReactNode }) {
 	const state = use(TooltipTriggerStateContext);
 	if (!state) return children;
 	return (
-		<TooltipTriggerStateContext value={{ ...state, shouldSkipAnimation: false }}>
+		<TooltipTriggerStateContext
+			value={{
+				...state,
+				shouldSkipAnimation: false,
+				close: (immediate) => {
+					if (!immediate) state.close();
+				},
+			}}
+		>
 			{children}
 		</TooltipTriggerStateContext>
 	);
