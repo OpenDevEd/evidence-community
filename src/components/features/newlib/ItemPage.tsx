@@ -3,7 +3,9 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Alert02Icon,
+	ArrowRight01Icon,
 	Building03Icon,
+	Folder01Icon,
 	Mortarboard01Icon,
 } from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
@@ -23,6 +25,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
+import type { FacetsGetResponse } from "@/app/api/facets/types";
 import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
 import Attachment from "@/components/features/items/Attachment";
@@ -38,10 +41,11 @@ import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
+import { HierarchyTree } from "@/components/typography/HierarchyTree";
 import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
@@ -906,11 +910,15 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 function ItemCollection({
 	collection,
 	item,
+	publicationCount,
 }: {
 	collection: Collection;
 	item: Item | undefined;
+	/** Published records in the collection or its subcollections, as its link shows. */
+	publicationCount: number;
 }) {
-	const [referrer, setReferrer] = useQueryState("referrer");
+	const [referrer] = useQueryState("referrer");
+	const reducedMotion = useReducedMotion();
 	const ancestry = collection.ancestry || [];
 	const collectionsData = item?.collectionsData as Collection[];
 
@@ -926,112 +934,81 @@ function ItemCollection({
 
 	const fullHierarchy = [
 		...hierarchyNames,
-		{ name: collection.name, key: collection.key },
+		{ name: collection.name || collection.key, key: collection.key },
 	];
+
+	const filterTo = (depth: number) => ({
+		href: getSafeReferrer(referrer),
+		params: {
+			collections: fullHierarchy.slice(0, depth + 1).map((h) => h.key),
+			referrer: referrer ?? undefined,
+		},
+	});
 
 	return (
 		<li key={collection.key}>
 			<Tooltip
 				color="default"
+				delay={160}
+				closeDelay={240}
+				placement="top-start"
+				offset={10}
+				disableAnimation={Boolean(reducedMotion)}
+				className="w-[360px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-black/10 bg-card_light p-0 text-black shadow-xl dark:border-white/10 dark:bg-card dark:text-white"
 				content={
-					<motion.div
-						className="px-2 py-1 min-w-collection-tooltip"
-						initial={{ opacity: 0, scale: 0.95 }}
-						animate={{ opacity: 1, scale: 1 }}
-						transition={{
-							type: "spring",
-							stiffness: 300,
-							damping: 30,
-						}}
-					>
-						{fullHierarchy.map((item, index) => (
-							<motion.div
-								key={index}
-								className="flex items-center gap-2 py-0.5"
-								style={{
-									paddingLeft: `${index * 12}px`,
-								}}
-								initial={{ opacity: 0, x: -20 }}
-								animate={{ opacity: 1, x: 0 }}
-								transition={{
-									duration: 0.3,
-									delay: index * 0.1,
-									ease: [0.23, 1, 0.32, 1],
-								}}
+					<div className="flex w-full flex-col">
+						<div className="space-y-3 p-4">
+							<div className="flex items-start gap-2.5">
+								<HugeiconsIcon
+									icon={Folder01Icon}
+									size={18}
+									className="mt-0.5 shrink-0 text-accent"
+									aria-hidden
+								/>
+								<div className="min-w-0">
+									<h3 className="text-base font-semibold leading-snug">
+										{collection.name}
+									</h3>
+									{publicationCount > 0 && (
+										<p className="mt-0.5 text-xs text-black/50 dark:text-white/50">
+											{publicationCount.toLocaleString()}{" "}
+											{publicationCount === 1 ? "publication" : "publications"}
+										</p>
+									)}
+								</div>
+							</div>
+							{hierarchyNames.length > 0 && (
+								<HierarchyTree
+									label="Collection path"
+									levels={fullHierarchy}
+									renderLink={(level, index, className) => (
+										<LinkWithParams {...filterTo(index)} className={className}>
+											{level.name}
+										</LinkWithParams>
+									)}
+								/>
+							)}
+						</div>
+						<div className="shrink-0 border-t border-black/[0.07] bg-black/[0.025] p-1.5 dark:border-white/[0.07] dark:bg-white/[0.025]">
+							<Button
+								as={LinkWithParams}
+								{...filterTo(fullHierarchy.length - 1)}
+								size="sm"
+								variant="transparent"
+								className="w-full justify-between px-2.5 text-sm font-medium text-inherit"
+								endContent={
+									<HugeiconsIcon
+										icon={ArrowRight01Icon}
+										size={16}
+										aria-hidden
+									/>
+								}
 							>
-								{index > 0 && (
-									<motion.div
-										className="text-white/40"
-										initial={{ opacity: 0, scaleX: 0 }}
-										animate={{ opacity: 1, scaleX: 1 }}
-										transition={{
-											duration: 0.3,
-											delay: index * 0.1 + 0.1,
-											ease: "anticipate",
-										}}
-									>
-										└─
-									</motion.div>
-								)}
-								<LinkWithParams
-									href={getSafeReferrer(referrer)}
-									params={{
-										collections: fullHierarchy
-											.slice(0, index + 1)
-											.map((h) => h.key),
-										referrer: referrer ?? undefined,
-									}}
-								>
-									<motion.span
-										className="text-sm whitespace-nowrap overflow-hidden text-ellipsis relative group"
-										whileHover={{ scale: 1.02 }}
-										transition={{
-											type: "spring",
-											stiffness: 400,
-											damping: 10,
-										}}
-									>
-										<motion.span className="relative z-10">
-											{item.name}
-										</motion.span>
-										<motion.div
-											className="absolute inset-0 bg-accent/20 rounded-sm -z-0"
-											initial={{ scaleX: 0 }}
-											whileHover={{
-												scaleX: 1,
-												transition: {
-													duration: 0.2,
-													ease: "circOut",
-												},
-											}}
-											style={{ originX: 0 }}
-										/>
-									</motion.span>
-								</LinkWithParams>
-							</motion.div>
-						))}
-					</motion.div>
+								Show publications in this collection
+							</Button>
+						</div>
+					</div>
 				}
-				placement="top"
-				classNames={{
-					base: [
-						"before:bg-secondary-100",
-						"data-[showing=true]:animate-in",
-						"data-[showing=true]:fade-in-0",
-						"data-[showing=true]:zoom-in-95",
-						"data-[showing=false]:animate-out",
-						"data-[showing=false]:fade-out-0",
-						"data-[showing=false]:zoom-out-95",
-						"data-[showing=true]:slide-in-from-bottom-1",
-						"data-[showing=false]:slide-out-to-bottom-1",
-					].join(" "),
-					content: [
-						"bg-secondary-100",
-						"border border-white/10",
-						"shadow-xl shadow-black/10",
-						"dark:shadow-white/10",
-					].join(" "),
-				}}
 			>
 				<LinkWithParams
 					href={getSafeReferrer(referrer)}
@@ -1062,6 +1039,14 @@ function ItemCollection({
 export function ItemCollections({ item }: { item: Item | undefined }) {
 	const isCollectionsEnabled = useLibraryFeature("collections");
 	const t = useTranslations("ui");
+	// The library-wide counts the sidebar shows: a collection's own records
+	// plus its subcollections'. Zotero's own count leaves out subcollections,
+	// so a parent folder would read as empty.
+	const { data: facets } = useSWR<FacetsGetResponse>(
+		isCollectionsEnabled ? "/facets" : null,
+		fetcher,
+		{ revalidateOnFocus: false },
+	);
 
 	if (!isCollectionsEnabled) return null;
 
@@ -1098,6 +1083,11 @@ export function ItemCollections({ item }: { item: Item | undefined }) {
 										key={collection.key}
 										collection={collection}
 										item={item}
+										publicationCount={
+											facets?.facetDistribution.collectionsAncestry?.[
+												collection.key
+											] ?? 0
+										}
 									/>
 								))}
 							</ul>

@@ -5,14 +5,11 @@ import useSWR from "swr";
 import { FreeSoloPopover, Spinner } from "@nextui-org/react";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
-import {
-	ArrowRight01Icon,
-	ArrowUpRight01Icon,
-	TagsIcon,
-} from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon, TagsIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Card } from "@/components/nextui/Card";
+import { HierarchyTree } from "@/components/typography/HierarchyTree";
 import type { TopicNode } from "@/lib/topics/contract";
 import { fetchTopicDetail } from "@/lib/topics/client";
 
@@ -82,37 +79,37 @@ export function TopicHoverCard({
 						>
 							{detail.data.description}
 						</p>
-						{/* Domain › Field › Subfield, each opening its directory page. */}
-						<nav
-							aria-label="Topic path"
-							className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs font-medium"
-						>
-							{detail.data.path.map((node, index) => (
-								<span key={node.id} className="inline-flex items-center gap-1">
-									{index > 0 && (
-										<HugeiconsIcon
-											icon={ArrowRight01Icon}
-											size={12}
-											className="text-black/35 dark:text-white/35"
-											aria-hidden
-										/>
-									)}
-									<a
-										href={directoryUrl(
-											publicBaseUrl,
-											node.id,
-											node.name,
-										)}
-										target="_blank"
-										rel="noopener noreferrer"
-										title={["Domain", "Field", "Subfield"][index]}
-										className="rounded-sm hover:text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
-									>
-										{node.name}
-									</a>
-								</span>
-							))}
-						</nav>
+						<HierarchyTree
+							label="Topic path"
+							levels={[
+								...detail.data.path.map((node, index) => ({
+									...node,
+									key: node.id,
+									href: directoryUrl(publicBaseUrl, node.id, node.name),
+									title: ["Domain", "Field", "Subfield"][index],
+								})),
+								{
+									key: topic.id,
+									name: detail.data.name,
+									href: openScholarUrl(
+										publicBaseUrl,
+										`/topics/${encodeURIComponent(topic.id)}`,
+									),
+									title: "Topic",
+								},
+							]}
+							renderLink={(level, _index, className) => (
+								<a
+									href={level.href}
+									target="_blank"
+									rel="noopener noreferrer"
+									title={level.title}
+									className={`${className} rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus`}
+								>
+									{level.name}
+								</a>
+							)}
+						/>
 						{detail.data.keywords.length > 0 && (
 							<div
 								className="flex flex-wrap gap-1"
