@@ -73,6 +73,7 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { SourceProviderIcon } from "./SourceProviderIcon";
 import { ButtonGroup } from "@nextui-org/react";
 import { ADMIN_BUTTON_GROUP, ADMIN_GROUP_BUTTON, ADMIN_GROUP_DIVIDER, DraftPreviewPortal, type DraftPreview, type PreviewReview } from "./DraftPreviewPane";
 import { InspectorSection as Section } from "./InspectorSection";
@@ -1540,6 +1541,7 @@ export function AdminInspector({
 		!busy;
 	const readOnly = !editable;
 	const liveRecord = liveDetail?.key === detail.key ? liveDetail : detail;
+	const recordSource = sources.find((source) => source.key === liveRecord.sourceConnectionKey);
     const originWritebackReason = liveRecord.writeback.available.find(
         target => target.sourceKey === liveRecord.writeback.originSourceKey,
     )?.reason;
@@ -2227,8 +2229,13 @@ export function AdminInspector({
 							<dt className="text-black/40 dark:text-white/40">
 								Source
 							</dt>
-							<dd className="font-medium text-black/70 dark:text-white/75">
-								{humanizeAdminField(liveRecord.sourceConnectionKey)}
+							<dd className="flex min-w-0 items-center gap-1.5 font-medium text-black/70 dark:text-white/75">
+								<SourceProviderIcon
+									className="shrink-0"
+									provider={recordSource?.provider ?? liveRecord.sourceConnectionKey}
+									size={13}
+								/>
+								<TruncatedText text={recordSource?.label ?? liveRecord.sourceConnectionKey} />
 							</dd>
 						</div>
 						<div className="flex items-center justify-between gap-3">
