@@ -46,7 +46,10 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 		const observedAt = now().toISOString();
 		const sources = (await options.read()).map(trimFailure);
 		const snapshot = JSON.stringify(sources);
-		if (snapshot === sent) return true;
+		if (snapshot === sent) {
+			lastProblem = null;
+			return true;
+		}
 		try {
 			const response = await request(url, {
 				body: JSON.stringify({

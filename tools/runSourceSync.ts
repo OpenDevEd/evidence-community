@@ -163,7 +163,17 @@ async function main() {
 		// A watching worker also runs requested sources and keeps OpenScholar's
 		// view current. The lanes stop with the worker, before the database closes.
 		const lanes = new AbortController();
+		const reportError = (error: unknown) =>
+			console.error(`Source status could not be read: ${errorMessage(error)}`);
 		const searchableCache: SearchableCache = new Map();
+		const report = createSourceStatusReporter({
+			...config.authentication.openScholar,
+			read: () =>
+				readSourceStatuses(database, {
+					cache: searchableCache,
+					hiddenTags: config.content.tags.hidden,
+				}),
+		});
 		const stopLanes = () => lanes.abort();
 		abortController.signal.addEventListener("abort", stopLanes, { once: true });
 		const background = command.watch
@@ -176,15 +186,8 @@ async function main() {
 					}),
 					runSourceStatusReporter({
 						isActive: () => hasSourceActivity(database),
-						onError: (error) => console.error(`Source status could not be read: ${errorMessage(error)}`),
-						report: createSourceStatusReporter({
-							...config.authentication.openScholar,
-							read: () =>
-								readSourceStatuses(database, {
-									cache: searchableCache,
-									hiddenTags: config.content.tags.hidden,
-								}),
-						}),
+						onError: reportError,
+						report,
 						signal: lanes.signal,
 					}),
 				]
@@ -208,6 +211,8 @@ async function main() {
 			stopLanes();
 			abortController.signal.removeEventListener("abort", stopLanes);
 			await Promise.all(background);
+			// Work that finished while stopping still reaches OpenScholar.
+			if (command.watch) await report().catch(reportError);
 		}
 	} finally {
 		await runtimeProcess.close();
