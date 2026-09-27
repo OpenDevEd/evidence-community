@@ -9,7 +9,7 @@ import type { Database } from "@/db/database-schema";
 import { adminItemListProjection } from "@/db/schema/tables/adminItemListProjection";
 import { item } from "@/db/schema/tables/item";
 import { itemSourceLink, sourceRecordIssue, sourceSnapshot } from "@/db/schema/source";
-import { publicItemVisibility } from "@/lib/public-item-visibility";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
 
 import { adminFieldLabel } from "./errors";
 import { ItemNotFoundError } from "./native-item-service";
@@ -252,8 +252,8 @@ export async function getAdminSourceIssuePage(
 	const recordKey = sql<string | null>`coalesce(${parent.key}, ${item.key})`;
 	const filter = and(openIssues(sourceKey), eq(issueType, type));
 	const { hidden } = (await getLibraryConfig()).content.tags;
-	// The published record, by the public site's own rule; a draft's tags do not count.
-	const visible = publicItemVisibility(db, hidden, record);
+	// The published top-level record, by the public site's own rule; a draft's tags do not count.
+	const visible = publicParentVisibility(db, hidden, record);
 	const [[source], [total], rows] = await Promise.all([
 		db
 			.select({
@@ -322,17 +322,17 @@ export async function getAdminSourceIssuePage(
 
 /**
  * Dismisses one record's issue or every issue of a type. All of them share
- * one time, which is what undo hands back to open them again.
+ * the statement's time, to the microsecond, which undo hands back to open
+ * exactly them again.
  */
 export async function dismissAdminSourceIssues(
 	db: Database,
 	sourceKey: string,
 	target: { record: string } | { type: string },
 ) {
-	const dismissedAt = new Date();
 	const rows = await db
 		.update(sourceRecordIssue)
-		.set({ dismissedAt })
+		.set({ dismissedAt: sql`statement_timestamp()` })
 		.where(
 			and(
 				openIssues(sourceKey),
@@ -341,8 +341,10 @@ export async function dismissAdminSourceIssues(
 					: eq(issueType, target.type),
 			),
 		)
-		.returning({ key: sourceRecordIssue.sourceRecordKey });
-	return { batch: dismissedAt.toISOString(), count: rows.length };
+		.returning({
+			batch: sql<string>`to_char(${sourceRecordIssue.dismissedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+		});
+	return { batch: rows[0]?.batch ?? null, count: rows.length };
 }
 
 /** Opens again the issues one dismissal closed. */
@@ -353,7 +355,7 @@ export async function restoreAdminSourceIssues(db: Database, sourceKey: string, 
 		.where(
 			and(
 				eq(sourceRecordIssue.sourceConnectionKey, sourceKey),
-				eq(sourceRecordIssue.dismissedAt, new Date(batch)),
+				eq(sourceRecordIssue.dismissedAt, sql`${batch}::timestamptz`),
 			),
 		)
 		.returning({ key: sourceRecordIssue.sourceRecordKey });

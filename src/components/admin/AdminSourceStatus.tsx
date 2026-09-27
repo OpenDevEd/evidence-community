@@ -604,6 +604,67 @@ const typesKey = (sourceKey: string, version: string) => [TYPES_KEY, sourceKey, 
 const pageKey = (sourceKey: string, type: string, offset: number, limit: number, version: string) =>
 	[PAGE_KEY, sourceKey, type, offset, limit, version] as const;
 
+/** One page of a type's records. The page kept while the next one loads is marked stale. */
+function useIssuePage(sourceKey: string, type: string, page: { offset: number; limit: number }, version: string, polling: boolean) {
+	const { data, error } = useSWR(
+		pageKey(sourceKey, type, page.offset, page.limit, version),
+		async ([, key, kind, offset, limit]) => ({ ...(await getAdminSourceIssuePage(key, kind, { offset, limit })), offset, limit }),
+		{ keepPreviousData: true, refreshInterval: polling ? ISSUES_POLL_MS : 0 },
+	);
+	const stale = data?.offset !== page.offset || data?.limit !== page.limit;
+	return { error: stale ? error : undefined, rows: data?.issues ?? [], stale };
+}
+
+/** Where the page sits in the type, and the pages to move between. */
+function PageFooter({
+	group,
+	current,
+	pages,
+	first,
+	shown,
+	onPage,
+}: {
+	group: AdminSourceIssueType;
+	current: number;
+	pages: number;
+	first: number;
+	shown: number;
+	onPage: (page: number) => void;
+}) {
+	if (pages <= 1) {
+		return (
+			<span className="text-xs tabular-nums text-black/50 dark:text-white/50">
+				{count(group.count)} {group.count === 1 ? "record" : "records"}
+			</span>
+		);
+	}
+	return (
+		<>
+			<span className="text-xs tabular-nums text-black/50 dark:text-white/50">
+				{`${count(first)} to ${count(first + shown - 1)} of ${count(group.count)}`}
+			</span>
+			<Pagination
+				aria-label={`${group.title} pages`}
+				total={pages}
+				page={current}
+				onChange={onPage}
+				size="sm"
+				siblings={0}
+				boundaries={1}
+				showControls
+				classNames={{
+					base: "m-0 p-0",
+					wrapper: "gap-1",
+					// The dots between page numbers are the only item holding an icon; they are not a button.
+					item: "size-8 min-w-8 text-xs [&:has(svg)]:border-transparent [&:has(svg)]:bg-transparent [&:has(svg)]:shadow-none",
+					prev: "size-8 min-w-8",
+					next: "size-8 min-w-8",
+				}}
+			/>
+		</>
+	);
+}
+
 /** The records of one issue type, a page at a time, with the fix said once above them. */
 function IssueKindPane({
 	group,
@@ -628,13 +689,9 @@ function IssueKindPane({
 	const pageSize = fit.rows;
 	const pages = Math.max(1, Math.ceil(group.count / pageSize));
 	const current = Math.min(Math.floor(start / pageSize) + 1, pages);
-	const { data, error } = useSWR(
-		pageKey(sourceKey, group.key, (current - 1) * pageSize, pageSize, version),
-		([, key, type, offset, limit]) => getAdminSourceIssuePage(key, type, { offset, limit }),
-		{ keepPreviousData: true, refreshInterval: polling ? ISSUES_POLL_MS : 0 },
-	);
-	const rows = data?.issues ?? [];
-	const first = (current - 1) * pageSize + 1;
+	const offset = (current - 1) * pageSize;
+	// The page kept while the next one loads stays in place but cannot be acted on.
+	const { error, rows, stale } = useIssuePage(sourceKey, group.key, { offset, limit: pageSize }, version, polling);
 	return (
 		<div className="flex min-h-0 min-w-0 flex-col">
 			<div className="flex h-12 shrink-0 items-center gap-3 border-b border-black/[0.055] px-4 dark:border-white/[0.06]">
@@ -666,10 +723,14 @@ function IssueKindPane({
 					Dismiss all
 				</Button>
 			</div>
-			<ul ref={listRef} aria-label={`${group.title} records`} className="min-h-0 flex-1 overflow-hidden px-1 py-2">
-				{error && !data ? (
-					<li role="alert" className="px-3 py-2 text-xs text-danger">These records could not be loaded.</li>
-				) : null}
+			<ul
+				ref={listRef}
+				aria-busy={stale}
+				aria-label={`${group.title} records`}
+				inert={stale}
+				className={`min-h-0 flex-1 overflow-hidden px-1 py-2 transition-opacity motion-reduce:transition-none ${stale ? "opacity-50" : ""}`}
+			>
+				{error ? <li role="alert" className="px-3 py-2 text-xs text-danger">These records could not be loaded.</li> : null}
 				{rows.map((row) => (
 					<IssueRecord
 						key={row.sourceRecordKey}
@@ -681,31 +742,14 @@ function IssueKindPane({
 				))}
 			</ul>
 			<div className="flex h-12 shrink-0 items-center justify-between gap-3 border-t border-black/[0.055] px-4 dark:border-white/[0.06]">
-				<span className="text-xs tabular-nums text-black/50 dark:text-white/50">
-					{pages > 1
-						? `${count(first)} to ${count(first + rows.length - 1)} of ${count(group.count)}`
-						: `${count(group.count)} ${group.count === 1 ? "record" : "records"}`}
-				</span>
-				{pages > 1 ? (
-					<Pagination
-						aria-label={`${group.title} pages`}
-						total={pages}
-						page={current}
-						onChange={(page) => setStart((page - 1) * pageSize)}
-						size="sm"
-						siblings={0}
-						boundaries={1}
-						showControls
-						classNames={{
-							base: "m-0 p-0",
-							wrapper: "gap-1",
-							// The dots between page numbers are the only item holding an icon; they are not a button.
-							item: "size-8 min-w-8 text-xs [&:has(svg)]:border-transparent [&:has(svg)]:bg-transparent [&:has(svg)]:shadow-none",
-							prev: "size-8 min-w-8",
-							next: "size-8 min-w-8",
-						}}
-					/>
-				) : null}
+				<PageFooter
+					group={group}
+					current={current}
+					pages={pages}
+					first={offset + 1}
+					shown={rows.length}
+					onPage={(page) => setStart((page - 1) * pageSize)}
+				/>
 			</div>
 		</div>
 	);
@@ -768,7 +812,7 @@ function SourceIssues({
 				sourceKey,
 				"record" in target ? { record: target.record } : { type: target.type },
 			);
-			toast(dismissed === 1 ? "Issue dismissed" : `${count(dismissed)} issues dismissed`, {
+			if (batch) toast(dismissed === 1 ? "Issue dismissed" : `${count(dismissed)} issues dismissed`, {
 				action: {
 					label: "Undo",
 					onClick: () =>
@@ -855,11 +899,14 @@ export function AdminSourceStatusDialog({
 }) {
 	const activity = source?.activity ?? null;
 	// The polled issue counts are in the key, so the lists follow what the import writes.
-	const version = activity ? JSON.stringify(activity.issues) : "";
+	// A finished or failed run refetches too, since an import can swap issues without changing a count.
+	const version = activity
+		? JSON.stringify([activity.state, activity.lastSuccessAt, activity.state === "failed" ? activity.failure.at : null, activity.issues])
+		: "";
 	const running = activity?.state === "running";
 	// A source that never imported has no issues to ask for.
 	const imported = activity !== null && activity.state !== "idle";
-	const { data: loaded } = useSWR(
+	const { data: loaded, error } = useSWR(
 		source && imported ? typesKey(source.key, version) : null,
 		async ([, key]) => ({ ...(await getAdminSourceIssueTypes(key)), sourceKey: key }),
 		{ keepPreviousData: true, refreshInterval: running ? ISSUES_POLL_MS : 0 },
@@ -918,6 +965,10 @@ export function AdminSourceStatusDialog({
 											onOpenRecord(itemKey);
 										}}
 									/>
+								) : imported && error ? (
+									<p role="alert" className="border-t border-black/[0.07] px-5 py-4 text-sm text-danger dark:border-white/[0.07] sm:px-6">
+										Record issues could not be loaded. They load again at the next update.
+									</p>
 								) : null}
 							</div>
 						</>

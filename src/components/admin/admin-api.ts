@@ -247,7 +247,7 @@ export function dismissAdminSourceIssues(
 	sourceKey: string,
 	target: { record: string } | { type: string },
 ) {
-	return requestJson<{ batch: string; count: number }>(sourceIssuesPath(sourceKey), {
+	return requestJson<{ batch: string | null; count: number }>(sourceIssuesPath(sourceKey), {
 		body: JSON.stringify({ action: "dismiss", ...target }),
 		method: "PATCH",
 	});

@@ -645,7 +645,7 @@ export default function AdminWorkbench({
 	// The sync worker is an outside process: keep the sidebar import state
 	// fresh, quickly while an import runs or its dialog is open.
 	const watchingImport =
-		syncSourceKey !== null ||
+		Boolean(syncSource?.activity) ||
 		library.sources.some(({ activity }) => activity?.state === "running");
 	useEffect(() => {
 		const timer = setInterval(
