@@ -12,6 +12,7 @@ import {
 	and,
 	asc,
 	eq,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -83,7 +84,8 @@ export type SourceStatusInput = {
 	searchFailed: number;
 	/** The latest run that changed records. */
 	lastChange: { records: number } | null;
-	searchable: number;
+	/** Null while it is not counted: during an import, when it changes all the time. */
+	searchable: number | null;
 	/** Open record issues by code. */
 	issues: Record<string, number>;
 };
@@ -91,7 +93,8 @@ export type SourceStatusInput = {
 type SourceStatusBase = {
 	key: string;
 	provider: SourceProvider;
-	searchable: number;
+	/** Null while the source imports, when it is not counted. */
+	searchable: number | null;
 	searchFailed: number;
 	/** Null until a run has changed anything. */
 	changed: number | null;
@@ -202,13 +205,27 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
  * Every imported source's status, read in one pass. Search work is counted
  * per run: all events of the runs that still have some waiting.
  */
+/** How long a searchable count is reused while its source's state holds. */
+const SEARCHABLE_MAX_AGE_MS = 60_000;
+
+/** Searchable counts a caller keeps between reads, so frequent reads do not rescan idle sources. */
+export type SearchableCache = Map<string, { count: number; revision: string; countedAt: number }>;
+
+/** What a source's count depends on besides time: its state and when its runs last ended. */
+function searchableRevision(status: SourceStatus) {
+	const failedAt = status.state === "failed" ? status.failure.at : "";
+	return `${status.state}|${status.lastSuccessAt ?? ""}|${failedAt}`;
+}
+
+const isImporting = (status: SourceStatus) => status.state === "running" && status.phase === "import";
+
 export async function readSourceStatuses(
 	database: Database,
-	options: { hiddenTags: readonly string[]; now?: Date },
+	options: { hiddenTags: readonly string[]; now?: Date; cache?: SearchableCache },
 ): Promise<SourceStatus[]> {
 	const now = options.now ?? new Date();
 	const hiddenTags = options.hiddenTags.map((name) => name.toLowerCase());
-	const [sources, states, searchRows, failedRows, searchableRows, issueRows] =
+	const [sources, states, searchRows, failedRows, issueRows] =
 		await Promise.all([
 			database
 				.select({ key: sourceConnection.key, provider: sourceConnection.provider })
@@ -272,37 +289,6 @@ export async function readSourceStatuses(
 				.innerJoin(sourceSyncRun, eq(outbox.sourceSyncRunId, sourceSyncRun.id))
 				.where(and(isNull(outbox.processedAt), isNotNull(outbox.deadLetteredAt)))
 				.groupBy(sourceSyncRun.sourceConnectionKey),
-			// The same records the search projection publishes.
-			database
-				.select({
-					count: sql<number>`count(*)::int`,
-					key: itemSourceLink.sourceConnectionKey,
-				})
-				.from(itemSourceLink)
-				.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
-				.where(
-					and(
-						// A record the source withdrew stays public through another source.
-						eq(itemSourceLink.remoteDeleted, false),
-						sql`coalesce(${item.deleted}, 0) = 0`,
-						isNull(item.parentItem),
-						notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),
-						hiddenTags.length > 0
-							? notExists(
-									database
-										.select({ itemKey: itemToTag.itemKey })
-										.from(itemToTag)
-										.where(
-											and(
-												eq(itemToTag.itemKey, item.key),
-												inArray(sql`lower(${itemToTag.tagName})`, hiddenTags),
-											),
-										),
-								)
-							: undefined,
-					),
-				)
-				.groupBy(itemSourceLink.sourceConnectionKey),
 			database
 				.select({
 					code: sourceRecordIssue.code,
@@ -317,13 +303,12 @@ export async function readSourceStatuses(
 	const stateByKey = new Map(states.map((row) => [row.key, row]));
 	const searchByKey = new Map(searchRows.map((row) => [row.key, row]));
 	const failedByKey = new Map(failedRows.map((row) => [row.key, row.count]));
-	const searchableByKey = new Map(searchableRows.map((row) => [row.key, row.count]));
 	const issuesByKey = new Map<string, Record<string, number>>();
 	for (const row of issueRows) {
 		issuesByKey.set(row.key, { ...issuesByKey.get(row.key), [row.code]: row.count });
 	}
 
-	return sources.map(({ key, provider }) => {
+	const statuses = sources.map(({ key, provider }) => {
 		const state = stateByKey.get(key) ?? NEVER_RUN;
 		return sourceStatus({
 			activeRun: activeRunOf(state),
@@ -336,10 +321,125 @@ export async function readSourceStatuses(
 			provider,
 			search: searchByKey.get(key) ?? null,
 			searchFailed: failedByKey.get(key) ?? 0,
-			searchable: searchableByKey.get(key) ?? 0,
+			searchable: 0,
 		});
 	});
+	// Every record is read to count them, so a source mid-import is left out.
+	const searchable = await searchableCounts(database, statuses, hiddenTags, now, options.cache);
+	return statuses.map((status) => ({
+		...status,
+		searchable: isImporting(status) ? null : (searchable.get(status.key) ?? 0),
+	}));
 }
+
+/**
+ * Counts for the sources not mid-import. With a cache, a source is recounted
+ * when its revision changed or its count is over a minute old, and a source
+ * seen importing loses its cached count.
+ */
+async function searchableCounts(
+	database: Database,
+	statuses: SourceStatus[],
+	hiddenTags: string[],
+	now: Date,
+	cache: SearchableCache | undefined,
+) {
+	for (const status of statuses) if (isImporting(status)) cache?.delete(status.key);
+	const counted = statuses.filter((status) => !isImporting(status));
+	const due = counted.filter((status) => {
+		const cached = cache?.get(status.key);
+		return (
+			!cached ||
+			cached.revision !== searchableRevision(status) ||
+			now.getTime() - cached.countedAt >= SEARCHABLE_MAX_AGE_MS
+		);
+	});
+	const fresh = await countSearchable(database, due.map(({ key }) => key), hiddenTags);
+	if (!cache) return fresh;
+	for (const status of due) {
+		cache.set(status.key, {
+			count: fresh.get(status.key) ?? 0,
+			countedAt: now.getTime(),
+			revision: searchableRevision(status),
+		});
+	}
+	return new Map(counted.map(({ key }) => [key, cache.get(key)?.count ?? 0]));
+}
+
+/** Whether any source is importing or has search work waiting: cheap enough to ask every few seconds. */
+export async function hasSourceActivity(database: Database, now = new Date()) {
+	// A dead worker's lease on a source paused since is not work under way.
+	const [running] = await database
+		.select({ key: sourceSyncState.sourceConnectionKey })
+		.from(sourceSyncState)
+		.innerJoin(sourceConnection, eq(sourceConnection.key, sourceSyncState.sourceConnectionKey))
+		.where(
+			and(
+				isNotNull(sourceSyncState.activeRunId),
+				gt(sourceSyncState.leaseExpiresAt, now),
+				eq(sourceConnection.status, "active"),
+			),
+		)
+		.limit(1);
+	if (running) return true;
+	const [waiting] = await database
+		.select({ id: outbox.id })
+		.from(outbox)
+		.where(
+			and(
+				isNotNull(outbox.sourceSyncRunId),
+				isNull(outbox.processedAt),
+				isNull(outbox.deadLetteredAt),
+			),
+		)
+		.limit(1);
+	return waiting !== undefined;
+}
+
+/**
+ * Records each source has in the public library, by the search projection's
+ * rule. Counted only for the sources that show it: this reads every record.
+ */
+async function countSearchable(
+	database: Database,
+	sourceKeys: string[],
+	hiddenTags: string[],
+): Promise<Map<string, number>> {
+	if (sourceKeys.length === 0) return new Map();
+	const rows = await database
+		.select({
+			count: sql<number>`count(*)::int`,
+			key: itemSourceLink.sourceConnectionKey,
+		})
+		.from(itemSourceLink)
+		.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
+		.where(
+			and(
+				inArray(itemSourceLink.sourceConnectionKey, sourceKeys),
+				// A record the source withdrew stays public through another source.
+				eq(itemSourceLink.remoteDeleted, false),
+				sql`coalesce(${item.deleted}, 0) = 0`,
+				isNull(item.parentItem),
+				notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),
+				hiddenTags.length > 0
+					? notExists(
+							database
+								.select({ itemKey: itemToTag.itemKey })
+								.from(itemToTag)
+								.where(
+									and(
+										eq(itemToTag.itemKey, item.key),
+										inArray(sql`lower(${itemToTag.tagName})`, hiddenTags),
+									),
+								),
+						)
+					: undefined,
+			),
+		)
+		.groupBy(itemSourceLink.sourceConnectionKey);
+	return new Map(rows.map((row) => [row.key, row.count]));
+}
+
 
 type SyncStateRow = {
 	lastChangedRecords: number | null;

@@ -256,6 +256,7 @@ async function claimRun(
 				lastAttemptAt: now,
 				leaseExpiresAt: expiryFrom(now, leaseDurationMs),
 				leaseOwner: workerId,
+				runRequestedAt: null,
 				updatedAt: now,
 			})
 			.where(

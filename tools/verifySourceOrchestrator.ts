@@ -7,7 +7,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
@@ -22,7 +22,13 @@ import {
 	SourceLeaseUnavailableError,
 } from "../src/lib/source-ingestion/orchestrator";
 import {
+	listRunnableSourceRequests,
+	requestSourceRun,
+} from "../src/lib/source-ingestion/run-requests";
+import {
+	hasSourceActivity,
 	readSourceStatuses,
+	type SearchableCache,
 	type SourceStatus,
 } from "../src/lib/source-ingestion/source-status";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
@@ -399,7 +405,8 @@ async function verify() {
 			midRun?.state === "running" &&
 				midRun.phase === "import" &&
 				midRun.done === 2 &&
-				midRun.total === 3,
+				midRun.total === 3 &&
+				midRun.searchable === null,
 			`A running import did not report its progress: ${JSON.stringify(midRun)}`,
 		);
 		const tagged = await database
@@ -410,6 +417,7 @@ async function verify() {
 			tagged.length === 2,
 			`The import's search work was not tagged with its run: ${tagged.length}`,
 		);
+		assert(await hasSourceActivity(database), "Waiting search work did not count as activity");
 		const searching = await statusOf();
 		assert(
 			searching?.state === "running" &&
@@ -430,6 +438,23 @@ async function verify() {
 			.set({ attempts: 5, deadLetteredAt: new Date(), lastError: "Meilisearch task failed" })
 			.where(eq(outbox.id, givenUp.id));
 		const upToDate = await statusOf();
+		// A caller's cache keeps an idle source's count instead of rescanning it.
+		const cache: SearchableCache = new Map();
+		const cachedStatus = async () =>
+			(await readSourceStatuses(database, { cache, hiddenTags: [] })).find(
+				(status) => status.key === progressKey,
+			);
+		const cachedBefore = await cachedStatus();
+		await database
+			.update(item)
+			.set({ deleted: 1 })
+			.where(inArray(item.key, (await database.select({ key: itemIdentity.key }).from(itemIdentity).where(eq(itemIdentity.sourceConnectionKey, progressKey))).slice(0, 1).map(({ key }) => key)));
+		const cachedAfter = await cachedStatus();
+		const uncachedAfter = await statusOf();
+		assert(
+			cachedBefore?.searchable === 2 && cachedAfter?.searchable === 2 && uncachedAfter?.searchable === 1,
+			`The searchable cache was not reused, or reads without it were cached: ${JSON.stringify({ cachedAfter: cachedAfter?.searchable, uncachedAfter: uncachedAfter?.searchable })}`,
+		);
 		assert(
 			upToDate?.state === "succeeded" &&
 				upToDate.changed === 2 &&
@@ -501,6 +526,26 @@ async function verify() {
 				partial.changed === 1,
 			`A failed run's written changes were not counted: ${JSON.stringify(partial)}`,
 		);
+		// A dead worker's lease is not activity.
+		const deadLeaseAt = new Date(Date.now() - 60_000);
+		const [deadRun] = await database
+			.insert(sourceSyncRun)
+			.values({ heartbeatAt: deadLeaseAt, sourceConnectionKey: progressKey, startedAt: deadLeaseAt, workerId: "dead-worker" })
+			.returning({ id: sourceSyncRun.id });
+		await database
+			.update(sourceSyncState)
+			.set({ activeRunId: deadRun!.id, leaseExpiresAt: deadLeaseAt, leaseOwner: "dead-worker" })
+			.where(eq(sourceSyncState.sourceConnectionKey, progressKey));
+		await database
+			.update(outbox)
+			.set({ processedAt: new Date() })
+			.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
+		assert(!(await hasSourceActivity(database)), "A dead worker's lease counted as activity");
+		await database
+			.update(sourceSyncState)
+			.set({ activeRunId: null, leaseExpiresAt: null, leaseOwner: null })
+			.where(eq(sourceSyncState.sourceConnectionKey, progressKey));
+		await database.delete(sourceSyncRun).where(eq(sourceSyncRun.id, deadRun!.id));
 		// A source dropped from the configuration stops reporting.
 		await database
 			.update(sourceConnection)
@@ -512,11 +557,74 @@ async function verify() {
 			.set({ status: "active" })
 			.where(eq(sourceConnection.key, progressKey));
 
+		// Run-now requests: saved, held while the source runs, cleared by the next claim.
+		assert(
+			(await requestSourceRun(database, pausedKey)) === "not_active" &&
+				(await requestSourceRun(database, "orchestrator-missing")) === "not_found",
+			"A run request was accepted for a paused or unknown source",
+		);
+		let heldDuringRun: boolean | undefined;
+		await runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("zotero", async () => {
+					assert(
+						(await requestSourceRun(database, progressKey)) === "requested",
+						"A run request for an active source was refused",
+					);
+					heldDuringRun = (await listRunnableSourceRequests(database)).includes(progressKey);
+					return { records: 0 };
+				}),
+			]),
+			sourceConnectionKey: progressKey,
+			workerId: "request-worker",
+		});
+		assert(
+			heldDuringRun === false,
+			"A request for a running source woke the worker",
+		);
+		assert(
+			(await listRunnableSourceRequests(database)).includes(progressKey) &&
+				(await listRunnableSourceRequests(database, { only: expiredKey })).length === 0,
+			"A request made during a run was not kept for after it, or leaked to a worker for another source",
+		);
+		await runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("zotero", async () => ({ records: 0 })),
+			]),
+			sourceConnectionKey: progressKey,
+			workerId: "requested-run-worker",
+		});
+		assert(
+			!(await listRunnableSourceRequests(database)).includes(progressKey),
+			"Claiming a requested run did not clear the request",
+		);
+		await requestSourceRun(database, progressKey);
+		await database
+			.update(sourceConnection)
+			.set({ status: "paused" })
+			.where(eq(sourceConnection.key, progressKey));
+		assert(
+			!(await listRunnableSourceRequests(database)).includes(progressKey),
+			"A request left on a paused source was offered to the worker",
+		);
+		const [dropped] = await database
+			.select({ runRequestedAt: sourceSyncState.runRequestedAt })
+			.from(sourceSyncState)
+			.where(eq(sourceSyncState.sourceConnectionKey, progressKey));
+		assert(dropped?.runRequestedAt === null, "A request on a paused source was kept for when it returns");
+
 		console.log(
 			JSON.stringify({
 				expiredLeaseRecovered: true,
 				failureRetryRecovered: true,
 				importProgressReported: true,
+				runRequestsHonoured: true,
 				leaseContentionRejected: true,
 				maximumConcurrent,
 				providers: completedProviders.sort(),

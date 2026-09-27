@@ -1,6 +1,7 @@
 import { hostname } from "node:os";
 
 import { openLibraryDatabaseProcess } from "../src/config/library-config/process";
+import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import {
 	runActiveSourceConnections,
@@ -14,6 +15,19 @@ import {
 	validateSourceWorkerPollMs,
 } from "../src/lib/source-ingestion/source-worker";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
+import {
+	listRunnableSourceRequests,
+	runRequestedSources,
+} from "../src/lib/source-ingestion/run-requests";
+import {
+	hasSourceActivity,
+	readSourceStatuses,
+	type SearchableCache,
+} from "../src/lib/source-ingestion/source-status";
+import {
+	createSourceStatusReporter,
+	runSourceStatusReporter,
+} from "../src/lib/source-ingestion/status-reporter";
 
 const usage =
 	"Usage: npm run source:sync -- [--connection <key>] [--concurrency <1-32>] [--watch] [--poll-ms <1000-3600000>] [--worker-id <id>]";
@@ -127,6 +141,54 @@ async function runConfiguredSweep(
 	}
 }
 
+type WorkerOptions = Parameters<typeof runActiveSourceConnections>[0];
+
+/**
+ * The lanes a watching worker runs beside its sweep: requested sources, and
+ * status reports to OpenScholar. Stopping waits for both, then reports once
+ * more, so work that finished while stopping still reaches OpenScholar.
+ */
+function startWatchLanes(
+	config: LibraryServerConfig,
+	options: WorkerOptions,
+	only: string | undefined,
+	/** The process stopping: no new requested runs start after it. */
+	stopping: AbortSignal,
+) {
+	const { database } = options;
+	// The reporter outlives the stop signal, to report the runs that drain.
+	const reporting = new AbortController();
+	const reportError = (error: unknown) =>
+		console.error(`Source status could not be read: ${errorMessage(error)}`);
+	const searchableCache: SearchableCache = new Map();
+	const report = createSourceStatusReporter({
+		...config.authentication.openScholar,
+		read: () =>
+			readSourceStatuses(database, { cache: searchableCache, hiddenTags: config.content.tags.hidden }),
+	});
+	const running = [
+		runRequestedSources({
+			list: () => listRunnableSourceRequests(database, { only }),
+			onError: (error) => console.error(`Requested source run failed: ${errorMessage(error)}`),
+			run: (sourceConnectionKey) => runSourceConnection({ ...options, sourceConnectionKey }),
+			signal: stopping,
+		}),
+		runSourceStatusReporter({
+			isActive: () => hasSourceActivity(database),
+			onError: reportError,
+			report,
+			signal: reporting.signal,
+		}),
+	];
+	return {
+		async stop() {
+			reporting.abort();
+			await Promise.all(running);
+			await report().catch(reportError);
+		},
+	};
+}
+
 async function main() {
 	const command = parseCommand(process.argv.slice(2));
 	const runtimeProcess = await openLibraryDatabaseProcess();
@@ -140,25 +202,33 @@ async function main() {
 			config,
 			databaseResource.database,
 		);
+		const database = databaseResource.database;
 		const options = {
 			credentialResolver: runtime.credentialResolver,
-			database: databaseResource.database,
+			database,
 			registry: runtime.registry,
 			workerId: command.workerId,
 		};
-		const result = await runSourceWorker({
-			onError: (error) => console.error(errorMessage(error)),
-			onSweep: (sweep) => console.log(JSON.stringify(sweep, null, 2)),
-			pollMs: command.pollMs,
-			runSweep: () => runConfiguredSweep(command, options),
-			signal: abortController.signal,
-			watch: command.watch,
-		});
-		if (
-			!command.watch &&
-			result.lastSweep?.some((entry) => entry.status === "failed")
-		) {
-			process.exitCode = 1;
+		const lanes = command.watch
+			? startWatchLanes(config, options, command.sourceConnectionKey, abortController.signal)
+			: null;
+		try {
+			const result = await runSourceWorker({
+				onError: (error) => console.error(errorMessage(error)),
+				onSweep: (sweep) => console.log(JSON.stringify(sweep, null, 2)),
+				pollMs: command.pollMs,
+				runSweep: () => runConfiguredSweep(command, options),
+				signal: abortController.signal,
+				watch: command.watch,
+			});
+			if (
+				!command.watch &&
+				result.lastSweep?.some((entry) => entry.status === "failed")
+			) {
+				process.exitCode = 1;
+			}
+		} finally {
+			await lanes?.stop();
 		}
 	} finally {
 		await runtimeProcess.close();

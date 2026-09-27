@@ -298,6 +298,8 @@ export const sourceSyncState = pgTable(
 		lastErrorCode: text("lastErrorCode", { enum: SOURCE_SYNC_ERROR_CODES }),
 		/** Records written by the latest run that changed any. */
 		lastChangedRecords: integer("lastChangedRecords"),
+		/** Someone asked for a run now; claiming a run clears it. */
+		runRequestedAt: timestampWithTimezone("runRequestedAt"),
 		lastResult: jsonb("lastResult").$type<JsonObject>(),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},
