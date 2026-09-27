@@ -213,7 +213,13 @@ export async function readSourceStatuses(
 			database
 				.select({ key: sourceConnection.key, provider: sourceConnection.provider })
 				.from(sourceConnection)
-				.where(ne(sourceConnection.provider, NATIVE_SOURCE_CONNECTION_KEY))
+				// A source dropped from the configuration stays as a removed row.
+				.where(
+					and(
+						ne(sourceConnection.provider, NATIVE_SOURCE_CONNECTION_KEY),
+						ne(sourceConnection.status, "removed"),
+					),
+				)
 				.orderBy(asc(sourceConnection.key)),
 			database
 				.select({
@@ -276,6 +282,8 @@ export async function readSourceStatuses(
 				.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
 				.where(
 					and(
+						// A record the source withdrew stays public through another source.
+						eq(itemSourceLink.remoteDeleted, false),
 						sql`coalesce(${item.deleted}, 0) = 0`,
 						isNull(item.parentItem),
 						notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),

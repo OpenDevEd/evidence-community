@@ -301,6 +301,28 @@ async function heartbeatRun(
 	});
 }
 
+/**
+ * Records a run changed: its search work on top-level records. Counted when
+ * the run ends either way, since a failed run keeps the batches it wrote.
+ */
+async function countChangedRecords(
+	transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
+	runId: number,
+) {
+	const [row] = await transaction
+		.select({ changed: sql<number>`count(distinct ${outbox.entityKey})::int` })
+		.from(outbox)
+		.innerJoin(item, eq(item.key, outbox.entityKey))
+		.where(
+			and(
+				eq(outbox.sourceSyncRunId, runId),
+				eq(outbox.entityType, "item"),
+				isNull(item.parentItem),
+			),
+		);
+	return row?.changed ?? 0;
+}
+
 async function finishRunSucceeded(
 	options: SourceOrchestratorOptions,
 	claimed: ClaimedRun,
@@ -309,18 +331,7 @@ async function finishRunSucceeded(
 ) {
 	const now = (options.now ?? (() => new Date()))();
 	await options.database.transaction(async (transaction) => {
-		// Records this run changed: its search work on top-level records.
-		const [{ changed }] = await transaction
-			.select({ changed: sql<number>`count(distinct ${outbox.entityKey})::int` })
-			.from(outbox)
-			.innerJoin(item, eq(item.key, outbox.entityKey))
-			.where(
-				and(
-					eq(outbox.sourceSyncRunId, claimed.runId),
-					eq(outbox.entityType, "item"),
-					isNull(item.parentItem),
-				),
-			);
+		const changed = await countChangedRecords(transaction, claimed.runId);
 		const [state] = await transaction
 			.update(sourceSyncState)
 			.set({
@@ -381,9 +392,11 @@ async function finishRunFailed(
 			? "interrupted"
 			: classifySourceError(error);
 	await options.database.transaction(async (transaction) => {
+		const changed = await countChangedRecords(transaction, claimed.runId);
 		const [state] = await transaction
 			.update(sourceSyncState)
 			.set({
+				...(changed > 0 ? { lastChangedRecords: changed } : {}),
 				activeRunId: null,
 				consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
 				lastError: message,
