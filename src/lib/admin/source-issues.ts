@@ -123,6 +123,13 @@ const ISSUE_TYPES: IssueType[] = [
 		next: "OpenAlex gave more authors or affiliations than a record holds, or authors without a name. The full list stays in the source record.",
 		codes: ["incomplete_authorships"],
 	},
+	{
+		key: "no-longer-matched",
+		kind: "other",
+		title: "No longer in the search",
+		next: "No connected OpenAlex search returns these records any more. They were kept because someone edited them. Keep them, or delete them in the editor if they no longer belong.",
+		codes: ["source_membership_removed"],
+	},
 ];
 
 const OTHER: Omit<IssueType, "codes"> = {

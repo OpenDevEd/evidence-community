@@ -81,6 +81,13 @@ it("groups a source's issues by what to do about them, pages each type, and undo
 				updatedAt: new Date(Date.UTC(2026, 8, index)),
 			})),
 		);
+		// An edited record kept after its source stopped returning it.
+		await db.insert(sourceRecordIssue).values({
+			sourceConnectionKey: SOURCE,
+			sourceRecordKey: "KEPT0001",
+			code: "source_membership_removed",
+			message: "This edited record no longer matches any connected OpenAlex search.",
+		});
 
 		const counts = async () =>
 			Object.fromEntries((await getAdminSourceIssueTypes(db, SOURCE)).map((type) => [type.key, type.count]));
@@ -89,6 +96,7 @@ it("groups a source's issues by what to do about them, pages each type, and undo
 			"pdf-not-uploaded": 1,
 			"pdf-link-without-url": 1,
 			"pdf-missing": 1,
+			"no-longer-matched": 1,
 			other: 3,
 		});
 
@@ -155,10 +163,10 @@ it("groups a source's issues by what to do about them, pages each type, and undo
 		expect(byType.count).toBe(1);
 		await new Promise((resolve) => setTimeout(resolve, 5));
 		expect((await dismissAdminSourceIssues(db, SOURCE, { record: "HIDDEN44" })).count).toBe(1);
-		expect(await counts()).toEqual({ fields: 1, "pdf-link-without-url": 1, other: 3 });
+		expect(await counts()).toEqual({ fields: 1, "pdf-link-without-url": 1, "no-longer-matched": 1, other: 3 });
 
 		// Undo opens again what that one dismissal closed, and nothing else.
 		expect(await restoreAdminSourceIssues(db, SOURCE, byType.batch)).toEqual({ count: 1 });
-		expect(await counts()).toEqual({ fields: 1, "pdf-not-uploaded": 1, "pdf-link-without-url": 1, other: 3 });
+		expect(await counts()).toEqual({ fields: 1, "pdf-not-uploaded": 1, "pdf-link-without-url": 1, "no-longer-matched": 1, other: 3 });
 	});
 });

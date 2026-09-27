@@ -927,6 +927,35 @@ function sourceSubtitle(source: AdminSource) {
 	return source.provider === "openalex" ? "OpenAlex search" : sourceProviderName(source.provider);
 }
 
+/** Status version: the polled issue counts, and a run ending, since an import can swap issues without changing a count. */
+function statusVersion(activity: SourceStatus) {
+	return JSON.stringify([activity.state, activity.lastSuccessAt, activity.state === "failed" ? activity.failure.at : null, activity.issues]);
+}
+
+/** What to ask for: nothing for a source that never imported, which has no issues. */
+function issueTypesRequest(sourceKey: string | null, activity: SourceStatus | null) {
+	const imported = activity !== null && activity.state !== "idle";
+	const version = activity ? statusVersion(activity) : "";
+	return { imported, running: activity?.state === "running", version, key: sourceKey && imported ? typesKey(sourceKey, version) : null };
+}
+
+/** Kept data belongs to this source, and to its current status unless the refresh that would replace it failed. */
+function isCurrentTypes(loaded: { sourceKey: string; at: string } | undefined, sourceKey: string | null, version: string, failed: boolean) {
+	return loaded?.sourceKey === sourceKey && (loaded.at === version || !failed);
+}
+
+/** The source's issue types, never another source's, nor ones kept from before a failed refresh. */
+function useIssueTypes(sourceKey: string | null, activity: SourceStatus | null) {
+	const { imported, running, version, key } = issueTypesRequest(sourceKey, activity);
+	const { data: loaded, error } = useSWR(
+		key,
+		async ([, source, at]) => ({ ...(await getAdminSourceIssueTypes(source)), sourceKey: source, at }),
+		{ keepPreviousData: true, refreshInterval: running ? ISSUES_POLL_MS : 0 },
+	);
+	const data = isCurrentTypes(loaded, sourceKey, version, Boolean(error)) ? loaded : undefined;
+	return { data, error, imported, running, version };
+}
+
 /** Import state and record issues of one external source. */
 export function AdminSourceStatusDialog({
 	source,
@@ -944,21 +973,7 @@ export function AdminSourceStatusDialog({
 	onOpenRecord: (itemKey: string) => void;
 }) {
 	const activity = source?.activity ?? null;
-	// The polled issue counts are in the key, so the lists follow what the import writes.
-	// A finished or failed run refetches too, since an import can swap issues without changing a count.
-	const version = activity
-		? JSON.stringify([activity.state, activity.lastSuccessAt, activity.state === "failed" ? activity.failure.at : null, activity.issues])
-		: "";
-	const running = activity?.state === "running";
-	// A source that never imported has no issues to ask for.
-	const imported = activity !== null && activity.state !== "idle";
-	const { data: loaded, error } = useSWR(
-		source && imported ? typesKey(source.key, version) : null,
-		async ([, key]) => ({ ...(await getAdminSourceIssueTypes(key)), sourceKey: key }),
-		{ keepPreviousData: true, refreshInterval: running ? ISSUES_POLL_MS : 0 },
-	);
-	// The data kept while the next load runs may belong to the source shown before.
-	const data = loaded?.sourceKey === source?.key ? loaded : undefined;
+	const { data, error, imported, running, version } = useIssueTypes(source?.key ?? null, activity);
 	const showIssues = imported && data !== undefined;
 	const fills = showIssues && data.types.length > 0;
 	return (
