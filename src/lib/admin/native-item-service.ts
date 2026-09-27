@@ -94,6 +94,24 @@ import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
+
+/**
+ * Records the library may manage directly: its own, and OpenAlex records,
+ * which never write back. They alone can hold library attachments and notes;
+ * a Zotero record's children sync back to Zotero.
+ */
+export function isNativeOrOpenAlex(
+	executor: Executor,
+	sourceConnectionKey: typeof item.sourceConnectionKey | typeof itemIdentity.sourceConnectionKey,
+) {
+	return or(
+		eq(sourceConnectionKey, NATIVE_CONNECTION_KEY),
+		inArray(
+			sourceConnectionKey,
+			executor.select({ key: sourceConnection.key }).from(sourceConnection).where(eq(sourceConnection.provider, "openalex")),
+		),
+	);
+}
 export type ItemWritebackPolicyOptions = {
 	writebackConfig?: SourceWritebackConfiguration & Partial<Pick<LibraryServerConfig, "topics" | "authentication">>;
 };
@@ -603,10 +621,7 @@ export async function createNativeItemDraft(db: Database, payload: unknown, opti
 				.where(
 					and(
 						eq(itemIdentity.key, parentItemKey),
-						eq(
-							itemIdentity.sourceConnectionKey,
-							NATIVE_CONNECTION_KEY,
-						),
+						isNativeOrOpenAlex(transaction, itemIdentity.sourceConnectionKey),
 					),
 				)
 				.for("update")
@@ -1488,7 +1503,7 @@ async function unpublishNativeItemAttempt(
 			.where(
 				and(
 					eq(item.key, itemKey),
-					or(eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY), inArray(item.sourceConnectionKey, transaction.select({key: sourceConnection.key}).from(sourceConnection).where(eq(sourceConnection.provider, "openalex")))),
+					isNativeOrOpenAlex(transaction, item.sourceConnectionKey),
 				),
 			)
 			.limit(1);
