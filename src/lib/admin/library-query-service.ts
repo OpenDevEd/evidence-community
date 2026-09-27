@@ -8,20 +8,15 @@ import {
 	itemFileDraft,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import {
-	itemFilePublication,
-	itemSourceLink,
-	sourceRecordIssue,
-	sourceSyncRun,
-	sourceSyncState,
-} from "@/db/schema/source";
+import { itemFilePublication } from "@/db/schema/source";
 import { itemFileRemoval } from "@/db/schema/review";
-import { AdminValidationError } from "./errors";
-import { sourceSyncSummary } from "./source-sync-summary";
+import {
+	readSourceStatuses,
+	type SearchableCache,
+} from "@/lib/source-ingestion/source-status";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
@@ -71,8 +66,6 @@ import type {
 	AdminLibrarySnapshot,
 	AdminLinkRow,
 	AdminRecordState,
-	AdminSourceIssue,
-	AdminSourceIssuesPage,
 } from "./types";
 
 function dateString(value: Date | string | null | undefined) {
@@ -524,58 +517,36 @@ export function toAdminCollection(
 	};
 }
 
+// Counting a source's searchable records reads all of them, so the admin's
+// polling recounts a source only when its state changed or after a minute.
+const searchableCache: SearchableCache = new Map();
+
 export async function getAdminLibrarySnapshot(
 	db: Database,
 ): Promise<AdminLibrarySnapshot> {
-	const [sourceRows, config, collectionCounts, syncStates, issueCounts] =
-		await Promise.all([
-			db
-				.select()
-				.from(sourceConnection)
-				.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
-			getLibraryConfig(),
-			db
-				.select({
-					count: sql<number>`count(*)::int`,
-					sourceConnectionKey: collection.sourceConnectionKey,
-				})
-				.from(collection)
-				.where(eq(collection.deleted, 0))
-				.groupBy(collection.sourceConnectionKey),
-			db
-				.select({
-					activeRunStartedAt: sourceSyncRun.startedAt,
-					lastError: sourceSyncState.lastError,
-					lastFailureAt: sourceSyncState.lastFailureAt,
-					lastResult: sourceSyncState.lastResult,
-					lastSuccessAt: sourceSyncState.lastSuccessAt,
-					leaseExpiresAt: sourceSyncState.leaseExpiresAt,
-					sourceConnectionKey: sourceSyncState.sourceConnectionKey,
-				})
-				.from(sourceSyncState)
-				.leftJoin(
-					sourceSyncRun,
-					eq(sourceSyncState.activeRunId, sourceSyncRun.id),
-				),
-			db
-				.select({
-					count: sql<number>`count(*)::int`,
-					sourceConnectionKey: sourceRecordIssue.sourceConnectionKey,
-				})
-				.from(sourceRecordIssue)
-				.where(isNull(sourceRecordIssue.dismissedAt))
-				.groupBy(sourceRecordIssue.sourceConnectionKey),
-		]);
+	const config = await getLibraryConfig();
+	const [sourceRows, collectionCounts, statuses] = await Promise.all([
+		db
+			.select()
+			.from(sourceConnection)
+			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
+		db
+			.select({
+				count: sql<number>`count(*)::int`,
+				sourceConnectionKey: collection.sourceConnectionKey,
+			})
+			.from(collection)
+			.where(eq(collection.deleted, 0))
+			.groupBy(collection.sourceConnectionKey),
+		readSourceStatuses(db, {
+			cache: searchableCache,
+			hiddenTags: config.content.tags.hidden,
+		}),
+	]);
 	const collectionCountBySource = new Map(
 		collectionCounts.map((row) => [row.sourceConnectionKey, row.count]),
 	);
-	const syncStateBySource = new Map(
-		syncStates.map((row) => [row.sourceConnectionKey, row]),
-	);
-	const issueCountBySource = new Map(
-		issueCounts.map((row) => [row.sourceConnectionKey, row.count]),
-	);
-	const now = new Date();
+	const statusBySource = new Map(statuses.map((status) => [status.key, status]));
 	const sources = sourceRows.map((row) => {
 		const policy = evaluateSourceWritebackPolicy(
 			{
@@ -589,29 +560,17 @@ export async function getAdminLibrarySnapshot(
 			config,
 		);
 		return {
+			activity: statusBySource.get(row.key) ?? null,
 			collectionCount: collectionCountBySource.get(row.key) ?? 0,
+			externalScopeKey: row.externalScopeKey,
 			key: row.key,
 			label: sourceDisplayLabel(row),
 			provider: row.provider,
 			readOnly:
 				row.provider !== NATIVE_SOURCE_CONNECTION_KEY &&
 				!policy.effective,
+			scopeKind: row.scopeKind,
 			status: row.status,
-			sync:
-				row.provider === NATIVE_SOURCE_CONNECTION_KEY
-					? null
-					: sourceSyncSummary({
-							activeRunStartedAt: null,
-							lastError: null,
-							lastFailureAt: null,
-							lastResult: null,
-							lastSuccessAt: null,
-							leaseExpiresAt: null,
-							...syncStateBySource.get(row.key),
-							issueCount: issueCountBySource.get(row.key) ?? 0,
-							now,
-							syncCursor: row.syncCursor,
-						}),
 			writeback: {
 				enabled: policy.sourceEnabled,
 				supported: policy.supported,
@@ -620,14 +579,16 @@ export async function getAdminLibrarySnapshot(
 	});
 	if (!sources.some(({ key }) => key === NATIVE_SOURCE_CONNECTION_KEY)) {
 		sources.unshift({
+			activity: null,
 			collectionCount:
 				collectionCountBySource.get(NATIVE_SOURCE_CONNECTION_KEY) ?? 0,
+			externalScopeKey: null,
 			key: NATIVE_SOURCE_CONNECTION_KEY,
 			label: "Native",
 			provider: NATIVE_SOURCE_CONNECTION_KEY,
 			readOnly: false,
+			scopeKind: "library",
 			status: "active",
-			sync: null,
 			writeback: {
 				enabled: false,
 				supported: false,
@@ -637,152 +598,5 @@ export async function getAdminLibrarySnapshot(
 
 	return {
 		sources,
-	};
-}
-
-const ADMIN_SOURCE_ISSUE_PAGE_SIZE = 50;
-
-type AdminSourceIssueCursor = { sourceRecordKey: string; updatedAt: string };
-
-function encodeSourceIssueCursor(cursor: AdminSourceIssueCursor) {
-	return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
-}
-
-function decodeSourceIssueCursor(encoded: string): AdminSourceIssueCursor {
-	try {
-		const parsed = JSON.parse(
-			Buffer.from(encoded, "base64url").toString("utf8"),
-		) as Partial<AdminSourceIssueCursor>;
-		// The encoder writes toISOString() output; anything else, including a
-		// date JavaScript would silently normalise, is rejected before SQL.
-		if (
-			typeof parsed.sourceRecordKey === "string" &&
-			typeof parsed.updatedAt === "string" &&
-			new Date(parsed.updatedAt).toISOString() === parsed.updatedAt
-		) {
-			return { sourceRecordKey: parsed.sourceRecordKey, updatedAt: parsed.updatedAt };
-		}
-	} catch {}
-	throw new AdminValidationError("The issue list cursor is not valid.", {
-		cursor: "Reload the list.",
-	});
-}
-
-function sourceIssueRowFilter(
-	sourceConnectionKey: string,
-	options: { cursor: AdminSourceIssueCursor | null; dismissed: boolean },
-) {
-	return and(
-		eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey),
-		options.dismissed
-			? isNotNull(sourceRecordIssue.dismissedAt)
-			: isNull(sourceRecordIssue.dismissedAt),
-		options.cursor
-			? sql`(${sourceRecordIssue.updatedAt}, ${sourceRecordIssue.sourceRecordKey}) < (${options.cursor.updatedAt}::timestamptz, ${options.cursor.sourceRecordKey})`
-			: undefined,
-	);
-}
-
-function toAdminSourceIssue(row: {
-	attachmentFilename: string | null;
-	code: string;
-	dismissedAt: Date | string | null;
-	itemKey: string | null;
-	message: string;
-	sourceRecordKey: string;
-	title: string | null;
-	updatedAt: Date | string;
-}): AdminSourceIssue {
-	return {
-		...row,
-		attachmentFilename: row.attachmentFilename?.trim() || null,
-		dismissedAt: row.dismissedAt ? dateString(row.dismissedAt) : null,
-		title: row.title?.trim() || null,
-		updatedAt: dateString(row.updatedAt) ?? "",
-	};
-}
-
-/** Marks one saved import issue as dismissed or open again. */
-export async function setAdminSourceIssueDismissed(
-	db: Database,
-	sourceConnectionKey: string,
-	sourceRecordKey: string,
-	dismissed: boolean,
-) {
-	const [row] = await db
-		.update(sourceRecordIssue)
-		.set({ dismissedAt: dismissed ? new Date() : null })
-		.where(
-			and(
-				eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey),
-				eq(sourceRecordIssue.sourceRecordKey, sourceRecordKey),
-			),
-		)
-		.returning({ dismissedAt: sourceRecordIssue.dismissedAt });
-	if (!row) throw new ItemNotFoundError(sourceRecordKey);
-	return { dismissedAt: row.dismissedAt ? dateString(row.dismissedAt) : null };
-}
-
-/** Records of one source with a saved import issue, newest first. */
-export async function getAdminSourceIssues(
-	db: Database,
-	sourceConnectionKey: string,
-	options: { cursor?: string | null; dismissed?: boolean } = {},
-): Promise<AdminSourceIssuesPage> {
-	// An attachment issue is shown on the record it belongs to, with the file
-	// named, because that is what the reader opens in Zotero.
-	const parent = alias(item, "parent");
-	const filter = sourceIssueRowFilter(sourceConnectionKey, {
-		cursor: options.cursor ? decodeSourceIssueCursor(options.cursor) : null,
-		dismissed: Boolean(options.dismissed),
-	});
-	const [[totals], rows] = await Promise.all([
-		db
-			.select({
-				dismissedTotal: sql<number>`count(*) filter (where ${sourceRecordIssue.dismissedAt} is not null)::int`,
-				total: sql<number>`count(*) filter (where ${sourceRecordIssue.dismissedAt} is null)::int`,
-			})
-			.from(sourceRecordIssue)
-			.where(eq(sourceRecordIssue.sourceConnectionKey, sourceConnectionKey)),
-		db
-		.select({
-			attachmentFilename: sql<string | null>`case when ${item.itemType} = 'Attachment' then ${item.filename} end`,
-			code: sourceRecordIssue.code,
-			dismissedAt: sourceRecordIssue.dismissedAt,
-			itemKey: sql<string | null>`coalesce(${parent.key}, ${item.key})`,
-			message: sourceRecordIssue.message,
-			sourceRecordKey: sourceRecordIssue.sourceRecordKey,
-			title: sql<string | null>`coalesce(${parent.title}, ${item.title})`,
-			updatedAt: sourceRecordIssue.updatedAt,
-		})
-		.from(sourceRecordIssue)
-		.leftJoin(
-			itemSourceLink,
-			and(
-				eq(itemSourceLink.sourceConnectionKey, sourceRecordIssue.sourceConnectionKey),
-				eq(itemSourceLink.sourceRecordKey, sourceRecordIssue.sourceRecordKey),
-			),
-		)
-		.leftJoin(item, eq(item.key, itemSourceLink.itemKey))
-		.leftJoin(parent, eq(parent.key, item.parentItem))
-		.where(filter)
-		// Newest first; the same order the keyset cursor compares against.
-		.orderBy(desc(sourceRecordIssue.updatedAt), desc(sourceRecordIssue.sourceRecordKey))
-		.limit(ADMIN_SOURCE_ISSUE_PAGE_SIZE + 1),
-	]);
-	const hasMore = rows.length > ADMIN_SOURCE_ISSUE_PAGE_SIZE;
-	const page = hasMore ? rows.slice(0, ADMIN_SOURCE_ISSUE_PAGE_SIZE) : rows;
-	const last = hasMore ? page.at(-1) : undefined;
-	return {
-		dismissedTotal: totals?.dismissedTotal ?? 0,
-		hasMore,
-		issues: page.map(toAdminSourceIssue),
-		nextCursor: last
-			? encodeSourceIssueCursor({
-					sourceRecordKey: last.sourceRecordKey,
-					updatedAt: new Date(last.updatedAt).toISOString(),
-				})
-			: null,
-		total: totals?.total ?? 0,
 	};
 }

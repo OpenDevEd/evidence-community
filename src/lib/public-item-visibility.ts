@@ -17,9 +17,14 @@ export function publicItemVisibility(database: Pick<Database, "select">, hiddenT
 }
 
 
-export function publicParentVisibility(database: Pick<Database, "select">, hiddenTags: readonly string[]) {
-	return and(publicItemVisibility(database, hiddenTags),
-		notInArray(sql`${item.itemType}::text`, EXCLUDED_ITEM_TYPES),
-		sql`coalesce(${item.parentItem}, '') = ''`,
+/** `row` is the item table, or an alias of it. */
+export function publicParentVisibility(
+	database: Pick<Database, "select">,
+	hiddenTags: readonly string[],
+	row: { deleted: AnyColumn; key: AnyColumn; itemType: AnyColumn; parentItem: AnyColumn } = item,
+) {
+	return and(publicItemVisibility(database, hiddenTags, row),
+		notInArray(sql`${row.itemType}::text`, EXCLUDED_ITEM_TYPES),
+		sql`coalesce(${row.parentItem}, '') = ''`,
 	);
 }

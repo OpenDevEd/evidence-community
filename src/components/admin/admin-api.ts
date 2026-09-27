@@ -19,7 +19,8 @@ import type {
 	AdminItemListPage,
 	AdminItemWriteback,
 	AdminLibrarySnapshot,
-	AdminSourceIssuesPage,
+	AdminSourceIssuePage,
+	AdminSourceIssueType,
 } from "@/lib/admin/types";
 import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
 import {
@@ -223,28 +224,40 @@ export function getAdminLibrary() {
 	return requestJson<AdminLibrarySnapshot>("/api/admin/library");
 }
 
-export function getAdminSourceIssues(
+function sourceIssuesPath(sourceKey: string) {
+	return `/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues`;
+}
+
+export function getAdminSourceIssueTypes(sourceKey: string) {
+	return requestJson<{ types: AdminSourceIssueType[] }>(sourceIssuesPath(sourceKey));
+}
+
+export function getAdminSourceIssuePage(
 	sourceKey: string,
-	options: { cursor?: string | null; dismissed?: boolean } = {},
+	type: string,
+	page: { offset: number; limit: number },
 ) {
-	const search = new URLSearchParams();
-	if (options.cursor) search.set("cursor", options.cursor);
-	if (options.dismissed) search.set("dismissed", "1");
-	const query = search.size > 0 ? `?${search}` : "";
-	return requestJson<AdminSourceIssuesPage>(
-		`/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues${query}`,
+	return requestJson<AdminSourceIssuePage>(
+		`${sourceIssuesPath(sourceKey)}/${encodeURIComponent(type)}?offset=${page.offset}&limit=${page.limit}`,
 	);
 }
 
-export function setAdminSourceIssueDismissed(
+/** Dismisses one record's issue or a whole type; the batch undoes it. */
+export function dismissAdminSourceIssues(
 	sourceKey: string,
-	sourceRecordKey: string,
-	dismissed: boolean,
+	target: { record: string } | { type: string },
 ) {
-	return requestJson<{ dismissedAt: string | null }>(
-		`/api/admin/library/sources/${encodeURIComponent(sourceKey)}/issues/${encodeURIComponent(sourceRecordKey)}`,
-		{ body: JSON.stringify({ dismissed }), method: "PATCH" },
-	);
+	return requestJson<{ batch: string | null; count: number }>(sourceIssuesPath(sourceKey), {
+		body: JSON.stringify({ action: "dismiss", ...target }),
+		method: "PATCH",
+	});
+}
+
+export function restoreAdminSourceIssues(sourceKey: string, batch: string) {
+	return requestJson<{ count: number }>(sourceIssuesPath(sourceKey), {
+		body: JSON.stringify({ action: "restore", batch }),
+		method: "PATCH",
+	});
 }
 
 export function getAdminItems(

@@ -2,16 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	getLibraryConfig: vi.fn(),
+	readSourceStatuses: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: mocks.getLibraryConfig,
 }));
+vi.mock("@/lib/source-ingestion/source-status", () => ({
+	readSourceStatuses: mocks.readSourceStatuses,
+}));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db";
-import { sourceRecordIssue } from "@/db/schema/source";
 import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
@@ -29,6 +32,7 @@ describe("admin library snapshot", () => {
 				externalScopeKey: "group-42",
 				key: "zotero-main",
 				provider: "zotero",
+				scopeKind: "group",
 				status: "active",
 			},
 		]);
@@ -36,66 +40,55 @@ describe("admin library snapshot", () => {
 			.fn()
 			.mockResolvedValue([{ count: 3, sourceConnectionKey: "zotero-main" }]);
 		const where = vi.fn(() => ({ groupBy }));
-		const leftJoin = vi.fn().mockResolvedValue([
-			{
-				activeRunStartedAt: null,
-				lastError: null,
-				lastFailureAt: null,
-				lastResult: { records: 12 },
-				lastSuccessAt: new Date("2026-09-04T10:00:00Z"),
-				leaseExpiresAt: null,
-				sourceConnectionKey: "zotero-main",
-			},
-		]);
-		const issueGroupBy = vi
-			.fn()
-			.mockResolvedValue([{ count: 2, sourceConnectionKey: "zotero-main" }]);
-		const from = vi.fn((table: unknown) => ({
-			leftJoin,
-			orderBy,
-			where:
-				table === sourceRecordIssue
-					? () => ({ groupBy: issueGroupBy })
-					: where,
-		}));
+		const activity = {
+			changed: 4,
+			issues: { zotero_fields_dropped: 2 },
+			key: "zotero-main",
+			lastSuccessAt: "2026-09-04T10:00:00.000Z",
+			provider: "zotero",
+			searchFailed: 0,
+			searchable: 12,
+			state: "succeeded",
+		};
+		mocks.readSourceStatuses.mockResolvedValue([activity]);
+		const from = vi.fn(() => ({ orderBy, where }));
 		const select = vi.fn(() => ({ from }));
 
 		const snapshot = await getAdminLibrarySnapshot({
 			select,
 		} as unknown as Database);
 
-		// Sources, collection counts, sync state, and issue counts. Never the
-		// catalogue itself.
-		expect(select).toHaveBeenCalledTimes(4);
+		// Sources and collection counts; the status reader brings import state.
+		// Never the catalogue itself.
+		expect(select).toHaveBeenCalledTimes(2);
+		expect(mocks.readSourceStatuses).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ hiddenTags: expect.any(Array) }),
+		);
 		expect(snapshot).toEqual({
 			sources: [
 				{
+					activity: null,
 					collectionCount: 0,
+					externalScopeKey: null,
 					key: "native",
 					label: "Native",
 					provider: "native",
 					readOnly: false,
+					scopeKind: "library",
 					status: "active",
-					sync: null,
 					writeback: { enabled: false, supported: false },
 				},
 				{
+					activity,
 					collectionCount: 3,
+					externalScopeKey: "group-42",
 					key: "zotero-main",
 					label: expect.stringMatching(/Zotero.*group-42/),
 					provider: "zotero",
 					readOnly: true,
+					scopeKind: "group",
 					status: "active",
-					sync: {
-						issueCount: 2,
-						lastError: null,
-						lastFailureAt: null,
-						lastRecords: 12,
-						lastSuccessAt: "2026-09-04T10:00:00.000Z",
-						processed: null,
-						runningSince: null,
-						status: "succeeded",
-					},
 					writeback: { enabled: false, supported: true },
 				},
 			],

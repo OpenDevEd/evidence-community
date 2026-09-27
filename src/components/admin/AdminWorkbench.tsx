@@ -5,6 +5,7 @@ import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 import { documentAttachment, uploadPdfFile, validatePdf, type PdfUploadStep } from "./admin-pdf";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { parseAsString, useQueryState } from "nuqs";
 import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, Files01Icon, Logout01Icon, FilterHorizontalIcon, FileEditIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
@@ -63,7 +64,7 @@ import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
 import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
-import { AdminSourceSyncDialog } from "./AdminSourceSyncDialog";
+import { AdminSourceStatusDialog } from "./AdminSourceStatus";
 import {
 	AdminWritebackSourcesDialog,
 	type WritebackDialogRequest,
@@ -382,9 +383,12 @@ type BatchFeedback = {
 };
 
 export default function AdminWorkbench({
+	configurationHref,
 	definitions,
 	initialFilters,
 }: {
+	/** The library's source settings in OpenScholar. */
+	configurationHref: string;
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
 }) {
@@ -396,7 +400,8 @@ export default function AdminWorkbench({
 	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
 		sources: [],
 	});
-	const [syncSourceKey, setSyncSourceKey] = useState<string | null>(null);
+	// In the address, so OpenScholar can link straight to a source's status.
+	const [syncSourceKey, setSyncSourceKey] = useQueryState("source", parseAsString);
 	const syncSource =
 		library.sources.find(({ key }) => key === syncSourceKey) ?? null;
 	const [detail, setDetail] = useState<AdminItemDetail | null>(null);
@@ -640,8 +645,8 @@ export default function AdminWorkbench({
 	// The sync worker is an outside process: keep the sidebar import state
 	// fresh, quickly while an import runs or its dialog is open.
 	const watchingImport =
-		syncSourceKey !== null ||
-		library.sources.some(({ sync }) => sync?.status === "running");
+		Boolean(syncSource?.activity) ||
+		library.sources.some(({ activity }) => activity?.state === "running");
 	useEffect(() => {
 		const timer = setInterval(
 			() => void loadLibrary(),
@@ -2719,11 +2724,11 @@ export default function AdminWorkbench({
 				sources={library.sources}
 			/>
 
-			<AdminSourceSyncDialog
-				onClose={() => setSyncSourceKey(null)}
+			<AdminSourceStatusDialog
+				configurationHref={configurationHref}
+				onClose={() => void setSyncSourceKey(null)}
 				onIssuesChanged={loadLibrary}
 				onOpenRecord={(itemKey) => {
-					setSyncSourceKey(null);
 					setSelectedKey(itemKey);
 					setMobilePane("inspector");
 				}}

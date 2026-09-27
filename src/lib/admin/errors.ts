@@ -55,6 +55,7 @@ export class AdminValidationError extends Error {
 }
 
 const fieldLabels: Record<string, string> = {
+	abstractNote: "Abstract",
 	countryFocus: "Country focus",
 	beforeCollection: "Collection position",
 	expectedDraftRevision: "Draft revision",
@@ -65,6 +66,7 @@ const fieldLabels: Record<string, string> = {
 	itemType: "Item type",
 	parentCollection: "Parent collection",
 	parentItem: "Parent record",
+	url: "URL",
 };
 
 export function adminFieldLabel(path: string) {

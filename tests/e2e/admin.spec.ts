@@ -221,7 +221,9 @@ const importedSource: AdminSource = {
 	provider: "zotero",
 	readOnly: true,
 	status: "active",
-	sync: null,
+	activity: null,
+	externalScopeKey: null,
+	scopeKind: "group",
 	writeback: { enabled: true, supported: true },
 };
 
@@ -1672,7 +1674,9 @@ test("uses the same collection traversal model for multi-select", async ({
 			provider: "zotero",
 			readOnly: true,
 			status: "active",
-			sync: null,
+			activity: null,
+			externalScopeKey: null,
+			scopeKind: "group",
 			writeback: { enabled: true, supported: true },
 		}),
 	);
@@ -2508,7 +2512,9 @@ test("filters by searched native and imported collections without loading an opt
 			provider: "zotero",
 			readOnly: true,
 			status: "active",
-			sync: null,
+			activity: null,
+			externalScopeKey: null,
+			scopeKind: "group",
 			writeback: { enabled: true, supported: true },
 		}),
 	);
@@ -3755,7 +3761,9 @@ test("restores branch focus when a collection retry finishes empty", async ({
 		provider: "zotero",
 		readOnly: true,
 		status: "active",
-		sync: null,
+		activity: null,
+		externalScopeKey: null,
+		scopeKind: "group",
 		writeback: { enabled: true, supported: true },
 	};
 	await mockPublishedBook(page, { additionalSources: [emptySource] });
@@ -3817,7 +3825,9 @@ test("does not steal focus when a collection load finishes after the user leaves
 		provider: "zotero",
 		readOnly: true,
 		status: "active",
-		sync: null,
+		activity: null,
+		externalScopeKey: null,
+		scopeKind: "group",
 		writeback: { enabled: true, supported: true },
 	};
 	await mockPublishedBook(page, { additionalSources: [slowSource] });
@@ -6667,4 +6677,77 @@ test("shows search results from the narrow editor without interrupting typing", 
  await expect(search).toHaveValue("Published book");
  await expect(page.getByRole("region", { name: "Records", exact: true })).toBeVisible();
  await expect(page.locator(`[data-record-key="${publishedItemKey}"]`)).toBeVisible();
+});
+
+test("opens a source's status from the address and undoes a dismissed issue", async ({ page }) => {
+	await mockCompletedIndexing(page);
+	await mockPublishedBook(page, {
+		additionalSources: [
+			{
+				...importedSource,
+				externalScopeKey: "2129771",
+				activity: {
+					changed: 14,
+					issues: { zotero_file_metadata_invalid: 2 },
+					key: importedSource.key,
+					lastSuccessAt: timestamp,
+					provider: "zotero",
+					searchFailed: 0,
+					searchable: 12_450,
+					state: "succeeded",
+				},
+			},
+		],
+	});
+	let open = ["FIRST111", "SECOND22"];
+	const changes: unknown[] = [];
+	await page.route(`**/api/admin/library/sources/${importedSource.key}/issues**`, async (route) => {
+		const request = route.request();
+		if (request.method() === "PATCH") {
+			const body = request.postDataJSON() as { action: string; record?: string };
+			changes.push(body);
+			open = body.action === "dismiss" ? open.filter((key) => key !== body.record) : ["FIRST111", "SECOND22"];
+			await route.fulfill({ json: body.action === "dismiss" ? { batch: timestamp, count: 1 } : { count: 1 } });
+			return;
+		}
+		if (new URL(request.url()).pathname.endsWith("/issues")) {
+			await route.fulfill({
+				json: { types: [{ count: open.length, key: "pdf-not-uploaded", kind: "pdf", next: "Upload the files in Zotero.", title: "PDF not published" }] },
+			});
+			return;
+		}
+		await route.fulfill({
+			json: {
+				count: open.length,
+				issues: open.map((key) => ({
+					detail: null,
+					itemKey: null,
+					links: [{ href: `https://www.zotero.org/groups/2129771/items/${key}`, kind: "zotero-web" }],
+					message: `Zotero attachment ${key}: a published PDF must have a valid filename and MD5`,
+					meta: null,
+					sourceRecordKey: key,
+					title: `Report ${key}`,
+				})),
+			},
+		});
+	});
+
+	await openAdmin(page, `/admin?source=${importedSource.key}`);
+	const dialog = page.getByRole("dialog");
+	await expect(dialog.getByRole("heading", { name: importedSource.label })).toBeVisible();
+	await expect(dialog.getByText("records searchable")).toBeVisible();
+	await expect(dialog.getByRole("button", { name: /PDF not published/u })).toBeVisible();
+
+	await dialog.getByText("Report FIRST111").hover();
+	await dialog.getByRole("button", { name: "Dismiss issue: Report FIRST111" }).click();
+	await expect(dialog.getByText("Report FIRST111")).toHaveCount(0);
+	await page.getByRole("button", { name: "Undo" }).click();
+	await expect(dialog.getByText("Report FIRST111")).toBeVisible();
+	expect(changes).toEqual([
+		{ action: "dismiss", record: "FIRST111" },
+		{ action: "restore", batch: timestamp },
+	]);
+
+	await dialog.getByRole("button", { name: "Close" }).click();
+	await expect(page).not.toHaveURL(/[?&]source=/u);
 });

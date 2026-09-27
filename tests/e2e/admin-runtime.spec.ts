@@ -29,7 +29,8 @@ const protectedAdminRequests = [
 	["POST", "/api/admin/search-index/receipts"],
 	["GET", "/api/admin/library"],
 	["GET", "/api/admin/library/sources/zotero-main/issues"],
-	["PATCH", "/api/admin/library/sources/zotero-main/issues/ABCDEFGH"],
+	["PATCH", "/api/admin/library/sources/zotero-main/issues"],
+	["GET", "/api/admin/library/sources/zotero-main/issues/fields?offset=0&limit=10"],
 	["GET", "/api/admin/collections"],
 	["POST", "/api/admin/collections"],
 	["GET", "/api/admin/search-index"],
@@ -111,54 +112,43 @@ test("lets an Editor dismiss and restore a source import issue in the real libra
 }) => {
 	await openAdmin(page);
 	const issues = "/api/admin/library/sources/openalex-acceptance/issues";
-	const list = async (query = "") =>
-		(await page.request.get(`${issues}${query}`)).json();
+	const types = async () => (await (await page.request.get(issues)).json()).types;
 	const badgeCount = async () => {
 		const library = await (await page.request.get("/api/admin/library")).json();
-		return library.sources.find(
+		const { activity } = library.sources.find(
 			(source: { key: string }) => source.key === "openalex-acceptance",
-		).sync.issueCount;
+		);
+		return Object.values(activity.issues as Record<string, number>).reduce((sum, count) => sum + count, 0);
 	};
 
-	const setDismissed = (dismissed: boolean) =>
-		page.request.patch(`${issues}/W100000001`, { data: { dismissed } });
-
-	// The seeded issue points at the record it belongs to and counts on the badge.
-	const seeded = await list();
-	expect(seeded).toMatchObject({ dismissedTotal: 0, hasMore: false, total: 1 });
-	expect(seeded.issues[0]).toMatchObject({
-		dismissedAt: null,
-		itemKey: expectedKey,
-		sourceRecordKey: "W100000001",
-		title: expectedTitle,
+	// The seeded issue is a left-out field, points at the record it belongs to, and counts on the badge.
+	expect(await types()).toMatchObject([{ count: 1, key: "fields" }]);
+	const page1 = await (await page.request.get(`${issues}/fields?offset=0&limit=10`)).json();
+	expect(page1).toMatchObject({
+		count: 1,
+		issues: [{ itemKey: expectedKey, sourceRecordKey: "W100000001", title: expectedTitle }],
 	});
 	expect(await badgeCount()).toBe(1);
 
+	const dismissed = await page.request.patch(issues, { data: { action: "dismiss", record: "W100000001" } });
+	expect(dismissed.ok()).toBe(true);
+	const { batch, count } = await dismissed.json();
 	try {
-		// Dismissing hides it from the open list and the badge, but keeps it.
-		expect((await setDismissed(true)).ok()).toBe(true);
-		expect(await list()).toMatchObject({ dismissedTotal: 1, issues: [], total: 0 });
-		const dismissedView = await list("?dismissed=1");
-		expect(dismissedView.issues[0]).toMatchObject({ sourceRecordKey: "W100000001" });
-		expect(dismissedView.issues[0].dismissedAt).not.toBeNull();
+		// Dismissing hides it from the list and the badge, but keeps it for undo.
+		expect(count).toBe(1);
+		expect(await types()).toEqual([]);
 		expect(await badgeCount()).toBe(0);
 	} finally {
 		// Restore even after a failed assertion, so a retry sees the seeded state.
-		expect((await setDismissed(false)).ok()).toBe(true);
+		expect((await page.request.patch(issues, { data: { action: "restore", batch } })).ok()).toBe(true);
 	}
-	expect(await list()).toMatchObject({ dismissedTotal: 0, total: 1 });
+	expect(await types()).toMatchObject([{ count: 1, key: "fields" }]);
 	expect(await badgeCount()).toBe(1);
 
-	// A malformed cursor is a validation error, not a crash. The second one is
-	// a date JavaScript would silently normalise but PostgreSQL rejects.
-	const badDateCursor = Buffer.from(
-		JSON.stringify({ sourceRecordKey: "W100000001", updatedAt: "2026-02-30T00:00:00.000Z" }),
-	).toString("base64url");
-	expect((await page.request.get(`${issues}?cursor=nonsense`)).status()).toBe(400);
-	expect((await page.request.get(`${issues}?cursor=${badDateCursor}`)).status()).toBe(400);
-	expect(
-		(await page.request.patch(`${issues}/NOPE0000`, { data: { dismissed: true } })).status(),
-	).toBe(404);
+	// Malformed requests are validation errors, not crashes.
+	expect((await page.request.get(`${issues}/nonsense?offset=0&limit=10`)).status()).toBe(400);
+	expect((await page.request.get(`${issues}/fields?offset=-1&limit=10`)).status()).toBe(400);
+	expect((await page.request.patch(issues, { data: { action: "restore", batch: "yesterday" } })).status()).toBe(400);
 });
 
 test("resolves concurrent draft fields without losing either session's other changes", async ({

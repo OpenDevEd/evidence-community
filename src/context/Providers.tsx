@@ -175,7 +175,10 @@ function ToastAdapter({ children }: { children: ReactNode }) {
 	return (
 		<>
 			{children}
-			<Toaster />
+			{/* A top layer to react-aria: toasts stay readable, focusable and clickable while a dialog is open, and a click on one does not close it. */}
+			<div data-react-aria-top-layer="true">
+				<Toaster />
+			</div>
 		</>
 	);
 }
