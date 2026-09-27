@@ -117,7 +117,7 @@ export type HomeData = {
 	/** Whether the library's assistant answers questions across the library (`features.aiSearch`). */
 	ai: boolean;
 	/** The latest published digests, newest first. */
-	digests: { library: string; timezone: string; editions: DigestSummary[] } | null;
+	digests: { library: string; editions: DigestSummary[] } | null;
 	/** `withPdf`: publications with a PDF among their attachments. */
 	attachments: { total: number; itemsWith: number; withPdf: number; percentage: number } | null;
 	citations: { total: number; itemsWith: number; average: number; max: number; percentage: number; hIndex: number } | null;
@@ -281,7 +281,7 @@ function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
 	return (
 		<div className="grid gap-12 lg:grid-cols-[28rem_minmax(0,1fr)] lg:gap-20">
 			<div className="pr-4 pt-2">
-				<DigestCover edition={latest} libraryName={digests.library} timezone={digests.timezone} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />
+				<DigestCover edition={latest} libraryName={digests.library} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />
 			</div>
 			{earlier.length > 0 && (
 				<div>
@@ -290,7 +290,7 @@ function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
 						{earlier.map((edition) => (
 							<li key={edition.slug} className="border-b border-[rgb(var(--ink-rgb)/0.1)] py-4 last:border-b-0">
 								<Link href={`/digests/${edition.slug}`} className="group block outline-offset-4">
-									<span className="block text-sm tabular-nums opacity-60">{shortDate.format(new Date(edition.publishedAt))}</span>
+									<span className="block text-sm tabular-nums opacity-60">{shortDate.format(new Date(edition.published.at))}</span>
 									<span className="mt-1 block font-heading text-lg font-medium leading-snug transition-colors group-hover:text-accent">{edition.title}</span>
 								</Link>
 							</li>

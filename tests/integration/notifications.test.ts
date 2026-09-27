@@ -194,7 +194,7 @@ it("publishes only saved digest editions, preserving their metadata and hiding u
     const [unfinished] = await db.select().from(notificationEdition).where(eq(notificationEdition.title, "Private title"));
     expect(await getDigestEdition(db, config, "en-GB", unfinished.id)).toBeUndefined();
     expect(await getDigestEdition(db, config, "en-GB", "not-a-uuid")).toBeUndefined();
-    expect(await getNextDigestEdition(db, {...config, notifications: {...config.notifications, enabled: false}})).toBeNull();
+    expect(await getNextDigestEdition(db, {...config, notifications: {...config.notifications, enabled: false}}, "en-GB")).toBeNull();
   });
 }, 120_000);
 

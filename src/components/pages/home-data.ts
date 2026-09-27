@@ -232,5 +232,5 @@ async function mostCitedFor(_revision: string, config: LibraryServerConfig) {
 async function latestDigests(locale: string): Promise<HomeData["digests"]> {
 	const config = await getLibraryConfig();
 	const { editions } = await listDigestEditions(await getDatabaseForConfig(config), config, locale);
-	return editions.length > 0 ? { library: config.identity.name, timezone: config.notifications.schedule.timezone, editions: editions.slice(0, 3) } : null;
+	return editions.length > 0 ? { library: config.identity.name, editions: editions.slice(0, 3) } : null;
 }
