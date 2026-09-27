@@ -2386,8 +2386,9 @@ export default function AdminWorkbench({
 				{/* On the wide layout the preview waits under the editor and slides out from beneath it, pushing the filters
 				    and records out past the left edge. The three sit on one strip that slides as a whole, so the browser
 				    moves it without laying anything out again. The strip is cut off at the editor's right edge, so the
-				    waiting preview never shows beside it. */}
-				<div className="admin-workbench-grid grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:flex xl:overflow-hidden">
+				    waiting preview never shows beside it. The row clips its overflow rather than hiding it, so focus moving
+				    within it can't scroll it sideways. */}
+				<div className="admin-workbench-grid grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:flex xl:overflow-clip">
 					<div className="contents xl:block xl:min-h-0 xl:w-[calc(100vw-24.75rem)] xl:flex-none xl:[clip-path:inset(0_-23.25rem_0_-100vw_round_1rem)]">
 					<div
 						ref={previewStrip}

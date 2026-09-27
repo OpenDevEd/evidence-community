@@ -2,7 +2,6 @@
 
 import { Cancel01Icon, MinusSignIcon, PlusSignIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { ButtonGroup } from "@nextui-org/react";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -55,10 +54,11 @@ export function DraftPreviewPortal({
 	// The page fades in once drawn, so a record's first opening shows no empty frame. The inspector mounts this anew for
 	// each record and version.
 	const [loaded, setLoaded] = useState(false);
-	// Under the admin's own locale prefix, so the page reads in the language the admin is using.
-	const adminPath = usePathname();
-	const previewPath = `${adminPath.slice(0, adminPath.indexOf("/admin"))}/admin/preview`;
 	if (!preview.target) return null;
+	// Under the admin's own locale prefix, so the page reads in the language the admin is using. The pane only exists
+	// in the browser, so its location is there to read.
+	const adminPath = location.pathname;
+	const previewPath = `${adminPath.slice(0, adminPath.indexOf("/admin"))}/admin/preview`;
 	const { zoom, onZoom } = preview;
 	const step = PREVIEW_ZOOMS.indexOf(zoom);
 	const src = review
