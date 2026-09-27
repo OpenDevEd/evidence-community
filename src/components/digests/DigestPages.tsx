@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
 import { Calendar03Icon, ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
-import type { DigestArchivePage, DigestEdition, DigestSummary } from "@/lib/notifications/public";
+import type { DigestArchivePage, DigestDate, DigestEdition, DigestSummary } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
@@ -22,7 +22,7 @@ import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Mark
 
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { Icon, TextLink, muted } from "./DigestPrimitives";
-import { DigestCover, FirstEditionCover, publicationCount } from "./DigestCover";
+import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
 import { Subscription, type Preferences } from "./Subscription";
 
 /** The page number lives in the URL, so every page can be shared and reloaded. */
@@ -34,7 +34,7 @@ function PageControls({page, pages, href}: {page: number; pages: number; href: (
 
 function EditionMeta({ edition }: { edition: DigestSummary }) {
   const locale = useLocale();
-  return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={Calendar03Icon} size={14} /><time dateTime={edition.publishedAt}>{edition.date}</time></span><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(edition.publicationCount, locale)}</span></div>;
+  return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={Calendar03Icon} size={14} /><time dateTime={edition.published.at}>{edition.published.date}</time></span><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(edition.publicationCount, locale)}</span></div>;
 }
 function DigestContent({ edition }: { edition: DigestEdition }) {
   return <AIMarkdown>{edition.markdown}</AIMarkdown>;
@@ -42,7 +42,7 @@ function DigestContent({ edition }: { edition: DigestEdition }) {
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
 type DigestSettings = {libraryName: string; enabled: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
-type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<string | null>};
+type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>};
 export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
 type EditionProps = {view: "edition"; slug: string; earlier: Promise<DigestSummary[]>; edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>};
 type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber: Promise<Preferences | null>};
@@ -79,9 +79,10 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
-          {settings.enabled && <Suspense fallback={<Skeleton className="mt-5 h-5 w-80 max-w-full rounded-lg" />}><NextEdition nextEdition={nextEdition} settings={settings} locale={locale} /></Suspense>}
+          {/* Room for the longest next edition line, so nothing below moves when it arrives. */}
+          {settings.enabled && <div className="mt-5 min-h-16 sm:min-h-10"><Suspense fallback={<Skeleton className="h-10 w-80 max-w-full rounded-lg" />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense></div>}
         </div>
-        <Suspense fallback={<Skeleton className="mx-auto h-[337px] w-full max-w-md rounded-2xl" />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
+        <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Latest editions</h2></div>
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12">
@@ -92,38 +93,34 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
       </div>
   </PageContainer>;
 }
-function NextEdition({nextEdition, settings, locale}: {nextEdition: Promise<string | null>; settings: DigestSettings; locale: string}) {
-  const value = use(nextEdition);
-  if (!value) return null;
-  const next = new Date(value);
-  const nextDate = next.toLocaleDateString(locale, {weekday: "long", day: "numeric", month: "long", timeZone: settings.timezone});
-  const nextTime = next.toLocaleTimeString(locale, {hour: "2-digit", minute: "2-digit", hour12: false, timeZone: settings.timezone});
+function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate | null>; settings: DigestSettings}) {
+  const next = use(nextEdition);
+  if (!next) return null;
   return (
-          <div className="mt-5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm"><span className="text-accent"><Icon value={Calendar03Icon} size={16} /></span><span className={`text-xs ${muted}`}>Next edition</span><time dateTime={next.toISOString()} className="font-medium">{nextDate}</time><span className={`text-xs tabular-nums ${muted}`}>{nextTime} {settings.timezone}</span></div>);
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm"><span className="text-accent"><Icon value={Calendar03Icon} size={16} /></span><span className={`text-xs ${muted}`}>Next edition</span><time dateTime={next.at} className="font-medium">{next.weekday}</time><span className={`basis-full pl-[26px] text-xs tabular-nums ${muted}`}>{next.time} {settings.timezone}</span></div>);
 }
-function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<string | null>; settings: DigestSettings; base: string; locale: string}) {
+function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const {editions: items, page, pages} = use(editions);
-  if (!items.length) return <EmptyArchive next={settings.enabled ? use(nextEdition) : null} settings={settings} locale={locale} />;
-  return <>{items.map(item => {const date = new Date(item.publishedAt); const day = date.toLocaleDateString(locale, {day: "numeric", timeZone: settings.timezone}); const month = date.toLocaleDateString(locale, {month: "short", timeZone: settings.timezone});return <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[56px_minmax(0,1fr)_18px] items-start gap-4 rounded-2xl bg-card_light p-5 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055] sm:grid-cols-[64px_minmax(0,1fr)_18px] sm:gap-5">
-            <time dateTime={item.publishedAt} aria-label={item.date} className="rounded-xl bg-black/[0.04] px-1 py-3 text-center dark:bg-white/[0.04]"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(day)}</span><span className={`mt-2 block text-xs ${muted}`}>{month}</span></time>
+  if (!items.length) return <EmptyArchive next={settings.enabled ? use(nextEdition) : null} settings={settings} />;
+  return <>{items.map(item => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[56px_minmax(0,1fr)_18px] items-start gap-4 rounded-2xl bg-card_light p-5 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055] sm:grid-cols-[64px_minmax(0,1fr)_18px] sm:gap-5">
+            <time dateTime={item.published.at} aria-label={item.published.date} className="rounded-xl bg-black/[0.04] px-1 py-3 text-center dark:bg-white/[0.04]"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(item.published.day)}</span><span className={`mt-2 block text-xs ${muted}`}>{item.published.month}</span></time>
             <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><MarkdownExcerpt className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt><span className={`mt-3 inline-flex items-center gap-1.5 text-xs ${muted}`}><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
-          </Link>;})}
+          </Link>)}
     <PageControls page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} /></>;
 }
 
 /** Before the first edition: the first row is kept for it, dated when it is scheduled, and the rows after it wait faintly below. */
-function EmptyArchive({next, settings, locale}: {next: string | null; settings: DigestSettings; locale: string}) {
-  const date = next ? new Date(next) : null;
+function EmptyArchive({next, settings}: {next: DigestDate | null; settings: DigestSettings}) {
   // A library that sends no digests is not promised an edition.
   const [title, text] = settings.enabled
-    ? ["Editions will collect here", `Each digest sums up the publications added since the one before. ${firstEdition(date, settings, locale)}`]
+    ? ["Editions will collect here", `Each digest sums up the publications added since the one before. ${firstEdition(next)}`]
     : ["No editions yet", "This library is not sending digests at the moment."];
   const tile = "rounded-xl px-1 py-3 text-center";
   const row = "grid grid-cols-[56px_minmax(0,1fr)] items-start gap-4 rounded-2xl p-5 sm:grid-cols-[64px_minmax(0,1fr)] sm:gap-5";
   return <div>
     <div className={`${row} border-2 border-dashed border-accent/35`}>
-      {date
-        ? <time dateTime={date.toISOString()} className={`${tile} bg-accent/10 text-accent`}><span className="block text-2xl font-semibold leading-none tabular-nums">{date.toLocaleDateString(locale, {day: "numeric", timeZone: settings.timezone})}</span><span className="mt-2 block text-xs">{date.toLocaleDateString(locale, {month: "short", timeZone: settings.timezone})}</span></time>
+      {next
+        ? <time dateTime={next.at} className={`${tile} bg-accent/10 text-accent`}><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
         : <span aria-hidden="true" className={`${tile} grid h-[4.25rem] place-items-center bg-accent/10 text-accent`}><Icon value={Notification03Icon} size={22} /></span>}
       <div>
         <h2 className="text-xl font-semibold leading-snug">{title}</h2>
@@ -139,9 +136,9 @@ function EmptyArchive({next, settings, locale}: {next: string | null; settings: 
   </div>;
 }
 
-function firstEdition(date: Date | null, settings: DigestSettings, locale: string) {
+function firstEdition(next: DigestDate | null) {
   // A send date with nothing new is skipped, so the date is only when the first one is due.
-  return date ? `The first is due on ${date.toLocaleDateString(locale, {weekday: "long", day: "numeric", month: "long", timeZone: settings.timezone})}, if new publications have been added by then.` : "The first will appear after new publications are added.";
+  return next ? `The first is due on ${next.weekday}, if new publications have been added by then.` : "The first will appear after new publications are added.";
 }
 
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
@@ -195,14 +192,14 @@ function PastDigests({earlier, base}: {earlier: Promise<DigestSummary[]>; base: 
   const older = use(earlier);
   if (!older.length) return <p className={`text-sm ${muted}`}>This is the first edition.</p>;
   return <div className="space-y-2">{older.map(item => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group block rounded-xl bg-card_light p-4 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055]">
-              <time dateTime={item.publishedAt} className={`text-xs ${muted}`}>{item.date}</time><h3 className="mt-1.5 text-sm font-semibold leading-5 group-hover:text-accent">{item.title}</h3>
+              <time dateTime={item.published.at} className={`text-xs ${muted}`}>{item.published.date}</time><h3 className="mt-1.5 text-sm font-semibold leading-5 group-hover:text-accent">{item.title}</h3>
             </Link>)}</div>;
 }
 
-function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<string | null>; settings: DigestSettings; base: string; locale: string}) {
+function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const edition = use(latest);
   const next = use(nextEdition);
   return edition
-    ? <DigestCover edition={edition} libraryName={settings.libraryName} timezone={settings.timezone} href={`${base}/${edition.slug}`} locale={locale} />
-    : <FirstEditionCover libraryName={settings.libraryName} sending={settings.enabled} next={settings.enabled ? next : null} timezone={settings.timezone} locale={locale} />;
+    ? <DigestCover edition={edition} libraryName={settings.libraryName} href={`${base}/${edition.slug}`} locale={locale} />
+    : <FirstEditionCover libraryName={settings.libraryName} sending={settings.enabled} next={settings.enabled ? next : null} />;
 }

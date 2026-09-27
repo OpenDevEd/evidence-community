@@ -9,5 +9,5 @@ export default function Page({params, searchParams}: Props) {
   return <DigestPages view="archive"
     latest={readDigests(locale, getLatestDigest)}
     editions={readDigests(locale, async (db, config, locale) => listDigestEditions(db, config, locale, await page))}
-    nextEdition={readDigests(locale, (db, config) => getNextDigestEdition(db, config))} />;
+    nextEdition={readDigests(locale, (db, config, locale) => getNextDigestEdition(db, config, locale))} />;
 }

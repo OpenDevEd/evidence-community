@@ -10,7 +10,12 @@ import { nextDigestDate } from "./schedule";
 const ARCHIVE_PAGE_SIZE = 20;
 const EDITION_PAGE_SIZE = 12;
 
-export type DigestSummary = {slug: string; publishedAt: string; date: string; title: string; summary: string; publicationCount: number; cover: string | null};
+/**
+ * A date written out in the library's time zone. Only the server writes it: the
+ * browser's time zone data can disagree with the server's, and the page would not hydrate.
+ */
+export type DigestDate = {at: string; day: string; month: string; monthYear: string; weekday: string; date: string; time: string};
+export type DigestSummary = {slug: string; published: DigestDate; title: string; summary: string; publicationCount: number; cover: string | null};
 /** An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`. */
 export type DigestEdition = DigestSummary & {markdown: string; listed: number; page: number; pages: number; keys: string[]};
 export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages: number};
@@ -22,9 +27,17 @@ const summaryColumns = {
 };
 type SummaryRow = {id: string; publishedAt: Date | null; title: string | null; summary: string | null; publicationCount: number; cover: string | null};
 
+function digestDate(value: Date, locale: string, config: LibraryServerConfig): DigestDate {
+  const text = (options: Intl.DateTimeFormatOptions) => value.toLocaleString(locale, {...options, timeZone: config.notifications.schedule.timezone});
+  return {
+    at: value.toISOString(), day: text({day: "2-digit"}), month: text({month: "short"}), monthYear: text({month: "long", year: "numeric"}),
+    weekday: text({weekday: "long", day: "numeric", month: "long"}), date: text({day: "numeric", month: "long", year: "numeric"}),
+    time: text({hour: "2-digit", minute: "2-digit", hour12: false}),
+  };
+}
+
 function editionSummary(row: SummaryRow, locale: string, config: LibraryServerConfig): DigestSummary {
-  const timeZone = config.notifications.schedule.timezone;
-  return {slug: row.id, publishedAt: row.publishedAt!.toISOString(), date: row.publishedAt!.toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone}), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover};
+  return {slug: row.id, published: digestDate(row.publishedAt!, locale, config), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover};
 }
 const visibleEdition = and(eq(notificationEdition.stream, "digest"), isNotNull(notificationEdition.publishedAt));
 
@@ -93,8 +106,9 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
   return {...editionSummary(row, locale, config), markdown: row.markdown!, listed, page: current, pages, keys: keys.map(entry => entry.key)};
 }
 
-export async function getNextDigestEdition(db: Database, config: LibraryServerConfig): Promise<string | null> {
+export async function getNextDigestEdition(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestDate | null> {
   if (!config.notifications.enabled) return null;
   const [state] = await db.select().from(notificationState).limit(1);
-  return nextEditionDate(config, state)?.toISOString() ?? null;
+  const next = nextEditionDate(config, state);
+  return next && digestDate(next, locale, config);
 }
