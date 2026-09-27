@@ -11,6 +11,8 @@ import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 /** How often the worker looks for sources someone asked to run now. */
 const RUN_REQUEST_CHECK_MS = 5_000;
+/** Requested sources that may import at once, beside the regular sweep. */
+const MAX_REQUESTED_RUNS = 2;
 
 export type SourceRunRequest = "requested" | "not_found" | "not_active";
 
@@ -64,9 +66,10 @@ export async function listRunnableSourceRequests(
 }
 
 /**
- * Runs requested sources as they come in, next to the regular sweep, so a
- * request never waits for a long import of another source. Claiming the run
- * clears the request; the lease keeps the sweep from running it twice.
+ * Runs requested sources as they come in, next to the regular sweep and side
+ * by side, so a request never waits for a long import of another source.
+ * Claiming the run clears the request; the lease keeps the sweep from running
+ * it twice. Stopping waits for the runs already started.
  */
 export async function runRequestedSources(options: {
 	/** The requests that can start now, such as {@link listRunnableSourceRequests}. */
@@ -77,16 +80,20 @@ export async function runRequestedSources(options: {
 	wait?: (milliseconds: number, signal: AbortSignal) => Promise<unknown>;
 }) {
 	const wait = options.wait ?? ((milliseconds, signal) => delay(milliseconds, undefined, { signal }));
+	const running = new Map<string, Promise<void>>();
 	while (!options.signal.aborted) {
 		const keys = await options.list().catch((error: unknown) => {
 			options.onError(error);
 			return [];
 		});
 		for (const key of keys) {
-			if (options.signal.aborted) return;
+			if (options.signal.aborted || running.size >= MAX_REQUESTED_RUNS) break;
+			if (running.has(key)) continue;
 			// One failed run must not hold up the others.
-			await options.run(key).catch(options.onError);
+			const run = options.run(key).then(() => undefined, options.onError);
+			running.set(key, run.finally(() => running.delete(key)));
 		}
 		await wait(RUN_REQUEST_CHECK_MS, options.signal).catch(() => undefined);
 	}
+	await Promise.all(running.values());
 }

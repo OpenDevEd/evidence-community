@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { SourceStatus } from "@/lib/source-ingestion/source-status";
-import { createSourceStatusReporter } from "@/lib/source-ingestion/status-reporter";
+import {
+	createSourceStatusReporter,
+	runSourceStatusReporter,
+} from "@/lib/source-ingestion/status-reporter";
 
 const credential = `els_${"a".repeat(43)}`;
 
@@ -96,5 +99,28 @@ describe("source status reporter", () => {
 		await report();
 
 		expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body)).observedAt).toBe("2026-09-27T12:10:00.000Z");
+	});
+
+	it("tries a failed report again at the next check, then waits out the idle interval", async () => {
+		const controller = new AbortController();
+		const report = vi
+			.fn<() => Promise<boolean>>()
+			.mockResolvedValueOnce(false)
+			.mockResolvedValue(true);
+		const wait = vi.fn(async () => {
+			if (wait.mock.calls.length === 3) controller.abort();
+		});
+
+		await runSourceStatusReporter({
+			isActive: async () => false,
+			now: () => 0,
+			onError: vi.fn(),
+			report,
+			signal: controller.signal,
+			wait,
+		});
+
+		// First check fails, the second succeeds, the third is idle and not due.
+		expect(report).toHaveBeenCalledTimes(2);
 	});
 });

@@ -1,6 +1,7 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 
-import { getDatabase } from "@/db";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { getDatabaseForConfig } from "@/db";
 import { ADMIN_RESPONSE_HEADERS, adminErrorResponse } from "@/lib/admin/http";
 import { requireOpenScholarBearer } from "@/lib/admin/openscholar-bearer";
 import { requestSourceRun } from "@/lib/source-ingestion/run-requests";
@@ -16,12 +17,14 @@ const REFUSED = {
 export async function POST(request: NextRequest, { params }: Context) {
 	await connection();
 
-	const denied = await requireOpenScholarBearer(request);
+	// One configuration revision authorises the call and holds the request.
+	const config = await getLibraryConfig();
+	const denied = await requireOpenScholarBearer(request, config.authentication.openScholar.machineCredential);
 	if (denied) return denied;
 
 	try {
 		const { key } = await params;
-		const outcome = await requestSourceRun(await getDatabase(), key);
+		const outcome = await requestSourceRun(await getDatabaseForConfig(config), key);
 		if (outcome === "requested") {
 			return NextResponse.json({ requested: true }, { headers: ADMIN_RESPONSE_HEADERS, status: 202 });
 		}

@@ -42,4 +42,27 @@ describe("requested source runs", () => {
 		expect(onError).toHaveBeenCalledWith(outage);
 		expect(run).toHaveBeenCalledWith("zotero-1");
 	});
+
+	it("starts a second requested source while the first is still importing", async () => {
+		const controller = new AbortController();
+		let finishFirst: () => void = () => undefined;
+		const first = new Promise<void>((resolve) => {
+			finishFirst = resolve;
+		});
+		const list = vi
+			.fn<() => Promise<string[]>>()
+			.mockResolvedValueOnce(["zotero-1"])
+			.mockResolvedValue(["zotero-1", "openalex-2"]);
+		const run = vi.fn((key: string) => (key === "zotero-1" ? first : Promise.resolve()));
+		const wait = vi.fn(async () => {
+			if (wait.mock.calls.length === 2) {
+				controller.abort();
+				finishFirst();
+			}
+		});
+
+		await runRequestedSources({ list, onError: vi.fn(), run, signal: controller.signal, wait });
+
+		expect(run.mock.calls.map(([key]) => key)).toEqual(["zotero-1", "openalex-2"]);
+	});
 });

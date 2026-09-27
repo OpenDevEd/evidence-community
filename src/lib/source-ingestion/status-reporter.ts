@@ -40,12 +40,13 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 	let sent: string | null = null;
 	let lastProblem: string | null = null;
 
-	return async function report(): Promise<void> {
+	/** Resolves true once OpenScholar has this status, false when the post failed. */
+	return async function report(): Promise<boolean> {
 		// Timed before the read, so a slow read cannot pass for a newer one.
 		const observedAt = now().toISOString();
 		const sources = (await options.read()).map(trimFailure);
 		const snapshot = JSON.stringify(sources);
-		if (snapshot === sent) return;
+		if (snapshot === sent) return true;
 		try {
 			const response = await request(url, {
 				body: JSON.stringify({
@@ -67,11 +68,13 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 			}
 			sent = snapshot;
 			lastProblem = null;
+			return true;
 		} catch (error) {
 			const problem = error instanceof Error ? error.message : String(error);
 			// One line per distinct failure, not one every few seconds.
 			if (problem !== lastProblem) log(`Source status report to ${url.href} failed: ${problem}`);
 			lastProblem = problem;
+			return false;
 		}
 	};
 }
@@ -81,28 +84,27 @@ export function createSourceStatusReporter(options: ReporterOptions) {
  * or its search update runs, and at least once a minute otherwise.
  */
 export async function runSourceStatusReporter(options: {
-	report: () => Promise<void>;
+	report: () => Promise<boolean>;
 	/** A cheap check for work under way, run every few seconds. */
 	isActive: () => Promise<boolean>;
 	onError: (error: unknown) => void;
 	signal: AbortSignal;
 	now?: () => number;
+	wait?: (milliseconds: number, signal: AbortSignal) => Promise<unknown>;
 }) {
 	const now = options.now ?? Date.now;
+	const wait = options.wait ?? ((milliseconds, signal) => delay(milliseconds, undefined, { signal }));
 	let lastReport = Number.NEGATIVE_INFINITY;
 	while (!options.signal.aborted) {
 		try {
 			if (now() - lastReport >= IDLE_REPORT_MS || (await options.isActive())) {
-				lastReport = now();
-				await options.report();
+				const checkedAt = now();
+				// A failed post stays due, so the next check tries again.
+				if (await options.report()) lastReport = checkedAt;
 			}
 		} catch (error) {
 			options.onError(error);
 		}
-		try {
-			await delay(ACTIVITY_CHECK_MS, undefined, { signal: options.signal });
-		} catch {
-			return;
-		}
+		await wait(ACTIVITY_CHECK_MS, options.signal).catch(() => undefined);
 	}
 }
