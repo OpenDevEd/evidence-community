@@ -56,6 +56,10 @@ export function DraftPreviewPortal({
 	// The page fades in once drawn, so a record's first opening shows no empty frame. The inspector mounts this anew for
 	// each record and version.
 	const [loaded, setLoaded] = useState(false);
+	// A closed preview keeps the version it last showed, so autosaves don't rebuild a page nobody is looking at.
+	const version = review?.revision ?? preview.revision;
+	const [shownVersion, setShownVersion] = useState(version);
+	if (preview.open && shownVersion !== version) setShownVersion(version);
 	if (!preview.target) return null;
 	// Under the admin's own locale prefix, so the page reads in the language the admin is using. The pane only exists
 	// in the browser, so its location is there to read.
@@ -64,8 +68,8 @@ export function DraftPreviewPortal({
 	const { zoom, onZoom } = preview;
 	const step = PREVIEW_ZOOMS.indexOf(zoom);
 	const src = review
-		? `${previewPath}/${review.itemKey}?review=${review.id}&v=${review.revision}`
-		: `${previewPath}/${itemKey}?v=${preview.revision}`;
+		? `${previewPath}/${review.itemKey}?review=${review.id}&v=${shownVersion}`
+		: `${previewPath}/${itemKey}?v=${shownVersion}`;
 	const label = review ? "Preview of the submitted version" : "Preview of the working draft";
 	return createPortal(
 		<div className="flex h-full min-h-0 flex-col">

@@ -14,6 +14,8 @@ import { ADMIN_CONTENT_PERMISSION, adminSessionCookieName, authorizeAdminSession
 import { adminErrorDetails } from "@/lib/admin/http";
 import { previewItem } from "@/lib/admin/item-preview";
 
+import { LookOnly } from "./LookOnly";
+
 type Props = {
 	params: Promise<{ key: string }>;
 	searchParams: Promise<{ review?: string | string[] }>;
@@ -81,11 +83,10 @@ async function DraftPreview(props: Props) {
 		);
 	}
 	if (!item) return <PreviewMessage>After publishing, this record would be hidden from the public library.</PreviewMessage>;
-	// Look only: the page's links and buttons would lead this frame away from the preview.
 	return (
-		<div inert>
+		<LookOnly>
 			<ItemPage data={withoutFullText({ item })} loading={false} />
-		</div>
+		</LookOnly>
 	);
 }
 
