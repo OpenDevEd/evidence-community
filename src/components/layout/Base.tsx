@@ -77,7 +77,7 @@ export default async function Base({
 	const libraryConfig = projectPublicLibraryConfig(await getLibraryConfig());
 	const dir = getLangDir(locale);
 	return (
-		<html lang={locale} dir={dir} suppressHydrationWarning>
+		<html lang={locale} dir={dir} className="no-scrollbar" suppressHydrationWarning>
 			<body>
 				<ConsentDefaultsScript />
 				<link

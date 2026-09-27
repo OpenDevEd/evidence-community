@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { SkipLink } from "./SkipLink";
+import PageScrollbar from "./PageScrollbar";
 import { usePathname } from "next/navigation";
 import { useLocale } from "next-intl";
 
@@ -87,6 +88,7 @@ export default function SiteChrome({
 				{admin ? null : <Footer />}
 			</div>
 			{asksConsent ? <Banner /> : null}
+			<PageScrollbar />
 		</>
 	);
 }
