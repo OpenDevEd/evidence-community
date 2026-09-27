@@ -5,15 +5,18 @@ import { useEffect, useRef, type PointerEvent } from "react";
 /**
  * The page's scrollbar, drawn over the page. The browser's own is hidden (`no-scrollbar` on `<html>`) because it takes
  * width from the page: everything, the navbar included, moved sideways between pages that scroll and pages such as the
- * map that do not. It shows while the page scrolls or under the pointer, and can be dragged.
+ * map that do not. It shows while the page scrolls or under the pointer. The thumb can be dragged, and a click on the
+ * track pages toward it, as the browser's own does.
  */
 export default function PageScrollbar() {
+	const track = useRef<HTMLDivElement>(null);
 	const thumb = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ pointerY: number; scrollY: number } | null>(null);
 
 	// Follows the window's scroll position and size and the page's height.
 	useEffect(() => {
-		const element = thumb.current!;
+		const bar = track.current!;
+		const handle = thumb.current!;
 		const root = document.documentElement;
 		let frame = 0;
 		let fade = 0;
@@ -21,20 +24,20 @@ export default function PageScrollbar() {
 			frame = 0;
 			const { scrollHeight, clientHeight } = root;
 			const scrollable = scrollHeight - clientHeight;
-			element.hidden = scrollable <= 0;
+			bar.hidden = scrollable <= 0;
 			if (scrollable <= 0) return;
 			const height = Math.max(40, (clientHeight * clientHeight) / scrollHeight);
-			element.style.height = `${height}px`;
-			element.style.transform = `translateY(${(window.scrollY / scrollable) * (clientHeight - height)}px)`;
+			handle.style.height = `${height}px`;
+			handle.style.transform = `translateY(${(window.scrollY / scrollable) * (clientHeight - height)}px)`;
 		};
 		const schedule = () => {
 			frame ||= requestAnimationFrame(place);
 		};
 		const scrolled = () => {
 			schedule();
-			element.dataset.active = "";
+			bar.dataset.active = "";
 			clearTimeout(fade);
-			fade = window.setTimeout(() => delete element.dataset.active, 900);
+			fade = window.setTimeout(() => delete bar.dataset.active, 900);
 		};
 		const pageSize = new ResizeObserver(schedule);
 		pageSize.observe(document.body);
@@ -50,29 +53,36 @@ export default function PageScrollbar() {
 		};
 	}, []);
 
-	function startDrag(event: PointerEvent<HTMLDivElement>) {
+	function press(event: PointerEvent<HTMLDivElement>) {
+		const handle = thumb.current!.getBoundingClientRect();
+		if (event.clientY < handle.top || event.clientY > handle.bottom) {
+			const page = document.documentElement.clientHeight * 0.9;
+			window.scrollBy({ top: event.clientY < handle.top ? -page : page });
+			return;
+		}
 		event.currentTarget.setPointerCapture(event.pointerId);
 		drag.current = { pointerY: event.clientY, scrollY: window.scrollY };
 	}
-	function moveDrag(event: PointerEvent<HTMLDivElement>) {
+	function move(event: PointerEvent<HTMLDivElement>) {
 		if (!drag.current) return;
 		const { scrollHeight, clientHeight } = document.documentElement;
-		const track = clientHeight - event.currentTarget.offsetHeight;
-		window.scrollTo(0, drag.current.scrollY + ((event.clientY - drag.current.pointerY) * (scrollHeight - clientHeight)) / track);
+		const room = clientHeight - thumb.current!.offsetHeight;
+		window.scrollTo(0, drag.current.scrollY + ((event.clientY - drag.current.pointerY) * (scrollHeight - clientHeight)) / room);
 	}
 
+	// The inline end is where the browser puts the page's scrollbar, so right-to-left pages have it on the left.
 	return (
 		<div
-			ref={thumb}
+			ref={track}
 			aria-hidden
 			hidden
-			onPointerDown={startDrag}
-			onPointerMove={moveDrag}
+			onPointerDown={press}
+			onPointerMove={move}
 			onPointerUp={() => (drag.current = null)}
 			onPointerCancel={() => (drag.current = null)}
-			className="group fixed right-0 top-0 z-50 w-3 touch-none select-none p-0.5 opacity-0 transition-opacity duration-300 hover:opacity-100 active:opacity-100 data-[active]:opacity-100 motion-reduce:transition-none"
+			className="group fixed inset-y-0 end-0 z-50 w-3 touch-none select-none px-0.5 opacity-0 transition-opacity duration-300 hover:opacity-100 active:opacity-100 data-[active]:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:pointer-events-none"
 		>
-			<div className="h-full rounded-full bg-[rgba(127,127,127,0.6)] transition-[width,margin] group-hover:ml-0 group-active:ml-0 ml-1 w-auto" />
+			<div ref={thumb} className="ms-1 rounded-full bg-[rgba(127,127,127,0.6)] transition-[margin] group-hover:ms-0 group-active:ms-0 forced-colors:bg-[CanvasText]" />
 		</div>
 	);
 }
