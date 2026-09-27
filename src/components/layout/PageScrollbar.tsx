@@ -80,7 +80,7 @@ export default function PageScrollbar() {
 			onPointerMove={move}
 			onPointerUp={() => (drag.current = null)}
 			onPointerCancel={() => (drag.current = null)}
-			className="group fixed inset-y-0 end-0 z-50 w-3 touch-none select-none px-0.5 opacity-0 transition-opacity duration-300 hover:opacity-100 active:opacity-100 data-[active]:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:pointer-events-none"
+			className="group fixed inset-y-0 end-0 z-50 w-3 touch-none select-none px-0.5 opacity-0 transition-opacity duration-300 hover:opacity-100 active:opacity-100 data-[active]:opacity-100 motion-reduce:transition-none [@media(any-hover:none)]:pointer-events-none"
 		>
 			<div ref={thumb} className="ms-1 rounded-full bg-[rgba(127,127,127,0.6)] transition-[margin] group-hover:ms-0 group-active:ms-0 forced-colors:bg-[CanvasText]" />
 		</div>
