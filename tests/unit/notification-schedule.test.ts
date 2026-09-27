@@ -10,6 +10,8 @@ describe("library notification schedules", () => {
     // IANA's Etc/GMT+5 is five hours behind GMT, the reverse of its name.
     expect(timeZoneLabel("Etc/GMT+5")).toBe("GMT-5");
     expect(timeZoneLabel("Etc/GMT-3")).toBe("GMT+3");
+    expect(timeZoneLabel("etc/gmt+5")).toBe("GMT-5");
+    expect(timeZoneLabel("etc/utc")).toBe("UTC");
     expect(timeZoneLabel("UTC")).toBe("UTC");
     expect(timeZoneLabel("Etc/GMT+0")).toBe("UTC");
     // A daylight-saving alias has no single offset, so it stays as configured.

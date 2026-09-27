@@ -15,10 +15,10 @@ export function describeDigestSchedule(schedule: DigestSchedule, locale: string)
  */
 export function timeZoneLabel(timezone: string) {
   const [area, ...place] = timezone.split("/");
-  if (area !== "Etc" && place.length) return `${place.join(" ").replaceAll("_", " ")} time`;
-  const fixed = /^Etc\/GMT([+-])(\d+)$/.exec(timezone);
+  if (area.toLowerCase() !== "etc" && place.length) return `${place.join(" ").replaceAll("_", " ")} time`;
+  const fixed = /^etc\/gmt([+-])(\d+)$/i.exec(timezone);
   if (fixed && fixed[2] !== "0") return `GMT${fixed[1] === "+" ? "-" : "+"}${fixed[2]}`;
-  return /^(Etc\/)?(UTC|UCT|GMT(0|[+-]0)?|Greenwich|Universal|Zulu)$/.test(timezone) ? "UTC" : timezone;
+  return /^(etc\/)?(utc|uct|gmt(0|[+-]0)?|greenwich|universal|zulu)$/i.test(timezone) ? "UTC" : timezone;
 }
 
 export function nextDigestDate(schedule: DigestSchedule, after: Date) {
