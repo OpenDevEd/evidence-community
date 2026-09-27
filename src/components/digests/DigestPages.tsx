@@ -79,8 +79,7 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
-          {/* Room for the longest next edition line, so nothing below moves when it arrives. */}
-          {settings.enabled && <div className="mt-5 min-h-16 sm:min-h-10"><Suspense fallback={<Skeleton className="h-10 w-80 max-w-full rounded-lg" />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense></div>}
+          {settings.enabled && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
         </div>
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
@@ -93,11 +92,19 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
       </div>
   </PageContainer>;
 }
+/** The next send date as a tile, like the archive's. The tile sets the height, so the text beside it never moves the page. */
+const nextEditionRow = "mt-5 flex h-[4.25rem] items-center gap-4";
+function NextEditionLoading() {
+  return <div className={nextEditionRow}><Skeleton className="h-full w-16 rounded-xl" /><div className="space-y-2"><Skeleton className="h-3 w-24 rounded-lg" /><Skeleton className="h-5 w-44 rounded-lg" /><Skeleton className="h-3 w-28 rounded-lg" /></div></div>;
+}
 function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate | null>; settings: DigestSettings}) {
   const next = use(nextEdition);
   if (!next) return null;
-  return (
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm"><span className="text-accent"><Icon value={Calendar03Icon} size={16} /></span><span className={`text-xs ${muted}`}>Next edition</span><time dateTime={next.at} className="font-medium">{next.weekday}</time><span className={`basis-full pl-[26px] text-xs tabular-nums ${muted}`}>{next.time} {settings.timezone}</span></div>);
+  const place = settings.timezone.split("/").at(-1)!.replaceAll("_", " ");
+  return <div className={nextEditionRow}>
+    <time dateTime={next.at} aria-label={next.weekday} className="grid h-full w-16 shrink-0 place-content-center rounded-xl bg-accent/10 text-center text-accent"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
+    <div className="min-w-0 whitespace-nowrap"><p className={`text-xs ${muted}`}>Next edition</p><p className="mt-1 font-medium">{next.dayName} at {next.time}</p><p className={`mt-0.5 text-xs ${muted}`}>{place} time</p></div>
+  </div>;
 }
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const {editions: items, page, pages} = use(editions);

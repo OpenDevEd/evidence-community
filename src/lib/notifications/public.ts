@@ -14,7 +14,7 @@ const EDITION_PAGE_SIZE = 12;
  * A date written out in the library's time zone. Only the server writes it: the
  * browser's time zone data can disagree with the server's, and the page would not hydrate.
  */
-export type DigestDate = {at: string; day: string; month: string; monthYear: string; weekday: string; date: string; time: string};
+export type DigestDate = {at: string; day: string; month: string; monthYear: string; weekday: string; dayName: string; date: string; time: string};
 export type DigestSummary = {slug: string; published: DigestDate; title: string; summary: string; publicationCount: number; cover: string | null};
 /** An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`. */
 export type DigestEdition = DigestSummary & {markdown: string; listed: number; page: number; pages: number; keys: string[]};
@@ -31,7 +31,7 @@ function digestDate(value: Date, locale: string, config: LibraryServerConfig): D
   const text = (options: Intl.DateTimeFormatOptions) => value.toLocaleString(locale, {...options, timeZone: config.notifications.schedule.timezone});
   return {
     at: value.toISOString(), day: text({day: "2-digit"}), month: text({month: "short"}), monthYear: text({month: "long", year: "numeric"}),
-    weekday: text({weekday: "long", day: "numeric", month: "long"}), date: text({day: "numeric", month: "long", year: "numeric"}),
+    weekday: text({weekday: "long", day: "numeric", month: "long"}), dayName: text({weekday: "long"}), date: text({day: "numeric", month: "long", year: "numeric"}),
     time: text({hour: "2-digit", minute: "2-digit", hour12: false}),
   };
 }
