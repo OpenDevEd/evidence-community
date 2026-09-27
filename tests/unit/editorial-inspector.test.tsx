@@ -134,6 +134,7 @@ function Inspector({ role, overrides, initial = draftPayload }: { role: "editor"
 		onResolveConcurrentConflict: noop,
 		onBackToParent: noop,
 		onCreateAttachment: noop,
+		preview: { open: false, target: null, revision: 0, zoom: 0.75, onZoom: noop, onToggle: noop, onPrepare: noop },
 		onDiscardDraft: noop,
 		onDiscardFile: noop,
 		onDuplicate: noop,

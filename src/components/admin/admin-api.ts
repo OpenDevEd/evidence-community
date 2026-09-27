@@ -884,10 +884,6 @@ export function adminErrorMessage(error: unknown, fallback: string) {
  return error instanceof Error ? error.message : fallback;
 }
 
-export function setAdminLiveView(on: boolean) {
-	return requestJson<void>("/api/admin/live-view", { method: on ? "POST" : "DELETE" });
-}
-
 export function clearAdminPublicCache() {
 	return requestJson<void>("/api/admin/public-cache", { method: "DELETE" });
 }

@@ -11,6 +11,7 @@ export default defineConfig({
 		environment: "node",
 		include: [
 			"tests/integration/topic-review.test.ts",
+            "tests/integration/item-preview.test.ts",
 			"tests/integration/topics-lifecycle.test.ts",
 			"tests/integration/openalex-refresh.test.ts",
 			"tests/integration/openalex-source.test.ts",

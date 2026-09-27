@@ -45,7 +45,7 @@ export type ReviewActor = {
 	role: "owner" | "editor" | "creator";
 };
 
-async function reviewChildKeys(
+export async function reviewChildKeys(
 	db: Database | DatabaseTransaction,
 	rootKey: string,
 ) {
@@ -378,7 +378,7 @@ function effectiveReviewRecord(
 	);
 }
 
-async function publishReviewRecords(
+export async function publishReviewRecords(
 	transaction: DatabaseTransaction,
 	locked: typeof itemReview.$inferSelect,
 	config: LibraryServerConfig,

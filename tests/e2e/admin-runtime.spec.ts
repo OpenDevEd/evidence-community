@@ -62,7 +62,6 @@ const protectedAdminRequests = [
 	["POST", "/api/admin/items/ABCDEFGH/file/complete"],
 	["DELETE", "/api/admin/items/ABCDEFGH/file/draft"],
 	["GET", "/api/admin/items"],
-	["POST", "/api/admin/live-view"],
 	["DELETE", "/api/admin/public-cache"],
 ] as const;
 

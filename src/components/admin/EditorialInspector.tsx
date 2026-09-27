@@ -260,6 +260,7 @@ function SubmittedInspector({
 			detail={live.detail}
 			liveDetail={live.liveDetail}
 			payload={reviewPayload}
+			previewReview={{ id: snapshot.reviewId, itemKey: snapshot.key, revision: snapshot.reviewRevision }}
 			readOnlyVersion
 			allowReviewCorrections={allowCorrections}
 			publishingChoice={snapshot.publishing}
