@@ -71,6 +71,8 @@ async function publishReview(transaction: DatabaseTransaction, rootKey: string, 
 		.from(itemReview)
 		.where(and(eq(itemReview.id, reviewId), eq(itemReview.itemKey, rootKey)));
 	if (!review) throw new ItemNotFoundError(rootKey);
+	// An approved review already is the public record; replaying it over what approval wrote would invent a page.
+	if (review.state === "published") return { files: [], removed: [] };
 	assertReviewPublishable(review);
 	// Approval refuses a pending review whose records changed since it was sent; an older review shows what it held.
 	if (review.state === "pending") await assertReviewCurrent(transaction, review);

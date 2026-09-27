@@ -9,7 +9,7 @@ import { previewItem } from "@/lib/admin/item-preview";
 import { createNativeItemDraft, getItemDraft, openItemDraft, publishItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "@/lib/admin/native-file-service";
 import { AdminValidationError } from "@/lib/admin/errors";
-import { setItemPublishingChoice, submitItemReview } from "@/lib/admin/review-service";
+import { approveItemReview, setItemPublishingChoice, submitItemReview } from "@/lib/admin/review-service";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -89,7 +89,7 @@ it("names what stops publishing instead of previewing", async () => {
 	});
 }, 120_000);
 
-it("shows the Crossref DOI that approving the review would reserve", async () => {
+it("shows the Crossref DOI a review reserves, before approval and after", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const draft = await createNativeItemDraft(db, { itemType: "Report", title: "Report with a DOI", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
 		await setItemPublishingChoice(db, draft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
@@ -99,5 +99,9 @@ it("shows the Crossref DOI that approving the review would reserve", async () =>
 
 		expect(preview?.DOI).toMatch(new RegExp(`^${config.services.publication.crossref?.prefix}/`));
 		expect(await db.select().from(item).where(eq(item.key, draft.itemKey))).toEqual([]);
+
+		await approveItemReview(db, new MemoryFileStorage(), { reviewId: review.id, expectedRevision: review.revision, publicationTags: ["publish-record"] }, { userId: "editor", role: "editor" }, config);
+		const [published] = await db.select({ DOI: item.DOI }).from(item).where(eq(item.key, draft.itemKey));
+		expect((await previewItem(db, draft.itemKey, config, review.id))?.DOI).toBe(published?.DOI);
 	});
 }, 120_000);
