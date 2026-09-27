@@ -72,6 +72,7 @@ export default async function AdminPage({
 	return (
 		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId }}>
 		<AdminWorkbench
+			configurationHref={`${new URL(adminConfig.loginPageUrl).origin}/evidence-libraries/${encodeURIComponent(adminConfig.libraryId)}/configuration?section=sources`}
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
 		/>

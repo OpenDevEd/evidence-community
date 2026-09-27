@@ -36,7 +36,9 @@ const nativeSource: AdminSource = {
 	provider: "native",
 	readOnly: false,
 	status: "active",
-	sync: null,
+	activity: null,
+	externalScopeKey: null,
+	scopeKind: "group",
 	writeback: { enabled: false, supported: false },
 };
 

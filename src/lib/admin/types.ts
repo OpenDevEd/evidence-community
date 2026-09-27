@@ -1,3 +1,5 @@
+import type { SourceStatus } from "@/lib/source-ingestion/source-status";
+
 import type { SourceFieldConflict } from "./source-field-contract";
 export type AdminRecordState = "deleted" | "draft" | "edited" | "published";
 
@@ -195,58 +197,52 @@ export type AdminCollectionCatalogPage = {
 	nextCursor: string | null;
 };
 
-export type AdminSourceSyncStatus = "failed" | "idle" | "running" | "succeeded";
+export type AdminSourceIssueKind = "pdf" | "fields" | "large" | "other";
 
-/** Import state of an external source, read from the sync tables. */
-export type AdminSourceSync = {
-	/** Records with a saved import issue, such as a field that was left out. */
-	issueCount: number;
-	lastError: string | null;
-	lastFailureAt: string | null;
-	/** Records the last successful import wrote. */
-	lastRecords: number | null;
-	lastSuccessAt: string | null;
-	/** Records a running import has processed so far, when the source reports it. */
-	processed: number | null;
-	runningSince: string | null;
-	status: AdminSourceSyncStatus;
+/** One kind of record issue in a source, with what to do about all of them. */
+export type AdminSourceIssueType = {
+	key: string;
+	kind: AdminSourceIssueKind;
+	title: string;
+	next: string;
+	count: number;
 };
 
-export type AdminSourceIssuesPage = {
-	/** Dismissed issues for the source, whichever view this page shows. */
-	dismissedTotal: number;
-	hasMore: boolean;
-	issues: AdminSourceIssue[];
-	nextCursor: string | null;
-	/** Open (not dismissed) issues for the source; the sidebar badge shows this. */
-	total: number;
+/** Where else a record can be opened: in its source, and on the public site. */
+export type AdminSourceIssueLink = {
+	kind: "zotero-app" | "zotero-web" | "openalex" | "public";
+	href: string;
 };
 
 export type AdminSourceIssue = {
-	/** The attachment's filename when the issue is about a file under a record. */
-	attachmentFilename: string | null;
-	code: string;
-	/** When an admin dismissed the issue; null while it is open. */
-	dismissedAt: string | null;
+	sourceRecordKey: string;
 	/** The library record to open: the parent when the issue is about its attachment. */
 	itemKey: string | null;
-	/** The worker's technical message; the admin shows a plain explanation first. */
+	links: AdminSourceIssueLink[];
+	title: string;
+	/** Who and when, such as "Piper et al. 2018". */
+	meta: string | null;
+	/** What went wrong on this record, such as the field that was left out. */
+	detail: string | null;
+	/** The importer's technical message. */
 	message: string;
-	sourceRecordKey: string;
-	title: string | null;
-	updatedAt: string;
 };
 
+export type AdminSourceIssuePage = { count: number; issues: AdminSourceIssue[] };
+
 export type AdminSource = {
+	/** Import and search state; null for the native source, which has nothing to import. */
+	activity: SourceStatus | null;
 	/** Active collections this source holds; tells the tree whether to offer a chevron. */
 	collectionCount: number;
+	/** The Zotero group or user id; null for sources without one. */
+	externalScopeKey: string | null;
 	key: string;
 	label: string;
 	provider: string;
 	readOnly: boolean;
+	scopeKind: string;
 	status: string;
-	/** Null for the native source, which has nothing to import. */
-	sync: AdminSourceSync | null;
 	writeback: {
 		enabled: boolean;
 		supported: boolean;

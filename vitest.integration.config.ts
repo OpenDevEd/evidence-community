@@ -29,6 +29,7 @@ export default defineConfig({
             "tests/integration/public-item-read.test.ts",
             "tests/integration/reviewed-publications.test.ts",
             "tests/integration/zotero-citations.test.ts",
+            "tests/integration/source-issues.test.ts",
 		],
 		maxWorkers: 1,
 	},

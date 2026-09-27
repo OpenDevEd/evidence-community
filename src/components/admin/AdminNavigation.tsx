@@ -6,7 +6,7 @@ import { ReviewQueueEntry } from "./ReviewQueueEntry";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, SquareLock01Icon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
 
-import { AdminSourceSyncBadge } from "./AdminSourceSyncDialog";
+import { AdminSourceStatusBadge } from "./AdminSourceStatus";
 import { type ReactNode, useRef } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -211,11 +211,11 @@ export function AdminNavigation({
 									<HugeiconsIcon icon={SquareLock01Icon} aria-label="Writeback unavailable" size={11} />
 								) : null}
 							</button>
-							{entry.sync ? (
-								<AdminSourceSyncBadge
+							{entry.activity ? (
+								<AdminSourceStatusBadge
+									activity={entry.activity}
 									label={entry.label}
 									onClick={() => onOpenSourceSync(entry.key)}
-									sync={entry.sync}
 								/>
 							) : null}
 							</div>
