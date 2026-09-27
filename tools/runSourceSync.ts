@@ -21,6 +21,7 @@ import {
 import {
 	hasSourceActivity,
 	readSourceStatuses,
+	type SearchableCache,
 } from "../src/lib/source-ingestion/source-status";
 import {
 	createSourceStatusReporter,
@@ -162,6 +163,7 @@ async function main() {
 		// A watching worker also runs requested sources and keeps OpenScholar's
 		// view current. The lanes stop with the worker, before the database closes.
 		const lanes = new AbortController();
+		const searchableCache: SearchableCache = new Map();
 		const stopLanes = () => lanes.abort();
 		abortController.signal.addEventListener("abort", stopLanes, { once: true });
 		const background = command.watch
@@ -178,7 +180,10 @@ async function main() {
 						report: createSourceStatusReporter({
 							...config.authentication.openScholar,
 							read: () =>
-								readSourceStatuses(database, { hiddenTags: config.content.tags.hidden }),
+								readSourceStatuses(database, {
+									cache: searchableCache,
+									hiddenTags: config.content.tags.hidden,
+								}),
 						}),
 						signal: lanes.signal,
 					}),

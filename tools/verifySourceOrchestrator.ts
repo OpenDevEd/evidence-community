@@ -28,6 +28,7 @@ import {
 import {
 	hasSourceActivity,
 	readSourceStatuses,
+	type SearchableCache,
 	type SourceStatus,
 } from "../src/lib/source-ingestion/source-status";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
@@ -437,6 +438,23 @@ async function verify() {
 			.set({ attempts: 5, deadLetteredAt: new Date(), lastError: "Meilisearch task failed" })
 			.where(eq(outbox.id, givenUp.id));
 		const upToDate = await statusOf();
+		// A caller's cache keeps an idle source's count instead of rescanning it.
+		const cache: SearchableCache = new Map();
+		const cachedStatus = async () =>
+			(await readSourceStatuses(database, { cache, hiddenTags: [] })).find(
+				(status) => status.key === progressKey,
+			);
+		const cachedBefore = await cachedStatus();
+		await database
+			.update(item)
+			.set({ deleted: 1 })
+			.where(inArray(item.key, (await database.select({ key: itemIdentity.key }).from(itemIdentity).where(eq(itemIdentity.sourceConnectionKey, progressKey))).slice(0, 1).map(({ key }) => key)));
+		const cachedAfter = await cachedStatus();
+		const uncachedAfter = await statusOf();
+		assert(
+			cachedBefore?.searchable === 2 && cachedAfter?.searchable === 2 && uncachedAfter?.searchable === 1,
+			`The searchable cache was not reused, or reads without it were cached: ${JSON.stringify({ cachedAfter: cachedAfter?.searchable, uncachedAfter: uncachedAfter?.searchable })}`,
+		);
 		assert(
 			upToDate?.state === "succeeded" &&
 				upToDate.changed === 2 &&

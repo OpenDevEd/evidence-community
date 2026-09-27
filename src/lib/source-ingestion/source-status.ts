@@ -204,9 +204,15 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
  * Every imported source's status, read in one pass. Search work is counted
  * per run: all events of the runs that still have some waiting.
  */
+/** How long a searchable count is reused while its source's state holds. */
+const SEARCHABLE_MAX_AGE_MS = 60_000;
+
+/** Searchable counts a caller keeps between reads, so frequent reads do not rescan idle sources. */
+export type SearchableCache = Map<string, { count: number; state: SourceStatus["state"]; countedAt: number }>;
+
 export async function readSourceStatuses(
 	database: Database,
-	options: { hiddenTags: readonly string[]; now?: Date },
+	options: { hiddenTags: readonly string[]; now?: Date; cache?: SearchableCache },
 ): Promise<SourceStatus[]> {
 	const now = options.now ?? new Date();
 	const hiddenTags = options.hiddenTags.map((name) => name.toLowerCase());
@@ -310,12 +316,35 @@ export async function readSourceStatuses(
 		});
 	});
 	// Every record is read to count them, so a source mid-import is left out.
-	const counted = statuses.filter((status) => status.state !== "running").map((status) => status.key);
-	const searchable = await countSearchable(database, counted, hiddenTags);
+	const searchable = await searchableCounts(database, statuses, hiddenTags, now, options.cache);
 	return statuses.map((status) => ({
 		...status,
 		searchable: status.state === "running" ? null : (searchable.get(status.key) ?? 0),
 	}));
+}
+
+/**
+ * Counts for the sources not mid-import. With a cache, a source is recounted
+ * only when its state changed or its count is over a minute old.
+ */
+async function searchableCounts(
+	database: Database,
+	statuses: SourceStatus[],
+	hiddenTags: string[],
+	now: Date,
+	cache: SearchableCache | undefined,
+) {
+	const counted = statuses.filter((status) => status.state !== "running");
+	const due = counted.filter(({ key, state }) => {
+		const cached = cache?.get(key);
+		return !cached || cached.state !== state || now.getTime() - cached.countedAt >= SEARCHABLE_MAX_AGE_MS;
+	});
+	const fresh = await countSearchable(database, due.map(({ key }) => key), hiddenTags);
+	if (!cache) return fresh;
+	for (const { key, state } of due) {
+		cache.set(key, { count: fresh.get(key) ?? 0, countedAt: now.getTime(), state });
+	}
+	return new Map(counted.map(({ key }) => [key, cache.get(key)?.count ?? 0]));
 }
 
 /** Whether any source is importing or has search work waiting: cheap enough to ask every few seconds. */
