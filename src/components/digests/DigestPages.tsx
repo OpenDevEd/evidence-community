@@ -14,6 +14,7 @@ import { Pagination } from "@/components/nextui/Pagination";
 import { describeDigestSchedule, timeZoneLabel } from "@/lib/notifications/schedule";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
 
@@ -102,7 +103,7 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
   if (!next) return null;
   return <div className={nextEditionRow}>
     <time dateTime={next.at} aria-label={next.weekday} className="grid h-full w-16 shrink-0 place-content-center rounded-xl bg-accent/10 text-center text-accent"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
-    <div className="min-w-0 whitespace-nowrap"><p className={`text-xs ${muted}`}>Next edition</p><p className="mt-1 font-medium">{next.dayName} at {next.time}</p><p className={`mt-0.5 text-xs ${muted}`}>{timeZoneLabel(settings.timezone)}</p></div>
+    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>Next edition</p><p className="mt-1 truncate font-medium">{next.dayName} at {next.time}</p><TruncatedText text={timeZoneLabel(settings.timezone)} className={`mt-0.5 text-xs ${muted}`} /></div>
   </div>;
 }
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
