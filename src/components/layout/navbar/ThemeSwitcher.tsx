@@ -74,15 +74,15 @@ export default function ThemeSwitcher({
 		>
 			<HugeiconsIcon icon={Sun03Icon}
 				className={twMerge(
-					toolbar ? "size-4" : "size-5",
-					"text-accent transition-all",
+					toolbar ? "size-[15px]" : "size-5 text-accent",
+					"transition-all",
 					"dark:block hidden"
 				)}
 			/>
 			<HugeiconsIcon icon={Moon02Icon}
 				className={twMerge(
-					toolbar ? "size-4" : "size-5",
-					"text-accent transition-all",
+					toolbar ? "size-[15px]" : "size-5 text-accent",
+					"transition-all",
 					"dark:hidden block"
 				)}
 			/>
