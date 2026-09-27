@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { reconcileOpenAlexMemberships } from "./reconciliation";
 import type { SourceAdapterContext } from "../adapter";
+import { SourceCredentialNotFoundError } from "../credentials";
 import type { JsonValue, SourceItemUpsert } from "../batch-schema";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
@@ -46,10 +47,7 @@ async function openAlexClient(
 ) {
 	const connection = context.sourceConnection;
 	const apiKey = await context.credentialResolver?.(connection.key);
-	if (!apiKey)
-		throw new Error(
-			`OpenAlex source ${connection.key} has no API credential`,
-		);
+	if (!apiKey) throw new SourceCredentialNotFoundError(connection.key);
 	if (config.downloadPdfs && !options.attachmentProcessor)
 		throw new Error(
 			"OpenAlex PDF processing is enabled but no processor is available",
@@ -189,6 +187,7 @@ function writeBatch(
 		expectedCursor,
 		nextCursor,
 		mappingProfileVersion: "openalex-v1",
+		sourceSyncRunId: context.run?.id,
 		fetchedAt: new Date(),
 		...batch,
 	});
@@ -234,6 +233,11 @@ export async function syncOpenAlexSource(
 				`OpenAlex source ${connection.key} returned a non-advancing page`,
 			);
 		}
+		// The total is known from the page; say it before slow PDF work starts.
+		// A resumed import can pass a count that shrank since it started.
+		const reportPage = (imported: number) =>
+			context.run?.report(imported, Math.max(page.meta.count, imported));
+		await reportPage(cursor.imported);
 		const mapped = page.results.map(mapOpenAlexWork);
 		const items = mapped.flatMap((work) => work.items);
 		if (config.downloadPdfs)
@@ -255,6 +259,7 @@ export async function syncOpenAlexSource(
 		});
 		expectedCursor = cursor;
 		pages++;
+		await reportPage(cursor.imported);
 		await options.attachmentProcessor?.flushCleanup(connection.key);
 	}
 	while (
@@ -264,6 +269,7 @@ export async function syncOpenAlexSource(
 			configuration: connection.config,
 			cursor: expectedCursor,
 			startedAt: cursor.startedAt,
+			sourceSyncRunId: context.run?.id,
 		}))
 	)
 		await context.heartbeat();

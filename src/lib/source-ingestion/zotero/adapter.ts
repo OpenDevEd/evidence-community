@@ -22,6 +22,7 @@ export function createZoteroSourceAdapter(
 				credentialResolver: context.credentialResolver,
 				database: context.database,
 				fetch: options.fetch,
+				run: context.run,
 				sleep: options.sleep,
 				sourceConnectionKey: context.sourceConnection.key,
 			});

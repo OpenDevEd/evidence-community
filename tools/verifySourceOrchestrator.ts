@@ -1,6 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+	itemIdentity,
+	outbox,
 	sourceConnection,
 	sourceSyncRun,
 	sourceSyncState,
@@ -19,6 +21,13 @@ import {
 	runSourceConnection,
 	SourceLeaseUnavailableError,
 } from "../src/lib/source-ingestion/orchestrator";
+import {
+	readSourceStatuses,
+	type SourceStatus,
+} from "../src/lib/source-ingestion/source-status";
+import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
+import { ZoteroApiError } from "../src/lib/source-ingestion/zotero/client";
+import { item } from "../src/db/schema/tables/item";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -33,12 +42,14 @@ const pausedKey = "orchestrator-paused";
 const leaseKey = "orchestrator-lease";
 const failureKey = "orchestrator-failure";
 const expiredKey = "orchestrator-expired";
+const progressKey = "orchestrator-progress";
 const allKeys = [
 	...sweepKeys,
 	pausedKey,
 	leaseKey,
 	failureKey,
 	expiredKey,
+	progressKey,
 ];
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -70,8 +81,20 @@ async function verify() {
 	const database = resource.database;
 	let blockedRunRelease: (() => void) | undefined;
 	let pausedExistingKeys: string[] = [];
+	// Imported items keep an identity row that blocks deleting their connection.
+	const clearProgressItems = async () => {
+		const keys = database
+			.select({ key: itemIdentity.key })
+			.from(itemIdentity)
+			.where(eq(itemIdentity.sourceConnectionKey, progressKey));
+		await database.delete(item).where(inArray(item.key, keys));
+		await database
+			.delete(itemIdentity)
+			.where(eq(itemIdentity.sourceConnectionKey, progressKey));
+	};
 
 	try {
+		await clearProgressItems();
 		await database
 			.delete(sourceConnection)
 			.where(inArray(sourceConnection.key, allKeys));
@@ -145,7 +168,7 @@ async function verify() {
 		assert(sweep.length === 3, "The sweep did not select exactly the active test connections");
 		assert(
 			sweep.every((outcome) => outcome.status === "succeeded"),
-			"The heterogeneous source sweep did not succeed",
+			`The heterogeneous source sweep did not succeed: ${JSON.stringify(sweep)}`,
 		);
 		assert(
 			maximumConcurrent === 2,
@@ -326,10 +349,174 @@ async function verify() {
 			"Expired lease recovery did not close the old run before retrying",
 		);
 
+		// Progress, per-run search work and the failure code, as the status reads them.
+		await database.insert(sourceConnection).values({
+			externalScopeKey: "orchestrator-progress-scope",
+			key: progressKey,
+			provider: "zotero",
+			scopeKind: "group",
+		});
+		const statusOf = async () =>
+			(await readSourceStatuses(database, { hiddenTags: [] })).find(
+				(status) => status.key === progressKey,
+			);
+		let midRun: SourceStatus | undefined;
+		const progressRun = await runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("zotero", async (context) => {
+					await context.run?.report(0, 3);
+					const written = await writeSourceIngestionBatch(database, {
+						expectedCursor: context.sourceConnection.syncCursor,
+						fetchedAt: new Date(),
+						items: ["PROG0001", "PROG0002"].map((sourceRecordKey) => ({
+							metadata: { itemType: "journalArticle", title: sourceRecordKey },
+							operation: "upsert",
+							raw: {},
+							remoteVersion: "1",
+							sourceRecordKey,
+						})),
+						mappingProfileVersion: "orchestrator-progress-v1",
+						nextCursor: { step: 1 },
+						sourceConnectionKey: progressKey,
+						sourceSyncRunId: context.run?.id,
+					});
+					assert(
+						Object.keys(written.itemKeys).length === 2,
+						"The progress batch did not import both records",
+					);
+					await context.run?.report(2, 3);
+					midRun = await statusOf();
+					return { records: 2 };
+				}),
+			]),
+			sourceConnectionKey: progressKey,
+			workerId: "progress-worker",
+		});
+		assert(
+			midRun?.state === "running" &&
+				midRun.phase === "import" &&
+				midRun.done === 2 &&
+				midRun.total === 3,
+			`A running import did not report its progress: ${JSON.stringify(midRun)}`,
+		);
+		const tagged = await database
+			.select({ id: outbox.id })
+			.from(outbox)
+			.where(eq(outbox.sourceSyncRunId, progressRun.runId));
+		assert(
+			tagged.length === 2,
+			`The import's search work was not tagged with its run: ${tagged.length}`,
+		);
+		const searching = await statusOf();
+		assert(
+			searching?.state === "running" &&
+				searching.phase === "search" &&
+				searching.done === 0 &&
+				searching.total === 2,
+			`Waiting search work did not show as the search phase: ${JSON.stringify(searching)}`,
+		);
+		// Stand in for the search worker: one event indexed, one given up on.
+		const [indexed, givenUp] = tagged;
+		assert(indexed && givenUp, "The run's two search events were not found");
+		await database
+			.update(outbox)
+			.set({ processedAt: new Date() })
+			.where(eq(outbox.id, indexed.id));
+		await database
+			.update(outbox)
+			.set({ attempts: 5, deadLetteredAt: new Date(), lastError: "Meilisearch task failed" })
+			.where(eq(outbox.id, givenUp.id));
+		const upToDate = await statusOf();
+		assert(
+			upToDate?.state === "succeeded" &&
+				upToDate.changed === 2 &&
+				upToDate.searchable === 2 &&
+				upToDate.searchFailed === 1,
+			`A finished import did not read as up to date with its failed search update: ${JSON.stringify(upToDate)}`,
+		);
+		await expectRejects(
+			runSourceConnection({
+				database,
+				heartbeatIntervalMs: 100,
+				leaseDurationMs: 1_000,
+				registry: new SourceAdapterRegistry([
+					fakeAdapter("zotero", async () => {
+						throw new ZoteroApiError("Zotero request failed with 403 Forbidden", 403);
+					}),
+				]),
+				sourceConnectionKey: progressKey,
+				workerId: "refused-worker",
+			}),
+			"ZoteroApiError",
+			(error) => error instanceof ZoteroApiError,
+		);
+		const refused = await statusOf();
+		assert(
+			refused?.state === "failed" &&
+				refused.failure.code === "access_denied" &&
+				refused.changed === 2,
+			`A refused key did not read as access denied: ${JSON.stringify(refused)}`,
+		);
+		// A run that writes a batch and then fails still counts what it changed.
+		await expectRejects(
+			runSourceConnection({
+				database,
+				heartbeatIntervalMs: 100,
+				leaseDurationMs: 1_000,
+				registry: new SourceAdapterRegistry([
+					fakeAdapter("zotero", async (context) => {
+						await writeSourceIngestionBatch(database, {
+							expectedCursor: context.sourceConnection.syncCursor,
+							fetchedAt: new Date(),
+							items: [
+								{
+									metadata: { itemType: "journalArticle", title: "PROG0003" },
+									operation: "upsert",
+									raw: {},
+									remoteVersion: "1",
+									sourceRecordKey: "PROG0003",
+								},
+							],
+							mappingProfileVersion: "orchestrator-progress-v1",
+							nextCursor: { step: 2 },
+							sourceConnectionKey: progressKey,
+							sourceSyncRunId: context.run?.id,
+						});
+						throw new ZoteroApiError("Zotero request failed with 503", 503);
+					}),
+				]),
+				sourceConnectionKey: progressKey,
+				workerId: "partial-worker",
+			}),
+			"ZoteroApiError",
+			(error) => error instanceof ZoteroApiError,
+		);
+		const partial = await statusOf();
+		assert(
+			partial?.state === "failed" &&
+				partial.failure.code === "unavailable" &&
+				partial.changed === 1,
+			`A failed run's written changes were not counted: ${JSON.stringify(partial)}`,
+		);
+		// A source dropped from the configuration stops reporting.
+		await database
+			.update(sourceConnection)
+			.set({ status: "removed" })
+			.where(eq(sourceConnection.key, progressKey));
+		assert((await statusOf()) === undefined, "A removed source still reported its status");
+		await database
+			.update(sourceConnection)
+			.set({ status: "active" })
+			.where(eq(sourceConnection.key, progressKey));
+
 		console.log(
 			JSON.stringify({
 				expiredLeaseRecovered: true,
 				failureRetryRecovered: true,
+				importProgressReported: true,
 				leaseContentionRejected: true,
 				maximumConcurrent,
 				providers: completedProviders.sort(),
@@ -337,6 +524,7 @@ async function verify() {
 		);
 	} finally {
 		blockedRunRelease?.();
+		await clearProgressItems();
 		await database
 			.delete(sourceConnection)
 			.where(inArray(sourceConnection.key, allKeys));

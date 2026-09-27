@@ -35,6 +35,15 @@ export class ZoteroSourceConfigurationError extends Error {
 	}
 }
 
+export class ZoteroSnapshotTooLargeError extends ZoteroSourceConfigurationError {
+	constructor(checked: "snapshot" | "manifest", records: number, limit: number) {
+		super(
+			`Zotero ${checked} has ${records} records, exceeding maxSnapshotRecords ${limit}`,
+		);
+		this.name = "ZoteroSnapshotTooLargeError";
+	}
+}
+
 function zoteroScope(connection: ZoteroSourceConnection): ZoteroLibraryScope {
 	if (!connection.externalScopeKey) {
 		throw new ZoteroSourceConfigurationError(

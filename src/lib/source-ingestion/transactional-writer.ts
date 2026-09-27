@@ -2568,6 +2568,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			});
 		}
 
+		const sourceSyncRunId = batch.sourceSyncRunId ?? null;
 		const outboxRows = [
 			...[...collectionEvents].map(
 				([entityKey, { operation, revision }]) => ({
@@ -2575,6 +2576,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					entityKey,
 					operation,
 					revision,
+					sourceSyncRunId,
 				}),
 			),
 			...[...itemEvents].map(([entityKey, { operation, revision }]) => ({
@@ -2582,6 +2584,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				entityKey,
 				operation,
 				revision,
+				sourceSyncRunId,
 			})),
 		];
 		await insertInChunks(outboxRows, RELATION_CHUNK_SIZE, (rowChunk) =>

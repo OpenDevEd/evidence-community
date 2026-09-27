@@ -54,6 +54,19 @@ export const SOURCE_SYNC_RUN_STATUSES = [
 	"failed",
 ] as const;
 
+/** Why an import failed, so each app can say it in its own words. */
+export const SOURCE_SYNC_ERROR_CODES = [
+	"access_denied",
+	"not_found",
+	"missing_key",
+	"invalid_query",
+	"too_large",
+	"rate_limited",
+	"unavailable",
+	"interrupted",
+	"internal",
+] as const;
+
 export const OUTBOX_ENTITY_TYPES = ["item", "collection"] as const;
 export const OUTBOX_OPERATIONS = ["upsert", "delete"] as const;
 export const SOURCE_WRITEBACK_OPERATIONS = ["upsert", "delete"] as const;
@@ -73,6 +86,7 @@ export type SourceScopeKind = (typeof SOURCE_SCOPE_KINDS)[number];
 export type SourceConnectionStatus =
 	(typeof SOURCE_CONNECTION_STATUSES)[number];
 export type SourceSyncRunStatus = (typeof SOURCE_SYNC_RUN_STATUSES)[number];
+export type SourceSyncErrorCode = (typeof SOURCE_SYNC_ERROR_CODES)[number];
 export type OutboxEntityType = (typeof OUTBOX_ENTITY_TYPES)[number];
 export type OutboxOperation = (typeof OUTBOX_OPERATIONS)[number];
 export type SourceWritebackOperation =
@@ -229,6 +243,12 @@ export const sourceSyncRun = pgTable(
 		finishedAt: timestampWithTimezone("finishedAt"),
 		result: jsonb("result").$type<JsonObject>(),
 		error: text("error"),
+		/** Records the run has written so far, and how many it will write when the source said. */
+		recordsDone: integer("recordsDone").notNull().default(0),
+		recordsTotal: integer("recordsTotal"),
+		/** Where this run picked up, and when: a resumed import's rate counts only its own work. */
+		recordsFrom: integer("recordsFrom"),
+		recordsFromAt: timestampWithTimezone("recordsFromAt"),
 	},
 	(table) => [
 		check(
@@ -275,6 +295,9 @@ export const sourceSyncState = pgTable(
 			.notNull()
 			.default(0),
 		lastError: text("lastError"),
+		lastErrorCode: text("lastErrorCode", { enum: SOURCE_SYNC_ERROR_CODES }),
+		/** Records written by the latest run that changed any. */
+		lastChangedRecords: integer("lastChangedRecords"),
 		lastResult: jsonb("lastResult").$type<JsonObject>(),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},
@@ -767,6 +790,11 @@ export const outbox = pgTable(
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
 		processedAt: timestampWithTimezone("processedAt"),
 		deadLetteredAt: timestampWithTimezone("deadLetteredAt"),
+		/** The source import that queued this event, so its search update can be counted. */
+		sourceSyncRunId: bigint("sourceSyncRunId", { mode: "number" }).references(
+			() => sourceSyncRun.id,
+			{ onDelete: "set null" },
+		),
 	},
 	(table) => [
 		check(
@@ -809,6 +837,9 @@ export const outbox = pgTable(
 			.where(
 				sql`${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NOT NULL`,
 			),
+		index("outbox_source_sync_run_idx")
+			.on(table.sourceSyncRunId)
+			.where(sql`${table.sourceSyncRunId} IS NOT NULL`),
 	],
 );
 

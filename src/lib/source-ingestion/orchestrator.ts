@@ -1,13 +1,16 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+	outbox,
 	sourceConnection,
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { item } from "@/db/schema/tables/item";
+import { PARENT_REQUIRED_ITEM_TYPES } from "@/lib/admin/item-fields";
 
 import {
 	isSyncableSourceProvider,
@@ -19,11 +22,14 @@ import {
 } from "./adapter";
 import { chunkValues } from "@/lib/chunk-values";
 import type { SourceCredentialResolver } from "./credentials";
+import { classifySourceError } from "./source-status";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 const MAX_WORKER_ID_LENGTH = 255;
+
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 type ClaimedRun = {
 	connection: SourceConnection;
@@ -138,6 +144,30 @@ function expiryFrom(now: Date, leaseDurationMs: number) {
 	return new Date(now.getTime() + leaseDurationMs);
 }
 
+const EXPIRED_RUN_ERROR = "SourceLeaseLostError: worker lease expired";
+
+/**
+ * Marks runs whose worker died as failed. Their batches stay written, so what
+ * they changed is counted as a failed run's is.
+ */
+async function closeExpiredRuns(transaction: Transaction, sourceConnectionKey: string, now: Date) {
+	const expiredRuns = await transaction
+		.update(sourceSyncRun)
+		.set({ error: EXPIRED_RUN_ERROR, finishedAt: now, heartbeatAt: now, status: "failed" })
+		.where(
+			and(
+				eq(sourceSyncRun.sourceConnectionKey, sourceConnectionKey),
+				eq(sourceSyncRun.status, "running"),
+			),
+		)
+		.returning({ id: sourceSyncRun.id });
+	let changedPatch = {};
+	for (const run of expiredRuns) {
+		changedPatch = { ...changedPatch, ...(await changedRecordsPatch(transaction, run.id)) };
+	}
+	return { changedPatch, found: expiredRuns.length > 0 };
+}
+
 async function claimRun(
 	options: SourceConnectionRunOptions,
 	leaseDurationMs: number,
@@ -196,25 +226,7 @@ async function claimRun(
 			throw new SourceLeaseUnavailableError(connection.key);
 		}
 
-		const expiredError = "SourceLeaseLostError: worker lease expired";
-		const expiredRuns = await transaction
-			.update(sourceSyncRun)
-			.set({
-				error: expiredError,
-				finishedAt: now,
-				heartbeatAt: now,
-				status: "failed",
-			})
-			.where(
-				and(
-					eq(
-						sourceSyncRun.sourceConnectionKey,
-						connection.key,
-					),
-					eq(sourceSyncRun.status, "running"),
-				),
-			)
-			.returning({ id: sourceSyncRun.id });
+		const expired = await closeExpiredRuns(transaction, connection.key, now);
 
 		const [run] = await transaction
 			.insert(sourceSyncRun)
@@ -231,10 +243,12 @@ async function claimRun(
 			.update(sourceSyncState)
 			.set({
 				activeRunId: run.id,
-				...(expiredRuns.length > 0
+				...expired.changedPatch,
+				...(expired.found
 					? {
 							consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
-							lastError: expiredError,
+							lastError: EXPIRED_RUN_ERROR,
+							lastErrorCode: "interrupted" as const,
 							lastFailureAt: now,
 							lastResult: null,
 						}
@@ -297,6 +311,33 @@ async function heartbeatRun(
 	});
 }
 
+/**
+ * Records a run changed: its search work on top-level records. Counted when
+ * the run ends either way, since a failed run keeps the batches it wrote.
+ */
+async function countChangedRecords(transaction: Transaction, runId: number) {
+	const [row] = await transaction
+		.select({ changed: sql<number>`count(distinct ${outbox.entityKey})::int` })
+		.from(outbox)
+		.innerJoin(item, eq(item.key, outbox.entityKey))
+		.where(
+			and(
+				eq(outbox.sourceSyncRunId, runId),
+				eq(outbox.entityType, "item"),
+				isNull(item.parentItem),
+				// Attachments, notes and annotations are not records of their own.
+				notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),
+			),
+		);
+	return row?.changed ?? 0;
+}
+
+/** The sync state fields for what a run changed; nothing when it changed nothing. */
+async function changedRecordsPatch(transaction: Transaction, runId: number) {
+	const changed = await countChangedRecords(transaction, runId);
+	return changed > 0 ? { lastChangedRecords: changed } : {};
+}
+
 async function finishRunSucceeded(
 	options: SourceOrchestratorOptions,
 	claimed: ClaimedRun,
@@ -305,12 +346,15 @@ async function finishRunSucceeded(
 ) {
 	const now = (options.now ?? (() => new Date()))();
 	await options.database.transaction(async (transaction) => {
+		const changedPatch = await changedRecordsPatch(transaction, claimed.runId);
 		const [state] = await transaction
 			.update(sourceSyncState)
 			.set({
+				...changedPatch,
 				activeRunId: null,
 				consecutiveFailures: 0,
 				lastError: null,
+				lastErrorCode: null,
 				lastResult: result,
 				lastSuccessAt: now,
 				leaseExpiresAt: null,
@@ -358,13 +402,20 @@ async function finishRunFailed(
 ) {
 	const now = (options.now ?? (() => new Date()))();
 	const message = errorMessage(error);
+	const code =
+		error instanceof SourceLeaseLostError
+			? "interrupted"
+			: classifySourceError(error);
 	await options.database.transaction(async (transaction) => {
+		const changedPatch = await changedRecordsPatch(transaction, claimed.runId);
 		const [state] = await transaction
 			.update(sourceSyncState)
 			.set({
+				...changedPatch,
 				activeRunId: null,
 				consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
 				lastError: message,
+				lastErrorCode: code,
 				lastFailureAt: now,
 				lastResult: null,
 				leaseExpiresAt: null,
@@ -402,6 +453,27 @@ async function finishRunFailed(
 			throw new SourceLeaseLostError(claimed.connection.key);
 		}
 	});
+}
+
+/** Saves how far the run has got, for the status the admin and OpenScholar show. */
+async function reportRunProgress(
+	options: SourceOrchestratorOptions,
+	runId: number,
+	done: number,
+	total: number | null,
+) {
+	const now = (options.now ?? (() => new Date()))();
+	await options.database
+		.update(sourceSyncRun)
+		.set({
+			recordsDone: done,
+			recordsFrom: sql`coalesce(${sourceSyncRun.recordsFrom}, ${done})`,
+			recordsFromAt: sql`coalesce(${sourceSyncRun.recordsFromAt}, ${now})`,
+			recordsTotal: total,
+		})
+		.where(
+			and(eq(sourceSyncRun.id, runId), eq(sourceSyncRun.status, "running")),
+		);
 }
 
 async function heartbeatLoop(
@@ -475,6 +547,11 @@ export async function runSourceConnection(
 						leaseDurationMs,
 						workerId,
 					),
+				run: {
+					id: claimed.runId,
+					report: (done, total) =>
+						reportRunProgress(options, claimed.runId, done, total),
+				},
 				sourceConnection: claimed.connection,
 			}),
 		);

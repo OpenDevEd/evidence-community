@@ -38,10 +38,19 @@ export const sourceSyncResultSchema = jsonObjectSchema.superRefine(
 	},
 );
 
+/** The run an adapter works for: its id tags the search work it queues. */
+export type SourceRunProgress = {
+	id: number;
+	/** Records written so far, and how many there are when the source said. */
+	report: (done: number, total: number | null) => Promise<void>;
+};
+
 export type SourceAdapterContext = {
 	credentialResolver?: SourceCredentialResolver;
 	database: Database;
 	heartbeat: () => Promise<void>;
+	/** Missing when a caller syncs a source outside the orchestrator. */
+	run?: SourceRunProgress;
 	sourceConnection: SourceConnection;
 };
 

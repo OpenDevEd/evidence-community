@@ -30,7 +30,7 @@ const PARENT_CAPABLE_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
 // Attachments, notes and annotations always belong to a record. None of
 // them is a record of its own: not creatable from the New item list, and
 // not listed in the public library on its own.
-const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
+export const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
 
 export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 	creatorTypes: readonly unknown[];

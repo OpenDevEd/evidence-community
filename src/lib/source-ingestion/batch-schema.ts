@@ -226,6 +226,8 @@ export const sourceIngestionBatchSchema = z
 		expectedConfiguration: jsonObjectSchema.optional(),
 		institutionCountries: z.array(institutionCountryInputSchema).max(20_000).default([]),
 		nextCursor: jsonObjectSchema,
+		/** The import run writing this batch; other writers leave it out. */
+		sourceSyncRunId: z.number().int().positive().optional(),
 		mappingProfileVersion: z.string().trim().min(1).max(64),
 		fetchedAt: z.date(),
 		items: z
