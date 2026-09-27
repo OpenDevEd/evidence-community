@@ -437,8 +437,9 @@ export default function AdminWorkbench({
 	);
 	const [saveState, setSaveState] = useState<SaveState>("idle");
 	const [previewing, setPreviewing] = useState(false);
-	// Drawn from the first opening on, so closing slides it away instead of emptying it first.
-	const [previewPrepared, setPreviewPrepared] = useState(false);
+	// The record the page is drawn for while the preview is closed: from a hover on its button, so it opens drawn, until
+	// the slide away after closing ends. A closed pane holds nothing, so nothing rebuilds a page nobody is looking at.
+	const [previewFor, setPreviewFor] = useState<string | null>(null);
 	const [previewPane, setPreviewPane] = useState<HTMLElement | null>(null);
 	const [previewZoom, setPreviewZoom] = useState(DEFAULT_PREVIEW_ZOOM);
 	// A new save draws the preview again from the saved draft.
@@ -454,9 +455,11 @@ export default function AdminWorkbench({
 		requestAnimationFrame(() => setTimeout(() => setPreviewing(open)));
 	};
 	const showPreview = (open: boolean) => {
-		setPreviewPrepared(true);
+		setPreviewFor(selectedKey);
 		if (wideLayout) slidePreview(open);
 		else setMobilePane(open ? "preview" : "inspector");
+		// As long as the slide, duration-500 on the strip.
+		if (!open) setTimeout(() => setPreviewFor(null), 500);
 	};
 	const [saveMessage, setSaveMessage] = useState<string | null>(null);
 	const [validationErrors, setValidationErrors] = useState<AdminFieldErrors>(
@@ -2647,13 +2650,13 @@ export default function AdminWorkbench({
 							onDuplicate={duplicateCurrent}
 							preview={{
 								open: previewOpen,
-								target: previewPrepared ? previewPane : null,
+								target: previewOpen || previewFor === selectedKey ? previewPane : null,
 								revision: previewRevision,
 								zoom: previewZoom,
 								onZoom: setPreviewZoom,
 								onToggle: () => showPreview(!previewOpen),
 								onRefresh: () => setPreviewRevision((revision) => revision + 1),
-								onPrepare: () => setPreviewPrepared(true),
+								onPrepare: () => setPreviewFor(selectedKey),
 							}}
 							onOpenDraft={openCurrentDraft}
 							onManageSources={manageSources}

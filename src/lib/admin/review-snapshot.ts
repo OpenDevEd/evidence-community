@@ -21,14 +21,6 @@ type CapturedFile = {
 	removalId?: string;
 };
 
-/** A PDF still uploading or processing can't be submitted or previewed yet. */
-export function assertUploadReady(upload: Pick<typeof itemFileDraft.$inferSelect, "readyAt">) {
-	if (!upload.readyAt)
-		throw new AdminValidationError(
-			"Wait for the PDF upload to finish or remove it before submitting.",
-		);
-}
-
 function captureFile(
 	key: string,
 	current: typeof item.$inferSelect | undefined,
@@ -38,7 +30,10 @@ function captureFile(
 ): CapturedFile | null {
 	if (removal) return { itemKey: key, file: null, removalId: removal.id };
 	if (upload) {
-		assertUploadReady(upload);
+		if (!upload.readyAt)
+			throw new AdminValidationError(
+				"Wait for the PDF upload to finish or remove it before submitting.",
+			);
 		return {
 			itemKey: key,
 			file: reviewFileSchema.parse({

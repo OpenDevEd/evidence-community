@@ -6,10 +6,9 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemFileRemoval, itemReview, itemReviewFile } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { projectPublicItems } from "@/lib/search-index/projection";
-import { ItemNotFoundError, loadWorkingItemPayload, publishItemDraftWithContext } from "./native-item-service";
+import { ItemNotFoundError, publishItemDraftWithContext } from "./native-item-service";
 import { activateChosenIdentifiers, assertReviewCurrent, assertReviewPublishable, getItemPublishingChoice, publishReviewRecords, reviewChildKeys } from "./review-service";
-import { assertUploadReady } from "./review-snapshot";
-import { validateReviewPayload } from "./review-validation";
+import { captureItemReviewSnapshot } from "./review-snapshot";
 
 /** Names the preview as the requester of any identifier it activates; the rollback discards the activation anyway. */
 const PREVIEW_ACTOR = "draft-preview";
@@ -48,8 +47,8 @@ async function publishWorkingDrafts(transaction: DatabaseTransaction, rootKey: s
 		getItemPublishingChoice(transaction, rootKey),
 	]);
 	const drafted = keys.filter((key) => drafts.some((draft) => draft.key === key));
-	// What submitting for review checks, identifier requirements included, so the preview names every blocker.
-	for (const key of drafted) validateReviewPayload(await loadWorkingItemPayload(transaction, key), key === rootKey ? choice : null);
+	// What submitting for review checks, for the whole family, so the preview names every blocker.
+	await captureItemReviewSnapshot(transaction, rootKey, keys, choice);
 	// The parent first, as a review publishes it, so a new attachment has a record to belong to.
 	for (const key of drafted) await publishItemDraftWithContext(transaction, key, { writebackConfig: config });
 	// As approval would, so a DOI the record is about to receive shows on the page.
@@ -58,7 +57,6 @@ async function publishWorkingDrafts(transaction: DatabaseTransaction, rootKey: s
 		transaction.select().from(itemFileDraft).where(inArray(itemFileDraft.itemKey, keys)),
 		transaction.select({ itemKey: itemFileRemoval.itemKey }).from(itemFileRemoval).where(inArray(itemFileRemoval.itemKey, keys)),
 	]);
-	files.forEach(assertUploadReady);
 	return {
 		files: files.map((file) => ({ ...file, cover: Boolean(file.coverObjectPath) })),
 		removed: removals.map(({ itemKey }) => itemKey),
