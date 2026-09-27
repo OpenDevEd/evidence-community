@@ -60,6 +60,11 @@ export function DraftPreviewPortal({
 	const version = review?.revision ?? preview.revision;
 	const [shownVersion, setShownVersion] = useState(version);
 	if (preview.open && shownVersion !== version) setShownVersion(version);
+	// A frame loads once per record or review. Later versions reach it through its version attribute, and the page
+	// refreshes in place instead of reloading, so saving doesn't blank the frame or reset its scroll.
+	const page = review ? `${review.itemKey}:${review.id}` : itemKey;
+	const [frame, setFrame] = useState({ page, version: shownVersion });
+	if (frame.page !== page) setFrame({ page, version: shownVersion });
 	if (!preview.target) return null;
 	// Under the admin's own locale prefix, so the page reads in the language the admin is using. The pane only exists
 	// in the browser, so its location is there to read.
@@ -68,8 +73,8 @@ export function DraftPreviewPortal({
 	const { zoom, onZoom } = preview;
 	const step = PREVIEW_ZOOMS.indexOf(zoom);
 	const src = review
-		? `${previewPath}/${review.itemKey}?review=${review.id}&v=${shownVersion}`
-		: `${previewPath}/${itemKey}?v=${shownVersion}`;
+		? `${previewPath}/${review.itemKey}?review=${review.id}&v=${frame.version}`
+		: `${previewPath}/${itemKey}?v=${frame.version}`;
 	const label = review ? "Preview of the submitted version" : "Preview of the working draft";
 	return createPortal(
 		<div className="flex h-full min-h-0 flex-col">
@@ -108,6 +113,7 @@ export function DraftPreviewPortal({
 				<iframe
 					key={src}
 					src={src}
+					data-version={shownVersion}
 					title={label}
 					onLoad={() => setLoaded(true)}
 					className={`absolute left-0 top-0 origin-top-left bg-background transition-opacity duration-200 motion-reduce:transition-none ${loaded ? "opacity-100" : "opacity-0"}`}

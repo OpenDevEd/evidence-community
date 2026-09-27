@@ -406,6 +406,31 @@ test("keeps typing and field patches intact while an autosave is in flight", asy
 	}
 });
 
+test("updates the open draft preview in place after a save", async ({ page }) => {
+	test.setTimeout(90_000);
+	await openAdmin(page);
+	await page.getByRole("button", { name: "Create Item", exact: true }).click();
+	await page.getByRole("dialog", { name: "Create Item", exact: true }).getByRole("button", { name: "Book", exact: true }).click();
+	const inspector = page.locator("#admin-inspector-pane");
+	const title = inspector.getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toHaveValue("");
+	await title.fill("Preview in place check");
+	await inspector.getByRole("textbox", { name: "Abstract Note", exact: true }).fill("Evidence from classroom observations. ".repeat(200));
+	await inspector.getByRole("button", { name: "Preview", exact: true }).click();
+	const preview = page.getByTitle("Preview of the working draft").contentFrame();
+	await expect(preview.getByRole("heading", { level: 1, name: "Preview in place check" })).toBeVisible();
+	const frame = page.frame({ url: /\/admin\/preview\// });
+	if (!frame) throw new Error("Preview frame is missing");
+	// A reload would drop this mark and reset the scroll.
+	await frame.evaluate(() => {
+		window.scrollTo(0, 300);
+		Object.assign(window, { previewDocument: "first" });
+	});
+	await title.fill("Preview in place check, edited");
+	await expect(preview.getByRole("heading", { level: 1, name: "Preview in place check, edited" })).toBeVisible();
+	expect(await frame.evaluate(() => ({ document: (window as { previewDocument?: string }).previewDocument, scrollY: window.scrollY }))).toEqual({ document: "first", scrollY: 300 });
+});
+
 test("saves library display switches as tags and keeps the published preview unchanged until publication", async ({ page }) => {
 	test.setTimeout(120_000);
 	await openAdmin(page);
