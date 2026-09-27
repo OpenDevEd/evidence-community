@@ -11,6 +11,7 @@ import { sourceSnapshot } from "@/db/schema/source";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 
+import type { SourceRunProgress } from "../adapter";
 import type { SourceCredentialResolver } from "../credentials";
 import type { SourceIngestionBatch } from "../batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
@@ -20,6 +21,7 @@ import {
 	createZoteroConnectionClient,
 	loadZoteroSourceConnection,
 	ZoteroSourceConfigurationError,
+	ZoteroSnapshotTooLargeError,
 } from "./connection";
 import {
 	mapZoteroCollection,
@@ -42,6 +44,8 @@ type SyncZoteroSourceOptions = {
 	credentialResolver?: SourceCredentialResolver;
 	database: Database;
 	fetch?: Fetch;
+	/** The import run, when an orchestrator started this sync. */
+	run?: SourceRunProgress;
 	sourceConnectionKey: string;
 	sleep?: (milliseconds: number) => Promise<void>;
 };
@@ -260,8 +264,10 @@ async function readManifest(
 		deletedCollectionKeys.size +
 		deletedItemKeys.size;
 	if (snapshotRecordCount > maxSnapshotRecords) {
-		throw new ZoteroSourceConfigurationError(
-			`Zotero snapshot has ${snapshotRecordCount} records, exceeding maxSnapshotRecords ${maxSnapshotRecords}`,
+		throw new ZoteroSnapshotTooLargeError(
+			"snapshot",
+			snapshotRecordCount,
+			maxSnapshotRecords,
 		);
 	}
 	// Keep requests sequential so that Zotero's shared Backoff response
@@ -878,8 +884,10 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				...manifest.trashedCollectionKeys,
 			]);
 			if (manifest.entries.length > config.maxSnapshotRecords) {
-				throw new ZoteroSourceConfigurationError(
-					`Zotero manifest has ${manifest.entries.length} records, exceeding maxSnapshotRecords ${config.maxSnapshotRecords}`,
+				throw new ZoteroSnapshotTooLargeError(
+					"manifest",
+					manifest.entries.length,
+					config.maxSnapshotRecords,
 				);
 			}
 			let offset =
@@ -892,6 +900,9 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 			}
 			let expectedCursor = cursor;
 			const fetchedAt = new Date();
+			if (manifest.entries.length > 0) {
+				await options.run?.report(offset, manifest.entries.length);
+			}
 
 			if (manifest.entries.length === 0) {
 				const nextCursor = completedCursor(
@@ -906,6 +917,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
 					nextCursor,
 					sourceConnectionKey: options.sourceConnectionKey,
+					sourceSyncRunId: options.run?.id,
 				});
 				await options.attachmentProcessor?.flushCleanup?.(
 					options.sourceConnectionKey,
@@ -955,6 +967,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
 					nextCursor,
 					sourceConnectionKey: options.sourceConnectionKey,
+					sourceSyncRunId: options.run?.id,
 				});
 				unresolvedRelations += written.written.unresolvedRelations;
 				await options.attachmentProcessor?.flushCleanup?.(
@@ -963,6 +976,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				expectedCursor = nextCursor;
 				offset = end;
 				batches += 1;
+				await options.run?.report(end, manifest.entries.length);
 			}
 			return {
 				batches,

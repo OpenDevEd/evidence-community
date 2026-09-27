@@ -8,6 +8,8 @@ import { jsonObjectSchema, type JsonValue } from "../batch-schema";
 /** Only a completely read query may withdraw its memberships. Each batch is retryable. */
 export async function reconcileOpenAlexMemberships(db: Database, args: {
   sourceConnectionKey: string; configuration: Record<string, unknown>; cursor: Record<string, JsonValue>; startedAt: string;
+  /** The import run, so its withdrawals count in its search update. */
+  sourceSyncRunId?: number;
 }) {
   return db.transaction(async tx => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
@@ -50,7 +52,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
         AND NOT EXISTS (SELECT 1 FROM "itemReview" r WHERE r."itemKey" = COALESCE(i."parentItem", i.key) AND r.state = 'pending')
         AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" dirty WHERE dirty."itemKey" = i.key AND dirty."dirtyFields" <> '[]'::jsonb)
       RETURNING key, revision
-    ) INSERT INTO outbox ("entityType", "entityKey", operation, revision) SELECT 'item', key, 'delete', revision FROM withdrawn`);
+    ) INSERT INTO outbox ("entityType", "entityKey", operation, revision, "sourceSyncRunId") SELECT 'item', key, 'delete', revision, ${args.sourceSyncRunId ?? null}::bigint FROM withdrawn`);
     return keys.length;
   });
 }

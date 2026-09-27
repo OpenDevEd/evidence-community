@@ -1,13 +1,15 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+	outbox,
 	sourceConnection,
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { item } from "@/db/schema/tables/item";
 
 import {
 	isSyncableSourceProvider,
@@ -19,6 +21,7 @@ import {
 } from "./adapter";
 import { chunkValues } from "@/lib/chunk-values";
 import type { SourceCredentialResolver } from "./credentials";
+import { classifySourceError } from "./source-status";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -235,6 +238,7 @@ async function claimRun(
 					? {
 							consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
 							lastError: expiredError,
+							lastErrorCode: "interrupted" as const,
 							lastFailureAt: now,
 							lastResult: null,
 						}
@@ -305,12 +309,26 @@ async function finishRunSucceeded(
 ) {
 	const now = (options.now ?? (() => new Date()))();
 	await options.database.transaction(async (transaction) => {
+		// Records this run changed: its search work on top-level records.
+		const [{ changed }] = await transaction
+			.select({ changed: sql<number>`count(distinct ${outbox.entityKey})::int` })
+			.from(outbox)
+			.innerJoin(item, eq(item.key, outbox.entityKey))
+			.where(
+				and(
+					eq(outbox.sourceSyncRunId, claimed.runId),
+					eq(outbox.entityType, "item"),
+					isNull(item.parentItem),
+				),
+			);
 		const [state] = await transaction
 			.update(sourceSyncState)
 			.set({
+				...(changed > 0 ? { lastChangedRecords: changed } : {}),
 				activeRunId: null,
 				consecutiveFailures: 0,
 				lastError: null,
+				lastErrorCode: null,
 				lastResult: result,
 				lastSuccessAt: now,
 				leaseExpiresAt: null,
@@ -358,6 +376,10 @@ async function finishRunFailed(
 ) {
 	const now = (options.now ?? (() => new Date()))();
 	const message = errorMessage(error);
+	const code =
+		error instanceof SourceLeaseLostError
+			? "interrupted"
+			: classifySourceError(error);
 	await options.database.transaction(async (transaction) => {
 		const [state] = await transaction
 			.update(sourceSyncState)
@@ -365,6 +387,7 @@ async function finishRunFailed(
 				activeRunId: null,
 				consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
 				lastError: message,
+				lastErrorCode: code,
 				lastFailureAt: now,
 				lastResult: null,
 				leaseExpiresAt: null,
@@ -402,6 +425,27 @@ async function finishRunFailed(
 			throw new SourceLeaseLostError(claimed.connection.key);
 		}
 	});
+}
+
+/** Saves how far the run has got, for the status the admin and OpenScholar show. */
+async function reportRunProgress(
+	options: SourceOrchestratorOptions,
+	runId: number,
+	done: number,
+	total: number | null,
+) {
+	const now = (options.now ?? (() => new Date()))();
+	await options.database
+		.update(sourceSyncRun)
+		.set({
+			recordsDone: done,
+			recordsFrom: sql`coalesce(${sourceSyncRun.recordsFrom}, ${done})`,
+			recordsFromAt: sql`coalesce(${sourceSyncRun.recordsFromAt}, ${now})`,
+			recordsTotal: total,
+		})
+		.where(
+			and(eq(sourceSyncRun.id, runId), eq(sourceSyncRun.status, "running")),
+		);
 }
 
 async function heartbeatLoop(
@@ -475,6 +519,11 @@ export async function runSourceConnection(
 						leaseDurationMs,
 						workerId,
 					),
+				run: {
+					id: claimed.runId,
+					report: (done, total) =>
+						reportRunProgress(options, claimed.runId, done, total),
+				},
 				sourceConnection: claimed.connection,
 			}),
 		);

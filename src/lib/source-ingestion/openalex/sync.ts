@@ -189,6 +189,7 @@ function writeBatch(
 		expectedCursor,
 		nextCursor,
 		mappingProfileVersion: "openalex-v1",
+		sourceSyncRunId: context.run?.id,
 		fetchedAt: new Date(),
 		...batch,
 	});
@@ -234,6 +235,11 @@ export async function syncOpenAlexSource(
 				`OpenAlex source ${connection.key} returned a non-advancing page`,
 			);
 		}
+		// The total is known from the page; say it before slow PDF work starts.
+		// A resumed import can pass a count that shrank since it started.
+		const reportPage = (imported: number) =>
+			context.run?.report(imported, Math.max(page.meta.count, imported));
+		await reportPage(cursor.imported);
 		const mapped = page.results.map(mapOpenAlexWork);
 		const items = mapped.flatMap((work) => work.items);
 		if (config.downloadPdfs)
@@ -255,6 +261,7 @@ export async function syncOpenAlexSource(
 		});
 		expectedCursor = cursor;
 		pages++;
+		await reportPage(cursor.imported);
 		await options.attachmentProcessor?.flushCleanup(connection.key);
 	}
 	while (
@@ -264,6 +271,7 @@ export async function syncOpenAlexSource(
 			configuration: connection.config,
 			cursor: expectedCursor,
 			startedAt: cursor.startedAt,
+			sourceSyncRunId: context.run?.id,
 		}))
 	)
 		await context.heartbeat();
