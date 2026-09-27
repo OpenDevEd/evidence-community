@@ -37,6 +37,7 @@ import {
 	publishingChoiceSchema,
 	reviewFileSchema,
 	type ReviewRecord,
+	type PublishingChoice,
 	type PublishingChoiceState,
 } from "./review-contract";
 
@@ -421,6 +422,41 @@ export async function publishReviewRecords(
 	return { remainingConflicts, indexingKeys };
 }
 
+/** Activates the identifiers a publishing choice asks for, inside the publishing transaction. No provider calls. */
+export async function activateChosenIdentifiers(
+	transaction: DatabaseTransaction,
+	itemKey: string,
+	choice: PublishingChoice | null,
+	config: LibraryServerConfig,
+	requestedBy: string,
+) {
+	if (!choice) return;
+	if (choice.route === "crossref-zenodo")
+		await activateCrossrefPublicationInTransaction(transaction, itemKey, config, requestedBy);
+	await activateZenodoPublicationInTransaction(transaction, itemKey, config, choice.identifierPolicy, requestedBy, null);
+}
+
+/** Throws when a record changed after it was submitted, so the review is no longer what would be published. */
+export async function assertReviewCurrent(
+	transaction: DatabaseTransaction,
+	review: typeof itemReview.$inferSelect,
+) {
+	const current = await transaction
+		.select({ key: item.key, revision: item.revision })
+		.from(item)
+		.where(inArray(item.key, review.snapshot.records.map((record) => record.itemKey)))
+		.for("update");
+	for (const record of review.snapshot.records) {
+		if (
+			(current.find(({ key }) => key === record.itemKey)
+				?.revision ?? 0) !== record.baseRevision
+		)
+			throw new AdminValidationError(
+				`${record.itemKey} changed after submission. Withdraw or return this review, then submit it again.`,
+			);
+	}
+}
+
 /** Throws what stops a review from publishing: missing fields, including those its identifier choice needs. */
 export function assertReviewPublishable(review: typeof itemReview.$inferSelect) {
 	for (const record of review.snapshot.records) {
@@ -545,20 +581,7 @@ export async function approveItemReview(
 				review.id,
 				review.revision,
 			);
-			const current = await transaction
-				.select({ key: item.key, revision: item.revision })
-				.from(item)
-				.where(inArray(item.key, keys))
-				.for("update");
-			for (const record of locked.snapshot.records) {
-				if (
-					(current.find(({ key }) => key === record.itemKey)
-						?.revision ?? 0) !== record.baseRevision
-				)
-					throw new AdminValidationError(
-						`${record.itemKey} changed after submission. Withdraw or return this review, then submit it again.`,
-					);
-			}
+			await assertReviewCurrent(transaction, locked);
 			const { remainingConflicts, indexingKeys } =
 				await publishReviewRecords(transaction, locked, config);
 			const fileResults = [];
@@ -570,25 +593,7 @@ export async function approveItemReview(
 				files,
 				input.zenodoFileChange,
 			);
-			const choice = locked.snapshot.publishingChoice;
-			if (choice) {
-				if (choice.route === "crossref-zenodo") {
-					await activateCrossrefPublicationInTransaction(
-						transaction,
-						locked.itemKey,
-						config,
-						actor.userId,
-					);
-				}
-				await activateZenodoPublicationInTransaction(
-					transaction,
-					locked.itemKey,
-					config,
-					choice.identifierPolicy,
-					actor.userId,
-					null,
-				);
-			}
+			await activateChosenIdentifiers(transaction, locked.itemKey, locked.snapshot.publishingChoice, config, actor.userId);
 			const [published] = await transaction
 				.update(itemReview)
 				.set({

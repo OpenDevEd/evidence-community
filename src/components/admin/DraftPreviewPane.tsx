@@ -2,6 +2,7 @@
 
 import { Cancel01Icon, MinusSignIcon, PlusSignIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { ButtonGroup } from "@nextui-org/react";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -54,12 +55,15 @@ export function DraftPreviewPortal({
 	// The page fades in once drawn, so a record's first opening shows no empty frame. The inspector mounts this anew for
 	// each record and version.
 	const [loaded, setLoaded] = useState(false);
+	// Under the admin's own locale prefix, so the page reads in the language the admin is using.
+	const adminPath = usePathname();
+	const previewPath = `${adminPath.slice(0, adminPath.indexOf("/admin"))}/admin/preview`;
 	if (!preview.target) return null;
 	const { zoom, onZoom } = preview;
 	const step = PREVIEW_ZOOMS.indexOf(zoom);
 	const src = review
-		? `/admin/preview/${review.itemKey}?review=${review.id}&v=${review.revision}`
-		: `/admin/preview/${itemKey}?v=${preview.revision}`;
+		? `${previewPath}/${review.itemKey}?review=${review.id}&v=${review.revision}`
+		: `${previewPath}/${itemKey}?v=${preview.revision}`;
 	const label = review ? "Preview of the submitted version" : "Preview of the working draft";
 	return createPortal(
 		<div className="flex h-full min-h-0 flex-col">

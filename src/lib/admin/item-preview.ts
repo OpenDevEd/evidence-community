@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import type { Item } from "@/app/api/item/types";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -7,8 +7,12 @@ import { itemFileRemoval, itemReview, itemReviewFile } from "@/db/schema/review"
 import { item } from "@/db/schema/tables/item";
 import { projectPublicItems } from "@/lib/search-index/projection";
 import { ItemNotFoundError, loadWorkingItemPayload, publishItemDraftWithContext } from "./native-item-service";
-import { assertReviewPublishable, getItemPublishingChoice, publishReviewRecords, reviewChildKeys } from "./review-service";
+import { activateChosenIdentifiers, assertReviewCurrent, assertReviewPublishable, getItemPublishingChoice, publishReviewRecords, reviewChildKeys } from "./review-service";
+import { assertUploadReady } from "./review-snapshot";
 import { validateReviewPayload } from "./review-validation";
+
+/** Names the preview as the requester of any identifier it activates; the rollback discards the activation anyway. */
+const PREVIEW_ACTOR = "draft-preview";
 
 type PreviewFiles = {
 	files: { itemKey: string; uploadRevision: number; cover: boolean; coverWidth: number | null; coverHeight: number | null; filename: string }[];
@@ -48,13 +52,13 @@ async function publishWorkingDrafts(transaction: DatabaseTransaction, rootKey: s
 	for (const key of drafted) validateReviewPayload(await loadWorkingItemPayload(transaction, key), key === rootKey ? choice : null);
 	// The parent first, as a review publishes it, so a new attachment has a record to belong to.
 	for (const key of drafted) await publishItemDraftWithContext(transaction, key, { writebackConfig: config });
+	// As approval would, so a DOI the record is about to receive shows on the page.
+	await activateChosenIdentifiers(transaction, rootKey, choice, config, PREVIEW_ACTOR);
 	const [files, removals] = await Promise.all([
-		transaction
-			.select()
-			.from(itemFileDraft)
-			.where(and(inArray(itemFileDraft.itemKey, keys), isNotNull(itemFileDraft.readyAt))),
+		transaction.select().from(itemFileDraft).where(inArray(itemFileDraft.itemKey, keys)),
 		transaction.select({ itemKey: itemFileRemoval.itemKey }).from(itemFileRemoval).where(inArray(itemFileRemoval.itemKey, keys)),
 	]);
+	files.forEach(assertUploadReady);
 	return {
 		files: files.map((file) => ({ ...file, cover: Boolean(file.coverObjectPath) })),
 		removed: removals.map(({ itemKey }) => itemKey),
@@ -68,7 +72,10 @@ async function publishReview(transaction: DatabaseTransaction, rootKey: string, 
 		.where(and(eq(itemReview.id, reviewId), eq(itemReview.itemKey, rootKey)));
 	if (!review) throw new ItemNotFoundError(rootKey);
 	assertReviewPublishable(review);
+	// Approval refuses a pending review whose records changed since it was sent; an older review shows what it held.
+	if (review.state === "pending") await assertReviewCurrent(transaction, review);
 	await publishReviewRecords(transaction, review, config);
+	await activateChosenIdentifiers(transaction, rootKey, review.snapshot.publishingChoice, config, PREVIEW_ACTOR);
 	const files = await transaction.select().from(itemReviewFile).where(eq(itemReviewFile.reviewId, reviewId));
 	return {
 		files: files.flatMap(({ itemKey, file }) => (file ? [{ ...file, itemKey, cover: true }] : [])),

@@ -28,12 +28,18 @@ function PreviewMessage({ children }: { children: ReactNode }) {
 	return <div className="mx-auto max-w-xl px-6 py-16 text-sm text-black/65 dark:text-white/65">{children}</div>;
 }
 
+/** Whether this admin may preview. An access check outage is an error to retry, not a missing page. */
+async function canPreview() {
+	const authorization = await authorizeAdminSession((await cookies()).get(adminSessionCookieName())?.value, ADMIN_CONTENT_PERMISSION);
+	if (authorization.status === "unavailable") throw new Error("OpenScholar access verification is temporarily unavailable");
+	return authorization.status === "authorized";
+}
+
 /** The record key and review an admin asked for, or not found for anyone else and for malformed requests. */
 async function readPreviewRequest({ params, searchParams }: Props) {
-	const [{ key }, { review }, cookieStore] = await Promise.all([params, searchParams, cookies()]);
-	const authorization = await authorizeAdminSession(cookieStore.get(adminSessionCookieName())?.value, ADMIN_CONTENT_PERMISSION);
+	const [{ key }, { review }, allowed] = await Promise.all([params, searchParams, canPreview()]);
 	const request = previewRequest.safeParse({ key, review });
-	if (authorization.status !== "authorized" || !request.success) notFound();
+	if (!allowed || !request.success) notFound();
 	return request.data;
 }
 

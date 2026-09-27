@@ -62,6 +62,8 @@ function PageView() {
 	useEffect(() => {
 		if (
 			!pathname ||
+			// The admin's draft preview frame is nobody's visit, and it reloads with every save.
+			pathname.startsWith("/admin/preview/") ||
 			consentState === "pending" ||
 			(consentState === "granted" && !analyticsReady)
 		) {
