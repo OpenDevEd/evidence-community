@@ -759,13 +759,11 @@ export const itemFileDraft = pgTable(
 				itemIdentity.sourceConnectionKey,
 			],
 		}).onDelete("cascade"),
+		// The parent may be an OpenAlex record; the library owns the file either way.
 		foreignKey({
 			name: "itemFileDraft_parent_identity_fk",
-			columns: [table.parentItemKey, table.sourceConnectionKey],
-			foreignColumns: [
-				itemIdentity.key,
-				itemIdentity.sourceConnectionKey,
-			],
+			columns: [table.parentItemKey],
+			foreignColumns: [itemIdentity.key],
 		}).onDelete("cascade"),
 		unique("itemFileDraft_object_path_unique").on(table.objectPath),
 		index("itemFileDraft_parent_idx").on(table.parentItemKey),

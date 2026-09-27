@@ -4,24 +4,26 @@ import { hasAnyTag } from "@/lib/tags";
 
 type AttachmentVisibilityFields = {
 	PDFCoverPageImage?: string | null;
-	tags?: string[] | null;
+	contentType?: string | null;
+	linkMode?: string | null;
+	url?: string | null;
 };
 
 type ItemPageAttachmentFields = AttachmentVisibilityFields & {
 	itemType?: string | null;
-	linkMode?: string | null;
 	note?: string | null;
-	url?: string | null;
+	tags?: string[] | null;
 };
 
+/** A stored PDF has a cover. A PDF link has a URL only once its source publishes it. */
 export function isVisiblePdfAttachment(
 	attachment: AttachmentVisibilityFields,
 ) {
 	return Boolean(
 		attachment.PDFCoverPageImage ||
-			attachment.tags?.some(
-				(tag) => tag.toLowerCase() === "_auto-process",
-			),
+			(attachment.linkMode === "linked_url" &&
+				attachment.contentType?.toLowerCase() === "application/pdf" &&
+				/^https?:\/\//u.test(attachment.url ?? "")),
 	);
 }
 
@@ -72,6 +74,7 @@ export function itemPageAttachments(
 			title: attachment.title,
 			filename: attachment.filename,
 			url: attachment.url,
+			contentType: attachment.contentType,
 			tags: attachment.tags,
 			PDFCoverPageImage: attachment.PDFCoverPageImage,
 			note: isPublishedNote(attachment, publishTags) ? attachment.note : null,
