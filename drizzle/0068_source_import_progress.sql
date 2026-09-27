@@ -1,3 +1,9 @@
+-- Rollback: keep these columns. They are nullable or defaulted, and older
+-- runtimes neither read nor write them, so rolling the application back needs
+-- no schema change. A full reversal drops outbox_source_sync_run_idx, the
+-- outbox_sourceSyncRunId_sourceSyncRun_id_fk constraint, outbox.sourceSyncRunId,
+-- sourceSyncRun.recordsDone/recordsTotal/recordsFrom/recordsFromAt and
+-- sourceSyncState.lastErrorCode/lastChangedRecords; no library data lives in them.
 ALTER TABLE "outbox" ADD COLUMN "sourceSyncRunId" bigint;--> statement-breakpoint
 ALTER TABLE "sourceSyncRun" ADD COLUMN "recordsDone" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "sourceSyncRun" ADD COLUMN "recordsTotal" integer;--> statement-breakpoint

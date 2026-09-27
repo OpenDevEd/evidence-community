@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { reconcileOpenAlexMemberships } from "./reconciliation";
 import type { SourceAdapterContext } from "../adapter";
+import { SourceCredentialNotFoundError } from "../credentials";
 import type { JsonValue, SourceItemUpsert } from "../batch-schema";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
@@ -46,10 +47,7 @@ async function openAlexClient(
 ) {
 	const connection = context.sourceConnection;
 	const apiKey = await context.credentialResolver?.(connection.key);
-	if (!apiKey)
-		throw new Error(
-			`OpenAlex source ${connection.key} has no API credential`,
-		);
+	if (!apiKey) throw new SourceCredentialNotFoundError(connection.key);
 	if (config.downloadPdfs && !options.attachmentProcessor)
 		throw new Error(
 			"OpenAlex PDF processing is enabled but no processor is available",

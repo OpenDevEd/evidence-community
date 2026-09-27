@@ -173,7 +173,7 @@ async function verify() {
 		assert(sweep.length === 3, "The sweep did not select exactly the active test connections");
 		assert(
 			sweep.every((outcome) => outcome.status === "succeeded"),
-			"The heterogeneous source sweep did not succeed",
+			`The heterogeneous source sweep did not succeed: ${JSON.stringify(sweep)}`,
 		);
 		assert(
 			maximumConcurrent === 2,
@@ -466,6 +466,57 @@ async function verify() {
 				refused.changed === 2,
 			`A refused key did not read as access denied: ${JSON.stringify(refused)}`,
 		);
+		// A run that writes a batch and then fails still counts what it changed.
+		await expectRejects(
+			runSourceConnection({
+				database,
+				heartbeatIntervalMs: 100,
+				leaseDurationMs: 1_000,
+				registry: new SourceAdapterRegistry([
+					fakeAdapter("zotero", async (context) => {
+						await writeSourceIngestionBatch(database, {
+							expectedCursor: context.sourceConnection.syncCursor,
+							fetchedAt: new Date(),
+							items: [
+								{
+									metadata: { itemType: "journalArticle", title: "PROG0003" },
+									operation: "upsert",
+									raw: {},
+									remoteVersion: "1",
+									sourceRecordKey: "PROG0003",
+								},
+							],
+							mappingProfileVersion: "orchestrator-progress-v1",
+							nextCursor: { step: 2 },
+							sourceConnectionKey: progressKey,
+							sourceSyncRunId: context.run?.id,
+						});
+						throw new ZoteroApiError("Zotero request failed with 503", 503);
+					}),
+				]),
+				sourceConnectionKey: progressKey,
+				workerId: "partial-worker",
+			}),
+			"ZoteroApiError",
+			(error) => error instanceof ZoteroApiError,
+		);
+		const partial = await statusOf();
+		assert(
+			partial?.state === "failed" &&
+				partial.failure.code === "unavailable" &&
+				partial.changed === 1,
+			`A failed run's written changes were not counted: ${JSON.stringify(partial)}`,
+		);
+		// A source dropped from the configuration stops reporting.
+		await database
+			.update(sourceConnection)
+			.set({ status: "removed" })
+			.where(eq(sourceConnection.key, progressKey));
+		assert((await statusOf()) === undefined, "A removed source still reported its status");
+		await database
+			.update(sourceConnection)
+			.set({ status: "active" })
+			.where(eq(sourceConnection.key, progressKey));
 
 		// Run-now requests: saved, held while the source runs, cleared by the next claim.
 		assert(
