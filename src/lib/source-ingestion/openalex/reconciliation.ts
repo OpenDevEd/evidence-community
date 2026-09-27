@@ -33,7 +33,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
         AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" other JOIN "sourceConnection" c ON c.key = other."sourceConnectionKey"
           WHERE other."itemKey" = i.key AND NOT other."remoteDeleted" AND c.status <> 'removed')
         AND (EXISTS (SELECT 1 FROM "itemFieldOverride" o WHERE o."itemKey" = i.key)
-          OR EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key))
+          OR EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key) OR d.patch ->> 'parentItem' = i.key)
           OR EXISTS (SELECT 1 FROM "itemFieldOverride" o JOIN "item" child ON child.key = o."itemKey" WHERE child."parentItem" = i.key)
           OR EXISTS (SELECT 1 FROM "item" child WHERE child."parentItem" = i.key AND child."sourceConnectionKey" = 'native' AND child.deleted = 0)
           OR EXISTS (SELECT 1 FROM "itemReview" r WHERE r."itemKey" = COALESCE(i."parentItem", i.key) AND r.state = 'pending')
@@ -46,7 +46,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
         AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" other JOIN "sourceConnection" c ON c.key = other."sourceConnectionKey"
           WHERE other."itemKey" = i.key AND NOT other."remoteDeleted" AND c.status <> 'removed')
         AND NOT EXISTS (SELECT 1 FROM "itemFieldOverride" o WHERE o."itemKey" = i.key)
-        AND NOT EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key))
+        AND NOT EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key) OR d.patch ->> 'parentItem' = i.key)
         AND NOT EXISTS (SELECT 1 FROM "itemFieldOverride" o JOIN "item" child ON child.key = o."itemKey" WHERE child."parentItem" = i.key)
         AND NOT EXISTS (SELECT 1 FROM "item" child WHERE child."parentItem" = i.key AND child."sourceConnectionKey" = 'native' AND child.deleted = 0)
         AND NOT EXISTS (SELECT 1 FROM "itemReview" r WHERE r."itemKey" = COALESCE(i."parentItem", i.key) AND r.state = 'pending')

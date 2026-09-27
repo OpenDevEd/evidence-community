@@ -11,6 +11,7 @@ import {
 import {
 	ItemParentUnavailableError,
 	createNativeItemDraft,
+	discardItemDraft,
 	publishItemDraft,
 } from "@/lib/admin/native-item-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "@/lib/admin/native-file-service";
@@ -313,8 +314,9 @@ it("publishes a library PDF on an OpenAlex record and keeps both through later s
 				{ fetch: async () => Response.json({ meta: { count: results.length, next_cursor: null }, results }) },
 			);
 		};
-		await run([work(1)]);
+		await run([work(1), work(2)]);
 		const [record] = await db.select().from(item).where(eq(item.sourceRecordKey, "W1"));
+		const [draftOnly] = await db.select().from(item).where(eq(item.sourceRecordKey, "W2"));
 
 		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: record!.key, title: "Library copy" });
 		const pdf = await createPdf("Library copy of an OpenAlex work");
@@ -333,11 +335,17 @@ it("publishes a library PDF on an OpenAlex record and keeps both through later s
 		await run([work(1, "Updated in OpenAlex", "2026-09-26T10:00:00Z")]);
 		expect(await libraryCopy()).toMatchObject({ parentItem: record!.key, deleted: 0 });
 
+		// An unpublished library attachment counts too, even after the record's own draft is discarded.
+		await createNativeItemDraft(db, { itemType: "Attachment", parentItem: draftOnly!.key, title: "Unpublished copy" });
+		await discardItemDraft(db, draftOnly!.key);
+
 		// The work leaves the search. A full scan must keep the record that holds the library copy.
 		await db.update(sourceConnection).set({ syncCursor: sql`jsonb_set(${sourceConnection.syncCursor}, '{reconciledAt}', 'null'::jsonb)` }).where(eq(sourceConnection.key, "oa"));
 		await run([]);
-		expect((await db.select().from(item).where(eq(item.key, record!.key)))[0]?.deleted).toBe(0);
-		expect(await db.select({ code: sourceRecordIssue.code }).from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceRecordKey, "W1"))).toEqual([{ code: "source_membership_removed" }]);
+		for (const kept of [record!, draftOnly!]) {
+			expect((await db.select().from(item).where(eq(item.key, kept.key)))[0]?.deleted).toBe(0);
+			expect(await db.select({ code: sourceRecordIssue.code }).from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceRecordKey, kept.sourceRecordKey!))).toEqual([{ code: "source_membership_removed" }]);
+		}
 
 		// Zotero records sync their attachments back, so they still take no library files.
 		await db.insert(itemIdentity).values({ key: "ABCD2345", sourceConnectionKey: "zotero-group", sourceRecordKey: "ABCD2345" });
