@@ -1,13 +1,18 @@
-# Evidence Library Deployment Architecture
+# Off limits: the `coolify` branch tenants
+
+> This documents only the 17 live tenants that run the old Evidence Library from
+> the `coolify` branch. They are off limits: never change, delete or clean them
+> up. This is not how the current product works or will be deployed. Read it
+> only when the user asks for work on these tenants.
 
 Last verified: **2026-07-15** against the live Coolify control plane, the
 Hetzner Docker host, PostgreSQL, Meilisearch, Zotero, and the deployed source
 repositories.
 
-This document records the deployed architecture of the evidence-library
-platform. It is a current-state operations reference, not a description of an
-ideal future architecture. Re-run the verification commands at the end before
-making decisions that depend on live deployment state.
+This document records the deployed architecture of those tenants. It is
+an operations reference for them, not a description of the current product.
+Re-run the verification commands at the end before making decisions that
+depend on live deployment state.
 
 ## Executive Summary
 

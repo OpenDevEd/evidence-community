@@ -14,6 +14,23 @@ Library-specific facts, commands, and deployment boundaries.
   accounts, billing, and Evidence Library setup and management.
 - Cross-repository calls use an authenticated, versioned, retry-safe API. Do
   not rebuild OpenScholar research tools here.
+- There is no production for this product yet. This work prepares for a future
+  production release through OpenScholar `main`.
+
+## Off limits: the `coolify` branch and its tenants
+
+- 17 live tenants used by real organisations run the old Evidence Library from
+  the `coolify` branch, held together by manual setup. This product will
+  eventually replace them, but until then they are off limits. Never touch,
+  delete, or clean up them or anything they use: their Coolify applications,
+  databases, Meilisearch indexes, Supabase bucket, domains, and shared Zotero
+  groups.
+- The `coolify` branch is off limits. Never read it, compare against it, or
+  describe it as production, unless the user asks to pull something specific
+  from it. Never push to, delete, or rewrite it: any push redeploys every one
+  of those tenants.
+- `docs/evidence-library-architecture.md` documents only those off-limits
+  tenants. Read it only when the user asks for work on them.
 
 ## Shared product facts
 
@@ -38,8 +55,7 @@ supported process changed. Read the page back before claiming success.
 
 ## Runtime invariants
 
-Read `docs/evidence-library-architecture.md` for the full design and
-`docs/evidence-library-operations.md` before deployment work.
+Read `docs/evidence-library-operations.md` before deployment work.
 
 - PostgreSQL stores the real record and job data. Meilisearch is a rebuildable
   search copy.
@@ -68,19 +84,11 @@ steps.
 ## Next.js and React
 
 - This repository uses Next.js 16 and React 19.
-- Before changing a Next.js API, route, cache rule, request rule, or file
-  layout, read the matching installed guide under
-  `node_modules/next/dist/docs/`.
-- Do not use React effects for copied state, URL state, derived values, data
-  loading, navigation, mutations, filters, tabs, pages, or forms.
-- Effects are only for a real outside browser system. Keep them small and
-  include full cleanup and dependencies.
-- Reuse server components, route handlers, SWR where already established,
-  `nuqs`, render-time calculations, lifted state, context, and event handlers.
+- Application state uses route handlers and SWR where already established,
+  alongside the shared React rules in `AGENTS.md`.
 
 ## Local checks and CI
 
-Read `docs/test-quality.md` and use `test-decision` before touching tests.
 The command list in `package.json` is authoritative.
 
 - Run the smallest relevant unit test while coding:
@@ -90,32 +98,23 @@ The command list in `package.json` is authoritative.
 - A PR creation or update uses those targeted checks, not a full local
   `npm run check:changed` run.
 - Verify changed runtime behavior with the focused browser or service check.
-  The full `npm run test:acceptance` suite belongs to the pre-merge CI gate, or
-  an explicitly requested full-suite diagnosis. Clean up disposable acceptance
-  environments with `npm run test:acceptance:cleanup`.
+  The full `npm run test:acceptance` suite belongs to CI, or an explicitly
+  requested full-suite diagnosis. Clean up disposable acceptance environments
+  with `npm run test:acceptance:cleanup`.
 - Real database, Meilisearch, storage, source, Zotero, and publication commands
   are integration checks. Run only the command that owns the changed contract.
-- Documentation-only work needs link checks and `git diff --check`, not the
-  application suite.
 
 GitHub CI runs on the isolated self-hosted runners documented in
-`docs/self-hosted-ci.md`. It owns the full final static lanes, runtime
-acceptance, and aggregate merge gate on the exact PR head. Follow the CI
-section in `AGENTS.md`: ordinary edits finish after targeted verification;
-automatic CI runs in the background. Local lanes do not repeat the full suite.
+`docs/self-hosted-ci.md`. It owns the full static checks, runtime acceptance,
+and the aggregate `CI` result on the exact PR head. The runtime job uses four
+Playwright workers.
 
-The runtime job uses four Playwright workers. Read the aggregate `CI` result
-for the exact head before merging. The current GitHub plan cannot enforce that
-check for this private repository, so the integration owner must enforce it.
+GitHub can't enforce the aggregate `CI` check on this private repository
+without GitHub Pro, so read it on the exact head yourself before merging.
 
 ## Deployment and data safety
 
 - `docs/evidence-library-operations.md` is the deployment runbook.
-- Production tenants, branches, databases, buckets, indexes, domains, and
-  shared Zotero groups are off limits unless the user names the exact
-  production action.
-- Never push `coolify` or `openscholar`; a push can redeploy production
-  tenants.
 - Do not use the user's `new-el-optimize` checkout.
 - Before any Coolify branch change, read every target application's current
   `git_branch`.
@@ -123,22 +122,17 @@ check for this private repository, so the integration owner must enforce it.
   Coolify's internal database.
 - Keep development acceptance runtimes uniquely named and delete only what the
   current task created.
-- Schema and stored-data changes need an explicit migration and rollback
-  choice. Never widen a validator merely to keep obsolete rows.
+- Library data (records, revisions, and configuration) must never be lost.
+  Development libraries are used for MVPs and showcases, and future libraries
+  will rely on updates keeping their data. Every schema or stored-data change
+  ships an explicit migration and rollback choice. Never widen a validator
+  merely to keep obsolete rows.
 - Runtime configuration revisions are immutable records. Replace a revision by
   activating a new valid revision, not by editing history.
 
-Only the integration owner changes shared or production services. An
-implementation lane owns only its isolated worktree and explicitly assigned
-development resources.
+## References
 
-## Plans and current references
-
-Use a committed plan only for the cases named in `AGENTS.md`. Keep task
-contracts in the plan and link to shared rules instead of copying agent
-prompts.
-
-- Architecture: `docs/evidence-library-architecture.md`.
+- Off-limits `coolify` tenants: `docs/evidence-library-architecture.md`.
 - Operations: `docs/evidence-library-operations.md`.
 - Test rules: `docs/test-quality.md`.
 - Runtime customization history:

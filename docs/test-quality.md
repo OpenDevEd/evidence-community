@@ -9,31 +9,9 @@ tests. The commands and cleanup rules are in `docs/agents/project.md`.
 
 ## First decide whether a test belongs
 
-Use the `test-decision` skill before touching a test file or assertion. A code
-change does not automatically require a test change.
-
-Do not add or change a test for a change that only affects:
-
-- ordinary interface copy;
-- visual styling or layout;
-- comments or documentation; or
-- a refactor that keeps the same public behavior.
-
-Run the existing checks that cover the changed area. Inspect copy and visual
-changes in the real browser or a screenshot. Exact wording needs an assertion
-only when that wording is itself a lasting legal, security, accessibility, or
-protocol contract. A product owner asking for different ordinary copy once does
-not turn every word in that copy into a permanent contract.
-
-Before changing tests, write down:
-
-1. The behavior or contract that changed.
-2. The defect the test would catch.
-3. Why existing coverage does not catch it.
-4. The smallest boundary where the result is visible.
-5. Why harmless copy or refactoring would not break the test.
-
-If those five answers are not clear, do not change the test.
+Use the `test-decision` skill before touching a test file or assertion. It
+decides whether a change needs a test at all. The rest of this guide covers
+what a test must prove once it does.
 
 ## What a useful test must prove
 
@@ -119,23 +97,6 @@ checks. They do not prove runtime behavior and must not be counted as unit,
 integration, or acceptance coverage.
 
 ## Bad and good examples
-
-### Do not freeze ordinary copy
-
-Bad:
-
-```ts
-expect(card.textContent).not.toContain("optional");
-```
-
-This assertion was almost added for a one-line change from `No DOI · optional`
-to `No DOI`. It does not protect DOI behavior. It freezes one discarded word
-and would fail during harmless copy editing.
-
-Good: change the copy, run the existing component checks, and inspect the card
-in the real browser. Add no test. If the wording were a fixed accessibility
-name or an exact protocol error required by a client, assert that named contract
-at its real boundary and explain why it must stay exact.
 
 ### Prove authentication at the HTTP boundary
 
@@ -278,52 +239,6 @@ For every AI-output evaluation:
 
 Keep the evaluation environment close to the real workflow. A prompt playground
 or mocked transcript does not prove the deployed research flow.
-
-## OpenScholar examples not to copy
-
-These examples were verified on OpenScholar `origin/dev` at commit
-`cf2ebdf795536a6951764d45823e17b1f0407d1a` on 2026-08-24. They are recorded
-here for later work. Do not change the OpenScholar repository as part of an
-Evidence Library task.
-
-- [`tests/credit-purchase-idempotency.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/tests/credit-purchase-idempotency.test.ts)
-  reads
-  `convex/credits/internal.ts` and searches for local names, index names, and
-  outcome strings. It does not replay a payment or refund and inspect the credit
-  transaction. Replace it later with real idempotency and cumulative-refund
-  behavior tests.
-- [`tests/search-actions-screening-export.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/tests/search-actions-screening-export.test.ts)
-  matches the exact source form
-  of helper calls and object spreads. It does not export JSON and non-JSON data
-  and compare their public results.
-- The last tests in
-  [`tests/credit-grant-policy.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/tests/credit-grant-policy.test.ts)
-  and
-  [`tests/credit-grant-retry.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/tests/credit-grant-retry.test.ts)
-  search implementation source. The earlier
-  pure policy tests in those files are useful and should remain.
-- The first test in
-  [`tests/proxy-auth-policy.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/tests/proxy-auth-policy.test.ts)
-  searches text in
-  `proxy.ts`. The later `shouldProtectPath` input/output tests are useful. The
-  route matcher needs an HTTP boundary test or a static configuration check.
-- [`tests/debug-internal.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/tests/debug-internal.test.ts)
-  and
-  [`convex/extraction/import-boundary.test.ts`](https://github.com/OpenDevEd/openalex-count/blob/cf2ebdf795536a6951764d45823e17b1f0407d1a/convex/extraction/import-boundary.test.ts)
-  enforce source architecture. Move
-  them later to lint or named static checks and stop counting them as behavior
-  tests.
-
-A
-[historical OpenScholar evaluation prototype](https://github.com/OpenDevEd/openalex-count/blob/d543da65b07aac5f4d24eaaf0d68fd67208df0f3/tests/evals/screening-eval.test.ts#L183-L228)
-at commit `d543da65b07aac5f4d24eaaf0d68fd67208df0f3` also had invalid scoring rules:
-recall accepted any non-empty answer, citation validity excluded answers with no
-citations from its denominator, and zero citations could receive a perfect rate.
-It is not on current `dev`. Do not reuse those scoring patterns.
-
-These findings do not mean the OpenScholar suite is generally bad. Many of its
-state, billing, and Convex tests execute behavior. The listed cases are specific
-patterns to replace.
 
 ## Review checklist
 
