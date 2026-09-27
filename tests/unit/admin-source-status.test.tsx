@@ -160,6 +160,23 @@ describe("the admin's source status dialog", () => {
 		expect(onOpenRecord).toHaveBeenCalledWith("ITEMBBBB2222");
 	});
 
+	it("puts an issue back when its dismissal fails", async () => {
+		mocks.api.getAdminSourceIssueTypes.mockResolvedValueOnce({
+			types: [{ count: 1, key: "pdf-not-uploaded", kind: "pdf", next: "Upload the files.", title: "PDF not published" }],
+		});
+		mocks.api.getAdminSourceIssuePage.mockResolvedValueOnce({ count: 1, issues: [issue("AAAA1111")] });
+		await open({ ...base, changed: 14, searchable: 12_000, state: "succeeded", issues: { zotero_file_metadata_invalid: 1 } });
+		// The server refuses, and so does the refresh after it.
+		mocks.api.dismissAdminSourceIssues.mockRejectedValue(new Error("offline"));
+		mocks.api.getAdminSourceIssueTypes.mockRejectedValue(new Error("offline"));
+		mocks.api.getAdminSourceIssuePage.mockRejectedValue(new Error("offline"));
+
+		await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Dismiss issue: Report AAAA1111"]')!.click());
+		await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+		expect(mocks.toast.error).toHaveBeenCalled();
+		expect(document.querySelector('button[aria-label="Dismiss issue: Report AAAA1111"]')).not.toBeNull();
+	});
+
 	it("never shows one source's issues under another source's name", async () => {
 		mocks.api.getAdminSourceIssueTypes.mockResolvedValueOnce({
 			types: [{ count: 2, key: "fields", kind: "fields", next: "Fix the fields.", title: "Some fields were left out" }],

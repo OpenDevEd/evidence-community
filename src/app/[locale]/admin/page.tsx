@@ -22,6 +22,15 @@ import {
 	buildAdminLoginPageUrl,
 } from "@/lib/runtime-routing";
 
+/** The library's source settings in OpenScholar, beside the admin entry OpenScholar gave this library. */
+function openScholarConfigurationHref(loginPageUrl: string) {
+	const url = new URL(loginPageUrl);
+	url.pathname = url.pathname.replace(/\/admin\/?$/u, "/configuration");
+	url.search = "?section=sources";
+	url.hash = "";
+	return url.toString();
+}
+
 export default async function AdminPage({
 	params,
 	searchParams,
@@ -72,7 +81,7 @@ export default async function AdminPage({
 	return (
 		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId }}>
 		<AdminWorkbench
-			configurationHref={`${new URL(adminConfig.loginPageUrl).origin}/evidence-libraries/${encodeURIComponent(adminConfig.libraryId)}/configuration?section=sources`}
+			configurationHref={openScholarConfigurationHref(adminConfig.loginPageUrl)}
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
 		/>

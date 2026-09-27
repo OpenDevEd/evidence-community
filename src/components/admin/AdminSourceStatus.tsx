@@ -110,6 +110,10 @@ const FAILURE_MESSAGES: Record<Failure["code"], (name: string) => string> = {
 	internal: () => "The import hit an unexpected error. The technical details show what happened.",
 };
 
+/** A paused source never runs, so a failure that would retry on its own waits for it to resume. */
+const RETRIES_ON_ITS_OWN = new Set<Failure["code"]>(["rate_limited", "unavailable", "interrupted"]);
+const PAUSED_MESSAGE = "The source is paused, so the import does not try again. Resume it in the library's configuration.";
+
 type PhaseState = "running" | "done" | "failed" | "waiting";
 
 const PHASE_LOOK: Record<PhaseState, { text: string; ring: string }> = {
@@ -251,10 +255,12 @@ function RunningActivity({ activity }: { activity: Extract<SourceStatus, { state
 function FailedActivity({
 	activity,
 	configurationHref,
+	paused,
 	now,
 }: {
 	activity: Extract<SourceStatus, { state: "failed" }>;
 	configurationHref: string | null;
+	paused: boolean;
 	now: Date;
 }) {
 	return (
@@ -264,7 +270,9 @@ function FailedActivity({
 					Import failed {when(activity.failure.at, now)}
 				</p>
 				<p className="text-sm leading-relaxed text-black/70 dark:text-white/75">
-					{FAILURE_MESSAGES[activity.failure.code](sourceProviderName(activity.provider))}
+					{paused && RETRIES_ON_ITS_OWN.has(activity.failure.code)
+						? PAUSED_MESSAGE
+						: FAILURE_MESSAGES[activity.failure.code](sourceProviderName(activity.provider))}
 				</p>
 				<p className="text-[11px] text-black/50 dark:text-white/50">
 					{activity.lastSuccessAt ? `Last success ${when(activity.lastSuccessAt, now)}` : "No import has succeeded yet"}
@@ -305,9 +313,11 @@ const BAND: Record<SourceStatus["state"], string> = {
 function SourceActivityPanel({
 	activity,
 	configurationHref,
+	paused,
 }: {
 	activity: SourceStatus;
 	configurationHref: string | null;
+	paused: boolean;
 }) {
 	const now = new Date();
 	return (
@@ -331,7 +341,7 @@ function SourceActivityPanel({
 				</div>
 			) : null}
 			{activity.state === "failed" ? (
-				<FailedActivity activity={activity} configurationHref={configurationHref} now={now} />
+				<FailedActivity activity={activity} configurationHref={configurationHref} paused={paused} now={now} />
 			) : null}
 			<SearchFailed activity={activity} />
 			{activity.state === "idle" ? (
@@ -615,14 +625,27 @@ const pageKey = (sourceKey: string, type: string, offset: number, limit: number,
 	[PAGE_KEY, sourceKey, type, offset, limit, version] as const;
 
 /** One page of a type's records. The page kept while the next one loads is marked stale. */
+type LoadedPage = AdminSourceIssuePage & { offset: number; limit: number; at: string };
+
+/**
+ * Whether the rows on screen are the ones asked for. Rows from before the source's status changed
+ * stay usable while they refresh, since a dismissal always applies to the record's current issue;
+ * if that refresh fails, they are out of date.
+ */
+function pageFreshness(data: LoadedPage | undefined, page: { offset: number; limit: number }, version: string, failed: boolean) {
+	const otherPage = data?.offset !== page.offset || data?.limit !== page.limit;
+	const outdated = otherPage || data?.at !== version;
+	return { showError: outdated && failed, stale: otherPage || (outdated && failed) };
+}
+
 function useIssuePage(sourceKey: string, type: string, page: { offset: number; limit: number }, version: string, polling: boolean) {
 	const { data, error } = useSWR(
 		pageKey(sourceKey, type, page.offset, page.limit, version),
-		async ([, key, kind, offset, limit]) => ({ ...(await getAdminSourceIssuePage(key, kind, { offset, limit })), offset, limit }),
+		async ([, key, kind, offset, limit, at]): Promise<LoadedPage> => ({ ...(await getAdminSourceIssuePage(key, kind, { offset, limit })), offset, limit, at }),
 		{ keepPreviousData: true, refreshInterval: polling ? ISSUES_POLL_MS : 0 },
 	);
-	const stale = data?.offset !== page.offset || data?.limit !== page.limit;
-	return { error: stale ? error : undefined, rows: data?.issues ?? [], stale };
+	const { showError, stale } = pageFreshness(data, page, version, Boolean(error));
+	return { error: showError, rows: data?.issues ?? [], stale };
 }
 
 /** Where the page sits in the type, and the pages to move between. */
@@ -768,8 +791,10 @@ function IssueKindPane({
 type DismissTarget = { record: string; type: string } | { type: string };
 
 /** The rail's counts without what was just dismissed, before the server answers. */
-function typesWithout(data: { types: AdminSourceIssueType[] } | undefined, target: DismissTarget) {
-	if (!data) return data;
+type IssueTypes = { types: AdminSourceIssueType[] };
+
+function typesWithout(data: IssueTypes | undefined, target: DismissTarget): IssueTypes {
+	if (!data) return { types: [] };
 	const types = data.types.map((type) =>
 		type.key === target.type ? { ...type, count: "record" in target ? type.count - 1 : 0 } : type,
 	);
@@ -777,8 +802,8 @@ function typesWithout(data: { types: AdminSourceIssueType[] } | undefined, targe
 }
 
 /** A loaded page of the dismissed type without what was just dismissed. */
-function pageWithout(data: AdminSourceIssuePage | undefined, target: DismissTarget) {
-	if (!data) return data;
+function pageWithout(data: AdminSourceIssuePage | undefined, target: DismissTarget): AdminSourceIssuePage {
+	if (!data) return { count: 0, issues: [] };
 	const issues = "record" in target ? data.issues.filter((row) => row.sourceRecordKey !== target.record) : [];
 	return { count: Math.max(0, data.count - (data.issues.length - issues.length)), issues };
 }
@@ -815,13 +840,23 @@ function SourceIssues({
 	};
 
 	async function dismiss(target: DismissTarget) {
-		void mutate(cached(TYPES_KEY), (data?: { types: AdminSourceIssueType[] }) => typesWithout(data, target), { revalidate: false });
-		void mutate(cached(PAGE_KEY, target.type), (data?: AdminSourceIssuePage) => pageWithout(data, target), { revalidate: false });
+		const request = dismissAdminSourceIssues(
+			sourceKey,
+			"record" in target ? { record: target.record } : { type: target.type },
+		);
+		// Hidden at once; put back if the server refuses.
+		const optimistic = { populateCache: false, revalidate: false, rollbackOnError: true, throwOnError: false };
+		const settled = request.then(() => undefined);
+		void mutate<IssueTypes | undefined>(cached(TYPES_KEY), settled, {
+			...optimistic,
+			optimisticData: (data) => typesWithout(data, target),
+		});
+		void mutate<AdminSourceIssuePage | undefined>(cached(PAGE_KEY, target.type), settled, {
+			...optimistic,
+			optimisticData: (data) => pageWithout(data, target),
+		});
 		try {
-			const { batch, count: dismissed } = await dismissAdminSourceIssues(
-				sourceKey,
-				"record" in target ? { record: target.record } : { type: target.type },
-			);
+			const { batch, count: dismissed } = await request;
 			if (batch) toast(dismissed === 1 ? "Issue dismissed" : `${count(dismissed)} issues dismissed`, {
 				action: {
 					label: "Undo",
@@ -961,7 +996,7 @@ export function AdminSourceStatusDialog({
 								</Button>
 							</ModalHeader>
 							<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-								<SourceActivityPanel activity={activity} configurationHref={configurationHref} />
+								<SourceActivityPanel activity={activity} configurationHref={configurationHref} paused={source.status === "paused"} />
 								{showIssues ? (
 									<SourceIssues
 										key={source.key}
