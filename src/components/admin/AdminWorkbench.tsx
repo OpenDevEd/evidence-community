@@ -669,6 +669,8 @@ export default function AdminWorkbench({
 
 	const applyDetail = useCallback(
 		(next: AdminItemDetail, replaceLocal = false) => {
+			// Every record reload lands here, after a PDF change or a discard too, so the preview draws the record again.
+			setPreviewRevision((revision) => revision + 1);
 			const generationChanged = Boolean(
 				next.draft &&
 					draftGenerationByKey.current.has(next.key) &&

@@ -421,6 +421,18 @@ export async function publishReviewRecords(
 	return { remainingConflicts, indexingKeys };
 }
 
+/** Throws what stops a review from publishing: missing fields, including those its identifier choice needs. */
+export function assertReviewPublishable(review: typeof itemReview.$inferSelect) {
+	for (const record of review.snapshot.records) {
+		validateReviewPayload(
+			effectiveReviewRecord(review, record).payload,
+			record.itemKey === review.itemKey
+				? review.snapshot.publishingChoice
+				: null,
+		);
+	}
+}
+
 async function removeApprovedFiles(
 	transaction: DatabaseTransaction,
 	publication: LibraryServerConfig["services"]["publication"],
@@ -483,14 +495,7 @@ export async function approveItemReview(
 		throw new AdminValidationError(
 			"The review changed. Reload it and try again.",
 		);
-	for (const record of review.snapshot.records) {
-		validateReviewPayload(
-			effectiveReviewRecord(review, record).payload,
-			record.itemKey === review.itemKey
-				? review.snapshot.publishingChoice
-				: null,
-		);
-	}
+	assertReviewPublishable(review);
 	const files = await db
 		.select()
 		.from(itemReviewFile)

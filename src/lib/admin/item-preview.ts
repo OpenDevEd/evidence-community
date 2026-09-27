@@ -6,8 +6,9 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemFileRemoval, itemReview, itemReviewFile } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { projectPublicItems } from "@/lib/search-index/projection";
-import { ItemNotFoundError, publishItemDraftWithContext } from "./native-item-service";
-import { publishReviewRecords, reviewChildKeys } from "./review-service";
+import { ItemNotFoundError, loadWorkingItemPayload, publishItemDraftWithContext } from "./native-item-service";
+import { assertReviewPublishable, getItemPublishingChoice, publishReviewRecords, reviewChildKeys } from "./review-service";
+import { validateReviewPayload } from "./review-validation";
 
 type PreviewFiles = {
 	files: { itemKey: string; uploadRevision: number; cover: boolean; coverWidth: number | null; coverHeight: number | null; filename: string }[];
@@ -38,11 +39,15 @@ export async function previewItem(db: Database, rootKey: string, config: Library
 
 async function publishWorkingDrafts(transaction: DatabaseTransaction, rootKey: string, config: LibraryServerConfig): Promise<PreviewFiles> {
 	const keys = [rootKey, ...(await reviewChildKeys(transaction, rootKey))];
-	const drafts = await transaction.select({ key: itemDraft.itemKey }).from(itemDraft).where(inArray(itemDraft.itemKey, keys));
+	const [drafts, { choice }] = await Promise.all([
+		transaction.select({ key: itemDraft.itemKey }).from(itemDraft).where(inArray(itemDraft.itemKey, keys)),
+		getItemPublishingChoice(transaction, rootKey),
+	]);
+	const drafted = keys.filter((key) => drafts.some((draft) => draft.key === key));
+	// What submitting for review checks, identifier requirements included, so the preview names every blocker.
+	for (const key of drafted) validateReviewPayload(await loadWorkingItemPayload(transaction, key), key === rootKey ? choice : null);
 	// The parent first, as a review publishes it, so a new attachment has a record to belong to.
-	for (const key of keys) {
-		if (drafts.some((draft) => draft.key === key)) await publishItemDraftWithContext(transaction, key, { writebackConfig: config });
-	}
+	for (const key of drafted) await publishItemDraftWithContext(transaction, key, { writebackConfig: config });
 	const [files, removals] = await Promise.all([
 		transaction
 			.select()
@@ -62,6 +67,7 @@ async function publishReview(transaction: DatabaseTransaction, rootKey: string, 
 		.from(itemReview)
 		.where(and(eq(itemReview.id, reviewId), eq(itemReview.itemKey, rootKey)));
 	if (!review) throw new ItemNotFoundError(rootKey);
+	assertReviewPublishable(review);
 	await publishReviewRecords(transaction, review, config);
 	const files = await transaction.select().from(itemReviewFile).where(eq(itemReviewFile.reviewId, reviewId));
 	return {

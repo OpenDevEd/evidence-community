@@ -8,7 +8,8 @@ import type { Database } from "@/db/database-schema";
 import { previewItem } from "@/lib/admin/item-preview";
 import { createNativeItemDraft, getItemDraft, openItemDraft, publishItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "@/lib/admin/native-file-service";
-import { submitItemReview } from "@/lib/admin/review-service";
+import { AdminValidationError } from "@/lib/admin/errors";
+import { setItemPublishingChoice, submitItemReview } from "@/lib/admin/review-service";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -64,5 +65,16 @@ it("previews a submitted review as submitted, and the working draft as edited si
 		expect(await savedState(db)).toEqual(before);
 		const [published] = await db.select({ title: item.title }).from(item).where(eq(item.key, created.itemKey));
 		expect(published?.title).toBe("Published title");
+	});
+}, 120_000);
+
+it("names what the identifier choice still needs instead of previewing", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const draft = await createNativeItemDraft(db, { itemType: "Report", title: "Report for Zenodo" });
+		await setItemPublishingChoice(db, draft.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
+
+		await expect(previewItem(db, draft.itemKey, config)).rejects.toSatisfy(
+			(error) => error instanceof AdminValidationError && Boolean(error.fields.creators),
+		);
 	});
 }, 120_000);
