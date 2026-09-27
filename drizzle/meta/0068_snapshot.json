@@ -1,5 +1,5 @@
 {
-  "id": "37d13341-a2ff-429d-ad36-52a3104bdddd",
+  "id": "7fbfaff1-ca50-4158-a200-a3102ace76ae",
   "prevId": "3fa68cb2-1bb8-477b-9830-1a64f23bb9f3",
   "version": "7",
   "dialect": "postgresql",
@@ -3004,12 +3004,10 @@
           "tableFrom": "itemFileDraft",
           "tableTo": "itemIdentity",
           "columnsFrom": [
-            "parentItemKey",
-            "sourceConnectionKey"
+            "parentItemKey"
           ],
           "columnsTo": [
-            "key",
-            "sourceConnectionKey"
+            "key"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -3720,12 +3718,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "sourceSyncRunId": {
-          "name": "sourceSyncRunId",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -3809,39 +3801,9 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "outbox_source_sync_run_idx": {
-          "name": "outbox_source_sync_run_idx",
-          "columns": [
-            {
-              "expression": "sourceSyncRunId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"outbox\".\"sourceSyncRunId\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
-      "foreignKeys": {
-        "outbox_sourceSyncRunId_sourceSyncRun_id_fk": {
-          "name": "outbox_sourceSyncRunId_sourceSyncRun_id_fk",
-          "tableFrom": "outbox",
-          "tableTo": "sourceSyncRun",
-          "columnsFrom": [
-            "sourceSyncRunId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4612,31 +4574,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "recordsDone": {
-          "name": "recordsDone",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "recordsTotal": {
-          "name": "recordsTotal",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recordsFrom": {
-          "name": "recordsFrom",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recordsFromAt": {
-          "name": "recordsFromAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -4764,18 +4701,6 @@
         "lastError": {
           "name": "lastError",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lastErrorCode": {
-          "name": "lastErrorCode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lastChangedRecords": {
-          "name": "lastChangedRecords",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

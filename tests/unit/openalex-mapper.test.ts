@@ -326,7 +326,7 @@ describe("OpenAlex work mapping", () => {
 		expect(items[1]).toMatchObject({
 			sourceRecordKey: "W123:pdf",
 			parentSourceRecordKey: "W123",
-			metadata: { itemType: "Attachment", tags: ["_auto-process"] },
+			metadata: { itemType: "Attachment", tags: [] },
 			raw: {
 				openalexWorkId: "https://openalex.org/W123",
 				location: preferred,

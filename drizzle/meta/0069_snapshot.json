@@ -1,6 +1,6 @@
 {
-  "id": "5252383d-b404-4c2f-aa25-0061657ba5f5",
-  "prevId": "37d13341-a2ff-429d-ad36-52a3104bdddd",
+  "id": "0789c38f-4cdf-44fc-b874-818ce89951aa",
+  "prevId": "7fbfaff1-ca50-4158-a200-a3102ace76ae",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3004,12 +3004,10 @@
           "tableFrom": "itemFileDraft",
           "tableTo": "itemIdentity",
           "columnsFrom": [
-            "parentItemKey",
-            "sourceConnectionKey"
+            "parentItemKey"
           ],
           "columnsTo": [
-            "key",
-            "sourceConnectionKey"
+            "key"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -4776,12 +4774,6 @@
         "lastChangedRecords": {
           "name": "lastChangedRecords",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "runRequestedAt": {
-          "name": "runRequestedAt",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
