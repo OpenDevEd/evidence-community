@@ -24,7 +24,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
     if (!keys.length) return 0;
     await tx.execute(sql`UPDATE "itemSourceLink" SET "remoteDeleted" = true, "updatedAt" = now()
       WHERE "sourceConnectionKey" = ${args.sourceConnectionKey} AND "itemKey" = ANY(ARRAY[${sql.join(keys.map(key => sql`${key}`), sql`, `)}]::varchar[])`);
-    // Drafts, submitted reviews and persistent field overrides all count as editorial work.
+    // Drafts, submitted reviews, persistent field overrides and library attachments or notes all count as editorial work.
     await tx.execute(sql`INSERT INTO "sourceRecordIssue" ("sourceConnectionKey", "sourceRecordKey", "code", "message", "createdAt", "updatedAt")
       SELECT ${args.sourceConnectionKey}, links."sourceRecordKey", 'source_membership_removed',
         'This edited record no longer matches any connected OpenAlex search.', now(), now()
@@ -35,6 +35,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
         AND (EXISTS (SELECT 1 FROM "itemFieldOverride" o WHERE o."itemKey" = i.key)
           OR EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key))
           OR EXISTS (SELECT 1 FROM "itemFieldOverride" o JOIN "item" child ON child.key = o."itemKey" WHERE child."parentItem" = i.key)
+          OR EXISTS (SELECT 1 FROM "item" child WHERE child."parentItem" = i.key AND child."sourceConnectionKey" = 'native' AND child.deleted = 0)
           OR EXISTS (SELECT 1 FROM "itemReview" r WHERE r."itemKey" = COALESCE(i."parentItem", i.key) AND r.state = 'pending')
           OR EXISTS (SELECT 1 FROM "itemSourceLink" dirty WHERE dirty."itemKey" = i.key AND dirty."dirtyFields" <> '[]'::jsonb))
       ON CONFLICT ("sourceConnectionKey", "sourceRecordKey") DO UPDATE SET "code" = EXCLUDED."code", "message" = EXCLUDED."message", "updatedAt" = now(), "dismissedAt" = NULL
@@ -47,6 +48,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
         AND NOT EXISTS (SELECT 1 FROM "itemFieldOverride" o WHERE o."itemKey" = i.key)
         AND NOT EXISTS (SELECT 1 FROM "itemDraft" d WHERE d."itemKey" = i.key OR d."itemKey" IN (SELECT child.key FROM "item" child WHERE child."parentItem" = i.key))
         AND NOT EXISTS (SELECT 1 FROM "itemFieldOverride" o JOIN "item" child ON child.key = o."itemKey" WHERE child."parentItem" = i.key)
+        AND NOT EXISTS (SELECT 1 FROM "item" child WHERE child."parentItem" = i.key AND child."sourceConnectionKey" = 'native' AND child.deleted = 0)
         AND NOT EXISTS (SELECT 1 FROM "itemReview" r WHERE r."itemKey" = COALESCE(i."parentItem", i.key) AND r.state = 'pending')
         AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" dirty WHERE dirty."itemKey" = i.key AND dirty."dirtyFields" <> '[]'::jsonb)
       RETURNING key, revision

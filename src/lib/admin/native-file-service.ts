@@ -38,7 +38,7 @@ import { buildPublicationFileManifest } from "@/lib/publication/record-adapter";
 import { reviewFileSchema, type ReviewFile } from "./review-contract";
 import { removeUnreferencedPrivateFiles } from "./file-retention";
 import type { EvidenceFileStorage } from "./file-storage";
-import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
+import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision, isNativeOrOpenAlex } from "./native-item-service";
 import { processPdf } from "./pdf-processing";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
@@ -778,7 +778,7 @@ async function lockFilePublicationRecords(
 		.where(
 			and(
 				inArray(item.key, [itemKey, lockedDraft.parentItemKey]),
-				eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+				isNativeOrOpenAlex(transaction, item.sourceConnectionKey),
 			),
 		)
 		.orderBy(item.key)
@@ -1272,7 +1272,7 @@ export async function unpublishNativePdfInTransaction(
 						itemKey,
 						initialPublication.parentItemKey,
 					]),
-					eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+					isNativeOrOpenAlex(transaction, item.sourceConnectionKey),
 				),
 			)
 			.orderBy(item.key)

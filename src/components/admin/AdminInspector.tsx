@@ -1533,7 +1533,11 @@ export function AdminInspector({
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
-	const filesReadOnly = readOnlyVersion || !native || unrestored || !detail.draft || !detail.editable;
+	// OpenAlex records take library files because OpenAlex gets no writeback; Zotero attachments sync back to Zotero.
+	const holdsLibraryFiles =
+		native ||
+		(!isAttachment && sources.find((source) => source.key === detail.sourceConnectionKey)?.provider === "openalex");
+	const filesReadOnly = readOnlyVersion || !holdsLibraryFiles || unrestored || !detail.draft || !detail.editable;
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&

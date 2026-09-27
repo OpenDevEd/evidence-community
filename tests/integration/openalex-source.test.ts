@@ -1,22 +1,29 @@
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
+	itemIdentity,
 	itemSourceLink,
 	sourceConnection,
+	sourceRecordIssue,
+	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import {
+	ItemParentUnavailableError,
 	createNativeItemDraft,
 	publishItemDraft,
 } from "@/lib/admin/native-item-service";
+import { completeNativePdfUpload, stageNativePdfUpload } from "@/lib/admin/native-file-service";
+import { approveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { item } from "@/db/schema/tables/item";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
-import { sourceSnapshot } from "@/db/schema/source";
+import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
+import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
 
 const settings = {
 	name: "AI in education",
@@ -289,5 +296,51 @@ it("rejects rewriting an approved query and cannot commit a page fetched under a
 					.where(eq(sourceConnection.key, "oa-a"))
 			)[0]?.syncCursor,
 		).toEqual({});
+	});
+}, 120_000);
+
+it("publishes a library PDF on an OpenAlex record and keeps both through later syncs", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		await db.insert(sourceConnection).values([
+			{ key: "oa", provider: "openalex", scopeKind: "query", config: settings },
+			{ key: "zotero-group", provider: "zotero", scopeKind: "group", externalScopeKey: "1" },
+		]);
+		const run = async (results: ReturnType<typeof work>[]) => {
+			const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa"));
+			return syncOpenAlexSource(
+				{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{ fetch: async () => Response.json({ meta: { count: results.length, next_cursor: null }, results }) },
+			);
+		};
+		await run([work(1)]);
+		const [record] = await db.select().from(item).where(eq(item.sourceRecordKey, "W1"));
+
+		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: record!.key, title: "Library copy" });
+		const pdf = await createPdf("Library copy of an OpenAlex work");
+		const staged = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "copy.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
+		storage.privateFiles.set(staged.upload.path, pdf);
+		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: staged.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		const review = await submitItemReview(db, record!.key, { userId: "creator", role: "creator" });
+		await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision, publicationTags: ["publish-record"] }, { userId: "editor", role: "editor" }, libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] }));
+
+		const libraryCopy = async () => (await db.select().from(item).where(eq(item.key, attachment.itemKey)))[0];
+		expect(await libraryCopy()).toMatchObject({ parentItem: record!.key, deleted: 0 });
+		expect(await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, attachment.itemKey))).toHaveLength(1);
+		// OpenAlex takes no writeback, so the library copy stays local.
+		expect(await db.select().from(sourceWritebackJob)).toEqual([]);
+
+		await run([work(1, "Updated in OpenAlex", "2026-09-26T10:00:00Z")]);
+		expect(await libraryCopy()).toMatchObject({ parentItem: record!.key, deleted: 0 });
+
+		// The work leaves the search. A full scan must keep the record that holds the library copy.
+		await db.update(sourceConnection).set({ syncCursor: sql`jsonb_set(${sourceConnection.syncCursor}, '{reconciledAt}', 'null'::jsonb)` }).where(eq(sourceConnection.key, "oa"));
+		await run([]);
+		expect((await db.select().from(item).where(eq(item.key, record!.key)))[0]?.deleted).toBe(0);
+		expect(await db.select({ code: sourceRecordIssue.code }).from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceRecordKey, "W1"))).toEqual([{ code: "source_membership_removed" }]);
+
+		// Zotero records sync their attachments back, so they still take no library files.
+		await db.insert(itemIdentity).values({ key: "ABCD2345", sourceConnectionKey: "zotero-group", sourceRecordKey: "ABCD2345" });
+		await expect(createNativeItemDraft(db, { itemType: "Attachment", parentItem: "ABCD2345", title: "Zotero copy" })).rejects.toBeInstanceOf(ItemParentUnavailableError);
 	});
 }, 120_000);
