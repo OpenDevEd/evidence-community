@@ -202,5 +202,17 @@ describe("the admin's source status dialog", () => {
 		expect(badge.getAttribute("aria-label")).toBe("ODEN docs import: Up to date, 3 record issues");
 		await act(async () => badge.click());
 		expect(onClick).toHaveBeenCalledTimes(1);
+
+		// Records that never reached search are not up to date, whatever the import says.
+		await act(async () =>
+			root.render(
+				<AdminSourceStatusBadge
+					activity={{ ...base, changed: 14, searchable: 12_000, searchFailed: 2, state: "succeeded" }}
+					label="ODEN docs"
+					onClick={onClick}
+				/>,
+			),
+		);
+		expect(container.querySelector("button")!.getAttribute("aria-label")).toBe("ODEN docs import: Up to date, 2 not in search");
 	});
 });

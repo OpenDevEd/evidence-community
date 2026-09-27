@@ -137,16 +137,25 @@ function Phase({ label, icon, state }: { label: string; icon: typeof Database01I
 }
 
 function phaseStates(activity: SourceStatus): [PhaseState, PhaseState] {
-	switch (activity.state) {
-		case "running":
-			return activity.phase === "import" ? ["running", "waiting"] : ["done", "running"];
-		case "succeeded":
-			return ["done", "done"];
-		case "failed":
-			return ["failed", "done"];
-		case "idle":
-			return ["waiting", "waiting"];
+	if (activity.state === "running") {
+		return activity.phase === "import" ? ["running", "waiting"] : ["done", "running"];
 	}
+	// Search updates that failed show on the search step; a failed import never reached it.
+	const search: PhaseState = activity.searchFailed > 0 ? "failed" : "waiting";
+	if (activity.state === "succeeded") return ["done", search === "failed" ? "failed" : "done"];
+	return activity.state === "failed" ? ["failed", search] : ["waiting", "waiting"];
+}
+
+/** Records whose search update failed; they wait for a retry from the header. */
+function SearchFailed({ activity }: { activity: SourceStatus }) {
+	if (activity.searchFailed === 0) return null;
+	return (
+		<p className="flex items-center gap-1.5 text-xs text-rose-700 dark:text-rose-300">
+			<HugeiconsIcon aria-hidden icon={AlertCircleIcon} size={14} className="shrink-0" />
+			{count(activity.searchFailed)} {activity.searchFailed === 1 ? "record" : "records"} could not be added to search. Retry
+			from search indexing in the header.
+		</p>
+	);
 }
 
 /** The two phases of an import, with the one under way lit. */
@@ -324,6 +333,7 @@ function SourceActivityPanel({
 			{activity.state === "failed" ? (
 				<FailedActivity activity={activity} configurationHref={configurationHref} now={now} />
 			) : null}
+			<SearchFailed activity={activity} />
 			{activity.state === "idle" ? (
 				<div className="space-y-1.5">
 					<p className="text-xl font-semibold leading-tight tracking-tight text-black/70 dark:text-white/75">
@@ -998,7 +1008,13 @@ function badgeDescription(activity: SourceStatus) {
 					? "Up to date"
 					: "Not imported yet";
 	const issues = issueTotal(activity);
-	return issues > 0 ? `${state}, ${count(issues)} ${issues === 1 ? "record issue" : "record issues"}` : state;
+	return [
+		state,
+		activity.searchFailed > 0 ? `${count(activity.searchFailed)} not in search` : null,
+		issues > 0 ? `${count(issues)} ${issues === 1 ? "record issue" : "record issues"}` : null,
+	]
+		.filter(Boolean)
+		.join(", ");
 }
 
 /** The small status button shown next to a source in the sidebar. */
@@ -1011,7 +1027,8 @@ export function AdminSourceStatusBadge({
 	onClick: () => void;
 	activity: SourceStatus;
 }) {
-	const look = BADGE[activity.state];
+	// Records missing from search make an up-to-date source a problem too.
+	const look = BADGE[activity.state === "succeeded" && activity.searchFailed > 0 ? "failed" : activity.state];
 	const issues = issueTotal(activity);
 	return (
 		<Tooltip content={badgeDescription(activity)}>
