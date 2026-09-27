@@ -970,13 +970,14 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					sourceSyncRunId: options.run?.id,
 				});
 				unresolvedRelations += written.written.unresolvedRelations;
+				// The batch is durable now; slow file cleanup must not hold the count back.
+				await options.run?.report(end, manifest.entries.length);
 				await options.attachmentProcessor?.flushCleanup?.(
 					options.sourceConnectionKey,
 				);
 				expectedCursor = nextCursor;
 				offset = end;
 				batches += 1;
-				await options.run?.report(end, manifest.entries.length);
 			}
 			return {
 				batches,

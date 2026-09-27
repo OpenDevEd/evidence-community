@@ -1,6 +1,7 @@
 -- Rollback: keep these columns. They are nullable or defaulted, and older
 -- runtimes neither read nor write them, so rolling the application back needs
--- no schema change. A full reversal drops outbox_source_sync_run_idx, the
+-- no schema change. An older runtime leaves lastErrorCode as it was, so before
+-- upgrading again run: UPDATE "sourceSyncState" SET "lastErrorCode" = NULL; A full reversal drops outbox_source_sync_run_idx, the
 -- outbox_sourceSyncRunId_sourceSyncRun_id_fk constraint, outbox.sourceSyncRunId,
 -- sourceSyncRun.recordsDone/recordsTotal/recordsFrom/recordsFromAt and
 -- sourceSyncState.lastErrorCode/lastChangedRecords; no library data lives in them.
