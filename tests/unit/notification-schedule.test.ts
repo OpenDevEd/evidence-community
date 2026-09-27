@@ -9,7 +9,11 @@ describe("library notification schedules", () => {
     expect(timeZoneLabel("America/North_Dakota/Center")).toBe("North Dakota Center time");
     // IANA's Etc/GMT+5 is five hours behind GMT, the reverse of its name.
     expect(timeZoneLabel("Etc/GMT+5")).toBe("GMT-5");
+    expect(timeZoneLabel("Etc/GMT-3")).toBe("GMT+3");
     expect(timeZoneLabel("UTC")).toBe("UTC");
+    expect(timeZoneLabel("Etc/GMT+0")).toBe("UTC");
+    // A daylight-saving alias has no single offset, so it stays as configured.
+    expect(timeZoneLabel("CST6CDT")).toBe("CST6CDT");
   });
   it("uses the configured weekday, local time and timezone", () => {
     expect(nextDigestDate({frequency: "weekly" as const, weekday: 5, time: "09:15", timezone: "Asia/Kolkata"}, new Date("2026-09-09T10:00:00Z")).toISOString()).toBe("2026-09-11T03:45:00.000Z");

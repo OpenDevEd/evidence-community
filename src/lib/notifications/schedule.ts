@@ -9,12 +9,16 @@ export function describeDigestSchedule(schedule: DigestSchedule, locale: string)
   return `${day} at ${schedule.time} ${schedule.timezone}`;
 }
 
-/** A zone as a reader names it: the place for a regional zone, the offset for a fixed one (IANA's Etc/GMT+5 is GMT-5). */
+/**
+ * A zone as a reader names it, from its name alone so the server and every browser write the same text: the place for a
+ * regional zone, the real offset for a fixed one (IANA's Etc/GMT+5 is five hours behind), and any other zone as configured.
+ */
 export function timeZoneLabel(timezone: string) {
   const [area, ...place] = timezone.split("/");
   if (area !== "Etc" && place.length) return `${place.join(" ").replaceAll("_", " ")} time`;
-  const offset = new Intl.DateTimeFormat("en", {timeZone: timezone, timeZoneName: "shortOffset"}).formatToParts(0).find(part => part.type === "timeZoneName")!.value;
-  return offset === "GMT" ? "UTC" : offset;
+  const fixed = /^Etc\/GMT([+-])(\d+)$/.exec(timezone);
+  if (fixed && fixed[2] !== "0") return `GMT${fixed[1] === "+" ? "-" : "+"}${fixed[2]}`;
+  return /^(Etc\/)?(UTC|UCT|GMT(0|[+-]0)?|Greenwich|Universal|Zulu)$/.test(timezone) ? "UTC" : timezone;
 }
 
 export function nextDigestDate(schedule: DigestSchedule, after: Date) {
