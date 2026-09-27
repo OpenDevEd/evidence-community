@@ -94,10 +94,11 @@ Keep all of these user-facing features, including generated starter questions, t
 - Attach original PDFs directly as AI SDK file parts with the correct PDF media type (Summary, Explain, starter questions, and the `readPublications` tool; publication chat reads on demand, see above).
 - Automatically attach every PDF that passes the exact publication attachment visibility rule used by the PDF list:
 
-Use `isVisiblePdfAttachment`. A PDF has a rendered cover or an explicit PDF
-content type and HTTP(S) URL. The OpenAlex integration removes the obsolete
-`_auto-process` lookup path; provider IDs must never be inferred from a library
-record key. New imports save the chosen PDF URL directly.
+Use `isVisiblePdfAttachment`. A PDF has a rendered cover, or it is a linked URL
+with a PDF content type and an HTTP(S) URL. Sources set that URL only on
+attachments they publish. The `_auto-process` tag plays no part; provider IDs
+must never be inferred from a library record key. New imports save the chosen
+PDF URL directly.
 
 - Extract that rule into one shared helper and reuse it in the UI and server. Do not keep the current differing `isAIAllowed` institution/tag allowlist.
 - PDF delivery (confirmed by the user on 2026-08-19 after gateway 502s on ~29 MB uploads): PDFs are attached inline (base64, prompt-cacheable) while a request stays within 20 MB total / 12 MB per file; anything beyond that is attached by public URL reference instead of being skipped. Do not drop PDFs silently.

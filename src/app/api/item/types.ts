@@ -50,6 +50,7 @@ export type ListAttachment = Pick<
 	| "title"
 	| "filename"
 	| "url"
+	| "contentType"
 	| "tags"
 	| "PDFCoverPageImage"
 	| "note"
