@@ -5,6 +5,7 @@ import { ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons
 import type { DigestDate, DigestSummary } from "@/lib/notifications/public";
 import { CoverImage } from "@/components/features/items/CoverImage";
 import { MarkdownExcerpt } from "@/components/features/markdown/MarkdownExcerpt";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import styles from "./DigestPages.module.css";
 import { Icon } from "./DigestPrimitives";
 
@@ -23,7 +24,7 @@ export function DigestCover({edition, libraryName, href, locale, titleAs: Title 
           <div aria-hidden="true" className={`${styles.backSheet} absolute inset-0 -z-10 rounded-2xl bg-[#a8623f]`} />
           <div aria-hidden="true" className={`${styles.middleSheet} absolute inset-0 -z-10 rounded-2xl bg-[#d7c7b2]`} />
           <article className={`${styles.frontSheet} relative flex ${coverHeight} flex-col overflow-hidden rounded-2xl bg-[#eee4d5] text-[#352b24] shadow-xl`}>
-            <div className="flex items-center gap-4 px-7 pt-6"><span className="inline-flex items-center gap-2 text-xs font-medium text-[#352b24]/65"><Icon value={BookOpen01Icon} size={16} />{libraryName}</span></div>
+            <div className="flex items-center gap-4 px-7 pt-6"><span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-[#352b24]/65"><Icon value={BookOpen01Icon} size={16} /><TruncatedText text={libraryName} className="w-0 flex-1" /></span></div>
             <div className="relative flex flex-1 items-center gap-6 px-7 py-7">
               <div className="shrink-0 self-start pt-1" aria-hidden="true"><span className="block text-[76px] font-bold leading-[0.85] tracking-[-0.08em] text-[#ac5937]">{published.day}</span><span className="mt-3 block text-center text-xs font-medium text-[#352b24]/65">{published.monthYear}</span></div>
               <Title className={`relative line-clamp-4 text-[28px] font-semibold leading-[1.12] tracking-tight ${cover ? "max-w-[190px]" : "max-w-[230px]"}`}>{edition.title}</Title>
@@ -44,7 +45,7 @@ export function FirstEditionCover({libraryName, sending, next}: {libraryName: st
         <div className="relative isolate mx-auto w-full max-w-md">
           <div aria-hidden="true" className={`${styles.middleSheet} absolute inset-0 -z-10 rounded-2xl border-2 border-dashed border-[#a8623f]/45`} />
           <article className={`relative flex ${coverHeight} flex-col overflow-hidden rounded-2xl bg-[#eee4d5] text-[#352b24] shadow-xl`}>
-            <div className="flex items-center gap-4 px-7 pt-6"><span className="inline-flex items-center gap-2 text-xs font-medium text-[#352b24]/65"><Icon value={BookOpen01Icon} size={16} />{libraryName}</span></div>
+            <div className="flex items-center gap-4 px-7 pt-6"><span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-[#352b24]/65"><Icon value={BookOpen01Icon} size={16} /><TruncatedText text={libraryName} className="w-0 flex-1" /></span></div>
             <div className="relative flex flex-1 items-center gap-6 px-7 py-7">
               {next
                 ? <div className="shrink-0 self-start pt-1" aria-hidden="true"><span className="block text-[76px] font-bold leading-[0.85] tracking-[-0.08em] text-[#ac5937]/45">{next.day}</span><span className="mt-3 block text-center text-xs font-medium text-[#352b24]/65">{next.monthYear}</span></div>

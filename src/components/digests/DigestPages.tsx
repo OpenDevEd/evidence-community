@@ -79,7 +79,8 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
-          {settings.enabled && <Suspense fallback={<Skeleton className="mt-5 h-10 w-80 max-w-full rounded-lg" />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
+          {/* Room for the longest next edition line, so nothing below moves when it arrives. */}
+          {settings.enabled && <div className="mt-5 min-h-16 sm:min-h-10"><Suspense fallback={<Skeleton className="h-10 w-80 max-w-full rounded-lg" />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense></div>}
         </div>
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
@@ -96,7 +97,7 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
   const next = use(nextEdition);
   if (!next) return null;
   return (
-          <div className="mt-5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm"><span className="text-accent"><Icon value={Calendar03Icon} size={16} /></span><span className={`text-xs ${muted}`}>Next edition</span><time dateTime={next.at} className="font-medium">{next.weekday}</time><span className={`basis-full pl-[26px] text-xs tabular-nums ${muted}`}>{next.time} {settings.timezone}</span></div>);
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm"><span className="text-accent"><Icon value={Calendar03Icon} size={16} /></span><span className={`text-xs ${muted}`}>Next edition</span><time dateTime={next.at} className="font-medium">{next.weekday}</time><span className={`basis-full pl-[26px] text-xs tabular-nums ${muted}`}>{next.time} {settings.timezone}</span></div>);
 }
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const {editions: items, page, pages} = use(editions);
