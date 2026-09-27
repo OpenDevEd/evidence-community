@@ -9,6 +9,18 @@ export function describeDigestSchedule(schedule: DigestSchedule, locale: string)
   return `${day} at ${schedule.time} ${schedule.timezone}`;
 }
 
+/**
+ * A zone as a reader names it, from its name alone so the server and every browser write the same text: the place for a
+ * regional zone, the real offset for a fixed one (IANA's Etc/GMT+5 is five hours behind), and any other zone as configured.
+ */
+export function timeZoneLabel(timezone: string) {
+  const [area, ...place] = timezone.split("/");
+  if (area.toLowerCase() !== "etc" && place.length) return `${place.join(" ").replaceAll("_", " ")} time`;
+  const fixed = /^etc\/gmt([+-])(\d+)$/i.exec(timezone);
+  if (fixed && fixed[2] !== "0") return `GMT${fixed[1] === "+" ? "-" : "+"}${fixed[2]}`;
+  return /^(etc\/)?(utc|uct|gmt(0|[+-]0)?|greenwich|universal|zulu)$/i.test(timezone) ? "UTC" : timezone;
+}
+
 export function nextDigestDate(schedule: DigestSchedule, after: Date) {
   const [hour, minute] = schedule.time.split(":").map(Number);
   const days = schedule.frequency === "weekly"
