@@ -1,9 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Suspense, use } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import PageContainer from "./PageContainer";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import {
 	ComprehensiveStats,
 	OverviewStats,
@@ -23,7 +25,7 @@ import {
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 type StatisticsPageProps = {
-	stats: ComprehensiveStats;
+	stats: Promise<ComprehensiveStats>;
 };
 
 const containerVariants = {
@@ -43,7 +45,8 @@ const itemVariants = {
 
 type SectionProps = { stats: ComprehensiveStats };
 
-function StatisticsHeader({ stats }: SectionProps) {
+/** Switches the citation measure; shown only when the library has more than one. */
+function CitationMeasureSwitch({ stats }: SectionProps) {
 	const t = useTranslations("ui");
 	const citationMeasureLabel = (
 		option: (typeof stats.citationMeasure.options)[number],
@@ -52,45 +55,35 @@ function StatisticsHeader({ stats }: SectionProps) {
 			? t("libraryCitations")
 			: `${option.sourceLabel} ${t("citationsLowercase")}`;
 
+	if (stats.citationMeasure.options.length < 2) return null;
 	return (
-		<motion.div
-			variants={itemVariants}
-			className="text-center space-y-4"
-		>
-			<h1 className="text-4xl font-bold text-black dark:text-white">
-				{t("databaseStatistics")}
-			</h1>
-			<p className="text-lg text-black/60 dark:text-white/60 max-w-2xl mx-auto">
-				{t("databaseStatisticsDescription")}
-			</p>
-			{stats.citationMeasure.options.length > 1 && (
-				<nav
-					aria-label={t("citationMeasure")}
-					className="mx-auto flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
-				>
-					{stats.citationMeasure.options.map((option) => {
-						const selected =
-							option.key ===
-							stats.citationMeasure.selectedKey;
-						return (
-							<Link
-								key={option.key}
-								href={`/statistics?citation=${encodeURIComponent(option.key)}`}
-								aria-current={
-									selected ? "page" : undefined
-								}
-								className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-									selected
-										? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white"
-										: "text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white"
-								}`}
-							>
-								{citationMeasureLabel(option)}
-							</Link>
-						);
-					})}
-				</nav>
-			)}
+		<motion.div variants={itemVariants}>
+			<nav
+				aria-label={t("citationMeasure")}
+				className="mx-auto flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
+			>
+				{stats.citationMeasure.options.map((option) => {
+					const selected =
+						option.key ===
+						stats.citationMeasure.selectedKey;
+					return (
+						<Link
+							key={option.key}
+							href={`/statistics?citation=${encodeURIComponent(option.key)}`}
+							aria-current={
+								selected ? "page" : undefined
+							}
+							className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+								selected
+									? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white"
+									: "text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white"
+							}`}
+						>
+							{citationMeasureLabel(option)}
+						</Link>
+					);
+				})}
+			</nav>
 		</motion.div>
 	);
 }
@@ -189,66 +182,99 @@ function OpenAlexTopicsSection({
 }
 
 export default function StatisticsPage({ stats }: StatisticsPageProps) {
-	"use no memo";
-	const { topics } = useLibraryConfig();
+	const t = useTranslations("ui");
 
 	return (
 		<PageContainer className="space-y-8">
-			<motion.div
-				initial="hidden"
-				animate="show"
-				variants={containerVariants}
-				className="space-y-8"
-			>
-				<StatisticsHeader stats={stats} />
-
-				{/* Overview Stats */}
-				<OverviewStats stats={stats} />
-
-				{/* Data Completeness */}
-				<DataCompleteness stats={stats} />
-
-				{/* Item Types & Years */}
-				<ItemTypesAndYears stats={stats} />
-
-				{/* Citation Analysis */}
-				<CitationAnalysis citationStats={stats.citationStats} />
-
-				<CitationsByYearSection
-					stats={stats}
-					topicsEnabled={topics.enabled}
-				/>
-
-				{/* International Collaboration */}
-				<InternationalCollaboration
-					collaborationStats={stats.collaborationStats}
-				/>
-
-				{/* Language Distribution */}
-				<LanguageDistribution
-					languageDistribution={stats.languageDistribution}
-				/>
-
-				<InstitutionsSection stats={stats} />
-				<AuthorCountriesSection stats={stats} />
-				<AuthorAnalyticsSection stats={stats} />
-				<CollectionsSection stats={stats} />
-				<OpenAlexTopicsSection
-					stats={stats}
-					topicsEnabled={topics.enabled}
-				/>
-
-				{/* Top Journals */}
-				{hasRows(stats.topJournals) && (
-					<TopJournals topJournals={stats.topJournals} />
-				)}
-
-				{/* Recent Activity */}
-				{hasRows(stats.recentActivity) && (
-					<RecentActivity recentActivity={stats.recentActivity} />
-				)}
-			</motion.div>
+			<div className="text-center space-y-4">
+				<h1 className="text-4xl font-bold text-black dark:text-white">
+					{t("databaseStatistics")}
+				</h1>
+				<p className="text-lg text-black/60 dark:text-white/60 max-w-2xl mx-auto">
+					{t("databaseStatisticsDescription")}
+				</p>
+			</div>
+			<Suspense fallback={<StatisticsPlaceholder />}>
+				<StatisticsSections stats={stats} />
+			</Suspense>
 		</PageContainer>
+	);
+}
+
+/** Holds the space of the first sections while the figures stream in. */
+function StatisticsPlaceholder() {
+	return (
+		<div className="space-y-8" aria-busy="true">
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+				{[0, 1, 2, 3].map((index) => (
+					<Skeleton key={index} className="h-32 rounded-2xl" />
+				))}
+			</div>
+			<Skeleton className="h-96 rounded-2xl" />
+		</div>
+	);
+}
+
+function StatisticsSections({ stats: pending }: StatisticsPageProps) {
+	"use no memo";
+	const stats = use(pending);
+	const { topics } = useLibraryConfig();
+
+	return (
+		<motion.div
+			initial="hidden"
+			animate="show"
+			variants={containerVariants}
+			className="space-y-8"
+		>
+			<CitationMeasureSwitch stats={stats} />
+
+			{/* Overview Stats */}
+			<OverviewStats stats={stats} />
+
+			{/* Data Completeness */}
+			<DataCompleteness stats={stats} />
+
+			{/* Item Types & Years */}
+			<ItemTypesAndYears stats={stats} />
+
+			{/* Citation Analysis */}
+			<CitationAnalysis citationStats={stats.citationStats} />
+
+			<CitationsByYearSection
+				stats={stats}
+				topicsEnabled={topics.enabled}
+			/>
+
+			{/* International Collaboration */}
+			<InternationalCollaboration
+				collaborationStats={stats.collaborationStats}
+			/>
+
+			{/* Language Distribution */}
+			<LanguageDistribution
+				languageDistribution={stats.languageDistribution}
+			/>
+
+			<InstitutionsSection stats={stats} />
+			<AuthorCountriesSection stats={stats} />
+			<AuthorAnalyticsSection stats={stats} />
+			<CollectionsSection stats={stats} />
+			<OpenAlexTopicsSection
+				stats={stats}
+				topicsEnabled={topics.enabled}
+			/>
+
+			{/* Top Journals */}
+			{hasRows(stats.topJournals) && (
+				<TopJournals topJournals={stats.topJournals} />
+			)}
+
+			{/* Recent Activity */}
+			{hasRows(stats.recentActivity) && (
+				<RecentActivity recentActivity={stats.recentActivity} />
+			)}
+		</motion.div>
 	);
 }
 
