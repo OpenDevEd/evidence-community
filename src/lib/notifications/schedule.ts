@@ -9,6 +9,14 @@ export function describeDigestSchedule(schedule: DigestSchedule, locale: string)
   return `${day} at ${schedule.time} ${schedule.timezone}`;
 }
 
+/** A zone as a reader names it: the place for a regional zone, the offset for a fixed one (IANA's Etc/GMT+5 is GMT-5). */
+export function timeZoneLabel(timezone: string) {
+  const [area, ...place] = timezone.split("/");
+  if (area !== "Etc" && place.length) return `${place.join(" ").replaceAll("_", " ")} time`;
+  const offset = new Intl.DateTimeFormat("en", {timeZone: timezone, timeZoneName: "shortOffset"}).formatToParts(0).find(part => part.type === "timeZoneName")!.value;
+  return offset === "GMT" ? "UTC" : offset;
+}
+
 export function nextDigestDate(schedule: DigestSchedule, after: Date) {
   const [hour, minute] = schedule.time.split(":").map(Number);
   const days = schedule.frequency === "weekly"

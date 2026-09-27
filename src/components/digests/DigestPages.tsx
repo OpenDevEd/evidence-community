@@ -11,7 +11,7 @@ import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { Pagination } from "@/components/nextui/Pagination";
-import { describeDigestSchedule } from "@/lib/notifications/schedule";
+import { describeDigestSchedule, timeZoneLabel } from "@/lib/notifications/schedule";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import styles from "./DigestPages.module.css";
@@ -100,10 +100,9 @@ function NextEditionLoading() {
 function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate | null>; settings: DigestSettings}) {
   const next = use(nextEdition);
   if (!next) return null;
-  const place = settings.timezone.split("/").at(-1)!.replaceAll("_", " ");
   return <div className={nextEditionRow}>
     <time dateTime={next.at} aria-label={next.weekday} className="grid h-full w-16 shrink-0 place-content-center rounded-xl bg-accent/10 text-center text-accent"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
-    <div className="min-w-0 whitespace-nowrap"><p className={`text-xs ${muted}`}>Next edition</p><p className="mt-1 font-medium">{next.dayName} at {next.time}</p><p className={`mt-0.5 text-xs ${muted}`}>{place} time</p></div>
+    <div className="min-w-0 whitespace-nowrap"><p className={`text-xs ${muted}`}>Next edition</p><p className="mt-1 font-medium">{next.dayName} at {next.time}</p><p className={`mt-0.5 text-xs ${muted}`}>{timeZoneLabel(settings.timezone)}</p></div>
   </div>;
 }
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {

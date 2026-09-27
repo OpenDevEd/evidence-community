@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { completedHourlyWindow, nextDigestDate } from "@/lib/notifications/schedule";
+import { completedHourlyWindow, nextDigestDate, timeZoneLabel } from "@/lib/notifications/schedule";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
 describe("library notification schedules", () => {
+  it("names a regional zone by its place and a fixed zone by its real offset", () => {
+    expect(timeZoneLabel("Africa/Casablanca")).toBe("Casablanca time");
+    expect(timeZoneLabel("America/North_Dakota/Center")).toBe("North Dakota Center time");
+    // IANA's Etc/GMT+5 is five hours behind GMT, the reverse of its name.
+    expect(timeZoneLabel("Etc/GMT+5")).toBe("GMT-5");
+    expect(timeZoneLabel("UTC")).toBe("UTC");
+  });
   it("uses the configured weekday, local time and timezone", () => {
     expect(nextDigestDate({frequency: "weekly" as const, weekday: 5, time: "09:15", timezone: "Asia/Kolkata"}, new Date("2026-09-09T10:00:00Z")).toISOString()).toBe("2026-09-11T03:45:00.000Z");
     expect(nextDigestDate({frequency: "weekly" as const, weekday: 1, time: "17:30", timezone: "UTC"}, new Date("2026-09-09T10:00:00Z")).toISOString()).toBe("2026-09-14T17:30:00.000Z");
