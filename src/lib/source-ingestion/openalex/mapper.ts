@@ -345,8 +345,7 @@ function pdfAttachment(
 			itemType: "Attachment",
 			title: `${sourceRecordKey}.pdf`,
 			url: httpUrl(pdf.pdf_url)!,
-			// The public site shows a PDF without a cover only when it has this tag.
-			tags: ["_auto-process"],
+			tags: [],
 		},
 		parentSourceRecordKey: sourceRecordKey,
 		aliases: [],
