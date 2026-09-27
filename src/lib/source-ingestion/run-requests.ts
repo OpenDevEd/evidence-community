@@ -1,11 +1,16 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import {
 	sourceConnection,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+
+/** How often the worker looks for sources someone asked to run now. */
+const RUN_REQUEST_CHECK_MS = 5_000;
 
 export type SourceRunRequest = "requested" | "not_found" | "not_active";
 
@@ -33,22 +38,55 @@ export async function requestSourceRun(
 }
 
 /**
- * Whether a requested run can start. A source that is running already keeps
- * its request for after, so it does not wake the worker every few seconds.
+ * Requested sources that can start now: active and not running. A source that
+ * is running keeps its request for after; a paused one never starts.
  */
-export async function hasRunnableSourceRequest(database: Database, now = new Date()) {
-	const [row] = await database
-		.select({ found: sql<number>`1` })
+export async function listRunnableSourceRequests(
+	database: Database,
+	options: { now?: Date; only?: string } = {},
+) {
+	const now = options.now ?? new Date();
+	const rows = await database
+		.select({ key: sourceSyncState.sourceConnectionKey })
 		.from(sourceSyncState)
 		.innerJoin(sourceConnection, eq(sourceConnection.key, sourceSyncState.sourceConnectionKey))
 		.where(
 			and(
-				// A request left on a source paused since then must not wake the worker.
 				eq(sourceConnection.status, "active"),
 				isNotNull(sourceSyncState.runRequestedAt),
 				or(isNull(sourceSyncState.leaseExpiresAt), lte(sourceSyncState.leaseExpiresAt, now)),
+				options.only ? eq(sourceConnection.key, options.only) : undefined,
 			),
 		)
-		.limit(1);
-	return row !== undefined;
+		.orderBy(asc(sourceSyncState.runRequestedAt))
+		.limit(20);
+	return rows.map(({ key }) => key);
+}
+
+/**
+ * Runs requested sources as they come in, next to the regular sweep, so a
+ * request never waits for a long import of another source. Claiming the run
+ * clears the request; the lease keeps the sweep from running it twice.
+ */
+export async function runRequestedSources(options: {
+	/** The requests that can start now, such as {@link listRunnableSourceRequests}. */
+	list: () => Promise<string[]>;
+	run: (sourceConnectionKey: string) => Promise<unknown>;
+	onError: (error: unknown) => void;
+	signal: AbortSignal;
+	wait?: (milliseconds: number, signal: AbortSignal) => Promise<unknown>;
+}) {
+	const wait = options.wait ?? ((milliseconds, signal) => delay(milliseconds, undefined, { signal }));
+	while (!options.signal.aborted) {
+		const keys = await options.list().catch((error: unknown) => {
+			options.onError(error);
+			return [];
+		});
+		for (const key of keys) {
+			if (options.signal.aborted) return;
+			// One failed run must not hold up the others.
+			await options.run(key).catch(options.onError);
+		}
+		await wait(RUN_REQUEST_CHECK_MS, options.signal).catch(() => undefined);
+	}
 }

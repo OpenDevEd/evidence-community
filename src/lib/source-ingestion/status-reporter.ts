@@ -3,8 +3,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { SourceStatus } from "./source-status";
 
 const SOURCE_STATUS_PATH = "/api/v1/evidence-libraries/source-status";
-/** How often status goes out while a source imports or updates search, and otherwise. */
-const ACTIVE_REPORT_MS = 5_000;
+/** How often the worker checks for work, and the longest it goes without a report. */
+const ACTIVITY_CHECK_MS = 5_000;
 const IDLE_REPORT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 // A raw error can be 32 KiB; OpenScholar only shows it folded away.
@@ -40,16 +40,17 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 	let sent: string | null = null;
 	let lastProblem: string | null = null;
 
-	return async function report(): Promise<{ active: boolean }> {
+	return async function report(): Promise<void> {
+		// Timed before the read, so a slow read cannot pass for a newer one.
+		const observedAt = now().toISOString();
 		const sources = (await options.read()).map(trimFailure);
-		const active = sources.some((source) => source.state === "running");
 		const snapshot = JSON.stringify(sources);
-		if (snapshot === sent) return { active };
+		if (snapshot === sent) return;
 		try {
 			const response = await request(url, {
 				body: JSON.stringify({
 					libraryId: options.libraryId,
-					observedAt: now().toISOString(),
+					observedAt,
 					sources,
 					version: 1,
 				}),
@@ -72,25 +73,34 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 			if (problem !== lastProblem) log(`Source status report to ${url.href} failed: ${problem}`);
 			lastProblem = problem;
 		}
-		return { active };
 	};
 }
 
-/** Reports until the signal aborts: often while work runs, rarely when idle. */
-export async function runSourceStatusReporter(
-	report: () => Promise<{ active: boolean }>,
-	signal: AbortSignal,
-	onError: (error: unknown) => void,
-) {
-	while (!signal.aborted) {
-		let active = false;
+/**
+ * Reports until the signal aborts: every few seconds while a source imports
+ * or its search update runs, and at least once a minute otherwise.
+ */
+export async function runSourceStatusReporter(options: {
+	report: () => Promise<void>;
+	/** A cheap check for work under way, run every few seconds. */
+	isActive: () => Promise<boolean>;
+	onError: (error: unknown) => void;
+	signal: AbortSignal;
+	now?: () => number;
+}) {
+	const now = options.now ?? Date.now;
+	let lastReport = Number.NEGATIVE_INFINITY;
+	while (!options.signal.aborted) {
 		try {
-			({ active } = await report());
+			if (now() - lastReport >= IDLE_REPORT_MS || (await options.isActive())) {
+				lastReport = now();
+				await options.report();
+			}
 		} catch (error) {
-			onError(error);
+			options.onError(error);
 		}
 		try {
-			await delay(active ? ACTIVE_REPORT_MS : IDLE_REPORT_MS, undefined, { signal });
+			await delay(ACTIVITY_CHECK_MS, undefined, { signal: options.signal });
 		} catch {
 			return;
 		}

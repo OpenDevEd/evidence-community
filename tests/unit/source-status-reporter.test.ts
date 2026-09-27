@@ -78,18 +78,23 @@ describe("source status reporter", () => {
 		expect(log.mock.calls[0]![0]).toContain("404");
 	});
 
-	it("says whether a source is running, so the loop can report more often", async () => {
-		const fetch = vi.fn(async () => new Response(null, { status: 204 }));
-		const running = status({
-			done: 10,
-			minutesLeft: 3,
-			phase: "import",
-			startedAt: "2026-09-27T12:09:00.000Z",
-			state: "running",
-			total: 40,
-		} as Partial<SourceStatus>);
-		const { report } = reporter(async () => [running], fetch);
+	it("times the snapshot before reading it, so a slow read never passes for a newer one", async () => {
+		const fetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(null, { status: 204 }));
+		let clock = Date.parse("2026-09-27T12:10:00.000Z");
+		const report = createSourceStatusReporter({
+			convexSiteUrl: "https://convex-site.example.org",
+			fetch,
+			libraryId: "lib123",
+			machineCredential: credential,
+			now: () => new Date(clock),
+			read: async () => {
+				clock += 30_000;
+				return [status()];
+			},
+		});
 
-		await expect(report()).resolves.toEqual({ active: true });
+		await report();
+
+		expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body)).observedAt).toBe("2026-09-27T12:10:00.000Z");
 	});
 });

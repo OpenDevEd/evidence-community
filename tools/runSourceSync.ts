@@ -14,8 +14,14 @@ import {
 	validateSourceWorkerPollMs,
 } from "../src/lib/source-ingestion/source-worker";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
-import { hasRunnableSourceRequest } from "../src/lib/source-ingestion/run-requests";
-import { readSourceStatuses } from "../src/lib/source-ingestion/source-status";
+import {
+	listRunnableSourceRequests,
+	runRequestedSources,
+} from "../src/lib/source-ingestion/run-requests";
+import {
+	hasSourceActivity,
+	readSourceStatuses,
+} from "../src/lib/source-ingestion/source-status";
 import {
 	createSourceStatusReporter,
 	runSourceStatusReporter,
@@ -153,33 +159,50 @@ async function main() {
 			registry: runtime.registry,
 			workerId: command.workerId,
 		};
-		// A watching worker also keeps OpenScholar's view of the sources current.
-		const reporting = command.watch
-			? runSourceStatusReporter(
-					createSourceStatusReporter({
-						...config.authentication.openScholar,
-						read: () =>
-							readSourceStatuses(database, { hiddenTags: config.content.tags.hidden }),
+		// A watching worker also runs requested sources and keeps OpenScholar's
+		// view current. The lanes stop with the worker, before the database closes.
+		const lanes = new AbortController();
+		const stopLanes = () => lanes.abort();
+		abortController.signal.addEventListener("abort", stopLanes, { once: true });
+		const background = command.watch
+			? [
+					runRequestedSources({
+						list: () => listRunnableSourceRequests(database, { only: command.sourceConnectionKey }),
+						onError: (error) => console.error(`Requested source run failed: ${errorMessage(error)}`),
+						run: (sourceConnectionKey) => runSourceConnection({ ...options, sourceConnectionKey }),
+						signal: lanes.signal,
 					}),
-					abortController.signal,
-					(error) => console.error(`Source status could not be read: ${errorMessage(error)}`),
-				)
-			: null;
-		const result = await runSourceWorker({
-			onError: (error) => console.error(errorMessage(error)),
-			onSweep: (sweep) => console.log(JSON.stringify(sweep, null, 2)),
-			pollMs: command.pollMs,
-			runRequested: () => hasRunnableSourceRequest(database),
-			runSweep: () => runConfiguredSweep(command, options),
-			signal: abortController.signal,
-			watch: command.watch,
-		});
-		await reporting;
-		if (
-			!command.watch &&
-			result.lastSweep?.some((entry) => entry.status === "failed")
-		) {
-			process.exitCode = 1;
+					runSourceStatusReporter({
+						isActive: () => hasSourceActivity(database),
+						onError: (error) => console.error(`Source status could not be read: ${errorMessage(error)}`),
+						report: createSourceStatusReporter({
+							...config.authentication.openScholar,
+							read: () =>
+								readSourceStatuses(database, { hiddenTags: config.content.tags.hidden }),
+						}),
+						signal: lanes.signal,
+					}),
+				]
+			: [];
+		try {
+			const result = await runSourceWorker({
+				onError: (error) => console.error(errorMessage(error)),
+				onSweep: (sweep) => console.log(JSON.stringify(sweep, null, 2)),
+				pollMs: command.pollMs,
+				runSweep: () => runConfiguredSweep(command, options),
+				signal: abortController.signal,
+				watch: command.watch,
+			});
+			if (
+				!command.watch &&
+				result.lastSweep?.some((entry) => entry.status === "failed")
+			) {
+				process.exitCode = 1;
+			}
+		} finally {
+			stopLanes();
+			abortController.signal.removeEventListener("abort", stopLanes);
+			await Promise.all(background);
 		}
 	} finally {
 		await runtimeProcess.close();

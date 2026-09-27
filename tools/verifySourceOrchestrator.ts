@@ -22,10 +22,11 @@ import {
 	SourceLeaseUnavailableError,
 } from "../src/lib/source-ingestion/orchestrator";
 import {
-	hasRunnableSourceRequest,
+	listRunnableSourceRequests,
 	requestSourceRun,
 } from "../src/lib/source-ingestion/run-requests";
 import {
+	hasSourceActivity,
 	readSourceStatuses,
 	type SourceStatus,
 } from "../src/lib/source-ingestion/source-status";
@@ -414,6 +415,7 @@ async function verify() {
 			tagged.length === 2,
 			`The import's search work was not tagged with its run: ${tagged.length}`,
 		);
+		assert(await hasSourceActivity(database), "Waiting search work did not count as activity");
 		const searching = await statusOf();
 		assert(
 			searching?.state === "running" &&
@@ -482,7 +484,7 @@ async function verify() {
 						(await requestSourceRun(database, progressKey)) === "requested",
 						"A run request for an active source was refused",
 					);
-					heldDuringRun = await hasRunnableSourceRequest(database);
+					heldDuringRun = (await listRunnableSourceRequests(database)).includes(progressKey);
 					return { records: 0 };
 				}),
 			]),
@@ -494,8 +496,9 @@ async function verify() {
 			"A request for a running source woke the worker",
 		);
 		assert(
-			await hasRunnableSourceRequest(database),
-			"A request made during a run was not kept for after it",
+			(await listRunnableSourceRequests(database)).includes(progressKey) &&
+				(await listRunnableSourceRequests(database, { only: expiredKey })).length === 0,
+			"A request made during a run was not kept for after it, or leaked to a worker for another source",
 		);
 		await runSourceConnection({
 			database,
@@ -508,7 +511,7 @@ async function verify() {
 			workerId: "requested-run-worker",
 		});
 		assert(
-			!(await hasRunnableSourceRequest(database)),
+			!(await listRunnableSourceRequests(database)).includes(progressKey),
 			"Claiming a requested run did not clear the request",
 		);
 		await requestSourceRun(database, progressKey);
@@ -517,8 +520,8 @@ async function verify() {
 			.set({ status: "paused" })
 			.where(eq(sourceConnection.key, progressKey));
 		assert(
-			!(await hasRunnableSourceRequest(database)),
-			"A request left on a paused source woke the worker",
+			!(await listRunnableSourceRequests(database)).includes(progressKey),
+			"A request left on a paused source was offered to the worker",
 		);
 
 		console.log(
