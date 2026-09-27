@@ -95,12 +95,17 @@ export async function runSourceStatusReporter(options: {
 	const now = options.now ?? Date.now;
 	const wait = options.wait ?? ((milliseconds, signal) => delay(milliseconds, undefined, { signal }));
 	let lastReport = Number.NEGATIVE_INFINITY;
+	let wasActive = false;
 	while (!options.signal.aborted) {
 		try {
-			if (now() - lastReport >= IDLE_REPORT_MS || (await options.isActive())) {
-				const checkedAt = now();
-				// A failed post stays due, so the next check tries again.
-				if (await options.report()) lastReport = checkedAt;
+			const active = await options.isActive();
+			// The check after work stops reports too, so the end shows at once.
+			const due = active || wasActive || now() - lastReport >= IDLE_REPORT_MS;
+			const checkedAt = now();
+			// A failed post stays due, so the next check tries again.
+			if (due && (await options.report())) {
+				lastReport = checkedAt;
+				wasActive = active;
 			}
 		} catch (error) {
 			options.onError(error);

@@ -123,4 +123,26 @@ describe("source status reporter", () => {
 		// First check fails, the second succeeds, the third is idle and not due.
 		expect(report).toHaveBeenCalledTimes(2);
 	});
+
+	it("reports once more when work stops, so the finished state shows at once", async () => {
+		const controller = new AbortController();
+		const activity = [true, false, false];
+		const isActive = vi.fn(async () => activity.shift() ?? false);
+		const report = vi.fn(async () => true);
+		const wait = vi.fn(async () => {
+			if (wait.mock.calls.length === 3) controller.abort();
+		});
+
+		await runSourceStatusReporter({
+			isActive,
+			now: () => 0,
+			onError: vi.fn(),
+			report,
+			signal: controller.signal,
+			wait,
+		});
+
+		// Active, then the check right after it stopped; the idle one after that waits.
+		expect(report).toHaveBeenCalledTimes(2);
+	});
 });

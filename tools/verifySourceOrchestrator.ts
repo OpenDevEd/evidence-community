@@ -404,7 +404,8 @@ async function verify() {
 			midRun?.state === "running" &&
 				midRun.phase === "import" &&
 				midRun.done === 2 &&
-				midRun.total === 3,
+				midRun.total === 3 &&
+				midRun.searchable === null,
 			`A running import did not report its progress: ${JSON.stringify(midRun)}`,
 		);
 		const tagged = await database

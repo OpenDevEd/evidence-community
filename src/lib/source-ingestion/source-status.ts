@@ -83,7 +83,8 @@ export type SourceStatusInput = {
 	searchFailed: number;
 	/** The latest run that changed records. */
 	lastChange: { records: number } | null;
-	searchable: number;
+	/** Null while it is not counted: during an import, when it changes all the time. */
+	searchable: number | null;
 	/** Open record issues by code. */
 	issues: Record<string, number>;
 };
@@ -91,7 +92,8 @@ export type SourceStatusInput = {
 type SourceStatusBase = {
 	key: string;
 	provider: SourceProvider;
-	searchable: number;
+	/** Null while the source imports, when it is not counted. */
+	searchable: number | null;
 	searchFailed: number;
 	/** Null until a run has changed anything. */
 	changed: number | null;
@@ -307,12 +309,13 @@ export async function readSourceStatuses(
 			searchable: 0,
 		});
 	});
-	const searchable = await countSearchable(
-		database,
-		statuses.filter((status) => status.state === "succeeded").map((status) => status.key),
-		hiddenTags,
-	);
-	return statuses.map((status) => ({ ...status, searchable: searchable.get(status.key) ?? 0 }));
+	// Every record is read to count them, so a source mid-import is left out.
+	const counted = statuses.filter((status) => status.state !== "running").map((status) => status.key);
+	const searchable = await countSearchable(database, counted, hiddenTags);
+	return statuses.map((status) => ({
+		...status,
+		searchable: status.state === "running" ? null : (searchable.get(status.key) ?? 0),
+	}));
 }
 
 /** Whether any source is importing or has search work waiting: cheap enough to ask every few seconds. */
