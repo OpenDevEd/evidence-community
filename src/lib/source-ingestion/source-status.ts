@@ -12,6 +12,7 @@ import {
 	and,
 	asc,
 	eq,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -208,7 +209,10 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 const SEARCHABLE_MAX_AGE_MS = 60_000;
 
 /** Searchable counts a caller keeps between reads, so frequent reads do not rescan idle sources. */
-export type SearchableCache = Map<string, { count: number; state: SourceStatus["state"]; countedAt: number }>;
+export type SearchableCache = Map<
+	string,
+	{ count: number; state: SourceStatus["state"]; lastSuccessAt: string | null; countedAt: number }
+>;
 
 export async function readSourceStatuses(
 	database: Database,
@@ -335,24 +339,38 @@ async function searchableCounts(
 	cache: SearchableCache | undefined,
 ) {
 	const counted = statuses.filter((status) => status.state !== "running");
-	const due = counted.filter(({ key, state }) => {
+	// A finished import changes the success time even when the state reads the same.
+	const due = counted.filter(({ key, state, lastSuccessAt }) => {
 		const cached = cache?.get(key);
-		return !cached || cached.state !== state || now.getTime() - cached.countedAt >= SEARCHABLE_MAX_AGE_MS;
+		return (
+			!cached ||
+			cached.state !== state ||
+			cached.lastSuccessAt !== lastSuccessAt ||
+			now.getTime() - cached.countedAt >= SEARCHABLE_MAX_AGE_MS
+		);
 	});
 	const fresh = await countSearchable(database, due.map(({ key }) => key), hiddenTags);
 	if (!cache) return fresh;
-	for (const { key, state } of due) {
-		cache.set(key, { count: fresh.get(key) ?? 0, countedAt: now.getTime(), state });
+	for (const { key, state, lastSuccessAt } of due) {
+		cache.set(key, { count: fresh.get(key) ?? 0, countedAt: now.getTime(), lastSuccessAt, state });
 	}
 	return new Map(counted.map(({ key }) => [key, cache.get(key)?.count ?? 0]));
 }
 
 /** Whether any source is importing or has search work waiting: cheap enough to ask every few seconds. */
-export async function hasSourceActivity(database: Database) {
+export async function hasSourceActivity(database: Database, now = new Date()) {
+	// A dead worker's lease on a source paused since is not work under way.
 	const [running] = await database
 		.select({ key: sourceSyncState.sourceConnectionKey })
 		.from(sourceSyncState)
-		.where(isNotNull(sourceSyncState.activeRunId))
+		.innerJoin(sourceConnection, eq(sourceConnection.key, sourceSyncState.sourceConnectionKey))
+		.where(
+			and(
+				isNotNull(sourceSyncState.activeRunId),
+				gt(sourceSyncState.leaseExpiresAt, now),
+				eq(sourceConnection.status, "active"),
+			),
+		)
 		.limit(1);
 	if (running) return true;
 	const [waiting] = await database

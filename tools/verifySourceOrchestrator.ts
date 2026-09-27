@@ -7,7 +7,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
@@ -526,6 +526,26 @@ async function verify() {
 				partial.changed === 1,
 			`A failed run's written changes were not counted: ${JSON.stringify(partial)}`,
 		);
+		// A dead worker's lease is not activity.
+		const deadLeaseAt = new Date(Date.now() - 60_000);
+		const [deadRun] = await database
+			.insert(sourceSyncRun)
+			.values({ heartbeatAt: deadLeaseAt, sourceConnectionKey: progressKey, startedAt: deadLeaseAt, workerId: "dead-worker" })
+			.returning({ id: sourceSyncRun.id });
+		await database
+			.update(sourceSyncState)
+			.set({ activeRunId: deadRun!.id, leaseExpiresAt: deadLeaseAt, leaseOwner: "dead-worker" })
+			.where(eq(sourceSyncState.sourceConnectionKey, progressKey));
+		await database
+			.update(outbox)
+			.set({ processedAt: new Date() })
+			.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
+		assert(!(await hasSourceActivity(database)), "A dead worker's lease counted as activity");
+		await database
+			.update(sourceSyncState)
+			.set({ activeRunId: null, leaseExpiresAt: null, leaseOwner: null })
+			.where(eq(sourceSyncState.sourceConnectionKey, progressKey));
+		await database.delete(sourceSyncRun).where(eq(sourceSyncRun.id, deadRun!.id));
 		// A source dropped from the configuration stops reporting.
 		await database
 			.update(sourceConnection)
