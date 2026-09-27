@@ -209,10 +209,15 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 const SEARCHABLE_MAX_AGE_MS = 60_000;
 
 /** Searchable counts a caller keeps between reads, so frequent reads do not rescan idle sources. */
-export type SearchableCache = Map<
-	string,
-	{ count: number; state: SourceStatus["state"]; lastSuccessAt: string | null; countedAt: number }
->;
+export type SearchableCache = Map<string, { count: number; revision: string; countedAt: number }>;
+
+/** What a source's count depends on besides time: its state and when its runs last ended. */
+function searchableRevision(status: SourceStatus) {
+	const failedAt = status.state === "failed" ? status.failure.at : "";
+	return `${status.state}|${status.lastSuccessAt ?? ""}|${failedAt}`;
+}
+
+const isImporting = (status: SourceStatus) => status.state === "running" && status.phase === "import";
 
 export async function readSourceStatuses(
 	database: Database,
@@ -323,13 +328,14 @@ export async function readSourceStatuses(
 	const searchable = await searchableCounts(database, statuses, hiddenTags, now, options.cache);
 	return statuses.map((status) => ({
 		...status,
-		searchable: status.state === "running" ? null : (searchable.get(status.key) ?? 0),
+		searchable: isImporting(status) ? null : (searchable.get(status.key) ?? 0),
 	}));
 }
 
 /**
  * Counts for the sources not mid-import. With a cache, a source is recounted
- * only when its state changed or its count is over a minute old.
+ * when its revision changed or its count is over a minute old, and a source
+ * seen importing loses its cached count.
  */
 async function searchableCounts(
 	database: Database,
@@ -338,21 +344,24 @@ async function searchableCounts(
 	now: Date,
 	cache: SearchableCache | undefined,
 ) {
-	const counted = statuses.filter((status) => status.state !== "running");
-	// A finished import changes the success time even when the state reads the same.
-	const due = counted.filter(({ key, state, lastSuccessAt }) => {
-		const cached = cache?.get(key);
+	for (const status of statuses) if (isImporting(status)) cache?.delete(status.key);
+	const counted = statuses.filter((status) => !isImporting(status));
+	const due = counted.filter((status) => {
+		const cached = cache?.get(status.key);
 		return (
 			!cached ||
-			cached.state !== state ||
-			cached.lastSuccessAt !== lastSuccessAt ||
+			cached.revision !== searchableRevision(status) ||
 			now.getTime() - cached.countedAt >= SEARCHABLE_MAX_AGE_MS
 		);
 	});
 	const fresh = await countSearchable(database, due.map(({ key }) => key), hiddenTags);
 	if (!cache) return fresh;
-	for (const { key, state, lastSuccessAt } of due) {
-		cache.set(key, { count: fresh.get(key) ?? 0, countedAt: now.getTime(), lastSuccessAt, state });
+	for (const status of due) {
+		cache.set(status.key, {
+			count: fresh.get(status.key) ?? 0,
+			countedAt: now.getTime(),
+			revision: searchableRevision(status),
+		});
 	}
 	return new Map(counted.map(({ key }) => [key, cache.get(key)?.count ?? 0]));
 }

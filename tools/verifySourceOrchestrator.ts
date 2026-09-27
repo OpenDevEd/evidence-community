@@ -613,6 +613,11 @@ async function verify() {
 			!(await listRunnableSourceRequests(database)).includes(progressKey),
 			"A request left on a paused source was offered to the worker",
 		);
+		const [dropped] = await database
+			.select({ runRequestedAt: sourceSyncState.runRequestedAt })
+			.from(sourceSyncState)
+			.where(eq(sourceSyncState.sourceConnectionKey, progressKey));
+		assert(dropped?.runRequestedAt === null, "A request on a paused source was kept for when it returns");
 
 		console.log(
 			JSON.stringify({

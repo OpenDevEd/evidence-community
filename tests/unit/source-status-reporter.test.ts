@@ -145,4 +145,19 @@ describe("source status reporter", () => {
 		// Active, then the check right after it stopped; the idle one after that waits.
 		expect(report).toHaveBeenCalledTimes(2);
 	});
+
+	it("retries a failed report from an import that ended before the next check", async () => {
+		const controller = new AbortController();
+		const activity = [true, false, false];
+		const isActive = vi.fn(async () => activity.shift() ?? false);
+		const report = vi.fn<() => Promise<boolean>>().mockResolvedValueOnce(false).mockResolvedValue(true);
+		const wait = vi.fn(async () => {
+			if (wait.mock.calls.length === 3) controller.abort();
+		});
+
+		await runSourceStatusReporter({ isActive, now: () => 0, onError: vi.fn(), report, signal: controller.signal, wait });
+
+		// Failed while active, retried once work stopped, then idle.
+		expect(report).toHaveBeenCalledTimes(2);
+	});
 });

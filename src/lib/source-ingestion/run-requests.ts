@@ -4,7 +4,7 @@ import {
 	sourceConnection,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -48,6 +48,23 @@ export async function listRunnableSourceRequests(
 	options: { now?: Date; only?: string } = {},
 ) {
 	const now = options.now ?? new Date();
+	// A request left on a source paused or removed since is dropped, so
+	// turning the source back on later does not run it by surprise.
+	await database
+		.update(sourceSyncState)
+		.set({ runRequestedAt: null })
+		.where(
+			and(
+				isNotNull(sourceSyncState.runRequestedAt),
+				inArray(
+					sourceSyncState.sourceConnectionKey,
+					database
+						.select({ key: sourceConnection.key })
+						.from(sourceConnection)
+						.where(ne(sourceConnection.status, "active")),
+				),
+			),
+		);
 	const rows = await database
 		.select({ key: sourceSyncState.sourceConnectionKey })
 		.from(sourceSyncState)
