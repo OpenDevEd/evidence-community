@@ -110,6 +110,33 @@ describe("source worker", () => {
 		expect(runSweep).toHaveBeenCalledTimes(1);
 	});
 
+	it("starts the next sweep early when a run is requested", async () => {
+		const controller = new AbortController();
+		const runSweep = vi.fn(async () => {
+			if (runSweep.mock.calls.length === 2) controller.abort();
+			return [succeeded];
+		});
+		const wait = vi.fn(async (_milliseconds: number) => undefined);
+		const runRequested = vi
+			.fn<() => Promise<boolean>>()
+			.mockResolvedValueOnce(false)
+			.mockResolvedValueOnce(true);
+
+		const result = await runSourceWorker({
+			delay: wait,
+			pollMs: 60_000,
+			runRequested,
+			runSweep,
+			signal: controller.signal,
+			watch: true,
+		});
+
+		expect(result.sweeps).toBe(2);
+		expect(wait.mock.calls.map(([milliseconds]) => milliseconds)).toEqual([
+			5_000, 5_000,
+		]);
+	});
+
 	it("propagates one-shot failures", async () => {
 		const controller = new AbortController();
 		await expect(

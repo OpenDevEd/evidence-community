@@ -5,6 +5,8 @@ import type { SourceRunSweepResult } from "./orchestrator";
 export const DEFAULT_SOURCE_WORKER_POLL_MS = 60_000;
 export const MIN_SOURCE_WORKER_POLL_MS = 1_000;
 export const MAX_SOURCE_WORKER_POLL_MS = 60 * 60 * 1_000;
+/** How often an idle worker checks whether someone asked for a run now. */
+const RUN_REQUEST_CHECK_MS = 5_000;
 
 type SourceWorkerDelay = (
 	milliseconds: number,
@@ -16,6 +18,8 @@ export type SourceWorkerOptions<TResult = SourceRunSweepResult[]> = {
 	onError?: (error: unknown) => void;
 	onSweep?: (results: TResult) => void;
 	pollMs?: number;
+	/** Whether someone asked for a run now; checked while the worker waits. */
+	runRequested?: () => Promise<boolean>;
 	runSweep: () => Promise<TResult>;
 	signal: AbortSignal;
 	watch?: boolean;
@@ -43,6 +47,21 @@ async function defaultDelay(milliseconds: number, signal: AbortSignal) {
 	await delay(milliseconds, undefined, { signal });
 }
 
+/** Waits out the poll interval, ending early when a run is requested. */
+async function waitForNextSweep(
+	pollMs: number,
+	wait: SourceWorkerDelay,
+	options: Pick<SourceWorkerOptions<unknown>, "runRequested" | "signal">,
+) {
+	if (!options.runRequested) return wait(pollMs, options.signal);
+	for (let waited = 0; waited < pollMs; ) {
+		const step = Math.min(RUN_REQUEST_CHECK_MS, pollMs - waited);
+		await wait(step, options.signal);
+		waited += step;
+		if (await options.runRequested()) return;
+	}
+}
+
 export async function runSourceWorker<TResult = SourceRunSweepResult[]>(
 	options: SourceWorkerOptions<TResult>,
 ): Promise<SourceWorkerResult<TResult>> {
@@ -67,7 +86,7 @@ export async function runSourceWorker<TResult = SourceRunSweepResult[]>(
 
 		if (!watch || options.signal.aborted) break;
 		try {
-			await wait(pollMs, options.signal);
+			await waitForNextSweep(pollMs, wait, options);
 		} catch (error) {
 			if (!options.signal.aborted) throw error;
 		}

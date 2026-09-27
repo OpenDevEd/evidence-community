@@ -22,6 +22,10 @@ import {
 	SourceLeaseUnavailableError,
 } from "../src/lib/source-ingestion/orchestrator";
 import {
+	hasRunnableSourceRequest,
+	requestSourceRun,
+} from "../src/lib/source-ingestion/run-requests";
+import {
 	readSourceStatuses,
 	type SourceStatus,
 } from "../src/lib/source-ingestion/source-status";
@@ -461,11 +465,68 @@ async function verify() {
 			`A refused key did not read as access denied: ${JSON.stringify(refused)}`,
 		);
 
+		// Run-now requests: saved, held while the source runs, cleared by the next claim.
+		assert(
+			(await requestSourceRun(database, pausedKey)) === "not_active" &&
+				(await requestSourceRun(database, "orchestrator-missing")) === "not_found",
+			"A run request was accepted for a paused or unknown source",
+		);
+		let heldDuringRun: boolean | undefined;
+		await runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("zotero", async () => {
+					assert(
+						(await requestSourceRun(database, progressKey)) === "requested",
+						"A run request for an active source was refused",
+					);
+					heldDuringRun = await hasRunnableSourceRequest(database);
+					return { records: 0 };
+				}),
+			]),
+			sourceConnectionKey: progressKey,
+			workerId: "request-worker",
+		});
+		assert(
+			heldDuringRun === false,
+			"A request for a running source woke the worker",
+		);
+		assert(
+			await hasRunnableSourceRequest(database),
+			"A request made during a run was not kept for after it",
+		);
+		await runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("zotero", async () => ({ records: 0 })),
+			]),
+			sourceConnectionKey: progressKey,
+			workerId: "requested-run-worker",
+		});
+		assert(
+			!(await hasRunnableSourceRequest(database)),
+			"Claiming a requested run did not clear the request",
+		);
+		await requestSourceRun(database, progressKey);
+		await database
+			.update(sourceConnection)
+			.set({ status: "paused" })
+			.where(eq(sourceConnection.key, progressKey));
+		assert(
+			!(await hasRunnableSourceRequest(database)),
+			"A request left on a paused source woke the worker",
+		);
+
 		console.log(
 			JSON.stringify({
 				expiredLeaseRecovered: true,
 				failureRetryRecovered: true,
 				importProgressReported: true,
+				runRequestsHonoured: true,
 				leaseContentionRejected: true,
 				maximumConcurrent,
 				providers: completedProviders.sort(),

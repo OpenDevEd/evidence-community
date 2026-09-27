@@ -14,6 +14,12 @@ import {
 	validateSourceWorkerPollMs,
 } from "../src/lib/source-ingestion/source-worker";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
+import { hasRunnableSourceRequest } from "../src/lib/source-ingestion/run-requests";
+import { readSourceStatuses } from "../src/lib/source-ingestion/source-status";
+import {
+	createSourceStatusReporter,
+	runSourceStatusReporter,
+} from "../src/lib/source-ingestion/status-reporter";
 
 const usage =
 	"Usage: npm run source:sync -- [--connection <key>] [--concurrency <1-32>] [--watch] [--poll-ms <1000-3600000>] [--worker-id <id>]";
@@ -140,20 +146,35 @@ async function main() {
 			config,
 			databaseResource.database,
 		);
+		const database = databaseResource.database;
 		const options = {
 			credentialResolver: runtime.credentialResolver,
-			database: databaseResource.database,
+			database,
 			registry: runtime.registry,
 			workerId: command.workerId,
 		};
+		// A watching worker also keeps OpenScholar's view of the sources current.
+		const reporting = command.watch
+			? runSourceStatusReporter(
+					createSourceStatusReporter({
+						...config.authentication.openScholar,
+						read: () =>
+							readSourceStatuses(database, { hiddenTags: config.content.tags.hidden }),
+					}),
+					abortController.signal,
+					(error) => console.error(`Source status could not be read: ${errorMessage(error)}`),
+				)
+			: null;
 		const result = await runSourceWorker({
 			onError: (error) => console.error(errorMessage(error)),
 			onSweep: (sweep) => console.log(JSON.stringify(sweep, null, 2)),
 			pollMs: command.pollMs,
+			runRequested: () => hasRunnableSourceRequest(database),
 			runSweep: () => runConfiguredSweep(command, options),
 			signal: abortController.signal,
 			watch: command.watch,
 		});
+		await reporting;
 		if (
 			!command.watch &&
 			result.lastSweep?.some((entry) => entry.status === "failed")

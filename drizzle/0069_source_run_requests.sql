@@ -1,0 +1,1 @@
+ALTER TABLE "sourceSyncState" ADD COLUMN "runRequestedAt" timestamp with time zone;
