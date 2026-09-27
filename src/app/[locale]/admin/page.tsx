@@ -25,7 +25,8 @@ import {
 /** The library's source settings in OpenScholar, beside the admin entry OpenScholar gave this library. */
 function openScholarConfigurationHref(loginPageUrl: string) {
 	const url = new URL(loginPageUrl);
-	url.pathname = url.pathname.replace(/\/admin\/?$/u, "/configuration");
+	// OpenScholar hands out the library's `/admin` entry; a bare library path works too.
+	url.pathname = `${url.pathname.replace(/\/(admin\/?)?$/u, "")}/configuration`;
 	url.search = "?section=sources";
 	url.hash = "";
 	return url.toString();
