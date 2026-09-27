@@ -449,14 +449,14 @@ export default function AdminWorkbench({
 	// The wide layout slides the preview in beside the editor. The slide starts in the frame after the press, and the
 	// page draws its new state once the slide is already running, because a transform animation carries on without
 	// waiting for that work. Narrower layouts show one pane at a time, so there the preview is a pane of its own.
+	const slidePreview = (open: boolean) => {
+		previewStrip.current?.setAttribute("data-preview", open ? "open" : "");
+		requestAnimationFrame(() => setTimeout(() => setPreviewing(open)));
+	};
 	const showPreview = (open: boolean) => {
 		setPreviewPrepared(true);
-		if (!wideLayout) {
-			setMobilePane(open ? "preview" : "inspector");
-			return;
-		}
-		if (previewStrip.current) previewStrip.current.dataset.preview = open && selectedKey ? "open" : "";
-		requestAnimationFrame(() => setTimeout(() => setPreviewing(open)));
+		if (wideLayout) slidePreview(open);
+		else setMobilePane(open ? "preview" : "inspector");
 	};
 	const [saveMessage, setSaveMessage] = useState<string | null>(null);
 	const [validationErrors, setValidationErrors] = useState<AdminFieldErrors>(
@@ -864,7 +864,6 @@ export default function AdminWorkbench({
 				if (selectedKeyRef.current === key) {
 					setValidationErrors({});
 					setSaveState("saved");
-					setPreviewRevision((revision) => revision + 1);
 					setSaveMessage(null);
 				}
 				return;

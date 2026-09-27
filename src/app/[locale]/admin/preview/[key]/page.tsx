@@ -19,37 +19,56 @@ type Props = {
 	searchParams: Promise<{ review?: string | string[] }>;
 };
 
-const reviewId = z.uuid().optional();
+const previewRequest = z.object({
+	key: z.string().refine(isCanonicalRecordKey),
+	review: z.uuid().optional(),
+});
 
 function PreviewMessage({ children }: { children: ReactNode }) {
 	return <div className="mx-auto max-w-xl px-6 py-16 text-sm text-black/65 dark:text-white/65">{children}</div>;
 }
 
-/** The public item page as publishing the working draft, or the given review, would leave it. Admins only; never cached. */
-async function DraftPreview({ params, searchParams }: Props) {
-	await connection();
-	const authorization = await authorizeAdminSession((await cookies()).get(adminSessionCookieName())?.value, ADMIN_CONTENT_PERMISSION);
-	if (authorization.status !== "authorized") notFound();
-	const [{ key }, query] = await Promise.all([params, searchParams]);
-	const review = reviewId.safeParse(query.review);
-	if (!isCanonicalRecordKey(key) || !review.success) notFound();
+/** The record key and review an admin asked for, or not found for anyone else and for malformed requests. */
+async function readPreviewRequest({ params, searchParams }: Props) {
+	const [{ key }, { review }, cookieStore] = await Promise.all([params, searchParams, cookies()]);
+	const authorization = await authorizeAdminSession(cookieStore.get(adminSessionCookieName())?.value, ADMIN_CONTENT_PERMISSION);
+	const request = previewRequest.safeParse({ key, review });
+	if (authorization.status !== "authorized" || !request.success) notFound();
+	return request.data;
+}
+
+/** What stops this version from publishing, or the error itself when it isn't about the record. */
+function publishBlockers(error: unknown) {
+	const details = adminErrorDetails(error);
+	if (details.status >= 500) throw error;
+	return Object.values(details.fields ?? { _form: details.message });
+}
+
+async function loadPreview(key: string, review?: string) {
 	const config = await getLibraryConfig();
-	let item;
 	try {
 		const [preview, collections] = await Promise.all([
-			getDatabaseForConfig(config).then((db) => previewItem(db, key, config, review.data)),
+			getDatabaseForConfig(config).then((db) => previewItem(db, key, config, review)),
 			getCachedCollections(config),
 		]);
-		item = preview && withCollectionsData(preview, collections);
+		return { item: preview && withCollectionsData(preview, collections), blockers: [] };
 	} catch (error) {
-		const details = adminErrorDetails(error);
-		if (details.status >= 500) throw error;
+		return { item: null, blockers: publishBlockers(error) };
+	}
+}
+
+/** The public item page as publishing the working draft, or the given review, would leave it. Admins only; never cached. */
+async function DraftPreview(props: Props) {
+	await connection();
+	const { key, review } = await readPreviewRequest(props);
+	const { item, blockers } = await loadPreview(key, review);
+	if (blockers.length) {
 		return (
 			<PreviewMessage>
 				<p className="font-medium text-black/85 dark:text-white/85">This version can&apos;t be published yet, so there&apos;s nothing to preview.</p>
 				<ul className="mt-2 flex flex-col gap-1">
-					{Object.entries(details.fields ?? { _form: details.message }).map(([field, message]) => (
-						<li key={field}>{message}</li>
+					{blockers.map((message) => (
+						<li key={message}>{message}</li>
 					))}
 				</ul>
 			</PreviewMessage>
