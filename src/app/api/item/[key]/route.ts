@@ -8,6 +8,7 @@ import { Collection } from "../../collections/types";
 import { getCachedCollections } from "../../cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import type { Item } from "../types";
 
 export async function getItemRaw(key: string, config?: LibraryServerConfig) {
 	const libraryConfig = config ?? (await getLibraryConfig());
@@ -26,8 +27,13 @@ export async function getItem(key: string) {
 		return rawResult;
 	}
 
-	const result = rawResult.item;
+	return {
+		item: withCollectionsData(rawResult.item, collections),
+	};
+}
 
+/** Adds the data of the collections a record sits in, as its page shows them. */
+export function withCollectionsData(result: Item, collections: Collection[] | undefined) {
 	if (collections) {
 		result.collectionsData = result.collectionsAncestry
 			?.map((collection) => {
@@ -40,10 +46,7 @@ export async function getItem(key: string) {
 				(collectionData) => collectionData !== undefined,
 			) as Collection[];
 	}
-
-	return {
-		item: result,
-	};
+	return result;
 }
 
 /** Browsers never show PDF full text, so public reads leave it out. */

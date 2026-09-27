@@ -128,6 +128,7 @@ import { useAdminItemList } from "./useAdminItemList";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
 import { AdminPublicPages } from "./AdminPublicPages";
+import { DEFAULT_PREVIEW_ZOOM } from "./DraftPreviewPane";
 import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
 	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
@@ -383,11 +384,9 @@ type BatchFeedback = {
 export default function AdminWorkbench({
 	definitions,
 	initialFilters,
-	liveView,
 }: {
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
-	liveView: boolean;
 }) {
 	const showImportLabel = useBreakpoint("lg");
 	const finePointer = useFinePointer();
@@ -437,6 +436,31 @@ export default function AdminWorkbench({
 		{},
 	);
 	const [saveState, setSaveState] = useState<SaveState>("idle");
+	const [previewing, setPreviewing] = useState(false);
+	// The record the page is drawn for while the preview is closed: from a hover on its button, so it opens drawn, until
+	// the slide away after closing ends. A closed pane holds nothing, so nothing rebuilds a page nobody is looking at.
+	const [previewFor, setPreviewFor] = useState<string | null>(null);
+	const [previewPane, setPreviewPane] = useState<HTMLElement | null>(null);
+	const [previewZoom, setPreviewZoom] = useState(DEFAULT_PREVIEW_ZOOM);
+	// A new save draws the preview again from the saved draft.
+	const [previewRevision, setPreviewRevision] = useState(0);
+	const wideLayout = useBreakpoint("xl");
+	const pushedAside = previewing && wideLayout && Boolean(selectedKey);
+	const previewStrip = useRef<HTMLDivElement>(null);
+	// The wide layout slides the preview in beside the editor. The slide starts in the frame after the press, and the
+	// page draws its new state once the slide is already running, because a transform animation carries on without
+	// waiting for that work. Narrower layouts show one pane at a time, so there the preview is a pane of its own.
+	const slidePreview = (open: boolean) => {
+		previewStrip.current?.setAttribute("data-preview", open ? "open" : "");
+		requestAnimationFrame(() => setTimeout(() => setPreviewing(open)));
+	};
+	const showPreview = (open: boolean) => {
+		setPreviewFor(selectedKey);
+		if (wideLayout) slidePreview(open);
+		else setMobilePane(open ? "preview" : "inspector");
+		// As long as the slide, duration-500 on the strip.
+		if (!open) setTimeout(() => setPreviewFor(null), 500);
+	};
 	const [saveMessage, setSaveMessage] = useState<string | null>(null);
 	const [validationErrors, setValidationErrors] = useState<AdminFieldErrors>(
 		{},
@@ -446,8 +470,9 @@ export default function AdminWorkbench({
 	const [recordAssignment, setRecordAssignment] =
 		useState<RecordAssignment | null>(null);
 	const [mobilePane, setMobilePane] = useState<
-		"inspector" | "list" | "navigation"
+		"inspector" | "list" | "navigation" | "preview"
 	>(() => selectedKey ? "inspector" : "list");
+	const previewOpen = wideLayout ? previewing : mobilePane === "preview";
 	const selectNavigationFilter = useCallback((next: Parameters<typeof setFilters>[0]) => {
 		setFilters(next);
 		setMobilePane("list");
@@ -647,6 +672,8 @@ export default function AdminWorkbench({
 
 	const applyDetail = useCallback(
 		(next: AdminItemDetail, replaceLocal = false) => {
+			// Every record reload lands here, after a PDF change or a discard too, so the preview draws the record again.
+			setPreviewRevision((revision) => revision + 1);
 			const generationChanged = Boolean(
 				next.draft &&
 					draftGenerationByKey.current.has(next.key) &&
@@ -927,6 +954,8 @@ export default function AdminWorkbench({
 				if (pending?.generation === generation) {
 					pendingPayloadByKey.current.delete(key);
 				}
+				// Even for a record no longer selected: an attachment's preview is its parent's page.
+				setPreviewRevision((revision) => revision + 1);
 				if (selectedKeyRef.current === key) {
 					setValidationErrors({});
 					setSaveState("saved");
@@ -2193,7 +2222,7 @@ export default function AdminWorkbench({
 							onRetry={() => void searchIndex.retry()}
 							view={searchIndex.view}
 						/>
-						<AdminPublicPages initialLiveView={liveView} />
+						<AdminPublicPages />
 						<ThemeSwitcher
 							styleVariant={theme.layout}
 							toolbar
@@ -2358,14 +2387,30 @@ export default function AdminWorkbench({
 					assignRecordsToCollection(itemKeys, collectionKey)
 				}
 			>
-				<div className="admin-workbench-grid grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3">
+				{/* On the wide layout the preview waits under the editor and slides out from beneath it, pushing the filters
+				    and records out past the left edge. The three sit on one strip that slides as a whole, so the browser
+				    moves it without laying anything out again. The strip is cut off at the editor's right edge, so the
+				    waiting preview never shows beside it. The row clips its overflow rather than hiding it, so focus moving
+				    within it can't scroll it sideways. */}
+				<div className="admin-workbench-grid grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:flex xl:overflow-clip">
+					<div className="contents xl:block xl:min-h-0 xl:w-[calc(100vw-24.75rem)] xl:flex-none xl:[clip-path:inset(0_-23.25rem_0_-100vw_round_1rem)]">
+					<div
+						ref={previewStrip}
+						data-preview={pushedAside ? "open" : undefined}
+						className="contents xl:flex xl:h-full xl:w-[calc(200vw-48.75rem)] xl:gap-3 xl:transition-transform xl:duration-500 xl:ease-[cubic-bezier(0.32,0.72,0,1)] xl:will-change-transform motion-reduce:transition-none xl:data-[preview=open]:-translate-x-[calc(100vw-24rem)]"
+					>
+					<div
+						aria-hidden={pushedAside || undefined}
+						inert={pushedAside}
+						className="contents xl:flex xl:min-h-0 xl:w-[calc(100vw-24.75rem)] xl:flex-none xl:gap-3"
+					>
 					<aside
 						id="admin-navigation-pane"
 						aria-label="Filters and collections"
 						tabIndex={-1}
 						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
 							mobilePane === "navigation" ? "block" : "hidden"
-						} xl:block`}
+						} xl:block xl:w-60 xl:flex-none`}
 					>
 						<div className="flex h-full min-h-0 flex-col">
 							<div className="flex shrink-0 items-center justify-end gap-2 border-b border-black/[0.06] p-3 xl:hidden dark:border-white/[0.06]">
@@ -2391,7 +2436,7 @@ export default function AdminWorkbench({
 						tabIndex={-1}
 						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
 							mobilePane === "list" ? "flex" : "hidden"
-						} flex-col xl:flex`}
+						} flex-col xl:flex xl:min-w-0 xl:flex-1`}
 					>
 						<AdminItemTable
 							bulkActions={
@@ -2550,14 +2595,29 @@ export default function AdminWorkbench({
 							sources={library.sources}
 						/>
 					</section>
+					</div>
+
+					<section
+						ref={setPreviewPane}
+						id="admin-preview-pane"
+						aria-label="Public page preview"
+						tabIndex={-1}
+						aria-hidden={(wideLayout && !pushedAside) || undefined}
+						inert={wideLayout && !pushedAside}
+						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
+							mobilePane === "preview" ? "block" : "hidden"
+						} xl:block xl:w-[calc(100vw-24.75rem)] xl:flex-none`}
+					/>
+					</div>
+					</div>
 
 					<aside
 						aria-label="Record editor"
 						id="admin-inspector-pane"
 						tabIndex={-1}
-						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
+						className={`relative z-10 min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
 							mobilePane === "inspector" ? "block" : "hidden"
-						} xl:block`}
+						} xl:block xl:w-[22.5rem] xl:flex-none`}
 					>
 						<EditorialInspector
 							concurrentConflict={concurrentConflict}
@@ -2588,6 +2648,16 @@ export default function AdminWorkbench({
 							onDiscardDraft={discardCurrent}
 							onDiscardFile={discardPdfDraft}
 							onDuplicate={duplicateCurrent}
+							preview={{
+								open: previewOpen,
+								target: previewOpen || previewFor === selectedKey ? previewPane : null,
+								revision: previewRevision,
+								zoom: previewZoom,
+								onZoom: setPreviewZoom,
+								onToggle: () => showPreview(!previewOpen),
+								onRefresh: () => setPreviewRevision((revision) => revision + 1),
+								onPrepare: () => setPreviewFor(selectedKey),
+							}}
 							onOpenDraft={openCurrentDraft}
 							onManageSources={manageSources}
 							onPublish={publishCurrent}

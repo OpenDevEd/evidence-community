@@ -637,55 +637,62 @@ export async function readPublicItems(
 ): Promise<Item[]> {
 	if (!keys.length) return [];
 	return database.transaction(
-		async (transaction) => {
-			const { rows: collections } =
-				await transaction.execute<CollectionRow>(sql`
-			WITH RECURSIVE ancestors AS (
-				SELECT current.key, current."parentCollection", current.deleted
-				FROM ${collection} current
-				JOIN ${itemToCollection} membership ON membership."collectionKey" = current.key
-				WHERE membership."itemKey" IN (${sql.join(
-					keys.map((key) => sql`${key}`),
-					sql`, `,
-				)})
-				UNION
-				SELECT parent.key, parent."parentCollection", parent.deleted
-				FROM ${collection} parent
-				JOIN ancestors child ON parent.key = child."parentCollection"
-			)
-			SELECT * FROM ancestors
-		`);
-			const plan = await buildSearchProjectionPlanForKeys(
-				transaction,
-				config,
-				keys,
-				collections,
-				config.content.tags.hidden,
-			);
-			const documents = new Map(
-				plan.documents.map((document) => [document.key, document]),
-			);
-			return keys.flatMap((key) => {
-				const document = documents.get(key);
-				if (
-					!document ||
-					hasAnyTag(document.tags, config.content.tags.hidden)
-				)
-					return [];
-				const result = document as unknown as Item;
-				result.attachmentsData = filterPublicAttachments(
-					result.attachmentsData,
-					config.content.tags,
-				);
-				const attachmentKeys = new Set(
-					result.attachmentsData?.map((attachment) => attachment.key),
-				);
-				result.fullTextPDFs = result.fullTextPDFs?.filter(
-					(attachment) => attachmentKeys.has(attachment.key),
-				);
-				return [result];
-			});
-		},
+		(transaction) => projectPublicItems(transaction, keys, config),
 		{ isolationLevel: "repeatable read", accessMode: "read only" },
 	);
+}
+
+/** The public projection of these records as the given transaction sees them, which may include uncommitted changes. */
+export async function projectPublicItems(
+	transaction: DatabaseTransaction,
+	keys: readonly string[],
+	config: LibraryServerConfig,
+): Promise<Item[]> {
+	const { rows: collections } =
+		await transaction.execute<CollectionRow>(sql`
+	WITH RECURSIVE ancestors AS (
+		SELECT current.key, current."parentCollection", current.deleted
+		FROM ${collection} current
+		JOIN ${itemToCollection} membership ON membership."collectionKey" = current.key
+		WHERE membership."itemKey" IN (${sql.join(
+			keys.map((key) => sql`${key}`),
+			sql`, `,
+		)})
+		UNION
+		SELECT parent.key, parent."parentCollection", parent.deleted
+		FROM ${collection} parent
+		JOIN ancestors child ON parent.key = child."parentCollection"
+	)
+	SELECT * FROM ancestors
+`);
+	const plan = await buildSearchProjectionPlanForKeys(
+		transaction,
+		config,
+		keys,
+		collections,
+		config.content.tags.hidden,
+	);
+	const documents = new Map(
+		plan.documents.map((document) => [document.key, document]),
+	);
+	return keys.flatMap((key) => {
+		const document = documents.get(key);
+		if (
+			!document ||
+			hasAnyTag(document.tags, config.content.tags.hidden)
+		)
+			return [];
+		const result = document as unknown as Item;
+		result.attachmentsData = filterPublicAttachments(
+			result.attachmentsData,
+			config.content.tags,
+		);
+		const attachmentKeys = new Set(
+			result.attachmentsData?.map((attachment) => attachment.key),
+		);
+		result.fullTextPDFs = result.fullTextPDFs?.filter(
+			(attachment) => attachmentKeys.has(attachment.key),
+		);
+		return [result];
+	});
 }

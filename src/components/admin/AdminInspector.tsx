@@ -46,6 +46,7 @@ import {
 	TagsIcon,
 	Tick01Icon,
 	UserGroupIcon,
+	ViewIcon,
 	WorkHistoryIcon,
 } from "@hugeicons/core-free-icons";
 import {
@@ -72,6 +73,8 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { ButtonGroup } from "@nextui-org/react";
+import { ADMIN_BUTTON_GROUP, ADMIN_GROUP_BUTTON, ADMIN_GROUP_DIVIDER, DraftPreviewPortal, type DraftPreview, type PreviewReview } from "./DraftPreviewPane";
 import { InspectorSection as Section } from "./InspectorSection";
 import { InspectorListRow, InspectorListRemove } from "./InspectorListRow";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -1326,6 +1329,8 @@ export function AdminInspector({
 	onDiscardDraft,
 	onDiscardFile,
 	onDuplicate,
+	preview,
+	previewReview,
 	onOpenDraft,
 	onManageSources,
 	onPublish,
@@ -1384,6 +1389,9 @@ export function AdminInspector({
 	onDiscardDraft: () => void;
 	onDiscardFile: (key: string) => void;
 	onDuplicate: () => void;
+	/** The public page preview beside the editor. */
+	preview: DraftPreview;
+	previewReview?: PreviewReview;
 	onOpenDraft: () => void;
 	onManageSources: () => void;
 	onPublish: () => void;
@@ -1582,59 +1590,68 @@ export function AdminInspector({
 			data-admin-region="inspector"
 		>
 			{versionControls}
+			<DraftPreviewPortal
+				preview={preview}
+				itemKey={detail.parentItem ?? detail.key}
+				review={previewReview}
+				saving={saveState === "saving"}
+			/>
 			<AdminDocumentHeader
 				publicActions={
-					<>
+					<ButtonGroup className={ADMIN_BUTTON_GROUP}>
+						<Tooltip content={preview.open ? "Hide preview" : "Preview"}>
+							<Button
+								aria-label={preview.open ? "Hide preview" : "Preview"}
+								aria-pressed={preview.open}
+								isIconOnly
+								onPress={preview.onToggle}
+								onPointerEnter={preview.onPrepare}
+								onFocus={preview.onPrepare}
+								size="xs"
+								variant="transparent"
+								className={`${ADMIN_GROUP_BUTTON} aria-pressed:bg-accent/15 aria-pressed:text-accent`}
+							>
+								<HugeiconsIcon icon={ViewIcon} aria-hidden size={14} />
+							</Button>
+						</Tooltip>
 						{showPublicLinkActions && (
-							<div className="flex shrink-0 items-center gap-1.5">
+							<Tooltip content="Open public item">
 								<Button
 									as="a"
 									aria-label="Open public item"
 									href={itemUrl ?? undefined}
 									target="_blank"
 									rel="noreferrer"
+									isIconOnly
 									size="xs"
-									variant="muted"
-									className="h-8 min-w-0 gap-1.5 rounded-xl px-3 text-xs font-medium"
-									endContent={
-										<HugeiconsIcon
-											icon={LinkSquare01Icon}
-											size={13}
-										/>
-									}
+									variant="transparent"
+									className={`${ADMIN_GROUP_BUTTON} ${ADMIN_GROUP_DIVIDER}`}
 								>
-									Open item
+									<HugeiconsIcon icon={LinkSquare01Icon} aria-hidden size={14} />
 								</Button>
-								<Button
-										aria-label="Copy public item link"
-										isIconOnly
-										size="xs"
-										variant="muted"
-										className="h-8 w-8 rounded-xl"
-										onPress={() => {
-											if (itemUrl)
-												void navigator.clipboard
-													.writeText(itemUrl)
-													.then(() =>
-														toast.success(
-															"Item link copied",
-														),
-													)
-													.catch(() =>
-														toast.error(
-															"Could not copy item link",
-														),
-													);
-										}}
-									>
-										<HugeiconsIcon
-											icon={Copy01Icon}
-											size={13}
-										/>
-									</Button>
-							</div>
+							</Tooltip>
 						)}
-					</>
+						{showPublicLinkActions && (
+							<Tooltip content="Copy public item link">
+								<Button
+									aria-label="Copy public item link"
+									isIconOnly
+									size="xs"
+									variant="transparent"
+									className={`${ADMIN_GROUP_BUTTON} ${ADMIN_GROUP_DIVIDER}`}
+									onPress={() => {
+										if (itemUrl)
+											void navigator.clipboard
+												.writeText(itemUrl)
+												.then(() => toast.success("Item link copied"))
+												.catch(() => toast.error("Could not copy item link"));
+									}}
+								>
+									<HugeiconsIcon icon={Copy01Icon} aria-hidden size={14} />
+								</Button>
+							</Tooltip>
+						)}
+					</ButtonGroup>
 				}
 				menuOpen={menuOpen}
 				onMenuOpenChange={setMenuOpen}

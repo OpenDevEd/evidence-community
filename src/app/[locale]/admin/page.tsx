@@ -15,7 +15,6 @@ import {
 	adminSessionCookieName,
 	authorizeAdminSession,
 	getAdminAccessConfig,
-	hasLiveView,
 } from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
 import {
@@ -75,7 +74,6 @@ export default async function AdminPage({
 		<AdminWorkbench
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
-			liveView={await hasLiveView()}
 		/>
 		</AdminSessionProvider>
 	);

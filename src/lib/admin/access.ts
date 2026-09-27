@@ -2,7 +2,6 @@ import "server-only";
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
-import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -16,8 +15,6 @@ import {
 export const ADMIN_SESSION_COOKIE = "__Host-evidence_library_admin";
 export const ADMIN_DEVELOPMENT_SESSION_COOKIE = "evidence_library_admin";
 export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
-const LIVE_VIEW_COOKIE = "__Host-evidence_library_live_view";
-const LIVE_VIEW_DEVELOPMENT_COOKIE = "evidence_library_live_view";
 
 export {
 	ADMIN_CONTENT_PERMISSION,
@@ -82,12 +79,6 @@ export function adminSessionCookieName(environment = process.env.NODE_ENV) {
 	return environment === "production"
 		? ADMIN_SESSION_COOKIE
 		: ADMIN_DEVELOPMENT_SESSION_COOKIE;
-}
-
-export function liveViewCookieName(environment = process.env.NODE_ENV) {
-	return environment === "production"
-		? LIVE_VIEW_COOKIE
-		: LIVE_VIEW_DEVELOPMENT_COOKIE;
 }
 
 export async function getAdminAccessConfig(): Promise<AdminAccessConfig> {
@@ -155,32 +146,6 @@ export function verifyAdminSessionToken(
 	}
 	const { version: _version, ...session } = result.data;
 	return session;
-}
-
-// Live view: this browser reads records live instead of from the public cache.
-// Signed with the library's own secret, so it is worth nothing in another library.
-const liveViewSchema = z
-	.object({
-		adminId: z.string().min(1).max(512),
-		expiresAt: z.number().int().positive(),
-		purpose: z.literal("live-view"),
-	})
-	.strict();
-
-export function createLiveViewToken(adminId: string, secret: string, now = Date.now()) {
-	return signPayload({ adminId, expiresAt: now + ADMIN_SESSION_TTL_MS, purpose: "live-view" }, secret);
-}
-
-/** The admin who turned on live view, or null for a missing, tampered or expired value. */
-export function verifyLiveViewToken(token: string | undefined, secret: string, now = Date.now()) {
-	const result = liveViewSchema.safeParse(readSignedPayload(token, secret));
-	return result.success && result.data.expiresAt > now ? result.data.adminId : null;
-}
-
-export async function hasLiveView() {
-	const token = (await cookies()).get(liveViewCookieName())?.value;
-	if (!token) return false;
-	return verifyLiveViewToken(token, (await getLibraryConfig()).authentication.secret) !== null;
 }
 
 export async function authorizeAdminSession(

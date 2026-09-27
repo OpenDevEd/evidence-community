@@ -12,7 +12,6 @@ import { isAdminPath } from "@/lib/path";
 
 const Banner = dynamic(() => import("./Banner"));
 const Footer = dynamic(() => import("./Footer"));
-const LiveViewNotice = dynamic(() => import("./LiveViewNotice"));
 const Navbar = dynamic(() => import("./navbar"));
 
 /** The links that jump to the page or the footer, which admin does not have. */
@@ -43,27 +42,13 @@ function ReaderHeader({
 	);
 }
 
-/** The footer, and the live view notice for an admin who turned it on. */
-function ReaderFooter({ admin, liveView }: { admin: boolean; liveView: boolean }) {
-	if (admin) return null;
-
-	return (
-		<>
-			<Footer />
-			{liveView ? <LiveViewNotice /> : null}
-		</>
-	);
-}
-
 export default function SiteChrome({
 	children,
-	liveView,
 	skipNavigationLabel,
 	skipToContentLabel,
 	skipToFooterLabel,
 }: {
 	children: React.ReactNode;
-	liveView: boolean;
 	skipNavigationLabel: string;
 	skipToContentLabel: string;
 	skipToFooterLabel: string;
@@ -99,7 +84,7 @@ export default function SiteChrome({
 				<div id="page-content" tabIndex={-1} className="flex w-full flex-1 flex-col items-center focus:outline-none">
 					{children}
 				</div>
-				<ReaderFooter admin={admin} liveView={liveView} />
+				{admin ? null : <Footer />}
 			</div>
 			{asksConsent ? <Banner /> : null}
 		</>
