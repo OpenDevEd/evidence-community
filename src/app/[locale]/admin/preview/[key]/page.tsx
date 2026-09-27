@@ -14,6 +14,7 @@ import { ADMIN_CONTENT_PERMISSION, adminSessionCookieName, authorizeAdminSession
 import { adminErrorDetails } from "@/lib/admin/http";
 import { previewItem } from "@/lib/admin/item-preview";
 
+import { FollowSavedDraft } from "./FollowSavedDraft";
 import { LookOnly } from "./LookOnly";
 
 type Props = {
@@ -93,6 +94,7 @@ async function DraftPreview(props: Props) {
 export default function DraftPreviewPage(props: Props) {
 	return (
 		<Suspense>
+			<FollowSavedDraft />
 			<DraftPreview {...props} />
 		</Suspense>
 	);
