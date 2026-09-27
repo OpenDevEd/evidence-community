@@ -2230,12 +2230,15 @@ export function AdminInspector({
 								Source
 							</dt>
 							<dd className="flex min-w-0 items-center gap-1.5 font-medium text-black/70 dark:text-white/75">
-								<SourceProviderIcon
-									className="shrink-0"
-									provider={recordSource?.provider ?? liveRecord.sourceConnectionKey}
-									size={13}
-								/>
-								<TruncatedText text={recordSource?.label ?? liveRecord.sourceConnectionKey} />
+								{recordSource ? (
+									<SourceProviderIcon
+										className="shrink-0"
+										provider={recordSource.provider}
+										size={13}
+									/>
+								) : null}
+								{/* The key stands in until the library's sources load. */}
+								<TruncatedText text={recordSource?.label ?? humanizeAdminField(liveRecord.sourceConnectionKey)} />
 							</dd>
 						</div>
 						<div className="flex items-center justify-between gap-3">
