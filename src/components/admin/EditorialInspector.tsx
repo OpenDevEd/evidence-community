@@ -300,7 +300,7 @@ function SubmittedInspector({
 }
 
 function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
-	const publishing = usePublishingChoice(props.detail, false);
+	const publishing = usePublishingChoice(props.detail, false, props.preview.onRefresh);
 	const key = props.detail.key;
 	const review = useItemReview(props.detail.parentItem ?? props.detail.key);
 	const { refresh, error } = review;

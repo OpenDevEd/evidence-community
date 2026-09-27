@@ -13,6 +13,8 @@ import {
 export function usePublishingChoice(
 	detail: Pick<AdminItemDetail, "key" | "kind">,
 	readOnly: boolean,
+	/** Runs once a change is saved, since it changes what publishing would do. */
+	onSaved: () => void,
 ) {
 	const saved = useSWR(
 		!readOnly && detail.kind === "created"
@@ -37,6 +39,7 @@ export function usePublishingChoice(
 		setError(null);
 		try {
 			await request();
+			onSaved();
 		} catch (error) {
 			setError(error instanceof Error ? error.message : message);
 		} finally {

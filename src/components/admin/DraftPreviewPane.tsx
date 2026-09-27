@@ -28,6 +28,8 @@ export type DraftPreview = {
 	zoom: number;
 	onZoom: (zoom: number) => void;
 	onToggle: () => void;
+	/** Draws the preview again, after a change that saves outside the draft. */
+	onRefresh: () => void;
 	/** Starts loading when the pointer reaches the preview button, so it opens drawn. */
 	onPrepare: () => void;
 };

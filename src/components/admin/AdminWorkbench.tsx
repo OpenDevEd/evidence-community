@@ -951,10 +951,11 @@ export default function AdminWorkbench({
 				if (pending?.generation === generation) {
 					pendingPayloadByKey.current.delete(key);
 				}
+				// Even for a record no longer selected: an attachment's preview is its parent's page.
+				setPreviewRevision((revision) => revision + 1);
 				if (selectedKeyRef.current === key) {
 					setValidationErrors({});
 					setSaveState("saved");
-					setPreviewRevision((revision) => revision + 1);
 					setSaveMessage(null);
 				}
 			} catch (error) {
@@ -2651,6 +2652,7 @@ export default function AdminWorkbench({
 								zoom: previewZoom,
 								onZoom: setPreviewZoom,
 								onToggle: () => showPreview(!previewOpen),
+								onRefresh: () => setPreviewRevision((revision) => revision + 1),
 								onPrepare: () => setPreviewPrepared(true),
 							}}
 							onOpenDraft={openCurrentDraft}
