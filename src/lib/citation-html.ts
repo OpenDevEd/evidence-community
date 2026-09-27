@@ -1,5 +1,6 @@
 import { htmlToDOM, type DOMNode } from "html-react-parser";
 import serialize from "dom-serializer";
+import { escapeHtml } from "@/lib/escape-html";
 
 const tags = new Set(["div", "span", "i", "em", "b", "strong", "sup", "sub"]);
 const classes = new Set([
@@ -30,6 +31,23 @@ function citationHref(value: string | undefined) {
 	}
 }
 
+/**
+ * Browsers break URLs after hyphens (reads like a hyphenated word) and only
+ * sometimes after slashes, and no CSS changes that. Mark Chicago's break
+ * points instead: after "//", before "/" and before a hyphen, never after one.
+ */
+function breakableUrl(text: string): DOMNode[] {
+	return htmlToDOM(
+		escapeHtml(text).replace(/(\/\/)|\/|-([^&]?)/gu, (match, slashes, next) =>
+			slashes
+				? "//<wbr>"
+				: match === "/"
+					? "<wbr>/"
+					: `<wbr><span style="white-space:nowrap">-${next}</span>`,
+		),
+	);
+}
+
 function formattingAttributes(
 	attributes: Record<string, string>,
 ): Record<string, string> {
@@ -53,10 +71,15 @@ function cleanNode(node: DOMNode): DOMNode[] {
 		const href = citationHref(node.attribs.href);
 		if (!href) return children;
 		node.attribs = { href, target: "_blank", rel: "noopener noreferrer" };
+		node.children = children.flatMap((child) =>
+			child.type === "text" && !/\s/.test(child.data)
+				? breakableUrl(child.data)
+				: [child],
+		);
 	} else {
 		node.attribs = formattingAttributes(node.attribs);
+		node.children = children;
 	}
-	node.children = children;
 	return [node];
 }
 

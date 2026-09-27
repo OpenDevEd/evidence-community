@@ -59,7 +59,7 @@ it("keeps BibTeX as literal copyable source", () => {
 
 
 it("keeps the configured library URL clickable and in the copied citation", async () => {
-  const url = "https://library.example.org/lib/ARTICLE1";
+  const url = "https://evidence-test-library.example.org/lib/ARTICLE1";
   const { apa } = await formatCitations(record, "en-GB", url);
   const { container } = render(createElement(CitationText, { citation: apa }));
   expect(container.querySelector(`a[href="${url}"]`)!.getAttribute("href")).toBe(url);
