@@ -1,6 +1,7 @@
 import { hostname } from "node:os";
 
 import { openLibraryDatabaseProcess } from "../src/config/library-config/process";
+import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import {
 	runActiveSourceConnections,
@@ -140,6 +141,54 @@ async function runConfiguredSweep(
 	}
 }
 
+type WorkerOptions = Parameters<typeof runActiveSourceConnections>[0];
+
+/**
+ * The lanes a watching worker runs beside its sweep: requested sources, and
+ * status reports to OpenScholar. Stopping waits for both, then reports once
+ * more, so work that finished while stopping still reaches OpenScholar.
+ */
+function startWatchLanes(
+	config: LibraryServerConfig,
+	options: WorkerOptions,
+	only: string | undefined,
+	/** The process stopping: no new requested runs start after it. */
+	stopping: AbortSignal,
+) {
+	const { database } = options;
+	// The reporter outlives the stop signal, to report the runs that drain.
+	const reporting = new AbortController();
+	const reportError = (error: unknown) =>
+		console.error(`Source status could not be read: ${errorMessage(error)}`);
+	const searchableCache: SearchableCache = new Map();
+	const report = createSourceStatusReporter({
+		...config.authentication.openScholar,
+		read: () =>
+			readSourceStatuses(database, { cache: searchableCache, hiddenTags: config.content.tags.hidden }),
+	});
+	const running = [
+		runRequestedSources({
+			list: () => listRunnableSourceRequests(database, { only }),
+			onError: (error) => console.error(`Requested source run failed: ${errorMessage(error)}`),
+			run: (sourceConnectionKey) => runSourceConnection({ ...options, sourceConnectionKey }),
+			signal: stopping,
+		}),
+		runSourceStatusReporter({
+			isActive: () => hasSourceActivity(database),
+			onError: reportError,
+			report,
+			signal: reporting.signal,
+		}),
+	];
+	return {
+		async stop() {
+			reporting.abort();
+			await Promise.all(running);
+			await report().catch(reportError);
+		},
+	};
+}
+
 async function main() {
 	const command = parseCommand(process.argv.slice(2));
 	const runtimeProcess = await openLibraryDatabaseProcess();
@@ -160,38 +209,9 @@ async function main() {
 			registry: runtime.registry,
 			workerId: command.workerId,
 		};
-		// A watching worker also runs requested sources and keeps OpenScholar's
-		// view current. The lanes stop with the worker, before the database closes.
-		const lanes = new AbortController();
-		const reportError = (error: unknown) =>
-			console.error(`Source status could not be read: ${errorMessage(error)}`);
-		const searchableCache: SearchableCache = new Map();
-		const report = createSourceStatusReporter({
-			...config.authentication.openScholar,
-			read: () =>
-				readSourceStatuses(database, {
-					cache: searchableCache,
-					hiddenTags: config.content.tags.hidden,
-				}),
-		});
-		const stopLanes = () => lanes.abort();
-		abortController.signal.addEventListener("abort", stopLanes, { once: true });
-		const background = command.watch
-			? [
-					runRequestedSources({
-						list: () => listRunnableSourceRequests(database, { only: command.sourceConnectionKey }),
-						onError: (error) => console.error(`Requested source run failed: ${errorMessage(error)}`),
-						run: (sourceConnectionKey) => runSourceConnection({ ...options, sourceConnectionKey }),
-						signal: lanes.signal,
-					}),
-					runSourceStatusReporter({
-						isActive: () => hasSourceActivity(database),
-						onError: reportError,
-						report,
-						signal: lanes.signal,
-					}),
-				]
-			: [];
+		const lanes = command.watch
+			? startWatchLanes(config, options, command.sourceConnectionKey, abortController.signal)
+			: null;
 		try {
 			const result = await runSourceWorker({
 				onError: (error) => console.error(errorMessage(error)),
@@ -208,11 +228,7 @@ async function main() {
 				process.exitCode = 1;
 			}
 		} finally {
-			stopLanes();
-			abortController.signal.removeEventListener("abort", stopLanes);
-			await Promise.all(background);
-			// Work that finished while stopping still reaches OpenScholar.
-			if (command.watch) await report().catch(reportError);
+			await lanes?.stop();
 		}
 	} finally {
 		await runtimeProcess.close();
