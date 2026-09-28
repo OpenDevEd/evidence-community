@@ -3,7 +3,11 @@ import { reconcileOpenAlexMemberships } from "./reconciliation";
 import type { SourceAdapterContext, SourceConnection } from "../adapter";
 import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import { SourceCredentialNotFoundError } from "../credentials";
-import type { JsonValue, SourceItemUpsert } from "../batch-schema";
+import {
+	MAX_SOURCE_BATCH_BYTES,
+	type JsonValue,
+	type SourceItemUpsert,
+} from "../batch-schema";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
 import { mapOpenAlexWork } from "./mapper";
@@ -56,6 +60,10 @@ export function openAlexFullScanDue(reconciledAt: string, now: Date) {
 	return Date.parse(reconciledAt) < lastNightlyRefresh(now) - 6 * DAY_MS;
 }
 const UPDATED_SINCE = "from_updated_date:";
+const PDF_PAGE_SIZE = 50;
+const PDF_CONCURRENCY = 6;
+// Leaves room for the batch envelope and institution facts.
+const WRITE_BUDGET_BYTES = MAX_SOURCE_BATCH_BYTES - 4 * 1024 * 1024;
 
 async function openAlexClient(
 	context: SourceAdapterContext,
@@ -187,7 +195,7 @@ async function fetchPage(
 		return await client.works(
 			pageQuery(config, cursor),
 			cursor.nextCursor!,
-			config.downloadPdfs ? 10 : 100,
+			config.downloadPdfs ? PDF_PAGE_SIZE : 100,
 		);
 	} catch (error) {
 		// Free keys use complete scans. Only an explicit entitlement denial changes strategy.
@@ -201,26 +209,96 @@ async function fetchPage(
 	}
 }
 
-// Process one file at a time to bound PDF buffers and renderer memory.
+// Downloads take most of the PDF time, so several run at once. The cap
+// bounds PDF buffers and renderer memory.
 async function processAttachments(
 	context: SourceAdapterContext,
 	items: SourceItemUpsert[],
 	processor: NonNullable<OpenAlexSourceOptions["attachmentProcessor"]>,
 ) {
-	for (let index = 0; index < items.length; index++) {
-		if (!items[index]!.file?.url) continue;
-		await context.heartbeat();
-		items[index] = await processor(
-			items[index]!,
-			context.sourceConnection.key,
+	let next = 0;
+	let failed = false;
+	const worker = async () => {
+		while (!failed && next < items.length) {
+			const index = next++;
+			if (!items[index]!.file?.url) continue;
+			await context.heartbeat();
+			items[index] = await processor(
+				items[index]!,
+				context.sourceConnection.key,
+			);
+		}
+	};
+	// After a failure, start no more PDFs but let running ones finish before
+	// the run gives up its lease.
+	const results = await Promise.allSettled(
+		Array.from({ length: PDF_CONCURRENCY }, () =>
+			worker().catch((error: unknown) => {
+				failed = true;
+				throw error;
+			}),
+		),
+	);
+	const rejected = results.find((result) => result.status === "rejected");
+	if (rejected) throw rejected.reason;
+}
+
+/** Splits a page into writes under the batch limit, keeping record order. */
+function writeChunks(items: SourceItemUpsert[]) {
+	const chunks: SourceItemUpsert[][] = [[]];
+	let bytes = 0;
+	for (const record of items) {
+		const size = Buffer.byteLength(JSON.stringify(record), "utf8");
+		if (bytes + size > WRITE_BUDGET_BYTES && chunks.at(-1)!.length) {
+			chunks.push([]);
+			bytes = 0;
+		}
+		chunks.at(-1)!.push(record);
+		bytes += size;
+	}
+	return chunks;
+}
+
+// Only the last write moves the cursor on, so a retry fetches the page again.
+async function writePage(
+	context: SourceAdapterContext,
+	expectedCursor: Record<string, JsonValue>,
+	nextCursor: Cursor,
+	page: { items: SourceItemUpsert[]; institutionCountries: InstitutionFacts },
+) {
+	const chunks = writeChunks(page.items);
+	for (const [index, items] of chunks.entries()) {
+		await writeBatch(
+			context,
+			expectedCursor,
+			index === chunks.length - 1 ? nextCursor : expectedCursor,
+			{ items, institutionCountries: index ? [] : page.institutionCountries },
 		);
 	}
+}
+
+function logPdfPage(
+	sourceConnectionKey: string,
+	works: number,
+	items: SourceItemUpsert[],
+	startedAt: number,
+) {
+	const pdfs = items.filter((record) => record.file?.url);
+	const failed = pdfs.filter((record) => record.processingIssue).length;
+	console.info("OpenAlex PDF page processed", {
+		sourceConnectionKey,
+		works,
+		pdfs: pdfs.length,
+		published: pdfs.length - failed,
+		failed,
+		seconds: (performance.now() - startedAt) / 1000,
+	});
 }
 
 function writeBatch(
 	context: SourceAdapterContext,
 	expectedCursor: Record<string, JsonValue>,
-	nextCursor: Cursor,
+	nextCursor: Record<string, JsonValue>,
 	batch: {
 		items: SourceItemUpsert[];
 		institutionCountries?: InstitutionFacts;
@@ -287,12 +365,15 @@ export async function syncOpenAlexSource(
 		await reportPage(cursor.imported);
 		const mapped = page.results.map(mapOpenAlexWork);
 		const items = mapped.flatMap((work) => work.items);
-		if (config.downloadPdfs)
+		if (config.downloadPdfs) {
+			const startedAt = performance.now();
 			await processAttachments(
 				context,
 				items,
 				options.attachmentProcessor!,
 			);
+			logPdfPage(connection.key, page.results.length, items, startedAt);
+		}
 		cursor = {
 			...cursor,
 			nextCursor: page.meta.next_cursor,
@@ -300,7 +381,7 @@ export async function syncOpenAlexSource(
 			completedAt: null,
 		};
 		await context.heartbeat();
-		await writeBatch(context, expectedCursor, cursor, {
+		await writePage(context, expectedCursor, cursor, {
 			items,
 			institutionCountries: mapped.flatMap((work) => work.institutions),
 		});
