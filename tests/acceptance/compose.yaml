@@ -197,10 +197,6 @@ services:
   redis:
     image: redis:7.2-alpine
     init: true
-    networks:
-      default:
-        aliases:
-          - evidence-library-redis
     command:
       [
         "redis-server",
