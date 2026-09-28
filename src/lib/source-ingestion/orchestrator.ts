@@ -15,6 +15,7 @@ import { PARENT_REQUIRED_ITEM_TYPES } from "@/lib/admin/item-fields";
 import {
 	isSyncableSourceProvider,
 	parseSourceSyncResult,
+	type SourceAdapter,
 	type SourceAdapterRegistry,
 	type SourceConnection,
 	type SourceSyncResult,
@@ -575,9 +576,28 @@ export async function runSourceConnection(
 	}
 }
 
+/**
+ * Reads the source again when the sweep reaches it: a requested run may have
+ * finished since the sweep started, and the clock has moved on.
+ */
+async function isDueNow(
+	options: SourceOrchestratorOptions,
+	sourceConnectionKey: string,
+	isDue: NonNullable<SourceAdapter["isDue"]>,
+) {
+	const [current] = await options.database
+		.select()
+		.from(sourceConnection)
+		.where(eq(sourceConnection.key, sourceConnectionKey))
+		.limit(1);
+	return !current || isDue(current, options.now?.() ?? new Date());
+}
+
 export async function runActiveSourceConnections(
 	options: SourceOrchestratorOptions & {
 		concurrency?: number;
+		/** Run every source regardless of its schedule, for an operator's one-off sweep. */
+		force?: boolean;
 	},
 ): Promise<SourceRunSweepResult[]> {
 	const concurrency = options.concurrency ?? 2;
@@ -588,9 +608,11 @@ export async function runActiveSourceConnections(
 	) {
 		throw new Error("concurrency must be an integer between 1 and 32");
 	}
-	const now = options.now?.() ?? new Date();
 	const connections = await options.database
-		.select()
+		.select({
+			key: sourceConnection.key,
+			provider: sourceConnection.provider,
+		})
 		.from(sourceConnection)
 		.where(
 			and(
@@ -612,7 +634,7 @@ export async function runActiveSourceConnections(
 				}
 				try {
 					const { isDue } = options.registry.get(connection.provider);
-					if (isDue && !isDue(connection, now)) {
+					if (isDue && !options.force && !(await isDueNow(options, connection.key, isDue))) {
 						return { connectionKey: connection.key, status: "not_due" as const };
 					}
 					return await runSourceConnection({

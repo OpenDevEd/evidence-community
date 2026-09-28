@@ -39,9 +39,22 @@ type OpenAlexConnectionConfig = z.infer<typeof openAlexConnectionConfigSchema>;
 type InstitutionFacts = ReturnType<typeof mapOpenAlexWork>["institutions"];
 
 const DAY_MS = 24 * 3600_000;
-const WEEK_MS = 7 * DAY_MS;
 /** When OpenAlex sources refresh each night: incrementally, and in full once a week. */
 const OPENALEX_NIGHTLY_UTC_TIME = "02:00";
+
+/** The most recent nightly refresh time at or before `now`. */
+function lastNightlyRefresh(now: Date) {
+	const tonight = nightlyScheduleForDate(OPENALEX_NIGHTLY_UTC_TIME, now).getTime();
+	return now.getTime() < tonight ? tonight - DAY_MS : tonight;
+}
+
+/**
+ * A full scan is due on the seventh night after the last one. Counting nights
+ * rather than hours keeps it weekly even though a scan finishes after 02:00.
+ */
+export function openAlexFullScanDue(reconciledAt: string, now: Date) {
+	return Date.parse(reconciledAt) < lastNightlyRefresh(now) - 6 * DAY_MS;
+}
 const UPDATED_SINCE = "from_updated_date:";
 
 async function openAlexClient(
@@ -63,13 +76,13 @@ async function openAlexClient(
 	});
 }
 
-/** A reconciled full scan less than a week old lets the next run fetch only updated works. */
+/** A reconciled full scan from this week lets the next run fetch only updated works. */
 function incrementalSince(saved: Cursor | null, queryVersion: string) {
 	if (
 		!saved?.completedAt ||
 		saved.queryVersion !== queryVersion ||
 		!saved.reconciledAt ||
-		Date.now() - Date.parse(saved.reconciledAt) >= WEEK_MS ||
+		openAlexFullScanDue(saved.reconciledAt, new Date()) ||
 		saved.incrementalAvailable === false
 	)
 		return null;
@@ -126,9 +139,7 @@ export function openAlexSyncIsDue(connection: SourceConnection, now: Date) {
 	if (!config.success || !saved.success) return true;
 	if (!saved.data.completedAt) return true;
 	if (saved.data.queryVersion !== config.data.approvedQuery.version) return true;
-	const tonight = nightlyScheduleForDate(OPENALEX_NIGHTLY_UTC_TIME, now).getTime();
-	const lastNight = now.getTime() < tonight ? tonight - DAY_MS : tonight;
-	return Date.parse(saved.data.startedAt) < lastNight;
+	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
 }
 
 function pageQuery(config: OpenAlexConnectionConfig, cursor: Cursor) {

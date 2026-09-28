@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SourceConnection } from "@/lib/source-ingestion/adapter";
-import { openAlexSyncIsDue } from "@/lib/source-ingestion/openalex/sync";
+import { openAlexFullScanDue, openAlexSyncIsDue } from "@/lib/source-ingestion/openalex/sync";
 
 const config = {
 	name: "AI in education",
@@ -50,5 +50,12 @@ describe("openAlexSyncIsDue", () => {
 		const yesterday = cursor({ startedAt: "2026-09-27T02:00:30.000Z" });
 		expect(openAlexSyncIsDue(connection(yesterday), new Date("2026-09-28T01:00:00Z"))).toBe(false);
 		expect(openAlexSyncIsDue(connection(yesterday), new Date("2026-09-28T03:00:00Z"))).toBe(true);
+	});
+
+	// A full scan finishes after 02:00, so counting hours would push the next one to the eighth night.
+	it("runs the full rescan on the seventh night after the last one finished", () => {
+		const finished = "2026-09-21T02:40:00.000Z";
+		expect(openAlexFullScanDue(finished, new Date("2026-09-27T02:00:30Z"))).toBe(false);
+		expect(openAlexFullScanDue(finished, new Date("2026-09-28T02:00:30Z"))).toBe(true);
 	});
 });

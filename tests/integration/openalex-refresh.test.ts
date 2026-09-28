@@ -299,5 +299,9 @@ it("leaves a source the sweep refreshed tonight until the next night, but runs i
 		expect(requests).toBe(1);
 		await runSourceConnection({ ...options, sourceConnectionKey: "oa-nightly" });
 		expect(requests).toBe(2);
+		// An operator's one-off sweep runs every source, due or not.
+		const forced = await runActiveSourceConnections({ ...options, force: true });
+		expect(forced).toEqual([expect.objectContaining({ connectionKey: "oa-nightly", status: "succeeded" })]);
+		expect(requests).toBe(3);
 	});
 }, 120_000);
