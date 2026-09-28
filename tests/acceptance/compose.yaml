@@ -33,6 +33,7 @@ x-library-service: &library-service
     timeout: 2s
     retries: 60
     start_period: 10s
+    start_interval: 1s
 
 x-search-indexer-service: &search-indexer-service
   image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
@@ -46,6 +47,7 @@ x-search-indexer-service: &search-indexer-service
     timeout: 2s
     retries: 60
     start_period: 10s
+    start_interval: 1s
 
 x-meilisearch-service: &meilisearch-service
   image: getmeili/meilisearch:v1.54
@@ -66,6 +68,7 @@ x-meilisearch-service: &meilisearch-service
     timeout: 2s
     retries: 60
     start_period: 5s
+    start_interval: 1s
 
 services:
   fixture:
@@ -105,6 +108,7 @@ services:
       timeout: 2s
       retries: 60
       start_period: 5s
+      start_interval: 1s
 
   runtime-provider-fake:
     image: node:22-alpine
@@ -131,6 +135,7 @@ services:
       timeout: 2s
       retries: 60
       start_period: 5s
+      start_interval: 1s
 
   ca-exporter:
     image: alpine:3.23
@@ -164,6 +169,7 @@ services:
       timeout: 2s
       retries: 60
       start_period: 5s
+      start_interval: 1s
 
   postgres:
     image: pgvector/pgvector:pg17
@@ -186,6 +192,7 @@ services:
       timeout: 2s
       retries: 60
       start_period: 5s
+      start_interval: 1s
 
   redis:
     image: redis:7.2-alpine
@@ -215,6 +222,7 @@ services:
       timeout: 2s
       retries: 60
       start_period: 5s
+      start_interval: 1s
 
   amber-meilisearch:
     <<: *meilisearch-service
