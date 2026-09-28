@@ -229,10 +229,13 @@ test("resolves concurrent draft fields without losing either session's other cha
 		await expect
 			.poll(async () => (await readDraft()).title)
 			.toBe("A newer first-session title");
-		await apply.click();
-		await expect(
-			comparison.getByText("A newer first-session title", { exact: true }),
-		).toBeVisible();
+		// The second session may notice the newer save on its own before Apply.
+		await expect(async () => {
+			if (await apply.isEnabled()) await apply.click({ timeout: 1_000 });
+			await expect(
+				comparison.getByText("A newer first-session title", { exact: true }),
+			).toBeVisible({ timeout: 1_000 });
+		}).toPass({ timeout: 30_000 });
 		await expect(apply).toBeDisabled();
 		await comparison
 			.getByRole("group", { name: "Title", exact: true })

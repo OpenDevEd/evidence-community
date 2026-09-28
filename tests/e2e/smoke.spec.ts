@@ -508,7 +508,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 
 	if (!expectedSwitchBackLocaleLabel) return;
 
-	await page
+	const switchedTrigger = page
 		.getByRole("banner")
 		.getByRole("button")
 		.filter({
@@ -517,14 +517,17 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 					? "EN-GB"
 					: expectedSwitchLocale.toUpperCase(),
 		})
-		.filter({ visible: true })
-		.click();
-	await page
-		.getByRole("menuitem", {
-			name: expectedSwitchBackLocaleLabel,
-			exact: true,
-		})
-		.press("Enter");
+		.filter({ visible: true });
+	const switchBack = page.getByRole("menuitem", {
+		name: expectedSwitchBackLocaleLabel,
+		exact: true,
+	});
+	// The header still re-renders for the new locale, which can swallow a click.
+	await expect(async () => {
+		if (!(await switchBack.isVisible())) await switchedTrigger.click();
+		await expect(switchBack).toBeVisible({ timeout: 1_000 });
+	}).toPass();
+	await switchBack.press("Enter");
 	await expect.poll(() => new URL(page.url()).pathname).toBe("/lib");
 	await expect(page.locator("html")).toHaveAttribute(
 		"lang",
