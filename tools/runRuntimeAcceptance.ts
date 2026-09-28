@@ -6,6 +6,7 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
 	closeSync,
+	existsSync,
 	mkdirSync,
 	openSync,
 	readFileSync,
@@ -268,10 +269,14 @@ function runInBackground(
 	environment = commandEnvironment,
 ) {
 	if (stopBackgroundRuns) {
-		return Promise.reject(new Error(`${label} was not started`));
+		const skipped = Promise.reject(new Error(`${label} was not started`));
+		skipped.catch(() => undefined);
+		return skipped;
 	}
-	mkdirSync(testResultsDirectory, { recursive: true });
-	const logFile = path.join(testResultsDirectory, `${label}.log`);
+	// Outside test-results, which Playwright empties when it starts locally.
+	const logDirectory = path.join(runtimeDirectory, "logs");
+	mkdirSync(logDirectory, { recursive: true });
+	const logFile = path.join(logDirectory, `${label}.log`);
 	const output = openSync(logFile, "w");
 	const child = spawn(command, args, {
 		cwd: rootDirectory,
@@ -284,7 +289,9 @@ function runInBackground(
 		child.once("error", reject);
 		child.once("close", (status) => {
 			backgroundRuns.delete(child);
-			console.log(`\n${label}:\n${readFileSync(logFile, "utf8")}`);
+			// A failed run may already have removed the runtime directory.
+			const log = existsSync(logFile) ? readFileSync(logFile, "utf8") : "";
+			console.log(`\n${label}:\n${log}`);
 			if (status === 0) resolve();
 			else {
 				reject(
@@ -3295,6 +3302,8 @@ async function runAcceptanceBehavior(
 	// The Amber checks below touch only Amber. Indigo's suite shares the mail
 	// catcher with Amber's suite, so it must finish before Amber's starts.
 	const indigoSuite = runBrowserSuiteInBackground(profiles[1]);
+	// Awaited below; a failure before then must not end the process.
+	indigoSuite.catch(() => undefined);
 	await verifyLiveConfigLifecycle(profiles[0]);
 	await verifyPublicationLifecycle(profiles[0]);
 	await verifyZenodoReuseExternalLifecycle(profiles[0]);

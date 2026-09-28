@@ -42,18 +42,24 @@ jobs:
           api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
           auth="Authorization: Bearer $GITHUB_TOKEN"
           # Any lookup failure runs the full suite.
+          passed=false
           tree="$(curl -fsS -H "$auth" "$api/git/commits/$GITHUB_SHA" | jq -r .tree.sha)" || tree=""
-          count=0
+          runs=""
           if [ -n "$tree" ]; then
-            count="$(curl -fsS -H "$auth" "$api/actions/artifacts?name=ci-passed-$tree" \
-              | jq '[.artifacts[] | select(.expired | not)] | length')" || count=0
+            runs="$(curl -fsS -H "$auth" "$api/actions/artifacts?name=ci-passed-$tree" \
+              | jq -r '.artifacts[] | select(.expired | not) | .workflow_run.id')" || runs=""
           fi
-          if [ "$count" -gt 0 ]; then
-            echo "A pull request run already passed tree $tree."
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "passed=false" >> "$GITHUB_OUTPUT"
-          fi
+          # Only a successful pull request run of this workflow from this
+          # repository counts. A fork could upload the same artifact name.
+          for run in $runs; do
+            if curl -fsS -H "$auth" "$api/actions/runs/$run" | jq -e --arg repository "$GITHUB_REPOSITORY" \
+              '.path == ".github/workflows/ci.yml" and .event == "pull_request" and .conclusion == "success" and .head_repository.full_name == $repository' > /dev/null; then
+              passed=true
+              echo "Pull request run $run already passed tree $tree."
+              break
+            fi
+          done
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
 
   static-checks:
     name: Static checks
@@ -204,6 +210,11 @@ jobs:
             printf '::error::Failed: acceptance=%s integration=%s\n' "$acceptance_status" "$integration_status"
             exit 1
           fi
+
+      # A cancelled job can stop the suite before its own cleanup runs.
+      - name: Remove this runner's abandoned acceptance stacks
+        if: failure() || cancelled()
+        run: npm run test:acceptance:cleanup
 
       - name: Upload failure evidence
         if: failure()
