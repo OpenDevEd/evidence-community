@@ -9,14 +9,14 @@ function narrowsResults(filter: string | undefined) {
 	);
 }
 
-/** Leaving out retracted works narrows nothing, however the clause is grouped or spelled. */
+/** Leaving out retracted works narrows nothing, however the clause is grouped, spelled or repeated. */
 function narrowsOql(oql: string | undefined) {
 	const where = oql?.match(/^works\s+where\s+([\s\S]+)$/i)?.[1];
 	return Boolean(
 		where
 			?.toLowerCase()
 			.replace(/[()\s]+/g, " ")
-			.split(/\band\b/)
+			.split(/\b(?:and|or)\b/)
 			.map((clause) => clause.trim())
 			.some(
 				(clause) =>
@@ -25,12 +25,15 @@ function narrowsOql(oql: string | undefined) {
 	);
 }
 
+const OQL_MAX = 131_072;
+const APPROVED_OQL_MAX = OQL_MAX - 1_024;
+
 export const openAlexQuerySchema = z
 	.object({
 		filter: z.string().trim().min(1).max(16_384).optional(),
 		search: z.string().trim().min(1).max(2_048).optional(),
 		// OpenAlex Query Language, filters included, sent as a POST body because it outgrows a URL.
-		oql: z.string().trim().min(1).max(131_072).optional(),
+		oql: z.string().trim().min(1).max(OQL_MAX).optional(),
 	})
 	.strict()
 	.refine(
@@ -57,7 +60,11 @@ export const openAlexConnectionConfigSchema = z
 			.object({
 				version: z.string().trim().min(1).max(128),
 				approvedAt: z.iso.datetime(),
-				query: openAlexQuerySchema,
+				// Incremental syncs wrap the approved OQL in about 50 more characters.
+				query: openAlexQuerySchema.refine(
+					(query) => (query.oql?.length ?? 0) <= APPROVED_OQL_MAX,
+					"An OpenAlex source's OQL query is too long",
+				),
 			})
 			.strict(),
 		downloadPdfs: z.boolean().default(false),

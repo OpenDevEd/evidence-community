@@ -56,6 +56,7 @@ describe("OpenAlex works requests", () => {
 		await expect(client.works({ oql: "works where is_retracted is (false)" }, "*")).rejects.toThrow(/requires a search or filter/);
 		await expect(client.works({ oql: "works" }, "*")).rejects.toThrow(/requires a search or filter/);
 		await expect(client.works({ oql: "works where (IS_RETRACTED is (false)) and retracted is (false)" }, "*")).rejects.toThrow(/requires a search or filter/);
+		await expect(client.works({ oql: "works where (is_retracted is (false)) or (is_retracted is (false))" }, "*")).rejects.toThrow(/requires a search or filter/);
 	});
 
 	it("retries throttling with Retry-After without dropping the cursor", async () => {
