@@ -65,7 +65,11 @@ export function DraftPreviewPortal({
 	const page = review ? `${review.itemKey}:${review.id}` : itemKey;
 	const [frame, setFrame] = useState({ page, version: shownVersion });
 	if (frame.page !== page) setFrame({ page, version: shownVersion });
-	if (!preview.target) return null;
+	if (!preview.target) {
+		// The frame goes with the pane, so a reopened preview loads again behind the spinner.
+		if (loadedSrc) setLoadedSrc(null);
+		return null;
+	}
 	// Under the admin's own locale prefix, so the page reads in the language the admin is using. The pane only exists
 	// in the browser, so its location is there to read.
 	const adminPath = location.pathname;
