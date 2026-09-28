@@ -6,7 +6,6 @@ import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
 import MainWrapper from "./MainWrapper";
 import SiteChrome from "./SiteChrome";
-import { Suspense } from "react";
 import ConsentDefaultsScript from "@/app/_components/ConsentDefaultsScript";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
@@ -88,17 +87,23 @@ export default async function Base({
 				/>
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
-				<Suspense fallback={null}>
-					<LibraryConfigProvider config={libraryConfig}>
-						<BaseContent
-							gapmaps={libraryConfig.gapMaps}
-							locale={locale}
-							storedConsent={storedConsent}
-						>
-							{children}
-						</BaseContent>
-					</LibraryConfigProvider>
-				</Suspense>
+				{/*
+				 * No Suspense around the whole page. Next first renders a
+				 * segment from its prerendered data, then again from the full
+				 * data. If a boundary here is still streaming at that moment,
+				 * React drops its server HTML and draws the page again on the
+				 * client, which blanks the page and loses clicks. Under load
+				 * that happened on about one admin load in ten.
+				 */}
+				<LibraryConfigProvider config={libraryConfig}>
+					<BaseContent
+						gapmaps={libraryConfig.gapMaps}
+						locale={locale}
+						storedConsent={storedConsent}
+					>
+						{children}
+					</BaseContent>
+				</LibraryConfigProvider>
 			</body>
 		</html>
 	);
