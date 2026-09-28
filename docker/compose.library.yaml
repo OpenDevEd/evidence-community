@@ -44,6 +44,9 @@ services:
         restart: unless-stopped
         expose:
             - "3000"
+        # Every health check below probes each second while its container
+        # starts, then rarely. Each probe is a docker exec, and with many
+        # libraries on one host the probes alone kept the Docker daemons busy.
         healthcheck:
             test:
                 [
@@ -84,7 +87,7 @@ services:
                     "node_modules/.bin/tsx",
                     "tools/checkSearchIndexerHealth.ts",
                 ]
-            interval: 15s
+            interval: 60s
             timeout: 5s
             start_period: 1h
             start_interval: 2s
@@ -149,9 +152,9 @@ services:
                 condition: service_healthy
         healthcheck:
             test: ["CMD", "node", ".next/publication/health.mjs"]
-            interval: 15s
+            interval: 60s
             timeout: 5s
-            start_period: 30s
+            start_period: 2m
             start_interval: 1s
             retries: 3
         labels: *runtime-labels
@@ -188,11 +191,11 @@ services:
                     "--silent",
                     "http://127.0.0.1:7700/health",
                 ]
-            interval: 5s
+            interval: 30s
             timeout: 5s
-            start_period: 10s
+            start_period: 5m
             start_interval: 1s
-            retries: 12
+            retries: 3
         volumes:
             - meilisearch-data:/meili_data
         networks:
@@ -225,11 +228,11 @@ services:
                     - evidence-library-redis
         healthcheck:
             test: ["CMD", "redis-cli", "ping"]
-            interval: 5s
+            interval: 30s
             timeout: 5s
-            start_period: 5s
+            start_period: 30s
             start_interval: 1s
-            retries: 12
+            retries: 3
         labels: *runtime-labels
         restart: unless-stopped
 
