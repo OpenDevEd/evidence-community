@@ -408,7 +408,8 @@ const ROW_HEIGHT = 44;
  */
 function useRowsThatFit() {
 	const ref = useRef<HTMLUListElement>(null);
-	const [fit, setFit] = useState({ rows: 8, height: ROW_HEIGHT });
+	// Null until measured, so the first page asked for is the one that stays.
+	const [fit, setFit] = useState<{ rows: number; height: number } | null>(null);
 	useEffect(() => {
 		// The list's height comes from the window, which only reaches React through this observer.
 		const element = ref.current;
@@ -638,13 +639,13 @@ function pageFreshness(data: LoadedPage | undefined, page: { offset: number; lim
 	return { showError: outdated && failed, stale: otherPage || (outdated && failed) };
 }
 
-function useIssuePage(sourceKey: string, type: string, page: { offset: number; limit: number }, version: string, polling: boolean) {
+function useIssuePage(sourceKey: string, type: string, page: { offset: number; limit: number } | null, version: string, polling: boolean) {
 	const { data, error } = useSWR(
-		pageKey(sourceKey, type, page.offset, page.limit, version),
+		page ? pageKey(sourceKey, type, page.offset, page.limit, version) : null,
 		async ([, key, kind, offset, limit, at]): Promise<LoadedPage> => ({ ...(await getAdminSourceIssuePage(key, kind, { offset, limit })), offset, limit, at }),
 		{ keepPreviousData: true, refreshInterval: polling ? ISSUES_POLL_MS : 0 },
 	);
-	const { showError, stale } = pageFreshness(data, page, version, Boolean(error));
+	const { showError, stale } = page ? pageFreshness(data, page, version, Boolean(error)) : { showError: false, stale: false };
 	return { error: showError, rows: data?.issues ?? [], stale };
 }
 
@@ -674,7 +675,8 @@ function PageFooter({
 	return (
 		<>
 			<span className="text-xs tabular-nums text-black/50 dark:text-white/50">
-				{`${count(first)} to ${count(first + shown - 1)} of ${count(group.count)}`}
+				{/* The range once its rows are here; the total while they load. */}
+				{shown > 0 ? `${count(first)} to ${count(first + shown - 1)} of ${count(group.count)}` : `${count(group.count)} records`}
 			</span>
 			<Pagination
 				aria-label={`${group.title} pages`}
@@ -719,12 +721,12 @@ function IssueKindPane({
 	const [listRef, fit] = useRowsThatFit();
 	// The first record shown, not the page, so resizing keeps the reader's place.
 	const [start, setStart] = useState(0);
-	const pageSize = fit.rows;
+	const pageSize = fit?.rows ?? 1;
 	const pages = Math.max(1, Math.ceil(group.count / pageSize));
 	const current = Math.min(Math.floor(start / pageSize) + 1, pages);
 	const offset = (current - 1) * pageSize;
 	// The page kept while the next one loads stays in place but cannot be acted on.
-	const { error, rows, stale } = useIssuePage(sourceKey, group.key, { offset, limit: pageSize }, version, polling);
+	const { error, rows, stale } = useIssuePage(sourceKey, group.key, fit ? { offset, limit: pageSize } : null, version, polling);
 	return (
 		<div className="flex min-h-0 min-w-0 flex-col">
 			<div className="flex h-12 shrink-0 items-center gap-3 border-b border-black/[0.055] px-4 dark:border-white/[0.06]">
@@ -769,7 +771,7 @@ function IssueKindPane({
 					<IssueRecord
 						key={row.sourceRecordKey}
 						row={row}
-						height={fit.height}
+						height={fit?.height ?? ROW_HEIGHT}
 						onOpenRecord={onOpenRecord}
 						onDismiss={onDismiss}
 					/>
@@ -884,7 +886,7 @@ function SourceIssues({
 	return (
 		<section
 			aria-label="Record issues"
-			className="grid min-h-[240px] flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] border-t border-black/[0.07] dark:border-white/[0.07] sm:grid-cols-[232px_minmax(0,1fr)] sm:grid-rows-1"
+			className="motion-safe:animate-fade-in motion-safe:[animation-duration:360ms] grid min-h-[240px] flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] border-t border-black/[0.07] dark:border-white/[0.07] sm:grid-cols-[232px_minmax(0,1fr)] sm:grid-rows-1"
 		>
 			<aside className="flex min-h-0 min-w-0 flex-col border-b border-black/[0.07] bg-black/[0.015] dark:border-white/[0.07] dark:bg-white/[0.02] sm:border-b-0 sm:border-r">
 				<div className="flex h-12 shrink-0 items-center justify-between gap-2 px-4">
@@ -956,6 +958,36 @@ function useIssueTypes(sourceKey: string | null, activity: SourceStatus | null) 
 	return { data, error, imported, running, version };
 }
 
+/** How the dialog changes size: the same curve iOS sheets use. */
+const RESIZE = { duration: 420, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
+
+/**
+ * Grows or shrinks the frame to its content's height instead of jumping, as
+ * issues arrive or leave. The content is laid out at its final size at once
+ * and the frame reveals it, so nothing inside reflows while it moves. A ref
+ * callback, since the frame only exists while the dialog is open.
+ */
+function animateHeight(frame: HTMLDivElement | null) {
+	const content = frame?.firstElementChild;
+	if (!frame || !(content instanceof HTMLElement)) return;
+	// The content's size reaches React only through this observer; the Web Animations API moves the frame.
+	let last: number | null = null;
+	const observer = new ResizeObserver(() => {
+		// Layout heights, not on-screen boxes: the dialog opens with a scale, which a CSS height must not include.
+		const next = content.offsetHeight;
+		const running = frame.getAnimations();
+		// Mid-animation, start from where the frame is now.
+		const from = running.length > 0 ? frame.offsetHeight : last;
+		last = next;
+		if (from === null || Math.abs(from - next) < 1) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		for (const animation of running) animation.cancel();
+		frame.animate([{ height: `${from}px` }, { height: `${next}px` }], RESIZE);
+	});
+	observer.observe(content);
+	return () => observer.disconnect();
+}
+
 /** Import state and record issues of one external source. */
 export function AdminSourceStatusDialog({
 	source,
@@ -974,8 +1006,10 @@ export function AdminSourceStatusDialog({
 }) {
 	const activity = source?.activity ?? null;
 	const { data, error, imported, running, version } = useIssueTypes(source?.key ?? null, activity);
-	const showIssues = imported && data !== undefined;
-	const fills = showIssues && data.types.length > 0;
+	// A source whose status counts no open issues shows that at once, so the dialog never grows to say it.
+	const types = data?.types ?? (activity && issueTotal(activity) === 0 && !error ? [] : undefined);
+	const showIssues = imported && types !== undefined;
+	const fills = showIssues && types.length > 0;
 	return (
 		<DialogModal
 			isOpen={Boolean(source && activity)}
@@ -988,10 +1022,13 @@ export function AdminSourceStatusDialog({
 			hideCloseButton
 			classNames={{ base: "!my-4 !max-h-[calc(100dvh-2rem)] !max-w-[820px] overflow-hidden rounded-2xl" }}
 		>
-			<ModalContent className={`flex flex-col ${fills ? "h-[min(820px,calc(100dvh-2rem))]" : "max-h-[calc(100dvh-2rem)]"}`}>
+			<ModalContent className="overflow-hidden">
 				{(close) =>
 					source && activity ? (
-						<>
+						<div ref={animateHeight} className="overflow-hidden">
+						<div
+							className={`flex flex-col ${fills ? "h-[min(820px,calc(100dvh-2rem))]" : "max-h-[calc(100dvh-2rem)]"}`}
+						>
 							<ModalHeader className="flex shrink-0 items-center gap-3 px-5 py-4 font-normal sm:px-6">
 								<span className="grid size-11 shrink-0 place-items-center rounded-xl bg-black/[0.04] dark:bg-white/[0.07]">
 									<SourceProviderIcon provider={source.provider} size={22} />
@@ -1017,7 +1054,7 @@ export function AdminSourceStatusDialog({
 									<SourceIssues
 										key={source.key}
 										sourceKey={source.key}
-										types={data.types}
+										types={types}
 										version={version}
 										polling={running}
 										onIssuesChanged={onIssuesChanged}
@@ -1032,7 +1069,8 @@ export function AdminSourceStatusDialog({
 									</p>
 								) : null}
 							</div>
-						</>
+						</div>
+						</div>
 					) : null
 				}
 			</ModalContent>

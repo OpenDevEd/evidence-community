@@ -54,14 +54,19 @@ describe("the admin's source status dialog", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		// jsdom lays nothing out: every observed box reports room for ten rows.
 		vi.stubGlobal(
 			"ResizeObserver",
 			class {
-				observe() {}
+				constructor(private readonly report: ResizeObserverCallback) {}
+				observe() {
+					queueMicrotask(() => this.report([{ contentRect: { height: 440 } } as ResizeObserverEntry], this as never));
+				}
 				unobserve() {}
 				disconnect() {}
 			},
 		);
+		Element.prototype.getAnimations ??= () => [];
 		Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 		vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduce"), addEventListener() {}, removeEventListener() {} }));
 		container = document.createElement("div");
@@ -124,6 +129,13 @@ describe("the admin's source status dialog", () => {
 		expect(document.body.textContent).not.toContain("ZoteroApiError 403 Forbidden");
 		await act(async () => details.click());
 		expect(document.body.textContent).toContain("ZoteroApiError 403 Forbidden");
+	});
+
+	it("says there is nothing to fix from the first frame when the status counts no issues", async () => {
+		// The issue list never arrives: the dialog must not wait for it to say so.
+		mocks.api.getAdminSourceIssueTypes.mockReturnValue(new Promise(() => {}));
+		await open({ ...base, changed: 14, searchable: 12_000, state: "succeeded", issues: {} });
+		expect(document.body.textContent).toContain("No record issues to fix.");
 	});
 
 	it("does not ask for record issues before the first import", async () => {
