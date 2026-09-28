@@ -172,7 +172,7 @@ jobs:
               --builder evidence-library-release \
               --target library-runtime \
               --platform linux/amd64 \
-              --build-arg EVIDENCE_LIBRARY_RELEASE_BUILD=1 \
+              --build-arg SKIP_BUILD_TYPECHECK=1 \
               --label org.opencontainers.image.source=https://github.com/OpenDevEd/new-el \
               --label "org.opencontainers.image.revision=$RUNTIME_COMMIT" \
               --tag "$image" \

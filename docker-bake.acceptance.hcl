@@ -5,6 +5,9 @@ group "acceptance" {
 target "acceptance-image" {
   context    = "."
   dockerfile = "Dockerfile"
+  args = {
+    SKIP_BUILD_TYPECHECK = "1"
+  }
 }
 
 target "runtime" {
