@@ -139,6 +139,8 @@ because `Static checks` runs the same type check. The Compose files set
 `start_interval: 1s`, so a service counts as healthy about a second after it is
 ready instead of at Docker's default five-second probe.
 
+Playwright's browsers stay in each runner user's `~/.cache/ms-playwright`, so
+the runtime job downloads Chromium only when the lockfile selects a new build.
 The rootless Docker daemon and named BuildKit builder keep Docker layers
 between runs. A failed or canceled run must still execute the acceptance
 cleanup before the next runtime job.
