@@ -38,6 +38,19 @@ function worksUrl(
 	return url;
 }
 
+/** OQL goes in a POST body, since it outgrows a URL. */
+function requestInit(oql: string | undefined): RequestInit {
+	if (!oql) return { headers: { Accept: "application/json" } };
+	return {
+		method: "POST",
+		body: JSON.stringify({ oql }),
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+		},
+	};
+}
+
 function isRetryable(response: Response, attempt: number) {
 	return (response.status === 429 || response.status >= 500) && attempt < 3;
 }
@@ -62,6 +75,7 @@ export class OpenAlexClient {
 	) {}
 
 	private async fetchWithRetries(url: URL, oql?: string) {
+		const init = requestInit(oql);
 		const request = this.options.fetch ?? fetch;
 		const sleep =
 			this.options.sleep ??
@@ -70,16 +84,7 @@ export class OpenAlexClient {
 			let response: Response;
 			try {
 				response = await request(url, {
-					...(oql
-						? {
-								method: "POST",
-								body: JSON.stringify({ oql }),
-								headers: {
-									Accept: "application/json",
-									"Content-Type": "application/json",
-								},
-							}
-						: { headers: { Accept: "application/json" } }),
+					...init,
 					redirect: "error",
 					signal: AbortSignal.timeout(30_000),
 				});

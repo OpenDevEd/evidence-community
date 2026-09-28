@@ -140,6 +140,12 @@ it("refreshes a sampled OQL query in full, since a sample of updated works is a 
 		await run(db, "oa-sample", record);
 		await run(db, "oa-sample", record);
 		expect(bodies.map((body) => JSON.parse(body).oql)).toEqual([oql, oql]);
+		// A full scan reconciles, so works that leave the sample are withdrawn.
+		const [connection] = await db
+			.select()
+			.from(sourceConnection)
+			.where(eq(sourceConnection.key, "oa-sample"));
+		expect(connection?.syncCursor).toMatchObject({ mode: "full" });
 	});
 }, 120_000);
 

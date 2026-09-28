@@ -9,10 +9,20 @@ function narrowsResults(filter: string | undefined) {
 	);
 }
 
-/** OpenScholar writes OQL as `works where (typed) and filters`; the retraction clause alone narrows nothing. */
+/** Leaving out retracted works narrows nothing, however the clause is grouped or spelled. */
 function narrowsOql(oql: string | undefined) {
-	const where = oql?.match(/^works\s+where\s+([\s\S]+)$/i)?.[1].trim();
-	return Boolean(where && where !== "is_retracted is (false)");
+	const where = oql?.match(/^works\s+where\s+([\s\S]+)$/i)?.[1];
+	return Boolean(
+		where
+			?.toLowerCase()
+			.replace(/[()\s]+/g, " ")
+			.split(/\band\b/)
+			.map((clause) => clause.trim())
+			.some(
+				(clause) =>
+					clause && !/^(is_)?retracted is false$/.test(clause),
+			),
+	);
 }
 
 export const openAlexQuerySchema = z

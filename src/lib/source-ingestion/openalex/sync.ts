@@ -74,7 +74,16 @@ function incrementalSince(saved: Cursor | null, queryVersion: string) {
 		.slice(0, 10);
 }
 
-function startCursor(saved: Cursor | null, queryVersion: string): Cursor {
+/** A sample of the updated works is not part of the approved sample, so sampled OQL always scans in full. */
+function isSampledOql(query: OpenAlexConnectionConfig["approvedQuery"]["query"]) {
+	return Boolean(query.oql && /\ssample\s+\d+(?:\s+seed\s+\d+)?\s*$/i.test(query.oql));
+}
+
+function startCursor(
+	saved: Cursor | null,
+	queryVersion: string,
+	fullOnly: boolean,
+): Cursor {
 	const sameQuery = saved?.queryVersion === queryVersion;
 	if (saved && !saved.completedAt && sameQuery)
 		return saved.mode === "full"
@@ -91,7 +100,7 @@ function startCursor(saved: Cursor | null, queryVersion: string): Cursor {
 		updatedSince: null,
 		incrementalAvailable: null,
 	};
-	const updatedSince = incrementalSince(saved, queryVersion);
+	const updatedSince = fullOnly ? null : incrementalSince(saved, queryVersion);
 	return updatedSince
 		? {
 				...cursor,
@@ -106,8 +115,6 @@ function pageQuery(config: OpenAlexConnectionConfig, cursor: Cursor) {
 	const query = config.approvedQuery.query;
 	if (cursor.mode !== "incremental") return query;
 	if (query.oql) {
-		// A sample of the updated works is not part of the approved sample, so a sampled query always runs in full.
-		if (/\ssample\s+\d+(?:\s+seed\s+\d+)?\s*$/i.test(query.oql)) return query;
 		const where = query.oql.replace(/^works\s+where\s+/i, "");
 		return {
 			oql: `works where (${where}) and from_updated_date is (${cursor.updatedSince})`,
@@ -214,6 +221,7 @@ export async function syncOpenAlexSource(
 			? cursorSchema.parse(expectedCursor)
 			: null,
 		config.approvedQuery.version,
+		isSampledOql(config.approvedQuery.query),
 	);
 	let pages = 0;
 	await options.attachmentProcessor?.flushCleanup(connection.key);
