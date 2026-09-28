@@ -5893,8 +5893,14 @@ test("renders field types with semantic cells instead of plain text", async ({
 	await expect(collections).not.toContainText(teacherCollection.key);
 	await expect(tags).toContainText("equity");
 	await expect(tags).toContainText("teacher training");
-	await tags.getByText("+1", { exact: true }).hover();
-	await expect(page.getByRole("tooltip")).toHaveText("rural schools");
+	// Showing columns re-renders the row, which can replace the hovered chip.
+	await expect(async () => {
+		await page.mouse.move(0, 0);
+		await tags.getByText("+1", { exact: true }).hover();
+		await expect(page.getByRole("tooltip")).toHaveText("rural schools", {
+			timeout: 1_000,
+		});
+	}).toPass();
 	await expect(source).toContainText("Native");
 	await expect(source.locator("svg")).toHaveCount(1);
 	await expect(dateAdded).toContainText("Jul 31, 2026");
@@ -5904,13 +5910,10 @@ test("renders field types with semantic cells instead of plain text", async ({
 	await expect(pageCount).toHaveText("146");
 
 	for (const cell of [year, revision, pageCount]) {
-		expect(
-			await cell
-				.locator("span")
-				.evaluate(
-					(element) => getComputedStyle(element).fontVariantNumeric,
-				),
-		).toContain("tabular-nums");
+		await expect(cell.locator("span")).toHaveCSS(
+			"font-variant-numeric",
+			/tabular-nums/,
+		);
 	}
 });
 
@@ -6151,6 +6154,8 @@ test("unpublishes through the inspector and submits restoration for review", asy
   await page.getByRole("button", {name: "Unpublish", exact: true}).click();
   const dialog = page.getByRole("dialog", {name: "Unpublish record?"});
   await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+  // Reopening the menu while the dialog still closes lets its focus return shut the new menu.
+  await expect(dialog).toBeHidden();
   expect(unpublishRequests).toBe(0);
   await inspector.getByRole("button", {name: "Record status and sources"}).click();
   await page.getByRole("button", {name: "Unpublish", exact: true}).click();

@@ -25,7 +25,9 @@ for (const view of ["archive", "edition"] as const) {
 				delayedChunks++;
 				await new Promise(resolve => setTimeout(resolve, 2_000));
 			}
-			await route.fulfill({ response, body });
+			// The page can drop a request while it waits, as when it navigates;
+			// a request still waiting would stall the assertions below instead.
+			await route.fulfill({ response, body }).catch(() => undefined);
 		});
 
 		await page.goto(view === "archive" ? "/digests" : `/digests/${editionId}`);
