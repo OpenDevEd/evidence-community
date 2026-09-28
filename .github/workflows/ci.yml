@@ -170,6 +170,9 @@ jobs:
           --health-retries 10
     env:
       PLAYWRIGHT_WORKERS: "4"
+      # Eight took the admin suite from 98 to 65 seconds on the CI guest. The
+      # public suites flake above four.
+      PLAYWRIGHT_ADMIN_WORKERS: "8"
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

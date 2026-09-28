@@ -117,10 +117,10 @@ A pull request uses two light runners and one runtime runner:
   and runs lint, the type check and the generated-schema check at the same time.
 - `Unit tests` runs Vitest.
 - `Runtime and integration` builds the image and runs the complete acceptance
-  suite with four Playwright workers. The database integration tests run beside
-  it against their own PostgreSQL service. Inside the acceptance suite, the
-  repository Compose check and the Indigo browser suite run in the background
-  while the Amber checks run.
+  suite with four Playwright workers, eight for the admin suite. The database
+  integration tests run beside it against their own PostgreSQL service. Inside
+  the acceptance suite, the repository Compose check and the Indigo browser
+  suite run in the background while the Amber checks run.
 
 The aggregate `CI` job records the tree a passing pull request run tested as an
 artifact named `ci-passed-<tree>`. A push to `main` whose tree matches skips the

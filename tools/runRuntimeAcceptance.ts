@@ -1774,7 +1774,9 @@ async function runBrowserSuiteInBackground(profile: Profile) {
 function runAdminBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} admin browser suite`);
 	const adminWorkers =
-		process.env.PLAYWRIGHT_WORKERS ?? (process.env.CI ? undefined : "1");
+		process.env.PLAYWRIGHT_ADMIN_WORKERS ??
+		process.env.PLAYWRIGHT_WORKERS ??
+		(process.env.CI ? undefined : "1");
 	const environment = playwrightEnvironment(`${profile.name}-admin`, {
 		...commandEnvironment,
 		...publicExpectations(profile),
