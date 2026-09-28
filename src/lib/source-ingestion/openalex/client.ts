@@ -25,9 +25,12 @@ function worksUrl(
 		throw new Error("OpenAlex pageSize must be between 1 and 100");
 	}
 	const approved = openAlexQuerySchema.parse(query);
-	const url = new URL("https://api.openalex.org/works");
-	for (const [key, value] of Object.entries(approved)) {
-		if (value) url.searchParams.set(key, value);
+	// OQL runs at the API root with the query in the POST body.
+	const url = new URL(
+		approved.oql ? "https://api.openalex.org/" : "https://api.openalex.org/works",
+	);
+	for (const key of ["filter", "search"] as const) {
+		if (approved[key]) url.searchParams.set(key, approved[key]);
 	}
 	url.searchParams.set("cursor", cursor);
 	url.searchParams.set("per_page", String(pageSize));
@@ -58,7 +61,7 @@ export class OpenAlexClient {
 		},
 	) {}
 
-	private async fetchWithRetries(url: URL) {
+	private async fetchWithRetries(url: URL, oql?: string) {
 		const request = this.options.fetch ?? fetch;
 		const sleep =
 			this.options.sleep ??
@@ -67,7 +70,16 @@ export class OpenAlexClient {
 			let response: Response;
 			try {
 				response = await request(url, {
-					headers: { Accept: "application/json" },
+					...(oql
+						? {
+								method: "POST",
+								body: JSON.stringify({ oql }),
+								headers: {
+									Accept: "application/json",
+									"Content-Type": "application/json",
+								},
+							}
+						: { headers: { Accept: "application/json" } }),
 					redirect: "error",
 					signal: AbortSignal.timeout(30_000),
 				});
@@ -88,7 +100,7 @@ export class OpenAlexClient {
 
 	async works(query: OpenAlexQuery, cursor: string, pageSize = 100) {
 		const url = worksUrl(query, cursor, pageSize, this.options.apiKey);
-		const response = await this.fetchWithRetries(url);
+		const response = await this.fetchWithRetries(url, query.oql);
 		const bytes = await readBoundedResponse(
 			response,
 			response.ok

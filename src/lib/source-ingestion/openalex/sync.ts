@@ -105,6 +105,14 @@ function startCursor(saved: Cursor | null, queryVersion: string): Cursor {
 function pageQuery(config: OpenAlexConnectionConfig, cursor: Cursor) {
 	const query = config.approvedQuery.query;
 	if (cursor.mode !== "incremental") return query;
+	if (query.oql) {
+		// A sample of the updated works is not part of the approved sample, so a sampled query always runs in full.
+		if (/\ssample\s+\d+(?:\s+seed\s+\d+)?\s*$/i.test(query.oql)) return query;
+		const where = query.oql.replace(/^works\s+where\s+/i, "");
+		return {
+			oql: `works where (${where}) and from_updated_date is (${cursor.updatedSince})`,
+		};
+	}
 	const clauses = (query.filter ?? "").split(",").filter(Boolean);
 	const previousSince = clauses
 		.find((clause) => clause.startsWith(UPDATED_SINCE))

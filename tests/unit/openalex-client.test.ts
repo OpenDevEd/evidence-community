@@ -29,6 +29,34 @@ describe("OpenAlex works requests", () => {
 		});
 	});
 
+	it("posts an OQL query to the API root with the cursor and page size in the URL", async () => {
+		const oql = "works where (title has (chatgpt)) and is_retracted is (false)";
+		let requested: { url: URL; init?: RequestInit } | undefined;
+		const client = new OpenAlexClient({
+			apiKey: "test-key",
+			fetch: async (input, init) => {
+				requested = { url: new URL(String(input)), init };
+				return Response.json(page);
+			},
+		});
+		expect(await client.works({ oql }, "*")).toEqual(page);
+		expect(requested?.url.pathname).toBe("/");
+		expect(Object.fromEntries(requested!.url.searchParams)).toEqual({
+			cursor: "*",
+			per_page: "100",
+			api_key: "test-key",
+		});
+		expect(requested?.init?.method).toBe("POST");
+		expect(JSON.parse(String(requested?.init?.body))).toEqual({ oql });
+	});
+
+	it("rejects an OQL query mixed with a search, or one that narrows nothing", async () => {
+		const client = new OpenAlexClient({ apiKey: "test-key", fetch: async () => Response.json(page) });
+		await expect(client.works({ oql: "works where title has (x)", search: "x" }, "*")).rejects.toThrow(/either OQL/);
+		await expect(client.works({ oql: "works where is_retracted is (false)" }, "*")).rejects.toThrow(/requires a search or filter/);
+		await expect(client.works({ oql: "works" }, "*")).rejects.toThrow(/requires a search or filter/);
+	});
+
 	it("retries throttling with Retry-After without dropping the cursor", async () => {
 		const cursors: string[] = [];
 		const delays: number[] = [];

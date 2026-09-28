@@ -95,6 +95,54 @@ it("does not withdraw a work omitted by an incremental refresh", async () => {
 	});
 }, 120_000);
 
+it("posts an OQL query and narrows an incremental refresh inside it", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const oql = "works where (title has (chatgpt) or abstract has (tutor)) and is_retracted is (false)";
+		await db.insert(sourceConnection).values({
+			key: "oa-oql",
+			provider: "openalex",
+			scopeKind: "query",
+			config: { ...settings("unused"), approvedQuery: { ...settings("unused").approvedQuery, query: { oql } } },
+		});
+		const requests: { url: URL; method?: string; body?: string }[] = [];
+		const record: typeof fetch = async (input, init) => {
+			requests.push({ url: new URL(String(input)), method: init?.method, body: String(init?.body) });
+			return page([work(1)]);
+		};
+		await run(db, "oa-oql", record);
+		await run(db, "oa-oql", record);
+
+		expect(requests.map(({ url, method }) => [url.pathname, method, url.searchParams.has("filter")])).toEqual([
+			["/", "POST", false],
+			["/", "POST", false],
+		]);
+		expect(JSON.parse(requests[0]!.body!)).toEqual({ oql });
+		expect(JSON.parse(requests[1]!.body!).oql).toMatch(
+			/^works where \(\(title has \(chatgpt\) or abstract has \(tutor\)\) and is_retracted is \(false\)\) and from_updated_date is \(\d{4}-\d{2}-\d{2}\)$/,
+		);
+	});
+}, 120_000);
+
+it("refreshes a sampled OQL query in full, since a sample of updated works is a different sample", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const oql = "works where (title has (chatgpt)) and is_retracted is (false) sample 50 seed 7";
+		await db.insert(sourceConnection).values({
+			key: "oa-sample",
+			provider: "openalex",
+			scopeKind: "query",
+			config: { ...settings("unused"), approvedQuery: { ...settings("unused").approvedQuery, query: { oql } } },
+		});
+		const bodies: string[] = [];
+		const record: typeof fetch = async (_input, init) => {
+			bodies.push(String(init?.body));
+			return page([work(1)]);
+		};
+		await run(db, "oa-sample", record);
+		await run(db, "oa-sample", record);
+		expect(bodies.map((body) => JSON.parse(body).oql)).toEqual([oql, oql]);
+	});
+}, 120_000);
+
 it("falls back after an incremental entitlement denial and withdraws only after the full scan completes", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		await addSource(db, "oa");

@@ -9,14 +9,29 @@ function narrowsResults(filter: string | undefined) {
 	);
 }
 
+/** OpenScholar writes OQL as `works where (typed) and filters`; the retraction clause alone narrows nothing. */
+function narrowsOql(oql: string | undefined) {
+	const where = oql?.match(/^works\s+where\s+([\s\S]+)$/i)?.[1].trim();
+	return Boolean(where && where !== "is_retracted is (false)");
+}
+
 export const openAlexQuerySchema = z
 	.object({
 		filter: z.string().trim().min(1).max(16_384).optional(),
 		search: z.string().trim().min(1).max(2_048).optional(),
+		// OpenAlex Query Language, filters included, sent as a POST body because it outgrows a URL.
+		oql: z.string().trim().min(1).max(131_072).optional(),
 	})
 	.strict()
 	.refine(
-		(query) => Boolean(query.search) || narrowsResults(query.filter),
+		(query) => !query.oql || (!query.search && !query.filter),
+		"An OpenAlex source uses either OQL or a search and filter",
+	)
+	.refine(
+		(query) =>
+			Boolean(query.search) ||
+			narrowsResults(query.filter) ||
+			narrowsOql(query.oql),
 		"An OpenAlex source requires a search or filter",
 	);
 
@@ -26,7 +41,8 @@ export const openAlexConnectionConfigSchema = z
 		name: z.string().trim().min(1).max(80),
 		// The editor retains its unexpanded query, filters and local history ID.
 		// Imports always use approvedQuery, never this UI state.
-		searchUrl: z.string().max(16_384).regex(/^\/results\/[A-Za-z0-9-]+(?:\?|$)/),
+		// An OQL search keeps its typed query here, so it is as long as the query.
+		searchUrl: z.string().max(262_144).regex(/^\/results\/[A-Za-z0-9-]+(?:\?|$)/),
 		approvedQuery: z
 			.object({
 				version: z.string().trim().min(1).max(128),
