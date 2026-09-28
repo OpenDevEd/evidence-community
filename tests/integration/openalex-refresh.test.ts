@@ -8,6 +8,9 @@ import { itemSourceLink, sourceConnection, sourceSnapshot } from "@/db/schema/so
 import type { Database } from "@/db/database-schema";
 import { getPublicItemLinks } from "@/lib/links/item-links";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { createOpenAlexSourceAdapter } from "@/lib/source-ingestion/openalex/adapter";
+import { SourceAdapterRegistry } from "@/lib/source-ingestion/adapter";
+import { runActiveSourceConnections, runSourceConnection } from "@/lib/source-ingestion/orchestrator";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const settings = (search: string) => ({
@@ -210,7 +213,7 @@ it("falls back after an incremental entitlement denial and withdraws only after 
 	});
 }, 120_000);
 
-it("runs a complete reconciliation when the last full scan is more than 24 hours old", async () => {
+it("runs a complete reconciliation when the last full scan is more than a week old", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		await addSource(db, "oa");
 		await run(db, "oa", async () => page([work(1), work(2)]));
@@ -223,7 +226,7 @@ it("runs a complete reconciliation when the last full scan is more than 24 hours
 			.set({
 				syncCursor: {
 					...(connection!.syncCursor as Record<string, unknown>),
-					reconciledAt: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+					reconciledAt: new Date(Date.now() - 8 * 24 * 60 * 60_000).toISOString(),
 					incrementalAvailable: true,
 				},
 			})
@@ -266,5 +269,39 @@ it("resolves a citation when its target later arrives through another OpenAlex q
 		expect(await getPublicItemLinks(db, citedKey)).toMatchObject({
 			citedBy: [citingKey],
 		});
+	});
+}, 120_000);
+
+it("leaves a source the sweep refreshed tonight until the next night, but runs it when asked", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await addSource(db, "oa-nightly");
+		let requests = 0;
+		const options = {
+			credentialResolver: async () => "test-key",
+			database: db,
+			registry: new SourceAdapterRegistry([
+				createOpenAlexSourceAdapter({
+					fetch: async () => {
+						requests += 1;
+						return page([work(1)]);
+					},
+					sleep: async () => {},
+				}),
+			]),
+			workerId: "nightly-test",
+		};
+
+		const first = await runActiveSourceConnections(options);
+		const second = await runActiveSourceConnections(options);
+
+		expect(first).toEqual([expect.objectContaining({ connectionKey: "oa-nightly", status: "succeeded" })]);
+		expect(second).toEqual([{ connectionKey: "oa-nightly", status: "not_due" }]);
+		expect(requests).toBe(1);
+		await runSourceConnection({ ...options, sourceConnectionKey: "oa-nightly" });
+		expect(requests).toBe(2);
+		// An operator's one-off sweep runs every source, due or not.
+		const forced = await runActiveSourceConnections({ ...options, force: true });
+		expect(forced).toEqual([expect.objectContaining({ connectionKey: "oa-nightly", status: "succeeded" })]);
+		expect(requests).toBe(3);
 	});
 }, 120_000);

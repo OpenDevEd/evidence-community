@@ -1,3 +1,4 @@
+import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import type { CrossrefDepositor } from "@opendeved/doi-sync-core";
 import { and, desc, eq, gte } from "drizzle-orm";
 
@@ -43,20 +44,6 @@ function errorMessage(error: unknown) {
 function throwIfAborted(signal: AbortSignal | undefined, error: unknown) {
 	if (!signal?.aborted) return;
 	throw signal.reason ?? error;
-}
-
-export function nightlyScheduleForDate(time: string, now: Date) {
-	const match = /^([01]\d|2[0-3]):([0-5]\d)$/u.exec(time);
-	if (!match) throw new Error("nightlyUtcTime must use HH:mm");
-	return new Date(
-		Date.UTC(
-			now.getUTCFullYear(),
-			now.getUTCMonth(),
-			now.getUTCDate(),
-			Number(match[1]),
-			Number(match[2]),
-		),
-	);
 }
 
 export async function publicationNightlyRunIsDue(
