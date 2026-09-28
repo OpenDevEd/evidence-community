@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import { Spinner } from "@/components/nextui/Spinner";
 import { Tooltip } from "@/components/nextui/Tooltip";
 
 /** One pill of flat icon buttons, as the chat composer groups its controls. */
@@ -53,9 +54,8 @@ export function DraftPreviewPortal({
 	review?: PreviewReview;
 	saving: boolean;
 }) {
-	// The page fades in once drawn, so a record's first opening shows no empty frame. The inspector mounts this anew for
-	// each record and version.
-	const [loaded, setLoaded] = useState(false);
+	// A spinner covers each newly loading page and fades once it has drawn, so opening a record never shows an empty frame.
+	const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 	// A closed preview keeps the version it last showed, so autosaves don't rebuild a page nobody is looking at.
 	const version = review?.revision ?? preview.revision;
 	const [shownVersion, setShownVersion] = useState(version);
@@ -75,6 +75,7 @@ export function DraftPreviewPortal({
 	const src = review
 		? `${previewPath}/${review.itemKey}?review=${review.id}&v=${frame.version}`
 		: `${previewPath}/${itemKey}?v=${frame.version}`;
+	const loaded = loadedSrc === src;
 	const label = review ? "Preview of the submitted version" : "Preview of the working draft";
 	return createPortal(
 		<div className="flex h-full min-h-0 flex-col">
@@ -109,16 +110,22 @@ export function DraftPreviewPortal({
 					</Tooltip>
 				</div>
 			</div>
-			<div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+			<div className="relative min-h-0 flex-1 overflow-hidden">
 				<iframe
 					key={src}
 					src={src}
 					data-version={shownVersion}
 					title={label}
-					onLoad={() => setLoaded(true)}
-					className={`absolute left-0 top-0 origin-top-left bg-background transition-opacity duration-200 motion-reduce:transition-none ${loaded ? "opacity-100" : "opacity-0"}`}
+					onLoad={() => setLoadedSrc(src)}
+					className="absolute left-0 top-0 origin-top-left"
 					style={{ width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})` }}
 				/>
+				<div
+					aria-hidden={loaded || undefined}
+					className={`absolute inset-0 flex items-center justify-center bg-background_light transition-opacity duration-300 ease-out motion-reduce:transition-none dark:bg-background ${loaded ? "pointer-events-none opacity-0" : "opacity-100"}`}
+				>
+					<Spinner size="lg" aria-label="Loading preview" />
+				</div>
 			</div>
 		</div>,
 		preview.target,
