@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import { Spinner } from "@/components/nextui/Spinner";
 import { Tooltip } from "@/components/nextui/Tooltip";
 
 /** One pill of flat icon buttons, as the chat composer groups its controls. */
@@ -53,9 +54,6 @@ export function DraftPreviewPortal({
 	review?: PreviewReview;
 	saving: boolean;
 }) {
-	// The page fades in once drawn, so a record's first opening shows no empty frame. The inspector mounts this anew for
-	// each record and version.
-	const [loaded, setLoaded] = useState(false);
 	// A closed preview keeps the version it last showed, so autosaves don't rebuild a page nobody is looking at.
 	const version = review?.revision ?? preview.revision;
 	const [shownVersion, setShownVersion] = useState(version);
@@ -109,18 +107,34 @@ export function DraftPreviewPortal({
 					</Tooltip>
 				</div>
 			</div>
-			<div className="relative min-h-0 flex-1 overflow-hidden bg-background">
-				<iframe
-					key={src}
-					src={src}
-					data-version={shownVersion}
-					title={label}
-					onLoad={() => setLoaded(true)}
-					className={`absolute left-0 top-0 origin-top-left bg-background transition-opacity duration-200 motion-reduce:transition-none ${loaded ? "opacity-100" : "opacity-0"}`}
-					style={{ width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})` }}
-				/>
-			</div>
+			<PreviewFrame key={src} src={src} version={shownVersion} title={label} zoom={zoom} />
 		</div>,
 		preview.target,
+	);
+}
+
+/**
+ * One page loading into the preview. A spinner on the page's own background covers it until it has loaded, then fades.
+ * Each new page or reopened pane mounts a new frame, so it loads behind the spinner again.
+ */
+function PreviewFrame({ src, version, title, zoom }: { src: string; version: number; title: string; zoom: number }) {
+	const [loaded, setLoaded] = useState(false);
+	return (
+		<div className="relative min-h-0 flex-1 overflow-hidden">
+			<iframe
+				src={src}
+				data-version={version}
+				title={title}
+				onLoad={() => setLoaded(true)}
+				className="absolute left-0 top-0 origin-top-left"
+				style={{ width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})` }}
+			/>
+			<div
+				aria-hidden={loaded || undefined}
+				className={`absolute inset-0 flex items-center justify-center bg-background_light transition-opacity duration-300 ease-out motion-reduce:transition-none dark:bg-background ${loaded ? "pointer-events-none opacity-0" : "opacity-100"}`}
+			>
+				<Spinner size="lg" aria-label="Loading preview" />
+			</div>
+		</div>
 	);
 }
