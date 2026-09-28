@@ -2,9 +2,17 @@ import { projectPublicLibraryConfig } from "../src/config/library-config/public"
 import { getRuntimeLinkHref, getVisibleRuntimeLinks } from "../src/config/library-config/links";
 import { analyticsCapabilities } from "../src/lib/analytics-consent";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	closeSync,
+	existsSync,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
@@ -92,6 +100,7 @@ const acceptanceOpenScholar = {
 	},
 } as const;
 const cleanupOnly = process.argv.includes("--cleanup");
+const repositoryComposeOnly = process.argv.includes("--repository-compose");
 
 async function availablePort(environmentValue: string | undefined) {
 	if (environmentValue) return environmentValue;
@@ -243,6 +252,91 @@ function run(
 			`${command} ${args.join(" ")} exited with status ${result.status}`,
 		);
 	}
+}
+
+const backgroundRuns = new Set<ChildProcess>();
+let stopBackgroundRuns = false;
+
+/**
+ * Starts a command without blocking the steps that follow it. Its output goes
+ * to a file and is printed in one piece when it ends, so it never interleaves
+ * with the steps running beside it.
+ */
+function runInBackground(
+	label: string,
+	command: string,
+	args: string[],
+	environment = commandEnvironment,
+) {
+	if (stopBackgroundRuns) {
+		const skipped = Promise.reject(new Error(`${label} was not started`));
+		skipped.catch(() => undefined);
+		return skipped;
+	}
+	// Outside test-results, which Playwright empties when it starts locally.
+	const logDirectory = path.join(runtimeDirectory, "logs");
+	mkdirSync(logDirectory, { recursive: true });
+	const logFile = path.join(logDirectory, `${label}.log`);
+	const output = openSync(logFile, "w");
+	const child = spawn(command, args, {
+		cwd: rootDirectory,
+		env: environment,
+		stdio: ["ignore", output, output],
+	});
+	closeSync(output);
+	backgroundRuns.add(child);
+	const finished = new Promise<void>((resolve, reject) => {
+		child.once("error", reject);
+		child.once("close", (status) => {
+			backgroundRuns.delete(child);
+			// A failed run may already have removed the runtime directory.
+			const log = existsSync(logFile) ? readFileSync(logFile, "utf8") : "";
+			console.log(`\n${label}:\n${log}`);
+			if (status === 0) resolve();
+			else {
+				reject(
+					new Error(`${command} ${args.join(" ")} exited with status ${status}`),
+				);
+			}
+		});
+	});
+	// The caller awaits this later; a failure before then must not end the process.
+	finished.catch(() => undefined);
+	return finished;
+}
+
+function descendants(pid: number): number[] {
+	const children = spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" })
+		.stdout.split("\n")
+		.filter(Boolean)
+		.map(Number);
+	return children.flatMap((child) => [child, ...descendants(child)]);
+}
+
+function signalProcessTree(pid: number) {
+	for (const member of [pid, ...descendants(pid)]) {
+		try {
+			process.kill(member, "SIGTERM");
+		} catch {
+			// Already gone.
+		}
+	}
+}
+
+/**
+ * Stops every background run, including the Playwright or Compose process
+ * its npx or tsx wrapper started, and waits for them before cleanup begins.
+ */
+async function stopRunsInBackground() {
+	stopBackgroundRuns = true;
+	const running = [...backgroundRuns];
+	const closed = running.map(
+		(child) => new Promise((resolve) => child.once("close", resolve)),
+	);
+	for (const child of running) {
+		if (child.pid !== undefined) signalProcessTree(child.pid);
+	}
+	await Promise.all(closed);
 }
 
 function playwrightEnvironment(label: string, environment: NodeJS.ProcessEnv) {
@@ -429,6 +523,8 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 	config.services.database.url =
 		"postgresql://library:library@postgres:5432/library_compose";
 	config.services.search.host = "http://meilisearch:7700";
+	// The production alias, which only this stack's private network carries.
+	config.services.redis = { url: "redis://evidence-library-redis:6379" };
 	const environment = {
 		...commandEnvironment,
 		EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${composeProject}_default`,
@@ -1633,82 +1729,46 @@ function publicExpectations(profile: Profile) {
 	};
 }
 
+function browserSuiteRuns(profile: Profile) {
+	const suites: Array<[label: string, files: string[], project: string]> = [
+		[
+			"smoke",
+			[
+				"tests/e2e/smoke.spec.ts",
+				"tests/e2e/email-form.spec.ts",
+				"tests/e2e/subscription.spec.ts",
+				"tests/e2e/digest-loading.spec.ts",
+				"tests/e2e/brand-logo.spec.ts",
+			],
+			"chromium",
+		],
+		["ai-chat", ["tests/e2e/ai-chat.spec.ts"], "chromium"],
+		["consent-gate", ["tests/e2e/consent-gate.spec.ts"], "chromium"],
+		["integrations", ["tests/e2e/runtime-integrations.spec.ts"], "chromium"],
+		["mobile", ["tests/e2e/runtime-mobile.spec.ts"], "mobile-chromium"],
+	];
+	return suites.map(([suite, files, project]) => ({
+		label: `${profile.name}-${suite}`,
+		args: ["playwright", "test", ...files, "--project", project],
+		environment: playwrightEnvironment(`${profile.name}-${suite}`, {
+			...commandEnvironment,
+			...publicExpectations(profile),
+		}),
+	}));
+}
+
 function runBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} runtime acceptance suite`);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
-			"tests/e2e/smoke.spec.ts",
-			"tests/e2e/email-form.spec.ts",
-			"tests/e2e/subscription.spec.ts",
-			"tests/e2e/digest-loading.spec.ts",
-			"tests/e2e/brand-logo.spec.ts",
-			"--project",
-			"chromium",
-		],
-		playwrightEnvironment(`${profile.name}-smoke`, {
-			...commandEnvironment,
-			...publicExpectations(profile),
-		}),
-	);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
-			"tests/e2e/ai-chat.spec.ts",
-			"--project",
-			"chromium",
-		],
-		playwrightEnvironment(`${profile.name}-ai-chat`, {
-			...commandEnvironment,
-			...publicExpectations(profile),
-		}),
-	);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
-			"tests/e2e/consent-gate.spec.ts",
-			"--project",
-			"chromium",
-		],
-		playwrightEnvironment(`${profile.name}-consent-gate`, {
-			...commandEnvironment,
-			...publicExpectations(profile),
-		}),
-	);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
-			"tests/e2e/runtime-integrations.spec.ts",
-			"--project",
-			"chromium",
-		],
-		playwrightEnvironment(`${profile.name}-integrations`, {
-			...commandEnvironment,
-			...publicExpectations(profile),
-		}),
-	);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
-			"tests/e2e/runtime-mobile.spec.ts",
-			"--project",
-			"mobile-chromium",
-		],
-		playwrightEnvironment(`${profile.name}-mobile`, {
-			...commandEnvironment,
-			...publicExpectations(profile),
-		}),
-	);
+	for (const suite of browserSuiteRuns(profile)) {
+		run("npx", suite.args, suite.environment);
+	}
+}
+
+async function runBrowserSuiteInBackground(profile: Profile) {
+	console.log(`\nStarting ${profile.name} runtime acceptance suite in the background`);
+	for (const suite of browserSuiteRuns(profile)) {
+		await runInBackground(suite.label, "npx", suite.args, suite.environment);
+	}
 }
 
 function runAdminBrowserSuite(profile: Profile) {
@@ -3198,9 +3258,26 @@ async function startAcceptanceInfrastructure(profiles: Profile[]) {
 		"amber-meilisearch",
 		"indigo-meilisearch",
 	);
-	await verifyRepositoryComposeStartup(profiles[0]);
-	await verifyBaseAcceptanceServicesSurvived();
 	for (const profile of profiles) await seedSharedSearchIndexes(profile);
+}
+
+// The deployment Compose check starts its own library stack beside this one
+// and only shares its database server, so it runs in a separate process while
+// the acceptance stack starts and the Amber checks run.
+function startRepositoryComposeCheck() {
+	return runInBackground(
+		"repository-compose",
+		path.join(rootDirectory, "node_modules", ".bin", "tsx"),
+		[fileURLToPath(import.meta.url), "--repository-compose"],
+		{ ...commandEnvironment, EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT: composeProject },
+	);
+}
+
+async function runRepositoryComposeCheck() {
+	await initializeAcceptancePorts();
+	const [amber] = loadAcceptanceProfiles();
+	await verifyRepositoryComposeStartup(amber);
+	await verifyBaseAcceptanceServicesSurvived();
 }
 
 async function startAcceptanceSearchWorkers(profiles: Profile[]) {
@@ -3234,7 +3311,10 @@ async function seedAcceptanceRecords(profiles: Profile[]) {
 	}
 }
 
-async function runAcceptanceBehavior(profiles: Profile[]) {
+async function runAcceptanceBehavior(
+	profiles: Profile[],
+	repositoryCompose: Promise<void>,
+) {
 	await verifySearchQueueIsolation(profiles);
 	compose(
 		"up",
@@ -3246,6 +3326,13 @@ async function runAcceptanceBehavior(profiles: Profile[]) {
 		"amber-search-indexer",
 		"indigo-search-indexer",
 	);
+	// Counts collector requests, so it runs before anything else sends them.
+	profiles.forEach(verifyServerAnalyticsTransport);
+	// The Amber checks below touch only Amber. Indigo's suite shares the mail
+	// catcher with Amber's suite, so it must finish before Amber's starts.
+	const indigoSuite = runBrowserSuiteInBackground(profiles[1]);
+	// Awaited below; a failure before then must not end the process.
+	indigoSuite.catch(() => undefined);
 	await verifyLiveConfigLifecycle(profiles[0]);
 	await verifyPublicationLifecycle(profiles[0]);
 	await verifyZenodoReuseExternalLifecycle(profiles[0]);
@@ -3253,9 +3340,10 @@ async function runAcceptanceBehavior(profiles: Profile[]) {
 	await verifyOpenScholarReadApi(profiles[0]);
 	await verifyOwnerLegalText(profiles[0]);
 	await verifyNoteRedirects(profiles[0]);
-	profiles.forEach(verifyServerAnalyticsTransport);
-	profiles.forEach(runBrowserSuite);
+	await indigoSuite;
+	runBrowserSuite(profiles[0]);
 	runAdminBrowserSuite(profiles[0]);
+	await repositoryCompose;
 	verifyJunitReports();
 	cleanupAcceptanceUsers();
 }
@@ -3289,6 +3377,8 @@ function reportAcceptanceFailure(error: unknown): never {
 
 function cleanupAcceptanceRuntime() {
 	if (keepRunning) return;
+	// A stopped Compose check can leave its stack on this project's network.
+	removeLibraryComposeProject(libraryComposeProject);
 	compose("down", "--volumes", "--remove-orphans");
 	rmSync(runtimeDirectory, { recursive: true, force: true });
 }
@@ -3301,11 +3391,13 @@ async function runAcceptance() {
 	try {
 		buildAcceptanceImage();
 		await startAcceptanceInfrastructure(profiles);
+		const repositoryCompose = startRepositoryComposeCheck();
 		await startAcceptanceSearchWorkers(profiles);
 		await seedAcceptanceRecords(profiles);
-		await runAcceptanceBehavior(profiles);
+		await runAcceptanceBehavior(profiles, repositoryCompose);
 		reportAcceptanceSuccess();
 	} catch (error) {
+		await stopRunsInBackground();
 		reportAcceptanceFailure(error);
 	} finally {
 		cleanupAcceptanceRuntime();
@@ -3314,6 +3406,7 @@ async function runAcceptance() {
 
 async function main() {
 	if (cleanupOnly) return cleanupAbandonedProjects();
+	if (repositoryComposeOnly) return runRepositoryComposeCheck();
 	await runAcceptance();
 }
 

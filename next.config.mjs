@@ -11,8 +11,7 @@ const nextConfig = {
 	cacheMaxMemorySize: 128 * 1024 * 1024,
 	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "citeproc-ts"],
 	typescript: {
-		ignoreBuildErrors:
-			process.env.EVIDENCE_LIBRARY_RELEASE_BUILD === "1",
+		ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "1",
 	},
 	experimental: {
 		cpus: Math.max(1, availableParallelism() - 1),

@@ -4,15 +4,44 @@ description: Install Node.js and the locked project dependencies.
 runs:
   using: composite
   steps:
+    # The runners keep their disk between jobs, so the npm download cache is
+    # already local. Restoring it from GitHub's cache service only costs time.
     - name: Set up Node.js
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: 22
-        cache: npm
 
+    # Each runner user keeps one finished install per dependency state. A
+    # hard-linked copy takes about 3 seconds; npm ci takes about 45.
     - name: Install dependencies
       shell: bash
       run: |
+        set -euo pipefail
+        core=packages/evidence-library-core
+        installed=(node_modules "$core/node_modules" "$core/dist")
+        key="$({ node --version; git ls-files -s .npmrc package.json package-lock.json patches "$core"; } | sha256sum | cut -c1-16)"
+        cache_root="$HOME/.cache/evidence-library-install"
+        cache="$cache_root/$key"
+
+        if [ -d "$cache" ]; then
+          rm -rf "${installed[@]}"
+          for path in "${installed[@]}"; do cp -al "$cache/$path" "$path"; done
+          echo "Restored the installed dependencies for $key."
+          exit 0
+        fi
+
+        # A cancelled job can leave a half-copied install behind.
+        rm -rf "$cache_root"/.staging-*
+
         npm ci --prefer-offline --no-audit --no-fund --ignore-scripts
         npm rebuild @parcel/watcher @swc/core bcrypt esbuild sharp
         npm run postinstall
+
+        staging="$cache_root/.staging-$key"
+        rm -rf "$staging"
+        mkdir -p "$staging/$core"
+        for path in "${installed[@]}"; do cp -al "$path" "$staging/$path"; done
+        mv "$staging" "$cache"
+        # Keep this install and the one before it, so a pull request with a
+        # dependency change and main can alternate without reinstalling.
+        ls -1dt "$cache_root"/*/ | tail -n +3 | xargs -r rm -rf

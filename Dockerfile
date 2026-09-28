@@ -22,7 +22,8 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM base AS builder
 
-ARG EVIDENCE_LIBRARY_RELEASE_BUILD=0
+# CI's Type check job already runs tsc on the same commit.
+ARG SKIP_BUILD_TYPECHECK=0
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -30,7 +31,7 @@ COPY . .
 RUN npm --prefix packages/evidence-library-core run build
 
 RUN --mount=type=cache,target=/app/.next/cache \
-	EVIDENCE_LIBRARY_RELEASE_BUILD=${EVIDENCE_LIBRARY_RELEASE_BUILD} npm run build
+	SKIP_BUILD_TYPECHECK=${SKIP_BUILD_TYPECHECK} npm run build
 
 RUN npm run publication:worker:build
 
