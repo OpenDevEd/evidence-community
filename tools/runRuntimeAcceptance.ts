@@ -313,6 +313,16 @@ function descendants(pid: number): number[] {
 	return children.flatMap((child) => [child, ...descendants(child)]);
 }
 
+function signalProcessTree(pid: number) {
+	for (const member of [pid, ...descendants(pid)]) {
+		try {
+			process.kill(member, "SIGTERM");
+		} catch {
+			// Already gone.
+		}
+	}
+}
+
 /**
  * Stops every background run, including the Playwright or Compose process
  * its npx or tsx wrapper started, and waits for them before cleanup begins.
@@ -324,14 +334,7 @@ async function stopRunsInBackground() {
 		(child) => new Promise((resolve) => child.once("close", resolve)),
 	);
 	for (const child of running) {
-		if (child.pid === undefined) continue;
-		for (const pid of [child.pid, ...descendants(child.pid)]) {
-			try {
-				process.kill(pid, "SIGTERM");
-			} catch {
-				// Already gone.
-			}
-		}
+		if (child.pid !== undefined) signalProcessTree(child.pid);
 	}
 	await Promise.all(closed);
 }
