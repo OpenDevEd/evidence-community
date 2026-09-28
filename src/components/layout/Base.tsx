@@ -88,17 +88,23 @@ export default async function Base({
 				/>
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
-				<Suspense fallback={null}>
-					<LibraryConfigProvider config={libraryConfig}>
-						<BaseContent
-							gapmaps={libraryConfig.gapMaps}
-							locale={locale}
-							storedConsent={storedConsent}
-						>
-							{children}
-						</BaseContent>
-					</LibraryConfigProvider>
-				</Suspense>
+				<LibraryConfigProvider config={libraryConfig}>
+					<BaseContent
+						gapmaps={libraryConfig.gapMaps}
+						locale={locale}
+						storedConsent={storedConsent}
+					>
+						{/*
+						 * Only the page sits in a boundary, not the providers
+						 * around it. A boundary around everything was hidden and
+						 * drawn again right after hydration on about one admin
+						 * load in ten under load, which blanked the page and lost
+						 * clicks. A page's own redirect() still needs a boundary
+						 * here to reach the browser as a client-side redirect.
+						 */}
+						<Suspense fallback={null}>{children}</Suspense>
+					</BaseContent>
+				</LibraryConfigProvider>
 			</body>
 		</html>
 	);
