@@ -305,9 +305,35 @@ function runInBackground(
 	return finished;
 }
 
-function stopRunsInBackground() {
+function descendants(pid: number): number[] {
+	const children = spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" })
+		.stdout.split("\n")
+		.filter(Boolean)
+		.map(Number);
+	return children.flatMap((child) => [child, ...descendants(child)]);
+}
+
+/**
+ * Stops every background run, including the Playwright or Compose process
+ * its npx or tsx wrapper started, and waits for them before cleanup begins.
+ */
+async function stopRunsInBackground() {
 	stopBackgroundRuns = true;
-	for (const child of backgroundRuns) child.kill("SIGTERM");
+	const running = [...backgroundRuns];
+	const closed = running.map(
+		(child) => new Promise((resolve) => child.once("close", resolve)),
+	);
+	for (const child of running) {
+		if (child.pid === undefined) continue;
+		for (const pid of [child.pid, ...descendants(child.pid)]) {
+			try {
+				process.kill(pid, "SIGTERM");
+			} catch {
+				// Already gone.
+			}
+		}
+	}
+	await Promise.all(closed);
 }
 
 function playwrightEnvironment(label: string, environment: NodeJS.ProcessEnv) {
@@ -3328,7 +3354,6 @@ function reportAcceptanceSuccess() {
 }
 
 function reportAcceptanceFailure(error: unknown): never {
-	stopRunsInBackground();
 	compose(
 		"logs",
 		"--no-color",
@@ -3369,6 +3394,7 @@ async function runAcceptance() {
 		await runAcceptanceBehavior(profiles, repositoryCompose);
 		reportAcceptanceSuccess();
 	} catch (error) {
+		await stopRunsInBackground();
 		reportAcceptanceFailure(error);
 	} finally {
 		cleanupAcceptanceRuntime();
