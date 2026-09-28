@@ -48,6 +48,8 @@ export type SourceOrchestratorOptions = {
 
 type SourceConnectionRunOptions = SourceOrchestratorOptions & {
 	sourceConnectionKey: string;
+	/** For the regular sweep: run only if the source's adapter says it is due. */
+	onlyWhenDue?: boolean;
 };
 
 export type SourceRunOutcome = {
@@ -67,7 +69,7 @@ export type SourceRunSweepResult =
 	  }
 	| {
 			connectionKey: string;
-			status: "busy";
+			status: "busy" | "not_due";
 	  };
 
 export class SourceConnectionNotFoundError extends Error {
@@ -90,6 +92,14 @@ export class SourceLeaseUnavailableError extends Error {
 	constructor(sourceConnectionKey: string) {
 		super(`Source connection already has an active lease: ${sourceConnectionKey}`);
 		this.name = "SourceLeaseUnavailableError";
+	}
+}
+
+/** The regular sweep reached a source its adapter says is not due yet. */
+class SourceNotDueError extends Error {
+	constructor(sourceConnectionKey: string) {
+		super(`Source connection is not due: ${sourceConnectionKey}`);
+		this.name = "SourceNotDueError";
 	}
 }
 
@@ -168,6 +178,19 @@ async function closeExpiredRuns(transaction: Transaction, sourceConnectionKey: s
 	return { changedPatch, found: expiredRuns.length > 0 };
 }
 
+function assertDue(
+	options: SourceConnectionRunOptions,
+	connection: SourceConnection,
+	provider: SyncableSourceProvider,
+	now: Date,
+) {
+	if (!options.onlyWhenDue || !options.registry.has(provider)) return;
+	const { isDue } = options.registry.get(provider);
+	if (isDue && !isDue(connection, now)) {
+		throw new SourceNotDueError(connection.key);
+	}
+}
+
 async function claimRun(
 	options: SourceConnectionRunOptions,
 	leaseDurationMs: number,
@@ -225,6 +248,8 @@ async function claimRun(
 		) {
 			throw new SourceLeaseUnavailableError(connection.key);
 		}
+		// Checked under the row lock, so a run that just finished is already seen.
+		assertDue(options, connection, connection.provider, now);
 
 		const expired = await closeExpiredRuns(transaction, connection.key, now);
 
@@ -578,6 +603,8 @@ export async function runSourceConnection(
 export async function runActiveSourceConnections(
 	options: SourceOrchestratorOptions & {
 		concurrency?: number;
+		/** Run every source regardless of its schedule, for an operator's one-off sweep. */
+		force?: boolean;
 	},
 ): Promise<SourceRunSweepResult[]> {
 	const concurrency = options.concurrency ?? 2;
@@ -616,8 +643,12 @@ export async function runActiveSourceConnections(
 					return await runSourceConnection({
 						...options,
 						sourceConnectionKey: connection.key,
+						onlyWhenDue: !options.force,
 					});
 				} catch (error) {
+					if (error instanceof SourceNotDueError) {
+						return { connectionKey: connection.key, status: "not_due" as const };
+					}
 					if (error instanceof SourceLeaseUnavailableError) {
 						return {
 							connectionKey: connection.key,

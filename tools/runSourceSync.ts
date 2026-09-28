@@ -113,6 +113,8 @@ async function runConfiguredSweep(
 		return runActiveSourceConnections({
 			...options,
 			concurrency: command.concurrency,
+			// Only the watching worker keeps to source schedules; a one-off run syncs everything.
+			force: !command.watch,
 		});
 	}
 	try {

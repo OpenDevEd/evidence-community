@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { reconcileOpenAlexMemberships } from "./reconciliation";
-import type { SourceAdapterContext } from "../adapter";
+import type { SourceAdapterContext, SourceConnection } from "../adapter";
+import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import { SourceCredentialNotFoundError } from "../credentials";
 import {
 	MAX_SOURCE_BATCH_BYTES,
@@ -42,6 +43,22 @@ type OpenAlexConnectionConfig = z.infer<typeof openAlexConnectionConfigSchema>;
 type InstitutionFacts = ReturnType<typeof mapOpenAlexWork>["institutions"];
 
 const DAY_MS = 24 * 3600_000;
+/** When OpenAlex sources refresh each night: incrementally, and in full once a week. */
+const OPENALEX_NIGHTLY_UTC_TIME = "02:00";
+
+/** The most recent nightly refresh time at or before `now`. */
+function lastNightlyRefresh(now: Date) {
+	const tonight = nightlyScheduleForDate(OPENALEX_NIGHTLY_UTC_TIME, now).getTime();
+	return now.getTime() < tonight ? tonight - DAY_MS : tonight;
+}
+
+/**
+ * A full scan is due on the seventh night after the last one. Counting nights
+ * rather than hours keeps it weekly even though a scan finishes after 02:00.
+ */
+export function openAlexFullScanDue(reconciledAt: string, now: Date) {
+	return Date.parse(reconciledAt) < lastNightlyRefresh(now) - 6 * DAY_MS;
+}
 const UPDATED_SINCE = "from_updated_date:";
 const PDF_PAGE_SIZE = 50;
 const PDF_CONCURRENCY = 6;
@@ -67,13 +84,13 @@ async function openAlexClient(
 	});
 }
 
-/** A recent, reconciled full scan lets the next run fetch only updated works. */
+/** A reconciled full scan from this week lets the next run fetch only updated works. */
 function incrementalSince(saved: Cursor | null, queryVersion: string) {
 	if (
 		!saved?.completedAt ||
 		saved.queryVersion !== queryVersion ||
 		!saved.reconciledAt ||
-		Date.now() - Date.parse(saved.reconciledAt) >= DAY_MS ||
+		openAlexFullScanDue(saved.reconciledAt, new Date()) ||
 		saved.incrementalAvailable === false
 	)
 		return null;
@@ -117,6 +134,20 @@ function startCursor(
 				incrementalAvailable: saved!.incrementalAvailable,
 			}
 		: cursor;
+}
+
+/**
+ * The regular sweep refreshes a source once a night. A new source, a changed
+ * query and an unfinished run go ahead straight away.
+ */
+export function openAlexSyncIsDue(connection: SourceConnection, now: Date) {
+	const config = openAlexConnectionConfigSchema.safeParse(connection.config);
+	const saved = cursorSchema.safeParse(connection.syncCursor);
+	// Let the run report what is wrong with a configuration or cursor it cannot read.
+	if (!config.success || !saved.success) return true;
+	if (!saved.data.completedAt) return true;
+	if (saved.data.queryVersion !== config.data.approvedQuery.version) return true;
+	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
 }
 
 function pageQuery(config: OpenAlexConnectionConfig, cursor: Cursor) {
