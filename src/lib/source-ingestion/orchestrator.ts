@@ -15,7 +15,6 @@ import { PARENT_REQUIRED_ITEM_TYPES } from "@/lib/admin/item-fields";
 import {
 	isSyncableSourceProvider,
 	parseSourceSyncResult,
-	type SourceAdapter,
 	type SourceAdapterRegistry,
 	type SourceConnection,
 	type SourceSyncResult,
@@ -49,6 +48,8 @@ export type SourceOrchestratorOptions = {
 
 type SourceConnectionRunOptions = SourceOrchestratorOptions & {
 	sourceConnectionKey: string;
+	/** For the regular sweep: run only if the source's adapter says it is due. */
+	onlyWhenDue?: boolean;
 };
 
 export type SourceRunOutcome = {
@@ -91,6 +92,14 @@ export class SourceLeaseUnavailableError extends Error {
 	constructor(sourceConnectionKey: string) {
 		super(`Source connection already has an active lease: ${sourceConnectionKey}`);
 		this.name = "SourceLeaseUnavailableError";
+	}
+}
+
+/** The regular sweep reached a source its adapter says is not due yet. */
+class SourceNotDueError extends Error {
+	constructor(sourceConnectionKey: string) {
+		super(`Source connection is not due: ${sourceConnectionKey}`);
+		this.name = "SourceNotDueError";
 	}
 }
 
@@ -169,6 +178,19 @@ async function closeExpiredRuns(transaction: Transaction, sourceConnectionKey: s
 	return { changedPatch, found: expiredRuns.length > 0 };
 }
 
+function assertDue(
+	options: SourceConnectionRunOptions,
+	connection: SourceConnection,
+	provider: SyncableSourceProvider,
+	now: Date,
+) {
+	if (!options.onlyWhenDue || !options.registry.has(provider)) return;
+	const { isDue } = options.registry.get(provider);
+	if (isDue && !isDue(connection, now)) {
+		throw new SourceNotDueError(connection.key);
+	}
+}
+
 async function claimRun(
 	options: SourceConnectionRunOptions,
 	leaseDurationMs: number,
@@ -226,6 +248,8 @@ async function claimRun(
 		) {
 			throw new SourceLeaseUnavailableError(connection.key);
 		}
+		// Checked under the row lock, so a run that just finished is already seen.
+		assertDue(options, connection, connection.provider, now);
 
 		const expired = await closeExpiredRuns(transaction, connection.key, now);
 
@@ -576,23 +600,6 @@ export async function runSourceConnection(
 	}
 }
 
-/**
- * Reads the source again when the sweep reaches it: a requested run may have
- * finished since the sweep started, and the clock has moved on.
- */
-async function isDueNow(
-	options: SourceOrchestratorOptions,
-	sourceConnectionKey: string,
-	isDue: NonNullable<SourceAdapter["isDue"]>,
-) {
-	const [current] = await options.database
-		.select()
-		.from(sourceConnection)
-		.where(eq(sourceConnection.key, sourceConnectionKey))
-		.limit(1);
-	return !current || isDue(current, options.now?.() ?? new Date());
-}
-
 export async function runActiveSourceConnections(
 	options: SourceOrchestratorOptions & {
 		concurrency?: number;
@@ -633,15 +640,15 @@ export async function runActiveSourceConnections(
 					};
 				}
 				try {
-					const { isDue } = options.registry.get(connection.provider);
-					if (isDue && !options.force && !(await isDueNow(options, connection.key, isDue))) {
-						return { connectionKey: connection.key, status: "not_due" as const };
-					}
 					return await runSourceConnection({
 						...options,
 						sourceConnectionKey: connection.key,
+						onlyWhenDue: !options.force,
 					});
 				} catch (error) {
+					if (error instanceof SourceNotDueError) {
+						return { connectionKey: connection.key, status: "not_due" as const };
+					}
 					if (error instanceof SourceLeaseUnavailableError) {
 						return {
 							connectionKey: connection.key,
