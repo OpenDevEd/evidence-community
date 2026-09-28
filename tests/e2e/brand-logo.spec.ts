@@ -408,6 +408,10 @@ test.describe("on a narrow screen", () => {
 				),
 			)
 			.toBeGreaterThan(0);
+		// The box holds the full cap until the render after the logo loads.
+		await expect
+			.poll(() => box.evaluate((element: HTMLElement) => element.offsetWidth))
+			.toBeLessThan(logoBoxes.header.cap);
 
 		const boxRectangle = await box.evaluate((element: HTMLElement) => ({
 			height: element.offsetHeight,
