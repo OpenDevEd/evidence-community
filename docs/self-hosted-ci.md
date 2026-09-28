@@ -1,6 +1,6 @@
 # Self-hosted CI
 
-Last checked: **2026-09-24**
+Last checked: **2026-09-28**
 
 GitHub schedules and reports every CI job. An isolated Ubuntu 24.04 KVM guest
 named `new-el-ci` executes the jobs on the development Hetzner server.
@@ -10,30 +10,31 @@ No hosted runner service is part of the workflow.
 
 | Count | Label | CPU boundary | Memory limit | Work |
 |---:|---|---:|---:|---|
-| 4 | `evidence-library-light` | 2 fixed guest CPUs each | 8 GiB each | lint, types, schemas, unit tests, Fallow, the final result and release notes |
-| 3 | `evidence-library-runtime` | guest CPUs 8 through 23 | 32 GiB each | Docker build and runtime acceptance |
-| 1 | `evidence-library-release` | guest CPUs 8 through 23 | 32 GiB | select, publish and record the exact green runtime commit |
+| 4 | `evidence-library-light` | any guest CPU | 8 GiB each | static checks with Fallow, unit tests, the final result and release notes |
+| 3 | `evidence-library-runtime` | any guest CPU, 16 cores at most per user | 32 GiB each | Docker build, runtime acceptance and the database integration tests |
+| 1 | `evidence-library-release` | any guest CPU, 16 cores at most | 32 GiB | select, publish and record the exact green runtime commit |
 
-The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk. The
-four light runners use guest CPUs 0 through 7. The runtime and release users
-are all limited to CPUs 8 through 23, so their combined Docker work cannot use
-more than those 16 cores. Their runner listeners share the
-`evidence-library-heavy.slice` limit. Each user owns a separate rootless Docker
-daemon and persistent BuildKit builder: `evidence-library-runtime` for tests
-and `evidence-library-release` for publication.
+The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk.
+No runner is pinned to CPUs. A job running alone uses every idle CPU, and when
+jobs compete the kernel shares CPU time between `system.slice` (the light
+runners), `user.slice` (rootless Docker) and `evidence-library-heavy.slice`
+(the heavy runner listeners), so the light runners still get about a third of
+the guest. Until 2026-09-28 each light runner was pinned to two CPUs, and the
+unit tests took 264 seconds instead of 82 on six.
 
 The runtime runners are `new-el-ci-runtime`, `-2` and `-3`, run by the users
-`gha-runtime`, `gha-runtime-2` and `gha-runtime-3`. A single runtime job used
-about 6 GiB of memory and left the guest CPUs more than 90% idle while its
-browser tests ran, so three can run at once. Each job picks free ports when it
-starts, but releases them again before Docker binds them, so two jobs can rarely
-pick the same port and one fails; rerun it.
+`gha-runtime`, `gha-runtime-2` and `gha-runtime-3`. Each user owns a separate
+rootless Docker daemon and persistent BuildKit builder: `evidence-library-runtime`
+for tests and `evidence-library-release` for publication. A single runtime job
+used about 6 GiB of memory, so three can run at once. Each job picks free ports
+when it starts, but releases them again before Docker binds them, so two jobs
+can rarely pick the same port and one fails; rerun it.
 
 Keep rootless Docker's user managers under `user.slice`. Moving a manager to
-the listener slice stops Docker from creating container scopes. Put the same
-`AllowedCPUs=8-23` and `MemoryMax=32G` limits on the user slice of every heavy
+the listener slice stops Docker from creating container scopes. Put the
+`CPUQuota=1600%` and `MemoryMax=32G` limits on the user slice of every heavy
 user instead: `gha-runtime`, `gha-runtime-2`, `gha-runtime-3` and `gha-release`.
-Check them with `systemctl show user-$(id -u <user>).slice -p AllowedCPUs -p MemoryMax`.
+Check them with `systemctl show user-$(id -u <user>).slice -p AllowedCPUs -p CPUQuotaPerSecUSec -p MemoryMax`.
 
 ## Isolation
 
@@ -110,13 +111,35 @@ only a cache or container that belongs to this CI guest.
 
 ## CI behavior
 
-The workflow keeps the existing matrix and aggregate `CI` result. The runtime
-job uses four Playwright workers, installs the lockfile-selected Chromium build,
-and runs the complete acceptance suite. The VM already contains Chromium's
-Linux packages, so the job does not need `sudo`.
+A pull request uses two light runners and one runtime runner:
 
-`actions/setup-node` and `actions/cache` keep npm and browser downloads between
-runs. The rootless Docker daemon and named BuildKit builder keep Docker layers
+- `Static checks` runs Fallow on the source alone, then installs dependencies
+  and runs lint, the type check and the generated-schema check at the same time.
+- `Unit tests` runs Vitest.
+- `Runtime and integration` builds the image and runs the complete acceptance
+  suite with four Playwright workers. The database integration tests run beside
+  it against their own PostgreSQL service. Inside the acceptance suite, the
+  repository Compose check and the Indigo browser suite run in the background
+  while the Amber checks run.
+
+The aggregate `CI` job records the tree a passing pull request run tested as an
+artifact named `ci-passed-<tree>`. A push to `main` whose tree matches skips the
+lanes, so the runtime image can publish right after the merge. A push that
+merged onto a newer `main` has a different tree and runs everything.
+
+Each runner user keeps its last two installed dependency trees under
+`~/.cache/evidence-library-install`, keyed by Node's version and the Git
+hashes of `package.json`, `package-lock.json`, `patches` and
+`packages/evidence-library-core`. A matching job copies the tree as hard links
+in about 3 seconds instead of running `npm ci` for about 45. The npm download
+cache stays on the runner's disk, so `actions/setup-node` does not restore it.
+
+The acceptance image skips the Next.js type check (`SKIP_BUILD_TYPECHECK=1`)
+because `Static checks` runs the same type check. The Compose files set
+`start_interval: 1s`, so a service counts as healthy about a second after it is
+ready instead of at Docker's default five-second probe.
+
+The rootless Docker daemon and named BuildKit builder keep Docker layers
 between runs. A failed or canceled run must still execute the acceptance
 cleanup before the next runtime job.
 

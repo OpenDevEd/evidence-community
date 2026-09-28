@@ -18,116 +18,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  static-checks:
-    name: ${{ matrix.name }}
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+  # A pull request run tests the merge result. When it passed, it records the
+  # tree it tested. A push whose tree matches has nothing new to test.
+  tested:
+    name: Tested tree
+    if: github.event_name == 'push'
     runs-on:
       - self-hosted
       - evidence-library-light
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Lint
-            command: npm run lint
-          - name: Type check
-            command: npm run typecheck
-          - name: Generated schemas
-            command: npm run schema:check
-          - name: Unit tests
-            command: npm test
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      passed: ${{ steps.lookup.outputs.passed }}
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: ./.github/actions/setup-project
-
-      - name: Run ${{ matrix.name }}
-        run: ${{ matrix.command }}
-
-  runtime:
-    name: Runtime acceptance
-    # This suite includes every browser spec and builds the production image.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on:
-      - self-hosted
-      - evidence-library-runtime
-    timeout-minutes: 45
-    env:
-      PLAYWRIGHT_WORKERS: "4"
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: ./.github/actions/setup-project
-
-      - name: Restore the Playwright browser cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Chromium and its system packages
-        run: ./node_modules/.bin/playwright install chromium
-
-      - name: Use the persistent Docker builder
+      - name: Look for a passed pull request run of this tree
+        id: lookup
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          docker buildx use evidence-library-runtime
-          docker buildx inspect --bootstrap
+          set -uo pipefail
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          auth="Authorization: Bearer $GITHUB_TOKEN"
+          # Any lookup failure runs the full suite.
+          tree="$(curl -fsS -H "$auth" "$api/git/commits/$GITHUB_SHA" | jq -r .tree.sha)" || tree=""
+          count=0
+          if [ -n "$tree" ]; then
+            count="$(curl -fsS -H "$auth" "$api/actions/artifacts?name=ci-passed-$tree" \
+              | jq '[.artifacts[] | select(.expired | not)] | length')" || count=0
+          fi
+          if [ "$count" -gt 0 ]; then
+            echo "A pull request run already passed tree $tree."
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Run end-to-end tests
-        run: npm run test:acceptance
-
-      - name: Upload failure evidence
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: runtime-acceptance
-          path: test-results/
-          if-no-files-found: ignore
-          retention-days: 7
-
-  integration:
-    name: Database and publication integration
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on:
-      - self-hosted
-      - evidence-library-runtime
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_PASSWORD: integration
-        ports:
-          - 5432/tcp
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-project
-      - name: Verify transactions, files, reviews and provider retries
-        env:
-          DATABASE_URL_POST: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports[5432] }}/postgres
-        run: npm run test:integration
-
-  code-quality:
-    name: Fallow code quality
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+  static-checks:
+    name: Static checks
+    needs: tested
+    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on:
       - self-hosted
       - evidence-library-light
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out the repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
+      # Fallow reads the source without installed dependencies, so it runs first.
       - name: Test the comparison rules
         run: bash tests/ci/fallow-comparison.test.sh
 
@@ -157,6 +99,121 @@ jobs:
           fail-on-issues: true
           annotations: true
 
+      - uses: ./.github/actions/setup-project
+
+      - name: Lint, type check and generated schemas
+        run: |
+          # The three checks share the runner's CPUs. Each writes its own log,
+          # printed whole once all three have finished.
+          names=("Lint" "Type check" "Generated schemas")
+          commands=("npm run lint" "npm run typecheck" "npm run schema:check")
+          pids=()
+          for i in "${!names[@]}"; do
+            bash -c "${commands[$i]}" > "$RUNNER_TEMP/check-$i.log" 2>&1 &
+            pids+=("$!")
+          done
+          failed=()
+          for i in "${!names[@]}"; do
+            if wait "${pids[$i]}"; then result=passed; else result=failed; failed+=("${names[$i]}"); fi
+            echo "::group::${names[$i]} $result"
+            cat "$RUNNER_TEMP/check-$i.log"
+            echo "::endgroup::"
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::Failed: ${failed[*]}"
+            exit 1
+          fi
+
+  unit-tests:
+    name: Unit tests
+    needs: tested
+    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on:
+      - self-hosted
+      - evidence-library-light
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: ./.github/actions/setup-project
+
+      - name: Run unit tests
+        run: npm test
+
+  runtime:
+    name: Runtime acceptance and integration
+    # This suite includes every browser spec and builds the production image.
+    needs: tested
+    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on:
+      - self-hosted
+      - evidence-library-runtime
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: integration
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PLAYWRIGHT_WORKERS: "4"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: ./.github/actions/setup-project
+
+      - name: Restore the Playwright browser cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Chromium and its system packages
+        run: ./node_modules/.bin/playwright install chromium
+
+      - name: Use the persistent Docker builder
+        run: |
+          docker buildx use evidence-library-runtime
+          docker buildx inspect --bootstrap
+
+      - name: Run end-to-end and integration tests
+        env:
+          INTEGRATION_DATABASE_URL: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports['5432'] }}/postgres
+        run: |
+          # The integration tests need only their own database, so they run
+          # beside the acceptance suite instead of holding a second runner.
+          DATABASE_URL_POST="$INTEGRATION_DATABASE_URL" npm run test:integration \
+            > "$RUNNER_TEMP/integration.log" 2>&1 &
+          integration=$!
+          acceptance_status=0
+          npm run test:acceptance || acceptance_status=$?
+          integration_status=0
+          wait "$integration" || integration_status=$?
+          echo "::group::Database and publication integration"
+          cat "$RUNNER_TEMP/integration.log"
+          echo "::endgroup::"
+          if (( acceptance_status != 0 || integration_status != 0 )); then
+            printf '::error::Failed: acceptance=%s integration=%s\n' "$acceptance_status" "$integration_status"
+            exit 1
+          fi
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-acceptance
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   ci:
     name: CI
     runs-on:
@@ -165,19 +222,42 @@ jobs:
     timeout-minutes: 5
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs:
-      - code-quality
-      - integration
+      - tested
       - static-checks
+      - unit-tests
       - runtime
     steps:
       - name: Require every CI lane to pass
         env:
-          CODE_QUALITY: ${{ needs.code-quality.result }}
-          INTEGRATION: ${{ needs.integration.result }}
+          TESTED: ${{ needs.tested.outputs.passed }}
           STATIC_CHECKS: ${{ needs.static-checks.result }}
+          UNIT_TESTS: ${{ needs.unit-tests.result }}
           RUNTIME: ${{ needs.runtime.result }}
         run: |
-          test "$CODE_QUALITY" = success
-          test "$INTEGRATION" = success
+          if [ "$TESTED" = true ]; then
+            echo "A pull request run already passed this tree."
+            exit 0
+          fi
           test "$STATIC_CHECKS" = success
+          test "$UNIT_TESTS" = success
           test "$RUNTIME" = success
+
+      - name: Name the tested tree
+        id: tree
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tree="$(curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" | jq -r .tree.sha)"
+          echo "$tree" > "$RUNNER_TEMP/tested-tree"
+          echo "sha=$tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record the tested tree
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ci-passed-${{ steps.tree.outputs.sha }}
+          path: ${{ runner.temp }}/tested-tree
+          retention-days: 14
