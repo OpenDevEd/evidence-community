@@ -56,6 +56,11 @@ export type SourceAdapterContext = {
 
 export type SourceAdapter = {
 	provider: SyncableSourceProvider;
+	/**
+	 * When set, the regular sweep runs the source only while this says it is
+	 * due. A run someone asks for always goes ahead.
+	 */
+	isDue?: (connection: SourceConnection, now: Date) => boolean;
 	sync: (
 		context: SourceAdapterContext,
 	) => Promise<SourceSyncResult>;

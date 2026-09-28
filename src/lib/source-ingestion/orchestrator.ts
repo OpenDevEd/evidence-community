@@ -67,7 +67,7 @@ export type SourceRunSweepResult =
 	  }
 	| {
 			connectionKey: string;
-			status: "busy";
+			status: "busy" | "not_due";
 	  };
 
 export class SourceConnectionNotFoundError extends Error {
@@ -588,11 +588,9 @@ export async function runActiveSourceConnections(
 	) {
 		throw new Error("concurrency must be an integer between 1 and 32");
 	}
+	const now = options.now?.() ?? new Date();
 	const connections = await options.database
-		.select({
-			key: sourceConnection.key,
-			provider: sourceConnection.provider,
-		})
+		.select()
 		.from(sourceConnection)
 		.where(
 			and(
@@ -613,6 +611,10 @@ export async function runActiveSourceConnections(
 					};
 				}
 				try {
+					const { isDue } = options.registry.get(connection.provider);
+					if (isDue && !isDue(connection, now)) {
+						return { connectionKey: connection.key, status: "not_due" as const };
+					}
 					return await runSourceConnection({
 						...options,
 						sourceConnectionKey: connection.key,

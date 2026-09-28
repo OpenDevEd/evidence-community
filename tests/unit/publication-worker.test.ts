@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import type { publicationSyncRun } from "@/db/schema/publication";
+import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import {
-	nightlyScheduleForDate,
 	runPublicationWorkerCycle,
 } from "@/lib/publication/worker";
 import { publicationWorkerIsReady } from "@/lib/publication/worker-state";
