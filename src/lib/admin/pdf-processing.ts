@@ -81,11 +81,16 @@ async function processInTurn(bytes: Uint8Array): Promise<ProcessedPdf> {
 	let timer: NodeJS.Timeout | undefined;
 	const deadline = new Promise<never>((_, reject) => {
 		timer = setTimeout(() => {
-			// A document that ran out of time may never finish destroying either.
-			loadingTask.destroy().catch(() => undefined);
-			reject(
-				new InvalidPdfError(
-					"This PDF took too long to process. Try exporting it again or choose another file.",
+			// The next document waits for this one to be destroyed, since the
+			// overlap is what hangs pdf.js, but only for so long: a document
+			// that ran out of time may never finish destroying either.
+			const destroyed = loadingTask.destroy().catch(() => undefined);
+			const given = new Promise((resolve) => setTimeout(resolve, PROCESSING_TIMEOUT_MS));
+			void Promise.race([destroyed, given]).then(() =>
+				reject(
+					new InvalidPdfError(
+						"This PDF took too long to process. Try exporting it again or choose another file.",
+					),
 				),
 			);
 		}, PROCESSING_TIMEOUT_MS);

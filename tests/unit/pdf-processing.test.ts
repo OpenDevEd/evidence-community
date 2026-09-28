@@ -26,6 +26,9 @@ it("gives up on a PDF that never finishes and processes the next one", async () 
 
 	// The time limit starts once pdf.js has loaded.
 	await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
+	// A minute to process, then a minute for the stuck document to be destroyed.
+	await vi.advanceTimersByTimeAsync(60_000);
+	await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
 	await vi.advanceTimersByTimeAsync(60_000);
 
 	await rejected;
