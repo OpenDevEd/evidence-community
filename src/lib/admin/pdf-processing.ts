@@ -85,7 +85,7 @@ async function processInTurn(bytes: Uint8Array): Promise<ProcessedPdf> {
 			// overlap is what hangs pdf.js, but only for so long: a document
 			// that ran out of time may never finish destroying either.
 			const destroyed = loadingTask.destroy().catch(() => undefined);
-			const given = new Promise((resolve) => setTimeout(resolve, PROCESSING_TIMEOUT_MS));
+			const given = new Promise((resolve) => setTimeout(resolve, PROCESSING_TIMEOUT_MS).unref());
 			void Promise.race([destroyed, given]).then(() =>
 				reject(
 					new InvalidPdfError(
