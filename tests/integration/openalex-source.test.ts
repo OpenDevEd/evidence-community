@@ -1,5 +1,9 @@
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/source-ingestion/transactional-writer", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/lib/source-ingestion/transactional-writer")>();
+	return { ...actual, writeSourceIngestionBatch: vi.fn(actual.writeSourceIngestionBatch) };
+});
 import { eq, sql } from "drizzle-orm";
 import {
 	itemIdentity,
@@ -22,6 +26,8 @@ import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import type { SourceIngestionBatch, SourceItemUpsert } from "@/lib/source-ingestion/batch-schema";
+import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
@@ -350,5 +356,85 @@ it("publishes a library PDF on an OpenAlex record and keeps both through later s
 		// Zotero records sync their attachments back, so they still take no library files.
 		await db.insert(itemIdentity).values({ key: "ABCD2345", sourceConnectionKey: "zotero-group", sourceRecordKey: "ABCD2345" });
 		await expect(createNativeItemDraft(db, { itemType: "Attachment", parentItem: "ABCD2345", title: "Zotero copy" })).rejects.toBeInstanceOf(ItemParentUnavailableError);
+	});
+}, 120_000);
+
+it("processes up to six PDFs at once and writes a large page in order, in parts under the batch limit", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const [connection] = await db
+			.insert(sourceConnection)
+			.values({
+				key: "oa-pdf",
+				provider: "openalex",
+				scopeKind: "query",
+				config: { ...settings, downloadPdfs: true },
+			})
+			.returning();
+		const ids = Array.from({ length: 50 }, (_, index) => index + 1);
+		const pdfUrl = (id: number) => `https://example.org/W${id}.pdf`;
+		let running = 0;
+		let mostRunning = 0;
+		// Later records finish first, so a result written to the wrong slot shows up.
+		// Near-limit text makes the page too large for one write.
+		const processor = Object.assign(
+			async (record: SourceItemUpsert) => {
+				mostRunning = Math.max(mostRunning, ++running);
+				await new Promise((resolve) =>
+					setTimeout(resolve, 51 - Number(record.sourceRecordKey.slice(1, -4))),
+				);
+				running--;
+				return {
+					...record,
+					file: { ...record.file!, fullText: "x".repeat(1_400_000) },
+					processingIssue: { code: "test_pdf", message: record.file!.url! },
+				};
+			},
+			{ flushCleanup: async () => {} },
+		);
+		const pageSizes: (string | null)[] = [];
+		vi.mocked(writeSourceIngestionBatch).mockClear();
+		await syncOpenAlexSource(
+			{
+				database: db,
+				sourceConnection: connection!,
+				credentialResolver: async () => "test-key",
+				heartbeat: async () => {},
+			},
+			{
+				attachmentProcessor: processor,
+				fetch: async (url) => {
+					pageSizes.push(new URL(String(url)).searchParams.get("per_page"));
+					return Response.json({
+						meta: { count: ids.length, next_cursor: null },
+						results: ids.map((id) => ({
+							...work(id),
+							best_oa_location: { is_oa: true, pdf_url: pdfUrl(id), license: "cc-by" },
+						})),
+					});
+				},
+			},
+		);
+
+		expect(pageSizes).toEqual(["50"]);
+		expect(mostRunning).toBe(6);
+		const pageWrites = vi
+			.mocked(writeSourceIngestionBatch)
+			.mock.calls.map(([, batch]) => batch as SourceIngestionBatch)
+			.filter((batch) => batch.items.length);
+		expect(pageWrites.length).toBeGreaterThan(1);
+		// Earlier parts keep the old cursor, so a failure part-way fetches the page again.
+		expect(pageWrites.map((batch) => (batch.nextCursor as { nextCursor?: unknown }).nextCursor)).toEqual([
+			...pageWrites.slice(1).map(() => undefined),
+			null,
+		]);
+		const pdfs = pageWrites
+			.flatMap((batch) => batch.items)
+			.filter((record): record is SourceItemUpsert => record.operation === "upsert" && Boolean(record.processingIssue));
+		expect(pdfs.map((record) => [record.sourceRecordKey, record.processingIssue?.message])).toEqual(
+			ids.map((id) => [`W${id}:pdf`, pdfUrl(id)]),
+		);
+		expect(
+			await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.code, "test_pdf")),
+		).toHaveLength(ids.length);
 	});
 }, 120_000);
