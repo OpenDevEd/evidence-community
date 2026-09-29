@@ -16,7 +16,6 @@ import { OpenAlexApiError, OpenAlexClient } from "./client";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
 import { OPENALEX_MAX_PAGE_SIZE } from "./schema";
-import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { openAlexConnectionConfigSchema } from "./schema";
 
 const cursorSchema = z
@@ -591,12 +590,12 @@ function pageQueue(limit: number) {
 	};
 }
 
-/** Fetches one slice's pages in order, handing each to the writer. */
-async function fetchSlice(scan: Scan, slice: number, queue: ReturnType<typeof pageQueue>) {
+/** Fetches one slice's pages in order, handing each to the writer, until the scan stops. */
+async function fetchSlice(scan: Scan, slice: number, queue: ReturnType<typeof pageQueue>, stop: { stopped: boolean }) {
 	const { dates, nextCursor } = scan.cursor.slices![slice]!;
 	const query = slicedQuery(scan.config.approvedQuery.query, dates);
 	let cursor = nextCursor;
-	while (cursor) {
+	while (cursor && !stop.stopped) {
 		const page = await scan.client.works(query, cursor, RECORD_PAGE_SIZE);
 		assertAdvancing(page, cursor, scan.context.sourceConnection.key);
 		cursor = page.meta.next_cursor;
@@ -644,15 +643,29 @@ async function scanSlices(scan: Scan) {
 	const queue = pageQueue(QUEUED_PAGES);
 	const total = scan.cursor.slices!.reduce((sum, slice) => sum + slice.count, 0);
 	const open = scan.cursor.slices!.flatMap((slice, index) => (slice.nextCursor ? [index] : []));
-	const fetching = mapWithConcurrency(open, SLICE_CONCURRENCY, (slice) => fetchSlice(scan, slice, queue)).then(
-		() => queue.close(),
-		(error: unknown) => queue.close(error),
-	);
+	// After a failure no fetcher starts another request, but pages already
+	// fetched still reach the writer before the error does.
+	const stop = { stopped: false };
+	let failure: unknown;
+	let next = 0;
+	const fetcher = async () => {
+		while (!stop.stopped && next < open.length) await fetchSlice(scan, open[next++]!, queue, stop);
+	};
+	const fetching = Promise.allSettled(
+		Array.from({ length: Math.min(SLICE_CONCURRENCY, open.length) }, () =>
+			fetcher().catch((error: unknown) => {
+				stop.stopped = true;
+				failure ??= error;
+			}),
+		),
+	).then(() => queue.close(failure));
 	try {
 		for (let page = await queue.take(); page; page = await queue.take()) {
 			await writeSlicePage(scan, page, total);
 		}
 	} finally {
+		// The writer finished or failed: stop the fetchers and wait for every one.
+		stop.stopped = true;
 		queue.close();
 		await fetching;
 	}
