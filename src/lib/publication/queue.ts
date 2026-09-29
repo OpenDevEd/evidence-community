@@ -379,6 +379,8 @@ export async function enqueueItemSearchReprojections(
 					leaseExpiresAt: null,
 					processedAt: null,
 					deadLetteredAt: null,
+					// A re-queue counts from now, so a run's search update does not date from the record's import.
+					createdAt: queuedAt,
 					...(sourceSyncRunId === null ? {} : { sourceSyncRunId }),
 				},
 			});

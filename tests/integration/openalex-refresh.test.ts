@@ -252,7 +252,7 @@ it("resolves a citation when its target later arrives through another OpenAlex q
 	await withIsolatedPublicationDatabase(async (db) => {
 		await addSource(db, "oa-citing", "citing works");
 		await addSource(db, "oa-cited", "cited works");
-		await run(db, "oa-citing", async () => page([work(100, [200]), work(101, [200])]));
+		await run(db, "oa-citing", async () => page([work(100, [200]), work(101, [200]), work(102, [200])]));
 
 		const before = await itemsByRecord(db);
 		const citingKey = before.get("W100")!.key;
@@ -271,6 +271,12 @@ it("resolves a citation when its target later arrives through another OpenAlex q
 		});
 		const events = async (key: string) => db.select().from(outbox).where(eq(outbox.entityKey, key));
 		const eventIdsBefore = (await events(citingKey)).map((event) => event.id);
+		// A search worker is indexing W102 right now.
+		const indexedKey = before.get("W102")!.key;
+		const leaseExpiresAt = new Date(Date.now() + 60_000);
+		await db.update(outbox).set({ leaseOwner: "search-worker", leaseExpiresAt, processedAt: null }).where(eq(outbox.entityKey, indexedKey));
+		const [leasedBefore] = await events(indexedKey);
+		const queuedFrom = new Date();
 
 		await run(db, "oa-cited", async () => page([work(200)]));
 		const after = await itemsByRecord(db);
@@ -279,14 +285,19 @@ it("resolves a citation when its target later arrives through another OpenAlex q
 			cites: [citedKey],
 		});
 		expect(await getPublicItemLinks(db, citedKey)).toMatchObject({
-			citedBy: [citingKey, depositedKey].sort(),
+			citedBy: [citingKey, depositedKey, before.get("W102")!.key].sort(),
 		});
 		// The citing record is unchanged, so it keeps its revision. Its search
 		// event is queued again with a new id, which changes its public version.
 		expect(after.get("W100")!.revision).toBe(before.get("W100")!.revision);
 		const eventsAfter = await events(citingKey);
 		expect(eventsAfter).toHaveLength(eventIdsBefore.length);
-		expect(eventsAfter.some((event) => !eventIdsBefore.includes(event.id) && event.processedAt === null)).toBe(true);
+		const requeued = eventsAfter.find((event) => !eventIdsBefore.includes(event.id));
+		expect(requeued).toMatchObject({ processedAt: null });
+		expect(requeued!.createdAt.getTime()).toBeGreaterThanOrEqual(queuedFrom.getTime());
+		// The worker's row is left alone, and the record takes a new revision so a fresh event follows it.
+		expect((await events(indexedKey)).find((event) => event.id === leasedBefore!.id)).toMatchObject({ leaseOwner: "search-worker" });
+		expect(after.get("W102")!.revision).toBe(before.get("W102")!.revision + 1);
 		// A record with a publication target still takes a new revision, so its deposit is updated.
 		expect(after.get("W101")!.revision).toBe(before.get("W101")!.revision + 1);
 	});
