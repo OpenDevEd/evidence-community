@@ -7,6 +7,7 @@ import type { SourceAdapterContext, SourceConnection } from "../adapter";
 import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import { SourceCredentialNotFoundError } from "../credentials";
 import {
+	MAX_INSTITUTION_FACTS,
 	MAX_SOURCE_BATCH_BYTES,
 	type JsonValue,
 	type SourceItemUpsert,
@@ -16,6 +17,7 @@ import { OpenAlexApiError, OpenAlexClient } from "./client";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
 import { OPENALEX_MAX_PAGE_SIZE } from "./schema";
+import { chunkValues } from "@/lib/chunk-values";
 import { openAlexConnectionConfigSchema } from "./schema";
 
 const cursorSchema = z
@@ -41,6 +43,7 @@ const cursorSchema = z
 			.nullable()
 			.default(null),
 		// A full scan of a large query reads date slices at once, each with its own cursor.
+		// Only a sliced scan saves the key, so other cursors stay readable by older releases.
 		slices: z
 			.array(
 				z.object({
@@ -50,8 +53,7 @@ const cursorSchema = z
 					count: z.number().int().nonnegative(),
 				}),
 			)
-			.nullable()
-			.default(null),
+			.optional(),
 	})
 	.strict();
 
@@ -176,7 +178,6 @@ function startCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cu
 		incrementalAvailable: null,
 		stage: "records",
 		pdfs: null,
-		slices: null,
 	};
 	const updatedSince = fullOnly ? null : incrementalSince(saved, queryVersion);
 	return updatedSince
@@ -322,12 +323,15 @@ async function writePage(
 	stage: Cursor["stage"],
 ) {
 	const chunks = writeChunks(page.items);
-	for (const [index, items] of chunks.entries()) {
+	// A page of works with many affiliations can carry more facts than one write takes.
+	const facts = chunkValues(page.institutionCountries, MAX_INSTITUTION_FACTS);
+	const writes = Math.max(chunks.length, facts.length);
+	for (let index = 0; index < writes; index++) {
 		await writeBatch(
 			context,
 			expectedCursor,
-			index === chunks.length - 1 ? nextCursor : expectedCursor,
-			{ items, institutionCountries: index ? [] : page.institutionCountries },
+			index === writes - 1 ? nextCursor : expectedCursor,
+			{ items: chunks[index] ?? [], institutionCountries: facts[index] ?? [] },
 			stage,
 		);
 	}
@@ -715,11 +719,11 @@ async function startPdfStage(scan: Scan) {
 		scan.cursor.mode === "full"
 			? await countPdfLinks(scan.context.database, scan.context.sourceConnection.key)
 			: null;
+	const { slices: _finished, ...records } = scan.cursor;
 	scan.cursor = {
-		...scan.cursor,
+		...records,
 		stage: "pdfs",
 		nextCursor: "*",
-		slices: null,
 		pdfs: { done: 0, missed: 0, total },
 	};
 	await writeBatch(scan.context, scan.expectedCursor, scan.cursor, { items: [] }, "pdfs");

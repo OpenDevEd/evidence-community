@@ -711,3 +711,30 @@ it("fetches a large full scan as date slices, importing each work once and resum
 		expect((await records()).sort()).toEqual(expected);
 	});
 }, 120_000);
+
+it("writes a page whose works carry more institution facts than one batch takes", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-affiliations", provider: "openalex", scopeKind: "query", config: settings });
+		// 200 works with 102 distinct institutions each: 20,400 facts on one page.
+		const affiliated = (id: number) => ({
+			...work(id),
+			authorships: Array.from({ length: 3 }, (_, author) => ({
+				raw_author_name: `Author ${author}`,
+				institutions: Array.from({ length: 34 }, (_, index) => ({
+					id: `https://openalex.org/I${id}${author}${index}`,
+					display_name: `Institute ${id}-${author}-${index}`,
+					country_code: "KE",
+				})),
+			})),
+		});
+		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-affiliations"));
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+			{ fetch: async () => Response.json({ meta: { count: 200, next_cursor: null }, results: Array.from({ length: 200 }, (_, index) => affiliated(index + 1)) }) },
+		);
+		expect(await db.select({ key: item.key }).from(item).where(sql`${item.sourceRecordKey} like 'W%'`)).toHaveLength(200);
+		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-affiliations"));
+		// A scan that was not sliced saves no slice key, so an older release can still read its cursor.
+		expect(saved!.syncCursor).not.toHaveProperty("slices");
+	});
+}, 120_000);
