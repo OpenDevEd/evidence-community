@@ -62,3 +62,13 @@ it("keeps at most fifty keys, dropping the oldest", async () => {
 	expect(await staleWhileRevalidate("revision:50", 60_000, compute)).toBe(50);
 	expect(compute).toHaveBeenCalledTimes(1);
 });
+
+it("hands a refresh the last value, so one that only partly worked can keep it", async () => {
+	vi.useFakeTimers({ toFake: ["Date"] });
+	const compute = vi.fn(async (previous: string | undefined) => (previous ? `${previous}+` : "first"));
+	expect(await staleWhileRevalidate("partial", 60_000, compute)).toBe("first");
+	vi.setSystemTime(Date.now() + 61_000);
+	await staleWhileRevalidate("partial", 60_000, compute);
+	await vi.waitFor(async () => expect(await staleWhileRevalidate("partial", 60_000, compute)).toBe("first+"));
+	expect(compute).toHaveBeenLastCalledWith("first");
+});
