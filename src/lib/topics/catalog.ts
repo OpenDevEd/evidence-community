@@ -70,6 +70,19 @@ export async function readTopicTree(ids: readonly string[], context: TopicCatalo
   return {publicBaseUrl: (await readCatalogMeta(context)).publicBaseUrl, nodes: nodes.map(({id, name, parent}) => ({id, name, parent}))};
 }
 
+/** The same, from stored rows of any age, so a page never waits on OpenScholar; undefined when any is not stored. */
+export async function readStoredTopicTree(ids: readonly string[], context: TopicCatalogContext): Promise<TopicTree | undefined> {
+  const unique = [...new Set(ids)];
+  const [rows, [meta]] = await Promise.all([
+    context.database.select().from(topicCatalogCache).where(and(eq(topicCatalogCache.kind, "node"), inArray(topicCatalogCache.id, unique))),
+    context.database.select().from(topicCatalogCache).where(eq(topicCatalogCache.id, CATALOG_META_ID)).limit(1),
+  ]);
+  if (rows.length < unique.length || !meta) return undefined;
+  const byId = new Map(rows.map(row => [row.id, topicNodeSchema.parse(row.payload)]));
+  return {publicBaseUrl: catalogMetaSchema.parse(meta.payload).publicBaseUrl,
+    nodes: unique.map(id => byId.get(id)!).map(({id, name, parent}) => ({id, name, parent}))};
+}
+
 type CachedTopic = typeof topicCatalogCache.$inferSelect;
 
 function cachedNode(row: CachedTopic | undefined, maxAgeMs: number) {
@@ -108,8 +121,11 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
     if (node) result.set(id, node);
     return !node;
   });
-  await Promise.all(Array.from({length: Math.ceil(missing.length / 100)}, (_, index) =>
-    resolveTopicBatch(missing.slice(index * 100, index * 100 + 100), byId, result, context, options)));
+  // A few batches at a time: a cold library tree has dozens, and OpenScholar and the pool must not get them all at once.
+  const batches = Array.from({length: Math.ceil(missing.length / 100)}, (_, index) => missing.slice(index * 100, index * 100 + 100));
+  for (let start = 0; start < batches.length; start += 4) {
+    await Promise.all(batches.slice(start, start + 4).map(batch => resolveTopicBatch(batch, byId, result, context, options)));
+  }
   return unique.flatMap(id => result.has(id) ? [result.get(id)!] : []);
 }
 

@@ -130,6 +130,7 @@ function TopicChips({
 	onChange: (topics: string[]) => void;
 	selected: string[];
 }) {
+	const t = useTranslations("ui");
 	const tree = useTopicTree({ seeded: true }).data?.nodes;
 	// A topic no public item carries, from a saved link say, is looked up by ID.
 	const unknown = tree
@@ -148,7 +149,7 @@ function TopicChips({
 	const byId = new Map(nodes.map((node) => [node.id, node]));
 	const frontier = [
 		...selectionFrontier(selected, nodes),
-		// An ID the catalog doesn't know still gets a chip, so it can be removed.
+		// A topic the catalog doesn't know still gets a chip, so it can be removed.
 		...selected.filter((id) => !byId.has(id)),
 	];
 
@@ -164,7 +165,7 @@ function TopicChips({
 			>
 				<Chip
 					group="Topic"
-					title={node?.name ?? id}
+					title={node?.name ?? t("unknownTopic")}
 					callback={() =>
 						onChange(
 							node

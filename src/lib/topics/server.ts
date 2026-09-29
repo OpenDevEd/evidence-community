@@ -3,7 +3,7 @@ import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getDatabaseForConfig } from "@/db";
-import { readTopicTree, resolveTopicAncestry } from "./catalog";
+import { readStoredTopicTree, readTopicTree, resolveTopicAncestry } from "./catalog";
 import type { TopicTree } from "./contract";
 
 async function topicContext() {
@@ -11,7 +11,7 @@ async function topicContext() {
 	return config.topics.enabled ? { database: await getDatabaseForConfig(config), config } : null;
 }
 
-/** A record with its topic names, so its page draws the topics row once, complete. */
+/** A record with its stored topic names, so its page draws the topics row once, complete, without waiting on OpenScholar. */
 export async function withTopicNames<T extends { item?: { key?: string; topics?: string[] } | null } | null>(
 	data: T,
 ): Promise<T | (T & { topics: TopicTree })> {
@@ -19,7 +19,9 @@ export async function withTopicNames<T extends { item?: { key?: string; topics?:
 	const context = ids?.length ? await topicContext() : null;
 	if (!data || !ids?.length || !context) return data;
 	try {
-		return { ...data, topics: await readTopicTree(ids, context) };
+		const topics = await readStoredTopicTree(ids, context);
+		// Names not stored yet are left to the row, which reads the library's topic tree.
+		return topics ? { ...data, topics } : data;
 	} catch (error) {
 		// The row then asks for the names itself and offers a retry if that fails too.
 		console.error("Item topic names could not be read", { key: data.item?.key, error });
