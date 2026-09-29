@@ -13,7 +13,7 @@ import Link from "next/link";
 import Resource from "../items/Resource";
 import React from "react";
 import { Card } from "@/components/nextui/Card";
-import { parsePageCitation } from "@/lib/ai/citations";
+import { parsePageCitations } from "@/lib/ai/citations";
 import {
 	PageCitation,
 	PublicationLink,
@@ -196,11 +196,11 @@ function PageCitationSpan({
 	children: ReactNode;
 	pdfSources: Record<string, string>;
 }) {
-	const { page, href } = parsePageCitation(
-		String(children ?? ""),
-		pdfSources,
+	return parsePageCitations(String(children ?? ""), pdfSources).map(
+		({ page, href }, index) => (
+			<PageCitation key={index} href={href} page={page} />
+		),
 	);
-	return <PageCitation href={href} page={page} />;
 }
 
 function SectionHighlight({ children }: { children: ReactNode }) {

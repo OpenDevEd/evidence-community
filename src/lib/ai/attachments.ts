@@ -275,7 +275,7 @@ async function loadPublications(
 
 function citationInstruction(itemKey: string, file: LoadedPdf) {
 	const citationTarget = buildPdfDownloadPath(itemKey, file.attachmentKey);
-	return `The attached file ${JSON.stringify(file.filename)} has citation target ${citationTarget}. Every claim supported by this PDF must use [PAGE ${citationTarget} — PAGE_NUMBER PAGE/] immediately after the supported text, where PAGE_NUMBER is the page's physical position in this file (first page of the file = 1, counting covers and front matter), not any page number printed on the page. This one citation displays both the publication source and exact page.`;
+	return `The attached file ${JSON.stringify(file.filename)} has citation target ${citationTarget}. Every claim supported by this PDF must use [PAGE ${citationTarget} — PAGE_NUMBER PAGE/] immediately after the supported text, where PAGE_NUMBER is one page's physical position in this file (first page of the file = 1, counting covers and front matter), not any page number printed on the page. Always use this exact target, never the filename. For several pages, write one complete token per page. This one citation displays both the publication source and exact page.`;
 }
 
 function publicationDataText(publication: LoadedPublication) {

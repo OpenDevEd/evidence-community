@@ -1,7 +1,7 @@
 "use client";
 
 import { BiBookOpen } from "react-icons/bi";
-import { LuDownload, LuExternalLink } from "react-icons/lu";
+import { LuExternalLink } from "react-icons/lu";
 import { CoverImage } from "@/components/features/items/CoverImage";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
@@ -31,7 +31,6 @@ import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
-import { downloadFile } from "@/lib/download";
 import { fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
 
@@ -269,11 +268,7 @@ function PdfPreview({
 						<CitationCopyLink href={openHref} />
 					</div>
 
-					<PdfActions
-						openHref={openHref}
-						downloadUrl={attachment?.url}
-						filename={attachmentName}
-					/>
+					<PdfOpenLink href={openHref} />
 				</div>
 			</div>
 
@@ -288,21 +283,13 @@ function PdfPreview({
 	);
 }
 
-function PdfActions({
-	openHref,
-	downloadUrl,
-	filename,
-}: {
-	openHref: string;
-	downloadUrl?: string | null;
-	filename: string;
-}) {
+function PdfOpenLink({ href }: { href: string }) {
 	const t = useTranslations("ui");
 
 	return (
-		<div className="mt-auto flex gap-2 pt-2">
+		<div className="mt-auto flex pt-2">
 			<a
-				href={openHref}
+				href={href}
 				target="_blank"
 				rel="noopener noreferrer"
 				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-black/[0.055] px-2 text-xs font-semibold text-black/65 no-underline transition-colors hover:bg-accent/[0.12] hover:text-accent dark:bg-white/[0.08] dark:text-white/70 dark:hover:bg-accent/[0.15] dark:hover:text-accent"
@@ -310,18 +297,6 @@ function PdfActions({
 				<LuExternalLink className="size-3.5" aria-hidden="true" />
 				{t("openDocument")}
 			</a>
-			<button
-				type="button"
-				disabled={!downloadUrl}
-				onClick={() => {
-					if (!downloadUrl) return;
-					downloadFile(downloadUrl, filename).catch(console.error);
-				}}
-				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-xs font-semibold text-white transition-colors hover:bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
-			>
-				<LuDownload className="size-3.5" aria-hidden="true" />
-				{t("download")}
-			</button>
 		</div>
 	);
 }

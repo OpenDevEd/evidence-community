@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	buildPdfDownloadPath,
-	parsePageCitation,
+	parsePageCitations,
 	pdfFilename,
 	bucketPdfCitationSources,
 	publicationPdfCitationSources,
@@ -123,11 +123,35 @@ describe("what the assistant is told about citing evidence", () => {
 describe("turning a page citation into a link", () => {
 	it("opens the cited PDF at the cited page", () => {
 		expect(
-			parsePageCitation("/lib/ABCD1234/download/PDF0001 — 12"),
-		).toEqual({
-			page: "12",
-			href: "/lib/ABCD1234/download/PDF0001#page=12",
-		});
+			parsePageCitations("/lib/ABCD1234/download/PDF0001 — 12"),
+		).toEqual([
+			{ page: "12", href: "/lib/ABCD1234/download/PDF0001#page=12" },
+		]);
+	});
+
+	// Shapes a model wrote when it packed several pages into one token.
+	it("gives every page a model packed into one token its own link", () => {
+		const file = "/lib/ABCD1234/download/PDF0001";
+		const pages = (value: string) =>
+			parsePageCitations(value).map(({ page, href }) => [page, href]);
+
+		expect(pages(`${file} — 7 PAGE/, PAGE ${file} — 8`)).toEqual([
+			["7", `${file}#page=7`],
+			["8", `${file}#page=8`],
+		]);
+		expect(pages(`${file} — 10 PAGE/, 11 PAGE/, 12`)).toEqual([
+			["10", `${file}#page=10`],
+			["11", `${file}#page=11`],
+			["12", `${file}#page=12`],
+		]);
+		expect(pages(`${file} — 3, 4`)).toEqual([
+			["3", `${file}#page=3`],
+			["4", `${file}#page=4`],
+		]);
+		// A record key may itself end in PAGE.
+		expect(pages("/lib/ABCDPAGE/download/PDF00001 — 12")).toEqual([
+			["12", "/lib/ABCDPAGE/download/PDF00001#page=12"],
+		]);
 	});
 
 	it("resolves a filename the model used instead of a path", () => {
@@ -144,7 +168,7 @@ describe("turning a page citation into a link", () => {
 			"Teacher training.pdf": "/lib/ABCD1234/download/PDF0001",
 		});
 		expect(
-			parsePageCitation("Teacher training.pdf — 4", sources).href,
+			parsePageCitations("Teacher training.pdf — 4", sources)[0].href,
 		).toBe("/lib/ABCD1234/download/PDF0001#page=4");
 	});
 
@@ -179,10 +203,10 @@ describe("turning a page citation into a link", () => {
 
 	it("drops a link the model invented", () => {
 		expect(
-			parsePageCitation("https://example.org/evil.pdf — 3").href,
+			parsePageCitations("https://example.org/evil.pdf — 3")[0].href,
 		).toBeUndefined();
 		expect(
-			parsePageCitation("/lib/ABCD1234/download/../../secret — 3").href,
+			parsePageCitations("/lib/ABCD1234/download/../../secret — 3")[0].href,
 		).toBeUndefined();
 	});
 
