@@ -23,7 +23,7 @@ import {
 	getOpenAlexTopicStats,
 	getCitationsByYear,
 } from "./index";
-import { withMeilisearchCache } from "@/lib/cache-utils";
+import { peekMeilisearchCache, withMeilisearchCache } from "@/lib/cache-utils";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import { resolveCitationMeasure } from "./citation-measure";
@@ -34,9 +34,33 @@ import type { ShownCollections } from "./topic-stats";
 /** Part of the cache key: raise it when the statistics change what they count, so a deployment never serves figures cached by the code before it. */
 const STATISTICS_VERSION = 6;
 
+/**
+ * Runs the statistics queries one at a time. The web process has three database connections; a large library's
+ * queries take seconds each, and run together they held every connection until page requests timed out waiting.
+ */
+async function inTurn<const T extends readonly (() => Promise<unknown>)[]>(
+	tasks: T,
+): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
+	const results: unknown[] = [];
+	for (const task of tasks) results.push(await task());
+	return results as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
+}
+
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
 ): Promise<ComprehensiveStats> {
+	const { config, key, compute, citationMeasure } = await statisticsRequest(requestedCitationMeasure);
+	return { ...(await withMeilisearchCache(config, key, compute)), citationMeasure };
+}
+
+/** The cached statistics, or null while they are counted in the background: for a page that shows without them. */
+export async function peekComprehensiveStats(): Promise<ComprehensiveStats | null> {
+	const { config, key, compute, citationMeasure } = await statisticsRequest();
+	const stats = await peekMeilisearchCache(config, key, compute);
+	return stats && { ...stats, citationMeasure };
+}
+
+async function statisticsRequest(requestedCitationMeasure?: string) {
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
 	// Statistics count what a reader could find in the library, nothing hidden from it.
@@ -52,10 +76,11 @@ export async function getComprehensiveStats(
 		.update(JSON.stringify([...shown]))
 		.digest("hex")
 		.slice(0, 16);
-	const stats = await withMeilisearchCache(
+	return {
 		config,
-		`${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${collectionsFingerprint}-${measure.key}`,
-		async () => {
+		key: `${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${collectionsFingerprint}-${measure.key}`,
+		citationMeasure: { selectedKey: measure.key, options },
+		compute: async () => {
 			const totalItems = await getTotalItems(db, hidden);
 
 			const [
@@ -78,27 +103,27 @@ export async function getComprehensiveStats(
 				collectionsByYear,
 				openAlexTopicData,
 				citationsByYear,
-			] = await Promise.all([
-				getInstitutionStats(db, measure, hidden),
-				getInstitutionStatsByYear(db, measure, hidden),
-				getAvailableYears(db, hidden),
-				getItemTypeStats(db, totalItems, hidden),
-				getYearDistribution(db, hidden),
-				getCitationStats(db, measure, hidden),
-				getCreatorStats(db, hidden),
-				getFieldCompleteness(db, totalItems, hidden),
-				getAttachmentStats(db, totalItems, hidden),
-				getPublishersAndJournals(db, hidden),
-				getRecentActivity(db, hidden),
-				getAuthorCountries(db, measure, hidden),
-				getAuthorProductivityStats(db, hidden),
-				getAuthorCollaborationStats(db, hidden),
-				getDetailedAuthorStats(db, measure, hidden),
-				getTopicStats(db, measure, shown, hidden),
-				getTopicStatsByYear(db, measure, shown, hidden),
-				getOpenAlexTopicStats(db, config, measure, hidden),
-				getCitationsByYear(db, measure, hidden),
-			]);
+			] = await inTurn([
+				() => getInstitutionStats(db, measure, hidden),
+				() => getInstitutionStatsByYear(db, measure, hidden),
+				() => getAvailableYears(db, hidden),
+				() => getItemTypeStats(db, totalItems, hidden),
+				() => getYearDistribution(db, hidden),
+				() => getCitationStats(db, measure, hidden),
+				() => getCreatorStats(db, hidden),
+				() => getFieldCompleteness(db, totalItems, hidden),
+				() => getAttachmentStats(db, totalItems, hidden),
+				() => getPublishersAndJournals(db, hidden),
+				() => getRecentActivity(db, hidden),
+				() => getAuthorCountries(db, measure, hidden),
+				() => getAuthorProductivityStats(db, hidden),
+				() => getAuthorCollaborationStats(db, hidden),
+				() => getDetailedAuthorStats(db, measure, hidden),
+				() => getTopicStats(db, measure, shown, hidden),
+				() => getTopicStatsByYear(db, measure, shown, hidden),
+				() => getOpenAlexTopicStats(db, config, measure, hidden),
+				() => getCitationsByYear(db, measure, hidden),
+			] as const);
 
 			const collaborationStats = await getCollaborationStats(
 				db,
@@ -136,10 +161,6 @@ export async function getComprehensiveStats(
 				citationsByYear,
 			};
 		},
-	);
-	return {
-		...stats,
-		citationMeasure: { selectedKey: measure.key, options },
 	};
 }
 

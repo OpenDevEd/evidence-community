@@ -8,8 +8,8 @@ import { getCachedCollections } from "@/app/api/cache";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryHomeConfig, LibraryServerConfig } from "@/config/library-config/schema";
-import { cacheLife } from "next/cache";
-import { getComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
+import { peekMeilisearchCache } from "@/lib/cache-utils";
+import { peekComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
 import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
 import { getDatabaseForConfig, type Database } from "@/db";
@@ -21,7 +21,7 @@ import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-
 import { normalizeDoi } from "@/lib/doi";
 import { listReviewedPublications } from "@/lib/admin/reviewed-publication-catalog";
 
-type Stats = Awaited<ReturnType<typeof getComprehensiveStats>>;
+type Stats = NonNullable<Awaited<ReturnType<typeof peekComprehensiveStats>>>;
 
 /** A part of the page that failed shows empty rather than breaking the page, and the failure is logged. */
 function fallback<T>(part: string, value: T) {
@@ -65,7 +65,7 @@ function topicsAndPlaces(stats: Stats | null, facets: Awaited<ReturnType<typeof 
 /** Only what the Ask box's example questions are made from, for OpenScholar's Home card. */
 export async function loadQuestionFacts() {
 	const [stats, facets, collections] = await Promise.all([
-		getComprehensiveStats().catch(fallback("statistics", null)),
+		peekComprehensiveStats().catch(fallback("statistics", null)),
 		getPublicFacets({}).catch(fallback("facets", null)),
 		getCachedCollections().catch(fallback("collections", [])),
 	]);
@@ -116,7 +116,7 @@ function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries"
 
 export async function loadHomeData(now: Date, locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
 	const [stats, withPdf, facets, collections, cited, digests, journey] = await Promise.all([
-		getComprehensiveStats().catch(fallback("statistics", null)),
+		peekComprehensiveStats().catch(fallback("statistics", null)),
 		// The shelf shows first pages, so it lists the newest records with a PDF: the "full text only" scope.
 		getPublicItems({ sort: "desc", scope: "documents" }).catch(fallback("newest publications", null)),
 		getPublicFacets({}).catch(fallback("facets", null)),
@@ -212,21 +212,20 @@ async function coversOf(keys: string[]): Promise<Record<string, string>> {
 	return Object.fromEntries(rows.flatMap((row) => (row.parent && row.cover ? [[row.parent, row.cover]] : [])));
 }
 
+/**
+ * The query weighs every citation in the library, far the slowest part of the page: seconds on a large library.
+ * Its answer is kept per configuration revision beside the statistics, and counted in the background, so the page
+ * shows without it rather than wait.
+ */
 async function mostCited() {
 	const config = await getLibraryConfig();
-	return mostCitedFor(config.revision, config);
-}
-
-/**
- * The query weighs every citation in the library, far the slowest part of the page, so its answer is kept per
- * configuration revision and refreshed in the background every ten minutes.
- */
-async function mostCitedFor(_revision: string, config: LibraryServerConfig) {
-	"use cache";
-	cacheLife({ revalidate: 600 });
 	const db = await getDatabaseForConfig(config);
 	const { measure } = await resolveCitationMeasure(db, undefined);
-	return getMostCitedItems(db, measure, 3, config.content.tags.hidden);
+	return (
+		(await peekMeilisearchCache(config, `${config.revision}-most-cited-v1-${measure.key}`, () =>
+			getMostCitedItems(db, measure, 3, config.content.tags.hidden),
+		)) ?? []
+	);
 }
 
 async function latestDigests(locale: string): Promise<HomeData["digests"]> {
