@@ -71,26 +71,31 @@ type ProcessorOptions = {
 type PdfPhase = "download" | "read" | "upload";
 type RunOptions = ProcessorOptions & { timings: ReturnType<typeof phaseTimings> };
 
-/** Time spent in each step of publishing PDFs, taken and reset by the import's page log. */
+/**
+ * Time spent in each step of publishing PDFs, per source, taken and reset by
+ * that source's page log. One processor serves every source a runtime syncs.
+ */
 function phaseTimings() {
 	const empty = () => ({ count: 0, seconds: 0, slowestSeconds: 0 });
-	let phases: Record<PdfPhase, ReturnType<typeof empty>> = { download: empty(), read: empty(), upload: empty() };
+	const fresh = () => ({ download: empty(), read: empty(), upload: empty() });
+	const bySource = new Map<string, Record<PdfPhase, ReturnType<typeof empty>>>();
 	return {
-		async time<T>(phase: PdfPhase, step: () => Promise<T>) {
+		async time<T>(sourceConnectionKey: string, phase: PdfPhase, step: () => Promise<T>) {
 			const started = performance.now();
 			try {
 				return await step();
 			} finally {
 				const seconds = (performance.now() - started) / 1000;
-				const entry = phases[phase];
+				if (!bySource.has(sourceConnectionKey)) bySource.set(sourceConnectionKey, fresh());
+				const entry = bySource.get(sourceConnectionKey)![phase];
 				entry.count++;
 				entry.seconds += seconds;
 				entry.slowestSeconds = Math.max(entry.slowestSeconds, seconds);
 			}
 		},
-		take() {
-			const taken = phases;
-			phases = { download: empty(), read: empty(), upload: empty() };
+		take(sourceConnectionKey: string) {
+			const taken = bySource.get(sourceConnectionKey) ?? fresh();
+			bySource.delete(sourceConnectionKey);
 			return taken;
 		},
 	};
@@ -191,7 +196,7 @@ async function publishNewPdf(
 	attempt: Attempt,
 ) {
 	attempt.issueCode = "openalex_pdf_invalid";
-	const processed = await options.timings.time("read", () => processPdfInWorkers(bytes));
+	const processed = await options.timings.time(sourceConnectionKey, "read", () => processPdfInWorkers(bytes));
 	// Never upload over a path queued for deletion by another import.
 	const prefix = `sources/openalex/${sourceConnectionKey}/${record.sourceRecordKey}/${sha256}/${randomUUID()}/`;
 	const paths = {
@@ -218,7 +223,7 @@ async function publishNewPdf(
 			staged: true,
 		},
 	});
-	await options.timings.time("upload", () => uploadSourcePublication({
+	await options.timings.time(sourceConnectionKey, "upload", () => uploadSourcePublication({
 		database: options.database,
 		storage: options.storage,
 		sourceConnectionKey,
@@ -295,7 +300,7 @@ async function publishPdf(
 		return withPublishedFile(record, reusable);
 	}
 	attempt.issueCode = "openalex_pdf_download_failed";
-	const bytes = await options.timings.time("download", () => downloadPdf(new URL(record.file.url!), options.maxPdfBytes));
+	const bytes = await options.timings.time(sourceConnectionKey, "download", () => downloadPdf(new URL(record.file.url!), options.maxPdfBytes));
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
 	if (reusable?.managedPublication?.sha256 === sha256)
 		return withPublishedFile(record, reusable);
@@ -382,7 +387,7 @@ export function createOpenAlexAttachmentProcessor(processorOptions: ProcessorOpt
 		);
 	};
 	/** What each publishing step took since the last call, for the PDF stage's log. */
-	processor.takeTimings = () => options.timings.take();
+	processor.takeTimings = (sourceConnectionKey: string) => options.timings.take(sourceConnectionKey);
 	processor.flushCleanup = (sourceConnectionKey: string) =>
 		flushSourceFileCleanup(
 			options.database,

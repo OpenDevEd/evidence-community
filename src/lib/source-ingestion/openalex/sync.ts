@@ -65,7 +65,7 @@ export type OpenAlexSourceOptions = {
 		reuse: RecordProcessor;
 		flushCleanup: (sourceConnectionKey: string) => Promise<void>;
 		/** Time spent per publishing step since the last call, for the page log. */
-		takeTimings?: () => unknown;
+		takeTimings?: (sourceConnectionKey: string) => unknown;
 	};
 };
 
@@ -382,7 +382,7 @@ function logPdfPage(
 		seconds: (performance.now() - page.startedAt) / 1000,
 		writeSeconds: page.writeSeconds,
 		// Pages overlap, so this covers the PDFs finished since the previous page's log.
-		steps: scan.options.attachmentProcessor?.takeTimings?.(),
+		steps: scan.options.attachmentProcessor?.takeTimings?.(scan.context.sourceConnection.key),
 	});
 }
 
@@ -636,6 +636,8 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
  * still written in order.
  */
 async function scanPdfPages(scan: Scan) {
+	// Times left from a run that stopped part-way are not this run's.
+	scan.options.attachmentProcessor?.takeTimings?.(scan.context.sourceConnection.key);
 	const pipeline: PdfPipeline = {
 		scan,
 		lane: downloadLanes(PDF_CONCURRENCY, PDF_PER_HOST),
