@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
-import { DrizzleQueryError } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
+import { databaseErrorCode, isTransientConflict } from "@/db/transient-conflict";
 
 import {
 	ItemDraftConflictError,
@@ -353,10 +354,8 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		);
 		return { ...details, status: 400 };
 	}
-	const databaseError = (
-		error instanceof DrizzleQueryError ? error.cause : error
-	) as { code?: string } | undefined;
-	if (databaseError?.code === "40P01" || databaseError?.code === "40001") {
+	const databaseCode = databaseErrorCode(error);
+	if (isTransientConflict(error)) {
 		return {
 			code: "conflict",
 			message:
@@ -364,7 +363,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
-	if (databaseError?.code === "23503" || databaseError?.code === "23514") {
+	if (databaseCode === "23503" || databaseCode === "23514") {
 		return {
 			code: "invalid_reference",
 			message:
@@ -372,7 +371,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 400,
 		};
 	}
-	if (databaseError?.code === "23505") {
+	if (databaseCode === "23505") {
 		return {
 			code: "already_exists",
 			message: "This record already exists.",

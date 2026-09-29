@@ -68,6 +68,7 @@ import {
 	sourceIngestionBatchSchema,
 } from "./batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
+import { retryTransientConflicts } from "@/db/transient-conflict";
 import { replaceZoteroCitationLinks } from "./zotero/citations";
 import {
 	canonicalSourceJson,
@@ -990,7 +991,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		]),
 	);
 
-	return db.transaction(async (transaction) => {
+	// A page shares search events with the search worker and other pages, so
+	// PostgreSQL may roll it back to break a deadlock. The page runs again
+	// from the start: everything it changes lives inside the transaction.
+	return retryTransientConflicts(() => db.transaction(async (transaction) => {
 		const [providerRow] = await transaction.select({ provider: sourceConnection.provider }).from(sourceConnection).where(eq(sourceConnection.key, batch.sourceConnectionKey));
 		if (isOpenAlexWorkProvider(providerRow?.provider)) {
 			// ponytail: serialize OpenAlex work pages per library; use work-level locks if parallel import throughput becomes necessary.
@@ -2752,5 +2756,5 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				unresolvedRelations,
 			},
 		};
-	});
+	}));
 }
