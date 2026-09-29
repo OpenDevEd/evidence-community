@@ -16,7 +16,9 @@ parentPort?.on("message", (/** @type {{ id: number; bytes: Uint8Array }} */ { id
 				id,
 				error: {
 					invalid: error instanceof Error && error.name === INVALID_PDF_CONTENT,
+					name: error instanceof Error ? error.name : "Error",
 					message: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
 				},
 			});
 		}

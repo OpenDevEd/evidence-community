@@ -10,7 +10,7 @@ import { assertPdfHeader, InvalidPdfError, pdfReadError, type ProcessedPdf } fro
 const MAX_WORKERS = 4;
 const PROCESSING_TIMEOUT_MS = 60_000;
 
-type Reply = { result?: ProcessedPdf; error?: { invalid: boolean; message: string } };
+type Reply = { result?: ProcessedPdf; error?: { invalid: boolean; name: string; message: string; stack?: string } };
 type Job = { bytes: Uint8Array; resolve: (result: ProcessedPdf) => void; reject: (error: Error) => void };
 type Slot = { worker: Worker; job: Job | null; timer?: NodeJS.Timeout };
 
@@ -26,13 +26,20 @@ function startSlot(): Slot {
 	slot.worker.on("message", ({ result, error }: Reply) => {
 		const job = detach(slot);
 		if (result) job?.resolve(result);
-		else job?.reject(pdfReadError({ name: error?.invalid ? "InvalidPdfContent" : "Error", message: error?.message ?? "" }));
+		else job?.reject(workerError(error));
 		drain();
 	});
 	slot.worker.on("error", (error) => retire(slot, error));
 	slot.worker.on("exit", () => retire(slot, new Error("PDF worker exited")));
 	slots.push(slot);
 	return slot;
+}
+
+/** A worker's failure as the caller sees it; one that is not about the PDF's content is logged, as in this thread. */
+function workerError(error: Reply["error"]) {
+	const cause = Object.assign(new Error(error?.message ?? "PDF worker failed"), { name: error?.name ?? "Error", stack: error?.stack });
+	if (!error?.invalid) console.error("PDF processing failed", cause);
+	return pdfReadError({ name: error?.invalid ? "InvalidPdfContent" : "Error", message: cause.message }, cause);
 }
 
 function detach(slot: Slot) {
