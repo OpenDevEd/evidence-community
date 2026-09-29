@@ -4,6 +4,8 @@ vi.mock("@/lib/source-ingestion/transactional-writer", async (importOriginal) =>
 	const actual = await importOriginal<typeof import("@/lib/source-ingestion/transactional-writer")>();
 	return { ...actual, writeSourceIngestionBatch: vi.fn(actual.writeSourceIngestionBatch) };
 });
+import { randomBytes } from "node:crypto";
+
 import { eq, sql } from "drizzle-orm";
 import {
 	itemIdentity,
@@ -20,6 +22,7 @@ import {
 } from "@/lib/admin/native-item-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "@/lib/admin/native-file-service";
 import { approveItemReview, submitItemReview } from "@/lib/admin/review-service";
+import { adminItemListProjection } from "@/db/schema/tables/adminItemListProjection";
 import { item } from "@/db/schema/tables/item";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
@@ -356,6 +359,26 @@ it("publishes a library PDF on an OpenAlex record and keeps both through later s
 		// Zotero records sync their attachments back, so they still take no library files.
 		await db.insert(itemIdentity).values({ key: "ABCD2345", sourceConnectionKey: "zotero-group", sourceRecordKey: "ABCD2345" });
 		await expect(createNativeItemDraft(db, { itemType: "Attachment", parentItem: "ABCD2345", title: "Zotero copy" })).rejects.toBeInstanceOf(ItemParentUnavailableError);
+	});
+}, 120_000);
+
+it("imports a work whose title is too long for a btree index entry", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa", provider: "openalex", scopeKind: "query", config: settings });
+		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa"));
+		// Random text doesn't compress, so the full title would pass the 2,704-byte index limit.
+		const title = randomBytes(3_000).toString("base64");
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+			{ fetch: async () => Response.json({ meta: { count: 2, next_cursor: null }, results: [work(1, title), work(2)] }) },
+		);
+		const listed = await db
+			.select({ title: adminItemListProjection.title, titleSort: adminItemListProjection.titleSort })
+			.from(adminItemListProjection)
+			.innerJoin(item, eq(item.key, adminItemListProjection.key))
+			.where(eq(item.sourceRecordKey, "W1"));
+		expect(listed).toEqual([{ title, titleSort: title.toLowerCase().slice(0, 512) }]);
+		expect(await db.select().from(item).where(eq(item.sourceRecordKey, "W2"))).toHaveLength(1);
 	});
 }, 120_000);
 
