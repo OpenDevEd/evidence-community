@@ -43,11 +43,12 @@ it("renews a worker's leases while an import locks the same search events in key
 		await workerClaimed;
 
 		const lockEvent = (key: string) => importConnection.query(`SELECT id FROM "outbox" WHERE "entityKey" = $1 ORDER BY "entityKey" FOR UPDATE`, [key]);
+		const importPid = (await importConnection.query<{ pid: number }>("SELECT pg_backend_pid() AS pid")).rows[0]!.pid;
 		await importConnection.query("BEGIN");
 		await lockEvent("AAAAAAAA");
 		// Wait until the worker's heartbeat is queued behind the import.
 		for (let waited = 0; ; waited += 20) {
-			const blocked = await db.execute<{ waiting: number }>(sql`SELECT count(*)::int AS waiting FROM pg_locks WHERE NOT granted`);
+			const blocked = await db.execute<{ waiting: number }>(sql`SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE ${importPid}::int = ANY (pg_blocking_pids(pid))`);
 			if (blocked.rows[0]!.waiting > 0) break;
 			if (waited > 5_000) throw new Error("The heartbeat never reached the locked event");
 			await delay(20);
