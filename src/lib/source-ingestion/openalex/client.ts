@@ -77,6 +77,24 @@ function failureText(error: unknown) {
 	return cause ? `${error.message} (${cause.code ?? cause.message})` : error.message;
 }
 
+// OpenAlex's search gives up after about 8 seconds. On a busy day a long OQL
+// query can miss that at 200 works a page yet make it at 50, so a timed-out
+// page is asked for again at half the size, down to MIN_PAGE_SIZE. After
+// PAGES_BEFORE_GROWING pages at a smaller size, pages double again.
+const SEARCH_TIMEOUT = "Elasticsearch error: Connection timed out";
+const MIN_PAGE_SIZE = 25;
+const PAGES_BEFORE_GROWING = 10;
+
+class OpenAlexSearchTimeoutError extends OpenAlexApiError {}
+
+/** Throws on OpenAlex's search timeout, so the page can be asked for at a smaller size. */
+async function throwIfSearchTimeout(response: Response) {
+	if (response.status !== 500) return response.body?.cancel();
+	const body = new TextDecoder().decode(await readBoundedResponse(response, 8_192, 30_000, 30_000));
+	if (body.includes(SEARCH_TIMEOUT))
+		throw new OpenAlexSearchTimeoutError(`OpenAlex works returned 500: ${body}`, 500);
+}
+
 function retryDelay(response: Response, attempt: number) {
 	const retryAfter = response.headers.get("retry-after");
 	const seconds = Number(retryAfter);
@@ -87,6 +105,9 @@ function retryDelay(response: Response, attempt: number) {
 }
 
 export class OpenAlexClient {
+	private pageLimit = OPENALEX_MAX_PAGE_SIZE;
+	private pagesAtLimit = 0;
+
 	constructor(
 		private readonly options: {
 			apiKey: string;
@@ -96,7 +117,7 @@ export class OpenAlexClient {
 		},
 	) {}
 
-	private async fetchWithRetries(url: URL, oql?: string) {
+	private async fetchWithRetries(url: URL, oql?: string, canShrink = false) {
 		const init = requestInit(oql);
 		const request = this.options.fetch ?? fetch;
 		const sleep =
@@ -117,7 +138,7 @@ export class OpenAlexClient {
 				continue;
 			}
 			if (!isRetryable(response, attempt)) return response;
-			await response.body?.cancel();
+			await (canShrink ? throwIfSearchTimeout(response) : response.body?.cancel());
 			await sleep(retryDelay(response, attempt));
 		}
 		throw new OpenAlexApiError("OpenAlex works request exhausted retries");
@@ -134,18 +155,36 @@ export class OpenAlexClient {
 
 	/** One page of the query's works; "*" asks for the first. OpenAlex leaves `next_cursor` out without a cursor. */
 	async works(query: OpenAlexQuery, cursor: string, pageSize = 100) {
-		const url = worksUrl(query, cursor, pageSize, this.options.apiKey);
-		const page = openAlexPageSchema.parse(await this.read(url, query.oql));
-		if (page.results.length > pageSize) {
-			throw new OpenAlexApiError(
-				"OpenAlex returned more works than requested",
-			);
+		let size = Math.min(pageSize, this.pageLimit);
+		for (;;) {
+			const url = worksUrl(query, cursor, size, this.options.apiKey);
+			let body: unknown;
+			try {
+				body = await this.read(url, query.oql, size > MIN_PAGE_SIZE);
+			} catch (error) {
+				if (!(error instanceof OpenAlexSearchTimeoutError)) throw error;
+				size = Math.max(MIN_PAGE_SIZE, Math.ceil(size / 2));
+				this.pageLimit = size;
+				this.pagesAtLimit = 0;
+				console.warn("OpenAlex search timed out; asking for fewer works a page", { pageSize: size });
+				continue;
+			}
+			const page = openAlexPageSchema.parse(body);
+			if (page.results.length > size) {
+				throw new OpenAlexApiError(
+					"OpenAlex returned more works than requested",
+				);
+			}
+			if (this.pageLimit < OPENALEX_MAX_PAGE_SIZE && ++this.pagesAtLimit >= PAGES_BEFORE_GROWING) {
+				this.pageLimit = Math.min(OPENALEX_MAX_PAGE_SIZE, this.pageLimit * 2);
+				this.pagesAtLimit = 0;
+			}
+			return page;
 		}
-		return page;
 	}
 
-	private async read(url: URL, oql: string | undefined): Promise<unknown> {
-		const response = await this.fetchWithRetries(url, oql);
+	private async read(url: URL, oql: string | undefined, canShrink = false): Promise<unknown> {
+		const response = await this.fetchWithRetries(url, oql, canShrink);
 		const bytes = await readBoundedResponse(
 			response,
 			response.ok

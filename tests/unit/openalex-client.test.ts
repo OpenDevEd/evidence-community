@@ -135,6 +135,51 @@ describe("OpenAlex works requests", () => {
 		expect(canceled).toBe(true);
 	});
 
+	it("asks for smaller pages at the same cursor while OpenAlex's search times out, then grows again", async () => {
+		const searchTimeout = () =>
+			Response.json(
+				{ validation: { valid: false, errors: [{ type: "es_error", message: "Elasticsearch error: Connection timed out" }] } },
+				{ status: 500 },
+			);
+		const requests: { cursor: string; size: number }[] = [];
+		const client = new OpenAlexClient({
+			apiKey: "test-key",
+			sleep: async () => {},
+			fetch: async (input) => {
+				const url = new URL(String(input));
+				const size = Number(url.searchParams.get("per_page"));
+				requests.push({ cursor: url.searchParams.get("cursor")!, size });
+				return size > 50 ? searchTimeout() : Response.json(page);
+			},
+		});
+
+		expect(await client.works(query, "saved", 200)).toEqual(page);
+		expect(requests).toEqual([
+			{ cursor: "saved", size: 200 },
+			{ cursor: "saved", size: 100 },
+			{ cursor: "saved", size: 50 },
+		]);
+
+		// Later pages start at the size that worked. Ten pages at that size in all, and the next tries twice as many.
+		requests.length = 0;
+		for (let index = 0; index < 11; index++) await client.works(query, "next", 200);
+		expect(requests.map(({ size }) => size)).toEqual([...Array(9).fill(50), 100, 50, 50]);
+	});
+
+	it("retries other server errors at the same page size", async () => {
+		const sizes: number[] = [];
+		const client = new OpenAlexClient({
+			apiKey: "test-key",
+			sleep: async () => {},
+			fetch: async (input) => {
+				sizes.push(Number(new URL(String(input)).searchParams.get("per_page")));
+				return sizes.length === 1 ? new Response("Bad gateway", { status: 502 }) : Response.json(page);
+			},
+		});
+		expect(await client.works(query, "saved", 200)).toEqual(page);
+		expect(sizes).toEqual([200, 200]);
+	});
+
 	it("reports provider failures without retrying authentication errors", async () => {
 		let calls = 0;
 		const client = new OpenAlexClient({
