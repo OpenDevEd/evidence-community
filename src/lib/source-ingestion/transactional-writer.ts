@@ -147,6 +147,8 @@ async function requeueLinkedRecords(
 			.from(item)
 			.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))));
 	}
+	// One key order across chunks, so two imports locking the same records cannot deadlock.
+	current.sort((left, right) => (left.itemKey < right.itemKey ? -1 : left.itemKey > right.itemKey ? 1 : 0));
 	const leased = new Set<string>();
 	for (const chunk of chunkValues(current, 1_000)) {
 		const values = sql.join(chunk.map((entry) => sql`(${entry.itemKey}, ${entry.revision}::bigint)`), sql`, `);
