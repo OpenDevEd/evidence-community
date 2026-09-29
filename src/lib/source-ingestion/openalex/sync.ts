@@ -105,7 +105,9 @@ const PDF_PAGE_SIZE = OPENALEX_MAX_PAGE_SIZE;
 const PDF_CONCURRENCY = 48;
 // More at once and some publishers answer 429.
 const PDF_PER_HOST = 4;
-const PDF_PAGES_IN_FLIGHT = 3;
+// A page is written once its slowest PDF is done, which in production can take a
+// minute or two. With three pages in flight such waits left most lanes idle.
+const PDF_PAGES_IN_FLIGHT = 8;
 // Leaves room for the batch envelope and institution facts.
 const WRITE_BUDGET_BYTES = MAX_SOURCE_BATCH_BYTES - 4 * 1024 * 1024;
 
