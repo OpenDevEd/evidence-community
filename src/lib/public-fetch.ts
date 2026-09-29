@@ -1,7 +1,6 @@
 import "server-only";
 
 import { lookup as lookupCallback, type LookupAddress } from "node:dns";
-import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 import { Agent, fetch as undiciFetch, type RequestInit, type Response } from "undici";
 
@@ -69,41 +68,26 @@ const publicOnly = new Agent({
 	},
 });
 
-/** An address from stored data or settings may only reach the public internet, never this network. */
-async function assertPublicHttpUrl(url: URL) {
+/**
+ * An address from stored data or settings may only reach the public internet, never this network. A name is
+ * checked once, when `publicOnly` resolves it to connect; an address written in the URL is never looked up, so it
+ * is checked here.
+ */
+function assertPublicHttpUrl(url: URL) {
 	if (url.protocol !== "https:" && url.protocol !== "http:") {
 		throw new Error("Unsupported URL protocol");
 	}
 
 	const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
-	if (hostname === "localhost" || hostname.endsWith(".local")) {
+	if (hostname === "localhost" || hostname.endsWith(".local") || (isIP(hostname) && isPrivateIp(hostname))) {
 		throw new Error("Private URL is not allowed");
 	}
-
-	const addresses = await lookup(hostname, { all: true });
-	if (
-		!addresses.length ||
-		addresses.some(({ address }) => isPrivateIp(address))
-	) {
-		throw new Error("Private URL is not allowed");
-	}
-}
-
-/** Stops waiting on a step that takes no signal, such as a DNS lookup, when the request is stopped. */
-function untilAborted<T>(work: Promise<T>, signal: AbortSignal | null | undefined) {
-	if (!signal) return work;
-	signal.throwIfAborted();
-	return new Promise<T>((resolve, reject) => {
-		const stop = () => reject(signal.reason);
-		signal.addEventListener("abort", stop, { once: true });
-		work.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
-	});
 }
 
 /** A request to a public address; every redirect is checked the same way before it is followed. */
 export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect" | "dispatcher">, redirects = 0): Promise<Response> {
 	if (redirects > MAX_REDIRECTS) throw new Error("Too many redirects");
-	await untilAborted(assertPublicHttpUrl(url), init.signal);
+	assertPublicHttpUrl(url);
 	const response = await undiciFetch(url, { ...init, redirect: "manual", dispatcher: publicOnly });
 	if (response.status >= 300 && response.status < 400) {
 		// Release the connection first: a redirect's body could otherwise hold it open until the timeout.

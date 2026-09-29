@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const getCachedItem = vi.hoisted(() => vi.fn());
 vi.mock("@/app/api/cache", () => ({ getCachedItem }));
-vi.mock("node:dns/promises", () => ({
-	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
-}));
 
 import {
 	READ_TOOL_MAX_SINGLE_PDF_BYTES,
