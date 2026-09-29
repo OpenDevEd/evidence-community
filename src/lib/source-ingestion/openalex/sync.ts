@@ -1008,10 +1008,10 @@ function queryStream(config: z.infer<typeof openAlexConnectionConfigSchema>): Op
 		downloadPdfs: config.downloadPdfs,
 		fullScansOnly: isSampledOql(query),
 		page: (client, cursor, pageSize, updatedSince) =>
-			client.works(updatedSince ? withUpdatedSince(query, updatedSince) : query, cursor, pageSize),
+			client.works(updatedSince ? withUpdatedSince(query, updatedSince) : query, cursor, pageSize, { followsCursor: true }),
 		planSlices: async (client, count) =>
 			count < MIN_SLICED_WORKS || isSampledOql(query) ? null : planSlices(client, query),
-		slicePage: (client, slice, cursor) => client.works(slicedQuery(query, slice.dates), cursor, RECORD_PAGE_SIZE),
+		slicePage: (client, slice, cursor) => client.works(slicedQuery(query, slice.dates), cursor, RECORD_PAGE_SIZE, { followsCursor: true }),
 	};
 }
 
