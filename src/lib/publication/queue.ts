@@ -1,4 +1,5 @@
 import type { ProviderSyncState, ProviderSyncStatePatch } from "@opendeved/doi-sync-core";
+import { chunkValues } from "@/lib/chunk-values";
 import { outbox } from "@opendeved/evidence-library-core";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -340,34 +341,55 @@ export async function enqueuePublicationJobsForItem(
 	return jobs;
 }
 
-export async function enqueueItemSearchReprojection(
+export function enqueueItemSearchReprojection(
 	transaction: DatabaseTransaction,
 	input: { itemKey: string; revision: number; queuedAt: Date },
 ) {
-	await transaction
-		.insert(outbox)
-		.values({
-			entityType: "item",
-			entityKey: input.itemKey,
-			operation: "upsert",
-			revision: input.revision,
-			nextAttemptAt: input.queuedAt,
-		})
-		.onConflictDoUpdate({
-			target: [outbox.entityType, outbox.entityKey, outbox.revision],
-			set: {
-				// A new id changes the record's version, so cached item pages read the change.
-				// Drizzle leaves identity columns out of its update types.
-				...({ id: sql`DEFAULT` } as object),
-				attempts: 0,
-				lastError: null,
-				nextAttemptAt: input.queuedAt,
-				leaseOwner: null,
-				leaseExpiresAt: null,
-				processedAt: null,
-				deadLetteredAt: null,
-			},
-		});
+	return enqueueItemSearchReprojections(transaction, [input], input.queuedAt);
+}
+
+/** Queues records for search again without a new revision. A run's own re-queues count toward its search update. */
+export async function enqueueItemSearchReprojections(
+	transaction: DatabaseTransaction,
+	items: readonly { itemKey: string; revision: number }[],
+	queuedAt: Date,
+	sourceSyncRunId: number | null = null,
+) {
+	for (const chunk of chunkValues(items, 1_000)) {
+		await transaction
+			.insert(outbox)
+			.values(chunk.map((entry) => ({
+				entityType: "item" as const,
+				entityKey: entry.itemKey,
+				operation: "upsert" as const,
+				revision: entry.revision,
+				nextAttemptAt: queuedAt,
+				sourceSyncRunId,
+			})))
+			.onConflictDoUpdate({
+				target: [outbox.entityType, outbox.entityKey, outbox.revision],
+				set: {
+					// A new id changes the record's version, so cached item pages read the change.
+					// Drizzle leaves identity columns out of its update types.
+					...({ id: sql`DEFAULT` } as object),
+					attempts: 0,
+					lastError: null,
+					nextAttemptAt: queuedAt,
+					leaseOwner: null,
+					leaseExpiresAt: null,
+					processedAt: null,
+					deadLetteredAt: null,
+					// A re-queue counts from now, so a run's search update does not date from the record's import.
+					createdAt: queuedAt,
+					// A row another run queued and search has not reached stays that run's.
+					...(sourceSyncRunId === null
+						? {}
+						: {
+								sourceSyncRunId: sql`CASE WHEN ${outbox.processedAt} IS NULL AND ${outbox.sourceSyncRunId} IS NOT NULL THEN ${outbox.sourceSyncRunId} ELSE ${sourceSyncRunId} END`,
+							}),
+				},
+			});
+	}
 }
 
 /** Claims one job while holding the same item lock used by admin mutations. */

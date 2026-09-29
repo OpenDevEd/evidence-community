@@ -57,7 +57,7 @@ import {
 	sourceRecordValidationOptions,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
-import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
+import { enqueueItemSearchReprojections, enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 import { publicationTarget } from "@/db/schema/publication";
 
 import {
@@ -119,6 +119,51 @@ async function writeSourceValues(
 	for (const chunk of chunkValues(topics, RELATION_CHUNK_SIZE)) {
 		await transaction.insert(sourceTopicAssignment).values(chunk);
 	}
+}
+
+/**
+ * Queues linked records for search again, as their top-level records, at
+ * their current revision. Their search rows are locked in key order, so no
+ * worker claims one halfway. A record a worker is indexing right now is
+ * returned instead: it takes a new revision, so the worker's result is
+ * followed by a fresh event.
+ */
+async function requeueLinkedRecords(
+	transaction: Transaction,
+	keys: string[],
+	written: ReadonlySet<string>,
+	queuedAt: Date,
+	sourceSyncRunId: number | null,
+) {
+	const roots = new Set<string>();
+	for (const chunk of chunkValues(keys, 10_000)) {
+		const rows = await transaction.select({ key: item.key, parentItem: item.parentItem }).from(item).where(inArray(item.key, chunk));
+		for (const row of rows) roots.add(row.parentItem ?? row.key);
+	}
+	const current: { itemKey: string; revision: number }[] = [];
+	for (const chunk of chunkValues([...roots].filter((key) => !written.has(key)), 10_000)) {
+		current.push(...(await transaction
+			.select({ itemKey: item.key, revision: item.revision })
+			.from(item)
+			.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))));
+	}
+	// One key order across chunks, so two imports locking the same records cannot deadlock.
+	current.sort((left, right) => (left.itemKey < right.itemKey ? -1 : left.itemKey > right.itemKey ? 1 : 0));
+	const leased = new Set<string>();
+	for (const chunk of chunkValues(current, 1_000)) {
+		const values = sql.join(chunk.map((entry) => sql`(${entry.itemKey}, ${entry.revision}::bigint)`), sql`, `);
+		const rows = await transaction.execute<{ entityKey: string; leased: boolean }>(sql`
+			SELECT o."entityKey", (o."processedAt" IS NULL AND o."leaseExpiresAt" > ${queuedAt}) AS leased
+			FROM "outbox" o
+			JOIN (VALUES ${values}) AS v("key", "revision")
+				ON o."entityType" = 'item' AND o."entityKey" = v."key" AND o."revision" = v."revision"
+			ORDER BY o."entityKey"
+			FOR UPDATE OF o
+		`);
+		for (const row of rows.rows) if (row.leased) leased.add(row.entityKey);
+	}
+	await enqueueItemSearchReprojections(transaction, current.filter((entry) => !leased.has(entry.itemKey)), queuedAt, sourceSyncRunId);
+	return [...leased];
 }
 
 async function publicationTargetedKeys(transaction: Transaction, keys: string[]) {
@@ -2523,15 +2568,24 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const oldParent = existingItemByKey.get(key)?.parentItem;
 			if (oldParent) affectedParentKeys.add(oldParent);
 		}
-		// Citation sidecars and source-owned links change the public projection
-		// even when the canonical item fields did not change.
-		for (const key of [
-			...relatedLinkChange.changedItemKeys,
-			...citationLinkChange.changedItemKeys,
-			...citationMetricChangedItemKeys,
-		]) {
-			affectedParentKeys.add(key);
-		}
+		for (const key of citationMetricChangedItemKeys) affectedParentKeys.add(key);
+		// A new link changes both records' public pages but neither record, so
+		// records outside this batch are queued for search again instead of
+		// taking a new revision. In a large import that is thousands of records
+		// a page. Records with a publication target still take one, so their
+		// deposits are updated.
+		const linkedKeys = [...new Set([...relatedLinkChange.changedItemKeys, ...citationLinkChange.changedItemKeys])]
+			.filter((key) => !directlyChangedItemKeys.has(key) && !affectedParentKeys.has(key));
+		const depositedLinkedKeys = await publicationTargetedKeys(transaction, linkedKeys);
+		for (const key of depositedLinkedKeys) affectedParentKeys.add(key);
+		const leasedLinkedKeys = await requeueLinkedRecords(
+			transaction,
+			linkedKeys.filter((key) => !depositedLinkedKeys.has(key)),
+			new Set([...directlyChangedItemKeys, ...affectedParentKeys]),
+			now,
+			batch.sourceSyncRunId ?? null,
+		);
+		for (const key of leasedLinkedKeys) affectedParentKeys.add(key);
 		const parentKeysToBump = [...affectedParentKeys]
 			.filter((key) => !directlyChangedItemKeys.has(key))
 			.sort();
