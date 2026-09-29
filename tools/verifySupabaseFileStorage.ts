@@ -70,7 +70,7 @@ async function verify() {
 			[publicBucket, true],
 		] as const) {
 			const { error } = await admin.storage.createBucket(name, {
-				allowedMimeTypes: ["application/pdf", "image/png"],
+				allowedMimeTypes: ["application/pdf", "image/jpeg", "image/png"],
 				fileSizeLimit: 10_000_000,
 				public: isPublic,
 			});

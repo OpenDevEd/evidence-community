@@ -306,7 +306,7 @@ async function verifyPipeline() {
 		);
 		assert(
 			coverResponse.ok &&
-				coverResponse.headers.get("content-type")?.includes("image/png"),
+				coverResponse.headers.get("content-type")?.includes("image/jpeg"),
 			"Published cover is unavailable or has the wrong content type",
 		);
 
