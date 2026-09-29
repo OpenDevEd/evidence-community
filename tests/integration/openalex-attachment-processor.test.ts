@@ -184,6 +184,9 @@ describe("OpenAlex PDF processing", () => {
 				new Response(await createPdf("FIRST PDF")),
 			);
 			const hosted = await processor(original!, "openalex-pdf-a");
+			// Each step is timed for the PDF stage's log, and taking the times starts them again.
+			expect(processor.takeTimings("openalex-pdf-a")).toMatchObject({ download: { count: 1 }, read: { count: 1 }, upload: { count: 1 } });
+			expect(processor.takeTimings("openalex-pdf-a")).toMatchObject({ download: { count: 0 }, read: { count: 0 }, upload: { count: 0 } });
 			await write("openalex-pdf-a", [parent, hosted]);
 			const shared = await processor(original!, "openalex-pdf-b");
 			expect(shared.file?.managedPublication?.objectPath).toBe(

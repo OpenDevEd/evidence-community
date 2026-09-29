@@ -64,6 +64,8 @@ export type OpenAlexSourceOptions = {
 		/** Keeps a PDF already published, without downloading. */
 		reuse: RecordProcessor;
 		flushCleanup: (sourceConnectionKey: string) => Promise<void>;
+		/** Time spent per publishing step since the last call, for the page log. */
+		takeTimings?: (sourceConnectionKey: string) => unknown;
 	};
 };
 
@@ -366,20 +368,21 @@ async function splitNewRecords(scan: Scan, items: SourceItemUpsert[]) {
 }
 
 function logPdfPage(
-	sourceConnectionKey: string,
-	works: number,
-	items: SourceItemUpsert[],
-	startedAt: number,
+	scan: Scan,
+	page: { works: number; items: SourceItemUpsert[]; startedAt: number; writeSeconds: number },
 ) {
-	const pdfs = items.filter((record) => record.file?.url);
+	const pdfs = page.items.filter((record) => record.file?.url);
 	const failed = pdfs.filter((record) => record.processingIssue).length;
 	console.info("OpenAlex PDF page processed", {
-		sourceConnectionKey,
-		works,
+		sourceConnectionKey: scan.context.sourceConnection.key,
+		works: page.works,
 		pdfs: pdfs.length,
 		published: pdfs.length - failed,
 		failed,
-		seconds: (performance.now() - startedAt) / 1000,
+		seconds: (performance.now() - page.startedAt) / 1000,
+		writeSeconds: page.writeSeconds,
+		// Pages overlap, so this covers the PDFs finished since the previous page's log.
+		steps: scan.options.attachmentProcessor?.takeTimings?.(scan.context.sourceConnection.key),
 	});
 }
 
@@ -620,10 +623,11 @@ async function fillPdfPages(pipeline: PdfPipeline) {
 async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
 	const { scan } = pipeline;
 	await next.processed;
-	logPdfPage(scan.context.sourceConnection.key, next.page.results.length, next.items, next.startedAt);
 	countPdfPage(scan, next.items, next.links);
 	if (pipeline.fetchCursor.incrementalAvailable && scan.cursor.mode === "incremental") scan.cursor = { ...scan.cursor, incrementalAvailable: true };
+	const writeStarted = performance.now();
 	await writeScannedPage(scan, next.page, next.mapped, next.items, false);
+	logPdfPage(scan, { works: next.page.results.length, items: next.items, startedAt: next.startedAt, writeSeconds: (performance.now() - writeStarted) / 1000 });
 }
 
 /**
@@ -632,6 +636,8 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
  * still written in order.
  */
 async function scanPdfPages(scan: Scan) {
+	// Times left from a run that stopped part-way are not this run's.
+	scan.options.attachmentProcessor?.takeTimings?.(scan.context.sourceConnection.key);
 	const pipeline: PdfPipeline = {
 		scan,
 		lane: downloadLanes(PDF_CONCURRENCY, PDF_PER_HOST),
