@@ -544,7 +544,8 @@ function downloadLanes(size: number, perHost: number) {
 		byHost.set(host, (byHost.get(host) ?? 0) + 1);
 	};
 	return async <T,>(host: string, task: () => Promise<T>) => {
-		if (fits(host) && !waiting.length) take(host);
+		// Only a full host or a full set of lanes makes a download wait.
+		if (fits(host)) take(host);
 		else await new Promise<void>((start) => waiting.push({ host, start }));
 		try {
 			return await task();
@@ -633,6 +634,7 @@ async function scanPdfPages(scan: Scan) {
 		pipeline.stop.failed = true;
 		await Promise.allSettled(pipeline.inFlight.map((pending) => pending.processed));
 	};
+	let failed = false;
 	try {
 		for (;;) {
 			if (!(await fillPdfPages(pipeline))) {
@@ -645,11 +647,17 @@ async function scanPdfPages(scan: Scan) {
 			if (!next) break;
 			await writePdfPage(pipeline, next);
 		}
+	} catch (error) {
+		failed = true;
+		throw error;
 	} finally {
 		await settle();
+		// Every staged upload is now written or given up, so cleanup cannot remove one in use.
+		await scan.options.attachmentProcessor?.flushCleanup(scan.context.sourceConnection.key).catch((error: unknown) => {
+			// A failed stage reports its own error, not the cleanup's.
+			if (!failed) throw error;
+		});
 	}
-	// Every staged upload is now written or given up, so cleanup cannot remove one in use.
-	await scan.options.attachmentProcessor?.flushCleanup(scan.context.sourceConnection.key);
 }
 
 function pdfHost(url: string) {
@@ -673,8 +681,14 @@ async function processWithLanes(
 			record.file?.url
 				? lane(pdfHost(record.file.url), async () => {
 						if (stop.failed) throw new Error("PDF stage stopped");
-						await context.heartbeat();
-						items[index] = await processor(record, context.sourceConnection.key);
+						try {
+							await context.heartbeat();
+							items[index] = await processor(record, context.sourceConnection.key);
+						} catch (error) {
+							// Before this lane goes to the next download.
+							stop.failed = true;
+							throw error;
+						}
 					})
 				: Promise.resolve(),
 		),
