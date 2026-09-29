@@ -21,6 +21,8 @@ import {
 	eq,
 	getTableColumns,
 	inArray,
+	isNotNull,
+	isNull,
 	notExists,
 	sql,
 	type InferInsertModel,
@@ -56,6 +58,7 @@ import {
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
+import { publicationTarget } from "@/db/schema/publication";
 
 import {
 	type SourceItemUpsert,
@@ -78,6 +81,61 @@ type CollectionInsert = InferInsertModel<typeof collection>;
 
 const ITEM_UPSERT_CHUNK_SIZE = 200;
 const RELATION_CHUNK_SIZE = 1_000;
+
+type SourceValueRow = typeof itemSourceValue.$inferInsert;
+type TopicAssignmentRow = typeof sourceTopicAssignment.$inferInsert;
+
+/** A page's source values and topic assignments, in a few statements instead of three per record. */
+async function writeSourceValues(
+	transaction: Transaction,
+	batch: SourceIngestionBatch,
+	records: SourceItemUpsert[],
+	rowsFor: (record: SourceItemUpsert) => { state: SourceValueRow; topics?: TopicAssignmentRow[] },
+) {
+	const rows = new Map(records.map((record) => {
+		const row = rowsFor(record);
+		return [row.state.itemKey, row] as const;
+	}));
+	const states = [...rows.values()].map((row) => row.state);
+	for (const chunk of chunkValues(states, RELATION_CHUNK_SIZE)) {
+		await transaction.insert(itemSourceValue).values(chunk).onConflictDoUpdate({
+			target: [itemSourceValue.itemKey, itemSourceValue.sourceConnectionKey],
+			set: {
+				payload: sql`excluded.payload`,
+				remoteVersion: sql`excluded."remoteVersion"`,
+				fetchedAt: sql`excluded."fetchedAt"`,
+				importedTopics: sql`excluded."importedTopics"`,
+			},
+		});
+	}
+	const topicKeys = [...rows.values()].flatMap((row) => (row.topics ? [row.state.itemKey] : []));
+	for (const chunk of chunkValues(topicKeys, RELATION_CHUNK_SIZE)) {
+		await transaction.delete(sourceTopicAssignment).where(and(
+			inArray(sourceTopicAssignment.itemKey, chunk),
+			eq(sourceTopicAssignment.sourceConnectionKey, batch.sourceConnectionKey),
+		));
+	}
+	const topics = [...rows.values()].flatMap((row) => row.topics ?? []);
+	for (const chunk of chunkValues(topics, RELATION_CHUNK_SIZE)) {
+		await transaction.insert(sourceTopicAssignment).values(chunk);
+	}
+}
+
+async function publicationTargetedKeys(transaction: Transaction, keys: string[]) {
+	const targeted = new Set<string>();
+	for (const chunk of chunkValues(keys, 10_000)) {
+		const rows = await transaction
+			.selectDistinct({ itemKey: publicationTarget.itemKey })
+			.from(publicationTarget)
+			.where(and(
+				inArray(publicationTarget.itemKey, chunk),
+				isNull(publicationTarget.deactivatedAt),
+				isNotNull(publicationTarget.activatedAt),
+			));
+		for (const row of rows) targeted.add(row.itemKey);
+	}
+	return targeted;
+}
 const COLLECTION_UPSERT_CHUNK_SIZE = 1_000;
 
 const itemColumns = getTableColumns(item);
@@ -621,10 +679,13 @@ async function insertInChunks<T>(
 	}
 }
 
-async function updateItemParents(
+/** Rows whose parent is already right are skipped, so their projection is not refreshed again. */
+async function updateParents(
 	transaction: Transaction,
+	table: "item" | "collection",
 	rows: Array<{ key: string; parentKey: string | null }>,
 ) {
+	const column = sql.identifier(table === "item" ? "parentItem" : "parentCollection");
 	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
 		const cases = sql.join(
 			rowChunk.map((row) => sql`WHEN ${row.key} THEN ${row.parentKey}`),
@@ -635,30 +696,10 @@ async function updateItemParents(
 			sql`, `,
 		);
 		await transaction.execute(sql`
-			UPDATE "item"
-			SET "parentItem" = CASE "key" ${cases} END
+			UPDATE ${sql.identifier(table)}
+			SET ${column} = CASE "key" ${cases} END
 			WHERE "key" IN (${keys})
-		`);
-	}
-}
-
-async function updateCollectionParents(
-	transaction: Transaction,
-	rows: Array<{ key: string; parentKey: string | null }>,
-) {
-	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
-		const cases = sql.join(
-			rowChunk.map((row) => sql`WHEN ${row.key} THEN ${row.parentKey}`),
-			sql` `,
-		);
-		const keys = sql.join(
-			rowChunk.map((row) => sql`${row.key}`),
-			sql`, `,
-		);
-		await transaction.execute(sql`
-			UPDATE "collection"
-			SET "parentCollection" = CASE "key" ${cases} END
-			WHERE "key" IN (${keys})
+				AND ${column} IS DISTINCT FROM CASE "key" ${cases} END
 		`);
 	}
 }
@@ -1423,8 +1464,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				);
 			}
 		}
-		await updateCollectionParents(
+		await updateParents(
 			transaction,
+			"collection",
 			changedCollectionUpserts.map((record) => ({
 				key: collectionKeys.get(record.sourceRecordKey)!,
 				parentKey: effectiveCollectionStateByRecordKey.get(
@@ -1570,23 +1612,20 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return previous !== undefined && (!Number.isFinite(incoming) || incoming < previous) ? [key] : [];
 		}));
 		const currentItemUpserts = itemUpserts.filter((record) => !staleItemKeys.has(itemKeys.get(record.sourceRecordKey)!));
-		for (const record of isOpenAlex ? currentItemUpserts : []) {
+		await writeSourceValues(transaction, batch, isOpenAlex ? currentItemUpserts : [], (record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const normalized = normalizedItems.get(record.sourceRecordKey)!;
 			const sourceItem = {...normalized.item};
 			if (!importedTopicRows.has(key)) delete sourceItem.topics;
-			const state = {itemKey: key, sourceConnectionKey: batch.sourceConnectionKey,
-				payload: {...sourceItem, tags: normalized.tags, collections: effectiveItemStateByRecordKey.get(record.sourceRecordKey)!.sourceCollections,
-					parentItem: parentItemKeys.get(record.sourceRecordKey) ?? null},
-				remoteVersion: record.remoteVersion, fetchedAt: batch.fetchedAt, importedTopics: topicImportKeys.has(key)};
-			await transaction.insert(itemSourceValue).values(state).onConflictDoUpdate({target: [itemSourceValue.itemKey, itemSourceValue.sourceConnectionKey], set: state});
-			if (importedTopicRows.has(key)) {
-				await transaction.delete(sourceTopicAssignment).where(and(eq(sourceTopicAssignment.itemKey, key), eq(sourceTopicAssignment.sourceConnectionKey, batch.sourceConnectionKey)));
-				const assignments = importedTopicRows.get(key)!;
-				if (assignments.length) await transaction.insert(sourceTopicAssignment).values(assignments.map(topic => ({...topic, itemKey: key,
-					sourceConnectionKey: batch.sourceConnectionKey, sourceVersion: record.remoteVersion, fetchedAt: batch.fetchedAt})));
-			}
-		}
+			return {
+				state: {itemKey: key, sourceConnectionKey: batch.sourceConnectionKey,
+					payload: {...sourceItem, tags: normalized.tags, collections: effectiveItemStateByRecordKey.get(record.sourceRecordKey)!.sourceCollections,
+						parentItem: parentItemKeys.get(record.sourceRecordKey) ?? null},
+					remoteVersion: record.remoteVersion, fetchedAt: batch.fetchedAt, importedTopics: topicImportKeys.has(key)},
+				topics: importedTopicRows.get(key)?.map(topic => ({...topic, itemKey: key,
+					sourceConnectionKey: batch.sourceConnectionKey, sourceVersion: record.remoteVersion, fetchedAt: batch.fetchedAt})),
+			};
+		});
 		const changedItemUpserts = currentItemUpserts.filter((record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
@@ -1693,8 +1732,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				throw new SourceReferenceNotFoundError("item", "active parent");
 			}
 		}
-		await updateItemParents(
+		await updateParents(
 			transaction,
+			"item",
 			changedItemUpserts.map((record) => ({
 				key: itemKeys.get(record.sourceRecordKey)!,
 				parentKey: effectiveItemStateByRecordKey.get(
@@ -2557,7 +2597,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				return parentItemKey ? [parentItemKey] : [];
 			}),
 		]);
-		for (const parent of changedParents) {
+		// Most imported records have no publication target, so find the ones that do in one read.
+		const targetedParentKeys = await publicationTargetedKeys(transaction, changedParents.map((parent) => parent.key));
+		for (const parent of changedParents.filter((row) => targetedParentKeys.has(row.key))) {
 			await enqueuePublicationJobsForItem(transaction, {
 				itemKey: parent.key,
 				canonicalRevision: parent.revision,
