@@ -191,9 +191,15 @@ function startWatchLanes(
 	};
 }
 
+// An import's PDF stage reads and stages files for up to 48 PDFs at once
+// while a page is written and the lease heartbeat runs, which three
+// connections could not keep up with. Idle connections close after five
+// seconds, so only an active import holds these.
+const SOURCE_SYNC_DATABASE_CONNECTIONS = 6;
+
 async function main() {
 	const command = parseCommand(process.argv.slice(2));
-	const runtimeProcess = await openLibraryDatabaseProcess();
+	const runtimeProcess = await openLibraryDatabaseProcess({ maxConnections: SOURCE_SYNC_DATABASE_CONNECTIONS });
 	const { abortController, config, databaseResource } = runtimeProcess;
 	try {
 		await reconcileConfiguredSources(

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { fetch as transport, Response } from "undici";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,6 +23,7 @@ import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openal
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
+import { uploadSourcePublication } from "@/lib/source-ingestion/attachment-storage";
 import { getSourceCitationMetrics } from "@/lib/links/citation-metrics";
 import {
 	MemoryFileStorage,
@@ -78,6 +79,37 @@ beforeEach(() => {
 });
 
 describe("OpenAlex PDF processing", () => {
+	it("stages a PDF while a page of the same source is being written", async () => {
+		await withIsolatedPublicationDatabase(async (database) => {
+			await sources(database);
+			// Each item insert waits a second, so the write holds its source lock that long.
+			await database.execute(sql`create function slow_item_write() returns trigger language plpgsql as $$ begin perform pg_sleep(1); return null; end $$`);
+			await database.execute(sql`create trigger slow_item_write after insert on item for each statement execute function slow_item_write()`);
+			const [parent] = mapped(`${externalUrl}?written`, "2026-09-24T01:02:03Z", 200);
+			const writing = writeSourceIngestionBatch(database, {
+				sourceConnectionKey: "openalex-pdf-a",
+				expectedCursor: {},
+				nextCursor: {},
+				mappingProfileVersion: "test",
+				fetchedAt: new Date(),
+				items: [parent],
+			});
+			await new Promise((resolve) => setTimeout(resolve, 200));
+			const started = Date.now();
+			await uploadSourcePublication({
+				database,
+				storage: new MemoryFileStorage(),
+				sourceConnectionKey: "openalex-pdf-a",
+				paths: { pdf: "staged/document.pdf", cover: "staged/cover.png" },
+				bytes: new Uint8Array([1]),
+				cover: new Uint8Array([1]),
+			});
+			// Staging does not wait for the write to finish.
+			expect(Date.now() - started).toBeLessThan(500);
+			await writing;
+		});
+	});
+
 	it("keeps later pages' staged PDFs while an earlier page waits for a slow download", async () => {
 		await withIsolatedPublicationDatabase(async (database) => {
 			await sources(database);
