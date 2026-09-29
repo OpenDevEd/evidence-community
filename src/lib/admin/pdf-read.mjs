@@ -1,6 +1,5 @@
 // Plain JavaScript, so a worker thread can load it without a TypeScript loader.
 import { createCanvas } from "@napi-rs/canvas";
-import sharp from "sharp";
 
 const COVER_WIDTH = 1600;
 
@@ -92,7 +91,7 @@ export async function readPdf(loadingTask) {
 	firstPage.cleanup();
 
 	return {
-		cover: await coverPng(canvas, coverHeight),
+		cover: coverJpeg(canvas),
 		coverHeight,
 		coverWidth: COVER_WIDTH,
 		pageCount: document.numPages,
@@ -101,18 +100,13 @@ export async function readPdf(loadingTask) {
 }
 
 /**
- * The cover as PNG, pixel for pixel what the canvas's own encoder gives. The
- * canvas encoder took about 90 ms of a PDF's 180; this takes about 30, and
- * the file is about a quarter smaller.
+ * The cover as a JPEG at quality 92. Encoding a PNG took about 30 ms of a
+ * PDF's 120 even through sharp; this takes about 12, for a file about a
+ * tenth larger.
  * @param {import("@napi-rs/canvas").Canvas} canvas
- * @param {number} height
  */
-async function coverPng(canvas, height) {
-	const png = await sharp(canvas.data(), { raw: { width: COVER_WIDTH, height, channels: 4 } })
-		.png({ compressionLevel: 3, adaptiveFiltering: false })
-		.toBuffer();
-	// A copy, so the worker can hand over its buffer whatever sharp allocated.
-	return new Uint8Array(png);
+function coverJpeg(canvas) {
+	return new Uint8Array(canvas.toBuffer("image/jpeg", 92));
 }
 
 /**

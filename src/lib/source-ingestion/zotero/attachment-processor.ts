@@ -75,7 +75,7 @@ export function sourcePublicationPaths(
 		md5,
 	].join("/");
 	return {
-		cover: `${root}/cover.png`,
+		cover: `${root}/cover.jpg`,
 		pdf: `${root}/document.pdf`,
 	};
 }

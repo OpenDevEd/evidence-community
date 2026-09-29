@@ -483,8 +483,8 @@ describe("OpenAlex PDF processing", () => {
 			expect(
 				Buffer.from(
 					await storage.downloadPublic(publication.coverObjectPath),
-				).subarray(0, 8),
-			).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+				).subarray(0, 3),
+			).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
 			expect(
 				await database.select().from(sourceFileCleanup),
 			).toHaveLength(2);

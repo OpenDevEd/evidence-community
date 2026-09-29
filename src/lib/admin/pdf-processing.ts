@@ -11,6 +11,11 @@ export type ProcessedPdf = {
 	text: string;
 };
 
+/** Covers are JPEGs; drafts staged before that still hold PNGs. */
+export function coverContentType(path: string) {
+	return path.endsWith(".png") ? "image/png" : "image/jpeg";
+}
+
 export class InvalidPdfError extends AdminValidationError {
 	constructor(message: string, options?: ErrorOptions) {
 		super(message, { file: message }, options);

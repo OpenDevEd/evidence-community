@@ -39,7 +39,7 @@ import { reviewFileSchema, type ReviewFile } from "./review-contract";
 import { removeUnreferencedPrivateFiles } from "./file-retention";
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision, isNativeOrOpenAlex } from "./native-item-service";
-import { processPdf } from "./pdf-processing";
+import { coverContentType, processPdf } from "./pdf-processing";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
 const PDF_CONTENT_TYPE = "application/pdf";
@@ -372,13 +372,13 @@ function uploadPath(
 }
 
 function stagedCoverPath(pdfPath: string) {
-	return pdfPath.replace(/\/file\.pdf$/u, "/cover.png");
+	return pdfPath.replace(/\/file\.pdf$/u, "/cover.jpg");
 }
 
-function publishedPaths(itemKey: string, sha256: string) {
+function publishedPaths(itemKey: string, sha256: string, stagedCover: string) {
 	const base = `native/${itemKey}/published/${randomUUID()}-${sha256}`;
 	return {
-		cover: `${base}/cover.png`,
+		cover: `${base}/cover${path.extname(stagedCover)}`,
 		pdf: `${base}/file.pdf`,
 	};
 }
@@ -608,7 +608,7 @@ export async function completeNativePdfUpload(
 
 	const processed = await processPdf(bytes);
 	const coverObjectPath = stagedCoverPath(draft.objectPath);
-	await storage.uploadPrivate(coverObjectPath, processed.cover, "image/png");
+	await storage.uploadPrivate(coverObjectPath, processed.cover, coverContentType(coverObjectPath));
 
 	const [ready] = await db.transaction(async (transaction) => {
 		await lockItemMutations(transaction, [itemKey]);
@@ -903,10 +903,10 @@ export async function prepareNativePdfPublication(
 		);
 	}
 
-	const publicPaths = publishedPaths(itemKey, draft.actualSha256);
+	const publicPaths = publishedPaths(itemKey, draft.actualSha256, draft.coverObjectPath);
 	const uploads = await Promise.allSettled([
 		storage.uploadPublic(publicPaths.pdf, pdfBytes, PDF_CONTENT_TYPE),
-		storage.uploadPublic(publicPaths.cover, coverBytes, "image/png"),
+		storage.uploadPublic(publicPaths.cover, coverBytes, coverContentType(draft.coverObjectPath)),
 	]);
 	const failedUpload = uploads.find((result) => result.status === "rejected");
 	if (failedUpload?.status === "rejected") {
