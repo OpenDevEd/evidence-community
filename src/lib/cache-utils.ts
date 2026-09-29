@@ -22,7 +22,8 @@ async function cachedDocument<T>(libraryConfig: LibraryServerConfig, key: string
 			cached = current && current.computedAt >= read.computedAt ? current : read;
 			remembered.set(docId, cached);
 		} catch {
-			// Cache miss
+			// Cache miss, unless a compute finished while this read was in flight.
+			cached = remembered.get(docId) as Cached<T> | undefined;
 		}
 	}
 	return { docId, cacheIndex, cached };

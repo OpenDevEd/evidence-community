@@ -9,7 +9,7 @@ import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryHomeConfig, LibraryServerConfig } from "@/config/library-config/schema";
 import { peekMeilisearchCache } from "@/lib/cache-utils";
-import { peekComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
+import { getComprehensiveStats, peekComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
 import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
 import { getDatabaseForConfig, type Database } from "@/db";
@@ -62,10 +62,13 @@ function topicsAndPlaces(stats: Stats | null, facets: Awaited<ReturnType<typeof 
 	};
 }
 
-/** Only what the Ask box's example questions are made from, for OpenScholar's Home card. */
+/**
+ * Only what the Ask box's example questions are made from, for OpenScholar's Home card. It answers once, so it waits
+ * for the statistics rather than suggest from a cold cache.
+ */
 export async function loadQuestionFacts() {
 	const [stats, facets, collections] = await Promise.all([
-		peekComprehensiveStats().catch(fallback("statistics", null)),
+		getComprehensiveStats().catch(fallback("statistics", null)),
 		getPublicFacets({}).catch(fallback("facets", null)),
 		getCachedCollections().catch(fallback("collections", [])),
 	]);
