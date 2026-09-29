@@ -24,6 +24,7 @@ A Zotero source is defined once in `LIBRARY_CONFIG_JSON`:
 | `maxRecordsPerBatch`    |                    `500` | Integer, 1–1,000       |
 | `maxSnapshotRecords`    |                 `100000` | Integer, 1–1,000,000   |
 | `requestTimeoutMs`      |                  `30000` | Integer, 1,000–120,000 |
+| `downloadPdfs`          |                   `true` | Boolean                |
 
 The import and writeback workers read the same manifest entry. Before their
 first sweep, they create or update the durable database row automatically.
@@ -116,6 +117,11 @@ adapter. A Zotero attachment is published only when it is a PDF, uses Zotero's
 `imported_file` or `imported_url` mode, has a parent item, and carries one of the
 configured publication tags. Untagged attachments retain their metadata but
 have no public URL, extracted text, cover, or `itemFilePublication` row.
+
+With `downloadPdfs` off, the group publishes no PDF, tagged or not. Changing
+the setting rereads the whole group once, so PDFs already published come down
+and tagged ones go up without waiting for their records to change. The cursor
+keeps `pdfs: false` while the last complete read left PDFs out.
 
 Published PDFs are downloaded with total and inactivity timeouts and the
 configured byte limit, verified against Zotero's MD5, parsed for bounded full

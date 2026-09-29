@@ -21,7 +21,7 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openalex/attachment-processor";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
-import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { openAlexSyncIsDue, syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 import { uploadSourcePublication } from "@/lib/source-ingestion/attachment-storage";
 import { getSourceCitationMetrics } from "@/lib/links/citation-metrics";
@@ -150,6 +150,55 @@ describe("OpenAlex PDF processing", () => {
 			);
 			expect(await database.select().from(itemFilePublication)).toHaveLength(6);
 			expect(storage.publicFiles.size).toBe(12);
+		});
+	});
+
+	it("takes a finished run's PDFs down on the next run once PDFs are turned off, even after an unfinished refresh", async () => {
+		await withIsolatedPublicationDatabase(async (database) => {
+			await sources(database);
+			const settings = {
+				name: "AI in education",
+				searchUrl: "/results/saved-search-1",
+				approvedQuery: { version: "v1", approvedAt: "2026-09-24T00:00:00Z", query: { search: "Research" } },
+			};
+			const setPdfs = (downloadPdfs: boolean) =>
+				database.update(sourceConnection).set({ config: { ...settings, downloadPdfs } }).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			const processor = createOpenAlexAttachmentProcessor({ database, storage: new MemoryFileStorage(), maxPdfBytes: 1_000_000 });
+			const works = [1, 2].map((id) => mapped(`${externalUrl}?work=${id}`, "2026-09-24T01:02:03Z", id)[0]!.raw);
+			vi.mocked(transport).mockImplementation(async (input) => new Response(await createPdf(String(input))));
+			const sync = async () => {
+				const [connection] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
+				await syncOpenAlexSource(
+					{ database, sourceConnection: connection!, credentialResolver: async () => "test", heartbeat: async () => {} },
+					{ attachmentProcessor: processor, fetch: async () => globalThis.Response.json({ meta: { count: works.length, next_cursor: null }, results: works }) },
+				);
+				return (await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a")))[0]!;
+			};
+			await setPdfs(true);
+			expect((await sync()).syncCursor).toMatchObject({ stage: "pdfs" });
+			expect(await database.select().from(itemFilePublication)).toHaveLength(2);
+
+			// A nightly refresh stopped part-way through its records hides the finished PDF stage.
+			const [finished] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			await database
+				.update(sourceConnection)
+				.set({
+					syncCursor: {
+						...finished!.syncCursor,
+						stage: "records",
+						mode: "incremental",
+						updatedSince: "2026-09-20",
+						completedAt: null,
+						nextCursor: "page-2",
+						pdfs: null,
+					},
+				})
+				.where(eq(sourceConnection.key, "openalex-pdf-a"));
+			await setPdfs(false);
+			const [turnedOff] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			expect(openAlexSyncIsDue(turnedOff!, new Date())).toBe(true);
+			expect((await sync()).syncCursor).toMatchObject({ stage: "records", mode: "full" });
+			expect(await database.select().from(itemFilePublication)).toHaveLength(0);
 		});
 	});
 

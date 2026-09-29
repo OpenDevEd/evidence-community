@@ -41,6 +41,9 @@ const cursorSchema = z
 			})
 			.nullable()
 			.default(null),
+		// Whether PDFs were added since the last scan that left them out. Absent on
+		// cursors from before it was kept, which may have added some.
+		pdfsAdded: z.boolean().optional(),
 		// A full scan of a large query reads date slices at once, each with its own cursor.
 		// Only a sliced scan saves the key, so other cursors stay readable by older releases.
 		slices: z
@@ -176,9 +179,13 @@ function pdfsOwed(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Curso
 	return stream.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
 }
 
-/** PDFs turned off mid-stage: only a full records scan puts every page back on its external link. */
-function pdfsDropped(stream: OpenAlexWorkStream, saved: Cursor | null) {
-	return saved?.stage === "pdfs" && !saved.completedAt && !stream.downloadPdfs;
+/**
+ * PDFs turned off after a run added them, or while it was adding them: only a
+ * full records scan puts every record back on its external link.
+ */
+function pdfsDropped(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Cursor | null) {
+	if (!saved || stream.downloadPdfs) return false;
+	return saved.stage === "pdfs" || saved.pdfsAdded !== false;
 }
 
 function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor | null {
@@ -187,14 +194,22 @@ function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor
 	return saved.mode === "full" ? { ...saved, incrementalAvailable: null } : saved;
 }
 
+/** PDFs just turned on or off need every record, and so does a sample. */
+function mustScanInFull(stream: OpenAlexWorkStream, saved: Cursor | null) {
+	return stream.fullScansOnly || pdfsOwed(stream, saved) || pdfsDropped(stream, saved);
+}
+
+/** Added PDFs are remembered while PDFs stay on; a scan with them off takes them all down. */
+function carriedPdfs(saved: Cursor | null, stream: OpenAlexWorkStream) {
+	return { pdfsAdded: stream.downloadPdfs && (saved?.stage === "pdfs" || saved?.pdfsAdded === true) };
+}
+
 function startCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor {
 	const resumed = resumedCursor(saved, stream);
 	if (resumed) return resumed;
 	const queryVersion = stream.version;
 	const sameQuery = saved?.queryVersion === queryVersion;
-	// PDFs just turned on need every record.
-	const fullOnly =
-		stream.fullScansOnly || pdfsOwed(stream, saved) || pdfsDropped(stream, saved);
+	const fullOnly = mustScanInFull(stream, saved);
 	const cursor: Cursor = {
 		queryVersion,
 		startedAt: new Date().toISOString(),
@@ -207,6 +222,7 @@ function startCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor {
 		incrementalAvailable: null,
 		stage: "records",
 		pdfs: null,
+		...carriedPdfs(saved, stream),
 	};
 	const updatedSince = fullOnly ? null : incrementalSince(saved, queryVersion);
 	return updatedSince
@@ -242,7 +258,7 @@ export function openAlexWorksAreDue(syncCursor: unknown, stream: Pick<OpenAlexWo
 	if (!saved.success) return true;
 	if (!saved.data.completedAt) return true;
 	if (saved.data.queryVersion !== stream.version) return true;
-	if (pdfsOwed(stream, saved.data)) return true;
+	if (pdfsOwed(stream, saved.data) || pdfsDropped(stream, saved.data)) return true;
 	return Date.parse(saved.data.completedAt) < lastNightlyRefresh(now);
 }
 
@@ -983,6 +999,7 @@ async function startPdfStage(scan: Scan) {
 		stage: "pdfs",
 		nextCursor: "*",
 		pdfs: { done: 0, missed: 0, total },
+		pdfsAdded: true,
 	};
 	await writeBatch(scan.context, scan.expectedCursor, scan.cursor, { items: [] }, "pdfs");
 	scan.expectedCursor = scan.cursor;

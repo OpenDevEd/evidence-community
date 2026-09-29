@@ -101,6 +101,8 @@ describe("library configuration fixtures", () => {
 					maxRecordsPerBatch: 500,
 					maxSnapshotRecords: 100_000,
 					requestTimeoutMs: 30_000,
+					// Existing groups keep adding their tagged PDFs.
+					downloadPdfs: true,
 				},
 			},
 		]);

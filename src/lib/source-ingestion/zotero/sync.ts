@@ -621,14 +621,94 @@ function nextSoftTrashState(
 	return next;
 }
 
-function completedCursor(targetVersion: number, softTrash: SoftTrashState) {
+function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfs: boolean) {
 	return {
 		libraryVersion: targetVersion,
 		softTrashedCollectionKeys: [
 			...softTrash.softTrashedCollectionKeys,
 		].sort(),
 		softTrashedItemKeys: [...softTrash.softTrashedItemKeys].sort(),
+		...pdfsField(pdfs),
 	};
+}
+
+/** The cursor field recording a read that left PDFs out; absent when it added them. */
+function pdfsField(pdfs: boolean) {
+	return pdfs ? {} : { pdfs: false as const };
+}
+
+/**
+ * Where a read starts. An unfinished read under the same PDF setting carries
+ * on where it stopped. A mapping change, a PDF setting change, or an
+ * unfinished read under the other setting starts from the beginning, so
+ * every record is read again. Otherwise it reads what changed since the last
+ * complete read.
+ */
+/** The cursor of a read that stopped part-way: the last complete read's state, plus where this one got to. */
+function pendingCursor(
+	cursor: ZoteroCursor,
+	previousSoftTrash: SoftTrashState,
+	read: { offset: number; snapshotSince: number; targetVersion: number; pdfs: boolean },
+) {
+	return {
+		libraryVersion: currentLibraryVersion(cursor),
+		softTrashedCollectionKeys: [...previousSoftTrash.softTrashedCollectionKeys].sort(),
+		softTrashedItemKeys: [...previousSoftTrash.softTrashedItemKeys].sort(),
+		// Kept until the read completes, so an interrupted change is read again in full.
+		...pdfsField(cursorAddedPdfs(cursor)),
+		pending: {
+			offset: read.offset,
+			snapshotSince: read.snapshotSince,
+			targetVersion: read.targetVersion,
+			...pdfsField(read.pdfs),
+		},
+	};
+}
+
+/** Where an unfinished read of the same snapshot carries on; anything else starts at the first record. */
+function resumeOffset(cursor: ZoteroCursor, resumes: boolean, manifest: ZoteroManifest) {
+	const pending = "pending" in cursor ? cursor.pending : undefined;
+	const offset = resumes && pending?.targetVersion === manifest.targetVersion ? pending.offset : 0;
+	return offset > manifest.entries.length ? 0 : offset;
+}
+
+/**
+ * Reads the manifest from where the read starts. When it restores something
+ * in the local trash, the read starts over from the beginning so unchanged
+ * descendants and memberships come back with it.
+ */
+async function readSnapshot(
+	client: ZoteroApiClient,
+	prefix: string,
+	maxSnapshotRecords: number,
+	read: {
+		start: { snapshotSince: number; resumes: boolean };
+		baseVersion: number;
+		localState: LocalSourceState;
+		previousSoftTrash: SoftTrashState;
+	},
+) {
+	const manifest = await readManifest(client, prefix, read.start.snapshotSince, maxSnapshotRecords);
+	const restores =
+		!read.start.resumes &&
+		read.baseVersion > 0 &&
+		manifestRestoresTombstone(manifest, read.localState, read.previousSoftTrash);
+	if (!restores) return { manifest, snapshotSince: read.start.snapshotSince };
+	return { manifest: await readManifest(client, prefix, 0, maxSnapshotRecords), snapshotSince: 0 };
+}
+
+function readStart(cursor: ZoteroCursor, replay: boolean, downloadPdfs: boolean) {
+	const pending = "pending" in cursor ? cursor.pending : undefined;
+	if (pending && (pending.pdfs ?? true) === downloadPdfs) {
+		return { snapshotSince: pending.snapshotSince, resumes: true };
+	}
+	const fromStart = Boolean(pending) || replay || cursorAddedPdfs(cursor) !== downloadPdfs;
+	return { snapshotSince: fromStart ? 0 : currentLibraryVersion(cursor), resumes: false };
+}
+
+/** Whether the last complete read added PDFs; a cursor from before the setting did. */
+function cursorAddedPdfs(cursor: ZoteroCursor) {
+	return !("pdfs" in cursor && cursor.pdfs === false);
 }
 
 function expandLocalDescendantKeys<
@@ -759,6 +839,104 @@ function expandLocalDescendantDeletes(
 	return { ...manifest, entries: retainedEntries };
 }
 
+/** A read that found nothing new still moves the cursor on. */
+async function completeEmptyRead(
+	options: SyncZoteroSourceOptions,
+	read: {
+		expectedConfiguration: Record<string, unknown>;
+		expectedCursor: ZoteroCursor;
+		fetchedAt: Date;
+		nextCursor: ReturnType<typeof completedCursor>;
+		targetVersion: number;
+	},
+) {
+	await writeSourceIngestionBatch(options.database, {
+		collections: [],
+		// A configuration changed since the read started, such as its PDF setting, rejects the batch.
+		expectedConfiguration: read.expectedConfiguration,
+		expectedCursor: read.expectedCursor,
+		fetchedAt: read.fetchedAt,
+		items: [],
+		mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
+		nextCursor: read.nextCursor,
+		sourceConnectionKey: options.sourceConnectionKey,
+		sourceSyncRunId: options.run?.id,
+	});
+	await options.attachmentProcessor?.flushCleanup?.(options.sourceConnectionKey);
+	return { batches: 1, records: 0, targetVersion: read.targetVersion, unresolvedRelations: 0 };
+}
+
+/** Writes the manifest's records batch by batch; each batch moves the cursor on, so a restart carries on after it. */
+async function writeManifestBatches(
+	options: SyncZoteroSourceOptions,
+	read: {
+		manifest: ZoteroManifest;
+		offset: number;
+		cursor: ZoteroCursor;
+		previousSoftTrash: SoftTrashState;
+		nextSoftTrash: SoftTrashState;
+		snapshotSince: number;
+		excludedCollectionKeys: Set<string>;
+		attachmentContext: ZoteroAttachmentProcessorContext;
+		fetchedAt: Date;
+		downloadPdfs: boolean;
+		maxRecordsPerBatch: number;
+		expectedConfiguration: Record<string, unknown>;
+	},
+) {
+	const { manifest, cursor, previousSoftTrash, nextSoftTrash, snapshotSince, fetchedAt } = read;
+	let offset = read.offset;
+	let expectedCursor: ZoteroCursor = cursor;
+	let batches = 0;
+	let unresolvedRelations = 0;
+	while (offset < manifest.entries.length) {
+		const end = Math.min(
+			offset + read.maxRecordsPerBatch,
+			manifest.entries.length,
+		);
+		const mapped = await mapManifestEntries(
+			manifest.entries.slice(offset, end),
+			options.attachmentProcessor,
+			read.excludedCollectionKeys,
+			read.attachmentContext,
+		);
+		const nextCursor =
+			end === manifest.entries.length
+				? completedCursor(manifest.targetVersion, nextSoftTrash, read.downloadPdfs)
+				: pendingCursor(cursor, previousSoftTrash, {
+						offset: end,
+						snapshotSince,
+						targetVersion: manifest.targetVersion,
+						pdfs: read.downloadPdfs,
+					});
+		const written = await writeSourceIngestionBatch(options.database, {
+			...mapped,
+			expectedConfiguration: read.expectedConfiguration,
+			expectedCursor,
+			fetchedAt,
+			mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
+			nextCursor,
+			sourceConnectionKey: options.sourceConnectionKey,
+			sourceSyncRunId: options.run?.id,
+		});
+		unresolvedRelations += written.written.unresolvedRelations;
+		// The batch is durable now; slow file cleanup must not hold the count back.
+		await options.run?.report(end, manifest.entries.length);
+		await options.attachmentProcessor?.flushCleanup?.(
+			options.sourceConnectionKey,
+		);
+		expectedCursor = nextCursor;
+		offset = end;
+		batches += 1;
+	}
+	return {
+		batches,
+		records: manifest.entries.length,
+		targetVersion: manifest.targetVersion,
+		unresolvedRelations,
+	};
+}
+
 export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	const connection = await loadZoteroSourceConnection(
 		options.database,
@@ -776,6 +954,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		client,
 		prefix,
 		sourceConnectionKey: options.sourceConnectionKey,
+		publishPdfs: config.downloadPdfs,
 	};
 	await options.attachmentProcessor?.flushCleanup?.(
 		options.sourceConnectionKey,
@@ -804,35 +983,15 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				),
 			]);
 			const previousSoftTrash = previousSoftTrashState(cursor);
-			let snapshotSince =
-				"pending" in cursor && cursor.pending
-					? cursor.pending.snapshotSince
-					: requiresMappingReplay
-						? 0
-						: baseVersion;
-			let manifest = await readManifest(
-				client,
-				prefix,
-				snapshotSince,
-				config.maxSnapshotRecords,
-			);
-			if (
-				!("pending" in cursor && cursor.pending) &&
-				baseVersion > 0 &&
-				manifestRestoresTombstone(
-					manifest,
-					localState,
-					previousSoftTrash,
-				)
-			) {
-				snapshotSince = 0;
-				manifest = await readManifest(
-					client,
-					prefix,
-					0,
-					config.maxSnapshotRecords,
-				);
-			}
+			const start = readStart(cursor, requiresMappingReplay, config.downloadPdfs);
+			const snapshot = await readSnapshot(client, prefix, config.maxSnapshotRecords, {
+				start,
+				baseVersion,
+				localState,
+				previousSoftTrash,
+			});
+			const snapshotSince = snapshot.snapshotSince;
+			let manifest = snapshot.manifest;
 			const nextSoftTrash = nextSoftTrashState(
 				manifest,
 				previousSoftTrash,
@@ -864,101 +1023,37 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					config.maxSnapshotRecords,
 				);
 			}
-			let offset =
-				"pending" in cursor &&
-				cursor.pending?.targetVersion === manifest.targetVersion
-					? cursor.pending.offset
-					: 0;
-			if (offset > manifest.entries.length) {
-				offset = 0;
-			}
-			let expectedCursor = cursor;
+			const offset = resumeOffset(cursor, start.resumes, manifest);
+			const expectedCursor = cursor;
 			const fetchedAt = new Date();
 			if (manifest.entries.length > 0) {
 				await options.run?.report(offset, manifest.entries.length);
 			}
 
 			if (manifest.entries.length === 0) {
-				const nextCursor = completedCursor(
-					manifest.targetVersion,
-					nextSoftTrash,
-				);
-				await writeSourceIngestionBatch(options.database, {
-					collections: [],
+				return completeEmptyRead(options, {
+					expectedConfiguration: connection.config,
 					expectedCursor,
 					fetchedAt,
-					items: [],
-					mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
-					nextCursor,
-					sourceConnectionKey: options.sourceConnectionKey,
-					sourceSyncRunId: options.run?.id,
-				});
-				await options.attachmentProcessor?.flushCleanup?.(
-					options.sourceConnectionKey,
-				);
-				return {
-					batches: 1,
-					records: 0,
+					nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, config.downloadPdfs),
 					targetVersion: manifest.targetVersion,
-					unresolvedRelations: 0,
-				};
+				});
 			}
 
-			let batches = 0;
-			let unresolvedRelations = 0;
-			while (offset < manifest.entries.length) {
-				const end = Math.min(
-					offset + config.maxRecordsPerBatch,
-					manifest.entries.length,
-				);
-				const mapped = await mapManifestEntries(
-					manifest.entries.slice(offset, end),
-					options.attachmentProcessor,
-					excludedCollectionKeys,
-					attachmentContext,
-				);
-				const nextCursor =
-					end === manifest.entries.length
-						? completedCursor(manifest.targetVersion, nextSoftTrash)
-						: {
-								libraryVersion: baseVersion,
-								softTrashedCollectionKeys: [
-									...previousSoftTrash.softTrashedCollectionKeys,
-								].sort(),
-								softTrashedItemKeys: [
-									...previousSoftTrash.softTrashedItemKeys,
-								].sort(),
-								pending: {
-									offset: end,
-									snapshotSince,
-									targetVersion: manifest.targetVersion,
-								},
-							};
-				const written = await writeSourceIngestionBatch(options.database, {
-					...mapped,
-					expectedCursor,
-					fetchedAt,
-					mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
-					nextCursor,
-					sourceConnectionKey: options.sourceConnectionKey,
-					sourceSyncRunId: options.run?.id,
-				});
-				unresolvedRelations += written.written.unresolvedRelations;
-				// The batch is durable now; slow file cleanup must not hold the count back.
-				await options.run?.report(end, manifest.entries.length);
-				await options.attachmentProcessor?.flushCleanup?.(
-					options.sourceConnectionKey,
-				);
-				expectedCursor = nextCursor;
-				offset = end;
-				batches += 1;
-			}
-			return {
-				batches,
-				records: manifest.entries.length,
-				targetVersion: manifest.targetVersion,
-				unresolvedRelations,
-			};
+			return writeManifestBatches(options, {
+				manifest,
+				offset,
+				cursor,
+				previousSoftTrash,
+				nextSoftTrash,
+				snapshotSince,
+				excludedCollectionKeys,
+				attachmentContext,
+				fetchedAt,
+				downloadPdfs: config.downloadPdfs,
+				maxRecordsPerBatch: config.maxRecordsPerBatch,
+				expectedConfiguration: connection.config,
+			});
 		} catch (error) {
 			if (
 				!(error instanceof ZoteroSnapshotChangedError) ||

@@ -22,6 +22,8 @@ export type ZoteroAttachmentProcessorContext = {
 	client: ZoteroApiClient;
 	prefix: string;
 	sourceConnectionKey: string;
+	/** False when the source adds no PDFs. */
+	publishPdfs: boolean;
 };
 
 export type ZoteroAttachmentProcessor = {

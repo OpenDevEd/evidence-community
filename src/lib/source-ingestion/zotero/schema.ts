@@ -25,6 +25,8 @@ export const zoteroConnectionConfigSchema = z
 			.min(1_000)
 			.max(120_000)
 			.default(30_000),
+		// Off, the group adds no PDFs, not even for attachments tagged for publication.
+		downloadPdfs: z.boolean().default(true),
 	})
 	.strict();
 
@@ -88,11 +90,15 @@ export const zoteroCursorSchema = z.union([
 			libraryVersion: z.number().int().nonnegative(),
 			softTrashedCollectionKeys: z.array(z.string().min(1).max(512)),
 			softTrashedItemKeys: z.array(z.string().min(1).max(512)),
+			// False once a complete read left PDFs out; absent, the last read added them.
+			pdfs: z.literal(false).optional(),
 			pending: z
 				.object({
 					offset: z.number().int().nonnegative(),
 					snapshotSince: z.number().int().nonnegative(),
 					targetVersion: z.number().int().nonnegative(),
+					// False while this read leaves PDFs out.
+					pdfs: z.literal(false).optional(),
 				})
 				.strict()
 				.optional(),

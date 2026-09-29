@@ -853,6 +853,56 @@ async function verify() {
 			)}`,
 		);
 
+		// Turning PDFs off, then on again, rereads the whole group once each time.
+		const pdfsSeen: boolean[] = [];
+		const watchingProcessor = async (record: RemoteRecord, context?: { publishPdfs: boolean }) => {
+			pdfsSeen.push(context?.publishPdfs ?? true);
+			return attachmentProcessor(record);
+		};
+		const setPdfs = async (downloadPdfs: boolean) => {
+			const [current] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+			await database
+				.update(sourceConnection)
+				.set({ config: { ...(current!.config as Record<string, unknown>), downloadPdfs } })
+				.where(eq(sourceConnection.key, connectionKey));
+		};
+		const syncWithPdfs = () =>
+			syncZoteroSource({ database, sourceConnectionKey: connectionKey, credentialResolver, attachmentProcessor: watchingProcessor, sleep: async () => {} });
+		await setPdfs(false);
+		const pdfsOff = await syncWithPdfs();
+		const pdfsOffSettled = await syncWithPdfs();
+		const offSeen = [...pdfsSeen];
+		await setPdfs(true);
+		const pdfsOn = await syncWithPdfs();
+		assert(
+			pdfsOff.records === 15 && pdfsOffSettled.records === 0 && pdfsOn.records === 15 &&
+				offSeen.length > 0 && offSeen.every((publish) => !publish) &&
+				pdfsSeen.slice(offSeen.length).every((publish) => publish),
+			`A PDF setting change did not reread the group exactly once: ${JSON.stringify({ off: pdfsOff.records, settled: pdfsOffSettled.records, on: pdfsOn.records, pdfsSeen })}`,
+		);
+
+		// A read left unfinished under one setting starts over when the setting changes.
+		const [settled] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+		const settledCursor = settled!.syncCursor as { libraryVersion: number };
+		await database
+			.update(sourceConnection)
+			.set({
+				syncCursor: {
+					...settledCursor,
+					pending: { offset: 1, snapshotSince: settledCursor.libraryVersion, targetVersion: settledCursor.libraryVersion },
+				},
+			})
+			.where(eq(sourceConnection.key, connectionKey));
+		await setPdfs(false);
+		pdfsSeen.length = 0;
+		const restarted = await syncWithPdfs();
+		assert(
+			restarted.records === 15 && pdfsSeen.length > 0 && pdfsSeen.every((publish) => !publish),
+			`An unfinished read did not start over after the PDF setting changed: ${JSON.stringify({ records: restarted.records, pdfsSeen })}`,
+		);
+		await setPdfs(true);
+		await syncWithPdfs();
+
 		remote.version = 11;
 		const movedRemote = remote.items.get("MOVE2345")!;
 		movedRemote.version = 11;
