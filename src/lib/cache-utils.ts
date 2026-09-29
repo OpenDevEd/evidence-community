@@ -15,8 +15,11 @@ async function cachedDocument<T>(libraryConfig: LibraryServerConfig, key: string
 	if (!cached) {
 		try {
 			const result = await cacheIndex.getDocument(docId);
-			// Documents written before `computedAt` was stored count as just written.
-			cached = { value: JSON.parse(result.content) as T, computedAt: Number(result.computedAt) || Date.now() };
+			// Documents written before `computedAt` was stored count as old, so they are refreshed behind the page.
+			const read = { value: JSON.parse(result.content) as T, computedAt: Number(result.computedAt) || 0 };
+			// A compute may have finished while this read was in flight; the newer value wins.
+			const current = remembered.get(docId) as Cached<T> | undefined;
+			cached = current && current.computedAt >= read.computedAt ? current : read;
 			remembered.set(docId, cached);
 		} catch {
 			// Cache miss
