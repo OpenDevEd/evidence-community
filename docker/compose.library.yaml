@@ -103,6 +103,10 @@ services:
         environment:
             <<: *runtime-environment
             SOURCE_SYNC_WORKER_ID: source-sync
+            # DNS lookups share Node's threadpool with the database driver's. With
+            # the default four threads, a PDF stage's many hosts queued the
+            # database's lookup past its five-second connect timeout.
+            UV_THREADPOOL_SIZE: "128"
         configs:
             - *runtime-config
         volumes:
