@@ -58,7 +58,8 @@ export function classifySourceError(error: unknown): SourceSyncErrorCode {
 	if (error instanceof SourceCredentialNotFoundError) return "missing_key";
 	if (error instanceof OpenScholarCollectionGoneError) return error.code;
 	if (error instanceof OpenScholarServiceError) {
-		return error.status >= 500 ? "unavailable" : (PROVIDER_STATUS_CODES[error.status] ?? "internal");
+		if (error.status === null || error.status >= 500) return "unavailable";
+		return PROVIDER_STATUS_CODES[error.status] ?? "internal";
 	}
 	if (error instanceof ZoteroSnapshotTooLargeError) return "too_large";
 	if (error instanceof ZoteroApiError || error instanceof OpenAlexApiError) {

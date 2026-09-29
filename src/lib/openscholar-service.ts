@@ -3,13 +3,17 @@ import { readBoundedResponse } from "@/lib/source-ingestion/read-bounded-respons
 
 export type OpenScholarService = LibraryServerConfig["authentication"]["openScholar"];
 
-/** OpenScholar answered without success. `code` is the `error` its body names, when it names one. */
+/**
+ * OpenScholar answered without success, or never answered (`status` null).
+ * `code` is the `error` its body names, when it names one.
+ */
 export class OpenScholarServiceError extends Error {
 	constructor(
-		readonly status: number,
+		readonly status: number | null,
 		readonly code: string | null,
+		options?: ErrorOptions,
 	) {
-		super(`OpenScholar returned ${status}${code ? ` (${code})` : ""}`);
+		super(status === null ? "OpenScholar could not be reached" : `OpenScholar returned ${status}${code ? ` (${code})` : ""}`, options);
 		this.name = "OpenScholarServiceError";
 	}
 }
@@ -40,6 +44,10 @@ export async function postToOpenScholar(
 		headers: { "Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}` },
 		body: JSON.stringify({ ...body, libraryId: service.libraryId }),
 		signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(options.signal ? [options.signal] : [])]),
+	}).catch((error: unknown) => {
+		// A caller's own abort stays an abort; anything else never reached OpenScholar.
+		if (options.signal?.aborted) throw error;
+		throw new OpenScholarServiceError(null, null, { cause: error });
 	});
 	const bytes = await readBoundedResponse(response, response.ok ? (options.maxBytes ?? 2_000_000) : 8_192, timeoutMs, timeoutMs);
 	const text = new TextDecoder().decode(bytes);

@@ -18,7 +18,7 @@ async function serviceRequest(path: string, body: object, context: TopicCatalogC
   try {
     return await postToOpenScholar(context.config.authentication.openScholar, path, {...body, contractVersion: 1}, {fetch: context.fetch});
   } catch (error) {
-    throw error instanceof OpenScholarServiceError ? new TopicServiceError(error.status) : error;
+    throw error instanceof OpenScholarServiceError && error.status !== null ? new TopicServiceError(error.status) : error;
   }
 }
 

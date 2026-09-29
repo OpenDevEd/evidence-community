@@ -138,6 +138,13 @@ it("imports a collection a hundred ids per request, shares works with an OpenAle
 		const [withdrawn] = await db.select({ deleted: item.deleted }).from(item).where(eq(item.key, followed.get("W251")!));
 		expect(kept?.deleted).toBe(0);
 		expect(withdrawn?.deleted).toBe(1);
+
+		// An emptied collection withdraws everything it held, without asking OpenAlex.
+		openAlexRequests.length = 0;
+		collection.current = { version: "v3", ids: [] };
+		await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request });
+		expect(openAlexRequests).toEqual([]);
+		expect((await activeKeys(db, "openscholar-c1")).size).toBe(0);
 	});
 }, 120_000);
 
