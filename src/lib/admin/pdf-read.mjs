@@ -101,7 +101,8 @@ export async function readPdf(loadingTask) {
 
 /**
  * The cover as a JPEG at quality 92. Encoding a PNG took about 30 ms of a
- * PDF's 120 even through sharp; this takes about 12, and the file is smaller.
+ * PDF's 120 even through sharp; this takes about 12, for a file about a
+ * tenth larger.
  * @param {import("@napi-rs/canvas").Canvas} canvas
  */
 function coverJpeg(canvas) {
