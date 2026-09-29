@@ -26,6 +26,7 @@ function input(overrides: Partial<SourceStatusInput> = {}): SourceStatusInput {
 		provider: "zotero",
 		search: null,
 		searchFailed: 0,
+		pdfs: null,
 		searchable: 0,
 		...overrides,
 	};
@@ -176,6 +177,60 @@ describe("sourceStatus", () => {
 
 	it("leaves the change count unknown until a run changes something", () => {
 		expect(sourceStatus(input({ lastSuccessAt: minutesAgo(1) })).changed).toBeNull();
+	});
+
+	it("shows a run adding PDFs as the PDF step, counting this run's PDFs at its own rate", () => {
+		const status = sourceStatus(
+			input({
+				activeRun: {
+					leaseExpiresAt: minutesAgo(-5),
+					pdfsMissed: 100,
+					recordsDone: 600,
+					recordsFrom: 0,
+					recordsFromAt: minutesAgo(2),
+					recordsTotal: 2_000,
+					stage: "pdfs",
+					startedAt: minutesAgo(30),
+				},
+				pdfs: { added: 9_000, missed: 1_000 },
+			}),
+		);
+		expect(status).toMatchObject({
+			done: 600,
+			minutesLeft: 5,
+			pdfs: { added: 500, missed: 100 },
+			phase: "pdfs",
+			state: "running",
+			total: 2_000,
+		});
+	});
+
+	it("shows the records' search update before their PDFs", () => {
+		const status = sourceStatus(
+			input({
+				activeRun: {
+					leaseExpiresAt: minutesAgo(-5),
+					pdfsMissed: 0,
+					recordsDone: 50,
+					recordsFrom: 0,
+					recordsFromAt: minutesAgo(1),
+					recordsTotal: 2_000,
+					stage: "pdfs",
+					startedAt: minutesAgo(30),
+				},
+				search: { done: 400, startedAt: minutesAgo(10), total: 1_000 },
+			}),
+		);
+		expect(status).toMatchObject({ done: 400, phase: "search", state: "running", total: 1_000 });
+	});
+
+	it("says when a failed run had imported every record and stopped adding PDFs", () => {
+		const failure = { at: minutesAgo(3), code: "internal" as const, details: "Error: storage unavailable" };
+		expect(sourceStatus(input({ lastError: { ...failure, inPdfs: true } }))).toMatchObject({
+			failedIn: "pdfs",
+			state: "failed",
+		});
+		expect(sourceStatus(input({ lastError: failure }))).not.toHaveProperty("failedIn");
 	});
 
 	it("is idle before the first import", () => {

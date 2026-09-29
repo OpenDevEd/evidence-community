@@ -54,7 +54,7 @@ import type {
 	AdminSourceIssuePage,
 	AdminSourceIssueType,
 } from "@/lib/admin/types";
-import type { SourceStatus } from "@/lib/source-ingestion/source-status";
+import type { PdfCounts, SourceStatus } from "@/lib/source-ingestion/source-status";
 
 import {
 	dismissAdminSourceIssues,
@@ -140,14 +140,34 @@ function Phase({ label, icon, state }: { label: string; icon: typeof Database01I
 	);
 }
 
-function phaseStates(activity: SourceStatus): [PhaseState, PhaseState] {
+const PHASE_ORDER = ["import", "search", "pdfs"] as const;
+
+/** Import records, update search, then add PDFs: the steps before the current one are done. */
+function phaseStates(activity: SourceStatus): [PhaseState, PhaseState, PhaseState] {
 	if (activity.state === "running") {
-		return activity.phase === "import" ? ["running", "waiting"] : ["done", "running"];
+		const current = PHASE_ORDER.indexOf(activity.phase);
+		return PHASE_ORDER.map((_, step) =>
+			step < current ? "done" : step === current ? "running" : "waiting",
+		) as [PhaseState, PhaseState, PhaseState];
 	}
 	// Search updates that failed show on the search step; a failed import never reached it.
 	const search: PhaseState = activity.searchFailed > 0 ? "failed" : "waiting";
-	if (activity.state === "succeeded") return ["done", search === "failed" ? "failed" : "done"];
-	return activity.state === "failed" ? ["failed", search] : ["waiting", "waiting"];
+	if (activity.state === "succeeded") return ["done", search === "failed" ? "failed" : "done", "done"];
+	if (activity.state === "failed") {
+		return activity.failedIn === "pdfs"
+			? ["done", search === "failed" ? "failed" : "done", "failed"]
+			: ["failed", search, "waiting"];
+	}
+	return ["waiting", "waiting", "waiting"];
+}
+
+function Connector({ lit }: { lit: boolean }) {
+	return (
+		<span
+			aria-hidden
+			className={`h-px min-w-4 flex-1 transition-colors duration-500 motion-reduce:transition-none ${lit ? "bg-emerald-500/50" : "bg-black/10 dark:bg-white/10"}`}
+		/>
+	);
 }
 
 /** Records whose search update failed; they wait for a retry from the header. */
@@ -162,19 +182,71 @@ function SearchFailed({ activity }: { activity: SourceStatus }) {
 	);
 }
 
-/** The two phases of an import, with the one under way lit. */
+/** The phases of an import, with the one under way lit. Add PDFs shows for a source that adds them. */
 function PhaseTrack({ activity }: { activity: SourceStatus }) {
-	const [importState, searchState] = phaseStates(activity);
+	const [importState, searchState, pdfState] = phaseStates(activity);
 	return (
 		<div className="flex items-center gap-2">
 			<Phase label="Import records" icon={Database01Icon} state={importState} />
-			<span
-				aria-hidden
-				className={`h-px flex-1 transition-colors duration-500 motion-reduce:transition-none ${importState === "done" ? "bg-emerald-500/50" : "bg-black/10 dark:bg-white/10"}`}
-			/>
+			<Connector lit={importState === "done"} />
 			<Phase label="Update search" icon={Search01Icon} state={searchState} />
+			{activity.pdfs ? (
+				<>
+					<Connector lit={searchState === "done"} />
+					<Phase label="Add PDFs" icon={Pdf01Icon} state={pdfState} />
+				</>
+			) : null}
 		</div>
 	);
+}
+
+const SEGMENT = "h-full transition-all duration-700 ease-out motion-reduce:transition-none";
+
+/** PDFs added, then PDFs that could not be downloaded, along the PDFs to go through. */
+function PdfBar({ pdfs, total, label, tone }: { pdfs: PdfCounts; total: number; label: string; tone: "running" | "done" }) {
+	const share = (value: number) => `${total ? Math.min((value / total) * 100, 100) : 0}%`;
+	return (
+		<div
+			role="progressbar"
+			aria-label={label}
+			aria-valuemin={0}
+			aria-valuemax={total}
+			aria-valuenow={pdfs.added + pdfs.missed}
+			className="flex h-2.5 w-full overflow-hidden rounded-full bg-black/[0.08] dark:bg-white/[0.1]"
+		>
+			<span className={`${SEGMENT} ${tone === "running" ? "bg-accent" : "bg-emerald-500"}`} style={{ width: share(pdfs.added) }} />
+			<span className={`${SEGMENT} bg-black/25 dark:bg-white/25`} style={{ width: share(pdfs.missed) }} />
+		</div>
+	);
+}
+
+function PdfLegend({ pdfs, tone }: { pdfs: PdfCounts; tone: "running" | "done" }) {
+	return (
+		<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+			<span className="inline-flex items-center gap-1">
+				<HugeiconsIcon
+					aria-hidden
+					icon={Pdf01Icon}
+					size={13}
+					className={tone === "running" ? "text-accent" : "text-emerald-600 dark:text-emerald-400"}
+				/>
+				{count(pdfs.added)} added
+			</span>
+			{pdfs.missed ? (
+				<span className="inline-flex items-center gap-1">
+					<HugeiconsIcon aria-hidden icon={FileMinusIcon} size={13} />
+					{count(pdfs.missed)} could not be downloaded
+				</span>
+			) : null}
+		</span>
+	);
+}
+
+/** Time left, in hours once it runs past two. */
+function timeLeft(minutes: number | null) {
+	if (minutes === null) return null;
+	if (minutes < 1) return "Under a minute left";
+	return minutes >= 120 ? `${Math.round(minutes / 60)} h left` : `${Math.round(minutes)} min left`;
 }
 
 /** Moves a shown number toward its new value, so a change reads as progress. */
@@ -217,37 +289,51 @@ function Headline({ value, unit }: { value: number; unit: string }) {
 	);
 }
 
+const RUNNING_UNIT = { import: "records", search: "records made searchable", pdfs: "PDFs" } as const;
+const RUNNING_LABEL = { import: "Import progress", search: "Search update progress", pdfs: "PDF progress" } as const;
+
 function RunningActivity({ activity }: { activity: Extract<SourceStatus, { state: "running" }> }) {
-	const unit = activity.phase === "import" ? "records" : "records made searchable";
+	const unit = RUNNING_UNIT[activity.phase];
 	const fraction = activity.total ? Math.min(activity.done / activity.total, 1) : null;
+	const pdfs = activity.phase === "pdfs" ? activity.pdfs : null;
 	return (
 		<div className="space-y-2.5">
 			<Headline
 				value={activity.done}
 				unit={activity.total === null ? `${unit} so far` : `of ${count(activity.total)} ${unit}`}
 			/>
-			<Progress
-				aria-label={activity.phase === "import" ? "Import progress" : "Search update progress"}
-				isIndeterminate={fraction === null}
-				value={fraction === null ? undefined : fraction * 100}
-				classNames={{
-					track: "h-2.5 bg-black/[0.08] dark:bg-white/[0.1]",
-					indicator: "duration-700 ease-out motion-reduce:transition-none",
-				}}
-			/>
+			{pdfs && activity.total ? (
+				<PdfBar pdfs={pdfs} total={activity.total} label={RUNNING_LABEL.pdfs} tone="running" />
+			) : (
+				<Progress
+					aria-label={RUNNING_LABEL[activity.phase]}
+					isIndeterminate={fraction === null}
+					value={fraction === null ? undefined : fraction * 100}
+					classNames={{
+						track: "h-2.5 bg-black/[0.08] dark:bg-white/[0.1]",
+						indicator: "duration-700 ease-out motion-reduce:transition-none",
+					}}
+				/>
+			)}
 			<div className="grid grid-cols-3 items-center text-[11px] tabular-nums text-black/55 dark:text-white/55">
-				<span>Started {clock(new Date(activity.startedAt))}</span>
+				{pdfs ? <PdfLegend pdfs={pdfs} tone="running" /> : <span>Started {clock(new Date(activity.startedAt))}</span>}
 				<span className="text-center text-xs font-semibold text-black/75 dark:text-white/80">
 					{fraction === null ? null : `${Math.floor(fraction * 100)}%`}
 				</span>
-				<span className="text-right">
-					{activity.minutesLeft === null
-						? null
-						: activity.minutesLeft < 1
-							? "Under a minute left"
-							: `${Math.round(activity.minutesLeft)} min left`}
-				</span>
+				<span className="text-right">{timeLeft(activity.minutesLeft)}</span>
 			</div>
+		</div>
+	);
+}
+
+/** A finished source's PDFs: added, and those that could not be downloaded. */
+function PdfSummary({ pdfs }: { pdfs: PdfCounts }) {
+	const total = pdfs.added + pdfs.missed;
+	if (!total) return null;
+	return (
+		<div className="space-y-2 text-[11px] tabular-nums text-black/55 dark:text-white/55">
+			<PdfBar pdfs={pdfs} total={total} label="PDFs added" tone="done" />
+			<PdfLegend pdfs={pdfs} tone="done" />
 		</div>
 	);
 }
@@ -267,7 +353,7 @@ function FailedActivity({
 		<div className="space-y-3">
 			<div className="space-y-1.5">
 				<p className="text-xl font-semibold leading-tight tracking-tight text-rose-700 dark:text-rose-300">
-					Import failed {when(activity.failure.at, now)}
+					{activity.failedIn === "pdfs" ? "PDFs stopped" : "Import failed"} {when(activity.failure.at, now)}
 				</p>
 				<p className="text-sm leading-relaxed text-black/70 dark:text-white/75">
 					{paused && RETRIES_ON_ITS_OWN.has(activity.failure.code)
@@ -275,9 +361,14 @@ function FailedActivity({
 						: FAILURE_MESSAGES[activity.failure.code](sourceProviderName(activity.provider))}
 				</p>
 				<p className="text-[11px] text-black/50 dark:text-white/50">
-					{activity.lastSuccessAt ? `Last success ${when(activity.lastSuccessAt, now)}` : "No import has succeeded yet"}
+					{activity.failedIn === "pdfs"
+						? "Every record stays searchable. Retrying carries on from the last PDF added."
+						: activity.lastSuccessAt
+							? `Last success ${when(activity.lastSuccessAt, now)}`
+							: "No import has succeeded yet"}
 				</p>
 			</div>
+			{activity.failedIn === "pdfs" && activity.pdfs ? <PdfSummary pdfs={activity.pdfs} /> : null}
 			<TechnicalDetails details={activity.failure.details}>
 				{configurationHref ? (
 					<Button
@@ -338,6 +429,7 @@ function SourceActivityPanel({
 								: `${count(activity.changed)} changed in the last import, checked ${ago(activity.lastSuccessAt, now)}`
 							: null}
 					</p>
+					{activity.pdfs ? <PdfSummary pdfs={activity.pdfs} /> : null}
 				</div>
 			) : null}
 			{activity.state === "failed" ? (
@@ -1088,9 +1180,7 @@ const BADGE: Record<SourceStatus["state"], { className: string; icon: typeof Clo
 function badgeDescription(activity: SourceStatus) {
 	const state =
 		activity.state === "running"
-			? activity.phase === "import"
-				? "Importing"
-				: "Updating search"
+			? { import: "Importing", search: "Updating search", pdfs: "Adding PDFs" }[activity.phase]
 			: activity.state === "failed"
 				? "Last import failed"
 				: activity.state === "succeeded"

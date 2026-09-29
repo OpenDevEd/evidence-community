@@ -6696,6 +6696,7 @@ test("opens a source's status from the address and undoes a dismissed issue", as
 					issues: { zotero_file_metadata_invalid: 2 },
 					key: importedSource.key,
 					lastSuccessAt: timestamp,
+					pdfs: null,
 					provider: "zotero",
 					searchFailed: 0,
 					searchable: 12_450,
