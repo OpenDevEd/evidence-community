@@ -153,7 +153,7 @@ describe("OpenAlex works requests", () => {
 			},
 		});
 
-		expect(await client.works(query, "saved", 200)).toEqual(page);
+		expect(await client.works(query, "saved", 200, { followsCursor: true })).toEqual(page);
 		expect(requests).toEqual([
 			{ cursor: "saved", size: 200 },
 			{ cursor: "saved", size: 100 },
@@ -162,8 +162,30 @@ describe("OpenAlex works requests", () => {
 
 		// Later pages start at the size that worked. Ten pages at that size in all, and the next tries twice as many.
 		requests.length = 0;
-		for (let index = 0; index < 11; index++) await client.works(query, "next", 200);
+		for (let index = 0; index < 11; index++) await client.works(query, "next", 200, { followsCursor: true });
 		expect(requests.map(({ size }) => size)).toEqual([...Array(9).fill(50), 100, 50, 50]);
+
+		// A caller that reads one page and ignores the cursor always gets the size it asked for.
+		requests.length = 0;
+		await expect(client.works(query, "*", 100)).rejects.toMatchObject({ status: 500 });
+		expect(requests.map(({ size }) => size)).toEqual(Array(6).fill(100));
+	});
+
+	it("still asks for a smaller page when the search times out on the last retry", async () => {
+		const sizes: number[] = [];
+		const client = new OpenAlexClient({
+			apiKey: "test-key",
+			sleep: async () => {},
+			fetch: async (input) => {
+				sizes.push(Number(new URL(String(input)).searchParams.get("per_page")));
+				if (sizes.length < 6) return new Response("Bad gateway", { status: 502 });
+				return sizes.length === 6
+					? Response.json({ errors: [{ message: "Elasticsearch error: Connection timed out" }] }, { status: 500 })
+					: Response.json(page);
+			},
+		});
+		expect(await client.works(query, "saved", 200, { followsCursor: true })).toEqual(page);
+		expect(sizes).toEqual([...Array(6).fill(200), 100]);
 	});
 
 	it("retries other server errors at the same page size", async () => {
@@ -173,11 +195,14 @@ describe("OpenAlex works requests", () => {
 			sleep: async () => {},
 			fetch: async (input) => {
 				sizes.push(Number(new URL(String(input)).searchParams.get("per_page")));
-				return sizes.length === 1 ? new Response("Bad gateway", { status: 502 }) : Response.json(page);
+				if (sizes.length === 1) return new Response("Bad gateway", { status: 502 });
+				// A 500 whose body cannot be read is retried like any other.
+				if (sizes.length === 2) return new Response(null, { status: 500 });
+				return Response.json(page);
 			},
 		});
-		expect(await client.works(query, "saved", 200)).toEqual(page);
-		expect(sizes).toEqual([200, 200]);
+		expect(await client.works(query, "saved", 200, { followsCursor: true })).toEqual(page);
+		expect(sizes).toEqual([200, 200, 200]);
 	});
 
 	it("reports provider failures without retrying authentication errors", async () => {

@@ -87,12 +87,20 @@ const PAGES_BEFORE_GROWING = 10;
 
 class OpenAlexSearchTimeoutError extends OpenAlexApiError {}
 
-/** Throws on OpenAlex's search timeout, so the page can be asked for at a smaller size. */
+/**
+ * Throws on OpenAlex's search timeout, so the page can be asked for at a
+ * smaller size. Any other 500 comes back with its body, to be retried or
+ * reported as before.
+ */
 async function throwIfSearchTimeout(response: Response) {
-	if (response.status !== 500) return response.body?.cancel();
-	const body = new TextDecoder().decode(await readBoundedResponse(response, 8_192, 30_000, 30_000));
+	if (response.status !== 500) return response;
+	const body = await readBoundedResponse(response, 8_192, 30_000, 30_000).then(
+		(bytes) => new TextDecoder().decode(bytes),
+		() => "",
+	);
 	if (body.includes(SEARCH_TIMEOUT))
 		throw new OpenAlexSearchTimeoutError(`OpenAlex works returned 500: ${body}`, 500);
+	return new Response(body, { status: response.status, headers: response.headers });
 }
 
 function retryDelay(response: Response, attempt: number) {
@@ -137,8 +145,9 @@ export class OpenAlexClient {
 				await sleep(1_000 * 2 ** attempt);
 				continue;
 			}
+			if (canShrink) response = await throwIfSearchTimeout(response);
 			if (!isRetryable(response, attempt)) return response;
-			await (canShrink ? throwIfSearchTimeout(response) : response.body?.cancel());
+			await response.body?.cancel();
 			await sleep(retryDelay(response, attempt));
 		}
 		throw new OpenAlexApiError("OpenAlex works request exhausted retries");
@@ -153,20 +162,22 @@ export class OpenAlexClient {
 		return group_by.flatMap(({ key, count }) => (/^\d{4}$/.test(key) ? [{ year: Number(key), count }] : []));
 	}
 
-	/** One page of the query's works; "*" asks for the first. OpenAlex leaves `next_cursor` out without a cursor. */
-	async works(query: OpenAlexQuery, cursor: string, pageSize = 100) {
-		let size = Math.min(pageSize, this.pageLimit);
+	/**
+	 * One page of the query's works; "*" asks for the first. OpenAlex leaves
+	 * `next_cursor` out without a cursor. A caller that follows `next_cursor`
+	 * can take a smaller page than it asked for when OpenAlex's search times
+	 * out; any other caller always gets the size it asked for.
+	 */
+	async works(query: OpenAlexQuery, cursor: string, pageSize = 100, { followsCursor = false } = {}) {
+		let size = followsCursor ? Math.min(pageSize, this.pageLimit) : pageSize;
 		for (;;) {
 			const url = worksUrl(query, cursor, size, this.options.apiKey);
 			let body: unknown;
 			try {
-				body = await this.read(url, query.oql, size > MIN_PAGE_SIZE);
+				body = await this.read(url, query.oql, followsCursor && size > MIN_PAGE_SIZE);
 			} catch (error) {
 				if (!(error instanceof OpenAlexSearchTimeoutError)) throw error;
-				size = Math.max(MIN_PAGE_SIZE, Math.ceil(size / 2));
-				this.pageLimit = size;
-				this.pagesAtLimit = 0;
-				console.warn("OpenAlex search timed out; asking for fewer works a page", { pageSize: size });
+				size = this.shrink(size);
 				continue;
 			}
 			const page = openAlexPageSchema.parse(body);
@@ -175,12 +186,26 @@ export class OpenAlexClient {
 					"OpenAlex returned more works than requested",
 				);
 			}
-			if (this.pageLimit < OPENALEX_MAX_PAGE_SIZE && ++this.pagesAtLimit >= PAGES_BEFORE_GROWING) {
-				this.pageLimit = Math.min(OPENALEX_MAX_PAGE_SIZE, this.pageLimit * 2);
-				this.pagesAtLimit = 0;
-			}
+			this.countPage(size);
 			return page;
 		}
+	}
+
+	/** The next size to ask for after a search timeout at `size`. */
+	private shrink(size: number) {
+		const smaller = Math.max(MIN_PAGE_SIZE, Math.ceil(size / 2));
+		this.pageLimit = Math.min(this.pageLimit, smaller);
+		this.pagesAtLimit = 0;
+		console.warn("OpenAlex search timed out; asking for fewer works a page", { pageSize: smaller });
+		return smaller;
+	}
+
+	/** Only a page asked for at the current limit counts toward raising it. */
+	private countPage(size: number) {
+		if (size !== this.pageLimit || size >= OPENALEX_MAX_PAGE_SIZE) return;
+		if (++this.pagesAtLimit < PAGES_BEFORE_GROWING) return;
+		this.pageLimit = Math.min(OPENALEX_MAX_PAGE_SIZE, this.pageLimit * 2);
+		this.pagesAtLimit = 0;
 	}
 
 	private async read(url: URL, oql: string | undefined, canShrink = false): Promise<unknown> {
