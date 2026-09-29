@@ -113,7 +113,7 @@ export default async function Home({ params }: Props) {
 		? contentFrom(config.home, { arrival: t("stepArrival"), check: t("stepCheck"), publication: t("stepPublication") })
 		: defaultContent(config.identity.name);
 	// Not awaited: the page renders now and each part built from these figures streams in when they arrive.
-	const data = loadHomeData(new Date(), locale, config.home);
+	const data = loadHomeData(locale, config.home);
 	const { shapes } = await getWorldMap();
 	return (
 		<HomePage

@@ -9,6 +9,7 @@ import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryHomeConfig, LibraryServerConfig } from "@/config/library-config/schema";
 import { peekMeilisearchCache } from "@/lib/cache-utils";
+import { staleWhileRevalidate } from "@/lib/stale-while-revalidate";
 import { getComprehensiveStats, peekComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
 import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
@@ -117,7 +118,17 @@ function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries"
 	};
 }
 
-export async function loadHomeData(now: Date, locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
+/**
+ * Everything the home page shows below its heading. Nothing in it depends on the visitor, so every visitor gets the
+ * last copy at once, and after a minute a fresh one is counted behind the page. Only the first visit after a start
+ * waits. A new configuration revision is a new key; clearing the public cache forgets it.
+ */
+export async function loadHomeData(locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
+	const config = await getLibraryConfig();
+	return staleWhileRevalidate(`home:${config.revision}:${locale}`, 60_000, () => countHomeData(new Date(), locale, home));
+}
+
+async function countHomeData(now: Date, locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
 	const [stats, withPdf, facets, collections, cited, digests, journey] = await Promise.all([
 		peekComprehensiveStats().catch(fallback("statistics", null)),
 		// The shelf shows first pages, so it lists the newest records with a PDF: the "full text only" scope.
