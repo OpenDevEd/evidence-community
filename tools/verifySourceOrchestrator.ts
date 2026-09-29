@@ -7,7 +7,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, DrizzleQueryError, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import type { Database } from "../src/db/database-schema";
@@ -126,6 +126,36 @@ async function expectRejects(
 	} catch (error) {
 		if (!matches(error)) throw error;
 	}
+}
+
+/** A failed query records the database's reason, not just the SQL. */
+async function verifyQueryFailureReason(
+	database: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	statusOf: () => Promise<SourceStatus | undefined>,
+) {
+	await expectRejects(
+		runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("zotero", async () => {
+					await database.execute(sql`select 1 / 0`);
+					throw new Error("Expected the query to fail");
+				}),
+			]),
+			sourceConnectionKey: progressKey,
+			workerId: "query-worker",
+		}),
+		"DrizzleQueryError",
+		(error) => error instanceof DrizzleQueryError,
+	);
+	const queryFailure = await statusOf();
+	assert(
+		queryFailure?.state === "failed" &&
+			queryFailure.failure.details.startsWith("error: division by zero (22012) in: select 1 / 0"),
+		`A failed query did not record its database reason: ${JSON.stringify(queryFailure)}`,
+	);
 }
 
 async function verify() {
@@ -573,6 +603,7 @@ async function verify() {
 				partial.changed === 1,
 			`A failed run's written changes were not counted: ${JSON.stringify(partial)}`,
 		);
+		await verifyQueryFailureReason(database, statusOf);
 		// A dead worker's lease is not activity.
 		const deadLeaseAt = new Date(Date.now() - 60_000);
 		const [deadRun] = await database

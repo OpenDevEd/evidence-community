@@ -6,7 +6,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, DrizzleQueryError, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -143,6 +143,19 @@ function validateOptions(options: SourceOrchestratorOptions) {
 }
 
 function errorMessage(error: unknown) {
+	if (error instanceof DrizzleQueryError && error.cause) {
+		// A page insert's SQL runs past the length cap, so the reason goes first.
+		const cause = error.cause as Error & { code?: string; detail?: string };
+		return [
+			`${cause.name}: ${cause.message}`,
+			cause.code && `(${cause.code})`,
+			cause.detail,
+			`in: ${error.query.slice(0, 200)}`,
+		]
+			.filter(Boolean)
+			.join(" ")
+			.slice(0, MAX_ERROR_LENGTH);
+	}
 	const message =
 		error instanceof Error
 			? `${error.name}: ${error.message}`
