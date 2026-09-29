@@ -47,9 +47,16 @@ describe("openAlexSyncIsDue", () => {
 	});
 
 	it("refreshes once after the night's time when the last run was the day before", () => {
-		const yesterday = cursor({ startedAt: "2026-09-27T02:00:30.000Z" });
+		const yesterday = cursor({ startedAt: "2026-09-27T02:00:30.000Z", completedAt: "2026-09-27T02:05:00.000Z" });
 		expect(openAlexSyncIsDue(connection(yesterday), new Date("2026-09-28T01:00:00Z"))).toBe(false);
 		expect(openAlexSyncIsDue(connection(yesterday), new Date("2026-09-28T03:00:00Z"))).toBe(true);
+	});
+
+	// An import that runs for days is not followed straight away by a refresh it has already covered.
+	it("waits for the next night after a long run that finished after tonight's time", () => {
+		const long = cursor({ mode: "full", startedAt: "2026-09-27T10:00:00.000Z", completedAt: "2026-09-28T12:55:00.000Z" });
+		expect(openAlexSyncIsDue(connection(long), new Date("2026-09-28T12:56:00Z"))).toBe(false);
+		expect(openAlexSyncIsDue(connection(long), new Date("2026-09-29T02:00:00Z"))).toBe(true);
 	});
 
 	// A full scan finishes after 02:00, so counting hours would push the next one to the eighth night.

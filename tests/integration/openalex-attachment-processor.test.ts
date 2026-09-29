@@ -565,28 +565,39 @@ describe("OpenAlex PDF processing", () => {
 			});
 			expect(transport).toHaveBeenCalledTimes(1);
 
-			// The records stage keeps a published PDF without downloading. A changed
-			// one keeps its file but loses its version, so the PDF stage looks again.
+			// The records stage keeps a published PDF without downloading. OpenAlex
+			// bumps the version for any metadata change, and the same PDF URL keeps
+			// both the file and the new version, so the PDF stage skips it too.
 			const kept = await processor.reuse(original!, "openalex-pdf-a");
 			expect(kept.remoteVersion).toBe(original!.remoteVersion);
 			expect(kept.file!.managedPublication).toEqual({ ...publication, staged: false });
-			const changed = await processor.reuse(
-				mapped(externalUrl, "2026-09-25T00:00:00Z")[1]!,
-				"openalex-pdf-a",
-			);
-			expect(changed.remoteVersion).toBeNull();
-			expect(changed.file!.managedPublication).toEqual({ ...publication, staged: false });
+			const bumped = mapped(externalUrl, "2026-09-25T00:00:00Z")[1]!;
+			const refreshed = await processor.reuse(bumped, "openalex-pdf-a");
+			expect(refreshed.remoteVersion).toBe(bumped.remoteVersion);
+			expect(refreshed.file!.managedPublication).toEqual({ ...publication, staged: false });
+			expect((await processor(bumped, "openalex-pdf-a")).file!.managedPublication).toEqual({ ...publication, staged: false });
 			expect(transport).toHaveBeenCalledTimes(1);
 
-			// A metadata update with identical PDF bytes must not restage active objects.
+			// A new PDF URL keeps the file but loses its version, so the PDF stage
+			// downloads again. Identical bytes must not restage active objects.
+			const moved = mapped("https://93.184.216.34/moved.pdf", "2026-09-26T00:00:00Z")[1]!;
+			const flagged = await processor.reuse(moved, "openalex-pdf-a");
+			expect(flagged.remoteVersion).toBeNull();
+			expect(flagged.file!.managedPublication).toEqual({ ...publication, staged: false });
+			await writeSourceIngestionBatch(database, {
+				sourceConnectionKey: "openalex-pdf-a",
+				expectedCursor: { completed: true },
+				nextCursor: { completed: true, again: true },
+				mappingProfileVersion: "test",
+				fetchedAt: new Date(),
+				items: [parent, flagged],
+			});
 			vi.mocked(transport).mockResolvedValueOnce(new Response(bytes));
 			storage.publicUploadHook = async () => {
 				throw new Error("Unexpected repeated upload");
 			};
-			const updated = await processor(
-				mapped(externalUrl, "2026-09-25T00:00:00Z")[1]!,
-				"openalex-pdf-a",
-			);
+			const updated = await processor(moved, "openalex-pdf-a");
+			expect(transport).toHaveBeenCalledTimes(2);
 			expect(updated.processingIssue).toBeNull();
 			expect(updated.file!.managedPublication).toEqual({
 				...publication,

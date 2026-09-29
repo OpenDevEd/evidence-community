@@ -244,7 +244,12 @@ export function openAlexSyncIsDue(connection: SourceConnection, now: Date) {
 	return openAlexWorksAreDue(connection.syncCursor, { version: config.data.approvedQuery.version, downloadPdfs: config.data.downloadPdfs }, now);
 }
 
-/** Whether a stream at this version has work to do: a new version, an unfinished run, PDFs owed, or tonight's refresh. */
+/**
+ * Whether a stream at this version has work to do: a new version, an unfinished
+ * run, PDFs owed, or tonight's refresh. A run that finished after tonight's
+ * time counts as tonight's, however long ago it started: the next refresh reads
+ * from that start anyway, so nothing is missed by waiting.
+ */
 export function openAlexWorksAreDue(syncCursor: unknown, stream: Pick<OpenAlexWorkStream, "version" | "downloadPdfs">, now: Date) {
 	// Let the run report what is wrong with a cursor it cannot read.
 	const saved = cursorSchema.safeParse(syncCursor);
@@ -252,7 +257,7 @@ export function openAlexWorksAreDue(syncCursor: unknown, stream: Pick<OpenAlexWo
 	if (!saved.data.completedAt) return true;
 	if (saved.data.queryVersion !== stream.version) return true;
 	if (pdfsOwed(stream, saved.data) || pdfsDropped(stream, saved.data)) return true;
-	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
+	return Date.parse(saved.data.completedAt) < lastNightlyRefresh(now);
 }
 
 /** The query narrowed to works updated since a day, for an incremental refresh. */

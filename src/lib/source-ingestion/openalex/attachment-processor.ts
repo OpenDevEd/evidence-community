@@ -141,19 +141,18 @@ function reusableFile(existing: Publication, sourceRecordKey: string) {
 		: null;
 }
 
-/** The stored publication came from this remote version and PDF URL without an issue. */
+/**
+ * The stored publication came from this PDF URL without an issue. OpenAlex
+ * bumps a work's version for any change, such as a citation count, so the
+ * version only matters when the records stage cleared it to ask for a look.
+ */
 async function isUnchangedPublication(
 	database: Database,
 	record: PdfRecord,
 	existing: Publication,
 	sourceConnectionKey: string,
 ) {
-	if (
-		!existing ||
-		record.remoteVersion === null ||
-		existing.remoteVersion !== record.remoteVersion
-	)
-		return false;
+	if (!existing || existing.remoteVersion === null) return false;
 	const [issue] = await database
 		.select()
 		.from(sourceRecordIssue)
@@ -373,8 +372,8 @@ export function createOpenAlexAttachmentProcessor(processorOptions: ProcessorOpt
 		);
 		const reusable = reusableFile(existing, record.sourceRecordKey);
 		if (!reusable) return record;
-		// A PDF that changed, or whose last refresh failed, keeps its file until
-		// the PDF stage looks again. Without a version it cannot pass as unchanged.
+		// A PDF whose URL changed, or whose last refresh failed, keeps its file
+		// until the PDF stage looks again. Clearing its version asks for that look.
 		const unchanged = await isUnchangedPublication(
 			options.database,
 			record,
