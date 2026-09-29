@@ -100,6 +100,7 @@ import {
 } from "./AdminCollectionPicker";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
+import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 import { AdminRecordStatusMenu } from "./AdminRecordStatusMenu";
 import {
@@ -1530,14 +1531,14 @@ export function AdminInspector({
 	const tagsForEditor = (tags: string[]) => ordinaryItemTags(tags, content.tags);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const importedOpenAlex = detail.kind === "imported" && detail.writeback.available.some(
-		(target) => target.isOrigin && target.provider === "openalex",
+		(target) => target.isOrigin && isOpenAlexWorkProvider(target.provider),
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
 	// OpenAlex records take library files because OpenAlex gets no writeback; Zotero attachments sync back to Zotero.
 	const holdsLibraryFiles =
 		native ||
-		(!isAttachment && sources.find((source) => source.key === detail.sourceConnectionKey)?.provider === "openalex");
+		(!isAttachment && isOpenAlexWorkProvider(sources.find((source) => source.key === detail.sourceConnectionKey)?.provider));
 	const filesReadOnly = readOnlyVersion || !holdsLibraryFiles || unrestored || !detail.draft || !detail.editable;
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&

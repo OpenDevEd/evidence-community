@@ -11,6 +11,7 @@ import { and, eq, inArray, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "./database-schema";
+import { isOpenAlexWorkProvider, OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
@@ -175,14 +176,14 @@ export async function reserveItemSourceLinks(
 		.select({ provider: sourceConnection.provider })
 		.from(sourceConnection)
 		.where(eq(sourceConnection.key, sourceConnectionKey));
-	if (connection?.provider === "openalex") {
-		// OpenAlex searches share work identity inside this library, never DOI-match manual or Zotero records.
+	if (isOpenAlexWorkProvider(connection?.provider)) {
+		// Sources of OpenAlex works share work identity inside this library, never DOI-match manual or Zotero records.
 		const shared = await db
 			.select({ itemKey: itemIdentity.key, sourceRecordKey: itemIdentity.sourceRecordKey })
 			.from(itemIdentity)
 			.innerJoin(sourceConnection, eq(sourceConnection.key, itemIdentity.sourceConnectionKey))
 			.where(and(
-				eq(sourceConnection.provider, "openalex"),
+				inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS),
 				inArray(itemIdentity.sourceRecordKey, uniqueSourceRecordKeys),
 			));
 		if (shared.length) {
@@ -217,7 +218,7 @@ export async function reserveItemSourceLinks(
 		// A record imported from a source writes back to that source by
 		// default, but only when the record has no enabled source yet. A
 		// record the admin already directs elsewhere keeps that choice.
-		if (insertedItemKeys.length > 0 && connection?.provider !== "openalex") {
+		if (insertedItemKeys.length > 0 && !isOpenAlexWorkProvider(connection?.provider)) {
 			const enabledLink = alias(itemSourceLink, "enabledItemSourceLink");
 			await db
 				.update(itemSourceLink)

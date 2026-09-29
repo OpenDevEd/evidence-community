@@ -1,4 +1,4 @@
-import { readBoundedResponse } from "@/lib/source-ingestion/read-bounded-response";
+import { OpenScholarServiceError, postToOpenScholar } from "@/lib/openscholar-service";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "@/db/database-schema";
@@ -15,14 +15,11 @@ export class TopicServiceError extends Error {
 }
 
 async function serviceRequest(path: string, body: object, context: TopicCatalogContext) {
-  const service = context.config.authentication.openScholar;
-  const response = await (context.fetch ?? fetch)(new URL(path, service.convexSiteUrl), {
-    method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}`},
-    body: JSON.stringify({...body, contractVersion: 1, libraryId: service.libraryId}), signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) { await response.body?.cancel(); throw new TopicServiceError(response.status); }
-  const text = new TextDecoder().decode(await readBoundedResponse(response, 2_000_000, 10000, 10000));
-  return JSON.parse(text) as unknown;
+  try {
+    return await postToOpenScholar(context.config.authentication.openScholar, path, {...body, contractVersion: 1}, {fetch: context.fetch});
+  } catch (error) {
+    throw error instanceof OpenScholarServiceError ? new TopicServiceError(error.status) : error;
+  }
 }
 
 type CacheEntry = Pick<typeof topicCatalogCache.$inferInsert, "id" | "kind" | "payload">;

@@ -22,17 +22,21 @@ export function createSourceSyncRuntime(
 		storage,
 	});
 
+	// OpenScholar collections are OpenAlex works, so they share its PDF pipeline.
+	const openalex = {
+		attachmentProcessor: createOpenAlexAttachmentProcessor({
+			database,
+			storage,
+			maxPdfBytes: config.services.storage.maxPdfBytes,
+		}),
+	};
+
 	return {
 		credentialResolver,
 		registry: createDefaultSourceAdapterRegistry({
 			zotero: { attachmentProcessor },
-			openalex: {
-				attachmentProcessor: createOpenAlexAttachmentProcessor({
-					database,
-					storage,
-					maxPdfBytes: config.services.storage.maxPdfBytes,
-				}),
-			},
+			openalex,
+			openscholar: { ...openalex, service: config.authentication.openScholar },
 		}),
 		storage,
 	};

@@ -29,7 +29,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: {
     // Drafts, submitted reviews, persistent field overrides and library attachments or notes all count as editorial work.
     await tx.execute(sql`INSERT INTO "sourceRecordIssue" ("sourceConnectionKey", "sourceRecordKey", "code", "message", "createdAt", "updatedAt")
       SELECT ${args.sourceConnectionKey}, links."sourceRecordKey", 'source_membership_removed',
-        'This edited record no longer matches any connected OpenAlex search.', now(), now()
+        ${connection.provider === "openscholar" ? "This edited record is no longer in the connected OpenScholar collection." : "This edited record no longer matches any connected OpenAlex search."}, now(), now()
       FROM "item" i JOIN "itemSourceLink" links ON links."itemKey" = i.key AND links."sourceConnectionKey" = ${args.sourceConnectionKey}
       WHERE i.key = ANY(ARRAY[${sql.join(keys.map(key => sql`${key}`), sql`, `)}]::varchar[]) AND i.deleted = 0
         AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" other JOIN "sourceConnection" c ON c.key = other."sourceConnectionKey"

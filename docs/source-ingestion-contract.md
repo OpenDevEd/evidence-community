@@ -17,7 +17,7 @@ Library databases and deployments are not migrated or modified.
   is unique by `(sourceConnectionKey, sourceRecordKey)`, while
   `(itemKey, sourceConnectionKey)` allows one item to link to several providers
   without changing its canonical owner.
-- At most one source link per item may have writeback enabled. Each link tracks
+- Each record chooses which of its source links have writeback enabled. Each link tracks
   the latest remote version, remote deletion state, the last fully acknowledged
   version, and the canonical fields that currently contain unpublished local
   changes.
@@ -29,8 +29,13 @@ Library databases and deployments are not migrated or modified.
 - The built-in native connection is exactly `native`.
 - Zotero connections are declared in `LIBRARY_CONFIG_JSON`. Both source
   workers reconcile those declarations before their first sweep.
-- The current manifest supports Zotero group libraries. Other provider types
-  remain database model capabilities until their manifest contracts are built.
+- The manifest supports Zotero groups, OpenAlex queries and OpenScholar
+  collections. Other provider types remain database model capabilities until
+  their manifest contracts are built.
+- OpenAlex queries and OpenScholar collections are both sources of OpenAlex
+  works (`src/lib/source-providers.ts`). A library keeps one record per work
+  across all of them, and none of them writes back. See
+  `docs/openscholar-source-adapter.md`.
 - Duplicate non-null remote scopes for the same provider are rejected.
 - OpenAlex queries are mutable configuration. Separate OpenAlex connections may
   intentionally hold the same query because connection identity, scheduling,
@@ -255,8 +260,9 @@ for active parent items; a tombstoned parent remains a deletion.
 ## Source synchronization
 
 - `SourceAdapterRegistry` dispatches each connection by provider. The runtime
-  ships with the Zotero adapter; Mendeley, OpenAlex, DSpace, and EPrints plug
-  into the same interface without changing orchestration or canonical writes.
+  ships with the Zotero, OpenAlex and OpenScholar adapters; Mendeley, DSpace,
+  and EPrints plug into the same interface without changing orchestration or
+  canonical writes.
 - `sourceConnection` is the source registry and schedule input. A sweep selects
   only active, non-native connections and runs them with bounded concurrency.
 - Every attempt creates an immutable `sourceSyncRun`. Exactly one running

@@ -10,6 +10,7 @@ import { adminItemListProjection } from "@/db/schema/tables/adminItemListProject
 import { item } from "@/db/schema/tables/item";
 import { itemSourceLink, sourceRecordIssue, sourceSnapshot } from "@/db/schema/source";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 import { adminFieldLabel } from "./errors";
 import { ItemNotFoundError } from "./native-item-service";
@@ -193,7 +194,7 @@ const ZOTERO_WEB = /^https:\/\/www\.zotero\.org\//u;
 
 function sourceLinks(source: SourceScope, recordKey: string, zoteroWeb: string | null): AdminSourceIssueLink[] {
 	const key = encodeURIComponent(recordKey);
-	if (source.provider === "openalex") {
+	if (isOpenAlexWorkProvider(source.provider)) {
 		// A PDF record's key is its work's, with ":pdf" after it.
 		return [{ kind: "openalex", href: `https://openalex.org/${encodeURIComponent(recordKey.split(":")[0]!)}` }];
 	}

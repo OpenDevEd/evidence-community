@@ -48,10 +48,17 @@ export const openAlexQuerySchema = z
 		"An OpenAlex source requires a search or filter",
 	);
 
-export const openAlexConnectionConfigSchema = z
+/** What every source of OpenAlex works is set up with: which key reads OpenAlex, its name, and whether it adds PDFs. */
+export const openAlexWorksConfigSchema = z
 	.object({
 		apiKeyMode: z.enum(["platform", "custom"]).default("platform"),
 		name: z.string().trim().min(1).max(80),
+		downloadPdfs: z.boolean().default(false),
+	})
+	.strict();
+
+export const openAlexConnectionConfigSchema = openAlexWorksConfigSchema
+	.extend({
 		// The editor retains its unexpanded query, filters and local history ID.
 		// Imports always use approvedQuery, never this UI state.
 		// An OQL search keeps its typed query here, so it is as long as the query.
@@ -67,7 +74,6 @@ export const openAlexConnectionConfigSchema = z
 				),
 			})
 			.strict(),
-		downloadPdfs: z.boolean().default(false),
 	})
 	.strict();
 
@@ -90,6 +96,8 @@ export const openAlexPageSchema = z
 		results: z.array(z.unknown()).max(OPENALEX_MAX_PAGE_SIZE),
 	})
 	.loose();
+
+export type OpenAlexPage = z.infer<typeof openAlexPageSchema>;
 
 export const openAlexGroupsSchema = z
 	.object({

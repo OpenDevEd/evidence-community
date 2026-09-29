@@ -5,6 +5,7 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { sourceConnection } from "@/db/schema/source";
 import { itemCitationMetric } from "@/db/schema/tables/itemCitationMetric";
 import { sourceDisplayLabel, sourceProviderName } from "@/lib/admin/source-label";
+import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 type Executor = Database | DatabaseTransaction;
 
@@ -48,12 +49,12 @@ export async function getSourceCitationMetricsForKeys(
 	const metricsByItem = new Map<string, SourceCitationMetric[]>();
 	for (const row of rows) {
 		const metrics = metricsByItem.get(row.itemKey) ?? [];
-		const openAlex = row.provider === "openalex";
+		const openAlex = isOpenAlexWorkProvider(row.provider);
 		const metric: SourceCitationMetric = {
 			sourceConnectionKey: row.sourceConnectionKey,
 			// These are OpenAlex's own counts, whichever search imported the work.
 			sourceLabel: openAlex
-				? sourceProviderName(row.provider)
+				? sourceProviderName("openalex")
 				: sourceDisplayLabel({
 						key: row.sourceConnectionKey,
 						provider: row.provider,
@@ -67,7 +68,7 @@ export async function getSourceCitationMetricsForKeys(
 		};
 		// Overlapping OpenAlex searches report the same work: keep the newest count.
 		const shown = openAlex
-			? metrics.findIndex((existing) => existing.provider === "openalex")
+			? metrics.findIndex((existing) => isOpenAlexWorkProvider(existing.provider))
 			: -1;
 		if (shown === -1) metrics.push(metric);
 		else if (metric.observedAt > metrics[shown]!.observedAt) metrics[shown] = metric;

@@ -16,9 +16,8 @@ import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
-import { OPENALEX_MAX_PAGE_SIZE } from "./schema";
+import { OPENALEX_MAX_PAGE_SIZE, openAlexConnectionConfigSchema, type OpenAlexPage, type OpenAlexQuery } from "./schema";
 import { chunkValues } from "@/lib/chunk-values";
-import { openAlexConnectionConfigSchema } from "./schema";
 
 const cursorSchema = z
 	.object({
@@ -48,6 +47,8 @@ const cursorSchema = z
 			.array(
 				z.object({
 					dates: z.object({ from: z.string().nullable(), to: z.string().nullable() }).nullable(),
+					// Where a list of works' part starts in the list; queries split by dates instead.
+					offset: z.number().int().nonnegative().optional(),
 					nextCursor: z.string().nullable(),
 					// Works in the slice when it was planned, for the import's total.
 					count: z.number().int().nonnegative(),
@@ -74,8 +75,28 @@ type RecordProcessor = (
 	sourceConnectionKey: string,
 ) => Promise<SourceItemUpsert>;
 type Cursor = z.infer<typeof cursorSchema>;
-type OpenAlexConnectionConfig = z.infer<typeof openAlexConnectionConfigSchema>;
+type Slice = NonNullable<Cursor["slices"]>[number];
+type SlicePlan = Omit<Slice, "nextCursor">;
 type InstitutionFacts = ReturnType<typeof mapOpenAlexWork>["institutions"];
+
+/**
+ * Where an import reads its works: one approved query, or the works an
+ * OpenScholar collection lists. Everything else about an import, from
+ * incremental refreshes to the PDF stage, is the same for both.
+ */
+export type OpenAlexWorkStream = {
+	/** What the stream covers. A new version starts a full scan, which withdraws works it no longer finds. */
+	version: string;
+	downloadPdfs: boolean;
+	/** Every scan reads everything, as for a sample, where the updated works are a different sample. */
+	fullScansOnly: boolean;
+	/** One page of works: "*" asks for the first, and `updatedSince` keeps works updated since that day. */
+	page: (client: OpenAlexClient, cursor: string, pageSize: number, updatedSince: string | null) => Promise<OpenAlexPage>;
+	/** Splits a new full scan of `count` works into parts read at the same time, or null to read it as one stream. */
+	planSlices: (client: OpenAlexClient, count: number) => Promise<SlicePlan[] | null>;
+	/** One page of a planned part. */
+	slicePage: (client: OpenAlexClient, slice: Slice, cursor: string) => Promise<OpenAlexPage>;
+};
 
 const DAY_MS = 24 * 3600_000;
 /** When OpenAlex sources refresh each night: incrementally, and in full once a week. */
@@ -113,13 +134,13 @@ const WRITE_BUDGET_BYTES = MAX_SOURCE_BATCH_BYTES - 4 * 1024 * 1024;
 
 async function openAlexClient(
 	context: SourceAdapterContext,
-	config: OpenAlexConnectionConfig,
+	downloadPdfs: boolean,
 	options: OpenAlexSourceOptions,
 ) {
 	const connection = context.sourceConnection;
 	const apiKey = await context.credentialResolver?.(connection.key);
 	if (!apiKey) throw new SourceCredentialNotFoundError(connection.key);
-	if (config.downloadPdfs && !options.attachmentProcessor)
+	if (downloadPdfs && !options.attachmentProcessor)
 		throw new Error(
 			"OpenAlex PDF processing is enabled but no processor is available",
 		);
@@ -146,34 +167,34 @@ function incrementalSince(saved: Cursor | null, queryVersion: string) {
 }
 
 /** A sample of the updated works is not part of the approved sample, so sampled OQL always scans in full. */
-function isSampledOql(query: OpenAlexConnectionConfig["approvedQuery"]["query"]) {
+function isSampledOql(query: OpenAlexQuery) {
 	return Boolean(query.oql && /\ssample\s+\d+(?:\s+seed\s+\d+)?\s*$/i.test(query.oql));
 }
 
 /** PDFs were turned on after the last complete run, so no PDF stage has covered the records yet. */
-function pdfsOwed(config: OpenAlexConnectionConfig, saved: Cursor | null) {
-	return config.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
+function pdfsOwed(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Cursor | null) {
+	return stream.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
 }
 
 /** PDFs turned off mid-stage: only a full records scan puts every page back on its external link. */
-function pdfsDropped(config: OpenAlexConnectionConfig, saved: Cursor | null) {
-	return saved?.stage === "pdfs" && !saved.completedAt && !config.downloadPdfs;
+function pdfsDropped(stream: OpenAlexWorkStream, saved: Cursor | null) {
+	return saved?.stage === "pdfs" && !saved.completedAt && !stream.downloadPdfs;
 }
 
-function resumedCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cursor | null {
-	if (!saved || saved.completedAt || saved.queryVersion !== config.approvedQuery.version) return null;
-	if (pdfsDropped(config, saved)) return null;
+function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor | null {
+	if (!saved || saved.completedAt || saved.queryVersion !== stream.version) return null;
+	if (pdfsDropped(stream, saved)) return null;
 	return saved.mode === "full" ? { ...saved, incrementalAvailable: null } : saved;
 }
 
-function startCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cursor {
-	const resumed = resumedCursor(saved, config);
+function startCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor {
+	const resumed = resumedCursor(saved, stream);
 	if (resumed) return resumed;
-	const queryVersion = config.approvedQuery.version;
+	const queryVersion = stream.version;
 	const sameQuery = saved?.queryVersion === queryVersion;
-	// A sample of updated works is a different sample; PDFs just turned on need every record.
+	// PDFs just turned on need every record.
 	const fullOnly =
-		isSampledOql(config.approvedQuery.query) || pdfsOwed(config, saved) || pdfsDropped(config, saved);
+		stream.fullScansOnly || pdfsOwed(stream, saved) || pdfsDropped(stream, saved);
 	const cursor: Cursor = {
 		queryVersion,
 		startedAt: new Date().toISOString(),
@@ -204,29 +225,35 @@ function startCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cu
  */
 export function openAlexSyncIsDue(connection: SourceConnection, now: Date) {
 	const config = openAlexConnectionConfigSchema.safeParse(connection.config);
-	const saved = cursorSchema.safeParse(connection.syncCursor);
-	// Let the run report what is wrong with a configuration or cursor it cannot read.
-	if (!config.success || !saved.success) return true;
+	// Let the run report what is wrong with a configuration it cannot read.
+	if (!config.success) return true;
+	return openAlexWorksAreDue(connection.syncCursor, { version: config.data.approvedQuery.version, downloadPdfs: config.data.downloadPdfs }, now);
+}
+
+/** Whether a stream at this version has work to do: a new version, an unfinished run, PDFs owed, or tonight's refresh. */
+export function openAlexWorksAreDue(syncCursor: unknown, stream: Pick<OpenAlexWorkStream, "version" | "downloadPdfs">, now: Date) {
+	// Let the run report what is wrong with a cursor it cannot read.
+	const saved = cursorSchema.safeParse(syncCursor);
+	if (!saved.success) return true;
 	if (!saved.data.completedAt) return true;
-	if (saved.data.queryVersion !== config.data.approvedQuery.version) return true;
-	if (pdfsOwed(config.data, saved.data)) return true;
+	if (saved.data.queryVersion !== stream.version) return true;
+	if (pdfsOwed(stream, saved.data)) return true;
 	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
 }
 
-function pageQuery(config: OpenAlexConnectionConfig, cursor: Cursor) {
-	const query = config.approvedQuery.query;
-	if (cursor.mode !== "incremental") return query;
+/** The query narrowed to works updated since a day, for an incremental refresh. */
+export function withUpdatedSince(query: OpenAlexQuery, updatedSince: string): OpenAlexQuery {
 	if (query.oql) {
 		const where = query.oql.replace(/^works\s+where\s+/i, "");
 		return {
-			oql: `works where (${where}) and from_updated_date is (${cursor.updatedSince})`,
+			oql: `works where (${where}) and from_updated_date is (${updatedSince})`,
 		};
 	}
 	const clauses = (query.filter ?? "").split(",").filter(Boolean);
 	const previousSince = clauses
 		.find((clause) => clause.startsWith(UPDATED_SINCE))
 		?.slice(UPDATED_SINCE.length);
-	const since = [previousSince, cursor.updatedSince]
+	const since = [previousSince, updatedSince]
 		.filter((value): value is string => Boolean(value))
 		.sort()
 		.at(-1);
@@ -250,15 +277,16 @@ function isEntitlementDenial(error: unknown): error is OpenAlexApiError {
 /** Returns null when the key cannot use incremental sync. */
 async function fetchPage(
 	client: OpenAlexClient,
-	config: OpenAlexConnectionConfig,
+	stream: OpenAlexWorkStream,
 	cursor: Cursor,
 	sourceConnectionKey: string,
 ) {
 	try {
-		return await client.works(
-			pageQuery(config, cursor),
+		return await stream.page(
+			client,
 			cursor.nextCursor!,
 			cursor.stage === "pdfs" ? PDF_PAGE_SIZE : RECORD_PAGE_SIZE,
+			cursor.mode === "incremental" ? cursor.updatedSince : null,
 		);
 	} catch (error) {
 		// Free keys use complete scans. Only an explicit entitlement denial changes strategy.
@@ -438,7 +466,7 @@ const isPdfLink = (record: SourceItemUpsert) =>
 type Scan = {
 	context: SourceAdapterContext;
 	client: OpenAlexClient;
-	config: OpenAlexConnectionConfig;
+	stream: OpenAlexWorkStream;
 	options: OpenAlexSourceOptions;
 	cursor: Cursor;
 	expectedCursor: Record<string, JsonValue>;
@@ -451,7 +479,7 @@ type Scan = {
  */
 async function preparePage(scan: Scan, items: SourceItemUpsert[]) {
 	const processor = scan.options.attachmentProcessor;
-	if (!scan.config.downloadPdfs || !processor) return;
+	if (!scan.stream.downloadPdfs || !processor) return;
 	await processAttachments(scan.context, items, processor.reuse);
 }
 
@@ -513,11 +541,11 @@ function assertAdvancing(
 
 /** Fetches and writes every page of the cursor's stage. */
 async function scanPages(scan: Scan) {
-	const { context, client, config } = scan;
+	const { context, client, stream } = scan;
 	const connection = context.sourceConnection;
 	while (scan.cursor.nextCursor && !scan.cursor.slices) {
 		await context.heartbeat();
-		const page = await fetchPage(client, config, scan.cursor, connection.key);
+		const page = await fetchPage(client, stream, scan.cursor, connection.key);
 		if (!page) {
 			scan.cursor = fullScanCursor(scan.cursor);
 			continue;
@@ -596,13 +624,13 @@ type PdfPipeline = {
 /** Fetches pages ahead until enough are in flight. False when incremental access was refused. */
 async function fillPdfPages(pipeline: PdfPipeline) {
 	const { scan, lane, stop, inFlight } = pipeline;
-	const { context, client, config } = scan;
+	const { context, client, stream } = scan;
 	const processor = scan.options.attachmentProcessor;
 	while (pipeline.fetchCursor.nextCursor && inFlight.length < PDF_PAGES_IN_FLIGHT && !stop.failed && !pipeline.fetchError) {
 		let page: Awaited<ReturnType<typeof fetchPage>>;
 		try {
 			await context.heartbeat();
-			page = await fetchPage(client, config, pipeline.fetchCursor, context.sourceConnection.key);
+			page = await fetchPage(client, stream, pipeline.fetchCursor, context.sourceConnection.key);
 		} catch (error) {
 			pipeline.fetchError = error;
 			break;
@@ -803,11 +831,10 @@ function pageQueue(limit: number) {
 
 /** Fetches one slice's pages in order, handing each to the writer, until the scan stops. */
 async function fetchSlice(scan: Scan, slice: number, queue: ReturnType<typeof pageQueue>, stop: { stopped: boolean }) {
-	const { dates, nextCursor } = scan.cursor.slices![slice]!;
-	const query = slicedQuery(scan.config.approvedQuery.query, dates);
-	let cursor = nextCursor;
+	const part = scan.cursor.slices![slice]!;
+	let cursor = part.nextCursor;
 	while (cursor && !stop.stopped) {
-		const page = await scan.client.works(query, cursor, RECORD_PAGE_SIZE);
+		const page = await scan.stream.slicePage(scan.client, part, cursor);
 		assertAdvancing(page, cursor, scan.context.sourceConnection.key);
 		cursor = page.meta.next_cursor;
 		const handed = await queue.put({
@@ -888,10 +915,9 @@ async function scanSlices(scan: Scan) {
  * by its slice.
  */
 async function switchToSlices(scan: Scan, count: number) {
-	const { cursor, config, context } = scan;
+	const { cursor, stream, context } = scan;
 	if (cursor.stage !== "records" || cursor.mode !== "full" || cursor.nextCursor !== "*" || cursor.imported) return false;
-	if (count < MIN_SLICED_WORKS || isSampledOql(config.approvedQuery.query)) return false;
-	const slices = await planSlices(scan.client, config.approvedQuery.query).catch((error: unknown) => {
+	const slices = await stream.planSlices(scan.client, count).catch((error: unknown) => {
 		console.warn("OpenAlex slice planning failed; scanning the query as one stream", {
 			sourceConnectionKey: context.sourceConnection.key,
 			error: error instanceof Error ? error.message : String(error),
@@ -905,19 +931,39 @@ async function switchToSlices(scan: Scan, count: number) {
 	return true;
 }
 
-async function reconcile(scan: Scan) {
-	const connection = scan.context.sourceConnection;
+/** Withdraws the source's works that no scan has read since `startedAt`, in retryable batches. */
+async function withdrawUnread(context: SourceAdapterContext, cursor: Record<string, JsonValue>, startedAt: string) {
+	const connection = context.sourceConnection;
 	while (
-		scan.cursor.mode === "full" &&
-		(await reconcileOpenAlexMemberships(scan.context.database, {
+		await reconcileOpenAlexMemberships(context.database, {
 			sourceConnectionKey: connection.key,
 			configuration: connection.config,
-			cursor: scan.expectedCursor,
-			startedAt: scan.cursor.startedAt,
-			sourceSyncRunId: scan.context.run?.id,
-		}))
+			cursor,
+			startedAt,
+			sourceSyncRunId: context.run?.id,
+		})
 	)
-		await scan.context.heartbeat();
+		await context.heartbeat();
+}
+
+async function reconcile(scan: Scan) {
+	if (scan.cursor.mode === "full") await withdrawUnread(scan.context, scan.expectedCursor, scan.cursor.startedAt);
+}
+
+/**
+ * Withdraws every work the source holds, as when a scan no longer finds them,
+ * and forgets its cursor, so the source imports in full if it comes back.
+ */
+export async function withdrawOpenAlexWorks(context: SourceAdapterContext) {
+	const cursor = context.sourceConnection.syncCursor as Record<string, JsonValue>;
+	await withdrawUnread(context, cursor, new Date().toISOString());
+	if (Object.keys(cursor).length) await writeBatch(context, cursor, {}, { items: [] });
+}
+
+/** The stream version the source's last run read, or null before its first. */
+export function savedOpenAlexWorksVersion(syncCursor: unknown) {
+	const saved = cursorSchema.safeParse(syncCursor);
+	return saved.success ? saved.data.queryVersion : null;
 }
 
 /** Starts the PDF stage over the same query, once every record is in. */
@@ -944,7 +990,7 @@ async function scanStages(scan: Scan) {
 			await scanPages(scan);
 			if (scan.cursor.slices) await scanSlices(scan);
 			await reconcile(scan);
-			if (!scan.config.downloadPdfs) return;
+			if (!scan.stream.downloadPdfs) return;
 			await startPdfStage(scan);
 		}
 		// Said before the first page, so a failure there still reads as the PDF stage.
@@ -954,22 +1000,45 @@ async function scanStages(scan: Scan) {
 	}
 }
 
+/** The works an approved query finds, page by page with OpenAlex's own cursor; a large one is read in date slices. */
+function queryStream(config: z.infer<typeof openAlexConnectionConfigSchema>): OpenAlexWorkStream {
+	const query = config.approvedQuery.query;
+	return {
+		version: config.approvedQuery.version,
+		downloadPdfs: config.downloadPdfs,
+		fullScansOnly: isSampledOql(query),
+		page: (client, cursor, pageSize, updatedSince) =>
+			client.works(updatedSince ? withUpdatedSince(query, updatedSince) : query, cursor, pageSize),
+		planSlices: async (client, count) =>
+			count < MIN_SLICED_WORKS || isSampledOql(query) ? null : planSlices(client, query),
+		slicePage: (client, slice, cursor) => client.works(slicedQuery(query, slice.dates), cursor, RECORD_PAGE_SIZE),
+	};
+}
+
 export async function syncOpenAlexSource(
 	context: SourceAdapterContext,
 	options: OpenAlexSourceOptions = {},
 ) {
+	const config = openAlexConnectionConfigSchema.parse(context.sourceConnection.config);
+	return syncOpenAlexWorks(context, queryStream(config), options);
+}
+
+/** Imports a stream's works: records first, then their PDFs when the source adds them. */
+export async function syncOpenAlexWorks(
+	context: SourceAdapterContext,
+	stream: OpenAlexWorkStream,
+	options: OpenAlexSourceOptions = {},
+) {
 	const connection = context.sourceConnection;
-	const config = openAlexConnectionConfigSchema.parse(connection.config);
-	const client = await openAlexClient(context, config, options);
 	const expectedCursor = connection.syncCursor as Record<string, JsonValue>;
 	const saved = Object.keys(expectedCursor).length ? cursorSchema.parse(expectedCursor) : null;
 	const scan: Scan = {
 		context,
-		client,
-		config,
+		client: await openAlexClient(context, stream.downloadPdfs, options),
+		stream,
 		options,
 		expectedCursor,
-		cursor: startCursor(saved, config),
+		cursor: startCursor(saved, stream),
 		pages: 0,
 	};
 	await options.attachmentProcessor?.flushCleanup(connection.key);

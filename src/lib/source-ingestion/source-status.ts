@@ -32,8 +32,11 @@ import { PARENT_REQUIRED_ITEM_TYPES } from "@/lib/admin/item-fields";
 
 import { SourceCredentialNotFoundError } from "./credentials";
 import { OpenAlexApiError } from "./openalex/client";
+import { OpenScholarCollectionGoneError } from "./openscholar/client";
+import { OpenScholarServiceError } from "@/lib/openscholar-service";
 import { ZoteroApiError } from "./zotero/client";
 import { ZoteroSnapshotTooLargeError } from "./zotero/connection";
+import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 const PROVIDER_STATUS_CODES: Partial<Record<number, SourceSyncErrorCode>> = {
 	401: "access_denied",
@@ -53,6 +56,10 @@ function providerErrorCode(error: ZoteroApiError | OpenAlexApiError): SourceSync
 /** Why an import failed, as a code each app can put in its own words. */
 export function classifySourceError(error: unknown): SourceSyncErrorCode {
 	if (error instanceof SourceCredentialNotFoundError) return "missing_key";
+	if (error instanceof OpenScholarCollectionGoneError) return error.code;
+	if (error instanceof OpenScholarServiceError) {
+		return error.status >= 500 ? "unavailable" : (PROVIDER_STATUS_CODES[error.status] ?? "internal");
+	}
 	if (error instanceof ZoteroSnapshotTooLargeError) return "too_large";
 	if (error instanceof ZoteroApiError || error instanceof OpenAlexApiError) {
 		return providerErrorCode(error);
@@ -571,10 +578,10 @@ function lastErrorOf(state: SyncStateRow, failedStage: "pdfs" | null): SourceSta
 	};
 }
 
-/** OpenAlex sources add PDFs to their records when the configuration asks. */
+/** Sources of OpenAlex works add PDFs to their records when the configuration asks. */
 function addsPdfs(provider: SourceProvider, config: unknown) {
 	return (
-		provider === "openalex" &&
+		isOpenAlexWorkProvider(provider) &&
 		typeof config === "object" &&
 		config !== null &&
 		"downloadPdfs" in config &&

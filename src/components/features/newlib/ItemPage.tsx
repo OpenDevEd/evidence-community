@@ -88,6 +88,7 @@ import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { AuthorProfileHover } from "@/components/authors/AuthorProfileHover";
 import { creatorDisplayName } from "@/lib/creator-display-name";
+import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 import { ItemTopics } from "@/components/topics/ItemTopics";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
@@ -1183,7 +1184,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	);
 
 	// OpenAlex records show provider relations elsewhere; only in-library links belong here.
-	if (item?.provider === "openalex" && !hasLinks) return null;
+	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return null;
 
 	return (
 		<div className="flex flex-col gap-4">

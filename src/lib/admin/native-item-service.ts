@@ -7,6 +7,7 @@ import type { ConflictingDraft } from "./errors";
 import { sameBibliographicCreators } from "@/lib/admin/creator-profile-links";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { isNotNull } from "drizzle-orm";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import {
 	itemDraft,
 	itemFileDraft,
@@ -108,7 +109,7 @@ export function isNativeOrOpenAlex(
 		eq(sourceConnectionKey, NATIVE_CONNECTION_KEY),
 		inArray(
 			sourceConnectionKey,
-			executor.select({ key: sourceConnection.key }).from(sourceConnection).where(eq(sourceConnection.provider, "openalex")),
+			executor.select({ key: sourceConnection.key }).from(sourceConnection).where(inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS)),
 		),
 	);
 }

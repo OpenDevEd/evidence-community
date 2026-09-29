@@ -22,7 +22,7 @@ import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { OpenAlexIcon } from "@/components/icons/OpenAlexIcon";
+import { OpenAlexIcon } from "@/components/icons/SourceMarkIcons";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
 import {
 	formatInstitutionNames,

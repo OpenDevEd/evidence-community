@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 
 import BrandIcon from "@/components/icons/BrandIcon";
-import { OpenAlexIcon } from "@/components/icons/OpenAlexIcon";
+import { OpenAlexIcon } from "@/components/icons/SourceMarkIcons";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Dropdown } from "@/components/nextui/Dropdown";
@@ -100,6 +100,7 @@ type Failure = Extract<SourceStatus, { state: "failed" }>["failure"];
 /** What a failure means and what to do, with the provider's name filled in. */
 const FAILURE_MESSAGES: Record<Failure["code"], (name: string) => string> = {
 	access_denied: (name) => `${name} refused the saved key. Update it in the library's configuration.`,
+	owner_left: () => "The person who added this collection left the organisation, so its records were withdrawn. Remove the source in the library's configuration.",
 	not_found: (name) => `${name} no longer finds this source, or the saved key cannot see it.`,
 	missing_key: () => "No API key is saved for this source. Add one in the library's configuration.",
 	invalid_query: (name) => `${name} rejected the search. Edit it in the library's configuration.`,
@@ -1018,7 +1019,8 @@ function sourceSubtitle(source: AdminSource) {
 	if (source.provider === "zotero") {
 		return source.scopeKind === "group" ? `Zotero group ${source.externalScopeKey}` : "Zotero library";
 	}
-	return source.provider === "openalex" ? "OpenAlex search" : sourceProviderName(source.provider);
+	if (source.provider === "openalex") return "OpenAlex search";
+	return source.provider === "openscholar" ? "OpenScholar collection" : sourceProviderName(source.provider);
 }
 
 /** Status version: the polled issue counts, and a run ending, since an import can swap issues without changing a count. */

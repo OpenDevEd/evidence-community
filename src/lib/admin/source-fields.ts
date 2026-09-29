@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemSourceLink, sourceConnection } from "@/db/schema/source";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { itemFieldOverride, itemSourceValue } from "@/db/schema/topics";
 import { sourcePayloadHash } from "@/lib/source-ingestion/fingerprint";
 import type { JsonValue } from "@/lib/source-ingestion/batch-schema";
@@ -14,11 +15,11 @@ function sourceFieldFingerprint(value: unknown) {
   return sourcePayloadHash((value ?? null) as JsonValue);
 }
 
-/** Only OpenAlex keeps source values; Zotero changes flow through writeback instead. */
+/** Only sources of OpenAlex works keep source values; Zotero changes flow through writeback instead. */
 async function sourceValues(db: Reader, itemKey: string) {
   return db.select(getTableColumns(itemSourceValue)).from(itemSourceValue)
     .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceValue.sourceConnectionKey))
-    .where(and(eq(itemSourceValue.itemKey, itemKey), eq(sourceConnection.provider, "openalex"))).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
+    .where(and(eq(itemSourceValue.itemKey, itemKey), inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS))).orderBy(desc(itemSourceValue.remoteVersion), asc(itemSourceValue.sourceConnectionKey));
 }
 
 export async function readSourceFields(db: Reader, itemKey: string): Promise<SourceFieldConflict[]> {

@@ -12,6 +12,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { sourceDisplayLabel } from "@/lib/admin/source-label";
+import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
@@ -248,7 +249,7 @@ export function importedItemEditBlockReason(
 ): SourceWritebackReason | null {
 	if (!targets.originSourceKey) return null;
 	const origin = findWritebackTarget(targets, targets.originSourceKey);
-	if (origin?.provider === "openalex") return null;
+	if (isOpenAlexWorkProvider(origin?.provider)) return null;
 	const reason = origin?.reason ?? "not-linked";
 	return reason === "ok" || reason === "item-locked" || reason === "not-linked"
 		? null
