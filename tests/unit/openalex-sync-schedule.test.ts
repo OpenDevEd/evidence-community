@@ -20,6 +20,7 @@ const cursor = (overrides: Record<string, unknown> = {}) => ({
 	reconciledAt: "2026-09-25T02:10:00.000Z",
 	updatedSince: "2026-09-26",
 	incrementalAvailable: true,
+	pdfsAdded: false,
 	...overrides,
 });
 
@@ -85,5 +86,9 @@ describe("openAlexSyncIsDue with PDFs", () => {
 		expect(openAlexSyncIsDue(connection(added), midday)).toBe(true);
 		// The run that takes them down ends on the records stage.
 		expect(openAlexSyncIsDue(connection(cursor({ mode: "full" })), midday)).toBe(false);
+	});
+
+	it("scans once in full a source whose cursor predates the record of added PDFs", () => {
+		expect(openAlexSyncIsDue(connection(cursor({ pdfsAdded: undefined })), midday)).toBe(true);
 	});
 });

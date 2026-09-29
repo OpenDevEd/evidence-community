@@ -41,8 +41,9 @@ const cursorSchema = z
 			})
 			.nullable()
 			.default(null),
-		// PDFs were added since the last full scan that left them out, so turning them off must take them down.
-		pdfsAdded: z.literal(true).optional(),
+		// Whether PDFs were added since the last scan that left them out. Absent on
+		// cursors from before it was kept, which may have added some.
+		pdfsAdded: z.boolean().optional(),
 		// A full scan of a large query reads date slices at once, each with its own cursor.
 		// Only a sliced scan saves the key, so other cursors stay readable by older releases.
 		slices: z
@@ -183,7 +184,8 @@ function pdfsOwed(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Curso
  * full records scan puts every record back on its external link.
  */
 function pdfsDropped(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Cursor | null) {
-	return !stream.downloadPdfs && (saved?.stage === "pdfs" || saved?.pdfsAdded === true);
+	if (!saved || stream.downloadPdfs) return false;
+	return saved.stage === "pdfs" || saved.pdfsAdded !== false;
 }
 
 function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor | null {
@@ -199,7 +201,7 @@ function mustScanInFull(stream: OpenAlexWorkStream, saved: Cursor | null) {
 
 /** Added PDFs are remembered while PDFs stay on; a scan with them off takes them all down. */
 function carriedPdfs(saved: Cursor | null, stream: OpenAlexWorkStream) {
-	return saved?.pdfsAdded && stream.downloadPdfs ? { pdfsAdded: true as const } : {};
+	return { pdfsAdded: stream.downloadPdfs && (saved?.stage === "pdfs" || saved?.pdfsAdded === true) };
 }
 
 function startCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor {

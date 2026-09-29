@@ -842,10 +842,18 @@ function expandLocalDescendantDeletes(
 /** A read that found nothing new still moves the cursor on. */
 async function completeEmptyRead(
 	options: SyncZoteroSourceOptions,
-	read: { expectedCursor: ZoteroCursor; fetchedAt: Date; nextCursor: ReturnType<typeof completedCursor>; targetVersion: number },
+	read: {
+		expectedConfiguration: Record<string, unknown>;
+		expectedCursor: ZoteroCursor;
+		fetchedAt: Date;
+		nextCursor: ReturnType<typeof completedCursor>;
+		targetVersion: number;
+	},
 ) {
 	await writeSourceIngestionBatch(options.database, {
 		collections: [],
+		// A configuration changed since the read started, such as its PDF setting, rejects the batch.
+		expectedConfiguration: read.expectedConfiguration,
 		expectedCursor: read.expectedCursor,
 		fetchedAt: read.fetchedAt,
 		items: [],
@@ -873,6 +881,7 @@ async function writeManifestBatches(
 		fetchedAt: Date;
 		downloadPdfs: boolean;
 		maxRecordsPerBatch: number;
+		expectedConfiguration: Record<string, unknown>;
 	},
 ) {
 	const { manifest, cursor, previousSoftTrash, nextSoftTrash, snapshotSince, fetchedAt } = read;
@@ -902,6 +911,7 @@ async function writeManifestBatches(
 					});
 		const written = await writeSourceIngestionBatch(options.database, {
 			...mapped,
+			expectedConfiguration: read.expectedConfiguration,
 			expectedCursor,
 			fetchedAt,
 			mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
@@ -1022,6 +1032,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 
 			if (manifest.entries.length === 0) {
 				return completeEmptyRead(options, {
+					expectedConfiguration: connection.config,
 					expectedCursor,
 					fetchedAt,
 					nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, config.downloadPdfs),
@@ -1041,6 +1052,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				fetchedAt,
 				downloadPdfs: config.downloadPdfs,
 				maxRecordsPerBatch: config.maxRecordsPerBatch,
+				expectedConfiguration: connection.config,
 			});
 		} catch (error) {
 			if (
