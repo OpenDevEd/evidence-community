@@ -9,6 +9,17 @@ editors and translators and removes hard line wrapping that split words during
 reimport. Both installed module builds are patched. Citation formatting and
 export tests exercise the generated files and reimport their metadata.
 
+## Next.js route handler compression
+
+`next start` gzips pages but skipped every route handler: `sendResponse()`
+copied single-value headers with `appendHeader()`, so `Content-Type` became an
+array and the compression filter treated JSON as incompressible. The 16.3.5
+patch backports [vercel/next.js#98044](https://github.com/vercel/next.js/pull/98044),
+which sets single-value headers with `setHeader()`, in both the CommonJS and ESM
+builds. Streamed responses still flush after every chunk. The smoke test
+"gzips JSON from route handlers" fails if an upgrade drops the fix; remove the
+patch once a Next release includes it.
+
 ## NextUI
 
 These patches backport HeroUI v2 fixes to the locked NextUI packages. They keep
