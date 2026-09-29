@@ -31,6 +31,7 @@ export default defineConfig({
             "tests/integration/reviewed-publications.test.ts",
             "tests/integration/zotero-citations.test.ts",
             "tests/integration/source-issues.test.ts",
+            "tests/integration/search-outbox-lock-order.test.ts",
 		],
 		maxWorkers: 1,
 	},

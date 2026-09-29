@@ -312,25 +312,47 @@ async function claimEvents(
 	});
 }
 
+/**
+ * Updates events after locking them in entity key order, the order a source
+ * import locks them in (`requeueLinkedRecords`). A plain `id IN (...)` update
+ * locks in id order, so it could deadlock with an import holding a later id.
+ */
+function updateInKeyOrder<T>(
+	database: Database,
+	ids: readonly number[],
+	update: (transaction: DatabaseTransaction) => Promise<T>,
+) {
+	return database.transaction(async (transaction) => {
+		await transaction
+			.select({ id: outbox.id })
+			.from(outbox)
+			.where(inArray(outbox.id, [...ids]))
+			.orderBy(asc(outbox.entityKey), asc(outbox.id))
+			.for("update");
+		return update(transaction);
+	});
+}
+
+/** Events this worker still holds: leased to it and not yet finished. */
+function stillLeased(ids: readonly number[], workerId: string) {
+	return and(
+		inArray(outbox.id, [...ids]),
+		eq(outbox.leaseOwner, workerId),
+		isNull(outbox.processedAt),
+		isNull(outbox.deadLetteredAt),
+	);
+}
+
 async function releaseEvents(
 	options: SearchOutboxConsumerOptions,
 	events: readonly ClaimedEvent[],
 	workerId: string,
 ) {
-	await options.database
+	const ids = events.map(({ id }) => id);
+	await updateInKeyOrder(options.database, ids, (transaction) => transaction
 		.update(outbox)
 		.set({ leaseExpiresAt: null, leaseOwner: null })
-		.where(
-			and(
-				inArray(
-					outbox.id,
-					events.map(({ id }) => id),
-				),
-				eq(outbox.leaseOwner, workerId),
-				isNull(outbox.processedAt),
-				isNull(outbox.deadLetteredAt),
-			),
-		);
+		.where(stillLeased(ids, workerId)));
 }
 
 async function heartbeatEvents(
@@ -340,23 +362,14 @@ async function heartbeatEvents(
 	workerId: string,
 ) {
 	const heartbeatAt = now(options);
-	const updated = await options.database
+	const ids = events.map(({ id }) => id);
+	const updated = await updateInKeyOrder(options.database, ids, (transaction) => transaction
 		.update(outbox)
 		.set({
 			leaseExpiresAt: expiresAt(heartbeatAt, leaseDurationMs),
 		})
-		.where(
-			and(
-				inArray(
-					outbox.id,
-					events.map(({ id }) => id),
-				),
-				eq(outbox.leaseOwner, workerId),
-				isNull(outbox.processedAt),
-				isNull(outbox.deadLetteredAt),
-			),
-		)
-		.returning({ id: outbox.id });
+		.where(stillLeased(ids, workerId))
+		.returning({ id: outbox.id }));
 	if (updated.length !== events.length) {
 		throw new SearchOutboxLeaseLostError(events[0]!.id);
 	}
@@ -393,7 +406,8 @@ async function acknowledgeEvents(
 	events: readonly ClaimedEvent[],
 	workerId: string,
 ) {
-	const acknowledged = await options.database
+	const ids = events.map(({ id }) => id);
+	const acknowledged = await updateInKeyOrder(options.database, ids, (transaction) => transaction
 		.update(outbox)
 		.set({
 			lastError: null,
@@ -401,18 +415,8 @@ async function acknowledgeEvents(
 			leaseOwner: null,
 			processedAt: now(options),
 		})
-		.where(
-			and(
-				inArray(
-					outbox.id,
-					events.map(({ id }) => id),
-				),
-				eq(outbox.leaseOwner, workerId),
-				isNull(outbox.processedAt),
-				isNull(outbox.deadLetteredAt),
-			),
-		)
-		.returning({ id: outbox.id });
+		.where(stillLeased(ids, workerId))
+		.returning({ id: outbox.id }));
 	if (acknowledged.length !== events.length) {
 		throw new SearchOutboxLeaseLostError(events[0]!.id);
 	}
@@ -1246,7 +1250,7 @@ export async function rebuildForOutboxBacklog(
 		10_000,
 	)) {
 		throwIfAborted(options.signal);
-		const rows = await database
+		const rows = await updateInKeyOrder(database, ids, (transaction) => transaction
 			.update(outbox)
 			.set({
 				lastError: null,
@@ -1266,7 +1270,7 @@ export async function rebuildForOutboxBacklog(
 					),
 				),
 			)
-			.returning({ id: outbox.id });
+			.returning({ id: outbox.id }));
 		acknowledged += rows.length;
 	}
 	return { ...rebuilt, acknowledged };
