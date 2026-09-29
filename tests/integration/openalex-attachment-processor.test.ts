@@ -78,6 +78,46 @@ beforeEach(() => {
 });
 
 describe("OpenAlex PDF processing", () => {
+	it("follows a landing page's citation_pdf_url to its PDF", async () => {
+		await withIsolatedPublicationDatabase(async (database) => {
+			await sources(database);
+			const processor = createOpenAlexAttachmentProcessor({ database, storage: new MemoryFileStorage(), maxPdfBytes: 1_000_000 });
+			const landing = (meta: string) =>
+				new Response(`<html><head>${meta}<title>Research</title></head></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+			vi.mocked(transport)
+				.mockResolvedValueOnce(landing('<meta content="/files/research.pdf?download=1&amp;v=2" name="citation_pdf_url">'))
+				.mockResolvedValueOnce(new Response(await createPdf("LINKED PDF")));
+			const [, attachment] = mapped();
+			const published = await processor(attachment!, "openalex-pdf-a");
+			expect(published.processingIssue).toBeNull();
+			expect(published.file?.fullText).toContain("LINKED PDF");
+			expect(String(vi.mocked(transport).mock.calls[1]![0])).toBe("https://93.184.216.34/files/research.pdf?download=1&v=2");
+
+			// A relative link resolves against the page a redirect ended on.
+			const redirected = landing('<meta name="citation_pdf_url" content="paper.pdf">');
+			Object.defineProperty(redirected, "url", { value: "https://93.184.216.34/articles/123/index.html" });
+			vi.mocked(transport)
+				.mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "/articles/123/index.html" } }))
+				.mockResolvedValueOnce(redirected)
+				.mockResolvedValueOnce(new Response(await createPdf("MOVED PDF")));
+			const [, moved] = mapped(`${externalUrl}?moved`, "2026-09-24T01:02:03Z", 125);
+			expect((await processor(moved!, "openalex-pdf-a")).processingIssue).toBeNull();
+			expect(String(vi.mocked(transport).mock.calls.at(-1)![0])).toBe("https://93.184.216.34/articles/123/paper.pdf");
+
+			// A landing page sent without an HTML content type is still read.
+			vi.mocked(transport)
+				.mockResolvedValueOnce(new Response('<!doctype html><meta name="citation_pdf_url" content="/untyped.pdf">', { headers: { "content-type": "application/octet-stream" } }))
+				.mockResolvedValueOnce(new Response(await createPdf("UNTYPED PDF")));
+			const [, untyped] = mapped(`${externalUrl}?untyped`, "2026-09-24T01:02:03Z", 126);
+			expect((await processor(untyped!, "openalex-pdf-a")).processingIssue).toBeNull();
+
+			// A landing page that names no PDF still fails as an invalid PDF.
+			vi.mocked(transport).mockResolvedValueOnce(landing('<meta name="citation_title" content="Research">'));
+			const [, other] = mapped(`${externalUrl}?landing`, "2026-09-24T01:02:03Z", 124);
+			expect((await processor(other!, "openalex-pdf-a")).processingIssue?.code).toBe("openalex_pdf_invalid");
+		});
+	});
+
 	it("shares hosted PDFs, survives refresh failure and rejects a reuse that lost its publication", async () => {
 		await withIsolatedPublicationDatabase(async (database) => {
 			await sources(database);

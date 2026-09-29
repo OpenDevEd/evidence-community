@@ -98,8 +98,9 @@ const RECORD_PAGE_SIZE = OPENALEX_MAX_PAGE_SIZE;
 const SLICE_CONCURRENCY = 16;
 // Fetched pages waiting for the writer, about 2 MB each.
 const QUEUED_PAGES = 8;
-const PDF_PAGE_SIZE = 50;
-const PDF_CONCURRENCY = 6;
+// A page waits for its slowest download, so larger pages leave fewer such waits.
+const PDF_PAGE_SIZE = OPENALEX_MAX_PAGE_SIZE;
+const PDF_CONCURRENCY = 24;
 // Leaves room for the batch envelope and institution facts.
 const WRITE_BUDGET_BYTES = MAX_SOURCE_BATCH_BYTES - 4 * 1024 * 1024;
 
