@@ -132,8 +132,8 @@ export class OpenAlexClient {
 		return group_by.flatMap(({ key, count }) => (/^\d{4}$/.test(key) ? [{ year: Number(key), count }] : []));
 	}
 
-	/** One page of the query's works. Without a cursor, the first page by relevance or date. */
-	async works(query: OpenAlexQuery, cursor: string | null, pageSize = 100) {
+	/** One page of the query's works; "*" asks for the first. OpenAlex leaves `next_cursor` out without a cursor. */
+	async works(query: OpenAlexQuery, cursor: string, pageSize = 100) {
 		const url = worksUrl(query, cursor, pageSize, this.options.apiKey);
 		const page = openAlexPageSchema.parse(await this.read(url, query.oql));
 		if (page.results.length > pageSize) {

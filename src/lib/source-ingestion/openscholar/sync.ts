@@ -33,7 +33,8 @@ function offsetOf(cursor: string) {
 function collectionStream(openAlexIds: readonly string[], version: string, downloadPdfs: boolean): OpenAlexWorkStream {
 	const read = async (client: OpenAlexClient, offset: number, updatedSince: string | null) => {
 		const query = worksWithIds(openAlexIds.slice(offset, offset + PART));
-		return (await client.works(updatedSince ? withUpdatedSince(query, updatedSince) : query, null, PART)).results;
+		// A hundred ids fit one page, so OpenAlex's own cursor never goes past "*".
+		return (await client.works(updatedSince ? withUpdatedSince(query, updatedSince) : query, "*", PART)).results;
 	};
 	return {
 		version,

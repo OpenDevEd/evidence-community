@@ -37,7 +37,7 @@ when the collection is still at `knownVersion`, or a page of up to 1,000
 Refusals:
 
 - `401 invalid_service_credential`: the credential does not belong to the library;
-- `403 not_configured`: the library's active configuration has no such source;
+- `403 not_configured`: no owner of the collection ever connected it to this library;
 - `403 owner_left`: the person who added the collection is no longer in the
   library's organisation;
 - `404 collection_not_found`: the collection was deleted.

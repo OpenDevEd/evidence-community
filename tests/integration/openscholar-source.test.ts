@@ -9,6 +9,7 @@ import { COLLECTION_ITEMS_PATH } from "@/lib/source-ingestion/openscholar/client
 import { syncOpenScholarCollection } from "@/lib/source-ingestion/openscholar/sync";
 import { classifySourceError } from "@/lib/source-ingestion/source-status";
 import type { Database } from "@/db/database-schema";
+import type { SourceItemUpsert } from "@/lib/source-ingestion/batch-schema";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const service = {
@@ -46,7 +47,9 @@ function services(collection: { current: { version: string; ids: number[] } | "o
 		}
 		const requested = url.searchParams.get("filter")!.match(/^ids\.openalex:([^,]+)/u)![1]!.split("|");
 		openAlexRequests.push(requested);
-		return Response.json({ meta: { count: requested.length, next_cursor: null }, results: requested.map((id) => work(Number(id.slice(1)))) });
+		// Like OpenAlex, a request without a cursor gets no `next_cursor`.
+		const meta = { count: requested.length, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) };
+		return Response.json({ meta, results: requested.map((id) => work(Number(id.slice(1)))) });
 	}) as typeof fetch;
 	return { request, openAlexRequests, collectionRequests };
 }
@@ -135,6 +138,48 @@ it("imports a collection a hundred ids per request, shares works with an OpenAle
 		const [withdrawn] = await db.select({ deleted: item.deleted }).from(item).where(eq(item.key, followed.get("W251")!));
 		expect(kept?.deleted).toBe(0);
 		expect(withdrawn?.deleted).toBe(1);
+	});
+}, 120_000);
+
+it("adds a collection's PDFs through the shared PDF stage once its records are in", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({
+			key: "openscholar-c1",
+			provider: "openscholar",
+			scopeKind: "collection",
+			externalScopeKey: "c1",
+			config: { name: "Reading list", apiKeyMode: "platform", downloadPdfs: true },
+		});
+		const ids = range(1, 150);
+		const collection = { current: { version: "v1", ids } as { version: string; ids: number[] } | "owner_left" };
+		const { request, openAlexRequests } = services(collection);
+		const withPdfs = (async (input: string | URL, init?: RequestInit) => {
+			const response = await request(input, init);
+			if (new URL(String(input)).pathname === COLLECTION_ITEMS_PATH) return response;
+			const page = (await response.json()) as { meta: unknown; results: ReturnType<typeof work>[] };
+			return Response.json({
+				...page,
+				results: page.results.map((result) => ({
+					...result,
+					best_oa_location: { is_oa: true, pdf_url: `https://example.org/${result.id.split("/").pop()}.pdf` },
+				})),
+			});
+		}) as typeof fetch;
+		const downloaded: string[] = [];
+		const processor = Object.assign(
+			async (record: SourceItemUpsert) => {
+				downloaded.push(record.sourceRecordKey);
+				return record;
+			},
+			{ reuse: async (record: SourceItemUpsert) => record, flushCleanup: async () => {} },
+		);
+
+		await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: withPdfs, attachmentProcessor: processor });
+
+		expect(downloaded.sort()).toEqual(ids.map((id) => `W${id}:pdf`).sort());
+		expect((await connection(db, "openscholar-c1")).syncCursor).toMatchObject({ stage: "pdfs", pdfs: { done: 150, missed: 0 } });
+		// Records in parallel parts, then the PDF stage reads the collection again a hundred at a time.
+		expect(openAlexRequests.length).toBeLessThanOrEqual(Math.ceil(150 / 100) + 1 + Math.ceil(150 / 100));
 	});
 }, 120_000);
 

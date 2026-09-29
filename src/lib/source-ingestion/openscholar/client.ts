@@ -23,7 +23,8 @@ export const COLLECTION_ITEMS_PATH = "/api/v1/evidence-libraries/source-collecti
 const collectionPageSchema = z.object({
 	contractVersion: z.literal(1),
 	version: z.string().min(1).max(128),
-	name: z.string().max(255),
+	// Shortened to what a source name holds; OpenScholar sends names of any length.
+	name: z.string().transform((name) => name.slice(0, 255)),
 	unchanged: z.boolean().default(false),
 	items: z
 		.array(
