@@ -218,6 +218,17 @@ test("serves value-free machine-readable configuration contracts", async ({
 	expect(catalogText).not.toContain(expectedContactEmail);
 });
 
+test("gzips JSON from route handlers when the browser accepts it", async ({
+	request,
+}) => {
+	// Next skips its own gzip for route handlers without patches/next+16.3.5.patch; an upgrade must keep this.
+	const response = await request.get("/api/items", {
+		headers: { "accept-encoding": "gzip" },
+	});
+	expect(response.status()).toBe(200);
+	expect(response.headers()["content-encoding"]).toBe("gzip");
+});
+
 test("renders identity assets, logo CSS, colors, and fonts from runtime configuration", async ({
 	page,
 }) => {

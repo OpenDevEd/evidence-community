@@ -1,0 +1,42 @@
+diff --git a/node_modules/next/dist/esm/server/send-response.js b/node_modules/next/dist/esm/server/send-response.js
+index 50c9c0c..4b17891 100644
+--- a/node_modules/next/dist/esm/server/send-response.js
++++ b/node_modules/next/dist/esm/server/send-response.js
+@@ -40,11 +40,13 @@ import { splitCookiesString } from './web/utils';
+                     res.appendHeader(name, cookie);
+                 }
+             } else {
+-                // only append the header if it is either not present in the outbound response
+-                // or if the header supports multiple values
++                // Append headers that support multiple values. Otherwise, only set the
++                // header if it is not already present in the outbound response.
+                 const isHeaderPresent = typeof res.getHeader(name) !== 'undefined';
+-                if (headersWithMultipleValuesAllowed.includes(name.toLowerCase()) || !isHeaderPresent) {
++                if (headersWithMultipleValuesAllowed.includes(name.toLowerCase())) {
+                     res.appendHeader(name, value);
++                } else if (!isHeaderPresent) {
++                    res.setHeader(name, value);
+                 }
+             }
+         });
+diff --git a/node_modules/next/dist/server/send-response.js b/node_modules/next/dist/server/send-response.js
+index ad737fa..5d6ca8d 100644
+--- a/node_modules/next/dist/server/send-response.js
++++ b/node_modules/next/dist/server/send-response.js
+@@ -44,11 +44,13 @@ async function sendResponse(req, res, response, waitUntil) {
+                     res.appendHeader(name, cookie);
+                 }
+             } else {
+-                // only append the header if it is either not present in the outbound response
+-                // or if the header supports multiple values
++                // Append headers that support multiple values. Otherwise, only set the
++                // header if it is not already present in the outbound response.
+                 const isHeaderPresent = typeof res.getHeader(name) !== 'undefined';
+-                if (headersWithMultipleValuesAllowed.includes(name.toLowerCase()) || !isHeaderPresent) {
++                if (headersWithMultipleValuesAllowed.includes(name.toLowerCase())) {
+                     res.appendHeader(name, value);
++                } else if (!isHeaderPresent) {
++                    res.setHeader(name, value);
+                 }
+             }
+         });
