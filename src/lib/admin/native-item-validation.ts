@@ -471,14 +471,18 @@ function normalizeDraftFields(
 	return result;
 }
 
+// Built once: an import validates every record's creators.
+const creatorsSchema = z.array(creatorSchema(false));
+const incompleteCreatorsSchema = z.array(creatorSchema(true));
+
 function parseDraftCreators(
 	value: unknown,
 	definition: ReturnType<typeof zoteroDefinitionFor>,
 	options: NativeItemValidationOptions,
 ) {
-	const creatorResult = z
-		.array(creatorSchema(options.allowIncompleteCreators ?? false))
-		.safeParse(value);
+	const creatorResult = (
+		options.allowIncompleteCreators ? incompleteCreatorsSchema : creatorsSchema
+	).safeParse(value);
 	if (!creatorResult.success) {
 		throw new NativeItemValidationError(
 			"Check the creator details and try again.",
