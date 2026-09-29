@@ -100,7 +100,10 @@ const SLICE_CONCURRENCY = 16;
 const QUEUED_PAGES = 8;
 // A page waits for its slowest download, so larger pages leave fewer such waits.
 const PDF_PAGE_SIZE = OPENALEX_MAX_PAGE_SIZE;
-const PDF_CONCURRENCY = 24;
+const PDF_CONCURRENCY = 48;
+// More at once and some publishers answer 429.
+const PDF_PER_HOST = 4;
+const PDF_PAGES_IN_FLIGHT = 3;
 // Leaves room for the batch envelope and institution facts.
 const WRITE_BUDGET_BYTES = MAX_SOURCE_BATCH_BYTES - 4 * 1024 * 1024;
 
@@ -265,8 +268,7 @@ async function fetchPage(
 	}
 }
 
-// Downloads take most of the PDF time, so several run at once. The cap
-// bounds PDF buffers and renderer memory.
+// The records stage only reuses PDFs already published, which reads the database.
 async function processAttachments(
 	context: SourceAdapterContext,
 	items: SourceItemUpsert[],
@@ -442,18 +444,14 @@ type Scan = {
  * Records first: a page is written as soon as it is fetched, keeping only PDFs
  * already published. The PDF stage then adds the rest, page by page.
  */
-async function preparePage(scan: Scan, items: SourceItemUpsert[], works: number) {
+async function preparePage(scan: Scan, items: SourceItemUpsert[]) {
 	const processor = scan.options.attachmentProcessor;
 	if (!scan.config.downloadPdfs || !processor) return;
-	const key = scan.context.sourceConnection.key;
-	if (scan.cursor.stage === "records") {
-		await processAttachments(scan.context, items, processor.reuse);
-		return;
-	}
-	const links = new Set(items.filter(isPdfLink).map((record) => record.sourceRecordKey));
-	const startedAt = performance.now();
-	await processAttachments(scan.context, items, processor);
-	logPdfPage(key, works, items, startedAt);
+	await processAttachments(scan.context, items, processor.reuse);
+}
+
+/** Adds a processed PDF page to the stage's counts. */
+function countPdfPage(scan: Scan, items: SourceItemUpsert[], links: ReadonlySet<string>) {
 	const pdfs = scan.cursor.pdfs!;
 	const done = pdfs.done + links.size;
 	// Other records' issues, such as incomplete authors, are not PDFs missed.
@@ -526,34 +524,207 @@ async function scanPages(scan: Scan) {
 		await reportProgress(scan, page.meta.count);
 		const mapped = page.results.map(mapOpenAlexWork);
 		const items = mapped.flatMap((work) => work.items);
-		await preparePage(scan, items, page.results.length);
-		scan.cursor = {
-			...scan.cursor,
-			nextCursor: page.meta.next_cursor,
-			imported:
-				scan.cursor.stage === "records"
-					? scan.cursor.imported + page.results.length
-					: scan.cursor.imported,
-			completedAt: null,
-		};
-		await context.heartbeat();
-		const { fresh, known } = await splitNewRecords(scan, items);
-		// New works go in first, without moving the cursor on.
-		if (fresh.length) {
-			await writePage(context, scan.expectedCursor, scan.expectedCursor, { items: fresh, institutionCountries: [] }, "records");
-		}
-		await writePage(
-			context,
-			scan.expectedCursor,
-			scan.cursor,
-			{ items: known, institutionCountries: mapped.flatMap((work) => work.institutions) },
-			scan.cursor.stage,
-		);
-		scan.expectedCursor = scan.cursor;
-		scan.pages++;
-		await reportProgress(scan, page.meta.count);
-		await scan.options.attachmentProcessor?.flushCleanup(connection.key);
+		await preparePage(scan, items);
+		await writeScannedPage(scan, page, mapped, items);
 	}
+}
+
+/**
+ * Download lanes shared by every page in flight, given out in the order asked
+ * for, with a few per host so no publisher gets many requests at once. A PDF
+ * waiting on a busy host does not hold up PDFs from other hosts.
+ */
+function downloadLanes(size: number, perHost: number) {
+	let busy = 0;
+	const byHost = new Map<string, number>();
+	const waiting: { host: string; start: () => void }[] = [];
+	const fits = (host: string) => busy < size && (byHost.get(host) ?? 0) < perHost;
+	const take = (host: string) => {
+		busy++;
+		byHost.set(host, (byHost.get(host) ?? 0) + 1);
+	};
+	return async <T,>(host: string, task: () => Promise<T>) => {
+		if (fits(host) && !waiting.length) take(host);
+		else await new Promise<void>((start) => waiting.push({ host, start }));
+		try {
+			return await task();
+		} finally {
+			busy--;
+			const left = byHost.get(host)! - 1;
+			if (left) byHost.set(host, left);
+			else byHost.delete(host);
+			for (let index = 0; index < waiting.length && busy < size; ) {
+				const next = waiting[index]!;
+				if (!fits(next.host)) {
+					index++;
+					continue;
+				}
+				waiting.splice(index, 1);
+				take(next.host);
+				next.start();
+			}
+		}
+	};
+}
+
+type PdfPage = {
+	page: NonNullable<Awaited<ReturnType<typeof fetchPage>>>;
+	mapped: ReturnType<typeof mapOpenAlexWork>[];
+	items: SourceItemUpsert[];
+	links: Set<string>;
+	startedAt: number;
+	processed: Promise<void>;
+};
+
+type PdfPipeline = {
+	scan: Scan;
+	lane: ReturnType<typeof downloadLanes>;
+	stop: { failed: boolean };
+	inFlight: PdfPage[];
+	fetchCursor: Cursor;
+};
+
+/** Fetches pages ahead until enough are in flight. False when incremental access was refused. */
+async function fillPdfPages(pipeline: PdfPipeline) {
+	const { scan, lane, stop, inFlight } = pipeline;
+	const { context, client, config } = scan;
+	const processor = scan.options.attachmentProcessor;
+	while (pipeline.fetchCursor.nextCursor && inFlight.length < PDF_PAGES_IN_FLIGHT && !stop.failed) {
+		await context.heartbeat();
+		const page = await fetchPage(client, config, pipeline.fetchCursor, context.sourceConnection.key);
+		if (!page) return false;
+		if (pipeline.fetchCursor.mode === "incremental") pipeline.fetchCursor = { ...pipeline.fetchCursor, incrementalAvailable: true };
+		assertAdvancing(page, pipeline.fetchCursor.nextCursor, context.sourceConnection.key);
+		pipeline.fetchCursor = { ...pipeline.fetchCursor, nextCursor: page.meta.next_cursor };
+		const mapped = page.results.map(mapOpenAlexWork);
+		const items = mapped.flatMap((work) => work.items);
+		const processed = processor ? processWithLanes(context, items, processor, lane, stop) : Promise.resolve();
+		// A failure is handled when its page is written; this keeps it from going unobserved first.
+		processed.catch(() => (stop.failed = true));
+		inFlight.push({ page, mapped, items, processed, links: new Set(items.filter(isPdfLink).map((record) => record.sourceRecordKey)), startedAt: performance.now() });
+	}
+	return true;
+}
+
+/** Writes the oldest page in flight once all its PDFs are done. */
+async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
+	const { scan } = pipeline;
+	await next.processed;
+	logPdfPage(scan.context.sourceConnection.key, next.page.results.length, next.items, next.startedAt);
+	countPdfPage(scan, next.items, next.links);
+	if (pipeline.fetchCursor.incrementalAvailable && scan.cursor.mode === "incremental") scan.cursor = { ...scan.cursor, incrementalAvailable: true };
+	await writeScannedPage(scan, next.page, next.mapped, next.items, false);
+}
+
+/**
+ * The PDF stage keeps a few pages in flight: a page's slowest download no
+ * longer holds up the next pages' downloads, only its own write. Pages are
+ * still written in order.
+ */
+async function scanPdfPages(scan: Scan) {
+	const pipeline: PdfPipeline = {
+		scan,
+		lane: downloadLanes(PDF_CONCURRENCY, PDF_PER_HOST),
+		stop: { failed: false },
+		inFlight: [],
+		fetchCursor: scan.cursor,
+	};
+	const settle = async () => {
+		pipeline.stop.failed = true;
+		await Promise.allSettled(pipeline.inFlight.map((pending) => pending.processed));
+	};
+	try {
+		for (;;) {
+			if (!(await fillPdfPages(pipeline))) {
+				// Incremental access was refused: pages in flight belong to the old query.
+				await settle();
+				scan.cursor = fullScanCursor(scan.cursor);
+				break;
+			}
+			const next = pipeline.inFlight.shift();
+			if (!next) break;
+			await writePdfPage(pipeline, next);
+		}
+	} finally {
+		await settle();
+	}
+	// Every staged upload is now written or given up, so cleanup cannot remove one in use.
+	await scan.options.attachmentProcessor?.flushCleanup(scan.context.sourceConnection.key);
+}
+
+function pdfHost(url: string) {
+	try {
+		return new URL(url).hostname;
+	} catch {
+		return url;
+	}
+}
+
+/** Processes a page's PDFs on the shared lanes; after a failure no new PDF starts. */
+async function processWithLanes(
+	context: SourceAdapterContext,
+	items: SourceItemUpsert[],
+	processor: RecordProcessor,
+	lane: ReturnType<typeof downloadLanes>,
+	stop: { failed: boolean },
+) {
+	const results = await Promise.allSettled(
+		items.map((record, index) =>
+			record.file?.url
+				? lane(pdfHost(record.file.url), async () => {
+						if (stop.failed) throw new Error("PDF stage stopped");
+						await context.heartbeat();
+						items[index] = await processor(record, context.sourceConnection.key);
+					})
+				: Promise.resolve(),
+		),
+	);
+	const rejected = results.find((result) => result.status === "rejected");
+	if (rejected) {
+		stop.failed = true;
+		throw rejected.reason;
+	}
+}
+
+/**
+ * Moves the cursor past a fetched page and writes it. Cleanup removes staged
+ * files no publication uses, so it waits while later pages have uploads staged.
+ */
+async function writeScannedPage(
+	scan: Scan,
+	page: { meta: { count: number; next_cursor: string | null }; results: unknown[] },
+	mapped: ReturnType<typeof mapOpenAlexWork>[],
+	items: SourceItemUpsert[],
+	cleanUp = true,
+) {
+	const { context } = scan;
+	const connection = context.sourceConnection;
+	scan.cursor = {
+		...scan.cursor,
+		nextCursor: page.meta.next_cursor,
+		imported:
+			scan.cursor.stage === "records"
+				? scan.cursor.imported + page.results.length
+				: scan.cursor.imported,
+		completedAt: null,
+	};
+	await context.heartbeat();
+	const { fresh, known } = await splitNewRecords(scan, items);
+	// New works go in first, without moving the cursor on.
+	if (fresh.length) {
+		await writePage(context, scan.expectedCursor, scan.expectedCursor, { items: fresh, institutionCountries: [] }, "records");
+	}
+	await writePage(
+		context,
+		scan.expectedCursor,
+		scan.cursor,
+		{ items: known, institutionCountries: mapped.flatMap((work) => work.institutions) },
+		scan.cursor.stage,
+	);
+	scan.expectedCursor = scan.cursor;
+	scan.pages++;
+	await reportProgress(scan, page.meta.count);
+	if (cleanUp) await scan.options.attachmentProcessor?.flushCleanup(connection.key);
 }
 
 type SlicePage = { slice: number; nextCursor: string | null; works: number; mapped: ReturnType<typeof mapOpenAlexWork>[] };
@@ -619,7 +790,7 @@ async function writeSlicePage(scan: Scan, page: SlicePage, total: number) {
 	const { context } = scan;
 	await context.heartbeat();
 	const items = page.mapped.flatMap((work) => work.items);
-	await preparePage(scan, items, page.works);
+	await preparePage(scan, items);
 	const slices = scan.cursor.slices!.map((slice, index) =>
 		index === page.slice ? { ...slice, nextCursor: page.nextCursor } : slice,
 	);
@@ -743,7 +914,7 @@ async function scanStages(scan: Scan) {
 		}
 		// Said before the first page, so a failure there still reads as the PDF stage.
 		await reportProgress(scan, 0);
-		await scanPages(scan);
+		await scanPdfPages(scan);
 		if (scan.cursor.stage === "pdfs") return;
 	}
 }

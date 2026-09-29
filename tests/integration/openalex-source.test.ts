@@ -385,7 +385,7 @@ it("imports a work whose title is too long for a btree index entry", async () =>
 	});
 }, 120_000);
 
-it("processes up to 24 PDFs at once and writes a large page in order, in parts under the batch limit", async () => {
+it("processes up to 48 PDFs at once, four per host, and writes a large page in order, in parts under the batch limit", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const [connection] = await db
 			.insert(sourceConnection)
@@ -396,19 +396,26 @@ it("processes up to 24 PDFs at once and writes a large page in order, in parts u
 				config: { ...settings, downloadPdfs: true },
 			})
 			.returning();
-		const ids = Array.from({ length: 50 }, (_, index) => index + 1);
-		const pdfUrl = (id: number) => `https://example.org/W${id}.pdf`;
+		const ids = Array.from({ length: 60 }, (_, index) => index + 1);
+		// Ten PDFs share one host; the rest each have their own.
+		const host = (id: number) => (id <= 10 ? "shared.example.org" : `host${id}.example.org`);
+		const pdfUrl = (id: number) => `https://${host(id)}/W${id}.pdf`;
 		let running = 0;
 		let mostRunning = 0;
+		let sharedRunning = 0;
+		let mostShared = 0;
 		// Later records finish first, so a result written to the wrong slot shows up.
 		// Near-limit text makes the page too large for one write.
 		const processor = Object.assign(
 			async (record: SourceItemUpsert) => {
+				const shared = record.file!.url!.includes("shared.");
 				mostRunning = Math.max(mostRunning, ++running);
+				if (shared) mostShared = Math.max(mostShared, ++sharedRunning);
 				await new Promise((resolve) =>
-					setTimeout(resolve, 51 - Number(record.sourceRecordKey.slice(1, -4))),
+					setTimeout(resolve, 61 - Number(record.sourceRecordKey.slice(1, -4))),
 				);
 				running--;
+				if (shared) sharedRunning--;
 				return {
 					...record,
 					file: { ...record.file!, fullText: "x".repeat(1_400_000) },
@@ -441,9 +448,10 @@ it("processes up to 24 PDFs at once and writes a large page in order, in parts u
 			},
 		);
 
-		// Records first in pages of 100, then the PDF stage in pages of 50.
+		// Records first, then the PDF stage, both in pages of 200.
 		expect(pageSizes).toEqual(["200", "200"]);
-		expect(mostRunning).toBe(24);
+		expect(mostRunning).toBe(48);
+		expect(mostShared).toBe(4);
 		const pageWrites = vi
 			.mocked(writeSourceIngestionBatch)
 			.mock.calls.map(([, batch]) => batch as SourceIngestionBatch)
