@@ -204,23 +204,25 @@ it("shows the latest source conflict when an overlapping query supplies the upda
 
 it("rebuilds existing search documents when topic visibility changes and retains the request across failures", async () => {
   await withIsolatedPublicationDatabase(async db => {
-    expect(await prepareSearchProjection(db, false, true)).toBe(true);
+    expect(await prepareSearchProjection(db, false, true, [])).toBe(true);
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, true)).toBe(false);
-    expect(await prepareSearchProjection(db, true, true)).toBe(true);
-    expect(await prepareSearchProjection(db, true, true)).toBe(true);
+    expect(await prepareSearchProjection(db, false, true, [])).toBe(false);
+    expect(await prepareSearchProjection(db, true, true, [])).toBe(true);
+    expect(await prepareSearchProjection(db, true, true, [])).toBe(true);
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, true, true)).toBe(false);
-    expect(await prepareSearchProjection(db, false, true)).toBe(true);
+    expect(await prepareSearchProjection(db, true, true, [])).toBe(false);
+    expect(await prepareSearchProjection(db, false, true, [])).toBe(true);
     // Switching full-text search adds or removes page text, so it rebuilds too.
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, false)).toBe(true);
+    expect(await prepareSearchProjection(db, false, false, [])).toBe(true);
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, false)).toBe(false);
+    expect(await prepareSearchProjection(db, false, false, [])).toBe(false);
+    // Hidden tags decide which records have a PDF, so changing them rebuilds too.
+    expect(await prepareSearchProjection(db, false, false, ["hidden"])).toBe(true);
     // An index an older runtime built keeps its old documents unless it rebuilds.
     await db.update(status).set({searchProjectionSignature: JSON.stringify({topics: false, fullText: false})}).where(eq(status.id, 1));
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, false)).toBe(true);
+    expect(await prepareSearchProjection(db, false, false, ["hidden"])).toBe(true);
   });
 });
 

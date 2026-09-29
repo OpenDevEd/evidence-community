@@ -37,10 +37,10 @@ const searchFiltersSchema = z
 			.enum(SORT_KEYS)
 			.optional()
 			.describe("Sort order explicitly requested by the user"),
-		fullTextOnly: z
+		pdfOnly: z
 			.boolean()
 			.optional()
-			.describe("Only return publications with searchable PDF full text"),
+			.describe("Only return publications with a PDF that can be read"),
 	})
 	.strict();
 

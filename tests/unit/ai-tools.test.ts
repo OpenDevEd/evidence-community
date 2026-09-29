@@ -30,7 +30,7 @@ import {
 } from "@/lib/ai/tool-schemas";
 import { createResearchTools } from "@/lib/ai/tools";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
-import { FULL_TEXT_PDF_FILTER } from "@/lib/search-filter-constants";
+import { PDF_FILTER } from "@/lib/search-filter-constants";
 import { cloneLibraryConfig } from "../fixtures/library-config";
 
 const config = libraryConfigSchema.parse(cloneLibraryConfig());
@@ -140,6 +140,7 @@ describe("searching the library for the assistant", () => {
 					abstractNote: "<p>Radio &amp; learning</p>",
 					creators: [{ lastName: "Ada", firstName: "Grace" }],
 					year: 2024,
+					hasPdf: true,
 				},
 			],
 			estimatedTotalHits: 1,
@@ -156,6 +157,7 @@ describe("searching the library for the assistant", () => {
 		expect(result.queries[0].hits[0]).toMatchObject({
 			key: "ITEM0001",
 			abstract: "Radio & learning",
+			hasPdf: true,
 			citation: "/lib/ITEM0001",
 		});
 	});
@@ -174,21 +176,21 @@ describe("searching the library for the assistant", () => {
 		expect(options.limit).toBe(10);
 	});
 
-	it("keeps Deep Research on publications that have full text", async () => {
+	it("keeps Deep Research on publications that have a PDF", async () => {
 		await runSearch("research", { queries: ["radio", "schools"] });
 
 		expect(searchOptions().filter).toEqual(
-			expect.arrayContaining([FULL_TEXT_PDF_FILTER]),
+			expect.arrayContaining([PDF_FILTER]),
 		);
 	});
 
-	it("lets Deep Research widen the search when full text is missing", async () => {
+	it("lets Deep Research widen the search when PDFs are missing", async () => {
 		await runSearch("research", {
 			queries: ["radio", "schools"],
-			filters: { fullTextOnly: false },
+			filters: { pdfOnly: false },
 		});
 
-		expect(searchOptions().filter).not.toContain(FULL_TEXT_PDF_FILTER);
+		expect(searchOptions().filter).not.toContain(PDF_FILTER);
 	});
 
 	it("refuses to search inside results the reader does not have", async () => {

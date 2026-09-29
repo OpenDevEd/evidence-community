@@ -24,7 +24,7 @@ import { exportCitationItems } from "@/lib/citation-export";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { readPublicItems } from "@/lib/search-index/projection";
+import { generateFullSearchProjectionPlans, readPublicItems } from "@/lib/search-index/projection";
 import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 
@@ -188,5 +188,32 @@ it("uses current registered identifiers across public records, citations, cards 
 		expect((await read("ZENDAAAA")).status).toBe(404);
 		expect(await getPublicItemCard(database, "ZENDAAAA", config)).toBeNull();
 		expect((await readCitationRecordsPage(config, null, 10)).map((record) => record.key)).toEqual(["IMPRTAAA", "RESERVAA"]);
+	});
+}, 120_000);
+
+it("indexes whether a record has a readable PDF, stored or linked, even without extracted text", async () => {
+	await withIsolatedPublicationDatabase(async (database, client) => {
+		const rows = [
+			["LINKEDAA", "Report", null, null, null, null],
+			["LINKPDFA", "Attachment", "LINKEDAA", "linked_url", "application/pdf", "https://oa.example.org/paper.pdf"],
+			["HIDEPUBA", "Report", null, null, null, null],
+			["HIDEPDFA", "Attachment", "HIDEPUBA", "linked_url", "application/pdf", "https://oa.example.org/hidden.pdf"],
+			["WEBPUBAA", "Report", null, null, null, null],
+			["WEBLINKA", "Attachment", "WEBPUBAA", "linked_url", "text/html", "https://oa.example.org/landing"],
+		];
+		for (const [key, itemType, parentItem, linkMode, contentType, url] of rows) {
+			await client.query('INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'native\', $1)', [key]);
+			await client.query('INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "deleted", "title", "linkMode", "contentType", "url") VALUES ($1, \'native\', $1, $2, $3, 0, $1, $4, $5, $6)', [key, itemType, parentItem, linkMode, contentType, url]);
+		}
+		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\')');
+		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDEPDFA\', \'Hidden\')');
+
+		const indexed = [];
+		for await (const plan of generateFullSearchProjectionPlans(database, config)) indexed.push(...plan.documents);
+		expect(indexed.map((document) => [document.key, document.hasPdf])).toEqual([
+			["HIDEPUBA", false],
+			["LINKEDAA", true],
+			["WEBPUBAA", false],
+		]);
 	});
 }, 120_000);

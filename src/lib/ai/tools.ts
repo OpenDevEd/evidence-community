@@ -8,7 +8,7 @@ import { abstractPlainText } from "@/lib/abstract-text";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
 import type { LibrarySearchContext } from "@/lib/search-context";
-import { FULL_TEXT_PDF_FILTER } from "@/lib/search-filter-constants";
+import { PDF_FILTER, PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import { publicationToolModelOutput } from "./attachments";
 import {
 	CURRENT_RESULTS_WINDOW_SIZE,
@@ -46,6 +46,7 @@ const SEARCH_ATTRIBUTES = [
 	"DOI",
 	"url",
 	"collections",
+	PDF_PRESENCE_ATTRIBUTE,
 ] as const;
 
 function logDevelopmentSearch(
@@ -80,6 +81,7 @@ function searchHitToModelHit(hit: SearchHit) {
 		publicationTitle: hit.publicationTitle,
 		DOI: hit.DOI,
 		url: hit.url,
+		hasPdf: hit[PDF_PRESENCE_ATTRIBUTE] === true,
 		citation: `/lib/${String(hit.key)}`,
 	};
 }
@@ -180,8 +182,8 @@ function toolSearchFilters(
 	allowedKeys?: string[],
 ) {
 	const finalFilters = [...compiled.finalFilters];
-	if (filters?.fullTextOnly && !finalFilters.includes(FULL_TEXT_PDF_FILTER)) {
-		finalFilters.push(FULL_TEXT_PDF_FILTER);
+	if (filters?.pdfOnly) {
+		finalFilters.push(PDF_FILTER);
 	}
 	if (allowedKeys) {
 		finalFilters.push(`key IN ${JSON.stringify(allowedKeys)}`);
@@ -360,15 +362,15 @@ function describeCurrentResults(
 	};
 }
 
-/** Deep Research looks for full text first unless the reader said otherwise. */
+/** Deep Research looks for publications with a PDF first unless the reader said otherwise. */
 function modeFilters(mode: ResearchMode, filters: SearchFilters | undefined) {
-	return mode === "research" && filters?.fullTextOnly === undefined
-		? { ...filters, fullTextOnly: true }
+	return mode === "research" && filters?.pdfOnly === undefined
+		? { ...filters, pdfOnly: true }
 		: filters;
 }
 
 const SEARCH_TOOL_DESCRIPTION =
-	"Search the Evidence Library for candidate publications. Submit related query variations together so they run in parallel. Results contain discovery metadata and abstracts, not page-verifiable evidence. Before relying on a publication's substantive claims, use readPublications and cite its exact PDF page. Use filters.fullTextOnly to return only publications with searchable PDF full text. When the request context says a current result set is available and the user refers to it, set withinCurrentResults=true: with no queries this lists one 200-entry window of those results in the user's own order (positions, keys, titles, creators, years) — use it for questions about the list itself such as counts, order, or the first/last/Nth entry (window='last' for the end of the list); with queries it searches only inside that window. At most one window per user message; to continue later, pass the nextCursor returned by the previous call.";
+	"Search the Evidence Library for candidate publications. Submit related query variations together so they run in parallel. Results contain discovery metadata and abstracts, not page-verifiable evidence. Before relying on a publication's substantive claims, use readPublications and cite its exact PDF page. Each hit says whether it has a PDF (hasPdf); only those can be read. Use filters.pdfOnly to return only publications with a PDF. When the request context says a current result set is available and the user refers to it, set withinCurrentResults=true: with no queries this lists one 200-entry window of those results in the user's own order (positions, keys, titles, creators, years) — use it for questions about the list itself such as counts, order, or the first/last/Nth entry (window='last' for the end of the list); with queries it searches only inside that window. At most one window per user message; to continue later, pass the nextCursor returned by the previous call.";
 
 const READ_TOOL_DESCRIPTION =
 	"Read the complete visible PDF attachments for selected Evidence Library publications. Use this before making evidence claims so every claim can identify both its publication source and exact PDF page. Use publication keys returned by searchLibrary and submit multiple keys together to read them in parallel. Prefer two or three of the most relevant publications per call: PDFs within about 20 MB per call are attached inline and cached across turns, anything beyond that is attached by link and is slower to process.";
