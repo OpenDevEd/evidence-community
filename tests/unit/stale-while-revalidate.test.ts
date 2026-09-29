@@ -43,3 +43,22 @@ it("computes afresh after the values are forgotten", async () => {
 	forgetStaleValues();
 	expect(await staleWhileRevalidate("status", 60_000, compute)).toBe("after");
 });
+
+it("drops a value counted before the cache was cleared", async () => {
+	let release!: (value: string) => void;
+	const slow = vi.fn(() => new Promise<string>((resolve) => (release = resolve)));
+	const pending = staleWhileRevalidate("cleared", 60_000, slow);
+	forgetStaleValues();
+	expect(await staleWhileRevalidate("cleared", 60_000, async () => "fresh")).toBe("fresh");
+	release("old");
+	expect(await pending).toBe("old");
+	expect(await staleWhileRevalidate("cleared", 60_000, async () => "unused")).toBe("fresh");
+});
+
+it("keeps at most fifty keys, dropping the oldest", async () => {
+	for (let index = 0; index < 51; index++) await staleWhileRevalidate(`revision:${index}`, 60_000, async () => index);
+	const compute = vi.fn(async () => -1);
+	expect(await staleWhileRevalidate("revision:0", 60_000, compute)).toBe(-1);
+	expect(await staleWhileRevalidate("revision:50", 60_000, compute)).toBe(50);
+	expect(compute).toHaveBeenCalledTimes(1);
+});
