@@ -2,8 +2,9 @@
 -- whole page insert fail on "adminItemListProjection_title_idx". Sorting
 -- only needs the start of a title; titles that share the first 512
 -- characters fall back to key order. 512 characters is at most 2 KB.
--- Rollback: keep the function. Older runtimes only read "titleSort", and
--- every existing row already fits. A full reversal reapplies 0045's version.
+-- Existing rows are cut to the same length so old and new rows sort alike.
+-- Rollback: keep the function and the cut values. Older runtimes only read
+-- "titleSort", and a reapplied 0045 function rewrites a row on its next change.
 CREATE OR REPLACE FUNCTION refresh_admin_item_list_projection_core(requested_key text)
 RETURNS void
 LANGUAGE plpgsql
@@ -219,4 +220,8 @@ BEGIN
 		DELETE FROM "adminItemListProjection" WHERE key = root_key;
 	END IF;
 END;
-$$;
+$$;--> statement-breakpoint
+
+UPDATE "adminItemListProjection"
+SET "titleSort" = left("titleSort", 512)
+WHERE length("titleSort") > 512;
