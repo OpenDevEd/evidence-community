@@ -1043,7 +1043,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 
 		if (batch.institutionCountries.length) {
 			const rows = new Map(batch.institutionCountries.map(({ name, ...facts }) => [institutionNameKey(name), facts]));
-			await transaction.insert(institutionCountry).values([...rows].map(([nameKey, facts]) => ({ nameKey, ...facts }))).onConflictDoNothing();
+			// Four parameters a fact: one statement would pass PostgreSQL's limit of 65,535 near 16,000 facts.
+			for (const chunk of chunkValues([...rows], RELATION_CHUNK_SIZE)) {
+				await transaction.insert(institutionCountry).values(chunk.map(([nameKey, facts]) => ({ nameKey, ...facts }))).onConflictDoNothing();
+			}
 		}
 
 		const collectionKeys = await reserveCollectionIdentities(transaction, {

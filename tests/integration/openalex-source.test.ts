@@ -31,6 +31,7 @@ import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { slicedQuery, type SliceDates } from "@/lib/source-ingestion/openalex/slices";
 import type { SourceIngestionBatch, SourceItemUpsert } from "@/lib/source-ingestion/batch-schema";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 import { maximalLibraryConfig } from "../fixtures/library-config";
@@ -441,7 +442,7 @@ it("processes up to six PDFs at once and writes a large page in order, in parts 
 		);
 
 		// Records first in pages of 100, then the PDF stage in pages of 50.
-		expect(pageSizes).toEqual(["100", "50"]);
+		expect(pageSizes).toEqual(["200", "50"]);
 		expect(mostRunning).toBe(6);
 		const pageWrites = vi
 			.mocked(writeSourceIngestionBatch)
@@ -532,7 +533,7 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 		};
 
 		await expect(sync()).rejects.toThrow("lease lost");
-		expect(pageSizes).toEqual(["100", "50"]);
+		expect(pageSizes).toEqual(["200", "50"]);
 		expect(processor.reuse).toHaveBeenCalledTimes(3);
 		// The records went in without their PDFs.
 		expect(await db.select().from(item).where(sql`${item.sourceRecordKey} in ('W1', 'W2', 'W3')`)).toHaveLength(3);
@@ -599,7 +600,7 @@ it("restarts a PDF stage from the records when it must scan in full, and tags wo
 				? new Response("Premium from_updated_date requires a paid key", { status: 403 })
 				: page([1]),
 		);
-		expect(requests.map((request) => request.perPage)).toEqual(["50", "100", "50"]);
+		expect(requests.map((request) => request.perPage)).toEqual(["50", "200", "50"]);
 		expect((await record(2)).deleted).toBe(1);
 		expect((await current()).syncCursor).toMatchObject({ stage: "pdfs", mode: "full" });
 
@@ -617,7 +618,123 @@ it("restarts a PDF stage from the records when it must scan in full, and tags wo
 		await db.update(sourceConnection).set({ config: settings }).where(eq(sourceConnection.key, "oa-stage"));
 		requests.length = 0;
 		await sync(() => page([1, 2]));
-		expect(requests).toEqual([{ perPage: "100", cursor: "*" }]);
+		expect(requests).toEqual([{ perPage: "200", cursor: "*" }]);
 		expect((await current()).syncCursor).toMatchObject({ stage: "records", mode: "full" });
+	});
+}, 120_000);
+
+it("fetches a large full scan as date slices, importing each work once and resuming each slice after a failure", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const query = { oql: "works where title has education" };
+		await db.insert(sourceConnection).values({
+			key: "oa-sliced", provider: "openalex", scopeKind: "query",
+			config: { ...settings, approvedQuery: { ...settings.approvedQuery, query } },
+		});
+		// Thirty works, two with no date. Counts are reported a thousand times
+		// larger, so the query looks big enough to slice.
+		const dated = (id: number) => ({ ...work(id), publication_date: `${2023 + (id % 2)}-${String((id % 12) + 1).padStart(2, "0")}-15` });
+		const works: Array<ReturnType<typeof work> & { publication_date?: string }> = [...Array.from({ length: 28 }, (_, index) => dated(index + 1)), work(29), work(30)];
+		const clauseOf = (oql: string) => (oql.includes(") and ") ? oql.slice(oql.indexOf(") and ") + 6) : null);
+		const matches = (clause: string | null, date: string | undefined) => {
+			if (!clause) return true;
+			if (clause === "publication_date is null") return date === undefined;
+			const from = /publication_date >= (\S+)/.exec(clause)?.[1];
+			const to = /publication_date < (\S+)/.exec(clause)?.[1];
+			return date !== undefined && (!from || date >= from) && (!to || date < to);
+		};
+		let failNextSecondPage = false;
+		let failed: string | null = null;
+		let totalOffset = 0;
+		const requests: string[] = [];
+		const yearGroups = () => {
+			const years = Map.groupBy(works.filter((candidate) => candidate.publication_date), (candidate) => candidate.publication_date!.slice(0, 4));
+			return Response.json({ meta: { count: 0 }, group_by: [...years].map(([key, list]) => ({ key, count: list.length * 1000 })) });
+		};
+		const failsOnce = (clause: string | null, offset: number) => {
+			if (!clause || offset !== 2 || !failNextSecondPage) return false;
+			failNextSecondPage = false;
+			failed = clause;
+			return true;
+		};
+		const page = (url: URL, clause: string | null) => {
+			const matching = works.filter((candidate) => matches(clause, candidate.publication_date));
+			const count = matching.length * 1000 + (clause ? 0 : totalOffset);
+			if (url.searchParams.get("per_page") === "1") return Response.json({ meta: { count, next_cursor: null }, results: [] });
+			const offset = url.searchParams.get("cursor") === "*" ? 0 : Number(url.searchParams.get("cursor"));
+			requests.push(`${clause ?? "all"}@${offset}`);
+			if (failsOnce(clause, offset)) return new Response("Forbidden", { status: 403 });
+			// Pages of two, so most slices have several.
+			const next = offset + 2 < matching.length ? String(offset + 2) : null;
+			return Response.json({ meta: { count, next_cursor: next }, results: matching.slice(offset, offset + 2) });
+		};
+		const respond = async (input: RequestInfo | URL, init?: RequestInit) => {
+			const oql = (JSON.parse(String(init?.body)) as { oql: string }).oql;
+			return oql.endsWith(" group by publication_year") ? yearGroups() : page(new URL(String(input)), clauseOf(oql));
+		};
+		const connection = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-sliced")))[0]!;
+		const sync = async () =>
+			syncOpenAlexSource(
+				{ database: db, sourceConnection: await connection(), credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{ fetch: respond as typeof fetch, sleep: async () => {} },
+			);
+		type SavedCursor = { imported: number; nextCursor: string | null; completedAt: string | null; slices: { dates: SliceDates; nextCursor: string | null }[] | null };
+		const cursor = async () => (await connection()).syncCursor as unknown as SavedCursor;
+		const records = async () => (await db.select({ key: item.sourceRecordKey }).from(item).where(sql`${item.sourceRecordKey} like 'W%'`)).map((row) => row.key);
+		const expected = works.map((candidate) => candidate.id.split("/").pop()!).sort();
+
+		// One slice's second page fails once, and the run stops there.
+		failNextSecondPage = true;
+		await expect(sync()).rejects.toMatchObject({ status: 403 });
+		const stopped = await cursor();
+		expect(stopped.slices!.length).toBeGreaterThan(2);
+		const clauseFor = (dates: SliceDates) => clauseOf(slicedQuery(query, dates).oql!)!;
+		expect(stopped.slices!.find((slice) => clauseFor(slice.dates) === failed)?.nextCursor).toBe("2");
+
+		// The next run resumes that slice at its second page, fetches no finished
+		// slice again, and imports every work once.
+		requests.length = 0;
+		await sync();
+		expect(requests).toContain(`${failed}@2`);
+		expect(requests).not.toContain(`${failed}@0`);
+		for (const slice of stopped.slices!.filter((candidate) => candidate.nextCursor === null)) {
+			expect(requests.filter((request) => request.startsWith(`${clauseFor(slice.dates)}@`))).toEqual([]);
+		}
+		expect((await records()).sort()).toEqual(expected);
+		expect(await cursor()).toMatchObject({ imported: 30, nextCursor: null, completedAt: expect.any(String) });
+
+		// When the slices' counts do not add up to the query's, the scan reads the query as one stream.
+		totalOffset = 1;
+		await db.update(sourceConnection).set({ syncCursor: {} }).where(eq(sourceConnection.key, "oa-sliced"));
+		requests.length = 0;
+		await sync();
+		expect(requests.every((request) => request.startsWith("all@"))).toBe(true);
+		expect((await records()).sort()).toEqual(expected);
+	});
+}, 120_000);
+
+it("writes a page whose works carry more institution facts than one batch takes", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-affiliations", provider: "openalex", scopeKind: "query", config: settings });
+		// 200 works with 102 distinct institutions each: 20,400 facts on one page.
+		const affiliated = (id: number) => ({
+			...work(id),
+			authorships: Array.from({ length: 3 }, (_, author) => ({
+				raw_author_name: `Author ${author}`,
+				institutions: Array.from({ length: 34 }, (_, index) => ({
+					id: `https://openalex.org/I${id}${author}${index}`,
+					display_name: `Institute ${id}-${author}-${index}`,
+					country_code: "KE",
+				})),
+			})),
+		});
+		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-affiliations"));
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+			{ fetch: async () => Response.json({ meta: { count: 200, next_cursor: null }, results: Array.from({ length: 200 }, (_, index) => affiliated(index + 1)) }) },
+		);
+		expect(await db.select({ key: item.key }).from(item).where(sql`${item.sourceRecordKey} like 'W%'`)).toHaveLength(200);
+		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-affiliations"));
+		// A scan that was not sliced saves no slice key, so an older release can still read its cursor.
+		expect(saved!.syncCursor).not.toHaveProperty("slices");
 	});
 }, 120_000);

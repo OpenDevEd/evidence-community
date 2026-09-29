@@ -27,6 +27,8 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
 export const MAX_SOURCE_RECORD_BYTES = 2 * 1024 * 1024;
 export const MAX_SOURCE_BATCH_BYTES = 64 * 1024 * 1024;
+/** Institution facts one batch may carry. */
+export const MAX_INSTITUTION_FACTS = 20_000;
 export const MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH = 4096;
 const sourceRecordKeySchema = z.string().trim().min(1).max(512);
 const nullableRemoteVersionSchema = z
@@ -224,7 +226,7 @@ export const sourceIngestionBatchSchema = z
 			.refine(isSourceConnectionKey, "Invalid source connection key"),
 		expectedCursor: jsonObjectSchema,
 		expectedConfiguration: jsonObjectSchema.optional(),
-		institutionCountries: z.array(institutionCountryInputSchema).max(20_000).default([]),
+		institutionCountries: z.array(institutionCountryInputSchema).max(MAX_INSTITUTION_FACTS).default([]),
 		nextCursor: jsonObjectSchema,
 		/** The import run writing this batch; other writers leave it out. */
 		sourceSyncRunId: z.number().int().positive().optional(),
