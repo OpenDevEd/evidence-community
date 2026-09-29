@@ -78,6 +78,49 @@ beforeEach(() => {
 });
 
 describe("OpenAlex PDF processing", () => {
+	it("keeps later pages' staged PDFs while an earlier page waits for a slow download", async () => {
+		await withIsolatedPublicationDatabase(async (database) => {
+			await sources(database);
+			await database
+				.update(sourceConnection)
+				.set({
+					config: {
+						name: "AI in education",
+						searchUrl: "/results/saved-search-1",
+						approvedQuery: { version: "v1", approvedAt: "2026-09-24T00:00:00Z", query: { search: "Research" } },
+						downloadPdfs: true,
+					},
+				})
+				.where(eq(sourceConnection.key, "openalex-pdf-a"));
+			const storage = new MemoryFileStorage();
+			const processor = createOpenAlexAttachmentProcessor({ database, storage, maxPdfBytes: 1_000_000 });
+			const works = [1, 2, 3, 4, 5, 6].map((id) => mapped(`${externalUrl}?work=${id}`, "2026-09-24T01:02:03Z", id)[0]!.raw);
+			// The first page's first PDF arrives last, after the other pages have staged theirs.
+			vi.mocked(transport).mockImplementation(async (input) => {
+				if (String(input).endsWith("?work=1")) await new Promise((resolve) => setTimeout(resolve, 300));
+				return new Response(await createPdf(String(input)));
+			});
+			const [connection] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			await syncOpenAlexSource(
+				{ database, sourceConnection: connection!, credentialResolver: async () => "test", heartbeat: async () => {} },
+				{
+					attachmentProcessor: processor,
+					// Pages of two works.
+					fetch: async (input) => {
+						const cursor = new URL(String(input)).searchParams.get("cursor");
+						const from = cursor === "*" ? 0 : Number(cursor);
+						return globalThis.Response.json({
+							meta: { count: works.length, next_cursor: from + 2 < works.length ? String(from + 2) : null },
+							results: works.slice(from, from + 2),
+						});
+					},
+				},
+			);
+			expect(await database.select().from(itemFilePublication)).toHaveLength(6);
+			expect(storage.publicFiles.size).toBe(12);
+		});
+	});
+
 	it("follows a landing page's citation_pdf_url to its PDF", async () => {
 		await withIsolatedPublicationDatabase(async (database) => {
 			await sources(database);

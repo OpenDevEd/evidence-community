@@ -385,7 +385,7 @@ it("imports a work whose title is too long for a btree index entry", async () =>
 	});
 }, 120_000);
 
-it("processes up to 24 PDFs at once and writes a large page in order, in parts under the batch limit", async () => {
+it("processes up to 48 PDFs at once, four per host, and writes a large page in order, in parts under the batch limit", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const [connection] = await db
 			.insert(sourceConnection)
@@ -396,19 +396,32 @@ it("processes up to 24 PDFs at once and writes a large page in order, in parts u
 				config: { ...settings, downloadPdfs: true },
 			})
 			.returning();
-		const ids = Array.from({ length: 50 }, (_, index) => index + 1);
-		const pdfUrl = (id: number) => `https://example.org/W${id}.pdf`;
+		const ids = Array.from({ length: 60 }, (_, index) => index + 1);
+		// Ten PDFs share one host; the rest each have their own.
+		const host = (id: number) => (id <= 10 ? "shared.example.org" : `host${id}.example.org`);
+		const pdfUrl = (id: number) => `https://${host(id)}/W${id}.pdf`;
 		let running = 0;
 		let mostRunning = 0;
+		let sharedRunning = 0;
+		let mostShared = 0;
+		let sharedDone = 0;
+		let sharedDoneWhenOthersStarted: number | undefined;
 		// Later records finish first, so a result written to the wrong slot shows up.
 		// Near-limit text makes the page too large for one write.
 		const processor = Object.assign(
 			async (record: SourceItemUpsert) => {
+				const shared = record.file!.url!.includes("shared.");
+				if (!shared) sharedDoneWhenOthersStarted ??= sharedDone;
 				mostRunning = Math.max(mostRunning, ++running);
+				if (shared) mostShared = Math.max(mostShared, ++sharedRunning);
 				await new Promise((resolve) =>
-					setTimeout(resolve, 51 - Number(record.sourceRecordKey.slice(1, -4))),
+					setTimeout(resolve, 61 - Number(record.sourceRecordKey.slice(1, -4))),
 				);
 				running--;
+				if (shared) {
+					sharedRunning--;
+					sharedDone++;
+				}
 				return {
 					...record,
 					file: { ...record.file!, fullText: "x".repeat(1_400_000) },
@@ -441,9 +454,12 @@ it("processes up to 24 PDFs at once and writes a large page in order, in parts u
 			},
 		);
 
-		// Records first in pages of 100, then the PDF stage in pages of 50.
+		// Records first, then the PDF stage, both in pages of 200.
 		expect(pageSizes).toEqual(["200", "200"]);
-		expect(mostRunning).toBe(24);
+		expect(mostRunning).toBe(48);
+		expect(mostShared).toBe(4);
+		// Other hosts start while the shared host's first four still run.
+		expect(sharedDoneWhenOthersStarted).toBe(0);
 		const pageWrites = vi
 			.mocked(writeSourceIngestionBatch)
 			.mock.calls.map(([, batch]) => batch as SourceIngestionBatch)
@@ -740,5 +756,87 @@ it("writes a page whose works carry more institution facts than one batch takes"
 		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-affiliations"));
 		// A scan that was not sliced saves no slice key, so an older release can still read its cursor.
 		expect(saved!.syncCursor).not.toHaveProperty("slices");
+	});
+}, 120_000);
+
+it("stops starting PDFs after one fails, and still cleans up", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const [connection] = await db
+			.insert(sourceConnection)
+			.values({ key: "oa-pdf-fail", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } })
+			.returning();
+		const ids = Array.from({ length: 60 }, (_, index) => index + 1);
+		let started = 0;
+		let failed = false;
+		let cleanedAfterFailure = 0;
+		const flushCleanup = async () => {
+			if (failed) cleanedAfterFailure++;
+		};
+		const processor = Object.assign(
+			async (record: SourceItemUpsert) => {
+				started++;
+				if (record.sourceRecordKey === "W1:pdf") {
+					failed = true;
+					throw new Error("storage unavailable");
+				}
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return record;
+			},
+			{ reuse: async (record: SourceItemUpsert) => record, flushCleanup },
+		);
+		await expect(
+			syncOpenAlexSource(
+				{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{
+					attachmentProcessor: processor,
+					fetch: async () =>
+						Response.json({
+							meta: { count: ids.length, next_cursor: null },
+							results: ids.map((id) => ({ ...work(id), best_oa_location: { is_oa: true, pdf_url: `https://host${id}.example.org/W${id}.pdf`, license: "cc-by" } })),
+						}),
+				},
+			),
+		).rejects.toThrow("storage unavailable");
+		// The twelve waiting for a lane never start.
+		expect(started).toBe(48);
+		// The failed PDF stage still cleans up what it staged.
+		expect(cleanedAfterFailure).toBe(1);
+	});
+}, 120_000);
+
+it("writes the PDF pages already fetched when a later page cannot be fetched", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const [connection] = await db
+			.insert(sourceConnection)
+			.values({ key: "oa-pdf-prefetch", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } })
+			.returning();
+		const works = [1, 2, 3, 4, 5, 6].map((id) => ({ ...work(id), best_oa_location: { is_oa: true, pdf_url: `https://host${id}.example.org/W${id}.pdf`, license: "cc-by" } }));
+		const processor = Object.assign(
+			async (record: SourceItemUpsert) => {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				return record;
+			},
+			{ reuse: async (record: SourceItemUpsert) => record, flushCleanup: async () => {} },
+		);
+		const seen = new Map<string, number>();
+		await expect(
+			syncOpenAlexSource(
+				{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{
+					attachmentProcessor: processor,
+					sleep: async () => {},
+					// Pages of two. The records scan reads all three; the PDF scan cannot read the third.
+					fetch: async (input) => {
+						const cursor = new URL(String(input)).searchParams.get("cursor")!;
+						seen.set(cursor, (seen.get(cursor) ?? 0) + 1);
+						if (cursor === "4" && seen.get(cursor)! > 1) return new Response("Forbidden", { status: 403 });
+						const from = cursor === "*" ? 0 : Number(cursor);
+						return Response.json({ meta: { count: works.length, next_cursor: from + 2 < works.length ? String(from + 2) : null }, results: works.slice(from, from + 2) });
+					},
+				},
+			),
+		).rejects.toMatchObject({ status: 403 });
+		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-pdf-prefetch"));
+		expect(saved!.syncCursor).toMatchObject({ stage: "pdfs", nextCursor: "4", pdfs: { done: 4 } });
 	});
 }, 120_000);
