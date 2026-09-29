@@ -7,6 +7,17 @@ import {
 	type OpenAlexQuery,
 } from "./schema";
 
+/** OpenAlex refuses more ids than this in one filter. */
+export const OPENALEX_MAX_IDS_PER_FILTER = 100;
+
+/** A filter for the works with these ids, at most `OPENALEX_MAX_IDS_PER_FILTER` of them. */
+export function worksWithIds(ids: readonly string[]): OpenAlexQuery {
+	if (!ids.length || ids.length > OPENALEX_MAX_IDS_PER_FILTER) {
+		throw new Error(`An OpenAlex id filter takes 1 to ${OPENALEX_MAX_IDS_PER_FILTER} ids`);
+	}
+	return { filter: `ids.openalex:${ids.join("|")}` };
+}
+
 export class OpenAlexApiError extends Error {
 	constructor(
 		message: string,
@@ -121,6 +132,7 @@ export class OpenAlexClient {
 		return group_by.flatMap(({ key, count }) => (/^\d{4}$/.test(key) ? [{ year: Number(key), count }] : []));
 	}
 
+	/** One page of the query's works; "*" asks for the first. OpenAlex leaves `next_cursor` out without a cursor. */
 	async works(query: OpenAlexQuery, cursor: string, pageSize = 100) {
 		const url = worksUrl(query, cursor, pageSize, this.options.apiKey);
 		const page = openAlexPageSchema.parse(await this.read(url, query.oql));

@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	itemFilePublication,
@@ -9,6 +9,7 @@ import {
 import { item } from "@/db/schema/tables/item";
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
 import type { SourceItemUpsert } from "./batch-schema";
+import { isOpenAlexWorkProvider, OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 
 export const MAX_SOURCE_FULL_TEXT_BYTES = 1_500_000;
 const CLEANUP_BATCH_SIZE = 100;
@@ -87,7 +88,7 @@ export async function readSourceFilePublication(
 			and(
 				sharedOpenAlex
 					? and(
-							eq(sourceConnection.provider, "openalex"),
+							inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS),
 							eq(
 								itemSourceLink.sourceConnectionKey,
 								itemFilePublication.sourceConnectionKey,
@@ -237,7 +238,7 @@ export async function flushSourceFileCleanup(
 				.select({ provider: sourceConnection.provider })
 				.from(sourceConnection)
 				.where(eq(sourceConnection.key, sourceConnectionKey));
-			if (connection?.provider === "openalex") {
+			if (isOpenAlexWorkProvider(connection?.provider)) {
 				await transaction.execute(
 					sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`,
 				);

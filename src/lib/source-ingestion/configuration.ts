@@ -15,19 +15,23 @@ export class SourceConfigurationConflictError extends Error {
 	}
 }
 
+/** Where each source lives at its provider. Zotero groups and OpenScholar collections take their name from the provider during sync. */
+function sourceScope(source: ConfiguredSource) {
+	switch (source.provider) {
+		case "zotero":
+			return { scopeKind: "group" as const, externalScopeKey: source.groupId };
+		case "openscholar":
+			return { scopeKind: "collection" as const, externalScopeKey: source.collectionId };
+		case "openalex":
+			return { scopeKind: "query" as const, externalScopeKey: null, displayName: source.settings.name };
+	}
+}
+
 export function configuredSourceConnectionValues(source: ConfiguredSource) {
 	return {
 		key: source.key,
 		provider: source.provider,
-		scopeKind:
-			source.provider === "zotero"
-				? ("group" as const)
-				: ("query" as const),
-		externalScopeKey: source.provider === "zotero" ? source.groupId : null,
-		// Zotero sources take their name from the group during sync.
-		...(source.provider === "openalex"
-			? { displayName: source.settings.name }
-			: {}),
+		...sourceScope(source),
 		config: source.settings,
 		status: source.enabled ? ("active" as const) : ("paused" as const),
 	};
@@ -81,11 +85,12 @@ async function assertSourceFits(
 		);
 	}
 	await assertOpenAlexApproval(transaction, source);
-	if (source.provider !== "zotero") return;
-	const scoped = currentByScope.get(`${source.provider}:${source.groupId}`);
+	if (!values.externalScopeKey) return;
+	const scoped = currentByScope.get(`${source.provider}:${values.externalScopeKey}`);
 	if (scoped && scoped.key !== source.key) {
+		const scope = source.provider === "zotero" ? "Zotero group" : "OpenScholar collection";
 		throw new SourceConfigurationConflictError(
-			`Zotero group ${source.groupId} already belongs to source ${scoped.key}.`,
+			`${scope} ${values.externalScopeKey} already belongs to source ${scoped.key}.`,
 		);
 	}
 }

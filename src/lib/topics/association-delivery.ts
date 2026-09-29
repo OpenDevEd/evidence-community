@@ -1,8 +1,9 @@
 import { normalizeDoi } from "@/lib/doi";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { itemSourceLink, sourceConnection } from "@/db/schema/source";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { topicAssociationDelivery, topicDeliveryConfiguration } from "@/db/schema/topics";
 import { getPublicItemCard } from "@/lib/public-item-card";
 import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
@@ -50,7 +51,7 @@ export async function runTopicAssociationCycle(database: Database, config: Libra
       const card = config.topics.enabled ? await getPublicItemCard(tx, job.itemKey, config) : null;
       const [source] = await tx.select({id: itemSourceLink.sourceRecordKey}).from(itemSourceLink)
         .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-        .where(and(eq(itemSourceLink.itemKey, job.itemKey), eq(sourceConnection.provider, "openalex"))).limit(1);
+        .where(and(eq(itemSourceLink.itemKey, job.itemKey), inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS))).limit(1);
       const libraryId = config.authentication.openScholar.libraryId;
       const data = topicAssociationRequestSchema.parse({contractVersion: 1,
         idempotencyKey: `${libraryId}:${job.itemKey}:${job.generation}`,

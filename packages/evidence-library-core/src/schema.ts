@@ -28,6 +28,7 @@ export const SOURCE_PROVIDERS = [
 	"zotero",
 	"mendeley",
 	"openalex",
+	"openscholar",
 	"dspace",
 	"eprints",
 ] as const;
@@ -57,6 +58,7 @@ export const SOURCE_SYNC_RUN_STATUSES = [
 /** Why an import failed, so each app can say it in its own words. */
 export const SOURCE_SYNC_ERROR_CODES = [
 	"access_denied",
+	"owner_left",
 	"not_found",
 	"missing_key",
 	"invalid_query",
@@ -140,6 +142,7 @@ export const sourceConnection = pgTable(
 				OR (${table.provider} = 'zotero' AND ${table.scopeKind} IN ('group', 'personal-library') AND ${table.externalScopeKey} IS NOT NULL)
 				OR (${table.provider} = 'mendeley' AND ${table.scopeKind} IN ('group', 'personal-library') AND ${table.externalScopeKey} IS NOT NULL)
 				OR (${table.provider} = 'openalex' AND ${table.scopeKind} = 'query' AND ${table.externalScopeKey} IS NULL)
+				OR (${table.provider} = 'openscholar' AND ${table.scopeKind} = 'collection' AND ${table.externalScopeKey} IS NOT NULL)
 				OR (${table.provider} = 'dspace' AND ${table.scopeKind} IN ('repository', 'collection', 'oai-set') AND ${table.externalScopeKey} IS NOT NULL)
 				OR (${table.provider} = 'eprints' AND ${table.scopeKind} IN ('repository', 'oai-set') AND ${table.externalScopeKey} IS NOT NULL)
 			)`,

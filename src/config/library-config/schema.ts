@@ -2,7 +2,7 @@ import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 import postcss, { type Root } from "postcss";
 import { z } from "zod";
 
-import { openAlexConnectionConfigSchema } from "@/lib/source-ingestion/openalex/schema";
+import { openAlexConnectionConfigSchema, openAlexWorksConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
 
 import {
@@ -1376,14 +1376,31 @@ const zoteroSourceConfigurationSchema = z
 	})
 	.strict();
 
+// Sources of OpenAlex works read OpenAlex with `apiKey` and never write back.
+const openAlexWorksSourceSchema = zoteroSourceConfigurationSchema.omit({ groupId: true }).extend({
+	writebackEnabled: z.literal(false).default(false),
+});
+
 const sourceConfigurationSchema = z.discriminatedUnion("provider", [
 	zoteroSourceConfigurationSchema,
-	zoteroSourceConfigurationSchema.omit({ groupId: true }).extend({
+	openAlexWorksSourceSchema.extend({
 		provider: z.literal("openalex"),
-		writebackEnabled: z.literal(false).default(false),
 		settings: openAlexConnectionConfigSchema,
 	}),
+	// One OpenScholar collection, read live from OpenScholar; its items resolve through OpenAlex.
+	openAlexWorksSourceSchema.extend({
+		provider: z.literal("openscholar"),
+		collectionId: z.string().trim().regex(/^[0-9a-z]+$/u).max(128),
+		settings: openAlexWorksConfigSchema,
+	}),
 ]);
+
+/** What makes two sources the same: a Zotero group or an OpenScholar collection. OpenAlex searches may repeat. */
+function sourceScope(source: z.infer<typeof sourceConfigurationSchema>) {
+	if (source.provider === "zotero") return `zotero:${source.groupId}`;
+	if (source.provider === "openscholar") return `openscholar:${source.collectionId}`;
+	return `openalex:${source.key}`;
+}
 
 const sourcesSchema = z
 	.array(sourceConfigurationSchema)
@@ -1391,7 +1408,7 @@ const sourcesSchema = z
 	.default([])
 	.superRefine((sources, context) => {
 		addDuplicateIssues(sources, context, (source) => source.key);
-		addDuplicateIssues(sources, context, (source) => source.provider === "zotero" ? `zotero:${source.groupId}` : `openalex:${source.key}`);
+		addDuplicateIssues(sources, context, sourceScope);
 	});
 
 type AIProviderConfiguration = {

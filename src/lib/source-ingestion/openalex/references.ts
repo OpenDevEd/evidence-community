@@ -1,6 +1,7 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { DatabaseTransaction } from "@/db/database-schema";
 import { itemSourceLink, sourceConnection } from "@/db/schema/source";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { sourceReference } from "@/db/schema/topics";
 import { replaceSourceLinks } from "@/lib/links/item-links";
 import type { SourceItemUpsert } from "../batch-schema";
@@ -10,7 +11,7 @@ async function openAlexItemKeys(tx: DatabaseTransaction, recordKeys: string[]) {
   for (let offset = 0; offset < recordKeys.length; offset += 1000) {
     const found = await tx.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey}).from(itemSourceLink)
       .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-      .where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.sourceRecordKey, recordKeys.slice(offset, offset + 1000))));
+      .where(and(inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS), inArray(itemSourceLink.sourceRecordKey, recordKeys.slice(offset, offset + 1000))));
     for (const target of found) identities.set(target.record, target.key);
   }
   return identities;

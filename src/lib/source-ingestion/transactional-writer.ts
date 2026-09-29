@@ -1,4 +1,5 @@
 import { updateOpenAlexReferences } from "./openalex/references";
+import { isOpenAlexWorkProvider, OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { itemSourceValue, sourceTopicAssignment } from "@/db/schema/topics";
 import { sourceOverridesByItem } from "@/lib/admin/source-fields";
 import { importedTopics, effectiveSourceTopics } from "@/lib/topics/assignments";
@@ -991,8 +992,8 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 
 	return db.transaction(async (transaction) => {
 		const [providerRow] = await transaction.select({ provider: sourceConnection.provider }).from(sourceConnection).where(eq(sourceConnection.key, batch.sourceConnectionKey));
-		if (providerRow?.provider === "openalex") {
-			// ponytail: serialize OpenAlex pages per library; use work-level locks if parallel import throughput becomes necessary.
+		if (isOpenAlexWorkProvider(providerRow?.provider)) {
+			// ponytail: serialize OpenAlex work pages per library; use work-level locks if parallel import throughput becomes necessary.
 			await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
 		}
 		const involvedConnectionKeys = [
@@ -1027,6 +1028,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				batch.sourceConnectionKey,
 			);
 		}
+		const openAlexWorks = isOpenAlexWorkProvider(connection.provider);
 		if (lockedConnections.length !== involvedConnectionKeys.length) {
 			throw new SourceReferenceNotFoundError(
 				"collection",
@@ -1553,33 +1555,32 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			),
 		);
 
-		const openAlexLinks = connection.provider === "openalex" && batchItemKeys.length
+		const openAlexLinks = openAlexWorks && batchItemKeys.length
 			? await transaction.select({ itemKey: itemSourceLink.itemKey, remoteVersion: itemSourceLink.remoteVersion, config: sourceConnection.config, status: sourceConnection.status })
 				.from(itemSourceLink).innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-				.where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.itemKey, batchItemKeys)))
+				.where(and(inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS), inArray(itemSourceLink.itemKey, batchItemKeys)))
 			: [];
 		const downloadItemKeys = new Set(openAlexLinks.filter((link) => link.status !== "removed" && link.config.downloadPdfs === true).map((link) => link.itemKey));
 		const mayManageFile = (record: SourceItemUpsert) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
 			const publication = existingPublicationByItemKey.get(key);
-			if (connection.provider === "openalex") {
+			if (openAlexWorks) {
 				return Boolean(record.file?.managedPublication) || !publication || !downloadItemKeys.has(key);
 			}
 			return sourceOwnsCanonicalItem(existing, batch.sourceConnectionKey);
 		};
 
 		// Editorial overrides and source values exist only for OpenAlex; Zotero edits flow through writeback.
-		const isOpenAlex = connection.provider === "openalex";
-		const overridesByItem = isOpenAlex ? await sourceOverridesByItem(transaction, batchItemKeys) : new Map<string, Record<string, unknown>>();
-		const previousSourceValues = isOpenAlex && batchItemKeys.length ? await transaction.select().from(itemSourceValue).where(inArray(itemSourceValue.itemKey, batchItemKeys)) : [];
+		const overridesByItem = openAlexWorks ? await sourceOverridesByItem(transaction, batchItemKeys) : new Map<string, Record<string, unknown>>();
+		const previousSourceValues = openAlexWorks && batchItemKeys.length ? await transaction.select().from(itemSourceValue).where(inArray(itemSourceValue.itemKey, batchItemKeys)) : [];
 		const topicImportKeys = new Set(previousSourceValues.filter(row => row.importedTopics).map(row => row.itemKey));
 		const importedTopicRows = new Map<string, ReturnType<typeof importedTopics>>();
 		for (const record of itemUpserts) {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
 			const normalized = normalizedItems.get(record.sourceRecordKey)!;
-			if (connection.provider === "openalex" && !record.parentSourceRecordKey && (!existing || topicImportKeys.has(key))) {
+			if (openAlexWorks && !record.parentSourceRecordKey && (!existing || topicImportKeys.has(key))) {
 				const assignments = importedTopics(record.raw);
 				importedTopicRows.set(key, assignments);
 				topicImportKeys.add(key);
@@ -1623,7 +1624,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 						dirtyFields,
 						item: preserveProtectedFileFields(
 							maskDirtyItemFields(
-								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators, { sourceAffiliations: connection.provider === "openalex" }) },
+								{ ...normalized.item, creators: preserveCreatorProfileLinks(normalized.item.creators, existing?.creators, { sourceAffiliations: openAlexWorks }) },
 								existing,
 								dirtyFields,
 							),
@@ -1662,7 +1663,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return previous !== undefined && (!Number.isFinite(incoming) || incoming < previous) ? [key] : [];
 		}));
 		const currentItemUpserts = itemUpserts.filter((record) => !staleItemKeys.has(itemKeys.get(record.sourceRecordKey)!));
-		await writeSourceValues(transaction, batch, isOpenAlex ? currentItemUpserts : [], (record) => {
+		await writeSourceValues(transaction, batch, openAlexWorks ? currentItemUpserts : [], (record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const normalized = normalizedItems.get(record.sourceRecordKey)!;
 			const sourceItem = {...normalized.item};
@@ -1682,7 +1683,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			if (!existing) return true;
 			if (existing.deleted === 1) {
 				return (
-					(connection.provider === "openalex" || existing.sourceConnectionKey === batch.sourceConnectionKey) && !overridesByItem.get(key)?.deleted
+					(openAlexWorks || existing.sourceConnectionKey === batch.sourceConnectionKey) && !overridesByItem.get(key)?.deleted
 				);
 			}
 			const sourceChanged = sourceSnapshotChanged(
@@ -1847,7 +1848,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				previous?.sha256 === publication.sha256 &&
 				previous.objectPath === publication.objectPath &&
 				previous.coverObjectPath === publication.coverObjectPath;
-			if (connection.provider === "openalex" && !publication.staged && !sameContent) {
+			if (openAlexWorks && !publication.staged && !sameContent) {
 				throw new SourceFileStagingConflictError(batch.sourceConnectionKey, [publication.objectPath, publication.coverObjectPath]);
 			}
 			return [
@@ -2241,9 +2242,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const citationSourceKeys = [
 			...new Set([...citationTargetsByRecordKey.values()].flat()),
 		].filter((key) => !itemKeys.has(key));
-		const citationIdentity = connection.provider === "openalex" && citationSourceKeys.length ? new Map((await transaction.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey})
+		const citationIdentity = openAlexWorks && citationSourceKeys.length ? new Map((await transaction.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey})
             .from(itemSourceLink).innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-            .where(and(eq(sourceConnection.provider, "openalex"), inArray(itemSourceLink.sourceRecordKey, citationSourceKeys)))).map(row => [row.record, row.key])) : await loadIdentityMap(
+            .where(and(inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS), inArray(itemSourceLink.sourceRecordKey, citationSourceKeys)))).map(row => [row.record, row.key])) : await loadIdentityMap(
 			transaction,
 			"item",
 			batch.sourceConnectionKey,
@@ -2266,7 +2267,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		let citationLinkChange: { changedItemKeys: string[] } =
 			connection.provider === "zotero"
 				? { changedItemKeys: [] }
-				: connection.provider === "openalex"
+				: openAlexWorks
 					? {
 							changedItemKeys: await updateOpenAlexReferences(
 								transaction,

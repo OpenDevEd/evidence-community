@@ -2,6 +2,7 @@ import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 
 const PROVIDER_NAMES: Record<string, string> = {
 	openalex: "OpenAlex",
+	openscholar: "OpenScholar",
 	zotero: "Zotero",
 };
 
@@ -27,10 +28,11 @@ export function sourceDisplayLabel(
 	options: { includeIdentifier?: boolean } = {},
 ) {
 	if (connection.provider === NATIVE_SOURCE_CONNECTION_KEY) return "Native";
-	// An OpenAlex source's key is generated, so it tells a reader nothing.
+	// OpenAlex keys and OpenScholar collection ids are generated, so they tell a reader nothing.
 	const scope =
-		connection.externalScopeKey ??
-		(connection.provider === "openalex" ? null : connection.key);
+		connection.provider === "openalex" || connection.provider === "openscholar"
+			? null
+			: (connection.externalScopeKey ?? connection.key);
 	const provider = sourceProviderName(connection.provider);
 	const identifier = scope ? `${provider} ${scope}` : provider;
 	const name = connection.displayName?.trim();

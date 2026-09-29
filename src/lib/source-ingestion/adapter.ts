@@ -17,6 +17,7 @@ export const SYNCABLE_SOURCE_PROVIDERS = [
 	"zotero",
 	"mendeley",
 	"openalex",
+	"openscholar",
 	"dspace",
 	"eprints",
 ] as const satisfies readonly SourceProvider[];
