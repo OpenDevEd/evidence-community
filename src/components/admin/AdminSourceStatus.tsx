@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 
 import BrandIcon from "@/components/icons/BrandIcon";
-import { OpenAlexIcon } from "@/components/icons/SourceMarkIcons";
+import { OpenAlexIcon } from "@/components/icons/OpenAlexIcon";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Dropdown } from "@/components/nextui/Dropdown";
