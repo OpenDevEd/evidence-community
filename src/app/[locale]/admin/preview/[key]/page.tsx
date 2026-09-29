@@ -13,6 +13,7 @@ import { getDatabaseForConfig } from "@/db";
 import { ADMIN_CONTENT_PERMISSION, adminSessionCookieName, authorizeAdminSession } from "@/lib/admin/access";
 import { adminErrorDetails } from "@/lib/admin/http";
 import { previewItem } from "@/lib/admin/item-preview";
+import { withTopicNames } from "@/lib/topics/server";
 
 import { FollowSavedDraft } from "./FollowSavedDraft";
 import { LookOnly } from "./LookOnly";
@@ -86,7 +87,7 @@ async function DraftPreview(props: Props) {
 	if (!item) return <PreviewMessage>After publishing, this record would be hidden from the public library.</PreviewMessage>;
 	return (
 		<LookOnly>
-			<ItemPage data={withoutFullText({ item })} loading={false} />
+			<ItemPage data={await withTopicNames(withoutFullText({ item }))} loading={false} />
 		</LookOnly>
 	);
 }

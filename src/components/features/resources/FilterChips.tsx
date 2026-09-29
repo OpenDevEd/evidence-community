@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Delete02Icon } from "@hugeicons/core-free-icons";
-import { ReactNode, useRef } from "react";
+import { ReactNode, Suspense, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
 import { AnimatePresence, motion } from "framer-motion";
@@ -12,14 +12,13 @@ import { useFiltersContext } from "@/context/FiltersProvider";
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
-import useSWR from "swr";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { fetchTopicNodeClosure } from "@/lib/topics/client";
+import useSWR from "swr";
+import { fetchTopicCatalog, useTopicTree } from "@/lib/topics/client";
 import {
 	selectionFrontier,
 	toggleTopicSelection,
 } from "@/lib/topics/selection";
-import type { TopicNode } from "@/lib/topics/contract";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -100,15 +99,9 @@ function yearChipTitle(range: string): string {
 export function getFilterChipState(
 	queryParams: Record<string, any>,
 	handleClearFilters?: () => void,
-	topicState: {
-		enabled?: boolean;
-		frontier?: readonly string[];
-	} = {},
+	topicsEnabled = true,
 ) {
-	const topicFilters =
-		topicState.enabled === false
-			? []
-			: (topicState.frontier ?? queryParams.topics ?? []);
+	const topicFilters = topicsEnabled ? (queryParams.topics ?? []) : [];
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution?.length || 0) +
@@ -129,18 +122,35 @@ export function getFilterChipState(
 	};
 }
 
+/** Its own component so only these chips wait, behind their own boundary, for the server's topic names on a first visit. */
 function TopicChips({
-	frontier,
-	nodes,
 	onChange,
 	selected,
 }: {
-	frontier: readonly string[];
-	nodes: readonly TopicNode[] | undefined;
 	onChange: (topics: string[]) => void;
 	selected: string[];
 }) {
-	const byId = new Map(nodes?.map((node) => [node.id, node]));
+	const tree = useTopicTree({ seeded: true }).data?.nodes;
+	// A topic no public item carries, from a saved link say, is looked up by ID.
+	const unknown = tree
+		? selected.filter((id) => !tree.some((node) => node.id === id))
+		: [];
+	const unknownNodes = useSWR(
+		unknown.length ? ["topic-names", unknown.join(",")] : null,
+		() => fetchTopicCatalog({ ids: unknown }).then(({ nodes }) => nodes),
+		{ revalidateOnFocus: false },
+	);
+	// Chips wait for names rather than show IDs; the chip row is already open.
+	if (!tree || (unknown.length && !unknownNodes.data && !unknownNodes.error)) {
+		return null;
+	}
+	const nodes = [...tree, ...(unknownNodes.data ?? [])];
+	const byId = new Map(nodes.map((node) => [node.id, node]));
+	const frontier = [
+		...selectionFrontier(selected, nodes),
+		// An ID the catalog doesn't know still gets a chip, so it can be removed.
+		...selected.filter((id) => !byId.has(id)),
+	];
 
 	return frontier.map((id) => {
 		const node = byId.get(id);
@@ -157,14 +167,14 @@ function TopicChips({
 					title={node?.name ?? id}
 					callback={() =>
 						onChange(
-							nodes
+							node
 								? toggleTopicSelection(selected, id, nodes)
 								: selected.filter((topicId) => topicId !== id),
 						)
 					}
 					classNames={{
 						button: "bg-secondary dark:bg-secondary/70",
-						title: "text-black dark:text-white",
+						title: "text-white dark:text-white",
 					}}
 				/>
 			</motion.div>
@@ -181,20 +191,10 @@ export function FilterChips() {
 	const selectedTopics = topics.enabled
 		? (itemsContext.queryParams.topics ?? [])
 		: [];
-	const { data: topicNodes } = useSWR(
-		selectedTopics.length
-			? ["topic-filter-chips", selectedTopics.join(",")]
-			: null,
-		() => fetchTopicNodeClosure(selectedTopics),
-		{ revalidateOnFocus: false },
-	);
-	const topicFrontier = topicNodes
-		? selectionFrontier(selectedTopics, topicNodes)
-		: selectedTopics;
 	const { filtersCount, clearButton } = getFilterChipState(
 		itemsContext.queryParams,
 		itemsContext.handleClearFilters,
-		{ enabled: topics.enabled, frontier: topicFrontier },
+		topics.enabled,
 	);
 
 	return (
@@ -210,12 +210,12 @@ export function FilterChips() {
 			<div className="relative flex min-w-0 flex-1 gap-2 overflow-x-auto [&>div]:shrink-0 [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden">
 				<AnimatePresence initial={false} mode="popLayout">
 					{selectedTopics.length > 0 ? (
-						<TopicChips
-							frontier={topicFrontier}
-							nodes={topicNodes}
-							onChange={itemsContext.handleTopicsChange}
-							selected={selectedTopics}
-						/>
+						<Suspense fallback={null}>
+							<TopicChips
+								onChange={itemsContext.handleTopicsChange}
+								selected={selectedTopics}
+							/>
+						</Suspense>
 					) : null}
 					{itemsContext.queryParams?.range && (
 						<motion.div

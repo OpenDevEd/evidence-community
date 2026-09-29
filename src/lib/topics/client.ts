@@ -2,8 +2,11 @@ import {
 	topicCatalogResponseSchema,
 	topicDetailResponseSchema,
 	topicNodeIdSchema,
-	type TopicNode,
+	topicTreeSchema,
 } from "./contract";
+import useSWR from "swr";
+import { use, useContext } from "react";
+import { SelectedTopicNamesContext } from "@/components/topics/SelectedTopicNames";
 
 const CATALOG_PAGE_SIZE = 100;
 
@@ -106,20 +109,28 @@ export async function fetchTopicDetail(topicId: string) {
 	return topicDetailResponseSchema.parse(await topicResponse(url));
 }
 
-export async function fetchTopicNodeClosure(ids: readonly string[]) {
-	const nodes = new Map<string, TopicNode>();
-	let pending = [...new Set(ids)];
-	for (let depth = 0; pending.length && depth < 4; depth += 1) {
-		const response = await fetchTopicCatalog({ ids: pending });
-		for (const node of response.nodes) nodes.set(node.id, node);
-		pending = [
-			...new Set(
-				response.nodes.flatMap((node) =>
-					node.parent && !nodes.has(node.parent) ? [node.parent] : [],
-				),
-			),
-		];
-	}
-	if (pending.length) throw new Error("Topic hierarchy exceeds four levels");
-	return [...nodes.values()];
+/**
+ * The library's topic tree, fetched once and shared by the filter, its chips and item pages. `seeded` callers show the
+ * server's names for the URL's topics until it arrives, suspending for them on a first visit.
+ */
+export function useTopicTree({ enabled = true, seeded = false } = {}) {
+	const selectedNames = useContext(SelectedTopicNamesContext);
+	const tree = useSWR(
+		enabled ? "topic-tree" : null,
+		async () => {
+			const url = new URL("/api/topics/tree", window.location.origin);
+			return topicTreeSchema.parse(await topicResponse(url));
+		},
+		// Each mount asks again; the browser answers from its cache for five minutes.
+		{ revalidateOnFocus: false },
+	);
+	return {
+		data:
+			tree.data ??
+			(enabled && seeded && selectedNames
+				? (use(selectedNames) ?? undefined)
+				: undefined),
+		error: tree.error,
+		mutate: tree.mutate,
+	};
 }

@@ -45,7 +45,6 @@ vi.mock("@/context/FiltersProvider", () => ({
 }));
 
 import { FilterChips } from "@/components/features/resources/ResourcesView";
-import { getFilterChipState } from "@/components/features/resources/FilterChips";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -86,19 +85,6 @@ describe("the chips showing which filters are on", () => {
 		await render();
 
 		expect(clearButton()).toBeNull();
-	});
-
-	it("counts the topic frontier instead of every saved ancestor", () => {
-		const state = getFilterChipState(
-			{
-				...filters.queryParams,
-				topics: ["domains/1", "fields/2", "subfields/3", "T4"],
-			},
-			undefined,
-			{ enabled: true, frontier: ["T4"] },
-		);
-
-		expect(state.filtersCount).toBe(1);
 	});
 
 	it("ignores topic URL state while Topics are off", async () => {

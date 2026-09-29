@@ -54,65 +54,12 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { YearFilter } from "./YearFilter";
-import useSWR from "swr";
-import useSWRInfinite from "swr/infinite";
-import {
-	fetchAllTopicCatalogPages,
-	fetchTopicCatalog,
-	fetchTopicNodeClosure,
-} from "@/lib/topics/client";
-import type { TopicNode } from "@/lib/topics/contract";
-import { toggleTopicSelection } from "@/lib/topics/selection";
+import { useTopicTree } from "@/lib/topics/client";
+import type { TopicTreeNode } from "@/lib/topics/contract";
+import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
-
-/** Paging for a search the server answers a page at a time. */
-type FacetSearchPaging = {
-	hasMore: boolean;
-	isLoadingMore: boolean;
-	onLoadMore: () => void;
-	error: boolean;
-	onRetry: () => void;
-};
-
-function showsSearchPaging(
-	search: string,
-	paging: FacetSearchPaging | undefined,
-): paging is FacetSearchPaging {
-	return Boolean(search && paging && (paging.error || paging.hasMore));
-}
-
-function SearchPagingButton({ paging }: { paging: FacetSearchPaging }) {
-	const { error, isLoadingMore } = paging;
-	return (
-		<Button
-			size="xs"
-			variant="transparent"
-			className="h-8 w-full gap-1.5 text-xs"
-			isDisabled={isLoadingMore}
-			onPress={
-				error
-					? paging.onRetry
-					: paging.onLoadMore
-			}
-			startContent={
-				!error && isLoadingMore ? (
-					<span
-						aria-hidden
-						className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
-					/>
-				) : undefined
-			}
-		>
-			{error
-				? "Try again"
-				: isLoadingMore
-					? "Loading"
-					: "Show more"}
-		</Button>
-	);
-}
 
 function searchedFacetItems(
 	list: FacetListItem[],
@@ -135,8 +82,6 @@ function FacetPicker({
 	facetName,
 	searchList,
 	fixedHeight = false,
-	onSearchChange,
-	searchPaging,
 }: {
 	label: string;
 	placeholder: string;
@@ -147,8 +92,6 @@ function FacetPicker({
 	facetName?: string;
 	searchList?: FacetListItem[];
 	fixedHeight?: boolean;
-	onSearchChange?: (value: string) => void;
-	searchPaging?: FacetSearchPaging;
 }) {
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
@@ -209,7 +152,6 @@ function FacetPicker({
 								functionToCall(key);
 							}
 							setSearch("");
-							onSearchChange?.("");
 						}
 					}}
 					inputProps={{
@@ -229,7 +171,6 @@ function FacetPicker({
 					}}
 					onInputChange={(value) => {
 						setSearch(value);
-						onSearchChange?.(value);
 					}}
 					disabledKeys={allSectionNames.map(
 						(name) => `section-${name}`,
@@ -257,11 +198,6 @@ function FacetPicker({
 					// 	)
 					// }
 					itemHeight={48}
-					listboxProps={{
-						bottomContent: showsSearchPaging(search, searchPaging) ? (
-							<SearchPagingButton paging={searchPaging} />
-						) : null,
-					}}
 				>
 					{Object.entries(groupedBySection).map(
 						([section, items]) => (
@@ -291,6 +227,7 @@ function FacetPicker({
 												startContent={item.startContent}
 												aria-label={item.label}
 												key={item.key}
+												classNames={{ title: "min-w-0" }}
 												style={item.style}
 												textValue={item.label}
 												selectedIcon={
@@ -332,7 +269,6 @@ function FacetPicker({
 													</span>
 													<TruncatedText
 														text={item.label}
-														lines={2}
 														className="leading-5"
 													/>
 													{item.showArrow && (
@@ -545,10 +481,6 @@ function InstitutionParser(
 	};
 }
 
-function uniqueTopicNodes(groups: readonly (readonly TopicNode[])[]) {
-	return [...new Map(groups.flat().map((node) => [node.id, node])).values()];
-}
-
 function TopicFilter({
 	counts,
 	onChange,
@@ -558,52 +490,7 @@ function TopicFilter({
 	onChange: (topics: string[]) => void;
 	selected: string[];
 }) {
-	const [search, setSearch] = useState("");
-	const tree = useSWR(
-		["topic-filter-tree", selected.join(",")],
-		async () => {
-			const [root, chosen] = await Promise.all([
-				fetchAllTopicCatalogPages({ parent: null }),
-				selected.length
-					? fetchTopicCatalog({ ids: selected })
-					: Promise.resolve(null),
-			]);
-			const selectedNodes = chosen?.nodes ?? [];
-			const children = await Promise.all(
-				selectedNodes
-					.filter((node) => node.childCount > 0)
-					.map((node) =>
-						fetchAllTopicCatalogPages({ parent: node.id }).then(
-							(response) => response.nodes,
-						),
-					),
-			);
-			return uniqueTopicNodes([root.nodes, selectedNodes, ...children]);
-		},
-		{ revalidateOnFocus: false, keepPreviousData: true },
-	);
-	const query = search.trim();
-	const matches = useSWRInfinite(
-		(index, previous) => {
-			if (!query || (index > 0 && !previous?.nextCursor)) return null;
-			return [
-				"topic-filter-search",
-				query,
-				index === 0 ? null : previous!.nextCursor,
-			];
-		},
-		([, term, cursor]: [string, string, string | null]) =>
-			fetchTopicCatalog({ query: term, cursor }),
-		{
-			revalidateOnFocus: false,
-			revalidateFirstPage: false,
-			keepPreviousData: true,
-		},
-	);
-	const matchNodes = uniqueTopicNodes(
-		matches.data?.map((page) => page.nodes) ?? [],
-	);
-	const nodes = uniqueTopicNodes([tree.data ?? [], matchNodes]);
+	const tree = useTopicTree();
 
 	if (tree.error) {
 		return (
@@ -623,39 +510,37 @@ function TopicFilter({
 		);
 	}
 
-	const rows = (query ? matchNodes : (tree.data ?? []))
-		.slice()
-		.sort((left, right) =>
-			left.path.join(" > ").localeCompare(right.path.join(" > ")),
-		)
-		.map((node): FacetListItem => {
-			const count = counts ? (counts[node.id] ?? 0) : undefined;
+	const nodes = tree.data?.nodes ?? [];
+	const byId = new Map(nodes.map((node) => [node.id, node]));
+	// Topics without results under the other filters are left out.
+	const shown = nodes
+		.filter((node) => (counts?.[node.id] ?? 0) > 0)
+		.map((node) => {
+			const lineage = topicAncestry(node.id, byId);
 			return {
-				key: node.id,
-				label: node.name,
-				count,
-				hideCount: count === undefined,
-				showArrow: node.childCount > 0,
-				style: query
-					? undefined
-					: { paddingLeft: `${node.path.length * 1.25 - 0.75}rem` },
-				isSelected: selected.includes(node.id),
-				hide: query
-					? false
-					: Boolean(node.parent && !selected.includes(node.parent)),
-				onSelectionChange: () => {
-					void fetchTopicNodeClosure([...selected, node.id]).then(
-						(closure) =>
-							onChange(
-								toggleTopicSelection(selected, node.id, [
-									...nodes,
-									...closure,
-								]),
-							),
-					);
-				},
+				node,
+				depth: lineage.length,
+				path: lineage.map((id) => byId.get(id)!.name).join(" > "),
 			};
-		});
+		})
+		.sort((left, right) => left.path.localeCompare(right.path));
+	const parents = new Set(shown.map(({ node }) => node.parent));
+	const row = (node: TopicTreeNode, depth: number | null): FacetListItem => ({
+		key: node.id,
+		label: node.name,
+		count: counts?.[node.id],
+		showArrow: depth !== null && parents.has(node.id),
+		style:
+			depth === null
+				? undefined
+				: { paddingLeft: `${depth * 1.25 - 0.75}rem` },
+		isSelected: selected.includes(node.id),
+		hide:
+			depth !== null &&
+			Boolean(node.parent && !selected.includes(node.parent)),
+		onSelectionChange: () =>
+			onChange(toggleTopicSelection(selected, node.id, nodes)),
+	});
 
 	return (
 		<FacetPicker
@@ -663,16 +548,8 @@ function TopicFilter({
 			label="Topics"
 			placeholder="Select topics"
 			selectedKey={selected}
-			list={rows}
-			searchList={rows}
-			onSearchChange={setSearch}
-			searchPaging={{
-				hasMore: Boolean(matches.data?.at(-1)?.nextCursor),
-				isLoadingMore: matches.isValidating,
-				onLoadMore: () => void matches.setSize(matches.size + 1),
-				error: Boolean(matches.error),
-				onRetry: () => void matches.mutate(),
-			}}
+			list={shown.map(({ node, depth }) => row(node, depth))}
+			searchList={shown.map(({ node }) => row(node, null))}
 		/>
 	);
 }

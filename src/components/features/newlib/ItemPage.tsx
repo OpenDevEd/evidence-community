@@ -1363,6 +1363,7 @@ export default function ItemPage({
 										item?.topics?.length ? (
 											<ItemTopics
 												topicIds={item.topics}
+												topics={data.topics}
 											/>
 										) : null}
 										<ItemAttachments item={item} />

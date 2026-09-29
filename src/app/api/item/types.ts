@@ -1,3 +1,4 @@
+import type { TopicTree } from "@/lib/topics/contract";
 import { InferSelectModel } from "drizzle-orm";
 import type { SourceProvider } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
@@ -62,6 +63,8 @@ export type ListItem = Omit<Item, "attachmentsData"> & {
 
 export type ItemGetResponse = {
 	item: Item | undefined;
+	/** Names for the record's topics, sent with the item page's record. */
+	topics?: TopicTree;
 };
 
 export type Author = {

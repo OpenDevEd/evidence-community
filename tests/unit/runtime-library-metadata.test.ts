@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
 	getLibraryConfig: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/components/pages/EvidenceLibrary", () => ({
 	default: () => null,
 }));

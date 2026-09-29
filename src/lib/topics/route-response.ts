@@ -16,11 +16,12 @@ function topicFailure(error: unknown, [message, details]: [string, Record<string
   return topicError("topics_unavailable", 503, true);
 }
 
-/** Shared status codes and no-store caching for the public topic routes. */
+/** Shared status codes for the public topic routes. Errors are never cached; answers only as `cacheControl` allows. */
 export async function topicResponse<T>(
   parse: (config: LibraryServerConfig) => {success: true; data: T} | {success: false},
   read: (input: T, context: TopicCatalogContext) => Promise<unknown>,
   failure: (input: T, config: LibraryServerConfig) => [string, Record<string, unknown>],
+  cacheControl = headers["Cache-Control"],
 ) {
   // The config exists only at runtime, so these routes must never prerender.
   await connection();
@@ -28,6 +29,6 @@ export async function topicResponse<T>(
   if (!config.topics.enabled) return topicError("topics_disabled", 404);
   const input = parse(config);
   if (!input.success) return topicError("invalid_input", 400);
-  try { return NextResponse.json(await read(input.data, {database: await getDatabase(), config}), {headers}); }
+  try { return NextResponse.json(await read(input.data, {database: await getDatabase(), config}), {headers: {"Cache-Control": cacheControl}}); }
   catch (error) { return topicFailure(error, failure(input.data, config)); }
 }
