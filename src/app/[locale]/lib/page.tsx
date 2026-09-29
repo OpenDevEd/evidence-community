@@ -9,6 +9,8 @@ import { getItemsPaginationMeta } from "@/lib/search";
 import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
+import { readSelectedTopicNames } from "@/lib/topics/server";
+import { SelectedTopicNames } from "@/components/topics/SelectedTopicNames";
 
 async function getCachedPaginationMeta(
   queryParams: Parameters<typeof getItemsPaginationMeta>[0],
@@ -104,10 +106,18 @@ export async function generateMetadata(props: {
   });
 }
 
-export default function Lib() {
+export default function Lib(props: {
+  searchParams: Promise<URLSearchParams>;
+}) {
+  // Not awaited, so a navigation here stays instant.
+  const names = props.searchParams.then((searchParams) =>
+    readSelectedTopicNames(defaultParams(searchParams).topics),
+  );
   return (
     <>
-      <EvidenceLibrary />
+      <SelectedTopicNames names={names}>
+        <EvidenceLibrary />
+      </SelectedTopicNames>
       <RuntimeMetadata />
     </>
   );

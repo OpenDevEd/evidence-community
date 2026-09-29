@@ -14,6 +14,7 @@ import ItemRoute from "./ItemRoute";
 import type { ItemGetResponse } from "@/app/api/item/types";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
+import { withTopicNames } from "@/lib/topics/server";
 
 async function getCurrentItem(key: string) {
 	const data = await getCachedItemSmall(key);
@@ -167,7 +168,7 @@ export async function generateMetadata(props: {
 export default function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
-	const record = props.params.then(({ key }) => getCurrentItem(key)) as Promise<ItemGetResponse | null>;
+	const record = props.params.then(({ key }) => getCurrentItem(key)).then(withTopicNames) as Promise<ItemGetResponse | null>;
 	return (
 		<>
 			<Suspense fallback={<LoadingComponent />}>

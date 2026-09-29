@@ -33,7 +33,7 @@ import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { itemPageAttachments } from "./attachment-visibility";
 import { getDatabaseForConfig } from "@/db";
-import { resolveTopicAncestry } from "./topics/catalog";
+import { readTopicTree, resolveTopicAncestry } from "./topics/catalog";
 import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
 
 /**
@@ -275,6 +275,38 @@ export async function resolveSearchTopicNodes(
 	if (!selected.length) return [];
 	const database = await getDatabaseForConfig(libraryConfig);
 	return resolveTopicAncestry(selected, { database, config: libraryConfig }, {allowUnknown: true});
+}
+
+async function readCachedTopicTree(
+	_configRevision: string,
+	libraryConfig: LibraryServerConfig,
+) {
+	"use cache";
+	// New topics from an import show within five minutes; until then the last tree is served.
+	cacheLife({ revalidate: 300 });
+	const { index } = await getMeilisearchForConfig(libraryConfig);
+	const { facetDistribution } = await index.search("", {
+		limit: 0,
+		facets: ["topicAncestors"],
+		filter: buildSearchFilters({
+			author: "",
+			collections: [],
+			country: [],
+			hiddenTags: libraryConfig.content.tags.hidden,
+			institution: [],
+			range: null,
+			scope: "",
+		}),
+	});
+	return readTopicTree(Object.keys(facetDistribution?.topicAncestors ?? {}), {
+		database: await getDatabaseForConfig(libraryConfig),
+		config: libraryConfig,
+	});
+}
+
+/** Every topic a public item carries, with its ancestors: the whole topic filter in one response. */
+export async function getPublicTopicTree(libraryConfig: LibraryServerConfig) {
+	return readCachedTopicTree(libraryConfig.revision, libraryConfig);
 }
 
 export async function getPublicItems(

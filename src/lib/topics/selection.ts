@@ -7,7 +7,11 @@ function nodeMap(nodes: readonly TopicSelectionNode[]) {
 	return new Map(nodes.map((node) => [node.id, node]));
 }
 
-function ancestry(id: string, nodes: ReadonlyMap<string, TopicSelectionNode>) {
+/** The IDs from the root down to `id`, as far as `nodes` knows them. */
+export function topicAncestry(
+	id: string,
+	nodes: ReadonlyMap<string, TopicSelectionNode>,
+) {
 	const path: string[] = [];
 	const visited = new Set<string>();
 	let current = nodes.get(id);
@@ -27,7 +31,7 @@ export function selectionFrontier(
 	const byId = nodeMap(nodes);
 	const known = [...new Set(selected)].filter((id) => byId.has(id));
 	const ancestorIds = new Set(
-		known.flatMap((id) => ancestry(id, byId).slice(0, -1)),
+		known.flatMap((id) => topicAncestry(id, byId).slice(0, -1)),
 	);
 	return known.filter((id) => !ancestorIds.has(id));
 }
@@ -43,9 +47,9 @@ export function toggleTopicSelection(
 
 	if (selected.includes(id)) {
 		return selected.filter(
-			(entry) => entry !== id && !ancestry(entry, byId).includes(id),
+			(entry) => entry !== id && !topicAncestry(entry, byId).includes(id),
 		);
 	}
 
-	return [...new Set([...selected, ...ancestry(id, byId)])];
+	return [...new Set([...selected, ...topicAncestry(id, byId)])];
 }

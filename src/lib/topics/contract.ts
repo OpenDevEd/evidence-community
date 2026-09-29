@@ -9,6 +9,11 @@ export const topicNodeSchema = z.object({
   path: z.array(z.string().max(1000)).max(4), childCount: z.number().int().nonnegative(),
 }).strict();
 export type TopicNode = z.infer<typeof topicNodeSchema>;
+export const topicTreeSchema = z.object({
+  publicBaseUrl: z.string().url(), nodes: z.array(topicNodeSchema.pick({id: true, name: true, parent: true})),
+}).strict();
+export type TopicTree = z.infer<typeof topicTreeSchema>;
+export type TopicTreeNode = TopicTree["nodes"][number];
 const envelope = {contractVersion: z.literal(1), libraryId: z.string().min(1).max(128)};
 export const topicCatalogRequestSchema = z.object({
   ...envelope, parent: topicNodeIdSchema.nullable().optional(), query: z.string().max(200).optional(),

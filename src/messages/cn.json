@@ -109,6 +109,7 @@
     "sendMessageAriaLabel": "发送消息",
     "deleteHistoryItemAriaLabel": "删除历史记录项",
     "closePopupAriaLabel": "关闭此弹出窗口",
+    "unknownTopic": "未知主题",
     "clearFiltersAriaLabel": "清除所有筛选器",
     "skipNavAriaLabel": "跳过导航",
     "collectionButtonAriaLabel": "{name} 收藏按钮",

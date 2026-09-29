@@ -109,6 +109,7 @@
     "sendMessageAriaLabel": "Envoyer un message",
     "deleteHistoryItemAriaLabel": "Supprimer l'élément d'historique",
     "closePopupAriaLabel": "Fermer cette fenêtre contextuelle",
+    "unknownTopic": "Sujet inconnu",
     "clearFiltersAriaLabel": "Effacer tous les filtres",
     "skipNavAriaLabel": "Passer la navigation",
     "collectionButtonAriaLabel": "Bouton de la collection {name}",

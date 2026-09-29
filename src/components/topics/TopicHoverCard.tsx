@@ -10,7 +10,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Card } from "@/components/nextui/Card";
 import { HierarchyTree } from "@/components/typography/HierarchyTree";
-import type { TopicNode } from "@/lib/topics/contract";
+import type { TopicTreeNode } from "@/lib/topics/contract";
 import { fetchTopicDetail } from "@/lib/topics/client";
 
 /** Keywords shown before the rest are left to the topic page. */
@@ -35,7 +35,7 @@ export function TopicHoverCard({
 	topic,
 }: {
 	publicBaseUrl: string;
-	topic: TopicNode;
+	topic: Pick<TopicTreeNode, "id" | "name">;
 }) {
 	const [open, setOpen] = useState(false);
 	const [interactive, setInteractive] = useState(false);

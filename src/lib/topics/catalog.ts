@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { topicCatalogCache } from "@/db/schema/topics";
-import { topicCatalogRequestSchema, topicCatalogResponseSchema, topicDetailResponseSchema, topicNodeSchema, topicNodeIdSchema, type TopicNode } from "./contract";
+import { topicCatalogRequestSchema, topicCatalogResponseSchema, topicDetailResponseSchema, topicNodeSchema, topicNodeIdSchema, type TopicNode, type TopicTree } from "./contract";
 
 export type TopicCatalogContext = { database: Pick<Database, "select" | "insert">; config: Pick<LibraryServerConfig, "authentication">; fetch?: typeof fetch };
 const FRESH_MS = 24 * 3600_000;
@@ -55,8 +55,32 @@ async function readTopicCatalog(request: Omit<z.input<typeof topicCatalogRequest
 export async function readPublicTopicCatalog(request: z.output<typeof topicCatalogRequestSchema>, context: TopicCatalogContext) {
   if (!request.ids) return readTopicCatalog(request, context);
   const nodes = await resolveTopicNodes(request.ids, context, {allowUnknown: true});
+  return {contractVersion: 1 as const, ...await readCatalogMeta(context), nodes, nextCursor: null};
+}
+
+/** Stored with every catalog answer; a library whose lookups never reached OpenScholar asks for the top level once. */
+async function readCatalogMeta(context: TopicCatalogContext) {
   const [meta] = await context.database.select().from(topicCatalogCache).where(eq(topicCatalogCache.id, CATALOG_META_ID)).limit(1);
-  return {contractVersion: 1 as const, ...catalogMetaSchema.parse(meta?.payload), nodes, nextCursor: null};
+  return catalogMetaSchema.parse(meta?.payload ?? await readTopicCatalog({parent: null}, context));
+}
+
+/** Names and parents for the given topics, from the stored catalog; enough to draw a tree or chips without further requests. */
+export async function readTopicTree(ids: readonly string[], context: TopicCatalogContext): Promise<TopicTree> {
+  const nodes = await resolveTopicNodes(ids, context, {allowUnknown: true});
+  return {publicBaseUrl: (await readCatalogMeta(context)).publicBaseUrl, nodes: nodes.map(({id, name, parent}) => ({id, name, parent}))};
+}
+
+/** The same, from stored rows of any age, so a page never waits on OpenScholar; undefined when any is not stored. */
+export async function readStoredTopicTree(ids: readonly string[], context: TopicCatalogContext): Promise<TopicTree | undefined> {
+  const unique = [...new Set(ids)];
+  const [rows, [meta]] = await Promise.all([
+    context.database.select().from(topicCatalogCache).where(and(eq(topicCatalogCache.kind, "node"), inArray(topicCatalogCache.id, unique))),
+    context.database.select().from(topicCatalogCache).where(eq(topicCatalogCache.id, CATALOG_META_ID)).limit(1),
+  ]);
+  if (rows.length < unique.length || !meta) return undefined;
+  const byId = new Map(rows.map(row => [row.id, topicNodeSchema.parse(row.payload)]));
+  return {publicBaseUrl: catalogMetaSchema.parse(meta.payload).publicBaseUrl,
+    nodes: unique.map(id => byId.get(id)!).map(({id, name, parent}) => ({id, name, parent}))};
 }
 
 type CachedTopic = typeof topicCatalogCache.$inferSelect;
@@ -97,7 +121,11 @@ export async function resolveTopicNodes(ids: readonly string[], context: TopicCa
     if (node) result.set(id, node);
     return !node;
   });
-  for (let offset = 0; offset < missing.length; offset += 100) await resolveTopicBatch(missing.slice(offset, offset + 100), byId, result, context, options);
+  // A few batches at a time: a cold library tree has dozens, and OpenScholar and the pool must not get them all at once.
+  const batches = Array.from({length: Math.ceil(missing.length / 100)}, (_, index) => missing.slice(index * 100, index * 100 + 100));
+  for (let start = 0; start < batches.length; start += 4) {
+    await Promise.all(batches.slice(start, start + 4).map(batch => resolveTopicBatch(batch, byId, result, context, options)));
+  }
   return unique.flatMap(id => result.has(id) ? [result.get(id)!] : []);
 }
 
