@@ -93,6 +93,17 @@ describe("OpenAlex PDF processing", () => {
 			expect(published.file?.fullText).toContain("LINKED PDF");
 			expect(String(vi.mocked(transport).mock.calls[1]![0])).toBe("https://93.184.216.34/files/research.pdf?download=1&v=2");
 
+			// A relative link resolves against the page a redirect ended on.
+			const redirected = landing('<meta name="citation_pdf_url" content="paper.pdf">');
+			Object.defineProperty(redirected, "url", { value: "https://93.184.216.34/articles/123/index.html" });
+			vi.mocked(transport)
+				.mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "/articles/123/index.html" } }))
+				.mockResolvedValueOnce(redirected)
+				.mockResolvedValueOnce(new Response(await createPdf("MOVED PDF")));
+			const [, moved] = mapped(`${externalUrl}?moved`, "2026-09-24T01:02:03Z", 125);
+			expect((await processor(moved!, "openalex-pdf-a")).processingIssue).toBeNull();
+			expect(String(vi.mocked(transport).mock.calls.at(-1)![0])).toBe("https://93.184.216.34/articles/123/paper.pdf");
+
 			// A landing page that names no PDF still fails as an invalid PDF.
 			vi.mocked(transport).mockResolvedValueOnce(landing('<meta name="citation_title" content="Research">'));
 			const [, other] = mapped(`${externalUrl}?landing`, "2026-09-24T01:02:03Z", 124);

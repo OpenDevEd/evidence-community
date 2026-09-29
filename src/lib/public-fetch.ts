@@ -112,7 +112,7 @@ export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect"
 export async function fetchPublicFile(
 	url: URL,
 	{ accept, timeoutMs, idleTimeoutMs, maxBytes = Number.POSITIVE_INFINITY }: { accept: string; timeoutMs: number; idleTimeoutMs?: number; maxBytes?: number },
-): Promise<{ data: Uint8Array; contentType: string }> {
+): Promise<{ data: Uint8Array; contentType: string; url: URL }> {
 	const idle = new AbortController();
 	let idleTimer: NodeJS.Timeout | undefined;
 	const stillReceiving = () => {
@@ -134,7 +134,7 @@ async function downloadPublicFile(
 	maxBytes: number,
 	signal: AbortSignal,
 	stillReceiving: () => void,
-): Promise<{ data: Uint8Array; contentType: string }> {
+): Promise<{ data: Uint8Array; contentType: string; url: URL }> {
 	const response = await publicRequest(url, {
 		headers: { Accept: accept, "User-Agent": "Evidence-Library/1.0" },
 		signal,
@@ -142,10 +142,12 @@ async function downloadPublicFile(
 	if (!response.ok) throw new Error(`Download returned ${response.status}`);
 	if (Number(response.headers?.get("content-length")) > maxBytes) throw new Error("File is too large");
 	const contentType = response.headers?.get("content-type") ?? "";
+	// Where redirects ended, so a page's relative links resolve against it.
+	const finalUrl = response.url ? new URL(response.url) : url;
 	if (!response.body) {
 		const data = new Uint8Array(await response.arrayBuffer());
 		if (data.byteLength > maxBytes) throw new Error("File is too large");
-		return { data, contentType };
+		return { data, contentType, url: finalUrl };
 	}
 	const chunks: Uint8Array[] = [];
 	let size = 0;
@@ -153,16 +155,19 @@ async function downloadPublicFile(
 	// A read already waiting ends when the download is stopped.
 	const stop = () => void reader.cancel(signal.reason).catch(() => undefined);
 	signal.addEventListener("abort", stop, { once: true });
-	for (let part = await reader.read(); !part.done; part = await reader.read()) {
-		stillReceiving();
-		size += part.value.byteLength;
-		if (size > maxBytes) {
-			await reader.cancel();
-			throw new Error("File is too large");
+	try {
+		for (let part = await reader.read(); !part.done; part = await reader.read()) {
+			stillReceiving();
+			size += part.value.byteLength;
+			if (size > maxBytes) {
+				await reader.cancel();
+				throw new Error("File is too large");
+			}
+			chunks.push(part.value);
 		}
-		chunks.push(part.value);
+	} finally {
+		signal.removeEventListener("abort", stop);
 	}
-	signal.removeEventListener("abort", stop);
 	signal.throwIfAborted();
 	const data = new Uint8Array(size);
 	let offset = 0;
@@ -170,5 +175,5 @@ async function downloadPublicFile(
 		data.set(chunk, offset);
 		offset += chunk.byteLength;
 	}
-	return { data, contentType };
+	return { data, contentType, url: finalUrl };
 }

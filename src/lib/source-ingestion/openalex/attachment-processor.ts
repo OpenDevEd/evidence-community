@@ -232,9 +232,9 @@ function landingPagePdfUrl(html: string, base: URL) {
  * `citation_pdf_url` is followed once, so the PDF behind it is published.
  */
 async function downloadPdf(url: URL, maxBytes: number) {
-	const { data, contentType } = await fetchPublicFile(url, { ...PDF_DOWNLOAD, maxBytes });
+	const { data, contentType, url: landing } = await fetchPublicFile(url, { ...PDF_DOWNLOAD, maxBytes });
 	if (isPdf(data) || !/html/iu.test(contentType)) return data;
-	const linked = landingPagePdfUrl(new TextDecoder().decode(data), url);
+	const linked = landingPagePdfUrl(new TextDecoder().decode(data), landing);
 	if (!linked) return data;
 	return (await fetchPublicFile(linked, { ...PDF_DOWNLOAD, maxBytes })).data;
 }
