@@ -881,6 +881,28 @@ async function verify() {
 			`A PDF setting change did not reread the group exactly once: ${JSON.stringify({ off: pdfsOff.records, settled: pdfsOffSettled.records, on: pdfsOn.records, pdfsSeen })}`,
 		);
 
+		// A read left unfinished under one setting starts over when the setting changes.
+		const [settled] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+		const settledCursor = settled!.syncCursor as { libraryVersion: number };
+		await database
+			.update(sourceConnection)
+			.set({
+				syncCursor: {
+					...settledCursor,
+					pending: { offset: 1, snapshotSince: settledCursor.libraryVersion, targetVersion: settledCursor.libraryVersion },
+				},
+			})
+			.where(eq(sourceConnection.key, connectionKey));
+		await setPdfs(false);
+		pdfsSeen.length = 0;
+		const restarted = await syncWithPdfs();
+		assert(
+			restarted.records === 15 && pdfsSeen.length > 0 && pdfsSeen.every((publish) => !publish),
+			`An unfinished read did not start over after the PDF setting changed: ${JSON.stringify({ records: restarted.records, pdfsSeen })}`,
+		);
+		await setPdfs(true);
+		await syncWithPdfs();
+
 		remote.version = 11;
 		const movedRemote = remote.items.get("MOVE2345")!;
 		movedRemote.version = 11;

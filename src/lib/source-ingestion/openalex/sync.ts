@@ -41,6 +41,8 @@ const cursorSchema = z
 			})
 			.nullable()
 			.default(null),
+		// PDFs were added since the last full scan that left them out, so turning them off must take them down.
+		pdfsAdded: z.literal(true).optional(),
 		// A full scan of a large query reads date slices at once, each with its own cursor.
 		// Only a sliced scan saves the key, so other cursors stay readable by older releases.
 		slices: z
@@ -181,7 +183,7 @@ function pdfsOwed(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Curso
  * full records scan puts every record back on its external link.
  */
 function pdfsDropped(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Cursor | null) {
-	return saved?.stage === "pdfs" && !stream.downloadPdfs;
+	return !stream.downloadPdfs && (saved?.stage === "pdfs" || saved?.pdfsAdded === true);
 }
 
 function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor | null {
@@ -190,14 +192,22 @@ function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor
 	return saved.mode === "full" ? { ...saved, incrementalAvailable: null } : saved;
 }
 
+/** PDFs just turned on or off need every record, and so does a sample. */
+function mustScanInFull(stream: OpenAlexWorkStream, saved: Cursor | null) {
+	return stream.fullScansOnly || pdfsOwed(stream, saved) || pdfsDropped(stream, saved);
+}
+
+/** Added PDFs are remembered while PDFs stay on; a scan with them off takes them all down. */
+function carriedPdfs(saved: Cursor | null, stream: OpenAlexWorkStream) {
+	return saved?.pdfsAdded && stream.downloadPdfs ? { pdfsAdded: true as const } : {};
+}
+
 function startCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor {
 	const resumed = resumedCursor(saved, stream);
 	if (resumed) return resumed;
 	const queryVersion = stream.version;
 	const sameQuery = saved?.queryVersion === queryVersion;
-	// PDFs just turned on need every record.
-	const fullOnly =
-		stream.fullScansOnly || pdfsOwed(stream, saved) || pdfsDropped(stream, saved);
+	const fullOnly = mustScanInFull(stream, saved);
 	const cursor: Cursor = {
 		queryVersion,
 		startedAt: new Date().toISOString(),
@@ -210,6 +220,7 @@ function startCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor {
 		incrementalAvailable: null,
 		stage: "records",
 		pdfs: null,
+		...carriedPdfs(saved, stream),
 	};
 	const updatedSince = fullOnly ? null : incrementalSince(saved, queryVersion);
 	return updatedSince
@@ -981,6 +992,7 @@ async function startPdfStage(scan: Scan) {
 		stage: "pdfs",
 		nextCursor: "*",
 		pdfs: { done: 0, missed: 0, total },
+		pdfsAdded: true,
 	};
 	await writeBatch(scan.context, scan.expectedCursor, scan.cursor, { items: [] }, "pdfs");
 	scan.expectedCursor = scan.cursor;

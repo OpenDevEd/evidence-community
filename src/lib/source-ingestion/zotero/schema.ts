@@ -97,6 +97,8 @@ export const zoteroCursorSchema = z.union([
 					offset: z.number().int().nonnegative(),
 					snapshotSince: z.number().int().nonnegative(),
 					targetVersion: z.number().int().nonnegative(),
+					// False while this read leaves PDFs out.
+					pdfs: z.literal(false).optional(),
 				})
 				.strict()
 				.optional(),

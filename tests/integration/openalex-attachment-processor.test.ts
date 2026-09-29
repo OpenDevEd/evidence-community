@@ -153,7 +153,7 @@ describe("OpenAlex PDF processing", () => {
 		});
 	});
 
-	it("takes a finished run's PDFs down on the next run once PDFs are turned off", async () => {
+	it("takes a finished run's PDFs down on the next run once PDFs are turned off, even after an unfinished refresh", async () => {
 		await withIsolatedPublicationDatabase(async (database) => {
 			await sources(database);
 			const settings = {
@@ -178,6 +178,22 @@ describe("OpenAlex PDF processing", () => {
 			expect((await sync()).syncCursor).toMatchObject({ stage: "pdfs" });
 			expect(await database.select().from(itemFilePublication)).toHaveLength(2);
 
+			// A nightly refresh stopped part-way through its records hides the finished PDF stage.
+			const [finished] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
+			await database
+				.update(sourceConnection)
+				.set({
+					syncCursor: {
+						...finished!.syncCursor,
+						stage: "records",
+						mode: "incremental",
+						updatedSince: "2026-09-20",
+						completedAt: null,
+						nextCursor: "page-2",
+						pdfs: null,
+					},
+				})
+				.where(eq(sourceConnection.key, "openalex-pdf-a"));
 			await setPdfs(false);
 			const [turnedOff] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, "openalex-pdf-a"));
 			expect(openAlexSyncIsDue(turnedOff!, new Date())).toBe(true);
