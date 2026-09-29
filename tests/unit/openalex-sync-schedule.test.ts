@@ -72,4 +72,11 @@ describe("openAlexSyncIsDue with PDFs", () => {
 	it("waits for the night once a run has added the PDFs", () => {
 		expect(openAlexSyncIsDue(withPdfs(cursor({ stage: "pdfs", pdfs: { done: 5, missed: 1, total: 5 } })), midday)).toBe(false);
 	});
+
+	it("runs a source straight away when PDFs were turned off after a run added them, then waits", () => {
+		const added = cursor({ stage: "pdfs", pdfs: { done: 5, missed: 1, total: 5 } });
+		expect(openAlexSyncIsDue(connection(added), midday)).toBe(true);
+		// The run that takes them down ends on the records stage.
+		expect(openAlexSyncIsDue(connection(cursor({ mode: "full" })), midday)).toBe(false);
+	});
 });

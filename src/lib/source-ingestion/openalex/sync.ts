@@ -176,9 +176,12 @@ function pdfsOwed(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Curso
 	return stream.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
 }
 
-/** PDFs turned off mid-stage: only a full records scan puts every page back on its external link. */
-function pdfsDropped(stream: OpenAlexWorkStream, saved: Cursor | null) {
-	return saved?.stage === "pdfs" && !saved.completedAt && !stream.downloadPdfs;
+/**
+ * PDFs turned off after a run added them, or while it was adding them: only a
+ * full records scan puts every record back on its external link.
+ */
+function pdfsDropped(stream: Pick<OpenAlexWorkStream, "downloadPdfs">, saved: Cursor | null) {
+	return saved?.stage === "pdfs" && !stream.downloadPdfs;
 }
 
 function resumedCursor(saved: Cursor | null, stream: OpenAlexWorkStream): Cursor | null {
@@ -237,7 +240,7 @@ export function openAlexWorksAreDue(syncCursor: unknown, stream: Pick<OpenAlexWo
 	if (!saved.success) return true;
 	if (!saved.data.completedAt) return true;
 	if (saved.data.queryVersion !== stream.version) return true;
-	if (pdfsOwed(stream, saved.data)) return true;
+	if (pdfsOwed(stream, saved.data) || pdfsDropped(stream, saved.data)) return true;
 	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
 }
 
