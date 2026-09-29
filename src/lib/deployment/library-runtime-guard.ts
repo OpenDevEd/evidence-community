@@ -443,6 +443,15 @@ function customDomainsRoute(
 				customDomainMiddlewares,
 				domainsRoutePriority,
 			),
+			// Next's build files are named by their content, and one page view asks for dozens at once. The shared
+			// per-visitor limits (40 requests in flight, a burst of 80) refused them, and a page that cannot load its
+			// own code reloads or goes blank. They skip the limits and the shield; everything else keeps both.
+			[`${name}-static-https`]: router(
+				`(${rule}) && PathPrefix(\`/_next/static/\`)`,
+				`${custom.dockerService}@docker`,
+				[],
+				domainsRoutePriority + 1,
+			),
 		},
 	};
 }
