@@ -7,6 +7,7 @@ import type { SourceAdapterContext, SourceConnection } from "../adapter";
 import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import { SourceCredentialNotFoundError } from "../credentials";
 import {
+	MAX_INSTITUTION_FACTS,
 	MAX_SOURCE_BATCH_BYTES,
 	type JsonValue,
 	type SourceItemUpsert,
@@ -14,6 +15,9 @@ import {
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
 import { mapOpenAlexWork } from "./mapper";
+import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
+import { OPENALEX_MAX_PAGE_SIZE } from "./schema";
+import { chunkValues } from "@/lib/chunk-values";
 import { openAlexConnectionConfigSchema } from "./schema";
 
 const cursorSchema = z
@@ -38,6 +42,18 @@ const cursorSchema = z
 			})
 			.nullable()
 			.default(null),
+		// A full scan of a large query reads date slices at once, each with its own cursor.
+		// Only a sliced scan saves the key, so other cursors stay readable by older releases.
+		slices: z
+			.array(
+				z.object({
+					dates: z.object({ from: z.string().nullable(), to: z.string().nullable() }).nullable(),
+					nextCursor: z.string().nullable(),
+					// Works in the slice when it was planned, for the import's total.
+					count: z.number().int().nonnegative(),
+				}),
+			)
+			.optional(),
 	})
 	.strict();
 
@@ -77,7 +93,11 @@ export function openAlexFullScanDue(reconciledAt: string, now: Date) {
 	return Date.parse(reconciledAt) < lastNightlyRefresh(now) - 6 * DAY_MS;
 }
 const UPDATED_SINCE = "from_updated_date:";
-const RECORD_PAGE_SIZE = 100;
+const RECORD_PAGE_SIZE = OPENALEX_MAX_PAGE_SIZE;
+// Each slice waits about 4 seconds per page, so sixteen keep the writer busy.
+const SLICE_CONCURRENCY = 16;
+// Fetched pages waiting for the writer, about 2 MB each.
+const QUEUED_PAGES = 8;
 const PDF_PAGE_SIZE = 50;
 const PDF_CONCURRENCY = 6;
 // Leaves room for the batch envelope and institution facts.
@@ -303,12 +323,15 @@ async function writePage(
 	stage: Cursor["stage"],
 ) {
 	const chunks = writeChunks(page.items);
-	for (const [index, items] of chunks.entries()) {
+	// A page of works with many affiliations can carry more facts than one write takes.
+	const facts = chunkValues(page.institutionCountries, MAX_INSTITUTION_FACTS);
+	const writes = Math.max(chunks.length, facts.length);
+	for (let index = 0; index < writes; index++) {
 		await writeBatch(
 			context,
 			expectedCursor,
-			index === chunks.length - 1 ? nextCursor : expectedCursor,
-			{ items, institutionCountries: index ? [] : page.institutionCountries },
+			index === writes - 1 ? nextCursor : expectedCursor,
+			{ items: chunks[index] ?? [], institutionCountries: facts[index] ?? [] },
 			stage,
 		);
 	}
@@ -458,37 +481,46 @@ async function reportProgress(scan: Scan, count: number) {
 	await context.run?.report(cursor.imported, Math.max(count, cursor.imported));
 }
 
+/** Incremental access was refused: scan the whole query instead. */
+function fullScanCursor(cursor: Cursor): Cursor {
+	return {
+		...cursor,
+		mode: "full",
+		nextCursor: "*",
+		startedAt: new Date().toISOString(),
+		imported: 0,
+		updatedSince: null,
+		incrementalAvailable: false,
+		// A full PDF pass would skip reconciling, so the records go first again.
+		stage: "records",
+		pdfs: null,
+	};
+}
+
+function assertAdvancing(
+	page: { meta: { next_cursor: string | null }; results: unknown[] },
+	cursor: string | null,
+	sourceConnectionKey: string,
+) {
+	if (page.meta.next_cursor === cursor || (!page.results.length && page.meta.next_cursor)) {
+		throw new Error(`OpenAlex source ${sourceConnectionKey} returned a non-advancing page`);
+	}
+}
+
 /** Fetches and writes every page of the cursor's stage. */
 async function scanPages(scan: Scan) {
 	const { context, client, config } = scan;
 	const connection = context.sourceConnection;
-	while (scan.cursor.nextCursor) {
+	while (scan.cursor.nextCursor && !scan.cursor.slices) {
 		await context.heartbeat();
 		const page = await fetchPage(client, config, scan.cursor, connection.key);
 		if (!page) {
-			scan.cursor = {
-				...scan.cursor,
-				mode: "full",
-				nextCursor: "*",
-				startedAt: new Date().toISOString(),
-				imported: 0,
-				updatedSince: null,
-				incrementalAvailable: false,
-				// A full PDF pass would skip reconciling, so the records go first again.
-				stage: "records",
-				pdfs: null,
-			};
+			scan.cursor = fullScanCursor(scan.cursor);
 			continue;
 		}
 		if (scan.cursor.mode === "incremental") scan.cursor = { ...scan.cursor, incrementalAvailable: true };
-		if (
-			page.meta.next_cursor === scan.cursor.nextCursor ||
-			(!page.results.length && page.meta.next_cursor)
-		) {
-			throw new Error(
-				`OpenAlex source ${connection.key} returned a non-advancing page`,
-			);
-		}
+		assertAdvancing(page, scan.cursor.nextCursor, connection.key);
+		if (await switchToSlices(scan, page.meta.count)) return;
 		// The total is known from the page; say it before slow PDF work starts.
 		await reportProgress(scan, page.meta.count);
 		const mapped = page.results.map(mapOpenAlexWork);
@@ -523,6 +555,149 @@ async function scanPages(scan: Scan) {
 	}
 }
 
+type SlicePage = { slice: number; nextCursor: string | null; works: number; mapped: ReturnType<typeof mapOpenAlexWork>[] };
+
+/** Pages waiting for the writer. Fetchers wait while it is full, which bounds memory. */
+function pageQueue(limit: number) {
+	const pages: SlicePage[] = [];
+	let closed = false;
+	let failure: unknown;
+	let wakeWriter: (() => void) | null = null;
+	const waitingFetchers: (() => void)[] = [];
+	return {
+		async put(page: SlicePage) {
+			while (pages.length >= limit && !closed) await new Promise<void>((wake) => waitingFetchers.push(wake));
+			if (closed) return false;
+			pages.push(page);
+			wakeWriter?.();
+			return true;
+		},
+		// Pages fetched before a failure are still written, so a restart has less to fetch.
+		async take() {
+			for (;;) {
+				if (pages.length) {
+					waitingFetchers.shift()?.();
+					return pages.shift()!;
+				}
+				if (failure) throw failure;
+				if (closed) return null;
+				await new Promise<void>((wake) => (wakeWriter = wake));
+				wakeWriter = null;
+			}
+		},
+		close(error?: unknown) {
+			closed = true;
+			failure ??= error;
+			wakeWriter?.();
+			for (const wake of waitingFetchers.splice(0)) wake();
+		},
+	};
+}
+
+/** Fetches one slice's pages in order, handing each to the writer, until the scan stops. */
+async function fetchSlice(scan: Scan, slice: number, queue: ReturnType<typeof pageQueue>, stop: { stopped: boolean }) {
+	const { dates, nextCursor } = scan.cursor.slices![slice]!;
+	const query = slicedQuery(scan.config.approvedQuery.query, dates);
+	let cursor = nextCursor;
+	while (cursor && !stop.stopped) {
+		const page = await scan.client.works(query, cursor, RECORD_PAGE_SIZE);
+		assertAdvancing(page, cursor, scan.context.sourceConnection.key);
+		cursor = page.meta.next_cursor;
+		const handed = await queue.put({
+			slice,
+			nextCursor: cursor,
+			works: page.results.length,
+			mapped: page.results.map(mapOpenAlexWork),
+		});
+		if (!handed) return;
+	}
+}
+
+/** Writes one fetched page and moves only its slice's cursor on. */
+async function writeSlicePage(scan: Scan, page: SlicePage, total: number) {
+	const { context } = scan;
+	await context.heartbeat();
+	const items = page.mapped.flatMap((work) => work.items);
+	await preparePage(scan, items, page.works);
+	const slices = scan.cursor.slices!.map((slice, index) =>
+		index === page.slice ? { ...slice, nextCursor: page.nextCursor } : slice,
+	);
+	scan.cursor = {
+		...scan.cursor,
+		slices,
+		imported: scan.cursor.imported + page.works,
+		nextCursor: slices.some((slice) => slice.nextCursor) ? scan.cursor.nextCursor : null,
+		completedAt: null,
+	};
+	await writePage(context, scan.expectedCursor, scan.cursor, {
+		items,
+		institutionCountries: page.mapped.flatMap((work) => work.institutions),
+	}, "records");
+	scan.expectedCursor = scan.cursor;
+	scan.pages++;
+	await reportProgress(scan, total);
+	await scan.options.attachmentProcessor?.flushCleanup(context.sourceConnection.key);
+}
+
+/**
+ * Fetches the slices at the same time while one writer saves their pages, so
+ * the import waits on OpenAlex far less. A restart resumes every slice.
+ */
+async function scanSlices(scan: Scan) {
+	const queue = pageQueue(QUEUED_PAGES);
+	const total = scan.cursor.slices!.reduce((sum, slice) => sum + slice.count, 0);
+	const open = scan.cursor.slices!.flatMap((slice, index) => (slice.nextCursor ? [index] : []));
+	// After a failure no fetcher starts another request, but pages already
+	// fetched still reach the writer before the error does.
+	const stop = { stopped: false };
+	let failure: unknown;
+	let next = 0;
+	const fetcher = async () => {
+		while (!stop.stopped && next < open.length) await fetchSlice(scan, open[next++]!, queue, stop);
+	};
+	const fetching = Promise.allSettled(
+		Array.from({ length: Math.min(SLICE_CONCURRENCY, open.length) }, () =>
+			fetcher().catch((error: unknown) => {
+				stop.stopped = true;
+				failure ??= error;
+			}),
+		),
+	).then(() => queue.close(failure));
+	try {
+		for (let page = await queue.take(); page; page = await queue.take()) {
+			await writeSlicePage(scan, page, total);
+		}
+	} finally {
+		// The writer finished or failed: stop the fetchers and wait for every one.
+		stop.stopped = true;
+		queue.close();
+		await fetching;
+	}
+}
+
+/**
+ * A new full scan whose first page shows a large query is split into date
+ * slices, saved so a restart keeps them. That first page is fetched again
+ * by its slice.
+ */
+async function switchToSlices(scan: Scan, count: number) {
+	const { cursor, config, context } = scan;
+	if (cursor.stage !== "records" || cursor.mode !== "full" || cursor.nextCursor !== "*" || cursor.imported) return false;
+	if (count < MIN_SLICED_WORKS || isSampledOql(config.approvedQuery.query)) return false;
+	const slices = await planSlices(scan.client, config.approvedQuery.query).catch((error: unknown) => {
+		console.warn("OpenAlex slice planning failed; scanning the query as one stream", {
+			sourceConnectionKey: context.sourceConnection.key,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return null;
+	});
+	if (!slices) return false;
+	scan.cursor = { ...cursor, slices: slices.map((slice) => ({ ...slice, nextCursor: "*" })) };
+	await writeBatch(context, scan.expectedCursor, scan.cursor, { items: [] });
+	scan.expectedCursor = scan.cursor;
+	return true;
+}
+
 async function reconcile(scan: Scan) {
 	const connection = scan.context.sourceConnection;
 	while (
@@ -544,8 +719,9 @@ async function startPdfStage(scan: Scan) {
 		scan.cursor.mode === "full"
 			? await countPdfLinks(scan.context.database, scan.context.sourceConnection.key)
 			: null;
+	const { slices: _finished, ...records } = scan.cursor;
 	scan.cursor = {
-		...scan.cursor,
+		...records,
 		stage: "pdfs",
 		nextCursor: "*",
 		pdfs: { done: 0, missed: 0, total },
@@ -559,6 +735,7 @@ async function scanStages(scan: Scan) {
 	for (;;) {
 		if (scan.cursor.stage === "records") {
 			await scanPages(scan);
+			if (scan.cursor.slices) await scanSlices(scan);
 			await reconcile(scan);
 			if (!scan.config.downloadPdfs) return;
 			await startPdfStage(scan);

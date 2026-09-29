@@ -1,4 +1,5 @@
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
+import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
@@ -266,24 +267,6 @@ function summary(payload: Record<string, unknown>) {
 type TranslatedEntry =
 	| { source: string; zoteroItem: Record<string, unknown> }
 	| { message: string; source: string };
-
-async function mapWithConcurrency<T, R>(
-	values: readonly T[],
-	limit: number,
-	run: (value: T) => Promise<R>,
-) {
-	const results: R[] = new Array(values.length);
-	let next = 0;
-	await Promise.all(
-		Array.from({ length: Math.min(limit, values.length) }, async () => {
-			while (next < values.length) {
-				const index = next++;
-				results[index] = await run(values[index]!);
-			}
-		}),
-	);
-	return results;
-}
 
 async function translateDois(dois: readonly string[], translationUrl: string) {
 	return mapWithConcurrency(dois, DOI_LOOKUP_CONCURRENCY, async (raw): Promise<TranslatedEntry[]> => {

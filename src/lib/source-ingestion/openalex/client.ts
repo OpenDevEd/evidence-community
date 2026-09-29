@@ -1,5 +1,7 @@
 import { readBoundedResponse } from "../read-bounded-response";
 import {
+	OPENALEX_MAX_PAGE_SIZE,
+	openAlexGroupsSchema,
 	openAlexPageSchema,
 	openAlexQuerySchema,
 	type OpenAlexQuery,
@@ -17,12 +19,12 @@ export class OpenAlexApiError extends Error {
 
 function worksUrl(
 	query: OpenAlexQuery,
-	cursor: string,
+	cursor: string | null,
 	pageSize: number,
 	apiKey: string,
 ) {
-	if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
-		throw new Error("OpenAlex pageSize must be between 1 and 100");
+	if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > OPENALEX_MAX_PAGE_SIZE) {
+		throw new Error(`OpenAlex pageSize must be between 1 and ${OPENALEX_MAX_PAGE_SIZE}`);
 	}
 	const approved = openAlexQuerySchema.parse(query);
 	// OQL runs at the API root with the query in the POST body.
@@ -32,7 +34,7 @@ function worksUrl(
 	for (const key of ["filter", "search"] as const) {
 		if (approved[key]) url.searchParams.set(key, approved[key]);
 	}
-	url.searchParams.set("cursor", cursor);
+	if (cursor) url.searchParams.set("cursor", cursor);
 	url.searchParams.set("per_page", String(pageSize));
 	url.searchParams.set("api_key", apiKey);
 	return url;
@@ -51,8 +53,17 @@ function requestInit(oql: string | undefined): RequestInit {
 	};
 }
 
+// A long import makes thousands of requests, so a network blip of up to half a minute is waited out.
+const MAX_ATTEMPTS = 6;
+
 function isRetryable(response: Response, attempt: number) {
-	return (response.status === 429 || response.status >= 500) && attempt < 3;
+	return (response.status === 429 || response.status >= 500) && attempt < MAX_ATTEMPTS - 1;
+}
+
+function failureText(error: unknown) {
+	if (!(error instanceof Error)) return String(error);
+	const cause = error.cause as { code?: string; message?: string } | undefined;
+	return cause ? `${error.message} (${cause.code ?? cause.message})` : error.message;
 }
 
 function retryDelay(response: Response, attempt: number) {
@@ -61,7 +72,7 @@ function retryDelay(response: Response, attempt: number) {
 	const requestedDelay = Number.isFinite(seconds)
 		? seconds * 1000
 		: Date.parse(retryAfter ?? "") - Date.now();
-	return Math.min(60_000, Math.max(250 * 2 ** attempt, requestedDelay || 0));
+	return Math.min(60_000, Math.max(1_000 * 2 ** attempt, requestedDelay || 0));
 }
 
 export class OpenAlexClient {
@@ -80,7 +91,7 @@ export class OpenAlexClient {
 		const sleep =
 			this.options.sleep ??
 			((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
-		for (let attempt = 0; attempt < 4; attempt++) {
+		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
 			let response: Response;
 			try {
 				response = await request(url, {
@@ -89,11 +100,9 @@ export class OpenAlexClient {
 					signal: AbortSignal.timeout(30_000),
 				});
 			} catch (error) {
-				if (attempt === 3)
-					throw new OpenAlexApiError(
-						`OpenAlex works request failed: ${error instanceof Error ? error.message : String(error)}`,
-					);
-				await sleep(250 * 2 ** attempt);
+				if (attempt === MAX_ATTEMPTS - 1)
+					throw new OpenAlexApiError(`OpenAlex works request failed: ${failureText(error)}`);
+				await sleep(1_000 * 2 ** attempt);
 				continue;
 			}
 			if (!isRetryable(response, attempt)) return response;
@@ -103,9 +112,28 @@ export class OpenAlexClient {
 		throw new OpenAlexApiError("OpenAlex works request exhausted retries");
 	}
 
+	/** Counts of the query's works by publication year. Works with no year are left out. */
+	async yearCounts(query: OpenAlexQuery) {
+		const grouped = query.oql ? { oql: `${query.oql} group by publication_year` } : query;
+		const url = worksUrl(grouped, null, OPENALEX_MAX_PAGE_SIZE, this.options.apiKey);
+		if (!query.oql) url.searchParams.set("group_by", "publication_year");
+		const { group_by } = openAlexGroupsSchema.parse(await this.read(url, grouped.oql));
+		return group_by.flatMap(({ key, count }) => (/^\d{4}$/.test(key) ? [{ year: Number(key), count }] : []));
+	}
+
 	async works(query: OpenAlexQuery, cursor: string, pageSize = 100) {
 		const url = worksUrl(query, cursor, pageSize, this.options.apiKey);
-		const response = await this.fetchWithRetries(url, query.oql);
+		const page = openAlexPageSchema.parse(await this.read(url, query.oql));
+		if (page.results.length > pageSize) {
+			throw new OpenAlexApiError(
+				"OpenAlex returned more works than requested",
+			);
+		}
+		return page;
+	}
+
+	private async read(url: URL, oql: string | undefined): Promise<unknown> {
+		const response = await this.fetchWithRetries(url, oql);
 		const bytes = await readBoundedResponse(
 			response,
 			response.ok
@@ -121,12 +149,6 @@ export class OpenAlexClient {
 				`OpenAlex works returned ${response.status}: ${body}`,
 				response.status,
 			);
-		const page = openAlexPageSchema.parse(JSON.parse(body));
-		if (page.results.length > pageSize) {
-			throw new OpenAlexApiError(
-				"OpenAlex returned more works than requested",
-			);
-		}
-		return page;
+		return JSON.parse(body);
 	}
 }

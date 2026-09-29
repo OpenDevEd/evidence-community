@@ -76,6 +76,9 @@ export type OpenAlexApprovedQuery = z.infer<
 	typeof openAlexConnectionConfigSchema
 >["approvedQuery"];
 
+/** OpenAlex rejects larger pages. */
+export const OPENALEX_MAX_PAGE_SIZE = 200;
+
 export const openAlexPageSchema = z
 	.object({
 		meta: z
@@ -84,6 +87,12 @@ export const openAlexPageSchema = z
 				next_cursor: z.string().min(1).max(16_384).nullable(),
 			})
 			.loose(),
-		results: z.array(z.unknown()).max(100),
+		results: z.array(z.unknown()).max(OPENALEX_MAX_PAGE_SIZE),
+	})
+	.loose();
+
+export const openAlexGroupsSchema = z
+	.object({
+		group_by: z.array(z.object({ key: z.string(), count: z.number().int().nonnegative() }).loose()),
 	})
 	.loose();
