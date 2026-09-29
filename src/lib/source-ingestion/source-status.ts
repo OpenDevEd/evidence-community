@@ -169,7 +169,10 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 		searchable: input.searchable,
 	};
 	const run = input.activeRun;
-	if (run && run.leaseExpiresAt <= input.now) return expiredLeaseStatus(base, run);
+	if (run && run.leaseExpiresAt <= input.now) {
+		// Stopped while adding PDFs: the records' search update, if still waiting, comes first.
+		return (run.stage === "pdfs" ? searchStatus(base, input) : null) ?? expiredLeaseStatus(base, run);
+	}
 	if (run?.stage === "pdfs") return pdfStageStatus(base, run, input);
 	// A run that has reported nothing may only be checking for changes.
 	if (run && (run.recordsDone > 0 || (run.recordsTotal ?? 0) > 0)) {

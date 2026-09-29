@@ -127,16 +127,25 @@ function pdfsOwed(config: OpenAlexConnectionConfig, saved: Cursor | null) {
 	return config.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
 }
 
-function startCursor(
-	saved: Cursor | null,
-	queryVersion: string,
-	fullOnly: boolean,
-): Cursor {
+/** PDFs turned off mid-stage: only a full records scan puts every page back on its external link. */
+function pdfsDropped(config: OpenAlexConnectionConfig, saved: Cursor | null) {
+	return saved?.stage === "pdfs" && !saved.completedAt && !config.downloadPdfs;
+}
+
+function resumedCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cursor | null {
+	if (!saved || saved.completedAt || saved.queryVersion !== config.approvedQuery.version) return null;
+	if (pdfsDropped(config, saved)) return null;
+	return saved.mode === "full" ? { ...saved, incrementalAvailable: null } : saved;
+}
+
+function startCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cursor {
+	const resumed = resumedCursor(saved, config);
+	if (resumed) return resumed;
+	const queryVersion = config.approvedQuery.version;
 	const sameQuery = saved?.queryVersion === queryVersion;
-	if (saved && !saved.completedAt && sameQuery)
-		return saved.mode === "full"
-			? { ...saved, incrementalAvailable: null }
-			: saved;
+	// A sample of updated works is a different sample; PDFs just turned on need every record.
+	const fullOnly =
+		isSampledOql(config.approvedQuery.query) || pdfsOwed(config, saved) || pdfsDropped(config, saved);
 	const cursor: Cursor = {
 		queryVersion,
 		startedAt: new Date().toISOString(),
@@ -318,6 +327,8 @@ async function splitNewRecords(scan: Scan, items: SourceItemUpsert[]) {
 		.where(
 			and(
 				eq(itemSourceLink.sourceConnectionKey, scan.context.sourceConnection.key),
+				// A withdrawn work that comes back is new to search again.
+				eq(itemSourceLink.remoteDeleted, false),
 				inArray(itemSourceLink.sourceRecordKey, items.map((record) => record.sourceRecordKey)),
 			),
 		);
@@ -463,6 +474,9 @@ async function scanPages(scan: Scan) {
 				imported: 0,
 				updatedSince: null,
 				incrementalAvailable: false,
+				// A full PDF pass would skip reconciling, so the records go first again.
+				stage: "records",
+				pdfs: null,
 			};
 			continue;
 		}
@@ -540,6 +554,22 @@ async function startPdfStage(scan: Scan) {
 	scan.expectedCursor = scan.cursor;
 }
 
+/** Records, then PDFs. A PDF stage that falls back to a full scan starts over from the records. */
+async function scanStages(scan: Scan) {
+	for (;;) {
+		if (scan.cursor.stage === "records") {
+			await scanPages(scan);
+			await reconcile(scan);
+			if (!scan.config.downloadPdfs) return;
+			await startPdfStage(scan);
+		}
+		// Said before the first page, so a failure there still reads as the PDF stage.
+		await reportProgress(scan, 0);
+		await scanPages(scan);
+		if (scan.cursor.stage === "pdfs") return;
+	}
+}
+
 export async function syncOpenAlexSource(
 	context: SourceAdapterContext,
 	options: OpenAlexSourceOptions = {},
@@ -555,25 +585,11 @@ export async function syncOpenAlexSource(
 		config,
 		options,
 		expectedCursor,
-		cursor: startCursor(
-			saved,
-			config.approvedQuery.version,
-			// A sample of updated works is a different sample; PDFs just turned on need every record.
-			isSampledOql(config.approvedQuery.query) || pdfsOwed(config, saved),
-		),
+		cursor: startCursor(saved, config),
 		pages: 0,
 	};
 	await options.attachmentProcessor?.flushCleanup(connection.key);
-	if (scan.cursor.stage === "records") {
-		await scanPages(scan);
-		await reconcile(scan);
-		if (config.downloadPdfs) await startPdfStage(scan);
-	}
-	if (scan.cursor.stage === "pdfs") {
-		// Said before the first page, so a failure there still reads as the PDF stage.
-		await reportProgress(scan, 0);
-		await scanPages(scan);
-	}
+	await scanStages(scan);
 	const cursor: Cursor = {
 		...scan.cursor,
 		completedAt: new Date().toISOString(),

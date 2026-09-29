@@ -532,3 +532,69 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 		expect(issueRows.map((row) => row.code)).toEqual(["openalex_pdf_download_failed"]);
 	});
 }, 120_000);
+
+it("restarts a PDF stage from the records when it must scan in full, and tags works that come back", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-stage", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } });
+		const processor = Object.assign(async (record: SourceItemUpsert) => record, {
+			reuse: async (record: SourceItemUpsert) => record,
+			flushCleanup: async () => {},
+		});
+		const requests: { perPage: string | null; cursor: string | null }[] = [];
+		const current = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-stage")))[0]!;
+		const sync = async (respond: (url: URL) => Response, runId?: number) =>
+			syncOpenAlexSource(
+				{
+					database: db,
+					sourceConnection: await current(),
+					credentialResolver: async () => "test-key",
+					heartbeat: async () => {},
+					...(runId ? { run: { id: runId, report: async () => {} } } : {}),
+				},
+				{
+					attachmentProcessor: processor,
+					sleep: async () => {},
+					fetch: async (input) => {
+						const url = new URL(String(input));
+						requests.push({ perPage: url.searchParams.get("per_page"), cursor: url.searchParams.get("cursor") });
+						return respond(url);
+					},
+				},
+			);
+		const page = (ids: number[]) => Response.json({ meta: { count: ids.length, next_cursor: null }, results: ids.map((id) => work(id)) });
+		const resumeAt = async (cursor: Record<string, unknown>) =>
+			db.update(sourceConnection).set({ syncCursor: { ...(await current()).syncCursor, completedAt: null, ...cursor } }).where(eq(sourceConnection.key, "oa-stage"));
+		const record = async (id: number) => (await db.select().from(item).where(eq(item.sourceRecordKey, `W${id}`)))[0]!;
+		await sync(() => page([1, 2]));
+
+		// Incremental access is lost mid-way through a nightly PDF stage. The full
+		// scan starts over from the records, so W2, now gone from OpenAlex, is withdrawn.
+		await resumeAt({ stage: "pdfs", mode: "incremental", updatedSince: "2026-09-20", nextCursor: "*", pdfs: { done: 0, missed: 0, total: null } });
+		requests.length = 0;
+		await sync((url) =>
+			url.searchParams.get("filter")?.includes("from_updated_date:")
+				? new Response("Premium from_updated_date requires a paid key", { status: 403 })
+				: page([1]),
+		);
+		expect(requests.map((request) => request.perPage)).toEqual(["50", "100", "50"]);
+		expect((await record(2)).deleted).toBe(1);
+		expect((await current()).syncCursor).toMatchObject({ stage: "pdfs", mode: "full" });
+
+		// W2 comes back between the records scan and the PDF scan: its search update is the run's.
+		const [run] = await db.insert(sourceSyncRun).values({ sourceConnectionKey: "oa-stage", workerId: "test" }).returning({ id: sourceSyncRun.id });
+		await resumeAt({ stage: "records", pdfs: null, nextCursor: "*", imported: 0 });
+		await sync((url) => page(url.searchParams.get("per_page") === "50" ? [1, 2] : [1]), run!.id);
+		expect((await record(2)).deleted).toBe(0);
+		const events = await db.select().from(outbox).where(eq(outbox.entityKey, (await record(2)).key)).orderBy(outbox.id);
+		expect(events.at(-1)?.sourceSyncRunId).toBe(run!.id);
+
+		// PDFs are turned off part-way through the PDF stage: a full records scan
+		// puts every page back on its external link instead of finishing the PDF pages.
+		await resumeAt({ stage: "pdfs", mode: "full", nextCursor: "page-2", pdfs: { done: 1, missed: 0, total: 2 } });
+		await db.update(sourceConnection).set({ config: settings }).where(eq(sourceConnection.key, "oa-stage"));
+		requests.length = 0;
+		await sync(() => page([1, 2]));
+		expect(requests).toEqual([{ perPage: "100", cursor: "*" }]);
+		expect((await current()).syncCursor).toMatchObject({ stage: "records", mode: "full" });
+	});
+}, 120_000);
