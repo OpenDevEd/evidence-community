@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-// A name that resolves publicly when checked and privately when connected to: the connection must still be refused.
-vi.mock("node:dns/promises", () => ({ lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]) }));
+// A name that resolves to a private address when connected to: the connection must be refused.
 vi.mock("node:dns", () => ({
 	lookup: (_hostname: string, _options: unknown, callback: (error: null, addresses: { address: string; family: number }[]) => void) =>
 		callback(null, [{ address: "169.254.169.254", family: 4 }]),
@@ -33,7 +32,13 @@ describe("public addresses", () => {
 		expect(isPrivateIp("2606:4700::6810:84e5")).toBe(false);
 	});
 
-	it("refuses a connection whose own lookup gives a private address, after the check passed", async () => {
+	it("refuses an address written into the URL without looking anything up", async () => {
+		for (const url of ["http://169.254.169.254/latest/meta-data", "http://[::1]/", "https://10.0.0.5/paper.pdf", "http://[::ffff:127.0.0.1]/"]) {
+			await expect(publicRequest(new URL(url), {}), url).rejects.toThrow("Private URL is not allowed");
+		}
+	});
+
+	it("refuses a name whose lookup gives a private address when it connects", async () => {
 		await expect(publicRequest(new URL("https://rebinding.example/logo.png"), {})).rejects.toThrow();
 		await expect(publicRequest(new URL("https://rebinding.example/logo.png"), {}).catch((error: Error) => String(error.cause ?? error))).resolves.toMatch(/Private URL is not allowed/u);
 	});

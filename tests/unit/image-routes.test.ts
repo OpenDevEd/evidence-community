@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { lookup } = vi.hoisted(() => ({ lookup: vi.fn() }));
-vi.mock("node:dns/promises", () => ({ lookup }));
 const fetchMock = vi.hoisted(() => vi.fn());
 vi.mock("undici", () => ({ Agent: class {}, fetch: fetchMock }));
 vi.mock("@/config/library-config/server", () => ({
@@ -23,8 +21,6 @@ const cover = (...path: string[]) => getCover(new Request(`https://library.examp
 beforeEach(() => {
 	vi.stubGlobal("fetch", fetchMock);
 	fetchMock.mockReset();
-	lookup.mockReset();
-	lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 });
 
 describe("logo route", () => {
@@ -54,9 +50,9 @@ describe("logo route", () => {
 	});
 
 	it("never follows a redirect into a private network", async () => {
-		fetchMock.mockResolvedValue(new Response(null, { status: 302, headers: { location: "http://internal.example/secret.png" } }));
-		// A redirect to a literal private address is refused too.
-		lookup.mockImplementation(async (host: string) => [{ address: host === "internal.example" ? "10.0.0.5" : "93.184.216.34", family: 4 }]);
+		// A redirect to a private address written into the URL is refused before any request. A name that
+		// resolves to one is refused when it connects (public-fetch.test.ts).
+		fetchMock.mockResolvedValue(new Response(null, { status: 302, headers: { location: "http://10.0.0.5/secret.png" } }));
 		expect((await logo("r5", "logo-light.png")).status).toBe(404);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
