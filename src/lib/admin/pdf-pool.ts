@@ -7,7 +7,8 @@ import { assertPdfHeader, InvalidPdfError, pdfReadError, type ProcessedPdf } fro
 // cores. Each worker reads one PDF at a time; one that runs out of time,
 // fails or exits is retired and a new one takes the next PDF, which also
 // ends a hung pdf.js.
-const MAX_WORKERS = 4;
+// On the production server, four workers kept PDFs waiting 2–3 s each to be read.
+const MAX_WORKERS = 8;
 const PROCESSING_TIMEOUT_MS = 60_000;
 
 type WorkerFailure = { invalid: boolean; name: string; message: string; stack?: string };
