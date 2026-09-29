@@ -192,10 +192,10 @@ function startWatchLanes(
 }
 
 // An import's PDF stage reads and stages files for up to 48 PDFs at once
-// while a page is written and the lease heartbeat runs. With the default of
-// three connections those waited past the pool's timeout and the run failed.
-// Idle connections close after five seconds, so only an active import holds these.
-const SOURCE_SYNC_DATABASE_CONNECTIONS = 12;
+// while a page is written and the lease heartbeat runs, which three
+// connections could not keep up with. Idle connections close after five
+// seconds, so only an active import holds these.
+const SOURCE_SYNC_DATABASE_CONNECTIONS = 6;
 
 async function main() {
 	const command = parseCommand(process.argv.slice(2));

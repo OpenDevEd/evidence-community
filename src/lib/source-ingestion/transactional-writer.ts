@@ -1007,12 +1007,14 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				),
 			]),
 		].sort();
+		// Writes to a source take turns. The lock leaves the key alone, so PDFs
+		// staged meanwhile, whose rows reference the source, are not held up.
 		const lockedConnections = await transaction
 			.select()
 			.from(sourceConnection)
 			.where(inArray(sourceConnection.key, involvedConnectionKeys))
 			.orderBy(sourceConnection.key)
-			.for("update");
+			.for("no key update");
 		const connection = lockedConnections.find(
 			(candidate) => candidate.key === batch.sourceConnectionKey,
 		);

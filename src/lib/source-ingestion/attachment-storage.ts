@@ -242,11 +242,12 @@ export async function flushSourceFileCleanup(
 					sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`,
 				);
 			}
+			// Takes turns with the source's writes without blocking files being staged.
 			await transaction
 				.select({ key: sourceConnection.key })
 				.from(sourceConnection)
 				.where(eq(sourceConnection.key, sourceConnectionKey))
-				.for("update");
+				.for("no key update");
 			const rows = await transaction
 				.select()
 				.from(sourceFileCleanup)
