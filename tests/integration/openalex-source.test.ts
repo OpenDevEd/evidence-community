@@ -385,7 +385,7 @@ it("imports a work whose title is too long for a btree index entry", async () =>
 	});
 }, 120_000);
 
-it("processes up to six PDFs at once and writes a large page in order, in parts under the batch limit", async () => {
+it("processes up to 24 PDFs at once and writes a large page in order, in parts under the batch limit", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const [connection] = await db
 			.insert(sourceConnection)
@@ -442,8 +442,8 @@ it("processes up to six PDFs at once and writes a large page in order, in parts 
 		);
 
 		// Records first in pages of 100, then the PDF stage in pages of 50.
-		expect(pageSizes).toEqual(["200", "50"]);
-		expect(mostRunning).toBe(6);
+		expect(pageSizes).toEqual(["200", "200"]);
+		expect(mostRunning).toBe(24);
 		const pageWrites = vi
 			.mocked(writeSourceIngestionBatch)
 			.mock.calls.map(([, batch]) => batch as SourceIngestionBatch)
@@ -512,7 +512,8 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 					credentialResolver: async () => "test-key",
 					// The first run stops as soon as it starts on a PDF.
 					heartbeat: async () => {
-						if (failHeartbeat && pageSizes.at(-1) === "50") {
+						// The run's second page is its first PDF page.
+						if (failHeartbeat && pageSizes.length === 2) {
 							failHeartbeat = false;
 							throw new Error("lease lost");
 						}
@@ -525,7 +526,8 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 						const perPage = new URL(String(url)).searchParams.get("per_page");
 						pageSizes.push(perPage);
 						// OpenAlex added W4 between the records stage and the PDF stage.
-						const page = perPage === "50" ? [...results, withPdf(4)] : results;
+						const pdfStage = pageSizes.length > 1 || !failHeartbeat;
+						const page = pdfStage ? [...results, withPdf(4)] : results;
 						return Response.json({ meta: { count: page.length, next_cursor: null }, results: page });
 					},
 				},
@@ -533,7 +535,7 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 		};
 
 		await expect(sync()).rejects.toThrow("lease lost");
-		expect(pageSizes).toEqual(["200", "50"]);
+		expect(pageSizes).toEqual(["200", "200"]);
 		expect(processor.reuse).toHaveBeenCalledTimes(3);
 		// The records went in without their PDFs.
 		expect(await db.select().from(item).where(sql`${item.sourceRecordKey} in ('W1', 'W2', 'W3')`)).toHaveLength(3);
@@ -541,7 +543,7 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 		pageSizes.length = 0;
 		await sync();
 		// The second run carries on with the PDFs instead of importing the records again.
-		expect(pageSizes).toEqual(["50"]);
+		expect(pageSizes).toEqual(["200"]);
 		expect(await recordsWhenFirstPdfStarted).toBe(3);
 		expect(report).toHaveBeenLastCalledWith(4, 4, { missed: 1 });
 		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-first"));
@@ -600,14 +602,16 @@ it("restarts a PDF stage from the records when it must scan in full, and tags wo
 				? new Response("Premium from_updated_date requires a paid key", { status: 403 })
 				: page([1]),
 		);
-		expect(requests.map((request) => request.perPage)).toEqual(["50", "200", "50"]);
+		expect(requests.map((request) => request.perPage)).toEqual(["200", "200", "200"]);
 		expect((await record(2)).deleted).toBe(1);
 		expect((await current()).syncCursor).toMatchObject({ stage: "pdfs", mode: "full" });
 
 		// W2 comes back between the records scan and the PDF scan: its search update is the run's.
 		const [run] = await db.insert(sourceSyncRun).values({ sourceConnectionKey: "oa-stage", workerId: "test" }).returning({ id: sourceSyncRun.id });
 		await resumeAt({ stage: "records", pdfs: null, nextCursor: "*", imported: 0 });
-		await sync((url) => page(url.searchParams.get("per_page") === "50" ? [1, 2] : [1]), run!.id);
+		// The records scan comes first, then the PDF scan.
+		let scans = 0;
+		await sync(() => page(scans++ ? [1, 2] : [1]), run!.id);
 		expect((await record(2)).deleted).toBe(0);
 		const events = await db.select().from(outbox).where(eq(outbox.entityKey, (await record(2)).key)).orderBy(outbox.id);
 		expect(events.at(-1)?.sourceSyncRunId).toBe(run!.id);

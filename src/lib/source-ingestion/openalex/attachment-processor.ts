@@ -202,6 +202,43 @@ async function publishNewPdf(
 	return result;
 }
 
+// A slow download may take its full time as long as bytes keep arriving.
+const PDF_DOWNLOAD = { accept: "application/pdf", timeoutMs: 120_000, idleTimeoutMs: 30_000 };
+const PDF_HEADER = Buffer.from("%PDF-");
+
+const isPdf = (bytes: Uint8Array) => {
+	const header = Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.byteLength, 1_024)).indexOf(PDF_HEADER);
+	return header >= 0;
+};
+
+/** The PDF a landing page names in its `citation_pdf_url` meta tag, which scholarly sites publish for indexers. */
+function landingPagePdfUrl(html: string, base: URL) {
+	for (const tag of html.match(/<meta\b[^>]*>/giu) ?? []) {
+		if (!/\bname\s*=\s*["']citation_pdf_url["']/iu.test(tag)) continue;
+		const content = /\bcontent\s*=\s*["']([^"']+)["']/iu.exec(tag)?.[1]?.replaceAll("&amp;", "&");
+		if (!content) return null;
+		try {
+			const url = new URL(content, base);
+			return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+		} catch {
+			return null;
+		}
+	}
+	return null;
+}
+
+/**
+ * Many OpenAlex PDF links open the article's landing page instead. Its
+ * `citation_pdf_url` is followed once, so the PDF behind it is published.
+ */
+async function downloadPdf(url: URL, maxBytes: number) {
+	const { data, contentType } = await fetchPublicFile(url, { ...PDF_DOWNLOAD, maxBytes });
+	if (isPdf(data) || !/html/iu.test(contentType)) return data;
+	const linked = landingPagePdfUrl(new TextDecoder().decode(data), url);
+	if (!linked) return data;
+	return (await fetchPublicFile(linked, { ...PDF_DOWNLOAD, maxBytes })).data;
+}
+
 async function publishPdf(
 	options: ProcessorOptions,
 	record: PdfRecord,
@@ -229,11 +266,7 @@ async function publishPdf(
 		return withPublishedFile(record, reusable);
 	}
 	attempt.issueCode = "openalex_pdf_download_failed";
-	const { data: bytes } = await fetchPublicFile(new URL(record.file.url), {
-		accept: "application/pdf",
-		timeoutMs: 120_000,
-		maxBytes: options.maxPdfBytes,
-	});
+	const bytes = await downloadPdf(new URL(record.file.url), options.maxPdfBytes);
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
 	if (reusable?.managedPublication?.sha256 === sha256)
 		return withPublishedFile(record, reusable);

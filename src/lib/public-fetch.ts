@@ -104,14 +104,40 @@ export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect"
 	return response;
 }
 
-/** Downloads a file from a public address, stopping at the time and size limits. */
+/**
+ * Downloads a file from a public address, stopping at the time and size
+ * limits. With `idleTimeoutMs`, a download that receives nothing for that
+ * long stops too, while a slow one that keeps sending may take the full time.
+ */
 export async function fetchPublicFile(
 	url: URL,
-	{ accept, timeoutMs, maxBytes = Number.POSITIVE_INFINITY }: { accept: string; timeoutMs: number; maxBytes?: number },
+	{ accept, timeoutMs, idleTimeoutMs, maxBytes = Number.POSITIVE_INFINITY }: { accept: string; timeoutMs: number; idleTimeoutMs?: number; maxBytes?: number },
+): Promise<{ data: Uint8Array; contentType: string }> {
+	const idle = new AbortController();
+	let idleTimer: NodeJS.Timeout | undefined;
+	const stillReceiving = () => {
+		if (idleTimeoutMs === undefined) return;
+		clearTimeout(idleTimer);
+		idleTimer = setTimeout(() => idle.abort(new Error("Download stalled")), idleTimeoutMs);
+	};
+	stillReceiving();
+	try {
+		return await downloadPublicFile(url, accept, maxBytes, AbortSignal.any([AbortSignal.timeout(timeoutMs), idle.signal]), stillReceiving);
+	} finally {
+		clearTimeout(idleTimer);
+	}
+}
+
+async function downloadPublicFile(
+	url: URL,
+	accept: string,
+	maxBytes: number,
+	signal: AbortSignal,
+	stillReceiving: () => void,
 ): Promise<{ data: Uint8Array; contentType: string }> {
 	const response = await publicRequest(url, {
 		headers: { Accept: accept, "User-Agent": "Evidence-Library/1.0" },
-		signal: AbortSignal.timeout(timeoutMs),
+		signal,
 	});
 	if (!response.ok) throw new Error(`Download returned ${response.status}`);
 	if (Number(response.headers?.get("content-length")) > maxBytes) throw new Error("File is too large");
@@ -124,7 +150,11 @@ export async function fetchPublicFile(
 	const chunks: Uint8Array[] = [];
 	let size = 0;
 	const reader = response.body.getReader();
+	// A read already waiting ends when the download is stopped.
+	const stop = () => void reader.cancel(signal.reason).catch(() => undefined);
+	signal.addEventListener("abort", stop, { once: true });
 	for (let part = await reader.read(); !part.done; part = await reader.read()) {
+		stillReceiving();
 		size += part.value.byteLength;
 		if (size > maxBytes) {
 			await reader.cancel();
@@ -132,6 +162,8 @@ export async function fetchPublicFile(
 		}
 		chunks.push(part.value);
 	}
+	signal.removeEventListener("abort", stop);
+	signal.throwIfAborted();
 	const data = new Uint8Array(size);
 	let offset = 0;
 	for (const chunk of chunks) {
