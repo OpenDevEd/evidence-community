@@ -71,7 +71,7 @@ function researchInstructions(
 ) {
 	const modeRules =
 		mode === "research"
-			? "This is Deep Research mode. Search with multiple query variations, prioritise publications with full PDF text, select several relevant publications when available, and read their PDFs before writing a detailed answer. Deep Research searches default to filters.fullTextOnly=true. If full-text-only results are missing or insufficient, retry with filters.fullTextOnly=false, but treat metadata-only publications as leads and say that page-level evidence is unavailable rather than presenting their abstracts as evidence. If every search returns nothing, say so clearly."
+			? "This is Deep Research mode. Search with multiple query variations, prioritise publications with a PDF, select several relevant publications when available, and read their PDFs before writing a detailed answer. Deep Research searches default to filters.pdfOnly=true. If those results are missing or insufficient, retry with filters.pdfOnly=false, but treat publications without a PDF as leads and say that page-level evidence is unavailable rather than presenting their abstracts as evidence. If every search returns nothing, say so clearly."
 			: "This is Quick mode. Decide whether library evidence is useful. Do not search or read publications for greetings, small talk, or questions that need no library evidence. If you do use library evidence, search for candidates and then read the PDFs you rely on, so every substantive claim has an exact source-and-page citation.";
 
 	return [

@@ -26,6 +26,8 @@ import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
+import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
+import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
@@ -467,6 +469,15 @@ async function buildSearchProjectionPlanForKeys(
 							tags: tagsByItem.get(child.key),
 						})),
 				}),
+				// A stored PDF or a linked one: the AI can read either, even
+				// when no text was extracted. The library's hidden tags always
+				// apply, because the search filter cannot see attachment tags.
+				[PDF_PRESENCE_ATTRIBUTE]: parentChildren.some(
+					(child) =>
+						child.deleted !== 1 &&
+						!hasAnyTag(tagsByItem.get(child.key), config.content.tags.hidden) &&
+						isVisiblePdfAttachment(child),
+				),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
 				citationMetrics: citationMetricsByItem.get(parent.key) ?? [],

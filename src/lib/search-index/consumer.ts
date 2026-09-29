@@ -30,6 +30,7 @@ import { chunkValues } from "@/lib/chunk-values";
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
 import {
 	FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
+	PDF_PRESENCE_ATTRIBUTE,
 	SEARCH_RESULT_LIMIT,
 } from "@/lib/search-filter-constants";
 
@@ -1135,6 +1136,7 @@ export async function ensureSearchIndex(
 						"provider",
 						"sourceConnectionKey",
 						FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
+						PDF_PRESENCE_ATTRIBUTE,
 					],
 					features: {
 						facetSearch: false,

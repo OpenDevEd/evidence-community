@@ -129,6 +129,7 @@ async function main() {
 			databaseResource.database,
 			config.topics.enabled,
 			config.search.fullText,
+			config.content.tags.hidden,
 		);
 		if (command.rebuild && !rebuildPending) {
 			await setSearchIndexRebuildPending(databaseResource.database, true);

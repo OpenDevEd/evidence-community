@@ -66,12 +66,12 @@ export async function setSearchIndexRebuildPending(
  * format), so every library rebuilds once when it runs the new code. Without
  * it, records keep what an older runtime stored until they are edited.
  */
-const SEARCH_PROJECTION_VERSION = 2;
+const SEARCH_PROJECTION_VERSION = 3;
 
 /** Persist the configuration used by the projection; a failed rebuild stays pending. */
-export async function prepareSearchProjection(database: Database, topicsEnabled: boolean, fullTextSearch: boolean) {
-  // Page text is indexed only with full-text search; switching it rebuilds.
-  const signature = JSON.stringify({version: SEARCH_PROJECTION_VERSION, topics: topicsEnabled, ...(fullTextSearch ? {} : {fullText: false})});
+export async function prepareSearchProjection(database: Database, topicsEnabled: boolean, fullTextSearch: boolean, hiddenTags: readonly string[]) {
+  // Page text is indexed only with full-text search, and hidden tags decide `hasPdf`; changing either rebuilds.
+  const signature = JSON.stringify({version: SEARCH_PROJECTION_VERSION, topics: topicsEnabled, ...(fullTextSearch ? {} : {fullText: false}), hiddenTags: [...hiddenTags].sort()});
   const [row] = await database.select().from(status).where(eq(status.id, 1)).limit(1);
   if (!row) throw new Error("Library status row is missing.");
   if (row.searchProjectionSignature === signature) return row.searchIndexRebuildPending;
