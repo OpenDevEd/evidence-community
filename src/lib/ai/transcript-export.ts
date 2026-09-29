@@ -5,7 +5,7 @@ import {
 	isToolUIPart,
 	type UIMessage,
 } from "ai";
-import { parsePageCitation } from "./citations";
+import { parsePageCitations } from "./citations";
 import { escapeHtml } from "@/lib/escape-html";
 import { markdownToPlainText } from "@/lib/markdown-text";
 import {
@@ -41,12 +41,14 @@ function normalizeEvidenceMarkdown(content: string, origin?: string) {
 	);
 	normalized = normalized.replace(
 		/\[PAGE\s*(.*?)\s*PAGE\/\]/g,
-		(_match, citationTarget: string) => {
-			const citation = parsePageCitation(citationTarget);
-			return citation.href
-				? `[Source, p. ${citation.page}](${absoluteUrl(citation.href, origin)})`
-				: `(Source unavailable, p. ${citation.page})`;
-		},
+		(_match, citationTarget: string) =>
+			parsePageCitations(citationTarget)
+				.map((citation) =>
+					citation.href
+						? `[Source, p. ${citation.page}](${absoluteUrl(citation.href, origin)})`
+						: `(Source unavailable, p. ${citation.page})`,
+				)
+				.join(" "),
 	);
 	normalized = normalized.replace(
 		/\[RESOURCE\s+(\/lib\/([^/?#\s]+))\s+RESOURCE\/\]/g,

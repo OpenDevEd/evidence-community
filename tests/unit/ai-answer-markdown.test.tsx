@@ -75,6 +75,22 @@ describe("what an AI answer shows the reader", () => {
 		expect(container.textContent).not.toContain("/download/");
 	});
 
+	it("opens each page of a citation that packs several pages", async () => {
+		await render(
+			"Screened 3,010 records. [PAGE /lib/ABCD1234/download/PDF00001 — 7 PAGE/, PAGE /lib/ABCD1234/download/PDF00001 — 8 PAGE/].",
+		);
+
+		expect(
+			[...container.querySelectorAll("a")].map((link) =>
+				link.getAttribute("href"),
+			),
+		).toEqual([
+			"/lib/ABCD1234/download/PDF00001#page=7",
+			"/lib/ABCD1234/download/PDF00001#page=8",
+		]);
+		expect(container.textContent).not.toContain("PAGE");
+	});
+
 	it("shows the page but no citation link when the source is unknown", async () => {
 		await render("A claim from an unknown file. [PAGE notes.pdf — 3 PAGE/]");
 
