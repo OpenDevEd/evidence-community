@@ -59,10 +59,11 @@ export async function openLibraryConfigProcess() {
 	}
 }
 
-export async function openLibraryDatabaseProcess() {
+export async function openLibraryDatabaseProcess(options: { maxConnections?: number } = {}) {
 	const configProcess = await openLibraryConfigProcess();
 	const databaseResource = createPostgresDatabaseResource(
 		configProcess.config.services.database.url,
+		options.maxConnections,
 	);
 	return {
 		...configProcess,
