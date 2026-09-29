@@ -12,6 +12,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { RuntimeCollectionConfigurationError } from "@/lib/collections";
+import { staleWhileRevalidate } from "@/lib/stale-while-revalidate";
 
 // --- Collections ---
 
@@ -182,17 +183,13 @@ export async function getUserLikesDirect(
 	});
 }
 
-async function _getCachedStatus(
-	configRevision: string,
-	config: LibraryServerConfig,
-): Promise<PublicLibraryStatus> {
-	"use cache";
-	cacheLife({ revalidate: 60 });
-	cacheTag("status");
-	return readPublicLibraryStatus(await getDatabaseForConfig(config), config);
-}
-
+/**
+ * The library's public record count and last update, which every page's layout reads. Counting a large library takes
+ * about a second, so the last count answers at once and a fresh one is taken behind it after a minute.
+ */
 export async function getCachedStatus(): Promise<PublicLibraryStatus> {
 	const config = await getLibraryConfig();
-	return _getCachedStatus(config.revision, config);
+	return staleWhileRevalidate(`status:${config.revision}`, 60_000, async () =>
+		readPublicLibraryStatus(await getDatabaseForConfig(config), config),
+	);
 }
