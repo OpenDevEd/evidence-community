@@ -803,3 +803,40 @@ it("stops starting PDFs after one fails, and still cleans up", async () => {
 		expect(cleanedAfterFailure).toBe(1);
 	});
 }, 120_000);
+
+it("writes the PDF pages already fetched when a later page cannot be fetched", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const [connection] = await db
+			.insert(sourceConnection)
+			.values({ key: "oa-pdf-prefetch", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } })
+			.returning();
+		const works = [1, 2, 3, 4, 5, 6].map((id) => ({ ...work(id), best_oa_location: { is_oa: true, pdf_url: `https://host${id}.example.org/W${id}.pdf`, license: "cc-by" } }));
+		const processor = Object.assign(
+			async (record: SourceItemUpsert) => {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				return record;
+			},
+			{ reuse: async (record: SourceItemUpsert) => record, flushCleanup: async () => {} },
+		);
+		const seen = new Map<string, number>();
+		await expect(
+			syncOpenAlexSource(
+				{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{
+					attachmentProcessor: processor,
+					sleep: async () => {},
+					// Pages of two. The records scan reads all three; the PDF scan cannot read the third.
+					fetch: async (input) => {
+						const cursor = new URL(String(input)).searchParams.get("cursor")!;
+						seen.set(cursor, (seen.get(cursor) ?? 0) + 1);
+						if (cursor === "4" && seen.get(cursor)! > 1) return new Response("Forbidden", { status: 403 });
+						const from = cursor === "*" ? 0 : Number(cursor);
+						return Response.json({ meta: { count: works.length, next_cursor: from + 2 < works.length ? String(from + 2) : null }, results: works.slice(from, from + 2) });
+					},
+				},
+			),
+		).rejects.toMatchObject({ status: 403 });
+		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-pdf-prefetch"));
+		expect(saved!.syncCursor).toMatchObject({ stage: "pdfs", nextCursor: "4", pdfs: { done: 4 } });
+	});
+}, 120_000);

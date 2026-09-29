@@ -577,10 +577,13 @@ type PdfPage = {
 	processed: Promise<void>;
 };
 
+type PdfStop = { failed: boolean; error?: unknown };
 type PdfPipeline = {
 	scan: Scan;
 	lane: ReturnType<typeof downloadLanes>;
-	stop: { failed: boolean };
+	stop: PdfStop;
+	/** A page that could not be fetched; the pages before it are still written. */
+	fetchError?: unknown;
 	inFlight: PdfPage[];
 	fetchCursor: Cursor;
 };
@@ -590,9 +593,15 @@ async function fillPdfPages(pipeline: PdfPipeline) {
 	const { scan, lane, stop, inFlight } = pipeline;
 	const { context, client, config } = scan;
 	const processor = scan.options.attachmentProcessor;
-	while (pipeline.fetchCursor.nextCursor && inFlight.length < PDF_PAGES_IN_FLIGHT && !stop.failed) {
-		await context.heartbeat();
-		const page = await fetchPage(client, config, pipeline.fetchCursor, context.sourceConnection.key);
+	while (pipeline.fetchCursor.nextCursor && inFlight.length < PDF_PAGES_IN_FLIGHT && !stop.failed && !pipeline.fetchError) {
+		let page: Awaited<ReturnType<typeof fetchPage>>;
+		try {
+			await context.heartbeat();
+			page = await fetchPage(client, config, pipeline.fetchCursor, context.sourceConnection.key);
+		} catch (error) {
+			pipeline.fetchError = error;
+			break;
+		}
 		if (!page) return false;
 		if (pipeline.fetchCursor.mode === "incremental") pipeline.fetchCursor = { ...pipeline.fetchCursor, incrementalAvailable: true };
 		assertAdvancing(page, pipeline.fetchCursor.nextCursor, context.sourceConnection.key);
@@ -644,7 +653,10 @@ async function scanPdfPages(scan: Scan) {
 				break;
 			}
 			const next = pipeline.inFlight.shift();
-			if (!next) break;
+			if (!next) {
+				if (pipeline.fetchError) throw pipeline.fetchError;
+				break;
+			}
 			await writePdfPage(pipeline, next);
 		}
 	} catch (error) {
@@ -674,19 +686,20 @@ async function processWithLanes(
 	items: SourceItemUpsert[],
 	processor: RecordProcessor,
 	lane: ReturnType<typeof downloadLanes>,
-	stop: { failed: boolean },
+	stop: PdfStop,
 ) {
 	const results = await Promise.allSettled(
 		items.map((record, index) =>
 			record.file?.url
 				? lane(pdfHost(record.file.url), async () => {
-						if (stop.failed) throw new Error("PDF stage stopped");
+						if (stop.failed) throw stop.error ?? new Error("PDF stage stopped");
 						try {
 							await context.heartbeat();
 							items[index] = await processor(record, context.sourceConnection.key);
 						} catch (error) {
-							// Before this lane goes to the next download.
+							// Before this lane goes to the next download. The first failure is the one reported.
 							stop.failed = true;
+							stop.error ??= error;
 							throw error;
 						}
 					})
@@ -696,7 +709,7 @@ async function processWithLanes(
 	const rejected = results.find((result) => result.status === "rejected");
 	if (rejected) {
 		stop.failed = true;
-		throw rejected.reason;
+		throw stop.error ?? rejected.reason;
 	}
 }
 
