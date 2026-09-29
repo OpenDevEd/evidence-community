@@ -68,6 +68,33 @@ type ProcessorOptions = {
 	storage: EvidenceFileStorage;
 	maxPdfBytes: number;
 };
+type PdfPhase = "download" | "read" | "upload";
+type RunOptions = ProcessorOptions & { timings: ReturnType<typeof phaseTimings> };
+
+/** Time spent in each step of publishing PDFs, taken and reset by the import's page log. */
+function phaseTimings() {
+	const empty = () => ({ count: 0, seconds: 0, slowestSeconds: 0 });
+	let phases: Record<PdfPhase, ReturnType<typeof empty>> = { download: empty(), read: empty(), upload: empty() };
+	return {
+		async time<T>(phase: PdfPhase, step: () => Promise<T>) {
+			const started = performance.now();
+			try {
+				return await step();
+			} finally {
+				const seconds = (performance.now() - started) / 1000;
+				const entry = phases[phase];
+				entry.count++;
+				entry.seconds += seconds;
+				entry.slowestSeconds = Math.max(entry.slowestSeconds, seconds);
+			}
+		},
+		take() {
+			const taken = phases;
+			phases = { download: empty(), read: empty(), upload: empty() };
+			return taken;
+		},
+	};
+}
 type SourceFile = NonNullable<SourceItemUpsert["file"]>;
 type PdfRecord = SourceItemUpsert & { file: SourceFile & { url: string } };
 type Publication = Awaited<ReturnType<typeof readSourceFilePublication>>;
@@ -156,7 +183,7 @@ async function isUnchangedPublication(
 }
 
 async function publishNewPdf(
-	options: ProcessorOptions,
+	options: RunOptions,
 	record: PdfRecord,
 	sourceConnectionKey: string,
 	bytes: Uint8Array,
@@ -164,7 +191,7 @@ async function publishNewPdf(
 	attempt: Attempt,
 ) {
 	attempt.issueCode = "openalex_pdf_invalid";
-	const processed = await processPdfInWorkers(bytes);
+	const processed = await options.timings.time("read", () => processPdfInWorkers(bytes));
 	// Never upload over a path queued for deletion by another import.
 	const prefix = `sources/openalex/${sourceConnectionKey}/${record.sourceRecordKey}/${sha256}/${randomUUID()}/`;
 	const paths = {
@@ -191,14 +218,14 @@ async function publishNewPdf(
 			staged: true,
 		},
 	});
-	await uploadSourcePublication({
+	await options.timings.time("upload", () => uploadSourcePublication({
 		database: options.database,
 		storage: options.storage,
 		sourceConnectionKey,
 		paths,
 		bytes,
 		cover: processed.cover,
-	});
+	}));
 	return result;
 }
 
@@ -242,7 +269,7 @@ async function downloadPdf(url: URL, maxBytes: number) {
 }
 
 async function publishPdf(
-	options: ProcessorOptions,
+	options: RunOptions,
 	record: PdfRecord,
 	sourceConnectionKey: string,
 	attempt: Attempt,
@@ -268,7 +295,7 @@ async function publishPdf(
 		return withPublishedFile(record, reusable);
 	}
 	attempt.issueCode = "openalex_pdf_download_failed";
-	const bytes = await downloadPdf(new URL(record.file.url), options.maxPdfBytes);
+	const bytes = await options.timings.time("download", () => downloadPdf(new URL(record.file.url!), options.maxPdfBytes));
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
 	if (reusable?.managedPublication?.sha256 === sha256)
 		return withPublishedFile(record, reusable);
@@ -302,10 +329,11 @@ function failedPdf(
 	};
 }
 
-export function createOpenAlexAttachmentProcessor(options: ProcessorOptions) {
-	if (!Number.isSafeInteger(options.maxPdfBytes) || options.maxPdfBytes < 1) {
+export function createOpenAlexAttachmentProcessor(processorOptions: ProcessorOptions) {
+	if (!Number.isSafeInteger(processorOptions.maxPdfBytes) || processorOptions.maxPdfBytes < 1) {
 		throw new Error("OpenAlex maxPdfBytes must be a positive integer");
 	}
+	const options: RunOptions = { ...processorOptions, timings: phaseTimings() };
 	const processor = async (
 		record: SourceItemUpsert,
 		sourceConnectionKey: string,
@@ -353,6 +381,8 @@ export function createOpenAlexAttachmentProcessor(options: ProcessorOptions) {
 			reusable,
 		);
 	};
+	/** What each publishing step took since the last call, for the PDF stage's log. */
+	processor.takeTimings = () => options.timings.take();
 	processor.flushCleanup = (sourceConnectionKey: string) =>
 		flushSourceFileCleanup(
 			options.database,
