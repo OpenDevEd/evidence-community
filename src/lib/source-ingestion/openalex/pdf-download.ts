@@ -24,9 +24,13 @@ const UNREACHABLE_FOR_MS = 30 * 60_000;
  */
 const unreachable = new Map<string, { failures: number; until: number }>();
 
-function isConnectFailure(error: unknown) {
-	const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
-	return error instanceof TypeError && typeof code === "string" && CONNECT_FAILURES.has(code);
+/** The host that did not answer, when the request failed to connect at all. */
+function unansweredHost(error: unknown) {
+	const failure = error as { cause?: { code?: unknown }; host?: unknown } | null;
+	const code = failure?.cause?.code;
+	return error instanceof TypeError && typeof code === "string" && CONNECT_FAILURES.has(code) && typeof failure?.host === "string"
+		? failure.host
+		: null;
 }
 
 async function fetchFromHost(url: URL, options: Parameters<typeof fetchPublicFile>[1]) {
@@ -39,9 +43,11 @@ async function fetchFromHost(url: URL, options: Parameters<typeof fetchPublicFil
 		unreachable.delete(url.hostname);
 		return result;
 	} catch (error) {
-		if (isConnectFailure(error)) {
-			const failures = (state?.failures ?? 0) + 1;
-			unreachable.set(url.hostname, { failures, until: failures >= UNREACHABLE_AFTER ? Date.now() + UNREACHABLE_FOR_MS : 0 });
+		const host = unansweredHost(error);
+		if (host) {
+			// Read now, not before the request: other downloads from the host fail at the same time.
+			const failures = (unreachable.get(host)?.failures ?? 0) + 1;
+			unreachable.set(host, { failures, until: failures >= UNREACHABLE_AFTER ? Date.now() + UNREACHABLE_FOR_MS : 0 });
 		} else {
 			// Any other failure came from a host that answered.
 			unreachable.delete(url.hostname);
@@ -107,10 +113,10 @@ async function unpaywallCopies(doi: string) {
 }
 
 /** Where to look for the work's PDF, in order. Unpaywall is asked only once the others have failed. */
-async function* copiesOf(link: string, raw: Record<string, unknown>) {
+async function* copiesOf(link: string, raw: Record<string, unknown>, inTime: () => boolean) {
 	yield new URL(link);
 	yield* httpUrls(Array.isArray(raw.otherCopies) ? raw.otherCopies : []);
-	if (typeof raw.doi === "string") yield* await unpaywallCopies(raw.doi);
+	if (typeof raw.doi === "string" && inTime()) yield* await unpaywallCopies(raw.doi);
 }
 
 async function tryCopy(url: URL, maxBytes: number): Promise<{ bytes: Uint8Array } | { error: unknown }> {
@@ -130,8 +136,9 @@ export async function downloadAnyCopy(link: string, raw: Record<string, unknown>
 	const started = Date.now();
 	const tried = new Set<string>();
 	let chosen: { bytes: Uint8Array } | { error: unknown } | undefined;
-	for await (const url of copiesOf(link, raw)) {
-		if (chosen && Date.now() - started >= FALLBACK_BUDGET_MS) break;
+	const inTime = () => Date.now() - started < FALLBACK_BUDGET_MS;
+	for await (const url of copiesOf(link, raw, inTime)) {
+		if (chosen && !inTime()) break;
 		if (tried.has(url.href)) continue;
 		tried.add(url.href);
 		const outcome = await tryCopy(url, maxBytes);

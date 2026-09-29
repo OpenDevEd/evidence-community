@@ -88,7 +88,10 @@ function assertPublicHttpUrl(url: URL) {
 export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect" | "dispatcher">, redirects = 0): Promise<Response> {
 	if (redirects > MAX_REDIRECTS) throw new Error("Too many redirects");
 	assertPublicHttpUrl(url);
-	const response = await undiciFetch(url, { ...init, redirect: "manual", dispatcher: publicOnly });
+	// A failed connection names its host: after a redirect it is not the host first asked.
+	const response = await undiciFetch(url, { ...init, redirect: "manual", dispatcher: publicOnly }).catch((error: unknown) => {
+		throw error instanceof Error ? Object.assign(error, { host: url.hostname }) : error;
+	});
 	if (response.status >= 300 && response.status < 400) {
 		// Release the connection first: a redirect's body could otherwise hold it open until the timeout.
 		await response.body?.cancel();

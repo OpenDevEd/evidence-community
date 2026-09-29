@@ -15,8 +15,9 @@ vi.mock("@/lib/public-fetch", () => ({
 const { downloadAnyCopy } = await import("@/lib/source-ingestion/openalex/pdf-download");
 
 const file = (data: Uint8Array, contentType: string) => (url: string) => async () => ({ data, contentType, url: new URL(url) });
-const refused = () => async () => {
-	throw Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
+// The connection that failed names its host, as publicRequest does; after a redirect it is another host.
+const refused = (host: string) => async () => {
+	throw Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_CONNECT_TIMEOUT" }, host });
 };
 const unpaywall = (locations: object[]) => async () => ({ data: new TextEncoder().encode(JSON.stringify({ oa_locations: locations })), contentType: "application/json", url: new URL("https://api.unpaywall.org") });
 
@@ -55,18 +56,29 @@ it("reports what the chosen link did when no copy is a PDF", async () => {
 });
 
 it("skips a host after three refused connections, and tries it again once it answers", async () => {
-	for (const name of ["1", "2", "3", "4"]) answers.set(`https://dead.example/${name}.pdf`, refused());
+	for (const name of ["1", "2", "3", "4"]) answers.set(`https://dead.example/${name}.pdf`, refused("dead.example"));
 	for (const name of ["1", "2", "3"]) await expect(downloadAnyCopy(`https://dead.example/${name}.pdf`, {}, 1_000_000)).rejects.toThrow("fetch failed");
 	requested.length = 0;
 	await expect(downloadAnyCopy("https://dead.example/4.pdf", {}, 1_000_000)).rejects.toThrow("dead.example did not accept connections");
 	expect(requested).toEqual([]);
 
 	// A host that answers, even with an error, is counted as reachable again.
-	answers.set("https://flaky.example/1.pdf", refused());
-	answers.set("https://flaky.example/2.pdf", refused());
+	answers.set("https://flaky.example/1.pdf", refused("flaky.example"));
+	answers.set("https://flaky.example/2.pdf", refused("flaky.example"));
 	await expect(downloadAnyCopy("https://flaky.example/1.pdf", {}, 1_000_000)).rejects.toThrow("fetch failed");
 	await expect(downloadAnyCopy("https://flaky.example/2.pdf", {}, 1_000_000)).rejects.toThrow("fetch failed");
 	await expect(downloadAnyCopy("https://flaky.example/3.pdf", {}, 1_000_000)).rejects.toThrow("Download returned 404");
-	answers.set("https://flaky.example/4.pdf", refused());
+	answers.set("https://flaky.example/4.pdf", refused("flaky.example"));
 	await expect(downloadAnyCopy("https://flaky.example/4.pdf", {}, 1_000_000)).rejects.toThrow("fetch failed");
+});
+
+it("counts refusals that happen at the same time, and blames a redirect's target rather than the link's host", async () => {
+	for (const name of ["1", "2", "3", "4"]) answers.set(`https://busy.example/${name}.pdf`, refused("busy.example"));
+	await Promise.all(["1", "2", "3"].map((name) => expect(downloadAnyCopy(`https://busy.example/${name}.pdf`, {}, 1_000_000)).rejects.toThrow("fetch failed")));
+	await expect(downloadAnyCopy("https://busy.example/4.pdf", {}, 1_000_000)).rejects.toThrow("busy.example did not accept connections");
+
+	for (const name of ["1", "2", "3"]) answers.set(`https://repository.example/${name}.pdf`, refused("storage.example"));
+	for (const name of ["1", "2", "3"]) await expect(downloadAnyCopy(`https://repository.example/${name}.pdf`, {}, 1_000_000)).rejects.toThrow("fetch failed");
+	answers.set("https://repository.example/4.pdf", file(pdf, "application/pdf")("https://repository.example/4.pdf"));
+	expect(new TextDecoder().decode(await downloadAnyCopy("https://repository.example/4.pdf", {}, 1_000_000))).toBe("%PDF-1.7 body");
 });

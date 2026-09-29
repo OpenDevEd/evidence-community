@@ -1,7 +1,7 @@
 import type { PDFDocumentLoadingTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { AdminValidationError } from "./errors";
-import { INVALID_PDF_CONTENT, readPdf } from "./pdf-read.mjs";
+import { INVALID_PDF_CONTENT, PDFJS_OPTIONS, readPdf } from "./pdf-read.mjs";
 
 export type ProcessedPdf = {
 	cover: Uint8Array;
@@ -57,6 +57,7 @@ async function processInTurn(bytes: Uint8Array): Promise<ProcessedPdf> {
 	const loadingTask = getDocument({
 		data: bytes.slice(),
 		useSystemFonts: true,
+		...PDFJS_OPTIONS,
 	});
 	// The turn includes destroying the document, which must finish before the next one starts.
 	const work = (async () => {
