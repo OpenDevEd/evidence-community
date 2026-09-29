@@ -4,69 +4,92 @@ import { Worker } from "node:worker_threads";
 import { assertPdfHeader, InvalidPdfError, pdfReadError, type ProcessedPdf } from "./pdf-processing";
 
 // Imports read PDFs in worker threads, so several are read at once on other
-// cores. Each worker reads one PDF at a time; one that runs out of time is
-// stopped and replaced, which also ends a hung pdf.js.
+// cores. Each worker reads one PDF at a time; one that runs out of time,
+// fails or exits is retired and a new one takes the next PDF, which also
+// ends a hung pdf.js.
 const MAX_WORKERS = 4;
 const PROCESSING_TIMEOUT_MS = 60_000;
 
 type Reply = { result?: ProcessedPdf; error?: { invalid: boolean; message: string } };
 type Job = { bytes: Uint8Array; resolve: (result: ProcessedPdf) => void; reject: (error: Error) => void };
+type Slot = { worker: Worker; job: Job | null; timer?: NodeJS.Timeout };
 
-const idle: Worker[] = [];
+const slots: Slot[] = [];
 const waiting: Job[] = [];
-let started = 0;
 
 const poolSize = () => Math.min(MAX_WORKERS, Math.max(1, availableParallelism() - 1));
 
-function run(worker: Worker, job: Job) {
-	worker.ref();
-	const finish = (outcome: () => void) => {
-		clearTimeout(timer);
-		worker.off("message", reply);
-		worker.off("error", failed);
-		outcome();
-	};
-	const reply = ({ result, error }: Reply) => {
-		finish(() => (result ? job.resolve(result) : job.reject(pdfReadError({ name: error?.invalid ? "InvalidPdfContent" : "Error", message: error?.message ?? "" }))));
-		release(worker);
-	};
-	const failed = (error: Error) => {
-		finish(() => job.reject(pdfReadError(error, error)));
-		replace(worker);
-	};
-	const timer = setTimeout(() => {
-		finish(() => job.reject(new InvalidPdfError("This PDF took too long to process. Try exporting it again or choose another file.")));
-		replace(worker);
-	}, PROCESSING_TIMEOUT_MS);
-	worker.on("message", reply);
-	worker.on("error", failed);
+/** Starts a worker that stays handled for its whole life, busy or idle. */
+function startSlot(): Slot {
+	const slot: Slot = { worker: new Worker(new URL("./pdf-worker.mjs", import.meta.url)), job: null };
+	slot.worker.unref();
+	slot.worker.on("message", ({ result, error }: Reply) => {
+		const job = detach(slot);
+		if (result) job?.resolve(result);
+		else job?.reject(pdfReadError({ name: error?.invalid ? "InvalidPdfContent" : "Error", message: error?.message ?? "" }));
+		drain();
+	});
+	slot.worker.on("error", (error) => retire(slot, error));
+	slot.worker.on("exit", () => retire(slot, new Error("PDF worker exited")));
+	slots.push(slot);
+	return slot;
+}
+
+function detach(slot: Slot) {
+	clearTimeout(slot.timer);
+	const job = slot.job;
+	slot.job = null;
+	slot.worker.unref();
+	return job;
+}
+
+/** Takes a worker out of the pool; the PDF it held, if any, fails. */
+function retire(slot: Slot, cause: unknown) {
+	const index = slots.indexOf(slot);
+	if (index < 0) return;
+	slots.splice(index, 1);
+	detach(slot)?.reject(cause instanceof InvalidPdfError ? cause : pdfReadError({ message: String(cause) }, cause));
+	void slot.worker.terminate();
+	drain();
+}
+
+function assign(slot: Slot, job: Job) {
+	slot.job = job;
+	slot.worker.ref();
+	slot.timer = setTimeout(
+		() => retire(slot, new InvalidPdfError("This PDF took too long to process. Try exporting it again or choose another file.")),
+		PROCESSING_TIMEOUT_MS,
+	);
 	// The worker gets its own copy, so the caller keeps its bytes.
-	worker.postMessage({ id: 0, bytes: job.bytes.slice() });
+	slot.worker.postMessage({ id: 0, bytes: job.bytes.slice() });
 }
 
-/** Gives a free worker the next waiting PDF, or lets it sit idle. */
-function release(worker: Worker) {
-	const job = waiting.shift();
-	if (job) return run(worker, job);
-	worker.unref();
-	idle.push(worker);
+/** A free worker, or a new one while the pool has room. */
+function freeSlot() {
+	const idle = slots.find((candidate) => !candidate.job);
+	if (idle || slots.length >= poolSize()) return idle ?? null;
+	try {
+		return startSlot();
+	} catch (error) {
+		// With no worker at all, nothing would ever take the waiting PDFs.
+		if (!slots.length) for (const job of waiting.splice(0)) job.reject(pdfReadError({ message: String(error) }, error));
+		return null;
+	}
 }
 
-/** A worker that failed or ran out of time is ended and its place taken by a new one. */
-function replace(worker: Worker) {
-	void worker.terminate();
-	started--;
-	const job = waiting.shift();
-	if (job) dispatch(job);
-}
-
-function dispatch(job: Job) {
-	const worker = idle.pop() ?? (started < poolSize() ? (started++, new Worker(new URL("./pdf-worker.mjs", import.meta.url))) : null);
-	if (worker) run(worker, job);
-	else waiting.push(job);
+/** Gives waiting PDFs to free workers, starting workers up to the pool size. */
+function drain() {
+	while (waiting.length) {
+		const slot = freeSlot();
+		if (!slot) return;
+		assign(slot, waiting.shift()!);
+	}
 }
 
 export async function processPdfInWorkers(bytes: Uint8Array): Promise<ProcessedPdf> {
 	assertPdfHeader(bytes);
-	return new Promise<ProcessedPdf>((resolve, reject) => dispatch({ bytes, resolve, reject }));
+	return new Promise<ProcessedPdf>((resolve, reject) => {
+		waiting.push({ bytes, resolve, reject });
+		drain();
+	});
 }
