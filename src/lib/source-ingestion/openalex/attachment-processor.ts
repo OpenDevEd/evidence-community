@@ -201,7 +201,7 @@ async function publishNewPdf(
 	const prefix = `sources/openalex/${sourceConnectionKey}/${record.sourceRecordKey}/${sha256}/${randomUUID()}/`;
 	const paths = {
 		pdf: `${prefix}document.pdf`,
-		cover: `${prefix}cover.png`,
+		cover: `${prefix}cover.jpg`,
 	};
 	attempt.issueCode = "openalex_pdf_storage_failed";
 	const result = withPublishedFile(record, {

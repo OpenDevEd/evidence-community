@@ -181,7 +181,7 @@ export async function uploadSourcePublication(options: {
 	// Both uploads must finish before a caller can clean up a failed publication.
 	const results = await Promise.allSettled([
 		storage.uploadPublic(paths.pdf, bytes, "application/pdf"),
-		storage.uploadPublic(paths.cover, cover, "image/png"),
+		storage.uploadPublic(paths.cover, cover, "image/jpeg"),
 	]);
 	for (const result of results)
 		if (result.status === "rejected") throw result.reason;

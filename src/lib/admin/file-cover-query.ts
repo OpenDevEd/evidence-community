@@ -9,6 +9,7 @@ import type { EvidenceFileStorage } from "./file-storage";
 import { getNativeFileRuntime } from "./file-runtime";
 import { ADMIN_RESPONSE_HEADERS, handleAdminResponse } from "./http";
 import { ItemNotFoundError } from "./native-item-service";
+import { coverContentType } from "./pdf-processing";
 
 type PdfObject = "cover" | "file";
 
@@ -62,7 +63,7 @@ export async function getAdminPdfObject(
 ) {
 	const located = await locateAdminPdfObject(db, itemKey, revision, object, reviewId);
 	if (!located?.path) throw new ItemNotFoundError(itemKey);
-	return { bytes: await storage.downloadPrivate(located.path), filename: located.filename };
+	return { bytes: await storage.downloadPrivate(located.path), ...located, path: located.path };
 }
 
 const pdfObjectRequest = z.object({
@@ -70,9 +71,9 @@ const pdfObjectRequest = z.object({
 	review: z.string().uuid().optional(),
 });
 
-const PDF_OBJECT_HEADERS: Record<PdfObject, (filename: string) => Record<string, string>> = {
-	cover: () => ({ "Content-Type": "image/png" }),
-	file: (filename) => ({
+const PDF_OBJECT_HEADERS: Record<PdfObject, (located: { filename: string; path: string }) => Record<string, string>> = {
+	cover: ({ path }) => ({ "Content-Type": coverContentType(path) }),
+	file: ({ filename }) => ({
 		"Content-Type": "application/pdf",
 		"Content-Disposition": `inline; filename="${filename.replace(/["\\\r\n]/g, "_")}"`,
 	}),
@@ -89,7 +90,7 @@ export function handleAdminPdfObjectRequest(
 		const { revision, review } = pdfObjectRequest.parse(
 			Object.fromEntries(request.nextUrl.searchParams),
 		);
-		const { bytes, filename } = await getAdminPdfObject(
+		const { bytes, ...located } = await getAdminPdfObject(
 			runtime.db,
 			runtime.storage,
 			key,
@@ -100,7 +101,7 @@ export function handleAdminPdfObjectRequest(
 		return new NextResponse(new Uint8Array(bytes), {
 			headers: {
 				...ADMIN_RESPONSE_HEADERS,
-				...PDF_OBJECT_HEADERS[object](filename),
+				...PDF_OBJECT_HEADERS[object](located),
 				"X-Content-Type-Options": "nosniff",
 			},
 		});
