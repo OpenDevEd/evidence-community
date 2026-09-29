@@ -57,7 +57,7 @@ import {
 	sourceRecordValidationOptions,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
-import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
+import { enqueueItemSearchReprojections, enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 import { publicationTarget } from "@/db/schema/publication";
 
 import {
@@ -119,6 +119,31 @@ async function writeSourceValues(
 	for (const chunk of chunkValues(topics, RELATION_CHUNK_SIZE)) {
 		await transaction.insert(sourceTopicAssignment).values(chunk);
 	}
+}
+
+/** Queues linked records for search again, as their top-level records, at their current revision. */
+async function requeueLinkedRecords(
+	transaction: Transaction,
+	keys: string[],
+	itemEvents: ReadonlyMap<string, unknown>,
+	queuedAt: Date,
+	sourceSyncRunId: number | null,
+) {
+	const roots = new Set<string>();
+	for (const chunk of chunkValues(keys, 10_000)) {
+		const rows = await transaction.select({ key: item.key, parentItem: item.parentItem }).from(item).where(inArray(item.key, chunk));
+		for (const row of rows) roots.add(row.parentItem ?? row.key);
+	}
+	// Records written in this batch already have their own event.
+	const pending = [...roots].filter((key) => !itemEvents.has(key));
+	const current: { itemKey: string; revision: number }[] = [];
+	for (const chunk of chunkValues(pending, 10_000)) {
+		current.push(...(await transaction
+			.select({ itemKey: item.key, revision: item.revision })
+			.from(item)
+			.where(and(inArray(item.key, chunk), eq(item.deleted, 0)))));
+	}
+	await enqueueItemSearchReprojections(transaction, current, queuedAt, sourceSyncRunId);
 }
 
 async function publicationTargetedKeys(transaction: Transaction, keys: string[]) {
@@ -2520,15 +2545,17 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const oldParent = existingItemByKey.get(key)?.parentItem;
 			if (oldParent) affectedParentKeys.add(oldParent);
 		}
-		// Citation sidecars and source-owned links change the public projection
-		// even when the canonical item fields did not change.
-		for (const key of [
-			...relatedLinkChange.changedItemKeys,
-			...citationLinkChange.changedItemKeys,
-			...citationMetricChangedItemKeys,
-		]) {
-			affectedParentKeys.add(key);
-		}
+		for (const key of citationMetricChangedItemKeys) affectedParentKeys.add(key);
+		// A new link changes both records' public pages but neither record, so
+		// records outside this batch are queued for search again instead of
+		// taking a new revision. In a large import that is thousands of records
+		// a page. Records with a publication target still take one, so their
+		// deposits are updated.
+		const linkedKeys = [...new Set([...relatedLinkChange.changedItemKeys, ...citationLinkChange.changedItemKeys])]
+			.filter((key) => !directlyChangedItemKeys.has(key) && !affectedParentKeys.has(key));
+		const depositedLinkedKeys = await publicationTargetedKeys(transaction, linkedKeys);
+		for (const key of depositedLinkedKeys) affectedParentKeys.add(key);
+		const requeuedLinkedKeys = linkedKeys.filter((key) => !depositedLinkedKeys.has(key));
 		const parentKeysToBump = [...affectedParentKeys]
 			.filter((key) => !directlyChangedItemKeys.has(key))
 			.sort();
@@ -2562,6 +2589,8 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				});
 			}
 		}
+
+		await requeueLinkedRecords(transaction, requeuedLinkedKeys, itemEvents, now, batch.sourceSyncRunId ?? null);
 
 		const changedRows = await byChunk([...itemEvents.keys()], (chunk) =>
 			transaction

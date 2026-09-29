@@ -4,6 +4,8 @@ vi.mock("server-only", () => ({}));
 
 import { eq } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
+import { outbox } from "@opendeved/evidence-library-core";
+import { publicationTarget } from "@/db/schema/publication";
 import { itemSourceLink, sourceConnection, sourceSnapshot } from "@/db/schema/source";
 import type { Database } from "@/db/database-schema";
 import { getPublicItemLinks } from "@/lib/links/item-links";
@@ -250,15 +252,25 @@ it("resolves a citation when its target later arrives through another OpenAlex q
 	await withIsolatedPublicationDatabase(async (db) => {
 		await addSource(db, "oa-citing", "citing works");
 		await addSource(db, "oa-cited", "cited works");
-		await run(db, "oa-citing", async () => page([work(100, [200])]));
+		await run(db, "oa-citing", async () => page([work(100, [200]), work(101, [200])]));
 
 		const before = await itemsByRecord(db);
 		const citingKey = before.get("W100")!.key;
+		const depositedKey = before.get("W101")!.key;
 		expect(await getPublicItemLinks(db, citingKey)).toEqual({
 			cites: [],
 			citedBy: [],
 			related: [],
 		});
+		await db.insert(publicationTarget).values({
+			itemKey: depositedKey,
+			provider: "crossref",
+			environment: "test",
+			requestedBy: "citation-test",
+			activatedAt: new Date(),
+		});
+		const events = async (key: string) => db.select().from(outbox).where(eq(outbox.entityKey, key));
+		const eventIdsBefore = (await events(citingKey)).map((event) => event.id);
 
 		await run(db, "oa-cited", async () => page([work(200)]));
 		const after = await itemsByRecord(db);
@@ -267,8 +279,16 @@ it("resolves a citation when its target later arrives through another OpenAlex q
 			cites: [citedKey],
 		});
 		expect(await getPublicItemLinks(db, citedKey)).toMatchObject({
-			citedBy: [citingKey],
+			citedBy: [citingKey, depositedKey].sort(),
 		});
+		// The citing record is unchanged, so it keeps its revision. Its search
+		// event is queued again with a new id, which changes its public version.
+		expect(after.get("W100")!.revision).toBe(before.get("W100")!.revision);
+		const eventsAfter = await events(citingKey);
+		expect(eventsAfter).toHaveLength(eventIdsBefore.length);
+		expect(eventsAfter.some((event) => !eventIdsBefore.includes(event.id) && event.processedAt === null)).toBe(true);
+		// A record with a publication target still takes a new revision, so its deposit is updated.
+		expect(after.get("W101")!.revision).toBe(before.get("W101")!.revision + 1);
 	});
 }, 120_000);
 
