@@ -19,7 +19,12 @@ const store: Store = ((globalThis as { __staleWhileRevalidate?: Store }).__stale
  * and the next one the new. Next's "use cache" rebuilds an entry past its revalidate time while the request waits,
  * which put a large library's counts in front of a page once a minute.
  */
-export async function staleWhileRevalidate<T>(key: string, maxAgeMs: number, compute: () => Promise<T>): Promise<T> {
+export async function staleWhileRevalidate<T>(
+	key: string,
+	maxAgeMs: number,
+	/** Given the last value, if any, so a refresh that only partly worked can keep it. */
+	compute: (previous: T | undefined) => Promise<T>,
+): Promise<T> {
 	const entry = store.entries.get(key);
 	if (entry && "value" in entry) {
 		if (Date.now() - entry.computedAt > maxAgeMs && !entry.refreshing) {
@@ -32,9 +37,9 @@ export async function staleWhileRevalidate<T>(key: string, maxAgeMs: number, com
 	return ((entry?.refreshing as Promise<T> | undefined) ?? refresh(key, compute));
 }
 
-function refresh<T>(key: string, compute: () => Promise<T>): Promise<T> {
+function refresh<T>(key: string, compute: (previous: T | undefined) => Promise<T>): Promise<T> {
 	const generation = store.generation;
-	const refreshing: Promise<T> = compute()
+	const refreshing: Promise<T> = compute(store.entries.get(key)?.value as T | undefined)
 		.then((value) => {
 			// A value counted before the cache was cleared is not kept.
 			if (store.generation === generation) put(key, { value, computedAt: Date.now() });

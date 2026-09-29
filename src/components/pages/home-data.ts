@@ -123,31 +123,44 @@ function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries"
  * last copy at once, and after a minute a fresh one is counted behind the page. Only the first visit after a start
  * waits. A new configuration revision is a new key; clearing the public cache forgets it.
  */
-export async function loadHomeData(locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
-	const config = await getLibraryConfig();
-	return staleWhileRevalidate(`home:${config.revision}:${locale}`, 60_000, () => countHomeData(new Date(), locale, home));
+export async function loadHomeData(locale: string, config: LibraryServerConfig): Promise<HomeData> {
+	// The key and the home settings come from the same snapshot, so a publish in between cannot mix them.
+	return staleWhileRevalidate(`home:${config.revision}:${locale}`, 60_000, (previous) =>
+		countHomeData(new Date(), locale, config.home, previous),
+	);
 }
 
-async function countHomeData(now: Date, locale: string, home?: LibraryHomeConfig): Promise<HomeData> {
+async function countHomeData(now: Date, locale: string, home: LibraryHomeConfig | undefined, previous: HomeData | undefined): Promise<HomeData> {
+	// A part that fails shows empty. When an earlier copy exists, the whole earlier copy stays instead, so a passing
+	// failure does not empty the page for the next minute.
+	let failed = false;
+	const soft = <T>(part: string, value: T) => {
+		const log = fallback(part, value);
+		return (error: unknown) => {
+			failed = true;
+			return log(error);
+		};
+	};
 	const [stats, withPdf, facets, collections, cited, digests, journey] = await Promise.all([
-		peekComprehensiveStats().catch(fallback("statistics", null)),
+		peekComprehensiveStats().catch(soft("statistics", null)),
 		// The shelf shows first pages, so it lists the newest records with a PDF: the "full text only" scope.
-		getPublicItems({ sort: "desc", scope: "documents" }).catch(fallback("newest publications", null)),
-		getPublicFacets({}).catch(fallback("facets", null)),
-		getCachedCollections().catch(fallback("collections", [])),
-		mostCited().catch(fallback("most cited", [])),
-		latestDigests(locale).catch(fallback("digests", null)),
-		latestJourney(home?.followed, home?.directory ?? []).catch(fallback("followed publication", null)),
+		getPublicItems({ sort: "desc", scope: "documents" }).catch(soft("newest publications", null)),
+		getPublicFacets({}).catch(soft("facets", null)),
+		getCachedCollections().catch(soft("collections", [])),
+		mostCited().catch(soft("most cited", [])),
+		latestDigests(locale).catch(soft("digests", null)),
+		latestJourney(home?.followed, home?.directory ?? []).catch(soft("followed publication", null)),
 	]);
 	const shelf = withPdf?.items ?? [];
 	const config = await getLibraryConfig();
 	const figures = { ...figuresFrom(stats, now), ...topicsAndPlaces(stats, facets, collections) };
 	const listed = [...cited.map((row) => row.key), ...(journey ? [journey.key] : [])];
 	const [covers, copies, examples] = await Promise.all([
-		coversOf([...shelf.map((row) => row.key), ...listed]).catch(fallback("covers", {} as Record<string, string>)),
-		getPublicItemsByKeys(listed).catch(fallback("most cited and followed publications", [])),
-		rowExamples(firstFilters(listedRows(figures, config, now.toISOString()))).catch(fallback("explorer publications", {})),
+		coversOf([...shelf.map((row) => row.key), ...listed]).catch(soft("covers", {} as Record<string, string>)),
+		getPublicItemsByKeys(listed).catch(soft("most cited and followed publications", [])),
+		rowExamples(firstFilters(listedRows(figures, config, now.toISOString()))).catch(soft("explorer publications", {})),
 	]);
+	if (failed && previous) return previous;
 	return {
 		...figures,
 		covers,
