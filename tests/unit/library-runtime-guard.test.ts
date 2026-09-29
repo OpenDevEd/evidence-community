@@ -286,6 +286,15 @@ describe("Evidence Library runtime guard", () => {
 						service: `https-0-${applicationUuid}-web-2567@docker`,
 						tls: { certResolver: "letsencrypt" },
 					},
+					// A page view needs dozens of build files at once, so they skip the per-visitor limits.
+					[`${name}-static-https`]: {
+						entryPoints: ["https"],
+						middlewares: [],
+						priority: 100_001,
+						rule: `(${rule}) && PathPrefix(\`/_next/static/\`)`,
+						service: `https-0-${applicationUuid}-web-2567@docker`,
+						tls: { certResolver: "letsencrypt" },
+					},
 				},
 			},
 		});
@@ -429,6 +438,7 @@ describe("Evidence Library runtime guard", () => {
 		).toEqual([
 			`ode-el-${applicationUuid}-domains-http`,
 			`ode-el-${applicationUuid}-domains-https`,
+			`ode-el-${applicationUuid}-domains-static-https`,
 		]);
 
 		await manager.finalize({ ...input, customOrigins: [] });
