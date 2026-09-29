@@ -160,9 +160,20 @@ async function downloadPublicFile(
 		if (data.byteLength > maxBytes) throw new Error("File is too large");
 		return { data, contentType, url: finalUrl };
 	}
+	const data = await readBody(response.body, maxBytes, signal, stillReceiving);
+	return { data, contentType, url: finalUrl };
+}
+
+/** Reads a response body up to `maxBytes`, ending a waiting read when the download is stopped. */
+async function readBody(
+	body: NonNullable<Response["body"]>,
+	maxBytes: number,
+	signal: AbortSignal,
+	stillReceiving: () => void,
+) {
 	const chunks: Uint8Array[] = [];
 	let size = 0;
-	const reader = response.body.getReader();
+	const reader = body.getReader();
 	// A read already waiting ends when the download is stopped.
 	const stop = () => void reader.cancel(signal.reason).catch(() => undefined);
 	signal.addEventListener("abort", stop, { once: true });
@@ -186,5 +197,5 @@ async function downloadPublicFile(
 		data.set(chunk, offset);
 		offset += chunk.byteLength;
 	}
-	return { data, contentType, url: finalUrl };
+	return data;
 }
