@@ -104,6 +104,13 @@ describe("OpenAlex PDF processing", () => {
 			expect((await processor(moved!, "openalex-pdf-a")).processingIssue).toBeNull();
 			expect(String(vi.mocked(transport).mock.calls.at(-1)![0])).toBe("https://93.184.216.34/articles/123/paper.pdf");
 
+			// A landing page sent without an HTML content type is still read.
+			vi.mocked(transport)
+				.mockResolvedValueOnce(new Response('<!doctype html><meta name="citation_pdf_url" content="/untyped.pdf">', { headers: { "content-type": "application/octet-stream" } }))
+				.mockResolvedValueOnce(new Response(await createPdf("UNTYPED PDF")));
+			const [, untyped] = mapped(`${externalUrl}?untyped`, "2026-09-24T01:02:03Z", 126);
+			expect((await processor(untyped!, "openalex-pdf-a")).processingIssue).toBeNull();
+
 			// A landing page that names no PDF still fails as an invalid PDF.
 			vi.mocked(transport).mockResolvedValueOnce(landing('<meta name="citation_title" content="Research">'));
 			const [, other] = mapped(`${externalUrl}?landing`, "2026-09-24T01:02:03Z", 124);

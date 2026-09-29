@@ -6,6 +6,7 @@ vi.mock("undici", async (importOriginal) => ({ ...(await importOriginal<typeof i
 
 import { ReadableStream } from "node:stream/web";
 import { fetch as transport, Response } from "undici";
+import { lookup } from "node:dns/promises";
 import { fetchPublicFile } from "@/lib/public-fetch";
 
 /** A body that sends `chunks` pieces, `gapMs` apart, and then either ends or goes quiet. */
@@ -33,6 +34,13 @@ describe("fetchPublicFile idle timeout", () => {
 			fetchPublicFile(new URL("https://publisher.example/paper.pdf"), { accept: "application/pdf", timeoutMs: 10_000, idleTimeoutMs: 50 }),
 		).rejects.toThrow("Download stalled");
 		expect(Date.now() - started).toBeLessThan(2_000);
+	});
+
+	it("stops waiting on an address lookup that never answers", async () => {
+		vi.mocked(lookup).mockImplementationOnce(() => new Promise(() => {}));
+		await expect(
+			fetchPublicFile(new URL("https://publisher.example/paper.pdf"), { accept: "application/pdf", timeoutMs: 10_000, idleTimeoutMs: 50 }),
+		).rejects.toThrow("Download stalled");
 	});
 
 	it("lets a slow download finish while it keeps sending", async () => {

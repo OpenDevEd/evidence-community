@@ -89,10 +89,21 @@ async function assertPublicHttpUrl(url: URL) {
 	}
 }
 
+/** Stops waiting on a step that takes no signal, such as a DNS lookup, when the request is stopped. */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal | null | undefined) {
+	if (!signal) return work;
+	signal.throwIfAborted();
+	return new Promise<T>((resolve, reject) => {
+		const stop = () => reject(signal.reason);
+		signal.addEventListener("abort", stop, { once: true });
+		work.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+	});
+}
+
 /** A request to a public address; every redirect is checked the same way before it is followed. */
 export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect" | "dispatcher">, redirects = 0): Promise<Response> {
 	if (redirects > MAX_REDIRECTS) throw new Error("Too many redirects");
-	await assertPublicHttpUrl(url);
+	await untilAborted(assertPublicHttpUrl(url), init.signal);
 	const response = await undiciFetch(url, { ...init, redirect: "manual", dispatcher: publicOnly });
 	if (response.status >= 300 && response.status < 400) {
 		// Release the connection first: a redirect's body could otherwise hold it open until the timeout.

@@ -233,7 +233,9 @@ function landingPagePdfUrl(html: string, base: URL) {
  */
 async function downloadPdf(url: URL, maxBytes: number) {
 	const { data, contentType, url: landing } = await fetchPublicFile(url, { ...PDF_DOWNLOAD, maxBytes });
-	if (isPdf(data) || !/html/iu.test(contentType)) return data;
+	// Some landing pages come without an HTML content type, so the body is looked at too.
+	const looksLikeHtml = /html/iu.test(contentType) || /^\s*</u.test(new TextDecoder().decode(data.subarray(0, 512)));
+	if (isPdf(data) || !looksLikeHtml) return data;
 	const linked = landingPagePdfUrl(new TextDecoder().decode(data), landing);
 	if (!linked) return data;
 	return (await fetchPublicFile(linked, { ...PDF_DOWNLOAD, maxBytes })).data;
