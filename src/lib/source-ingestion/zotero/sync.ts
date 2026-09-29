@@ -621,14 +621,20 @@ function nextSoftTrashState(
 	return next;
 }
 
-function completedCursor(targetVersion: number, softTrash: SoftTrashState) {
+function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfs: boolean) {
 	return {
 		libraryVersion: targetVersion,
 		softTrashedCollectionKeys: [
 			...softTrash.softTrashedCollectionKeys,
 		].sort(),
 		softTrashedItemKeys: [...softTrash.softTrashedItemKeys].sort(),
+		...(pdfs ? {} : { pdfs: false as const }),
 	};
+}
+
+/** Whether the last complete read added PDFs; a cursor from before the setting did. */
+function cursorAddedPdfs(cursor: ZoteroCursor) {
+	return !("pdfs" in cursor && cursor.pdfs === false);
 }
 
 function expandLocalDescendantKeys<
@@ -776,6 +782,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		client,
 		prefix,
 		sourceConnectionKey: options.sourceConnectionKey,
+		publishPdfs: config.downloadPdfs,
 	};
 	await options.attachmentProcessor?.flushCleanup?.(
 		options.sourceConnectionKey,
@@ -804,10 +811,11 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				),
 			]);
 			const previousSoftTrash = previousSoftTrashState(cursor);
+			// Turning PDFs on or off rereads every attachment, so unchanged ones gain or lose theirs.
 			let snapshotSince =
 				"pending" in cursor && cursor.pending
 					? cursor.pending.snapshotSince
-					: requiresMappingReplay
+					: requiresMappingReplay || cursorAddedPdfs(cursor) !== config.downloadPdfs
 						? 0
 						: baseVersion;
 			let manifest = await readManifest(
@@ -882,6 +890,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				const nextCursor = completedCursor(
 					manifest.targetVersion,
 					nextSoftTrash,
+					config.downloadPdfs,
 				);
 				await writeSourceIngestionBatch(options.database, {
 					collections: [],
@@ -919,7 +928,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				);
 				const nextCursor =
 					end === manifest.entries.length
-						? completedCursor(manifest.targetVersion, nextSoftTrash)
+						? completedCursor(manifest.targetVersion, nextSoftTrash, config.downloadPdfs)
 						: {
 								libraryVersion: baseVersion,
 								softTrashedCollectionKeys: [
@@ -928,6 +937,8 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 								softTrashedItemKeys: [
 									...previousSoftTrash.softTrashedItemKeys,
 								].sort(),
+								// Kept until the read completes, so an interrupted change is read again in full.
+								...(cursorAddedPdfs(cursor) ? {} : { pdfs: false as const }),
 								pending: {
 									offset: end,
 									snapshotSince,

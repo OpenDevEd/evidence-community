@@ -116,6 +116,7 @@ export function createZoteroAttachmentProcessor(
 	) => {
 		const base = baseFile(item);
 		if (
+			context?.publishPdfs === false ||
 			item.data.contentType !== PDF_CONTENT_TYPE ||
 			!isPublished(item, publishTags)
 		) {
