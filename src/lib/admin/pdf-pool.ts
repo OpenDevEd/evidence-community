@@ -10,7 +10,8 @@ import { assertPdfHeader, InvalidPdfError, pdfReadError, type ProcessedPdf } fro
 const MAX_WORKERS = 4;
 const PROCESSING_TIMEOUT_MS = 60_000;
 
-type Reply = { result?: ProcessedPdf; error?: { invalid: boolean; name: string; message: string; stack?: string } };
+type WorkerFailure = { invalid: boolean; name: string; message: string; stack?: string };
+type Reply = { result: ProcessedPdf; error?: never } | { result?: never; error: WorkerFailure };
 type Job = { bytes: Uint8Array; resolve: (result: ProcessedPdf) => void; reject: (error: Error) => void };
 type Slot = { worker: Worker; job: Job | null; timer?: NodeJS.Timeout };
 
@@ -23,10 +24,10 @@ const poolSize = () => Math.min(MAX_WORKERS, Math.max(1, availableParallelism() 
 function startSlot(): Slot {
 	const slot: Slot = { worker: new Worker(new URL("./pdf-worker.mjs", import.meta.url)), job: null };
 	slot.worker.unref();
-	slot.worker.on("message", ({ result, error }: Reply) => {
+	slot.worker.on("message", (reply: Reply) => {
 		const job = detach(slot);
-		if (result) job?.resolve(result);
-		else job?.reject(workerError(error));
+		if (reply.error) job?.reject(workerError(reply.error));
+		else job?.resolve(reply.result);
 		drain();
 	});
 	slot.worker.on("error", (error) => retire(slot, error));
@@ -36,10 +37,10 @@ function startSlot(): Slot {
 }
 
 /** A worker's failure as the caller sees it; one that is not about the PDF's content is logged, as in this thread. */
-function workerError(error: Reply["error"]) {
-	const cause = Object.assign(new Error(error?.message ?? "PDF worker failed"), { name: error?.name ?? "Error", stack: error?.stack });
-	if (!error?.invalid) console.error("PDF processing failed", cause);
-	return pdfReadError({ name: error?.invalid ? "InvalidPdfContent" : "Error", message: cause.message }, cause);
+function workerError(error: WorkerFailure) {
+	const cause = Object.assign(new Error(error.message), { name: error.name, stack: error.stack });
+	if (!error.invalid) console.error("PDF processing failed", cause);
+	return pdfReadError(cause, cause);
 }
 
 function detach(slot: Slot) {
