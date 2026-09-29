@@ -53,10 +53,13 @@ export async function getComprehensiveStats(
 	return { ...(await withMeilisearchCache(config, key, compute)), citationMeasure };
 }
 
-/** The cached statistics, or null while they are counted in the background: for a page that shows without them. */
+/**
+ * The cached statistics, or null while they are counted in the background: for a page that shows without them.
+ * Figures older than a day are recounted behind the ones shown, so a library that grows every night catches up.
+ */
 export async function peekComprehensiveStats(): Promise<ComprehensiveStats | null> {
 	const { config, key, compute, citationMeasure } = await statisticsRequest();
-	const stats = await peekMeilisearchCache(config, key, compute);
+	const stats = await peekMeilisearchCache(config, key, compute, { maxAgeMs: 24 * 60 * 60 * 1000 });
 	return stats && { ...stats, citationMeasure };
 }
 

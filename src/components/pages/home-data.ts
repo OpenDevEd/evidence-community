@@ -144,7 +144,8 @@ export async function loadHomeData(now: Date, locale: string, home?: LibraryHome
 		// Up to eighteen, so the hero's three columns each show their own first pages; the publications row shows six.
 		recent: shelf.filter((row) => covers[row.key]).slice(0, 18),
 		journey,
-		cited,
+		// The list can be minutes old: a record hidden since then has no public copy and leaves it.
+		cited: cited.filter((row) => copies.some((copy) => copy.key === row.key)),
 		ai: isLibraryFeatureEnabled(config.features, "aiSearch"),
 		digests,
 	};
@@ -214,16 +215,19 @@ async function coversOf(keys: string[]): Promise<Record<string, string>> {
 
 /**
  * The query weighs every citation in the library, far the slowest part of the page: seconds on a large library.
- * Its answer is kept per configuration revision beside the statistics, and counted in the background, so the page
- * shows without it rather than wait.
+ * Its answer is kept per configuration revision beside the statistics, counted in the background so the page shows
+ * without it rather than wait, and recounted behind the one shown every ten minutes.
  */
 async function mostCited() {
 	const config = await getLibraryConfig();
 	const db = await getDatabaseForConfig(config);
 	const { measure } = await resolveCitationMeasure(db, undefined);
 	return (
-		(await peekMeilisearchCache(config, `${config.revision}-most-cited-v1-${measure.key}`, () =>
-			getMostCitedItems(db, measure, 3, config.content.tags.hidden),
+		(await peekMeilisearchCache(
+			config,
+			`${config.revision}-most-cited-v1-${measure.key}`,
+			() => getMostCitedItems(db, measure, 3, config.content.tags.hidden),
+			{ maxAgeMs: 10 * 60 * 1000 },
 		)) ?? []
 	);
 }
