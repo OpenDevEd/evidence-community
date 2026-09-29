@@ -628,8 +628,23 @@ function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfs:
 			...softTrash.softTrashedCollectionKeys,
 		].sort(),
 		softTrashedItemKeys: [...softTrash.softTrashedItemKeys].sort(),
-		...(pdfs ? {} : { pdfs: false as const }),
+		...pdfsField(pdfs),
 	};
+}
+
+/** The cursor field recording a read that left PDFs out; absent when it added them. */
+function pdfsField(pdfs: boolean) {
+	return pdfs ? {} : { pdfs: false as const };
+}
+
+/**
+ * Where a read starts: an unfinished one where it stopped, a mapping or PDF
+ * setting change from the start so every record is read again, else since the
+ * last complete read.
+ */
+function snapshotStart(cursor: ZoteroCursor, replay: boolean, downloadPdfs: boolean) {
+	if ("pending" in cursor && cursor.pending) return cursor.pending.snapshotSince;
+	return replay || cursorAddedPdfs(cursor) !== downloadPdfs ? 0 : currentLibraryVersion(cursor);
 }
 
 /** Whether the last complete read added PDFs; a cursor from before the setting did. */
@@ -811,13 +826,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				),
 			]);
 			const previousSoftTrash = previousSoftTrashState(cursor);
-			// Turning PDFs on or off rereads every attachment, so unchanged ones gain or lose theirs.
-			let snapshotSince =
-				"pending" in cursor && cursor.pending
-					? cursor.pending.snapshotSince
-					: requiresMappingReplay || cursorAddedPdfs(cursor) !== config.downloadPdfs
-						? 0
-						: baseVersion;
+			let snapshotSince = snapshotStart(cursor, requiresMappingReplay, config.downloadPdfs);
 			let manifest = await readManifest(
 				client,
 				prefix,
@@ -938,7 +947,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 									...previousSoftTrash.softTrashedItemKeys,
 								].sort(),
 								// Kept until the read completes, so an interrupted change is read again in full.
-								...(cursorAddedPdfs(cursor) ? {} : { pdfs: false as const }),
+								...pdfsField(cursorAddedPdfs(cursor)),
 								pending: {
 									offset: end,
 									snapshotSince,
