@@ -191,13 +191,13 @@ export class OpenAlexClient {
 		}
 	}
 
-	/** The next size to ask for after a search timeout at `size`. */
+	/** The next size to ask for after a search timeout at `size`, or the shared limit if another page already lowered it further. */
 	private shrink(size: number) {
 		const smaller = Math.max(MIN_PAGE_SIZE, Math.ceil(size / 2));
 		this.pageLimit = Math.min(this.pageLimit, smaller);
 		this.pagesAtLimit = 0;
-		console.warn("OpenAlex search timed out; asking for fewer works a page", { pageSize: smaller });
-		return smaller;
+		console.warn("OpenAlex search timed out; asking for fewer works a page", { pageSize: this.pageLimit });
+		return this.pageLimit;
 	}
 
 	/** Only a page asked for at the current limit counts toward raising it. */
