@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
@@ -122,6 +122,11 @@ function isSampledOql(query: OpenAlexConnectionConfig["approvedQuery"]["query"])
 	return Boolean(query.oql && /\ssample\s+\d+(?:\s+seed\s+\d+)?\s*$/i.test(query.oql));
 }
 
+/** PDFs were turned on after the last complete run, so no PDF stage has covered the records yet. */
+function pdfsOwed(config: OpenAlexConnectionConfig, saved: Cursor | null) {
+	return config.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
+}
+
 function startCursor(
 	saved: Cursor | null,
 	queryVersion: string,
@@ -167,6 +172,7 @@ export function openAlexSyncIsDue(connection: SourceConnection, now: Date) {
 	if (!config.success || !saved.success) return true;
 	if (!saved.data.completedAt) return true;
 	if (saved.data.queryVersion !== config.data.approvedQuery.version) return true;
+	if (pdfsOwed(config.data, saved.data)) return true;
 	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
 }
 
@@ -283,8 +289,9 @@ function writeChunks(items: SourceItemUpsert[]) {
 async function writePage(
 	context: SourceAdapterContext,
 	expectedCursor: Record<string, JsonValue>,
-	nextCursor: Cursor,
+	nextCursor: Record<string, JsonValue>,
 	page: { items: SourceItemUpsert[]; institutionCountries: InstitutionFacts },
+	stage: Cursor["stage"],
 ) {
 	const chunks = writeChunks(page.items);
 	for (const [index, items] of chunks.entries()) {
@@ -293,9 +300,32 @@ async function writePage(
 			expectedCursor,
 			index === chunks.length - 1 ? nextCursor : expectedCursor,
 			{ items, institutionCountries: index ? [] : page.institutionCountries },
-			nextCursor.stage,
+			stage,
 		);
 	}
+}
+
+/**
+ * Works the PDF stage finds that the records stage did not write, because
+ * OpenAlex added them since. Their search update is the run's, like any
+ * record's; PDFs added to known records are not.
+ */
+async function splitNewRecords(scan: Scan, items: SourceItemUpsert[]) {
+	if (scan.cursor.stage !== "pdfs" || !items.length) return { fresh: [], known: items };
+	const rows = await scan.context.database
+		.select({ key: itemSourceLink.sourceRecordKey })
+		.from(itemSourceLink)
+		.where(
+			and(
+				eq(itemSourceLink.sourceConnectionKey, scan.context.sourceConnection.key),
+				inArray(itemSourceLink.sourceRecordKey, items.map((record) => record.sourceRecordKey)),
+			),
+		);
+	const known = new Set(rows.map((row) => row.key));
+	return {
+		fresh: items.filter((record) => !known.has(record.sourceRecordKey)),
+		known: items.filter((record) => known.has(record.sourceRecordKey)),
+	};
 }
 
 function logPdfPage(
@@ -460,10 +490,18 @@ async function scanPages(scan: Scan) {
 			completedAt: null,
 		};
 		await context.heartbeat();
-		await writePage(context, scan.expectedCursor, scan.cursor, {
-			items,
-			institutionCountries: mapped.flatMap((work) => work.institutions),
-		});
+		const { fresh, known } = await splitNewRecords(scan, items);
+		// New works go in first, without moving the cursor on.
+		if (fresh.length) {
+			await writePage(context, scan.expectedCursor, scan.expectedCursor, { items: fresh, institutionCountries: [] }, "records");
+		}
+		await writePage(
+			context,
+			scan.expectedCursor,
+			scan.cursor,
+			{ items: known, institutionCountries: mapped.flatMap((work) => work.institutions) },
+			scan.cursor.stage,
+		);
 		scan.expectedCursor = scan.cursor;
 		scan.pages++;
 		await reportProgress(scan, page.meta.count);
@@ -510,6 +548,7 @@ export async function syncOpenAlexSource(
 	const config = openAlexConnectionConfigSchema.parse(connection.config);
 	const client = await openAlexClient(context, config, options);
 	const expectedCursor = connection.syncCursor as Record<string, JsonValue>;
+	const saved = Object.keys(expectedCursor).length ? cursorSchema.parse(expectedCursor) : null;
 	const scan: Scan = {
 		context,
 		client,
@@ -517,11 +556,10 @@ export async function syncOpenAlexSource(
 		options,
 		expectedCursor,
 		cursor: startCursor(
-			Object.keys(expectedCursor).length
-				? cursorSchema.parse(expectedCursor)
-				: null,
+			saved,
 			config.approvedQuery.version,
-			isSampledOql(config.approvedQuery.query),
+			// A sample of updated works is a different sample; PDFs just turned on need every record.
+			isSampledOql(config.approvedQuery.query) || pdfsOwed(config, saved),
 		),
 		pages: 0,
 	};

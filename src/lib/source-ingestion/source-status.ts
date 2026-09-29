@@ -169,24 +169,36 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 		searchable: input.searchable,
 	};
 	const run = input.activeRun;
-	if (run && run.leaseExpiresAt <= input.now) {
-		return {
-			...base,
-			failure: {
-				at: run.leaseExpiresAt.toISOString(),
-				code: "interrupted",
-				details: "SourceLeaseLostError: worker lease expired",
-			},
-			state: "failed",
-		};
-	}
+	if (run && run.leaseExpiresAt <= input.now) return expiredLeaseStatus(base, run);
 	if (run?.stage === "pdfs") return pdfStageStatus(base, run, input);
 	// A run that has reported nothing may only be checking for changes.
 	if (run && (run.recordsDone > 0 || (run.recordsTotal ?? 0) > 0)) {
 		return { ...base, ...runProgress(run, input.now), phase: "import" };
 	}
-	if (input.lastError) return failedStatus(base, input.lastError);
+	if (input.lastError) return lastErrorStatus(base, input, input.lastError);
 	return searchStatus(base, input) ?? { ...base, state: input.lastSuccessAt ? "succeeded" : "idle" };
+}
+
+function expiredLeaseStatus(base: SourceStatusBase, run: NonNullable<SourceStatusInput["activeRun"]>): SourceStatus {
+	return {
+		...base,
+		failure: {
+			at: run.leaseExpiresAt.toISOString(),
+			code: "interrupted",
+			details: "SourceLeaseLostError: worker lease expired",
+		},
+		state: "failed",
+		...(run.stage === "pdfs" ? { failedIn: "pdfs" as const } : {}),
+	};
+}
+
+/** Stopped while adding PDFs: the records' search update, if still waiting, comes first. */
+function lastErrorStatus(
+	base: SourceStatusBase,
+	input: SourceStatusInput,
+	lastError: NonNullable<SourceStatusInput["lastError"]>,
+): SourceStatus {
+	return (lastError.inPdfs ? searchStatus(base, input) : null) ?? failedStatus(base, lastError);
 }
 
 function failedStatus(base: SourceStatusBase, lastError: NonNullable<SourceStatusInput["lastError"]>): SourceStatus {

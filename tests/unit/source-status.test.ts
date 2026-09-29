@@ -224,6 +224,33 @@ describe("sourceStatus", () => {
 		expect(status).toMatchObject({ done: 400, phase: "search", state: "running", total: 1_000 });
 	});
 
+	it("keeps the PDF stage of a run whose worker lease ran out", () => {
+		const status = sourceStatus(
+			input({
+				activeRun: {
+					leaseExpiresAt: minutesAgo(1),
+					recordsDone: 50,
+					recordsFrom: 0,
+					recordsFromAt: minutesAgo(5),
+					recordsTotal: 100,
+					stage: "pdfs",
+					startedAt: minutesAgo(30),
+				},
+			}),
+		);
+		expect(status).toMatchObject({ failedIn: "pdfs", state: "failed" });
+	});
+
+	it("shows the records' waiting search update before a stop while adding PDFs", () => {
+		const status = sourceStatus(
+			input({
+				lastError: { at: minutesAgo(3), code: "internal", details: "Error: storage unavailable", inPdfs: true },
+				search: { done: 400, startedAt: minutesAgo(10), total: 1_000 },
+			}),
+		);
+		expect(status).toMatchObject({ phase: "search", state: "running" });
+	});
+
 	it("says when a failed run had imported every record and stopped adding PDFs", () => {
 		const failure = { at: minutesAgo(3), code: "internal" as const, details: "Error: storage unavailable" };
 		expect(sourceStatus(input({ lastError: { ...failure, inPdfs: true } }))).toMatchObject({

@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import {
 	itemIdentity,
 	itemSourceLink,
+	outbox,
 	sourceConnection,
 	sourceRecordIssue,
 	sourceSyncRun,
@@ -452,10 +453,11 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 			.values({ sourceConnectionKey: "oa-first", workerId: "test" })
 			.returning({ id: sourceSyncRun.id });
 		const ids = [1, 2, 3];
-		const results = ids.map((id) => ({
+		const withPdf = (id: number) => ({
 			...work(id),
 			best_oa_location: { is_oa: true, pdf_url: `https://example.org/W${id}.pdf`, license: "cc-by" },
-		}));
+		});
+		const results = ids.map(withPdf);
 		const countRecords = async () =>
 			(
 				await db
@@ -496,8 +498,11 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 				{
 					attachmentProcessor: processor,
 					fetch: async (url) => {
-						pageSizes.push(new URL(String(url)).searchParams.get("per_page"));
-						return Response.json({ meta: { count: ids.length, next_cursor: null }, results });
+						const perPage = new URL(String(url)).searchParams.get("per_page");
+						pageSizes.push(perPage);
+						// OpenAlex added W4 between the records stage and the PDF stage.
+						const page = perPage === "50" ? [...results, withPdf(4)] : results;
+						return Response.json({ meta: { count: page.length, next_cursor: null }, results: page });
 					},
 				},
 			);
@@ -514,9 +519,13 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 		// The second run carries on with the PDFs instead of importing the records again.
 		expect(pageSizes).toEqual(["50"]);
 		expect(await recordsWhenFirstPdfStarted).toBe(3);
-		expect(report).toHaveBeenLastCalledWith(3, 3, { missed: 1 });
+		expect(report).toHaveBeenLastCalledWith(4, 4, { missed: 1 });
 		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-first"));
-		expect(saved!.syncCursor).toMatchObject({ stage: "pdfs", pdfs: { done: 3, missed: 1, total: 3 } });
+		expect(saved!.syncCursor).toMatchObject({ stage: "pdfs", pdfs: { done: 4, missed: 1, total: 4 } });
+		// The new work's search update belongs to the run, like the other records'.
+		const [newWork] = await db.select({ key: item.key }).from(item).where(eq(item.sourceRecordKey, "W4"));
+		const newWorkEvents = await db.select().from(outbox).where(eq(outbox.entityKey, newWork!.key));
+		expect(newWorkEvents.map((event) => event.sourceSyncRunId)).toEqual([run!.id]);
 		expect(saved!.syncCursor).not.toMatchObject({ completedAt: null });
 		// The PDF that could not be downloaded is a record issue.
 		const issueRows = await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "oa-first"));
