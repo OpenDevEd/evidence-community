@@ -249,6 +249,13 @@ export const sourceSyncRun = pgTable(
 		/** Where this run picked up, and when: a resumed import's rate counts only its own work. */
 		recordsFrom: integer("recordsFrom"),
 		recordsFromAt: timestampWithTimezone("recordsFromAt"),
+		/**
+		 * Null while the run imports records. "pdfs" once it adds PDFs to them:
+		 * the records counts then count PDFs, and pdfsMissed those that could
+		 * not be downloaded.
+		 */
+		stage: text("stage", { enum: ["pdfs"] }),
+		pdfsMissed: integer("pdfsMissed"),
 	},
 	(table) => [
 		check(

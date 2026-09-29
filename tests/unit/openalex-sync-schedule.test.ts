@@ -59,3 +59,17 @@ describe("openAlexSyncIsDue", () => {
 		expect(openAlexFullScanDue(finished, new Date("2026-09-28T02:00:30Z"))).toBe(true);
 	});
 });
+
+describe("openAlexSyncIsDue with PDFs", () => {
+	const withPdfs = (syncCursor: Record<string, unknown>) =>
+		({ ...connection(syncCursor), config: { ...config, downloadPdfs: true } }) as unknown as SourceConnection;
+	const midday = new Date("2026-09-28T12:00:00Z");
+
+	it("runs a source straight away when PDFs were turned on after its last complete run", () => {
+		expect(openAlexSyncIsDue(withPdfs(cursor()), midday)).toBe(true);
+	});
+
+	it("waits for the night once a run has added the PDFs", () => {
+		expect(openAlexSyncIsDue(withPdfs(cursor({ stage: "pdfs", pdfs: { done: 5, missed: 1, total: 5 } })), midday)).toBe(false);
+	});
+});

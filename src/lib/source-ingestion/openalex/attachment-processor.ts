@@ -291,6 +291,33 @@ export function createOpenAlexAttachmentProcessor(options: ProcessorOptions) {
 			return failedPdf(record, attempt, error);
 		}
 	};
+	/** Keeps a PDF already published for the record, without downloading anything. */
+	processor.reuse = async (
+		record: SourceItemUpsert,
+		sourceConnectionKey: string,
+	): Promise<SourceItemUpsert> => {
+		if (!isUnpublishedPdf(record)) return record;
+		const existing = await readSourceFilePublication(
+			options.database,
+			sourceConnectionKey,
+			record.sourceRecordKey,
+			true,
+		);
+		const reusable = reusableFile(existing, record.sourceRecordKey);
+		if (!reusable) return record;
+		// A PDF that changed, or whose last refresh failed, keeps its file until
+		// the PDF stage looks again. Without a version it cannot pass as unchanged.
+		const unchanged = await isUnchangedPublication(
+			options.database,
+			record,
+			existing,
+			sourceConnectionKey,
+		);
+		return withPublishedFile(
+			unchanged ? record : { ...record, remoteVersion: null },
+			reusable,
+		);
+	};
 	processor.flushCleanup = (sourceConnectionKey: string) =>
 		flushSourceFileCleanup(
 			options.database,

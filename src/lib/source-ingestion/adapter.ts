@@ -41,8 +41,12 @@ export const sourceSyncResultSchema = jsonObjectSchema.superRefine(
 /** The run an adapter works for: its id tags the search work it queues. */
 export type SourceRunProgress = {
 	id: number;
-	/** Records written so far, and how many there are when the source said. */
-	report: (done: number, total: number | null) => Promise<void>;
+	/**
+	 * Records written so far, and how many there are when the source said.
+	 * With `pdfs`, the run is adding PDFs: the counts are PDFs, and `missed`
+	 * those that could not be downloaded.
+	 */
+	report: (done: number, total: number | null, pdfs?: { missed: number }) => Promise<void>;
 };
 
 export type SourceAdapterContext = {

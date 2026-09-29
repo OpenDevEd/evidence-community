@@ -10,6 +10,7 @@ import {
 import { and, asc, DrizzleQueryError, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import type { Database } from "../src/db/database-schema";
 import {
 	SourceAdapterRegistry,
 	SourceAdapterNotFoundError,
@@ -49,6 +50,7 @@ const leaseKey = "orchestrator-lease";
 const failureKey = "orchestrator-failure";
 const expiredKey = "orchestrator-expired";
 const progressKey = "orchestrator-progress";
+const pdfKey = "orchestrator-pdfs";
 const allKeys = [
 	...sweepKeys,
 	pausedKey,
@@ -56,6 +58,7 @@ const allKeys = [
 	failureKey,
 	expiredKey,
 	progressKey,
+	pdfKey,
 ];
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -67,6 +70,49 @@ function fakeAdapter(
 	sync: SourceAdapter["sync"],
 ): SourceAdapter {
 	return { provider, sync };
+}
+
+/** A source that adds PDFs shows the PDF step, and a run that fails in it says so. */
+async function verifyPdfStage(database: Database) {
+	await database.insert(sourceConnection).values({
+		config: { downloadPdfs: true },
+		key: pdfKey,
+		provider: "openalex",
+		scopeKind: "query",
+	});
+	const pdfStatusOf = async () =>
+		(await readSourceStatuses(database, { hiddenTags: [] })).find((status) => status.key === pdfKey);
+	let addingPdfs: SourceStatus | undefined;
+	await expectRejects(
+		runSourceConnection({
+			database,
+			heartbeatIntervalMs: 100,
+			leaseDurationMs: 1_000,
+			registry: new SourceAdapterRegistry([
+				fakeAdapter("openalex", async (context) => {
+					await context.run?.report(40, 100, { missed: 10 });
+					addingPdfs = await pdfStatusOf();
+					throw new Error("Storage upload failed");
+				}),
+			]),
+			sourceConnectionKey: pdfKey,
+			workerId: "pdf-worker",
+		}),
+		"Error",
+		(error) => String(error) === "Error: Storage upload failed",
+	);
+	const { state, phase, done, total, pdfs } = (addingPdfs ?? {}) as Partial<Extract<SourceStatus, { state: "running" }>>;
+	assert(
+		JSON.stringify({ state, phase, done, total, pdfs }) ===
+			JSON.stringify({ state: "running", phase: "pdfs", done: 40, total: 100, pdfs: { added: 30, missed: 10 } }),
+		`A run adding PDFs did not show the PDF step: ${JSON.stringify(addingPdfs)}`,
+	);
+	const stopped = ((await pdfStatusOf()) ?? {}) as Partial<Extract<SourceStatus, { state: "failed" }>>;
+	assert(
+		JSON.stringify({ state: stopped.state, failedIn: stopped.failedIn, pdfs: stopped.pdfs }) ===
+			JSON.stringify({ state: "failed", failedIn: "pdfs", pdfs: { added: 0, missed: 0 } }),
+		`A run that failed while adding PDFs did not say so: ${JSON.stringify(stopped)}`,
+	);
 }
 
 async function expectRejects(
@@ -515,6 +561,7 @@ async function verify() {
 				refused.changed === 2,
 			`A refused key did not read as access denied: ${JSON.stringify(refused)}`,
 		);
+		await verifyPdfStage(database);
 		// A run that writes a batch and then fails still counts what it changed.
 		await expectRejects(
 			runSourceConnection({

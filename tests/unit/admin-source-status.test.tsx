@@ -22,7 +22,7 @@ vi.mock("sonner", () => ({ toast: mocks.toast }));
 
 import { AdminSourceStatusBadge, AdminSourceStatusDialog } from "@/components/admin/AdminSourceStatus";
 
-const base = { issues: {}, key: "zotero-main", lastSuccessAt: "2026-09-26T18:10:00.000Z", provider: "zotero" as const, searchFailed: 0 };
+const base = { issues: {}, key: "zotero-main", lastSuccessAt: "2026-09-26T18:10:00.000Z", pdfs: null, provider: "zotero" as const, searchFailed: 0 };
 
 function source(activity: SourceStatus): AdminSource {
 	return {
@@ -113,6 +113,27 @@ describe("the admin's source status dialog", () => {
 
 		await open({ ...running, phase: "search", total: 12_800 });
 		expect(progress()?.getAttribute("aria-label")).toBe("Search update progress");
+	});
+
+	it("shows the PDF step once the records are in, counting PDFs added and those that could not be downloaded", async () => {
+		await open({
+			...base,
+			changed: null,
+			searchable: 12_000,
+			state: "running",
+			phase: "pdfs",
+			done: 3_000,
+			total: 6_000,
+			startedAt: "2026-09-27T12:04:00.000Z",
+			minutesLeft: 150,
+			pdfs: { added: 2_400, missed: 600 },
+		});
+		expect(document.body.textContent).toContain("Add PDFs");
+		expect(document.body.textContent).toContain("of 6,000 PDFs");
+		expect(progress()?.getAttribute("aria-label")).toBe("PDF progress");
+		expect(progress()?.getAttribute("aria-valuenow")).toBe("3000");
+		expect(document.body.textContent).toContain("600 could not be downloaded");
+		expect(document.body.textContent).toContain("3 h left");
 	});
 
 	it("sends a failed import to the library's configuration, with the raw error one press away", async () => {

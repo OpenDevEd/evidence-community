@@ -11,6 +11,7 @@ import {
 import {
 	and,
 	asc,
+	desc,
 	eq,
 	gt,
 	inArray,
@@ -23,6 +24,7 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -71,9 +73,14 @@ export type SourceStatusInput = {
 		/** Where this run picked up and when, for its own rate. */
 		recordsFrom: number | null;
 		recordsFromAt: Date | null;
+		/** Set once the run adds PDFs: the records counts are then PDFs. */
+		stage?: "pdfs" | null;
+		pdfsMissed?: number | null;
 	} | null;
-	/** Set while the latest finished run failed. */
-	lastError: { code: SourceSyncErrorCode; details: string; at: Date } | null;
+	/** Set while the latest finished run failed, with whether it was adding PDFs then. */
+	lastError: { code: SourceSyncErrorCode; details: string; at: Date; inPdfs?: boolean } | null;
+	/** PDFs the source has published and those it could not download, when it has any. */
+	pdfs: PdfCounts | null;
 	lastSuccessAt: Date | null;
 	/**
 	 * Search work queued by this source's runs that still have some waiting.
@@ -90,6 +97,9 @@ export type SourceStatusInput = {
 	issues: Record<string, number>;
 };
 
+/** PDFs added to a source's records, and those that could not be downloaded. */
+export type PdfCounts = { added: number; missed: number };
+
 type SourceStatusBase = {
 	key: string;
 	provider: SourceProvider;
@@ -100,20 +110,28 @@ type SourceStatusBase = {
 	changed: number | null;
 	lastSuccessAt: string | null;
 	issues: Record<string, number>;
+	/** Null for a source without PDFs. While PDFs are added, the counts of this run. */
+	pdfs: PdfCounts | null;
 };
 
 export type SourceStatus = SourceStatusBase &
 	(
 		| {
 				state: "running";
-				phase: "import" | "search";
+				/** Records are imported and made searchable, then PDFs are added. */
+				phase: "import" | "search" | "pdfs";
 				done: number;
 				/** Null when the source has not said how many records there are. */
 				total: number | null;
 				startedAt: string;
 				minutesLeft: number | null;
 		  }
-		| { state: "failed"; failure: { code: SourceSyncErrorCode; details: string; at: string } }
+		| {
+				state: "failed";
+				failure: { code: SourceSyncErrorCode; details: string; at: string };
+				/** Set when the run stopped while adding PDFs: the records are all in. */
+				failedIn?: "pdfs";
+		  }
 		| { state: "succeeded" }
 		| { state: "idle" }
 	);
@@ -145,60 +163,103 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 		issues: input.issues,
 		key: input.key,
 		lastSuccessAt: input.lastSuccessAt?.toISOString() ?? null,
+		pdfs: input.pdfs,
 		provider: input.provider,
 		searchFailed: input.searchFailed,
 		searchable: input.searchable,
 	};
 	const run = input.activeRun;
 	if (run && run.leaseExpiresAt <= input.now) {
-		return {
-			...base,
-			failure: {
-				at: run.leaseExpiresAt.toISOString(),
-				code: "interrupted",
-				details: "SourceLeaseLostError: worker lease expired",
-			},
-			state: "failed",
-		};
+		// Stopped while adding PDFs: the records' search update, if still waiting, comes first.
+		return (run.stage === "pdfs" ? searchStatus(base, input) : null) ?? expiredLeaseStatus(base, run);
 	}
+	if (run?.stage === "pdfs") return pdfStageStatus(base, run, input);
 	// A run that has reported nothing may only be checking for changes.
 	if (run && (run.recordsDone > 0 || (run.recordsTotal ?? 0) > 0)) {
-		return {
-			...base,
-			done: run.recordsDone,
-			minutesLeft: minutesLeft(
-				{ done: run.recordsDone, total: run.recordsTotal },
-				run.recordsFrom === null || !run.recordsFromAt
-					? null
-					: { at: run.recordsFromAt, done: run.recordsFrom },
-				input.now,
-			),
-			phase: "import",
-			startedAt: run.startedAt.toISOString(),
-			state: "running",
-			total: run.recordsTotal,
-		};
+		return { ...base, ...runProgress(run, input.now), phase: "import" };
 	}
-	if (input.lastError) {
-		return {
-			...base,
-			failure: { ...input.lastError, at: input.lastError.at.toISOString() },
-			state: "failed",
-		};
-	}
+	if (input.lastError) return lastErrorStatus(base, input, input.lastError);
+	return searchStatus(base, input) ?? { ...base, state: input.lastSuccessAt ? "succeeded" : "idle" };
+}
+
+function expiredLeaseStatus(base: SourceStatusBase, run: NonNullable<SourceStatusInput["activeRun"]>): SourceStatus {
+	return {
+		...base,
+		failure: {
+			at: run.leaseExpiresAt.toISOString(),
+			code: "interrupted",
+			details: "SourceLeaseLostError: worker lease expired",
+		},
+		state: "failed",
+		...(run.stage === "pdfs" ? { failedIn: "pdfs" as const } : {}),
+	};
+}
+
+/** Stopped while adding PDFs: the records' search update, if still waiting, comes first. */
+function lastErrorStatus(
+	base: SourceStatusBase,
+	input: SourceStatusInput,
+	lastError: NonNullable<SourceStatusInput["lastError"]>,
+): SourceStatus {
+	return (lastError.inPdfs ? searchStatus(base, input) : null) ?? failedStatus(base, lastError);
+}
+
+function failedStatus(base: SourceStatusBase, lastError: NonNullable<SourceStatusInput["lastError"]>): SourceStatus {
+	const { inPdfs, ...failure } = lastError;
+	return {
+		...base,
+		failure: { ...failure, at: failure.at.toISOString() },
+		state: "failed",
+		...(inPdfs ? { failedIn: "pdfs" as const } : {}),
+	};
+}
+
+function searchStatus(base: SourceStatusBase, input: SourceStatusInput): SourceStatus | null {
 	const search = input.search;
-	if (search && search.done < search.total) {
-		return {
+	if (!search || search.done >= search.total) return null;
+	return {
+		...base,
+		done: search.done,
+		minutesLeft: minutesLeft(search, { at: search.startedAt, done: 0 }, input.now),
+		phase: "search",
+		startedAt: search.startedAt.toISOString(),
+		state: "running",
+		total: search.total,
+	};
+}
+
+/** How far a run has got, and the time left at its own rate. */
+function runProgress(run: NonNullable<SourceStatusInput["activeRun"]>, now: Date) {
+	return {
+		done: run.recordsDone,
+		minutesLeft: minutesLeft(
+			{ done: run.recordsDone, total: run.recordsTotal },
+			run.recordsFrom === null || !run.recordsFromAt
+				? null
+				: { at: run.recordsFromAt, done: run.recordsFrom },
+			now,
+		),
+		startedAt: run.startedAt.toISOString(),
+		state: "running" as const,
+		total: run.recordsTotal,
+	};
+}
+
+/** A run adding PDFs: its records' search update shows first, since it came first. */
+function pdfStageStatus(
+	base: SourceStatusBase,
+	run: NonNullable<SourceStatusInput["activeRun"]>,
+	input: SourceStatusInput,
+): SourceStatus {
+	const missed = run.pdfsMissed ?? 0;
+	return (
+		searchStatus(base, input) ?? {
 			...base,
-			done: search.done,
-			minutesLeft: minutesLeft(search, { at: search.startedAt, done: 0 }, input.now),
-			phase: "search",
-			startedAt: search.startedAt.toISOString(),
-			state: "running",
-			total: search.total,
-		};
-	}
-	return { ...base, state: input.lastSuccessAt ? "succeeded" : "idle" };
+			...runProgress(run, input.now),
+			pdfs: { added: run.recordsDone - missed, missed },
+			phase: "pdfs",
+		}
+	);
 }
 
 /**
@@ -228,7 +289,11 @@ export async function readSourceStatuses(
 	const [sources, states, searchRows, failedRows, issueRows] =
 		await Promise.all([
 			database
-				.select({ key: sourceConnection.key, provider: sourceConnection.provider })
+				.select({
+					config: sourceConnection.config,
+					key: sourceConnection.key,
+					provider: sourceConnection.provider,
+				})
 				.from(sourceConnection)
 				// A source dropped from the configuration stays as a removed row.
 				.where(
@@ -252,6 +317,8 @@ export async function readSourceStatuses(
 					recordsFromAt: sourceSyncRun.recordsFromAt,
 					recordsTotal: sourceSyncRun.recordsTotal,
 					runStartedAt: sourceSyncRun.startedAt,
+					runStage: sourceSyncRun.stage,
+					runPdfsMissed: sourceSyncRun.pdfsMissed,
 				})
 				.from(sourceSyncState)
 				.leftJoin(sourceSyncRun, eq(sourceSyncState.activeRunId, sourceSyncRun.id)),
@@ -300,6 +367,10 @@ export async function readSourceStatuses(
 				.groupBy(sourceRecordIssue.sourceConnectionKey, sourceRecordIssue.code),
 		]);
 
+	const [pdfsByKey, failedStageByKey] = await Promise.all([
+		readPdfCounts(database),
+		readFailedStages(database),
+	]);
 	const stateByKey = new Map(states.map((row) => [row.key, row]));
 	const searchByKey = new Map(searchRows.map((row) => [row.key, row]));
 	const failedByKey = new Map(failedRows.map((row) => [row.key, row.count]));
@@ -308,16 +379,17 @@ export async function readSourceStatuses(
 		issuesByKey.set(row.key, { ...issuesByKey.get(row.key), [row.code]: row.count });
 	}
 
-	const statuses = sources.map(({ key, provider }) => {
+	const statuses = sources.map(({ config, key, provider }) => {
 		const state = stateByKey.get(key) ?? NEVER_RUN;
 		return sourceStatus({
 			activeRun: activeRunOf(state),
 			issues: issuesByKey.get(key) ?? {},
 			key,
 			lastChange: state.lastChangedRecords ? { records: state.lastChangedRecords } : null,
-			lastError: lastErrorOf(state),
+			lastError: lastErrorOf(state, failedStageByKey.get(key) ?? null),
 			lastSuccessAt: state.lastSuccessAt,
 			now,
+			pdfs: addsPdfs(provider, config) ? (pdfsByKey.get(key) ?? { added: 0, missed: 0 }) : null,
 			provider,
 			search: searchByKey.get(key) ?? null,
 			searchFailed: failedByKey.get(key) ?? 0,
@@ -453,6 +525,8 @@ type SyncStateRow = {
 	recordsFromAt: Date | null;
 	recordsTotal: number | null;
 	runStartedAt: Date | null;
+	runStage: "pdfs" | null;
+	runPdfsMissed: number | null;
 };
 
 // A source the worker has not claimed yet has no sync state row.
@@ -468,6 +542,8 @@ const NEVER_RUN: SyncStateRow = {
 	recordsFromAt: null,
 	recordsTotal: null,
 	runStartedAt: null,
+	runStage: null,
+	runPdfsMissed: null,
 };
 
 function activeRunOf(state: SyncStateRow): SourceStatusInput["activeRun"] {
@@ -478,16 +554,70 @@ function activeRunOf(state: SyncStateRow): SourceStatusInput["activeRun"] {
 		recordsFrom: state.recordsFrom,
 		recordsFromAt: state.recordsFromAt,
 		recordsTotal: state.recordsTotal,
+		stage: state.runStage,
+		pdfsMissed: state.runPdfsMissed,
 		startedAt: state.runStartedAt,
 	};
 }
 
-function lastErrorOf(state: SyncStateRow): SourceStatusInput["lastError"] {
+function lastErrorOf(state: SyncStateRow, failedStage: "pdfs" | null): SourceStatusInput["lastError"] {
 	if (!state.lastError || !state.lastFailureAt) return null;
 	return {
 		at: state.lastFailureAt,
 		// Failures saved before codes existed.
 		code: state.lastErrorCode ?? "internal",
 		details: state.lastError,
+		inPdfs: failedStage === "pdfs",
 	};
+}
+
+/** OpenAlex sources add PDFs to their records when the configuration asks. */
+function addsPdfs(provider: SourceProvider, config: unknown) {
+	return (
+		provider === "openalex" &&
+		typeof config === "object" &&
+		config !== null &&
+		"downloadPdfs" in config &&
+		config.downloadPdfs === true
+	);
+}
+
+const PDF_ISSUE_CODES = ["openalex_pdf_download_failed", "openalex_pdf_invalid", "openalex_pdf_storage_failed"];
+
+/**
+ * Each source's published PDFs and open PDF issues, for sources that have
+ * either. A PDF counts for every source holding the record, not only the one
+ * that published it.
+ */
+async function readPdfCounts(database: Database): Promise<Map<string, PdfCounts>> {
+	const [published, missed] = await Promise.all([
+		database
+			.select({ count: sql<number>`count(*)::int`, key: itemSourceLink.sourceConnectionKey })
+			.from(itemSourceLink)
+			.innerJoin(itemFilePublication, eq(itemFilePublication.itemKey, itemSourceLink.itemKey))
+			.where(eq(itemSourceLink.remoteDeleted, false))
+			.groupBy(itemSourceLink.sourceConnectionKey),
+		database
+			.select({ count: sql<number>`count(*)::int`, key: sourceRecordIssue.sourceConnectionKey })
+			.from(sourceRecordIssue)
+			.where(and(isNull(sourceRecordIssue.dismissedAt), inArray(sourceRecordIssue.code, PDF_ISSUE_CODES)))
+			.groupBy(sourceRecordIssue.sourceConnectionKey),
+	]);
+	const counts = new Map<string, PdfCounts>();
+	for (const row of published) counts.set(row.key, { added: row.count, missed: 0 });
+	for (const row of missed) counts.set(row.key, { added: counts.get(row.key)?.added ?? 0, missed: row.count });
+	return counts;
+}
+
+/** The stage each source's latest failed run stopped in. */
+async function readFailedStages(database: Database): Promise<Map<string, "pdfs" | null>> {
+	const rows = await database
+		.selectDistinctOn([sourceSyncRun.sourceConnectionKey], {
+			key: sourceSyncRun.sourceConnectionKey,
+			stage: sourceSyncRun.stage,
+		})
+		.from(sourceSyncRun)
+		.where(eq(sourceSyncRun.status, "failed"))
+		.orderBy(sourceSyncRun.sourceConnectionKey, desc(sourceSyncRun.finishedAt));
+	return new Map(rows.map((row) => [row.key, row.stage]));
 }

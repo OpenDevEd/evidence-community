@@ -10,8 +10,10 @@ import { eq, sql } from "drizzle-orm";
 import {
 	itemIdentity,
 	itemSourceLink,
+	outbox,
 	sourceConnection,
 	sourceRecordIssue,
+	sourceSyncRun,
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import {
@@ -412,7 +414,7 @@ it("processes up to six PDFs at once and writes a large page in order, in parts 
 					processingIssue: { code: "test_pdf", message: record.file!.url! },
 				};
 			},
-			{ flushCleanup: async () => {} },
+			{ reuse: async (record: SourceItemUpsert) => record, flushCleanup: async () => {} },
 		);
 		const pageSizes: (string | null)[] = [];
 		vi.mocked(writeSourceIngestionBatch).mockClear();
@@ -438,16 +440,17 @@ it("processes up to six PDFs at once and writes a large page in order, in parts 
 			},
 		);
 
-		expect(pageSizes).toEqual(["50"]);
+		// Records first in pages of 100, then the PDF stage in pages of 50.
+		expect(pageSizes).toEqual(["100", "50"]);
 		expect(mostRunning).toBe(6);
 		const pageWrites = vi
 			.mocked(writeSourceIngestionBatch)
 			.mock.calls.map(([, batch]) => batch as SourceIngestionBatch)
-			.filter((batch) => batch.items.length);
+			.filter((batch) => batch.items.length && (batch.nextCursor as { stage?: string }).stage === "pdfs");
 		expect(pageWrites.length).toBeGreaterThan(1);
 		// Earlier parts keep the old cursor, so a failure part-way fetches the page again.
 		expect(pageWrites.map((batch) => (batch.nextCursor as { nextCursor?: unknown }).nextCursor)).toEqual([
-			...pageWrites.slice(1).map(() => undefined),
+			...pageWrites.slice(1).map(() => "*"),
 			null,
 		]);
 		const pdfs = pageWrites
@@ -459,5 +462,162 @@ it("processes up to six PDFs at once and writes a large page in order, in parts 
 		expect(
 			await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.code, "test_pdf")),
 		).toHaveLength(ids.length);
+	});
+}, 120_000);
+
+it("imports every record before downloading a PDF, then adds the PDFs and resumes that stage after a failure", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const [connection] = await db
+			.insert(sourceConnection)
+			.values({ key: "oa-first", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } })
+			.returning();
+		const [run] = await db
+			.insert(sourceSyncRun)
+			.values({ sourceConnectionKey: "oa-first", workerId: "test" })
+			.returning({ id: sourceSyncRun.id });
+		const ids = [1, 2, 3];
+		const withPdf = (id: number) => ({
+			...work(id),
+			best_oa_location: { is_oa: true, pdf_url: `https://example.org/W${id}.pdf`, license: "cc-by" },
+		});
+		const results = ids.map(withPdf);
+		const countRecords = async () =>
+			(
+				await db
+					.select({ count: sql<number>`count(*)::int` })
+					.from(item)
+					.where(sql`${item.sourceRecordKey} in ('W1', 'W2', 'W3')`)
+			)[0]!.count;
+		let recordsWhenFirstPdfStarted: Promise<number> | undefined;
+		const processor = Object.assign(
+			async (record: SourceItemUpsert) => {
+				recordsWhenFirstPdfStarted ??= countRecords();
+				await recordsWhenFirstPdfStarted;
+				return record.sourceRecordKey === "W3:pdf"
+					? { ...record, processingIssue: { code: "openalex_pdf_download_failed", message: "Download returned 403" } }
+					: record;
+			},
+			{ reuse: vi.fn(async (record: SourceItemUpsert) => record), flushCleanup: async () => {} },
+		);
+		const pageSizes: (string | null)[] = [];
+		const report = vi.fn(async () => {});
+		let failHeartbeat = true;
+		const sync = async () => {
+			const [current] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-first"));
+			return syncOpenAlexSource(
+				{
+					database: db,
+					sourceConnection: current!,
+					credentialResolver: async () => "test-key",
+					// The first run stops as soon as it starts on a PDF.
+					heartbeat: async () => {
+						if (failHeartbeat && pageSizes.at(-1) === "50") {
+							failHeartbeat = false;
+							throw new Error("lease lost");
+						}
+					},
+					run: { id: run!.id, report },
+				},
+				{
+					attachmentProcessor: processor,
+					fetch: async (url) => {
+						const perPage = new URL(String(url)).searchParams.get("per_page");
+						pageSizes.push(perPage);
+						// OpenAlex added W4 between the records stage and the PDF stage.
+						const page = perPage === "50" ? [...results, withPdf(4)] : results;
+						return Response.json({ meta: { count: page.length, next_cursor: null }, results: page });
+					},
+				},
+			);
+		};
+
+		await expect(sync()).rejects.toThrow("lease lost");
+		expect(pageSizes).toEqual(["100", "50"]);
+		expect(processor.reuse).toHaveBeenCalledTimes(3);
+		// The records went in without their PDFs.
+		expect(await db.select().from(item).where(sql`${item.sourceRecordKey} in ('W1', 'W2', 'W3')`)).toHaveLength(3);
+
+		pageSizes.length = 0;
+		await sync();
+		// The second run carries on with the PDFs instead of importing the records again.
+		expect(pageSizes).toEqual(["50"]);
+		expect(await recordsWhenFirstPdfStarted).toBe(3);
+		expect(report).toHaveBeenLastCalledWith(4, 4, { missed: 1 });
+		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-first"));
+		expect(saved!.syncCursor).toMatchObject({ stage: "pdfs", pdfs: { done: 4, missed: 1, total: 4 } });
+		// The new work's search update belongs to the run, like the other records'.
+		const [newWork] = await db.select({ key: item.key }).from(item).where(eq(item.sourceRecordKey, "W4"));
+		const newWorkEvents = await db.select().from(outbox).where(eq(outbox.entityKey, newWork!.key));
+		expect(newWorkEvents.map((event) => event.sourceSyncRunId)).toEqual([run!.id]);
+		expect(saved!.syncCursor).not.toMatchObject({ completedAt: null });
+		// The PDF that could not be downloaded is a record issue.
+		const issueRows = await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "oa-first"));
+		expect(issueRows.map((row) => row.code)).toEqual(["openalex_pdf_download_failed"]);
+	});
+}, 120_000);
+
+it("restarts a PDF stage from the records when it must scan in full, and tags works that come back", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-stage", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } });
+		const processor = Object.assign(async (record: SourceItemUpsert) => record, {
+			reuse: async (record: SourceItemUpsert) => record,
+			flushCleanup: async () => {},
+		});
+		const requests: { perPage: string | null; cursor: string | null }[] = [];
+		const current = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-stage")))[0]!;
+		const sync = async (respond: (url: URL) => Response, runId?: number) =>
+			syncOpenAlexSource(
+				{
+					database: db,
+					sourceConnection: await current(),
+					credentialResolver: async () => "test-key",
+					heartbeat: async () => {},
+					...(runId ? { run: { id: runId, report: async () => {} } } : {}),
+				},
+				{
+					attachmentProcessor: processor,
+					sleep: async () => {},
+					fetch: async (input) => {
+						const url = new URL(String(input));
+						requests.push({ perPage: url.searchParams.get("per_page"), cursor: url.searchParams.get("cursor") });
+						return respond(url);
+					},
+				},
+			);
+		const page = (ids: number[]) => Response.json({ meta: { count: ids.length, next_cursor: null }, results: ids.map((id) => work(id)) });
+		const resumeAt = async (cursor: Record<string, unknown>) =>
+			db.update(sourceConnection).set({ syncCursor: { ...(await current()).syncCursor, completedAt: null, ...cursor } }).where(eq(sourceConnection.key, "oa-stage"));
+		const record = async (id: number) => (await db.select().from(item).where(eq(item.sourceRecordKey, `W${id}`)))[0]!;
+		await sync(() => page([1, 2]));
+
+		// Incremental access is lost mid-way through a nightly PDF stage. The full
+		// scan starts over from the records, so W2, now gone from OpenAlex, is withdrawn.
+		await resumeAt({ stage: "pdfs", mode: "incremental", updatedSince: "2026-09-20", nextCursor: "*", pdfs: { done: 0, missed: 0, total: null } });
+		requests.length = 0;
+		await sync((url) =>
+			url.searchParams.get("filter")?.includes("from_updated_date:")
+				? new Response("Premium from_updated_date requires a paid key", { status: 403 })
+				: page([1]),
+		);
+		expect(requests.map((request) => request.perPage)).toEqual(["50", "100", "50"]);
+		expect((await record(2)).deleted).toBe(1);
+		expect((await current()).syncCursor).toMatchObject({ stage: "pdfs", mode: "full" });
+
+		// W2 comes back between the records scan and the PDF scan: its search update is the run's.
+		const [run] = await db.insert(sourceSyncRun).values({ sourceConnectionKey: "oa-stage", workerId: "test" }).returning({ id: sourceSyncRun.id });
+		await resumeAt({ stage: "records", pdfs: null, nextCursor: "*", imported: 0 });
+		await sync((url) => page(url.searchParams.get("per_page") === "50" ? [1, 2] : [1]), run!.id);
+		expect((await record(2)).deleted).toBe(0);
+		const events = await db.select().from(outbox).where(eq(outbox.entityKey, (await record(2)).key)).orderBy(outbox.id);
+		expect(events.at(-1)?.sourceSyncRunId).toBe(run!.id);
+
+		// PDFs are turned off part-way through the PDF stage: a full records scan
+		// puts every page back on its external link instead of finishing the PDF pages.
+		await resumeAt({ stage: "pdfs", mode: "full", nextCursor: "page-2", pdfs: { done: 1, missed: 0, total: 2 } });
+		await db.update(sourceConnection).set({ config: settings }).where(eq(sourceConnection.key, "oa-stage"));
+		requests.length = 0;
+		await sync(() => page([1, 2]));
+		expect(requests).toEqual([{ perPage: "100", cursor: "*" }]);
+		expect((await current()).syncCursor).toMatchObject({ stage: "records", mode: "full" });
 	});
 }, 120_000);

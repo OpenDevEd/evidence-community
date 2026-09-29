@@ -500,15 +500,21 @@ async function reportRunProgress(
 	runId: number,
 	done: number,
 	total: number | null,
+	pdfs?: { missed: number },
 ) {
 	const now = (options.now ?? (() => new Date()))();
+	// Each stage measures its own rate from where it started.
+	const restart = pdfs ? sql`${sourceSyncRun.stage} is null` : sql`${sourceSyncRun.stage} is not null`;
 	await options.database
 		.update(sourceSyncRun)
 		.set({
 			recordsDone: done,
-			recordsFrom: sql`coalesce(${sourceSyncRun.recordsFrom}, ${done})`,
-			recordsFromAt: sql`coalesce(${sourceSyncRun.recordsFromAt}, ${now})`,
+			recordsFrom: sql`case when ${restart} then ${done} else coalesce(${sourceSyncRun.recordsFrom}, ${done}) end`,
+			recordsFromAt: sql`case when ${restart} then ${now}::timestamptz else coalesce(${sourceSyncRun.recordsFromAt}, ${now}) end`,
 			recordsTotal: total,
+			// A PDF stage that starts over from the records reads as importing again.
+			stage: pdfs ? "pdfs" : null,
+			...(pdfs ? { pdfsMissed: pdfs.missed } : {}),
 		})
 		.where(
 			and(eq(sourceSyncRun.id, runId), eq(sourceSyncRun.status, "running")),
@@ -588,8 +594,8 @@ export async function runSourceConnection(
 					),
 				run: {
 					id: claimed.runId,
-					report: (done, total) =>
-						reportRunProgress(options, claimed.runId, done, total),
+					report: (done, total, pdfs) =>
+						reportRunProgress(options, claimed.runId, done, total, pdfs),
 				},
 				sourceConnection: claimed.connection,
 			}),

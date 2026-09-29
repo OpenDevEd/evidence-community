@@ -1,4 +1,7 @@
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { itemSourceLink } from "@opendeved/evidence-library-core";
+import { item } from "@/db/schema/tables/item";
 import { reconcileOpenAlexMemberships } from "./reconciliation";
 import type { SourceAdapterContext, SourceConnection } from "../adapter";
 import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
@@ -24,20 +27,34 @@ const cursorSchema = z
 		reconciledAt: z.iso.datetime().nullable().default(null),
 		updatedSince: z.string().nullable().default(null),
 		incrementalAvailable: z.boolean().nullable().default(null),
+		// Records are imported first, then a second scan adds their PDFs.
+		stage: z.enum(["records", "pdfs"]).default("records"),
+		pdfs: z
+			.object({
+				done: z.number().int().nonnegative(),
+				missed: z.number().int().nonnegative(),
+				// Null for a nightly refresh, which only looks at updated works.
+				total: z.number().int().nonnegative().nullable(),
+			})
+			.nullable()
+			.default(null),
 	})
 	.strict();
 
 export type OpenAlexSourceOptions = {
 	fetch?: typeof fetch;
 	sleep?: (milliseconds: number) => Promise<void>;
-	attachmentProcessor?: ((
-		record: SourceItemUpsert,
-		sourceConnectionKey: string,
-	) => Promise<SourceItemUpsert>) & {
+	attachmentProcessor?: RecordProcessor & {
+		/** Keeps a PDF already published, without downloading. */
+		reuse: RecordProcessor;
 		flushCleanup: (sourceConnectionKey: string) => Promise<void>;
 	};
 };
 
+type RecordProcessor = (
+	record: SourceItemUpsert,
+	sourceConnectionKey: string,
+) => Promise<SourceItemUpsert>;
 type Cursor = z.infer<typeof cursorSchema>;
 type OpenAlexConnectionConfig = z.infer<typeof openAlexConnectionConfigSchema>;
 type InstitutionFacts = ReturnType<typeof mapOpenAlexWork>["institutions"];
@@ -60,6 +77,7 @@ export function openAlexFullScanDue(reconciledAt: string, now: Date) {
 	return Date.parse(reconciledAt) < lastNightlyRefresh(now) - 6 * DAY_MS;
 }
 const UPDATED_SINCE = "from_updated_date:";
+const RECORD_PAGE_SIZE = 100;
 const PDF_PAGE_SIZE = 50;
 const PDF_CONCURRENCY = 6;
 // Leaves room for the batch envelope and institution facts.
@@ -104,16 +122,30 @@ function isSampledOql(query: OpenAlexConnectionConfig["approvedQuery"]["query"])
 	return Boolean(query.oql && /\ssample\s+\d+(?:\s+seed\s+\d+)?\s*$/i.test(query.oql));
 }
 
-function startCursor(
-	saved: Cursor | null,
-	queryVersion: string,
-	fullOnly: boolean,
-): Cursor {
+/** PDFs were turned on after the last complete run, so no PDF stage has covered the records yet. */
+function pdfsOwed(config: OpenAlexConnectionConfig, saved: Cursor | null) {
+	return config.downloadPdfs && Boolean(saved?.completedAt) && saved?.stage !== "pdfs";
+}
+
+/** PDFs turned off mid-stage: only a full records scan puts every page back on its external link. */
+function pdfsDropped(config: OpenAlexConnectionConfig, saved: Cursor | null) {
+	return saved?.stage === "pdfs" && !saved.completedAt && !config.downloadPdfs;
+}
+
+function resumedCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cursor | null {
+	if (!saved || saved.completedAt || saved.queryVersion !== config.approvedQuery.version) return null;
+	if (pdfsDropped(config, saved)) return null;
+	return saved.mode === "full" ? { ...saved, incrementalAvailable: null } : saved;
+}
+
+function startCursor(saved: Cursor | null, config: OpenAlexConnectionConfig): Cursor {
+	const resumed = resumedCursor(saved, config);
+	if (resumed) return resumed;
+	const queryVersion = config.approvedQuery.version;
 	const sameQuery = saved?.queryVersion === queryVersion;
-	if (saved && !saved.completedAt && sameQuery)
-		return saved.mode === "full"
-			? { ...saved, incrementalAvailable: null }
-			: saved;
+	// A sample of updated works is a different sample; PDFs just turned on need every record.
+	const fullOnly =
+		isSampledOql(config.approvedQuery.query) || pdfsOwed(config, saved) || pdfsDropped(config, saved);
 	const cursor: Cursor = {
 		queryVersion,
 		startedAt: new Date().toISOString(),
@@ -124,6 +156,8 @@ function startCursor(
 		reconciledAt: sameQuery ? saved!.reconciledAt : null,
 		updatedSince: null,
 		incrementalAvailable: null,
+		stage: "records",
+		pdfs: null,
 	};
 	const updatedSince = fullOnly ? null : incrementalSince(saved, queryVersion);
 	return updatedSince
@@ -147,6 +181,7 @@ export function openAlexSyncIsDue(connection: SourceConnection, now: Date) {
 	if (!config.success || !saved.success) return true;
 	if (!saved.data.completedAt) return true;
 	if (saved.data.queryVersion !== config.data.approvedQuery.version) return true;
+	if (pdfsOwed(config.data, saved.data)) return true;
 	return Date.parse(saved.data.startedAt) < lastNightlyRefresh(now);
 }
 
@@ -195,7 +230,7 @@ async function fetchPage(
 		return await client.works(
 			pageQuery(config, cursor),
 			cursor.nextCursor!,
-			config.downloadPdfs ? PDF_PAGE_SIZE : 100,
+			cursor.stage === "pdfs" ? PDF_PAGE_SIZE : RECORD_PAGE_SIZE,
 		);
 	} catch (error) {
 		// Free keys use complete scans. Only an explicit entitlement denial changes strategy.
@@ -214,7 +249,7 @@ async function fetchPage(
 async function processAttachments(
 	context: SourceAdapterContext,
 	items: SourceItemUpsert[],
-	processor: NonNullable<OpenAlexSourceOptions["attachmentProcessor"]>,
+	processor: RecordProcessor,
 ) {
 	let next = 0;
 	let failed = false;
@@ -263,8 +298,9 @@ function writeChunks(items: SourceItemUpsert[]) {
 async function writePage(
 	context: SourceAdapterContext,
 	expectedCursor: Record<string, JsonValue>,
-	nextCursor: Cursor,
+	nextCursor: Record<string, JsonValue>,
 	page: { items: SourceItemUpsert[]; institutionCountries: InstitutionFacts },
+	stage: Cursor["stage"],
 ) {
 	const chunks = writeChunks(page.items);
 	for (const [index, items] of chunks.entries()) {
@@ -273,8 +309,34 @@ async function writePage(
 			expectedCursor,
 			index === chunks.length - 1 ? nextCursor : expectedCursor,
 			{ items, institutionCountries: index ? [] : page.institutionCountries },
+			stage,
 		);
 	}
+}
+
+/**
+ * Works the PDF stage finds that the records stage did not write, because
+ * OpenAlex added them since. Their search update is the run's, like any
+ * record's; PDFs added to known records are not.
+ */
+async function splitNewRecords(scan: Scan, items: SourceItemUpsert[]) {
+	if (scan.cursor.stage !== "pdfs" || !items.length) return { fresh: [], known: items };
+	const rows = await scan.context.database
+		.select({ key: itemSourceLink.sourceRecordKey })
+		.from(itemSourceLink)
+		.where(
+			and(
+				eq(itemSourceLink.sourceConnectionKey, scan.context.sourceConnection.key),
+				// A withdrawn work that comes back is new to search again.
+				eq(itemSourceLink.remoteDeleted, false),
+				inArray(itemSourceLink.sourceRecordKey, items.map((record) => record.sourceRecordKey)),
+			),
+		);
+	const known = new Set(rows.map((row) => row.key));
+	return {
+		fresh: items.filter((record) => !known.has(record.sourceRecordKey)),
+		known: items.filter((record) => known.has(record.sourceRecordKey)),
+	};
 }
 
 function logPdfPage(
@@ -303,6 +365,7 @@ function writeBatch(
 		items: SourceItemUpsert[];
 		institutionCountries?: InstitutionFacts;
 	},
+	stage: Cursor["stage"] = "records",
 ) {
 	const connection = context.sourceConnection;
 	return writeSourceIngestionBatch(context.database, {
@@ -311,10 +374,200 @@ function writeBatch(
 		expectedCursor,
 		nextCursor,
 		mappingProfileVersion: "openalex-v1",
-		sourceSyncRunId: context.run?.id,
+		// The records' search update is the run's; records changed by their
+		// PDFs are updated in search like any other edit.
+		sourceSyncRunId: stage === "records" ? context.run?.id : undefined,
 		fetchedAt: new Date(),
 		...batch,
 	});
+}
+
+/** PDF links among a source's records: what its PDF stage works through. */
+async function countPdfLinks(database: SourceAdapterContext["database"], sourceConnectionKey: string) {
+	const [row] = await database
+		.select({ count: sql<number>`count(*)::int` })
+		.from(itemSourceLink)
+		.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
+		.where(
+			and(
+				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				eq(itemSourceLink.remoteDeleted, false),
+				eq(item.itemType, "Attachment"),
+				eq(item.contentType, "application/pdf"),
+			),
+		);
+	return row?.count ?? 0;
+}
+
+const isPdfLink = (record: SourceItemUpsert) =>
+	record.metadata.itemType === "Attachment" &&
+	record.file?.contentType === "application/pdf" &&
+	Boolean(record.file.url);
+
+type Scan = {
+	context: SourceAdapterContext;
+	client: OpenAlexClient;
+	config: OpenAlexConnectionConfig;
+	options: OpenAlexSourceOptions;
+	cursor: Cursor;
+	expectedCursor: Record<string, JsonValue>;
+	pages: number;
+};
+
+/**
+ * Records first: a page is written as soon as it is fetched, keeping only PDFs
+ * already published. The PDF stage then adds the rest, page by page.
+ */
+async function preparePage(scan: Scan, items: SourceItemUpsert[], works: number) {
+	const processor = scan.options.attachmentProcessor;
+	if (!scan.config.downloadPdfs || !processor) return;
+	const key = scan.context.sourceConnection.key;
+	if (scan.cursor.stage === "records") {
+		await processAttachments(scan.context, items, processor.reuse);
+		return;
+	}
+	const links = new Set(items.filter(isPdfLink).map((record) => record.sourceRecordKey));
+	const startedAt = performance.now();
+	await processAttachments(scan.context, items, processor);
+	logPdfPage(key, works, items, startedAt);
+	const pdfs = scan.cursor.pdfs!;
+	const done = pdfs.done + links.size;
+	// Other records' issues, such as incomplete authors, are not PDFs missed.
+	const missed = items.filter(
+		(record) => links.has(record.sourceRecordKey) && record.processingIssue,
+	).length;
+	// A new cursor: the saved one is still what the next write expects.
+	scan.cursor = {
+		...scan.cursor,
+		pdfs: {
+			done,
+			missed: pdfs.missed + missed,
+			total: pdfs.total === null ? null : Math.max(pdfs.total, done),
+		},
+	};
+}
+
+async function reportProgress(scan: Scan, count: number) {
+	const { cursor, context } = scan;
+	if (cursor.stage === "pdfs") {
+		const pdfs = cursor.pdfs!;
+		await context.run?.report(pdfs.done, pdfs.total, { missed: pdfs.missed });
+		return;
+	}
+	// A resumed import can pass a count that shrank since it started.
+	await context.run?.report(cursor.imported, Math.max(count, cursor.imported));
+}
+
+/** Fetches and writes every page of the cursor's stage. */
+async function scanPages(scan: Scan) {
+	const { context, client, config } = scan;
+	const connection = context.sourceConnection;
+	while (scan.cursor.nextCursor) {
+		await context.heartbeat();
+		const page = await fetchPage(client, config, scan.cursor, connection.key);
+		if (!page) {
+			scan.cursor = {
+				...scan.cursor,
+				mode: "full",
+				nextCursor: "*",
+				startedAt: new Date().toISOString(),
+				imported: 0,
+				updatedSince: null,
+				incrementalAvailable: false,
+				// A full PDF pass would skip reconciling, so the records go first again.
+				stage: "records",
+				pdfs: null,
+			};
+			continue;
+		}
+		if (scan.cursor.mode === "incremental") scan.cursor = { ...scan.cursor, incrementalAvailable: true };
+		if (
+			page.meta.next_cursor === scan.cursor.nextCursor ||
+			(!page.results.length && page.meta.next_cursor)
+		) {
+			throw new Error(
+				`OpenAlex source ${connection.key} returned a non-advancing page`,
+			);
+		}
+		// The total is known from the page; say it before slow PDF work starts.
+		await reportProgress(scan, page.meta.count);
+		const mapped = page.results.map(mapOpenAlexWork);
+		const items = mapped.flatMap((work) => work.items);
+		await preparePage(scan, items, page.results.length);
+		scan.cursor = {
+			...scan.cursor,
+			nextCursor: page.meta.next_cursor,
+			imported:
+				scan.cursor.stage === "records"
+					? scan.cursor.imported + page.results.length
+					: scan.cursor.imported,
+			completedAt: null,
+		};
+		await context.heartbeat();
+		const { fresh, known } = await splitNewRecords(scan, items);
+		// New works go in first, without moving the cursor on.
+		if (fresh.length) {
+			await writePage(context, scan.expectedCursor, scan.expectedCursor, { items: fresh, institutionCountries: [] }, "records");
+		}
+		await writePage(
+			context,
+			scan.expectedCursor,
+			scan.cursor,
+			{ items: known, institutionCountries: mapped.flatMap((work) => work.institutions) },
+			scan.cursor.stage,
+		);
+		scan.expectedCursor = scan.cursor;
+		scan.pages++;
+		await reportProgress(scan, page.meta.count);
+		await scan.options.attachmentProcessor?.flushCleanup(connection.key);
+	}
+}
+
+async function reconcile(scan: Scan) {
+	const connection = scan.context.sourceConnection;
+	while (
+		scan.cursor.mode === "full" &&
+		(await reconcileOpenAlexMemberships(scan.context.database, {
+			sourceConnectionKey: connection.key,
+			configuration: connection.config,
+			cursor: scan.expectedCursor,
+			startedAt: scan.cursor.startedAt,
+			sourceSyncRunId: scan.context.run?.id,
+		}))
+	)
+		await scan.context.heartbeat();
+}
+
+/** Starts the PDF stage over the same query, once every record is in. */
+async function startPdfStage(scan: Scan) {
+	const total =
+		scan.cursor.mode === "full"
+			? await countPdfLinks(scan.context.database, scan.context.sourceConnection.key)
+			: null;
+	scan.cursor = {
+		...scan.cursor,
+		stage: "pdfs",
+		nextCursor: "*",
+		pdfs: { done: 0, missed: 0, total },
+	};
+	await writeBatch(scan.context, scan.expectedCursor, scan.cursor, { items: [] }, "pdfs");
+	scan.expectedCursor = scan.cursor;
+}
+
+/** Records, then PDFs. A PDF stage that falls back to a full scan starts over from the records. */
+async function scanStages(scan: Scan) {
+	for (;;) {
+		if (scan.cursor.stage === "records") {
+			await scanPages(scan);
+			await reconcile(scan);
+			if (!scan.config.downloadPdfs) return;
+			await startPdfStage(scan);
+		}
+		// Said before the first page, so a failure there still reads as the PDF stage.
+		await reportProgress(scan, 0);
+		await scanPages(scan);
+		if (scan.cursor.stage === "pdfs") return;
+	}
 }
 
 export async function syncOpenAlexSource(
@@ -324,95 +577,31 @@ export async function syncOpenAlexSource(
 	const connection = context.sourceConnection;
 	const config = openAlexConnectionConfigSchema.parse(connection.config);
 	const client = await openAlexClient(context, config, options);
-	let expectedCursor = connection.syncCursor as Record<string, JsonValue>;
-	let cursor = startCursor(
-		Object.keys(expectedCursor).length
-			? cursorSchema.parse(expectedCursor)
-			: null,
-		config.approvedQuery.version,
-		isSampledOql(config.approvedQuery.query),
-	);
-	let pages = 0;
+	const expectedCursor = connection.syncCursor as Record<string, JsonValue>;
+	const saved = Object.keys(expectedCursor).length ? cursorSchema.parse(expectedCursor) : null;
+	const scan: Scan = {
+		context,
+		client,
+		config,
+		options,
+		expectedCursor,
+		cursor: startCursor(saved, config),
+		pages: 0,
+	};
 	await options.attachmentProcessor?.flushCleanup(connection.key);
-	while (cursor.nextCursor) {
-		await context.heartbeat();
-		const page = await fetchPage(client, config, cursor, connection.key);
-		if (!page) {
-			cursor = {
-				...cursor,
-				mode: "full",
-				nextCursor: "*",
-				startedAt: new Date().toISOString(),
-				imported: 0,
-				updatedSince: null,
-				incrementalAvailable: false,
-			};
-			continue;
-		}
-		if (cursor.mode === "incremental") cursor.incrementalAvailable = true;
-		if (
-			page.meta.next_cursor === cursor.nextCursor ||
-			(!page.results.length && page.meta.next_cursor)
-		) {
-			throw new Error(
-				`OpenAlex source ${connection.key} returned a non-advancing page`,
-			);
-		}
-		// The total is known from the page; say it before slow PDF work starts.
-		// A resumed import can pass a count that shrank since it started.
-		const reportPage = (imported: number) =>
-			context.run?.report(imported, Math.max(page.meta.count, imported));
-		await reportPage(cursor.imported);
-		const mapped = page.results.map(mapOpenAlexWork);
-		const items = mapped.flatMap((work) => work.items);
-		if (config.downloadPdfs) {
-			const startedAt = performance.now();
-			await processAttachments(
-				context,
-				items,
-				options.attachmentProcessor!,
-			);
-			logPdfPage(connection.key, page.results.length, items, startedAt);
-		}
-		cursor = {
-			...cursor,
-			nextCursor: page.meta.next_cursor,
-			imported: cursor.imported + page.results.length,
-			completedAt: null,
-		};
-		await context.heartbeat();
-		await writePage(context, expectedCursor, cursor, {
-			items,
-			institutionCountries: mapped.flatMap((work) => work.institutions),
-		});
-		expectedCursor = cursor;
-		pages++;
-		await reportPage(cursor.imported);
-		await options.attachmentProcessor?.flushCleanup(connection.key);
-	}
-	while (
-		cursor.mode === "full" &&
-		(await reconcileOpenAlexMemberships(context.database, {
-			sourceConnectionKey: connection.key,
-			configuration: connection.config,
-			cursor: expectedCursor,
-			startedAt: cursor.startedAt,
-			sourceSyncRunId: context.run?.id,
-		}))
-	)
-		await context.heartbeat();
-	cursor = {
-		...cursor,
+	await scanStages(scan);
+	const cursor: Cursor = {
+		...scan.cursor,
 		completedAt: new Date().toISOString(),
 		reconciledAt:
-			cursor.mode === "full"
+			scan.cursor.mode === "full"
 				? new Date().toISOString()
-				: cursor.reconciledAt,
+				: scan.cursor.reconciledAt,
 	};
-	await writeBatch(context, expectedCursor, cursor, { items: [] });
+	await writeBatch(context, scan.expectedCursor, cursor, { items: [] }, cursor.stage);
 	return {
 		records: cursor.imported,
-		pages,
+		pages: scan.pages,
 		queryVersion: cursor.queryVersion,
 		completedAt: cursor.completedAt,
 	};
