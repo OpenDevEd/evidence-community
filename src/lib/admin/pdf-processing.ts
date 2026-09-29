@@ -1,14 +1,7 @@
-import { createCanvas } from "@napi-rs/canvas";
 import type { PDFDocumentLoadingTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { AdminValidationError } from "./errors";
-
-const COVER_WIDTH = 1600;
-
-type TextItem = {
-	str: string;
-	transform: number[];
-};
+import { INVALID_PDF_CONTENT, readPdf } from "./pdf-read.mjs";
 
 export type ProcessedPdf = {
 	cover: Uint8Array;
@@ -25,40 +18,30 @@ export class InvalidPdfError extends AdminValidationError {
 	}
 }
 
-function pageText(pageNumber: number, items: readonly TextItem[]) {
-	let lastY: number | undefined;
-	let text = "";
-
-	for (const item of items) {
-		const y = item.transform[5];
-		if (text.length > 0 && lastY !== undefined && y !== lastY) {
-			text += "\n";
-		}
-		text += item.str;
-		lastY = y;
-	}
-
-	return `**|| PAGE ${pageNumber} ||**\n\n${text}`;
-}
-
-function cleanExtractedText(text: string) {
-	return text.replace(
-		/[\u0000\uFFFD\uFFFE\uFFFF\u0001-\u0008\u000B-\u000C\u000E-\u001F]/gu,
-		"",
-	);
-}
-
 // pdf.js never finishes rendering a document when another document in the
 // same process is destroyed meanwhile, so documents take turns. A turn ends
 // after PROCESSING_TIMEOUT_MS, so one PDF cannot hold up the rest.
 const PROCESSING_TIMEOUT_MS = 60_000;
 let turn: Promise<unknown> = Promise.resolve();
 
-export async function processPdf(bytes: Uint8Array): Promise<ProcessedPdf> {
+export function assertPdfHeader(bytes: Uint8Array) {
 	const headerOffset = Buffer.from(bytes).indexOf("%PDF-");
 	if (headerOffset < 0 || headerOffset > 1024) {
 		throw new InvalidPdfError("Choose a valid PDF file.");
 	}
+}
+
+/** The error a failed read becomes, whether it ran here or in a worker. */
+export function pdfReadError(error: { name?: string; message: string }, cause?: unknown) {
+	if (error.name === INVALID_PDF_CONTENT) return new InvalidPdfError(error.message, { cause });
+	return new InvalidPdfError(
+		"This PDF could not be processed. Try exporting it again or choose another file.",
+		{ cause },
+	);
+}
+
+export async function processPdf(bytes: Uint8Array): Promise<ProcessedPdf> {
+	assertPdfHeader(bytes);
 	const run = turn.then(() => processInTurn(bytes));
 	turn = run.catch(() => undefined);
 	return run;
@@ -100,65 +83,9 @@ async function processInTurn(bytes: Uint8Array): Promise<ProcessedPdf> {
 		return await Promise.race([work, deadline]);
 	} catch (error) {
 		if (error instanceof InvalidPdfError) throw error;
-		console.error("PDF processing failed", error);
-		throw new InvalidPdfError(
-			"This PDF could not be processed. Try exporting it again or choose another file.",
-			{ cause: error },
-		);
+		if (!(error instanceof Error) || error.name !== INVALID_PDF_CONTENT) console.error("PDF processing failed", error);
+		throw pdfReadError(error instanceof Error ? error : { message: String(error) }, error);
 	} finally {
 		clearTimeout(timer);
 	}
-}
-
-async function readPdf(loadingTask: PDFDocumentLoadingTask): Promise<ProcessedPdf> {
-	const document = await loadingTask.promise;
-	if (document.numPages < 1) {
-		throw new InvalidPdfError("This PDF has no pages.");
-	}
-
-	const pages: string[] = [];
-	let firstPage: Awaited<ReturnType<typeof document.getPage>> | undefined;
-	for (
-		let pageNumber = 1;
-		pageNumber <= document.numPages;
-		pageNumber++
-	) {
-		const page = await document.getPage(pageNumber);
-		if (pageNumber === 1) firstPage = page;
-		const content = await page.getTextContent();
-		const items = content.items.flatMap((item) =>
-			"str" in item && "transform" in item
-				? [
-						{
-							str: item.str,
-							transform: item.transform,
-						},
-					]
-				: [],
-		);
-		pages.push(pageText(pageNumber, items));
-		if (pageNumber !== 1) page.cleanup();
-	}
-
-	if (!firstPage) {
-		throw new InvalidPdfError("This PDF has no readable pages.");
-	}
-	const naturalViewport = firstPage.getViewport({ scale: 1 });
-	const scale = COVER_WIDTH / naturalViewport.width;
-	const viewport = firstPage.getViewport({ scale });
-	const coverHeight = Math.max(1, Math.round(viewport.height));
-	const canvas = createCanvas(COVER_WIDTH, coverHeight);
-	await firstPage.render({
-		canvas: canvas as unknown as HTMLCanvasElement,
-		viewport,
-	}).promise;
-	firstPage.cleanup();
-
-	return {
-		cover: new Uint8Array(canvas.toBuffer("image/png")),
-		coverHeight,
-		coverWidth: COVER_WIDTH,
-		pageCount: document.numPages,
-		text: cleanExtractedText(pages.join("\n\n")),
-	};
 }

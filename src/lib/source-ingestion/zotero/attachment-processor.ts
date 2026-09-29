@@ -4,7 +4,7 @@ import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 
 import type { Database } from "@/db/database-schema";
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
-import { processPdf } from "@/lib/admin/pdf-processing";
+import { processPdfInWorkers } from "@/lib/admin/pdf-pool";
 
 import type {
 	ZoteroAttachmentProcessor,
@@ -222,7 +222,7 @@ export function createZoteroAttachmentProcessor(
 
 		let processed;
 		try {
-			processed = await processPdf(downloaded.bytes);
+			processed = await processPdfInWorkers(downloaded.bytes);
 		} catch (error) {
 			throw new ZoteroAttachmentPermanentError(
 				"zotero_pdf_invalid",
