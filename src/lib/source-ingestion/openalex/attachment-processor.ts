@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { sourceRecordIssue, sourceSnapshot } from "@/db/schema/source";
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
-import { processPdf } from "@/lib/admin/pdf-processing";
+import { processPdfInWorkers } from "@/lib/admin/pdf-pool";
 import { fetchPublicFile } from "@/lib/public-fetch";
 import {
 	MAX_SOURCE_FULL_TEXT_BYTES,
@@ -164,7 +164,7 @@ async function publishNewPdf(
 	attempt: Attempt,
 ) {
 	attempt.issueCode = "openalex_pdf_invalid";
-	const processed = await processPdf(bytes);
+	const processed = await processPdfInWorkers(bytes);
 	// Never upload over a path queued for deletion by another import.
 	const prefix = `sources/openalex/${sourceConnectionKey}/${record.sourceRecordKey}/${sha256}/${randomUUID()}/`;
 	const paths = {
