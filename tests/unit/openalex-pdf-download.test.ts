@@ -82,3 +82,19 @@ it("counts refusals that happen at the same time, and blames a redirect's target
 	answers.set("https://repository.example/4.pdf", file(pdf, "application/pdf")("https://repository.example/4.pdf"));
 	expect(new TextDecoder().decode(await downloadAnyCopy("https://repository.example/4.pdf", {}, 1_000_000))).toBe("%PDF-1.7 body");
 });
+
+it("sends at most four fallback requests to one host at a time", async () => {
+	let running = 0, most = 0;
+	for (let index = 0; index < 6; index++) {
+		answers.set(`https://blocked.example/${index}.pdf`, file(html, "text/html")(`https://blocked.example/${index}.pdf`));
+		answers.set(`https://mirror.example/${index}.pdf`, async () => {
+			running++;
+			most = Math.max(most, running);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			running--;
+			return { data: pdf, contentType: "application/pdf", url: new URL(`https://mirror.example/${index}.pdf`) };
+		});
+	}
+	await Promise.all(Array.from({ length: 6 }, (_, index) => downloadAnyCopy(`https://blocked.example/${index}.pdf`, { otherCopies: [`https://mirror.example/${index}.pdf`] }, 1_000_000)));
+	expect(most).toBe(4);
+});

@@ -15,6 +15,8 @@ const isPdf = (bytes: Uint8Array) => {
 
 // Connection errors that mean the host did not answer at all, as opposed to an answer we could not use.
 const CONNECT_FAILURES = new Set(["UND_ERR_CONNECT_TIMEOUT", "ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH", "EAI_AGAIN"]);
+// Fallback copies do not go through the stage's per-host lanes, so they keep the same limit here.
+const FALLBACK_PER_HOST = 4;
 const UNREACHABLE_AFTER = 3;
 const UNREACHABLE_FOR_MS = 30 * 60_000;
 
@@ -56,6 +58,30 @@ async function fetchFromHost(url: URL, options: Parameters<typeof fetchPublicFil
 	}
 }
 
+const hostSlots = new Map<string, { active: number; waiting: (() => void)[] }>();
+
+/** Runs a fallback request once fewer than FALLBACK_PER_HOST are running against its host. */
+async function withHostSlot<T>(host: string, run: () => Promise<T>): Promise<T> {
+	const slots = hostSlots.get(host) ?? { active: 0, waiting: [] };
+	hostSlots.set(host, slots);
+	while (slots.active >= FALLBACK_PER_HOST) await new Promise<void>((wake) => slots.waiting.push(wake));
+	slots.active++;
+	try {
+		return await run();
+	} finally {
+		slots.active--;
+		slots.waiting.shift()?.();
+		if (slots.active === 0 && slots.waiting.length === 0) hostSlots.delete(host);
+	}
+}
+
+/** The time a fetch may take: the usual limit, or less when the record's deadline comes first. */
+function timeLeft(deadline: number | undefined) {
+	const left = deadline === undefined ? PDF_DOWNLOAD.timeoutMs : Math.min(PDF_DOWNLOAD.timeoutMs, deadline - Date.now());
+	if (left <= 0) throw new Error("No time was left to try this copy");
+	return left;
+}
+
 /** The PDF a landing page names in its `citation_pdf_url` meta tag, which scholarly sites publish for indexers. */
 function landingPagePdfUrl(html: string, base: URL) {
 	for (const tag of html.match(/<meta\b[^>]*>/giu) ?? []) {
@@ -76,14 +102,14 @@ function landingPagePdfUrl(html: string, base: URL) {
  * Many OpenAlex PDF links open the article's landing page instead. Its
  * `citation_pdf_url` is followed once, so the PDF behind it is published.
  */
-async function downloadPdf(url: URL, maxBytes: number) {
-	const { data, contentType, url: landing } = await fetchFromHost(url, { ...PDF_DOWNLOAD, maxBytes });
+async function downloadPdf(url: URL, maxBytes: number, deadline?: number) {
+	const { data, contentType, url: landing } = await fetchFromHost(url, { ...PDF_DOWNLOAD, timeoutMs: timeLeft(deadline), maxBytes });
 	// Some landing pages come without an HTML content type, so the body is looked at too.
 	const looksLikeHtml = /html/iu.test(contentType) || /^\s*</u.test(new TextDecoder().decode(data.subarray(0, 512)));
 	if (isPdf(data) || !looksLikeHtml) return data;
 	const linked = landingPagePdfUrl(new TextDecoder().decode(data), landing);
 	if (!linked) return data;
-	return (await fetchFromHost(linked, { ...PDF_DOWNLOAD, maxBytes })).data;
+	return (await fetchFromHost(linked, { ...PDF_DOWNLOAD, timeoutMs: timeLeft(deadline), maxBytes })).data;
 }
 
 function httpUrls(values: unknown[]) {
@@ -103,7 +129,7 @@ async function unpaywallCopies(doi: string) {
 	try {
 		const url = new URL(`https://api.unpaywall.org/v2/${encodeURIComponent(doi)}`);
 		url.searchParams.set("email", UNPAYWALL_EMAIL);
-		const { data } = await fetchPublicFile(url, { accept: "application/json", timeoutMs: 10_000, maxBytes: 1_000_000 });
+		const { data } = await withHostSlot(url.hostname, () => fetchFromHost(url, { accept: "application/json", timeoutMs: 10_000, maxBytes: 1_000_000 }));
 		const locations = (JSON.parse(new TextDecoder().decode(data)) as { oa_locations?: { url_for_pdf?: unknown; url_for_landing_page?: unknown }[] }).oa_locations ?? [];
 		return httpUrls([...locations.map((location) => location.url_for_pdf), ...locations.map((location) => location.url_for_landing_page)]);
 	} catch (error) {
@@ -119,9 +145,11 @@ async function* copiesOf(link: string, raw: Record<string, unknown>, inTime: () 
 	if (typeof raw.doi === "string" && inTime()) yield* await unpaywallCopies(raw.doi);
 }
 
-async function tryCopy(url: URL, maxBytes: number): Promise<{ bytes: Uint8Array } | { error: unknown }> {
+/** The chosen link runs in the stage's lane; a fallback waits for a host slot and ends at the record's deadline. */
+async function tryCopy(url: URL, maxBytes: number, deadline?: number): Promise<{ bytes: Uint8Array } | { error: unknown }> {
 	try {
-		return { bytes: await downloadPdf(url, maxBytes) };
+		const bytes = deadline === undefined ? await downloadPdf(url, maxBytes) : await withHostSlot(url.hostname, () => downloadPdf(url, maxBytes, deadline));
+		return { bytes };
 	} catch (error) {
 		return { error };
 	}
@@ -141,7 +169,7 @@ export async function downloadAnyCopy(link: string, raw: Record<string, unknown>
 		if (chosen && !inTime()) break;
 		if (tried.has(url.href)) continue;
 		tried.add(url.href);
-		const outcome = await tryCopy(url, maxBytes);
+		const outcome = await tryCopy(url, maxBytes, chosen ? started + FALLBACK_BUDGET_MS : undefined);
 		if ("bytes" in outcome && isPdf(outcome.bytes)) return outcome.bytes;
 		chosen ??= outcome;
 	}
