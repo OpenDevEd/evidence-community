@@ -131,7 +131,7 @@ describe("sourceStatus", () => {
 		const status = sourceStatus(
 			input({
 				lastSuccessAt: minutesAgo(0),
-				search: { done: 900, startedAt: minutesAgo(3), total: 1_200, waitingFrom: minutesAgo(3) },
+				search: { done: 900, startedAt: minutesAgo(3), total: 1_200, recordsWaiting: 300 },
 			}),
 		);
 		expect(status).toMatchObject({
@@ -147,7 +147,7 @@ describe("sourceStatus", () => {
 		const status = sourceStatus(
 			input({
 				lastError: { at: minutesAgo(1), code: "access_denied", details: "ZoteroApiError: 403" },
-				search: { done: 1, startedAt: minutesAgo(3), total: 5, waitingFrom: minutesAgo(3) },
+				search: { done: 1, startedAt: minutesAgo(3), total: 5, recordsWaiting: 4 },
 			}),
 		);
 		expect(status).toMatchObject({
@@ -181,7 +181,7 @@ describe("sourceStatus", () => {
 				issues: { pdf_unavailable: 3 },
 				lastChange: { records: 14 },
 				lastSuccessAt: minutesAgo(2),
-				search: { done: 20, startedAt: minutesAgo(3), total: 20, waitingFrom: minutesAgo(3) },
+				search: { done: 20, startedAt: minutesAgo(3), total: 20, recordsWaiting: 0 },
 				searchFailed: 2,
 				searchable: 12_450,
 			}),
@@ -239,7 +239,7 @@ describe("sourceStatus", () => {
 					stage: "pdfs",
 					startedAt: minutesAgo(30),
 				},
-				search: { done: 400, startedAt: minutesAgo(10), total: 1_000, waitingFrom: minutesAgo(10) },
+				search: { done: 400, startedAt: minutesAgo(10), total: 1_000, recordsWaiting: 600 },
 			}),
 		);
 		expect(status).toMatchObject({ done: 400, phase: "search", state: "running", total: 1_000 });
@@ -259,7 +259,7 @@ describe("sourceStatus", () => {
 					startedAt: minutesAgo(40),
 				},
 				// The records' search update finished; one work found during the PDF stage waits.
-				search: { done: 90_002, startedAt: minutesAgo(60), total: 90_003, waitingFrom: minutesAgo(20) },
+				search: { done: 90_002, startedAt: minutesAgo(60), total: 90_003, recordsWaiting: 0 },
 			}),
 		);
 		expect(status).toMatchObject({ done: 15_000, phase: "pdfs", state: "running", total: 50_000 });
@@ -277,7 +277,7 @@ describe("sourceStatus", () => {
 		};
 		expect(sourceStatus(input({ activeRun }))).toMatchObject({ failedIn: "pdfs", state: "failed" });
 		expect(
-			sourceStatus(input({ activeRun, search: { done: 400, startedAt: minutesAgo(10), total: 1_000, waitingFrom: minutesAgo(10) } })),
+			sourceStatus(input({ activeRun, search: { done: 400, startedAt: minutesAgo(10), total: 1_000, recordsWaiting: 600 } })),
 		).toMatchObject({ phase: "search", state: "running" });
 	});
 
@@ -285,7 +285,7 @@ describe("sourceStatus", () => {
 		const status = sourceStatus(
 			input({
 				lastError: { at: minutesAgo(3), code: "internal", details: "Error: storage unavailable", inPdfs: true },
-				search: { done: 400, startedAt: minutesAgo(10), total: 1_000, waitingFrom: minutesAgo(10) },
+				search: { done: 400, startedAt: minutesAgo(10), total: 1_000, recordsWaiting: 600 },
 			}),
 		);
 		expect(status).toMatchObject({ phase: "search", state: "running" });

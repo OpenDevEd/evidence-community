@@ -94,7 +94,13 @@ export type SourceStatusInput = {
 	 * Search work queued by this source's runs that still have some waiting.
 	 * Done counts failed events too, so the bar can finish.
 	 */
-	search: { done: number; total: number; startedAt: Date; waitingFrom: Date } | null;
+	search: {
+		done: number;
+		total: number;
+		startedAt: Date;
+		/** Waiting events queued before their run began adding PDFs: the records' own search update. */
+		recordsWaiting: number;
+	} | null;
 	/** Search updates of this source's records that failed and wait for a retry. */
 	searchFailed: number;
 	/** The latest run that changed records. */
@@ -179,7 +185,7 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 	const run = input.activeRun;
 	if (run && run.leaseExpiresAt <= input.now) {
 		// Stopped while adding PDFs: the records' search update, if still waiting, comes first.
-		return (run.stage === "pdfs" ? recordsSearchStatus(base, input, run) : null) ?? expiredLeaseStatus(base, run);
+		return (run.stage === "pdfs" ? recordsSearchStatus(base, input) : null) ?? expiredLeaseStatus(base, run);
 	}
 	if (run?.stage === "pdfs") return pdfStageStatus(base, run, input);
 	// A run that has reported nothing may only be checking for changes, unless
@@ -256,18 +262,11 @@ function runProgress(run: NonNullable<SourceStatusInput["activeRun"]>, now: Date
 
 /**
  * The search update of the records a run imported before adding their PDFs.
- * Search work queued since the PDF stage began, such as works OpenAlex added
- * since the import, does not take the place of the PDF progress.
+ * Search work a PDF stage queued, such as works OpenAlex added since the
+ * import, does not take the place of the PDF progress.
  */
-function recordsSearchStatus(
-	base: SourceStatusBase,
-	input: SourceStatusInput,
-	run: NonNullable<SourceStatusInput["activeRun"]>,
-) {
-	// The PDF stage measures its rate from when it began. Work still waiting
-	// from before then is the records'; the rest came from the PDF stage.
-	if (input.search && run.recordsFromAt && input.search.waitingFrom >= run.recordsFromAt) return null;
-	return searchStatus(base, input);
+function recordsSearchStatus(base: SourceStatusBase, input: SourceStatusInput) {
+	return input.search?.recordsWaiting ? searchStatus(base, input) : null;
 }
 
 /** A run adding PDFs: its records' search update shows first, since it came first. */
@@ -278,7 +277,7 @@ function pdfStageStatus(
 ): SourceStatus {
 	const missed = run.pdfsMissed ?? 0;
 	return (
-		recordsSearchStatus(base, input, run) ?? {
+		recordsSearchStatus(base, input) ?? {
 			...base,
 			...runProgress(run, input.now),
 			pdfs: { added: run.recordsDone - missed, missed },
@@ -353,7 +352,8 @@ export async function readSourceStatuses(
 					key: sourceSyncRun.sourceConnectionKey,
 					startedAt: sql<Date>`min(${outbox.createdAt})`.mapWith(outbox.createdAt),
 					total: sql<number>`count(*)::int`,
-					waitingFrom: sql<Date>`min(${outbox.createdAt}) filter (where ${outbox.processedAt} is null and ${outbox.deadLetteredAt} is null)`.mapWith(outbox.createdAt),
+					// Each event's own run says whether it was queued before that run's PDF stage began.
+					recordsWaiting: sql<number>`count(*) filter (where ${outbox.processedAt} is null and ${outbox.deadLetteredAt} is null and not coalesce(${sourceSyncRun.stage} = 'pdfs' and ${outbox.createdAt} >= ${sourceSyncRun.recordsFromAt}, false))::int`,
 				})
 				.from(outbox)
 				.innerJoin(sourceSyncRun, eq(outbox.sourceSyncRunId, sourceSyncRun.id))
