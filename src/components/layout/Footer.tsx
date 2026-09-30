@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { siBluesky, siGithub, siX, siYoutube, type SimpleIcon } from "simple-icons";
 
+import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import BrandIcon from "@/components/icons/BrandIcon";
@@ -320,14 +321,7 @@ export default function Footer() {
 					)}
 					{footer.poweredBy && (
 						<p data-library-powered-by="">
-							<a
-								href="https://openscholar.ai"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="hover:text-accent"
-							>
-								{t("poweredBy")}
-							</a>
+							<PoweredByOpenScholar className="text-sm" />
 						</p>
 					)}
 				</div>

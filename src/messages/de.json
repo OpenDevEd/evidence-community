@@ -623,8 +623,7 @@
     "cookiePolicy": "Cookie-Richtlinie",
     "privacyPolicy": "Datenschutzerklärung",
     "termsOfService": "Nutzungsbedingungen",
-    "legal": "Rechtliches",
-    "poweredBy": "Bereitgestellt von OpenScholar"
+    "legal": "Rechtliches"
   },
   "itemType": {
     "Artwork": "Kunstwerk",
