@@ -1,7 +1,21 @@
 // Plain JavaScript, so a worker thread can load it without a TypeScript loader.
 import { createCanvas } from "@napi-rs/canvas";
+import { join } from "node:path";
 
 const COVER_WIDTH = 1600;
+
+// pdf.js reads character maps (Chinese, Japanese, Korean and other composite fonts), the standard PDF fonts and its
+// JBIG2 and JPEG 2000 decoders from these folders. Without them it loses text set in those fonts and leaves scanned
+// images out of covers. Only its errors are logged: its font warnings ran to thousands an hour on a large import.
+// Found from the app's folder: a bundler rewrites `require.resolve` into a module id, which is not a path.
+const PDFJS_ROOT = join(process.cwd(), "node_modules", "pdfjs-dist");
+export const PDFJS_OPTIONS = {
+	cMapUrl: `${join(PDFJS_ROOT, "cmaps")}/`,
+	standardFontDataUrl: `${join(PDFJS_ROOT, "standard_fonts")}/`,
+	wasmUrl: `${join(PDFJS_ROOT, "wasm")}/`,
+	iccUrl: `${join(PDFJS_ROOT, "iccs")}/`,
+	verbosity: 0,
+};
 
 /** A PDF that opened but cannot be published. The message is shown to the user. */
 export const INVALID_PDF_CONTENT = "InvalidPdfContent";
@@ -115,7 +129,7 @@ function coverJpeg(canvas) {
  */
 export async function readPdfBytes(bytes) {
 	const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
-	const loadingTask = getDocument({ data: bytes, useSystemFonts: true });
+	const loadingTask = getDocument({ data: bytes, useSystemFonts: true, ...PDFJS_OPTIONS });
 	try {
 		return await readPdf(loadingTask);
 	} finally {

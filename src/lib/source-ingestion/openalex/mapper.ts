@@ -112,6 +112,20 @@ function preferredPdf(work: OpenAlexWork) {
 		)[0];
 }
 
+const MAX_OTHER_COPIES = 4;
+
+/**
+ * Other places to read the work when its PDF link fails: the other open copies' PDF links, then their landing pages,
+ * whose citation_pdf_url is followed.
+ */
+function otherCopies(work: OpenAlexWork, chosen: string) {
+	const open = [work.best_oa_location, work.primary_location, ...(work.locations ?? [])].filter(
+		(location): location is Location => location?.is_oa === true,
+	);
+	const urls = [...open.map((location) => httpUrl(location.pdf_url)), ...open.map((location) => httpUrl(location.landing_page_url))];
+	return [...new Set(urls.filter((url): url is string => url !== null && url !== chosen))].slice(0, MAX_OTHER_COPIES);
+}
+
 function abstract(work: OpenAlexWork) {
 	if (!work.abstract_inverted_index) return null;
 	return Object.entries(work.abstract_inverted_index)
@@ -340,6 +354,8 @@ function pdfAttachment(
 		raw: jsonObjectSchema.parse({
 			openalexWorkId: work.id,
 			location: pdf,
+			doi: parent.metadata.DOI ?? null,
+			otherCopies: otherCopies(work, httpUrl(pdf.pdf_url)!),
 		}),
 		metadata: {
 			itemType: "Attachment",

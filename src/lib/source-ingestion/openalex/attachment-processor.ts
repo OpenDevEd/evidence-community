@@ -5,7 +5,6 @@ import type { Database } from "@/db/database-schema";
 import { sourceRecordIssue, sourceSnapshot } from "@/db/schema/source";
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
 import { processPdfInWorkers } from "@/lib/admin/pdf-pool";
-import { fetchPublicFile } from "@/lib/public-fetch";
 import {
 	MAX_SOURCE_FULL_TEXT_BYTES,
 	flushSourceFileCleanup,
@@ -19,6 +18,7 @@ import {
 	MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH,
 	type SourceItemUpsert,
 } from "../batch-schema";
+import { downloadAnyCopy } from "./pdf-download";
 
 function originalPdfUrl(raw: Record<string, unknown>) {
 	const location = raw.location;
@@ -233,45 +233,6 @@ async function publishNewPdf(
 	return result;
 }
 
-// A slow download may take its full time as long as bytes keep arriving.
-const PDF_DOWNLOAD = { accept: "application/pdf", timeoutMs: 120_000, idleTimeoutMs: 30_000 };
-const PDF_HEADER = Buffer.from("%PDF-");
-
-const isPdf = (bytes: Uint8Array) => {
-	const header = Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.byteLength, 1_024)).indexOf(PDF_HEADER);
-	return header >= 0;
-};
-
-/** The PDF a landing page names in its `citation_pdf_url` meta tag, which scholarly sites publish for indexers. */
-function landingPagePdfUrl(html: string, base: URL) {
-	for (const tag of html.match(/<meta\b[^>]*>/giu) ?? []) {
-		if (!/\bname\s*=\s*["']citation_pdf_url["']/iu.test(tag)) continue;
-		const content = /\bcontent\s*=\s*["']([^"']+)["']/iu.exec(tag)?.[1]?.replaceAll("&amp;", "&");
-		if (!content) return null;
-		try {
-			const url = new URL(content, base);
-			return url.protocol === "https:" || url.protocol === "http:" ? url : null;
-		} catch {
-			return null;
-		}
-	}
-	return null;
-}
-
-/**
- * Many OpenAlex PDF links open the article's landing page instead. Its
- * `citation_pdf_url` is followed once, so the PDF behind it is published.
- */
-async function downloadPdf(url: URL, maxBytes: number) {
-	const { data, contentType, url: landing } = await fetchPublicFile(url, { ...PDF_DOWNLOAD, maxBytes });
-	// Some landing pages come without an HTML content type, so the body is looked at too.
-	const looksLikeHtml = /html/iu.test(contentType) || /^\s*</u.test(new TextDecoder().decode(data.subarray(0, 512)));
-	if (isPdf(data) || !looksLikeHtml) return data;
-	const linked = landingPagePdfUrl(new TextDecoder().decode(data), landing);
-	if (!linked) return data;
-	return (await fetchPublicFile(linked, { ...PDF_DOWNLOAD, maxBytes })).data;
-}
-
 async function publishPdf(
 	options: RunOptions,
 	record: PdfRecord,
@@ -299,7 +260,7 @@ async function publishPdf(
 		return withPublishedFile(record, reusable);
 	}
 	attempt.issueCode = "openalex_pdf_download_failed";
-	const bytes = await options.timings.time(sourceConnectionKey, "download", () => downloadPdf(new URL(record.file.url!), options.maxPdfBytes));
+	const bytes = await options.timings.time(sourceConnectionKey, "download", () => downloadAnyCopy(record.file.url, record.raw, options.maxPdfBytes));
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
 	if (reusable?.managedPublication?.sha256 === sha256)
 		return withPublishedFile(record, reusable);
