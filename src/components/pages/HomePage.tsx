@@ -857,10 +857,10 @@ function niceCeiling(value: number) {
 }
 
 /** Change over time: one smooth 2px line over a flat wash, two recessive gridlines, and a crosshair that reads out the point under the pointer. Fills its parent's height. */
-function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { points: { label: string; value: number }[]; link: Linkage; unit: string; labelEvery?: number; dottedLast?: boolean }) {
+function Trend({ points, link, unit, labelEvery = 1, dottedFrom = -1 }: { points: { label: string; value: number }[]; link: Linkage; unit: string; labelEvery?: number; dottedFrom?: number }) {
 	const top = niceCeiling(Math.max(...points.map((point) => point.value)));
 	const x = (index: number) => (points.length > 1 ? (100 * index) / (points.length - 1) : 50);
-	const split = dottedLast && points.length > 1 ? x(points.length - 2) : null;
+	const split = dottedFrom >= 0 && points.length > 1 ? x(Math.max(0, dottedFrom - 1)) : null;
 	const y = (value: number) => 100 - (value / top) * 84;
 	const line = smoothPath(points.map((point, index) => ({ x: x(index), y: y(point.value) })));
 	const shown = points[link.shown];
@@ -887,7 +887,7 @@ function Trend({ points, link, unit, labelEvery = 1, dottedLast = false }: { poi
 	);
 }
 
-/** The trend's line and wash, drawn in from the left once seen; from `split` on the line is dotted, for a year still being counted. */
+/** The trend's line and wash, drawn in from the left once seen; from `split` on the line is dotted, for the years still being counted. */
 function TrendLine({ line, split }: { line: string; split: number | null }) {
 	const clipId = useId();
 	return (
@@ -1181,7 +1181,7 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 	const countryRows = listed.countries;
 	const flip = (index: number) => series.length - 1 - index;
 	const allViews: View[] = [
-		{ key: "years", title: "By year", icon: Calendar03Icon, rows: listed.years, initial: busiest, reading: (row, index) => (index === busiest ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedLast={series.at(-1)?.label === today.slice(0, 4)} /></div> },
+		{ key: "years", title: "By year", icon: Calendar03Icon, rows: listed.years, initial: busiest, reading: (row, index) => (index === busiest ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedFrom={series.findIndex((point) => Number(point.label) >= Number(today.slice(0, 4)))} /></div> },
 		parts({ key: "types", title: "By type", icon: Layers01Icon, reading: (row) => (row.name === "Other" ? <>{counted(row)} publications are of <strong>another type</strong></> : <><strong>{percent(row.count, data.publications)}%</strong> are <strong>{plural(row.name)}</strong></>) }, otherTypes > 0 ? [...types, { name: "Other", count: otherTypes }] : types, data.publications),
 		{ key: "countries", title: "By country", icon: Globe02Icon, rows: countryRows, reading: (row, index) => (index === 0 ? <><strong>{row.name}</strong> leads {countries} countries, with {counted(row)} publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} about <strong>{row.name}</strong></>), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
 		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, listed.collections, data.publications),
