@@ -179,7 +179,7 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 	const run = input.activeRun;
 	if (run && run.leaseExpiresAt <= input.now) {
 		// Stopped while adding PDFs: the records' search update, if still waiting, comes first.
-		return (run.stage === "pdfs" ? searchStatus(base, input) : null) ?? expiredLeaseStatus(base, run);
+		return (run.stage === "pdfs" ? recordsSearchStatus(base, input, run) : null) ?? expiredLeaseStatus(base, run);
 	}
 	if (run?.stage === "pdfs") return pdfStageStatus(base, run, input);
 	// A run that has reported nothing may only be checking for changes, unless
@@ -254,6 +254,21 @@ function runProgress(run: NonNullable<SourceStatusInput["activeRun"]>, now: Date
 	};
 }
 
+/**
+ * The search update of the records a run imported before adding their PDFs.
+ * Search work queued since the PDF stage began, such as works OpenAlex added
+ * since the import, does not take the place of the PDF progress.
+ */
+function recordsSearchStatus(
+	base: SourceStatusBase,
+	input: SourceStatusInput,
+	run: NonNullable<SourceStatusInput["activeRun"]>,
+) {
+	// The PDF stage measures its rate from when it began.
+	if (input.search && run.recordsFromAt && input.search.startedAt >= run.recordsFromAt) return null;
+	return searchStatus(base, input);
+}
+
 /** A run adding PDFs: its records' search update shows first, since it came first. */
 function pdfStageStatus(
 	base: SourceStatusBase,
@@ -262,7 +277,7 @@ function pdfStageStatus(
 ): SourceStatus {
 	const missed = run.pdfsMissed ?? 0;
 	return (
-		searchStatus(base, input) ?? {
+		recordsSearchStatus(base, input, run) ?? {
 			...base,
 			...runProgress(run, input.now),
 			pdfs: { added: run.recordsDone - missed, missed },

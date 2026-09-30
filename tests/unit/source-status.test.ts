@@ -245,6 +245,25 @@ describe("sourceStatus", () => {
 		expect(status).toMatchObject({ done: 400, phase: "search", state: "running", total: 1_000 });
 	});
 
+	it("keeps showing PDF progress while works found during the PDF stage are made searchable", () => {
+		const status = sourceStatus(
+			input({
+				activeRun: {
+					leaseExpiresAt: minutesAgo(-5),
+					pdfsMissed: 7,
+					recordsDone: 15_000,
+					recordsFrom: 0,
+					recordsFromAt: minutesAgo(40),
+					recordsTotal: 50_000,
+					stage: "pdfs",
+					startedAt: minutesAgo(40),
+				},
+				search: { done: 2, startedAt: minutesAgo(20), total: 3 },
+			}),
+		);
+		expect(status).toMatchObject({ done: 15_000, phase: "pdfs", state: "running", total: 50_000 });
+	});
+
 	it("keeps the PDF stage of a run whose worker lease ran out, after the records' waiting search update", () => {
 		const activeRun = {
 			leaseExpiresAt: minutesAgo(1),
