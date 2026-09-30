@@ -142,6 +142,10 @@ type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: s
 /** A country on the map: `location` is its place in the region filter, when it has one. */
 type Country = { code?: string; location?: string; name: string; count: number; selected: boolean };
 type Anchor = { x: number; y: number } | null;
+/** Each country's place on the globe, by code. */
+type Places = Record<string, [number, number]>;
+/** The slide a click gave the map, for the country it chose. */
+type Slide = { location: string; x: number };
 
 /** A country's colour: the accent mixed into the land by the square root of its share of the busiest, so small counts still show. */
 function tint(count: number, max: number) {
@@ -181,35 +185,43 @@ function nameOf(code: string, geo: Feature) {
 	return COUNTRIES[code] ?? geo.properties.name;
 }
 
-/** Where the map may draw on this screen. On a phone the page starts below the 80px header, and the globe's flat top stays hidden under the search bar. */
-function frameOf(width: number, height: number, isDesktop: boolean) {
+/** Where the map may draw on this screen, beside the country list when there is one (`listWidth`). On a phone the page starts
+ * below the 80px header, and the globe's flat top stays hidden under the search bar. */
+function frameOf(width: number, height: number, isDesktop: boolean, listWidth: number) {
 	const bottom = height - 96;
-	return isDesktop ? { width, height, bottom, left: PANEL_WIDTH + 48, top: 120, pad: PAD } : { width, height, bottom, left: 16, top: 40, pad: 0 };
+	return isDesktop ? { width, height, bottom, listWidth, left: listWidth + 32, top: 120, pad: PAD } : { width, height, bottom, listWidth, left: 16, top: 40, pad: 0 };
 }
 type Frame = ReturnType<typeof frameOf>;
+type View = NonNullable<ReturnType<typeof mapView>>;
 
 /** The projection and starting point for this screen, centred on `focus`: the middle of the library's countries. */
-function mapView(width: number | null, height: number | null, isDesktop: boolean, focus?: [number, number]) {
+function mapView(width: number | null, height: number | null, isDesktop: boolean, listWidth: number, focus?: [number, number]) {
 	if (!width || !height) return null;
-	const frame = frameOf(width, height, isDesktop);
+	const frame = frameOf(width, height, isDesktop, listWidth);
 	return { frame, ...(isDesktop ? desktopView(frame, focus) : phoneView(frame, focus)) };
+}
+
+/** The globe turned so `focus` is on its middle meridian: the library's countries then never sit across the date line. */
+function globeFor(focus?: [number, number]) {
+	return geoEqualEarth().rotate([-(focus?.[0] ?? 0), 0]);
 }
 
 /** A phone gets the land at full height, wider than the screen, with the library's countries in the middle. */
 function phoneView(frame: Frame, focus?: [number, number]) {
-	const projection = geoEqualEarth().fitExtent([[frame.left, frame.top], [frame.left + 4 * (frame.bottom - frame.top), frame.bottom]], LAND);
-	const [x] = projection(focus ?? [20, 0])!;
+	const target = focus ?? [20, 0];
+	const projection = globeFor(target).fitExtent([[frame.left, frame.top], [frame.left + 4 * (frame.bottom - frame.top), frame.bottom]], LAND);
+	const [x] = projection(target)!;
 	return { projection, center: projection.invert!([x, frame.height / 2]) as [number, number], minZoom: 1 };
 }
 
 /** A wide screen opens zoomed in on the library's countries, far enough in that the globe fills the screen from top to bottom,
- * with them in the middle of the space beside the panel. Zooming out shows the whole globe there. */
+ * with them in the middle of the space beside the list. Zooming out shows the whole globe there. */
 function desktopView(frame: Frame, focus?: [number, number]) {
-	const fitted = geoEqualEarth().fitExtent([[frame.left, frame.top], [frame.width - 32, frame.bottom]], SPHERE);
+	const fitted = globeFor(focus).fitExtent([[frame.left, frame.top], [frame.width - 32, frame.bottom]], SPHERE);
 	const [[, sphereTop], [, sphereBottom]] = geoPath(fitted).bounds(SPHERE);
 	const zoom = focus ? Math.max(START_ZOOM, (frame.height + 48) / (sphereBottom - sphereTop)) : 1;
 	const middle: [number, number] = [(frame.left + frame.width - 32) / 2, (frame.top + frame.bottom) / 2];
-	const projection = geoEqualEarth().scale(fitted.scale() * zoom).translate([0, 0]);
+	const projection = globeFor(focus).scale(fitted.scale() * zoom).translate([0, 0]);
 	const [x, y] = projection(focus ?? fitted.invert!(middle)!)!;
 	const shiftY = middle[1] + frame.pad - y;
 	projection.translate([middle[0] + frame.pad - x, focus ? coverY(projection, frame, shiftY) : shiftY]);
@@ -222,12 +234,35 @@ function coverY(projection: ReturnType<typeof geoEqualEarth>, frame: Frame, y: n
 	return Math.min(frame.pad - top, Math.max(frame.height + frame.pad - bottom, y));
 }
 
-/** How far the map slides sideways for the country's shape to sit in the gap between the two panels. */
-function slideTo(code: string, current: number) {
+/** The slide that puts a point at screen position `x` in the gap between the list and the results, no further than the map is drawn past the screen. */
+function slideFrom(frame: Frame, x: number) {
+	const gap = (frame.listWidth + frame.width - RESULTS_WIDTH) / 2;
+	return Math.max(-frame.pad, Math.min(frame.pad, gap - x));
+}
+
+/** A country chosen by a click slides from where its shape is now, wherever the map has been moved. */
+function slideTo(code: string, current: number, frame: Frame) {
 	const shape = document.querySelector(`[data-country="${code}"]`)?.getBoundingClientRect();
 	if (!shape) return current;
-	const gap = (PANEL_WIDTH + 16 + window.innerWidth - RESULTS_WIDTH) / 2;
-	return Math.max(-PAD, Math.min(PAD, current + gap - (shape.left + shape.width / 2)));
+	return slideFrom(frame, shape.left + shape.width / 2 - current);
+}
+
+/** How far the map is slid: only on a wide screen (a phone has no `pad`), to the country chosen last. */
+function offsetOf(view: View | null, chosen: string[], slide: Slide | null, places: Places) {
+	const last = chosen.at(-1);
+	if (!view?.frame.pad || !last) return 0;
+	return slideFor(view, last, slide, places);
+}
+
+/** The slide a click gave this country, or else its slide from its place on the globe. */
+function slideFor(view: View, location: string, slide: Slide | null, places: Places) {
+	return slide?.location === location ? slide.x : placedSlide(view, places[location.split(" > ").at(-1)!]);
+}
+
+/** A country chosen in the address, before any click, slides from its place on the globe as the map first shows it. */
+function placedSlide(view: View, place?: [number, number]) {
+	const point = place && view.projection(place);
+	return point ? slideFrom(view.frame, point[0] - view.frame.pad) : 0;
 }
 
 /** A keyboard user's tooltip sits over the country, kept inside the screen. */
@@ -344,15 +379,6 @@ function facetOf(props: ReturnType<typeof useItemsList>) {
 	return (props.facetDistribution?.country_uncategorized ?? {}) as Record<string, number>;
 }
 
-/** The map stays slid only while the results are open beside it on a wide screen. */
-function slideOffset(isDesktop: boolean, chosen: number, shift: number) {
-	return isDesktop && chosen > 0 ? shift : 0;
-}
-
-/** Choosing a country on a wide screen slides the map to it; unchoosing one leaves the map where it is. */
-function nextShift(code: string, choosing: boolean, current: number) {
-	return choosing ? slideTo(code, current) : current;
-}
 
 function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 	return (
@@ -374,8 +400,8 @@ function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props:
 	const t = useTranslations("ui");
 	const { theme } = useLibraryConfig();
 	return (
-		<div className={twMerge("fixed inset-y-0 left-0 z-10 hidden w-[calc(22rem+1rem)] pb-24 pl-4 pt-[calc(7.5rem-1.5rem)] md:block", theme.layout === "small" && "pt-[7.5rem]")}>
-			<div className="flex h-full flex-col rounded-2xl bg-white pt-2 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] dark:bg-secondary-400">
+		<div className={twMerge("fixed inset-y-0 left-0 z-10 pointer-events-none hidden w-[calc(22rem+1rem)] pb-24 pl-4 pt-[calc(7.5rem-1.5rem)] lg:block", theme.layout === "small" && "pt-[7.5rem]")}>
+			<div className="pointer-events-auto flex h-full flex-col rounded-2xl bg-white pt-2 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] dark:bg-secondary-400">
 				<h2 className="flex items-baseline justify-between px-5 pb-1 pt-2 text-base font-semibold">
 					{t("countries")}
 					<span className="text-sm font-medium tabular-nums text-black/50 dark:text-white/50">{rows.length}</span>
@@ -413,7 +439,7 @@ function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props:
 }
 
 
-export default function Map({ focus }: { focus?: [number, number] }) {
+export default function Map({ focus, places }: { focus?: [number, number]; places: Places }) {
 	const { search } = useLibraryConfig();
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
 		null,
@@ -431,16 +457,18 @@ export default function Map({ focus }: { focus?: [number, number] }) {
 	const maxItems = Math.max(1, ...rows.map((row) => row.count));
 	const size = useWindowSize();
 	const isDesktop = useBreakpoint("md");
-	const view = useMemo(() => mapView(size.width, size.height, isDesktop, focus), [size.width, size.height, isDesktop, focus]);
+	// The country list shows only where it and the results fit side by side.
+	const listWidth = useBreakpoint("lg") ? PANEL_WIDTH + 16 : 0;
+	const view = useMemo(() => mapView(size.width, size.height, isDesktop, listWidth, focus), [size.width, size.height, isDesktop, listWidth, focus]);
 	const chosen = props.queryParams.country;
 
 	// Choosing a country slides the map sideways so it sits in the gap between the two panels, in step with the results sliding in.
-	const [shift, setShift] = useState(0);
-	const offset = slideOffset(isDesktop, chosen.length, shift);
+	const [slide, setSlide] = useState<Slide | null>(null);
+	const offset = offsetOf(view, chosen, slide, places);
 	const selectCountry = (code: string) => {
 		const location = COUNTRY_PARAMS[code];
 		if (!location) return;
-		setShift(nextShift(code, isDesktop && !chosen.includes(location), offset));
+		if (view && !chosen.includes(location)) setSlide({ location, x: slideTo(code, offset, view.frame) });
 		props.handleCountrySelect(location);
 	};
 	const showCountry = (country: Country, anchor: Anchor) => {

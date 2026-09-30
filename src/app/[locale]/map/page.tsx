@@ -21,20 +21,31 @@ export default async function MapPage() {
 	// The outlines start downloading with the page, not after the map hydrates and asks for them.
 	preload("/features.json", { as: "fetch", crossOrigin: "anonymous" });
 	preload("/antarctica.json", { as: "fetch", crossOrigin: "anonymous" });
-	const focus = await focusOf().catch((error: unknown) => {
+	const { shapes } = await getWorldMap();
+	const focus = await focusOf(shapes).catch((error: unknown) => {
 		// Without it the map opens on the whole globe, so the page still works.
 		console.error("Map page: the library's countries could not be read for the starting point", error);
 		return undefined;
 	});
-	return <Map focus={focus} />;
+	return <Map focus={focus} places={placesOf(shapes)} />;
+}
+
+/** The projection `getWorldMap` placed the country markers with, so it turns a marker's position back into a place. */
+function worldProjection() {
+	return geoEqualEarth().scale(150).translate([MAP_WIDTH / 2, MAP_HEIGHT / 2]);
+}
+
+/** Each country's place on the globe (longitude and latitude), by code. */
+function placesOf(shapes: MapShape[]) {
+	const projection = worldProjection();
+	return Object.fromEntries(shapes.map((shape) => [shape.code, projection.invert!([shape.x, shape.y]) as [number, number]]));
 }
 
 /** Where the map opens: the middle of the library's countries, each weighted by its records, as a longitude and latitude. */
-async function focusOf() {
-	const [{ shapes }, facets] = await Promise.all([getWorldMap(), getPublicFacets({})]);
+async function focusOf(shapes: MapShape[]) {
+	const facets = await getPublicFacets({});
 	const middle = middleOf(shapes, countsOf((facets.facetDistribution?.country ?? {}) as Record<string, number>));
-	// The shapes were placed with this projection (see `getWorldMap`), so it turns the weighted middle back into a place.
-	return middle && (geoEqualEarth().scale(150).translate([MAP_WIDTH / 2, MAP_HEIGHT / 2]).invert!(middle) as [number, number]);
+	return middle && (worldProjection().invert!(middle) as [number, number]);
 }
 
 /** Records per country code. The facet counts by region path ("Africa > Western Africa > NG"). */
