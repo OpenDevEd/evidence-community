@@ -65,11 +65,23 @@ function requestInit(oql: string | undefined): RequestInit {
 	};
 }
 
-// A long import makes thousands of requests, so a network blip of up to half a minute is waited out.
-const MAX_ATTEMPTS = 6;
+// OpenAlex fails often, from a network blip to an outage of most of an hour. A
+// request keeps trying, waiting longer each time up to a minute, until it has
+// waited this long in all; only then does the import stop, and its next run
+// carries on from the same place.
+const OUTAGE_WAIT_MS = 60 * 60_000;
+const MAX_RETRY_DELAY_MS = 60_000;
 
-function isRetryable(response: Response, attempt: number) {
-	return (response.status === 429 || response.status >= 500) && attempt < MAX_ATTEMPTS - 1;
+const isRetryable = (response: Response) => response.status === 429 || response.status >= 500;
+
+/** Says why a request is tried again, so an outage shows in the log while the import waits. */
+function logRetry(reason: string, attempt: number, delayMs: number, waitedMs: number) {
+	console.warn("OpenAlex request failed; trying again", {
+		reason: reason.slice(0, 200),
+		attempt: attempt + 1,
+		waitSeconds: delayMs / 1000,
+		waitedMinutes: Math.round(waitedMs / 60_000),
+	});
 }
 
 function failureText(error: unknown) {
@@ -113,13 +125,15 @@ async function throwIfSearchTimeout(response: Response) {
 	return new Response(body, { status: response.status, headers: response.headers });
 }
 
+const backoff = (attempt: number) => Math.min(MAX_RETRY_DELAY_MS, 1_000 * 2 ** attempt);
+
 function retryDelay(response: Response, attempt: number) {
 	const retryAfter = response.headers.get("retry-after");
 	const seconds = Number(retryAfter);
 	const requestedDelay = Number.isFinite(seconds)
 		? seconds * 1000
 		: Date.parse(retryAfter ?? "") - Date.now();
-	return Math.min(60_000, Math.max(1_000 * 2 ** attempt, requestedDelay || 0));
+	return Math.min(MAX_RETRY_DELAY_MS, Math.max(backoff(attempt), requestedDelay || 0));
 }
 
 export class OpenAlexClient {
@@ -142,7 +156,8 @@ export class OpenAlexClient {
 	private async fetchWithRetries(url: URL, oql?: string, canShrink = false) {
 		const init = requestInit(oql);
 		const request = this.options.fetch ?? fetch;
-		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+		let waited = 0;
+		for (let attempt = 0; ; attempt++) {
 			let response: Response;
 			try {
 				response = await request(url, {
@@ -151,17 +166,24 @@ export class OpenAlexClient {
 					signal: AbortSignal.timeout(30_000),
 				});
 			} catch (error) {
-				if (attempt === MAX_ATTEMPTS - 1)
+				const delay = backoff(attempt);
+				if (waited + delay > OUTAGE_WAIT_MS)
 					throw new OpenAlexApiError(`OpenAlex works request failed: ${failureText(error)}`);
-				await this.sleep(1_000 * 2 ** attempt);
+				logRetry(failureText(error), attempt, delay, waited);
+				await this.sleep(delay);
+				waited += delay;
 				continue;
 			}
 			if (canShrink) response = await throwIfSearchTimeout(response);
-			if (!isRetryable(response, attempt)) return response;
+			if (!isRetryable(response)) return response;
+			const delay = retryDelay(response, attempt);
+			// The last answer is reported as it is.
+			if (waited + delay > OUTAGE_WAIT_MS) return response;
 			await response.body?.cancel();
-			await this.sleep(retryDelay(response, attempt));
+			logRetry(`HTTP ${response.status}`, attempt, delay, waited);
+			await this.sleep(delay);
+			waited += delay;
 		}
-		throw new OpenAlexApiError("OpenAlex works request exhausted retries");
 	}
 
 	/** Counts of the query's works by publication year. Works with no year are left out. */

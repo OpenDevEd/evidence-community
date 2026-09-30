@@ -71,3 +71,31 @@ it("resumes the imports a restarted worker was running without waiting out their
 		expect(other).toEqual({ leaseOwner: "another-worker" });
 	});
 }, 60_000);
+
+it("measures a stage that started over from its new start", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ externalScopeKey: "restart-scope", key: "started-over", provider: "eprints", scopeKind: "repository" });
+		await runSourceConnection({
+			database: db,
+			registry: new SourceAdapterRegistry([
+				{
+					provider: "eprints",
+					sync: async ({ run }) => {
+						await run!.report(600, 50_000, { missed: 10 });
+						// The stage starts over, as a PDF stage does when it moves to date slices.
+						await run!.report(0, 50_000, { missed: 0 });
+						await run!.report(40, 50_000, { missed: 1 });
+						return { synchronized: 1 };
+					},
+				},
+			]),
+			sourceConnectionKey: "started-over",
+			workerId: "source-sync",
+		});
+		const [run] = await db
+			.select({ recordsDone: sourceSyncRun.recordsDone, recordsFrom: sourceSyncRun.recordsFrom, stage: sourceSyncRun.stage })
+			.from(sourceSyncRun)
+			.where(eq(sourceSyncRun.sourceConnectionKey, "started-over"));
+		expect(run).toEqual({ recordsDone: 40, recordsFrom: 0, stage: "pdfs" });
+	});
+}, 60_000);

@@ -168,7 +168,39 @@ describe("OpenAlex works requests", () => {
 		// A caller that reads one page and ignores the cursor always gets the size it asked for.
 		requests.length = 0;
 		await expect(client.works(query, "*", 100)).rejects.toMatchObject({ status: 500 });
-		expect(requests.map(({ size }) => size)).toEqual(Array(6).fill(100));
+		expect(new Set(requests.map(({ size }) => size))).toEqual(new Set([100]));
+	});
+
+	it("waits out an OpenAlex outage of up to an hour, then reports the last answer", async () => {
+		const waits: number[] = [];
+		let failures = 0;
+		const client = new OpenAlexClient({
+			apiKey: "test-key",
+			sleep: async (ms) => {
+				waits.push(ms);
+			},
+			fetch: async () => {
+				if (failures-- > 0) {
+					if (failures % 2) throw new TypeError("fetch failed");
+					return new Response("Service unavailable", { status: 503 });
+				}
+				return Response.json(page);
+			},
+		});
+
+		// Forty failures in a row, mixing lost connections and 503s: about half an hour of waiting.
+		failures = 40;
+		expect(await client.works(query, "saved")).toEqual(page);
+		expect(waits).toHaveLength(40);
+		expect(Math.max(...waits)).toBe(60_000);
+
+		// One that never ends stops once the next wait would pass an hour.
+		waits.length = 0;
+		failures = Number.POSITIVE_INFINITY;
+		await expect(client.works(query, "saved")).rejects.toThrow(/request failed|503/);
+		const waited = waits.reduce((sum, ms) => sum + ms, 0);
+		expect(waited).toBeLessThanOrEqual(60 * 60_000);
+		expect(waited).toBeGreaterThan(59 * 60_000);
 	});
 
 	it("still asks for a smaller page when the search times out on the last retry", async () => {
