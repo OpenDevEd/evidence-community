@@ -137,6 +137,7 @@ describe("OpenAlex PDF processing", () => {
 				{ database, sourceConnection: connection!, credentialResolver: async () => "test", heartbeat: async () => {} },
 				{
 					attachmentProcessor: processor,
+					sleep: async () => {},
 					// Pages of two works.
 					fetch: async (input) => {
 						const cursor = new URL(String(input)).searchParams.get("cursor");
