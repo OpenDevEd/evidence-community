@@ -94,7 +94,7 @@ export type SourceStatusInput = {
 	 * Search work queued by this source's runs that still have some waiting.
 	 * Done counts failed events too, so the bar can finish.
 	 */
-	search: { done: number; total: number; startedAt: Date } | null;
+	search: { done: number; total: number; startedAt: Date; waitingFrom: Date } | null;
 	/** Search updates of this source's records that failed and wait for a retry. */
 	searchFailed: number;
 	/** The latest run that changed records. */
@@ -264,8 +264,9 @@ function recordsSearchStatus(
 	input: SourceStatusInput,
 	run: NonNullable<SourceStatusInput["activeRun"]>,
 ) {
-	// The PDF stage measures its rate from when it began.
-	if (input.search && run.recordsFromAt && input.search.startedAt >= run.recordsFromAt) return null;
+	// The PDF stage measures its rate from when it began. Work still waiting
+	// from before then is the records'; the rest came from the PDF stage.
+	if (input.search && run.recordsFromAt && input.search.waitingFrom >= run.recordsFromAt) return null;
 	return searchStatus(base, input);
 }
 
@@ -352,6 +353,7 @@ export async function readSourceStatuses(
 					key: sourceSyncRun.sourceConnectionKey,
 					startedAt: sql<Date>`min(${outbox.createdAt})`.mapWith(outbox.createdAt),
 					total: sql<number>`count(*)::int`,
+					waitingFrom: sql<Date>`min(${outbox.createdAt}) filter (where ${outbox.processedAt} is null and ${outbox.deadLetteredAt} is null)`.mapWith(outbox.createdAt),
 				})
 				.from(outbox)
 				.innerJoin(sourceSyncRun, eq(outbox.sourceSyncRunId, sourceSyncRun.id))
