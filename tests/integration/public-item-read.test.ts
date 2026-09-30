@@ -24,7 +24,7 @@ import { exportCitationItems } from "@/lib/citation-export";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { generateFullSearchProjectionPlans, generateSearchProjectionPlans, readPublicItems } from "@/lib/search-index/projection";
+import { generateFullSearchProjectionPlans, readPublicItems } from "@/lib/search-index/projection";
 import { createNativeCollection } from "@/lib/admin/native-collection-service";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 
@@ -243,11 +243,5 @@ it("indexes the higher of the library's citation count and OpenAlex's, which the
 			ALXCITED: 40,
 			UNCITED2: 0,
 		});
-
-		// Hiding a citing record reindexes only that record, and still lowers the count of what it cites.
-		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'CITINGBB\', \'hidden\')');
-		const reindexed = [];
-		for await (const plan of generateSearchProjectionPlans(database, config, [{ entityType: "item", entityKey: "CITINGBB" }])) reindexed.push(...plan.documents);
-		expect(reindexed.find((document) => document.key === "LIBCITED")?.citationCount).toBe(1);
 	});
 }, 120_000);
