@@ -101,7 +101,7 @@ it("resumes after a failed page and shares identities across concurrent searches
 					credentialResolver: async () => "test-key",
 					heartbeat: async () => {},
 				},
-				{ fetch: request },
+				{ fetch: request, sleep: async () => {} },
 			);
 		};
 		await expect(
@@ -158,7 +158,8 @@ it("resumes after a failed page and shares identities across concurrent searches
 				}),
 			),
 		]);
-		expect(cursors).toEqual(["page-2"]);
+		// The resumed run reads only from the saved cursor.
+		expect(new Set(cursors)).toEqual(new Set(["page-2"]));
 		const records = await db.select().from(item);
 		expect(records).toHaveLength(3);
 		expect(records.find((row) => row.key === manual.itemKey)?.title).toBe(
@@ -825,11 +826,12 @@ it("writes the PDF pages already fetched when a later page cannot be fetched", a
 				{
 					attachmentProcessor: processor,
 					sleep: async () => {},
-					// Pages of two. The records scan reads all three; the PDF scan cannot read the third.
+					// Pages of two. The records scan reads all three, and the last one three times to be sure it ends there.
+					// The PDF scan cannot read the third.
 					fetch: async (input) => {
 						const cursor = new URL(String(input)).searchParams.get("cursor")!;
 						seen.set(cursor, (seen.get(cursor) ?? 0) + 1);
-						if (cursor === "4" && seen.get(cursor)! > 1) return new Response("Forbidden", { status: 403 });
+						if (cursor === "4" && seen.get(cursor)! > 3) return new Response("Forbidden", { status: 403 });
 						const from = cursor === "*" ? 0 : Number(cursor);
 						return Response.json({ meta: { count: works.length, next_cursor: from + 2 < works.length ? String(from + 2) : null }, results: works.slice(from, from + 2) });
 					},

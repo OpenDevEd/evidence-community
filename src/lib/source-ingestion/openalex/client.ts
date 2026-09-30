@@ -4,6 +4,7 @@ import {
 	openAlexGroupsSchema,
 	openAlexPageSchema,
 	openAlexQuerySchema,
+	type OpenAlexPage,
 	type OpenAlexQuery,
 } from "./schema";
 
@@ -85,6 +86,15 @@ const SEARCH_TIMEOUT = "Elasticsearch error: Connection timed out";
 const MIN_PAGE_SIZE = 25;
 const PAGES_BEFORE_GROWING = 10;
 
+// OpenAlex leaves `next_cursor` out of any page shorter than asked for, and a
+// busy search can answer with part of a page. A short page that would end the
+// scan is asked for again this many times first.
+const LAST_PAGE_CHECKS = 2;
+
+/** A page that ends the scan although the query has more works than it holds. */
+const endsEarly = (page: OpenAlexPage, size: number) =>
+	!page.meta.next_cursor && page.results.length < size && page.results.length < page.meta.count;
+
 class OpenAlexSearchTimeoutError extends OpenAlexApiError {}
 
 /**
@@ -125,12 +135,13 @@ export class OpenAlexClient {
 		},
 	) {}
 
+	private sleep(ms: number) {
+		return this.options.sleep ? this.options.sleep(ms) : new Promise<void>((resolve) => setTimeout(resolve, ms));
+	}
+
 	private async fetchWithRetries(url: URL, oql?: string, canShrink = false) {
 		const init = requestInit(oql);
 		const request = this.options.fetch ?? fetch;
-		const sleep =
-			this.options.sleep ??
-			((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
 			let response: Response;
 			try {
@@ -142,13 +153,13 @@ export class OpenAlexClient {
 			} catch (error) {
 				if (attempt === MAX_ATTEMPTS - 1)
 					throw new OpenAlexApiError(`OpenAlex works request failed: ${failureText(error)}`);
-				await sleep(1_000 * 2 ** attempt);
+				await this.sleep(1_000 * 2 ** attempt);
 				continue;
 			}
 			if (canShrink) response = await throwIfSearchTimeout(response);
 			if (!isRetryable(response, attempt)) return response;
 			await response.body?.cancel();
-			await sleep(retryDelay(response, attempt));
+			await this.sleep(retryDelay(response, attempt));
 		}
 		throw new OpenAlexApiError("OpenAlex works request exhausted retries");
 	}
@@ -166,29 +177,60 @@ export class OpenAlexClient {
 	 * One page of the query's works; "*" asks for the first. OpenAlex leaves
 	 * `next_cursor` out without a cursor. A caller that follows `next_cursor`
 	 * can take a smaller page than it asked for when OpenAlex's search times
-	 * out; any other caller always gets the size it asked for.
+	 * out; any other caller always gets the size it asked for. A short page
+	 * that would end a followed cursor early is asked for again first.
 	 */
 	async works(query: OpenAlexQuery, cursor: string, pageSize = 100, { followsCursor = false } = {}) {
 		let size = followsCursor ? Math.min(pageSize, this.pageLimit) : pageSize;
 		for (;;) {
-			const url = worksUrl(query, cursor, size, this.options.apiKey);
-			let body: unknown;
+			let page: OpenAlexPage;
 			try {
-				body = await this.read(url, query.oql, followsCursor && size > MIN_PAGE_SIZE);
+				page = await this.page(query, cursor, size, followsCursor && size > MIN_PAGE_SIZE);
 			} catch (error) {
 				if (!(error instanceof OpenAlexSearchTimeoutError)) throw error;
 				size = this.shrink(size);
 				continue;
 			}
-			const page = openAlexPageSchema.parse(body);
-			if (page.results.length > size) {
-				throw new OpenAlexApiError(
-					"OpenAlex returned more works than requested",
-				);
-			}
 			this.countPage(size);
-			return page;
+			return followsCursor ? this.checkLastPage(query, cursor, size, page) : page;
 		}
+	}
+
+	private async page(query: OpenAlexQuery, cursor: string, size: number, canShrink = false) {
+		const page = openAlexPageSchema.parse(await this.read(worksUrl(query, cursor, size, this.options.apiKey), query.oql, canShrink));
+		if (page.results.length > size) throw new OpenAlexApiError("OpenAlex returned more works than requested");
+		return page;
+	}
+
+	/**
+	 * Asks for a short last page again; an answer with a cursor or more works
+	 * replaces it. A search timeout asks again at a smaller size, as `works` does.
+	 */
+	private async checkLastPage(query: OpenAlexQuery, cursor: string, size: number, page: OpenAlexPage) {
+		let askedSize = size;
+		for (let check = 1; check <= LAST_PAGE_CHECKS && endsEarly(page, askedSize); ) {
+			await this.sleep(1_000 * check);
+			let again: OpenAlexPage;
+			try {
+				again = await this.page(query, cursor, size, size > MIN_PAGE_SIZE);
+			} catch (error) {
+				if (!(error instanceof OpenAlexSearchTimeoutError)) throw error;
+				size = this.shrink(size);
+				continue;
+			}
+			check++;
+			if (!again.meta.next_cursor && again.results.length <= page.results.length) continue;
+			console.warn("OpenAlex cut a page short; asking again found more", {
+				pageSize: size,
+				works: page.results.length,
+				worksAgain: again.results.length,
+				nextCursor: Boolean(again.meta.next_cursor),
+				count: again.meta.count,
+			});
+			page = again;
+			askedSize = size;
+		}
+		return page;
 	}
 
 	/** The next size to ask for after a search timeout at `size`, or the shared limit if another page already lowered it further. */

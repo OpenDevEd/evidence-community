@@ -54,6 +54,8 @@ function mappedIpv4(address: string) {
  * to a private one for the connection.
  */
 const publicOnly = new Agent({
+	// Springer Nature's Fastly answers undici's HTTP/1.1 requests with a JavaScript challenge, but not HTTP/2 ones.
+	allowH2: true,
 	connect: {
 		lookup(hostname, options, callback) {
 			lookupCallback(hostname, { all: true }, (error, addresses) => {

@@ -188,6 +188,55 @@ describe("OpenAlex works requests", () => {
 		expect(sizes).toEqual([...Array(6).fill(200), 100]);
 	});
 
+	it("asks for a short page with no cursor again before a followed scan ends on it", async () => {
+		const works = (length: number) => Array.from({ length }, (_, index) => ({ id: `https://openalex.org/W${index}` }));
+		const cutShort = { meta: { count: 94_216, next_cursor: null }, results: works(95) };
+		const full = { meta: { count: 94_216, next_cursor: "after" }, results: works(100) };
+		const answers = [cutShort, full];
+		const cursors: string[] = [];
+		const client = new OpenAlexClient({
+			apiKey: "test-key",
+			sleep: async () => {},
+			fetch: async (input) => {
+				cursors.push(new URL(String(input)).searchParams.get("cursor")!);
+				return Response.json(answers.shift() ?? cutShort);
+			},
+		});
+		expect(await client.works(query, "saved", 100, { followsCursor: true })).toEqual(full);
+		expect(cursors).toEqual(["saved", "saved"]);
+
+		// A short page that comes back the same every time is the real end.
+		cursors.length = 0;
+		expect(await client.works(query, "saved", 100, { followsCursor: true })).toEqual(cutShort);
+		expect(cursors).toEqual(["saved", "saved", "saved"]);
+
+		// A search timeout while asking again asks for a smaller page, as any other page would.
+		cursors.length = 0;
+		const sizes: number[] = [];
+		const half = { meta: { count: 94_216, next_cursor: "after" }, results: works(50) };
+		const timesOut = new OpenAlexClient({
+			apiKey: "test-key",
+			sleep: async () => {},
+			fetch: async (input) => {
+				const size = Number(new URL(String(input)).searchParams.get("per_page"));
+				sizes.push(size);
+				if (sizes.length === 1) return Response.json(cutShort);
+				return size > 50
+					? Response.json({ errors: [{ message: "Elasticsearch error: Connection timed out" }] }, { status: 500 })
+					: Response.json(half);
+			},
+		});
+		expect(await timesOut.works(query, "saved", 100, { followsCursor: true })).toEqual(half);
+		expect(sizes).toEqual([100, 100, 50]);
+
+		// A caller that ignores the cursor, or a page holding every work, is not asked for again.
+		cursors.length = 0;
+		answers.push(cutShort, page);
+		expect(await client.works(query, "saved", 100)).toEqual(cutShort);
+		expect(await client.works(query, "*", 100, { followsCursor: true })).toEqual(page);
+		expect(cursors).toEqual(["saved", "*"]);
+	});
+
 	it("retries other server errors at the same page size", async () => {
 		const sizes: number[] = [];
 		const client = new OpenAlexClient({
