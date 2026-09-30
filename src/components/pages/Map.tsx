@@ -10,7 +10,7 @@ import {
 } from "react-simple-maps";
 import { geoEqualEarth, geoPath } from "d3-geo";
 import { ReactNode, useEffect, useMemo, useState, useRef, memo } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
@@ -162,8 +162,6 @@ const RESULTS_WIDTH = 33 * 16;
 const START_ZOOM = 1.8;
 /** How far past the screen's edges the map is drawn on a wide screen, so sliding it towards a chosen country never shows its edge. */
 const PAD = 600;
-
-const number = new Intl.NumberFormat();
 
 function countryRows(facet: Record<string, number>) {
 	return Object.entries(facet).flatMap(rowOf).sort((a, b) => b.count - a.count);
@@ -398,6 +396,7 @@ function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 /** The library's countries, largest first, in the space above the search bar. The list doubles as the map's key: each bar has its country's colour. */
 function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props: ReturnType<typeof useItemsList>; rows: CountryRow[]; max: number; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void }) {
 	const t = useTranslations("ui");
+	const format = useFormatter();
 	const { theme } = useLibraryConfig();
 	return (
 		<div className={twMerge("fixed inset-y-0 left-0 z-10 pointer-events-none hidden w-[calc(22rem+1rem)] pb-24 pl-4 pt-[calc(7.5rem-1.5rem)] lg:block", theme.layout === "small" && "pt-[7.5rem]")}>
@@ -427,7 +426,7 @@ function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props:
 											<span className="block h-full rounded-full" style={{ width: `${Math.max(2, (100 * row.count) / max)}%`, background: tint(row.count, max) }} />
 										</span>
 									</span>
-									<span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">{number.format(row.count)}</span>
+									<span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(row.count)}</span>
 								</button>
 							</li>
 						);
