@@ -1079,8 +1079,6 @@ export async function ensureSearchIndex(
 	service: MeilisearchService,
 	options: {
 		onMissing?: () => Promise<void>;
-		/** Called once the index exists, before its settings are applied, which can take minutes on a large index. */
-		onIndexExists?: () => Promise<void>;
 		signal?: AbortSignal;
 		taskTimeoutMs?: number;
 	} = {},
@@ -1123,7 +1121,6 @@ export async function ensureSearchIndex(
 			}
 		}
 	}
-	await options.onIndexExists?.();
 
 	await waitForSuccessfulTask(
 		service.index.updateSettings({

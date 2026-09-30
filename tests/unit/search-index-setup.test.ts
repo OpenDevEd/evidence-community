@@ -108,22 +108,6 @@ describe("search index setup", () => {
 		});
 	});
 
-	it("says the index exists before sending its settings, which can take minutes", async () => {
-		const events: string[] = [];
-		const target = service(false, events);
-		const updateSettings = target.index.updateSettings.bind(target.index);
-		(target.index as unknown as { updateSettings: unknown }).updateSettings = (settings: never) => {
-			events.push("settings");
-			return updateSettings(settings);
-		};
-		await ensureSearchIndex(target, {
-			onIndexExists: async () => {
-				events.push("exists");
-			},
-		});
-		expect(events).toEqual(["create", "exists", "settings"]);
-	});
-
 	it("waits for a settings task as long as Meilisearch makes progress, and gives up once it stalls", async () => {
 		// The task is queued for its first five polls, then in batch 7 until the tenth.
 		const run = (progressFor: (poll: number) => number | Error) => {

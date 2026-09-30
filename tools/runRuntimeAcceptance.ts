@@ -3291,8 +3291,8 @@ async function startAcceptanceSearchWorkers(profiles: Profile[]) {
 		"amber-search-indexer",
 		"indigo-search-indexer",
 	);
-	// Health passes once the index exists; the startup rebuild may still be
-	// running, and the records seeded next must not race it.
+	// Health passes before the startup rebuild finishes, and the records
+	// seeded next must not race it.
 	for (const profile of profiles) {
 		const deadline = Date.now() + 180_000;
 		while (
