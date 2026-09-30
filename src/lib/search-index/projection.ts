@@ -6,7 +6,7 @@ import {
 	isPublicTopLevelItem,
 	LIBRARY_OWNED_PAYLOAD_FIELDS,
 } from "@/lib/admin/item-fields";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
@@ -16,6 +16,7 @@ import {
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
+import { itemLink } from "@/db/schema/tables/itemLink";
 import {
 	INSTITUTION_FILTER_FIELD,
 	institutionNameKey,
@@ -243,6 +244,24 @@ async function resolveTopLevelItemKeys(
 			.filter((event) => event.entityType === "item")
 			.map((event) => event.entityKey),
 	);
+	// Whether a record is public decides whether it shows in the links, and
+	// counts in the citations, of every record it is linked to, so those are
+	// projected again with it.
+	for (const itemChunk of chunkValues([...requestedItemKeys], 1_000)) {
+		const linked = await database
+			.select({ fromKey: itemLink.fromKey, toKey: itemLink.toKey })
+			.from(itemLink)
+			.where(
+				or(
+					inArray(itemLink.fromKey, itemChunk),
+					inArray(itemLink.toKey, itemChunk),
+				),
+			);
+		for (const link of linked) {
+			requestedItemKeys.add(link.fromKey);
+			requestedItemKeys.add(link.toKey);
+		}
+	}
 	const collectionEventKeys = events
 		.filter((event) => event.entityType === "collection")
 		.map((event) => event.entityKey);
