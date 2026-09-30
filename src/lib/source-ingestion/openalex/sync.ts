@@ -706,14 +706,22 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
 /**
  * A full PDF stage over a large query reads it in date slices, one after
  * another. Deep in a long query OpenAlex's search can time out even at small
- * pages, while each slice's pages stay quick.
+ * pages, while each slice's pages stay quick. A stage part-way through one
+ * stream starts over in slices; the PDFs it added are kept, not downloaded
+ * again.
  */
 async function slicePdfStage(scan: Scan) {
 	const { cursor } = scan;
-	if (cursor.mode !== "full" || cursor.nextCursor !== "*" || cursor.slices) return;
-	const slices = await planStreamSlices(scan, cursor.imported);
+	if (cursor.mode !== "full" || !cursor.nextCursor || cursor.slices) return;
+	// An OpenAlex failure fails the run with the stage where it was, so the next run plans again.
+	const slices = await scan.stream.planSlices(scan.client, cursor.imported);
 	if (!slices) return;
-	scan.cursor = { ...cursor, slices: slices.map((slice) => ({ ...slice, nextCursor: "*" })) };
+	scan.cursor = {
+		...cursor,
+		nextCursor: "*",
+		slices: slices.map((slice) => ({ ...slice, nextCursor: "*" })),
+		pdfs: { done: 0, missed: 0, total: cursor.pdfs?.total ?? null },
+	};
 	await writeBatch(scan.context, scan.expectedCursor, scan.cursor, { items: [] }, "pdfs");
 	scan.expectedCursor = scan.cursor;
 }
@@ -971,23 +979,13 @@ async function scanSlices(scan: Scan) {
 async function switchToSlices(scan: Scan, count: number) {
 	const { cursor, context } = scan;
 	if (cursor.stage !== "records" || cursor.mode !== "full" || cursor.nextCursor !== "*" || cursor.imported) return false;
-	const slices = await planStreamSlices(scan, count);
+	// An OpenAlex failure fails the run with the scan still at its start, so the next run plans again.
+	const slices = await scan.stream.planSlices(scan.client, count);
 	if (!slices) return false;
 	scan.cursor = { ...cursor, slices: slices.map((slice) => ({ ...slice, nextCursor: "*" })) };
 	await writeBatch(context, scan.expectedCursor, scan.cursor, { items: [] });
 	scan.expectedCursor = scan.cursor;
 	return true;
-}
-
-/** The stream's date slices for `count` works, or null to read it as one stream. */
-function planStreamSlices(scan: Scan, count: number) {
-	return scan.stream.planSlices(scan.client, count).catch((error: unknown) => {
-		console.warn("OpenAlex slice planning failed; scanning the query as one stream", {
-			sourceConnectionKey: scan.context.sourceConnection.key,
-			error: error instanceof Error ? error.message : String(error),
-		});
-		return null;
-	});
 }
 
 /** Withdraws the source's works that no scan has read since `startedAt`, in retryable batches. */

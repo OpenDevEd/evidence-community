@@ -666,7 +666,7 @@ function slicedOpenAlex(extra: (id: number) => Partial<SlicedWork> = () => ({}))
 		const to = /publication_date < (\S+)/.exec(clause)?.[1];
 		return date !== undefined && (!from || date >= from) && (!to || date < to);
 	};
-	const state = { failNextSecondPage: false, failed: null as string | null, totalOffset: 0 };
+	const state = { failNextSecondPage: false, failed: null as string | null, totalOffset: 0, planningDown: false };
 	const requests: string[] = [];
 	const yearGroups = () => {
 		const years = Map.groupBy(works.filter((candidate) => candidate.publication_date), (candidate) => candidate.publication_date!.slice(0, 4));
@@ -691,7 +691,8 @@ function slicedOpenAlex(extra: (id: number) => Partial<SlicedWork> = () => ({}))
 	};
 	const respond = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const oql = (JSON.parse(String(init?.body)) as { oql: string }).oql;
-		return oql.endsWith(" group by publication_year") ? yearGroups() : page(new URL(String(input)), clauseOf(oql));
+		if (!oql.endsWith(" group by publication_year")) return page(new URL(String(input)), clauseOf(oql));
+		return state.planningDown ? new Response("Service unavailable", { status: 503 }) : yearGroups();
 	}) as typeof fetch;
 	return { works, clauseOf, requests, respond, state };
 }
@@ -795,6 +796,50 @@ it("reads a large PDF stage in date slices, one after another, resuming a slice 
 			expect(requests.filter((request) => request.startsWith(`${clauseFor(slice.dates)}@`))).toEqual([]);
 		}
 		// Every PDF link is counted once across both runs.
+		expect((await connection()).syncCursor).toMatchObject({ stage: "pdfs", nextCursor: null, completedAt: expect.any(String), pdfs: { done: 30 } });
+	});
+}, 120_000);
+
+it("keeps a PDF stage where it was while OpenAlex cannot plan its slices, then moves it to slices", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const query = { oql: "works where title has education" };
+		await db.insert(sourceConnection).values({
+			key: "oa-pdf-outage", provider: "openalex", scopeKind: "query",
+			config: { ...settings, downloadPdfs: true, approvedQuery: { ...settings.approvedQuery, query } },
+		});
+		const { requests, respond, state } = slicedOpenAlex((id) => ({
+			best_oa_location: { is_oa: true, pdf_url: `https://host${id}.example.org/W${id}.pdf`, license: "cc-by" },
+		}));
+		const processor = Object.assign(async (record: SourceItemUpsert) => record, {
+			reuse: async (record: SourceItemUpsert) => record,
+			flushCleanup: async () => {},
+		});
+		const connection = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-pdf-outage")))[0]!;
+		const sync = async () =>
+			syncOpenAlexSource(
+				{ database: db, sourceConnection: await connection(), credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{ attachmentProcessor: processor, fetch: respond, sleep: async () => {} },
+			);
+		await sync();
+
+		// A PDF stage part-way through the whole query as one stream, as before slices. The records stage
+		// counted its works like the query: a thousand times larger.
+		const { slices: _recordSlices, ...finished } = (await connection()).syncCursor as Record<string, unknown>;
+		const partWay = { ...finished, imported: 30_000, stage: "pdfs", nextCursor: "4", completedAt: null, pdfs: { done: 4, missed: 0, total: 30 } };
+		await db.update(sourceConnection).set({ syncCursor: partWay }).where(eq(sourceConnection.key, "oa-pdf-outage"));
+
+		// While OpenAlex cannot plan slices, the run stops and the stage stays where it was.
+		requests.length = 0;
+		state.planningDown = true;
+		await expect(sync()).rejects.toMatchObject({ status: 503 });
+		expect((await connection()).syncCursor).toEqual(partWay);
+		expect(requests).toEqual([]);
+
+		// Once it can, the stage starts over in slices and counts every PDF link once.
+		state.planningDown = false;
+		await sync();
+		expect(requests.length).toBeGreaterThan(0);
+		expect(requests.some((request) => request.startsWith("all@"))).toBe(false);
 		expect((await connection()).syncCursor).toMatchObject({ stage: "pdfs", nextCursor: null, completedAt: expect.any(String), pdfs: { done: 30 } });
 	});
 }, 120_000);

@@ -535,8 +535,10 @@ async function reportRunProgress(
 	pdfs?: { missed: number },
 ) {
 	const now = (options.now ?? (() => new Date()))();
-	// Each stage measures its own rate from where it started.
-	const restart = pdfs ? sql`${sourceSyncRun.stage} is null` : sql`${sourceSyncRun.stage} is not null`;
+	// Each stage measures its own rate from where it started, and so does a stage whose count went back
+	// because it started over.
+	const newStage = pdfs ? sql`${sourceSyncRun.stage} is null` : sql`${sourceSyncRun.stage} is not null`;
+	const restart = sql`(${newStage} or ${sourceSyncRun.recordsFrom} > ${done})`;
 	await options.database
 		.update(sourceSyncRun)
 		.set({
