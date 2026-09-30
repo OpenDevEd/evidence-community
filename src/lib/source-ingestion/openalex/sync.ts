@@ -44,7 +44,8 @@ const cursorSchema = z
 		// Whether PDFs were added since the last scan that left them out. Absent on
 		// cursors from before it was kept, which may have added some.
 		pdfsAdded: z.boolean().optional(),
-		// A full scan of a large query reads date slices at once, each with its own cursor.
+		// A full scan of a large query reads date slices, each with its own cursor: the
+		// records stage all at once, the PDF stage one after another.
 		// Only a sliced scan saves the key, so other cursors stay readable by older releases.
 		slices: z
 			.array(
@@ -534,6 +535,13 @@ async function reportProgress(scan: Scan, count: number) {
 	await context.run?.report(cursor.imported, Math.max(count, cursor.imported));
 }
 
+/** The cursor once a page is read: its slice moves on, and a sliced scan ends with its last slice. */
+function pastPage(cursor: Cursor, slice: number | null, next: string | null): Cursor {
+	if (slice === null) return { ...cursor, nextCursor: next };
+	const slices = cursor.slices!.map((part, index) => (index === slice ? { ...part, nextCursor: next } : part));
+	return { ...cursor, slices, nextCursor: slices.some((part) => part.nextCursor) ? cursor.nextCursor : null };
+}
+
 /** Incremental access was refused: scan the whole query instead. */
 function fullScanCursor(cursor: Cursor): Cursor {
 	return {
@@ -624,6 +632,8 @@ function downloadLanes(size: number, perHost: number) {
 
 type PdfPage = {
 	page: NonNullable<Awaited<ReturnType<typeof fetchPage>>>;
+	/** The date slice the page came from, when the stage is sliced. */
+	slice: number | null;
 	mapped: ReturnType<typeof mapOpenAlexWork>[];
 	items: SourceItemUpsert[];
 	links: Set<string>;
@@ -642,30 +652,42 @@ type PdfPipeline = {
 	fetchCursor: Cursor;
 };
 
+/** The next page of the PDF stage, from the first unfinished slice when it is sliced. Null when incremental access was refused. */
+async function fetchPdfPage(scan: Scan, cursor: Cursor) {
+	const open = cursor.slices?.findIndex((slice) => slice.nextCursor) ?? -1;
+	if (open < 0) {
+		const page = await fetchPage(scan.client, scan.stream, cursor, scan.context.sourceConnection.key);
+		return page && { page, slice: null, from: cursor.nextCursor };
+	}
+	const slice = cursor.slices![open]!;
+	return { page: await scan.stream.slicePage(scan.client, slice, slice.nextCursor!), slice: open, from: slice.nextCursor };
+}
+
 /** Fetches pages ahead until enough are in flight. False when incremental access was refused. */
 async function fillPdfPages(pipeline: PdfPipeline) {
 	const { scan, lane, stop, inFlight } = pipeline;
-	const { context, client, stream } = scan;
+	const { context } = scan;
 	const processor = scan.options.attachmentProcessor;
 	while (pipeline.fetchCursor.nextCursor && inFlight.length < PDF_PAGES_IN_FLIGHT && !stop.failed && !pipeline.fetchError) {
-		let page: Awaited<ReturnType<typeof fetchPage>>;
+		let fetched: Awaited<ReturnType<typeof fetchPdfPage>>;
 		try {
 			await context.heartbeat();
-			page = await fetchPage(client, stream, pipeline.fetchCursor, context.sourceConnection.key);
+			fetched = await fetchPdfPage(scan, pipeline.fetchCursor);
 		} catch (error) {
 			pipeline.fetchError = error;
 			break;
 		}
-		if (!page) return false;
+		if (!fetched) return false;
+		const { page, slice } = fetched;
 		if (pipeline.fetchCursor.mode === "incremental") pipeline.fetchCursor = { ...pipeline.fetchCursor, incrementalAvailable: true };
-		assertAdvancing(page, pipeline.fetchCursor.nextCursor, context.sourceConnection.key);
-		pipeline.fetchCursor = { ...pipeline.fetchCursor, nextCursor: page.meta.next_cursor };
+		assertAdvancing(page, fetched.from, context.sourceConnection.key);
+		pipeline.fetchCursor = pastPage(pipeline.fetchCursor, slice, page.meta.next_cursor);
 		const mapped = page.results.map(mapOpenAlexWork);
 		const items = mapped.flatMap((work) => work.items);
 		const processed = processor ? processWithLanes(context, items, processor, lane, stop) : Promise.resolve();
 		// A failure is handled when its page is written; this keeps it from going unobserved first.
 		processed.catch(() => (stop.failed = true));
-		inFlight.push({ page, mapped, items, processed, links: new Set(items.filter(isPdfLink).map((record) => record.sourceRecordKey)), startedAt: performance.now() });
+		inFlight.push({ page, slice, mapped, items, processed, links: new Set(items.filter(isPdfLink).map((record) => record.sourceRecordKey)), startedAt: performance.now() });
 	}
 	return true;
 }
@@ -677,8 +699,23 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
 	countPdfPage(scan, next.items, next.links);
 	if (pipeline.fetchCursor.incrementalAvailable && scan.cursor.mode === "incremental") scan.cursor = { ...scan.cursor, incrementalAvailable: true };
 	const writeStarted = performance.now();
-	await writeScannedPage(scan, next.page, next.mapped, next.items, false);
+	await writeScannedPage(scan, next.page, next.mapped, next.items, false, next.slice);
 	logPdfPage(scan, { works: next.page.results.length, items: next.items, startedAt: next.startedAt, writeSeconds: (performance.now() - writeStarted) / 1000 });
+}
+
+/**
+ * A full PDF stage over a large query reads it in date slices, one after
+ * another. Deep in a long query OpenAlex's search can time out even at small
+ * pages, while each slice's pages stay quick.
+ */
+async function slicePdfStage(scan: Scan) {
+	const { cursor } = scan;
+	if (cursor.mode !== "full" || cursor.nextCursor !== "*" || cursor.slices) return;
+	const slices = await planStreamSlices(scan, cursor.imported);
+	if (!slices) return;
+	scan.cursor = { ...cursor, slices: slices.map((slice) => ({ ...slice, nextCursor: "*" })) };
+	await writeBatch(scan.context, scan.expectedCursor, scan.cursor, { items: [] }, "pdfs");
+	scan.expectedCursor = scan.cursor;
 }
 
 /**
@@ -687,6 +724,7 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
  * still written in order.
  */
 async function scanPdfPages(scan: Scan) {
+	await slicePdfStage(scan);
 	// Times left from a run that stopped part-way are not this run's.
 	scan.options.attachmentProcessor?.takeTimings?.(scan.context.sourceConnection.key);
 	const pipeline: PdfPipeline = {
@@ -780,12 +818,12 @@ async function writeScannedPage(
 	mapped: ReturnType<typeof mapOpenAlexWork>[],
 	items: SourceItemUpsert[],
 	cleanUp = true,
+	slice: number | null = null,
 ) {
 	const { context } = scan;
 	const connection = context.sourceConnection;
 	scan.cursor = {
-		...scan.cursor,
-		nextCursor: page.meta.next_cursor,
+		...pastPage(scan.cursor, slice, page.meta.next_cursor),
 		imported:
 			scan.cursor.stage === "records"
 				? scan.cursor.imported + page.results.length
@@ -874,14 +912,9 @@ async function writeSlicePage(scan: Scan, page: SlicePage, total: number) {
 	await context.heartbeat();
 	const items = page.mapped.flatMap((work) => work.items);
 	await preparePage(scan, items);
-	const slices = scan.cursor.slices!.map((slice, index) =>
-		index === page.slice ? { ...slice, nextCursor: page.nextCursor } : slice,
-	);
 	scan.cursor = {
-		...scan.cursor,
-		slices,
+		...pastPage(scan.cursor, page.slice, page.nextCursor),
 		imported: scan.cursor.imported + page.works,
-		nextCursor: slices.some((slice) => slice.nextCursor) ? scan.cursor.nextCursor : null,
 		completedAt: null,
 	};
 	await writePage(context, scan.expectedCursor, scan.cursor, {
@@ -936,20 +969,25 @@ async function scanSlices(scan: Scan) {
  * by its slice.
  */
 async function switchToSlices(scan: Scan, count: number) {
-	const { cursor, stream, context } = scan;
+	const { cursor, context } = scan;
 	if (cursor.stage !== "records" || cursor.mode !== "full" || cursor.nextCursor !== "*" || cursor.imported) return false;
-	const slices = await stream.planSlices(scan.client, count).catch((error: unknown) => {
-		console.warn("OpenAlex slice planning failed; scanning the query as one stream", {
-			sourceConnectionKey: context.sourceConnection.key,
-			error: error instanceof Error ? error.message : String(error),
-		});
-		return null;
-	});
+	const slices = await planStreamSlices(scan, count);
 	if (!slices) return false;
 	scan.cursor = { ...cursor, slices: slices.map((slice) => ({ ...slice, nextCursor: "*" })) };
 	await writeBatch(context, scan.expectedCursor, scan.cursor, { items: [] });
 	scan.expectedCursor = scan.cursor;
 	return true;
+}
+
+/** The stream's date slices for `count` works, or null to read it as one stream. */
+function planStreamSlices(scan: Scan, count: number) {
+	return scan.stream.planSlices(scan.client, count).catch((error: unknown) => {
+		console.warn("OpenAlex slice planning failed; scanning the query as one stream", {
+			sourceConnectionKey: scan.context.sourceConnection.key,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return null;
+	});
 }
 
 /** Withdraws the source's works that no scan has read since `startedAt`, in retryable batches. */
