@@ -380,7 +380,8 @@ export async function enqueueItemSearchReprojections(
 					processedAt: null,
 					deadLetteredAt: null,
 					// A re-queue counts from now, so a run's search update does not date from the record's import.
-					createdAt: queuedAt,
+					// A row still waiting in a run's search update keeps its time, which says which stage queued it.
+					createdAt: sql`CASE WHEN ${outbox.processedAt} IS NULL AND ${outbox.sourceSyncRunId} IS NOT NULL THEN ${outbox.createdAt} ELSE ${queuedAt}::timestamptz END`,
 					// A row another run queued and search has not reached stays that run's.
 					...(sourceSyncRunId === null
 						? {}
