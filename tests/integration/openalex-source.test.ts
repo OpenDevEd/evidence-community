@@ -644,6 +644,58 @@ it("restarts a PDF stage from the records when it must scan in full, and tags wo
 	});
 }, 120_000);
 
+type SlicedWork = ReturnType<typeof work> & { publication_date?: string; best_oa_location?: unknown };
+
+/**
+ * OpenAlex for a query of thirty works, two with no date, answering its OQL
+ * and date-sliced OQL in pages of two. Counts are reported a thousand times
+ * larger, so the query looks big enough to slice. Each page request is logged
+ * as `clause@offset`, or `all@offset` for the whole query.
+ */
+function slicedOpenAlex(extra: (id: number) => Partial<SlicedWork> = () => ({})) {
+	const dated = (id: number) => ({ ...work(id), publication_date: `${2023 + (id % 2)}-${String((id % 12) + 1).padStart(2, "0")}-15` });
+	const works: SlicedWork[] = [...Array.from({ length: 28 }, (_, index) => dated(index + 1)), work(29), work(30)].map((candidate, index) => ({
+		...candidate,
+		...extra(index + 1),
+	}));
+	const clauseOf = (oql: string) => (oql.includes(") and ") ? oql.slice(oql.indexOf(") and ") + 6) : null);
+	const matches = (clause: string | null, date: string | undefined) => {
+		if (!clause) return true;
+		if (clause === "publication_date is null") return date === undefined;
+		const from = /publication_date >= (\S+)/.exec(clause)?.[1];
+		const to = /publication_date < (\S+)/.exec(clause)?.[1];
+		return date !== undefined && (!from || date >= from) && (!to || date < to);
+	};
+	const state = { failNextSecondPage: false, failed: null as string | null, totalOffset: 0 };
+	const requests: string[] = [];
+	const yearGroups = () => {
+		const years = Map.groupBy(works.filter((candidate) => candidate.publication_date), (candidate) => candidate.publication_date!.slice(0, 4));
+		return Response.json({ meta: { count: 0 }, group_by: [...years].map(([key, list]) => ({ key, count: list.length * 1000 })) });
+	};
+	const failsOnce = (clause: string | null, offset: number) => {
+		if (!clause || offset !== 2 || !state.failNextSecondPage) return false;
+		state.failNextSecondPage = false;
+		state.failed = clause;
+		return true;
+	};
+	const page = (url: URL, clause: string | null) => {
+		const matching = works.filter((candidate) => matches(clause, candidate.publication_date));
+		const count = matching.length * 1000 + (clause ? 0 : state.totalOffset);
+		if (url.searchParams.get("per_page") === "1") return Response.json({ meta: { count, next_cursor: null }, results: [] });
+		const offset = url.searchParams.get("cursor") === "*" ? 0 : Number(url.searchParams.get("cursor"));
+		requests.push(`${clause ?? "all"}@${offset}`);
+		if (failsOnce(clause, offset)) return new Response("Forbidden", { status: 403 });
+		// Pages of two, so most slices have several.
+		const next = offset + 2 < matching.length ? String(offset + 2) : null;
+		return Response.json({ meta: { count, next_cursor: next }, results: matching.slice(offset, offset + 2) });
+	};
+	const respond = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const oql = (JSON.parse(String(init?.body)) as { oql: string }).oql;
+		return oql.endsWith(" group by publication_year") ? yearGroups() : page(new URL(String(input)), clauseOf(oql));
+	}) as typeof fetch;
+	return { works, clauseOf, requests, respond, state };
+}
+
 it("fetches a large full scan as date slices, importing each work once and resuming each slice after a failure", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const query = { oql: "works where title has education" };
@@ -651,52 +703,13 @@ it("fetches a large full scan as date slices, importing each work once and resum
 			key: "oa-sliced", provider: "openalex", scopeKind: "query",
 			config: { ...settings, approvedQuery: { ...settings.approvedQuery, query } },
 		});
-		// Thirty works, two with no date. Counts are reported a thousand times
-		// larger, so the query looks big enough to slice.
-		const dated = (id: number) => ({ ...work(id), publication_date: `${2023 + (id % 2)}-${String((id % 12) + 1).padStart(2, "0")}-15` });
-		const works: Array<ReturnType<typeof work> & { publication_date?: string }> = [...Array.from({ length: 28 }, (_, index) => dated(index + 1)), work(29), work(30)];
-		const clauseOf = (oql: string) => (oql.includes(") and ") ? oql.slice(oql.indexOf(") and ") + 6) : null);
-		const matches = (clause: string | null, date: string | undefined) => {
-			if (!clause) return true;
-			if (clause === "publication_date is null") return date === undefined;
-			const from = /publication_date >= (\S+)/.exec(clause)?.[1];
-			const to = /publication_date < (\S+)/.exec(clause)?.[1];
-			return date !== undefined && (!from || date >= from) && (!to || date < to);
-		};
-		let failNextSecondPage = false;
-		let failed: string | null = null;
-		let totalOffset = 0;
-		const requests: string[] = [];
-		const yearGroups = () => {
-			const years = Map.groupBy(works.filter((candidate) => candidate.publication_date), (candidate) => candidate.publication_date!.slice(0, 4));
-			return Response.json({ meta: { count: 0 }, group_by: [...years].map(([key, list]) => ({ key, count: list.length * 1000 })) });
-		};
-		const failsOnce = (clause: string | null, offset: number) => {
-			if (!clause || offset !== 2 || !failNextSecondPage) return false;
-			failNextSecondPage = false;
-			failed = clause;
-			return true;
-		};
-		const page = (url: URL, clause: string | null) => {
-			const matching = works.filter((candidate) => matches(clause, candidate.publication_date));
-			const count = matching.length * 1000 + (clause ? 0 : totalOffset);
-			if (url.searchParams.get("per_page") === "1") return Response.json({ meta: { count, next_cursor: null }, results: [] });
-			const offset = url.searchParams.get("cursor") === "*" ? 0 : Number(url.searchParams.get("cursor"));
-			requests.push(`${clause ?? "all"}@${offset}`);
-			if (failsOnce(clause, offset)) return new Response("Forbidden", { status: 403 });
-			// Pages of two, so most slices have several.
-			const next = offset + 2 < matching.length ? String(offset + 2) : null;
-			return Response.json({ meta: { count, next_cursor: next }, results: matching.slice(offset, offset + 2) });
-		};
-		const respond = async (input: RequestInfo | URL, init?: RequestInit) => {
-			const oql = (JSON.parse(String(init?.body)) as { oql: string }).oql;
-			return oql.endsWith(" group by publication_year") ? yearGroups() : page(new URL(String(input)), clauseOf(oql));
-		};
+		const openAlex = slicedOpenAlex();
+		const { works, clauseOf, requests, respond, state } = openAlex;
 		const connection = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-sliced")))[0]!;
 		const sync = async () =>
 			syncOpenAlexSource(
 				{ database: db, sourceConnection: await connection(), credentialResolver: async () => "test-key", heartbeat: async () => {} },
-				{ fetch: respond as typeof fetch, sleep: async () => {} },
+				{ fetch: respond, sleep: async () => {} },
 			);
 		type SavedCursor = { imported: number; nextCursor: string | null; completedAt: string | null; slices: { dates: SliceDates; nextCursor: string | null }[] | null };
 		const cursor = async () => (await connection()).syncCursor as unknown as SavedCursor;
@@ -704,19 +717,19 @@ it("fetches a large full scan as date slices, importing each work once and resum
 		const expected = works.map((candidate) => candidate.id.split("/").pop()!).sort();
 
 		// One slice's second page fails once, and the run stops there.
-		failNextSecondPage = true;
+		state.failNextSecondPage = true;
 		await expect(sync()).rejects.toMatchObject({ status: 403 });
 		const stopped = await cursor();
 		expect(stopped.slices!.length).toBeGreaterThan(2);
 		const clauseFor = (dates: SliceDates) => clauseOf(slicedQuery(query, dates).oql!)!;
-		expect(stopped.slices!.find((slice) => clauseFor(slice.dates) === failed)?.nextCursor).toBe("2");
+		expect(stopped.slices!.find((slice) => clauseFor(slice.dates) === state.failed)?.nextCursor).toBe("2");
 
 		// The next run resumes that slice at its second page, fetches no finished
 		// slice again, and imports every work once.
 		requests.length = 0;
 		await sync();
-		expect(requests).toContain(`${failed}@2`);
-		expect(requests).not.toContain(`${failed}@0`);
+		expect(requests).toContain(`${state.failed}@2`);
+		expect(requests).not.toContain(`${state.failed}@0`);
 		for (const slice of stopped.slices!.filter((candidate) => candidate.nextCursor === null)) {
 			expect(requests.filter((request) => request.startsWith(`${clauseFor(slice.dates)}@`))).toEqual([]);
 		}
@@ -724,12 +737,65 @@ it("fetches a large full scan as date slices, importing each work once and resum
 		expect(await cursor()).toMatchObject({ imported: 30, nextCursor: null, completedAt: expect.any(String) });
 
 		// When the slices' counts do not add up to the query's, the scan reads the query as one stream.
-		totalOffset = 1;
+		state.totalOffset = 1;
 		await db.update(sourceConnection).set({ syncCursor: {} }).where(eq(sourceConnection.key, "oa-sliced"));
 		requests.length = 0;
 		await sync();
 		expect(requests.every((request) => request.startsWith("all@"))).toBe(true);
 		expect((await records()).sort()).toEqual(expected);
+	});
+}, 120_000);
+
+it("reads a large PDF stage in date slices, one after another, resuming a slice after a failure", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const query = { oql: "works where title has education" };
+		await db.insert(sourceConnection).values({
+			key: "oa-pdf-sliced", provider: "openalex", scopeKind: "query",
+			config: { ...settings, downloadPdfs: true, approvedQuery: { ...settings.approvedQuery, query } },
+		});
+		const { clauseOf, requests, respond, state } = slicedOpenAlex((id) => ({
+			best_oa_location: { is_oa: true, pdf_url: `https://host${id}.example.org/W${id}.pdf`, license: "cc-by" },
+		}));
+		const processor = Object.assign(async (record: SourceItemUpsert) => record, {
+			reuse: async (record: SourceItemUpsert) => record,
+			flushCleanup: async () => {},
+		});
+		const connection = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-pdf-sliced")))[0]!;
+		const sync = async () =>
+			syncOpenAlexSource(
+				{ database: db, sourceConnection: await connection(), credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{ attachmentProcessor: processor, fetch: respond, sleep: async () => {} },
+			);
+		await sync();
+
+		// A PDF stage reopened at the start of the query, as after it stopped early. The
+		// records stage counted its works like the query: a thousand times larger.
+		const finished = (await connection()).syncCursor as Record<string, unknown>;
+		const { slices: _recordSlices, ...reopened } = finished;
+		await db
+			.update(sourceConnection)
+			.set({ syncCursor: { ...reopened, imported: 30_000, stage: "pdfs", nextCursor: "*", completedAt: null, pdfs: { done: 0, missed: 0, total: 30 } } })
+			.where(eq(sourceConnection.key, "oa-pdf-sliced"));
+		requests.length = 0;
+		state.failNextSecondPage = true;
+		await expect(sync()).rejects.toMatchObject({ status: 403 });
+		type SavedCursor = { stage: string; nextCursor: string | null; completedAt: string | null; pdfs: { done: number }; slices: { dates: SliceDates; nextCursor: string | null }[] };
+		const stopped = (await connection()).syncCursor as unknown as SavedCursor;
+		const clauseFor = (dates: SliceDates) => clauseOf(slicedQuery(query, dates).oql!)!;
+		expect(stopped.stage).toBe("pdfs");
+		expect(stopped.slices.find((slice) => clauseFor(slice.dates) === state.failed)?.nextCursor).toBe("2");
+		// The stage reads the slices, never the whole query.
+		expect(requests.some((request) => request.startsWith("all@"))).toBe(false);
+
+		requests.length = 0;
+		await sync();
+		expect(requests).toContain(`${state.failed}@2`);
+		expect(requests).not.toContain(`${state.failed}@0`);
+		for (const slice of stopped.slices.filter((candidate) => candidate.nextCursor === null)) {
+			expect(requests.filter((request) => request.startsWith(`${clauseFor(slice.dates)}@`))).toEqual([]);
+		}
+		// Every PDF link is counted once across both runs.
+		expect((await connection()).syncCursor).toMatchObject({ stage: "pdfs", nextCursor: null, completedAt: expect.any(String), pdfs: { done: 30 } });
 	});
 }, 120_000);
 
