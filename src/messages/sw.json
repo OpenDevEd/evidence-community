@@ -547,6 +547,8 @@
   "sorts": {
     "desc": "Mpya Zaidi",
     "asc": "Za Zamani Zaidi",
+    "mostCited": "Zilizonukuliwa Zaidi",
+    "leastCited": "Zilizonukuliwa Kidogo",
     "authorAZ": "Mwandishi A-Z",
     "authorZA": "Mwandishi Z-A",
     "titleAZ": "Kichwa A-Z",

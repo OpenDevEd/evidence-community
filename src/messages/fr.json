@@ -546,6 +546,8 @@
   "sorts": {
     "desc": "Plus récent",
     "asc": "Plus ancien",
+    "mostCited": "Plus cités",
+    "leastCited": "Moins cités",
     "authorAZ": "Auteur A-Z",
     "authorZA": "Auteur Z-A",
     "titleAZ": "Titre A-Z",

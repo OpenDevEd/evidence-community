@@ -8,11 +8,8 @@ import { getCachedCollections } from "@/app/api/cache";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryHomeConfig, LibraryServerConfig } from "@/config/library-config/schema";
-import { peekMeilisearchCache } from "@/lib/cache-utils";
 import { staleWhileRevalidate } from "@/lib/stale-while-revalidate";
 import { getComprehensiveStats, peekComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
-import { getMostCitedItems } from "@/app/[locale]/statistics/queries/citation-stats";
-import { resolveCitationMeasure } from "@/app/[locale]/statistics/queries/citation-measure";
 import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
@@ -240,22 +237,11 @@ async function coversOf(keys: string[]): Promise<Record<string, string>> {
 	return Object.fromEntries(rows.flatMap((row) => (row.parent && row.cover ? [[row.parent, row.cover]] : [])));
 }
 
-/**
- * The query weighs every citation in the library, far the slowest part of the page: seconds on a large library.
- * Its answer is kept per configuration revision beside the statistics, counted in the background so the page shows
- * without it rather than wait, and recounted behind the one shown every ten minutes.
- */
+/** The first three publications of the "Most cited" sort that anything cites. */
 async function mostCited() {
-	const config = await getLibraryConfig();
-	const db = await getDatabaseForConfig(config);
-	const { measure } = await resolveCitationMeasure(db, undefined);
-	return (
-		(await peekMeilisearchCache(
-			config,
-			`${config.revision}-most-cited-v1-${measure.key}`,
-			() => getMostCitedItems(db, measure, 3, config.content.tags.hidden),
-			{ maxAgeMs: 10 * 60 * 1000 },
-		)) ?? []
+	const { items } = await getPublicItems({ sort: "mostCited" }, { limit: 3 });
+	return items.flatMap((row) =>
+		row.citationCount ? [{ key: row.key, title: row.title || row.key, citations: row.citationCount }] : [],
 	);
 }
 

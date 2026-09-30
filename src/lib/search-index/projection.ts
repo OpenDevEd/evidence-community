@@ -294,9 +294,9 @@ async function buildSearchProjectionPlanForKeys(
 	config: LibraryServerConfig,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
-	hiddenTags: readonly string[] = [],
 	catalogDatabase?: Database,
 ): Promise<SearchProjectionPlan> {
+	const hiddenTags = config.content.tags.hidden;
 	const publication = config.services.publication;
 	if (topLevelKeys.length === 0) {
 		return { deleteKeys: [], documents: [] };
@@ -430,6 +430,12 @@ async function buildSearchProjectionPlanForKeys(
 				collectionsByItem.get(parent.key) ?? [],
 			);
 			const parentChildren = childrenByParent.get(parent.key) ?? [];
+			const citationMetrics = citationMetricsByItem.get(parent.key) ?? [];
+			const links = linksByItem.get(parent.key) ?? {
+				cites: [],
+				citedBy: [],
+				related: [],
+			};
 			const attachments = parentChildren.map((child) => ({
 				...cleanRow({
 					...child,
@@ -475,12 +481,18 @@ async function buildSearchProjectionPlanForKeys(
 				[PDF_PRESENCE_ATTRIBUTE]: parentChildren.some(
 					(child) =>
 						child.deleted !== 1 &&
-						!hasAnyTag(tagsByItem.get(child.key), config.content.tags.hidden) &&
+						!hasAnyTag(tagsByItem.get(child.key), hiddenTags) &&
 						isVisiblePdfAttachment(child),
 				),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
-				citationMetrics: citationMetricsByItem.get(parent.key) ?? [],
+				citationMetrics,
+				// What the citation sorts order by: the higher of the library's
+				// own count and a source's (OpenAlex counts citations worldwide).
+				citationCount: Math.max(
+					links.citedBy.length,
+					...citationMetrics.map((metric) => metric.citedByCount ?? 0),
+				),
 				collections: directCollections,
 				collectionsAncestry: collectionAncestry(
 					directCollections,
@@ -500,11 +512,7 @@ async function buildSearchProjectionPlanForKeys(
 						]),
 					).values(),
 				],
-				links: linksByItem.get(parent.key) ?? {
-					cites: [],
-					citedBy: [],
-					related: [],
-				},
+				links,
 				metadataSearch: metadataSearchValues(parent),
 				topicAncestors: topicAncestry(parent.topics),
 				topics: config.topics.enabled ? uniqueSorted(parent.topics) : [],
@@ -544,7 +552,6 @@ async function* plansForKeys(
 					config,
 					keyChunk,
 					collections,
-					[],
 					database,
 				),
 		);
@@ -681,7 +688,6 @@ export async function projectPublicItems(
 		config,
 		keys,
 		collections,
-		config.content.tags.hidden,
 	);
 	const documents = new Map(
 		plan.documents.map((document) => [document.key, document]),

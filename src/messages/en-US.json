@@ -535,6 +535,8 @@
   "sorts": {
     "desc": "Newest",
     "asc": "Oldest",
+    "mostCited": "Most cited",
+    "leastCited": "Least cited",
     "authorAZ": "Author A-Z",
     "authorZA": "Author Z-A",
     "titleAZ": "Title A-Z",

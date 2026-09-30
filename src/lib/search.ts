@@ -42,6 +42,7 @@ import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
  */
 export const LIST_ITEM_FIELDS = [...new Set([
 	...CITATION_RECORD_COLUMNS,
+	"citationCount",
 	"itemType",
 	"key",
 	"provider",
@@ -349,7 +350,7 @@ export async function getPublicItems(
 			limit: pageSize,
 			attributesToSearchOn,
 			attributesToRetrieve,
-			...(sortOption ? { sort: [sortOption] } : {}),
+			...(sortOption ? { sort: sortOption } : {}),
 			filter: finalFilters,
 		}),
 		getCachedCollections(libraryConfig),
@@ -484,7 +485,7 @@ export async function getItemsPaginationMeta(
 		offset: 0,
 		limit: 0,
 		attributesToSearchOn,
-		...(sortOption ? { sort: [sortOption] } : {}),
+		...(sortOption ? { sort: sortOption } : {}),
 		filter: finalFilters,
 	});
 

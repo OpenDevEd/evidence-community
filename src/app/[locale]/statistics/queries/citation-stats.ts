@@ -1,6 +1,6 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
 import { visibleItem } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
@@ -85,18 +85,6 @@ export async function getCitationStats(
 	};
 	
 	return citationStats;
-}
-
-/** The most cited publications a reader can see, under a citation measure, for the home page's citations preview. */
-export async function getMostCitedItems(db: Database, measure: CitationMeasure, limit: number, hiddenTags: readonly string[]) {
-	const citationCount = citationCountForItem(measure, hiddenTags);
-	const rows = await db
-		.select({ key: item.key, title: item.title, citations: citationCount })
-		.from(item)
-		.where(and(visibleItem(db, hiddenTags), sql`${citationCount} > 0`))
-		.orderBy(desc(citationCount))
-		.limit(limit);
-	return rows.map((row) => ({ key: row.key, title: row.title || row.key, citations: Number(row.citations) }));
 }
 
 export async function getCreatorStats(db: Database, hiddenTags: readonly string[]): Promise<CreatorStats> {

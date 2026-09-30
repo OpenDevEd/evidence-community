@@ -546,6 +546,8 @@
   "sorts": {
     "desc": "नवीनतम",
     "asc": "सबसे पुराना",
+    "mostCited": "सर्वाधिक उद्धृत",
+    "leastCited": "सबसे कम उद्धृत",
     "authorAZ": "लेखक A-Z",
     "authorZA": "लेखक Z-A",
     "titleAZ": "शीर्षक A-Z",
