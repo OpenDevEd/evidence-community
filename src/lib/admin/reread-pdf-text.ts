@@ -1,5 +1,5 @@
-import { outbox } from "@opendeved/evidence-library-core";
-import { eq, inArray, sql } from "drizzle-orm";
+import { itemSourceLink, outbox } from "@opendeved/evidence-library-core";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { lockItemMutations } from "@/db/canonical-mutation-lock";
 import type { Database } from "@/db/database-schema";
@@ -35,27 +35,44 @@ export async function rereadNearlyEmptyPdfText(database: Database, storage: Evid
 			sql`case when length(coalesce(${item.fullTextPDF}, '')) < ${NEARLY_EMPTY_MAX_CHARACTERS} then length(regexp_replace(coalesce(${item.fullTextPDF}, ''), '\\*\\*\\|\\| PAGE [0-9]+ \\|\\|\\*\\*|[^[:alpha:]]', '', 'g')) < ${NEARLY_EMPTY_LETTERS} else false end`,
 		);
 	let updated = 0;
+	let skipped = 0;
 	let failed = 0;
 	for (const row of rows) {
 		try {
 			const processed = await processPdfInWorkers(await storage.downloadPublic(row.objectPath));
 			const text = truncateUtf8(processed.text, MAX_SOURCE_FULL_TEXT_BYTES);
 			if (letters(text) < letters(row.text) + MIN_GAIN_LETTERS) continue;
-			await saveText(database, row.key, row.parent, text);
-			updated++;
+			if (await saveText(database, row, text)) updated++;
+			else skipped++;
 		} catch (error) {
 			failed++;
 			console.error("Could not read this PDF again", { itemKey: row.key, error: error instanceof Error ? error.message : String(error) });
 		}
 	}
-	return { checked: rows.length, updated, failed };
+	return { checked: rows.length, updated, skipped, failed };
 }
 
-async function saveText(database: Database, key: string, parent: string | null, text: string) {
-	await database.transaction(async (transaction) => {
-		const keys = parent ? [key, parent] : [key];
+/**
+ * Saves the text, checked again under the records' lock: the PDF may have been replaced or unpublished while it was
+ * read, and a record with source changes waiting to be written back keeps its revision, which that writeback needs.
+ */
+async function saveText(database: Database, row: { key: string; parent: string | null; text: string | null; objectPath: string }, text: string) {
+	return database.transaction(async (transaction) => {
+		const keys = row.parent ? [row.key, row.parent] : [row.key];
 		await lockItemMutations(transaction, keys);
-		await transaction.update(item).set({ fullTextPDF: text }).where(eq(item.key, key));
+		const [current] = await transaction
+			.select({ text: item.fullTextPDF, objectPath: itemFilePublication.objectPath })
+			.from(itemFilePublication)
+			.innerJoin(item, eq(item.key, itemFilePublication.itemKey))
+			.where(eq(item.key, row.key));
+		if (!current || current.objectPath !== row.objectPath || current.text !== row.text) return false;
+		const [pendingWriteback] = await transaction
+			.select({ key: itemSourceLink.itemKey })
+			.from(itemSourceLink)
+			.where(and(inArray(itemSourceLink.itemKey, keys), sql`jsonb_array_length(${itemSourceLink.dirtyFields}) > 0`))
+			.limit(1);
+		if (pendingWriteback) return false;
+		await transaction.update(item).set({ fullTextPDF: text }).where(eq(item.key, row.key));
 		// The outbox holds one event per record revision.
 		const bumped = await transaction
 			.update(item)
@@ -63,7 +80,8 @@ async function saveText(database: Database, key: string, parent: string | null, 
 			.where(inArray(item.key, keys))
 			.returning({ key: item.key, revision: item.revision });
 		await transaction.insert(outbox).values(
-			bumped.map((row) => ({ entityType: "item" as const, entityKey: row.key, operation: "upsert" as const, revision: row.revision })),
+			bumped.map((entry) => ({ entityType: "item" as const, entityKey: entry.key, operation: "upsert" as const, revision: entry.revision })),
 		);
+		return true;
 	});
 }

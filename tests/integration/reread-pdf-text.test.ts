@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { outbox } from "@opendeved/evidence-library-core";
+import { itemSourceLink, outbox } from "@opendeved/evidence-library-core";
 import { fetch as transport, Response } from "undici";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { expect, it, vi } from "vitest";
@@ -48,15 +48,19 @@ it("reads a published PDF with nearly empty saved text again, saves the text and
 		const [saved] = await database.select({ key: item.key, parent: item.parentItem }).from(item).where(eq(item.itemType, "Attachment"));
 		// As a reader without its character maps left a Chinese PDF: page markers and no words.
 		await database.update(item).set({ fullTextPDF: "**|| PAGE 1 ||**" }).where(eq(item.key, saved!.key));
+		// A record with source changes waiting to be written back keeps its revision for that writeback.
+		await database.update(itemSourceLink).set({ dirtyFields: ["title"] }).where(eq(itemSourceLink.itemKey, saved!.parent!));
+		expect(await rereadNearlyEmptyPdfText(database, storage)).toEqual({ checked: 1, updated: 0, skipped: 1, failed: 0 });
+		await database.update(itemSourceLink).set({ dirtyFields: [] }).where(eq(itemSourceLink.itemKey, saved!.parent!));
 		const eventsBefore = await database.select().from(outbox);
 
-		expect(await rereadNearlyEmptyPdfText(database, storage)).toEqual({ checked: 1, updated: 1, failed: 0 });
+		expect(await rereadNearlyEmptyPdfText(database, storage)).toEqual({ checked: 1, updated: 1, skipped: 0, failed: 0 });
 		const [reread] = await database.select({ text: item.fullTextPDF }).from(item).where(eq(item.key, saved!.key));
 		expect(reread?.text).toContain("Vocational training research");
 		const events = (await database.select().from(outbox)).slice(eventsBefore.length);
 		expect(events.map((event) => [event.entityKey, event.operation]).sort()).toEqual([[saved!.key, "upsert"], [saved!.parent, "upsert"]].sort());
 
 		// Text that is already there is not read again.
-		expect(await rereadNearlyEmptyPdfText(database, storage)).toEqual({ checked: 0, updated: 0, failed: 0 });
+		expect(await rereadNearlyEmptyPdfText(database, storage)).toEqual({ checked: 0, updated: 0, skipped: 0, failed: 0 });
 	});
 }, 120_000);
