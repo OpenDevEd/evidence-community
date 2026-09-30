@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
 import OpenScholar from "@/components/icons/OpenScholar";
 
-/** Small "Powered by OpenScholar" attribution shown under the chat composer. */
+/** "Powered by OpenScholar" attribution under the chat composer and in the footer. Its logo scales with the text. */
 export function PoweredByOpenScholar({ className }: { className?: string }) {
 	const t = useTranslations("ai");
 	return (
@@ -18,7 +18,7 @@ export function PoweredByOpenScholar({ className }: { className?: string }) {
 			)}
 		>
 			{t("poweredBy")}
-			<OpenScholar className="size-3.5 shrink-0" aria-hidden />
+			<OpenScholar className="size-[1.3em] shrink-0" aria-hidden />
 			<span className="font-semibold">
 				OpenScholar<span className="font-medium opacity-70">.ai</span>
 			</span>

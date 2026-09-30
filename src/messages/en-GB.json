@@ -623,8 +623,7 @@
     "cookiePolicy": "Cookie Policy",
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
-    "legal": "Legal",
-    "poweredBy": "Powered by OpenScholar"
+    "legal": "Legal"
   },
   "itemType": {
     "Artwork": "Artwork",
