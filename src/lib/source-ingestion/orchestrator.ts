@@ -6,7 +6,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, DrizzleQueryError, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, DrizzleQueryError, eq, gt, isNull, ne, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -170,10 +170,11 @@ function expiryFrom(now: Date, leaseDurationMs: number) {
 const EXPIRED_RUN_ERROR = "SourceLeaseLostError: worker lease expired";
 
 /**
- * Marks runs whose worker died as failed. Their batches stay written, so what
- * they changed is counted as a failed run's is.
+ * Marks the running runs of a source whose worker died as failed. Their
+ * batches stay written, so what they changed is counted as a failed run's is.
+ * Returns the sync state fields that record it.
  */
-async function closeExpiredRuns(transaction: Transaction, sourceConnectionKey: string, now: Date) {
+async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey: string, now: Date) {
 	const expiredRuns = await transaction
 		.update(sourceSyncRun)
 		.set({ error: EXPIRED_RUN_ERROR, finishedAt: now, heartbeatAt: now, status: "failed" })
@@ -188,7 +189,15 @@ async function closeExpiredRuns(transaction: Transaction, sourceConnectionKey: s
 	for (const run of expiredRuns) {
 		changedPatch = { ...changedPatch, ...(await changedRecordsPatch(transaction, run.id)) };
 	}
-	return { changedPatch, found: expiredRuns.length > 0 };
+	if (expiredRuns.length === 0) return {};
+	return {
+		...changedPatch,
+		consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
+		lastError: EXPIRED_RUN_ERROR,
+		lastErrorCode: "interrupted" as const,
+		lastFailureAt: now,
+		lastResult: null,
+	};
 }
 
 function assertDue(
@@ -264,7 +273,7 @@ async function claimRun(
 		// Checked under the row lock, so a run that just finished is already seen.
 		assertDue(options, connection, connection.provider, now);
 
-		const expired = await closeExpiredRuns(transaction, connection.key, now);
+		const abandoned = await closeAbandonedRuns(transaction, connection.key, now);
 
 		const [run] = await transaction
 			.insert(sourceSyncRun)
@@ -281,16 +290,7 @@ async function claimRun(
 			.update(sourceSyncState)
 			.set({
 				activeRunId: run.id,
-				...expired.changedPatch,
-				...(expired.found
-					? {
-							consecutiveFailures: sql`${sourceSyncState.consecutiveFailures} + 1`,
-							lastError: EXPIRED_RUN_ERROR,
-							lastErrorCode: "interrupted" as const,
-							lastFailureAt: now,
-							lastResult: null,
-						}
-					: {}),
+				...abandoned,
 				lastAttemptAt: now,
 				leaseExpiresAt: expiryFrom(now, leaseDurationMs),
 				leaseOwner: workerId,
@@ -305,6 +305,38 @@ async function claimRun(
 			);
 
 		return { connection, runId: run.id };
+	});
+}
+
+/**
+ * Ends the leases a worker ID still holds from before its process restarted,
+ * and asks for those sources to run again now. Each library runs one watching
+ * source worker under a fixed ID, so a lease under that ID at startup belongs
+ * to a process that is gone. Without this, an import stopped by a redeploy
+ * waits out the lease before it resumes. The old run is closed here, so an
+ * old process still running can no longer renew the lease.
+ */
+export async function releaseWorkerLeases(database: Database, workerId: string, now = new Date()) {
+	return database.transaction(async (transaction) => {
+		const held = await transaction
+			.select({ key: sourceSyncState.sourceConnectionKey })
+			.from(sourceSyncState)
+			.where(and(eq(sourceSyncState.leaseOwner, workerId), gt(sourceSyncState.leaseExpiresAt, now)))
+			.for("update");
+		for (const { key } of held) {
+			await transaction
+				.update(sourceSyncState)
+				.set({
+					...(await closeAbandonedRuns(transaction, key, now)),
+					activeRunId: null,
+					leaseExpiresAt: null,
+					leaseOwner: null,
+					runRequestedAt: sql`coalesce(${sourceSyncState.runRequestedAt}, ${now}::timestamptz)`,
+					updatedAt: now,
+				})
+				.where(eq(sourceSyncState.sourceConnectionKey, key));
+		}
+		return held.map(({ key }) => key);
 	});
 }
 

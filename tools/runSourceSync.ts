@@ -4,6 +4,7 @@ import { openLibraryDatabaseProcess } from "../src/config/library-config/process
 import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import {
+	releaseWorkerLeases,
 	runActiveSourceConnections,
 	runSourceConnection,
 	SourceLeaseUnavailableError,
@@ -191,6 +192,17 @@ function startWatchLanes(
 	};
 }
 
+/**
+ * Runs again at once the sources this worker was importing when it last
+ * stopped. Only for the watching worker: a one-off run started in its
+ * container shares its ID and would take the leases of imports still running.
+ */
+async function resumeRestartedRuns(command: Command, database: WorkerOptions["database"]) {
+	if (!command.watch) return;
+	const released = await releaseWorkerLeases(database, command.workerId);
+	if (released.length > 0) console.log(`Resuming sources stopped by a restart: ${released.join(", ")}`);
+}
+
 // An import's PDF stage reads and stages files for up to 48 PDFs at once
 // while a page is written and the lease heartbeat runs, which three
 // connections could not keep up with. Idle connections close after five
@@ -217,6 +229,7 @@ async function main() {
 			registry: runtime.registry,
 			workerId: command.workerId,
 		};
+		await resumeRestartedRuns(command, database);
 		const lanes = command.watch
 			? startWatchLanes(config, options, command.sourceConnectionKey, abortController.signal)
 			: null;

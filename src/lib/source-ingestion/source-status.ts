@@ -182,8 +182,9 @@ export function sourceStatus(input: SourceStatusInput): SourceStatus {
 		return (run.stage === "pdfs" ? searchStatus(base, input) : null) ?? expiredLeaseStatus(base, run);
 	}
 	if (run?.stage === "pdfs") return pdfStageStatus(base, run, input);
-	// A run that has reported nothing may only be checking for changes.
-	if (run && (run.recordsDone > 0 || (run.recordsTotal ?? 0) > 0)) {
+	// A run that has reported nothing may only be checking for changes, unless
+	// it picks up one that a restart interrupted.
+	if (run && (run.recordsDone > 0 || (run.recordsTotal ?? 0) > 0 || input.lastError?.code === "interrupted")) {
 		return { ...base, ...runProgress(run, input.now), phase: "import" };
 	}
 	if (input.lastError) return lastErrorStatus(base, input, input.lastError);

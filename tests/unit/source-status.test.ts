@@ -90,6 +90,27 @@ describe("sourceStatus", () => {
 		expect(status.state).toBe("succeeded");
 	});
 
+	it("shows an import picked up after a restart as importing, not as the interrupted run's failure", () => {
+		const status = sourceStatus(
+			input({
+				activeRun: {
+					leaseExpiresAt: minutesAgo(-5),
+					recordsDone: 0,
+					recordsFrom: null,
+					recordsFromAt: null,
+					recordsTotal: null,
+					startedAt: minutesAgo(0),
+				},
+				lastError: {
+					at: minutesAgo(0),
+					code: "interrupted",
+					details: "SourceLeaseLostError: worker lease expired",
+				},
+			}),
+		);
+		expect(status).toMatchObject({ phase: "import", state: "running" });
+	});
+
 	it("keeps the total unknown when the source has not said it", () => {
 		const status = sourceStatus(
 			input({
