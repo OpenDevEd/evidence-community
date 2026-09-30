@@ -63,8 +63,12 @@ watch worker has no connection lease to heartbeat.
 
 On the first `SIGINT` or `SIGTERM`, the worker finishes its active sweep, skips
 the next poll, and exits successfully. A second signal exits immediately with
-status 130. If the container is killed during a sync, the existing lease-expiry
-recovery closes the abandoned run before the next worker retries it.
+status 130. If the container is killed during a sync, the next watching worker
+closes the runs still leased under its worker ID as interrupted when it starts,
+and runs those sources again at once. Each library runs one watching worker
+under the fixed ID `source-sync`, so such a lease belongs to a process that is
+gone. The status shows the resumed import running rather than failed. A
+lease held under another ID is left to expire.
 When launched through `npm run`, npm itself may report status 130 after Ctrl-C
 even though the directly invoked worker follows the graceful shutdown path.
 
