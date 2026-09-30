@@ -153,12 +153,17 @@ async function main() {
 			},
 			signal: abortController.signal,
 		});
+		// The site and the other workers wait for this worker to leave
+		// "starting", which only needs the migrations and the index with its
+		// settings, so a new sort field works. The embedder and rebuild below
+		// can take many minutes on a large library; search answers from the
+		// existing records meanwhile.
+		await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
 		let embedderError: string | null = null;
 		try {
-			// The worker stays in the "starting" stage here. The stored
-			// worker state cannot describe a settings task (it requires
-			// outbox events for "waiting"/"indexing"), so progress goes to
-			// the log instead.
+			// The worker reads as idle here. The stored worker state cannot
+			// describe a settings task (it requires outbox events for
+			// "waiting"/"indexing"), so progress goes to the log instead.
 			let lastEmbedderStage = "";
 			await applySearchIndexEmbedder(service, config.search.embedder, {
 				batchClient: service.client.batches,

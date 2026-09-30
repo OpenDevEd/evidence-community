@@ -176,6 +176,25 @@ describe("searching the library for the assistant", () => {
 		expect(options.limit).toBe(10);
 	});
 
+	it("searches by keyword while the search worker still sets up the embedder", async () => {
+		const { MeilisearchApiError } = await import("meilisearch");
+		search.mockRejectedValueOnce(
+			new MeilisearchApiError(new Response(null, { status: 400 }), {
+				code: "invalid_search_embedder",
+				link: "",
+				message: "Cannot find embedder with name `default`.",
+				type: "invalid_request",
+			}),
+		);
+		const result = (await runSearch("quick", {
+			queries: ["radio teaching"],
+		})) as { queries: Array<{ hits: Array<Record<string, unknown>> }> };
+
+		expect(searchOptions(0).hybrid).toBeDefined();
+		expect(searchOptions(1).hybrid).toBeUndefined();
+		expect(result.queries[0].hits[0]).toMatchObject({ key: "ITEM0001" });
+	});
+
 	it("keeps Deep Research on publications that have a PDF", async () => {
 		await runSearch("research", { queries: ["radio", "schools"] });
 

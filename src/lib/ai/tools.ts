@@ -6,6 +6,7 @@ import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
 import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { PDF_FILTER, PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
@@ -234,7 +235,12 @@ async function searchOne(
 
 	try {
 		const { index } = await getMeilisearchForConfig(config);
-		const result = await index.search(query, searchOptions);
+		const result = await index.search(query, searchOptions).catch((error: unknown) => {
+			// While the search worker still sets up the embedder, keyword search answers alone.
+			if (!("hybrid" in searchOptions) || !isEmbedderUnavailable(error)) throw error;
+			const { hybrid: _hybrid, ...keywordOptions } = searchOptions;
+			return index.search(query, keywordOptions);
+		});
 		const hits = result.hits.map(searchHitToModelHit);
 		const totalHits = result.estimatedTotalHits ?? result.hits.length;
 

@@ -1,10 +1,27 @@
-import type { Embedders, OpenAiEmbedder, RestEmbedder } from "meilisearch";
+import { MeilisearchApiError, type Embedders, type OpenAiEmbedder, type RestEmbedder } from "meilisearch";
 
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 export type SearchEmbedderConfiguration =
 	LibraryServerConfig["search"]["embedder"];
+
+// Meilisearch reports a missing embedder with the first code and a failing
+// embedding provider with the second. Both mean "not ready", not a bug.
+const EMBEDDER_NOT_READY_CODES = new Set([
+	"invalid_search_embedder",
+	"vector_embedding_error",
+]);
+
+/** The search needed the embedder, which is missing or failing, as while the search worker still sets it up. */
+export function isEmbedderUnavailable(error: unknown) {
+	return (
+		error instanceof MeilisearchApiError &&
+		Boolean(
+			error.cause?.code && EMBEDDER_NOT_READY_CODES.has(error.cause.code),
+		)
+	);
+}
 
 /**
  * Embedder name that older indexes used. It is always removed so a library

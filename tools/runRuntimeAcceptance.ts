@@ -3291,15 +3291,21 @@ async function startAcceptanceSearchWorkers(profiles: Profile[]) {
 		"amber-search-indexer",
 		"indigo-search-indexer",
 	);
+	// Health passes before the startup rebuild finishes, and the records
+	// seeded next must not race it.
 	for (const profile of profiles) {
-		assert.equal(
+		const deadline = Date.now() + 180_000;
+		while (
 			postgresScalar(
 				profile.name,
 				`SELECT "searchIndexRebuildPending" FROM "status" WHERE "id" = 1`,
-			),
-			"f",
-			`${profile.name} search rebuild marker must clear before worker health passes`,
-		);
+			) !== "f"
+		) {
+			if (Date.now() > deadline) {
+				throw new Error(`${profile.name} search rebuild marker did not clear`);
+			}
+			await new Promise((resolve) => setTimeout(resolve, 500));
+		}
 	}
 }
 

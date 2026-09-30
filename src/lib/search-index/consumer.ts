@@ -505,7 +505,13 @@ async function waitForSuccessfulTask(
 		stage: "waiting",
 		taskUid: enqueued.taskUid,
 	});
-	const deadline = Date.now() + taskTimeoutMs;
+	// The timeout is for a task that stopped moving. A task in a long batch
+	// waits as long as its batch makes progress, and a queued task as long as
+	// the batch Meilisearch is running does. A failed progress read keeps the
+	// last one, so it never counts as movement.
+	let deadline = Date.now() + taskTimeoutMs;
+	let lastState = "";
+	let movement = "";
 	while (Date.now() <= deadline) {
 		throwIfAborted(options.signal);
 		const task = await abortable(
@@ -515,17 +521,31 @@ async function waitForSuccessfulTask(
 			options.signal,
 		);
 		let batchProgress: number | null = null;
-		if (task.batchUid !== null && options.batchClient) {
+		if (options.batchClient && (task.batchUid !== null || task.status === "enqueued")) {
 			try {
-				const batch = await abortable(
-					options.batchClient.getBatch(task.batchUid),
-					options.signal,
-				);
-				batchProgress = batch.progress?.percentage ?? null;
+				if (task.batchUid !== null) {
+					const batch = await abortable(
+						options.batchClient.getBatch(task.batchUid),
+						options.signal,
+					);
+					batchProgress = batch.progress?.percentage ?? null;
+					movement = `${task.batchUid}:${batchProgress}`;
+				} else {
+					const { results } = await abortable(
+						options.batchClient.getBatches({ statuses: ["processing"], limit: 1 }),
+						options.signal,
+					);
+					movement = `running:${results[0]?.uid}:${results[0]?.progress?.percentage}`;
+				}
 			} catch (error) {
 				if (error instanceof SearchOutboxAbortError) throw error;
 				// Batch telemetry is optional; task status remains authoritative.
 			}
+		}
+		const state = `${task.status}:${task.batchUid}:${movement}`;
+		if (state !== lastState) {
+			lastState = state;
+			deadline = Date.now() + taskTimeoutMs;
 		}
 		if (task.status === "enqueued" || task.status === "processing") {
 			await reportProgress({
@@ -1164,6 +1184,8 @@ export async function ensureSearchIndex(
 		}),
 		taskTimeoutMs,
 		{
+			// A new sortable or filterable field makes Meilisearch reindex every record; its progress keeps the wait going.
+			batchClient: service.client.batches,
 			signal: options.signal,
 			taskClient: service.index.tasks,
 		},
@@ -1303,6 +1325,7 @@ export async function rebuildSearchIndex(
 	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
 	const waitForOldestTask = () =>
 		waitForSuccessfulTask(tasks.shift()!, taskTimeoutMs, {
+			batchClient: service.client.batches,
 			signal: options.signal,
 			taskClient: service.index.tasks,
 		});
