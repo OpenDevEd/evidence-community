@@ -23,6 +23,8 @@ export type Item = InferSelectModel<typeof item> & {
 	provider?: SourceProvider;
 	links?: ItemLinks;
 	citationMetrics?: SourceCitationMetric[];
+	/** The higher of the library's citation count and a source's, as the index sorts by. */
+	citationCount?: number;
 	sourceExternalScopeKey?: string | null;
 	tags?: string[];
 	collections?: string[];

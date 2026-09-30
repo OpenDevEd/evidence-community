@@ -206,7 +206,7 @@ async function searchIndex(
 				limit: limitNum,
 				attributesToSearchOn,
 				attributesToRetrieve: allAttributes,
-				...(sortOption ? { sort: [sortOption] } : {}),
+				...(sortOption ? { sort: sortOption } : {}),
 				facets,
 				filter: finalFilters,
 			}),

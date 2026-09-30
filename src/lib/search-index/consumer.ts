@@ -1153,6 +1153,7 @@ export async function ensureSearchIndex(
 			pagination: { maxTotalHits: SEARCH_RESULT_LIMIT },
 			searchableAttributes: ["*"],
 			sortableAttributes: [
+				"citationCount",
 				"dateSortKey",
 				"fullNames",
 				"title",

@@ -546,6 +546,8 @@
   "sorts": {
     "desc": "最新",
     "asc": "最早",
+    "mostCited": "被引最多",
+    "leastCited": "被引最少",
     "authorAZ": "作者 A-Z",
     "authorZA": "作者 Z-A",
     "titleAZ": "标题 A-Z",

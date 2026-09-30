@@ -217,3 +217,31 @@ it("indexes whether a record has a readable PDF, stored or linked, even without 
 		]);
 	});
 }, 120_000);
+
+it("indexes the higher of the library's citation count and OpenAlex's, which the citation sorts order by", async () => {
+	await withIsolatedPublicationDatabase(async (database, client) => {
+		for (const key of ["LIBCITED", "ALXCITED", "UNCITED2", "CITINGAA", "CITINGBB", "HIDCITES"]) {
+			await client.query('INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'native\', $1)', [key]);
+			await client.query('INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "deleted", "title") VALUES ($1, \'native\', $1, \'Report\', 0, $1)', [key]);
+		}
+		// Two citing records in the library, and one a hidden tag keeps from readers.
+		for (const [fromKey, toKey] of [["CITINGAA", "LIBCITED"], ["CITINGBB", "LIBCITED"], ["HIDCITES", "LIBCITED"], ["CITINGAA", "ALXCITED"]]) {
+			await client.query('INSERT INTO "itemLink" ("fromKey", "toKey", "kind", "origin") VALUES ($1, $2, \'cites\', \'manual\')', [fromKey, toKey]);
+		}
+		await client.query('INSERT INTO "tag" ("name") VALUES (\'hidden\')');
+		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDCITES\', \'hidden\')');
+		await client.query('INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "config", "displayName") VALUES (\'openalex-test\', \'openalex\', \'query\', \'{"query":"education"}\'::jsonb, \'OpenAlex test\')');
+		for (const [key, citedByCount] of [["LIBCITED", 1], ["ALXCITED", 40]] as const) {
+			await client.query('INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, \'openalex-test\', $1)', [key]);
+			await client.query('INSERT INTO "itemCitationMetric" ("itemKey", "sourceConnectionKey", "citedByCount", "observedAt") VALUES ($1, \'openalex-test\', $2, now())', [key, citedByCount]);
+		}
+
+		const indexed = [];
+		for await (const plan of generateFullSearchProjectionPlans(database, config)) indexed.push(...plan.documents);
+		expect(Object.fromEntries(indexed.map((document) => [document.key, document.citationCount]))).toMatchObject({
+			LIBCITED: 2,
+			ALXCITED: 40,
+			UNCITED2: 0,
+		});
+	});
+}, 120_000);

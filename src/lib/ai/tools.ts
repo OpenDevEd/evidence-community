@@ -220,7 +220,7 @@ async function searchOne(
 		limit,
 		attributesToSearchOn: compiled.attributesToSearchOn,
 		attributesToRetrieve: [...SEARCH_ATTRIBUTES],
-		...(compiled.sortOption ? { sort: [compiled.sortOption] } : {}),
+		...(compiled.sortOption ? { sort: compiled.sortOption } : {}),
 	};
 	const startedAt = Date.now();
 
@@ -264,7 +264,7 @@ type CurrentResultsWindow = {
 	/** Window entries in the reader's displayed order. */
 	entries: ReturnType<typeof searchHitToListEntry>[];
 	/** The sort applied to the reader's results (relevance when unset). */
-	sort?: string;
+	sort?: string[];
 	start: number;
 	end: number;
 	total: number;
@@ -289,7 +289,7 @@ async function loadCurrentResultsWindow(
 	const baseOptions = {
 		attributesToSearchOn: compiled.attributesToSearchOn,
 		filter: compiled.finalFilters,
-		...(compiled.sortOption ? { sort: [compiled.sortOption] } : {}),
+		...(compiled.sortOption ? { sort: compiled.sortOption } : {}),
 	};
 
 	let offset = currentResultsOffset(searchContext, cursor);
@@ -354,7 +354,7 @@ function describeCurrentResults(
 		hasMore: window.hasMore,
 		nextCursor: window.nextCursor,
 		order: window.sort
-			? `sorted by ${window.sort}`
+			? `sorted by ${window.sort.join(", ")}`
 			: "relevance order as displayed",
 		// The window in the reader's order, only when listing, so an ordinary
 		// search result stays compact.
