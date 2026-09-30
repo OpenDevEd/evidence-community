@@ -107,6 +107,58 @@ describe("search index setup", () => {
 			created: false,
 		});
 	});
+
+	it("says the index exists before sending its settings, which can take minutes", async () => {
+		const events: string[] = [];
+		const target = service(false, events);
+		const updateSettings = target.index.updateSettings.bind(target.index);
+		(target.index as unknown as { updateSettings: unknown }).updateSettings = (settings: never) => {
+			events.push("settings");
+			return updateSettings(settings);
+		};
+		await ensureSearchIndex(target, {
+			onIndexExists: async () => {
+				events.push("exists");
+			},
+		});
+		expect(events).toEqual(["create", "exists", "settings"]);
+	});
+
+	it("waits for a settings task as long as Meilisearch makes progress, and gives up once it stalls", async () => {
+		// The task is queued for its first five polls, then in batch 7 until the tenth.
+		const run = (progressFor: (poll: number) => number | Error) => {
+			const target = service(true);
+			let polls = 0;
+			(target.index as unknown as { tasks: unknown }).tasks = {
+				getTask: async (uid: number) => {
+					polls++;
+					return {
+						...succeededTask(uid),
+						batchUid: polls <= 5 ? null : 7,
+						status: polls <= 5 ? "enqueued" : polls < 10 ? "processing" : "succeeded",
+					};
+				},
+			};
+			const progress = async () => {
+				const value = progressFor(polls);
+				if (value instanceof Error) throw value;
+				return { uid: 6, progress: { percentage: value } };
+			};
+			(target.client as unknown as { batches: unknown }).batches = {
+				getBatch: progress,
+				getBatches: async () => ({ results: [await progress()] }),
+			};
+			return ensureSearchIndex(target, { taskTimeoutMs: 300 });
+		};
+
+		// Ten polls 100 ms apart take three times the timeout.
+		await expect(run((poll) => poll)).resolves.toEqual({ created: false });
+		await expect(run(() => 10)).rejects.toMatchObject({ name: "MeilisearchTaskTimeOutError" });
+		// A failed progress read is not progress.
+		await expect(run((poll) => (poll % 2 ? new Error("unavailable") : 10))).rejects.toMatchObject({
+			name: "MeilisearchTaskTimeOutError",
+		});
+	});
 });
 
 describe("search index embedder", () => {

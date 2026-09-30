@@ -3,20 +3,14 @@ import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
-import { MeilisearchApiError, type Index } from "meilisearch";
+import type { Index } from "meilisearch";
 import { NextRequest, NextResponse } from "next/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { Item } from "@/app/api/item/types";
 import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
-
-// Meilisearch reports a missing embedder with the first code and a failing
-// embedding provider with the second. Both mean "not ready", not a bug.
-const EMBEDDER_NOT_READY_CODES = new Set([
-	"invalid_search_embedder",
-	"vector_embedding_error",
-]);
+import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
 
 function canRecommendSimilarResources(config: LibraryServerConfig) {
 	return Boolean(
@@ -71,15 +65,6 @@ function similarResourcesDescription(item: Item) {
 		itemUrl(item),
 		itemAbstract(item),
 	].join("");
-}
-
-function isEmbedderUnavailable(error: unknown) {
-	return (
-		error instanceof MeilisearchApiError &&
-		Boolean(
-			error.cause?.code && EMBEDDER_NOT_READY_CODES.has(error.cause.code),
-		)
-	);
 }
 
 export async function GET(
