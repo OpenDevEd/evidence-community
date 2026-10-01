@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import OpenScholar from "@/components/icons/OpenScholar";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useRouter } from "@/i18n/routing";
 import { twMerge } from "@/lib/tw-merge";
 import type { NavbarElementProps } from "@/types/navbar";
@@ -72,7 +73,8 @@ export function readerMenuGroups(input: {
 	reader: Reader;
 	t: Translate;
 	accountUrl: string;
-	onProfile: () => void;
+	/** Absent when the library has no reader profiles, as for an admin of a library with reader accounts off. */
+	onProfile?: () => void;
 	onSignOut: () => void;
 }) {
 	const { reader, t } = input;
@@ -112,9 +114,13 @@ export function readerMenuGroups(input: {
 							{t("addYourName")}
 						</DropdownItem>,
 					]),
-			<DropdownItem key="profile" onPress={input.onProfile} startContent={<NavbarMenuIcon icon={UserIcon} />}>
-				{t("profileMenuItem")}
-			</DropdownItem>,
+			...(input.onProfile
+				? [
+						<DropdownItem key="profile" onPress={input.onProfile} startContent={<NavbarMenuIcon icon={UserIcon} />}>
+							{t("profileMenuItem")}
+						</DropdownItem>,
+					]
+				: []),
 			<DropdownItem
 				key="account"
 				onPress={openAccount}
@@ -142,6 +148,7 @@ export default function UserMenu({ variant }: NavbarElementProps) {
 	const accountUrl = useOpenScholarAccountUrl();
 	const router = useRouter();
 	const t = useTranslations("ui");
+	const hasProfiles = useLibraryFeature("readerAccounts");
 
 	if (!reader) return null;
 
@@ -149,7 +156,7 @@ export default function UserMenu({ variant }: NavbarElementProps) {
 		reader,
 		t,
 		accountUrl,
-		onProfile: () => router.push(`/profile/${reader.id}`),
+		onProfile: hasProfiles ? () => router.push(`/profile/${reader.id}`) : undefined,
 		onSignOut: signOut,
 	});
 

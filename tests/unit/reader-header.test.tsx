@@ -123,6 +123,15 @@ describe("the signed-in reader's menu", () => {
 		expect(session.signOut).toHaveBeenCalledTimes(1);
 	});
 
+	it("offers no profile to an admin of a library with reader accounts off", () => {
+		session.features = { ...session.features, readerAccounts: false };
+		session.reader = { id: "reader-amina", name: "Amina Okafor", image: null };
+		render(<UserMenu variant="inline" styleVariant="small" />);
+		press("Your account");
+		expect(menuText()).not.toContain("Profile");
+		expect(menuText()).toContain("Sign out");
+	});
+
 	it("shows a named reader their name and no prompt to add one", () => {
 		session.reader = { id: "reader-amina", name: "Amina Okafor", image: null };
 		render(<UserMenu variant="inline" styleVariant="small" />);

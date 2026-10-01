@@ -251,7 +251,8 @@ export default function ActionsDropdown({ context, includeSignIn = true }: Actio
 	const languages = useLibraryLanguages();
 	const hasTheme = useLibraryFeature("themeSwitcher");
 	const hasLanguages = useLibraryFeature("languageSwitcher") && languages.length > 1;
-	const hasLogin = useLibraryFeature("readerAccounts") && !reader && includeSignIn;
+	const hasReaderAccounts = useLibraryFeature("readerAccounts");
+	const hasLogin = hasReaderAccounts && !reader && includeSignIn;
 
 	// Theme and language always sit in a menu; Sign in alone is a button.
 	if (!reader && !hasTheme && !hasLanguages) {
@@ -263,6 +264,7 @@ export default function ActionsDropdown({ context, includeSignIn = true }: Actio
 			hasTheme={hasTheme}
 			hasLanguages={hasLanguages}
 			hasLogin={hasLogin}
+			hasProfiles={hasReaderAccounts}
 			languages={languages}
 		/>
 	);
@@ -273,9 +275,11 @@ function ActionsMenu({
 	hasTheme,
 	hasLanguages,
 	hasLogin,
+	hasProfiles,
 	languages,
 }: {
 	includeSignIn: boolean;
+	hasProfiles: boolean;
 	hasTheme: boolean;
 	hasLanguages: boolean;
 	hasLogin: boolean;
@@ -300,7 +304,13 @@ function ActionsMenu({
 		onLanguages: () => goTo("languages"),
 	});
 	const groups = reader
-		? readerMenuGroups({ reader, t, accountUrl, onProfile: () => router.push(`/profile/${reader.id}`), onSignOut: signOut })
+		? readerMenuGroups({
+				reader,
+				t,
+				accountUrl,
+				onProfile: hasProfiles ? () => router.push(`/profile/${reader.id}`) : undefined,
+				onSignOut: signOut,
+			})
 		: null;
 	const shown =
 		view === "languages"

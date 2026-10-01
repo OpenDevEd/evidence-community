@@ -2760,7 +2760,8 @@ function cleanupAcceptanceUsers() {
 		"--dbname",
 		"amber",
 		"--command",
-		`DELETE FROM "user" WHERE "email" LIKE 'acceptance-%@example.org'`,
+		// Every acceptance reader is minted for a Clerk user ID starting with user_acceptance.
+		`DELETE FROM "reader_user" WHERE "id" LIKE 'reader-user\\_acceptance%'`,
 	);
 }
 
