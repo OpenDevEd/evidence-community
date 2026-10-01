@@ -24,11 +24,6 @@ function openScholarConfigurationHref(libraryUrl: string) {
 	return url.toString();
 }
 
-// Waits for the admin's access check instead of showing a loading state, so nobody sees the workbench before it.
-// Next.js reads this route export. Fallow does not recognize it yet.
-// fallow-ignore-next-line unused-export
-export const instant = false;
-
 export default async function AdminPage({
 	params,
 	searchParams,
