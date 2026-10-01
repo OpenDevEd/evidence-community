@@ -358,6 +358,30 @@ export function adminCollectionCatalogueReducer(
 	};
 }
 
+/**
+ * The status row under a branch, if any. A branch loading its first page has
+ * none (its owner's chevron spins), and a branch without children shows
+ * nothing because the missing chevron already says so.
+ */
+function branchStatus(branch: AdminCollectionCatalogueBranch): {
+	kind: "error" | "loadMore" | "loading";
+	positionInSet?: number;
+	retryMode?: "more" | "refresh";
+} | null {
+	const positionInSet = branch.revealed.length
+		? undefined
+		: branch.items.length + 1;
+	if (branch.loadingMore) return { kind: "loading", positionInSet };
+	if (branch.status === "error" || branch.loadMoreError) {
+		return {
+			kind: "error",
+			positionInSet,
+			retryMode: branch.loadMoreError ? "more" : "refresh",
+		};
+	}
+	return branch.nextCursor ? { kind: "loadMore", positionInSet } : null;
+}
+
 export function flattenAdminCollectionCatalogue(
 	state: AdminCollectionCatalogueState,
 	sources: readonly AdminSource[],
@@ -375,46 +399,8 @@ export function flattenAdminCollectionCatalogue(
 			parentCollection,
 		);
 		const branch = state.branches.get(branchKey);
-		const statusPosition = branch?.revealed.length
-			? undefined
-			: (branch?.items.length ?? 0) + 1;
-		if (
-			!branch ||
-			(branch.status === "loading" &&
-				branch.items.length === 0 &&
-				branch.revealed.length === 0)
-		) {
-			rows.push({
-				branchKey,
-				depth,
-				kind: "loading",
-				parentCollection,
-				positionInSet: statusPosition,
-				setSize: -1,
-				sourceConnectionKey,
-			});
-			return;
-		}
-		if (
-			branch.status === "error" &&
-			branch.items.length === 0 &&
-			branch.revealed.length === 0
-		) {
-			rows.push({
-				branchKey,
-				depth,
-				kind: "error",
-				parentCollection,
-				positionInSet: statusPosition,
-				retryMode: "refresh",
-				setSize: -1,
-				sourceConnectionKey,
-			});
-			return;
-		}
-		// A source or collection without children shows nothing under it; the
-		// missing chevron already says so.
-		if (branch.items.length === 0 && branch.revealed.length === 0) return;
+		// The owner's chevron spins while a branch loads; no row stands in.
+		if (!branch) return;
 		const visibleEntries = [
 			...branch.items.map((entry) => ({ entry, revealed: false })),
 			...branch.revealed.map((entry) => ({ entry, revealed: true })),
@@ -436,36 +422,15 @@ export function flattenAdminCollectionCatalogue(
 				visit(sourceConnectionKey, entry.key, depth + 1);
 			}
 		}
-		if (branch.status === "loading" || branch.loadingMore) {
+		const status = branchStatus(branch);
+		if (status) {
 			rows.push({
 				branchKey,
 				depth,
-				kind: "loading",
 				parentCollection,
-				positionInSet: statusPosition,
 				setSize: -1,
 				sourceConnectionKey,
-			});
-		} else if (branch.status === "error" || branch.loadMoreError) {
-			rows.push({
-				branchKey,
-				depth,
-				kind: "error",
-				parentCollection,
-				positionInSet: statusPosition,
-				retryMode: branch.loadMoreError ? "more" : "refresh",
-				setSize: -1,
-				sourceConnectionKey,
-			});
-		} else if (branch.nextCursor) {
-			rows.push({
-				branchKey,
-				depth,
-				kind: "loadMore",
-				parentCollection,
-				positionInSet: statusPosition,
-				setSize: -1,
-				sourceConnectionKey,
+				...status,
 			});
 		}
 	};
