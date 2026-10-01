@@ -16,6 +16,7 @@ import { cookies } from "next/headers";
 import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 import { LibraryThemeStyles } from "@/components/library/LibraryThemeStyles";
+import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 
 async function BaseContent({
@@ -88,6 +89,7 @@ export default async function Base({
 				/>
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
+				<NavbarFitStyles locale={locale} />
 				<LibraryConfigProvider config={libraryConfig}>
 					<BaseContent
 						gapmaps={libraryConfig.gapMaps}

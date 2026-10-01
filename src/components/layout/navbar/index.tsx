@@ -54,7 +54,7 @@ function barClassName(
 	showNavbarSearch: boolean,
 ) {
 	return twMerge(
-		"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
+		"navbar-bar xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
 		BAR_STYLE[styleVariant],
 		chatEngaged && BAR_BESIDE_CHAT[styleVariant],
 		// When the search bar is docked beneath the navbar (non-wide
@@ -182,7 +182,7 @@ export default function Navbar() {
 
 				{/* Mobile inline actions (< xl) - Login button/Avatar stay visible */}
 				{mobileInlineElements.length > 0 && (
-					<div className="flex xl:hidden items-center gap-3">
+					<div className="nf-compact flex items-center gap-3">
 						{mobileInlineElements.map((element) => {
 							const Component = element.component;
 							return (
@@ -201,7 +201,7 @@ export default function Navbar() {
 
 				{/* Tablet condensed dropdown (xl to 2xl) */}
 				{tabletDropdownElements.length > 0 && (
-					<div className="hidden xl:block 2xl:hidden">
+					<div className="nf-actions-condensed">
 						<ActionsDropdown context={navbarContext} />
 					</div>
 				)}
@@ -209,7 +209,7 @@ export default function Navbar() {
 				{/* Desktop expanded actions (2xl+) */}
 				{desktopInlineElements.length > 0 && (
 					<nav
-						className="hidden 2xl:block"
+						className="nf-actions-full"
 						aria-label={t("secondaryNavAriaLabel")}
 					>
 						<ul className="flex items-center gap-6">
