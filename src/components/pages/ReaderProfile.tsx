@@ -334,26 +334,35 @@ function CollectionsNav({
 	onCreate?: () => void;
 }) {
 	const t = useTranslations("ui");
+	const format = useFormatter();
 	return (
 		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
-			{/* The heading row matches the list's, so the first collection lines up with the search field. */}
-			<nav className="flex flex-col gap-4">
-				<div className="flex h-12 items-end justify-between gap-4">
-					<h2 className="text-3xl font-medium text-black dark:text-white/60">{t("collections")}</h2>
+			{/* The same card as the profile's own, its head tinted like the cover band above. */}
+			<nav className="overflow-hidden rounded-2xl bg-white dark:bg-secondary">
+				<div className="flex items-center justify-between gap-3 bg-accent/10 px-5 py-4">
+					<h2 className="flex items-center gap-2.5 font-heading text-xl font-semibold tracking-tight text-foreground dark:text-white">
+						{t("collections")}
+						<span className="rounded-full bg-white px-2 text-small font-medium tabular-nums text-black/70 dark:bg-white/10 dark:text-white/70">
+							{format.number(shelves.length - 1)}
+						</span>
+					</h2>
 					{onCreate ? (
-						<Tooltip content={t("newCollection")}>
-							<Button isIconOnly aria-label={t("newCollection")} onPress={onCreate} className="h-12 w-12 min-w-0 !p-0">
-								<HugeiconsIcon icon={Add01Icon} className="size-6" aria-hidden />
-							</Button>
-						</Tooltip>
+						<Button
+							color="accent"
+							onPress={onCreate}
+							startContent={<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />}
+							className="h-10 shrink-0 px-4 font-medium"
+						>
+							{t("newCollection")}
+						</Button>
 					) : null}
 				</div>
-				<div className="-mx-3 flex flex-col gap-1">
+				<div className="flex flex-col gap-1 p-3">
 				{shelves.map((shelf) => {
 					const isSelected = shelf.id === selected;
 					const isOpen = isSelected && Boolean(shelf.id) && Boolean(shelf.description || onEdit);
 					return (
-						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-white shadow-sm dark:bg-secondary")}>
+						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-black/[0.04] dark:bg-white/[0.06]")}>
 							<button
 								type="button"
 								aria-current={isSelected || undefined}
