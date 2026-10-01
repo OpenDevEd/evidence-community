@@ -5,7 +5,7 @@ import { headers as requestHeaders } from "next/headers";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 
-import { getReaderAuthForConfig } from "./auth";
+import { getReaderAuthForConfig } from "./instance";
 
 export type SignedInReader = { id: string; name: string; image: string | null; clerkUserId: string };
 

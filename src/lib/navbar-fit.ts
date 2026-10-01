@@ -79,6 +79,57 @@ function logoWidth(src: string | undefined) {
 	return pending;
 }
 
+type NavbarLabels = {
+	/** A navigation link's label as the header shows it. */
+	link: (label: string) => string;
+	gapMaps: string;
+	signIn: string;
+};
+
+/**
+ * The widths the bar needs, given a way to measure text in the library's font.
+ * Signed out the actions are the settings button and Sign in; signed in the
+ * avatar alone, so the larger of the two is kept and nothing jumps when a
+ * reader signs in.
+ */
+export function navbarWidths(
+	config: LibraryServerConfig,
+	measure: (value: string) => number,
+	labels: NavbarLabels,
+	logo: number,
+): NavbarFit {
+	const wide = config.theme.layout === "wide";
+	const label = (value: string) => (wide ? value.toUpperCase() : value);
+	const items = getVisibleRuntimeLinks(config.navigation.links).map(
+		(link) =>
+			(link.icon ? LINK_ICON + LINK_ICON_GAP : 0) +
+			measure(label(labels.link(link.label))) +
+			(getVisibleRuntimeLinks(link.children).length > 0 ? SUBMENU_TRIGGER : 0),
+	);
+	if (config.gapMaps.length > 0) items.push(LINK_ICON + LINK_ICON_GAP + measure(label(labels.gapMaps)));
+	const links = items.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, items.length - 1);
+
+	const hasSettings =
+		isLibraryFeatureEnabled(config.features, "themeSwitcher") ||
+		(isLibraryFeatureEnabled(config.features, "languageSwitcher") && config.localization.locales.length > 1);
+	const readerAccounts = isLibraryFeatureEnabled(config.features, "readerAccounts");
+	const signedOut = [
+		...(hasSettings ? [SETTINGS_BUTTON] : []),
+		...(readerAccounts ? [SIGN_IN_CHROME + measure(labels.signIn)] : []),
+	];
+	const actions = Math.max(
+		signedOut.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, signedOut.length - 1),
+		readerAccounts ? AVATAR : 0,
+	);
+
+	// Container queries measure the bar without its padding.
+	const base = logo + GAP + links + SAFETY;
+	return {
+		links: Math.ceil(base + (actions > 0 ? GAP + MENU_BUTTON : 0)),
+		full: Math.ceil(base + (actions > 0 ? GAP + actions : 0)),
+	};
+}
+
 export async function computeNavbarFit(
 	config: LibraryServerConfig,
 	locale: string,
@@ -95,43 +146,37 @@ export async function computeNavbarFit(
 	}
 	const context = createCanvas(1, 1).getContext("2d");
 	context.font = `${LINK_FONT.weight} ${LINK_FONT.size}px "${alias}"`;
-	const text = (value: string) => context.measureText(value).width;
-
-	const t = await getTranslations({ locale, namespace: "nav" });
-	const ui = await getTranslations({ locale, namespace: "ui" });
-	const wide = config.theme.layout === "wide";
-	const label = (value: string) => (wide ? value.toUpperCase() : value);
-
-	const items = getVisibleRuntimeLinks(config.navigation.links).map(
-		(link) =>
-			(link.icon ? LINK_ICON + LINK_ICON_GAP : 0) +
-			text(label(localizeOrUseIfCapitalized(link.label, t))) +
-			(getVisibleRuntimeLinks(link.children).length > 0 ? SUBMENU_TRIGGER : 0),
+	const [t, ui, logo] = await Promise.all([
+		getTranslations({ locale, namespace: "nav" }),
+		getTranslations({ locale, namespace: "ui" }),
+		logoWidth(logoSrc),
+	]);
+	return navbarWidths(
+		config,
+		(value) => context.measureText(value).width,
+		{ link: (value) => localizeOrUseIfCapitalized(value, t), gapMaps: t("gapMaps"), signIn: ui("signIn") },
+		logo,
 	);
-	if (config.gapMaps.length > 0) items.push(LINK_ICON + LINK_ICON_GAP + text(label(t("gapMaps"))));
-	const links = items.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, items.length - 1);
+}
 
-	// Theme and language sit behind one settings button. Signed out, Sign in
-	// follows it; signed in, the avatar alone holds everything.
-	const hasSettings =
-		isLibraryFeatureEnabled(config.features, "themeSwitcher") ||
-		(isLibraryFeatureEnabled(config.features, "languageSwitcher") && config.localization.locales.length > 1);
-	const login = isLibraryFeatureEnabled(config.features, "readerAccounts");
-	const signedOut = [
-		...(hasSettings ? [SETTINGS_BUTTON] : []),
-		...(login ? [SIGN_IN_CHROME + text(ui("signIn"))] : []),
-	];
-	const actions = [Math.max(
-		signedOut.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, signedOut.length - 1),
-		login ? AVATAR : 0,
-	)].filter((width) => width > 0);
-	const actionsWidth = actions[0] ?? 0;
-
-	const logo = await logoWidth(logoSrc);
-	// Container queries measure the bar without its padding.
-	const base = logo + GAP + links + SAFETY;
-	return {
-		links: Math.ceil(base + (actions.length > 0 ? GAP + MENU_BUTTON : 0)),
-		full: Math.ceil(base + (actions.length > 0 ? GAP + actionsWidth : 0)),
-	};
+/**
+ * When the header shows its links and its actions inline, as CSS. Measured
+ * widths become container queries on the bar; without a measurement the
+ * fixed xl and 2xl breakpoints decide.
+ */
+export function navbarFitCss(fit: NavbarFit | null) {
+	const linksQuery = fit ? `@container navbar (min-width: ${fit.links}px)` : "@media (min-width: 1280px)";
+	const fullQuery = fit ? `@container navbar (min-width: ${fit.full}px)` : "@media (min-width: 1536px)";
+	return `
+.navbar-bar { container: navbar / inline-size; }
+.nf-links, .nf-actions-condensed, .nf-actions-full { display: none !important; }
+${linksQuery} {
+	.nf-links { display: flex !important; }
+	.nf-actions-condensed { display: block !important; }
+	.nf-compact { display: none !important; }
+}
+${fullQuery} {
+	.nf-actions-condensed { display: none !important; }
+	.nf-actions-full { display: block !important; }
+}`;
 }

@@ -44,21 +44,15 @@ interface ActionsDropdownProps {
 	includeSignIn?: boolean;
 }
 
+type Translate = ReturnType<typeof useTranslations<"ui">>;
+
 /**
- * The header's actions when they do not fit beside the links: who is signed
- * in and their account first, then the library's settings, then signing in or
- * out. Each group is one section, so the dividers are the only gaps.
+ * The menu shows either its actions or, one step in, the list of languages.
+ * The rows slide in from the side they come from while the menu frame eases
+ * from the old view's height to the new one's. The same menu stays mounted,
+ * so the popover never replays its opening.
  */
-export default function ActionsDropdown({ context, includeSignIn = true }: ActionsDropdownProps) {
-	const t = useTranslations("ui");
-	const { reader, signIn, signOut } = useReaderSession();
-	const accountUrl = useOpenScholarAccountUrl();
-	const { resolvedTheme: theme, setTheme } = useTheme();
-	const router = useRouter();
-	const currentLocale = useLocale();
-	const changeLocale = useRuntimeLocaleNavigation();
-	const languages = useLibraryLanguages();
-	// The menu shows either its actions or, one step in, the list of languages.
+function useSteppedMenu() {
 	const [view, setView] = useState<"main" | "languages">("main");
 	// Which way the last step went; none when the menu has just opened.
 	const [step, setStep] = useState<"forward" | "back" | null>(null);
@@ -79,9 +73,7 @@ export default function ActionsDropdown({ context, includeSignIn = true }: Actio
 		setView(next);
 	};
 
-	// The rows slide in from the side they come from while the menu frame eases
-	// from the old view's height to the new one's. The same menu stays mounted,
-	// so the popover never replays its opening. DOM animation, so a layout effect.
+	// DOM animation, so a layout effect.
 	useLayoutEffect(() => {
 		const from = heightBeforeStep.current;
 		heightBeforeStep.current = null;
@@ -109,112 +101,211 @@ export default function ActionsDropdown({ context, includeSignIn = true }: Actio
 			height?.cancel();
 		};
 	}, [view, step]);
-	const hasTheme = useLibraryFeature("themeSwitcher");
-	const hasLanguages = useLibraryFeature("languageSwitcher") && languages.length > 1;
-	const loginEnabled = useLibraryFeature("readerAccounts");
-	const hasLogin = loginEnabled && !reader && includeSignIn;
 
-	// Theme and language always sit in a menu; Sign in alone is a button.
-	if (!reader && !hasTheme && !hasLanguages) {
-		return hasLogin ? <LoginButton variant="inline" styleVariant={context.styleVariant} /> : null;
+	return { menuRef, view, isOpen, setOpen, goTo };
+}
+
+/** The library's settings: dark mode as a switch, and the step into languages. */
+function settingsItems(input: {
+	t: Translate;
+	hasTheme: boolean;
+	hasLanguages: boolean;
+	isDark: boolean;
+	currentLocale: string;
+	onToggleTheme: () => void;
+	onLanguages: () => void;
+}) {
+	const { t } = input;
+	const items = [];
+	if (input.hasTheme) {
+		items.push(
+			<DropdownItem
+				key="theme"
+				onPress={input.onToggleTheme}
+				startContent={<NavbarMenuIcon icon={Moon02Icon} />}
+				endContent={<NavbarMenuSwitch on={input.isDark} />}
+				textValue={t("darkMode")}
+			>
+				{t("darkMode")}
+			</DropdownItem>,
+		);
 	}
+	if (input.hasLanguages) {
+		items.push(
+			<DropdownItem
+				key="language"
+				onPress={input.onLanguages}
+				startContent={<NavbarMenuIcon icon={LanguageSkillIcon} />}
+				endContent={
+					<span className="flex items-center gap-1 text-small text-foreground/60 dark:text-white/60">
+						{languageName(input.currentLocale)}
+						<NavbarMenuIcon icon={ArrowRight01Icon} className="size-4 rtl:rotate-180" />
+					</span>
+				}
+				textValue={t("language")}
+			>
+				{t("language")}
+			</DropdownItem>,
+		);
+	}
+	return items;
+}
 
-	const isDark = theme === "dark";
-	const settings = [
-		...(hasTheme
-			? [
-					<DropdownItem
-						key="theme"
-						onPress={() => setTheme(isDark ? "light" : "dark")}
-						startContent={<NavbarMenuIcon icon={Moon02Icon} />}
-						endContent={<NavbarMenuSwitch on={isDark} />}
-						textValue={t("darkMode")}
-					>
-						{t("darkMode")}
-					</DropdownItem>,
-				]
-			: []),
-		...(hasLanguages
-			? [
-					<DropdownItem
-						key="language"
-						onPress={() => goTo("languages")}
-						startContent={<NavbarMenuIcon icon={LanguageSkillIcon} />}
-						endContent={
-							<span className="flex items-center gap-1 text-small text-foreground/60 dark:text-white/60">
-								{languageName(currentLocale)}
-								<NavbarMenuIcon icon={ArrowRight01Icon} className="size-4 rtl:rotate-180" />
-							</span>
-						}
-						textValue={t("language")}
-					>
-						{t("language")}
-					</DropdownItem>,
-				]
-			: []),
-	];
-
-	const groups = reader
-		? readerMenuGroups({
-				reader,
-				t,
-				accountUrl,
-				onProfile: () => router.push(`/profile/${reader.id}`),
-				onSignOut: signOut,
-			})
-		: null;
-
-	const sections = [
-		...(groups
-			? [
-					<DropdownSection key="reader" showDivider classNames={navbarMenuSectionClasses}>
-						{groups.identity}
-					</DropdownSection>,
-					<DropdownSection key="account" showDivider classNames={navbarMenuSectionClasses}>
-						{groups.account}
-					</DropdownSection>,
-				]
-			: []),
-		...(settings.length > 0
-			? [
-					<DropdownSection key="settings" showDivider={Boolean(groups) || hasLogin} classNames={navbarMenuSectionClasses}>
-						{settings}
-					</DropdownSection>,
-				]
-			: []),
-		groups ? (
+/** Who is signed in and their account, then the settings, then signing in or out. */
+function menuSections(input: {
+	t: Translate;
+	groups: ReturnType<typeof readerMenuGroups> | null;
+	settings: ReturnType<typeof settingsItems>;
+	hasLogin: boolean;
+	onSignIn: () => void;
+}) {
+	const { t, groups, settings, hasLogin } = input;
+	const sections = [];
+	if (groups) {
+		sections.push(
+			<DropdownSection key="reader" showDivider classNames={navbarMenuSectionClasses}>
+				{groups.identity}
+			</DropdownSection>,
+			<DropdownSection key="account" showDivider classNames={navbarMenuSectionClasses}>
+				{groups.account}
+			</DropdownSection>,
+		);
+	}
+	if (settings.length > 0) {
+		sections.push(
+			<DropdownSection key="settings" showDivider={Boolean(groups) || hasLogin} classNames={navbarMenuSectionClasses}>
+				{settings}
+			</DropdownSection>,
+		);
+	}
+	if (groups) {
+		sections.push(
 			<DropdownSection key="sign-out" classNames={navbarMenuSectionClasses}>
 				{groups.signOut}
-			</DropdownSection>
-		) : hasLogin ? (
+			</DropdownSection>,
+		);
+	} else if (hasLogin) {
+		sections.push(
 			<DropdownSection key="sign-in" classNames={navbarMenuSectionClasses}>
 				<DropdownItem
 					key="login"
-					onPress={signIn}
+					onPress={input.onSignIn}
 					startContent={<HugeiconsIcon icon={Login01Icon} aria-hidden className="size-5 shrink-0" />}
 					className={navbarMenuSignInClasses}
 				>
 					{t("signIn")}
 				</DropdownItem>
-			</DropdownSection>
-		) : null,
-	].filter((section) => section !== null);
+			</DropdownSection>,
+		);
+	}
+	return sections;
+}
 
-	const languageView = [
+/** Signed out, a menu button; with Sign in kept beside it, a settings button. */
+function menuButton(t: Translate, includeSignIn: boolean) {
+	return (
+		<Button
+			variant="invisible"
+			disableRipple
+			isIconOnly
+			className="flex items-center justify-center"
+			aria-label={includeSignIn ? t("actionsMenuAriaLabel") : t("settings")}
+		>
+			<HugeiconsIcon icon={includeSignIn ? Menu01Icon : Settings02Icon} className="size-5 text-accent" />
+		</Button>
+	);
+}
+
+/** One step into the menu: back to the actions, then the library's languages. */
+function languageSections(input: {
+	t: Translate;
+	languages: ReturnType<typeof useLibraryLanguages>;
+	currentLocale: string;
+	onBack: () => void;
+	onSelect: ReturnType<typeof useRuntimeLocaleNavigation>;
+}) {
+	return [
 		<DropdownSection key="languages-back" showDivider classNames={navbarMenuSectionClasses}>
 			<DropdownItem
 				key="back"
-				onPress={() => goTo("main")}
+				onPress={input.onBack}
 				startContent={<NavbarMenuIcon icon={ArrowLeft01Icon} className="rtl:rotate-180" />}
 				className="font-semibold"
 			>
-				{t("language")}
+				{input.t("language")}
 			</DropdownItem>
 		</DropdownSection>,
 		<DropdownSection key="languages" classNames={navbarMenuSectionClasses}>
-			{languageMenuItems({ locales: languages, current: currentLocale, onSelect: changeLocale })}
+			{languageMenuItems({ locales: input.languages, current: input.currentLocale, onSelect: input.onSelect })}
 		</DropdownSection>,
 	];
+}
+
+/**
+ * The header's actions when they do not fit beside the links: who is signed
+ * in and their account first, then the library's settings, then signing in or
+ * out. Each group is one section, so the dividers are the only gaps.
+ */
+export default function ActionsDropdown({ context, includeSignIn = true }: ActionsDropdownProps) {
+	const { reader } = useReaderSession();
+	const languages = useLibraryLanguages();
+	const hasTheme = useLibraryFeature("themeSwitcher");
+	const hasLanguages = useLibraryFeature("languageSwitcher") && languages.length > 1;
+	const hasLogin = useLibraryFeature("readerAccounts") && !reader && includeSignIn;
+
+	// Theme and language always sit in a menu; Sign in alone is a button.
+	if (!reader && !hasTheme && !hasLanguages) {
+		return hasLogin ? <LoginButton variant="inline" styleVariant={context.styleVariant} /> : null;
+	}
+	return (
+		<ActionsMenu
+			includeSignIn={includeSignIn}
+			hasTheme={hasTheme}
+			hasLanguages={hasLanguages}
+			hasLogin={hasLogin}
+			languages={languages}
+		/>
+	);
+}
+
+function ActionsMenu({
+	includeSignIn,
+	hasTheme,
+	hasLanguages,
+	hasLogin,
+	languages,
+}: {
+	includeSignIn: boolean;
+	hasTheme: boolean;
+	hasLanguages: boolean;
+	hasLogin: boolean;
+	languages: ReturnType<typeof useLibraryLanguages>;
+}) {
+	const t = useTranslations("ui");
+	const { reader, signIn, signOut } = useReaderSession();
+	const accountUrl = useOpenScholarAccountUrl();
+	const { resolvedTheme: theme, setTheme } = useTheme();
+	const router = useRouter();
+	const currentLocale = useLocale();
+	const changeLocale = useRuntimeLocaleNavigation();
+	const { menuRef, view, isOpen, setOpen, goTo } = useSteppedMenu();
+	const isDark = theme === "dark";
+	const settings = settingsItems({
+		t,
+		hasTheme,
+		hasLanguages,
+		isDark,
+		currentLocale,
+		onToggleTheme: () => setTheme(isDark ? "light" : "dark"),
+		onLanguages: () => goTo("languages"),
+	});
+	const groups = reader
+		? readerMenuGroups({ reader, t, accountUrl, onProfile: () => router.push(`/profile/${reader.id}`), onSignOut: signOut })
+		: null;
+	const shown =
+		view === "languages"
+			? languageSections({ t, languages, currentLocale, onBack: () => goTo("main"), onSelect: changeLocale })
+			: menuSections({ t, groups, settings, hasLogin, onSignIn: signIn });
 
 	return (
 		<Dropdown
@@ -224,21 +315,7 @@ export default function ActionsDropdown({ context, includeSignIn = true }: Actio
 			onOpenChange={setOpen}
 			closeOnSelect={false}
 		>
-			<DropdownTrigger>
-				{reader ? (
-					<ReaderAvatar reader={reader} asTrigger />
-				) : (
-					<Button
-						variant="invisible"
-						disableRipple
-						isIconOnly
-						className="flex items-center justify-center"
-						aria-label={includeSignIn ? t("actionsMenuAriaLabel") : t("settings")}
-					>
-						<HugeiconsIcon icon={includeSignIn ? Menu01Icon : Settings02Icon} className="size-5 text-accent" />
-					</Button>
-				)}
-			</DropdownTrigger>
+			<DropdownTrigger>{reader ? <ReaderAvatar reader={reader} asTrigger /> : menuButton(t, includeSignIn)}</DropdownTrigger>
 			<DropdownMenu
 				ref={menuRef}
 				aria-label={t("actionsMenuAriaLabel")}
@@ -249,7 +326,7 @@ export default function ActionsDropdown({ context, includeSignIn = true }: Actio
 					if (!KEEPS_MENU_OPEN.has(String(key))) setOpen(false);
 				}}
 			>
-				{view === "languages" ? languageView : sections}
+				{shown}
 			</DropdownMenu>
 		</Dropdown>
 	);

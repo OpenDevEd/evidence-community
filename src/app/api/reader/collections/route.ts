@@ -6,7 +6,7 @@ import { READER_RESPONSE_HEADERS, readerError, readJsonBody, readReaderRequest }
 
 export async function POST(request: Request) {
 	const access = await readReaderRequest(request);
-	if ("response" in access) return access.response;
+	if (access.response) return access.response;
 	const input = readerCollectionInputSchema.safeParse(await readJsonBody(request));
 	if (!input.success) return readerError(400, fromError(input.error).toString());
 	const collection = await createReaderCollection(access.database, access.reader.id, input.data);

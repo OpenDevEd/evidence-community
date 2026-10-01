@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getLibraryConfig } from "@/config/library-config/server";
-import { computeNavbarFit } from "@/lib/navbar-fit";
+import { computeNavbarFit, navbarFitCss } from "@/lib/navbar-fit";
 
 /**
  * Decides, in CSS, when the header shows its links and its actions inline. The
@@ -13,19 +13,5 @@ import { computeNavbarFit } from "@/lib/navbar-fit";
 export async function NavbarFitStyles({ locale }: { locale: string }) {
 	const config = await getLibraryConfig();
 	const fit = await computeNavbarFit(config, locale, config.identity.assets.logoLight);
-	const when = (width: number, fallback: string) =>
-		fit ? `@container navbar (min-width: ${width}px)` : `@media (min-width: ${fallback})`;
-	const css = `
-.navbar-bar { container: navbar / inline-size; }
-.nf-links, .nf-actions-condensed, .nf-actions-full { display: none !important; }
-${when(fit?.links ?? 0, "1280px")} {
-	.nf-links { display: flex !important; }
-	.nf-actions-condensed { display: block !important; }
-	.nf-compact { display: none !important; }
-}
-${when(fit?.full ?? 0, "1536px")} {
-	.nf-actions-condensed { display: none !important; }
-	.nf-actions-full { display: block !important; }
-}`;
-	return <style data-navbar-fit={fit ? `${fit.links} ${fit.full}` : "fallback"}>{css}</style>;
+	return <style data-navbar-fit={fit ? `${fit.links} ${fit.full}` : "fallback"}>{navbarFitCss(fit)}</style>;
 }

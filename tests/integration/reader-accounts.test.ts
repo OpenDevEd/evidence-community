@@ -8,8 +8,30 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(), getDatabaseForConfig: vi.fn() }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
+vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
+vi.mock("next/navigation", () => ({
+	notFound: () => {
+		throw new Error("NEXT_NOT_FOUND");
+	},
+}));
+// The page is checked for the data it hands over, not for its drawing.
+vi.mock("@/components/pages/ReaderProfile", () => ({ default: () => null }));
+vi.mock("@/app/[locale]/lib/page", () => ({ libraryMetadata: vi.fn() }));
+const requestHeaders = vi.hoisted(() => ({ current: new Headers() }));
+vi.mock("next/headers", () => ({ headers: async () => requestHeaders.current }));
+vi.mock("next/server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("next/server")>()),
+	connection: vi.fn(),
+}));
 
+import ProfilePage from "@/app/[locale]/profile/[id]/page";
+import { GET as readOwnData } from "@/app/api/reader/route";
+import { POST as toggleBookmarkRoute } from "@/app/api/reader/bookmarks/route";
+import { POST as createCollectionRoute } from "@/app/api/reader/collections/route";
+import { DELETE as deleteCollectionRoute, PATCH as editCollectionRoute } from "@/app/api/reader/collections/[id]/route";
+import { POST as toggleCollectionItemRoute } from "@/app/api/reader/collections/[id]/items/route";
 import { DELETE as deleteReaderRoute } from "@/app/api/v1/openscholar/readers/[clerkUserId]/route";
+import { signedInHeaders } from "../helpers/reader-session";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import type { Database } from "@/db/database-schema";
@@ -37,13 +59,16 @@ async function withReaders(
 	await withIsolatedPublicationDatabase(async (db) => {
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(db);
 		vi.mocked(getLibraryConfig).mockResolvedValue(config);
+		// The test session names each reader after their Clerk user.
+		const amina = "reader-user_amina";
+		const bob = "reader-user_bob";
 		await db.insert(readerUser).values([
-			{ id: "amina", name: "Amina Okafor", email: "amina@example.org", clerkUserId: "user_amina" },
-			{ id: "bob", name: "", email: "bob@example.org", clerkUserId: "user_bob" },
+			{ id: amina, name: "Amina Okafor", email: "amina@example.org", clerkUserId: "user_amina" },
+			{ id: bob, name: "", email: "bob@example.org", clerkUserId: "user_bob" },
 		]);
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
-		await verify({ db, itemKey, amina: "amina", bob: "bob" });
+		await verify({ db, itemKey, amina, bob });
 	});
 }
 
@@ -159,6 +184,64 @@ describe("the background account check", () => {
 
 			expect(fetcher).toHaveBeenCalledTimes(1);
 			expect(await db.select({ id: readerUser.id }).from(readerUser).where(eq(readerUser.id, amina))).toEqual([{ id: amina }]);
+		});
+	});
+});
+
+describe("reader routes", () => {
+	function call(clerkUserId: string | undefined, method: string, body?: unknown) {
+		const headers = signedInHeaders(clerkUserId);
+		if (body) headers.set("Content-Type", "application/json");
+		return new Request("https://library.example.org/api/reader", { method, headers, body: body ? JSON.stringify(body) : undefined });
+	}
+	const params = (id: string) => ({ params: Promise.resolve({ id }) });
+
+	it("lets the signed-in reader bookmark and collect, and nobody else change their collections", async () => {
+		await withReaders(async ({ itemKey }) => {
+			expect((await toggleBookmarkRoute(call(undefined, "POST", { itemKey }))).status).toBe(401);
+			expect(await (await toggleBookmarkRoute(call("user_amina", "POST", { itemKey }))).json()).toEqual({ bookmarked: true });
+			expect((await toggleBookmarkRoute(call("user_amina", "POST", { itemKey: "NOSUCHAA" }))).status).toBe(404);
+
+			const created = await createCollectionRoute(call("user_amina", "POST", { name: "Teacher training", description: "For the review", private: true }));
+			expect(created.status).toBe(201);
+			const { id } = (await created.json()) as { id: string };
+
+			expect((await editCollectionRoute(call("user_bob", "PATCH", { name: "Taken" }), params(id))).status).toBe(404);
+			expect((await toggleCollectionItemRoute(call("user_bob", "POST", { itemKey }), params(id))).status).toBe(404);
+			expect((await deleteCollectionRoute(call("user_bob", "DELETE"), params(id))).status).toBe(404);
+
+			expect((await editCollectionRoute(call("user_amina", "PATCH", { name: "Coaching" }), params(id))).status).toBe(200);
+			expect(await (await toggleCollectionItemRoute(call("user_amina", "POST", { itemKey }), params(id))).json()).toEqual({ inCollection: true });
+			const own = await (await readOwnData(call("user_amina", "GET"))).json();
+			expect(own).toMatchObject({
+				bookmarks: { [itemKey]: expect.any(String) },
+				collections: [{ id, name: "Coaching", description: "For the review", private: true, count: 1 }],
+				itemCollections: { [itemKey]: [id] },
+			});
+			expect((await deleteCollectionRoute(call("user_amina", "DELETE"), params(id))).status).toBe(204);
+		});
+	});
+
+	it("answers 404 for every reader route when the library has reader accounts off", async () => {
+		await withReaders(async ({ itemKey }) => {
+			vi.mocked(getLibraryConfig).mockResolvedValue({ ...config, features: { ...config.features, readerAccounts: false } });
+			expect((await toggleBookmarkRoute(call("user_amina", "POST", { itemKey }))).status).toBe(404);
+			expect((await readOwnData(call("user_amina", "GET"))).status).toBe(404);
+		});
+	});
+});
+
+describe("profile page", () => {
+	it("shows a visitor the reader's public collections and no page for someone who is not a reader", async () => {
+		await withReaders(async ({ db, amina }) => {
+			await createReaderCollection(db, amina, { name: "Shared", description: null, private: false });
+			await createReaderCollection(db, amina, { name: "Only mine", description: null, private: true });
+			requestHeaders.current = signedInHeaders("user_bob");
+
+			const page = (await ProfilePage({ params: Promise.resolve({ id: amina }) })) as { props: { data: { name: string; collections: { name: string }[] } } };
+			expect(page.props.data.name).toBe("Amina Okafor");
+			expect(page.props.data.collections.map((collection) => collection.name)).toEqual(["Shared"]);
+			await expect(ProfilePage({ params: Promise.resolve({ id: "reader-nobody" }) })).rejects.toThrow("NEXT_NOT_FOUND");
 		});
 	});
 });

@@ -7,7 +7,7 @@ import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import type { ReaderCollectionSummary } from "@/lib/readers/data";
 import { fetcher } from "@/lib/utils";
 
-export type ReaderData = {
+type ReaderData = {
 	bookmarks: Record<string, string>;
 	collections: ReaderCollectionSummary[];
 	itemCollections: Record<string, string[]>;

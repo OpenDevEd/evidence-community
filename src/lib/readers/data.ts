@@ -14,14 +14,9 @@ import {
 } from "@/db/schema/tables/reader";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const ITEM_KEY_PATTERN = /^[A-Z0-9]{8}$/u;
 
-export function isReaderCollectionId(value: string) {
+function isReaderCollectionId(value: string) {
 	return UUID_PATTERN.test(value);
-}
-
-export function isItemKey(value: string) {
-	return ITEM_KEY_PATTERN.test(value);
 }
 
 export type ReaderCollectionSummary = {

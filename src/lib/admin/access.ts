@@ -34,7 +34,7 @@ export type AdminSessionAuthorization =
 type RoleAnswer = { role: AdminRole } | { organisationName: string | null };
 
 /** OpenScholar decides roles; the answer is reused for about a minute. */
-export const ADMIN_ROLE_CACHE_MS = 60_000;
+const ADMIN_ROLE_CACHE_MS = 60_000;
 const roleAnswers = new Map<string, { answer: RoleAnswer; expiresAt: number }>();
 
 const roleResponseSchema = z.object({ role: adminRoleSchema });

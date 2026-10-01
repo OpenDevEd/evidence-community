@@ -1,6 +1,6 @@
 import { toNextJsHandler } from "better-auth/next-js";
 
-import { getReaderAuth } from "@/lib/readers/auth";
+import { getReaderAuth } from "@/lib/readers/instance";
 
 async function handle(request: Request) {
 	const { auth } = await getReaderAuth();

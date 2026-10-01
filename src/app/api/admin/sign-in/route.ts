@@ -1,6 +1,7 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 
-import { getReaderAuth, OPENSCHOLAR_PROVIDER_ID } from "@/lib/readers/auth";
+import { getReaderAuth } from "@/lib/readers/instance";
+import { OPENSCHOLAR_PROVIDER_ID } from "@/lib/readers/openscholar";
 import { getValidatedAdminReturnPath } from "@/lib/runtime-routing";
 
 /**

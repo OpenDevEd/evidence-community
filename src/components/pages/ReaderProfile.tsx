@@ -66,6 +66,73 @@ function useShelfItems(userId: string, collectionId: string) {
 	return useSWR<ItemsGetResponse>(query, fetcher, { revalidateOnFocus: false, keepPreviousData: true });
 }
 
+/** Which collection the owner is editing, or a new one; nothing for visitors. */
+function useCollectionDialog(isOwnProfile: boolean, collections: ProfileCollection[]) {
+	const [dialog, setDialog] = useState<{ collection: ProfileCollection | null } | null>(null);
+	if (!isOwnProfile) return { dialog: null, edit: undefined, create: undefined, close: () => setDialog(null) };
+	return {
+		dialog,
+		edit: (id: string) => setDialog({ collection: collections.find((collection) => collection.id === id) ?? null }),
+		create: () => setDialog({ collection: null }),
+		close: () => setDialog(null),
+	};
+}
+
+/**
+ * A reader's page: their card on top, then their bookmarks the way the
+ * library lists records, with search and sort, and their collections beside
+ * it where the library keeps its filters.
+ */
+type Shelf = { id: string; name: string; count: number; isPrivate: boolean; description: string | null };
+
+/** All bookmarks first, then each collection, as the column and the phone picker list them. */
+function profileShelves(allBookmarks: string, bookmarkCount: number, collections: ProfileCollection[]): Shelf[] {
+	return [
+		{ id: "", name: allBookmarks, count: bookmarkCount, isPrivate: false, description: null },
+		...collections.map((collection) => ({
+			id: collection.id,
+			name: collection.name,
+			count: collection.count,
+			isPrivate: collection.private,
+			description: collection.description,
+		})),
+	];
+}
+
+function firstBookmarkDate(bookmarks: Record<string, string>) {
+	const times = Object.values(bookmarks).map((value) => new Date(value).getTime()).filter((time) => !Number.isNaN(time));
+	return times.length > 0 ? new Date(Math.min(...times)) : null;
+}
+
+/**
+ * Saving and deleting the owner's collections. The profile's data comes with
+ * the page, so a change reloads it, along with the reader's own controls and
+ * the lists already shown.
+ */
+function useCollectionChanges(profileId: string, selected: string, select: (id: string) => void) {
+	const router = useRouter();
+	const { mutate: refreshReaderData } = useReaderData();
+	const { mutate } = useSWRConfig();
+	const refresh = async () => {
+		router.refresh();
+		await Promise.all([
+			refreshReaderData(),
+			mutate((key) => typeof key === "string" && key.startsWith(`/user/items/${profileId}`)),
+		]);
+	};
+	return {
+		save: async (id: string | null, input: CollectionInput) => {
+			await sendCollectionChange(id ? `/reader/collections/${id}` : "/reader/collections", id ? "PATCH" : "POST", input);
+			await refresh();
+		},
+		remove: async (id: string) => {
+			await sendCollectionChange(`/reader/collections/${id}`, "DELETE");
+			if (selected === id) select("");
+			await refresh();
+		},
+	};
+}
+
 /**
  * A reader's page: their card on top, then their bookmarks the way the
  * library lists records, with search and sort, and their collections beside
@@ -76,122 +143,34 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const { reader } = useReaderSession();
 	const isOwnProfile = reader?.id === data.id;
 	const items = useItemsList(data);
-	const router = useRouter();
-	const { mutate: refreshReaderData } = useReaderData();
-	const { mutate } = useSWRConfig();
 	const collections = data.collections;
-	const [dialog, setDialog] = useState<{ collection: ProfileCollection | null } | null>(null);
-	const profileReader = { id: data.id, name: data.name, image: data.image };
 	const bookmarkCount = Object.keys(data.bookmarks).length;
-	const bookmarkDates = Object.values(data.bookmarks).map((value) => new Date(value)).filter((date) => !Number.isNaN(date.getTime()));
-	const firstBookmarkedAt = bookmarkDates.length > 0 ? new Date(Math.min(...bookmarkDates.map((date) => date.getTime()))) : null;
 	const selected = items.queryParams.collectionId || "";
-	const shelves = [
-		{ id: "", name: t("allBookmarks"), count: bookmarkCount, isPrivate: false, description: null },
-		...collections.map((collection) => ({
-			id: collection.id,
-			name: collection.name,
-			count: collection.count,
-			isPrivate: Boolean(collection.private),
-			description: collection.description ?? null,
-		})),
-	];
+	const shelves = profileShelves(t("allBookmarks"), bookmarkCount, collections);
 	const select = (id: string) => items.handleCollectionSelect(id);
 	const selectedCollection = collections.find((collection) => collection.id === selected);
-	// The profile's data comes with the page, so a change reloads it, along with
-	// the reader's own controls and the lists already shown.
-	const refresh = async () => {
-		router.refresh();
-		await Promise.all([
-			refreshReaderData(),
-			mutate((key) => typeof key === "string" && key.startsWith(`/user/items/${data.id}`)),
-		]);
-	};
-	const save = async (id: string | null, input: CollectionInput) => {
-		await sendCollectionChange(id ? `/reader/collections/${id}` : "/reader/collections", id ? "PATCH" : "POST", input);
-		await refresh();
-	};
-	const edit = (id: string) => setDialog({ collection: collections.find((collection) => collection.id === id) ?? null });
-	const remove = async (id: string) => {
-		await sendCollectionChange(`/reader/collections/${id}`, "DELETE");
-		if (selected === id) select("");
-		await refresh();
-	};
+	const { save, remove } = useCollectionChanges(data.id, selected, select);
+	const { dialog, edit, create, close } = useCollectionDialog(isOwnProfile, collections);
 
 	return (
 		<PageContainer id="main-content" className="flex w-full flex-col gap-8 xl:gap-10">
 			<ProfileHeader
-				reader={profileReader}
+				reader={{ id: data.id, name: data.name, image: data.image }}
 				userId={data.id}
 				isOwnProfile={isOwnProfile}
 				bookmarkCount={bookmarkCount}
 				collectionCount={collections.length}
-				firstBookmarkedAt={firstBookmarkedAt}
+				firstBookmarkedAt={firstBookmarkDate(data.bookmarks)}
 			/>
 			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
-				<CollectionsNav
-					userId={data.id}
-					shelves={shelves}
-					selected={selected}
-					onSelect={select}
-					onEdit={isOwnProfile ? edit : undefined}
-					onCreate={isOwnProfile ? () => setDialog({ collection: null }) : undefined}
-				/>
+				<CollectionsNav userId={data.id} shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
 						header={selectedCollection?.name ?? t("allBookmarks")}
 						userData={{ ...data, collections }}
 						extraFilters={
-							(
-								<div className="flex gap-2 lg:hidden">
-									<Select
-										aria-label={t("bookmarksListAriaLabel")}
-										color="secondary"
-										placement="left"
-										className="max-w-full flex-1"
-										disallowEmptySelection
-										selectedKeys={[selected || "all"]}
-										onSelectionChange={(keys) => {
-											const key = String(Array.from(keys)[0] ?? "all");
-											select(key === "all" ? "" : key);
-										}}
-										startContent={
-											<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />
-										}
-									>
-										{shelves.map((shelf) => (
-											<SelectItem key={shelf.id || "all"} textValue={shelf.name} description={shelf.description}>
-												{shelf.name}
-											</SelectItem>
-										))}
-									</Select>
-									{isOwnProfile && selectedCollection ? (
-										<Tooltip content={t("editCollection")}>
-											<Button
-												isIconOnly
-												aria-label={t("editCollection")}
-												onPress={() => edit(selectedCollection.id)}
-												className="h-12 w-12 shrink-0"
-											>
-												<HugeiconsIcon icon={PencilEdit01Icon} className="size-5" aria-hidden />
-											</Button>
-										</Tooltip>
-									) : null}
-									{isOwnProfile ? (
-										<Tooltip content={t("newCollection")}>
-											<Button
-												isIconOnly
-												aria-label={t("newCollection")}
-												onPress={() => setDialog({ collection: null })}
-												className="h-12 w-12 shrink-0"
-											>
-												<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />
-											</Button>
-										</Tooltip>
-									) : null}
-								</div>
-							)
+							<PhoneCollectionPicker shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
 						}
 					/>
 				</div>
@@ -200,12 +179,67 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				<CollectionDialog
 					key={dialog.collection?.id ?? "new"}
 					collection={dialog.collection}
-					onClose={() => setDialog(null)}
+					onClose={close}
 					onSave={save}
 					onDelete={remove}
 				/>
 			) : null}
 		</PageContainer>
+	);
+}
+
+/** On phones the column is hidden, so a picker beside the filters chooses the list and the owner's actions sit next to it. */
+function PhoneCollectionPicker({
+	shelves,
+	selected,
+	onSelect,
+	onEdit,
+	onCreate,
+}: {
+	shelves: Shelf[];
+	selected: string;
+	onSelect: (id: string) => void;
+	/** The owner edits the collection the picker shows. */
+	onEdit?: (id: string) => void;
+	onCreate?: () => void;
+}) {
+	const t = useTranslations("ui");
+	return (
+		<div className="flex gap-2 lg:hidden">
+			<Select
+				aria-label={t("bookmarksListAriaLabel")}
+				color="secondary"
+				placement="left"
+				className="max-w-full flex-1"
+				disallowEmptySelection
+				selectedKeys={[selected || "all"]}
+				onSelectionChange={(keys) => {
+					const key = String(Array.from(keys)[0] ?? "all");
+					onSelect(key === "all" ? "" : key);
+				}}
+				startContent={<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />}
+			>
+				{shelves.map((shelf) => (
+					<SelectItem key={shelf.id || "all"} textValue={shelf.name} description={shelf.description}>
+						{shelf.name}
+					</SelectItem>
+				))}
+			</Select>
+			{onEdit && selected ? (
+				<Tooltip content={t("editCollection")}>
+					<Button isIconOnly aria-label={t("editCollection")} onPress={() => onEdit(selected)} className="h-12 w-12 shrink-0">
+						<HugeiconsIcon icon={PencilEdit01Icon} className="size-5" aria-hidden />
+					</Button>
+				</Tooltip>
+			) : null}
+			{onCreate ? (
+				<Tooltip content={t("newCollection")}>
+					<Button isIconOnly aria-label={t("newCollection")} onPress={onCreate} className="h-12 w-12 shrink-0">
+						<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />
+					</Button>
+				</Tooltip>
+			) : null}
+		</div>
 	);
 }
 
@@ -266,62 +300,23 @@ function CollectionDialog({
 							);
 						}}
 					>
-						<ModalBody className="gap-4 pt-0">
-							<Input
-								autoFocus
-								isRequired
-								label={t("collectionNameLabel")}
-								labelPlacement="outside"
-								placeholder={t("collectionNameLabel")}
-								maxLength={24}
-								value={name}
-								onValueChange={setName}
-							/>
-							<Textarea
-								label={t("collectionDescriptionLabel")}
-								labelPlacement="outside"
-								placeholder={t("collectionDescriptionLabel")}
-								maxLength={200}
-								minRows={3}
-								value={description}
-								onValueChange={setDescription}
-							/>
-							<Switch
-								color="accent"
-								isSelected={isPrivate}
-								onValueChange={setIsPrivate}
-								classNames={{
-									base: "h-auto w-full max-w-full justify-between gap-4 rounded-xl bg-black/[0.04] px-4 py-3 dark:bg-white/[0.06]",
-									label: "flex flex-col gap-0.5 text-start",
-								}}
-							>
-								<span className="text-small font-medium text-black/80 dark:text-white/80">{t("privateCollection")}</span>
-								<span className="text-small font-normal text-black/60 dark:text-white/60">{t("collectionVisibilityPrivateDescription")}</span>
-							</Switch>
-							{failed ? (
-								<p role="alert" className="text-small text-danger">
-									{t("collectionSaveFailed")}
-								</p>
-							) : null}
-						</ModalBody>
-						<ModalFooter className="gap-2 pb-6">
-							{collection ? (
-								<Button
-									variant="transparent"
-									onPress={() => setConfirmingDelete(true)}
-									startContent={<HugeiconsIcon icon={Delete02Icon} className="size-5" aria-hidden />}
-									className="me-auto h-10 px-3 font-medium text-danger dark:text-danger"
-								>
-									{t("deleteAction")}
-								</Button>
-							) : null}
-							<Button variant="transparent" onPress={onClose} className="h-10 px-4 font-medium">
-								{t("cancel")}
-							</Button>
-							<Button type="submit" color="accent" isDisabled={!trimmedName} isLoading={saving} className="h-10 px-4 font-medium">
-								{collection ? t("save") : t("create")}
-							</Button>
-						</ModalFooter>
+						<CollectionFields
+							name={name}
+							description={description}
+							isPrivate={isPrivate}
+							failed={failed}
+							onName={setName}
+							onDescription={setDescription}
+							onPrivate={setIsPrivate}
+						/>
+						<CollectionDialogActions
+							canDelete={Boolean(collection)}
+							canSave={Boolean(trimmedName)}
+							saving={saving}
+							saveLabel={collection ? t("save") : t("create")}
+							onDelete={() => setConfirmingDelete(true)}
+							onCancel={onClose}
+						/>
 					</form>
 				</ModalContent>
 			</DialogModal>
@@ -340,6 +335,98 @@ function CollectionDialog({
 	);
 }
 
+/** The collection's name, description and privacy, and a note when saving failed. */
+function CollectionFields(props: {
+	name: string;
+	description: string;
+	isPrivate: boolean;
+	failed: boolean;
+	onName: (value: string) => void;
+	onDescription: (value: string) => void;
+	onPrivate: (value: boolean) => void;
+}) {
+	const t = useTranslations("ui");
+	return (
+		<ModalBody className="gap-4 pt-0">
+			<Input
+				autoFocus
+				isRequired
+				label={t("collectionNameLabel")}
+				labelPlacement="outside"
+				placeholder={t("collectionNameLabel")}
+				maxLength={24}
+				value={props.name}
+				onValueChange={props.onName}
+			/>
+			<Textarea
+				label={t("collectionDescriptionLabel")}
+				labelPlacement="outside"
+				placeholder={t("collectionDescriptionLabel")}
+				maxLength={200}
+				minRows={3}
+				value={props.description}
+				onValueChange={props.onDescription}
+			/>
+			<Switch
+				color="accent"
+				isSelected={props.isPrivate}
+				onValueChange={props.onPrivate}
+				classNames={{
+					base: "h-auto w-full max-w-full justify-between gap-4 rounded-xl bg-black/[0.04] px-4 py-3 dark:bg-white/[0.06]",
+					label: "flex flex-col gap-0.5 text-start",
+				}}
+			>
+				<span className="text-small font-medium text-black/80 dark:text-white/80">{t("privateCollection")}</span>
+				<span className="text-small font-normal text-black/60 dark:text-white/60">{t("collectionVisibilityPrivateDescription")}</span>
+			</Switch>
+			{props.failed ? (
+				<p role="alert" className="text-small text-danger">
+					{t("collectionSaveFailed")}
+				</p>
+			) : null}
+		</ModalBody>
+	);
+}
+
+/** Delete on the start side for an existing collection, then Cancel and the save button. */
+function CollectionDialogActions({
+	canDelete,
+	canSave,
+	saving,
+	saveLabel,
+	onDelete,
+	onCancel,
+}: {
+	canDelete: boolean;
+	canSave: boolean;
+	saving: boolean;
+	saveLabel: string;
+	onDelete: () => void;
+	onCancel: () => void;
+}) {
+	const t = useTranslations("ui");
+	return (
+		<ModalFooter className="gap-2 pb-6">
+			{canDelete ? (
+				<Button
+					variant="transparent"
+					onPress={onDelete}
+					startContent={<HugeiconsIcon icon={Delete02Icon} className="size-5" aria-hidden />}
+					className="me-auto h-10 px-3 font-medium text-danger dark:text-danger"
+				>
+					{t("deleteAction")}
+				</Button>
+			) : null}
+			<Button variant="transparent" onPress={onCancel} className="h-10 px-4 font-medium">
+				{t("cancel")}
+			</Button>
+			<Button type="submit" color="accent" isDisabled={!canSave} isLoading={saving} className="h-10 px-4 font-medium">
+				{saveLabel}
+			</Button>
+		</ModalFooter>
+	);
+}
+
 /**
  * The reader's bookmarks and collections, in the column the library uses for
  * its filters, each shown as a small stack of its own records. Choosing one
@@ -355,7 +442,7 @@ function CollectionsNav({
 	onCreate,
 }: {
 	userId: string;
-	shelves: { id: string; name: string; count: number; isPrivate: boolean; description: string | null }[];
+	shelves: Shelf[];
 	selected: string;
 	onSelect: (id: string) => void;
 	/** Only the owner edits their collections. */
@@ -388,62 +475,96 @@ function CollectionsNav({
 					) : null}
 				</div>
 				<div className="flex flex-col gap-1 p-3">
-				{shelves.map((shelf) => {
-					const isSelected = shelf.id === selected;
-					const isOpen = isSelected && Boolean(shelf.id) && Boolean(shelf.description || onEdit);
-					return (
-						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-black/[0.04] dark:bg-white/[0.06]")}>
-							<button
-								type="button"
-								aria-current={isSelected || undefined}
-								onClick={() => onSelect(shelf.id)}
-								className={twMerge(
-									"group flex w-full items-center gap-4 rounded-xl p-3 text-start text-black/80 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/80 dark:hover:bg-white/[0.06]",
-									isSelected && "text-black hover:bg-transparent dark:text-white dark:hover:bg-transparent",
-								)}
-							>
-								<CoverStack userId={userId} collectionId={shelf.id} count={shelf.count} fanned={isSelected} />
-								<span className="flex min-w-0 flex-1 flex-col gap-0.5">
-									<span className="flex min-w-0 items-center gap-1.5">
-										<span className={twMerge("truncate font-medium", isSelected && "font-semibold")}>{shelf.name}</span>
-										{shelf.isPrivate ? (
-											<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
-										) : null}
-									</span>
-									<span className="text-small text-black/50 dark:text-white/50">{t("collectionRecordCount", { count: shelf.count })}</span>
-								</span>
-							</button>
-							{/* The row opens to its full height, so the rows below slide down instead of jumping. */}
-							<div
-								inert={!isOpen || undefined}
-								className={twMerge(
-									"grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
-									isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-								)}
-							>
-								<div className="min-h-0 overflow-hidden">
-									<div className="flex flex-col items-start gap-3 px-3 pb-3">
-										{shelf.description ? (
-											<p className="text-small leading-relaxed text-black/60 dark:text-white/60">{shelf.description}</p>
-										) : null}
-										{onEdit ? (
-											<Button
-												onPress={() => onEdit(shelf.id)}
-												startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-4" aria-hidden />}
-												className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
-											>
-												{t("editAction")}
-											</Button>
-										) : null}
-									</div>
-								</div>
-							</div>
-						</div>
-					);
-				})}
+					{shelves.map((shelf) => (
+						<CollectionRow
+							key={shelf.id || "all"}
+							userId={userId}
+							shelf={shelf}
+							isSelected={shelf.id === selected}
+							onSelect={() => onSelect(shelf.id)}
+							onEdit={onEdit && shelf.id ? () => onEdit(shelf.id) : undefined}
+						/>
+					))}
 				</div>
 			</nav>
 		</aside>
+	);
+}
+
+/**
+ * One list in the column: its cover stack, name and count. The chosen
+ * collection opens to show what it is for and, for its owner, Edit. The row
+ * opens to its full height, so the rows below slide down instead of jumping.
+ * All bookmarks never opens.
+ */
+function CollectionRow({
+	userId,
+	shelf,
+	isSelected,
+	onSelect,
+	onEdit,
+}: {
+	userId: string;
+	shelf: Shelf;
+	isSelected: boolean;
+	onSelect: () => void;
+	onEdit?: () => void;
+}) {
+	const t = useTranslations("ui");
+	const isOpen = isSelected && Boolean(shelf.description || onEdit);
+	return (
+		<div className={twMerge("rounded-xl", isSelected && "bg-black/[0.04] dark:bg-white/[0.06]")}>
+			<button
+				type="button"
+				aria-current={isSelected || undefined}
+				onClick={onSelect}
+				className={twMerge(
+					"group flex w-full items-center gap-4 rounded-xl p-3 text-start text-black/80 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/80 dark:hover:bg-white/[0.06]",
+					isSelected && "text-black hover:bg-transparent dark:text-white dark:hover:bg-transparent",
+				)}
+			>
+				<CoverStack userId={userId} collectionId={shelf.id} count={shelf.count} fanned={isSelected} />
+				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+					<span className="flex min-w-0 items-center gap-1.5">
+						<span className={twMerge("truncate font-medium", isSelected && "font-semibold")}>{shelf.name}</span>
+						{shelf.isPrivate ? (
+							<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
+						) : null}
+					</span>
+					<span className="text-small text-black/50 dark:text-white/50">{t("collectionRecordCount", { count: shelf.count })}</span>
+				</span>
+			</button>
+			{shelf.id ? <CollectionRowDetails isOpen={isOpen} description={shelf.description} onEdit={onEdit} /> : null}
+		</div>
+	);
+}
+
+/** What the chosen collection is for and, for its owner, Edit; it opens to its full height. */
+function CollectionRowDetails({ isOpen, description, onEdit }: { isOpen: boolean; description: string | null; onEdit?: () => void }) {
+	const t = useTranslations("ui");
+	return (
+		<div
+			inert={!isOpen || undefined}
+			className={twMerge(
+				"grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+				isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+			)}
+		>
+			<div className="min-h-0 overflow-hidden">
+				<div className="flex flex-col items-start gap-3 px-3 pb-3">
+					{description ? <p className="text-small leading-relaxed text-black/60 dark:text-white/60">{description}</p> : null}
+					{onEdit ? (
+						<Button
+							onPress={onEdit}
+							startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-4" aria-hidden />}
+							className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
+						>
+							{t("editAction")}
+						</Button>
+					) : null}
+				</div>
+			</div>
+		</div>
 	);
 }
 

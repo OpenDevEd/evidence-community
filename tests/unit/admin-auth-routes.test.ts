@@ -24,8 +24,7 @@ vi.mock("@/config/library-config/server", () => ({
 		localization: { defaultLocale: "en-GB" },
 	}),
 }));
-vi.mock("@/lib/readers/auth", () => ({
-	OPENSCHOLAR_PROVIDER_ID: "openscholar",
+vi.mock("@/lib/readers/instance", () => ({
 	getReaderAuth: async () => ({ auth: { api: { signInSocial } } }),
 }));
 vi.mock("next/headers", async () => {

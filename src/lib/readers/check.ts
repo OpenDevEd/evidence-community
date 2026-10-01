@@ -7,7 +7,8 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { readerAccount, readerUser } from "@/db/schema/tables/reader";
 
-import { openScholarDiscoveryUrl, openScholarProfileName, OPENSCHOLAR_PROVIDER_ID, type ReaderAuth } from "./auth";
+import type { ReaderAuth } from "./auth";
+import { openScholarDiscoveryUrl, openScholarProfileName, OPENSCHOLAR_PROVIDER_ID } from "./openscholar";
 import { deleteReaderByClerkUserId } from "./data";
 
 /** A reader's OpenScholar account is checked at most this often while they are active. */
@@ -73,7 +74,7 @@ async function refreshReaderProfile({ auth, config, database, userId }: ReaderCh
 const readerStatusSchema = z.object({ status: z.enum(["active", "deleted", "unknown"]) });
 
 /** OpenScholar's answer about one Clerk account. Only "deleted" lets the library remove reader data. */
-export async function readOpenScholarReaderStatus(config: LibraryServerConfig, clerkUserId: string) {
+async function readOpenScholarReaderStatus(config: LibraryServerConfig, clerkUserId: string) {
 	const { convexSiteUrl, libraryId, machineCredential } = config.authentication.openScholar;
 	const response = await fetch(new URL("/api/v1/evidence-libraries/reader-status", convexSiteUrl), {
 		method: "POST",

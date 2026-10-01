@@ -172,7 +172,7 @@ export function getValidatedAdminReturnPath(value: string | null | undefined) {
 	return `${returnUrl.pathname}${returnUrl.search}`;
 }
 
-export const ADMIN_SIGN_IN_PATH = "/api/admin/sign-in";
+const ADMIN_SIGN_IN_PATH = "/api/admin/sign-in";
 
 /** The library's own route that starts OpenScholar sign-in and returns to an admin page. */
 export function buildAdminSignInPath(returnPath: string | null | undefined) {

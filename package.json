@@ -95,6 +95,7 @@
 		"@napi-rs/canvas": "^1.0.3",
 		"@nextui-org/framer-utils": "^2.1.6",
 		"@nextui-org/react": "^2.6.11",
+		"@nextui-org/shared-icons": "^2.1.1",
 		"@opendeved/doi-sync-core": "github:OpenDevEd/doi-sync-core#78e0d49146ca53aebc1c99917e59c7b81870c20f",
 		"@opendeved/evidence-library-core": "file:packages/evidence-library-core",
 		"@openrouter/ai-sdk-provider": "^3.0.0",
