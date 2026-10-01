@@ -83,7 +83,7 @@ export function readerMenuItems(input: {
 				<span className="min-w-0">
 					<span className="block truncate font-semibold text-foreground">{readerDisplayName(reader, t)}</span>
 					<span className="flex items-center gap-1 text-small text-default-500">
-						<OpenScholar aria-hidden className="size-3.5" />
+						<OpenScholar monochrome aria-hidden className="size-3.5" />
 						{t("signedInWithOpenScholar")}
 					</span>
 				</span>
@@ -112,7 +112,7 @@ export function readerMenuItems(input: {
 		<DropdownItem
 			key="account"
 			onPress={openAccount}
-			startContent={<OpenScholar aria-hidden className="size-4" />}
+			startContent={<OpenScholar monochrome aria-hidden className="size-4" />}
 			endContent={external}
 		>
 			{t("openScholarAccount")}

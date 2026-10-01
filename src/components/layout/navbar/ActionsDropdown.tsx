@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu01Icon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
+import { Login01Icon, Menu01Icon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useTranslations } from "next-intl";
 import {
@@ -15,7 +15,6 @@ import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
 import { useRouter } from "@/i18n/routing";
-import OpenScholar from "@/components/icons/OpenScholar";
 import { useMockReaderSession } from "./MockReaderSession";
 import { ReaderAvatar, readerMenuItems } from "./UserMenu";
 import ThemeSwitcher from "./ThemeSwitcher";
@@ -207,9 +206,9 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					{hasLogin ? (
 						<DropdownItem
 							key="login"
-							startContent={<OpenScholar aria-hidden className="size-5" />}
+							startContent={<HugeiconsIcon icon={Login01Icon} className="size-5" />}
 						>
-							{t("signInWithOpenScholar")}
+							{t("signIn")}
 						</DropdownItem>
 					) : (
 						<DropdownItem key="login-placeholder" className="hidden">

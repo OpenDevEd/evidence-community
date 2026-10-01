@@ -4,12 +4,13 @@ import { useTranslations } from "next-intl";
 import { DropdownItem } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import OpenScholar from "@/components/icons/OpenScholar";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Login01Icon } from "@hugeicons/core-free-icons";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useMockReaderSession } from "./MockReaderSession";
 import type { NavbarElementProps } from "@/types/navbar";
 
-/** Starts signing in with the reader's OpenScholar account. Shown only on press. */
+/** Starts signing in with the reader's OpenScholar account, only when pressed. */
 export default function LoginButton({ variant }: NavbarElementProps) {
 	const t = useTranslations("ui");
 	const isEnabled = useLibraryFeature("login");
@@ -17,8 +18,8 @@ export default function LoginButton({ variant }: NavbarElementProps) {
 
 	if (!isEnabled || reader) return null;
 
-	const label = t("signInWithOpenScholar");
-	const logo = <OpenScholar aria-hidden className="size-5 shrink-0" />;
+	const label = t("signIn");
+	const logo = <HugeiconsIcon icon={Login01Icon} aria-hidden className="size-5 shrink-0" />;
 
 	if (variant === "menuItem") {
 		return (
@@ -35,6 +36,7 @@ export default function LoginButton({ variant }: NavbarElementProps) {
 			<Tooltip content={label}>
 				<Button
 					onPress={signIn}
+					color="accent"
 					isIconOnly
 					aria-label={label}
 					className="sm:hidden !p-0 rounded-full !size-10"
@@ -44,8 +46,9 @@ export default function LoginButton({ variant }: NavbarElementProps) {
 			</Tooltip>
 			<Button
 				onPress={signIn}
+				color="accent"
 				startContent={logo}
-				className="hidden sm:inline-flex h-10 !px-4 font-medium text-foreground"
+				className="hidden sm:inline-flex h-10 !px-4 font-medium"
 			>
 				{label}
 			</Button>

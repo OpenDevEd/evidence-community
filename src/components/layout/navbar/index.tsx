@@ -212,7 +212,7 @@ export default function Navbar() {
 						className="hidden 2xl:block"
 						aria-label={t("secondaryNavAriaLabel")}
 					>
-						<ul className="flex items-center gap-3">
+						<ul className="flex items-center gap-6">
 							{desktopInlineElements.map((element) => {
 								const Component = element.component;
 								return (

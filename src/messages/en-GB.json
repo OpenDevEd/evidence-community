@@ -1,6 +1,6 @@
 {
   "ui": {
-    "signInWithOpenScholar": "Sign in with OpenScholar",
+    "signIn": "Sign in",
     "signedInWithOpenScholar": "Signed in with OpenScholar",
     "readerFallbackName": "Reader",
     "addYourName": "Add your name",
