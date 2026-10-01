@@ -1,11 +1,13 @@
 {
   "ui": {
-    "bookmarkingSince": "since {date}",
+    "bookmarksStat": "{count, plural, one {Favorito} other {Favoritos}}",
+    "collectionsStat": "{count, plural, one {Coleção} other {Coleções}}",
+    "firstBookmarkStat": "Primeiro favorito",
+    "shareProfile": "Partilhar perfil",
+    "profileLinkCopied": "Link copiado",
+    "editProfile": "Editar perfil",
     "allBookmarks": "All bookmarks",
     "seeAll": "See all",
-    "otherTypes": "Other",
-    "bookmarksByType": "Bookmarks by record type",
-    "shelfSummary": "{bookmarks, plural, one {# bookmark} other {# bookmarks}} in {collections, plural, =0 {no collections} one {# collection} other {# collections}}",
     "newCollection": "Nova coleção",
     "profileSectionsAriaLabel": "Bookmarks and collections",
     "bookmarksTab": "Bookmarks",

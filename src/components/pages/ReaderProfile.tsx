@@ -8,13 +8,15 @@ import {
 	ArrowLeft01Icon,
 	ArrowRight01Icon,
 	LockIcon,
+	Share08Icon,
+	Tick02Icon,
 	UserEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
-import { Tooltip } from "@/components/nextui/Tooltip";
 import { ItemsContext } from "@/context/ItemsContext";
+import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { useItemsList } from "@/hooks/useItemsList";
 import { Link } from "@/i18n/routing";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
@@ -47,9 +49,9 @@ type ProfileData = {
 };
 
 /**
- * Record types keep one colour wherever they appear (the breakdown bar and the
- * shelf cards), validated for both themes (dataviz palette, slots 1 to 5). A
- * type outside the first four is "other".
+ * Record types keep one colour on every card, validated for both themes
+ * (dataviz palette, slots 1 to 5). A type outside the first four shares the
+ * last colour.
  */
 const TYPE_COLOURS = [
 	{ type: "Report", className: "bg-[#2a78d6] dark:bg-[#3987e5]" },
@@ -127,10 +129,9 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 					<>
 						<ProfileHeader
 							reader={profileReader}
-							userId={data.id}
 							isOwnProfile={isOwnProfile}
 							bookmarkCount={bookmarkCount}
-							collectionCount={collections.length}
+							collectionCount={collectionsEnabled ? collections.length : null}
 							firstBookmarkedAt={firstBookmarkedAt}
 						/>
 						{bookmarkCount === 0 ? (
@@ -164,129 +165,66 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 
 function ProfileHeader({
 	reader,
-	userId,
 	isOwnProfile,
 	bookmarkCount,
 	collectionCount,
 	firstBookmarkedAt,
 }: {
 	reader: { id: string; name: string; image: string | null };
-	userId: string;
 	isOwnProfile: boolean;
 	bookmarkCount: number;
-	collectionCount: number;
+	collectionCount: number | null;
 	firstBookmarkedAt: Date | null;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
-	const { data } = useShelfItems(userId, "");
+	const { copy, copied } = useClipboardFeedback();
+	const stats = [
+		{ key: "bookmarks", value: format.number(bookmarkCount), label: t("bookmarksStat", { count: bookmarkCount }) },
+		...(collectionCount === null
+			? []
+			: [{ key: "collections", value: format.number(collectionCount), label: t("collectionsStat", { count: collectionCount }) }]),
+		...(firstBookmarkedAt
+			? [{ key: "first", value: format.dateTime(firstBookmarkedAt, { month: "short", year: "numeric" }), label: t("firstBookmarkStat") }]
+			: []),
+	];
+
 	return (
-		<header className="flex flex-col gap-8 pt-2 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
-			<div className="flex min-w-0 items-center gap-5">
-				<ReaderAvatar reader={reader} size="lg" />
-				<div className="flex min-w-0 flex-col gap-1.5">
-					<h1 className="truncate font-heading text-4xl font-semibold tracking-tight text-foreground dark:text-white">
-						{readerDisplayName(reader, t)}
-					</h1>
-					<p className="text-foreground/60 dark:text-white/60">
-						{t("shelfSummary", { bookmarks: bookmarkCount, collections: collectionCount })}
-						{firstBookmarkedAt ? (
-							<span className="text-foreground/40 dark:text-white/40">
-								{" "}
-								{t("bookmarkingSince", { date: format.dateTime(firstBookmarkedAt, { month: "long", year: "numeric" }) })}
-							</span>
-						) : null}
-					</p>
-					{isOwnProfile && !reader.name ? (
-						<a
-							href={OPENSCHOLAR_ACCOUNT_URL}
-							target="_blank"
-							rel="noopener"
-							className="flex w-fit items-center gap-1.5 text-small font-medium text-accent hover:underline"
-						>
-							<HugeiconsIcon icon={UserEdit01Icon} className="size-4" aria-hidden />
-							{t("addYourName")}
-						</a>
-					) : null}
-				</div>
+		<header className="flex flex-col items-center gap-6 pt-6 text-center">
+			<ReaderAvatar reader={reader} size="lg" className="h-24 w-24 text-3xl [&_svg]:size-10" />
+			<h1 className="max-w-full truncate font-heading text-4xl font-semibold tracking-tight text-foreground sm:text-5xl dark:text-white">
+				{readerDisplayName(reader, t)}
+			</h1>
+			<dl className="flex flex-wrap justify-center gap-x-12 gap-y-4">
+				{stats.map((stat) => (
+					<div key={stat.key} className="flex flex-col-reverse items-center gap-0.5">
+						<dt className="text-small text-foreground/60 dark:text-white/60">{stat.label}</dt>
+						<dd className="text-2xl font-semibold tabular-nums text-foreground dark:text-white">{stat.value}</dd>
+					</div>
+				))}
+			</dl>
+			<div className="flex flex-wrap justify-center gap-2">
+				<Button
+					onPress={() => copy(`${window.location.origin}${window.location.pathname}`)}
+					startContent={<HugeiconsIcon icon={copied ? Tick02Icon : Share08Icon} className="size-5" aria-hidden />}
+					className="h-10 px-4 font-medium"
+				>
+					{copied ? t("profileLinkCopied") : t("shareProfile")}
+				</Button>
+				{isOwnProfile ? (
+					<Button
+						as="a"
+						href={OPENSCHOLAR_ACCOUNT_URL}
+						target="_blank"
+						rel="noopener"
+						startContent={<HugeiconsIcon icon={UserEdit01Icon} className="size-5" aria-hidden />}
+						className="h-10 px-4 font-medium"
+					>
+						{reader.name.trim() ? t("editProfile") : t("addYourName")}
+					</Button>
+				) : null}
 			</div>
-			{bookmarkCount > 0 ? <SpineShelf records={data?.items ?? null} count={bookmarkCount} /> : null}
 		</header>
-	);
-}
-
-/**
- * A book's size on the shelf, stable for each record so the shelf looks the
- * same on every visit. Books vary the way real ones do; the size carries no
- * data, so the range stays narrow enough not to read as a chart.
- */
-function spineSize(key: string) {
-	let hash = 0;
-	for (const character of key) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-	return { height: 78 + (hash % 19), width: 18 + ((hash >> 5) % 9) };
-}
-
-/**
- * The reader's bookmarks as books on a shelf: one spine per record, coloured
- * by its type, each opening its record. The legend below names the colours.
- */
-function SpineShelf({ records, count }: { records: ListItem[] | null; count: number }) {
-	const tTypes = useTranslations("itemType");
-	const t = useTranslations("ui");
-	const shown = records ?? [];
-	const types = [...TYPE_COLOURS.map((entry) => entry.type as string), "other"].filter((type) =>
-		shown.some((record) => (TYPE_COLOURS.some((entry) => entry.type === record.itemType) ? record.itemType : "other") === type),
-	);
-
-	return (
-		<figure className="flex min-w-0 flex-col gap-3 lg:items-end" aria-label={t("bookmarksByType")}>
-			<div className="flex max-w-full flex-col">
-				{/* The row keeps its height while the records load. */}
-				<ul className="no-scrollbar flex h-28 items-end gap-0.5 overflow-x-auto px-3 pt-3">
-					{records
-						? shown.map((record, index) => {
-								const size = spineSize(record.key);
-								const leans = index === shown.length - 1 && shown.length > 2;
-								return (
-									<li key={record.key} className={twMerge("shrink-0", leans && "ms-2 origin-bottom-left rotate-[8deg] rtl:origin-bottom-right rtl:-rotate-[8deg]")}>
-										<Tooltip content={record.title}>
-											<Link
-												href={`/lib/${record.key}`}
-												aria-label={record.title ?? undefined}
-												className={twMerge(
-													"flex flex-col justify-between rounded-[3px] py-2.5 outline-none shadow-[inset_-3px_0_0_rgba(0,0,0,0.12)] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent",
-													typeColour(record.itemType),
-												)}
-												style={size}
-											>
-												<span aria-hidden className="block h-[3px] bg-white/45" />
-												<span aria-hidden className="block h-[3px] bg-white/45" />
-											</Link>
-										</Tooltip>
-									</li>
-								);
-							})
-						: Array.from({ length: Math.min(count, 20) }, (_, index) => (
-								<li key={index} aria-hidden className="shrink-0 rounded-[3px] bg-black/[0.06] dark:bg-white/10" style={{ height: 78 + ((index * 7) % 19), width: 18 + ((index * 5) % 9) }} />
-							))}
-				</ul>
-				<div aria-hidden className="h-2 rounded-full bg-black/[0.12] shadow-[0_6px_10px_-6px_rgba(0,0,0,0.35)] dark:bg-white/15" />
-			</div>
-			<figcaption className="flex flex-wrap gap-x-5 gap-y-2">
-				{types.map((type) => {
-					const typeCount = shown.filter((record) =>
-						(TYPE_COLOURS.some((entry) => entry.type === record.itemType) ? record.itemType : "other") === type,
-					).length;
-					return (
-						<span key={type} className="flex items-center gap-2 text-small">
-							<span aria-hidden className={twMerge("h-3 w-2 rounded-[2px]", type === "other" ? OTHER_COLOUR : typeColour(type))} />
-							<span className="text-foreground/80 dark:text-white/80">{type === "other" ? t("otherTypes") : tTypes(type)}</span>
-							<span className="tabular-nums text-foreground/50 dark:text-white/50">{typeCount}</span>
-						</span>
-					);
-				})}
-			</figcaption>
-		</figure>
 	);
 }
 
