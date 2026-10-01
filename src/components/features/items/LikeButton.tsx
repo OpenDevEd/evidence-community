@@ -15,7 +15,7 @@ const LikeButton = forwardRef<
 >(function LikeButton({ itemData, className, revalidateResults }, ref) {
   const [mutationLoading, setMutationLoading] = useState(false);
   const { trigger } = useSWRMutation(`/reader/bookmarks`, setter);
-  const { reader, data, mutate } = useReaderData();
+  const { reader, data, refresh } = useReaderData();
   const isLiked = Boolean(itemData && data?.bookmarks[itemData.key]);
   const t = useTranslations("ui");
 
@@ -27,7 +27,7 @@ const LikeButton = forwardRef<
       });
       await Promise.all([
         revalidateResults && revalidateResults(),
-        mutate(),
+        refresh(),
       ]);
     } catch (error) {
       console.error(error);

@@ -9,6 +9,8 @@ import messages from "@/messages/en-GB.json";
 
 const session = vi.hoisted(() => ({ reader: null as { id: string; name: string; image: string | null } | null }));
 const list = vi.hoisted(() => ({ selected: "", select: vi.fn() }));
+// The signed-in reader's own bookmarks and collections, as the header's controls keep them.
+const own = vi.hoisted(() => ({ data: undefined as ProfileData | undefined }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
@@ -17,7 +19,7 @@ vi.mock("@/components/layout/navbar/ReaderSession", () => ({
 	useReaderSession: () => ({ reader: session.reader }),
 	useOpenScholarAccountUrl: () => "https://accounts.openscholar.example.org/user",
 }));
-vi.mock("@/hooks/useReaderData", () => ({ useReaderData: () => ({ mutate: vi.fn() }) }));
+vi.mock("@/hooks/useReaderData", () => ({ useReaderData: () => ({ data: own.data, refresh: vi.fn() }) }));
 vi.mock("@/hooks/useItemsList", () => ({
 	useItemsList: () => ({ queryParams: { collectionId: list.selected }, handleCollectionSelect: list.select }),
 }));
@@ -78,6 +80,7 @@ beforeEach(() => {
 	session.reader = null;
 	list.selected = "";
 	list.select.mockReset();
+	own.data = undefined;
 });
 
 afterEach(() => {
@@ -114,6 +117,19 @@ describe("a reader's profile", () => {
 
 		expect(document.querySelector("h1")?.textContent).toBe("Reader");
 		expect(document.querySelector('a[href="https://accounts.openscholar.example.org/user"]')?.textContent).toContain("Add your name");
+	});
+
+	it("shows the owner a collection they just made from a record, and visitors only what the page brought", () => {
+		const madeFromRecord = { ...profile.collections[0], id: "hidden-notes", name: "Hidden notes", description: null };
+		own.data = { ...profile, collections: [...profile.collections, madeFromRecord] };
+
+		session.reader = { id: "reader-amina", name: "Amina Okafor", image: null };
+		render();
+		expect(document.body.textContent).toContain("Hidden notes");
+
+		session.reader = { id: "reader-bob", name: "Bob", image: null };
+		render();
+		expect(document.body.textContent).not.toContain("Hidden notes");
 	});
 
 	it("saves and deletes the owner's collection through the reader API", async () => {

@@ -54,7 +54,7 @@ export function AddButton({
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [loading, setLoading] = useState(false);
-	const { reader, data, mutate } = useReaderData();
+	const { reader, data, refresh } = useReaderData();
 	const t = useTranslations("ui");
 	const highlightedCollections = itemData ? (data?.itemCollections[itemData.key] ?? []) : [];
 	const onCollectionSelect = async (pressedCollectionId: string) => {
@@ -68,7 +68,7 @@ export function AddButton({
 			if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
 			await Promise.allSettled([
 				revalidateResults && revalidateResults(),
-				mutate(),
+				refresh(),
 			]);
 			if (willClose) {
 				onClose();

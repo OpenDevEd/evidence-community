@@ -16,6 +16,11 @@ export async function generateMetadata(props: {
 	return libraryMetadata({ ...props, pathname: "/profile/" + params.id });
 }
 
+// Waits for the reader's profile instead of showing a loading state, so the click lands on the finished page.
+// Next.js reads this route export. Fallow does not recognize it yet.
+// fallow-ignore-next-line unused-export
+export const instant = false;
+
 export default async function ProfilePage(props: { params: Promise<{ id: string }> }) {
 	await connection();
 	const config = await getConfigForEnabledFeature("readerAccounts");

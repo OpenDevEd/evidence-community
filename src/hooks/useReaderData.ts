@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 
 import { useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
@@ -13,12 +13,20 @@ type ReaderData = {
 	itemCollections: Record<string, string[]>;
 };
 
-/** The signed-in reader's bookmarks and collections; nothing for anyone signed out. */
+/**
+ * The signed-in reader's bookmarks and collections; nothing for anyone signed
+ * out. `refresh` reloads them and every reader list already shown, such as a
+ * profile's list and its collection covers, after a bookmark or collection
+ * change.
+ */
 export function useReaderData() {
 	const { reader } = useReaderSession();
 	const readerAccounts = useLibraryFeature("readerAccounts");
-	const { data, mutate } = useSWR<ReaderData>(reader && readerAccounts ? "/reader" : null, fetcher, {
+	const { mutate } = useSWRConfig();
+	const { data, mutate: mutateOwn } = useSWR<ReaderData>(reader && readerAccounts ? "/reader" : null, fetcher, {
 		revalidateOnFocus: false,
 	});
-	return { reader: readerAccounts ? reader : null, data, mutate };
+	const refresh = () =>
+		Promise.all([mutateOwn(), mutate((key) => typeof key === "string" && key.startsWith("/user/items/"))]);
+	return { reader: readerAccounts ? reader : null, data, refresh };
 }

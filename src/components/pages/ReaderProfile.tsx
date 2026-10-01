@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import useSWR, { useSWRConfig } from "swr";
+import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
 import { ModalBody, ModalContent, ModalFooter, SelectItem } from "@nextui-org/react";
 import {
@@ -109,16 +109,12 @@ function firstBookmarkDate(bookmarks: Record<string, string>) {
  * the page, so a change reloads it, along with the reader's own controls and
  * the lists already shown.
  */
-function useCollectionChanges(profileId: string, selected: string, select: (id: string) => void) {
+function useCollectionChanges(selected: string, select: (id: string) => void) {
 	const router = useRouter();
-	const { mutate: refreshReaderData } = useReaderData();
-	const { mutate } = useSWRConfig();
+	const { refresh: refreshReaderData } = useReaderData();
 	const refresh = async () => {
 		router.refresh();
-		await Promise.all([
-			refreshReaderData(),
-			mutate((key) => typeof key === "string" && key.startsWith(`/user/items/${profileId}`)),
-		]);
+		await refreshReaderData();
 	};
 	return {
 		save: async (id: string | null, input: CollectionInput) => {
@@ -134,6 +130,16 @@ function useCollectionChanges(profileId: string, selected: string, select: (id: 
 }
 
 /**
+ * The owner sees their own collections and bookmarks live, so a change made
+ * from a record shows here at once; visitors see what the page brought.
+ */
+function useShownShelves(data: ProfileData, isOwnProfile: boolean) {
+	const { data: own } = useReaderData();
+	const live = isOwnProfile ? own : undefined;
+	return { collections: live?.collections ?? data.collections, bookmarks: live?.bookmarks ?? data.bookmarks };
+}
+
+/**
  * A reader's page: their card on top, then their bookmarks the way the
  * library lists records, with search and sort, and their collections beside
  * it where the library keeps its filters.
@@ -143,13 +149,13 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const { reader } = useReaderSession();
 	const isOwnProfile = reader?.id === data.id;
 	const items = useItemsList(data);
-	const collections = data.collections;
-	const bookmarkCount = Object.keys(data.bookmarks).length;
+	const { collections, bookmarks } = useShownShelves(data, isOwnProfile);
+	const bookmarkCount = Object.keys(bookmarks).length;
 	const selected = items.queryParams.collectionId || "";
 	const shelves = profileShelves(t("allBookmarks"), bookmarkCount, collections);
 	const select = (id: string) => items.handleCollectionSelect(id);
 	const selectedCollection = collections.find((collection) => collection.id === selected);
-	const { save, remove } = useCollectionChanges(data.id, selected, select);
+	const { save, remove } = useCollectionChanges(selected, select);
 	const { dialog, edit, create, close } = useCollectionDialog(isOwnProfile, collections);
 
 	return (
@@ -160,7 +166,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				isOwnProfile={isOwnProfile}
 				bookmarkCount={bookmarkCount}
 				collectionCount={collections.length}
-				firstBookmarkedAt={firstBookmarkDate(data.bookmarks)}
+				firstBookmarkedAt={firstBookmarkDate(bookmarks)}
 			/>
 			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
 				<CollectionsNav userId={data.id} shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
