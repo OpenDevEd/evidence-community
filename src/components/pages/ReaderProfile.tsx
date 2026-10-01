@@ -129,6 +129,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 					<>
 						<ProfileHeader
 							reader={profileReader}
+							userId={data.id}
 							isOwnProfile={isOwnProfile}
 							bookmarkCount={bookmarkCount}
 							collectionCount={collectionsEnabled ? collections.length : null}
@@ -165,12 +166,14 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 
 function ProfileHeader({
 	reader,
+	userId,
 	isOwnProfile,
 	bookmarkCount,
 	collectionCount,
 	firstBookmarkedAt,
 }: {
 	reader: { id: string; name: string; image: string | null };
+	userId: string;
 	isOwnProfile: boolean;
 	bookmarkCount: number;
 	collectionCount: number | null;
@@ -190,41 +193,95 @@ function ProfileHeader({
 	];
 
 	return (
-		<header className="flex flex-col items-center gap-6 pt-6 text-center">
-			<ReaderAvatar reader={reader} size="lg" className="h-24 w-24 text-3xl [&_svg]:size-10" />
-			<h1 className="max-w-full truncate font-heading text-4xl font-semibold tracking-tight text-foreground sm:text-5xl dark:text-white">
-				{readerDisplayName(reader, t)}
-			</h1>
-			<dl className="flex flex-wrap justify-center gap-x-12 gap-y-4">
-				{stats.map((stat) => (
-					<div key={stat.key} className="flex flex-col-reverse items-center gap-0.5">
-						<dt className="text-small text-foreground/60 dark:text-white/60">{stat.label}</dt>
-						<dd className="text-2xl font-semibold tabular-nums text-foreground dark:text-white">{stat.value}</dd>
+		<header className="overflow-hidden rounded-2xl bg-white dark:bg-secondary">
+			<CoverWall userId={userId} bookmarkCount={bookmarkCount} />
+			<div className="flex flex-col gap-6 px-5 pb-6 sm:px-8 sm:pb-8 lg:flex-row lg:items-end lg:justify-between">
+				<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
+					{/* The ring is the card's own colour, so the avatar reads as cut out of the covers behind it. */}
+					<span className="relative -mt-14 w-fit shrink-0 rounded-full bg-white p-1.5 sm:-mt-16 dark:bg-secondary">
+						<ReaderAvatar reader={reader} size="lg" className="h-24 w-24 text-3xl sm:h-28 sm:w-28 [&_svg]:size-10" />
+					</span>
+					<div className="flex min-w-0 flex-col gap-3">
+						<h1 className="truncate font-heading text-4xl font-semibold tracking-tight text-foreground sm:text-5xl dark:text-white">
+							{readerDisplayName(reader, t)}
+						</h1>
+						<dl className="flex flex-wrap gap-x-8 gap-y-2">
+							{stats.map((stat) => (
+								<div key={stat.key} className="flex flex-row-reverse items-baseline justify-end gap-1.5">
+									<dt className="text-small text-foreground/60 dark:text-white/60">{stat.label}</dt>
+									<dd className="text-lg font-semibold tabular-nums text-foreground dark:text-white">{stat.value}</dd>
+								</div>
+							))}
+						</dl>
 					</div>
-				))}
-			</dl>
-			<div className="flex flex-wrap justify-center gap-2">
-				<Button
-					onPress={() => copy(`${window.location.origin}${window.location.pathname}`)}
-					startContent={<HugeiconsIcon icon={copied ? Tick02Icon : Share08Icon} className="size-5" aria-hidden />}
-					className="h-10 px-4 font-medium"
-				>
-					{copied ? t("profileLinkCopied") : t("shareProfile")}
-				</Button>
-				{isOwnProfile ? (
+				</div>
+				<div className="flex shrink-0 flex-wrap gap-2">
 					<Button
-						as="a"
-						href={OPENSCHOLAR_ACCOUNT_URL}
-						target="_blank"
-						rel="noopener"
-						startContent={<HugeiconsIcon icon={UserEdit01Icon} className="size-5" aria-hidden />}
+						onPress={() => copy(`${window.location.origin}${window.location.pathname}`)}
+						startContent={<HugeiconsIcon icon={copied ? Tick02Icon : Share08Icon} className="size-5" aria-hidden />}
 						className="h-10 px-4 font-medium"
 					>
-						{reader.name.trim() ? t("editProfile") : t("addYourName")}
+						{copied ? t("profileLinkCopied") : t("shareProfile")}
 					</Button>
-				) : null}
+					{isOwnProfile ? (
+						<Button
+							as="a"
+							href={OPENSCHOLAR_ACCOUNT_URL}
+							target="_blank"
+							rel="noopener"
+							startContent={<HugeiconsIcon icon={UserEdit01Icon} className="size-5" aria-hidden />}
+							className="h-10 px-4 font-medium"
+						>
+							{reader.name.trim() ? t("editProfile") : t("addYourName")}
+						</Button>
+					) : null}
+				</div>
 			</div>
 		</header>
+	);
+}
+
+/** Enough covers to run past the widest card, repeating a short list. */
+const WALL_SIZE = 16;
+
+/**
+ * The reader's bookmarks as a wall of cover pages across the top of their card,
+ * in the order the shelf below shows them. It is a picture of what they read,
+ * so it is hidden from assistive technology; the shelves carry the records.
+ * The band has a fixed height, so the covers arriving moves nothing.
+ */
+function CoverWall({ userId, bookmarkCount }: { userId: string; bookmarkCount: number }) {
+	const { data } = useShelfItems(userId, "");
+	const records = data?.items ?? [];
+	const wall = records.length > 0 ? Array.from({ length: WALL_SIZE }, (_, index) => records[index % records.length]!) : [];
+	return (
+		<div aria-hidden className="relative h-40 overflow-hidden bg-accent/10 sm:h-52">
+			{bookmarkCount > 0 ? (
+				<ul className="absolute inset-x-0 -top-6 flex gap-4 px-4">
+					{(data ? wall : Array.from({ length: WALL_SIZE }, () => null)).map((record, index) => (
+						<li
+							key={index}
+							className="w-28 shrink-0 sm:w-32"
+							style={{ transform: `translateY(${index % 2 ? 28 : 0}px) rotate(${index % 3 === 0 ? -3 : index % 3 === 1 ? 2 : -1}deg)` }}
+						>
+							{record ? (
+								<PdfCover
+									src={record.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage}
+									alt=""
+									title={record.title ?? undefined}
+									className="aspect-[3/4] w-full object-cover shadow-md"
+									width={128}
+								/>
+							) : (
+								<div className="aspect-[3/4] rounded-xl bg-black/[0.05] dark:bg-white/[0.06]" />
+							)}
+						</li>
+					))}
+				</ul>
+			) : null}
+			{/* The covers fade into the card where the name begins. */}
+			<div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white dark:from-secondary" />
+		</div>
 	);
 }
 
