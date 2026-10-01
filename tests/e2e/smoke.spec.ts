@@ -568,9 +568,12 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
  * languages. Returns false when the library offers neither, so there is none.
  */
 async function openHeaderSettings(page: Page) {
-	// Found by role, not label, so it works in every language.
+	// The banner's last navigation holds the actions. Found by role, not label,
+	// so it works in every language; the first may hold link menus of its own.
 	const trigger = page
 		.getByRole("banner")
+		.getByRole("navigation")
+		.last()
 		.locator("button[aria-haspopup]")
 		.filter({ visible: true });
 	if ((await trigger.count()) === 0) return false;
