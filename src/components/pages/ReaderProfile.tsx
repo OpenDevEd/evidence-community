@@ -26,6 +26,7 @@ import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import GenericHeader from "@/components/features/modals/GenericHeader";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
+import { LIST_TOP_ID } from "@/hooks/useFilters";
 import { useItemsList } from "@/hooks/useItemsList";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
@@ -113,7 +114,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				collectionCount={collectionsEnabled ? collections.length : null}
 				firstBookmarkedAt={firstBookmarkedAt}
 			/>
-			<div className="flex flex-col gap-8 lg:flex-row xl:gap-10">
+			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
 				{collectionsEnabled ? (
 					<CollectionsNav
 						userId={data.id}
