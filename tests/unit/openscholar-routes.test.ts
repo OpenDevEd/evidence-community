@@ -20,8 +20,6 @@ vi.mock("@/config/library-config/server", () => ({
 			openScholar: {
 				convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
 				libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
-				loginPageUrl:
-					"https://openscholar.example.org/evidence-libraries/amber",
 				machineCredential,
 			},
 			secret: "12345678901234567890123456789012",

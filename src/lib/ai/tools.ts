@@ -6,6 +6,7 @@ import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { meilisearchIn } from "@/lib/meilisearch-filter";
 import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
 import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -285,6 +286,7 @@ async function loadCurrentResultsWindow(
 	searchContext: LibrarySearchContext,
 	cursor: string | undefined,
 	window: CurrentResultsWindowChoice,
+	readerListKeys: string[] | undefined,
 ): Promise<CurrentResultsWindow> {
 	const { index } = await getMeilisearchForConfig(config);
 	const compiled = resolveSearchRequest(
@@ -294,7 +296,8 @@ async function loadCurrentResultsWindow(
 	);
 	const baseOptions = {
 		attributesToSearchOn: compiled.attributesToSearchOn,
-		filter: compiled.finalFilters,
+		// A reader's list is exactly the records the chat route allowed.
+		filter: readerListKeys ? [...compiled.finalFilters, meilisearchIn("key", readerListKeys)] : compiled.finalFilters,
 		...(compiled.sortOption ? { sort: compiled.sortOption } : {}),
 	};
 
@@ -386,6 +389,8 @@ export function createResearchTools(
 	config: SearchConfig,
 	searchContext?: LibrarySearchContext,
 	requestId = "unknown",
+	/** The record keys of a reader's list, resolved for the person asking. */
+	readerListKeys?: string[],
 ) {
 	const schemas = createResearchToolSchemas(mode);
 	let currentWindowId: string | undefined;
@@ -415,6 +420,7 @@ export function createResearchTools(
 				searchContext,
 				cursor,
 				window,
+				readerListKeys,
 			);
 		}
 

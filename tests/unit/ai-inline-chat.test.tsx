@@ -42,12 +42,8 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: (feature: string) => feature === "aiSearch",
 }));
 // Signed-in state belongs to the page around the chat.
-vi.mock("next-auth", () => ({}));
 // Server actions belong to the pages around the chat.
 vi.mock("@/lib/actions", () => ({ convertItem: vi.fn() }));
-vi.mock("next-auth/react", () => ({
-	useSession: () => ({ data: null, status: "unauthenticated" }),
-}));
 
 import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
 import { useAskInlineChat } from "@/components/features/ai/useAskInlineChat";
@@ -351,6 +347,7 @@ describe("the chat beside the search results", () => {
 			institution: [],
 			sort: "relevance",
 			topics: [],
+			readerList: null,
 		};
 		expect(asked).toHaveLength(1);
 		expect(asked[0]).toMatchObject({

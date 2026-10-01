@@ -11,9 +11,9 @@ This inventory reflects the current application behavior as of September 12, 202
 | `ai_rate_limit_id`                                        | First-party application           | Keeps one anonymous browser quota across AI requests and web processes.                   | Yes when AI is used    | 365 days                        | HTTP-only, same-site cookie scoped to `/api/ai`; it contains a random identifier, not an account ID.     |
 | `__cf_bm`                                                 | Cloudflare                        | Bot-management and abuse detection.                                                       | Yes                    | Cloudflare-managed, short-lived | Security/infrastructure cookie.                                                                          |
 | `_cfuvid`                                                 | Cloudflare                        | Distinguishes visitors behind shared IPs for rate limiting and security controls.         | Yes                    | Cloudflare-managed, short-lived | Security/infrastructure cookie.                                                                          |
-| `authjs.session-token` or `__Secure-authjs.session-token` | Auth.js                           | Maintains a signed-in session when login is enabled.                                      | Yes when login is used | Up to 30 days                   | Secure deployments use the secure-prefixed name. Long values may be split across numbered cookie chunks. |
-| `authjs.callback-url` or `__Secure-authjs.callback-url`   | Auth.js                           | Returns the visitor to the requested page after login.                                    | Yes when login is used | Auth.js-managed                 | Secure deployments use the secure-prefixed name.                                                         |
-| `authjs.csrf-token` or `__Host-authjs.csrf-token`         | Auth.js                           | Protects authentication requests against cross-site request forgery.                      | Yes when login is used | Auth.js-managed                 | Secure deployments use the host-prefixed name.                                                           |
+| `evidence-library.session_token` or `__Secure-evidence-library.session_token` | Better Auth | Keeps a reader or admin signed in with their OpenScholar account. | Yes when signed in | 30 days, extended while in use | HTTP-only. Secure deployments use the secure-prefixed name. |
+| `evidence-library.session_data` or `__Secure-evidence-library.session_data` | Better Auth | Caches the signed session for a few minutes so each page does not query the database. | Yes when signed in | 5 minutes | HTTP-only and signed. |
+| `evidence-library.oauth_state` or `__Secure-evidence-library.oauth_state` | Better Auth | Ties the return from OpenScholar to the sign-in this browser started. | Yes during sign-in | 10 minutes | HTTP-only. Set only after the person presses Sign in or opens `/admin`. |
 
 ## Conditional analytics cookies and storage
 
@@ -28,7 +28,7 @@ These must not exist before explicit consent is granted.
 
 ## Notes for policy drafting
 
-- The security, locale, and Auth.js cookies above are not analytics cookies.
+- The security, locale, and sign-in cookies above are not analytics cookies.
 - `analytics_consent` is the only first-party consent cookie introduced by this application for analytics gating. `ai_rate_limit_id` is an essential abuse-prevention cookie and does not enable analytics.
 - Google Analytics and PostHog are designed not to load before consent. If they appear before consent, that is a regression.
 - Declined visitors can send strict same-origin aggregate events. Those requests use the consent cookie but create no browser analytics identifier or vendor storage.

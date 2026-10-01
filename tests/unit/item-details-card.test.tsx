@@ -21,10 +21,6 @@ const testState = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next-auth", () => ({
-	default: () => ({ auth: vi.fn(), handlers: {} }),
-}));
-vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ back: vi.fn() }) }));
 vi.mock("nuqs", () => ({ useQueryState: () => [null, vi.fn()] }));
 vi.mock("@/i18n/routing", () => ({

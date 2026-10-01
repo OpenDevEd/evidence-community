@@ -333,9 +333,13 @@ export function ContentInteractions({
 	const itemsContext = use(ItemsContext);
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
 	const { isAISearchEnabled } = useIsAISearchEnabled();
-	const searchContext = itemsContext.userData
-		? undefined
-		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	// On a profile the chat works on the reader's list the page shows.
+	const searchContext = normalizeLibrarySearchContext({
+		...itemsContext.queryParams,
+		readerList: itemsContext.userData
+			? { userId: itemsContext.userData.id, collectionId: itemsContext.queryParams.collectionId ?? "" }
+			: null,
+	});
 	const askInline = useAskInlineChat(searchContext);
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();

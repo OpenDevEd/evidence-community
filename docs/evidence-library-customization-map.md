@@ -39,14 +39,14 @@ container image can be started repeatedly with different mounted documents.
 | `filters` | Institution mode/label, country mode, collection expansion, years | Explicit modes; valid year range |
 | `content.tags` | Coming-soon, internal, hidden, description, redirects, publish tags | User-defined unique tag lists |
 | `citations` | Citation display behavior | Boolean switches |
-| `features` | Theme/language/login/search/AI/download and related UI switches | Dependency validation in the schema |
+| `features` | Theme/language/reader accounts/search/AI/download and related UI switches | Dependency validation in the schema |
 | `collections` | Enabled collection IDs, labels, ordering | Unique IDs and bounded order |
 | `gapMaps` | Runtime gap-map routes and source URLs | Unique IDs/slugs and stable URLs |
 | `exports` | One switch each for RIS, BibTeX, and the Atom feed | Booleans; the library builds every file from its own records |
 | `services` | PostgreSQL, Meilisearch, Zotero translation | Valid service URLs and bounded credentials/index |
 | `ai` | Providers, models, keys, prompts | Platform provider/model catalogs and feature dependencies |
 | `analytics` | PostHog, Google Analytics, UTM retention | Valid hosts/IDs and bounded retention |
-| `authentication` | Required OpenScholar service access and session signing; optional Google login | OpenScholar site, library, login page, machine credential, and signing secret are required; Google credentials are complete when enabled |
+| `authentication` | OpenScholar service access, sign-in and session signing | OpenScholar site, library ID, library page, account page, machine credential, the library's Clerk OAuth client (issuer, client ID, secret) and the session secret are all required; OpenScholar writes them |
 | `email` | Contact/takedown recipients and SMTP | Complete credential pairs and valid transport settings |
 | `generation` | Sitemap and legacy-redirect route availability | Runtime booleans |
 | `processing` | Structure, PDF, and shared processing rules | Platform condition/action catalogs |

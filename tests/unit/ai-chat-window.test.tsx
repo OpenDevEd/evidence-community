@@ -18,10 +18,6 @@ vi.mock("@/i18n/routing", () => ({
 	Link: ({ children }: { children: unknown }) => children,
 }));
 vi.mock("@/lib/analytics", () => ({ getAnalyticsDistinctId: () => "test" }));
-vi.mock("next-auth", () => ({}));
-vi.mock("next-auth/react", () => ({
-	useSession: () => ({ data: null, status: "unauthenticated" }),
-}));
 vi.mock("@/lib/actions", () => ({ convertItem: vi.fn() }));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({

@@ -407,27 +407,31 @@ Every library uses the normal Compose file and a public HTTPS origin. Set
 to HTTPS and route the hostname to the `web` service on port `3000`.
 
 Every deployed library must configure `authentication.openScholar` with its
-OpenScholar Convex site origin, Evidence Library ID, OpenScholar login page,
-and `els_` machine credential. It must also set `authentication.secret` for
-cookie signing. These fields are private and the runtime configuration is
-invalid when either part is missing.
+OpenScholar Convex site origin, Evidence Library ID, OpenScholar page for the
+library (`libraryUrl`), the account page readers and admins use (`accountUrl`),
+its `els_` machine credential, and its own Clerk OAuth application (`oauth`:
+issuer, client ID and client secret). It must also set `authentication.secret`,
+which signs session cookies and encrypts the OAuth tokens the library stores.
+OpenScholar writes all of these; the runtime configuration is invalid when any
+is missing.
 
-Opening `/admin` without a valid session shows nothing. The library redirects
-the browser to the configured OpenScholar page and adds `return`, the admin
-path the person asked for. OpenScholar signs the person in, checks whether they
-may administer this library, and sends them back.
+Readers and admins sign in with their OpenScholar account. The library uses
+Better Auth with OpenScholar's Clerk instance as its OAuth and OpenID Connect
+provider. Public pages never redirect: only the Sign in button starts sign-in.
 
-OpenScholar sends the browser to `/api/admin/session?code=elc_...&return=/admin`.
-The Evidence Library sends that code, its configured library ID, and its machine
-credential to
-`POST /api/v1/evidence-libraries/admin-login/redeem` on the configured Convex
-site. A successful response creates a signed 12-hour cookie containing the
-returned Clerk user, Clerk organization, target library, and owner/editor
-role. The cookie is HTTP-only, same-site lax, host-only, and secure in
-production. Codes are single-use; rejected, expired, replayed, or
-wrong-library codes do not create a session; they send the browser back to the
-OpenScholar page with `error=invalid_code`, which is where the person reads what
-went wrong.
+Opening `/admin` without a session cookie answers `307` to the library's own
+`/api/admin/sign-in?return=<path>`, which starts the OAuth flow (PKCE and a
+state cookie) and comes back to `/api/auth/callback/openscholar`, then to the
+admin path. Sessions last 30 days and extend while in use. The admin role is
+not stored in the session: each admin request asks OpenScholar's
+`admin-session/check` by Clerk user ID, and the answer is reused for about a
+minute. Someone signed in without a role sees which organisation to ask.
+
+While a reader is active the library refreshes their Clerk token and copies
+their name and avatar at most every 15 minutes. If that fails it asks
+OpenScholar's `reader-status`; only `deleted` removes the reader. OpenScholar
+also calls `DELETE /api/v1/openscholar/readers/{clerkUserId}` with the machine
+credential when an account is deleted.
 
 `return` is checked here, not trusted. It must be a path inside this library's
 admin, such as `/admin`, `/admin/items?scope=drafts`, or `/en-GB/admin`.
@@ -821,24 +825,30 @@ The cleanup command removes only Evidence Library acceptance environments whose
 test process has ended. It leaves active tests and unrelated development
 containers running.
 
-## Real-service admin codes
+## Real-service admin sign-in
 
-Real-service checks that call the deployed admin HTTP API require
-`EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE` to contain a fresh `elc_` code for that
-library. OpenScholar codes are single-use, so request a new code before every
-command. This applies to these checks:
+Real-service checks that call the deployed admin HTTP API sign in through the
+library's real flow with a development Clerk test user who has a role in that
+library's OpenScholar organisation. Set the development Clerk keys and the test
+user once:
 
 ```bash
-EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:search-worker
-EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:native-file-http
-EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-item-batch-http
-EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:linked-item-lifecycle
-EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-zotero-live -- --confirm-group <group-id>
+export CLERK_SECRET_KEY='<development sk_test_ key>'
+export CLERK_PUBLISHABLE_KEY='<development pk_test_ key>'
+export EVIDENCE_LIBRARY_TEST_CLERK_USER_ID='<user_ ID of the test admin>'
+npm run test:search-worker
+npm run test:native-file-http
+npm run test:admin-item-batch-http
+npm run test:linked-item-lifecycle
+npm run test:admin-zotero-live -- --confirm-group <group-id>
 ```
 
-The linked-item check needs the code only when `EVIDENCE_LIBRARY_TEST_URL` is
-set and its HTTP checks run. The acceptance suite issues its own disposable
-codes and does not need this environment value.
+Each check opens `/admin` in a headless browser, signs the test user in on
+Clerk's page with a one-time sign-in token, and keeps the library's session
+cookie. `EVIDENCE_LIBRARY_ADMIN_SESSION_COOKIE` instead reuses cookies copied
+from a signed-in browser. The linked-item check signs in only when
+`EVIDENCE_LIBRARY_TEST_URL` is set. The acceptance suite signs its own admins in
+through the library's database and does not need these values.
 
 ## Real publication sandbox checks
 
@@ -853,13 +863,8 @@ export PUBLICATION_SANDBOX_RUN_ID=docs-pen-$(date +%Y%m%d-%H%M%S)
 export PUBLICATION_EXPECTED_CROSSREF_PREFIX=10.53832
 export PUBLICATION_EXPECTED_CROSSREF_NAMESPACE=docs-pen.
 export PUBLICATION_SANDBOX_EVIDENCE_PATH=/tmp/${PUBLICATION_SANDBOX_RUN_ID}.json
-export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh docs-pen elc_ code>'
 npm run test:crossref-test-live
-
-export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<another fresh docs-pen elc_ code>'
 npm run test:zenodo-sandbox-live
-
-export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<another fresh docs-pen elc_ code>'
 npm run test:publication-sandbox-lifecycle
 ```
 

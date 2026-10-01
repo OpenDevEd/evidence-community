@@ -53,6 +53,8 @@ type CreateResearchAgentOptions = {
 	sessionId: string;
 	refreshResponseCache?: boolean;
 	searchContext?: LibrarySearchContext;
+	/** The record keys of a reader's list, resolved for the person asking. */
+	readerListKeys?: string[];
 	startedAt: number;
 };
 
@@ -284,6 +286,7 @@ export function createResearchAgent({
 	sessionId,
 	refreshResponseCache,
 	searchContext,
+	readerListKeys,
 	startedAt,
 }: CreateResearchAgentOptions) {
 	const { provider, modelId, createModel } = selectedModel;
@@ -315,7 +318,7 @@ export function createResearchAgent({
 		]
 			.filter(Boolean)
 			.join("\n"),
-		tools: createResearchTools(mode, config, searchContext, sessionId),
+		tools: createResearchTools(mode, config, searchContext, sessionId, readerListKeys),
 		toolOrder: ["searchLibrary", "readPublications"],
 		stopWhen: isStepCount(researchStepLimit(mode)),
 		prepareStep: ({ steps, messages: rawMessages, stepNumber }) => {

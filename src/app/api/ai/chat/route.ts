@@ -35,6 +35,10 @@ import {
 import { chatRequestSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
 import { getCachedItem } from "../../cache";
+import { getDatabaseForConfig } from "@/db";
+import type { LibrarySearchContext } from "@/lib/search-context";
+import { readReaderListKeys } from "@/lib/readers/data";
+import { getSignedInReader } from "@/lib/readers/session";
 
 export const maxDuration = 240;
 
@@ -116,6 +120,33 @@ function ensureLatestRequestContext(
 	};
 }
 
+/**
+ * The records of the reader's list a profile chat is about, as the person
+ * asking may see them. Someone else's private collection is refused before
+ * the model sees anything.
+ */
+async function resolveReaderListKeys(
+	config: LibraryServerConfig,
+	searchContext: LibrarySearchContext | null | undefined,
+	request: Request,
+) {
+	const readerList = searchContext?.readerList;
+	if (!readerList) return undefined;
+	if (!config.features.readerAccounts) {
+		throw new AIError("INVALID_REQUEST", "This library has no reader lists.", 400);
+	}
+	const viewer = await getSignedInReader(request.headers, config);
+	const list = await readReaderListKeys(await getDatabaseForConfig(config), readerList, viewer?.id ?? null);
+	if ("refused" in list) {
+		throw new AIError(
+			"INVALID_REQUEST",
+			list.refused === 403 ? "This collection is private." : "There is no such collection.",
+			list.refused,
+		);
+	}
+	return list.keys;
+}
+
 export async function POST(request: Request) {
 	const startedAt = Date.now();
 
@@ -128,6 +159,7 @@ export async function POST(request: Request) {
 		const { distinctId, itemKey, mode, modelId, searchContext } =
 			chatRequest;
 		const selectedModel = await resolveAIModel(config, modelId);
+		const readerListKeys = await resolveReaderListKeys(config, searchContext, request);
 		const publication = await currentPublication(itemKey);
 		const locale = await getRuntimeRequestLocale(request);
 
@@ -145,6 +177,7 @@ export async function POST(request: Request) {
 			sessionId: openRouterSessionId("chat", modelId, chatRequest.id),
 			refreshResponseCache: chatRequest.trigger === "regenerate-message",
 			searchContext,
+			readerListKeys,
 			startedAt,
 		});
 
