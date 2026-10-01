@@ -79,6 +79,9 @@ export async function getItems(
 		userId,
 		searchParams.collectionId || "",
 	);
+	// Without its filter the search would list the whole library, so a
+	// collection the caller may not see is refused instead.
+	if (userFilters.status) return { refused: userFilters.status };
 
 	const facets = getRuntimeSearchFacets(
 		libraryConfig.search,
