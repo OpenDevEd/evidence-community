@@ -82,14 +82,14 @@ describe("bibliographic dates", () => {
 		expect(isFuturePublication(item, today)).toBe(expected);
 	});
 
-	it("counts the reader's own day as today, not UTC's", () => {
+	it("decides by the UTC day whatever the host's time zone", () => {
 		const timeZone = process.env.TZ;
 		process.env.TZ = "Asia/Tokyo";
 		try {
 			// 05:00 on 2 October in Tokyo, still 1 October in UTC.
 			const now = new Date("2026-10-01T20:00:00Z");
-			expect(isFuturePublication({ datePublished: "2026-10-02" }, now)).toBe(false);
-			expect(isFuturePublication({ datePublished: "2026-10-03" }, now)).toBe(true);
+			expect(isFuturePublication({ datePublished: "2026-10-02" }, now)).toBe(true);
+			expect(isFuturePublication({ datePublished: "2026-10-01" }, now)).toBe(false);
 		} finally {
 			process.env.TZ = timeZone;
 		}

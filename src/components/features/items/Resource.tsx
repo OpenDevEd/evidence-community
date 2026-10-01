@@ -409,7 +409,7 @@ function ResourcePublishedDate({
 		<ResourceData
 			element="time"
 			datetime={date.toISOString()}
-			text={format.dateTime(date, { dateStyle: "medium" })}
+			text={format.dateTime(date, { dateStyle: "medium", timeZone: "UTC" })}
 			startContent={
 				isFuture && (
 					<HugeiconsIcon

@@ -92,10 +92,9 @@ export function isFuturePublication(
 	item: { datePublished?: string | null; year?: string | null } | undefined,
 	now = new Date(),
 ) {
-	// The reader's calendar day, not UTC's, so a date never reads as future on its own day.
-	const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
-		.toISOString()
-		.slice(0, 10);
+	// Calendar dates are compared and shown in UTC, so the server render and
+	// the reader's browser always agree.
+	const today = now.toISOString().slice(0, 10);
 	if (item?.datePublished) return item.datePublished.slice(0, 10) > today;
-	return Number(item?.year) > now.getFullYear();
+	return Number(item?.year) > now.getUTCFullYear();
 }
