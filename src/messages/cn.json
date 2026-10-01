@@ -1,5 +1,6 @@
 {
   "ui": {
+    "bookmarkingSince": "since {date}",
     "allBookmarks": "All bookmarks",
     "seeAll": "See all",
     "otherTypes": "Other",

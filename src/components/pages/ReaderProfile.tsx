@@ -86,6 +86,8 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const [openShelf, setOpenShelf] = useState<string | null>(items.queryParams.collectionId ? items.queryParams.collectionId : null);
 	const profileReader = { id: data.id, name: data.name ?? "", image: data.image ?? null };
 	const bookmarkCount = Object.keys(data.likes).length;
+	const bookmarkDates = Object.values(data.likes).map((value) => new Date(value as string)).filter((date) => !Number.isNaN(date.getTime()));
+	const firstBookmarkedAt = bookmarkDates.length > 0 ? new Date(Math.min(...bookmarkDates.map((date) => date.getTime()))) : null;
 
 	const open = (shelf: string | null) => {
 		setOpenShelf(shelf);
@@ -129,6 +131,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 							isOwnProfile={isOwnProfile}
 							bookmarkCount={bookmarkCount}
 							collectionCount={collections.length}
+							firstBookmarkedAt={firstBookmarkedAt}
 						/>
 						{bookmarkCount === 0 ? (
 							<EmptyShelves isOwnProfile={isOwnProfile} />
@@ -165,31 +168,34 @@ function ProfileHeader({
 	isOwnProfile,
 	bookmarkCount,
 	collectionCount,
+	firstBookmarkedAt,
 }: {
 	reader: { id: string; name: string; image: string | null };
 	userId: string;
 	isOwnProfile: boolean;
 	bookmarkCount: number;
 	collectionCount: number;
+	firstBookmarkedAt: Date | null;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const { data } = useShelfItems(userId, "");
 	return (
-		<header className="flex flex-col gap-6 rounded-3xl bg-white p-6 dark:bg-secondary md:flex-row md:items-center md:gap-10 md:p-8">
+		<header className="flex flex-col gap-8 pt-2 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
 			<div className="flex min-w-0 items-center gap-5">
 				<ReaderAvatar reader={reader} size="lg" />
-				<div className="flex min-w-0 flex-col gap-1">
-					<h1 className="truncate font-heading text-3xl font-semibold text-foreground dark:text-white">
+				<div className="flex min-w-0 flex-col gap-1.5">
+					<h1 className="truncate font-heading text-4xl font-semibold tracking-tight text-foreground dark:text-white">
 						{readerDisplayName(reader, t)}
 					</h1>
 					<p className="text-foreground/60 dark:text-white/60">
-						{t("shelfSummary", {
-							bookmarks: bookmarkCount,
-							collections: collectionCount,
-							bookmarksFormatted: format.number(bookmarkCount),
-							collectionsFormatted: format.number(collectionCount),
-						})}
+						{t("shelfSummary", { bookmarks: bookmarkCount, collections: collectionCount })}
+						{firstBookmarkedAt ? (
+							<span className="text-foreground/40 dark:text-white/40">
+								{" "}
+								{t("bookmarkingSince", { date: format.dateTime(firstBookmarkedAt, { month: "long", year: "numeric" }) })}
+							</span>
+						) : null}
 					</p>
 					{isOwnProfile && !reader.name ? (
 						<a
@@ -204,59 +210,83 @@ function ProfileHeader({
 					) : null}
 				</div>
 			</div>
-			{bookmarkCount > 0 ? <TypeBreakdown items={data?.items ?? []} /> : null}
+			{bookmarkCount > 0 ? <SpineShelf records={data?.items ?? null} count={bookmarkCount} /> : null}
 		</header>
 	);
 }
 
-/** What the bookmarks are made of, one segment per record type. */
-function TypeBreakdown({ items }: { items: ListItem[] }) {
+/**
+ * A book's size on the shelf, stable for each record so the shelf looks the
+ * same on every visit. Books vary the way real ones do; the size carries no
+ * data, so the range stays narrow enough not to read as a chart.
+ */
+function spineSize(key: string) {
+	let hash = 0;
+	for (const character of key) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+	return { height: 78 + (hash % 19), width: 18 + ((hash >> 5) % 9) };
+}
+
+/**
+ * The reader's bookmarks as books on a shelf: one spine per record, coloured
+ * by its type, each opening its record. The legend below names the colours.
+ */
+function SpineShelf({ records, count }: { records: ListItem[] | null; count: number }) {
 	const tTypes = useTranslations("itemType");
 	const t = useTranslations("ui");
-	const counts = new Map<string, number>();
-	for (const item of items) {
-		const known = TYPE_COLOURS.some((entry) => entry.type === item.itemType);
-		const key = known ? item.itemType : "other";
-		counts.set(key, (counts.get(key) ?? 0) + 1);
-	}
-	// Known types in their fixed order, then everything else.
-	const segments = [...TYPE_COLOURS.map((entry) => entry.type as string), "other"]
-		.filter((type) => counts.has(type))
-		.map((type) => ({
-			type,
-			count: counts.get(type) ?? 0,
-			label: type === "other" ? t("otherTypes") : tTypes(type),
-			colour: type === "other" ? OTHER_COLOUR : typeColour(type),
-		}));
-	const total = items.length;
+	const shown = records ?? [];
+	const types = [...TYPE_COLOURS.map((entry) => entry.type as string), "other"].filter((type) =>
+		shown.some((record) => (TYPE_COLOURS.some((entry) => entry.type === record.itemType) ? record.itemType : "other") === type),
+	);
 
 	return (
-		<div className="flex min-w-0 flex-1 flex-col gap-3" aria-label={t("bookmarksByType")} role="group">
-			<div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
-				{total === 0 ? (
-					<div className="h-full w-full rounded-full bg-black/[0.06] dark:bg-white/10" />
-				) : (
-					segments.map((segment) => (
-						<Tooltip key={segment.type} content={`${segment.label} ${segment.count}`}>
-							<div
-								className={twMerge("h-full first:rounded-s-full last:rounded-e-full", segment.colour)}
-								style={{ width: `${(segment.count / total) * 100}%` }}
-								aria-hidden
-							/>
-						</Tooltip>
-					))
-				)}
+		<figure className="flex min-w-0 flex-col gap-3 lg:items-end" aria-label={t("bookmarksByType")}>
+			<div className="flex max-w-full flex-col">
+				{/* The row keeps its height while the records load. */}
+				<ul className="no-scrollbar flex h-28 items-end gap-0.5 overflow-x-auto px-3 pt-3">
+					{records
+						? shown.map((record, index) => {
+								const size = spineSize(record.key);
+								const leans = index === shown.length - 1 && shown.length > 2;
+								return (
+									<li key={record.key} className={twMerge("shrink-0", leans && "ms-2 origin-bottom-left rotate-[8deg] rtl:origin-bottom-right rtl:-rotate-[8deg]")}>
+										<Tooltip content={record.title}>
+											<Link
+												href={`/lib/${record.key}`}
+												aria-label={record.title ?? undefined}
+												className={twMerge(
+													"flex flex-col justify-between rounded-[3px] py-2.5 outline-none shadow-[inset_-3px_0_0_rgba(0,0,0,0.12)] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent",
+													typeColour(record.itemType),
+												)}
+												style={size}
+											>
+												<span aria-hidden className="block h-[3px] bg-white/45" />
+												<span aria-hidden className="block h-[3px] bg-white/45" />
+											</Link>
+										</Tooltip>
+									</li>
+								);
+							})
+						: Array.from({ length: Math.min(count, 20) }, (_, index) => (
+								<li key={index} aria-hidden className="shrink-0 rounded-[3px] bg-black/[0.06] dark:bg-white/10" style={{ height: 78 + ((index * 7) % 19), width: 18 + ((index * 5) % 9) }} />
+							))}
+				</ul>
+				<div aria-hidden className="h-2 rounded-full bg-black/[0.12] shadow-[0_6px_10px_-6px_rgba(0,0,0,0.35)] dark:bg-white/15" />
 			</div>
-			<ul className="flex flex-wrap gap-x-5 gap-y-2">
-				{segments.map((segment) => (
-					<li key={segment.type} className="flex items-center gap-2 text-small">
-						<span aria-hidden className={twMerge("h-1.5 w-3 rounded-full", segment.colour)} />
-						<span className="text-foreground/80 dark:text-white/80">{segment.label}</span>
-						<span className="tabular-nums text-foreground/50 dark:text-white/50">{segment.count}</span>
-					</li>
-				))}
-			</ul>
-		</div>
+			<figcaption className="flex flex-wrap gap-x-5 gap-y-2">
+				{types.map((type) => {
+					const typeCount = shown.filter((record) =>
+						(TYPE_COLOURS.some((entry) => entry.type === record.itemType) ? record.itemType : "other") === type,
+					).length;
+					return (
+						<span key={type} className="flex items-center gap-2 text-small">
+							<span aria-hidden className={twMerge("h-3 w-2 rounded-[2px]", type === "other" ? OTHER_COLOUR : typeColour(type))} />
+							<span className="text-foreground/80 dark:text-white/80">{type === "other" ? t("otherTypes") : tTypes(type)}</span>
+							<span className="tabular-nums text-foreground/50 dark:text-white/50">{typeCount}</span>
+						</span>
+					);
+				})}
+			</figcaption>
+		</figure>
 	);
 }
 
