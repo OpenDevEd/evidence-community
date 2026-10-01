@@ -136,6 +136,7 @@ import {
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
 } from "@/lib/admin/item-filter-state";
+import { readerAuthClient } from "@/lib/readers/client";
 
 function requiredDraftValue<T>(
 	values: Map<string, T>,
@@ -564,7 +565,6 @@ export default function AdminWorkbench({
 	}, [bulkKeys, items, library.sources]);
 
 	const detailRequest = useRef(0);
-	const logoutFormRef = useRef<HTMLFormElement>(null);
 	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
 	const selectedKeyRef = useRef<string | null>(null);
 	const detailRef = useRef<AdminItemDetail | null>(null);
@@ -2249,19 +2249,17 @@ export default function AdminWorkbench({
 								/>
 							</Button>
 						</Tooltip>
-						<form
-							action="/api/admin/session/logout"
-							method="post"
-							ref={logoutFormRef}
-						/>
 						<Tooltip content="Log out">
 							<Button
 								aria-label="Log out"
 								className="h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
 								isIconOnly
-								onPress={() =>
-									logoutFormRef.current?.requestSubmit()
-								}
+								// Signing out ends the library session readers share, then leaves
+								// /admin so OpenScholar does not sign the person straight back in.
+								onPress={async () => {
+									await readerAuthClient.signOut();
+									window.location.assign("/");
+								}}
 								size="xs"
 								type="button"
 								variant="transparent"

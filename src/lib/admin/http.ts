@@ -24,8 +24,7 @@ import { InvalidPdfError } from "./pdf-processing";
 import {
 	ADMIN_CONTENT_PERMISSION,
 	ADMIN_PUBLISH_PERMISSION,
-	adminSessionCookieName,
-	authorizeAdminSession,
+	authorizeAdminRequest,
 	type AdminPermission,
   type AdminSession,
 } from "./access";
@@ -115,26 +114,28 @@ function adminError(details: AdminErrorDetails) {
 	);
 }
 
-type AdminRequest = {
-	cookies: { get(name: string): { value: string } | undefined };
-};
+type AdminRequest = { headers: Headers };
 
 async function readAdminPermission(
 	request: AdminRequest,
 	permission: AdminPermission,
 ) {
-	const authorization = await authorizeAdminSession(
-		request.cookies.get(adminSessionCookieName())?.value,
-		permission,
-	);
+	const authorization = await authorizeAdminRequest(request.headers, permission);
 	if (authorization.status === "authorized") return { session: authorization.session, denied: null };
   if (authorization.status === "unavailable") return { session: null, denied: NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify library access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS }) };
 	if (authorization.status === "forbidden") {
 		return { session: null, denied: adminForbiddenResponse(permission) };
 	}
+	if (authorization.status === "no_access") {
+		return { session: null, denied: adminError({
+			code: "no_access",
+			message: "You do not have access to this library's admin area.",
+			status: 403,
+		}) };
+	}
 	return { session: null, denied: adminError({
 		code: "unauthorized",
-		message: "Open this library from OpenScholar to continue.",
+		message: "Sign in to continue.",
 		status: 401,
 	}) };
 }

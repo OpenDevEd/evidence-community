@@ -14,13 +14,10 @@ import {
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "./lib/http-cache";
 import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { normalizePathname } from "./lib/path";
-import {
-	adminSessionCookieName,
-	verifyAdminSessionToken,
-} from "./lib/admin/access";
+import { getSessionCookie } from "better-auth/cookies";
 import {
 	ADMIN_PAGE_METHODS,
-	buildAdminLoginPageUrl,
+	buildAdminSignInPath,
 	getCanonicalLibraryRedirect,
 	getExternalRequestOrigin,
 	getRedirectLookupPath,
@@ -349,19 +346,9 @@ function adminMethodNotAllowedResponse() {
 	});
 }
 
-function hasAdminSession(
-	request: NextRequest,
-	authentication: LibraryServerConfig["authentication"],
-) {
-	return Boolean(
-		verifyAdminSessionToken(
-			request.cookies.get(adminSessionCookieName())?.value,
-			{
-				libraryId: authentication.openScholar.libraryId,
-				secret: authentication.secret,
-			},
-		),
-	);
+/** Only whether a session cookie is there: the admin page checks the session and the role itself. */
+function hasSessionCookie(request: NextRequest) {
+	return Boolean(getSessionCookie(request, { cookiePrefix: "evidence-library" }));
 }
 
 function getDisabledLocaleRedirect(
@@ -379,30 +366,25 @@ function getDisabledLocaleRedirect(
 	return NextResponse.redirect(url, 307);
 }
 
-function getAdminPageResponse(
-	request: NextRequest,
-	authentication: LibraryServerConfig["authentication"],
-) {
+function getAdminPageResponse(request: NextRequest) {
 	if (!isAdminPagePath(request.nextUrl.pathname)) return null;
 	// An admin page only ever answers a page request. Sending anything else
-	// to OpenScholar would repeat the method and the body on another site.
+	// into sign-in would repeat the method and the body on another site.
 	if (!isAdminPageMethod(request.method)) {
 		return adminMethodNotAllowedResponse();
 	}
-	if (hasAdminSession(request, authentication)) return null;
+	if (hasSessionCookie(request)) return null;
 
+	const origin = getExternalRequestOrigin(request.nextUrl, request.headers) ?? request.nextUrl.origin;
 	return NextResponse.redirect(
-		buildAdminLoginPageUrl(
-			authentication.openScholar.loginPageUrl,
-			`${request.nextUrl.pathname}${request.nextUrl.search}`,
-		),
+		new URL(buildAdminSignInPath(`${request.nextUrl.pathname}${request.nextUrl.search}`), origin),
 		307,
 	);
 }
 
 // The admin page must answer with a real redirect. Rendering it and calling
 // redirect() there streams a 200 first, so the browser would see the
-// card-free page instead of the OpenScholar handoff. Nothing else may answer
+// card-free page instead of the sign-in redirect. Nothing else may answer
 // first: a switched-off locale is dropped here, and the legacy query rules
 // never turn a refused method into a redirect.
 function getAdminRequestResponse(
@@ -413,7 +395,7 @@ function getAdminRequestResponse(
 
 	return (
 		getDisabledLocaleRedirect(request, libraryConfig.localization) ??
-		getAdminPageResponse(request, libraryConfig.authentication)
+		getAdminPageResponse(request)
 	);
 }
 
@@ -454,7 +436,7 @@ export default async function proxy(request: NextRequest) {
 		request.nextUrl.pathname,
 	);
 	if (
-		!libraryConfig.features.login &&
+		!libraryConfig.features.readerAccounts &&
 		isLoginProfilePath(request.nextUrl.pathname)
 	) {
 		return new NextResponse("Not Found", {

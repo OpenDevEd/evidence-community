@@ -1,11 +1,8 @@
 import { cache } from "react";
 import { getDatabase, getDatabaseForConfig } from "@/db";
-import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
-import { userCollection } from "@/db/schema/tables/userCollection";
 import { getItem, withoutFullText } from "./item/[key]/route";
 import { and, eq, sql } from "drizzle-orm";
 import { outbox } from "@opendeved/evidence-library-core";
-import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
 import { Collection } from "./collections/types";
@@ -98,95 +95,6 @@ export const getCachedItemSmall = cache(async (key: string) => {
 	const [config, version] = await Promise.all([getLibraryConfig(), readItemVersion(key)]);
 	return readCachedPublicItem(key, config.revision, version);
 });
-
-// --- User data (revalidate: 60s) ---
-
-async function _getCachedUserCollectionKeys(
-	collectionId: string,
-	configRevision: string,
-	config: LibraryServerConfig,
-) {
-	"use cache";
-	cacheLife({ revalidate: 60 });
-	cacheTag("userCollectionKeys-" + collectionId);
-	return getUserCollectionKeysDirect(collectionId, config);
-}
-
-export async function getCachedUserCollectionKeys(collectionId: string) {
-	const config = await getLibraryConfig();
-	return _getCachedUserCollectionKeys(collectionId, config.revision, config);
-}
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-
-/** A collection's privacy, owner and record keys, or null when there is no such collection. */
-export async function getUserCollectionKeysDirect(
-	collectionId: string,
-	config?: LibraryServerConfig,
-) {
-	if (!UUID_PATTERN.test(collectionId)) return null;
-	const db = config
-		? await getDatabaseForConfig(config)
-		: await getDatabase();
-	// Privacy and owner belong to the collection itself, so an empty private
-	// collection stays private.
-	const collection = await db.query.userCollection.findFirst({
-		where: and(
-			eq(userCollection.id, collectionId),
-			eq(userCollection.deleted, false),
-		),
-		columns: { private: true, userId: true },
-	});
-	if (!collection) return null;
-	const items = await db.query.itemToUserCollection.findMany({
-		where: and(
-			eq(itemToUserCollection.userCollectionId, collectionId),
-			eq(itemToUserCollection.deleted, false),
-		),
-		columns: { itemKey: true },
-	});
-
-	return {
-		private: collection.private ?? false,
-		userId: collection.userId,
-		itemKeys: items.map((item) => item.itemKey),
-	};
-}
-
-export async function updateCachedUserCollectionKeys(collectionId: string) {
-	return getUserCollectionKeysDirect(collectionId);
-}
-
-async function _getCachedUserLikes(
-	userId: string,
-	configRevision: string,
-	config: LibraryServerConfig,
-) {
-	"use cache";
-	cacheLife({ revalidate: 60 });
-	cacheTag("userLikes-" + userId);
-	return getUserLikesDirect(userId, config);
-}
-
-export async function getCachedUserLikes(userId: string) {
-	const config = await getLibraryConfig();
-	return _getCachedUserLikes(userId, config.revision, config);
-}
-
-export async function getUserLikesDirect(
-	userId: string,
-	config?: LibraryServerConfig,
-) {
-	const db = config
-		? await getDatabaseForConfig(config)
-		: await getDatabase();
-	return db.query.usersToLikes.findMany({
-		where: and(
-			eq(usersToLikes.userId, userId),
-			eq(usersToLikes.deleted, false),
-		),
-	});
-}
 
 /**
  * The library's public record count and last update, which every page's layout reads. Counting a large library takes

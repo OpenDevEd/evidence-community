@@ -1,5 +1,5 @@
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
@@ -10,7 +10,7 @@ import { withCollectionsData, withoutFullText } from "@/app/api/item/[key]/route
 import ItemPage from "@/components/features/newlib/ItemPage";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
-import { ADMIN_CONTENT_PERMISSION, adminSessionCookieName, authorizeAdminSession } from "@/lib/admin/access";
+import { ADMIN_CONTENT_PERMISSION, authorizeAdminRequest } from "@/lib/admin/access";
 import { adminErrorDetails } from "@/lib/admin/http";
 import { previewItem } from "@/lib/admin/item-preview";
 import { withTopicNames } from "@/lib/topics/server";
@@ -34,7 +34,7 @@ function PreviewMessage({ children }: { children: ReactNode }) {
 
 /** Whether this admin may preview. An access check outage is an error to retry, not a missing page. */
 async function canPreview() {
-	const authorization = await authorizeAdminSession((await cookies()).get(adminSessionCookieName())?.value, ADMIN_CONTENT_PERMISSION);
+	const authorization = await authorizeAdminRequest(await headers(), ADMIN_CONTENT_PERMISSION);
 	if (authorization.status === "unavailable") throw new Error("OpenScholar access verification is temporarily unavailable");
 	return authorization.status === "authorized";
 }

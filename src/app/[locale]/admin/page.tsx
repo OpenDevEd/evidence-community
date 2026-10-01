@@ -1,8 +1,9 @@
 import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { AdminNoAccess } from "@/components/admin/AdminNoAccess";
 import { AdminSessionProvider } from "@/components/admin/AdminSessionProvider";
 import AdminWorkbench from "@/components/admin/AdminWorkbench";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -10,23 +11,14 @@ import {
 	buildRuntimeLocalizedPathname,
 	type PlatformLocale,
 } from "@/i18n/runtime";
-import {
-	ADMIN_CONTENT_PERMISSION,
-	adminSessionCookieName,
-	authorizeAdminSession,
-	getAdminAccessConfig,
-} from "@/lib/admin/access";
+import { ADMIN_CONTENT_PERMISSION, authorizeAdminRequest } from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
-import {
-	ADMIN_HOME_PATH,
-	buildAdminLoginPageUrl,
-} from "@/lib/runtime-routing";
+import { ADMIN_HOME_PATH, buildAdminSignInPath } from "@/lib/runtime-routing";
 
-/** The library's source settings in OpenScholar, beside the admin entry OpenScholar gave this library. */
-function openScholarConfigurationHref(loginPageUrl: string) {
-	const url = new URL(loginPageUrl);
-	// OpenScholar hands out the library's `/admin` entry; a bare library path works too.
-	url.pathname = `${url.pathname.replace(/\/(admin\/?)?$/u, "")}/configuration`;
+/** The library's source settings on OpenScholar's page for this library. */
+function openScholarConfigurationHref(libraryUrl: string) {
+	const url = new URL(libraryUrl);
+	url.pathname = `${url.pathname.replace(/\/$/u, "")}/configuration`;
 	url.search = "?section=sources";
 	url.hash = "";
 	return url.toString();
@@ -48,29 +40,22 @@ export default async function AdminPage({
 		}
 	}
 
-	const cookieStore = await cookies();
-	const adminConfig = await getAdminAccessConfig();
-	const authorization = await authorizeAdminSession(
-		cookieStore.get(adminSessionCookieName())?.value,
-		ADMIN_CONTENT_PERMISSION,
-		adminConfig,
-	);
+	const config = await getLibraryConfig();
+	const authorization = await authorizeAdminRequest(await headers(), ADMIN_CONTENT_PERMISSION, config);
 	if (authorization.status === "unavailable") throw new Error("OpenScholar access verification is temporarily unavailable");
+	if (authorization.status === "no_access") return <AdminNoAccess organisationName={authorization.organisationName} />;
 	if (authorization.status !== "authorized") {
+		// The proxy sends a request without a session cookie to sign-in first;
+		// this covers a cookie whose session has ended.
 		const { locale } = await params;
-		const { localization } = await getLibraryConfig();
+		const { localization } = config;
 		const pathname = buildRuntimeLocalizedPathname(
 			ADMIN_HOME_PATH,
 			locale,
 			localization.defaultLocale,
 		);
 		const query = urlSearchParams.toString();
-		redirect(
-			buildAdminLoginPageUrl(
-				adminConfig.loginPageUrl,
-				query ? `${pathname}?${query}` : pathname,
-			),
-		);
+		redirect(buildAdminSignInPath(query ? `${pathname}?${query}` : pathname));
 	}
 
 	const definitions = getZoteroSchema().itemTypes.map((definition) => ({
@@ -82,7 +67,7 @@ export default async function AdminPage({
 	return (
 		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId }}>
 		<AdminWorkbench
-			configurationHref={openScholarConfigurationHref(adminConfig.loginPageUrl)}
+			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
 		/>
