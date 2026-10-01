@@ -275,7 +275,9 @@ Owner of sessions, reader data and the profile privacy rule: new-el.
 
 After phase 2, on the same session:
 
-- The profile page from the mock (decision 14) replaces `Profile.tsx`.
+- The profile page from the mock (decision 14) replaces `Profile.tsx`. Its
+  data lists a private collection only to its owner (today
+  `getProfileForConfig` returns every collection's name to visitors).
 - `PATCH /api/user/collections/[id]` and the collection dialog
   (decision 15); create and delete move to the new session.
 - The chat's result set gains an optional reader list (reader ID and
