@@ -344,13 +344,13 @@ const WORLD_FILES = ["/features.json", "/antarctica.json"];
 let world: Promise<World | null> | undefined;
 
 /** The outlines, fetched once per page load; the page preloads both files, so this usually finds them downloaded. A failure is
- * logged and leaves the map out rather than breaking the page; the next visit to the map tries again. */
+ * logged and leaves the map out for this page load rather than breaking the page; the failure stays cached, so Suspense
+ * doesn't fetch again on every retry. */
 function loadWorld() {
 	world ??= Promise.all(WORLD_FILES.map((url) => fetch(url).then(jsonOf)))
 		.then(([topology, antarctica]) => ({ countries: feature(topology, topology.objects.world).features as Feature[], antarctica: antarctica.features }))
 		.catch((error: unknown) => {
 			console.error("Map: the world outlines could not be loaded", error);
-			world = undefined;
 			return null;
 		});
 	return world;
@@ -397,21 +397,26 @@ function GlobeView({ view, world, offset, inert, renderCountry }: { view: View; 
 	useEffect(() => {
 		const element = stage.current!;
 		const moving = layer.current!;
-		let from = zoomIdentity;
+		// The zoom the SVG was last drawn at. Gestures can overlap (a drag starting while a wheel gesture is settling), so every frame
+		// moves the layer from this, and a gesture's end redraws the SVG at the zoom as it is then.
+		let committed = zoomTransform(element);
+		let active = 0;
 		const behaviour = zoom<HTMLDivElement, unknown>()
 			.scaleExtent([view.minZoom, 12])
 			.duration(0)
 			.on("start", () => {
-				from = zoomTransform(element);
+				active += 1;
 				moving.style.willChange = "transform";
 			})
 			.on("zoom", (event: { transform: ZoomTransform }) => {
-				moving.style.transform = cssTransform(from, event.transform);
+				moving.style.transform = cssTransform(committed, event.transform);
 			})
 			.on("end", (event: { transform: ZoomTransform }) => {
-				flushSync(() => setTransform(event.transform));
+				active -= 1;
+				committed = event.transform;
+				flushSync(() => setTransform(committed));
 				moving.style.transform = "";
-				moving.style.willChange = "";
+				if (!active) moving.style.willChange = "";
 			});
 		select(element).call(behaviour);
 		return () => {
@@ -422,7 +427,8 @@ function GlobeView({ view, world, offset, inert, renderCountry }: { view: View; 
 	return (
 		<div ref={stage} className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)` }} inert={inert}>
 			<div ref={layer} className="size-full origin-top-left animate-fade-in motion-reduce:animate-none" style={{ "--map-k": transform.k } as React.CSSProperties}>
-				<svg width={width + 2 * pad} height={height + 2 * pad} className="block">
+				{/* Not clipped to its box: while a gesture moves the layer, the geography beyond the box slides into view instead of blank space. */}
+				<svg width={width + 2 * pad} height={height + 2 * pad} overflow="visible" className="block">
 					<defs>
 						{/* The sea is lit from above the middle and darkens towards the rim, so the flat projection reads as a globe. */}
 						<radialGradient id="map-sea-shade" cx="50%" cy="42%" r="66%">
