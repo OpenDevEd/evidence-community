@@ -67,8 +67,11 @@ Libraries carry two separate login systems and neither is right:
    {organisation} to add you to the team that runs this library." The 403 from
    `admin-session/check` returns the organisation name. "Not set up yet" stays
    on OpenScholar's Open admin button.
-8. Public profiles and `/api/user/items/[id]` stay public and show the name and
-   avatar only. No response ever sends one reader's email to anyone else. An
+8. Public profiles and `/api/user/items/[id]` stay public and identify the
+   reader by name and avatar only. No response ever sends one reader's email
+   to anyone else. (Clarified 2026-10-01: a profile also shows the reader's
+   bookmarks, public collections and the counts decision 14 lists; private
+   collections stay with their owner.) An
    empty name shows as "Reader". The reader's own menu shows "Add your name",
    linking to the Clerk account page of the instance the library signs in
    with. OpenScholar writes it as `authentication.openScholar.accountUrl`
@@ -220,7 +223,7 @@ library takes it with its next publish.
 
 ### 2b. OpenScholar: contract sync (OpenDevEd/openalex-count#375)
 
-After phase 2 merges:
+After phases 2 and 2c merge:
 
 - Sync OpenScholar's configuration contract to the phase 2 commit.
 - Assembly writes `authentication.openScholar.oauth: { issuer, clientId,
@@ -273,13 +276,18 @@ Owner of sessions, reader data and the profile privacy rule: new-el.
 
 ### 2c. new-el: profile, collections and chat (OpenDevEd/new-el#93)
 
-After phase 2, on the same session:
+Ships in the same new-el release as phase 2, before phase 2b pins the
+contract, so every development library receives it with one publish. On the
+same session:
 
 - The profile page from the mock (decision 14) replaces `Profile.tsx`. Its
   data lists a private collection only to its owner (today
   `getProfileForConfig` returns every collection's name to visitors).
 - `PATCH /api/user/collections/[id]` and the collection dialog
-  (decision 15); create and delete move to the new session.
+  (decision 15); create and delete move to the new session. Adding a record
+  to a collection, editing and deleting all check that the signed-in reader
+  owns the collection (today `POST /api/user/item/[key]` accepts any
+  collection ID).
 - The chat's result set gains an optional reader list (reader ID and
   collection). The chat's result tool applies `getProfileSearchFilter` to it
   and refuses a private collection the asker cannot see (decisions 16
@@ -317,7 +325,9 @@ and the old readiness answer. Open admin links straight to the library's
   development Clerk in a real browser: sign in from the button, `/admin`
   redirect through `/api/admin/sign-in`, no-access page, rename in OpenScholar reaches the library, delete
   the Clerk user while they are away and the reader data disappears from the
-  library without them visiting it. Sign-up is checked once by a
+  library without them visiting it. On the same preview: bookmark a record,
+  create, edit and delete a collection, switch collections on desktop and on a
+  phone, and ask the chat about a collection. Sign-up is checked once by a
   person because Clerk's captcha blocks automation.
 
 ## Done when
