@@ -115,7 +115,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 									aria-label={t("bookmarksListAriaLabel")}
 									color="secondary"
 									placement="left"
-									className="lg:hidden"
+									className="max-w-full lg:hidden"
 									disallowEmptySelection
 									selectedKeys={[selected || "all"]}
 									onSelectionChange={(keys) => {

@@ -62,10 +62,7 @@ function LibraryFilters({
 	return (
 		<section
 			role="search"
-			className={twMerge(
-				"lg:flex lg:flex-row gap-4",
-				itemsContext.userData ? "grid grid-cols-2" : "flex flex-col",
-			)}
+			className="flex flex-col gap-4 lg:flex-row"
 		>
 			<SearchBar
 				handleSearchChange={itemsContext.handleSearchChange}
@@ -89,9 +86,6 @@ function LibraryFilters({
 				}
 			/>
 			<ScopeComponent itemsContext={itemsContext} />
-			{itemsContext.userData ? (
-				<SortComponent itemsContext={itemsContext} />
-			) : null}
 			{extraFilters}
 		</section>
 	);
@@ -144,13 +138,7 @@ function SearchTabContent({
 	return (
 		<div className="flex flex-col gap-4">
 			{/* Header with title and explore button */}
-			<div
-				className={twMerge(
-					"flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative",
-					// A reader's list has no Explore button to make room for under the title.
-					itemsContext.userData && "h-10",
-				)}
-			>
+			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
 				<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
 					<SkipLink href="#collections">
 						{t("goToFilters")}
@@ -178,26 +166,22 @@ function SearchTabContent({
 					)}
 				</div>
 				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
-					{!itemsContext.userData && (
-						<>
-							<Button
-								className="h-full font-medium text-base !p-0"
-								isIconOnly
-								onPress={onHelpOpen}
-								aria-label={t("helpAriaLabel")}
-							>
-								<BiHelpCircle
-									aria-label={t("helpIconAriaLabel")}
-									className="size-6"
-								/>
-							</Button>
-							<HelpModal
-								isOpen={isHelpOpen}
-								onOpenChange={onHelpOpenChange}
-							/>
-							{<SortComponent itemsContext={itemsContext} />}
-						</>
-					)}
+					<Button
+						className="h-full font-medium text-base !p-0"
+						isIconOnly
+						onPress={onHelpOpen}
+						aria-label={t("helpAriaLabel")}
+					>
+						<BiHelpCircle
+							aria-label={t("helpIconAriaLabel")}
+							className="size-6"
+						/>
+					</Button>
+					<HelpModal
+						isOpen={isHelpOpen}
+						onOpenChange={onHelpOpenChange}
+					/>
+					<SortComponent itemsContext={itemsContext} />
 				</div>
 			</div>
 
