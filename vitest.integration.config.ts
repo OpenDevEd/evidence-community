@@ -29,6 +29,7 @@ export default defineConfig({
             "tests/integration/notifications.test.ts",
             "tests/integration/public-library-status.test.ts",
             "tests/integration/reader-collection-privacy.test.ts",
+            "tests/integration/reader-accounts.test.ts",
             "tests/integration/public-item-read.test.ts",
             "tests/integration/reviewed-publications.test.ts",
             "tests/integration/zotero-citations.test.ts",

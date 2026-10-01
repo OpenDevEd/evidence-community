@@ -22,7 +22,7 @@ function renderMenu({links = false, gapMaps = false, controls = false} = {}) {
 	return renderToStaticMarkup(
 		<NextIntlClientProvider locale="en-GB" messages={messages} timeZone="UTC">
 			<LibraryConfigProvider config={config}>
-				<MobileMenu elements={elements} pathname="/digests" context={{session: null, styleVariant: "small", theme: "light", setTheme: () => {}, onLoginModalOpen: () => {}}} />
+				<MobileMenu elements={elements} pathname="/digests" context={{session: null, styleVariant: "small", theme: "light", setTheme: () => {}}} />
 			</LibraryConfigProvider>
 		</NextIntlClientProvider>,
 	);

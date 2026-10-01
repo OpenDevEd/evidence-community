@@ -1,6 +1,6 @@
 // fallow-ignore-file unused-file
 // Docker Compose starts this fixture directly; it is not imported by TypeScript.
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
 const port = Number(process.env.PORT ?? 4000);
@@ -8,7 +8,6 @@ const storageBytes = Buffer.from(
 	"Evidence Library publication acceptance PDF\n",
 );
 const depositions = new Map();
-const adminLoginCodes = new Map();
 const adminUsers = { editor: "user_acceptance_admin", creator: "user_acceptance_creator", owner: "user_acceptance_owner" };
 function requiredEnvironment(name) {
 	const value = process.env[name];
@@ -25,10 +24,6 @@ const openScholarLibraries = new Map([
 		requiredEnvironment("OPENSCHOLAR_INDIGO_LIBRARY_ID"),
 	],
 ]);
-const openScholarLibraryIds = new Set(openScholarLibraries.values());
-const defaultOpenScholarLibraryId = requiredEnvironment(
-	"OPENSCHOLAR_AMBER_LIBRARY_ID",
-);
 let nextDepositionId = 7001;
 let crossrefXml = null;
 let crossrefDeposits = 0;
@@ -145,30 +140,25 @@ const server = createServer(async (request, response) => {
 			issued: { "date-parts": [[2026]] },
 		})));
 	}
-	if (url.pathname === "/_test/admin-login-codes" && method === "POST") {
-		const bytes = await readBody(request);
-		let libraryId = defaultOpenScholarLibraryId;
-		let role = "editor";
-		if (bytes.byteLength > 0) {
-			try {
-				const input = JSON.parse(bytes.toString("utf8"));
-				libraryId = input.libraryId ?? defaultOpenScholarLibraryId;
-				role = input.role ?? "editor";
-			} catch {
-				return json(response, 400, { error: "invalid_request" });
-			}
-		}
-		if (!Object.hasOwn(adminUsers, role)) return json(response, 400, { error: "invalid_role" });
-		if (!openScholarLibraryIds.has(libraryId)) {
-			return json(response, 400, { error: "invalid_library" });
-		}
-		const code = `elc_${randomBytes(32).toString("base64url")}`;
-		adminLoginCodes.set(code, { libraryId, role });
-		return json(response, 201, { code });
+	// The library's OAuth client discovers OpenScholar's Clerk instance here.
+	// Browser suites sign in through Better Auth's test helpers, so the
+	// authorization page only has to exist for the redirect to be checked.
+	if (url.pathname === "/.well-known/openid-configuration") {
+		const origin = `https://${request.headers.host}`;
+		return json(response, 200, {
+			issuer: origin,
+			authorization_endpoint: `${origin}/oauth/authorize`,
+			token_endpoint: `${origin}/oauth/token`,
+			userinfo_endpoint: `${origin}/oauth/userinfo`,
+			response_types_supported: ["code"],
+			code_challenge_methods_supported: ["S256"],
+		});
+	}
+	if (url.pathname === "/oauth/authorize") {
+		return text(response, 200, "OpenScholar sign-in", "text/plain");
 	}
 	if (url.pathname === "/_test/state") {
 		return json(response, 200, {
-			adminLoginCodes: adminLoginCodes.size,
 			crossrefDeposits,
 			crossref: crossrefXml
 				? {
@@ -186,7 +176,7 @@ const server = createServer(async (request, response) => {
 	}
 
 	if (
-		["/api/v1/evidence-libraries/admin-login/redeem", "/api/v1/evidence-libraries/admin-session/check"].includes(url.pathname) &&
+		["/api/v1/evidence-libraries/admin-session/check", "/api/v1/evidence-libraries/reader-status"].includes(url.pathname) &&
 		method === "POST"
 	) {
 		const credential =
@@ -204,27 +194,14 @@ const server = createServer(async (request, response) => {
 		} catch {
 			return json(response, 400, { error: "invalid_request" });
 		}
-    if (url.pathname === "/api/v1/evidence-libraries/admin-session/check") {
-      const role = Object.keys(adminUsers).find(role => adminUsers[role] === body?.clerkUserId);
-      if (body?.libraryId !== credentialLibraryId || !role) return json(response, 403, { error: "access_revoked" });
-      return json(response, 200, { role });
-    }
-		if (
-			body?.libraryId !== credentialLibraryId ||
-			typeof body?.code !== "string" ||
-			adminLoginCodes.get(body.code)?.libraryId !== credentialLibraryId
-		) {
-			return json(response, 400, { error: "invalid_login_code" });
+		if (url.pathname === "/api/v1/evidence-libraries/reader-status") {
+			return json(response, 200, { status: "active" });
 		}
-		const { role } = adminLoginCodes.get(body.code);
-		adminLoginCodes.delete(body.code);
-		return json(response, 200, {
-			libraryId: credentialLibraryId,
-			clerkUserId: adminUsers[role],
-			clerkOrganizationId: "org_acceptance",
-			role,
-			consumedAt: Date.now(),
-		});
+		const role = Object.keys(adminUsers).find((name) => adminUsers[name] === body?.clerkUserId);
+		if (body?.libraryId !== credentialLibraryId || !role) {
+			return json(response, 403, { error: "access_revoked", organisationName: "Acceptance organisation" });
+		}
+		return json(response, 200, { role });
 	}
 
 	if (url.pathname.startsWith("/storage/v1/object/")) {

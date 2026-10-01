@@ -7,10 +7,6 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next-auth", () => ({
-	default: () => ({ auth: vi.fn(), handlers: {} }),
-}));
-vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }));
 vi.mock("nuqs", () => ({ useQueryState: () => [null, vi.fn()] }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/lib" }));
 vi.mock("@/i18n/routing", () => ({

@@ -28,8 +28,11 @@ export default function ItemsList({
 	extraFilters,
 	props,
 	contentId,
+	header,
 }: {
 	contentId?: string;
+	/** The list's heading, in place of the library's own. */
+	header?: ReactNode;
 	userData?: any;
 	extraFilters?: ReactNode;
 	props: ReturnType<typeof useItemsList>;
@@ -41,6 +44,7 @@ export default function ItemsList({
 		<ItemsContext.Provider value={props}>
 			<ResourcesView
 				contentId={contentId}
+				header={header}
 				extraFilters={extraFilters}
 				{...(!userData
 					? {}

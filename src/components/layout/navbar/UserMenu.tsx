@@ -1,86 +1,180 @@
 "use client";
 
+import type { ComponentProps } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { useSession, signOut } from "next-auth/react";
-import {
-	Avatar,
-	DropdownItem,
-	DropdownMenu,
-	DropdownTrigger,
-} from "@nextui-org/react";
+import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
+import OpenScholar from "@/components/icons/OpenScholar";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useRouter } from "@/i18n/routing";
+import { twMerge } from "@/lib/tw-merge";
 import type { NavbarElementProps } from "@/types/navbar";
+import { useOpenScholarAccountUrl, useReaderSession, type Reader } from "./ReaderSession";
+import {
+	NavbarMenuIcon,
+	navbarMenuClasses,
+	navbarMenuDropdownClasses,
+	navbarMenuItemClasses,
+	navbarMenuSectionClasses,
+} from "./menuStyles";
 
-export default function UserMenu({ variant, styleVariant }: NavbarElementProps) {
-	const { data: session } = useSession();
+type Translate = ReturnType<typeof useTranslations<"ui">>;
+
+/** A reader without a name in OpenScholar shows as "Reader", never as their email. */
+export function readerDisplayName(reader: Reader, t: Translate) {
+	return reader.name.trim() || t("readerFallbackName");
+}
+
+function initials(name: string) {
+	return name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
+}
+
+/** As the menu trigger it is the button itself, which is what the dropdown needs. */
+export function ReaderAvatar({
+	reader,
+	size = "md",
+	asTrigger = false,
+	...triggerProps
+}: { reader: Reader; size?: "sm" | "md" | "lg"; asTrigger?: boolean } & Omit<
+	ComponentProps<typeof Avatar>,
+	"size" | "as"
+>) {
+	const t = useTranslations("ui");
+	return (
+		<Avatar
+			// The dropdown trigger hands its press handler and ref through here.
+			{...triggerProps}
+			as={asTrigger ? "button" : "span"}
+			{...(asTrigger ? { "aria-label": t("userMenuAriaLabel") } : {})}
+			size={size}
+			getInitials={initials}
+			src={reader.image ?? undefined}
+			// A named reader shows initials; one without a name shows a person.
+			name={reader.name.trim() || undefined}
+			{...(reader.name.trim()
+				? {}
+				: {
+						showFallback: true,
+						fallback: <HugeiconsIcon icon={UserIcon} className="size-5 text-accent" aria-hidden />,
+					})}
+			alt={t("userAvatarAlt", { name: readerDisplayName(reader, t) })}
+			classNames={{ base: twMerge("shrink-0 bg-accent/10 text-accent font-medium", asTrigger && "cursor-pointer") }}
+		/>
+	);
+}
+
+/**
+ * The signed-in reader's rows, in the groups both header menus show them:
+ * who is signed in, their account, and signing out.
+ */
+export function readerMenuGroups(input: {
+	reader: Reader;
+	t: Translate;
+	accountUrl: string;
+	/** Absent when the library has no reader profiles, as for an admin of a library with reader accounts off. */
+	onProfile?: () => void;
+	onSignOut: () => void;
+}) {
+	const { reader, t } = input;
+	const openAccount = () => window.open(input.accountUrl, "_blank", "noopener");
+	const external = <NavbarMenuIcon icon={ArrowUpRight01Icon} className="size-4 text-foreground/40 dark:text-white/40" />;
+	const name = readerDisplayName(reader, t);
+	return {
+		identity: (
+			<DropdownItem
+				key="reader"
+				isReadOnly
+				textValue={name}
+				className="h-auto py-2 cursor-default data-[hover=true]:bg-transparent dark:data-[hover=true]:bg-transparent"
+			>
+				<span className="flex items-center gap-3">
+					<ReaderAvatar reader={reader} size="sm" />
+					<span className="min-w-0">
+						<span className="block truncate text-medium font-semibold text-foreground dark:text-white">{name}</span>
+						<span className="mt-0.5 flex items-center gap-1 text-tiny text-foreground/45 dark:text-white/40">
+							<OpenScholar monochrome aria-hidden className="size-3" />
+							{t("signedInWithOpenScholar")}
+						</span>
+					</span>
+				</span>
+			</DropdownItem>
+		),
+		account: [
+			...(reader.name.trim()
+				? []
+				: [
+						<DropdownItem
+							key="add-name"
+							onPress={openAccount}
+							startContent={<NavbarMenuIcon icon={UserEdit01Icon} />}
+							endContent={external}
+						>
+							{t("addYourName")}
+						</DropdownItem>,
+					]),
+			...(input.onProfile
+				? [
+						<DropdownItem key="profile" onPress={input.onProfile} startContent={<NavbarMenuIcon icon={UserIcon} />}>
+							{t("profileMenuItem")}
+						</DropdownItem>,
+					]
+				: []),
+			<DropdownItem
+				key="account"
+				onPress={openAccount}
+				startContent={<OpenScholar monochrome aria-hidden className="size-5 shrink-0 text-foreground/60 dark:text-white/60" />}
+				endContent={external}
+			>
+				{t("openScholarAccount")}
+			</DropdownItem>,
+		],
+		signOut: (
+			<DropdownItem
+				key="logout"
+				onPress={input.onSignOut}
+				startContent={<NavbarMenuIcon icon={Logout01Icon} className="text-danger dark:text-danger" />}
+				className="text-danger dark:text-danger"
+			>
+				{t("signOut")}
+			</DropdownItem>
+		),
+	};
+}
+
+export default function UserMenu({ variant }: NavbarElementProps) {
+	const { reader, signOut } = useReaderSession();
+	const accountUrl = useOpenScholarAccountUrl();
 	const router = useRouter();
 	const t = useTranslations("ui");
+	const hasProfiles = useLibraryFeature("readerAccounts");
 
-	// Don't render if user is not logged in
-	if (!session) return null;
+	if (!reader) return null;
 
-	const userName =
-		session.user?.name || session.user?.email || t("genericUser");
-	const userImage = session.user?.image ?? "/icons/profile.png";
+	const groups = readerMenuGroups({
+		reader,
+		t,
+		accountUrl,
+		onProfile: hasProfiles ? () => router.push(`/profile/${reader.id}`) : undefined,
+		onSignOut: signOut,
+	});
 
-	const handleAction = (key: React.Key) => {
-		if (key === "logout") {
-			signOut({ redirect: false });
-		} else if (key === "profile") {
-			router.push(`/profile/${session.user?.id}`);
-		}
-	};
+	if (variant === "menuItem") return <>{[groups.identity, ...groups.account, groups.signOut]}</>;
 
-	// Menu item variant - returns dropdown items for profile and logout
-	if (variant === "menuItem") {
-		return (
-			<>
-				<DropdownItem
-					key="profile"
-					onPress={() => router.push(`/profile/${session.user?.id}`)}
-					startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}
-				>
-					{t("profileMenuItem")}
-				</DropdownItem>
-				<DropdownItem
-					key="logout"
-					color="danger"
-					onPress={() => signOut({ redirect: false })}
-					startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
-					className="text-danger"
-				>
-					{t("logout")}
-				</DropdownItem>
-			</>
-		);
-	}
-
-	// Inline variant - Avatar with dropdown
 	return (
-		<Dropdown>
+		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses}>
 			<DropdownTrigger>
-				<Avatar
-					as="button"
-					className="cursor-pointer transition-transform"
-					src={userImage}
-					alt={t("userAvatarAlt", { name: userName })}
-				/>
+				<ReaderAvatar reader={reader} asTrigger />
 			</DropdownTrigger>
-			<DropdownMenu onAction={handleAction} aria-label={t("userMenuAriaLabel")}>
-				<DropdownItem key="profile" startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}>
-					{t("profileMenuItem")}
-				</DropdownItem>
-				<DropdownItem
-					key="logout"
-					color="danger"
-					startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
-					className="text-danger"
-				>
-					{t("logout")}
-				</DropdownItem>
+			<DropdownMenu aria-label={t("userMenuAriaLabel")} classNames={navbarMenuClasses} itemClasses={navbarMenuItemClasses}>
+				<DropdownSection showDivider classNames={navbarMenuSectionClasses}>
+					{groups.identity}
+				</DropdownSection>
+				<DropdownSection showDivider classNames={navbarMenuSectionClasses}>
+					{groups.account}
+				</DropdownSection>
+				<DropdownSection classNames={navbarMenuSectionClasses}>{groups.signOut}</DropdownSection>
 			</DropdownMenu>
 		</Dropdown>
 	);

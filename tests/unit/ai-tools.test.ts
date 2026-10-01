@@ -252,6 +252,24 @@ describe("searching the library for the assistant", () => {
 		expect(result.currentResults.total).toBe(2);
 	});
 
+	it("reads only the records of a reader's list on their profile", async () => {
+		search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
+		const tools = createResearchTools(
+			"quick",
+			config,
+			normalizeLibrarySearchContext({ readerList: { userId: "reader-amina", collectionId: "" } }),
+			"request-1",
+			["SAVED001", "SAVED002"],
+		);
+
+		await tools.searchLibrary.execute?.(
+			searchInput("quick", { queries: [], withinCurrentResults: true }),
+			{ messages: userMessages("compare these") } as never,
+		);
+
+		expect(searchOptions().filter).toEqual(expect.arrayContaining(['key IN ["SAVED001","SAVED002"]']));
+	});
+
 	it("keeps the reader's topic filter when reading their results", async () => {
 		search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
 		const tools = createResearchTools(

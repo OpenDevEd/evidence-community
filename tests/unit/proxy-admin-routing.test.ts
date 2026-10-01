@@ -23,11 +23,10 @@ import proxy from "@/proxy";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
-const loginPageUrl =
-	"https://openscholar.example.org/evidence-libraries/minimal";
+const signInUrl = "http://localhost/api/admin/sign-in";
 
-function adminRequest(url: string, method = "GET") {
-	return new NextRequest(`http://localhost${url}`, { method });
+function adminRequest(url: string, method = "GET", cookie?: string) {
+	return new NextRequest(`http://localhost${url}`, { method, headers: cookie ? { cookie } : undefined });
 }
 
 function publicAliasRequest(url: string) {
@@ -48,13 +47,20 @@ beforeEach(() => {
 });
 
 describe("admin requests through the proxy", () => {
-	it("sends a signed-out visitor to OpenScholar with the page to come back to", async () => {
+	it("sends a signed-out visitor to the library's sign-in with the page to come back to", async () => {
 		const response = await proxy(adminRequest("/admin?scope=drafts"));
 
 		expect(response.status).toBe(307);
 		expect(response.headers.get("location")).toBe(
-			`${loginPageUrl}?return=%2Fadmin%3Fscope%3Ddrafts`,
+			`${signInUrl}?return=%2Fadmin%3Fscope%3Ddrafts`,
 		);
+	});
+
+	it("lets a request with a session cookie reach the page, which checks the session and role", async () => {
+		const response = await proxy(adminRequest("/admin", "GET", "evidence-library.session_token=signed-token"));
+
+		expect(response.headers.get("location")).toBeNull();
+		expect(response.status).not.toBe(307);
 	});
 
 	it("answers a HEAD request the same way", async () => {
@@ -62,7 +68,7 @@ describe("admin requests through the proxy", () => {
 
 		expect(response.status).toBe(307);
 		expect(response.headers.get("location")).toBe(
-			`${loginPageUrl}?return=%2Fadmin`,
+			`${signInUrl}?return=%2Fadmin`,
 		);
 	});
 
@@ -85,7 +91,7 @@ describe("admin requests through the proxy", () => {
 		expect(response.headers.get("allow")).toBe("GET, HEAD");
 	});
 
-	it("drops a switched-off locale before leaving for OpenScholar", async () => {
+	it("drops a switched-off locale before starting sign-in", async () => {
 		const response = await proxy(adminRequest("/pt/admin?sort=date_desc"));
 
 		expect(response.status).toBe(307);
@@ -98,7 +104,7 @@ describe("admin requests through the proxy", () => {
 		const response = await proxy(adminRequest("/en-GB/admin/items"));
 
 		expect(response.headers.get("location")).toBe(
-			`${loginPageUrl}?return=%2Fen-GB%2Fadmin%2Fitems`,
+			`${signInUrl}?return=%2Fen-GB%2Fadmin%2Fitems`,
 		);
 	});
 });

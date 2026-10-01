@@ -159,7 +159,7 @@ export default function NavLinks({
 			className={twMerge(
 				"flex items-center justify-end gap-6",
 				isMobile && "flex-col gap-8 px-8",
-				!isMobile && "hidden xl:flex"
+				!isMobile && "nf-links"
 			)}
 		>
 			{links.map((link) => (

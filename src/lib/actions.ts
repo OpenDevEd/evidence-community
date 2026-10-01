@@ -2,19 +2,16 @@
 
 import { filterPublicAttachments } from "./tags";
 
-import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { InferSelectModel } from "drizzle-orm";
-import { Session } from "next-auth";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { exportCitationItems } from "@/lib/citation-export";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
-	getUserCollectionKeysDirect,
-	getUserLikesDirect,
 } from "@/app/api/cache";
-import { auth } from "@/app/api/auth/[...nextauth]/config";
+import { getDatabaseForConfig } from "@/db";
+import { readReaderListKeys } from "@/lib/readers/data";
+import { getSignedInReader } from "@/lib/readers/session";
 import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
 import { inferParserType } from "nuqs";
@@ -36,8 +33,6 @@ import { getRuntimeSearchFacets } from "@/config/library-config/search";
 import { AIError } from "@/lib/ai/errors";
 import { resolveAIModel } from "@/lib/ai/model-resolution";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
-import type { CredentialsInput } from "@/lib/auth-credentials";
-import { authorizeForConfig } from "@/lib/auth-service";
 import { meilisearchEquals, meilisearchIn } from "@/lib/meilisearch-filter";
 
 export async function areLinksValid(links: string[]) {
@@ -61,13 +56,6 @@ export async function areLinksValid(links: string[]) {
 	return validity;
 }
 
-export async function authorize(
-	props: CredentialsInput,
-): Promise<{ error: string } | { success: true }> {
-	const result = await authorizeForConfig(props, await getLibraryConfig());
-	return "error" in result ? result : { success: true };
-}
-
 export async function getItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	userId: string | null = null,
@@ -75,13 +63,19 @@ export async function getItems(
 	const collections = searchParams.collections || [];
 	const libraryConfig = await getLibraryConfig();
 
-	const userFilters = await getProfileSearchFilter(
-		userId,
-		searchParams.collectionId || "",
-	);
-	// Without its filter the search would list the whole library, so a
-	// collection the caller may not see is refused instead.
-	if (userFilters.status) return { refused: userFilters.status };
+	let readerFilter: string[] = [];
+	if (userId) {
+		if (!libraryConfig.features.readerAccounts) return { refused: 404 as const };
+		const list = await readReaderListKeys(
+			await getDatabaseForConfig(libraryConfig),
+			{ userId, collectionId: searchParams.collectionId || "" },
+			(await getSignedInReader(undefined, libraryConfig))?.id ?? null,
+		);
+		// Without its filter the search would list the whole library, so a
+		// collection the caller may not see is refused instead.
+		if ("refused" in list) return list;
+		readerFilter = [meilisearchIn("key", list.keys)];
+	}
 
 	const facets = getRuntimeSearchFacets(
 		libraryConfig.search,
@@ -96,67 +90,9 @@ export async function getItems(
 			...collections.map((collection: string) =>
 				meilisearchEquals("collectionsAncestry", collection),
 			),
-			...(userFilters?.filter ? userFilters.filter : []),
+			...readerFilter,
 		],
 	);
-}
-
-export async function getProfileSearchFilter(
-	id: string | null,
-	collectionId: string | null,
-) {
-	if (!collectionId && !id) {
-		return { filter: null };
-	}
-
-	const [session, collectionKeys, likes] = (await Promise.all([
-		auth(),
-		collectionId ? getUserCollectionKeysDirect(collectionId) : null,
-		id && !collectionId ? getUserLikesDirect(id) : null,
-	])) as [Session | null, any, any];
-
-	if (collectionId) {
-		if (!collectionKeys) {
-			return { filter: null, status: 404 };
-		}
-
-		if (collectionKeys.private) {
-			const userId = session?.user?.id;
-
-			if (!id) {
-				return { filter: null, status: 401 };
-			}
-
-			if (collectionKeys.userId !== userId) {
-				return { filter: null, status: 403 };
-			}
-		}
-
-		return {
-			filter: [meilisearchIn("key", collectionKeys.itemKeys)],
-		};
-	}
-
-	if (likes) {
-		return {
-			filter: [
-				meilisearchIn(
-					"key",
-					likes
-						.filter(
-							(like: InferSelectModel<typeof usersToLikes>) =>
-								!like.deleted,
-						)
-						.map(
-							(like: InferSelectModel<typeof usersToLikes>) =>
-								like.itemKey,
-						),
-				),
-			],
-		};
-	}
-
-	return { filter: null };
 }
 
 export async function convertItem(

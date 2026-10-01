@@ -62,10 +62,7 @@ function LibraryFilters({
 	return (
 		<section
 			role="search"
-			className={twMerge(
-				"lg:flex lg:flex-row gap-4",
-				itemsContext.userData ? "grid grid-cols-2" : "flex flex-col",
-			)}
+			className="flex flex-col gap-4 lg:flex-row"
 		>
 			<SearchBar
 				handleSearchChange={itemsContext.handleSearchChange}
@@ -89,9 +86,6 @@ function LibraryFilters({
 				}
 			/>
 			<ScopeComponent itemsContext={itemsContext} />
-			{itemsContext.userData ? (
-				<SortComponent itemsContext={itemsContext} />
-			) : null}
 			{extraFilters}
 		</section>
 	);
@@ -152,41 +146,42 @@ function SearchTabContent({
 					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
 						{header || (showHeader && t("searchTitle"))}
 					</h1>
-					<Button
-						startContent={
-							<AiOutlineCompass className="size-6 shrink-0" />
-						}
-						className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
-						onPress={onExploreOpen}
-					>
-						{t("explore")}
-					</Button>
-					<ExploreModal
-						isOpen={isExploreOpen}
-						onOpenChange={onExploreOpenChange}
-					/>
-				</div>
-				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
+					{/* Explore browses the library's filters, which a reader's list does not have. */}
 					{!itemsContext.userData && (
 						<>
 							<Button
-								className="h-full font-medium text-base !p-0"
-								isIconOnly
-								onPress={onHelpOpen}
-								aria-label={t("helpAriaLabel")}
+								startContent={
+									<AiOutlineCompass className="size-6 shrink-0" />
+								}
+								className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
+								onPress={onExploreOpen}
 							>
-								<BiHelpCircle
-									aria-label={t("helpIconAriaLabel")}
-									className="size-6"
-								/>
+								{t("explore")}
 							</Button>
-							<HelpModal
-								isOpen={isHelpOpen}
-								onOpenChange={onHelpOpenChange}
+							<ExploreModal
+								isOpen={isExploreOpen}
+								onOpenChange={onExploreOpenChange}
 							/>
-							{<SortComponent itemsContext={itemsContext} />}
 						</>
 					)}
+				</div>
+				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
+					<Button
+						className="h-full font-medium text-base !p-0"
+						isIconOnly
+						onPress={onHelpOpen}
+						aria-label={t("helpAriaLabel")}
+					>
+						<BiHelpCircle
+							aria-label={t("helpIconAriaLabel")}
+							className="size-6"
+						/>
+					</Button>
+					<HelpModal
+						isOpen={isHelpOpen}
+						onOpenChange={onHelpOpenChange}
+					/>
+					<SortComponent itemsContext={itemsContext} />
 				</div>
 			</div>
 
@@ -338,9 +333,13 @@ export function ContentInteractions({
 	const itemsContext = use(ItemsContext);
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
 	const { isAISearchEnabled } = useIsAISearchEnabled();
-	const searchContext = itemsContext.userData
-		? undefined
-		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	// On a profile the chat works on the reader's list the page shows.
+	const searchContext = normalizeLibrarySearchContext({
+		...itemsContext.queryParams,
+		readerList: itemsContext.userData
+			? { userId: itemsContext.userData.id, collectionId: itemsContext.queryParams.collectionId ?? "" }
+			: null,
+	});
 	const askInline = useAskInlineChat(searchContext);
 	const { chatWindow, isChatOpen, onChatOpenChange, openChatWindow } =
 		useLibraryChatWindow();

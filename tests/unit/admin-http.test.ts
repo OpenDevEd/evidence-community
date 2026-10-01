@@ -3,23 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 vi.mock("server-only", () => ({}));
-
-const signingConfig = {
-	libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
-	secret: "12345678901234567890123456789012",
-};
+vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
 
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: () => ({
 		authentication: {
 			openScholar: {
 				convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
-				libraryId: signingConfig.libraryId,
-				loginPageUrl:
-					"https://openscholar.example.org/evidence-libraries/amber",
+				libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
 				machineCredential: `els_${"a".repeat(43)}`,
 			},
-			secret: signingConfig.secret,
 		},
 	}),
 }));
@@ -32,9 +25,8 @@ import {
 import {
 	ADMIN_CONTENT_PERMISSION,
 	ADMIN_LIBRARY_PERMISSION,
-	adminSessionCookieName,
-	createAdminSessionToken,
 } from "@/lib/admin/access";
+import { signedInHeaders } from "../helpers/reader-session";
 import { CollectionWritebackUnavailableError } from "@/lib/admin/collection-mutation-service";
 import { CollectionValidationError } from "@/lib/admin/native-collection-service";
 import {
@@ -66,27 +58,11 @@ function wrappedDatabaseError(code: string) {
 	return new DrizzleQueryError("insert into item", [], cause);
 }
 
+let signedInUser = 0;
+/** A request from someone signed in; OpenScholar's role answer is kept per person, so each is new. */
 function adminRequest(role?: "owner" | "editor") {
-	const token = role
-		? createAdminSessionToken(
-				{
-					clerkOrganizationId: "org_2abc",
-					clerkUserId: "user_2abc",
-					consumedAt: Date.now(),
-					libraryId: signingConfig.libraryId,
-					role,
-				},
-				signingConfig,
-			)
-		: undefined;
-	return {
-		cookies: {
-			get: (name: string) =>
-				name === adminSessionCookieName() && token
-					? { value: token }
-					: undefined,
-		},
-	};
+	signedInUser += 1;
+	return { headers: signedInHeaders(role ? `user_http_${signedInUser}` : undefined) };
 }
 
 describe("admin API session gate", () => {

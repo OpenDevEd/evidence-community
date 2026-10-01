@@ -184,9 +184,8 @@
   "features": {
     "themeSwitcher": false,
     "languageSwitcher": false,
-    "login": false,
+    "readerAccounts": false,
     "navbarSearch": false,
-    "userCollections": false,
     "ai": false,
     "aiSearch": false,
     "deepResearch": false,
@@ -275,11 +274,7 @@
   "analytics": {
     "utmDurationSeconds": 600
   },
-  "authentication": {
-    "google": {
-      "enabled": false
-    }
-  },
+  "authentication": {},
   "email": {
     "smtp": {}
   },

@@ -5,8 +5,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next-auth", () => ({ default: () => ({ auth: vi.fn(), handlers: {} }) }));
-vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }));
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: string) => key,
 	useLocale: () => "en",

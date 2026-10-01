@@ -34,6 +34,15 @@ export const librarySearchContextSchema = z
 		author: z.string().trim().max(300),
 		collections: filterValuesSchema,
 		topics: filterValuesSchema,
+		/** A reader's bookmarks, or one of their collections, when the list is on a profile. */
+		readerList: z
+			.object({
+				userId: z.string().trim().min(1).max(200),
+				collectionId: z.string().trim().max(64),
+			})
+			.strict()
+			.nullable()
+			.default(null),
 	})
 	.strict();
 
@@ -76,6 +85,7 @@ export function normalizeLibrarySearchContext(
 		author: (value.author ?? "").trim().slice(0, MAX_FILTER_VALUE_LENGTH),
 		collections: filterValues(value.collections),
 		topics: filterValues(value.topics),
+		readerList: value.readerList ?? null,
 	});
 }
 
@@ -92,5 +102,10 @@ export function librarySearchContextSummary(
 		author: context.author || undefined,
 		collections: context.collections,
 		topics: context.topics,
+		readerList: context.readerList
+			? context.readerList.collectionId
+				? "one of this reader's collections, as shown on their profile"
+				: "this reader's bookmarks, as shown on their profile"
+			: undefined,
 	});
 }

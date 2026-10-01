@@ -11,7 +11,7 @@ import { Button } from "@/components/nextui/Button";
 import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
 import { trackAttachmentInteraction } from "@/lib/analytics";
-import { useSession } from "next-auth/react";
+import { useReaderSession } from "@/components/layout/navbar/ReaderSession";
 
 function downloadLink(url: string, filename: string) {
 	fetch(url)
@@ -103,7 +103,7 @@ function AttachmentCover({
 }
 
 function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
-	const { data: session } = useSession();
+	const { reader } = useReaderSession();
 	const locale = useLocale();
 	const t = useTranslations("ui");
 	const trackAttachment = (
@@ -115,7 +115,7 @@ function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
 			source,
 			parentType: item.itemType,
 			locale,
-			isAuthenticated: Boolean(session),
+			isAuthenticated: Boolean(reader),
 		});
 	};
 

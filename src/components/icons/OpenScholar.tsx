@@ -5,8 +5,14 @@ import { useId, type SVGProps } from "react";
 // Brand mark from the OpenScholar project (openscholar.ai). The original SVG's
 // glow filter is intentionally omitted: it is a blur filter and invisible at
 // small sizes.
-const OpenScholar = (props: SVGProps<SVGSVGElement>) => {
+/**
+ * `monochrome` draws the mark in the surrounding text colour, with lines as
+ * heavy as the outline icons beside it, for menus where every icon is one
+ * colour.
+ */
+const OpenScholar = ({ monochrome = false, ...props }: SVGProps<SVGSVGElement> & { monochrome?: boolean }) => {
 	const gradientId = useId();
+	const paint = monochrome ? "currentColor" : `url(#${gradientId})`;
 	return (
 		<svg
 			viewBox="0 0 150 150"
@@ -27,8 +33,8 @@ const OpenScholar = (props: SVGProps<SVGSVGElement>) => {
 				</linearGradient>
 			</defs>
 			<g
-				stroke={`url(#${gradientId})`}
-				strokeWidth="5"
+				stroke={paint}
+				strokeWidth={monochrome ? 7 : 5}
 				fill="none"
 				strokeLinecap="round"
 				strokeLinejoin="round"
@@ -42,7 +48,7 @@ const OpenScholar = (props: SVGProps<SVGSVGElement>) => {
 				<path d="M 95 47.5 L 85 57.5 L 85 97.5" />
 				<path d="M 110 92.5 L 100 102.5" />
 			</g>
-			<g fill={`url(#${gradientId})`}>
+			<g fill={paint}>
 				<circle cx="40" cy="57.5" r="4" />
 				<circle cx="55" cy="87.5" r="4" />
 				<circle cx="55" cy="47.5" r="4" />

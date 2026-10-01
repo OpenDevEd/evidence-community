@@ -30,7 +30,7 @@ import type { PublicLibraryStatus } from "@/lib/library-export-records";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
-import { SessionProvider } from "next-auth/react";
+import { ReaderSessionProvider, type Reader } from "@/components/layout/navbar/ReaderSession";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
@@ -214,16 +214,18 @@ export default function Providers({
 	status,
 	gapmaps,
 	storedConsent,
+	reader,
 }: {
 	children: ReactNode;
 	status: RuntimeStatus;
 	gapmaps: GapMap[];
 	/** The reader's stored answer to the cookie question, as the server read it. */
 	storedConsent: string | null;
+	/** Who is signed in, as the server read it with the page. */
+	reader: Reader | null;
 }) {
 	const router = useRouter();
-	const { analytics, features, theme } = useLibraryConfig();
-	const isLoginEnabled = features.login;
+	const { analytics, theme } = useLibraryConfig();
 
 	return (
 		<ThemeProvider
@@ -234,11 +236,7 @@ export default function Providers({
 		>
 			<NuqsAdapter>
 				<ToastAdapter>
-					<SessionProvider
-						session={isLoginEnabled ? undefined : null}
-						refetchOnWindowFocus={isLoginEnabled}
-						refetchWhenOffline={isLoginEnabled ? undefined : false}
-					>
+					<ReaderSessionProvider reader={reader}>
 						<AnalyticsConsentProvider
 							storedConsentFromServer={storedConsent}
 						>
@@ -261,7 +259,7 @@ export default function Providers({
 								</NextUIProvider>
 							</CacheProvider>
 						</AnalyticsConsentProvider>
-					</SessionProvider>
+					</ReaderSessionProvider>
 				</ToastAdapter>
 			</NuqsAdapter>
 		</ThemeProvider>

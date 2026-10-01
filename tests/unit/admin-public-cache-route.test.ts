@@ -2,41 +2,34 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ revalidateTag: vi.fn() }));
-const signingConfig = { libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5", secret: "12345678901234567890123456789012" };
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
 vi.mock("next/cache", () => ({ revalidateTag: mocks.revalidateTag }));
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: () => ({
 		authentication: {
 			openScholar: {
 				convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
-				libraryId: signingConfig.libraryId,
-				loginPageUrl: "https://openscholar.example.org/evidence-libraries/amber",
+				libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
 				machineCredential: `els_${"a".repeat(43)}`,
 			},
-			secret: signingConfig.secret,
 		},
 	}),
 }));
 
-import { adminSessionCookieName, createAdminSessionToken } from "@/lib/admin/access";
+import { signedInHeaders } from "../helpers/reader-session";
 import { DELETE as clearPublicCache } from "@/app/api/admin/public-cache/route";
 
 type Role = "owner" | "editor" | "creator";
 
-// OpenScholar answers the current role; the signed cookie only names the user.
+// OpenScholar answers the current role for the signed-in person.
 function request(path: string, method: string, role?: Role) {
 	vi.stubGlobal("fetch", vi.fn(async () => Response.json({ role })));
-	const headers = new Headers();
-	if (role) {
-		const token = createAdminSessionToken(
-			{ clerkOrganizationId: "org_2abc", clerkUserId: "user_2abc", consumedAt: Date.now(), libraryId: signingConfig.libraryId, role },
-			signingConfig,
-		);
-		headers.set("cookie", `${adminSessionCookieName()}=${token}`);
-	}
-	return new NextRequest(`https://library.example.org${path}`, { method, headers });
+	return new NextRequest(`https://library.example.org${path}`, {
+		method,
+		headers: signedInHeaders(role ? `user_cache_${role}` : undefined),
+	});
 }
 
 describe("public cache route", () => {

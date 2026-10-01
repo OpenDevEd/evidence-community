@@ -72,7 +72,7 @@ describe("library configuration fixtures", () => {
 		expect(config.search.defaultScope).toBe(
 			"title_abstract_author_and_keywords",
 		);
-		expect(config.features.login).toBe(false);
+		expect(config.features.readerAccounts).toBe(false);
 		expect(config.content.tags.publish).toEqual(["_publish", "publishPDF"]);
 	});
 
@@ -411,35 +411,21 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"login without authentication secret",
+			"sign-in without a session secret",
 			(config: any) => {
 				delete config.authentication.secret;
 			},
 		],
 		[
-			"Google authentication without login",
+			"OpenScholar sign-in without the library's OAuth client",
 			(config: any) => {
-				config.features.login = false;
-				config.features.userCollections = false;
+				delete config.authentication.openScholar.oauth;
 			},
 		],
 		[
-			"Google authentication without client ID",
+			"OpenScholar sign-in without the account page",
 			(config: any) => {
-				delete config.authentication.google.clientId;
-			},
-		],
-		[
-			"Google authentication without client secret",
-			(config: any) => {
-				delete config.authentication.google.clientSecret;
-			},
-		],
-		[
-			"user collections without login",
-			(config: any) => {
-				config.features.login = false;
-				config.authentication.google.enabled = false;
+				delete config.authentication.openScholar.accountUrl;
 			},
 		],
 		[

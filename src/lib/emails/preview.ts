@@ -109,10 +109,7 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 			html: renderLibraryInvitation({
 				identity: libraryEmailIdentity(config),
 				role: "editor",
-				acceptUrl: new URL(
-					"/evidence-libraries",
-					config.authentication.openScholar.loginPageUrl,
-				).href,
+				acceptUrl: new URL("/admin", config.identity.baseUrl).href,
 			}),
 		},
 		{

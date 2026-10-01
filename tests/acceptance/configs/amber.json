@@ -174,9 +174,8 @@
 	"features": {
 		"themeSwitcher": true,
 		"languageSwitcher": true,
-		"login": true,
+		"readerAccounts": true,
 		"navbarSearch": true,
-		"userCollections": false,
 		"ai": true,
 		"aiSearch": true,
 		"deepResearch": false,
@@ -297,10 +296,7 @@
 		"utmDurationSeconds": 600
 	},
 	"authentication": {
-		"secret": "amber-acceptance-auth-secret-0000000000000000",
-		"google": {
-			"enabled": false
-		}
+		"secret": "amber-acceptance-auth-secret-0000000000000000"
 	},
 	"email": {
 		"contactRecipient": "contact-amber@example.org",

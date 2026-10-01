@@ -271,9 +271,10 @@ Meilisearch:
 ```sh
 LIBRARY_CONFIG_PATH=config/library.local.json \
 DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
-EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' \
+EVIDENCE_LIBRARY_ADMIN_SESSION_COOKIE='<cookies from a signed-in browser>' \
 npm run test:search-worker
 ```
 
-The code must belong to the library in `LIBRARY_CONFIG_PATH`. It is consumed by
-this run, so request a new code before running the command again.
+The cookies must come from the library in `LIBRARY_CONFIG_PATH`; see "Real-service
+admin sign-in" in the operations guide for signing in with a Clerk test user
+instead.

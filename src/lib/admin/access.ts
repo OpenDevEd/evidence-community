@@ -1,20 +1,17 @@
 import "server-only";
 
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-
 import { z } from "zod";
 
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { getSignedInOpenScholarUser } from "@/lib/readers/session";
 
 import {
 	adminRoleSchema,
 	adminRoleHasPermission,
 	type AdminPermission,
+	type AdminRole,
 } from "./permissions";
-
-export const ADMIN_SESSION_COOKIE = "__Host-evidence_library_admin";
-export const ADMIN_DEVELOPMENT_SESSION_COOKIE = "evidence_library_admin";
-export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
 
 export {
 	ADMIN_CONTENT_PERMISSION,
@@ -24,158 +21,79 @@ export {
 	type AdminPermission,
 } from "./permissions";
 
-export const adminSessionIdentitySchema = z
-	.object({
-		clerkOrganizationId: z.string().trim().min(1).max(512),
-		clerkUserId: z.string().trim().min(1).max(512),
-		consumedAt: z.number().int().nonnegative(),
-		libraryId: z.string().trim().min(1).max(128),
-		role: adminRoleSchema,
-	})
-	.strict();
-
-const adminSessionSchema = adminSessionIdentitySchema
-	.extend({
-		expiresAt: z.number().int().positive(),
-		version: z.literal(2),
-	})
-	.strict();
-
-export type AdminSessionIdentity = z.infer<
-	typeof adminSessionIdentitySchema
->;
-export type AdminSession = AdminSessionIdentity & { expiresAt: number };
+export type AdminSession = { clerkUserId: string; role: AdminRole };
 
 export type AdminSessionAuthorization =
 	| { session: AdminSession; status: "authorized" }
 	| { session: AdminSession; status: "forbidden" }
+	/** Signed in, but OpenScholar gives this person no role in the library. */
+	| { organisationName: string | null; status: "no_access" }
 	| { status: "unauthenticated" }
 	| { status: "unavailable" };
 
-export type AdminAccessConfig = {
-	convexSiteUrl: string;
-	libraryId: string;
-	loginPageUrl: string;
-	machineCredential: string;
-	secret: string;
-};
+type RoleAnswer = { role: AdminRole } | { organisationName: string | null };
 
-export type AdminSessionSigningConfig = Pick<
-	AdminAccessConfig,
-	"libraryId" | "secret"
->;
+/** OpenScholar decides roles; the answer is reused for about a minute. */
+const ADMIN_ROLE_CACHE_MS = 60_000;
+const roleAnswers = new Map<string, { answer: RoleAnswer; expiresAt: number }>();
 
-export function adminSessionCookieOptions(environment = process.env.NODE_ENV) {
-	return {
-		httpOnly: true,
-		maxAge: ADMIN_SESSION_TTL_MS / 1_000,
-		path: "/",
-		sameSite: "lax" as const,
-		secure: environment === "production",
-	};
-}
+const roleResponseSchema = z.object({ role: adminRoleSchema });
+const noAccessResponseSchema = z.object({ organisationName: z.string().optional() });
 
-export function adminSessionCookieName(environment = process.env.NODE_ENV) {
-	return environment === "production"
-		? ADMIN_SESSION_COOKIE
-		: ADMIN_DEVELOPMENT_SESSION_COOKIE;
-}
+async function readAdminRole(config: LibraryServerConfig, clerkUserId: string): Promise<RoleAnswer | null> {
+	const { convexSiteUrl, libraryId, machineCredential } = config.authentication.openScholar;
+	const cacheKey = `${libraryId}:${clerkUserId}`;
+	const cached = roleAnswers.get(cacheKey);
+	if (cached && cached.expiresAt > Date.now()) return cached.answer;
 
-export async function getAdminAccessConfig(): Promise<AdminAccessConfig> {
-	const authentication = (await getLibraryConfig()).authentication;
-	return {
-		...authentication.openScholar,
-		secret: authentication.secret,
-	};
-}
-
-function digest(value: string) {
-	return createHash("sha256").update(value).digest();
-}
-
-function sign(payload: string, secret: string) {
-	return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
-export function createAdminSessionToken(
-	identity: AdminSessionIdentity,
-	config: AdminSessionSigningConfig,
-	now = Date.now(),
-) {
-	if (identity.libraryId !== config.libraryId) {
-		throw new Error("Admin session library does not match this runtime");
-	}
-	return signPayload(
-		{ ...identity, expiresAt: now + ADMIN_SESSION_TTL_MS, version: 2 },
-		config.secret,
-	);
-}
-
-function signPayload(value: unknown, secret: string) {
-	const payload = Buffer.from(JSON.stringify(value)).toString("base64url");
-	return `${payload}.${sign(payload, secret)}`;
-}
-
-/** The JSON inside a token signed with this secret, or null. */
-function readSignedPayload(token: string | undefined, secret: string): unknown {
-	if (!token) return null;
-	const [payload, signature, extra] = token.split(".");
-	if (!payload || !signature || extra) return null;
-	if (!timingSafeEqual(digest(signature), digest(sign(payload, secret)))) {
-		return null;
-	}
+	let response: Response;
 	try {
-		return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-	} catch {
+		response = await fetch(new URL("/api/v1/evidence-libraries/admin-session/check", convexSiteUrl), {
+			method: "POST",
+			cache: "no-store",
+			signal: AbortSignal.timeout(5_000),
+			headers: { "Content-Type": "application/json", Authorization: `Bearer ${machineCredential}` },
+			body: JSON.stringify({ libraryId, clerkUserId }),
+		});
+	} catch (error) {
+		console.error("Admin access check unavailable", { libraryId, error });
 		return null;
 	}
-}
-
-export function verifyAdminSessionToken(
-	token: string | undefined,
-	config: AdminSessionSigningConfig,
-	now = Date.now(),
-): AdminSession | null {
-	const result = adminSessionSchema.safeParse(readSignedPayload(token, config.secret));
-	if (
-		!result.success ||
-		result.data.expiresAt <= now ||
-		result.data.libraryId !== config.libraryId
-	) {
+	const body = await response.json().catch(() => null);
+	let answer: RoleAnswer;
+	if (response.ok) {
+		const result = roleResponseSchema.safeParse(body);
+		if (!result.success) {
+			console.error("Invalid admin access response", { libraryId });
+			return null;
+		}
+		answer = { role: result.data.role };
+	} else if (response.status === 403) {
+		answer = { organisationName: noAccessResponseSchema.safeParse(body).data?.organisationName ?? null };
+	} else {
+		console.error("Admin access check rejected", { libraryId, status: response.status });
 		return null;
 	}
-	const { version: _version, ...session } = result.data;
-	return session;
+	roleAnswers.set(cacheKey, { answer, expiresAt: Date.now() + ADMIN_ROLE_CACHE_MS });
+	return answer;
 }
 
-export async function authorizeAdminSession(
-  token: string | undefined,
-  permission: AdminPermission,
-  config?: AdminAccessConfig,
+/**
+ * Whether the person signed in on this request may do something in /admin.
+ * They sign in with OpenScholar like any reader; OpenScholar decides their
+ * role by their Clerk user ID.
+ */
+export async function authorizeAdminRequest(
+	headers: Headers,
+	permission: AdminPermission,
+	config?: LibraryServerConfig,
 ): Promise<AdminSessionAuthorization> {
-  config ??= await getAdminAccessConfig();
-  const signedSession = verifyAdminSessionToken(token, config);
-  if (!signedSession) return { status: "unauthenticated" };
-  let response: Response;
-  try {
-    response = await fetch(new URL("/api/v1/evidence-libraries/admin-session/check", config.convexSiteUrl), {
-      method: "POST", cache: "no-store", signal: AbortSignal.timeout(5_000),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.machineCredential}` },
-      body: JSON.stringify({ libraryId: config.libraryId, clerkUserId: signedSession.clerkUserId }),
-    });
-  } catch (error) {
-    console.error("Admin access check unavailable", { libraryId: config.libraryId, error });
-    return { status: "unavailable" };
-  }
-  if (!response.ok) {
-    if (response.status !== 403) console.error("Admin access check rejected", { libraryId: config.libraryId, status: response.status });
-    return { status: response.status === 403 ? "unauthenticated" : "unavailable" };
-  }
-  const result = z.object({ role: adminRoleSchema }).safeParse(await response.json().catch(() => null));
-  if (!result.success) {
-    console.error("Invalid admin access response", { libraryId: config.libraryId });
-    return { status: "unavailable" };
-  }
-  const session = { ...signedSession, role: result.data.role };
-  return { session, status: adminRoleHasPermission(session.role, permission) ? "authorized" : "forbidden" };
+	config ??= await getLibraryConfig();
+	const reader = await getSignedInOpenScholarUser(headers, config);
+	if (!reader) return { status: "unauthenticated" };
+	const answer = await readAdminRole(config, reader.clerkUserId);
+	if (!answer) return { status: "unavailable" };
+	if (!("role" in answer)) return { organisationName: answer.organisationName, status: "no_access" };
+	const session = { clerkUserId: reader.clerkUserId, role: answer.role };
+	return { session, status: adminRoleHasPermission(session.role, permission) ? "authorized" : "forbidden" };
 }

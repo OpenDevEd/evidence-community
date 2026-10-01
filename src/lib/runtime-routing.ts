@@ -172,15 +172,11 @@ export function getValidatedAdminReturnPath(value: string | null | undefined) {
 	return `${returnUrl.pathname}${returnUrl.search}`;
 }
 
-export function buildAdminLoginPageUrl(
-	loginPageUrl: string,
-	returnPath: string | null | undefined,
-	error?: "invalid_code",
-) {
-	const url = new URL(loginPageUrl);
-	if (error) url.searchParams.set("error", error);
-	url.searchParams.set("return", getValidatedAdminReturnPath(returnPath));
-	return url.toString();
+const ADMIN_SIGN_IN_PATH = "/api/admin/sign-in";
+
+/** The library's own route that starts OpenScholar sign-in and returns to an admin page. */
+export function buildAdminSignInPath(returnPath: string | null | undefined) {
+	return `${ADMIN_SIGN_IN_PATH}?${new URLSearchParams({ return: getValidatedAdminReturnPath(returnPath) })}`;
 }
 
 export const LIBRARY_CONFIG_HEALTH_PATH = "/api/library-config/health";

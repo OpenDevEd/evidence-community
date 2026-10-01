@@ -38,7 +38,8 @@ const genericSelectClassNames = {
 	label: "hidden",
 };
 
-const personalSelectClassNames = {
+/** Sort in the one-line layout, where it shares the row with the search. */
+const oneLineSelectClassNames = {
 	base: twMerge(
 		"flex-1 max-w-full min-w-0 lg:min-w-56",
 		genericSelectClassNames.base,
@@ -64,7 +65,6 @@ export function SortComponent({
 			items={SORT_OPTIONS}
 			selectorIcon={<div className="hidden"></div>}
 			classNames={
-				!itemsContext.userData &&
 				itemsContext.config.interactionsStyle !== "one-line"
 					? {
 							base: twMerge(
@@ -77,7 +77,7 @@ export function SortComponent({
 							),
 							label: twMerge("", genericSelectClassNames.label),
 						}
-					: personalSelectClassNames
+					: oneLineSelectClassNames
 			}
 			label={"Sort by"}
 			labelPlacement="outside"
@@ -119,25 +119,21 @@ export function ScopeComponent({
 			onSelectionChange={itemsContext.handleScopeChange as any}
 			items={scopeOptions}
 			selectorIcon={<div className="hidden"></div>}
-			classNames={
-				!itemsContext.userData
-					? {
-							// On its own line (the map's list) the scope has the
-							// whole row, so its label is not cut short.
-							base: twMerge(
-								"max-w-full",
-								itemsContext.config.interactionsStyle !==
-									"one-line" && "lg:max-w-72",
-								genericSelectClassNames.base,
-							),
-							mainWrapper: twMerge(
-								"h-10 lg:h-full",
-								genericSelectClassNames.mainWrapper,
-							),
-							label: twMerge("", genericSelectClassNames.label),
-						}
-					: personalSelectClassNames
-			}
+			classNames={{
+				// On its own line (the map's list) the scope has the whole
+				// row, so its label is not cut short.
+				base: twMerge(
+					"max-w-full",
+					itemsContext.config.interactionsStyle !== "one-line" &&
+						"lg:max-w-72",
+					genericSelectClassNames.base,
+				),
+				mainWrapper: twMerge(
+					"h-10 lg:h-full",
+					genericSelectClassNames.mainWrapper,
+				),
+				label: twMerge("", genericSelectClassNames.label),
+			}}
 			label={"Search scope"}
 			labelPlacement="outside"
 		>

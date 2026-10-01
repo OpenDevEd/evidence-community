@@ -40,6 +40,7 @@ describe("the library result set the assistant can see", () => {
 			author: "",
 			collections: [],
 			topics: [],
+			readerList: null,
 		});
 	});
 

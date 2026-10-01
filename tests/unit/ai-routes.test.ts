@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	convertToModelMessages: vi.fn(async (messages) => messages),
+	readReaderListKeys: vi.fn(),
+	getSignedInReader: vi.fn(),
 	createUIMessageStreamResponse: vi.fn(),
 	createResearchAgent: vi.fn(),
 	generateText: vi.fn(),
@@ -40,6 +42,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/db", () => ({ getDatabaseForConfig: vi.fn(async () => ({})) }));
+vi.mock("@/lib/readers/data", () => ({ readReaderListKeys: mocks.readReaderListKeys }));
+vi.mock("@/lib/readers/session", () => ({ getSignedInReader: mocks.getSignedInReader }));
 vi.mock("@/config/library-config/features", () => ({
 	isLibraryFeatureEnabled: (
 		features: Record<string, boolean>,
@@ -454,14 +459,15 @@ describe("AI routes", () => {
 
 		await chat(chatRequest({ searchContext }));
 
+		const expected = { ...searchContext, readerList: null };
 		expect(
 			mocks.createResearchAgent.mock.calls[0]?.[0].searchContext,
-		).toEqual(searchContext);
+		).toEqual(expected);
 		const messages = mocks.convertToModelMessages.mock.calls[0]?.[0];
 		const contextPart = messages[0].parts.find(
 			(part: { type: string }) => part.type === "data-requestContext",
 		);
-		expect(contextPart.data.searchContext).toEqual(searchContext);
+		expect(contextPart.data.searchContext).toEqual(expected);
 	});
 
 	it("refuses a chat request whose result list was tampered with", async () => {
@@ -476,6 +482,42 @@ describe("AI routes", () => {
 
 		expect(response.status).toBe(400);
 		expect(mocks.createResearchAgent).not.toHaveBeenCalled();
+	});
+
+	describe("on a reader's profile", () => {
+		const profileContext = (collectionId: string) => ({
+			search: "",
+			scope: "",
+			sort: "relevance",
+			range: "",
+			institution: [],
+			country: [],
+			author: "",
+			collections: [],
+			topics: [],
+			readerList: { userId: "reader-amina", collectionId },
+		});
+
+		beforeEach(() => {
+			mocks.libraryConfig.features = { ai: true, aiSearch: true, deepResearch: true, readerAccounts: true };
+			mocks.getSignedInReader.mockResolvedValue({ id: "reader-visitor", name: "", image: null, clerkUserId: "user_visitor" });
+		});
+
+		it("refuses someone else's private collection before the model sees anything", async () => {
+			mocks.readReaderListKeys.mockResolvedValue({ refused: 403 });
+			const response = await chat(chatRequest({ searchContext: profileContext("6b3a8f2e-1c4d-4e5f-8a9b-0c1d2e3f4a5b") }));
+
+			expect(response.status).toBe(403);
+			expect(mocks.readReaderListKeys.mock.calls[0]?.[2]).toBe("reader-visitor");
+			expect(mocks.createResearchAgent).not.toHaveBeenCalled();
+		});
+
+		it("gives the agent exactly the records of the list the reader is looking at", async () => {
+			mocks.readReaderListKeys.mockResolvedValue({ keys: ["SAVED001", "SAVED002"] });
+			await chat(chatRequest({ searchContext: profileContext("") }));
+
+			expect(mocks.createResearchAgent.mock.calls[0]?.[0].readerListKeys).toEqual(["SAVED001", "SAVED002"]);
+		});
 	});
 
 	it("refuses a model this library does not offer", async () => {
