@@ -8,8 +8,8 @@ import {
 	Add01Icon,
 	Bookmark02Icon,
 	CollectionsBookmarkIcon,
-	LockIcon,
 	Share08Icon,
+	SquareLock01Icon,
 	Tick02Icon,
 	UserEdit01Icon,
 } from "@hugeicons/core-free-icons";
@@ -180,10 +180,12 @@ function CollectionsNav({
 								className={twMerge("size-5 shrink-0", isSelected && "text-accent")}
 								aria-hidden
 							/>
-							<span className="min-w-0 flex-1 truncate">{shelf.name}</span>
-							{shelf.isPrivate ? (
-								<HugeiconsIcon icon={LockIcon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
-							) : null}
+							<span className="flex min-w-0 flex-1 items-center gap-1.5">
+								<span className="truncate">{shelf.name}</span>
+								{shelf.isPrivate ? (
+									<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-70" aria-label={t("privateCollection")} />
+								) : null}
+							</span>
 							<span className="shrink-0 text-small tabular-nums opacity-60">{format.number(shelf.count)}</span>
 						</button>
 					);
