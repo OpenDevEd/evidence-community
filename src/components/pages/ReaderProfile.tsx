@@ -3,11 +3,13 @@
 import { useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
-import { SelectItem } from "@nextui-org/react";
+import { ModalBody, ModalContent, ModalFooter, SelectItem } from "@nextui-org/react";
 import {
 	Add01Icon,
 	Bookmark02Icon,
 	CollectionsBookmarkIcon,
+	Delete02Icon,
+	PencilEdit01Icon,
 	Share08Icon,
 	SquareLock01Icon,
 	Tick02Icon,
@@ -15,8 +17,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import { ConfirmationModal } from "@/components/nextui/ConfirmationModal";
+import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
+import { Switch } from "@/components/nextui/Switch";
+import { Textarea } from "@/components/nextui/Textarea";
+import { Tooltip } from "@/components/nextui/Tooltip";
+import GenericHeader from "@/components/features/modals/GenericHeader";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { useItemsList } from "@/hooks/useItemsList";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
@@ -61,10 +69,11 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const isOwnProfile = reader?.id === data.id;
 	const collectionsEnabled = useLibraryFeature("userCollections");
 	const items = useItemsList(data);
-	// MOCK ONLY: a new collection is kept on the page until phase 2 wires the
-	// endpoint to the new session.
-	const [createdCollections, setCreatedCollections] = useState<ProfileCollection[]>([]);
-	const collections = collectionsEnabled ? [...data.collections, ...createdCollections] : [];
+	// MOCK ONLY: creating, editing and deleting a collection is kept on the
+	// page until phase 2 adds the endpoints for the new session.
+	const [ownCollections, setOwnCollections] = useState(data.collections);
+	const collections = collectionsEnabled ? ownCollections : [];
+	const [dialog, setDialog] = useState<{ collection: ProfileCollection | null } | null>(null);
 	const profileReader = { id: data.id, name: data.name ?? "", image: data.image ?? null };
 	const bookmarkCount = Object.keys(data.likes).length;
 	const bookmarkDates = Object.values(data.likes).map((value) => new Date(value as string)).filter((date) => !Number.isNaN(date.getTime()));
@@ -80,6 +89,17 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 		})),
 	];
 	const select = (id: string) => items.handleCollectionSelect(id);
+	const selectedCollection = collections.find((collection) => collection.id === selected);
+	const save = (collection: ProfileCollection) =>
+		setOwnCollections((previous) =>
+			previous.some((entry) => entry.id === collection.id)
+				? previous.map((entry) => (entry.id === collection.id ? collection : entry))
+				: [...previous, collection],
+		);
+	const remove = (id: string) => {
+		setOwnCollections((previous) => previous.filter((entry) => entry.id !== id));
+		if (selected === id) select("");
+	};
 
 	return (
 		<PageContainer id="main-content" className="flex w-full flex-col gap-8 xl:gap-10">
@@ -99,7 +119,13 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 						onSelect={select}
 						footer={
 							isOwnProfile ? (
-								<NewCollection onCreate={(collection) => setCreatedCollections((previous) => [...previous, collection])} />
+								<Button
+									onPress={() => setDialog({ collection: null })}
+									startContent={<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />}
+									className="h-10 w-fit px-4 font-medium"
+								>
+									{t("newCollection")}
+								</Button>
 							) : null
 						}
 					/>
@@ -107,37 +133,200 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
-						header={shelves.find((shelf) => shelf.id === selected)?.name ?? t("allBookmarks")}
+						header={selectedCollection?.name ?? t("allBookmarks")}
+						headerAction={
+							isOwnProfile && selectedCollection ? (
+								<Button
+									onPress={() => setDialog({ collection: selectedCollection })}
+									startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-5" aria-hidden />}
+									className="h-full shrink-0 px-4 font-medium"
+								>
+									{t("editAction")}
+								</Button>
+							) : null
+						}
+						headerDetails={
+							selectedCollection && (selectedCollection.private || selectedCollection.description) ? (
+								<div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+									{selectedCollection.private ? (
+										<span className="flex h-7 items-center gap-1.5 rounded-full bg-black/[0.06] px-3 text-small font-medium text-black/70 dark:bg-white/10 dark:text-white/70">
+											<HugeiconsIcon icon={SquareLock01Icon} className="size-4" aria-hidden />
+											{t("privateCollection")}
+										</span>
+									) : null}
+									{selectedCollection.description ? (
+										<p className="min-w-0 text-black/60 dark:text-white/60">{selectedCollection.description}</p>
+									) : null}
+								</div>
+							) : null
+						}
 						userData={{ ...data, collections }}
 						extraFilters={
 							collectionsEnabled ? (
-								<Select
-									aria-label={t("bookmarksListAriaLabel")}
-									color="secondary"
-									placement="left"
-									className="max-w-full lg:hidden"
-									disallowEmptySelection
-									selectedKeys={[selected || "all"]}
-									onSelectionChange={(keys) => {
-										const key = String(Array.from(keys)[0] ?? "all");
-										select(key === "all" ? "" : key);
-									}}
-									startContent={
-										<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />
-									}
-								>
-									{shelves.map((shelf) => (
-										<SelectItem key={shelf.id || "all"} textValue={shelf.name}>
-											{shelf.name}
-										</SelectItem>
-									))}
-								</Select>
+								<div className="flex gap-2 lg:hidden">
+									<Select
+										aria-label={t("bookmarksListAriaLabel")}
+										color="secondary"
+										placement="left"
+										className="max-w-full flex-1"
+										disallowEmptySelection
+										selectedKeys={[selected || "all"]}
+										onSelectionChange={(keys) => {
+											const key = String(Array.from(keys)[0] ?? "all");
+											select(key === "all" ? "" : key);
+										}}
+										startContent={
+											<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />
+										}
+									>
+										{shelves.map((shelf) => (
+											<SelectItem key={shelf.id || "all"} textValue={shelf.name}>
+												{shelf.name}
+											</SelectItem>
+										))}
+									</Select>
+									{isOwnProfile ? (
+										<Tooltip content={t("newCollection")}>
+											<Button
+												isIconOnly
+												aria-label={t("newCollection")}
+												onPress={() => setDialog({ collection: null })}
+												className="h-12 w-12 shrink-0"
+											>
+												<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />
+											</Button>
+										</Tooltip>
+									) : null}
+								</div>
 							) : null
 						}
 					/>
 				</div>
 			</div>
+			{dialog ? (
+				<CollectionDialog
+					key={dialog.collection?.id ?? "new"}
+					collection={dialog.collection}
+					onClose={() => setDialog(null)}
+					onSave={save}
+					onDelete={remove}
+				/>
+			) : null}
 		</PageContainer>
+	);
+}
+
+/**
+ * Creates a collection or edits one: its name, description and whether only
+ * its owner sees it. A new collection starts private, since the profile it
+ * appears on is public. Deleting asks first; the bookmarks stay bookmarked.
+ */
+function CollectionDialog({
+	collection,
+	onClose,
+	onSave,
+	onDelete,
+}: {
+	collection: ProfileCollection | null;
+	onClose: () => void;
+	onSave: (collection: ProfileCollection) => void;
+	onDelete: (id: string) => void;
+}) {
+	const t = useTranslations("ui");
+	const [name, setName] = useState(collection?.name ?? "");
+	const [description, setDescription] = useState(collection?.description ?? "");
+	const [isPrivate, setIsPrivate] = useState(collection ? Boolean(collection.private) : true);
+	const [confirmingDelete, setConfirmingDelete] = useState(false);
+	const trimmedName = name.trim();
+
+	return (
+		<>
+			<DialogModal size="md" isOpen={!confirmingDelete} onOpenChange={(open) => !open && onClose()}>
+				<ModalContent>
+					<GenericHeader onClose={onClose}>{collection ? t("editCollection") : t("newCollection")}</GenericHeader>
+					<form
+						onSubmit={(event) => {
+							event.preventDefault();
+							if (!trimmedName) return;
+							onSave({
+								id: collection?.id ?? `mock-${Date.now()}`,
+								numItems: collection?.numItems ?? 0,
+								name: trimmedName,
+								description: description.trim() || null,
+								private: isPrivate,
+							});
+							onClose();
+						}}
+					>
+						<ModalBody className="gap-4 pt-0">
+							<Input
+								autoFocus
+								isRequired
+								label={t("collectionNameLabel")}
+								labelPlacement="outside"
+								placeholder={t("collectionNameLabel")}
+								maxLength={24}
+								value={name}
+								onValueChange={setName}
+							/>
+							<Textarea
+								label={t("collectionDescriptionLabel")}
+								labelPlacement="outside"
+								placeholder={t("collectionDescriptionLabel")}
+								maxLength={200}
+								minRows={3}
+								value={description}
+								onValueChange={setDescription}
+							/>
+							<Switch
+								color="accent"
+								isSelected={isPrivate}
+								onValueChange={setIsPrivate}
+								classNames={{
+									base: "h-auto w-full max-w-full justify-between gap-4 rounded-xl bg-black/[0.04] px-4 py-3 dark:bg-white/[0.06]",
+									label: "flex flex-col gap-0.5 text-start",
+								}}
+							>
+								<span className="text-small font-medium text-black/80 dark:text-white/80">{t("privateCollection")}</span>
+								<span className="text-small font-normal text-black/60 dark:text-white/60">{t("collectionVisibilityPrivateDescription")}</span>
+							</Switch>
+						</ModalBody>
+						<ModalFooter className="gap-2 pb-6">
+							{collection ? (
+								<Button
+									variant="transparent"
+									onPress={() => setConfirmingDelete(true)}
+									startContent={<HugeiconsIcon icon={Delete02Icon} className="size-5" aria-hidden />}
+									className="me-auto h-10 px-3 font-medium text-danger dark:text-danger"
+								>
+									{t("deleteAction")}
+								</Button>
+							) : null}
+							<Button variant="transparent" onPress={onClose} className="h-10 px-4 font-medium">
+								{t("cancel")}
+							</Button>
+							<Button type="submit" color="accent" isDisabled={!trimmedName} className="h-10 px-4 font-medium">
+								{collection ? t("save") : t("create")}
+							</Button>
+						</ModalFooter>
+					</form>
+				</ModalContent>
+			</DialogModal>
+			{collection ? (
+				<ConfirmationModal
+					isOpen={confirmingDelete}
+					onOpenChange={(open) => !open && setConfirmingDelete(false)}
+					title={t("deleteCollectionTitle", { name: collection.name })}
+					description={t("deleteCollectionBody")}
+					confirmLabel={t("deleteAction")}
+					cancelLabel={t("cancel")}
+					onConfirm={() => {
+						onDelete(collection.id);
+						onClose();
+					}}
+				/>
+			) : null}
+		</>
 	);
 }
 
@@ -314,48 +503,5 @@ function CoverWall({ userId, bookmarkCount }: { userId: string; bookmarkCount: n
 			{/* The covers fade into the card where the name begins. */}
 			<div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white dark:from-secondary" />
 		</div>
-	);
-}
-
-function NewCollection({ onCreate }: { onCreate: (collection: ProfileCollection) => void }) {
-	const t = useTranslations("ui");
-	const [draftName, setDraftName] = useState<string | null>(null);
-	if (draftName === null) {
-		return (
-			<Button
-				onPress={() => setDraftName("")}
-				startContent={<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />}
-				className="h-10 w-fit px-4 font-medium"
-			>
-				{t("newCollection")}
-			</Button>
-		);
-	}
-	return (
-		<form
-			className="flex flex-wrap gap-2"
-			onSubmit={(event) => {
-				event.preventDefault();
-				const name = draftName.trim();
-				if (!name) return;
-				onCreate({ id: `mock-${name}`, name, numItems: 0, private: true });
-				setDraftName(null);
-			}}
-		>
-			<Input
-				autoFocus
-				aria-label={t("collectionNameLabel")}
-				placeholder={t("collectionNameLabel")}
-				value={draftName}
-				onValueChange={setDraftName}
-				classNames={{ base: "max-w-sm" }}
-			/>
-			<Button type="submit" color="accent" className="h-10 px-4 font-medium">
-				{t("create")}
-			</Button>
-			<Button onPress={() => setDraftName(null)} className="h-10 px-4">
-				{t("cancel")}
-			</Button>
-		</form>
 	);
 }
