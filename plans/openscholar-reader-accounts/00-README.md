@@ -41,8 +41,10 @@ Libraries carry two separate login systems and neither is right:
    login and `authentication.google` are deleted.
 4. Public pages never redirect. Only the "Sign in with OpenScholar" button,
    with the OpenScholar logo, starts sign-in. The button is mocked and
-   approved before it is built. `/admin` without a session answers a 307 into
-   the library's own OAuth start.
+   approved before it is built. `/admin` without a session answers a 307 to
+   the library's own `/api/admin/sign-in?return=<path>`, a GET route that
+   starts the OAuth flow. OpenScholar's readiness check relies on that exact
+   path (added 2026-10-01, see phase 1).
 5. Background check: while a reader is active, the server refreshes the Clerk
    token at most every 15 minutes (`auth.api.getAccessToken`) and updates the
    stored name and avatar from Clerk's userinfo. Better Auth reports every
@@ -150,22 +152,40 @@ account ID.
   this library's name instead of creating a second. Teardown deletes by the
   saved ID, or by name when the ID was never saved. Every Clerk failure logs
   the library ID, HTTP status, Clerk error code and `clerk_trace_id`.
-- Assembly chooses the authentication shape by the target runtime commit.
-  Runtimes before the phase 2 merge keep receiving today's shape
-  (`loginPageUrl`, `google`), because their strict schema rejects new keys.
-  Runtimes from the phase 2 merge on receive
-  `authentication.openScholar.oauth: { issuer, clientId, clientSecret }` and
-  `accountUrl`, and no `google` or `loginPageUrl`. This lets each library
-  update its runtime on its own.
 - `admin-session/check` returns the organisation name with its 403.
-- A machine-credential endpoint answers whether a Clerk user still exists.
+- A machine-credential endpoint answers whether a Clerk user is active,
+  deleted or unknown. Only "deleted" lets a library remove reader data.
 - The Clerk `user.deleted` webhook queues the reader deletion call to every
-  active library (decision 5), retried until each library confirms.
-- The configuration page shows `features.readerAccounts`.
+  active library (decision 5), retried until each library confirms. A library
+  that answers 404 has no such reader or runs software without readers, and
+  counts as done.
 - Readiness accepts both `/admin` answers (307 to the OpenScholar login page,
-  or 307 to the library's own sign-in start) until phase 3 ends, because
-  libraries update their runtime one at a time.
+  or 307 to the library's own `/api/admin/sign-in`) until phase 3 ends,
+  because libraries update their runtime one at a time.
 - Existing dev libraries get an OAuth application.
+
+Phase 1 changes nothing a running library receives, so it ships before
+phase 2.
+
+Correction on 2026-10-01: the earlier text had assembly choose the
+authentication shape by each library's runtime commit. OpenScholar already
+solves this: it pins one new-el commit as its configuration contract
+(`lib/evidence-libraries/configuration/contract-lock.json`), and a publish to
+a library whose runtime does not include that commit updates the runtime in
+the same step (`publishRuntime` in `convex/evidenceLibraries/updates.ts`). The
+new shape therefore arrives with the contract sync in phase 2b, and each
+library takes it with its next publish.
+
+### 2b. OpenScholar: contract sync (OpenDevEd/openalex-count#375)
+
+After phase 2 merges:
+
+- Sync OpenScholar's configuration contract to the phase 2 commit.
+- Assembly writes `authentication.openScholar.oauth: { issuer, clientId,
+  clientSecret }` and `accountUrl`, and no longer writes `google` or
+  `loginPageUrl`.
+- The configuration page shows `features.readerAccounts`.
+- Each dev library is published once, which moves it to the phase 2 runtime.
 
 Owner of the OAuth application and its redirect URIs: OpenScholar.
 
@@ -212,9 +232,9 @@ Owner of sessions, reader data and the profile privacy rule: new-el.
 After every dev library runs the phase 2 runtime: delete `adminHandoff.ts`,
 `adminHandoffActions.ts`, `adminLoginCodes.ts`, the redeem route, the
 `evidenceLibraryAdminLoginCodes` table, the admin route and status page,
-`lib/evidence-libraries/admin-handoff.ts`, `buildEvidenceLibraryLoginPageUrl`,
-the old readiness answer and the old assembly shape. Open admin links straight
-to the library's `/admin`.
+`lib/evidence-libraries/admin-handoff.ts`, `buildEvidenceLibraryLoginPageUrl`
+and the old readiness answer. Open admin links straight to the library's
+`/admin`.
 
 ## Checks
 
@@ -225,15 +245,14 @@ to the library's `/admin`.
   the fake OpenScholar keeps only `admin-session/check` and the user-exists
   endpoint.
 - OpenScholar tests: OAuth application create, adoption after a create whose
-  result was lost, redirect sync on domain change, delete on teardown, both
-  assembly shapes by runtime commit, and the deletion fan-out with one library
+  result was lost, redirect sync on domain change, delete on teardown, and the deletion fan-out with one library
   failing then retried, with the Clerk API faked at the HTTP boundary; one
   live create and delete against the development Clerk instance.
 - One remote verification tool signs in through the Clerk test-user flow
   against a deployed preview.
 - Final gate: CI green in both repositories, then a preview library against
   development Clerk in a real browser: sign in from the button, `/admin`
-  redirect, no-access page, rename in OpenScholar reaches the library, delete
+  redirect through `/api/admin/sign-in`, no-access page, rename in OpenScholar reaches the library, delete
   the Clerk user while they are away and the reader data disappears from the
   library without them visiting it. Sign-up is checked once by a
   person because Clerk's captcha blocks automation.
