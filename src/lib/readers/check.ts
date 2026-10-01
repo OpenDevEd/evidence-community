@@ -45,13 +45,8 @@ const userInfoSchema = z.object({
 type ReaderCheck = { auth: ReaderAuth; config: LibraryServerConfig; database: Database; userId: string };
 
 /** Refreshes the reader's Clerk token and copies their current name and avatar from OpenScholar. */
-async function refreshReaderProfile({ auth, config, database, userId }: ReaderCheck) {
-	const account = await database.query.readerAccount.findFirst({
-		where: and(eq(readerAccount.userId, userId), eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID)),
-		columns: { id: true },
-	});
-	if (!account) throw new Error("The reader has no OpenScholar account link");
-	const { accessToken } = await auth.api.getAccessToken({ body: { accountId: account.id, userId } });
+async function refreshReaderProfile({ auth, config, database, userId }: ReaderCheck, accountRowId: string) {
+	const { accessToken } = await auth.api.getAccessToken({ body: { accountId: accountRowId, userId } });
 	const { userinfo_endpoint } = await readDiscovery(config);
 	const response = await fetch(userinfo_endpoint, {
 		cache: "no-store",
@@ -100,23 +95,29 @@ export async function checkReaderSoon(check: ReaderCheck) {
 		.update(readerUser)
 		.set({ checkedAt: new Date() })
 		.where(and(eq(readerUser.id, userId), lt(readerUser.checkedAt, new Date(Date.now() - READER_CHECK_INTERVAL_MS))))
-		.returning({ clerkUserId: readerUser.clerkUserId });
+		.returning({ id: readerUser.id });
 	if (!claimed) return;
+	const account = await database.query.readerAccount.findFirst({
+		where: and(eq(readerAccount.userId, userId), eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID)),
+		columns: { id: true, accountId: true },
+	});
+	if (!account) return;
+	const clerkUserId = account.accountId;
 
 	try {
-		await refreshReaderProfile(check);
+		await refreshReaderProfile(check, account.id);
 		return;
 	} catch (refreshError) {
 		try {
-			const status = await readOpenScholarReaderStatus(config, claimed.clerkUserId);
+			const status = await readOpenScholarReaderStatus(config, clerkUserId);
 			if (status === "deleted") {
-				await deleteReaderByClerkUserId(database, claimed.clerkUserId);
-				console.info("Removed a reader whose OpenScholar account was deleted", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: claimed.clerkUserId });
+				await deleteReaderByClerkUserId(database, clerkUserId);
+				console.info("Removed a reader whose OpenScholar account was deleted", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId });
 				return;
 			}
-			console.warn("Reader check could not refresh an active OpenScholar account", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: claimed.clerkUserId, status, error: String(refreshError) });
+			console.warn("Reader check could not refresh an active OpenScholar account", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId, status, error: String(refreshError) });
 		} catch (statusError) {
-			console.warn("Reader check could not reach OpenScholar; the session stays", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: claimed.clerkUserId, refreshError: String(refreshError), statusError: String(statusError) });
+			console.warn("Reader check could not reach OpenScholar; the session stays", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId, refreshError: String(refreshError), statusError: String(statusError) });
 		}
 	}
 }

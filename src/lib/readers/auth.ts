@@ -34,11 +34,6 @@ export function createReaderAuth(
 				verification: readerVerification,
 			},
 		}),
-		user: {
-			additionalFields: {
-				clerkUserId: { type: "string", required: true, input: false },
-			},
-		},
 		session: {
 			expiresIn: 30 * DAY_SECONDS,
 			updateAge: DAY_SECONDS,
@@ -59,7 +54,6 @@ export function createReaderAuth(
 						pkce: true,
 						overrideUserInfo: true,
 						mapProfileToUser: (profile) => ({
-							clerkUserId: String(profile.sub ?? profile.id ?? ""),
 							name: openScholarProfileName(profile),
 							image: typeof profile.picture === "string" ? profile.picture : undefined,
 						}),

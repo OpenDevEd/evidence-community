@@ -33,11 +33,10 @@ export const readerUser = pgTable("reader_user", {
 	email: text("email").notNull(),
 	emailVerified: boolean("emailVerified").notNull().default(false),
 	image: text("image"),
-	clerkUserId: text("clerkUserId").notNull(),
 	/** When the background check last confirmed the OpenScholar account. */
 	checkedAt: timestamp("checkedAt", { mode: "date" }).notNull().defaultNow(),
 	...timestamps(),
-}, (table) => [uniqueIndex("reader_user_clerkUserId_idx").on(table.clerkUserId)]);
+});
 
 export const readerSession = pgTable("reader_session", {
 	id: text("id").primaryKey(),
@@ -51,7 +50,7 @@ export const readerSession = pgTable("reader_session", {
 
 export const readerAccount = pgTable("reader_account", {
 	id: text("id").primaryKey(),
-	/** The Clerk user ID for the OpenScholar provider. */
+	/** The Clerk user ID for the OpenScholar provider: the one place the library keeps it. */
 	accountId: text("accountId").notNull(),
 	providerId: text("providerId").notNull(),
 	userId: text("userId").notNull().references(() => readerUser.id, { onDelete: "cascade" }),

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { getSignedInReader } from "@/lib/readers/session";
+import { getSignedInOpenScholarUser } from "@/lib/readers/session";
 
 import {
 	adminRoleSchema,
@@ -89,7 +89,7 @@ export async function authorizeAdminRequest(
 	config?: LibraryServerConfig,
 ): Promise<AdminSessionAuthorization> {
 	config ??= await getLibraryConfig();
-	const reader = await getSignedInReader(headers, config);
+	const reader = await getSignedInOpenScholarUser(headers, config);
 	if (!reader) return { status: "unauthenticated" };
 	const answer = await readAdminRole(config, reader.clerkUserId);
 	if (!answer) return { status: "unavailable" };

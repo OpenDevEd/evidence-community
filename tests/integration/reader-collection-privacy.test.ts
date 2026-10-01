@@ -54,7 +54,7 @@ async function withCollections(
 	await withIsolatedPublicationDatabase(async (db: Database) => {
 		vi.mocked(getDatabase).mockResolvedValue(db);
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(db);
-		await db.insert(readerUser).values({ id: OWNER, name: "Owner", email: "owner@example.org", clerkUserId: OWNER_CLERK_ID });
+		await db.insert(readerUser).values({ id: OWNER, name: "Owner", email: "owner@example.org" });
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
 		const [emptyPrivate, savedPrivate] = await db

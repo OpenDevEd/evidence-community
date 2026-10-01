@@ -1,5 +1,5 @@
 {
-  "id": "c9acdea6-4793-450c-a819-010c7fcc1114",
+  "id": "d926edab-310c-4cd7-b225-7ded6d493e7a",
   "prevId": "eb4402dd-9396-4769-ad22-e092a988849b",
   "version": "7",
   "dialect": "postgresql",
@@ -7737,12 +7737,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "clerkUserId": {
-          "name": "clerkUserId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "checkedAt": {
           "name": "checkedAt",
           "type": "timestamp",
@@ -7765,23 +7759,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "reader_user_clerkUserId_idx": {
-          "name": "reader_user_clerkUserId_idx",
-          "columns": [
-            {
-              "expression": "clerkUserId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

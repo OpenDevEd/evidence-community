@@ -20,3 +20,7 @@ export async function getSignedInReader(headers?: Headers) {
 	const clerkUserId = decodeURIComponent(match[1]!);
 	return { id: `reader-${clerkUserId}`, name: "Test reader", image: null, clerkUserId };
 }
+
+export async function getSignedInOpenScholarUser(headers?: Headers) {
+	return getSignedInReader(headers);
+}

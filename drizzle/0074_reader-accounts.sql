@@ -71,7 +71,6 @@ CREATE TABLE "reader_user" (
 	"email" text NOT NULL,
 	"emailVerified" boolean DEFAULT false NOT NULL,
 	"image" text,
-	"clerkUserId" text NOT NULL,
 	"checkedAt" timestamp DEFAULT now() NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
@@ -99,5 +98,4 @@ CREATE INDEX "reader_bookmark_itemKey_idx" ON "reader_bookmark" USING btree ("it
 CREATE INDEX "reader_collection_userId_idx" ON "reader_collection" USING btree ("userId");--> statement-breakpoint
 CREATE INDEX "reader_collection_item_itemKey_idx" ON "reader_collection_item" USING btree ("itemKey");--> statement-breakpoint
 CREATE INDEX "reader_session_userId_idx" ON "reader_session" USING btree ("userId");--> statement-breakpoint
-CREATE UNIQUE INDEX "reader_user_clerkUserId_idx" ON "reader_user" USING btree ("clerkUserId");--> statement-breakpoint
 CREATE INDEX "reader_verification_identifier_idx" ON "reader_verification" USING btree ("identifier");

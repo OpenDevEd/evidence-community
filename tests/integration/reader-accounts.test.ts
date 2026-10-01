@@ -35,7 +35,7 @@ import { signedInHeaders } from "../helpers/reader-session";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import type { Database } from "@/db/database-schema";
-import { readerBookmark, readerCollection, readerCollectionItem, readerSession, readerUser } from "@/db/schema/tables/reader";
+import { readerAccount, readerBookmark, readerCollection, readerCollectionItem, readerSession, readerUser } from "@/db/schema/tables/reader";
 import { createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
 import type { ReaderAuth } from "@/lib/readers/auth";
 import { checkReaderSoon, READER_CHECK_INTERVAL_MS } from "@/lib/readers/check";
@@ -63,8 +63,12 @@ async function withReaders(
 		const amina = "reader-user_amina";
 		const bob = "reader-user_bob";
 		await db.insert(readerUser).values([
-			{ id: amina, name: "Amina Okafor", email: "amina@example.org", clerkUserId: "user_amina" },
-			{ id: bob, name: "", email: "bob@example.org", clerkUserId: "user_bob" },
+			{ id: amina, name: "Amina Okafor", email: "amina@example.org" },
+			{ id: bob, name: "", email: "bob@example.org" },
+		]);
+		await db.insert(readerAccount).values([
+			{ id: "account-amina", userId: amina, providerId: "openscholar", accountId: "user_amina" },
+			{ id: "account-bob", userId: bob, providerId: "openscholar", accountId: "user_bob" },
 		]);
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
@@ -136,9 +140,9 @@ describe("deleting an OpenScholar account", () => {
 			expect((await deleteRequest("user_amina", machineCredential)).status).toBe(204);
 			expect((await deleteRequest("user_amina", machineCredential)).status).toBe(404);
 
-			for (const table of [readerUser, readerSession, readerBookmark, readerCollection, readerCollectionItem]) {
+			for (const table of [readerUser, readerAccount, readerSession, readerBookmark, readerCollection, readerCollectionItem]) {
 				const rows = await db.select({ count: sql<number>`count(*)::int` }).from(table);
-				expect(rows[0]?.count, String(table)).toBe(table === readerUser ? 1 : 0);
+				expect(rows[0]?.count, String(table)).toBe(table === readerUser || table === readerAccount ? 1 : 0);
 			}
 		});
 	});

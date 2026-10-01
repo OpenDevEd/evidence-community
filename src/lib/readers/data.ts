@@ -1,17 +1,20 @@
 import "server-only";
 
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
 import {
 	READER_COLLECTION_DESCRIPTION_LIMIT,
 	READER_COLLECTION_NAME_LIMIT,
+	readerAccount,
 	readerBookmark,
 	readerCollection,
 	readerCollectionItem,
 	readerUser,
 } from "@/db/schema/tables/reader";
+
+import { OPENSCHOLAR_PROVIDER_ID } from "./openscholar";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
@@ -32,7 +35,15 @@ export type ReaderCollectionSummary = {
 export async function deleteReaderByClerkUserId(database: Database, clerkUserId: string) {
 	const deleted = await database
 		.delete(readerUser)
-		.where(eq(readerUser.clerkUserId, clerkUserId))
+		.where(
+			inArray(
+				readerUser.id,
+				database
+					.select({ userId: readerAccount.userId })
+					.from(readerAccount)
+					.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), eq(readerAccount.accountId, clerkUserId))),
+			),
+		)
 		.returning({ id: readerUser.id });
 	return deleted.length > 0;
 }

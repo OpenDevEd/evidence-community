@@ -6,6 +6,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { readerAccount, readerSession, readerUser, readerVerification } from "../src/db/schema/tables/reader";
 
+/** The library keeps a reader's Clerk user ID on their OpenScholar account link. */
+const OPENSCHOLAR_PROVIDER_ID = "openscholar";
+
 export type ReaderTestSessionTarget = {
 	/** The library's own database, reachable from where the test runs. */
 	databaseUrl: string;
@@ -28,7 +31,6 @@ function createTestAuth(target: ReaderTestSessionTarget) {
 				provider: "pg",
 				schema: { user: readerUser, session: readerSession, account: readerAccount, verification: readerVerification },
 			}),
-			user: { additionalFields: { clerkUserId: { type: "string", required: true, input: false } } },
 			advanced: { cookiePrefix: "evidence-library" },
 			plugins: [testUtils()],
 		}),
@@ -52,17 +54,16 @@ export async function mintReaderSessionCookies(
 		instances.set(key, instance);
 	}
 	const { auth, database } = instance;
+	const readerId = `reader-${clerkUserId}`;
 	await database
 		.insert(readerUser)
-		.values({
-			id: `reader-${clerkUserId}`,
-			name: options.name ?? "Acceptance reader",
-			email: `${clerkUserId}@acceptance.example.org`,
-			emailVerified: true,
-			clerkUserId,
-		})
+		.values({ id: readerId, name: options.name ?? "Acceptance reader", email: `${clerkUserId}@acceptance.example.org`, emailVerified: true })
 		.onConflictDoNothing();
-	const [reader] = await database.select({ id: readerUser.id }).from(readerUser).where(eq(readerUser.clerkUserId, clerkUserId));
+	await database
+		.insert(readerAccount)
+		.values({ id: `account-${clerkUserId}`, userId: readerId, providerId: OPENSCHOLAR_PROVIDER_ID, accountId: clerkUserId })
+		.onConflictDoNothing();
+	const [reader] = await database.select({ id: readerUser.id }).from(readerUser).where(eq(readerUser.id, readerId));
 	if (!reader) throw new Error(`No reader for ${clerkUserId}`);
 	const { test } = await auth.$context;
 	const cookies = await test.getCookies({
