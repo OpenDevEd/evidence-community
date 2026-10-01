@@ -36,7 +36,7 @@ export function ReaderAvatar({
 	size = "md",
 	asTrigger = false,
 	...triggerProps
-}: { reader: MockReader; size?: "sm" | "md"; asTrigger?: boolean } & Omit<
+}: { reader: MockReader; size?: "sm" | "md" | "lg"; asTrigger?: boolean } & Omit<
 	ComponentProps<typeof Avatar>,
 	"size" | "as"
 >) {

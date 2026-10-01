@@ -1,4 +1,4 @@
-import Profile from "@/components/pages/Profile";
+import ReaderProfile from "@/components/pages/ReaderProfile";
 import { Metadata } from "next";
 import { libraryMetadata } from "../../lib/page";
 import { notFound } from "next/navigation";
@@ -33,5 +33,5 @@ export default async function ProfilePage(props: {
 		config,
 	);
 
-	return <Profile data={profile} />;
+	return <ReaderProfile data={profile} />;
 }
