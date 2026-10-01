@@ -32,10 +32,16 @@ export const minimalLibraryConfig = {
 		openScholar: {
 			convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
 			libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
-			loginPageUrl:
+			libraryUrl:
 				"https://openscholar.example.org/evidence-libraries/minimal",
+			accountUrl: "https://accounts.openscholar.example.org/user",
 			machineCredential:
 				"els_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			oauth: {
+				issuer: "https://clerk.openscholar.example.org",
+				clientId: "evidence-library-minimal",
+				clientSecret: "evidence-library-minimal-secret",
+			},
 		},
 		secret: "minimal-auth-secret-123456789012345",
 	},
@@ -250,9 +256,8 @@ export const maximalLibraryConfig = {
 	features: {
 		themeSwitcher: true,
 		languageSwitcher: true,
-		login: true,
+		readerAccounts: true,
 		navbarSearch: true,
-		userCollections: true,
 		ai: true,
 		aiSearch: true,
 		deepResearch: true,
@@ -380,18 +385,19 @@ export const maximalLibraryConfig = {
 		utmDurationSeconds: 2_592_000,
 	},
 	authentication: {
-		google: {
-			enabled: true,
-			clientId: "google-client-id",
-			clientSecret: "google-client-secret-value",
-		},
 		openScholar: {
 			convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
 			libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
-			loginPageUrl:
+			libraryUrl:
 				"https://openscholar.example.org/evidence-libraries/amber",
+			accountUrl: "https://accounts.openscholar.example.org/user",
 			machineCredential:
 				"els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			oauth: {
+				issuer: "https://clerk.openscholar.example.org",
+				clientId: "evidence-library-client",
+				clientSecret: "evidence-library-client-secret",
+			},
 		},
 		secret: "12345678901234567890123456789012",
 	},

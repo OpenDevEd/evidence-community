@@ -1062,9 +1062,9 @@ const featuresSchema = z
 	.object({
 		themeSwitcher: z.boolean().default(false),
 		languageSwitcher: z.boolean().default(false),
-		login: z.boolean().default(false),
+		/** Readers sign in with OpenScholar to bookmark records and keep collections. */
+		readerAccounts: z.boolean().default(false),
 		navbarSearch: z.boolean().default(true),
-		userCollections: z.boolean().default(false),
 		ai: z.boolean().default(false),
 		aiSearch: z.boolean().default(false),
 		deepResearch: z.boolean().default(false),
@@ -1634,14 +1634,6 @@ const analyticsSchema = z
 
 const authenticationSchema = z
 	.object({
-		google: z
-			.object({
-				enabled: z.boolean().default(false),
-				clientId: secretSchema(10, 255).optional(),
-				clientSecret: secretSchema(20, 512).optional(),
-			})
-			.strict()
-			.prefault({}),
 		openScholar: z
 			.object({
 				convexSiteUrl: publicHttpsOriginSchema,
@@ -1649,13 +1641,25 @@ const authenticationSchema = z
 					(value) => /^[a-z0-9]+$/u.test(value),
 					"OpenScholar library ID must contain lowercase letters and numbers only",
 				),
-				loginPageUrl: publicHttpsUrlSchema,
+				/** OpenScholar's page for this library, where its configuration lives. */
+				libraryUrl: publicHttpsUrlSchema,
+				/** The account page of the Clerk instance readers and admins sign in with. */
+				accountUrl: publicHttpsUrlSchema,
 				machineCredential: secretSchema(47, 47).refine(
 					(value) => /^els_[A-Za-z0-9_-]{43}$/u.test(value),
 					"OpenScholar machine credential must use the els_ format",
 				),
+				/** This library's own Clerk OAuth application. */
+				oauth: z
+					.object({
+						issuer: publicHttpsOriginSchema,
+						clientId: singleLineStringSchema(255),
+						clientSecret: secretSchema(16, 512),
+					})
+					.strict(),
 			})
 			.strict(),
+		/** Signs this library's session cookies and encrypts the OAuth tokens it stores. */
 		secret: secretSchema(32, 512),
 	})
 	.strict();
@@ -1985,46 +1989,6 @@ export function createLibraryConfigSchema(
 			);
 		}
 
-		if (config.features.login && !config.authentication.secret) {
-			addRequiredIssue(
-				context,
-				["authentication", "secret"],
-				"Login requires an authentication secret",
-			);
-		}
-
-		if (config.authentication.google.enabled) {
-			if (!config.features.login) {
-				addRequiredIssue(
-					context,
-					["authentication", "google", "enabled"],
-					"Google authentication requires login",
-				);
-			}
-			if (!config.authentication.google.clientId) {
-				addRequiredIssue(
-					context,
-					["authentication", "google", "clientId"],
-					"Google authentication requires a client ID",
-				);
-			}
-			if (!config.authentication.google.clientSecret) {
-				addRequiredIssue(
-					context,
-					["authentication", "google", "clientSecret"],
-					"Google authentication requires a client secret",
-				);
-			}
-		}
-
-		if (config.features.userCollections && !config.features.login) {
-			addRequiredIssue(
-				context,
-				["features", "userCollections"],
-				"User collections require login",
-			);
-		}
-
 		const enabledProviders = config.ai.providers.filter(
 			(provider) => provider.enabled,
 		);
@@ -2197,11 +2161,7 @@ const publicAiSchema = z
 
 const publicAuthenticationSchema = z
 	.object({
-		google: z
-			.object({
-				enabled: z.boolean(),
-			})
-			.strict(),
+		openScholar: z.object({ accountUrl: publicHttpsUrlSchema }).strict(),
 	})
 	.strict();
 
