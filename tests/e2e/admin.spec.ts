@@ -853,7 +853,8 @@ test("starts OpenScholar sign-in from /admin, keeps the session, and signs out",
 
 	// Signing out ends the session and leaves /admin, so a later visit signs in again.
 	await logout.click();
-	await page.waitForURL(new URL("/", baseUrl).toString());
+	// The home page may forward to the library listing, so wait only for leaving /admin.
+	await page.waitForURL((url) => !url.pathname.startsWith("/admin"));
 	const again = await page.request.get(new URL("/admin", baseUrl).toString(), { maxRedirects: 0 });
 	expect(again.status()).toBe(307);
 	expect(again.headers().location).toBe(new URL("/api/admin/sign-in?return=%2Fadmin", baseUrl).toString());
