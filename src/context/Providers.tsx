@@ -31,6 +31,7 @@ import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { SessionProvider } from "next-auth/react";
+import { MockReaderSessionProvider } from "@/components/layout/navbar/MockReaderSession";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
@@ -239,6 +240,7 @@ export default function Providers({
 						refetchOnWindowFocus={isLoginEnabled}
 						refetchWhenOffline={isLoginEnabled ? undefined : false}
 					>
+<MockReaderSessionProvider>
 						<AnalyticsConsentProvider
 							storedConsentFromServer={storedConsent}
 						>
@@ -261,7 +263,8 @@ export default function Providers({
 								</NextUIProvider>
 							</CacheProvider>
 						</AnalyticsConsentProvider>
-					</SessionProvider>
+					</MockReaderSessionProvider>
+</SessionProvider>
 				</ToastAdapter>
 			</NuqsAdapter>
 		</ThemeProvider>

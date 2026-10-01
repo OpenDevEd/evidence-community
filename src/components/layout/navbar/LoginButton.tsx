@@ -1,57 +1,54 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Login01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
 import { DropdownItem } from "@nextui-org/react";
-import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
+import { Tooltip } from "@/components/nextui/Tooltip";
+import OpenScholar from "@/components/icons/OpenScholar";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { useMockReaderSession } from "./MockReaderSession";
 import type { NavbarElementProps } from "@/types/navbar";
 
-export default function LoginButton({
-	variant,
-	styleVariant,
-	onAction,
-}: NavbarElementProps) {
+/** Starts signing in with the reader's OpenScholar account. Shown only on press. */
+export default function LoginButton({ variant }: NavbarElementProps) {
 	const t = useTranslations("ui");
 	const isEnabled = useLibraryFeature("login");
-	const { data: session } = useSession();
+	const { reader, signIn } = useMockReaderSession();
 
-	// Don't render if login is disabled or user is already logged in
-	if (!isEnabled || session) return null;
+	if (!isEnabled || reader) return null;
 
-	// Menu item variant - for dropdowns
+	const label = t("signInWithOpenScholar");
+	const logo = <OpenScholar aria-hidden className="size-5 shrink-0" />;
+
 	if (variant === "menuItem") {
 		return (
-			<DropdownItem
-				key="login"
-				onPress={onAction}
-				startContent={<HugeiconsIcon icon={Login01Icon} className="size-5" />}
-			>
-				{t("login")}
+			<DropdownItem key="login" onPress={signIn} startContent={logo}>
+				{label}
 			</DropdownItem>
 		);
 	}
 
-	// Inline variant - button with style differences
-	const isSmall = styleVariant === "small";
-
+	// Narrow phones have room for the logo only, so that button carries a
+	// tooltip; everywhere else the label is visible and needs none.
 	return (
-		<Button
-			startContent={<HugeiconsIcon icon={Login01Icon} className="size-5 shrink-0" />}
-			onPress={onAction}
-			isIconOnly={isSmall}
-			className={twMerge(
-				"text-accent dark:text-accent py-1",
-				isSmall
-					? "!p-0 rounded-full !size-10"
-					: "!min-w-10 !px-0 sm:!min-w-24 sm:!px-4 uppercase"
-			)}
-			aria-label={t("loginButtonAriaLabel")}
-		>
-			{!isSmall && <span className="hidden sm:inline">{t("login")}</span>}
-		</Button>
+		<>
+			<Tooltip content={label}>
+				<Button
+					onPress={signIn}
+					isIconOnly
+					aria-label={label}
+					className="sm:hidden !p-0 rounded-full !size-10"
+				>
+					{logo}
+				</Button>
+			</Tooltip>
+			<Button
+				onPress={signIn}
+				startContent={logo}
+				className="hidden sm:inline-flex h-10 !px-4 font-medium text-foreground"
+			>
+				{label}
+			</Button>
+		</>
 	);
 }

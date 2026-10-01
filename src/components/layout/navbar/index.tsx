@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
+import { useMockReaderSession } from "./MockReaderSession";
 import { useTheme } from "next-themes";
 import { useDisclosure } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
@@ -12,7 +12,6 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
 import NavbarSearch from "./NavbarSearch";
-import LoginModal from "./LoginModal";
 import MobileMenu from "./MobileMenu";
 import ActionsDropdown from "./ActionsDropdown";
 
@@ -68,7 +67,7 @@ export default function Navbar() {
 	const t = useTranslations("ui");
 	const pathname = usePathname();
 	const { resolvedTheme: theme, setTheme } = useTheme();
-	const { data: session } = useSession();
+	const { reader: session } = useMockReaderSession();
 	const libraryConfig = useLibraryConfig();
 	const isLoginEnabled = isLibraryFeatureEnabled(
 		libraryConfig.features,
@@ -242,14 +241,6 @@ export default function Navbar() {
 					pathname={pathname}
 				/>
 
-				{/* Login modal */}
-				{isLoginEnabled ? (
-					<LoginModal
-						isOpen={isLoginModalOpen}
-						onOpenChange={onLoginModalOpenChange}
-						onClose={onLoginModalClose}
-					/>
-				) : null}
 			</div>
 		</header>
 

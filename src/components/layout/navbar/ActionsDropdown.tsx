@@ -1,12 +1,9 @@
 "use client";
 
-import { Login01Icon, Menu01Icon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
+import { Menu01Icon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
 import {
-	Avatar,
 	DropdownItem,
 	DropdownMenu,
 	DropdownSection,
@@ -18,7 +15,9 @@ import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
 import { useRouter } from "@/i18n/routing";
-import { signOut } from "next-auth/react";
+import OpenScholar from "@/components/icons/OpenScholar";
+import { useMockReaderSession } from "./MockReaderSession";
+import { ReaderAvatar, readerMenuItems } from "./UserMenu";
 import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -31,7 +30,7 @@ interface ActionsDropdownProps {
 
 export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	const t = useTranslations("ui");
-	const { data: session } = useSession();
+	const { reader: session, signIn, signOut } = useMockReaderSession();
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const router = useRouter();
 	const changeLocale = useRuntimeLocaleNavigation();
@@ -102,27 +101,14 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 				setTheme(theme === "dark" ? "light" : "dark");
 				break;
 			case "login":
-				context.onLoginModalOpen();
-				break;
-			case "profile":
-				router.push(`/profile/${session?.user?.id}`);
-				break;
-			case "logout":
-				signOut({ redirect: false });
+				signIn();
 				break;
 		}
 	};
 
 	// Determine trigger: avatar if logged in, hamburger if not
 	const trigger = session ? (
-		<Avatar
-			as="button"
-			className="cursor-pointer"
-			src={session.user?.image ?? "/icons/profile.png"}
-			alt={t("userAvatarAlt", {
-				name: session.user?.name || session.user?.email || t("genericUser"),
-			})}
-		/>
+		<ReaderAvatar reader={session} asTrigger />
 	) : (
 		<Button
 			variant="invisible"
@@ -150,9 +136,41 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					title: "font-medium",
 				}}
 			>
+				{/* Who is signed in comes first, then their account, then the rest. */}
+				<DropdownSection showDivider={hasUser} className={hasUser ? "mb-1" : "hidden"}>
+					{session ? (
+						readerMenuItems({
+							reader: session,
+							t,
+							onProfile: () => router.push(`/profile/${session.id}`),
+							onSignOut: signOut,
+						}).slice(0, 1)
+					) : (
+						<DropdownItem key="reader-placeholder" className="hidden">
+							{" "}
+						</DropdownItem>
+					)}
+				</DropdownSection>
+				<DropdownSection
+					showDivider={hasUser && (hasTheme || hasLanguages)}
+					className={hasUser ? "mb-1" : "hidden"}
+				>
+					{session ? (
+						readerMenuItems({
+							reader: session,
+							t,
+							onProfile: () => router.push(`/profile/${session.id}`),
+							onSignOut: signOut,
+						}).slice(1)
+					) : (
+						<DropdownItem key="user-placeholder" className="hidden">
+							{" "}
+						</DropdownItem>
+					)}
+				</DropdownSection>
 				{/* We need to flatten the children based on conditions */}
 				<DropdownSection
-					showDivider={hasTheme || hasLogin || hasUser}
+					showDivider={hasTheme || hasLogin}
 					classNames={{ base: "mb-0 mt-0" }}
 					className={hasLanguages ? "" : "hidden"}
 				>
@@ -164,7 +182,6 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 				</DropdownSection>
 
 				<DropdownSection
-					showDivider={hasUser}
 					className={hasTheme || hasLogin ? "my-1 mt-1.5" : "hidden"}
 				>
 					{hasTheme ? (
@@ -190,9 +207,9 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					{hasLogin ? (
 						<DropdownItem
 							key="login"
-							startContent={<HugeiconsIcon icon={Login01Icon} className="size-5" />}
+							startContent={<OpenScholar aria-hidden className="size-5" />}
 						>
-							{t("login")}
+							{t("signInWithOpenScholar")}
 						</DropdownItem>
 					) : (
 						<DropdownItem key="login-placeholder" className="hidden">
@@ -201,30 +218,6 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					)}
 				</DropdownSection>
 
-				<DropdownSection className={hasUser ? "mb-0" : "hidden"}>
-					{hasUser ? (
-						<>
-							<DropdownItem
-								key="profile"
-								startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}
-							>
-								{t("profileMenuItem")}
-							</DropdownItem>
-							<DropdownItem
-								key="logout"
-								color="danger"
-								startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
-								className="text-danger"
-							>
-								{t("logout")}
-							</DropdownItem>
-						</>
-					) : (
-						<DropdownItem key="user-placeholder" className="hidden">
-							{" "}
-						</DropdownItem>
-					)}
-				</DropdownSection>
 			</DropdownMenu>
 		</Dropdown>
 	);
