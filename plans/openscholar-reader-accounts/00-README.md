@@ -227,8 +227,9 @@ After phases 2 and 2c merge:
 
 - Sync OpenScholar's configuration contract to the phase 2 commit.
 - Assembly writes `authentication.openScholar.oauth: { issuer, clientId,
-  clientSecret }` and `accountUrl`, and no longer writes `google` or
-  `loginPageUrl`.
+  clientSecret }`, `accountUrl` and `libraryUrl` (OpenScholar's page for the
+  library, which `/admin` links to for source settings), and no longer writes
+  `google` or `loginPageUrl`.
 - The configuration page shows `features.readerAccounts`.
 - Each dev library is published once, which moves it to the phase 2 runtime.
 
