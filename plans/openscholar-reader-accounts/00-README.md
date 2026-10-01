@@ -50,6 +50,12 @@ Libraries carry two separate login systems and neither is right:
    (machine credential) whether the Clerk user still exists. A deleted user is
    signed out and their reader data is deleted. An unreachable OpenScholar or
    Clerk keeps the session.
+   Deletion does not wait for the reader to come back: OpenScholar's Clerk
+   `user.deleted` webhook (already handled by `markUserDeletedFromClerk`)
+   queues a durable, retried call to every active library's machine-credential
+   endpoint `DELETE /api/openscholar/readers/{clerkUserId}`, which removes the
+   reader's user row, sessions, likes and collections. The background check is
+   the second path for a library that missed the call.
 6. Admins use the same session. The role still comes from OpenScholar's
    `/api/v1/evidence-libraries/admin-session/check` by Clerk user ID
    (`account.accountId`), cached for about one minute. Admin records keep
@@ -62,7 +68,10 @@ Libraries carry two separate login systems and neither is right:
 8. Public profiles and `/api/user/items/[id]` stay public and show the name and
    avatar only. No response ever sends one reader's email to anyone else. An
    empty name shows as "Reader". The reader's own menu shows "Add your name",
-   linking to `https://accounts.openscholar.ai/user`.
+   linking to the Clerk account page of the instance the library signs in
+   with. OpenScholar writes it as `authentication.openScholar.accountUrl`
+   (`https://accounts.openscholar.ai/user` in production, the development
+   instance's Account Portal for dev and preview libraries).
 9. Account settings (name, avatar, email, password, MFA, deletion) live in
    OpenScholar's Clerk account page. A library keeps only likes and personal
    collections. Following other readers is removed.
@@ -70,7 +79,9 @@ Libraries carry two separate login systems and neither is right:
     replacing `features.login` and `features.userCollections`. OpenScholar's
     configuration page shows it. Admin sign-in does not depend on it.
 11. Old reader data is dropped (user decision, 2026-10-01). The rollback
-    recreates the old tables empty.
+    recreates the old tables empty and leaves the Better Auth tables and the
+    reader data saved on them in place, so rolling forward again finds it
+    intact. Nothing written after the migration is discarded.
 
 ## Spike evidence (2026-10-01)
 
@@ -126,10 +137,24 @@ account ID.
 - Create, update and delete the library's Clerk OAuth application in setup,
   deployment (every origin change) and teardown. Redirect URIs change before
   the library switches its canonical origin.
-- Assembly writes `authentication.openScholar.oauth: { issuer, clientId,
-  clientSecret }` and stops writing `google` and `loginPageUrl`.
+- Provisioning is recoverable. The application name carries the library ID.
+  OpenScholar records the intent before calling Clerk and saves the
+  application ID and encrypted secret in the same step that receives them. A
+  retry first lists the instance's OAuth applications and adopts the one with
+  this library's name instead of creating a second. Teardown deletes by the
+  saved ID, or by name when the ID was never saved. Every Clerk failure logs
+  the library ID, HTTP status, Clerk error code and `clerk_trace_id`.
+- Assembly chooses the authentication shape by the target runtime commit.
+  Runtimes before the phase 2 merge keep receiving today's shape
+  (`loginPageUrl`, `google`), because their strict schema rejects new keys.
+  Runtimes from the phase 2 merge on receive
+  `authentication.openScholar.oauth: { issuer, clientId, clientSecret }` and
+  `accountUrl`, and no `google` or `loginPageUrl`. This lets each library
+  update its runtime on its own.
 - `admin-session/check` returns the organisation name with its 403.
 - A machine-credential endpoint answers whether a Clerk user still exists.
+- The Clerk `user.deleted` webhook queues the reader deletion call to every
+  active library (decision 5), retried until each library confirms.
 - The configuration page shows `features.readerAccounts`.
 - Readiness accepts both `/admin` answers (307 to the OpenScholar login page,
   or 307 to the library's own sign-in start) until phase 3 ends, because
@@ -148,17 +173,29 @@ Owner of the OAuth application and its redirect URIs: OpenScholar.
 - Admin on the same session; HMAC cookie, `/api/admin/session` routes,
   `src/lib/admin/open-scholar.ts` and `AdminSessionProvider` deleted;
   no-access page on `/admin`.
-- Background check and deleted-user cleanup (decision 5).
-- Schema: `authentication.openScholar.oauth`, `features.readerAccounts`;
+- Background check, and `DELETE /api/openscholar/readers/{clerkUserId}`
+  behind `requireOpenScholarBearer` (decision 5).
+- The remote verification tools (`tools/adminSession.ts` and its callers:
+  `verifyAdminItemBatchHttp`, `verifyAdminZoteroWriteback`,
+  `verifyLinkedItemDraftLifecycle`, `verifyNativeFileHttp`,
+  `verifySearchIndexerWorker`, `publicationSandboxQualification`,
+  `runRuntimeAcceptance`) sign in through the real flow: a browser signs a
+  development Clerk test user in with a Clerk sign-in token and testing token
+  (`@clerk/testing`), and the tool reuses the library session cookie it gets
+  back. This works against a deployed preview before `/api/admin/session` is
+  deleted. Better Auth `test-utils` is for local tests only.
+- Schema: `authentication.openScholar.oauth`, `accountUrl`,
+  `features.readerAccounts`;
   `authentication.google`, `loginPageUrl`, `features.login` and
   `features.userCollections` removed. Regenerate OpenScholar's catalogs.
-- Migration: drop `user`, `account`, `session`, `verificationToken`,
-  `authenticators`, `userCollection`, `itemToUserCollection`, `userToLikes`,
-  `userToFollow`; create Better Auth's `user`, `session`, `account`,
-  `verification` and the likes and collection tables on the new `user`.
-  Rollback: recreate the old tables empty.
+- Migration: drop the tables `user`, `account`, `session`,
+  `verificationToken`, `authenticator`, `userCollection`,
+  `itemToUserCollection`, `userToLikes` and `userToFollow`; create Better
+  Auth's `user`, `session`, `account`, `verification` and the likes and
+  collection tables on the new `user`. Rollback: decision 11.
 - `src/lib/emails/preview.ts` links to the library's `/admin`.
-- Docs: `docs/cookie-inventory.md`, `docs/evidence-library-customization-map.md`,
+- Docs: `docs/cookie-inventory.md`, the public `docs/cookie-policy.md`,
+  `docs/evidence-library-customization-map.md`,
   `docs/evidence-library-operations.md`.
 
 Owner of sessions, reader data and the profile privacy rule: new-el.
@@ -169,8 +206,8 @@ After every dev library runs the phase 2 runtime: delete `adminHandoff.ts`,
 `adminHandoffActions.ts`, `adminLoginCodes.ts`, the redeem route, the
 `evidenceLibraryAdminLoginCodes` table, the admin route and status page,
 `lib/evidence-libraries/admin-handoff.ts`, `buildEvidenceLibraryLoginPageUrl`,
-and the old readiness answer. Open admin links straight to the library's
-`/admin`.
+the old readiness answer and the old assembly shape. Open admin links straight
+to the library's `/admin`.
 
 ## Checks
 
@@ -180,13 +217,18 @@ and the old readiness answer. Open admin links straight to the library's
 - new-el e2e: admin and reader specs sign in through Better Auth `test-utils`;
   the fake OpenScholar keeps only `admin-session/check` and the user-exists
   endpoint.
-- OpenScholar tests: OAuth application create, redirect sync on domain change,
-  delete on teardown, with the Clerk API faked at the HTTP boundary; one live
-  create and delete against the development Clerk instance.
+- OpenScholar tests: OAuth application create, adoption after a create whose
+  result was lost, redirect sync on domain change, delete on teardown, both
+  assembly shapes by runtime commit, and the deletion fan-out with one library
+  failing then retried, with the Clerk API faked at the HTTP boundary; one
+  live create and delete against the development Clerk instance.
+- One remote verification tool signs in through the Clerk test-user flow
+  against a deployed preview.
 - Final gate: CI green in both repositories, then a preview library against
   development Clerk in a real browser: sign in from the button, `/admin`
   redirect, no-access page, rename in OpenScholar reaches the library, delete
-  the Clerk user and the reader data disappears. Sign-up is checked once by a
+  the Clerk user while they are away and the reader data disappears from the
+  library without them visiting it. Sign-up is checked once by a
   person because Clerk's captcha blocks automation.
 
 ## Done when
