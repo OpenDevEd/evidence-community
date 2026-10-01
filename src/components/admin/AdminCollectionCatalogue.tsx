@@ -227,6 +227,7 @@ type CollectionRowProps = {
 	expanded: boolean;
 	focused: boolean;
 	hierarchyEnabled: boolean;
+	loading: boolean;
 	onCreate: (parentCollection: AdminCollectionCatalogEntry | null) => void;
 	onDelete: (collection: AdminCollectionCatalogEntry) => void;
 	onEdit: (collection: AdminCollectionCatalogEntry) => void;
@@ -251,6 +252,7 @@ function CollectionRow({
 	expanded,
 	focused,
 	hierarchyEnabled,
+	loading,
 	onCreate,
 	onDelete,
 	onEdit,
@@ -385,7 +387,7 @@ function CollectionRow({
 					onClick={() => onToggle(entry)}
 					type="button"
 				>
-					<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className={expanded ? "rotate-90" : ""} size={13} />
+					<CatalogueChevron expanded={expanded} loading={loading} />
 				</button>
 			) : movesEnabled ? (
 				<button
@@ -402,6 +404,7 @@ function CollectionRow({
 			)}
 			<button
 				aria-disabled={view === "deleted" && !canManage}
+				aria-busy={loading || undefined}
 				aria-expanded={
 					entry.hasChildren && hierarchyEnabled ? expanded : undefined
 				}
@@ -497,6 +500,66 @@ type CatalogueStatusRow = Exclude<
 	AdminCollectionCatalogueRow,
 	{ kind: "collection" } | { kind: "source" }
 >;
+
+/** Whether a branch is still waiting for its first page. */
+function branchLoading(
+	state: AdminCollectionCatalogueState,
+	sourceConnectionKey: string,
+	parentCollection: string | null,
+) {
+	const branch = state.branches.get(
+		adminCollectionBranchKey(sourceConnectionKey, parentCollection),
+	);
+	return !branch || branch.status === "idle" || branch.status === "loading";
+}
+
+/** An expanded row spins its chevron until its first page of children lands. */
+function rowLoading(
+	row: AdminCollectionCatalogueRow,
+	state: AdminCollectionCatalogueState,
+	expandedSources: ReadonlySet<string>,
+	expandedCollections: ReadonlySet<string>,
+	searchMode: boolean,
+) {
+	if (row.kind === "source") {
+		return (
+			expandedSources.has(row.source.key) &&
+			branchLoading(state, row.source.key, null)
+		);
+	}
+	return (
+		row.kind === "collection" &&
+		collectionLoading(row.entry, state, expandedCollections, searchMode)
+	);
+}
+
+function collectionLoading(
+	entry: AdminCollectionCatalogEntry,
+	state: AdminCollectionCatalogueState,
+	expandedCollections: ReadonlySet<string>,
+	searchMode: boolean,
+) {
+	return (
+		!searchMode &&
+		entry.hasChildren &&
+		expandedCollections.has(entry.key) &&
+		branchLoading(state, entry.sourceConnectionKey, entry.key)
+	);
+}
+
+function CatalogueChevron({
+	expanded,
+	loading,
+}: {
+	expanded: boolean;
+	loading: boolean;
+}) {
+	return loading ? (
+		<HugeiconsIcon icon={Loading03Icon} aria-hidden className="shrink-0 animate-spin motion-reduce:animate-none" size={13} />
+	) : (
+		<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className={`shrink-0 ${expanded ? "rotate-90" : ""}`} size={13} />
+	);
+}
 
 /**
  * Whether a source row offers a chevron. The library snapshot says how many
@@ -999,37 +1062,63 @@ export function AdminCollectionCatalogue({
 		focusRow(
 			position === "start" ? focusableRows[0] : focusableRows.at(-1),
 		);
-	const focusParent = (entry: AdminCollectionCatalogEntry) => {
-		const parent = entry.parentCollection
+	const navigateTree = (event: KeyboardEvent<HTMLElement>, id: string) => {
+		const moves: Record<string, (() => void) | undefined> = {
+			ArrowDown: () => focusRelative(id, 1),
+			ArrowUp: () => focusRelative(id, -1),
+			End: () => focusBoundary("end"),
+			Home: () => focusBoundary("start"),
+		};
+		const move = moves[event.key];
+		if (!move) return;
+		event.preventDefault();
+		move();
+	};
+	const branchOwner = (
+		sourceConnectionKey: string,
+		parentCollection: string | null,
+	) =>
+		parentCollection
 			? focusableRows.find(
 					(row) =>
 						row.kind === "collection" &&
-						row.entry.key === entry.parentCollection,
+						row.entry.key === parentCollection,
 				)
 			: focusableRows.find(
 					(row) =>
 						row.kind === "source" &&
-						row.source.key === entry.sourceConnectionKey,
+						row.source.key === sourceConnectionKey,
 				);
-		focusRow(parent);
+	const focusParent = (entry: AdminCollectionCatalogEntry) =>
+		focusRow(branchOwner(entry.sourceConnectionKey, entry.parentCollection));
+	const focusFirstChild = (
+		sourceConnectionKey: string,
+		parentCollection: string | null,
+	) => {
+		const child = focusableRows.find(
+			(row) =>
+				row.kind === "collection" &&
+				row.entry.sourceConnectionKey === sourceConnectionKey &&
+				row.entry.parentCollection === parentCollection,
+		);
+		if (child) {
+			focusRow(child);
+			return;
+		}
+		// Still loading: move to the first child once it lands.
+		if (branchLoading(catalogueState, sourceConnectionKey, parentCollection)) {
+			pendingStatusFocus.current = {
+				branchKey: adminCollectionBranchKey(
+					sourceConnectionKey,
+					parentCollection,
+				),
+				intent: "first",
+				parentCollection,
+				sourceConnectionKey,
+				waiting: true,
+			};
+		}
 	};
-	const focusSourceChild = (sourceConnectionKey: string) =>
-		focusRow(
-			focusableRows.find(
-				(row) =>
-					row.kind === "collection" &&
-					row.entry.sourceConnectionKey === sourceConnectionKey &&
-					row.entry.parentCollection === null,
-			),
-		);
-	const focusCollectionChild = (parentCollection: string) =>
-		focusRow(
-			focusableRows.find(
-				(row) =>
-					row.kind === "collection" &&
-					row.entry.parentCollection === parentCollection,
-			),
-		);
 	const pendingFocusBranch = pendingFocusEntry
 		? catalogueState.branches.get(
 				adminCollectionBranchKey(
@@ -1133,6 +1222,10 @@ export function AdminCollectionCatalogue({
 		const requestOptions = more
 			? { force: retryingMore, more: true }
 			: { force: true };
+		// A refreshing branch has no status row to hold focus, so its owner
+		// holds it until the first page lands.
+		if (!more && !searchMode)
+			focusRow(branchOwner(row.sourceConnectionKey, row.parentCollection));
 		pendingStatusFocus.current = {
 			branchKey: row.branchKey,
 			intent: more ? "status" : "first",
@@ -1167,7 +1260,16 @@ export function AdminCollectionCatalogue({
 				row.kind !== "empty" &&
 				row.branchKey === pending.branchKey,
 		);
-		if (status?.kind === "loading") return;
+		if (
+			status?.kind === "loading" ||
+			(pending.branchKey !== "search" &&
+				branchLoading(
+					catalogueState,
+					pending.sourceConnectionKey,
+					pending.parentCollection,
+				))
+		)
+			return;
 		pendingStatusFocus.current = null;
 		if (status?.kind === "error") {
 			focusRow(status);
@@ -1197,25 +1299,18 @@ export function AdminCollectionCatalogue({
 			focusRow(loadedTarget);
 			return;
 		}
-		const branchOwner = pending.parentCollection
-			? focusableRows.find(
-					(row) =>
-						row.kind === "collection" &&
-						row.entry.key === pending.parentCollection,
-				)
-			: focusableRows.find(
-					(row) =>
-						row.kind === "source" &&
-						row.source.key === pending.sourceConnectionKey,
-				);
-		if (branchOwner) {
-			focusRow(branchOwner);
+		const owner = branchOwner(
+			pending.sourceConnectionKey,
+			pending.parentCollection,
+		);
+		if (owner) {
+			focusRow(owner);
 			return;
 		}
 		document
 			.querySelector<HTMLElement>('[aria-label="Search collections"]')
 			?.focus({ preventScroll: true });
-	}, [focusRow, focusableRows, rows]);
+	}, [branchOwner, catalogueState, focusRow, focusableRows, rows]);
 
 	return (
 		<section
@@ -1288,6 +1383,13 @@ export function AdminCollectionCatalogue({
 					{virtualizer.getVirtualItems().map((virtualRow) => {
 						const row = rows[virtualRow.index]!;
 						const id = rowId(row);
+						const loading = rowLoading(
+							row,
+							catalogueTreeState,
+							expandedSources,
+							expandedCollections,
+							searchMode,
+						);
 						return (
 							<div
 								key={virtualRow.key}
@@ -1301,6 +1403,7 @@ export function AdminCollectionCatalogue({
 							>
 								{row.kind === "source" ? (
 									<button
+										aria-busy={loading || undefined}
 										aria-expanded={expandedSources.has(
 											row.source.key,
 										)}
@@ -1315,22 +1418,7 @@ export function AdminCollectionCatalogue({
 										}
 										onFocus={() => registerRowFocus(id)}
 										onKeyDown={(event) => {
-											if (event.key === "ArrowDown") {
-												event.preventDefault();
-												focusRelative(id, 1);
-											}
-											if (event.key === "ArrowUp") {
-												event.preventDefault();
-												focusRelative(id, -1);
-											}
-											if (event.key === "Home") {
-												event.preventDefault();
-												focusBoundary("start");
-											}
-											if (event.key === "End") {
-												event.preventDefault();
-												focusBoundary("end");
-											}
+											navigateTree(event, id);
 											if (event.key === "ArrowRight") {
 												event.preventDefault();
 												if (
@@ -1338,8 +1426,9 @@ export function AdminCollectionCatalogue({
 														row.source.key,
 													)
 												)
-													focusSourceChild(
+													focusFirstChild(
 														row.source.key,
+														null,
 													);
 												else
 													toggleSource(
@@ -1364,15 +1453,11 @@ export function AdminCollectionCatalogue({
 											catalogueTreeState,
 											row.source,
 										) ? (
-											<HugeiconsIcon
-												icon={ArrowRight01Icon}
-												aria-hidden
-												className={`shrink-0 ${
-													expandedSources.has(row.source.key)
-														? "rotate-90"
-														: ""
-												}`}
-												size={13}
+											<CatalogueChevron
+												expanded={expandedSources.has(
+													row.source.key,
+												)}
+												loading={loading}
 											/>
 										) : (
 											<span aria-hidden className="size-catalogue-icon shrink-0" />
@@ -1406,27 +1491,13 @@ export function AdminCollectionCatalogue({
 										)}
 										focused={focusedId === id}
 										hierarchyEnabled={!searchMode}
+										loading={loading}
 										onCreate={onCreate}
 										onDelete={onDelete}
 										onEdit={onEdit}
 										onFocus={() => registerRowFocus(id)}
 										onKeyDown={(event) => {
-											if (event.key === "ArrowDown") {
-												event.preventDefault();
-												focusRelative(id, 1);
-											}
-											if (event.key === "ArrowUp") {
-												event.preventDefault();
-												focusRelative(id, -1);
-											}
-											if (event.key === "Home") {
-												event.preventDefault();
-												focusBoundary("start");
-											}
-											if (event.key === "End") {
-												event.preventDefault();
-												focusBoundary("end");
-											}
+											navigateTree(event, id);
 											if (
 												!searchMode &&
 												event.key === "ArrowRight" &&
@@ -1438,7 +1509,8 @@ export function AdminCollectionCatalogue({
 														row.entry.key,
 													)
 												)
-													focusCollectionChild(
+													focusFirstChild(
+														row.entry.sourceConnectionKey,
 														row.entry.key,
 													);
 												else
@@ -1517,22 +1589,7 @@ export function AdminCollectionCatalogue({
 											};
 										}}
 										onKeyDown={(event) => {
-											if (event.key === "ArrowDown") {
-												event.preventDefault();
-												focusRelative(id, 1);
-											}
-											if (event.key === "ArrowUp") {
-												event.preventDefault();
-												focusRelative(id, -1);
-											}
-											if (event.key === "Home") {
-												event.preventDefault();
-												focusBoundary("start");
-											}
-											if (event.key === "End") {
-												event.preventDefault();
-												focusBoundary("end");
-											}
+											navigateTree(event, id);
 										}}
 										role="treeitem"
 										tabIndex={focusedId === id ? 0 : -1}

@@ -317,6 +317,59 @@ describe("admin collection catalogue state", () => {
 		).toEqual([root.key, child.key]);
 	});
 
+	it("adds no rows under a branch while its first page loads", () => {
+		const rootKey = adminCollectionBranchKey("native", null);
+		const unrequested = flattenAdminCollectionCatalogue(
+			initialState(),
+			[nativeSource],
+			new Set(["native"]),
+			new Set(),
+		);
+		const loading = flattenAdminCollectionCatalogue(
+			adminCollectionCatalogueReducer(initialState(), {
+				branchKey: rootKey,
+				cursor: null,
+				generation: 0,
+				requestId: 1,
+				type: "branchStart",
+			}),
+			[nativeSource],
+			new Set(["native"]),
+			new Set(),
+		);
+
+		const reloading = flattenAdminCollectionCatalogue(
+			{
+				...initialState(),
+				branches: new Map([
+					[
+						rootKey,
+						{
+							error: null,
+							items: [entry("ROOT0001")],
+							loadingMore: false,
+							loadMoreError: null,
+							nextCursor: null,
+							revealed: [],
+							requestId: 2,
+							status: "loading",
+						},
+					],
+				]),
+			},
+			[nativeSource],
+			new Set(["native"]),
+			new Set(),
+		);
+
+		expect(unrequested.map(({ kind }) => kind)).toEqual(["source"]);
+		expect(loading.map(({ kind }) => kind)).toEqual(["source"]);
+		expect(reloading.map(({ kind }) => kind)).toEqual([
+			"source",
+			"collection",
+		]);
+	});
+
 	it("replaces the load-more action with a loading row while paginating", () => {
 		const rootKey = adminCollectionBranchKey("native", null);
 		const state = adminCollectionCatalogueReducer(

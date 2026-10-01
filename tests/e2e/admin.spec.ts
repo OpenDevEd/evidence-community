@@ -3807,11 +3807,11 @@ test("restores branch focus when a collection retry finishes empty", async ({
 	await expect(retry).toBeVisible();
 	await retry.focus();
 	await page.keyboard.press("Enter");
-	await expect(tree.getByRole("treeitem", { name: "Loading" })).toBeFocused();
 	await expect(source).toBeFocused();
-	// The load finished: the loading row is gone and nothing is listed under
-	// a source without collections.
-	await expect(tree.getByRole("treeitem", { name: "Loading" })).toHaveCount(0);
+	// The load finished and nothing is listed under a source without
+	// collections.
+	await expect(source).not.toHaveAttribute("aria-busy");
+	await expect(source).toBeFocused();
 	await expect(tree.getByText("No collections here")).toHaveCount(0);
 });
 
@@ -3852,19 +3852,20 @@ test("does not steal focus when a collection load finishes after the user leaves
 
 	await page.goto("/admin");
 	const tree = page.getByRole("tree", { name: "Collections" });
-	await tree
-		.getByRole("treeitem", { name: slowSource.label, exact: true })
-		.click();
-	const loading = tree.getByRole("treeitem", { name: "Loading" });
-	await loading.focus();
-	await expect(loading).toBeFocused();
+	const slowRow = tree.getByRole("treeitem", {
+		name: slowSource.label,
+		exact: true,
+	});
+	await slowRow.click();
+	await expect(slowRow).toHaveAttribute("aria-busy", "true");
+	await page.keyboard.press("ArrowRight");
 	const nativeSource = tree.getByRole("treeitem", {
 		name: "Native",
 		exact: true,
 	});
 	await nativeSource.focus();
 	releaseLoad();
-	await expect(tree.getByRole("treeitem", { name: "Loading" })).toHaveCount(0);
+	await expect(slowRow).not.toHaveAttribute("aria-busy");
 	await expect(nativeSource).toBeFocused();
 });
 
@@ -4315,8 +4316,9 @@ test("pages and virtualizes large collection catalogues while loading sources la
 		exact: true,
 	});
 	await nativeGroup.focus();
-	await page.keyboard.press("ArrowDown");
-	await expect(tree.getByRole("treeitem", { name: "Loading" })).toBeFocused();
+	await expect(nativeGroup).toHaveAttribute("aria-busy", "true");
+	await page.keyboard.press("ArrowRight");
+	await expect(nativeGroup).toBeFocused();
 	releaseRootPage();
 	await expect(
 		tree.getByRole("treeitem", {
