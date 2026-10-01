@@ -8,6 +8,7 @@
     "editProfile": "编辑资料",
     "allBookmarks": "全部书签",
     "newCollection": "新建收藏夹",
+    "collectionRecordCount": "{count} 条记录",
     "editCollection": "编辑收藏夹",
     "collectionDescriptionLabel": "描述",
     "deleteCollectionTitle": "删除{name}？",

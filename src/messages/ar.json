@@ -8,6 +8,7 @@
     "editProfile": "تعديل الملف الشخصي",
     "allBookmarks": "كل الإشارات المرجعية",
     "newCollection": "مجموعة جديدة",
+    "collectionRecordCount": "{count, plural, one {سجل واحد} two {سجلان} few {# سجلات} many {# سجلًا} other {# سجل}}",
     "editCollection": "تعديل المجموعة",
     "collectionDescriptionLabel": "الوصف",
     "deleteCollectionTitle": "حذف {name}؟",

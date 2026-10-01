@@ -8,6 +8,7 @@
     "editProfile": "Modifier le profil",
     "allBookmarks": "Tous les signets",
     "newCollection": "Nouvelle collection",
+    "collectionRecordCount": "{count, plural, one {# notice} other {# notices}}",
     "editCollection": "Modifier la collection",
     "collectionDescriptionLabel": "Description",
     "deleteCollectionTitle": "Supprimer {name} ?",

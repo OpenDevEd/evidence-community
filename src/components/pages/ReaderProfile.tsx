@@ -116,6 +116,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 			<div className="flex flex-col gap-8 lg:flex-row xl:gap-10">
 				{collectionsEnabled ? (
 					<CollectionsNav
+						userId={data.id}
 						shelves={shelves}
 						selected={selected}
 						onSelect={select}
@@ -311,16 +312,19 @@ function CollectionDialog({
 
 /**
  * The reader's bookmarks and collections, in the column the library uses for
- * its filters. Choosing one lists its records beside it and opens its row to
- * show what it is for and, for its owner, a way to edit it.
+ * its filters, each shown as a small stack of its own records. Choosing one
+ * lists its records beside it, fans its stack out and opens the row to show
+ * what it is for and, for its owner, a way to edit it.
  */
 function CollectionsNav({
+	userId,
 	shelves,
 	selected,
 	onSelect,
 	onEdit,
 	onCreate,
 }: {
+	userId: string;
 	shelves: { id: string; name: string; count: number; isPrivate: boolean; description: string | null }[];
 	selected: string;
 	onSelect: (id: string) => void;
@@ -330,7 +334,6 @@ function CollectionsNav({
 	onCreate?: () => void;
 }) {
 	const t = useTranslations("ui");
-	const format = useFormatter();
 	return (
 		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
 			<nav className="flex flex-col gap-1 rounded-2xl bg-[#E8E6E1] p-4 dark:bg-secondary">
@@ -348,28 +351,26 @@ function CollectionsNav({
 					const isSelected = shelf.id === selected;
 					const isOpen = isSelected && Boolean(shelf.id) && Boolean(shelf.description || onEdit);
 					return (
-						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-white dark:bg-white/10")}>
+						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-white shadow-sm dark:bg-white/10")}>
 							<button
 								type="button"
 								aria-current={isSelected || undefined}
 								onClick={() => onSelect(shelf.id)}
 								className={twMerge(
-									"flex h-12 w-full items-center gap-3 rounded-xl px-3 text-start text-black/70 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/70 dark:hover:bg-white/[0.06]",
-									isSelected && "font-medium text-black hover:bg-transparent dark:text-white dark:hover:bg-transparent",
+									"group flex w-full items-center gap-4 rounded-xl p-3 text-start text-black/80 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/80 dark:hover:bg-white/[0.06]",
+									isSelected && "text-black hover:bg-transparent dark:text-white dark:hover:bg-transparent",
 								)}
 							>
-								<HugeiconsIcon
-									icon={shelf.id ? CollectionsBookmarkIcon : Bookmark02Icon}
-									className={twMerge("size-5 shrink-0", isSelected && "text-accent")}
-									aria-hidden
-								/>
-								<span className="flex min-w-0 flex-1 items-center gap-1.5">
-									<span className="truncate">{shelf.name}</span>
-									{shelf.isPrivate ? (
-										<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-70" aria-label={t("privateCollection")} />
-									) : null}
+								<CoverStack userId={userId} collectionId={shelf.id} count={shelf.count} fanned={isSelected} />
+								<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+									<span className="flex min-w-0 items-center gap-1.5">
+										<span className={twMerge("truncate font-medium", isSelected && "font-semibold")}>{shelf.name}</span>
+										{shelf.isPrivate ? (
+											<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
+										) : null}
+									</span>
+									<span className="text-small text-black/50 dark:text-white/50">{t("collectionRecordCount", { count: shelf.count })}</span>
 								</span>
-								<span className="shrink-0 text-small tabular-nums opacity-60">{format.number(shelf.count)}</span>
 							</button>
 							{/* The row opens to its full height, so the rows below slide down instead of jumping. */}
 							<div
@@ -380,9 +381,9 @@ function CollectionsNav({
 								)}
 							>
 								<div className="min-h-0 overflow-hidden">
-									<div className="flex flex-col items-start gap-3 pb-3 pe-3 ps-11">
+									<div className="flex flex-col items-start gap-3 px-3 pb-3">
 										{shelf.description ? (
-											<p className="text-small text-black/60 dark:text-white/60">{shelf.description}</p>
+											<p className="text-small leading-relaxed text-black/60 dark:text-white/60">{shelf.description}</p>
 										) : null}
 										{onEdit ? (
 											<Button
@@ -401,6 +402,56 @@ function CollectionsNav({
 				})}
 			</nav>
 		</aside>
+	);
+}
+
+/** Where each of the three covers sits, closed and fanned out: [x in px, rotation in degrees]. */
+const STACK_POSES = [
+	{ closed: [0, 0], fanned: [0, 0] },
+	{ closed: [-12, -8], fanned: [-22, -14] },
+	{ closed: [12, 8], fanned: [22, 14] },
+] as const;
+
+/**
+ * A collection's first three records as a little stack of cover pages, the
+ * first in front. A chosen collection fans its stack out. An empty one shows
+ * an outline where its first record will go. The box has a fixed size, so the
+ * covers arriving moves nothing.
+ */
+function CoverStack({ userId, collectionId, count, fanned }: { userId: string; collectionId: string; count: number; fanned: boolean }) {
+	const { data } = useShelfItems(userId, collectionId);
+	const records = data?.items.slice(0, 3) ?? [];
+	const slots = Math.min(count, 3);
+	return (
+		<span aria-hidden className="relative h-[4.5rem] w-24 shrink-0">
+			{count === 0 ? (
+				<span className="absolute start-1/2 top-1 aspect-[3/4] w-12 -translate-x-1/2 rounded-md border-2 border-dashed border-black/15 rtl:translate-x-1/2 dark:border-white/20" />
+			) : (
+				Array.from({ length: slots }, (_, index) => slots - 1 - index).map((index) => {
+					const record = records[index];
+					const [x, rotation] = STACK_POSES[index]![fanned ? "fanned" : "closed"];
+					return (
+						<span
+							key={index}
+							className="absolute start-1/2 top-1 -ms-6 w-12 transition-transform duration-300 ease-out group-hover:[--lift:-2px] motion-reduce:transition-none"
+							style={{ transform: `translate(${x}px, var(--lift, 0px)) rotate(${rotation}deg)` }}
+						>
+							{record ? (
+								<PdfCover
+									src={record.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage}
+									alt=""
+									title={record.title ?? undefined}
+									className="aspect-[3/4] w-full rounded-md object-cover shadow-[0_1px_3px_rgba(0,0,0,0.18)]"
+									width={48}
+								/>
+							) : (
+								<span className="block aspect-[3/4] w-full rounded-md bg-black/[0.08] dark:bg-white/10" />
+							)}
+						</span>
+					);
+				})
+			)}
+		</span>
 	);
 }
 

@@ -8,6 +8,7 @@
     "editProfile": "Hariri wasifu",
     "allBookmarks": "Alamisho zote",
     "newCollection": "Mkusanyiko mpya",
+    "collectionRecordCount": "{count, plural, one {rekodi #} other {rekodi #}}",
     "editCollection": "Hariri mkusanyiko",
     "collectionDescriptionLabel": "Maelezo",
     "deleteCollectionTitle": "Futa {name}?",

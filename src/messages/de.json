@@ -8,6 +8,7 @@
     "editProfile": "Profil bearbeiten",
     "allBookmarks": "Alle Lesezeichen",
     "newCollection": "Neue Sammlung",
+    "collectionRecordCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
     "editCollection": "Sammlung bearbeiten",
     "collectionDescriptionLabel": "Beschreibung",
     "deleteCollectionTitle": "{name} löschen?",

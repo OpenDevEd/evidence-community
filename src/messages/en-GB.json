@@ -8,6 +8,7 @@
     "editProfile": "Edit profile",
     "allBookmarks": "All bookmarks",
     "newCollection": "New collection",
+    "collectionRecordCount": "{count, plural, one {# record} other {# records}}",
     "editCollection": "Edit collection",
     "collectionDescriptionLabel": "Description",
     "deleteCollectionTitle": "Delete {name}?",

@@ -8,6 +8,7 @@
     "editProfile": "प्रोफ़ाइल संपादित करें",
     "allBookmarks": "सभी बुकमार्क",
     "newCollection": "नया संग्रह",
+    "collectionRecordCount": "{count, plural, one {# रिकॉर्ड} other {# रिकॉर्ड}}",
     "editCollection": "संग्रह संपादित करें",
     "collectionDescriptionLabel": "विवरण",
     "deleteCollectionTitle": "{name} हटाएँ?",

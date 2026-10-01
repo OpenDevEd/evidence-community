@@ -8,6 +8,7 @@
     "editProfile": "Editar perfil",
     "allBookmarks": "Todos os favoritos",
     "newCollection": "Nova coleção",
+    "collectionRecordCount": "{count, plural, one {# registo} other {# registos}}",
     "editCollection": "Editar coleção",
     "collectionDescriptionLabel": "Descrição",
     "deleteCollectionTitle": "Eliminar {name}?",
