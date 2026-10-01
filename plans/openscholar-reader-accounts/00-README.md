@@ -53,7 +53,7 @@ Libraries carry two separate login systems and neither is right:
    Deletion does not wait for the reader to come back: OpenScholar's Clerk
    `user.deleted` webhook (already handled by `markUserDeletedFromClerk`)
    queues a durable, retried call to every active library's machine-credential
-   endpoint `DELETE /api/openscholar/readers/{clerkUserId}`, which removes the
+   endpoint `DELETE /api/v1/openscholar/readers/{clerkUserId}`, which removes the
    reader's user row, sessions, likes and collections. The background check is
    the second path for a library that missed the call.
 6. Admins use the same session. The role still comes from OpenScholar's
@@ -78,10 +78,14 @@ Libraries carry two separate login systems and neither is right:
 10. Reader accounts are one configuration switch, `features.readerAccounts`,
     replacing `features.login` and `features.userCollections`. OpenScholar's
     configuration page shows it. Admin sign-in does not depend on it.
-11. Old reader data is dropped (user decision, 2026-10-01). The rollback
-    recreates the old tables empty and leaves the Better Auth tables and the
-    reader data saved on them in place, so rolling forward again finds it
-    intact. Nothing written after the migration is discarded.
+11. Old reader data is dropped (user decision, 2026-10-01). Better Auth's
+    tables get their own names through its `modelName` options
+    (`reader_user`, `reader_session`, `reader_account`, `reader_verification`)
+    so they never share a name with the old `user`, `account` and `session`.
+    The rollback recreates the old tables empty beside them and leaves the
+    Better Auth tables and the reader data saved on them in place, so rolling
+    forward again finds it intact. Nothing written after the migration is
+    discarded.
 
 ## Spike evidence (2026-10-01)
 
@@ -135,8 +139,10 @@ account ID.
 ### 1. OpenScholar: OAuth applications (OpenDevEd/openalex-count#375)
 
 - Create, update and delete the library's Clerk OAuth application in setup,
-  deployment (every origin change) and teardown. Redirect URIs change before
-  the library switches its canonical origin.
+  deployment (every origin change) and teardown. An origin change adds the new
+  callback URI while keeping the old one, switches and verifies the runtime,
+  and only then removes the old callback, so sign-in works on both origins
+  during the cutover.
 - Provisioning is recoverable. The application name carries the library ID.
   OpenScholar records the intent before calling Clerk and saves the
   application ID and encrypted secret in the same step that receives them. A
@@ -173,7 +179,7 @@ Owner of the OAuth application and its redirect URIs: OpenScholar.
 - Admin on the same session; HMAC cookie, `/api/admin/session` routes,
   `src/lib/admin/open-scholar.ts` and `AdminSessionProvider` deleted;
   no-access page on `/admin`.
-- Background check, and `DELETE /api/openscholar/readers/{clerkUserId}`
+- Background check, and `DELETE /api/v1/openscholar/readers/{clerkUserId}`
   behind `requireOpenScholarBearer` (decision 5).
 - The remote verification tools (`tools/adminSession.ts` and its callers:
   `verifyAdminItemBatchHttp`, `verifyAdminZoteroWriteback`,
@@ -191,8 +197,9 @@ Owner of the OAuth application and its redirect URIs: OpenScholar.
 - Migration: drop the tables `user`, `account`, `session`,
   `verificationToken`, `authenticator`, `userCollection`,
   `itemToUserCollection`, `userToLikes` and `userToFollow`; create Better
-  Auth's `user`, `session`, `account`, `verification` and the likes and
-  collection tables on the new `user`. Rollback: decision 11.
+  Auth's `reader_user`, `reader_session`, `reader_account`,
+  `reader_verification` and the likes and collection tables on
+  `reader_user`. Rollback: decision 11.
 - `src/lib/emails/preview.ts` links to the library's `/admin`.
 - Docs: `docs/cookie-inventory.md`, the public `docs/cookie-policy.md`,
   `docs/evidence-library-customization-map.md`,
