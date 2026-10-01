@@ -89,6 +89,48 @@ Libraries carry two separate login systems and neither is right:
     forward again finds it intact. Nothing written after the migration is
     discarded.
 
+## Decisions from the approved mock (2026-10-01)
+
+The mock lives on new-el branch `mock/openscholar-sign-in` (last commit
+`86291c97`). It uses a fake session in `localStorage`; the shipped code takes
+its components and wires them to Better Auth.
+
+12. Decision 4's button changes. Old: a "Sign in with OpenScholar" button with
+    the OpenScholar logo. New (user, 2026-10-01): a plain accent-filled "Sign
+    in" button with a standard sign-in icon, icon-only with a tooltip on narrow
+    screens. Reason: the branded pill clashed with every library theme. The
+    OpenScholar mark appears only in the account menu ("Signed in with
+    OpenScholar"), drawn in the text colour. Decision 4's no-redirect rule is
+    unchanged.
+13. Header: the navigation links, theme and language controls and the account
+    control are laid out from server-measured widths written as container
+    queries (`src/lib/navbar-fit.ts`, `NavbarFitStyles`). Theme and language
+    always sit in a settings menu; languages open as a step inside it. The
+    account menu holds the reader's name ("Reader" when empty), "Add your
+    name" when empty, Profile, OpenScholar account (external) and Sign out.
+14. Profile page: a card with a band of the reader's bookmark covers, the
+    avatar, name, counts and first-bookmark month, "Share profile" (copies the
+    link) and, on the reader's own profile, "Edit profile" ("Add your name"
+    when empty) opening the OpenScholar account page. Below it the bookmarks
+    use the library's own list (`ItemsList`) with the same search, scope, sort
+    and help placement as `/lib`. Collections sit in a card in the filter
+    column: each shows its first three covers as a stack; the chosen one fans
+    out and shows its description and, for its owner, Edit. On phones a picker
+    replaces the column. Changing collection or page returns to the top of
+    the list, not the page.
+15. Collections can be edited: name (24 characters), description (200) and
+    private. A new collection starts private, because profiles are public.
+    Deleting asks first and keeps the bookmarks. new-el adds
+    `PATCH /api/user/collections/[id]` beside the existing create and delete.
+16. The AI chat on a profile works on the list the reader is looking at: the
+    profile sends its reader and collection as the chat's result set, and the
+    chat's result tool applies the same filter as the list. The chat stays a
+    dialog on profiles.
+17. A private collection is visible only to its owner, in the list and in the
+    chat. Today `getItems` ignores the 403 from `getProfileSearchFilter` and
+    lists the whole library for someone else's private collection; that
+    defect is fixed on its own, before phase 2.
+
 ## Spike evidence (2026-10-01)
 
 Better Auth 1.7.7, Next 16.3.5 and drizzle-orm 0.45.2 against the development
@@ -196,6 +238,8 @@ Owner of the OAuth application and its redirect URIs: OpenScholar.
 - Reader UI moves to Better Auth's `useSession`; server routes use
   `auth.api.getSession`; follows removed; email never leaves the server for
   other readers; "Reader" fallback and "Add your name".
+- Header from the mock (decisions 12 and 13): Sign in button, account menu,
+  settings menu and measured layout. `LoginModal.tsx` is deleted.
 - Admin on the same session; HMAC cookie, `/api/admin/session` routes,
   `src/lib/admin/open-scholar.ts` and `AdminSessionProvider` deleted;
   no-access page on `/admin`.
@@ -227,6 +271,21 @@ Owner of the OAuth application and its redirect URIs: OpenScholar.
 
 Owner of sessions, reader data and the profile privacy rule: new-el.
 
+### 2c. new-el: profile, collections and chat (OpenDevEd/new-el#93)
+
+After phase 2, on the same session:
+
+- The profile page from the mock (decision 14) replaces `Profile.tsx`.
+- `PATCH /api/user/collections/[id]` and the collection dialog
+  (decision 15); create and delete move to the new session.
+- The chat's result set gains an optional reader list (reader ID and
+  collection). The chat's result tool applies `getProfileSearchFilter` to it
+  and refuses a private collection the asker cannot see (decisions 16
+  and 17).
+
+Before phase 2, as its own fix: `getItems` honours the 403 from
+`getProfileSearchFilter` (decision 17).
+
 ### 3. Cleanup (OpenDevEd/openalex-count#375)
 
 After every dev library runs the phase 2 runtime: delete `adminHandoff.ts`,
@@ -240,7 +299,9 @@ and the old readiness answer. Open admin links straight to the library's
 
 - new-el unit tests: session and role resolution, no-access answer, profile
   responses without email, the "Reader" fallback, deleted-user cleanup,
-  unreachable-OpenScholar keeps the session.
+  unreachable-OpenScholar keeps the session, collection edits by the owner
+  only, someone else's private collection refused in the list and in the
+  chat, and the chat's reader result set.
 - new-el e2e: admin and reader specs sign in through Better Auth `test-utils`;
   the fake OpenScholar keeps only `admin-session/check` and the user-exists
   endpoint.
