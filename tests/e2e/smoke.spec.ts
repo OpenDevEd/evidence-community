@@ -560,16 +560,18 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 });
 
 /**
- * The header's actions: the banner's last navigation. Found by role, not
- * label, so it works in every language; the first may hold link menus of its
- * own.
+ * The header's actions: the banner's second navigation, after the links.
+ * Found by role, not label, so it works in every language. A library that
+ * offers no settings and no Sign in has none, and the links' own menus must
+ * not be mistaken for it.
  */
 function headerActions(page: Page) {
-	return page.getByRole("banner").getByRole("navigation").last();
+	return page.getByRole("banner").getByRole("navigation").nth(1);
 }
 
 /** Opens the header's one menu button, if it has one: settings, or settings and Sign in. */
 async function openHeaderMenu(page: Page) {
+	if ((await page.getByRole("banner").getByRole("navigation").count()) < 2) return null;
 	const trigger = headerActions(page).locator("button[aria-haspopup]").filter({ visible: true });
 	if ((await trigger.count()) === 0) return null;
 	await trigger.first().click();
