@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
-import { mintReaderSessionCookies } from "../../tools/readerTestSession";
+import { cookieHeader, mintReaderSessionCookies } from "../../tools/readerTestSession";
 
 /** The Clerk users the fake OpenScholar gives each role in the acceptance libraries. */
 export const ACCEPTANCE_ADMINS = {
@@ -20,8 +20,8 @@ function requiredEnvironment(name: string) {
  * library's own Better Auth made. Clerk is not involved: the redirect to
  * OpenScholar is checked on its own.
  */
-export async function signInAs(context: BrowserContext, clerkUserId: string, name?: string) {
-	const { readerId, cookies } = await mintReaderSessionCookies(
+function mintSession(clerkUserId: string, name?: string) {
+	return mintReaderSessionCookies(
 		{
 			databaseUrl: requiredEnvironment("EVIDENCE_LIBRARY_TEST_DATABASE_URL"),
 			secret: requiredEnvironment("EVIDENCE_LIBRARY_TEST_AUTH_SECRET"),
@@ -30,8 +30,21 @@ export async function signInAs(context: BrowserContext, clerkUserId: string, nam
 		clerkUserId,
 		{ name, cookieDomain: new URL(requiredEnvironment("PLAYWRIGHT_BASE_URL")).hostname },
 	);
+}
+
+export async function signInAs(context: BrowserContext, clerkUserId: string, name?: string) {
+	const { readerId, cookies } = await mintSession(clerkUserId, name);
 	await context.addCookies(cookies.map((cookie) => ({ ...cookie, sameSite: cookie.sameSite ?? "Lax" })));
 	return readerId;
+}
+
+/**
+ * The same session as a Cookie header, for API requests over a plain-HTTP
+ * test port, where the browser would not send the library's secure cookies.
+ */
+export async function readerSessionHeader(clerkUserId: string) {
+	const { readerId, cookies } = await mintSession(clerkUserId);
+	return { readerId, cookie: cookieHeader(cookies) };
 }
 
 export function signInAdmin(page: Page, role: keyof typeof ACCEPTANCE_ADMINS = "editor") {

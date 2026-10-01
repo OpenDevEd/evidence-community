@@ -6,7 +6,7 @@ import {
 	type Page,
 } from "@playwright/test";
 
-import { signInAs } from "./admin-login";
+import { readerSessionHeader } from "./admin-login";
 import { dismissConsent, expectsConsent } from "./consent";
 
 test.skip(
@@ -490,23 +490,31 @@ test("offers OpenScholar sign-in only where reader accounts are on", async ({
 	expect((await request.get("/api/reader")).status()).toBe(401);
 
 	// Only pressing the button goes to OpenScholar, and it comes back to the library.
+	// This suite reaches the library through a test port; Better Auth accepts
+	// sign-in only from the library's own address, as a browser on it would send.
+	const libraryBaseUrl = process.env.EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL!;
+	await page.route("**/api/auth/sign-in/social", async (route) => {
+		// A browser will not let a page change its Origin, so this one request goes through Playwright.
+		const response = await route.fetch({ headers: { ...route.request().headers(), origin: new URL(libraryBaseUrl).origin } });
+		await route.fulfill({ response });
+	});
 	await signIn.click();
 	await page.waitForURL(/\/oauth\/authorize\?/u);
 	expect(new URL(page.url()).searchParams.get("redirect_uri")).toBe(
-		new URL("/api/auth/callback/openscholar", process.env.PLAYWRIGHT_BASE_URL!).toString(),
+		new URL("/api/auth/callback/openscholar", libraryBaseUrl).toString(),
 	);
 
 	// A signed-in reader keeps a private collection to themselves.
-	const readerId = await signInAs(page.context(), `user_acceptance_reader_${Date.now()}`);
-	const created = await page.request.post("/api/reader/collections", {
+	const { readerId, cookie } = await readerSessionHeader(`user_acceptance_reader_${Date.now()}`);
+	const created = await request.post("/api/reader/collections", {
 		data: { name: "Reading group", private: true },
+		headers: { cookie },
 	});
 	expect(created.status()).toBe(201);
 	const { id } = (await created.json()) as { id: string };
 	const listUrl = `/api/user/items/${readerId}?collectionId=${id}`;
-	expect((await page.request.get(listUrl)).status()).toBe(200);
-	await page.context().clearCookies();
-	expect((await page.request.get(listUrl)).status()).toBe(403);
+	expect((await request.get(listUrl, { headers: { cookie } })).status()).toBe(200);
+	expect((await request.get(listUrl)).status()).toBe(403);
 });
 
 test("delivers configured contact mail through SMTP only when enabled", async ({
