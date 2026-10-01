@@ -123,8 +123,9 @@ its components and wires them to Better Auth.
     the list, not the page.
 15. Collections can be edited: name (24 characters), description (200) and
     private. A new collection starts private, because profiles are public.
-    Deleting asks first and keeps the bookmarks. new-el adds
-    `PATCH /api/user/collections/[id]` beside the existing create and delete.
+    Deleting asks first and keeps the bookmarks. The reader routes live under
+    `/api/reader`: `collections` (create), `collections/[id]` (`PATCH` and
+    `DELETE`) and `collections/[id]/items`.
 16. The AI chat on a profile works on the list the reader is looking at: the
     profile sends its reader and collection as the chat's result set, and the
     chat's result tool applies the same filter as the list. The chat stays a
@@ -258,7 +259,7 @@ Owner of the OAuth application and its redirect URIs: OpenScholar.
   (`@clerk/testing`), and the tool reuses the library session cookie it gets
   back. This works against a deployed preview before `/api/admin/session` is
   deleted. Better Auth `test-utils` is for local tests only.
-- Schema: `authentication.openScholar.oauth`, `accountUrl`,
+- Schema: `authentication.openScholar.oauth`, `accountUrl`, `libraryUrl`,
   `features.readerAccounts`;
   `authentication.google`, `loginPageUrl`, `features.login` and
   `features.userCollections` removed. Regenerate OpenScholar's catalogs.
@@ -284,11 +285,13 @@ same session:
 - The profile page from the mock (decision 14) replaces `Profile.tsx`. Its
   data lists a private collection only to its owner (today
   `getProfileForConfig` returns every collection's name to visitors).
-- `PATCH /api/user/collections/[id]` and the collection dialog
-  (decision 15); create and delete move to the new session. Adding a record
-  to a collection, editing and deleting all check that the signed-in reader
-  owns the collection (today `POST /api/user/item/[key]` accepts any
-  collection ID).
+- The `/api/reader` collection routes and the collection dialog
+  (decision 15). Adding a record to a collection, editing and deleting all
+  check that the signed-in reader owns the collection (today
+  `POST /api/user/item/[key]` accepts any collection ID). Deleting removes
+  the collection row and its memberships, so no list, profile or chat can
+  read a deleted collection (today a delete only sets
+  `userCollection.deleted`, which the list query ignores).
 - The chat's result set gains an optional reader list (reader ID and
   collection). The chat's result tool applies `getProfileSearchFilter` to it
   and refuses a private collection the asker cannot see (decisions 16
