@@ -1,15 +1,11 @@
 "use client";
 
-import {
-	ComposableMap,
-	Geographies,
-	Geography,
-	Graticule,
-	Sphere,
-	ZoomableGroup,
-} from "react-simple-maps";
-import { geoEqualEarth, geoPath } from "d3-geo";
-import { ReactNode, useEffect, useMemo, useState, useRef, memo } from "react";
+import { geoEqualEarth, geoGraticule, geoPath } from "d3-geo";
+import { select } from "d3-selection";
+import { zoom, zoomIdentity, zoomTransform, type ZoomTransform } from "d3-zoom";
+import { feature } from "topojson-client";
+import { flushSync } from "react-dom";
+import { Fragment, ReactNode, Suspense, use, useEffect, useMemo, useState, useRef, memo } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -27,28 +23,22 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { BREAKPOINTS } from "@/../design-tokens";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-// URL to the world map GeoJSON data
-const geoUrl = "/features.json";
-
 function MouseTooltip({
 	content,
-	zoomData,
 	anchor,
 }: {
 	content: ReactNode | null;
-	zoomData: any;
 	anchor: { x: number; y: number } | null;
 }) {
 	const [mouse] = useMouse();
-	const dragging = zoomData?.dragging;
 	const isDesktop = useBreakpoint("md");
 
 	if (!isDesktop && !anchor) {
 		return null;
 	}
 
-	const top = anchor?.y ?? (dragging ? dragging.y : mouse.y);
-	const left = anchor?.x ?? (dragging ? dragging.x : mouse.x);
+	const top = anchor?.y ?? mouse.y;
+	const left = anchor?.x ?? mouse.x;
 	return (
 		<Tooltip
 			color="default"
@@ -138,7 +128,9 @@ const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
 });
 
 type CountryRow = { code: string; name: string; count: number };
-type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: string }> & { id: string; rsmKey: string };
+type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: string }> & { id: string };
+/** The outlines the globe draws: the countries, and Antarctica, which has no records and isn't in the countries file. */
+type World = { countries: Feature[]; antarctica: Feature[] };
 /** A country on the map: `location` is its place in the region filter, when it has one. */
 type Country = { code?: string; location?: string; name: string; count: number; selected: boolean };
 type Anchor = { x: number; y: number } | null;
@@ -209,7 +201,8 @@ function phoneView(frame: Frame, focus?: [number, number]) {
 	const target = focus ?? [20, 0];
 	const projection = globeFor(target).fitExtent([[frame.left, frame.top], [frame.left + 4 * (frame.bottom - frame.top), frame.bottom]], LAND);
 	const [x] = projection(target)!;
-	return { projection, center: projection.invert!([x, frame.height / 2]) as [number, number], minZoom: 1 };
+	const [left, top] = projection.translate();
+	return { projection: projection.translate([left + frame.width / 2 - x, top]), minZoom: 1 };
 }
 
 /** A wide screen opens zoomed in on the library's countries, far enough in that the globe fills the screen from top to bottom,
@@ -223,7 +216,7 @@ function desktopView(frame: Frame, focus?: [number, number]) {
 	const [x, y] = projection(focus ?? fitted.invert!(middle)!)!;
 	const shiftY = middle[1] + frame.pad - y;
 	projection.translate([middle[0] + frame.pad - x, focus ? coverY(projection, frame, shiftY) : shiftY]);
-	return { projection, center: projection.invert!([frame.width / 2 + frame.pad, frame.height / 2 + frame.pad]) as [number, number], minZoom: 1 / zoom };
+	return { projection, minZoom: 1 / zoom };
 }
 
 /** Moves the globe up or down only as far as keeps it covering the screen from top to bottom. */
@@ -272,14 +265,19 @@ function anchorOf(element: Element): Anchor {
 	};
 }
 
-// Countries are cut apart by thin lines of sea. Pointing at one deepens it and outlines it in white; a selected one is deeper still.
-const LIFTED = { fill: "color-mix(in oklab, rgb(var(--color-accent-500)), black 12%)", stroke: "white", strokeWidth: 1.5, outline: "none" };
-const CHOSEN = { fill: "color-mix(in oklab, rgb(var(--color-accent-500)), black 22%)", stroke: "white", strokeWidth: 2, outline: "none" };
+/** A line `width` pixels wide on screen at any zoom: the map's zoom (`--map-k`) is set only when a gesture ends, so while one runs the
+ * lines scale with the map instead of Firefox redrawing every outline on every frame. */
+function line(width: number) {
+	return `calc(${width}px / var(--map-k))`;
+}
 
-function shapeStyle(country: Country, hovered: string | null, max: number) {
-	const rest = { fill: tint(country.count, max), stroke: "var(--map-sea)", strokeWidth: 0.6, outline: "none" };
-	const active = activeStyle(country, rest);
-	return { default: country.selected || hovered === country.code ? active : rest, hover: active, pressed: active };
+// Countries are cut apart by thin lines of sea. Pointing at one deepens it and outlines it in white; a selected one is deeper still.
+const LIFTED = { fill: "color-mix(in oklab, rgb(var(--color-accent-500)), black 12%)", stroke: "white", strokeWidth: line(1.5) };
+const CHOSEN = { fill: "color-mix(in oklab, rgb(var(--color-accent-500)), black 22%)", stroke: "white", strokeWidth: line(2) };
+
+function shapeStyle(country: Country, hovered: string | null, max: number): React.CSSProperties {
+	const rest = { fill: tint(country.count, max), stroke: "var(--map-sea)", strokeWidth: line(0.6) };
+	return country.selected || hovered === country.code ? activeStyle(country, rest) : rest;
 }
 
 /** A country without records doesn't change when pointed at. */
@@ -314,14 +312,14 @@ function CountryTip({ country }: { country: Country }) {
 	);
 }
 
-function CountryShape({ geo, country, style, onSelect, onShow, onHide }: { geo: Feature; country: Country; style: ReturnType<typeof shapeStyle>; onSelect: (code: string) => void; onShow: (country: Country, anchor: Anchor) => void; onHide: () => void }) {
+function CountryShape({ d, country, style, onSelect, onShow, onHide }: { d: string; country: Country; style: React.CSSProperties; onSelect: (code: string) => void; onShow: (country: Country, anchor: Anchor) => void; onHide: () => void }) {
 	const t = useTranslations("ui");
 	const select = () => {
 		if (country.location) onSelect(country.code!);
 	};
 	return (
-		<Geography
-			geography={geo}
+		<path
+			d={d}
 			{...roleOf(country)}
 			aria-label={country.name}
 			aria-description={t.markup("resourcesCount", { count: country.count, number: (value) => value })}
@@ -334,47 +332,129 @@ function CountryShape({ geo, country, style, onSelect, onShow, onHide }: { geo: 
 			onClick={select}
 			onMouseEnter={() => onShow(country, null)}
 			onMouseLeave={onHide}
-			onFocusCapture={(event) => onShow(country, anchorOf(event.currentTarget))}
-			onBlurCapture={onHide}
-			vectorEffect="non-scaling-stroke"
-			className={twMerge("transition-[fill] duration-150 motion-reduce:transition-none", country.count > 0 && "cursor-pointer")}
+			onFocus={(event) => onShow(country, anchorOf(event.currentTarget))}
+			onBlur={onHide}
+			className={twMerge("outline-none", country.count > 0 && "cursor-pointer")}
 			style={style}
 		/>
 	);
 }
 
-/** The globe: a shaded sea, Antarctica, a faint graticule and the countries, drawn past the screen's edges on a wide screen and slid sideways by `offset`. */
-function Globe({ view, offset, inert, onMove, children }: { view: ReturnType<typeof mapView>; offset: number; inert: boolean; onMove: (data: unknown) => void; children: (geographies: Feature[]) => ReactNode }) {
+const WORLD_FILES = ["/features.json", "/antarctica.json"];
+let world: Promise<World | null> | undefined;
+
+/** The outlines, fetched once per page load; the page preloads both files, so this usually finds them downloaded. A failure is
+ * logged and leaves the map out for this page load rather than breaking the page; the failure stays cached, so Suspense
+ * doesn't fetch again on every retry. */
+function loadWorld() {
+	world ??= Promise.all(WORLD_FILES.map((url) => fetch(url).then(jsonOf)))
+		.then(([topology, antarctica]) => ({ countries: feature(topology, topology.objects.world).features as Feature[], antarctica: antarctica.features }))
+		.catch((error: unknown) => {
+			console.error("Map: the world outlines could not be loaded", error);
+			return null;
+		});
+	return world;
+}
+
+// The outlines start parsing as soon as this script runs in the browser, while the page is still hydrating.
+if (typeof window !== "undefined") void loadWorld();
+
+async function jsonOf(response: Response) {
+	if (!response.ok) throw new Error(`${response.url} answered ${response.status}`);
+	return response.json();
+}
+
+const GRATICULE = geoGraticule().step([15, 15])();
+
+/** How a gesture moves the drawn map, from the zoom the SVG was drawn at (`from`) to where the gesture is now (`to`). */
+function cssTransform(from: ZoomTransform, to: ZoomTransform) {
+	const scale = to.k / from.k;
+	return `translate(${to.x - scale * from.x}px, ${to.y - scale * from.y}px) scale(${scale})`;
+}
+
+/** The globe, once its outlines have arrived. Until then the page shows nothing here, and the globe fades in whole when they do. */
+function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof GlobeView>[0], "view" | "world">) {
 	if (!view) return null;
+	const loaded = use(loadWorld());
+	return loaded && <GlobeView view={view} world={loaded} {...rest} />;
+}
+
+/** A shaded sea, Antarctica, a faint graticule and the countries, drawn past the screen's edges on a wide screen and slid sideways by `offset`.
+ * Zooming and panning move the drawn map as one composited layer with a CSS transform, so Firefox redraws nothing while a gesture runs;
+ * when it ends, the zoom is committed to the SVG and the outlines are redrawn sharp at the new scale. Nothing here is blurred or
+ * transitioned: Firefox redraws a blur, or a fading fill, across the whole globe on every frame, which kept a core or more busy. */
+function GlobeView({ view, world, offset, inert, renderCountry }: { view: View; world: World; offset: number; inert: boolean; renderCountry: (geo: Feature, d: string) => ReactNode }) {
+	const stage = useRef<HTMLDivElement>(null);
+	const layer = useRef<HTMLDivElement>(null);
+	const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
 	const { pad, width, height } = view.frame;
+	const drawn = useMemo(() => {
+		const draw = geoPath(view.projection);
+		return { sea: draw(SPHERE) ?? "", graticule: draw(GRATICULE) ?? "", antarctica: world.antarctica.map((geo) => draw(geo) ?? ""), countries: world.countries.map((geo) => draw(geo) ?? "") };
+	}, [view.projection, world]);
+
+	// d3-zoom is an outside system: it listens for the pointer, wheel and touch on the stage until the globe goes away.
+	useEffect(() => {
+		const element = stage.current!;
+		const moving = layer.current!;
+		// The zoom the SVG was last drawn at. Gestures can overlap (a drag starting while a wheel gesture is settling), so every frame
+		// moves the layer from this, and a gesture's end redraws the SVG at the zoom as it is then.
+		let committed = zoomTransform(element);
+		let active = 0;
+		const behaviour = zoom<HTMLDivElement, unknown>()
+			.scaleExtent([view.minZoom, 12])
+			.duration(0)
+			.on("start", () => {
+				active += 1;
+				moving.style.willChange = "transform";
+			})
+			.on("zoom", (event: { transform: ZoomTransform }) => {
+				moving.style.transform = cssTransform(committed, event.transform);
+			})
+			.on("end", (event: { transform: ZoomTransform }) => {
+				active -= 1;
+				committed = event.transform;
+				flushSync(() => setTransform(committed));
+				moving.style.transform = "";
+				if (!active) moving.style.willChange = "";
+			});
+		select(element).call(behaviour);
+		return () => {
+			select(element).on(".zoom", null);
+		};
+	}, [view.minZoom]);
+
 	return (
-		<div className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)` }} inert={inert}>
-			<ComposableMap projection={view.projection as never} width={width + 2 * pad} height={height + 2 * pad}>
-				<defs>
-					{/* The sea is lit from above the middle and darkens towards the rim, so the flat projection reads as a globe. */}
-					<radialGradient id="map-sea-shade" cx="50%" cy="42%" r="66%">
-						<stop offset="0%" stopColor="var(--map-sea-lit)" />
-						<stop offset="62%" stopColor="var(--map-sea)" />
-						<stop offset="100%" stopColor="var(--map-sea-rim)" />
-					</radialGradient>
-				</defs>
-				<ZoomableGroup center={view.center} minZoom={view.minZoom} maxZoom={12} onMoveEnd={() => onMove(null)} onMove={onMove}>
-					<Sphere id="map-sea" fill="url(#map-sea-shade)" stroke="none" strokeWidth={0} style={{ filter: "drop-shadow(0 24px 36px rgb(20 40 70 / 0.12))" }} />
-					{/* Antarctica has no records and isn't in the countries file; it's drawn only so the globe's south isn't empty sea. */}
-					<Geographies geography="/antarctica.json">
-						{({ geographies }: { geographies: Feature[] }) => geographies.map((geo) => <Geography key={geo.rsmKey} geography={geo} tabIndex={-1} aria-hidden fill="var(--map-land)" stroke="var(--map-sea)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" style={{ default: { outline: "none" }, hover: { outline: "none" }, pressed: { outline: "none" } }} />)}
-					</Geographies>
-					<Graticule step={[15, 15]} stroke="rgb(20 40 70)" strokeOpacity={0.06} strokeWidth={0.5} vectorEffect="non-scaling-stroke" className="dark:[stroke:white]" />
-					<Geographies geography={geoUrl}>{({ geographies }: { geographies: Feature[] }) => children(geographies)}</Geographies>
-					<Sphere id="map-rim" fill="none" stroke="var(--map-sea-rim)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-				</ZoomableGroup>
-			</ComposableMap>
+		<div ref={stage} className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)` }} inert={inert}>
+			<div ref={layer} className="size-full origin-top-left animate-fade-in motion-reduce:animate-none" style={{ "--map-k": transform.k } as React.CSSProperties}>
+				{/* Not clipped to its box: while a gesture moves the layer, the geography beyond the box slides into view instead of blank space. */}
+				<svg width={width + 2 * pad} height={height + 2 * pad} overflow="visible" className="block">
+					<defs>
+						{/* The sea is lit from above the middle and darkens towards the rim, so the flat projection reads as a globe. */}
+						<radialGradient id="map-sea-shade" cx="50%" cy="42%" r="66%">
+							<stop offset="0%" stopColor="var(--map-sea-lit)" />
+							<stop offset="62%" stopColor="var(--map-sea)" />
+							<stop offset="100%" stopColor="var(--map-sea-rim)" />
+						</radialGradient>
+					</defs>
+					<g transform={transform.toString()}>
+						<g aria-hidden>
+							<path d={drawn.sea} fill="url(#map-sea-shade)" />
+							{drawn.antarctica.map((d, index) => <path key={index} d={d} fill="var(--map-land)" stroke="var(--map-sea)" style={{ strokeWidth: line(0.6) }} />)}
+							<path d={drawn.graticule} fill="none" stroke="rgb(20 40 70)" strokeOpacity={0.06} style={{ strokeWidth: line(0.5) }} className="dark:[stroke:white]" />
+						</g>
+						{world.countries.map((geo, index) => <Fragment key={index}>{renderCountry(geo, drawn.countries[index])}</Fragment>)}
+						<path aria-hidden d={drawn.sea} fill="none" stroke="var(--map-sea-rim)" style={{ strokeWidth: line(1) }} />
+					</g>
+				</svg>
+			</div>
 		</div>
 	);
 }
 
-function facetOf(props: ReturnType<typeof useItemsList>) {
-	return (props.facetDistribution?.country_uncategorized ?? {}) as Record<string, number>;
+/** The countries' record counts: the shared filters' facets once they arrive, and until then the counts the server sent with the page. */
+function facetOf(props: ReturnType<typeof useItemsList>, initial?: Record<string, number>) {
+	return (props.facetDistribution?.country_uncategorized ?? initial ?? {}) as Record<string, number>;
 }
 
 
@@ -438,20 +518,20 @@ function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props:
 }
 
 
-export default function Map({ focus, places }: { focus?: [number, number]; places: Places }) {
+/** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
+export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
 	const { search } = useLibraryConfig();
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
 		null,
 	);
 	const [tooltipAnchor, setTooltipAnchor] = useState<Anchor>(null);
-	const [zoomData, setZoomData] = useState<any>(null);
 	const [hovered, setHovered] = useState<string | null>(null);
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
 		disableViewSwitch: true,
 		interactionsStyle: "one-line",
 	});
-	const facet = facetOf(props);
+	const facet = facetOf(props, counts);
 	const rows = countryRows(facet);
 	const maxItems = Math.max(1, ...rows.map((row) => row.count));
 	const size = useWindowSize();
@@ -504,20 +584,22 @@ export default function Map({ focus, places }: { focus?: [number, number]; place
 		>
 			<MouseTooltip
 				content={tooltipContent}
-				zoomData={zoomData}
 				anchor={tooltipAnchor}
 			/>
 			<Search props={props} />
 			<CountryPanel props={props} rows={rows} max={maxItems} hovered={hovered} onHover={setHovered} onSelect={selectCountry} />
 			<MemoizedItemView props={props} />
-			<Globe view={view} offset={offset} inert={!isDesktop && chosen.length > 0} onMove={setZoomData}>
-				{(geographies) =>
-					geographies.map((geo) => {
+			<Suspense fallback={null}>
+				<Globe
+					view={view}
+					offset={offset}
+					inert={!isDesktop && chosen.length > 0}
+					renderCountry={(geo, d) => {
 						const country = countryOf(geo, facet, chosen);
-						return <CountryShape key={geo.rsmKey} geo={geo} country={country} style={shapeStyle(country, hovered, maxItems)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
-					})
-				}
-			</Globe>
+						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, maxItems)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
+					}}
+				/>
+			</Suspense>
 		</main>
 	);
 }
