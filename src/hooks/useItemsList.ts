@@ -41,7 +41,10 @@ function useItemsResults(
 		shouldRetryOnError: false,
 		revalidateOnFocus: false,
 		revalidateOnReconnect: false,
-		revalidateIfStale: false,
+		// A reader's own list changes whenever they bookmark or collect a
+		// record elsewhere, so it reloads each time its page opens; the
+		// library's list keeps what it already loaded.
+		revalidateIfStale: Boolean(userData),
 		onSuccess: (data) => {
 			if (data.totalPages < params.page) {
 				handlePageChange(data.totalPages);

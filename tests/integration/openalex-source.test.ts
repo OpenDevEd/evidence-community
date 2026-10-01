@@ -6,7 +6,7 @@ vi.mock("@/lib/source-ingestion/transactional-writer", async (importOriginal) =>
 });
 import { randomBytes } from "node:crypto";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
 	itemIdentity,
 	itemSourceLink,
@@ -26,6 +26,7 @@ import { completeNativePdfUpload, stageNativePdfUpload } from "@/lib/admin/nativ
 import { approveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { adminItemListProjection } from "@/db/schema/tables/adminItemListProjection";
 import { item } from "@/db/schema/tables/item";
+import { itemLink } from "@/db/schema/tables/itemLink";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -913,6 +914,134 @@ it("stops starting PDFs after one fails, and still cleans up", async () => {
 		expect(started).toBe(48);
 		// The failed PDF stage still cleans up what it staged.
 		expect(cleanedAfterFailure).toBe(1);
+	});
+}, 120_000);
+
+it("withdraws a Zenodo version DOI's record once DataCite confirms it, keeps it withdrawn, and brings it back if its concept leaves", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-versions", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } });
+		// OpenAlex lists a Zenodo upload twice: once under its concept DOI and once under its version DOI.
+		const upload = (id: number, doi: string) => ({
+			...work(id, "TVET teachers' digital competence"),
+			doi: `https://doi.org/${doi}`,
+			publication_date: "2026-09-28",
+			indexed_in: ["datacite"],
+			best_oa_location: { is_oa: true, pdf_url: `https://zenodo.org/records/${id}/files/paper.pdf`, license: "cc-by" },
+		});
+		// The version arrives first.
+		let works = [upload(2, "10.5281/zenodo.492"), upload(1, "10.5281/zenodo.491"), work(3, "Another study")];
+		let dataCiteUp = false;
+		let linked = true;
+		const respond = (async (input: RequestInfo | URL) => {
+			const url = new URL(String(input));
+			if (url.host === "api.datacite.org") {
+				if (!dataCiteUp) return new Response("Service unavailable", { status: 503 });
+				const relations: Record<string, unknown[]> = linked
+					? { "10.5281/zenodo.492": [{ relationType: "IsVersionOf", relatedIdentifier: "10.5281/zenodo.491", relatedIdentifierType: "DOI" }] }
+					: {};
+				return Response.json({
+					data: url.searchParams.get("ids")!.split(",").map((doi) => ({ attributes: { doi, relatedIdentifiers: relations[doi as keyof typeof relations] ?? [] } })),
+				});
+			}
+			return Response.json({ meta: { count: works.length, next_cursor: null }, results: works });
+		}) as typeof fetch;
+		const processor = Object.assign(async (record: SourceItemUpsert) => record, {
+			reuse: async (record: SourceItemUpsert) => record,
+			flushCleanup: async () => {},
+		});
+		const connection = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-versions")))[0]!;
+		const fullScan = async () => {
+			await db.update(sourceConnection).set({ syncCursor: {} }).where(eq(sourceConnection.key, "oa-versions"));
+			await syncOpenAlexSource(
+				{ database: db, sourceConnection: await connection(), credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{ attachmentProcessor: processor, fetch: respond, sleep: async () => {} },
+			);
+		};
+		const live = async () =>
+			(await db.select({ key: item.sourceRecordKey }).from(item).where(sql`${item.deleted} = 0 and ${item.sourceRecordKey} like 'W%'`))
+				.map((row) => row.key)
+				.sort();
+
+		// While DataCite cannot be asked, both are kept.
+		await fullScan();
+		expect(await live()).toEqual(["W1", "W1:pdf", "W2", "W2:pdf", "W3"]);
+
+		// The next full scan withdraws the version with its PDF, and its PDF stage does not bring it back.
+		dataCiteUp = true;
+		await fullScan();
+		expect(await live()).toEqual(["W1", "W1:pdf", "W3"]);
+
+		// While DataCite cannot be asked, it stays withdrawn.
+		dataCiteUp = false;
+		await fullScan();
+		expect(await live()).toEqual(["W1", "W1:pdf", "W3"]);
+
+		// If DataCite stops linking the two, it comes back; once it links them again, it goes.
+		dataCiteUp = true;
+		linked = false;
+		await fullScan();
+		expect(await live()).toEqual(["W1", "W1:pdf", "W2", "W2:pdf", "W3"]);
+		linked = true;
+		await fullScan();
+		expect(await live()).toEqual(["W1", "W1:pdf", "W3"]);
+
+		// If the concept leaves the query, the full scan that finds it gone brings the version back.
+		works = works.filter((candidate) => candidate.id !== "https://openalex.org/W1");
+		await fullScan();
+		expect(await live()).toEqual(["W2", "W2:pdf", "W3"]);
+	});
+}, 120_000);
+
+it("keeps a repeat's upload in a records-only library when its concept leaves, and points citations at the record kept", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-repeats", provider: "openalex", scopeKind: "query", config: settings });
+		const upload = (id: number, doi: string) => ({
+			...work(id, "TVET teachers' digital competence"),
+			doi: `https://doi.org/${doi}`,
+			publication_date: "2026-09-28",
+			indexed_in: ["datacite"],
+		});
+		// W3 cites the version DOI's work.
+		const citing = { ...work(3, "Another study"), referenced_works: ["https://openalex.org/W2"] };
+		let works = [upload(1, "10.5281/zenodo.491"), upload(2, "10.5281/zenodo.492"), citing];
+		const respond = (async (input: RequestInfo | URL) => {
+			const url = new URL(String(input));
+			if (url.host === "api.datacite.org") {
+				return Response.json({
+					data: url.searchParams.get("ids")!.split(",").map((doi) => ({
+						attributes: {
+							doi,
+							relatedIdentifiers: doi === "10.5281/zenodo.492" ? [{ relationType: "IsVersionOf", relatedIdentifier: "10.5281/zenodo.491", relatedIdentifierType: "DOI" }] : [],
+						},
+					})),
+				});
+			}
+			return Response.json({ meta: { count: works.length, next_cursor: null }, results: works });
+		}) as typeof fetch;
+		const connection = async () => (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-repeats")))[0]!;
+		const fullScan = async () => {
+			await db.update(sourceConnection).set({ syncCursor: {} }).where(eq(sourceConnection.key, "oa-repeats"));
+			await syncOpenAlexSource(
+				{ database: db, sourceConnection: await connection(), credentialResolver: async () => "test-key", heartbeat: async () => {} },
+				{ fetch: respond, sleep: async () => {} },
+			);
+		};
+		const items = async () =>
+			new Map((await db.select({ key: item.key, record: item.sourceRecordKey, deleted: item.deleted }).from(item)).map((row) => [row.record, row]));
+		const live = async () => [...(await items()).values()].filter((row) => !row.deleted).map((row) => row.record).sort();
+
+		await fullScan();
+		expect(await live()).toEqual(["W1", "W3"]);
+		// The next scan writes W3 again, and its citation of the repeat lands on the record kept instead.
+		await fullScan();
+		const byRecord = await items();
+		const cites = await db.select({ toKey: itemLink.toKey }).from(itemLink).where(and(eq(itemLink.kind, "cites"), eq(itemLink.fromKey, byRecord.get("W3")!.key)));
+		expect(cites).toEqual([{ toKey: byRecord.get("W1")!.key }]);
+
+		// The concept leaves the query: with no PDF stage to read it, the version still comes back in that scan.
+		works = works.filter((candidate) => candidate.id !== "https://openalex.org/W1");
+		await fullScan();
+		expect(await live()).toEqual(["W2", "W3"]);
 	});
 }, 120_000);
 

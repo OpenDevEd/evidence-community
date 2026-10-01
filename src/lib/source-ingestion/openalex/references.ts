@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { DatabaseTransaction } from "@/db/database-schema";
-import { itemSourceLink, sourceConnection } from "@/db/schema/source";
+import { itemSourceLink, sourceConnection, sourceRecordAlias } from "@/db/schema/source";
 import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { sourceReference } from "@/db/schema/topics";
 import { replaceSourceLinks } from "@/lib/links/item-links";
@@ -9,10 +9,17 @@ import type { SourceItemUpsert } from "../batch-schema";
 async function openAlexItemKeys(tx: DatabaseTransaction, recordKeys: string[]) {
   const identities = new Map<string, string>();
   for (let offset = 0; offset < recordKeys.length; offset += 1000) {
-    const found = await tx.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey}).from(itemSourceLink)
+    const found = await tx.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey, withdrawn: itemSourceLink.remoteDeleted}).from(itemSourceLink)
       .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
       .where(and(inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS), inArray(itemSourceLink.sourceRecordKey, recordKeys.slice(offset, offset + 1000))));
     for (const target of found) identities.set(target.record, target.key);
+    // A work withdrawn as a repeat stands for the record kept instead, while that record is live and no source
+    // still holds the work itself.
+    const liveRecords = new Set(found.filter(target => !target.withdrawn).map(target => target.record));
+    const repeats = await tx.select({record: sourceRecordAlias.aliasKey, key: sourceRecordAlias.itemKey}).from(sourceRecordAlias)
+      .innerJoin(itemSourceLink, and(eq(itemSourceLink.itemKey, sourceRecordAlias.itemKey), eq(itemSourceLink.sourceConnectionKey, sourceRecordAlias.sourceConnectionKey)))
+      .where(and(eq(sourceRecordAlias.kind, "duplicate-of"), eq(itemSourceLink.remoteDeleted, false), inArray(sourceRecordAlias.aliasKey, recordKeys.slice(offset, offset + 1000))));
+    for (const target of repeats) if (!liveRecords.has(target.record)) identities.set(target.record, target.key);
   }
   return identities;
 }
