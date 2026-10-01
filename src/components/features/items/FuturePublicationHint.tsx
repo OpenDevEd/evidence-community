@@ -21,6 +21,7 @@ export function FuturePublicationHint({
 			className="max-w-72 py-2 text-sm"
 		>
 			<span
+				tabIndex={0}
 				className={twMerge(
 					"inline-flex cursor-help items-center gap-1.5",
 					className,
