@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useState } from "react";
+import { useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
+import { SelectItem } from "@nextui-org/react";
 import {
 	Add01Icon,
-	ArrowLeft01Icon,
-	ArrowRight01Icon,
+	Bookmark02Icon,
+	CollectionsBookmarkIcon,
 	LockIcon,
 	Share08Icon,
 	Tick02Icon,
@@ -15,17 +16,13 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
-import { ItemsContext } from "@/context/ItemsContext";
+import { Select } from "@/components/nextui/Select";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { useItemsList } from "@/hooks/useItemsList";
-import { Link } from "@/i18n/routing";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
 import type { ItemsGetResponse } from "@/app/api/items/types";
-import type { ListItem } from "@/app/api/item/types";
-import { SearchBar } from "@/components/features/SearchBar";
-import { SortComponent } from "@/components/features/resources/LibrarySearchSelects";
-import { PaginationControls } from "@/components/features/resources/ResourcesView";
+import ItemsList from "@/components/features/items/ItemsList";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { OPENSCHOLAR_ACCOUNT_URL, useMockReaderSession } from "@/components/layout/navbar/MockReaderSession";
@@ -48,32 +45,15 @@ type ProfileData = {
 	collections: ProfileCollection[];
 };
 
-/**
- * Record types keep one colour on every card, validated for both themes
- * (dataviz palette, slots 1 to 5). A type outside the first four shares the
- * last colour.
- */
-const TYPE_COLOURS = [
-	{ type: "Report", className: "bg-[#2a78d6] dark:bg-[#3987e5]" },
-	{ type: "JournalArticle", className: "bg-[#eb6834] dark:bg-[#d95926]" },
-	{ type: "Book", className: "bg-[#1baf7a] dark:bg-[#199e70]" },
-	{ type: "Dataset", className: "bg-[#eda100] dark:bg-[#c98500]" },
-] as const;
-const OTHER_COLOUR = "bg-[#e87ba4] dark:bg-[#d55181]";
-
-function typeColour(type: string | undefined) {
-	return TYPE_COLOURS.find((entry) => entry.type === type)?.className ?? OTHER_COLOUR;
-}
-
 function useShelfItems(userId: string, collectionId: string) {
 	const query = buildItemsQuery(collectionId ? { collectionId, page: 1 } : { page: 1 }, `/user/items/${userId}`);
 	return useSWR<ItemsGetResponse>(query, fetcher, { revalidateOnFocus: false, keepPreviousData: true });
 }
 
 /**
- * A reader's page as shelves: who they are and what their bookmarks are made
- * of, then one shelf for all bookmarks and one per collection. "See all" opens
- * a shelf as a full list with its own search and sort.
+ * A reader's page: their card on top, then their bookmarks the way the
+ * library lists records, with search and sort, and their collections beside
+ * it where the library keeps its filters.
  */
 export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const t = useTranslations("ui");
@@ -85,82 +65,132 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	// endpoint to the new session.
 	const [createdCollections, setCreatedCollections] = useState<ProfileCollection[]>([]);
 	const collections = collectionsEnabled ? [...data.collections, ...createdCollections] : [];
-	const [openShelf, setOpenShelf] = useState<string | null>(items.queryParams.collectionId ? items.queryParams.collectionId : null);
 	const profileReader = { id: data.id, name: data.name ?? "", image: data.image ?? null };
 	const bookmarkCount = Object.keys(data.likes).length;
 	const bookmarkDates = Object.values(data.likes).map((value) => new Date(value as string)).filter((date) => !Number.isNaN(date.getTime()));
 	const firstBookmarkedAt = bookmarkDates.length > 0 ? new Date(Math.min(...bookmarkDates.map((date) => date.getTime()))) : null;
-
-	const open = (shelf: string | null) => {
-		setOpenShelf(shelf);
-		items.handleCollectionSelect(shelf && shelf !== "all" ? shelf : "");
-		window.scrollTo({ top: 0 });
-	};
-
-	const openCollection = collections.find((collection) => collection.id === openShelf);
+	const selected = items.queryParams.collectionId || "";
+	const shelves = [
+		{ id: "", name: t("allBookmarks"), count: bookmarkCount, isPrivate: false },
+		...collections.map((collection) => ({
+			id: collection.id,
+			name: collection.name,
+			count: collection.numItems ?? 0,
+			isPrivate: Boolean(collection.private),
+		})),
+	];
+	const select = (id: string) => items.handleCollectionSelect(id);
 
 	return (
-		<ItemsContext.Provider value={items}>
-			<PageContainer id="main-content" className="flex w-full flex-col gap-10">
-				{openShelf ? (
-					<section className="flex flex-col gap-6">
-						<div className="flex flex-col gap-2">
-							<button
-								type="button"
-								onClick={() => open(null)}
-								className="flex w-fit items-center gap-1.5 text-small font-medium text-foreground/60 hover:text-foreground dark:text-white/60 dark:hover:text-white"
-							>
-								<HugeiconsIcon icon={ArrowLeft01Icon} className="size-4 rtl:rotate-180" aria-hidden />
-								{readerDisplayName(profileReader, t)}
-							</button>
-							<h1 className="flex items-center gap-2 font-heading text-3xl font-semibold text-foreground dark:text-white">
-								{openCollection ? openCollection.name : t("allBookmarks")}
-								{openCollection?.private ? (
-									<HugeiconsIcon icon={LockIcon} className="size-5 text-foreground/50 dark:text-white/50" aria-label={t("privateCollection")} />
-								) : null}
-							</h1>
-							{openCollection?.description ? (
-								<p className="text-foreground/60 dark:text-white/60">{openCollection.description}</p>
+		<PageContainer id="main-content" className="flex w-full flex-col gap-8 xl:gap-10">
+			<ProfileHeader
+				reader={profileReader}
+				userId={data.id}
+				isOwnProfile={isOwnProfile}
+				bookmarkCount={bookmarkCount}
+				collectionCount={collectionsEnabled ? collections.length : null}
+				firstBookmarkedAt={firstBookmarkedAt}
+			/>
+			<div className="flex flex-col gap-8 lg:flex-row xl:gap-10">
+				{collectionsEnabled ? (
+					<CollectionsNav
+						shelves={shelves}
+						selected={selected}
+						onSelect={select}
+						footer={
+							isOwnProfile ? (
+								<NewCollection onCreate={(collection) => setCreatedCollections((previous) => [...previous, collection])} />
+							) : null
+						}
+					/>
+				) : null}
+				<div className="flex min-w-0 flex-1 flex-col gap-4">
+					<ItemsList
+						props={items}
+						header={shelves.find((shelf) => shelf.id === selected)?.name ?? t("allBookmarks")}
+						userData={{ ...data, collections }}
+						extraFilters={
+							collectionsEnabled ? (
+								<Select
+									aria-label={t("bookmarksListAriaLabel")}
+									color="secondary"
+									placement="left"
+									className="lg:hidden"
+									disallowEmptySelection
+									selectedKeys={[selected || "all"]}
+									onSelectionChange={(keys) => {
+										const key = String(Array.from(keys)[0] ?? "all");
+										select(key === "all" ? "" : key);
+									}}
+									startContent={
+										<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />
+									}
+								>
+									{shelves.map((shelf) => (
+										<SelectItem key={shelf.id || "all"} textValue={shelf.name}>
+											{shelf.name}
+										</SelectItem>
+									))}
+								</Select>
+							) : null
+						}
+					/>
+				</div>
+			</div>
+		</PageContainer>
+	);
+}
+
+/**
+ * The reader's bookmarks and collections, in the column the library uses for
+ * its filters. Choosing one lists its records beside it.
+ */
+function CollectionsNav({
+	shelves,
+	selected,
+	onSelect,
+	footer,
+}: {
+	shelves: { id: string; name: string; count: number; isPrivate: boolean }[];
+	selected: string;
+	onSelect: (id: string) => void;
+	footer: ReactNode;
+}) {
+	const t = useTranslations("ui");
+	const format = useFormatter();
+	return (
+		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
+			<nav className="flex flex-col gap-1 rounded-2xl bg-[#E8E6E1] p-4 dark:bg-secondary">
+				<h2 className="px-3 pb-2 pt-2 text-lg font-medium text-black/80 dark:text-white/80">{t("collections")}</h2>
+				{shelves.map((shelf) => {
+					const isSelected = shelf.id === selected;
+					return (
+						<button
+							key={shelf.id || "all"}
+							type="button"
+							aria-current={isSelected || undefined}
+							onClick={() => onSelect(shelf.id)}
+							className={twMerge(
+								"flex h-12 items-center gap-3 rounded-xl px-3 text-start text-black/70 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/70 dark:hover:bg-white/[0.06]",
+								isSelected && "bg-white font-medium text-black hover:bg-white dark:bg-white/10 dark:text-white dark:hover:bg-white/10",
+							)}
+						>
+							<HugeiconsIcon
+								icon={shelf.id ? CollectionsBookmarkIcon : Bookmark02Icon}
+								className={twMerge("size-5 shrink-0", isSelected && "text-accent")}
+								aria-hidden
+							/>
+							<span className="min-w-0 flex-1 truncate">{shelf.name}</span>
+							{shelf.isPrivate ? (
+								<HugeiconsIcon icon={LockIcon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
 							) : null}
-						</div>
-						<FullShelf />
-					</section>
-				) : (
-					<>
-						<ProfileHeader
-							reader={profileReader}
-							userId={data.id}
-							isOwnProfile={isOwnProfile}
-							bookmarkCount={bookmarkCount}
-							collectionCount={collectionsEnabled ? collections.length : null}
-							firstBookmarkedAt={firstBookmarkedAt}
-						/>
-						{bookmarkCount === 0 ? (
-							<EmptyShelves isOwnProfile={isOwnProfile} />
-						) : (
-							<div className="flex flex-col gap-10">
-								<Shelf userId={data.id} title={t("allBookmarks")} count={bookmarkCount} onSeeAll={() => open("all")} />
-								{collections.map((collection) => (
-									<Shelf
-										key={collection.id}
-										userId={data.id}
-										collectionId={collection.id}
-										title={collection.name}
-										description={collection.description}
-										isPrivate={Boolean(collection.private)}
-										count={collection.numItems ?? 0}
-										onSeeAll={() => open(collection.id)}
-									/>
-								))}
-								{collectionsEnabled && isOwnProfile ? (
-									<NewCollection onCreate={(collection) => setCreatedCollections((previous) => [...previous, collection])} />
-								) : null}
-							</div>
-						)}
-					</>
-				)}
-			</PageContainer>
-		</ItemsContext.Provider>
+							<span className="shrink-0 text-small tabular-nums opacity-60">{format.number(shelf.count)}</span>
+						</button>
+					);
+				})}
+				{footer ? <div className="px-1 pt-3">{footer}</div> : null}
+			</nav>
+		</aside>
 	);
 }
 
@@ -282,163 +312,6 @@ function CoverWall({ userId, bookmarkCount }: { userId: string; bookmarkCount: n
 			{/* The covers fade into the card where the name begins. */}
 			<div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white dark:from-secondary" />
 		</div>
-	);
-}
-
-function Shelf({
-	userId,
-	collectionId = "",
-	title,
-	description,
-	isPrivate = false,
-	count,
-	onSeeAll,
-}: {
-	userId: string;
-	collectionId?: string;
-	title: string;
-	description?: string | null;
-	isPrivate?: boolean;
-	count: number;
-	onSeeAll: () => void;
-}) {
-	const t = useTranslations("ui");
-	const { data } = useShelfItems(userId, collectionId);
-	const records = data?.items ?? [];
-	// The shelf keeps its height while its records load, so nothing below moves.
-	const placeholders = Math.min(count, 6);
-
-	return (
-		<section className="flex flex-col gap-4">
-			<div className="flex items-end justify-between gap-4">
-				<div className="min-w-0">
-					<h2 className="flex items-center gap-2 text-xl font-semibold text-foreground dark:text-white">
-						<span className="truncate">{title}</span>
-						{isPrivate ? (
-							<HugeiconsIcon icon={LockIcon} className="size-4 shrink-0 text-foreground/50 dark:text-white/50" aria-label={t("privateCollection")} />
-						) : null}
-						<span className="rounded-full bg-black/[0.06] px-2 text-small font-medium tabular-nums text-foreground/70 dark:bg-white/10 dark:text-white/70">
-							{count}
-						</span>
-					</h2>
-					{description ? <p className="truncate text-small text-foreground/60 dark:text-white/60">{description}</p> : null}
-				</div>
-				{count > 0 ? (
-					<button
-						type="button"
-						onClick={onSeeAll}
-						className="flex shrink-0 items-center gap-1 text-small font-medium text-accent hover:underline"
-					>
-						{t("seeAll")}
-						<HugeiconsIcon icon={ArrowRight01Icon} className="size-4 rtl:rotate-180" aria-hidden />
-					</button>
-				) : null}
-			</div>
-			{count === 0 ? (
-				<p className="rounded-2xl bg-black/[0.03] px-5 py-6 text-small text-foreground/60 dark:bg-white/[0.04] dark:text-white/60">
-					{t("emptyCollectionBody")}
-				</p>
-			) : (
-				<ul className="no-scrollbar -mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-2">
-					{data
-						? records.map((record) => (
-								<li key={record.key} className="w-40 shrink-0 snap-start sm:w-44">
-									<RecordCard record={record} />
-								</li>
-							))
-						: Array.from({ length: placeholders }, (_, index) => (
-								<li key={index} className="w-40 shrink-0 sm:w-44" aria-hidden>
-									<div className="aspect-[3/4] rounded-xl bg-black/[0.05] dark:bg-white/[0.06]" />
-									<div className="mt-3 h-[4.75rem]" />
-								</li>
-							))}
-				</ul>
-			)}
-		</section>
-	);
-}
-
-function RecordCard({ record }: { record: ListItem }) {
-	const tTypes = useTranslations("itemType");
-	const cover = record.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage;
-	const firstCreator = record.creators?.[0] as { lastName?: string; name?: string } | undefined;
-	const author = firstCreator?.lastName || firstCreator?.name || null;
-	return (
-		<Link href={`/lib/${record.key}`} className="group flex flex-col gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent">
-			<div className="overflow-hidden rounded-xl shadow-sm transition-shadow group-hover:shadow-md">
-				<PdfCover src={cover} alt="" title={record.title ?? undefined} className="aspect-[3/4] w-full object-cover" width={176} />
-			</div>
-			<div className="flex flex-col gap-1">
-				<span className="flex items-center gap-2 text-tiny font-medium text-foreground/60 dark:text-white/60">
-					<span aria-hidden className={twMerge("h-1.5 w-3 rounded-full", typeColour(record.itemType))} />
-					{tTypes(record.itemType)}
-				</span>
-				<span className="line-clamp-2 text-small font-medium leading-snug text-foreground group-hover:text-accent dark:text-white">
-					{record.title}
-				</span>
-				<span className="truncate text-tiny text-foreground/50 dark:text-white/50">
-					{[author, record.year].filter(Boolean).join(", ")}
-				</span>
-			</div>
-		</Link>
-	);
-}
-
-/** One shelf opened as the full list: its own search and sort, then the library's record rows. */
-function FullShelf() {
-	const items = use(ItemsContext);
-	const t = useTranslations("ui");
-	return (
-		<section className="flex flex-col gap-6">
-			<div className="flex flex-col gap-3 sm:flex-row">
-				<div className="min-w-0 flex-1">
-					<SearchBar handleSearchChange={items.handleSearchChange} search={items.queryParams.search || ""} />
-				</div>
-				<div className="sm:w-56 sm:shrink-0">
-					<SortComponent itemsContext={items} />
-				</div>
-			</div>
-			{items.itemsData && items.itemsData.items.length === 0 ? (
-				<p className="py-12 text-center text-foreground/60 dark:text-white/60">{t("noResourcesFound")}</p>
-			) : (
-				<ul className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-					{(items.itemsData?.items ?? []).map((record: ListItem) => (
-						<li key={record.key}>
-							<RecordCard record={record} />
-						</li>
-					))}
-				</ul>
-			)}
-			<PaginationControls />
-		</section>
-	);
-}
-
-function EmptyShelves({ isOwnProfile }: { isOwnProfile: boolean }) {
-	const t = useTranslations("ui");
-	return (
-		<section className="flex flex-col items-center gap-4 rounded-3xl bg-white px-6 py-16 text-center dark:bg-secondary">
-			<div className="flex gap-3" aria-hidden>
-				{[0, 1, 2].map((index) => (
-					<div
-						key={index}
-						className={twMerge(
-							"aspect-[3/4] w-16 rounded-lg border-2 border-dashed border-black/10 dark:border-white/15",
-							index === 1 && "-translate-y-2",
-						)}
-					/>
-				))}
-			</div>
-			<h2 className="text-xl font-semibold text-foreground dark:text-white">{t("noBookmarksTitle")}</h2>
-			<p className="max-w-md text-foreground/60 dark:text-white/60">
-				{isOwnProfile ? t("noBookmarksBody") : t("noBookmarksOther")}
-			</p>
-			{isOwnProfile ? (
-				<Button as={Link} href="/lib" color="accent" className="mt-2 h-10 px-5 font-medium">
-					{t("browseLibrary")}
-				</Button>
-			) : null}
-		</section>
 	);
 }
 

@@ -144,7 +144,13 @@ function SearchTabContent({
 	return (
 		<div className="flex flex-col gap-4">
 			{/* Header with title and explore button */}
-			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
+			<div
+				className={twMerge(
+					"flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative",
+					// A reader's list has no Explore button to make room for under the title.
+					itemsContext.userData && "h-10",
+				)}
+			>
 				<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
 					<SkipLink href="#collections">
 						{t("goToFilters")}
@@ -152,19 +158,24 @@ function SearchTabContent({
 					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
 						{header || (showHeader && t("searchTitle"))}
 					</h1>
-					<Button
-						startContent={
-							<AiOutlineCompass className="size-6 shrink-0" />
-						}
-						className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
-						onPress={onExploreOpen}
-					>
-						{t("explore")}
-					</Button>
-					<ExploreModal
-						isOpen={isExploreOpen}
-						onOpenChange={onExploreOpenChange}
-					/>
+					{/* Explore browses the library's filters, which a reader's list does not have. */}
+					{!itemsContext.userData && (
+						<>
+							<Button
+								startContent={
+									<AiOutlineCompass className="size-6 shrink-0" />
+								}
+								className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
+								onPress={onExploreOpen}
+							>
+								{t("explore")}
+							</Button>
+							<ExploreModal
+								isOpen={isExploreOpen}
+								onOpenChange={onExploreOpenChange}
+							/>
+						</>
+					)}
 				</div>
 				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
 					{!itemsContext.userData && (

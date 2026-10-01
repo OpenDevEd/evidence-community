@@ -78,7 +78,7 @@ import { trackLibraryResultsLoaded } from "@/lib/analytics";
 
 
 
-export function ResourcesList({
+function ResourcesList({
 	abstract,
 	view,
 	className,
@@ -243,7 +243,7 @@ function ContentActions() {
 	);
 }
 
-export function PaginationControls({ className }: { className?: string }) {
+function PaginationControls({ className }: { className?: string }) {
 	const itemsContext = use(ItemsContext);
 	const totalPages = itemsContext.itemsData?.totalPages || 0;
 	const actuallyNoData =
