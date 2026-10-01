@@ -17,8 +17,9 @@ vi.mock("@/db", () => ({
 	getDatabase: vi.fn(async () => mocks.database),
 	getDatabaseForConfig: vi.fn(async () => mocks.database),
 }));
-vi.mock("@/lib/admin/access", async (importOriginal) => ({
-	...await importOriginal<typeof import("@/lib/admin/access")>(),
+vi.mock("@/lib/admin/access", async () => ({
+	// The permission names only; the real module loads the sign-in stack.
+	...await import("@/lib/admin/permissions"),
 	authorizeAdminRequest: vi.fn(async () => ({
 		status: "authorized",
 		session: { clerkUserId: "editor", role: "editor" },

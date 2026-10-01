@@ -11,8 +11,9 @@ vi.mock("@/config/library-config/server", () => ({
 }));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(async () => ({})) }));
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/admin/access", async importOriginal => ({
-	...await importOriginal(),
+vi.mock("@/lib/admin/access", async () => ({
+	// The permission names only; the real module loads the sign-in stack.
+	...await import("@/lib/admin/permissions"),
 	authorizeAdminRequest: vi.fn(async () => ({status: "authorized", session: {role: "owner", userId: "owner"}})),
 }));
 vi.mock("@/lib/admin/native-item-service", async importOriginal => ({

@@ -11,7 +11,7 @@
 		"config:activate": "tsx ./tools/activateLibraryConfig.ts",
 		"config:validate": "tsx ./tools/validateLibraryConfig.ts",
 		"lint": "eslint .",
-		"typecheck": "next typegen && tsc --noEmit",
+		"typecheck": "next typegen && NODE_OPTIONS='--max_old_space_size=4096' tsc --noEmit",
 		"quality:fallow": "fallow audit --gate new-only --fail-on-issues --format json --quiet --explain",
 		"check": "npm run lint && npm run typecheck && npm run schema:check && npm run check:ai-wording && npm run test:unit",
 		"check:ai-wording": "tsx ./tools/checkAIWording.ts",
