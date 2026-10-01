@@ -90,8 +90,8 @@ export function readerMenuGroups(input: {
 					<ReaderAvatar reader={reader} size="sm" />
 					<span className="min-w-0">
 						<span className="block truncate text-medium font-semibold text-foreground dark:text-white">{name}</span>
-						<span className="flex items-center gap-1.5 text-small text-foreground/60 dark:text-white/60">
-							<OpenScholar monochrome aria-hidden className="size-3.5" />
+						<span className="mt-0.5 flex items-center gap-1 text-tiny text-foreground/45 dark:text-white/40">
+							<OpenScholar monochrome aria-hidden className="size-3" />
 							{t("signedInWithOpenScholar")}
 						</span>
 					</span>
