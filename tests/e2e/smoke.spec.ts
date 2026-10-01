@@ -567,7 +567,7 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 		name: /^(?:Toggle theme|Switch to (?:dark|light) mode)$/u,
 	});
 	const loginButton = page.getByRole("button", {
-		name: "Login/Register button",
+		name: "Sign in",
 		exact: true,
 	});
 

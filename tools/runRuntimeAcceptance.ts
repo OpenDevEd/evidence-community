@@ -708,7 +708,7 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 		);
 		await requireHttpRedirect(
 			`${baseUrl}/admin`,
-			config.authentication.openScholar.loginPageUrl,
+			`${baseUrl}/api/admin/sign-in?return=%2Fadmin`,
 			"Signed-out admin",
 		);
 		await requireMethodNotAllowed(`${baseUrl}/admin`, "Signed-out admin");
@@ -956,8 +956,15 @@ function loadProfile(
 		openScholar: {
 			convexSiteUrl: `https://openscholar-convex.localhost:${fixturePort}`,
 			libraryId: openScholar.libraryId,
-			loginPageUrl: `https://openscholar.localhost:${fixturePort}/evidence-libraries/${name}`,
+			libraryUrl: `https://openscholar.localhost:${fixturePort}/evidence-libraries/${name}`,
+			accountUrl: `https://openscholar.localhost:${fixturePort}/user`,
 			machineCredential: openScholar.machineCredential,
+			// The fake OpenScholar answers OpenID discovery for this library's client.
+			oauth: {
+				issuer: `https://openscholar-convex.localhost:${fixturePort}`,
+				clientId: `evidence-library-${openScholar.libraryId}`,
+				clientSecret: `${name}-acceptance-oauth-client-secret`,
+			},
 		},
 		secret: openScholar.secret,
 	};
@@ -1674,7 +1681,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_THEME_SWITCHER: String(
 			config.features.themeSwitcher,
 		),
-		PLAYWRIGHT_EXPECTED_LOGIN: String(config.features.login),
+		PLAYWRIGHT_EXPECTED_LOGIN: String(config.features.readerAccounts),
 		PLAYWRIGHT_EXPECTED_AI: String(config.features.ai),
 		PLAYWRIGHT_EXPECTED_AI_SEARCH: String(config.features.aiSearch),
 		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(config.features.deepResearch),
@@ -1710,7 +1717,12 @@ function publicExpectations(profile: Profile) {
 				config.analytics.posthog.host && config.analytics.posthog.key,
 			),
 		),
-		PLAYWRIGHT_EXPECTED_AUTHENTICATION: String(config.features.login),
+		PLAYWRIGHT_EXPECTED_AUTHENTICATION: String(config.features.readerAccounts),
+		// The browser suites sign people in with Better Auth's test helpers against
+		// the library's own database and secret.
+		EVIDENCE_LIBRARY_TEST_DATABASE_URL: `postgresql://library:library@127.0.0.1:${postgresPort}/${profile.name}`,
+		EVIDENCE_LIBRARY_TEST_AUTH_SECRET: config.authentication.secret,
+		EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL: config.identity.baseUrl,
 		PLAYWRIGHT_EXPECTED_EMAIL: String(
 			Boolean(config.email.contactRecipient),
 		),
@@ -1784,10 +1796,6 @@ function runAdminBrowserSuite(profile: Profile) {
 		EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
 		EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
 			profile.config.authentication.openScholar.libraryId,
-		EVIDENCE_LIBRARY_OPENSCHOLAR_WRONG_LIBRARY_ID:
-			acceptanceOpenScholar.indigo.libraryId,
-		EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
-			profile.config.authentication.openScholar.loginPageUrl,
 		PLAYWRIGHT_ADMIN_UI: "true",
 		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
 		PLAYWRIGHT_RUNTIME_E2E: "true",
@@ -1838,8 +1846,6 @@ function runPublicationBrowserPhase(
 			EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
 			EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
 				profile.config.authentication.openScholar.libraryId,
-			EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
-				profile.config.authentication.openScholar.loginPageUrl,
 			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
 			PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
 			PLAYWRIGHT_PUBLICATION_EXPECTED_DOI: "10.5555/acceptance.000002",
@@ -1862,15 +1868,14 @@ async function readPublicationProviderState() {
 	};
 }
 
-async function issueAcceptanceAdminLoginCode() {
-	const response = await fetch(
-		`http://127.0.0.1:${runtimeProviderFakePort}/_test/admin-login-codes`,
-		{ method: "POST" },
-	);
-	assert.equal(response.status, 201);
-	const body = (await response.json()) as { code?: unknown };
-	assert.equal(typeof body.code, "string");
-	return body.code as string;
+/** Where the runner signs its admin calls in: the profile's own database and secret, as the editor the fake OpenScholar knows. */
+function acceptanceAdminSessionTarget(profile: Profile) {
+	return {
+		databaseUrl: `postgresql://library:library@127.0.0.1:${postgresPort}/${profile.name}`,
+		secret: profile.config.authentication.secret,
+		libraryBaseUrl: profile.config.identity.baseUrl,
+		clerkUserId: "user_acceptance_admin",
+	};
 }
 
 async function makeCrossrefVerificationDue(itemKey: string) {
@@ -2789,7 +2794,7 @@ async function waitForPublicationState(
 async function verifyPublicationLifecycle(profile: Profile) {
 	const session = await createAdminTestSession(
 		`http://127.0.0.1:${profile.port}`,
-		await issueAcceptanceAdminLoginCode(),
+		acceptanceAdminSessionTarget(profile),
 	);
 	await adminPublicationRequest(
 		profile,
@@ -2914,7 +2919,7 @@ async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
 	const externalDoi = "10.1038/nature12373";
 	const session = await createAdminTestSession(
 		`http://127.0.0.1:${profile.port}`,
-		await issueAcceptanceAdminLoginCode(),
+		acceptanceAdminSessionTarget(profile),
 	);
 
 	await adminPublicationRequest(

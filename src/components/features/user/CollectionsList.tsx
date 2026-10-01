@@ -1,24 +1,22 @@
 "use client";
 
-import { Session } from "next-auth";
 import { useMemo, useRef, useState } from "react";
 import { COLLECTION_PER_PAGE } from "@/constants/user";
 import { twMerge } from "@/lib/tw-merge";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Input } from "@/components/nextui/Input";
-import { InferSelectModel } from "drizzle-orm";
-import { userCollection } from "@/db/schema/tables/userCollection";
+import type { ReaderCollectionSummary } from "@/lib/readers/data";
 import UserCollection from "./UserCollection";
 import { useTranslations } from "next-intl";
 
 export default function CollectionsList({
-	data,
+	collections,
 	highlightedCollections,
 	classNames,
 	onCollectionSelect,
 	isLoading,
 }: {
-	data: Session["user"];
+	collections: ReaderCollectionSummary[];
 	highlightedCollections?: string[];
 	classNames?: { container?: string; pagination?: string };
 	onCollectionSelect?: (collectionId: string) => void;
@@ -28,7 +26,7 @@ export default function CollectionsList({
 	const [search, setSearch] = useState("");
 	const t = useTranslations("ui");
 	const [collectionsPage, totalPages, currentPage] = useMemo(() => {
-		const sortedCollections = data.collections.sort((a, b) => {
+		const sortedCollections = [...collections].sort((a, b) => {
 			// const aHighlighted = highlightedCollections?.includes(a.id) || false;
 			// const bHighlighted = highlightedCollections?.includes(b.id) || false;
 			// if (aHighlighted !== bHighlighted) {
@@ -64,7 +62,7 @@ export default function CollectionsList({
 			totalPages,
 			currentPage,
 		];
-	}, [data.collections, page, search]);
+	}, [collections, page, search]);
 
 	return (
 		<>
@@ -76,11 +74,11 @@ export default function CollectionsList({
 			<div
 				className={twMerge(
 					"w-full grid grid-cols-2 gap-2",
-					data.collections.length === 0 && "grid-cols-1",
+					collections.length === 0 && "grid-cols-1",
 					classNames?.container
 				)}
 			>
-				{data.collections.length === 0 ? (
+				{collections.length === 0 ? (
 					<div className="w-full flex justify-center items-center my-12">
 						<p className="text-sm dark:text-white/60 text-black/60">
 							{t("noCollections")}

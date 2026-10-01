@@ -4,21 +4,20 @@ import { NextRequest } from "next/server";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
+import { signedInHeaders } from "../helpers/reader-session";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheLife() {}, cacheTag() {} }));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(), getDatabaseForConfig: vi.fn() }));
-vi.mock("@/app/api/auth/[...nextauth]/config", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
 // The library's own collections are not under test; the reader's collections are read for real.
 vi.mock("@/app/api/cache", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/app/api/cache")>()),
 	getCachedCollections: async () => [],
 }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
-vi.mock("@/lib/runtime-feature", () => ({
-	getConfigForEnabledFeature: vi.fn(),
-	featureUnavailableResponse: () => new Response(null, { status: 404 }),
-}));
+const requestHeaders = vi.hoisted(() => ({ current: new Headers() }));
+vi.mock("next/headers", () => ({ headers: async () => requestHeaders.current }));
 const search = vi.hoisted(() => ({
 	search: vi.fn(),
 	getDisplayedAttributes: async () => ["*"],
@@ -26,34 +25,27 @@ const search = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: search }) }));
 
-import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { GET } from "@/app/api/user/items/[id]/route";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import type { Database } from "@/db/database-schema";
-import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
-import { users } from "@/db/schema/tables/user";
-import { userCollection } from "@/db/schema/tables/userCollection";
+import { readerCollection, readerCollectionItem, readerUser } from "@/db/schema/tables/reader";
 import { createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
-import { getConfigForEnabledFeature } from "@/lib/runtime-feature";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
-const OWNER = "reader-owner";
+const OWNER_CLERK_ID = "user_owner";
+const OWNER = `reader-${OWNER_CLERK_ID}`;
 
 beforeEach(() => {
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
-	vi.mocked(getConfigForEnabledFeature).mockResolvedValue(config as never);
 	search.search.mockReset().mockImplementation(async () => ({ estimatedTotalHits: 0, hits: [] }));
 });
 
-function readCollection(collectionId: string) {
+function readList(collectionId: string, clerkUserId?: string) {
+	requestHeaders.current = signedInHeaders(clerkUserId);
 	return GET(new NextRequest(`https://library.example/api/user/items/${OWNER}?collectionId=${collectionId}`), {
 		params: Promise.resolve({ id: OWNER }),
 	});
-}
-
-function signIn(userId: string | null) {
-	vi.mocked(auth).mockResolvedValue((userId ? { user: { id: userId } } : null) as never);
 }
 
 async function withCollections(
@@ -62,27 +54,26 @@ async function withCollections(
 	await withIsolatedPublicationDatabase(async (db: Database) => {
 		vi.mocked(getDatabase).mockResolvedValue(db);
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(db);
-		await db.insert(users).values({ id: OWNER, name: "Owner" });
+		await db.insert(readerUser).values({ id: OWNER, name: "Owner", email: "owner@example.org", clerkUserId: OWNER_CLERK_ID });
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
 		const [emptyPrivate, savedPrivate] = await db
-			.insert(userCollection)
+			.insert(readerCollection)
 			.values([
 				{ userId: OWNER, name: "Empty and private", private: true },
 				{ userId: OWNER, name: "Saved and private", private: true },
 			])
-			.returning({ id: userCollection.id });
-		await db.insert(itemToUserCollection).values({ itemKey, userCollectionId: savedPrivate!.id, userId: OWNER });
+			.returning({ id: readerCollection.id });
+		await db.insert(readerCollectionItem).values({ itemKey, collectionId: savedPrivate!.id });
 		await verify({ emptyPrivate: emptyPrivate!.id, savedPrivate: savedPrivate!.id, itemKey });
 	});
 }
 
 it("refuses someone else's private collection, empty or not, without searching the library", async () => {
 	await withCollections(async ({ emptyPrivate, savedPrivate }) => {
-		for (const visitor of ["another-reader", null]) {
-			signIn(visitor);
-			expect((await readCollection(emptyPrivate)).status).toBe(403);
-			expect((await readCollection(savedPrivate)).status).toBe(403);
+		for (const visitor of ["user_other", undefined]) {
+			expect((await readList(emptyPrivate, visitor)).status).toBe(403);
+			expect((await readList(savedPrivate, visitor)).status).toBe(403);
 		}
 		expect(search.search).not.toHaveBeenCalled();
 	});
@@ -90,17 +81,15 @@ it("refuses someone else's private collection, empty or not, without searching t
 
 it("lists only a private collection's own records to its owner", async () => {
 	await withCollections(async ({ savedPrivate, itemKey }) => {
-		signIn(OWNER);
-		expect((await readCollection(savedPrivate)).status).toBe(200);
+		expect((await readList(savedPrivate, OWNER_CLERK_ID)).status).toBe(200);
 		expect(search.search.mock.lastCall?.[1].filter).toContainEqual(`key IN ["${itemKey}"]`);
 	});
 });
 
-it("answers 404 for a collection that does not exist instead of listing the whole library", async () => {
+it("answers 404 for a collection that is not this reader's instead of listing the whole library", async () => {
 	await withCollections(async () => {
-		signIn(OWNER);
-		expect((await readCollection("00000000-0000-4000-8000-000000000000")).status).toBe(404);
-		expect((await readCollection("not-a-collection")).status).toBe(404);
+		expect((await readList("00000000-0000-4000-8000-000000000000", OWNER_CLERK_ID)).status).toBe(404);
+		expect((await readList("not-a-collection", OWNER_CLERK_ID)).status).toBe(404);
 		expect(search.search).not.toHaveBeenCalled();
 	});
 });

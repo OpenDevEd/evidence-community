@@ -1097,18 +1097,11 @@ async function main() {
 		});
 		await chromiumPage
 			.context()
-			.addCookies([
-				{
-					// The production server sets a __Host- cookie, which needs
-					// Secure and path "/". Chromium still sends it to 127.0.0.1.
-					domain: "127.0.0.1",
-					name: adminSession.name,
-					path: "/",
-					sameSite: "Lax",
-					secure: true,
-					value: adminSession.value,
-				},
-			]);
+			.addCookies(
+				// The production server sets __Secure- cookies, which need Secure
+				// and path "/". Chromium still sends them to 127.0.0.1.
+				adminSession.cookies.map((cookie) => ({ ...cookie, domain: "127.0.0.1", path: "/", sameSite: "Lax" as const, secure: true })),
+			);
 		await chromiumPage.goto(`${baseUrl}/admin`);
 		const initialChromiumStatus = adminSearchIndexStatus(chromiumPage);
 		try {
@@ -1309,18 +1302,11 @@ async function main() {
 		});
 		await retryPage
 			.context()
-			.addCookies([
-				{
-					// The production server sets a __Host- cookie, which needs
-					// Secure and path "/". Chromium still sends it to 127.0.0.1.
-					domain: "127.0.0.1",
-					name: adminSession.name,
-					path: "/",
-					sameSite: "Lax",
-					secure: true,
-					value: adminSession.value,
-				},
-			]);
+			.addCookies(
+				// The production server sets __Secure- cookies, which need Secure
+				// and path "/". Chromium still sends them to 127.0.0.1.
+				adminSession.cookies.map((cookie) => ({ ...cookie, domain: "127.0.0.1", path: "/", sameSite: "Lax" as const, secure: true })),
+			);
 		await retryPage.goto(`${baseUrl}/admin`);
 		await waitForAdminSearchIndexStatus(
 			retryPage,

@@ -50,7 +50,7 @@ export const navbarElements: NavbarElementConfig[] = [
 	{
 		id: "login-button",
 		enabled: (features, session) =>
-			isLibraryFeatureEnabled(features, "login") && !session,
+			isLibraryFeatureEnabled(features, "readerAccounts") && !session,
 		placement: {
 			mobile: "inline", // Always visible on mobile (outside hamburger)
 			tablet: "dropdown", // In condensed dropdown

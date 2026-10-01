@@ -15,8 +15,10 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 const service = {
 	convexSiteUrl: "https://openscholar.test",
 	libraryId: "library-1",
-	loginPageUrl: "https://openscholar.test/login",
+	libraryUrl: "https://openscholar.test/evidence-libraries/library-1",
+	accountUrl: "https://accounts.openscholar.test/user",
 	machineCredential: "m".repeat(47),
+	oauth: { issuer: "https://clerk.openscholar.test", clientId: "client", clientSecret: "client-secret-value" },
 } as Parameters<typeof syncOpenScholarCollection>[1]["service"];
 
 const work = (id: number) => ({

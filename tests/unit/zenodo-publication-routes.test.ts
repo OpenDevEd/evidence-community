@@ -19,7 +19,7 @@ vi.mock("@/db", () => ({
 }));
 vi.mock("@/lib/admin/access", async (importOriginal) => ({
 	...await importOriginal<typeof import("@/lib/admin/access")>(),
-	authorizeAdminSession: vi.fn(async () => ({
+	authorizeAdminRequest: vi.fn(async () => ({
 		status: "authorized",
 		session: { clerkUserId: "editor", role: "editor" },
 	})),

@@ -4,10 +4,9 @@ import { Button } from "@/components/nextui/Button";
 import { Item, ListItem } from "@/app/api/item/types";
 import { useState, forwardRef } from "react";
 import useSWRMutation from "swr/mutation";
-import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
-import { useSWRConfig } from "swr";
+import { useReaderData } from "@/hooks/useReaderData";
 import { useTranslations } from "next-intl";
 
 const LikeButton = forwardRef<
@@ -15,9 +14,9 @@ const LikeButton = forwardRef<
   { itemData: Item | ListItem | undefined; className?: any, revalidateResults?: any }
 >(function LikeButton({ itemData, className, revalidateResults }, ref) {
   const [mutationLoading, setMutationLoading] = useState(false);
-  const { trigger } = useSWRMutation(`/like`, setter);
-  const { data: session, update } = useSession();
-  const isLiked = itemData && session?.user.likes[itemData.key];
+  const { trigger } = useSWRMutation(`/reader/bookmarks`, setter);
+  const { reader, data, mutate } = useReaderData();
+  const isLiked = Boolean(itemData && data?.bookmarks[itemData.key]);
   const t = useTranslations("ui");
 
   const handleLike = async (e: any) => {
@@ -28,7 +27,7 @@ const LikeButton = forwardRef<
       });
       await Promise.all([
         revalidateResults && revalidateResults(),
-        update(),
+        mutate(),
       ]);
     } catch (error) {
       console.error(error);
@@ -36,7 +35,7 @@ const LikeButton = forwardRef<
     setMutationLoading(false);
   };
 
-  if (!session) return null;
+  if (!reader) return null;
 
   return (
     <Button

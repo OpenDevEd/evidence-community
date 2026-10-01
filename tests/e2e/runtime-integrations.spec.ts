@@ -6,6 +6,7 @@ import {
 	type Page,
 } from "@playwright/test";
 
+import { signInAs } from "./admin-login";
 import { dismissConsent, expectsConsent } from "./consent";
 
 test.skip(
@@ -473,61 +474,39 @@ test("sends analytics only for the configured and consented profile", async ({
 	expect(network.eventRequests).toEqual([]);
 });
 
-test("enables credentials authentication only for the configured profile", async ({
+test("offers OpenScholar sign-in only where reader accounts are on", async ({
 	page,
 	request,
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
-	const providers = await request.get("/api/auth/providers");
-	if (!expectedAuthentication) {
-		expect(providers.status()).toBe(404);
-		await page.goto("/lib");
-		await dismissConsent(page);
-		await expect(
-			page.getByRole("button", {
-				name: /^(?:Login|Login\/Register button)$/u,
-				exact: true,
-			}),
-		).toHaveCount(0);
-		return;
-	}
-
-	expect(providers.status()).toBe(200);
-	expect(await providers.json()).toMatchObject({
-		credentials: { type: "credentials" },
-	});
-
-	const email = `acceptance-${Date.now()}@example.org`;
 	await page.goto("/lib");
 	await dismissConsent(page);
-	await page
-		.getByRole("button", {
-			name: /^(?:Login|Login\/Register button)$/u,
-			exact: true,
-		})
-		.click();
-	await page.getByPlaceholder("Email", { exact: true }).fill(email);
-	await page
-		.getByPlaceholder("Password", { exact: true })
-		.fill("acceptance-password");
-	await page.getByRole("button", { name: "Register", exact: true }).click();
+	const signIn = page.getByRole("button", { name: "Sign in", exact: true });
+	if (!expectedAuthentication) {
+		await expect(signIn).toHaveCount(0);
+		expect((await request.get("/api/reader")).status()).toBe(404);
+		return;
+	}
+	expect((await request.get("/api/reader")).status()).toBe(401);
 
-	await expect(
-		page.getByPlaceholder("Email", { exact: true }),
-	).toHaveCount(0, { timeout: 15_000 });
-	await expect
-		.poll(
-			() =>
-				page.evaluate(async () => {
-					const response = await fetch("/api/auth/session", {
-						credentials: "same-origin",
-					});
-					const session = await response.json();
-					return session?.user?.email;
-				}),
-			{ timeout: 15_000 },
-		)
-		.toBe(email);
+	// Only pressing the button goes to OpenScholar, and it comes back to the library.
+	await signIn.click();
+	await page.waitForURL(/\/oauth\/authorize\?/u);
+	expect(new URL(page.url()).searchParams.get("redirect_uri")).toBe(
+		new URL("/api/auth/callback/openscholar", process.env.PLAYWRIGHT_BASE_URL!).toString(),
+	);
+
+	// A signed-in reader keeps a private collection to themselves.
+	const readerId = await signInAs(page.context(), `user_acceptance_reader_${Date.now()}`);
+	const created = await page.request.post("/api/reader/collections", {
+		data: { name: "Reading group", private: true },
+	});
+	expect(created.status()).toBe(201);
+	const { id } = (await created.json()) as { id: string };
+	const listUrl = `/api/user/items/${readerId}?collectionId=${id}`;
+	expect((await page.request.get(listUrl)).status()).toBe(200);
+	await page.context().clearCookies();
+	expect((await page.request.get(listUrl)).status()).toBe(403);
 });
 
 test("delivers configured contact mail through SMTP only when enabled", async ({

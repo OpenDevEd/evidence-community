@@ -14,7 +14,7 @@ export async function forwardAuthorProfileRequest(body: object, clerkUserId?: st
       signal: AbortSignal.timeout(10000), cache: "no-store",
     });
     const result = await response.json();
-    return NextResponse.json({...result, profileBaseUrl: new URL(service.loginPageUrl).origin}, {status: response.status, headers});
+    return NextResponse.json({...result, profileBaseUrl: new URL(service.libraryUrl).origin}, {status: response.status, headers});
   } catch (error) {
     console.error("Author profile catalog request failed", {libraryId: service.libraryId, error});
     return NextResponse.json({error: "Author profiles are unavailable. Try again shortly."}, {status: 503, headers});

@@ -1,4 +1,4 @@
-import { Session } from "next-auth";
+import type { Reader } from "@/components/layout/navbar/ReaderSession";
 import type { LibraryFeatures } from "@/config/library-config/features";
 
 // Breakpoint definitions matching Tailwind config
@@ -30,7 +30,7 @@ export interface NavbarElementConfig {
 	// Function to determine if element should be rendered
 	enabled: (
 		features: LibraryFeatures,
-		session: Session | null
+		session: Reader | null
 	) => boolean;
 	// Where element appears at each breakpoint
 	placement: Record<NavbarBreakpoint, NavbarPlacement>;
@@ -42,11 +42,10 @@ export interface NavbarElementConfig {
 
 // Context passed to container components
 export interface NavbarContext {
-	session: Session | null;
+	session: Reader | null;
 	styleVariant: NavbarStyleVariant;
 	theme: string | undefined;
 	setTheme: (theme: string) => void;
-	onLoginModalOpen: () => void;
 }
 
 // Helper type for grouping elements by placement

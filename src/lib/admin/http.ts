@@ -128,7 +128,7 @@ async function readAdminPermission(
 	}
 	if (authorization.status === "no_access") {
 		return { session: null, denied: adminError({
-			code: "no_access",
+			code: "forbidden",
 			message: "You do not have access to this library's admin area.",
 			status: 403,
 		}) };

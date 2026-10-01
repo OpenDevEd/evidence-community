@@ -136,6 +136,7 @@ import {
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
 } from "@/lib/admin/item-filter-state";
+import { useRouter } from "next/navigation";
 import { readerAuthClient } from "@/lib/readers/client";
 
 function requiredDraftValue<T>(
@@ -393,6 +394,7 @@ export default function AdminWorkbench({
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
 }) {
+	const router = useRouter();
 	const showImportLabel = useBreakpoint("lg");
 	const finePointer = useFinePointer();
 	const { canPublish } = useAdminSession();
@@ -2258,7 +2260,7 @@ export default function AdminWorkbench({
 								// /admin so OpenScholar does not sign the person straight back in.
 								onPress={async () => {
 									await readerAuthClient.signOut();
-									window.location.assign("/");
+									router.replace("/");
 								}}
 								size="xs"
 								type="button"

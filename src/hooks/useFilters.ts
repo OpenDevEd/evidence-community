@@ -48,6 +48,21 @@ const SWR_OPTIONS = {
  * It owns NO items fetch and takes no `userData` — it is the public, shared
  * filtering surface.
  */
+/**
+ * A page with something above its list (a reader's card) marks where the list
+ * starts with this id. Changing page or collection then returns to the list
+ * instead of the top of the page, and only when the list's top has scrolled
+ * out of view, so it never moves the page down.
+ */
+export const LIST_TOP_ID = "list-top";
+
+function returnToListTop() {
+	const listTop = document.getElementById(LIST_TOP_ID);
+	if (!listTop) return undefined;
+	if (listTop.getBoundingClientRect().top < 0) listTop.scrollIntoView({ block: "start" });
+	return { scroll: false };
+}
+
 export function useFilters() {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 	const config = useLibraryConfig();
@@ -99,7 +114,7 @@ export function useFilters() {
 
 	const handlePageChange = useCallback(
 		(newPage: number) => {
-			setParams({ page: newPage });
+			setParams({ page: newPage }, returnToListTop());
 		},
 		[setParams],
 	);
@@ -134,11 +149,10 @@ export function useFilters() {
 
 	const handleCollectionSelect = useCallback(
 		(collectionId: string) => {
-			if (collectionId === params.collectionId) {
-				setParams({ collectionId: "" });
-			} else {
-				setParams({ collectionId });
-			}
+			setParams(
+				{ collectionId: collectionId === params.collectionId ? "" : collectionId },
+				returnToListTop(),
+			);
 		},
 		[params.collectionId, setParams],
 	);

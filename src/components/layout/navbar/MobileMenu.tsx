@@ -54,7 +54,7 @@ export default function MobileMenu({
 	return (
 		<>
 			{/* Hamburger/Close button - only visible on mobile */}
-			<div ref={triggerRef} className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
+			<div ref={triggerRef} className="nf-compact ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center">
 				<Button variant="invisible" {...untilReady(hydrated, toggleMenu)} aria-label={t(isOpen ? "close" : "openMenuAriaLabel")} aria-expanded={isOpen} aria-controls={menuId} onKeyDown={closeOnEscape}>
 					<MenuIcon isOpen={isOpen} />
 				</Button>
@@ -67,7 +67,7 @@ export default function MobileMenu({
 				aria-hidden={!isOpen}
 				onKeyDown={closeOnEscape}
 				className={twMerge(
-					"xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 motion-reduce:duration-0 overflow-y-auto overscroll-contain -z-10 flex flex-col gap-8",
+					"nf-compact bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 motion-reduce:duration-0 overflow-y-auto overscroll-contain -z-10 flex flex-col gap-8",
 					// Position absolutely when open to overlay content
 					"absolute left-0 right-0 top-full",
 					isOpen
@@ -99,11 +99,6 @@ export default function MobileMenu({
 									variant="inline"
 									styleVariant={context.styleVariant}
 									showLabel={true}
-									onAction={
-										element.id === "login-button"
-											? context.onLoginModalOpen
-											: undefined
-									}
 								/>
 							</li>
 						);

@@ -27,13 +27,11 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
 import { cloneElement, useState, useEffect, useMemo, useId, useRef } from "react";
 import CopyButton from "./CopyButton";
-import useSWRMutation from "swr/mutation";
-import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
-import { Session } from "next-auth";
+import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
@@ -43,41 +41,34 @@ import { hasAnyTag, hasTag } from "@/lib/tags";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
-import {
-	useLibraryConfig,
-	useLibraryFeature,
-} from "@/context/LibraryConfigProvider";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 export function AddButton({
 	itemData,
-	userData,
 	revalidateResults,
 	collectionId,
 }: {
 	itemData: Item | ListItem | undefined;
-	userData?: Session["user"];
 	revalidateResults?: any;
 	collectionId?: string;
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [loading, setLoading] = useState(false);
-	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
-	const { data: session, update } = useSession();
-	const isUserCollectionsEnabled = useLibraryFeature("userCollections");
+	const { reader, data, mutate } = useReaderData();
 	const t = useTranslations("ui");
-	const highlightedCollections = Object.keys(
-		itemData ? (session?.user.itemsCollections[itemData.key] ?? {}) : {},
-	);
+	const highlightedCollections = itemData ? (data?.itemCollections[itemData.key] ?? []) : [];
 	const onCollectionSelect = async (pressedCollectionId: string) => {
 		setLoading(true);
 		try {
 			const willClose =
 				pressedCollectionId === collectionId &&
 				highlightedCollections.includes(pressedCollectionId);
-			await trigger({ collectionId: pressedCollectionId });
+			if (!itemData) return;
+			const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey: itemData.key } });
+			if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
 			await Promise.allSettled([
 				revalidateResults && revalidateResults(),
-				update(),
+				mutate(),
 			]);
 			if (willClose) {
 				onClose();
@@ -90,8 +81,7 @@ export function AddButton({
 	};
 
 	return (
-		session &&
-		isUserCollectionsEnabled && (
+		reader && (
 			<>
 				<DialogModal
 					size="lg"
@@ -113,7 +103,7 @@ export function AddButton({
 										highlightedCollections={
 											highlightedCollections
 										}
-										data={session?.user}
+										collections={data?.collections ?? []}
 										classNames={{
 											container: "gap-3",
 										}}
@@ -311,14 +301,12 @@ function CountTooltip({
 function ResourceInteractions({
 	itemData,
 	isLoading,
-	userData,
 	revalidateResults,
 	collectionId,
 	itemHref,
 }: {
 	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
-	userData?: Session["user"];
 	revalidateResults?: any;
 	collectionId?: string;
 	itemHref?: string;
@@ -351,7 +339,6 @@ function ResourceInteractions({
 						)}
 						<AddButton
 							itemData={itemData}
-							userData={userData}
 							revalidateResults={revalidateResults}
 							collectionId={collectionId}
 						/>
@@ -546,7 +533,6 @@ export default function Resource({
 	itemData,
 	abstract,
 	isLoading = false,
-	userData,
 	revalidateResults,
 	collectionId,
 	itemKey,
@@ -559,7 +545,6 @@ export default function Resource({
 	itemData?: Item | ListItem | undefined;
 	abstract: boolean;
 	isLoading?: boolean;
-	userData?: Session["user"];
 	revalidateResults?: any;
 	collectionId?: string;
 	itemKey?: string;
@@ -698,7 +683,6 @@ export default function Resource({
 			<ResourceInteractions
 				itemData={finalItemData}
 				isLoading={finalIsLoading}
-				userData={userData}
 				revalidateResults={revalidateResults}
 				collectionId={collectionId}
 				itemHref={gapMapHref ? itemTargetHref : undefined}

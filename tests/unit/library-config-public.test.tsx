@@ -123,17 +123,11 @@ describe("public library configuration", () => {
 			enabled: serverConfig.citations.enabled,
 			showUrl: serverConfig.citations.showUrl,
 		});
+		// Only the account page reaches the browser: never the OAuth client secret,
+		// the machine credential or the session secret.
 		expect(publicConfig.authentication).toEqual({
-			google: { enabled: true },
+			openScholar: { accountUrl: serverConfig.authentication.openScholar.accountUrl },
 		});
-		expect(publicConfig.authentication.google).not.toHaveProperty(
-			"clientId",
-		);
-		expect(publicConfig.authentication.google).not.toHaveProperty(
-			"clientSecret",
-		);
-		expect(publicConfig.authentication).not.toHaveProperty("secret");
-		expect(publicConfig.authentication).not.toHaveProperty("openScholar");
 
 		for (const privateValue of [
 			"postgresql://library:password@database:5432/library",

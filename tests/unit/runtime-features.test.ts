@@ -16,9 +16,8 @@ import {
 const featureIds = [
 	"themeSwitcher",
 	"languageSwitcher",
-	"login",
+	"readerAccounts",
 	"navbarSearch",
-	"userCollections",
 	"ai",
 	"aiSearch",
 	"deepResearch",

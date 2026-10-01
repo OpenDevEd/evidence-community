@@ -1,230 +1,255 @@
 "use client";
 
-import { Login01Icon, Menu01Icon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
+import { useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft01Icon, ArrowRight01Icon, LanguageSkillIcon, Login01Icon, Menu01Icon, Moon02Icon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
-import {
-	Avatar,
-	DropdownItem,
-	DropdownMenu,
-	DropdownSection,
-	DropdownTrigger,
-} from "@nextui-org/react";
+import { DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
-import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
+import { useLocale } from "next-intl";
 import { useRouter } from "@/i18n/routing";
-import { signOut } from "next-auth/react";
-import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
-import LanguageSwitcher from "./LanguageSwitcher";
+import { languageMenuItems, languageName, useLibraryLanguages } from "./LanguageSwitcher";
 import type { NavbarContext } from "@/types/navbar";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { useOpenScholarAccountUrl, useReaderSession } from "./ReaderSession";
+import { ReaderAvatar, readerMenuGroups } from "./UserMenu";
+import {
+	NavbarMenuIcon,
+	NavbarMenuSwitch,
+	navbarMenuClasses,
+	navbarMenuDropdownClasses,
+	navbarMenuItemClasses,
+	navbarMenuSectionClasses,
+	navbarMenuSignInClasses,
+} from "./menuStyles";
+
+const KEEPS_MENU_OPEN = new Set(["theme", "language", "back"]);
+
+/** The popover box around the menu, whose height changes between views. */
+function menuFrame(menu: HTMLElement | null) {
+	return menu?.closest<HTMLElement>('[data-slot="content"]') ?? null;
+}
 
 interface ActionsDropdownProps {
 	context: NavbarContext;
+	/**
+	 * Off where the Sign in button sits beside the menu: the menu then holds the
+	 * library's settings only, behind a settings button. Signed in, the avatar
+	 * opens everything either way.
+	 */
+	includeSignIn?: boolean;
 }
 
-export default function ActionsDropdown({ context }: ActionsDropdownProps) {
+/**
+ * The header's actions when they do not fit beside the links: who is signed
+ * in and their account first, then the library's settings, then signing in or
+ * out. Each group is one section, so the dividers are the only gaps.
+ */
+export default function ActionsDropdown({ context, includeSignIn = true }: ActionsDropdownProps) {
 	const t = useTranslations("ui");
-	const { data: session } = useSession();
+	const { reader, signIn, signOut } = useReaderSession();
+	const accountUrl = useOpenScholarAccountUrl();
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const router = useRouter();
+	const currentLocale = useLocale();
 	const changeLocale = useRuntimeLocaleNavigation();
-	const { sortedLocales, localesNames } = useSortedLocales();
-	const isThemeEnabled = useLibraryFeature("themeSwitcher");
-	const isLanguageEnabled =
-		useLibraryFeature("languageSwitcher");
-	const isLoginEnabled = useLibraryFeature("login");
-
-	const hasLanguages = isLanguageEnabled && sortedLocales.length > 0;
-	const hasTheme = isThemeEnabled;
-	const hasLogin = isLoginEnabled && !session;
-	const hasUser = !!session;
-
-	// Count actionable items for single-item logic
-	// Languages always need dropdown, so we handle them separately
-	const singleActionItems = (hasTheme ? 1 : 0) + (hasLogin ? 1 : 0);
-	const totalItems = singleActionItems + (hasLanguages ? 1 : 0) + (hasUser ? 1 : 0);
-
-	// If nothing to show, return null
-	if (totalItems === 0) return null;
-
-	// If only one item and not logged in, render it directly (not in dropdown)
-	// This keeps the original behavior where a single action doesn't get wrapped in a hamburger
-	if (totalItems === 1 && !session) {
-		if (hasTheme) {
-			return (
-				<ThemeSwitcher
-					variant="inline"
-					styleVariant={context.styleVariant}
-				/>
-			);
-		}
-		if (hasLogin) {
-			return (
-				<LoginButton
-					variant="inline"
-					styleVariant={context.styleVariant}
-					onAction={context.onLoginModalOpen}
-				/>
-			);
-		}
-		if (hasLanguages) {
-			return (
-				<LanguageSwitcher
-					variant="inline"
-					styleVariant={context.styleVariant}
-				/>
-			);
-		}
-	}
-
-	// Build action items
-	const handleAction = (key: React.Key) => {
-		const keyStr = String(key);
-
-		// Check if it's a locale key
-		const selectedLocale = sortedLocales.find(
-			(locale) => locale === keyStr,
-		);
-		if (selectedLocale) {
-			changeLocale(selectedLocale);
-			return;
-		}
-
-		switch (keyStr) {
-			case "theme":
-				setTheme(theme === "dark" ? "light" : "dark");
-				break;
-			case "login":
-				context.onLoginModalOpen();
-				break;
-			case "profile":
-				router.push(`/profile/${session?.user?.id}`);
-				break;
-			case "logout":
-				signOut({ redirect: false });
-				break;
+	const languages = useLibraryLanguages();
+	// The menu shows either its actions or, one step in, the list of languages.
+	const [view, setView] = useState<"main" | "languages">("main");
+	// Which way the last step went; none when the menu has just opened.
+	const [step, setStep] = useState<"forward" | "back" | null>(null);
+	const [isOpen, setIsOpen] = useState(false);
+	const menuRef = useRef<HTMLUListElement>(null);
+	const heightBeforeStep = useRef<number | null>(null);
+	const setOpen = (open: boolean) => {
+		setIsOpen(open);
+		// Opening again starts from the actions, not where it was left.
+		if (!open) {
+			setView("main");
+			setStep(null);
 		}
 	};
+	const goTo = (next: "main" | "languages") => {
+		heightBeforeStep.current = menuFrame(menuRef.current)?.offsetHeight ?? null;
+		setStep(next === "languages" ? "forward" : "back");
+		setView(next);
+	};
 
-	// Determine trigger: avatar if logged in, hamburger if not
-	const trigger = session ? (
-		<Avatar
-			as="button"
-			className="cursor-pointer"
-			src={session.user?.image ?? "/icons/profile.png"}
-			alt={t("userAvatarAlt", {
-				name: session.user?.name || session.user?.email || t("genericUser"),
-			})}
-		/>
-	) : (
-		<Button
-			variant="invisible"
-			disableRipple
-			isIconOnly
-			className="flex items-center justify-center"
-			aria-label={t("actionsMenuAriaLabel")}
-		>
-			<HugeiconsIcon icon={Menu01Icon} className="size-5 text-accent" />
-		</Button>
-	);
+	// The rows slide in from the side they come from while the menu frame eases
+	// from the old view's height to the new one's. The same menu stays mounted,
+	// so the popover never replays its opening. DOM animation, so a layout effect.
+	useLayoutEffect(() => {
+		const from = heightBeforeStep.current;
+		heightBeforeStep.current = null;
+		const list = menuRef.current;
+		const frame = menuFrame(list);
+		if (from === null || !list || !frame || !step) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const rtl = getComputedStyle(list).direction === "rtl";
+		const offset = (step === "forward" ? 16 : -16) * (rtl ? -1 : 1);
+		const timing = { duration: 200, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
+		const rows = list.animate(
+			[
+				{ opacity: 0, transform: `translateX(${offset}px)` },
+				{ opacity: 1, transform: "translateX(0)" },
+			],
+			timing,
+		);
+		const to = frame.offsetHeight;
+		const height =
+			to === from
+				? null
+				: frame.animate([{ height: `${from}px`, overflow: "hidden" }, { height: `${to}px`, overflow: "hidden" }], timing);
+		return () => {
+			rows.cancel();
+			height?.cancel();
+		};
+	}, [view, step]);
+	const hasTheme = useLibraryFeature("themeSwitcher");
+	const hasLanguages = useLibraryFeature("languageSwitcher") && languages.length > 1;
+	const loginEnabled = useLibraryFeature("readerAccounts");
+	const hasLogin = loginEnabled && !reader && includeSignIn;
+
+	// Theme and language always sit in a menu; Sign in alone is a button.
+	if (!reader && !hasTheme && !hasLanguages) {
+		return hasLogin ? <LoginButton variant="inline" styleVariant={context.styleVariant} /> : null;
+	}
 
 	const isDark = theme === "dark";
+	const settings = [
+		...(hasTheme
+			? [
+					<DropdownItem
+						key="theme"
+						onPress={() => setTheme(isDark ? "light" : "dark")}
+						startContent={<NavbarMenuIcon icon={Moon02Icon} />}
+						endContent={<NavbarMenuSwitch on={isDark} />}
+						textValue={t("darkMode")}
+					>
+						{t("darkMode")}
+					</DropdownItem>,
+				]
+			: []),
+		...(hasLanguages
+			? [
+					<DropdownItem
+						key="language"
+						onPress={() => goTo("languages")}
+						startContent={<NavbarMenuIcon icon={LanguageSkillIcon} />}
+						endContent={
+							<span className="flex items-center gap-1 text-small text-foreground/60 dark:text-white/60">
+								{languageName(currentLocale)}
+								<NavbarMenuIcon icon={ArrowRight01Icon} className="size-4 rtl:rotate-180" />
+							</span>
+						}
+						textValue={t("language")}
+					>
+						{t("language")}
+					</DropdownItem>,
+				]
+			: []),
+	];
 
-	// Render based on what sections are available
-	// Using conditional rendering within the children directly
+	const groups = reader
+		? readerMenuGroups({
+				reader,
+				t,
+				accountUrl,
+				onProfile: () => router.push(`/profile/${reader.id}`),
+				onSignOut: signOut,
+			})
+		: null;
+
+	const sections = [
+		...(groups
+			? [
+					<DropdownSection key="reader" showDivider classNames={navbarMenuSectionClasses}>
+						{groups.identity}
+					</DropdownSection>,
+					<DropdownSection key="account" showDivider classNames={navbarMenuSectionClasses}>
+						{groups.account}
+					</DropdownSection>,
+				]
+			: []),
+		...(settings.length > 0
+			? [
+					<DropdownSection key="settings" showDivider={Boolean(groups) || hasLogin} classNames={navbarMenuSectionClasses}>
+						{settings}
+					</DropdownSection>,
+				]
+			: []),
+		groups ? (
+			<DropdownSection key="sign-out" classNames={navbarMenuSectionClasses}>
+				{groups.signOut}
+			</DropdownSection>
+		) : hasLogin ? (
+			<DropdownSection key="sign-in" classNames={navbarMenuSectionClasses}>
+				<DropdownItem
+					key="login"
+					onPress={signIn}
+					startContent={<HugeiconsIcon icon={Login01Icon} aria-hidden className="size-5 shrink-0" />}
+					className={navbarMenuSignInClasses}
+				>
+					{t("signIn")}
+				</DropdownItem>
+			</DropdownSection>
+		) : null,
+	].filter((section) => section !== null);
+
+	const languageView = [
+		<DropdownSection key="languages-back" showDivider classNames={navbarMenuSectionClasses}>
+			<DropdownItem
+				key="back"
+				onPress={() => goTo("main")}
+				startContent={<NavbarMenuIcon icon={ArrowLeft01Icon} className="rtl:rotate-180" />}
+				className="font-semibold"
+			>
+				{t("language")}
+			</DropdownItem>
+		</DropdownSection>,
+		<DropdownSection key="languages" classNames={navbarMenuSectionClasses}>
+			{languageMenuItems({ locales: languages, current: currentLocale, onSelect: changeLocale })}
+		</DropdownSection>,
+	];
+
 	return (
-		<Dropdown>
-			<DropdownTrigger>{trigger}</DropdownTrigger>
+		<Dropdown
+			placement="bottom-end"
+			classNames={navbarMenuDropdownClasses}
+			isOpen={isOpen}
+			onOpenChange={setOpen}
+			closeOnSelect={false}
+		>
+			<DropdownTrigger>
+				{reader ? (
+					<ReaderAvatar reader={reader} asTrigger />
+				) : (
+					<Button
+						variant="invisible"
+						disableRipple
+						isIconOnly
+						className="flex items-center justify-center"
+						aria-label={includeSignIn ? t("actionsMenuAriaLabel") : t("settings")}
+					>
+						<HugeiconsIcon icon={includeSignIn ? Menu01Icon : Settings02Icon} className="size-5 text-accent" />
+					</Button>
+				)}
+			</DropdownTrigger>
 			<DropdownMenu
+				ref={menuRef}
 				aria-label={t("actionsMenuAriaLabel")}
-				onAction={handleAction}
-				className="p-1 gap-0"
-				itemClasses={{
-					title: "font-medium",
+				classNames={navbarMenuClasses}
+				itemClasses={navbarMenuItemClasses}
+				// Settings and the step into languages keep the menu open; everything else is done once chosen.
+				onAction={(key) => {
+					if (!KEEPS_MENU_OPEN.has(String(key))) setOpen(false);
 				}}
 			>
-				{/* We need to flatten the children based on conditions */}
-				<DropdownSection
-					showDivider={hasTheme || hasLogin || hasUser}
-					classNames={{ base: "mb-0 mt-0" }}
-					className={hasLanguages ? "" : "hidden"}
-				>
-					{sortedLocales.map((locale) => (
-						<DropdownItem key={locale}>
-							{localesNames[locale as keyof typeof localesNames]}
-						</DropdownItem>
-					))}
-				</DropdownSection>
-
-				<DropdownSection
-					showDivider={hasUser}
-					className={hasTheme || hasLogin ? "my-1 mt-1.5" : "hidden"}
-				>
-					{hasTheme ? (
-						<DropdownItem
-							key="theme"
-							startContent={
-								isDark ? (
-									<HugeiconsIcon icon={Sun03Icon} className="size-5 text-accent" />
-								) : (
-									<HugeiconsIcon icon={Moon02Icon} className="size-5 text-accent" />
-								)
-							}
-						>
-							{t("switchThemeAriaLabel", {
-								theme: isDark ? t("lightTheme") : t("darkTheme"),
-							})}
-						</DropdownItem>
-					) : (
-						<DropdownItem key="theme-placeholder" className="hidden">
-							{" "}
-						</DropdownItem>
-					)}
-					{hasLogin ? (
-						<DropdownItem
-							key="login"
-							startContent={<HugeiconsIcon icon={Login01Icon} className="size-5" />}
-						>
-							{t("login")}
-						</DropdownItem>
-					) : (
-						<DropdownItem key="login-placeholder" className="hidden">
-							{" "}
-						</DropdownItem>
-					)}
-				</DropdownSection>
-
-				<DropdownSection className={hasUser ? "mb-0" : "hidden"}>
-					{hasUser ? (
-						<>
-							<DropdownItem
-								key="profile"
-								startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}
-							>
-								{t("profileMenuItem")}
-							</DropdownItem>
-							<DropdownItem
-								key="logout"
-								color="danger"
-								startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
-								className="text-danger"
-							>
-								{t("logout")}
-							</DropdownItem>
-						</>
-					) : (
-						<DropdownItem key="user-placeholder" className="hidden">
-							{" "}
-						</DropdownItem>
-					)}
-				</DropdownSection>
+				{view === "languages" ? languageView : sections}
 			</DropdownMenu>
 		</Dropdown>
 	);

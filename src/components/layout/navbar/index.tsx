@@ -1,9 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
+import { useReaderSession } from "./ReaderSession";
 import { useTheme } from "next-themes";
-import { useDisclosure } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
 import { usePathname } from "@/i18n/routing";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
@@ -12,9 +11,9 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
 import NavbarSearch from "./NavbarSearch";
-import LoginModal from "./LoginModal";
 import MobileMenu from "./MobileMenu";
 import ActionsDropdown from "./ActionsDropdown";
+import LoginButton from "./LoginButton";
 
 import {
 	navbarElements,
@@ -55,7 +54,7 @@ function barClassName(
 	showNavbarSearch: boolean,
 ) {
 	return twMerge(
-		"xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
+		"navbar-bar xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
 		BAR_STYLE[styleVariant],
 		chatEngaged && BAR_BESIDE_CHAT[styleVariant],
 		// When the search bar is docked beneath the navbar (non-wide
@@ -68,21 +67,10 @@ export default function Navbar() {
 	const t = useTranslations("ui");
 	const pathname = usePathname();
 	const { resolvedTheme: theme, setTheme } = useTheme();
-	const { data: session } = useSession();
+	const { reader: session } = useReaderSession();
 	const libraryConfig = useLibraryConfig();
-	const isLoginEnabled = isLibraryFeatureEnabled(
-		libraryConfig.features,
-		"login",
-	);
 	const styleVariant =
 		libraryConfig.theme.layout as NavbarStyleVariant;
-
-	const {
-		isOpen: isLoginModalOpen,
-		onOpen: onLoginModalOpen,
-		onOpenChange: onLoginModalOpenChange,
-		onClose: onLoginModalClose,
-	} = useDisclosure();
 
 	const { engaged: chatEngaged } = useInlineChatLayout();
 	const normalizedPathname = normalizePathname(pathname);
@@ -138,7 +126,6 @@ export default function Navbar() {
 		styleVariant,
 		theme,
 		setTheme,
-		onLoginModalOpen,
 	};
 
 	return (
@@ -183,7 +170,7 @@ export default function Navbar() {
 
 				{/* Mobile inline actions (< xl) - Login button/Avatar stay visible */}
 				{mobileInlineElements.length > 0 && (
-					<div className="flex xl:hidden items-center gap-3">
+					<div className="nf-compact flex items-center gap-3">
 						{mobileInlineElements.map((element) => {
 							const Component = element.component;
 							return (
@@ -191,9 +178,6 @@ export default function Navbar() {
 									key={element.id}
 									variant="inline"
 									styleVariant={styleVariant}
-									onAction={
-										element.id === "login-button" ? onLoginModalOpen : undefined
-									}
 								/>
 							);
 						})}
@@ -202,7 +186,7 @@ export default function Navbar() {
 
 				{/* Tablet condensed dropdown (xl to 2xl) */}
 				{tabletDropdownElements.length > 0 && (
-					<div className="hidden xl:block 2xl:hidden">
+					<div className="nf-actions-condensed">
 						<ActionsDropdown context={navbarContext} />
 					</div>
 				)}
@@ -210,26 +194,19 @@ export default function Navbar() {
 				{/* Desktop expanded actions (2xl+) */}
 				{desktopInlineElements.length > 0 && (
 					<nav
-						className="hidden 2xl:block"
+						className="nf-actions-full"
 						aria-label={t("secondaryNavAriaLabel")}
 					>
-						<ul className="flex items-center gap-3">
-							{desktopInlineElements.map((element) => {
-								const Component = element.component;
-								return (
-									<li key={element.id}>
-										<Component
-											variant="inline"
-											styleVariant={styleVariant}
-											onAction={
-												element.id === "login-button"
-													? onLoginModalOpen
-													: undefined
-											}
-										/>
-									</li>
-								);
-							})}
+						{/* Settings behind one button, then Sign in; signed in, the avatar holds both. */}
+						<ul className="flex items-center gap-6">
+							<li>
+								<ActionsDropdown context={navbarContext} includeSignIn={Boolean(session)} />
+							</li>
+							{!session ? (
+								<li>
+									<LoginButton variant="inline" styleVariant={styleVariant} />
+								</li>
+							) : null}
 						</ul>
 					</nav>
 				)}
@@ -242,14 +219,6 @@ export default function Navbar() {
 					pathname={pathname}
 				/>
 
-				{/* Login modal */}
-				{isLoginEnabled ? (
-					<LoginModal
-						isOpen={isLoginModalOpen}
-						onOpenChange={onLoginModalOpenChange}
-						onClose={onLoginModalClose}
-					/>
-				) : null}
 			</div>
 		</header>
 

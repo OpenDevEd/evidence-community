@@ -21,17 +21,17 @@ describe("runtime feature route guard", () => {
 	it("returns the active config only when the feature is enabled", async () => {
 		const config = {
 			features: {
-				login: true,
-				userCollections: false,
+				readerAccounts: true,
+				aiSearch: false,
 			},
 		};
 		getLibraryConfig.mockResolvedValue(config);
 
 		await expect(
-			getConfigForEnabledFeature("login"),
+			getConfigForEnabledFeature("readerAccounts"),
 		).resolves.toBe(config);
 		await expect(
-			getConfigForEnabledFeature("userCollections"),
+			getConfigForEnabledFeature("aiSearch"),
 		).resolves.toBeNull();
 	});
 

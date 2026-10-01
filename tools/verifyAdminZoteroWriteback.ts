@@ -8,7 +8,8 @@
  * prove Zotero deletes the copy. Zotero is read through its Web API.
  *
  *   ADMIN_ZOTERO_ORIGIN=https://... \
- *   EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE=elc_... \
+ *   CLERK_SECRET_KEY=sk_test_... CLERK_PUBLISHABLE_KEY=pk_test_... \
+ *   EVIDENCE_LIBRARY_TEST_CLERK_USER_ID=user_... \
  *   ADMIN_ZOTERO_GROUP=6641415 \
  *   ADMIN_ZOTERO_API_KEY=... \
  *   npm run test:admin-zotero-live -- --confirm-group 6641415
@@ -69,9 +70,7 @@ async function waitFor<T>(label: string, read: () => Promise<T | null>, timeoutM
 
 async function login(page: Page) {
 	const session = await createAdminTestSession(origin!);
-	await page.context().addCookies([
-		{ name: session.name, url: origin!, value: session.value },
-	]);
+	await page.context().addCookies(session.cookies.map((cookie) => ({ ...cookie, url: origin! })));
 	await page.goto(`${origin}/admin`);
 	const newItem = page.getByRole("button", { name: "New item" });
 	await newItem.waitFor({ state: "visible" });

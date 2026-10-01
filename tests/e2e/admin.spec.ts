@@ -12,11 +12,7 @@ import {
 	openAndMeasureAdminSearchIndexPopover,
 	waitForAdminSearchIndexStatus,
 } from "./admin-search-index-page";
-import {
-	createAdminBrowserSession,
-	issueAdminLoginCode,
-	openAdmin,
-} from "./admin-login";
+import { openAdmin, signInAdmin, signInAs } from "./admin-login";
 
 async function assignSelectedRecords(page: Page) {
   await page.getByRole("toolbar", {name: "Bulk actions"}).getByRole("button", {name: "Add selected to collection"}).click();
@@ -155,7 +151,7 @@ async function mockPublicShell(page: Page) {
 
 test.beforeEach(async ({ page }) => {
 	await mockPublicShell(page);
-	await createAdminBrowserSession(page);
+	await signInAdmin(page);
 });
 
 const teacherCollection = {
@@ -812,42 +808,32 @@ test.describe("overlay lifecycle", () => {
 	});
 });
 
-test("redeems a one-time code, keeps the session, and rejects replay", async ({
+test("starts OpenScholar sign-in from /admin, keeps the session, and signs out", async ({
 	page,
 }) => {
 	test.setTimeout(90_000);
-	const loginPageUrl =
-		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!;
+	const baseUrl = process.env.PLAYWRIGHT_BASE_URL!;
 	await mockPublishedBook(page);
 	await page.context().clearCookies();
 	await page.goto("/admin?scope=drafts");
 
-	expect(page.url().startsWith(`${loginPageUrl}?`)).toBe(true);
-	// OpenScholar repeats the return path the library sent, and the browser
-	// carries that value back instead of inventing a destination.
-	const returnPath = await page.locator("#admin-return").innerText();
-	expect(returnPath).toBe("/admin?scope=drafts");
+	// Signed out, /admin starts the OAuth flow with OpenScholar's Clerk
+	// instance and asks it to come back to the library's own callback.
+	const authorize = new URL(page.url());
+	expect(authorize.pathname).toBe("/oauth/authorize");
+	expect(authorize.searchParams.get("response_type")).toBe("code");
+	expect(authorize.searchParams.get("redirect_uri")).toBe(new URL("/api/auth/callback/openscholar", baseUrl).toString());
+	expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
+	expect(authorize.searchParams.get("state")).toBeTruthy();
+	expect(authorize.searchParams.get("scope")?.split(" ")).toEqual(
+		expect.arrayContaining(["openid", "email", "profile", "offline_access"]),
+	);
 
-	const code = await issueAdminLoginCode();
-	const callback = new URL(
-		"/api/admin/session",
-		process.env.PLAYWRIGHT_BASE_URL!,
-	);
-	callback.searchParams.set("code", code);
-	callback.searchParams.set("return", returnPath);
-	await page.evaluate((url) => {
-		window.location.href = url;
-	}, callback.toString());
-	await page.waitForURL(
-		new URL("/admin?scope=drafts", process.env.PLAYWRIGHT_BASE_URL!).toString(),
-	);
-	await expect(
-		page.getByRole("textbox", { name: "Search records" }),
-	).toBeVisible();
+	await signInAdmin(page);
+	await page.goto("/admin?scope=drafts");
+	await expect(page.getByRole("textbox", { name: "Search records" })).toBeVisible();
 	await page.reload();
-	await expect(
-		page.getByRole("textbox", { name: "Search records" }),
-	).toBeVisible();
+	await expect(page.getByRole("textbox", { name: "Search records" })).toBeVisible();
 
 	const logout = page.getByRole("button", { name: "Log out" });
 	const newItem = page.getByRole("button", { name: "Create Item" });
@@ -864,26 +850,16 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	expect(logoutBox!.x + logoutBox!.width).toBeLessThanOrEqual(newItemBox!.x);
 	expect(Math.abs(logoutBox!.y - newItemBox!.y)).toBeLessThanOrEqual(1);
 
+	// Signing out ends the session and leaves /admin, so a later visit signs in again.
 	await logout.click();
-	await page.waitForURL(`${loginPageUrl}?return=%2Fadmin`);
-	await expect(page.locator("#admin-return")).toHaveText("/admin");
-
-	const replay = await createAdminBrowserSession(page, code, returnPath);
-	expect(replay.headers()["set-cookie"]).toBeUndefined();
-	expect(replay.headers().location).toBe(
-		`${loginPageUrl}?error=invalid_code&return=%2Fadmin%3Fscope%3Ddrafts`,
-	);
-	await page.goto(replay.headers().location);
-	await expect(page.locator("#admin-error")).toHaveText("invalid_code");
-	await expect(page.locator("#admin-return")).toHaveText(
-		"/admin?scope=drafts",
-	);
+	await page.waitForURL(new URL("/", baseUrl).toString());
+	const again = await page.request.get(new URL("/admin", baseUrl).toString(), { maxRedirects: 0 });
+	expect(again.status()).toBe(307);
+	expect(again.headers().location).toBe(new URL("/api/admin/sign-in?return=%2Fadmin", baseUrl).toString());
 });
 
 test("answers admin requests on the library's own rules", async ({ page }) => {
 	const baseUrl = process.env.PLAYWRIGHT_BASE_URL!;
-	const loginPageUrl =
-		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!;
 	const disabledLocale = process.env.PLAYWRIGHT_EXPECTED_DISABLED_LOCALE!;
 	expect(disabledLocale).toBeTruthy();
 	const adminUrl = (path: string) => new URL(path, baseUrl).toString();
@@ -916,7 +892,7 @@ test("answers admin requests on the library's own rules", async ({ page }) => {
 		maxRedirects: 0,
 	});
 	expect(head.status()).toBe(307);
-	expect(head.headers().location).toBe(`${loginPageUrl}?return=%2Fadmin`);
+	expect(head.headers().location).toBe(adminUrl("/api/admin/sign-in?return=%2Fadmin"));
 
 	const switchedOffLocale = await page.request.get(
 		adminUrl(`/${disabledLocale}/admin?sort=date_desc`),
@@ -928,19 +904,13 @@ test("answers admin requests on the library's own rules", async ({ page }) => {
 	).toBe(adminUrl("/admin?sort=date_desc"));
 });
 
-test("rejects a one-time code for another library", async ({ page }) => {
-	const wrongLibraryId =
-		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_WRONG_LIBRARY_ID;
-	expect(wrongLibraryId).toBeTruthy();
+test("tells someone without a role which organisation to ask", async ({ page }) => {
 	await page.context().clearCookies();
-
-	const code = await issueAdminLoginCode(wrongLibraryId);
-	const response = await createAdminBrowserSession(page, code);
-
-	expect(response.headers()["set-cookie"]).toBeUndefined();
-	expect(response.headers().location).toBe(
-		`${process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!}?error=invalid_code&return=%2Fadmin`,
-	);
+	await signInAs(page.context(), "user_acceptance_outsider");
+	await page.goto("/admin");
+	await expect(page.getByRole("heading", { name: "You cannot open this admin area" })).toBeVisible();
+	await expect(page.getByText("Ask an admin of Acceptance organisation to add you to the team that runs this library.")).toBeVisible();
+	await expect(page.getByRole("button", { name: "Create Item" })).toHaveCount(0);
 });
 
 test("edits an imported record and shows its writeback lifecycle", async ({
@@ -4942,10 +4912,7 @@ test("lets Creators assign records but prevents library management actions", asy
 	page,
 }) => {
 	const batchRequests: unknown[] = [];
-	await createAdminBrowserSession(
-		page,
-		await issueAdminLoginCode(undefined, "creator"),
-	);
+	await signInAdmin(page, "creator");
 	await mockPublishedBook(page, {
 		itemCount: 2,
 		onBatchRequest: (body) => batchRequests.push(body),
@@ -6082,7 +6049,7 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 });
 
 test("lets Creators request restoration without changing writeback sources", async ({ page }) => {
-	await createAdminBrowserSession(page, await issueAdminLoginCode(undefined, "creator"));
+	await signInAdmin(page, "creator");
 	await mockPublishedBook(page);
 	const target = {
 		effective: true, isOrigin: false, itemEnabled: true, linkExists: true,

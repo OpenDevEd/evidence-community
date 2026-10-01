@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	buildAdminLoginPageUrl,
+	buildAdminSignInPath,
 	getCanonicalLibraryRedirect,
 	getExternalRequestOrigin,
 	getRedirectLookupPath,
@@ -188,27 +188,11 @@ describe("admin return path", () => {
 		expect(getValidatedAdminReturnPath(undefined)).toBe("/admin");
 	});
 
-	it("sends the browser back to OpenScholar with the return path", () => {
-		expect(
-			buildAdminLoginPageUrl(
-				"https://openscholar.example.org/evidence-libraries/amber",
-				"/admin/items?scope=drafts",
-			),
-		).toBe(
-			"https://openscholar.example.org/evidence-libraries/amber?return=%2Fadmin%2Fitems%3Fscope%3Ddrafts",
+	it("starts sign-in on the library itself with the page to come back to", () => {
+		expect(buildAdminSignInPath("/admin/items?scope=drafts")).toBe(
+			"/api/admin/sign-in?return=%2Fadmin%2Fitems%3Fscope%3Ddrafts",
 		);
-	});
-
-	it("marks a failed code exchange for OpenScholar", () => {
-		expect(
-			buildAdminLoginPageUrl(
-				"https://openscholar.example.org/evidence-libraries/amber",
-				"/admin",
-				"invalid_code",
-			),
-		).toBe(
-			"https://openscholar.example.org/evidence-libraries/amber?error=invalid_code&return=%2Fadmin",
-		);
+		expect(buildAdminSignInPath("https://evil.example.org/admin")).toBe("/api/admin/sign-in?return=%2Fadmin");
 	});
 });
 

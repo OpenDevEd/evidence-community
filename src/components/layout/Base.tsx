@@ -16,7 +16,9 @@ import { cookies } from "next/headers";
 import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 import { LibraryThemeStyles } from "@/components/library/LibraryThemeStyles";
+import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import { getSignedInReader } from "@/lib/readers/session";
 
 async function BaseContent({
 	children,
@@ -29,11 +31,14 @@ async function BaseContent({
 	locale: string;
 	storedConsent: string | null;
 }>) {
-	const [status, messages, t] = await Promise.all([
+	const [status, messages, t, signedIn] = await Promise.all([
 		getCachedStatus(),
 		getMessages(),
 		getTranslations({ locale, namespace: "ui" }),
+		getSignedInReader(),
 	]);
+	// Only what other readers may see goes to the browser.
+	const reader = signedIn ? { id: signedIn.id, name: signedIn.name, image: signedIn.image } : null;
 
 	return (
 		<NextIntlClientProvider messages={messages}>
@@ -41,6 +46,7 @@ async function BaseContent({
 				status={status}
 				gapmaps={gapmaps}
 				storedConsent={storedConsent}
+				reader={reader}
 			>
 				{/* Single shared filter state for the whole app — lives above the
 				    navbar AND the page so collections/params stay resident across
@@ -88,6 +94,7 @@ export default async function Base({
 				/>
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
+				<NavbarFitStyles locale={locale} />
 				<LibraryConfigProvider config={libraryConfig}>
 					<BaseContent
 						gapmaps={libraryConfig.gapMaps}

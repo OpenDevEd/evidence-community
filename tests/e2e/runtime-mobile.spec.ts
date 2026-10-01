@@ -68,7 +68,7 @@ test("renders the runtime navigation and feature controls on mobile", async ({
 
 	await expect(
 		page.getByRole("button", {
-			name: "Login/Register button",
+			name: "Sign in",
 			exact: true,
 		}),
 	).toHaveCount(expectedLogin ? 1 : 0);

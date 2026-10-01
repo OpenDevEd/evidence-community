@@ -1,77 +1,85 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { DropdownItem, DropdownTrigger } from "@nextui-org/react";
-import { ChevronDownIcon } from "@nextui-org/shared-icons";
+import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
+import { ArrowDown01Icon, LanguageSkillIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { twMerge } from "@/lib/tw-merge";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
-import { DropdownMenu } from "@nextui-org/react";
-import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
+import { getOrderedRuntimeLocales } from "@/i18n/runtime";
+import { localesNames } from "@/i18n/routing";
 import type { NavbarElementProps } from "@/types/navbar";
+import {
+	NavbarMenuIcon,
+	navbarMenuClasses,
+	navbarMenuDropdownClasses,
+	navbarMenuItemClasses,
+} from "./menuStyles";
 
-export default function LanguageSwitcher({
-	variant,
-	styleVariant,
-}: NavbarElementProps) {
+export function languageName(locale: string) {
+	return localesNames[locale as keyof typeof localesNames] ?? locale;
+}
+
+/** Every language the library offers, the current one ticked, in the library's order. */
+export function languageMenuItems<Locale extends string>(input: {
+	locales: readonly Locale[];
+	current: string;
+	onSelect: (locale: Locale) => void;
+}) {
+	return input.locales.map((locale) => (
+		<DropdownItem
+			key={`locale-${locale}`}
+			lang={locale}
+			onPress={() => input.onSelect(locale)}
+			endContent={
+				locale === input.current ? (
+					<NavbarMenuIcon icon={Tick02Icon} className="text-accent dark:text-accent" />
+				) : null
+			}
+		>
+			{languageName(locale)}
+		</DropdownItem>
+	));
+}
+
+/** All of the library's languages, the current one included. */
+export function useLibraryLanguages() {
+	const { localization } = useLibraryConfig();
+	return getOrderedRuntimeLocales(localization);
+}
+
+export default function LanguageSwitcher({ variant }: NavbarElementProps) {
 	const changeLocale = useRuntimeLocaleNavigation();
-	const {
-		currentLocaleName,
-		sortedLocales,
-		localesNames,
-	} = useSortedLocales();
+	const { currentLocale } = useSortedLocales();
+	const locales = useLibraryLanguages();
 	const isEnabled = useLibraryFeature("languageSwitcher");
 	const t = useTranslations("ui");
 
-	if (!isEnabled) return null;
+	if (!isEnabled || locales.length < 2) return null;
 
-	// Menu item variant - returns individual items for each locale
-	if (variant === "menuItem") {
-		return (
-			<>
-				{sortedLocales.map((locale) => (
-					<DropdownItem key={locale} onPress={() => changeLocale(locale)}>
-						{localesNames[locale as keyof typeof localesNames]}
-					</DropdownItem>
-				))}
-			</>
-		);
-	}
+	const items = languageMenuItems({ locales, current: currentLocale, onSelect: changeLocale });
+	if (variant === "menuItem") return <>{items}</>;
 
-	// Inline variant - dropdown with current locale as trigger
+	// The language's own name says more than a code such as EN-GB.
 	return (
-		<Dropdown>
-			<DropdownTrigger className="cursor-pointer select-none">
+		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses}>
+			<DropdownTrigger>
 				<Button
 					variant="invisible"
-					tabIndex={0}
 					disableRipple
-					className={twMerge(
-						"flex items-center gap-2 !px-2 justify-center",
-						styleVariant === "wide" && "uppercase"
-					)}
+					className={twMerge("flex h-10 items-center gap-2 !px-2 justify-center text-foreground/70 dark:text-white/70")}
 					aria-label={t("languageSwitcherAriaLabel")}
 				>
-					<span className="text-lg font-medium">{currentLocaleName}</span>
-					<ChevronDownIcon className="size-4" />
+					<NavbarMenuIcon icon={LanguageSkillIcon} className="text-accent dark:text-accent" />
+					<span className="text-lg font-medium">{languageName(currentLocale)}</span>
+					<NavbarMenuIcon icon={ArrowDown01Icon} className="size-4" />
 				</Button>
 			</DropdownTrigger>
-			<DropdownMenu
-				onAction={(key) => {
-					const locale = sortedLocales.find(
-						(candidate) => candidate === String(key),
-					);
-					if (locale) changeLocale(locale);
-				}}
-				aria-label={t("languageMenuAriaLabel")}
-			>
-				{sortedLocales.map((locale) => (
-					<DropdownItem key={locale}>
-						{localesNames[locale as keyof typeof localesNames]}
-					</DropdownItem>
-				))}
+			<DropdownMenu aria-label={t("languageMenuAriaLabel")} classNames={navbarMenuClasses} itemClasses={navbarMenuItemClasses}>
+				{items}
 			</DropdownMenu>
 		</Dropdown>
 	);
