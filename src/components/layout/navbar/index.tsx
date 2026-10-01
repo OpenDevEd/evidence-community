@@ -12,8 +12,7 @@ import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
 import NavbarSearch from "./NavbarSearch";
 import MobileMenu from "./MobileMenu";
-import ActionsDropdown from "./ActionsDropdown";
-import LoginButton from "./LoginButton";
+import NavbarActionSteps from "./NavbarActionSteps";
 
 import {
 	navbarElements,
@@ -21,6 +20,7 @@ import {
 	getElementsByPlacement,
 } from "@/config/navbar.config";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import { navbarActionSteps, navbarSettings } from "@/lib/navbar-actions";
 import { normalizePathname } from "@/lib/path";
 import { pageRunsUnderHeader } from "@/lib/runtime-routing";
 
@@ -63,6 +63,41 @@ function barClassName(
 	);
 }
 
+/** The header around the bar in each style: its surface, over the home page, and beside the chat. */
+const HEADER_STYLE: Record<NavbarStyleVariant, { surface: string; overPage: string; besideChat: string }> = {
+	small: {
+		surface: "max-w-site xl:px-14",
+		overPage: "xl:absolute xl:top-6 xl:scale-75",
+		besideChat: "xl:sticky xl:top-split xl:scale-75",
+	},
+	wide: { surface: "bg-white dark:bg-secondary", overPage: "xl:absolute", besideChat: "xl:sticky xl:top-0" },
+};
+
+function headerClassName(styleVariant: NavbarStyleVariant, floatsOverPage: boolean, chatEngaged: boolean) {
+	const style = HEADER_STYLE[styleVariant];
+	return twMerge(
+		"w-full px-0 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top motion-reduce:transition-none",
+		style.surface,
+		floatsOverPage && style.overPage,
+		// The small style floats the header below the top of the page; while
+		// the chat is open it sticks at the same offset, so the header and the
+		// chat do not jump apart on scroll.
+		chatEngaged && !floatsOverPage && style.besideChat,
+	);
+}
+
+/**
+ * The navbar search routes to the library listing, so it is hidden on pages
+ * that already own a search bar (the listing, the map, and a user's profile).
+ * It also stays in the page flow, so it cannot follow a header that floats over
+ * the page (the home page): there it would sit under the header.
+ */
+function showsNavbarSearch(pathname: string, enabled: boolean) {
+	const path = normalizePathname(pathname);
+	const ownsSearch = path === "/lib" || path.startsWith("/map") || path.startsWith("/profile");
+	return enabled && !ownsSearch && !pageRunsUnderHeader(pathname);
+}
+
 export default function Navbar() {
 	const t = useTranslations("ui");
 	const pathname = usePathname();
@@ -73,24 +108,11 @@ export default function Navbar() {
 		libraryConfig.theme.layout as NavbarStyleVariant;
 
 	const { engaged: chatEngaged } = useInlineChatLayout();
-	const normalizedPathname = normalizePathname(pathname);
 	const floatsOverPage = pageRunsUnderHeader(pathname);
-
-	// The navbar search routes to the library listing, so hide it on pages that
-	// already own a search bar (the listing, the map, and a user's profile).
-	// It also stays in the page flow, so it cannot follow a header that floats
-	// over the page (the home page): there it would sit under the header.
-	const isSearchOwningPath =
-		normalizedPathname === "/lib" ||
-		normalizedPathname.startsWith("/map") ||
-		normalizedPathname.startsWith("/profile");
-	const showNavbarSearch =
-		isLibraryFeatureEnabled(
-			libraryConfig.features,
-			"navbarSearch",
-		) &&
-		!isSearchOwningPath &&
-		!floatsOverPage;
+	const showNavbarSearch = showsNavbarSearch(
+		pathname,
+		isLibraryFeatureEnabled(libraryConfig.features, "navbarSearch"),
+	);
 
 	// Get enabled elements based on runtime configuration and session.
 	const enabledElements = getEnabledElements(
@@ -99,25 +121,12 @@ export default function Navbar() {
 	);
 
 	// Get elements grouped by placement for each breakpoint
-	const mobileInlineElements = getElementsByPlacement(
-		enabledElements,
-		"mobile",
-		"inline"
-	);
-	const mobileMenuElements = getElementsByPlacement(
-		enabledElements,
-		"mobile",
-		"mobileMenu"
-	);
-	const tabletDropdownElements = getElementsByPlacement(
-		enabledElements,
-		"tablet",
-		"dropdown"
-	);
-	const desktopInlineElements = getElementsByPlacement(
-		enabledElements,
-		"desktop",
-		"inline"
+	const mobileInlineElements = getElementsByPlacement(enabledElements, "inline");
+	const mobileMenuElements = getElementsByPlacement(enabledElements, "mobileMenu");
+	// Widest first; the bar's measured container queries pick one (navbar-fit).
+	const actionSteps = navbarActionSteps(
+		navbarSettings(libraryConfig),
+		isLibraryFeatureEnabled(libraryConfig.features, "readerAccounts"),
 	);
 
 	// Context passed to container components
@@ -132,24 +141,7 @@ export default function Navbar() {
 		<>
 		<header
 			id="site-header"
-			className={twMerge(
-				"w-full px-0 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-chrome duration-split ease-split origin-top motion-reduce:transition-none",
-				styleVariant === "wide"
-					? "bg-white dark:bg-secondary"
-					: "max-w-site xl:px-14",
-				floatsOverPage &&
-					(styleVariant !== "wide"
-						? "xl:absolute xl:top-6 xl:scale-75"
-						: "xl:absolute"),
-				// The small style floats the header below the top of the
-				// page; while the chat is open it sticks at the same offset,
-				// so the header and the chat do not jump apart on scroll.
-				chatEngaged &&
-					!floatsOverPage &&
-					(styleVariant !== "wide"
-						? "xl:sticky xl:top-split xl:scale-75"
-						: "xl:sticky xl:top-0")
-			)}
+			className={headerClassName(styleVariant, floatsOverPage, chatEngaged)}
 		>
 			<div
 				className={barClassName(
@@ -184,32 +176,7 @@ export default function Navbar() {
 					</div>
 				)}
 
-				{/* Tablet condensed dropdown (xl to 2xl) */}
-				{tabletDropdownElements.length > 0 && (
-					<div className="nf-actions-condensed">
-						<ActionsDropdown context={navbarContext} />
-					</div>
-				)}
-
-				{/* Desktop expanded actions (2xl+) */}
-				{desktopInlineElements.length > 0 && (
-					<nav
-						className="nf-actions-full"
-						aria-label={t("secondaryNavAriaLabel")}
-					>
-						{/* Settings behind one button, then Sign in; signed in, the avatar holds both. */}
-						<ul className="flex items-center gap-6">
-							<li>
-								<ActionsDropdown context={navbarContext} includeSignIn={Boolean(session)} />
-							</li>
-							{!session ? (
-								<li>
-									<LoginButton variant="inline" styleVariant={styleVariant} />
-								</li>
-							) : null}
-						</ul>
-					</nav>
-				)}
+				<NavbarActionSteps steps={actionSteps} context={navbarContext} />
 
 				{/* Mobile hamburger menu (< xl) */}
 				<MobileMenu

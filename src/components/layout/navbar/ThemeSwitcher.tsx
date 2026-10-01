@@ -115,5 +115,6 @@ export default function ThemeSwitcher({
 		</Button>
 	);
 
-	return toolbar ? <Tooltip content={label}>{button}</Tooltip> : button;
+	// Icon only, so it names itself in a tooltip; the phone menu shows the label instead.
+	return toolbar || !showLabel ? <Tooltip content={label}>{button}</Tooltip> : button;
 }

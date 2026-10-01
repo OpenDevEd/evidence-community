@@ -7,15 +7,18 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getVisibleRuntimeLinks } from "@/config/library-config/links";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
+import { localesNames } from "@/i18n/routing";
+import { navbarActionSteps, navbarSettings, type NavbarActionSlot } from "@/lib/navbar-actions";
 
 /**
- * How wide the header bar has to be before its links fit, and before the
- * actions (theme, language, Sign in or the reader's avatar) fit beside them
- * instead of in a menu. Measured with the library's own font, so a library with
- * a few short links keeps the full row on a small laptop and one with many long
- * links switches earlier. The numbers become container queries on the bar.
+ * How wide the header bar has to be for each arrangement of its actions
+ * (`navbarActionSteps`), widest first. Below the last one the links fold into
+ * the phone menu. Measured with the library's own font, so a library with a few
+ * short links keeps every control in the row on a small laptop and one with
+ * many long links folds earlier. The numbers become container queries on the
+ * bar.
  */
-export type NavbarFit = { links: number; full: number };
+export type NavbarFit = { steps: number[] };
 
 // The sizes the navbar's classes give its parts (navbar/index.tsx, NavLinks,
 // LoginButton, ThemeSwitcher, LanguageSwitcher), in pixels.
@@ -24,8 +27,10 @@ const LINK_ICON = 24; // size-6
 const LINK_ICON_GAP = 8; // gap-2
 const LINK_FONT = { size: 18, weight: 500 }; // text-lg font-medium
 const SUBMENU_TRIGGER = 8 + 40; // gap-2, then the chevron button
-const MENU_BUTTON = 20; // the condensed ☰ trigger
-const SETTINGS_BUTTON = 20; // size-5 icon, no padding
+const MENU_BUTTON = 20; // the ☰ trigger, a size-5 icon with no padding
+const SETTINGS_BUTTON = 20; // the settings trigger, likewise
+const THEME_BUTTON = 20; // the light or dark button, likewise
+const LANGUAGE_CHROME = 8 + 20 + 8 + 8 + 16 + 8; // px-2, icon, gap, gap, chevron, px-2
 const AVATAR = 40; // md avatar
 const SIGN_IN_CHROME = 16 + 20 + 8 + 16; // px-4, icon, gap, px-4
 const LOGO_HEIGHT = 40; // xl:h-10
@@ -84,13 +89,29 @@ type NavbarLabels = {
 	link: (label: string) => string;
 	gapMaps: string;
 	signIn: string;
+	/** The current language's name, which the language button shows. */
+	language: string;
 };
 
+/** How wide one control in the header's actions is. */
+function slotWidth(slot: NavbarActionSlot, measure: (value: string) => number, labels: NavbarLabels) {
+	switch (slot.kind) {
+		case "setting":
+			return slot.setting === "theme" ? THEME_BUTTON : LANGUAGE_CHROME + measure(labels.language);
+		case "settingsMenu":
+			return SETTINGS_BUTTON;
+		case "signIn":
+			return SIGN_IN_CHROME + measure(labels.signIn);
+		case "menu":
+			return MENU_BUTTON;
+	}
+}
+
 /**
- * The widths the bar needs, given a way to measure text in the library's font.
- * Signed out the actions are the settings button and Sign in; signed in the
- * avatar alone, so the larger of the two is kept and nothing jumps when a
- * reader signs in.
+ * The widths the bar needs for each arrangement of its actions, given a way to
+ * measure text in the library's font. Signed in, the avatar alone stands in
+ * for every arrangement, so each keeps the larger of the two and nothing jumps
+ * when a reader signs in.
  */
 export function navbarWidths(
 	config: LibraryServerConfig,
@@ -109,25 +130,48 @@ export function navbarWidths(
 	if (config.gapMaps.length > 0) items.push(LINK_ICON + LINK_ICON_GAP + measure(label(labels.gapMaps)));
 	const links = items.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, items.length - 1);
 
-	const hasSettings =
-		isLibraryFeatureEnabled(config.features, "themeSwitcher") ||
-		(isLibraryFeatureEnabled(config.features, "languageSwitcher") && config.localization.locales.length > 1);
 	const readerAccounts = isLibraryFeatureEnabled(config.features, "readerAccounts");
-	const signedOut = [
-		...(hasSettings ? [SETTINGS_BUTTON] : []),
-		...(readerAccounts ? [SIGN_IN_CHROME + measure(labels.signIn)] : []),
-	];
-	const actions = Math.max(
-		signedOut.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, signedOut.length - 1),
-		readerAccounts ? AVATAR : 0,
-	);
-
 	// Container queries measure the bar without its padding.
 	const base = logo + GAP + links + SAFETY;
 	return {
-		links: Math.ceil(base + (actions > 0 ? GAP + MENU_BUTTON : 0)),
-		full: Math.ceil(base + (actions > 0 ? GAP + actions : 0)),
+		steps: navbarActionSteps(navbarSettings(config), readerAccounts).map((slots) => {
+			const signedOut =
+				slots.reduce((sum, slot) => sum + slotWidth(slot, measure, labels), 0) + GAP * Math.max(0, slots.length - 1);
+			const actions = Math.max(signedOut, readerAccounts ? AVATAR : 0);
+			return Math.ceil(base + (actions > 0 ? GAP + actions : 0));
+		}),
 	};
+}
+
+/**
+ * Which arrangement of the header shows, as CSS. Each measured width becomes a
+ * container query on the bar; the widest that fits wins. Without a measurement
+ * the fixed xl and 2xl breakpoints decide between the narrowest and the widest
+ * arrangement.
+ */
+export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
+	const queries = fit
+		? fit.steps.map((width) => `@container navbar (min-width: ${width}px)`)
+		: Array.from({ length: stepCount }, (_, step) =>
+				step === 0 ? "@media (min-width: 1536px)" : step === stepCount - 1 ? "@media (min-width: 1280px)" : null,
+			);
+	// Narrowest first, so a wider arrangement that also fits overrides it.
+	const rules = queries
+		.map((query, step) => ({ query, step }))
+		.filter((rule): rule is { query: string; step: number } => rule.query !== null)
+		.reverse()
+		.map(
+			({ query, step }) => `${query} {
+	.nf-step { display: none !important; }
+	.nf-step-${step} { display: flex !important; }
+	.nf-links { display: flex !important; }
+	.nf-compact { display: none !important; }
+}`,
+		);
+	return `
+.navbar-bar { container: navbar / inline-size; }
+.nf-links, .nf-step { display: none !important; }
+${rules.join("\n")}`;
 }
 
 export async function computeNavbarFit(
@@ -154,29 +198,13 @@ export async function computeNavbarFit(
 	return navbarWidths(
 		config,
 		(value) => context.measureText(value).width,
-		{ link: (value) => localizeOrUseIfCapitalized(value, t), gapMaps: t("gapMaps"), signIn: ui("signIn") },
+		{
+			link: (value) => localizeOrUseIfCapitalized(value, t),
+			gapMaps: t("gapMaps"),
+			signIn: ui("signIn"),
+			language: localesNames[locale as keyof typeof localesNames] ?? locale,
+		},
 		logo,
 	);
 }
 
-/**
- * When the header shows its links and its actions inline, as CSS. Measured
- * widths become container queries on the bar; without a measurement the
- * fixed xl and 2xl breakpoints decide.
- */
-export function navbarFitCss(fit: NavbarFit | null) {
-	const linksQuery = fit ? `@container navbar (min-width: ${fit.links}px)` : "@media (min-width: 1280px)";
-	const fullQuery = fit ? `@container navbar (min-width: ${fit.full}px)` : "@media (min-width: 1536px)";
-	return `
-.navbar-bar { container: navbar / inline-size; }
-.nf-links, .nf-actions-condensed, .nf-actions-full { display: none !important; }
-${linksQuery} {
-	.nf-links { display: flex !important; }
-	.nf-actions-condensed { display: block !important; }
-	.nf-compact { display: none !important; }
-}
-${fullQuery} {
-	.nf-actions-condensed { display: none !important; }
-	.nf-actions-full { display: block !important; }
-}`;
-}

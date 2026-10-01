@@ -1,6 +1,8 @@
 import "server-only";
 
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { navbarActionSteps, navbarSettings } from "@/lib/navbar-actions";
 import { computeNavbarFit, navbarFitCss } from "@/lib/navbar-fit";
 
 /**
@@ -23,5 +25,6 @@ export async function NavbarFitStyles({ locale }: { locale: string }) {
 		computeNavbarFit(config, locale, config.identity.assets.logoLight),
 		new Promise<null>((resolve) => setTimeout(() => resolve(null), FIRST_MEASUREMENT_WAIT_MS)),
 	]);
-	return <style data-navbar-fit={fit ? `${fit.links} ${fit.full}` : "fallback"}>{navbarFitCss(fit)}</style>;
+	const stepCount = navbarActionSteps(navbarSettings(config), isLibraryFeatureEnabled(config.features, "readerAccounts")).length;
+	return <style data-navbar-fit={fit ? fit.steps.join(" ") : "fallback"}>{navbarFitCss(fit, stepCount)}</style>;
 }

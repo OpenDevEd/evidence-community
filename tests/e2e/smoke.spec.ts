@@ -461,17 +461,14 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		exact: true,
 	})).toHaveAttribute("href", "/lib");
 
-	const languageRow = page.locator('[role="menuitem"][data-key="language"]');
-	const opened = await openHeaderSettings(page);
+	const currentLanguage = await openLanguages(page);
 
 	if (!expectedLanguageSwitcher) {
-		await expect(languageRow).toHaveCount(0);
+		expect(currentLanguage).toBeNull();
 		return;
 	}
 
-	expect(opened).toBe(true);
-	await expect(languageRow).toContainText(expectedCurrentLocaleLabel);
-	await languageRow.click();
+	expect(currentLanguage).toContain(expectedCurrentLocaleLabel);
 	const localeOptions = page.locator('[role="menuitem"][lang]');
 	await expect(localeOptions).toHaveCount(expectedLocaleOptions.length);
 	await expect(localeOptions).toHaveText(expectedLocaleOptions);
@@ -520,10 +517,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	});
 	// The header still re-renders for the new locale, which can swallow a click.
 	await expect(async () => {
-		if (!(await switchBack.isVisible())) {
-			if (!(await languageRow.isVisible())) await openHeaderSettings(page);
-			await languageRow.click({ timeout: 1_000 });
-		}
+		if (!(await switchBack.isVisible())) await openLanguages(page);
 		await expect(switchBack).toBeVisible({ timeout: 1_000 });
 	}).toPass();
 	await switchBack.press("Enter");
@@ -551,7 +545,9 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 	await dismissConsent(page);
 
 	const navbarSearch = page.getByPlaceholder("Search", { exact: true });
-	const themeSwitcher = page.locator('[role="menuitem"][data-key="theme"]');
+	// Its own button when there is room, otherwise a row in the header's menu.
+	const inlineTheme = headerActions(page).getByRole("button", { name: /^Switch to (?:dark|light) mode$/u });
+	const themeSwitcher = inlineTheme.or(page.locator('[role="menuitem"][data-key="theme"]'));
 	const loginButton = page.getByRole("button", {
 		name: "Sign in",
 		exact: true,
@@ -559,26 +555,45 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 
 	await expect(navbarSearch).toHaveCount(expectedNavbarSearch ? 1 : 0);
 	await expect(loginButton).toHaveCount(expectedLogin ? 1 : 0);
-	await openHeaderSettings(page);
+	if ((await inlineTheme.count()) === 0) await openHeaderMenu(page);
 	await expect(themeSwitcher).toHaveCount(expectedThemeSwitcher ? 1 : 0);
 });
 
 /**
- * Opens the header's settings menu, which holds the theme switch and the
- * languages. Returns false when the library offers neither, so there is none.
+ * The header's actions: the banner's last navigation. Found by role, not
+ * label, so it works in every language; the first may hold link menus of its
+ * own.
  */
-async function openHeaderSettings(page: Page) {
-	// The banner's last navigation holds the actions. Found by role, not label,
-	// so it works in every language; the first may hold link menus of its own.
-	const trigger = page
-		.getByRole("banner")
-		.getByRole("navigation")
-		.last()
-		.locator("button[aria-haspopup]")
-		.filter({ visible: true });
-	if ((await trigger.count()) === 0) return false;
-	await trigger.click();
-	return true;
+function headerActions(page: Page) {
+	return page.getByRole("banner").getByRole("navigation").last();
+}
+
+/** Opens the header's one menu button, if it has one: settings, or settings and Sign in. */
+async function openHeaderMenu(page: Page) {
+	const trigger = headerActions(page).locator("button[aria-haspopup]").filter({ visible: true });
+	if ((await trigger.count()) === 0) return null;
+	await trigger.first().click();
+	await expect(page.getByRole("menuitem").first()).toBeVisible();
+	return trigger.first();
+}
+
+/**
+ * Opens the list of languages wherever the header keeps them: behind their own
+ * button when there is room, or one step into its menu. Answers the current
+ * language as the header names it, or null when the library offers no choice.
+ */
+async function openLanguages(page: Page) {
+	const trigger = await openHeaderMenu(page);
+	if (!trigger) return null;
+	const row = page.locator('[role="menuitem"][data-key="language"]');
+	if (await row.isVisible()) {
+		const current = await row.innerText();
+		await row.click();
+		return current;
+	}
+	if ((await page.locator('[role="menuitem"][lang]').count()) > 0) return trigger.innerText();
+	await page.keyboard.press("Escape");
+	return null;
 }
 
 test("enforces the runtime AI gate in both directions", async ({
