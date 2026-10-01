@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
-import { reconcileOpenAlexMemberships } from "./reconciliation";
+import { reconcileOpenAlexMemberships, withdrawDuplicateRecords } from "./reconciliation";
 import type { SourceAdapterContext, SourceConnection } from "../adapter";
 import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
 import { SourceCredentialNotFoundError } from "../credentials";
@@ -14,6 +14,7 @@ import {
 } from "../batch-schema";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
+import { findDuplicateRecords, skippedDuplicateKeys } from "./duplicates";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
 import { OPENALEX_MAX_PAGE_SIZE, openAlexConnectionConfigSchema, type OpenAlexPage, type OpenAlexQuery } from "./schema";
@@ -568,6 +569,17 @@ function assertAdvancing(
 	}
 }
 
+/** A page's works as records, without works an earlier scan found to repeat a record kept instead. */
+async function mapPage(scan: Scan, results: unknown[]) {
+	const mapped = results.map(mapOpenAlexWork);
+	const skipped = await skippedDuplicateKeys(
+		scan.context.database,
+		scan.context.sourceConnection.key,
+		mapped.map((work) => work.items[0]!.sourceRecordKey),
+	);
+	return skipped.size ? mapped.filter((work) => !skipped.has(work.items[0]!.sourceRecordKey)) : mapped;
+}
+
 /** Fetches and writes every page of the cursor's stage. */
 async function scanPages(scan: Scan) {
 	const { context, client, stream } = scan;
@@ -584,7 +596,7 @@ async function scanPages(scan: Scan) {
 		if (await switchToSlices(scan, page.meta.count)) return;
 		// The total is known from the page; say it before slow PDF work starts.
 		await reportProgress(scan, page.meta.count);
-		const mapped = page.results.map(mapOpenAlexWork);
+		const mapped = await mapPage(scan, page.results);
 		const items = mapped.flatMap((work) => work.items);
 		await preparePage(scan, items);
 		await writeScannedPage(scan, page, mapped, items);
@@ -682,7 +694,7 @@ async function fillPdfPages(pipeline: PdfPipeline) {
 		if (pipeline.fetchCursor.mode === "incremental") pipeline.fetchCursor = { ...pipeline.fetchCursor, incrementalAvailable: true };
 		assertAdvancing(page, fetched.from, context.sourceConnection.key);
 		pipeline.fetchCursor = pastPage(pipeline.fetchCursor, slice, page.meta.next_cursor);
-		const mapped = page.results.map(mapOpenAlexWork);
+		const mapped = await mapPage(scan, page.results);
 		const items = mapped.flatMap((work) => work.items);
 		const processed = processor ? processWithLanes(context, items, processor, lane, stop) : Promise.resolve();
 		// A failure is handled when its page is written; this keeps it from going unobserved first.
@@ -908,7 +920,7 @@ async function fetchSlice(scan: Scan, slice: number, queue: ReturnType<typeof pa
 			slice,
 			nextCursor: cursor,
 			works: page.results.length,
-			mapped: page.results.map(mapOpenAlexWork),
+			mapped: await mapPage(scan, page.results),
 		});
 		if (!handed) return;
 	}
@@ -1003,6 +1015,31 @@ async function withdrawUnread(context: SourceAdapterContext, cursor: Record<stri
 		await context.heartbeat();
 }
 
+/**
+ * Withdraws records that repeat another record of the source, once the scan has written every work, so the order
+ * works arrive in does not matter. A full scan only keeps a record it read itself.
+ */
+async function withdrawDuplicates(scan: Scan) {
+	const { context } = scan;
+	const readSince = scan.cursor.mode === "full" ? scan.cursor.startedAt : null;
+	const duplicates = await findDuplicateRecords(context.database, context.sourceConnection.key, readSince, scan.options.fetch);
+	await withdrawDuplicateRecords(context.database, {
+		sourceConnectionKey: context.sourceConnection.key,
+		configuration: context.sourceConnection.config,
+		cursor: scan.expectedCursor,
+		sourceSyncRunId: context.run?.id,
+		duplicates,
+		readSince,
+	});
+	if (duplicates.length) {
+		console.info("OpenAlex records withdrawn as repeats of records kept instead", {
+			sourceConnectionKey: context.sourceConnection.key,
+			count: duplicates.length,
+			examples: duplicates.slice(0, 5).map(({ recordKey }) => recordKey),
+		});
+	}
+}
+
 async function reconcile(scan: Scan) {
 	if (scan.cursor.mode === "full") await withdrawUnread(scan.context, scan.expectedCursor, scan.cursor.startedAt);
 }
@@ -1047,6 +1084,7 @@ async function scanStages(scan: Scan) {
 		if (scan.cursor.stage === "records") {
 			await scanPages(scan);
 			if (scan.cursor.slices) await scanSlices(scan);
+			await withdrawDuplicates(scan);
 			await reconcile(scan);
 			if (!scan.stream.downloadPdfs) return;
 			await startPdfStage(scan);
