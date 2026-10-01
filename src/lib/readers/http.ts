@@ -1,6 +1,6 @@
 import "server-only";
 
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -25,6 +25,8 @@ type ReaderRequest =
 
 /** The signed-in reader and their library's database, or the response to send instead. */
 export async function readReaderRequest(request: Request): Promise<ReaderRequest> {
+	// Each answer belongs to one signed-in reader, so none is prerendered at build time.
+	await connection();
 	const config = await getLibraryConfig();
 	if (!config.features.readerAccounts) return { response: featureUnavailableResponse() };
 	const reader = await getSignedInReader(request.headers, config);
