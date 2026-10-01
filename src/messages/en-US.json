@@ -2,6 +2,7 @@
   "ui": {
     "signIn": "Sign in",
     "darkMode": "Dark mode",
+    "language": "Language",
     "signedInWithOpenScholar": "Signed in with OpenScholar",
     "readerFallbackName": "Reader",
     "addYourName": "Add your name",

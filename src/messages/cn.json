@@ -1,5 +1,14 @@
 {
   "ui": {
+    "signIn": "登录",
+    "signedInWithOpenScholar": "已通过 OpenScholar 登录",
+    "readerFallbackName": "读者",
+    "addYourName": "添加你的姓名",
+    "openScholarAccount": "OpenScholar 账户",
+    "signOut": "退出登录",
+    "userMenuAriaLabel": "你的账户",
+    "darkMode": "深色模式",
+    "language": "语言",
     "downloadFormattedCitation": "格式化文本 (.html)",
     "downloadPlainCitation": "纯文本 (.txt)",
     "referenceManagerFormats": "文献管理工具",

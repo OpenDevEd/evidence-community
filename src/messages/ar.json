@@ -1,5 +1,14 @@
 {
   "ui": {
+    "signIn": "تسجيل الدخول",
+    "signedInWithOpenScholar": "تم تسجيل الدخول عبر OpenScholar",
+    "readerFallbackName": "قارئ",
+    "addYourName": "أضف اسمك",
+    "openScholarAccount": "حساب OpenScholar",
+    "signOut": "تسجيل الخروج",
+    "userMenuAriaLabel": "حسابك",
+    "darkMode": "الوضع الداكن",
+    "language": "اللغة",
     "downloadFormattedCitation": "منسّق (.html)",
     "downloadPlainCitation": "نص عادي (.txt)",
     "referenceManagerFormats": "مدير المراجع",

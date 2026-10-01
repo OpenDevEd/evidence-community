@@ -1,5 +1,14 @@
 {
   "ui": {
+    "signIn": "Ingia",
+    "signedInWithOpenScholar": "Umeingia kwa OpenScholar",
+    "readerFallbackName": "Msomaji",
+    "addYourName": "Ongeza jina lako",
+    "openScholarAccount": "Akaunti ya OpenScholar",
+    "signOut": "Toka",
+    "userMenuAriaLabel": "Akaunti yako",
+    "darkMode": "Hali ya giza",
+    "language": "Lugha",
     "downloadFormattedCitation": "Iliyoumbizwa (.html)",
     "downloadPlainCitation": "Maandishi pekee (.txt)",
     "referenceManagerFormats": "Kidhibiti cha marejeleo",

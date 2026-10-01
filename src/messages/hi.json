@@ -1,5 +1,14 @@
 {
   "ui": {
+    "signIn": "साइन इन करें",
+    "signedInWithOpenScholar": "OpenScholar से साइन इन",
+    "readerFallbackName": "पाठक",
+    "addYourName": "अपना नाम जोड़ें",
+    "openScholarAccount": "OpenScholar खाता",
+    "signOut": "साइन आउट करें",
+    "userMenuAriaLabel": "आपका खाता",
+    "darkMode": "डार्क मोड",
+    "language": "भाषा",
     "downloadFormattedCitation": "स्वरूपित (.html)",
     "downloadPlainCitation": "सादा पाठ (.txt)",
     "referenceManagerFormats": "संदर्भ प्रबंधक",

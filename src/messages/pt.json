@@ -1,5 +1,14 @@
 {
   "ui": {
+    "signIn": "Entrar",
+    "signedInWithOpenScholar": "Conectado com OpenScholar",
+    "readerFallbackName": "Leitor",
+    "addYourName": "Adicionar seu nome",
+    "openScholarAccount": "Conta OpenScholar",
+    "signOut": "Sair",
+    "userMenuAriaLabel": "Sua conta",
+    "darkMode": "Modo escuro",
+    "language": "Idioma",
     "downloadFormattedCitation": "Formatado (.html)",
     "downloadPlainCitation": "Texto simples (.txt)",
     "referenceManagerFormats": "Gestor de referências",

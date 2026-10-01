@@ -1,19 +1,19 @@
 "use client";
 
-import { Login01Icon, Menu01Icon, Moon02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft01Icon, ArrowRight01Icon, LanguageSkillIcon, Login01Icon, Menu01Icon, Moon02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useTranslations } from "next-intl";
 import { DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
-import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
 import { useLocale } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
-import LanguageSwitcher from "./LanguageSwitcher";
+import LanguageSwitcher, { languageMenuItems, languageName, useLibraryLanguages } from "./LanguageSwitcher";
 import type { NavbarContext } from "@/types/navbar";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useMockReaderSession } from "./MockReaderSession";
@@ -27,6 +27,13 @@ import {
 	navbarMenuSectionClasses,
 	navbarMenuSignInClasses,
 } from "./menuStyles";
+
+const KEEPS_MENU_OPEN = new Set(["theme", "language", "back"]);
+
+/** The popover box around the menu, whose height changes between views. */
+function menuFrame(menu: HTMLElement | null) {
+	return menu?.closest<HTMLElement>('[data-slot="content"]') ?? null;
+}
 
 interface ActionsDropdownProps {
 	context: NavbarContext;
@@ -44,9 +51,60 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	const router = useRouter();
 	const currentLocale = useLocale();
 	const changeLocale = useRuntimeLocaleNavigation();
-	const { sortedLocales, localesNames } = useSortedLocales();
+	const languages = useLibraryLanguages();
+	// The menu shows either its actions or, one step in, the list of languages.
+	const [view, setView] = useState<"main" | "languages">("main");
+	// Which way the last step went; none when the menu has just opened.
+	const [step, setStep] = useState<"forward" | "back" | null>(null);
+	const [isOpen, setIsOpen] = useState(false);
+	const menuRef = useRef<HTMLUListElement>(null);
+	const heightBeforeStep = useRef<number | null>(null);
+	const setOpen = (open: boolean) => {
+		setIsOpen(open);
+		// Opening again starts from the actions, not where it was left.
+		if (!open) {
+			setView("main");
+			setStep(null);
+		}
+	};
+	const goTo = (next: "main" | "languages") => {
+		heightBeforeStep.current = menuFrame(menuRef.current)?.offsetHeight ?? null;
+		setStep(next === "languages" ? "forward" : "back");
+		setView(next);
+	};
+
+	// The rows slide in from the side they come from while the menu frame eases
+	// from the old view's height to the new one's. The same menu stays mounted,
+	// so the popover never replays its opening. DOM animation, so a layout effect.
+	useLayoutEffect(() => {
+		const from = heightBeforeStep.current;
+		heightBeforeStep.current = null;
+		const list = menuRef.current;
+		const frame = menuFrame(list);
+		if (from === null || !list || !frame || !step) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const rtl = getComputedStyle(list).direction === "rtl";
+		const offset = (step === "forward" ? 16 : -16) * (rtl ? -1 : 1);
+		const timing = { duration: 200, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
+		const rows = list.animate(
+			[
+				{ opacity: 0, transform: `translateX(${offset}px)` },
+				{ opacity: 1, transform: "translateX(0)" },
+			],
+			timing,
+		);
+		const to = frame.offsetHeight;
+		const height =
+			to === from
+				? null
+				: frame.animate([{ height: `${from}px`, overflow: "hidden" }, { height: `${to}px`, overflow: "hidden" }], timing);
+		return () => {
+			rows.cancel();
+			height?.cancel();
+		};
+	}, [view, step]);
 	const hasTheme = useLibraryFeature("themeSwitcher");
-	const hasLanguages = useLibraryFeature("languageSwitcher") && sortedLocales.length > 0;
+	const hasLanguages = useLibraryFeature("languageSwitcher") && languages.length > 1;
 	const hasLogin = useLibraryFeature("login") && !reader;
 
 	const totalItems = (hasTheme ? 1 : 0) + (hasLogin ? 1 : 0) + (hasLanguages ? 1 : 0) + (reader ? 1 : 0);
@@ -75,15 +133,22 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 				]
 			: []),
 		...(hasLanguages
-			? sortedLocales.map((locale) => (
+			? [
 					<DropdownItem
-						key={`locale-${locale}`}
-						onPress={() => changeLocale(locale)}
-						endContent={locale === currentLocale ? <NavbarMenuIcon icon={Tick02Icon} className="text-accent dark:text-accent" /> : null}
+						key="language"
+						onPress={() => goTo("languages")}
+						startContent={<NavbarMenuIcon icon={LanguageSkillIcon} />}
+						endContent={
+							<span className="flex items-center gap-1 text-small text-foreground/60 dark:text-white/60">
+								{languageName(currentLocale)}
+								<NavbarMenuIcon icon={ArrowRight01Icon} className="size-4 rtl:rotate-180" />
+							</span>
+						}
+						textValue={t("language")}
 					>
-						{localesNames[locale as keyof typeof localesNames]}
-					</DropdownItem>
-				))
+						{t("language")}
+					</DropdownItem>,
+				]
 			: []),
 	];
 
@@ -132,8 +197,30 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 		) : null,
 	].filter((section) => section !== null);
 
+	const languageView = [
+		<DropdownSection key="languages-back" showDivider classNames={navbarMenuSectionClasses}>
+			<DropdownItem
+				key="back"
+				onPress={() => goTo("main")}
+				startContent={<NavbarMenuIcon icon={ArrowLeft01Icon} className="rtl:rotate-180" />}
+				className="font-semibold"
+			>
+				{t("language")}
+			</DropdownItem>
+		</DropdownSection>,
+		<DropdownSection key="languages" classNames={navbarMenuSectionClasses}>
+			{languageMenuItems({ locales: languages, current: currentLocale, onSelect: changeLocale })}
+		</DropdownSection>,
+	];
+
 	return (
-		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses}>
+		<Dropdown
+			placement="bottom-end"
+			classNames={navbarMenuDropdownClasses}
+			isOpen={isOpen}
+			onOpenChange={setOpen}
+			closeOnSelect={false}
+		>
 			<DropdownTrigger>
 				{reader ? (
 					<ReaderAvatar reader={reader} asTrigger />
@@ -149,8 +236,17 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					</Button>
 				)}
 			</DropdownTrigger>
-			<DropdownMenu aria-label={t("actionsMenuAriaLabel")} classNames={navbarMenuClasses} itemClasses={navbarMenuItemClasses}>
-				{sections}
+			<DropdownMenu
+				ref={menuRef}
+				aria-label={t("actionsMenuAriaLabel")}
+				classNames={navbarMenuClasses}
+				itemClasses={navbarMenuItemClasses}
+				// Settings and the step into languages keep the menu open; everything else is done once chosen.
+				onAction={(key) => {
+					if (!KEEPS_MENU_OPEN.has(String(key))) setOpen(false);
+				}}
+			>
+				{view === "languages" ? languageView : sections}
 			</DropdownMenu>
 		</Dropdown>
 	);

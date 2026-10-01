@@ -7,6 +7,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getVisibleRuntimeLinks } from "@/config/library-config/links";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
+import { localesNames } from "@/i18n/routing";
 
 /**
  * How wide the header bar has to be before its links fit, and before the
@@ -28,7 +29,7 @@ const MENU_BUTTON = 20; // the condensed ☰ trigger
 const THEME_BUTTON = 20; // size-5 icon, no padding
 const AVATAR = 40; // md avatar
 const SIGN_IN_CHROME = 16 + 20 + 8 + 16; // px-4, icon, gap, px-4
-const LANGUAGE_CHROME = 8 + 8 + 16 + 8; // px-2, gap, chevron, px-2
+const LANGUAGE_CHROME = 8 + 20 + 8 + 8 + 16 + 8; // px-2, icon, gap, gap, chevron, px-2
 const LOGO_HEIGHT = 40; // xl:h-10
 const LOGO_MAX_WIDTH = 192; // max-w-logo-header (12rem)
 /** Headroom for rounding and font rendering differences between browsers. */
@@ -115,8 +116,9 @@ export async function computeNavbarFit(
 	const actions: number[] = [];
 	if (isLibraryFeatureEnabled(config.features, "themeSwitcher")) actions.push(THEME_BUTTON);
 	if (isLibraryFeatureEnabled(config.features, "languageSwitcher")) {
-		const names = config.localization.locales.map((code) => new Intl.DisplayNames([code], { type: "language" }).of(code) ?? code);
-		actions.push(LANGUAGE_CHROME + Math.max(...names.map((name) => text(label(name)))));
+		// The switcher shows the current language's name; the longest decides.
+		const names = config.localization.locales.map((code) => localesNames[code as keyof typeof localesNames] ?? code);
+		actions.push(LANGUAGE_CHROME + Math.max(...names.map((name) => text(name))));
 	}
 	// Signed out shows Sign in, signed in the avatar; the wider one decides.
 	if (isLibraryFeatureEnabled(config.features, "login")) actions.push(Math.max(SIGN_IN_CHROME + text(ui("signIn")), AVATAR));
