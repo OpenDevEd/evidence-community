@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	bibliographicDateSearchFields,
+	isFuturePublication,
 	parseBibliographicDate,
 } from "@/lib/bibliographic-date";
 
@@ -66,5 +67,31 @@ describe("bibliographic dates", () => {
 		});
 		expect(bibliographicDateSearchFields("forthcoming")).toEqual({});
 		expect(bibliographicDateSearchFields("2024-13-99")).toEqual({});
+	});
+
+	it.each([
+		[{ datePublished: "2026-10-02" }, true],
+		[{ datePublished: "2026-10-01" }, false],
+		[{ datePublished: "2026-09-30T23:00:00.000Z" }, false],
+		[{ datePublished: "2026-09-30", year: "2027" }, false],
+		[{ year: "2027" }, true],
+		[{ year: "2026" }, false],
+		[{}, false],
+	])("decides whether %o is dated after today", (item, expected) => {
+		const today = new Date("2026-10-01T12:00:00Z");
+		expect(isFuturePublication(item, today)).toBe(expected);
+	});
+
+	it("decides by the UTC day whatever the host's time zone", () => {
+		const timeZone = process.env.TZ;
+		process.env.TZ = "Asia/Tokyo";
+		try {
+			// 05:00 on 2 October in Tokyo, still 1 October in UTC.
+			const now = new Date("2026-10-01T20:00:00Z");
+			expect(isFuturePublication({ datePublished: "2026-10-02" }, now)).toBe(true);
+			expect(isFuturePublication({ datePublished: "2026-10-01" }, now)).toBe(false);
+		} finally {
+			process.env.TZ = timeZone;
+		}
 	});
 });

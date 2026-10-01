@@ -45,6 +45,7 @@
     "to": "तक",
     "viewOnDocs": "{site} पर देखें",
     "inProgress": "प्रगति में है",
+    "futurePublicationDate": "प्रकाशक अक्सर किसी रचना पर उस अंक या संस्करण की तारीख़ डालते हैं जिसके लिए वह तय है, और उसे पहले ही जारी कर देते हैं।",
     "resourcesCount": "<number>{count}</number> {count, plural, one {संसाधन} other {संसाधन}}",
     "likedItemsCount": "<number>{count}</number> बुकमार्क किए गए {count, plural, one {संसाधन} other {संसाधन}}",
     "itemsInCollection": "<collections>{collection}</collections> में <number>{count}</number> {count, plural, one {संसाधन} other {संसाधन}}",

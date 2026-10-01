@@ -45,6 +45,7 @@
     "to": "To",
     "viewOnDocs": "View on {site}",
     "inProgress": "Coming Soon",
+    "futurePublicationDate": "Publishers often date a work by the issue or edition it is scheduled for, and release it before then.",
     "resourcesCount": "<number>{count}</number> {count, plural, one {resource} other {resources}}",
     "likedItemsCount": "<number>{count}</number> bookmarked {count, plural, one {resource} other {resources}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {resource} other {resources}} in <collections>{collection}</collections>",

@@ -45,6 +45,7 @@
     "to": "Mpaka",
     "viewOnDocs": "Tazama kwenye {site}",
     "inProgress": "Inaendelea",
+    "futurePublicationDate": "Wachapishaji mara nyingi huweka tarehe ya toleo lililopangwa, na huchapisha kazi kabla ya tarehe hiyo.",
     "resourcesCount": "<number>{count}</number> {count, plural, one {rasilimali} other {rasilimali}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {rasilimali} other {rasilimali}} zilizowekwa alama",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {rasilimali} other {rasilimali}} katika <collections>{collection}</collections>",

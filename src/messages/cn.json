@@ -45,6 +45,7 @@
     "to": "至",
     "viewOnDocs": "在 {site} 上查看",
     "inProgress": "进行中",
+    "futurePublicationDate": "出版方常按计划收录的期号或版次标注日期，并在此之前发布作品。",
     "resourcesCount": "<number>{count}</number> 个{count, plural, one {资源} other {资源}}",
     "likedItemsCount": "<number>{count}</number> 个已收藏{count, plural, one {资源} other {资源}}",
     "itemsInCollection": "<collections>{collection}</collections> 中有 <number>{count}</number> 个{count, plural, one {资源} other {资源}}",

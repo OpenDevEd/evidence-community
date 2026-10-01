@@ -45,6 +45,7 @@
     "to": "Bis",
     "viewOnDocs": "Auf {site} ansehen",
     "inProgress": "In Bearbeitung",
+    "futurePublicationDate": "Verlage datieren ein Werk oft auf die Ausgabe, für die es geplant ist, und veröffentlichen es schon vorher.",
     "resourcesCount": "<number>{count}</number> {count, plural, one {Ressource} other {Ressourcen}}",
     "likedItemsCount": "<number>{count}</number> gespeicherte {count, plural, one {Ressource} other {Ressourcen}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {Ressource} other {Ressourcen}} in <collections>{collection}</collections>",

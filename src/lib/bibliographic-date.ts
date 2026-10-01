@@ -83,3 +83,18 @@ export function bibliographicDateSearchFields(value: string | null) {
 		year: String(parsed.year),
 	};
 }
+
+/**
+ * Publishers often set a work's date to the issue it is scheduled for, so a
+ * record that is already out can carry a date after today.
+ */
+export function isFuturePublication(
+	item: { datePublished?: string | null; year?: string | null } | undefined,
+	now = new Date(),
+) {
+	// Calendar dates are compared and shown in UTC, so the server render and
+	// the reader's browser always agree.
+	const today = now.toISOString().slice(0, 10);
+	if (item?.datePublished) return item.datePublished.slice(0, 10) > today;
+	return Number(item?.year) > now.getUTCFullYear();
+}
