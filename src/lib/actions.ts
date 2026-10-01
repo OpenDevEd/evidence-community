@@ -115,9 +115,9 @@ export async function getProfileSearchFilter(
 		id && !collectionId ? getUserLikesDirect(id) : null,
 	])) as [Session | null, any, any];
 
-	if (collectionKeys) {
+	if (collectionId) {
 		if (!collectionKeys) {
-			return { filter: null };
+			return { filter: null, status: 404 };
 		}
 
 		if (collectionKeys.private) {
