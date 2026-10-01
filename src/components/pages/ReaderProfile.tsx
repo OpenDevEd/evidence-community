@@ -336,22 +336,24 @@ function CollectionsNav({
 	const t = useTranslations("ui");
 	return (
 		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
-			<nav className="flex flex-col gap-1 rounded-2xl bg-[#E8E6E1] p-4 dark:bg-secondary">
-				<div className="flex items-center justify-between gap-2 pb-2 ps-3 pt-1">
-					<h2 className="text-lg font-medium text-black/80 dark:text-white/80">{t("collections")}</h2>
+			{/* The heading row matches the list's, so the first collection lines up with the search field. */}
+			<nav className="flex flex-col gap-4">
+				<div className="flex h-12 items-end justify-between gap-4">
+					<h2 className="text-3xl font-medium text-black dark:text-white/60">{t("collections")}</h2>
 					{onCreate ? (
 						<Tooltip content={t("newCollection")}>
-							<Button isIconOnly aria-label={t("newCollection")} onPress={onCreate} className="h-9 w-9 min-w-0">
-								<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />
+							<Button isIconOnly aria-label={t("newCollection")} onPress={onCreate} className="h-12 w-12 min-w-0 !p-0">
+								<HugeiconsIcon icon={Add01Icon} className="size-6" aria-hidden />
 							</Button>
 						</Tooltip>
 					) : null}
 				</div>
+				<div className="-mx-3 flex flex-col gap-1">
 				{shelves.map((shelf) => {
 					const isSelected = shelf.id === selected;
 					const isOpen = isSelected && Boolean(shelf.id) && Boolean(shelf.description || onEdit);
 					return (
-						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-white shadow-sm dark:bg-white/10")}>
+						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-white shadow-sm dark:bg-secondary")}>
 							<button
 								type="button"
 								aria-current={isSelected || undefined}
@@ -400,6 +402,7 @@ function CollectionsNav({
 						</div>
 					);
 				})}
+				</div>
 			</nav>
 		</aside>
 	);
