@@ -100,6 +100,13 @@ describe("OpenAlex duplicate records", () => {
 			expect(planDuplicates([concept], [version], new Map(), true).release).toEqual([]);
 		});
 
+		it("lets a failed DataCite lookup hold back only the repeats that needed it", () => {
+			// A figshare .v1 whose unversioned DOI left, while an unrelated Zenodo pair could not be checked.
+			const figshareVersion = work("W8", "10.26181/32278425.v1", "Figshare study");
+			const zenodoPair = [{ ...work("W5", "10.5281/zenodo.700", "Zenodo study"), itemKey: "ITEM0005" }, work("W6", "10.5281/zenodo.701", "Zenodo study")];
+			expect(planDuplicates([zenodoPair[0]!], [figshareVersion, zenodoPair[1]!], new Map(), true).release).toEqual(["W8"]);
+		});
+
 		it("never withdraws a live record for a work that is not live", () => {
 			const skippedConcept = work("W1", "10.5281/zenodo.491");
 			const liveVersion = { ...version, itemKey: "ITEM0002" };

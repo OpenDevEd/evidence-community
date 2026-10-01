@@ -58,15 +58,16 @@ function* candidatePairs(works: readonly WorkFacts[]) {
 	}
 }
 
+/** The pairs only DataCite can decide: both registered with it, and not the same DOI or a figshare version. */
+function* uncertainPairs(works: readonly WorkFacts[]) {
+	for (const [work, other] of candidatePairs(works)) {
+		if (work.dataCite && other.dataCite && !keptOf(work, other, new Map())) yield [work, other] as const;
+	}
+}
+
 /** The DOIs DataCite has to say something about before the records' duplicates are known. */
 export function uncertainDuplicateDois(works: readonly WorkFacts[]) {
-	const dois = new Set<string>();
-	for (const [work, other] of candidatePairs(works)) {
-		if (!work.dataCite || !other.dataCite || keptOf(work, other, new Map())) continue;
-		dois.add(cleanDoi(work.doi!));
-		dois.add(cleanDoi(other.doi!));
-	}
-	return [...dois];
+	return [...new Set([...uncertainPairs(works)].flatMap(([work, other]) => [cleanDoi(work.doi!), cleanDoi(other.doi!)]))];
 }
 
 /** Each record that repeats another, mapped to the record kept instead. */
@@ -157,7 +158,7 @@ export type DuplicatePlan = { withdraw: DuplicateRecord[]; keepSkipped: Duplicat
 /**
  * Splits the source's records and the works this run skipped into what to withdraw, keep skipping or bring back.
  * Only a live record is kept instead of another. A skipped work that no longer repeats a live record comes back,
- * unless that depends on DataCite, which could not be asked.
+ * unless its own comparison needed DataCite, which could not be asked.
  */
 export function planDuplicates(
 	live: readonly (WorkFacts & { itemKey: string })[],
@@ -166,6 +167,7 @@ export function planDuplicates(
 	dataCiteFailed: boolean,
 ): DuplicatePlan {
 	const keptFor = duplicateWorkKeys([...live, ...skipped], versionsOf);
+	const undecided = new Set(dataCiteFailed ? [...uncertainPairs([...live, ...skipped])].flat().map((work) => work.key) : []);
 	const liveItem = new Map(live.map((record) => [record.key, record.itemKey]));
 	const repeatOf = (key: string) => {
 		const kept = keptFor.get(key);
@@ -181,24 +183,34 @@ export function planDuplicates(
 	for (const work of skipped) {
 		const repeat = repeatOf(work.key);
 		if (repeat) keepSkipped.push({ ...repeat, itemKey: repeat.keptItemKey });
-		else if (dataCiteFailed) continue;
-		else release.push(work.key);
+		else if (!undecided.has(work.key)) release.push(work.key);
 	}
 	return { withdraw, keepSkipped, release };
 }
 
+/** Repeats a page skipped since `seenSince`, with OpenAlex's record as of when the page skipped them. */
+async function skippedRecords(database: Database, sourceConnectionKey: string, seenSince: string) {
+	const { rows } = await database.execute<{ payload: Record<string, unknown> }>(sql`
+		SELECT snapshot.payload FROM "sourceRecordAlias" alias
+		JOIN "itemSourceLink" links ON links."sourceConnectionKey" = alias."sourceConnectionKey" AND links."sourceRecordKey" = alias."aliasKey"
+		JOIN "sourceSnapshot" snapshot ON snapshot."itemKey" = links."itemKey" AND snapshot."sourceConnectionKey" = links."sourceConnectionKey"
+		WHERE alias."sourceConnectionKey" = ${sourceConnectionKey} AND alias.kind = 'duplicate-of' AND snapshot."fetchedAt" >= ${seenSince}::timestamptz
+	`);
+	return rows.map((row) => workFacts(row.payload));
+}
+
 /**
- * Plans a pass over the source's live records and the works this run skipped as repeats, once the scan has written
- * its works. After a full scan only records it read count, so a record kept instead is one the scan keeps.
+ * Plans a pass over the source's live records and the repeats the scan skipped since it started, once it has
+ * written its works. After a full scan only records it read count, so a record kept instead is one the scan keeps.
  */
 export async function findDuplicateRecords(
 	database: Database,
 	sourceConnectionKey: string,
-	readSince: string | null,
-	skipped: readonly WorkFacts[],
+	scan: { startedAt: string; full: boolean },
 	fetchImpl: typeof fetch = fetch,
 ): Promise<DuplicatePlan> {
-	const live = await liveRecords(database, sourceConnectionKey, readSince);
+	const live = await liveRecords(database, sourceConnectionKey, scan.full ? scan.startedAt : null);
+	const skipped = await skippedRecords(database, sourceConnectionKey, scan.startedAt);
 	let versionsOf: VersionsOf = new Map();
 	let dataCiteFailed = false;
 	const uncertain = uncertainDuplicateDois([...live, ...skipped]);
@@ -217,13 +229,40 @@ export async function findDuplicateRecords(
 	return planDuplicates(live, skipped, versionsOf, dataCiteFailed);
 }
 
-/** The record keys among these that an earlier pass found to repeat another record of the source. */
-export async function skippedDuplicateKeys(database: Database, sourceConnectionKey: string, recordKeys: readonly string[]) {
-	if (!recordKeys.length) return new Set<string>();
+/**
+ * The works among these that an earlier pass found to repeat another record of the source. Each one's stored
+ * OpenAlex record is replaced with this one and dated now, so the pass checks it again with what OpenAlex says
+ * today, even after the scan resumes in a new process.
+ */
+export async function skipRepeats(database: Database, sourceConnectionKey: string, works: readonly Record<string, unknown>[]) {
+	const byKey = new Map(works.map((raw) => [workFacts(raw).key, raw]));
+	if (!byKey.size) return new Set<string>();
 	const { rows } = await database.execute<{ aliasKey: string }>(sql`
 		SELECT "aliasKey" FROM "sourceRecordAlias"
 		WHERE "sourceConnectionKey" = ${sourceConnectionKey} AND kind = 'duplicate-of'
-			AND "aliasKey" = ANY(ARRAY[${sql.join(recordKeys.map((key) => sql`${key}`), sql`, `)}]::varchar[])
+			AND "aliasKey" = ANY(ARRAY[${sql.join([...byKey.keys()].map((key) => sql`${key}`), sql`, `)}]::varchar[])
 	`);
-	return new Set(rows.map((row) => row.aliasKey));
+	const skipped = new Set(rows.map((row) => row.aliasKey));
+	if (skipped.size) {
+		// Dated by this process, like every snapshot the writer saves and the scan start it is compared with.
+		await database.execute(sql`
+			UPDATE "sourceSnapshot" snapshot SET payload = seen.payload, "fetchedAt" = ${new Date().toISOString()}::timestamptz
+			FROM "itemSourceLink" links, (VALUES ${sql.join([...skipped].map((key) => sql`(${key}, ${JSON.stringify(byKey.get(key))}::jsonb)`), sql`, `)}) AS seen (key, payload)
+			WHERE links."sourceConnectionKey" = ${sourceConnectionKey} AND links."sourceRecordKey" = seen.key
+				AND snapshot."itemKey" = links."itemKey" AND snapshot."sourceConnectionKey" = links."sourceConnectionKey"
+		`);
+	}
+	return skipped;
+}
+
+/** OpenAlex's stored records for these repeats, to write them again when they come back. */
+export async function storedWorks(database: Database, sourceConnectionKey: string, recordKeys: readonly string[]) {
+	if (!recordKeys.length) return [];
+	const { rows } = await database.execute<{ payload: Record<string, unknown> }>(sql`
+		SELECT snapshot.payload FROM "itemSourceLink" links
+		JOIN "sourceSnapshot" snapshot ON snapshot."itemKey" = links."itemKey" AND snapshot."sourceConnectionKey" = links."sourceConnectionKey"
+		WHERE links."sourceConnectionKey" = ${sourceConnectionKey}
+			AND links."sourceRecordKey" = ANY(ARRAY[${sql.join(recordKeys.map((key) => sql`${key}`), sql`, `)}]::varchar[])
+	`);
+	return rows.map((row) => row.payload);
 }

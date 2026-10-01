@@ -85,17 +85,16 @@ export type DuplicateRecord = { recordKey: string; itemKey: string; keptItemKey:
 
 /**
  * Applies a duplicate pass: withdraws live records that repeat another record of the source, with their
- * attachments, remembers which record each repeat stands for so later scans skip it, and forgets repeats that
- * come back.
+ * attachments, and remembers which record each repeat stands for so later scans skip it. A repeat whose own record
+ * is live again, because the pass wrote it back, stops being skipped.
  */
 export async function withdrawDuplicateRecords(db: Database, args: WithdrawalArgs & {
-  withdraw: DuplicateRecord[]; keepSkipped: DuplicateRecord[]; release: string[];
+  withdraw: DuplicateRecord[]; keepSkipped: DuplicateRecord[];
 }) {
   return withSourceUnchanged(db, args, async tx => {
-    if (args.release.length) {
-      await tx.execute(sql`DELETE FROM "sourceRecordAlias" WHERE "sourceConnectionKey" = ${args.sourceConnectionKey} AND kind = 'duplicate-of'
-        AND "aliasKey" = ANY(ARRAY[${sql.join(args.release.map(key => sql`${key}`), sql`, `)}]::varchar[])`);
-    }
+    await tx.execute(sql`DELETE FROM "sourceRecordAlias" alias USING "itemSourceLink" links
+      WHERE alias."sourceConnectionKey" = ${args.sourceConnectionKey} AND alias.kind = 'duplicate-of'
+        AND links."sourceConnectionKey" = alias."sourceConnectionKey" AND links."sourceRecordKey" = alias."aliasKey" AND NOT links."remoteDeleted"`);
     const aliases = [...args.withdraw, ...args.keepSkipped];
     if (aliases.length) {
       await tx.execute(sql`INSERT INTO "sourceRecordAlias" ("sourceConnectionKey", "aliasKey", "itemKey", kind)
