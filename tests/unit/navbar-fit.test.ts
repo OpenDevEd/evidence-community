@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
-import { navbarWidths } from "@/lib/navbar-fit";
+import { navbarFitCss, navbarWidths } from "@/lib/navbar-fit";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 
 const base = libraryConfigSchema.parse(maximalLibraryConfig);
@@ -43,5 +43,12 @@ describe("header widths", () => {
 		const small = navbarWidths({ ...base, theme: { ...base.theme, layout: "small" } }, measure, labels, 120);
 		const wide = navbarWidths({ ...base, theme: { ...base.theme, layout: "wide" } }, (value) => (value === value.toUpperCase() ? value.length * 12 : value.length * 10), labels, 120);
 		expect(wide.steps.at(-1)).toBeGreaterThan(small.steps.at(-1)!);
+	});
+
+	it("shows the links from the xl breakpoint when the font could not be measured, even with one arrangement", () => {
+		expect(navbarFitCss(null, 1)).toContain("@media (min-width: 1280px)");
+		expect(navbarFitCss(null, 1)).not.toContain("1536px");
+		const two = navbarFitCss(null, 2);
+		expect(two.indexOf("1280px")).toBeLessThan(two.indexOf("1536px"));
 	});
 });

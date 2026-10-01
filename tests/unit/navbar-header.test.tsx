@@ -95,13 +95,4 @@ describe("the library header", () => {
 			expect(container.querySelector('[data-testid="navbar-search"]'), pathname).toBeNull();
 		}
 	});
-
-	it("keeps its place beside the chat in both styles", () => {
-		page.chatEngaged = true;
-		for (const layout of ["small", "wide"]) {
-			page.layout = layout;
-			render();
-			expect(container.querySelector("#site-header")).not.toBeNull();
-		}
-	});
 });

@@ -149,7 +149,8 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 	const queries = fit
 		? fit.steps.map((width) => `@container navbar (min-width: ${width}px)`)
 		: Array.from({ length: stepCount }, (_, step) =>
-				step === 0 ? "@media (min-width: 1536px)" : step === stepCount - 1 ? "@media (min-width: 1280px)" : null,
+				// The narrowest step takes the links' breakpoint, even when it is the only one.
+				step === stepCount - 1 ? "@media (min-width: 1280px)" : step === 0 ? "@media (min-width: 1536px)" : null,
 			);
 	// Narrowest first, so a wider arrangement that also fits overrides it.
 	const rules = queries
