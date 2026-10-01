@@ -5,6 +5,7 @@ import {
 	ArrowLeft01Icon,
 	ArrowRight01Icon,
 	Calendar01Icon,
+	CalendarClockIcon,
 	Download01Icon,
 	File02Icon,
 	QuoteUpIcon,
@@ -27,6 +28,8 @@ import { hasAnyTag } from "@/lib/tags";
 import GapMapAction from "@/components/features/gapmaps/GapMapAction";
 import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { FuturePublicationHint } from "@/components/features/items/FuturePublicationHint";
+import { isFuturePublication } from "@/lib/bibliographic-date";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -82,17 +85,37 @@ function HeaderSection({ children }: { children: React.ReactNode }) {
 	);
 }
 
-export function ItemHeaderYear({ year }: { year?: string | null }) {
+export function ItemHeaderYear({
+	year,
+	datePublished,
+}: {
+	year?: string | null;
+	datePublished?: string | null;
+}) {
 	if (!year) return null;
+	if (!isFuturePublication({ year, datePublished })) {
+		return (
+			<HeaderSection>
+				<HugeiconsIcon
+					icon={Calendar01Icon}
+					className="size-4"
+					aria-hidden="true"
+				/>
+				{year}
+			</HeaderSection>
+		);
+	}
 
 	return (
 		<HeaderSection>
-			<HugeiconsIcon
-				icon={Calendar01Icon}
-				className="size-4"
-				aria-hidden="true"
-			/>
-			{year}
+			<FuturePublicationHint className="gap-2">
+				<HugeiconsIcon
+					icon={CalendarClockIcon}
+					className="size-4"
+					aria-hidden="true"
+				/>
+				{year}
+			</FuturePublicationHint>
 		</HeaderSection>
 	);
 }
@@ -210,7 +233,10 @@ export default function ItemHeader({
 					<ItemHeaderInstitution item={item} />
 					<ItemHeaderInternal item={item} />
 					<div className="flex items-center gap-4 flex-wrap">
-						<ItemHeaderYear year={item?.year} />
+						<ItemHeaderYear
+							year={item?.year}
+							datePublished={item?.datePublished}
+						/>
 
 						<HeaderSection>
 							<HugeiconsIcon

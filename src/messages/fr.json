@@ -45,6 +45,7 @@
     "to": "À",
     "viewOnDocs": "Voir sur {site}",
     "inProgress": "En cours",
+    "futurePublicationDate": "Les éditeurs datent souvent une publication du numéro ou de l'édition prévus, et la publient avant cette date.",
     "resourcesCount": "<number>{count}</number> {count, plural, one {ressource} other {ressources}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {ressource marquée} other {ressources marquées}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {ressource} other {ressources}} dans <collections>{collection}</collections>",

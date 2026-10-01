@@ -45,6 +45,7 @@
     "to": "إلى",
     "viewOnDocs": "عرض على {site}",
     "inProgress": "قيد التنفيذ",
+    "futurePublicationDate": "كثيرًا ما يؤرخ الناشرون العمل بتاريخ العدد أو الإصدار المقرر له، وينشرونه قبل ذلك.",
     "resourcesCount": "<number>{count}</number> {count, plural, one {مصدر} other {مصادر}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {مصدر محفوظ} other {مصادر محفوظة}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {مصدر} other {مصادر}} في <collections>{collection}</collections>",

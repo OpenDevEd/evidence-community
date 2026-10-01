@@ -5,6 +5,7 @@ import {
 	Add01Icon,
 	Alert02Icon,
 	ArrowRight01Icon,
+	CalendarClockIcon,
 	MapsIcon,
 	QuoteUpIcon,
 } from "@hugeicons/core-free-icons";
@@ -17,6 +18,8 @@ import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
+import { FuturePublicationHint } from "./FuturePublicationHint";
+import { isFuturePublication } from "@/lib/bibliographic-date";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { markFullyPrefetched } from "@/components/features/newlib/RefreshPrefetchedItem";
 import { preloadItemCovers } from "./PdfCover";
@@ -393,6 +396,42 @@ function ResourceTitle({
 	);
 }
 
+function ResourcePublishedDate({
+	value,
+	format,
+}: {
+	value: string;
+	format: ReturnType<typeof useFormatter>;
+}) {
+	const date = new Date(value);
+	const isFuture = isFuturePublication({ datePublished: value });
+	const published = (
+		<ResourceData
+			element="time"
+			datetime={date.toISOString()}
+			text={format.dateTime(date, { dateStyle: "medium" })}
+			startContent={
+				isFuture && (
+					<HugeiconsIcon
+						icon={CalendarClockIcon}
+						className="size-4 shrink-0 text-black/60 dark:text-white/60"
+						aria-hidden="true"
+					/>
+				)
+			}
+			classNames={{
+				container: "gap-1.5",
+				text: "text-black/60 dark:text-white/60 font-normal",
+			}}
+		/>
+	);
+	return isFuture ? (
+		<FuturePublicationHint>{published}</FuturePublicationHint>
+	) : (
+		published
+	);
+}
+
 function ResourceArticle({
 	titleId,
 	finalItemData,
@@ -447,20 +486,9 @@ function ResourceArticle({
 							new Date(finalItemData.datePublished).getTime(),
 						) && (
 							<>
-								<ResourceData
-									element="time"
-									datetime={new Date(
-										finalItemData.datePublished,
-									).toISOString()}
-									text={format.dateTime(
-										new Date(finalItemData.datePublished),
-										{
-											dateStyle: "medium",
-										},
-									)}
-									classNames={{
-										text: "text-black/60 dark:text-white/60 font-normal",
-									}}
+								<ResourcePublishedDate
+									value={finalItemData.datePublished}
+									format={format}
 								/>
 								<ResourceDivider />
 							</>
