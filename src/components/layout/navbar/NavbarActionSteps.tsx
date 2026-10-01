@@ -6,7 +6,6 @@ import type { NavbarActionSlot } from "@/lib/navbar-actions";
 import type { NavbarContext } from "@/types/navbar";
 
 import ActionsDropdown from "./ActionsDropdown";
-import LanguageSwitcher from "./LanguageSwitcher";
 import LoginButton from "./LoginButton";
 import ThemeSwitcher from "./ThemeSwitcher";
 
@@ -14,12 +13,8 @@ import ThemeSwitcher from "./ThemeSwitcher";
 function ActionSlot({ slot, context }: { slot: NavbarActionSlot; context: NavbarContext }) {
 	const { styleVariant } = context;
 	switch (slot.kind) {
-		case "setting":
-			return slot.setting === "theme" ? (
-				<ThemeSwitcher variant="inline" styleVariant={styleVariant} />
-			) : (
-				<LanguageSwitcher variant="inline" styleVariant={styleVariant} />
-			);
+		case "theme":
+			return <ThemeSwitcher variant="inline" styleVariant={styleVariant} />;
 		case "settingsMenu":
 			return <ActionsDropdown context={context} includeSignIn={false} />;
 		case "signIn":
@@ -43,7 +38,7 @@ export default function NavbarActionSteps({ steps, context }: { steps: NavbarAct
 					<ActionsDropdown context={context} />
 				) : (
 					slots.map((slot) => (
-						<ActionSlot key={slot.kind === "setting" ? slot.setting : slot.kind} slot={slot} context={context} />
+						<ActionSlot key={slot.kind} slot={slot} context={context} />
 					))
 				)}
 			</nav>

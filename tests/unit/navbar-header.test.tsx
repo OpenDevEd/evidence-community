@@ -76,17 +76,13 @@ describe("the library header", () => {
 		page.features = { themeSwitcher: true, languageSwitcher: true, readerAccounts: true };
 		page.locales = ["en-GB", "fr"];
 		render();
-		expect(page.steps.map((slots) => slots.map((slot) => slot.kind))).toEqual([
-			["setting", "setting", "signIn"],
-			["settingsMenu", "signIn"],
-			["menu"],
-		]);
+		expect(page.steps.map((slots) => slots.map((slot) => slot.kind))).toEqual([["settingsMenu", "signIn"], ["menu"]]);
 	});
 
 	it("offers no language choice for a library with one language", () => {
 		page.features = { themeSwitcher: true, languageSwitcher: true };
 		render();
-		expect(page.steps).toEqual([[{ kind: "setting", setting: "theme" }]]);
+		expect(page.steps).toEqual([[{ kind: "theme" }]]);
 	});
 
 	it("shows its search bar only on pages without one of their own", () => {

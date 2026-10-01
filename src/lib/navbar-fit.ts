@@ -7,7 +7,6 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getVisibleRuntimeLinks } from "@/config/library-config/links";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
-import { localesNames } from "@/i18n/routing";
 import { navbarActionSteps, navbarSettings, type NavbarActionSlot } from "@/lib/navbar-actions";
 
 /**
@@ -30,7 +29,6 @@ const SUBMENU_TRIGGER = 8 + 40; // gap-2, then the chevron button
 const MENU_BUTTON = 20; // the ☰ trigger, a size-5 icon with no padding
 const SETTINGS_BUTTON = 20; // the settings trigger, likewise
 const THEME_BUTTON = 20; // the light or dark button, likewise
-const LANGUAGE_CHROME = 8 + 20 + 8 + 8 + 16 + 8; // px-2, icon, gap, gap, chevron, px-2
 const AVATAR = 40; // md avatar
 const SIGN_IN_CHROME = 16 + 20 + 8 + 16; // px-4, icon, gap, px-4
 const LOGO_HEIGHT = 40; // xl:h-10
@@ -89,15 +87,13 @@ type NavbarLabels = {
 	link: (label: string) => string;
 	gapMaps: string;
 	signIn: string;
-	/** The current language's name, which the language button shows. */
-	language: string;
 };
 
 /** How wide one control in the header's actions is. */
 function slotWidth(slot: NavbarActionSlot, measure: (value: string) => number, labels: NavbarLabels) {
 	switch (slot.kind) {
-		case "setting":
-			return slot.setting === "theme" ? THEME_BUTTON : LANGUAGE_CHROME + measure(labels.language);
+		case "theme":
+			return THEME_BUTTON;
 		case "settingsMenu":
 			return SETTINGS_BUTTON;
 		case "signIn":
@@ -202,7 +198,6 @@ export async function computeNavbarFit(
 			link: (value) => localizeOrUseIfCapitalized(value, t),
 			gapMaps: t("gapMaps"),
 			signIn: ui("signIn"),
-			language: localesNames[locale as keyof typeof localesNames] ?? locale,
 		},
 		logo,
 	);

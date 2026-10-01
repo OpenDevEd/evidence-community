@@ -18,7 +18,6 @@ vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light", setTh
 vi.mock("@/i18n/routing", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/hooks/useRuntimeLocaleNavigation", () => ({ useRuntimeLocaleNavigation: () => vi.fn() }));
 vi.mock("@/components/layout/navbar/LanguageSwitcher", () => ({
-	default: () => <button aria-label="Choose language">English (UK)</button>,
 	useLibraryLanguages: () => ["en-GB", "fr"],
 	languageMenuItems: () => [],
 	languageName: (locale: string) => locale,
@@ -73,25 +72,20 @@ afterEach(() => {
 });
 
 describe("the header's action steps", () => {
-	it("shows a library's only setting as its own button, not a menu of one", () => {
+	it("shows the light or dark switch as its own button when it is the only setting", () => {
 		const steps = renderSteps(["theme"], false);
 		expect(steps).toHaveLength(1);
 		expect(steps[0]).toHaveLength(1);
 		expect(steps[0]).toEqual(["Switch to dark mode"]);
 	});
 
-	it("folds the settings behind one button, then everything into one menu, as the bar narrows", () => {
-		const steps = renderSteps(["theme", "language"], true);
-		expect(steps).toHaveLength(3);
-		expect(steps[0]).toHaveLength(3);
-		expect(steps[0]).toEqual(expect.arrayContaining(["Choose language", "Sign in"]));
-		expect(steps[1]).toEqual(["Settings", "Sign in"]);
-		expect(steps[2]).toEqual(["Actions menu"]);
+	it("opens the languages from the settings menu, then folds Sign in into one menu as the bar narrows", () => {
+		expect(renderSteps(["theme", "language"], true)).toEqual([["Settings", "Sign in"], ["Actions menu"]]);
 	});
 
 	it("shows only the signed-in reader's avatar at every step", () => {
 		session.reader = { id: "reader-amina", name: "Amina Okafor", image: null };
 		const steps = renderSteps(["theme", "language"], true);
-		expect(steps).toEqual([["Your account"], ["Your account"], ["Your account"]]);
+		expect(steps).toEqual([["Your account"], ["Your account"]]);
 	});
 });

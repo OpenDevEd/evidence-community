@@ -9,7 +9,7 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 const base = libraryConfigSchema.parse(maximalLibraryConfig);
 /** Every character is ten pixels wide, so widths can be worked out by hand. */
 const measure = (value: string) => value.length * 10;
-const labels = { link: (label: string) => label, gapMaps: "Gap Maps", signIn: "Sign in", language: "English (UK)" };
+const labels = { link: (label: string) => label, gapMaps: "Gap Maps", signIn: "Sign in" };
 
 function withFeatures(features: Partial<typeof base.features>) {
 	return { ...base, features: { ...base.features, ...features } };
@@ -35,9 +35,8 @@ describe("header widths", () => {
 			labels,
 			120,
 		);
-		expect(steps).toHaveLength(3);
-		expect([...steps].sort((a, b) => b - a)).toEqual(steps);
-		expect(new Set(steps).size).toBe(3);
+		expect(steps).toHaveLength(2);
+		expect(steps[0]).toBeGreaterThan(steps[1]!);
 	});
 
 	it("measures labels in capitals for the wide header", () => {

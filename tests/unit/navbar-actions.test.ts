@@ -2,26 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import { navbarActionSteps } from "@/lib/navbar-actions";
 
-const theme = { kind: "setting", setting: "theme" } as const;
-const language = { kind: "setting", setting: "language" } as const;
+const theme = { kind: "theme" } as const;
+const settingsMenu = { kind: "settingsMenu" } as const;
 const signIn = { kind: "signIn" } as const;
+const menu = { kind: "menu" } as const;
 
 describe("header action steps", () => {
-	it("shows a single setting as its own control, never behind a menu of one", () => {
+	it("shows the light or dark switch as its own button when it is the only setting", () => {
 		expect(navbarActionSteps(["theme"], false)).toEqual([[theme]]);
 	});
 
-	it("keeps Sign in beside a single setting until there is no room, then folds both into one menu", () => {
-		expect(navbarActionSteps(["theme"], true)).toEqual([[theme, signIn], [{ kind: "menu" }]]);
+	it("always opens the languages from the settings menu, even when they are the only setting", () => {
+		expect(navbarActionSteps(["language"], false)).toEqual([[settingsMenu]]);
+		expect(navbarActionSteps(["theme", "language"], false)).toEqual([[settingsMenu]]);
 	});
 
-	it("groups two settings behind one button before Sign in folds away", () => {
-		expect(navbarActionSteps(["theme", "language"], true)).toEqual([
-			[theme, language, signIn],
-			[{ kind: "settingsMenu" }, signIn],
-			[{ kind: "menu" }],
-		]);
-		expect(navbarActionSteps(["theme", "language"], false)).toEqual([[theme, language], [{ kind: "settingsMenu" }]]);
+	it("keeps Sign in beside the settings until there is no room, then folds both into one menu", () => {
+		expect(navbarActionSteps(["theme"], true)).toEqual([[theme, signIn], [menu]]);
+		expect(navbarActionSteps(["theme", "language"], true)).toEqual([[settingsMenu, signIn], [menu]]);
 	});
 
 	it("leaves Sign in as a button when there are no settings to fold it into", () => {

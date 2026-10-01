@@ -5,9 +5,9 @@ export type NavbarSetting = "theme" | "language";
 
 /** One control in the header's actions. */
 export type NavbarActionSlot =
-	/** A single setting, shown as its own control. */
-	| { kind: "setting"; setting: NavbarSetting }
-	/** Two or more settings behind one settings button. */
+	/** The light or dark switch, when it is the only setting. */
+	| { kind: "theme" }
+	/** The settings behind one settings button. */
 	| { kind: "settingsMenu" }
 	/** The Sign in button. */
 	| { kind: "signIn" }
@@ -29,18 +29,16 @@ export function navbarSettings(config: {
 
 /**
  * The header's actions from the widest arrangement to the narrowest, while the
- * links still fit beside them. Each step folds one more thing into a menu:
- * first the settings go behind one button, then Sign in joins them. A menu that
- * would hold a single item shows that item's own control instead, so a step
- * that changes nothing is left out. Below the last step the links fold into
- * the phone menu.
+ * links still fit beside them. The languages always open from the settings
+ * menu; the light or dark switch shows as its own button when it is the only
+ * setting. Narrower, Sign in joins the settings in one menu. Below the last
+ * step the links fold into the phone menu.
  */
 export function navbarActionSteps(settings: readonly NavbarSetting[], signIn: boolean): NavbarActionSlot[][] {
 	const signInSlot: NavbarActionSlot[] = signIn ? [{ kind: "signIn" }] : [];
-	const steps: NavbarActionSlot[][] = [
-		[...settings.map((setting): NavbarActionSlot => ({ kind: "setting", setting })), ...signInSlot],
-	];
-	if (settings.length > 1) steps.push([{ kind: "settingsMenu" }, ...signInSlot]);
+	const settingSlots: NavbarActionSlot[] =
+		settings.length === 0 ? [] : settings.includes("language") ? [{ kind: "settingsMenu" }] : [{ kind: "theme" }];
+	const steps = [[...settingSlots, ...signInSlot]];
 	if (signIn && settings.length > 0) steps.push([{ kind: "menu" }]);
 	return steps;
 }
