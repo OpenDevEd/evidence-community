@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
 import { ModalBody, ModalContent, ModalFooter, SelectItem } from "@nextui-org/react";
@@ -80,12 +80,13 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const firstBookmarkedAt = bookmarkDates.length > 0 ? new Date(Math.min(...bookmarkDates.map((date) => date.getTime()))) : null;
 	const selected = items.queryParams.collectionId || "";
 	const shelves = [
-		{ id: "", name: t("allBookmarks"), count: bookmarkCount, isPrivate: false },
+		{ id: "", name: t("allBookmarks"), count: bookmarkCount, isPrivate: false, description: null },
 		...collections.map((collection) => ({
 			id: collection.id,
 			name: collection.name,
 			count: collection.numItems ?? 0,
 			isPrivate: Boolean(collection.private),
+			description: collection.description ?? null,
 		})),
 	];
 	const select = (id: string) => items.handleCollectionSelect(id);
@@ -96,6 +97,7 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				? previous.map((entry) => (entry.id === collection.id ? collection : entry))
 				: [...previous, collection],
 		);
+	const edit = (id: string) => setDialog({ collection: collections.find((collection) => collection.id === id) ?? null });
 	const remove = (id: string) => {
 		setOwnCollections((previous) => previous.filter((entry) => entry.id !== id));
 		if (selected === id) select("");
@@ -117,49 +119,14 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 						shelves={shelves}
 						selected={selected}
 						onSelect={select}
-						footer={
-							isOwnProfile ? (
-								<Button
-									onPress={() => setDialog({ collection: null })}
-									startContent={<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />}
-									className="h-10 w-fit px-4 font-medium"
-								>
-									{t("newCollection")}
-								</Button>
-							) : null
-						}
+						onEdit={isOwnProfile ? edit : undefined}
+						onCreate={isOwnProfile ? () => setDialog({ collection: null }) : undefined}
 					/>
 				) : null}
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
 						header={selectedCollection?.name ?? t("allBookmarks")}
-						headerAction={
-							isOwnProfile && selectedCollection ? (
-								<Button
-									onPress={() => setDialog({ collection: selectedCollection })}
-									startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-5" aria-hidden />}
-									className="h-full shrink-0 px-4 font-medium"
-								>
-									{t("editAction")}
-								</Button>
-							) : null
-						}
-						headerDetails={
-							selectedCollection && (selectedCollection.private || selectedCollection.description) ? (
-								<div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
-									{selectedCollection.private ? (
-										<span className="flex h-7 items-center gap-1.5 rounded-full bg-black/[0.06] px-3 text-small font-medium text-black/70 dark:bg-white/10 dark:text-white/70">
-											<HugeiconsIcon icon={SquareLock01Icon} className="size-4" aria-hidden />
-											{t("privateCollection")}
-										</span>
-									) : null}
-									{selectedCollection.description ? (
-										<p className="min-w-0 text-black/60 dark:text-white/60">{selectedCollection.description}</p>
-									) : null}
-								</div>
-							) : null
-						}
 						userData={{ ...data, collections }}
 						extraFilters={
 							collectionsEnabled ? (
@@ -180,11 +147,23 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 										}
 									>
 										{shelves.map((shelf) => (
-											<SelectItem key={shelf.id || "all"} textValue={shelf.name}>
+											<SelectItem key={shelf.id || "all"} textValue={shelf.name} description={shelf.description}>
 												{shelf.name}
 											</SelectItem>
 										))}
 									</Select>
+									{isOwnProfile && selectedCollection ? (
+										<Tooltip content={t("editCollection")}>
+											<Button
+												isIconOnly
+												aria-label={t("editCollection")}
+												onPress={() => edit(selectedCollection.id)}
+												className="h-12 w-12 shrink-0"
+											>
+												<HugeiconsIcon icon={PencilEdit01Icon} className="size-5" aria-hidden />
+											</Button>
+										</Tooltip>
+									) : null}
 									{isOwnProfile ? (
 										<Tooltip content={t("newCollection")}>
 											<Button
@@ -332,54 +311,94 @@ function CollectionDialog({
 
 /**
  * The reader's bookmarks and collections, in the column the library uses for
- * its filters. Choosing one lists its records beside it.
+ * its filters. Choosing one lists its records beside it and opens its row to
+ * show what it is for and, for its owner, a way to edit it.
  */
 function CollectionsNav({
 	shelves,
 	selected,
 	onSelect,
-	footer,
+	onEdit,
+	onCreate,
 }: {
-	shelves: { id: string; name: string; count: number; isPrivate: boolean }[];
+	shelves: { id: string; name: string; count: number; isPrivate: boolean; description: string | null }[];
 	selected: string;
 	onSelect: (id: string) => void;
-	footer: ReactNode;
+	/** Only the owner edits their collections. */
+	onEdit?: (id: string) => void;
+	/** Only the owner adds collections. */
+	onCreate?: () => void;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	return (
 		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
 			<nav className="flex flex-col gap-1 rounded-2xl bg-[#E8E6E1] p-4 dark:bg-secondary">
-				<h2 className="px-3 pb-2 pt-2 text-lg font-medium text-black/80 dark:text-white/80">{t("collections")}</h2>
+				<div className="flex items-center justify-between gap-2 pb-2 ps-3 pt-1">
+					<h2 className="text-lg font-medium text-black/80 dark:text-white/80">{t("collections")}</h2>
+					{onCreate ? (
+						<Tooltip content={t("newCollection")}>
+							<Button isIconOnly aria-label={t("newCollection")} onPress={onCreate} className="h-9 w-9 min-w-0">
+								<HugeiconsIcon icon={Add01Icon} className="size-5" aria-hidden />
+							</Button>
+						</Tooltip>
+					) : null}
+				</div>
 				{shelves.map((shelf) => {
 					const isSelected = shelf.id === selected;
+					const isOpen = isSelected && Boolean(shelf.id) && Boolean(shelf.description || onEdit);
 					return (
-						<button
-							key={shelf.id || "all"}
-							type="button"
-							aria-current={isSelected || undefined}
-							onClick={() => onSelect(shelf.id)}
-							className={twMerge(
-								"flex h-12 items-center gap-3 rounded-xl px-3 text-start text-black/70 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/70 dark:hover:bg-white/[0.06]",
-								isSelected && "bg-white font-medium text-black hover:bg-white dark:bg-white/10 dark:text-white dark:hover:bg-white/10",
-							)}
-						>
-							<HugeiconsIcon
-								icon={shelf.id ? CollectionsBookmarkIcon : Bookmark02Icon}
-								className={twMerge("size-5 shrink-0", isSelected && "text-accent")}
-								aria-hidden
-							/>
-							<span className="flex min-w-0 flex-1 items-center gap-1.5">
-								<span className="truncate">{shelf.name}</span>
-								{shelf.isPrivate ? (
-									<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-70" aria-label={t("privateCollection")} />
-								) : null}
-							</span>
-							<span className="shrink-0 text-small tabular-nums opacity-60">{format.number(shelf.count)}</span>
-						</button>
+						<div key={shelf.id || "all"} className={twMerge("rounded-xl", isSelected && "bg-white dark:bg-white/10")}>
+							<button
+								type="button"
+								aria-current={isSelected || undefined}
+								onClick={() => onSelect(shelf.id)}
+								className={twMerge(
+									"flex h-12 w-full items-center gap-3 rounded-xl px-3 text-start text-black/70 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/70 dark:hover:bg-white/[0.06]",
+									isSelected && "font-medium text-black hover:bg-transparent dark:text-white dark:hover:bg-transparent",
+								)}
+							>
+								<HugeiconsIcon
+									icon={shelf.id ? CollectionsBookmarkIcon : Bookmark02Icon}
+									className={twMerge("size-5 shrink-0", isSelected && "text-accent")}
+									aria-hidden
+								/>
+								<span className="flex min-w-0 flex-1 items-center gap-1.5">
+									<span className="truncate">{shelf.name}</span>
+									{shelf.isPrivate ? (
+										<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-70" aria-label={t("privateCollection")} />
+									) : null}
+								</span>
+								<span className="shrink-0 text-small tabular-nums opacity-60">{format.number(shelf.count)}</span>
+							</button>
+							{/* The row opens to its full height, so the rows below slide down instead of jumping. */}
+							<div
+								inert={!isOpen || undefined}
+								className={twMerge(
+									"grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+									isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+								)}
+							>
+								<div className="min-h-0 overflow-hidden">
+									<div className="flex flex-col items-start gap-3 pb-3 pe-3 ps-11">
+										{shelf.description ? (
+											<p className="text-small text-black/60 dark:text-white/60">{shelf.description}</p>
+										) : null}
+										{onEdit ? (
+											<Button
+												onPress={() => onEdit(shelf.id)}
+												startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-4" aria-hidden />}
+												className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
+											>
+												{t("editAction")}
+											</Button>
+										) : null}
+									</div>
+								</div>
+							</div>
+						</div>
 					);
 				})}
-				{footer ? <div className="px-1 pt-3">{footer}</div> : null}
 			</nav>
 		</aside>
 	);

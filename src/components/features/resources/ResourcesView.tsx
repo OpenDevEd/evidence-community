@@ -756,15 +756,11 @@ export function ResourcesView({
 	params,
 	countLabel,
 	header,
-	headerAction,
-	headerDetails,
 }: {
 	extraFilters: ReactNode;
 	params?: Record<string, any>;
 	countLabel?: ReactNode;
 	header?: ReactNode;
-	headerAction?: ReactNode;
-	headerDetails?: ReactNode;
 	contentId?: string;
 }) {
 	const idPrefix = useId();
@@ -824,8 +820,6 @@ export function ResourcesView({
 				}}
 				normalProps={{
 					header,
-					headerAction,
-					headerDetails,
 					abstract,
 					onAbstractChange: setAbstract,
 					view,

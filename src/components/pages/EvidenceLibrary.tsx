@@ -94,8 +94,6 @@ function LibraryFilters({
 function SearchTabContent({
 	askAI,
 	header,
-	headerAction,
-	headerDetails,
 	itemsContext,
 	extraFilters,
 	countLabel,
@@ -106,10 +104,6 @@ function SearchTabContent({
 	showHeader,
 }: {
 	header: ReactNode;
-	/** A control for what the heading names, beside it. */
-	headerAction?: ReactNode;
-	/** More about what the heading names, under it. */
-	headerDetails?: ReactNode;
 	itemsContext: ReturnType<typeof useItemsList>;
 	extraFilters: ReactNode;
 	countLabel: ReactNode;
@@ -152,7 +146,6 @@ function SearchTabContent({
 					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
 						{header || (showHeader && t("searchTitle"))}
 					</h1>
-					{headerAction}
 					{/* Explore browses the library's filters, which a reader's list does not have. */}
 					{!itemsContext.userData && (
 						<>
@@ -191,8 +184,6 @@ function SearchTabContent({
 					<SortComponent itemsContext={itemsContext} />
 				</div>
 			</div>
-
-			{headerDetails}
 
 			<LibraryFilters
 				askAI={askAI}
@@ -330,8 +321,6 @@ export function ContentInteractions({
 	countLabel,
 	extraFilters,
 	header,
-	headerAction,
-	headerDetails,
 }: {
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
@@ -340,8 +329,6 @@ export function ContentInteractions({
 	countLabel: ReactNode;
 	extraFilters: ReactNode;
 	header?: ReactNode;
-	headerAction?: ReactNode;
-	headerDetails?: ReactNode;
 }) {
 	const itemsContext = use(ItemsContext);
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
@@ -365,8 +352,6 @@ export function ContentInteractions({
 			/>
 			<SearchTabContent
 				header={header}
-				headerAction={headerAction}
-				headerDetails={headerDetails}
 				itemsContext={itemsContext}
 				extraFilters={extraFilters}
 				countLabel={countLabel}

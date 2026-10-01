@@ -29,14 +29,10 @@ export default function ItemsList({
 	props,
 	contentId,
 	header,
-	headerAction,
-	headerDetails,
 }: {
 	contentId?: string;
 	/** The list's heading, in place of the library's own. */
 	header?: ReactNode;
-	headerAction?: ReactNode;
-	headerDetails?: ReactNode;
 	userData?: any;
 	extraFilters?: ReactNode;
 	props: ReturnType<typeof useItemsList>;
@@ -49,8 +45,6 @@ export default function ItemsList({
 			<ResourcesView
 				contentId={contentId}
 				header={header}
-				headerAction={headerAction}
-				headerDetails={headerDetails}
 				extraFilters={extraFilters}
 				{...(!userData
 					? {}
