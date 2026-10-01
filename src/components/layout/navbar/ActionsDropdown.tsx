@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft01Icon, ArrowRight01Icon, LanguageSkillIcon, Login01Icon, Menu01Icon, Moon02Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, LanguageSkillIcon, Login01Icon, Menu01Icon, Moon02Icon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useTranslations } from "next-intl";
 import { DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
@@ -11,9 +11,8 @@ import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
 import { useLocale } from "next-intl";
 import { useRouter } from "@/i18n/routing";
-import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
-import LanguageSwitcher, { languageMenuItems, languageName, useLibraryLanguages } from "./LanguageSwitcher";
+import { languageMenuItems, languageName, useLibraryLanguages } from "./LanguageSwitcher";
 import type { NavbarContext } from "@/types/navbar";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useMockReaderSession } from "./MockReaderSession";
@@ -37,6 +36,12 @@ function menuFrame(menu: HTMLElement | null) {
 
 interface ActionsDropdownProps {
 	context: NavbarContext;
+	/**
+	 * Off where the Sign in button sits beside the menu: the menu then holds the
+	 * library's settings only, behind a settings button. Signed in, the avatar
+	 * opens everything either way.
+	 */
+	includeSignIn?: boolean;
 }
 
 /**
@@ -44,7 +49,7 @@ interface ActionsDropdownProps {
  * in and their account first, then the library's settings, then signing in or
  * out. Each group is one section, so the dividers are the only gaps.
  */
-export default function ActionsDropdown({ context }: ActionsDropdownProps) {
+export default function ActionsDropdown({ context, includeSignIn = true }: ActionsDropdownProps) {
 	const t = useTranslations("ui");
 	const { reader, signIn, signOut } = useMockReaderSession();
 	const { resolvedTheme: theme, setTheme } = useTheme();
@@ -105,16 +110,12 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	}, [view, step]);
 	const hasTheme = useLibraryFeature("themeSwitcher");
 	const hasLanguages = useLibraryFeature("languageSwitcher") && languages.length > 1;
-	const hasLogin = useLibraryFeature("login") && !reader;
+	const loginEnabled = useLibraryFeature("login");
+	const hasLogin = loginEnabled && !reader && includeSignIn;
 
-	const totalItems = (hasTheme ? 1 : 0) + (hasLogin ? 1 : 0) + (hasLanguages ? 1 : 0) + (reader ? 1 : 0);
-	if (totalItems === 0) return null;
-
-	// A single action needs no menu.
-	if (totalItems === 1 && !reader) {
-		if (hasTheme) return <ThemeSwitcher variant="inline" styleVariant={context.styleVariant} />;
-		if (hasLogin) return <LoginButton variant="inline" styleVariant={context.styleVariant} />;
-		return <LanguageSwitcher variant="inline" styleVariant={context.styleVariant} />;
+	// Theme and language always sit in a menu; Sign in alone is a button.
+	if (!reader && !hasTheme && !hasLanguages) {
+		return hasLogin ? <LoginButton variant="inline" styleVariant={context.styleVariant} /> : null;
 	}
 
 	const isDark = theme === "dark";
@@ -230,9 +231,9 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 						disableRipple
 						isIconOnly
 						className="flex items-center justify-center"
-						aria-label={t("actionsMenuAriaLabel")}
+						aria-label={includeSignIn ? t("actionsMenuAriaLabel") : t("settings")}
 					>
-						<HugeiconsIcon icon={Menu01Icon} className="size-5 text-accent" />
+						<HugeiconsIcon icon={includeSignIn ? Menu01Icon : Settings02Icon} className="size-5 text-accent" />
 					</Button>
 				)}
 			</DropdownTrigger>

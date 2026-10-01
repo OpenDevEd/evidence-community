@@ -14,6 +14,7 @@ import NavLinks from "./NavLinks";
 import NavbarSearch from "./NavbarSearch";
 import MobileMenu from "./MobileMenu";
 import ActionsDropdown from "./ActionsDropdown";
+import LoginButton from "./LoginButton";
 
 import {
 	navbarElements,
@@ -212,23 +213,16 @@ export default function Navbar() {
 						className="nf-actions-full"
 						aria-label={t("secondaryNavAriaLabel")}
 					>
+						{/* Settings behind one button, then Sign in; signed in, the avatar holds both. */}
 						<ul className="flex items-center gap-6">
-							{desktopInlineElements.map((element) => {
-								const Component = element.component;
-								return (
-									<li key={element.id}>
-										<Component
-											variant="inline"
-											styleVariant={styleVariant}
-											onAction={
-												element.id === "login-button"
-													? onLoginModalOpen
-													: undefined
-											}
-										/>
-									</li>
-								);
-							})}
+							<li>
+								<ActionsDropdown context={navbarContext} includeSignIn={Boolean(session)} />
+							</li>
+							{!session ? (
+								<li>
+									<LoginButton variant="inline" styleVariant={styleVariant} />
+								</li>
+							) : null}
 						</ul>
 					</nav>
 				)}
