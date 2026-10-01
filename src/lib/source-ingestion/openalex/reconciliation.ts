@@ -84,28 +84,31 @@ export async function reconcileOpenAlexMemberships(db: Database, args: Withdrawa
 export type DuplicateRecord = { recordKey: string; itemKey: string; keptItemKey: string };
 
 /**
- * Withdraws records that repeat another record of the source, with their attachments, and remembers which record
- * each repeats so later scans skip it. A full scan also forgets duplicates whose kept record it did not read, so
- * the repeat comes back if the record it repeated left the query.
+ * Applies a duplicate pass: withdraws live records that repeat another record of the source, with their
+ * attachments, remembers which record each repeat stands for so later scans skip it, and forgets repeats that
+ * come back.
  */
-export async function withdrawDuplicateRecords(db: Database, args: WithdrawalArgs & { duplicates: DuplicateRecord[]; readSince: string | null }) {
+export async function withdrawDuplicateRecords(db: Database, args: WithdrawalArgs & {
+  withdraw: DuplicateRecord[]; keepSkipped: DuplicateRecord[]; release: string[];
+}) {
   return withSourceUnchanged(db, args, async tx => {
-    if (args.readSince) {
-      await tx.execute(sql`DELETE FROM "sourceRecordAlias" alias
-        WHERE alias."sourceConnectionKey" = ${args.sourceConnectionKey} AND alias.kind = 'duplicate-of'
-          AND NOT EXISTS (SELECT 1 FROM "sourceSnapshot" kept
-            WHERE kept."itemKey" = alias."itemKey" AND kept."sourceConnectionKey" = alias."sourceConnectionKey" AND kept."fetchedAt" >= ${new Date(args.readSince)})`);
+    if (args.release.length) {
+      await tx.execute(sql`DELETE FROM "sourceRecordAlias" WHERE "sourceConnectionKey" = ${args.sourceConnectionKey} AND kind = 'duplicate-of'
+        AND "aliasKey" = ANY(ARRAY[${sql.join(args.release.map(key => sql`${key}`), sql`, `)}]::varchar[])`);
     }
-    if (!args.duplicates.length) return 0;
-    await tx.execute(sql`INSERT INTO "sourceRecordAlias" ("sourceConnectionKey", "aliasKey", "itemKey", kind)
-      VALUES ${sql.join(args.duplicates.map(duplicate => sql`(${args.sourceConnectionKey}, ${duplicate.recordKey}, ${duplicate.keptItemKey}, 'duplicate-of')`), sql`, `)}
-      ON CONFLICT ("sourceConnectionKey", "aliasKey") DO UPDATE SET "itemKey" = EXCLUDED."itemKey", kind = EXCLUDED.kind`);
-    const parents = args.duplicates.map(duplicate => duplicate.itemKey);
+    const aliases = [...args.withdraw, ...args.keepSkipped];
+    if (aliases.length) {
+      await tx.execute(sql`INSERT INTO "sourceRecordAlias" ("sourceConnectionKey", "aliasKey", "itemKey", kind)
+        VALUES ${sql.join(aliases.map(duplicate => sql`(${args.sourceConnectionKey}, ${duplicate.recordKey}, ${duplicate.keptItemKey}, 'duplicate-of')`), sql`, `)}
+        ON CONFLICT ("sourceConnectionKey", "aliasKey") DO UPDATE SET "itemKey" = EXCLUDED."itemKey", kind = EXCLUDED.kind`);
+    }
+    if (!args.withdraw.length) return 0;
+    const parents = args.withdraw.map(duplicate => duplicate.itemKey);
     const children = await tx.execute<{key: string}>(sql`
       SELECT child.key FROM "item" child JOIN "itemSourceLink" links ON links."itemKey" = child.key AND links."sourceConnectionKey" = ${args.sourceConnectionKey}
       WHERE child."parentItem" = ANY(ARRAY[${sql.join(parents.map(key => sql`${key}`), sql`, `)}]::varchar[])`);
     await withdrawItems(tx, args, [...parents, ...children.rows.map(row => row.key)],
       "This edited record repeats another record of the same upload, which is kept instead.");
-    return args.duplicates.length;
+    return args.withdraw.length;
   });
 }

@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { DatabaseTransaction } from "@/db/database-schema";
-import { itemSourceLink, sourceConnection } from "@/db/schema/source";
+import { itemSourceLink, sourceConnection, sourceRecordAlias } from "@/db/schema/source";
 import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { sourceReference } from "@/db/schema/topics";
 import { replaceSourceLinks } from "@/lib/links/item-links";
@@ -13,6 +13,10 @@ async function openAlexItemKeys(tx: DatabaseTransaction, recordKeys: string[]) {
       .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
       .where(and(inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS), inArray(itemSourceLink.sourceRecordKey, recordKeys.slice(offset, offset + 1000))));
     for (const target of found) identities.set(target.record, target.key);
+    // A work withdrawn as a repeat stands for the record kept instead.
+    const repeats = await tx.select({record: sourceRecordAlias.aliasKey, key: sourceRecordAlias.itemKey}).from(sourceRecordAlias)
+      .where(and(eq(sourceRecordAlias.kind, "duplicate-of"), inArray(sourceRecordAlias.aliasKey, recordKeys.slice(offset, offset + 1000))));
+    for (const target of repeats) identities.set(target.record, target.key);
   }
   return identities;
 }

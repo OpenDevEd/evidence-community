@@ -14,7 +14,7 @@ import {
 } from "../batch-schema";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { OpenAlexApiError, OpenAlexClient } from "./client";
-import { findDuplicateRecords, skippedDuplicateKeys } from "./duplicates";
+import { findDuplicateRecords, skippedDuplicateKeys, workFacts } from "./duplicates";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
 import { OPENALEX_MAX_PAGE_SIZE, openAlexConnectionConfigSchema, type OpenAlexPage, type OpenAlexQuery } from "./schema";
@@ -494,6 +494,8 @@ type Scan = {
 	cursor: Cursor;
 	expectedCursor: Record<string, JsonValue>;
 	pages: number;
+	/** Works the records stage skipped as repeats, checked again once the stage has written every work. */
+	skipped: Map<string, ReturnType<typeof mapOpenAlexWork>>;
 };
 
 /**
@@ -577,7 +579,13 @@ async function mapPage(scan: Scan, results: unknown[]) {
 		scan.context.sourceConnection.key,
 		mapped.map((work) => work.items[0]!.sourceRecordKey),
 	);
-	return skipped.size ? mapped.filter((work) => !skipped.has(work.items[0]!.sourceRecordKey)) : mapped;
+	if (!skipped.size) return mapped;
+	return mapped.filter((work) => {
+		const key = work.items[0]!.sourceRecordKey;
+		if (!skipped.has(key)) return true;
+		if (scan.cursor.stage === "records") scan.skipped.set(key, work);
+		return false;
+	});
 }
 
 /** Fetches and writes every page of the cursor's stage. */
@@ -1022,20 +1030,32 @@ async function withdrawUnread(context: SourceAdapterContext, cursor: Record<stri
 async function withdrawDuplicates(scan: Scan) {
 	const { context } = scan;
 	const readSince = scan.cursor.mode === "full" ? scan.cursor.startedAt : null;
-	const duplicates = await findDuplicateRecords(context.database, context.sourceConnection.key, readSince, scan.options.fetch);
+	const skipped = [...scan.skipped.values()].map((work) => workFacts(work.items[0]!.raw));
+	const plan = await findDuplicateRecords(context.database, context.sourceConnection.key, readSince, skipped, scan.options.fetch);
 	await withdrawDuplicateRecords(context.database, {
 		sourceConnectionKey: context.sourceConnection.key,
 		configuration: context.sourceConnection.config,
 		cursor: scan.expectedCursor,
 		sourceSyncRunId: context.run?.id,
-		duplicates,
-		readSince,
+		...plan,
 	});
-	if (duplicates.length) {
-		console.info("OpenAlex records withdrawn as repeats of records kept instead", {
+	// A skipped work that no longer repeats a record the scan keeps is written now, before reconciling.
+	const released = plan.release.map((key) => scan.skipped.get(key)!);
+	scan.skipped.clear();
+	if (released.length) {
+		const items = released.flatMap((work) => work.items);
+		await preparePage(scan, items);
+		await writePage(context, scan.expectedCursor, scan.expectedCursor, {
+			items,
+			institutionCountries: released.flatMap((work) => work.institutions),
+		}, "records");
+	}
+	if (plan.withdraw.length || released.length) {
+		console.info("OpenAlex repeats withdrawn and brought back", {
 			sourceConnectionKey: context.sourceConnection.key,
-			count: duplicates.length,
-			examples: duplicates.slice(0, 5).map(({ recordKey }) => recordKey),
+			withdrawn: plan.withdraw.length,
+			broughtBack: released.length,
+			examples: plan.withdraw.slice(0, 5).map(({ recordKey }) => recordKey),
 		});
 	}
 }
@@ -1136,6 +1156,7 @@ export async function syncOpenAlexWorks(
 		expectedCursor,
 		cursor: startCursor(saved, stream),
 		pages: 0,
+		skipped: new Map(),
 	};
 	await options.attachmentProcessor?.flushCleanup(connection.key);
 	await scanStages(scan);

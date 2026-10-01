@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { duplicateWorkKeys, uncertainDuplicateDois } from "@/lib/source-ingestion/openalex/duplicates";
+import { duplicateWorkKeys, planDuplicates, uncertainDuplicateDois, workFacts } from "@/lib/source-ingestion/openalex/duplicates";
 
 const work = (key: string, doi: string | null, title = "TVET teachers in Ethiopia", date = "2026-09-28") => ({
 	key,
@@ -59,5 +59,51 @@ describe("OpenAlex duplicate records", () => {
 	it("asks DataCite only about pairs registered with it", () => {
 		const crossref = { ...work("W1", "10.1234/journal.1"), dataCite: false };
 		expect(uncertainDuplicateDois([crossref, work("W2", "10.1234/journal.2")])).toEqual([]);
+	});
+
+	it("compares what OpenAlex says, not the library's edited fields", () => {
+		expect(
+			workFacts({
+				id: "https://openalex.org/W2",
+				doi: null,
+				ids: { doi: "https://doi.org/10.5281/ZENODO.492" },
+				title: null,
+				display_name: "TVET teachers in Ethiopia",
+				publication_date: "2026-09-28",
+				indexed_in: ["datacite"],
+			}),
+		).toEqual({ key: "W2", doi: "10.5281/zenodo.492", title: "TVET teachers in Ethiopia", date: "2026-09-28", dataCite: true });
+	});
+
+	describe("a pass over live records and the works this run skipped", () => {
+		const concept = { ...work("W1", "10.5281/zenodo.491"), itemKey: "ITEM0001" };
+		const version = work("W2", "10.5281/zenodo.492");
+		const versionOf = new Map([["10.5281/zenodo.492", new Set(["10.5281/zenodo.491"])]]);
+
+		it("withdraws a live repeat and keeps a skipped one skipped while the record kept instead is live", () => {
+			expect(planDuplicates([concept, { ...version, itemKey: "ITEM0002" }], [], versionOf, false)).toEqual({
+				withdraw: [{ recordKey: "W2", itemKey: "ITEM0002", keptItemKey: "ITEM0001" }],
+				keepSkipped: [],
+				release: [],
+			});
+			expect(planDuplicates([concept], [version], versionOf, false)).toEqual({
+				withdraw: [],
+				keepSkipped: [{ recordKey: "W2", itemKey: "ITEM0001", keptItemKey: "ITEM0001" }],
+				release: [],
+			});
+		});
+
+		it("brings a skipped work back once it no longer repeats a live record, unless DataCite could not be asked", () => {
+			// The record kept instead left, or DataCite no longer links them.
+			expect(planDuplicates([], [version], versionOf, false).release).toEqual(["W2"]);
+			expect(planDuplicates([concept], [version], new Map(), false).release).toEqual(["W2"]);
+			expect(planDuplicates([concept], [version], new Map(), true).release).toEqual([]);
+		});
+
+		it("never withdraws a live record for a work that is not live", () => {
+			const skippedConcept = work("W1", "10.5281/zenodo.491");
+			const liveVersion = { ...version, itemKey: "ITEM0002" };
+			expect(planDuplicates([liveVersion], [skippedConcept], versionOf, false).withdraw).toEqual([]);
+		});
 	});
 });

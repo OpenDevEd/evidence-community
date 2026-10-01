@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { normalizeDoi } from "@/lib/doi";
 import type { DuplicateRecord } from "./reconciliation";
 
 /** What two records are compared on: their key, normalised DOI, title and publication date. */
@@ -119,52 +120,101 @@ async function dataCiteVersions(dois: readonly string[], fetchImpl: typeof fetch
 	return versionsOf;
 }
 
+/** What OpenAlex itself says about a work, from its own record, so library edits never change the comparison. */
+export function workFacts(raw: Record<string, unknown>): WorkFacts {
+	const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+	const ids = raw.ids as Record<string, unknown> | undefined;
+	return {
+		key: String(raw.id ?? "").split("/").pop()!,
+		doi: normalizeDoi(text(raw.doi) ?? text(ids?.doi)),
+		title: text(raw.title) ?? text(raw.display_name),
+		date: text(raw.publication_date),
+		dataCite: Array.isArray(raw.indexed_in) && raw.indexed_in.includes("datacite"),
+	};
+}
+
+/** The source's live records with OpenAlex's own facts. After a full scan, only the ones it read. */
+async function liveRecords(database: Database, sourceConnectionKey: string, readSince: string | null) {
+	const { rows } = await database.execute<{ itemKey: string; payload: Record<string, unknown> }>(sql`
+		SELECT links."itemKey" AS "itemKey", jsonb_build_object(
+			'id', snapshot.payload -> 'id', 'doi', snapshot.payload -> 'doi', 'ids', snapshot.payload -> 'ids',
+			'title', snapshot.payload -> 'title', 'display_name', snapshot.payload -> 'display_name',
+			'publication_date', snapshot.payload -> 'publication_date', 'indexed_in', snapshot.payload -> 'indexed_in'
+		) AS payload
+		FROM "itemSourceLink" links
+		JOIN item i ON i.key = links."itemKey"
+		JOIN "sourceSnapshot" snapshot ON snapshot."itemKey" = i.key AND snapshot."sourceConnectionKey" = links."sourceConnectionKey"
+		WHERE links."sourceConnectionKey" = ${sourceConnectionKey} AND NOT links."remoteDeleted"
+			AND i.deleted = 0 AND i."parentItem" IS NULL
+			AND (${readSince}::timestamptz IS NULL OR snapshot."fetchedAt" >= ${readSince}::timestamptz)
+	`);
+	return rows.map((row) => ({ ...workFacts(row.payload), itemKey: row.itemKey }));
+}
+
+/** What a pass does: records to withdraw, skipped works that stay skipped, and skipped works to write again. */
+export type DuplicatePlan = { withdraw: DuplicateRecord[]; keepSkipped: DuplicateRecord[]; release: string[] };
+
 /**
- * The source's records that repeat another of its records, from a pass over its live records once a scan has
- * written its works. After a full scan only records it read count, so a record kept instead is one the scan keeps.
- * When DataCite cannot be asked, no record is taken for a version it would have confirmed.
+ * Splits the source's records and the works this run skipped into what to withdraw, keep skipping or bring back.
+ * Only a live record is kept instead of another. A skipped work that no longer repeats a live record comes back,
+ * unless that depends on DataCite, which could not be asked.
+ */
+export function planDuplicates(
+	live: readonly (WorkFacts & { itemKey: string })[],
+	skipped: readonly WorkFacts[],
+	versionsOf: VersionsOf,
+	dataCiteFailed: boolean,
+): DuplicatePlan {
+	const keptFor = duplicateWorkKeys([...live, ...skipped], versionsOf);
+	const liveItem = new Map(live.map((record) => [record.key, record.itemKey]));
+	const repeatOf = (key: string) => {
+		const kept = keptFor.get(key);
+		const keptItemKey = kept ? liveItem.get(kept) : undefined;
+		return keptItemKey ? { recordKey: key, keptItemKey } : null;
+	};
+	const withdraw = live.flatMap((record) => {
+		const repeat = repeatOf(record.key);
+		return repeat ? [{ ...repeat, itemKey: record.itemKey }] : [];
+	});
+	const keepSkipped: DuplicateRecord[] = [];
+	const release: string[] = [];
+	for (const work of skipped) {
+		const repeat = repeatOf(work.key);
+		if (repeat) keepSkipped.push({ ...repeat, itemKey: repeat.keptItemKey });
+		else if (dataCiteFailed) continue;
+		else release.push(work.key);
+	}
+	return { withdraw, keepSkipped, release };
+}
+
+/**
+ * Plans a pass over the source's live records and the works this run skipped as repeats, once the scan has written
+ * its works. After a full scan only records it read count, so a record kept instead is one the scan keeps.
  */
 export async function findDuplicateRecords(
 	database: Database,
 	sourceConnectionKey: string,
 	readSince: string | null,
+	skipped: readonly WorkFacts[],
 	fetchImpl: typeof fetch = fetch,
-): Promise<DuplicateRecord[]> {
-	const { rows } = await database.execute<WorkFacts & { itemKey: string }>(sql`
-		WITH live AS (
-			SELECT links."sourceRecordKey" AS key, links."itemKey" AS "itemKey", i."DOI" AS doi, i.title, i.date,
-				COALESCE(snapshot.payload -> 'indexed_in' ? 'datacite', false) AS "dataCite",
-				md5(lower(trim(i.title))) AS title_hash
-			FROM "itemSourceLink" links
-			JOIN item i ON i.key = links."itemKey"
-			JOIN "sourceSnapshot" snapshot ON snapshot."itemKey" = i.key AND snapshot."sourceConnectionKey" = links."sourceConnectionKey"
-			WHERE links."sourceConnectionKey" = ${sourceConnectionKey} AND NOT links."remoteDeleted"
-				AND i.deleted = 0 AND i."parentItem" IS NULL AND i."DOI" IS NOT NULL AND i.title IS NOT NULL
-				AND (${readSince}::timestamptz IS NULL OR snapshot."fetchedAt" >= ${readSince}::timestamptz)
-		)
-		SELECT key, "itemKey", doi, title, date, "dataCite" FROM live
-		WHERE (title_hash, COALESCE(date, '')) IN (SELECT title_hash, COALESCE(date, '') FROM live GROUP BY 1, 2 HAVING count(*) > 1)
-	`);
-	if (!rows.length) return [];
+): Promise<DuplicatePlan> {
+	const live = await liveRecords(database, sourceConnectionKey, readSince);
 	let versionsOf: VersionsOf = new Map();
-	const uncertain = uncertainDuplicateDois(rows);
+	let dataCiteFailed = false;
+	const uncertain = uncertainDuplicateDois([...live, ...skipped]);
 	if (uncertain.length) {
 		try {
 			versionsOf = await dataCiteVersions(uncertain, fetchImpl);
 		} catch (error) {
-			console.warn("DataCite could not be asked whether OpenAlex works are versions of each other; keeping them", {
+			dataCiteFailed = true;
+			console.warn("DataCite could not be asked whether OpenAlex works are versions of each other; keeping them as they are", {
 				sourceConnectionKey,
 				dois: uncertain.length,
 				error: error instanceof Error ? error.message : String(error),
 			});
 		}
 	}
-	const itemKeyOf = new Map(rows.map((row) => [row.key, row.itemKey]));
-	return [...duplicateWorkKeys(rows, versionsOf)].map(([recordKey, keptKey]) => ({
-		recordKey,
-		itemKey: itemKeyOf.get(recordKey)!,
-		keptItemKey: itemKeyOf.get(keptKey)!,
-	}));
+	return planDuplicates(live, skipped, versionsOf, dataCiteFailed);
 }
 
 /** The record keys among these that an earlier pass found to repeat another record of the source. */
