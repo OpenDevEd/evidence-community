@@ -78,7 +78,7 @@ test("renders the runtime navigation and feature controls on mobile", async ({
 		}),
 	).toHaveCount(expectedThemeSwitcher ? 1 : 0);
 	await expect(
-		page.getByRole("button").filter({ hasText: "EN-GB" }),
+		page.getByRole("button", { name: "Choose language", exact: true }),
 	).toHaveCount(expectedLanguageSwitcher ? 1 : 0);
 });
 

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type { ItemsGetResponse } from "../../src/app/api/items/types";
 import type { ItemGetResponse } from "../../src/app/api/item/types";
@@ -75,7 +75,7 @@ const expectedDetectedLocale =
 const expectedLanguageSwitcher =
 	process.env.PLAYWRIGHT_EXPECTED_LANGUAGE_SWITCHER === "true";
 const expectedCurrentLocaleLabel =
-	process.env.PLAYWRIGHT_EXPECTED_CURRENT_LOCALE_LABEL ?? "EN-GB";
+	process.env.PLAYWRIGHT_EXPECTED_CURRENT_LOCALE_LABEL ?? "English (UK)";
 const expectedLocaleOptions = (
 	process.env.PLAYWRIGHT_EXPECTED_LOCALE_OPTIONS ?? ""
 )
@@ -461,23 +461,18 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		exact: true,
 	})).toHaveAttribute("href", "/lib");
 
-	const secondaryNavigation = page.getByRole("navigation", {
-		name: "Secondary navigation",
-	});
-	const languageTrigger = secondaryNavigation
-		.getByRole("button")
-		.filter({ hasText: expectedCurrentLocaleLabel })
-		.filter({ visible: true });
+	const languageRow = page.locator('[role="menuitem"][data-key="language"]');
+	const opened = await openHeaderSettings(page);
 
 	if (!expectedLanguageSwitcher) {
-		await expect(languageTrigger).toHaveCount(0);
+		await expect(languageRow).toHaveCount(0);
 		return;
 	}
 
-	await expect(languageTrigger).toBeVisible();
-	await expect(languageTrigger).toContainText(expectedCurrentLocaleLabel);
-	await languageTrigger.click();
-	const localeOptions = page.getByRole("menuitem");
+	expect(opened).toBe(true);
+	await expect(languageRow).toContainText(expectedCurrentLocaleLabel);
+	await languageRow.click();
+	const localeOptions = page.locator('[role="menuitem"][lang]');
 	await expect(localeOptions).toHaveCount(expectedLocaleOptions.length);
 	await expect(localeOptions).toHaveText(expectedLocaleOptions);
 
@@ -519,23 +514,16 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 
 	if (!expectedSwitchBackLocaleLabel) return;
 
-	const switchedTrigger = page
-		.getByRole("banner")
-		.getByRole("button")
-		.filter({
-			hasText:
-				expectedSwitchLocale === "en-GB"
-					? "EN-GB"
-					: expectedSwitchLocale.toUpperCase(),
-		})
-		.filter({ visible: true });
 	const switchBack = page.getByRole("menuitem", {
 		name: expectedSwitchBackLocaleLabel,
 		exact: true,
 	});
 	// The header still re-renders for the new locale, which can swallow a click.
 	await expect(async () => {
-		if (!(await switchBack.isVisible())) await switchedTrigger.click();
+		if (!(await switchBack.isVisible())) {
+			if (!(await languageRow.isVisible())) await openHeaderSettings(page);
+			await languageRow.click({ timeout: 1_000 });
+		}
 		await expect(switchBack).toBeVisible({ timeout: 1_000 });
 	}).toPass();
 	await switchBack.press("Enter");
@@ -563,18 +551,32 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 	await dismissConsent(page);
 
 	const navbarSearch = page.getByPlaceholder("Search", { exact: true });
-	const themeSwitcher = page.getByRole("button", {
-		name: /^(?:Toggle theme|Switch to (?:dark|light) mode)$/u,
-	});
+	const themeSwitcher = page.locator('[role="menuitem"][data-key="theme"]');
 	const loginButton = page.getByRole("button", {
 		name: "Sign in",
 		exact: true,
 	});
 
 	await expect(navbarSearch).toHaveCount(expectedNavbarSearch ? 1 : 0);
-	await expect(themeSwitcher).toHaveCount(expectedThemeSwitcher ? 1 : 0);
 	await expect(loginButton).toHaveCount(expectedLogin ? 1 : 0);
+	await openHeaderSettings(page);
+	await expect(themeSwitcher).toHaveCount(expectedThemeSwitcher ? 1 : 0);
 });
+
+/**
+ * Opens the header's settings menu, which holds the theme switch and the
+ * languages. Returns false when the library offers neither, so there is none.
+ */
+async function openHeaderSettings(page: Page) {
+	// Found by role, not label, so it works in every language.
+	const trigger = page
+		.getByRole("banner")
+		.locator("button[aria-haspopup]")
+		.filter({ visible: true });
+	if ((await trigger.count()) === 0) return false;
+	await trigger.click();
+	return true;
+}
 
 test("enforces the runtime AI gate in both directions", async ({
 	request,

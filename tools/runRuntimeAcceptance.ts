@@ -36,7 +36,7 @@ import {
 	parseHexColor,
 } from "../src/config/library-config/theme";
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
-import { localesNames, shortLocalesNames } from "../src/i18n/routing";
+import { localesNames } from "../src/i18n/routing";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 const subscriptionToken = randomBytes(32).toString("hex");
@@ -1641,9 +1641,11 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_LANGUAGE_SWITCHER: String(
 			config.features.languageSwitcher,
 		),
+		// The settings menu names the current language in full and lists every
+		// language, the current one ticked.
 		PLAYWRIGHT_EXPECTED_CURRENT_LOCALE_LABEL:
-			shortLocalesNames[config.localization.defaultLocale],
-		PLAYWRIGHT_EXPECTED_LOCALE_OPTIONS: alternateLocales
+			localesNames[config.localization.defaultLocale],
+		PLAYWRIGHT_EXPECTED_LOCALE_OPTIONS: orderedLocales
 			.map((locale) => localesNames[locale])
 			.join("|"),
 		PLAYWRIGHT_EXPECTED_SWITCH_LOCALE: switchLocale ?? "",
