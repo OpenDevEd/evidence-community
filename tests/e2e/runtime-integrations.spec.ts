@@ -6,7 +6,7 @@ import {
 	type Page,
 } from "@playwright/test";
 
-import { readerSessionHeader } from "./admin-login";
+import { libraryCallbackUrl, readerSessionHeader, sendAuthRequestsFromLibraryOrigin } from "./admin-login";
 import { dismissConsent, expectsConsent } from "./consent";
 
 test.skip(
@@ -490,19 +490,10 @@ test("offers OpenScholar sign-in only where reader accounts are on", async ({
 	expect((await request.get("/api/reader")).status()).toBe(401);
 
 	// Only pressing the button goes to OpenScholar, and it comes back to the library.
-	// This suite reaches the library through a test port; Better Auth accepts
-	// sign-in only from the library's own address, as a browser on it would send.
-	const libraryBaseUrl = process.env.EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL!;
-	await page.route("**/api/auth/sign-in/social", async (route) => {
-		// A browser will not let a page change its Origin, so this one request goes through Playwright.
-		const response = await route.fetch({ headers: { ...route.request().headers(), origin: new URL(libraryBaseUrl).origin } });
-		await route.fulfill({ response });
-	});
+	await sendAuthRequestsFromLibraryOrigin(page);
 	await signIn.click();
 	await page.waitForURL(/\/oauth\/authorize\?/u);
-	expect(new URL(page.url()).searchParams.get("redirect_uri")).toBe(
-		new URL("/api/auth/callback/openscholar", libraryBaseUrl).toString(),
-	);
+	expect(new URL(page.url()).searchParams.get("redirect_uri")).toBe(libraryCallbackUrl());
 
 	// A signed-in reader keeps a private collection to themselves.
 	const { readerId, cookie } = await readerSessionHeader(`user_acceptance_reader_${Date.now()}`);

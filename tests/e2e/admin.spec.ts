@@ -12,7 +12,7 @@ import {
 	openAndMeasureAdminSearchIndexPopover,
 	waitForAdminSearchIndexStatus,
 } from "./admin-search-index-page";
-import { openAdmin, signInAdmin, signInAs } from "./admin-login";
+import { libraryCallbackUrl, openAdmin, sendAuthRequestsFromLibraryOrigin, signInAdmin, signInAs } from "./admin-login";
 
 async function assignSelectedRecords(page: Page) {
   await page.getByRole("toolbar", {name: "Bulk actions"}).getByRole("button", {name: "Add selected to collection"}).click();
@@ -814,6 +814,7 @@ test("starts OpenScholar sign-in from /admin, keeps the session, and signs out",
 	test.setTimeout(90_000);
 	const baseUrl = process.env.PLAYWRIGHT_BASE_URL!;
 	await mockPublishedBook(page);
+	await sendAuthRequestsFromLibraryOrigin(page);
 	await page.context().clearCookies();
 	await page.goto("/admin?scope=drafts");
 
@@ -822,7 +823,7 @@ test("starts OpenScholar sign-in from /admin, keeps the session, and signs out",
 	const authorize = new URL(page.url());
 	expect(authorize.pathname).toBe("/oauth/authorize");
 	expect(authorize.searchParams.get("response_type")).toBe("code");
-	expect(authorize.searchParams.get("redirect_uri")).toBe(new URL("/api/auth/callback/openscholar", baseUrl).toString());
+	expect(authorize.searchParams.get("redirect_uri")).toBe(libraryCallbackUrl());
 	expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
 	expect(authorize.searchParams.get("state")).toBeTruthy();
 	expect(authorize.searchParams.get("scope")?.split(" ")).toEqual(

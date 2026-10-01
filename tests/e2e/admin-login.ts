@@ -39,6 +39,26 @@ export async function signInAs(context: BrowserContext, clerkUserId: string, nam
 }
 
 /**
+ * Browser suites reach the library through a test address, while Better Auth
+ * accepts sign-in and sign-out only from the library's configured one, as a
+ * browser on it would send. A page cannot change its Origin header, so these
+ * requests go through Playwright with the library's origin instead.
+ */
+export async function sendAuthRequestsFromLibraryOrigin(page: Page) {
+	const origin = new URL(requiredEnvironment("EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL")).origin;
+	await page.route("**/api/auth/**", async (route) => {
+		if (route.request().method() !== "POST") return route.fallback();
+		const response = await route.fetch({ headers: { ...route.request().headers(), origin } });
+		await route.fulfill({ response });
+	});
+}
+
+/** The library's own callback, which OpenScholar returns readers to. */
+export function libraryCallbackUrl() {
+	return new URL("/api/auth/callback/openscholar", requiredEnvironment("EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL")).toString();
+}
+
+/**
  * The same session as a Cookie header, for API requests over a plain-HTTP
  * test port, where the browser would not send the library's secure cookies.
  */
