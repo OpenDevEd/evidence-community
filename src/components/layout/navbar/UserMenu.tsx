@@ -1,8 +1,8 @@
 "use client";
 
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Logout01Icon, UserEdit01Icon, UserIcon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import type { ComponentProps } from "react";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowUpRight01Icon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
@@ -11,6 +11,13 @@ import { useRouter } from "@/i18n/routing";
 import { twMerge } from "@/lib/tw-merge";
 import type { NavbarElementProps } from "@/types/navbar";
 import { OPENSCHOLAR_ACCOUNT_URL, useMockReaderSession, type MockReader } from "./MockReaderSession";
+import {
+	NavbarMenuIcon,
+	navbarMenuClasses,
+	navbarMenuDropdownClasses,
+	navbarMenuItemClasses,
+	navbarMenuSectionClasses,
+} from "./menuStyles";
 
 type Translate = ReturnType<typeof useTranslations<"ui">>;
 
@@ -58,11 +65,10 @@ export function ReaderAvatar({
 }
 
 /**
- * The signed-in reader's items: who they are, their profile, their
- * OpenScholar account and signing out. Shared by the avatar menu and the
- * condensed menu so the two never differ.
+ * The signed-in reader's rows, in the groups both header menus show them:
+ * who is signed in, their account, and signing out.
  */
-export function readerMenuItems(input: {
+export function readerMenuGroups(input: {
 	reader: MockReader;
 	t: Translate;
 	onProfile: () => void;
@@ -70,63 +76,64 @@ export function readerMenuItems(input: {
 }) {
 	const { reader, t } = input;
 	const openAccount = () => window.open(OPENSCHOLAR_ACCOUNT_URL, "_blank", "noopener");
-	const external = <HugeiconsIcon icon={ArrowUpRight01Icon} className="size-4 text-default-400" aria-hidden />;
-	return [
-		<DropdownItem
-			key="reader"
-			isReadOnly
-			textValue={readerDisplayName(reader, t)}
-			className="opacity-100 cursor-default data-[hover=true]:bg-transparent"
-		>
-			<span className="flex items-center gap-3 py-1">
-				<ReaderAvatar reader={reader} size="sm" />
-				<span className="min-w-0">
-					<span className="block truncate font-semibold text-foreground">{readerDisplayName(reader, t)}</span>
-					<span className="flex items-center gap-1 text-small text-default-500">
-						<OpenScholar monochrome aria-hidden className="size-3.5" />
-						{t("signedInWithOpenScholar")}
+	const external = <NavbarMenuIcon icon={ArrowUpRight01Icon} className="size-4 text-foreground/40 dark:text-white/40" />;
+	const name = readerDisplayName(reader, t);
+	return {
+		identity: (
+			<DropdownItem
+				key="reader"
+				isReadOnly
+				textValue={name}
+				className="h-auto py-2 cursor-default data-[hover=true]:bg-transparent dark:data-[hover=true]:bg-transparent"
+			>
+				<span className="flex items-center gap-3">
+					<ReaderAvatar reader={reader} size="sm" />
+					<span className="min-w-0">
+						<span className="block truncate text-medium font-semibold text-foreground dark:text-white">{name}</span>
+						<span className="flex items-center gap-1.5 text-small text-foreground/60 dark:text-white/60">
+							<OpenScholar monochrome aria-hidden className="size-3.5" />
+							{t("signedInWithOpenScholar")}
+						</span>
 					</span>
 				</span>
-			</span>
-		</DropdownItem>,
-		...(reader.name.trim()
-			? []
-			: [
-					<DropdownItem
-						key="add-name"
-						onPress={openAccount}
-						startContent={<HugeiconsIcon icon={UserEdit01Icon} className="size-4 text-accent" />}
-						endContent={external}
-						className="text-accent"
-					>
-						{t("addYourName")}
-					</DropdownItem>,
-				]),
-		<DropdownItem
-			key="profile"
-			onPress={input.onProfile}
-			startContent={<HugeiconsIcon icon={UserIcon} className="size-4" />}
-		>
-			{t("profileMenuItem")}
-		</DropdownItem>,
-		<DropdownItem
-			key="account"
-			onPress={openAccount}
-			startContent={<OpenScholar monochrome aria-hidden className="size-4" />}
-			endContent={external}
-		>
-			{t("openScholarAccount")}
-		</DropdownItem>,
-		<DropdownItem
-			key="logout"
-			color="danger"
-			onPress={input.onSignOut}
-			startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" />}
-			className="text-danger"
-		>
-			{t("signOut")}
-		</DropdownItem>,
-	];
+			</DropdownItem>
+		),
+		account: [
+			...(reader.name.trim()
+				? []
+				: [
+						<DropdownItem
+							key="add-name"
+							onPress={openAccount}
+							startContent={<NavbarMenuIcon icon={UserEdit01Icon} />}
+							endContent={external}
+						>
+							{t("addYourName")}
+						</DropdownItem>,
+					]),
+			<DropdownItem key="profile" onPress={input.onProfile} startContent={<NavbarMenuIcon icon={UserIcon} />}>
+				{t("profileMenuItem")}
+			</DropdownItem>,
+			<DropdownItem
+				key="account"
+				onPress={openAccount}
+				startContent={<OpenScholar monochrome aria-hidden className="size-5 shrink-0 text-foreground/60 dark:text-white/60" />}
+				endContent={external}
+			>
+				{t("openScholarAccount")}
+			</DropdownItem>,
+		],
+		signOut: (
+			<DropdownItem
+				key="logout"
+				onPress={input.onSignOut}
+				startContent={<NavbarMenuIcon icon={Logout01Icon} className="text-danger dark:text-danger" />}
+				className="text-danger dark:text-danger"
+			>
+				{t("signOut")}
+			</DropdownItem>
+		),
+	};
 }
 
 export default function UserMenu({ variant }: NavbarElementProps) {
@@ -136,25 +143,28 @@ export default function UserMenu({ variant }: NavbarElementProps) {
 
 	if (!reader) return null;
 
-	const items = readerMenuItems({
+	const groups = readerMenuGroups({
 		reader,
 		t,
 		onProfile: () => router.push(`/profile/${reader.id}`),
 		onSignOut: signOut,
 	});
 
-	if (variant === "menuItem") return <>{items}</>;
+	if (variant === "menuItem") return <>{[groups.identity, ...groups.account, groups.signOut]}</>;
 
 	return (
-		<Dropdown placement="bottom-end">
+		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses}>
 			<DropdownTrigger>
 				<ReaderAvatar reader={reader} asTrigger />
 			</DropdownTrigger>
-			<DropdownMenu aria-label={t("userMenuAriaLabel")} className="p-1 min-w-60">
-				<DropdownSection showDivider classNames={{ base: "mb-1" }}>
-					{items.slice(0, 1)}
+			<DropdownMenu aria-label={t("userMenuAriaLabel")} classNames={navbarMenuClasses} itemClasses={navbarMenuItemClasses}>
+				<DropdownSection showDivider classNames={navbarMenuSectionClasses}>
+					{groups.identity}
 				</DropdownSection>
-				<DropdownSection classNames={{ base: "mb-0" }}>{items.slice(1)}</DropdownSection>
+				<DropdownSection showDivider classNames={navbarMenuSectionClasses}>
+					{groups.account}
+				</DropdownSection>
+				<DropdownSection classNames={navbarMenuSectionClasses}>{groups.signOut}</DropdownSection>
 			</DropdownMenu>
 		</Dropdown>
 	);
