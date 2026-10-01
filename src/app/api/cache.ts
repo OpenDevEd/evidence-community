@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { getDatabase, getDatabaseForConfig } from "@/db";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
+import { userCollection } from "@/db/schema/tables/userCollection";
 import { getItem, withoutFullText } from "./item/[key]/route";
 import { and, eq, sql } from "drizzle-orm";
 import { outbox } from "@opendeved/evidence-library-core";
@@ -116,35 +117,39 @@ export async function getCachedUserCollectionKeys(collectionId: string) {
 	return _getCachedUserCollectionKeys(collectionId, config.revision, config);
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+/** A collection's privacy, owner and record keys, or null when there is no such collection. */
 export async function getUserCollectionKeysDirect(
 	collectionId: string,
 	config?: LibraryServerConfig,
 ) {
+	if (!UUID_PATTERN.test(collectionId)) return null;
 	const db = config
 		? await getDatabaseForConfig(config)
 		: await getDatabase();
-	const res = await db.query.itemToUserCollection.findMany({
+	// Privacy and owner belong to the collection itself, so an empty private
+	// collection stays private.
+	const collection = await db.query.userCollection.findFirst({
+		where: and(
+			eq(userCollection.id, collectionId),
+			eq(userCollection.deleted, false),
+		),
+		columns: { private: true, userId: true },
+	});
+	if (!collection) return null;
+	const items = await db.query.itemToUserCollection.findMany({
 		where: and(
 			eq(itemToUserCollection.userCollectionId, collectionId),
 			eq(itemToUserCollection.deleted, false),
 		),
-		columns: {
-			itemKey: true,
-		},
-		with: {
-			userCollection: {
-				columns: {
-					private: true,
-					userId: true,
-				},
-			},
-		},
+		columns: { itemKey: true },
 	});
 
 	return {
-		private: res[0]?.userCollection.private ?? false,
-		userId: res[0]?.userCollection.userId ?? null,
-		itemKeys: res.map((item) => item.itemKey),
+		private: collection.private ?? false,
+		userId: collection.userId,
+		itemKeys: items.map((item) => item.itemKey),
 	};
 }
 

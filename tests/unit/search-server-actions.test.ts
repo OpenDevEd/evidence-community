@@ -29,5 +29,6 @@ it("lets no server action caller choose search options, so unpublished note text
 		],
 	}] });
 	const result = await actions.getItems({});
+	if ("refused" in result) throw new Error("A public search was refused");
 	expect(result.items[0].attachmentsData?.map((attachment) => attachment.key)).toEqual(["PUBNTEAA"]);
 });

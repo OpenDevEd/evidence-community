@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import { getItems, getProfileSearchFilter } from "@/lib/actions";
+import { getItems } from "@/lib/actions";
 import { z } from "zod";
 import { defaultParams } from "@/lib/utils";
 import {
@@ -32,6 +32,12 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 	const queryParams = defaultParams(searchParams);
 
 	const res = await getItems(queryParams, id);
+	if ("refused" in res) {
+		return NextResponse.json(
+			{ error: res.refused === 404 ? "There is no such collection." : "This collection is private." },
+			{ status: res.refused },
+		);
+	}
 
 	return NextResponse.json<ItemsGetResponse>(res);
 }
