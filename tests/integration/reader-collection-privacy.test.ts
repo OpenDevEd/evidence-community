@@ -4,12 +4,11 @@ import { NextRequest } from "next/server";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
-import { signedInHeaders } from "../helpers/reader-session";
+import { signInReaders } from "../helpers/reader-test-sessions";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheLife() {}, cacheTag() {} }));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(), getDatabaseForConfig: vi.fn() }));
-vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
 // The library's own collections are not under test; the reader's collections are read for real.
 vi.mock("@/app/api/cache", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/app/api/cache")>()),
@@ -18,6 +17,8 @@ vi.mock("@/app/api/cache", async (importOriginal) => ({
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
 const requestHeaders = vi.hoisted(() => ({ current: new Headers() }));
 vi.mock("next/headers", () => ({ headers: async () => requestHeaders.current }));
+// Reading a session schedules an account check after the response, which is not under test here.
+vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), after: vi.fn() }));
 const search = vi.hoisted(() => ({
 	search: vi.fn(),
 	getDisplayedAttributes: async () => ["*"],
@@ -36,8 +37,11 @@ const config = libraryConfigSchema.parse(maximalLibraryConfig);
 const OWNER_CLERK_ID = "user_owner";
 const OWNER = `reader-${OWNER_CLERK_ID}`;
 
+let signedInHeaders: (clerkUserId?: string) => Headers;
+
 beforeEach(() => {
-	vi.mocked(getLibraryConfig).mockResolvedValue(config);
+	// A copy, so each test database gets its own auth instance.
+	vi.mocked(getLibraryConfig).mockResolvedValue({ ...config });
 	search.search.mockReset().mockImplementation(async () => ({ estimatedTotalHits: 0, hits: [] }));
 });
 
@@ -55,6 +59,7 @@ async function withCollections(
 		vi.mocked(getDatabase).mockResolvedValue(db);
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(db);
 		await db.insert(readerUser).values({ id: OWNER, name: "Owner", email: "owner@example.org" });
+		signedInHeaders = await signInReaders(db, config, [OWNER_CLERK_ID, "user_other"]);
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
 		const [emptyPrivate, savedPrivate] = await db

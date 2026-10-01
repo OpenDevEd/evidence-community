@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
+import { handleOAuthUserInfo } from "better-auth/oauth2";
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
@@ -8,7 +9,6 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(), getDatabaseForConfig: vi.fn() }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
-vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
 vi.mock("next/navigation", () => ({
 	notFound: () => {
 		throw new Error("NEXT_NOT_FOUND");
@@ -22,6 +22,9 @@ vi.mock("next/headers", () => ({ headers: async () => requestHeaders.current }))
 vi.mock("next/server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("next/server")>()),
 	connection: vi.fn(),
+	// Reading a session schedules the account check after the response; the
+	// background check has its own tests below.
+	after: vi.fn(),
 }));
 
 import ProfilePage from "@/app/[locale]/profile/[id]/page";
@@ -31,13 +34,15 @@ import { POST as createCollectionRoute } from "@/app/api/reader/collections/rout
 import { DELETE as deleteCollectionRoute, PATCH as editCollectionRoute } from "@/app/api/reader/collections/[id]/route";
 import { POST as toggleCollectionItemRoute } from "@/app/api/reader/collections/[id]/items/route";
 import { DELETE as deleteReaderRoute } from "@/app/api/v1/openscholar/readers/[clerkUserId]/route";
-import { signedInHeaders } from "../helpers/reader-session";
+import { signInReaders } from "../helpers/reader-test-sessions";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import type { Database } from "@/db/database-schema";
 import { readerAccount, readerBookmark, readerCollection, readerCollectionItem, readerSession, readerUser } from "@/db/schema/tables/reader";
 import { createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
-import type { ReaderAuth } from "@/lib/readers/auth";
+import { createReaderAuth, type ReaderAuth } from "@/lib/readers/auth";
+import { getSignedInReader } from "@/lib/readers/session";
+import { openScholarReader } from "@/lib/readers/openscholar";
 import { checkReaderSoon, READER_CHECK_INTERVAL_MS } from "@/lib/readers/check";
 import {
 	createReaderCollection,
@@ -53,12 +58,18 @@ const machineCredential = config.authentication.openScholar.machineCredential;
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** Request headers signed in, through a real session, as one of the test's readers. */
+let signedInHeaders: (clerkUserId?: string) => Headers = () => {
+	throw new Error("Sign readers in inside withReaders");
+};
+
 async function withReaders(
 	verify: (fixture: { db: Database; itemKey: string; amina: string; bob: string }) => Promise<void>,
 ) {
 	await withIsolatedPublicationDatabase(async (db) => {
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(db);
-		vi.mocked(getLibraryConfig).mockResolvedValue(config);
+		// A copy, so this database gets its own auth instance.
+		vi.mocked(getLibraryConfig).mockResolvedValue({ ...config });
 		// The test session names each reader after their Clerk user.
 		const amina = "reader-user_amina";
 		const bob = "reader-user_bob";
@@ -70,6 +81,7 @@ async function withReaders(
 			{ id: "account-amina", userId: amina, providerId: "openscholar", accountId: "user_amina" },
 			{ id: "account-bob", userId: bob, providerId: "openscholar", accountId: "user_bob" },
 		]);
+		signedInHeaders = await signInReaders(db, config, ["user_amina", "user_bob"]);
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
 		await verify({ db, itemKey, amina, bob });
@@ -133,17 +145,39 @@ describe("deleting an OpenScholar account", () => {
 			await toggleBookmark(db, amina, itemKey);
 			const { id } = await createReaderCollection(db, amina, { name: "Mine", description: null, private: true });
 			await toggleCollectionItem(db, amina, id, itemKey);
-			await db.insert(readerSession).values({ id: "session-1", token: "token-1", userId: amina, expiresAt: new Date(Date.now() + 60_000) });
 
 			expect((await deleteRequest("user_amina")).status).toBe(401);
 			expect((await deleteRequest("user_amina", `els_${"z".repeat(43)}`)).status).toBe(401);
 			expect((await deleteRequest("user_amina", machineCredential)).status).toBe(204);
 			expect((await deleteRequest("user_amina", machineCredential)).status).toBe(404);
 
+			// Only Bob, his account link and his session remain.
+			const keptForBob = new Set<unknown>([readerUser, readerAccount, readerSession]);
 			for (const table of [readerUser, readerAccount, readerSession, readerBookmark, readerCollection, readerCollectionItem]) {
 				const rows = await db.select({ count: sql<number>`count(*)::int` }).from(table);
-				expect(rows[0]?.count, String(table)).toBe(table === readerUser || table === readerAccount ? 1 : 0);
+				expect(rows[0]?.count, String(table)).toBe(keptForBob.has(table) ? 1 : 0);
 			}
+		});
+	});
+});
+
+describe("signing in with OpenScholar", () => {
+	it("gives another Clerk account with a reader's email its own reader, never theirs", async () => {
+		await withReaders(async ({ db, amina }) => {
+			const context = await createReaderAuth(config, db).$context;
+			// Amina's address now belongs to a new Clerk account.
+			const profile = { sub: "user_new", email: "amina@example.org", given_name: "New" };
+			const result = await handleOAuthUserInfo({ context } as Parameters<typeof handleOAuthUserInfo>[0], {
+				userInfo: { id: profile.sub, ...openScholarReader(profile) },
+				account: { providerId: "openscholar", accountId: profile.sub },
+				callbackURL: "/admin",
+			});
+
+			expect(result.error).toBeFalsy();
+			expect(result.data?.user.id).not.toBe(amina);
+			expect(await db.select({ accountId: readerAccount.accountId }).from(readerAccount).where(eq(readerAccount.userId, amina))).toEqual([
+				{ accountId: "user_amina" },
+			]);
 		});
 	});
 });
@@ -187,7 +221,7 @@ describe("the background account check", () => {
 			await checkReaderSoon({ auth: failingAuth, config, database: db, userId: amina });
 
 			expect(fetcher).toHaveBeenCalledTimes(1);
-			expect(await db.select({ id: readerUser.id }).from(readerUser).where(eq(readerUser.id, amina))).toEqual([{ id: amina }]);
+			expect(await getSignedInReader(signedInHeaders("user_amina"), await getLibraryConfig())).toMatchObject({ id: amina });
 		});
 	});
 });

@@ -39,7 +39,6 @@ const userInfoSchema = z.object({
 	given_name: z.string().optional(),
 	family_name: z.string().optional(),
 	picture: z.string().optional(),
-	email: z.string().optional(),
 });
 
 type ReaderCheck = { auth: ReaderAuth; config: LibraryServerConfig; database: Database; userId: string };
@@ -60,7 +59,6 @@ async function refreshReaderProfile({ auth, config, database, userId }: ReaderCh
 		.set({
 			name: openScholarProfileName(profile),
 			image: profile.picture ?? null,
-			...(profile.email ? { email: profile.email } : {}),
 			updatedAt: new Date(),
 		})
 		.where(eq(readerUser.id, userId));

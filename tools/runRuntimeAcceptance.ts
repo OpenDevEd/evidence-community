@@ -1718,11 +1718,7 @@ function publicExpectations(profile: Profile) {
 			),
 		),
 		PLAYWRIGHT_EXPECTED_AUTHENTICATION: String(config.features.readerAccounts),
-		// The browser suites sign people in with Better Auth's test helpers against
-		// the library's own database and secret.
-		EVIDENCE_LIBRARY_TEST_DATABASE_URL: `postgresql://library:library@127.0.0.1:${postgresPort}/${profile.name}`,
-		EVIDENCE_LIBRARY_TEST_AUTH_SECRET: config.authentication.secret,
-		EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL: config.identity.baseUrl,
+		...readerTestSessionEnvironment(profile),
 		PLAYWRIGHT_EXPECTED_EMAIL: String(
 			Boolean(config.email.contactRecipient),
 		),
@@ -1846,6 +1842,7 @@ function runPublicationBrowserPhase(
 			EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
 			EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
 				profile.config.authentication.openScholar.libraryId,
+			...readerTestSessionEnvironment(profile),
 			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
 			PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
 			PLAYWRIGHT_PUBLICATION_EXPECTED_DOI: "10.5555/acceptance.000002",
@@ -1875,6 +1872,16 @@ function acceptanceAdminSessionTarget(profile: Profile) {
 		secret: profile.config.authentication.secret,
 		libraryBaseUrl: profile.config.identity.baseUrl,
 		clerkUserId: "user_acceptance_admin",
+	};
+}
+
+/** The browser suites sign people in with Better Auth's test helpers against the library's own database and secret. */
+function readerTestSessionEnvironment(profile: Profile) {
+	const target = acceptanceAdminSessionTarget(profile);
+	return {
+		EVIDENCE_LIBRARY_TEST_DATABASE_URL: target.databaseUrl,
+		EVIDENCE_LIBRARY_TEST_AUTH_SECRET: target.secret,
+		EVIDENCE_LIBRARY_TEST_LIBRARY_BASE_URL: target.libraryBaseUrl,
 	};
 }
 

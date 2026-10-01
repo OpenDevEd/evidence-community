@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useContext, type ReactNode } from "react";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -17,6 +18,7 @@ export function ReaderSessionProvider({ reader, children }: { reader: Reader | n
 
 export function useReaderSession() {
 	const serverReader = useContext(ServerReader);
+	const router = useRouter();
 	const { data, isPending } = readerAuthClient.useSession();
 	const reader: Reader | null = isPending
 		? serverReader
@@ -31,8 +33,10 @@ export function useReaderSession() {
 				provider: "openscholar",
 				callbackURL: `${window.location.pathname}${window.location.search}`,
 			}),
+		/** Signs out, then reloads what the server rendered for the reader, such as their private collections. */
 		signOut: async () => {
 			await readerAuthClient.signOut();
+			router.refresh();
 		},
 	};
 }

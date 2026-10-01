@@ -9,7 +9,7 @@ vi.mock("next/server", async (importOriginal) => ({
 vi.mock("@/lib/readers/session", () => import("../helpers/reader-session"));
 
 const signedIn = { clerkUserId: undefined as string | undefined };
-const signInSocial = vi.hoisted(() => vi.fn());
+const signInHandler = vi.hoisted(() => vi.fn<(request: Request) => Promise<Response>>());
 
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: () => ({
@@ -21,11 +21,12 @@ vi.mock("@/config/library-config/server", () => ({
 				machineCredential: `els_${"a".repeat(43)}`,
 			},
 		},
+		identity: { baseUrl: "https://library.example.org" },
 		localization: { defaultLocale: "en-GB" },
 	}),
 }));
 vi.mock("@/lib/readers/instance", () => ({
-	getReaderAuth: async () => ({ auth: { api: { signInSocial } } }),
+	getReaderAuthForConfig: async () => ({ auth: { handler: signInHandler } }),
 }));
 vi.mock("next/headers", async () => {
 	const { signedInHeaders } = await import("../helpers/reader-session");
@@ -54,12 +55,18 @@ async function captureRedirect(render: Promise<unknown>) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+async function signInBody(call = 0) {
+	return JSON.parse(await signInHandler.mock.calls[call]![0].text()) as Record<string, unknown>;
+}
+
 describe("admin sign-in route", () => {
 	beforeEach(() => {
-		signInSocial.mockReset().mockResolvedValue({
-			headers: new Headers([["set-cookie", "evidence-library.state=signed-state; Path=/; HttpOnly"]]),
-			response: { url: "https://clerk.openscholar.example.org/oauth/authorize?state=signed-state", redirect: false },
-		});
+		signInHandler.mockReset().mockImplementation(async () =>
+			Response.json(
+				{ url: "https://clerk.openscholar.example.org/oauth/authorize?state=signed-state", redirect: false },
+				{ headers: [["set-cookie", "evidence-library.state=signed-state; Path=/; HttpOnly"]] },
+			),
+		);
 	});
 
 	it("sends the visitor to OpenScholar and keeps the sign-in state cookie", async () => {
@@ -68,7 +75,7 @@ describe("admin sign-in route", () => {
 		expect(response.status).toBe(307);
 		expect(response.headers.get("location")).toBe("https://clerk.openscholar.example.org/oauth/authorize?state=signed-state");
 		expect(response.headers.get("set-cookie")).toContain("evidence-library.state=signed-state");
-		expect(signInSocial.mock.calls[0]?.[0].body).toEqual({
+		expect(await signInBody()).toEqual({
 			provider: "openscholar",
 			callbackURL: "/en-GB/admin/items?scope=drafts",
 			disableRedirect: true,
@@ -79,9 +86,16 @@ describe("admin sign-in route", () => {
 		"comes back to /admin instead of %s",
 		async (unsafeReturn) => {
 			await startSignIn(new NextRequest(`http://localhost/api/admin/sign-in?${new URLSearchParams({ return: unsafeReturn })}`));
-			expect(signInSocial.mock.calls[0]?.[0].body.callbackURL).toBe("/admin");
+			expect((await signInBody()).callbackURL).toBe("/admin");
 		},
 	);
+
+	it("passes on Better Auth's refusal, such as its rate limit, instead of redirecting", async () => {
+		signInHandler.mockImplementation(async () => new Response(null, { status: 429 }));
+		const response = await startSignIn(new NextRequest("http://localhost/api/admin/sign-in?return=%2Fadmin"));
+		expect(response.status).toBe(429);
+		expect(response.headers.get("location")).toBeNull();
+	});
 });
 
 describe("admin page", () => {

@@ -96,7 +96,6 @@ describe("a reader's profile", () => {
 		render();
 
 		expect(document.body.textContent).toContain("Amina Okafor");
-		expect(document.body.textContent).toContain("Teacher training");
 		expect(buttonNamed("Share profile")).toBeTruthy();
 		expect(document.querySelector('a[href="https://accounts.openscholar.example.org/user"]')).toBeNull();
 		expect(buttonNamed("New collection")).toBeUndefined();
@@ -119,7 +118,7 @@ describe("a reader's profile", () => {
 		expect(document.querySelector('a[href="https://accounts.openscholar.example.org/user"]')?.textContent).toContain("Add your name");
 	});
 
-	it("shows the owner a collection they just made from a record, and visitors only what the page brought", () => {
+	it("shows the owner a collection they just made from a record, and visitors only public ones", () => {
 		const madeFromRecord = { ...profile.collections[0], id: "hidden-notes", name: "Hidden notes", description: null };
 		own.data = { ...profile, collections: [...profile.collections, madeFromRecord] };
 
@@ -127,9 +126,11 @@ describe("a reader's profile", () => {
 		render();
 		expect(document.body.textContent).toContain("Hidden notes");
 
+		// The page was made for Amina; Bob now has it, as after she signed out.
 		session.reader = { id: "reader-bob", name: "Bob", image: null };
 		render();
 		expect(document.body.textContent).not.toContain("Hidden notes");
+		expect(document.body.textContent).not.toContain("Teacher training");
 	});
 
 	it("saves and deletes the owner's collection through the reader API", async () => {

@@ -131,12 +131,16 @@ function useCollectionChanges(selected: string, select: (id: string) => void) {
 
 /**
  * The owner sees their own collections and bookmarks live, so a change made
- * from a record shows here at once; visitors see what the page brought.
+ * from a record shows here at once. Anyone else sees the public collections
+ * the page brought, even when the page was made for the owner before they
+ * signed out.
  */
 function useShownShelves(data: ProfileData, isOwnProfile: boolean) {
 	const { data: own } = useReaderData();
-	const live = isOwnProfile ? own : undefined;
-	return { collections: live?.collections ?? data.collections, bookmarks: live?.bookmarks ?? data.bookmarks };
+	if (!isOwnProfile) {
+		return { collections: data.collections.filter((collection) => !collection.private), bookmarks: data.bookmarks };
+	}
+	return { collections: own?.collections ?? data.collections, bookmarks: own?.bookmarks ?? data.bookmarks };
 }
 
 /**

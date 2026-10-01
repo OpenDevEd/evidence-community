@@ -13,7 +13,7 @@ This inventory reflects the current application behavior as of September 12, 202
 | `_cfuvid`                                                 | Cloudflare                        | Distinguishes visitors behind shared IPs for rate limiting and security controls.         | Yes                    | Cloudflare-managed, short-lived | Security/infrastructure cookie.                                                                          |
 | `evidence-library.session_token` or `__Secure-evidence-library.session_token` | Better Auth | Keeps a reader or admin signed in with their OpenScholar account. | Yes when signed in | 30 days, extended while in use | HTTP-only. Secure deployments use the secure-prefixed name. |
 | `evidence-library.session_data` or `__Secure-evidence-library.session_data` | Better Auth | Caches the signed session for a few minutes so each page does not query the database. | Yes when signed in | 5 minutes | HTTP-only and signed. |
-| `evidence-library.oauth_state` or `__Secure-evidence-library.oauth_state` | Better Auth | Ties the return from OpenScholar to the sign-in this browser started. | Yes during sign-in | 10 minutes | HTTP-only. Set only after the person presses Sign in or opens `/admin`. |
+| `evidence-library.state` or `__Secure-evidence-library.state` | Better Auth | Ties the return from OpenScholar to the sign-in this browser started. | Yes during sign-in | 5 minutes | HTTP-only. Set only after the person presses Sign in or opens `/admin`. |
 
 ## Conditional analytics cookies and storage
 

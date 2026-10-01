@@ -10,7 +10,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { readerAccount, readerSession, readerUser, readerVerification } from "@/db/schema/tables/reader";
 
-import { openScholarDiscoveryUrl, openScholarProfileName, OPENSCHOLAR_PROVIDER_ID } from "./openscholar";
+import { openScholarDiscoveryUrl, openScholarReader, OPENSCHOLAR_PROVIDER_ID } from "./openscholar";
 
 const DAY_SECONDS = 24 * 60 * 60;
 
@@ -39,7 +39,8 @@ export function createReaderAuth(
 			updateAge: DAY_SECONDS,
 			cookieCache: { enabled: true, maxAge: 5 * 60 },
 		},
-		account: { encryptOAuthTokens: true },
+		// One reader per Clerk account: never attach another account to a reader.
+		account: { encryptOAuthTokens: true, accountLinking: { enabled: false } },
 		rateLimit: { enabled: true },
 		advanced: { cookiePrefix: "evidence-library" },
 		plugins: [
@@ -53,10 +54,7 @@ export function createReaderAuth(
 						scopes: ["openid", "email", "profile", "offline_access"],
 						pkce: true,
 						overrideUserInfo: true,
-						mapProfileToUser: (profile) => ({
-							name: openScholarProfileName(profile),
-							image: typeof profile.picture === "string" ? profile.picture : undefined,
-						}),
+						mapProfileToUser: openScholarReader,
 					},
 				],
 			}),
