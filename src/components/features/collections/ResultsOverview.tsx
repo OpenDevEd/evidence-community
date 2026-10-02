@@ -9,8 +9,16 @@ import { twMerge } from "@/lib/tw-merge";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import useSWR from "swr";
+import { Link } from "@/i18n/routing";
+import { buildItemsQuery, fetcher } from "@/lib/utils";
+import { useFiltersContext } from "@/context/FiltersProvider";
+import { PdfCover } from "@/components/features/items/PdfCover";
+import { Skeleton } from "@/components/nextui/Skeleton";
+import type { ItemsGetResponse } from "@/app/api/items/types";
 
 const YEARS_SHOWN = 30;
+const CITED_SHOWN = 3;
 const TYPES_SHOWN = 6;
 
 const CARD = "w-full bg-card_light dark:bg-card rounded-2xl p-6 flex flex-col gap-4";
@@ -200,6 +208,55 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 	);
 }
 
+/** The most cited of the results in view, three at most. Its box keeps the height of three rows, so the sidebar never moves as they load or change. */
+function MostCited() {
+	const format = useFormatter();
+	const { queryParams } = useFiltersContext();
+	const query = buildItemsQuery({ ...queryParams, sort: "mostCited", page: 1 });
+	const { data, isValidating } = useSWR<ItemsGetResponse>(
+		`${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}`,
+		fetcher,
+		{ keepPreviousData: true, revalidateOnFocus: false },
+	);
+	const cited = data?.items.filter((item) => item.citationCount) ?? [];
+
+	return (
+		<section className={CARD} aria-labelledby="results-cited" aria-busy={isValidating}>
+			<h4 id="results-cited" className={HEADING}>Most cited</h4>
+			<ol className={twMerge("flex min-h-[16rem] flex-col gap-2 transition-opacity", isValidating && data && "pointer-events-none opacity-50")}>
+				{!data &&
+					Array.from({ length: CITED_SHOWN }, (_, index) => (
+						<li key={index} className="flex gap-4 p-2">
+							<Skeleton className="h-16 w-12 shrink-0 rounded-md" />
+							<span className="flex flex-1 flex-col gap-2 pt-1">
+								<Skeleton className="h-4 w-full rounded-md" />
+								<Skeleton className="h-4 w-1/3 rounded-md" />
+							</span>
+						</li>
+					))}
+				{data && cited.length === 0 && (
+					<li className="text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
+				)}
+				{cited.map((item) => (
+					<li key={item.key}>
+						<Link href={`/lib/${item.key}`} className="group -mx-2 flex min-w-0 gap-4 rounded-xl p-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5">
+							<span className="block w-12 shrink-0 self-start overflow-hidden rounded-md shadow-sm [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+								<PdfCover src={item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage} alt="" width={48} title={item.title ?? undefined} />
+							</span>
+							<span className="flex min-w-0 flex-1 flex-col gap-1">
+								<span className="line-clamp-2 text-base font-medium leading-snug text-black/80 transition-colors group-hover:text-accent dark:text-white/80">{item.title || item.key}</span>
+								<span className="text-sm tabular-nums text-black/60 dark:text-white/60">
+									{format.number(item.citationCount ?? 0)} {item.citationCount === 1 ? "citation" : "citations"}
+								</span>
+							</span>
+						</Link>
+					</li>
+				))}
+			</ol>
+		</section>
+	);
+}
+
 /** What the results under the current search and filters are made of; every row and bar filters the list. */
 export function ResultsOverview({
 	facetDistribution,
@@ -227,6 +284,7 @@ export function ResultsOverview({
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
 			{showAuthors && <AuthorRows counts={facetDistribution?.fullNames} selected={author} onSelect={onAuthorSelect} />}
+			<MostCited />
 		</>
 	);
 }
