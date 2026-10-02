@@ -310,20 +310,23 @@ function SectionTitle({ name, count, largest, total, parts, childNoun }: { name:
 	const format = useFormatter();
 	const shown = [...parts.slice(0, SECTION_PARTS_SHOWN), parts.slice(SECTION_PARTS_SHOWN).reduce((sum, part) => sum + part, 0)].filter((part) => part > 0);
 	return (
-		<span className="flex w-full min-w-0 items-center gap-3">
+		// Measured against its own width: a narrow sidebar gets a shorter bar and leaves the share out.
+		<span className="@container block w-full min-w-0">
+		<span className="flex w-full min-w-0 items-center gap-2 @[22rem]:gap-3">
 			<TruncatedText text={name} className="min-w-0 flex-1" />
 			<span className="sr-only">
 				{format.number(parts.length)} {parts.length === 1 ? childNoun[0] : childNoun[1]}
 			</span>
-			<span className="flex w-24 shrink-0 justify-end" aria-hidden>
+			<span className="flex w-12 shrink-0 justify-end @[22rem]:w-20" aria-hidden>
 				<span className="flex h-2 gap-px overflow-hidden rounded-full bg-accent/10" style={{ width: barWidth(count, largest) }}>
 					{(shown.length ? shown : [count]).map((part, index) => (
 						<span key={index} className={RAMP[Math.min(index, RAMP.length - 1)]} style={{ flexGrow: part, flexBasis: 0 }} />
 					))}
 				</span>
 			</span>
-			{total ? <span className="w-10 shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60">{shareOf(format, count, total)}</span> : null}
-			<span className="w-14 shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
+			{total ? <span className="hidden w-10 shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60 @[22rem]:block">{shareOf(format, count, total)}</span> : null}
+			<span className="shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white @[22rem]:w-14">{format.number(count)}</span>
+		</span>
 		</span>
 	);
 }
@@ -408,7 +411,9 @@ export function InnerCollectionList({
 			variant="shadow"
 			className="bg-card_light dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
 			itemClasses={{
-				title: "text-black/80 dark:text-white/80 font-base text-xl",
+				// The title takes the row's width and no more, so a long name truncates instead of pushing the figures out.
+				titleWrapper: "min-w-0 flex-1",
+				title: "w-full min-w-0 text-black/80 dark:text-white/80 font-base text-xl",
 				indicator: "text-black/80 dark:text-white/80",
 				trigger: "p-0",
 				base: "mb-3 last:mb-0",
