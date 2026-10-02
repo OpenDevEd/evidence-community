@@ -298,6 +298,29 @@ function FacetPicker({
 	);
 }
 
+/** A section of a tree with its figures at a glance: its count and share of the results, a bar against the other
+ * sections, and how many of its children have results. A publication counts once however many children hold it. */
+function SectionTitle({ name, count, largest, total, withResults, childNoun }: { name: string; count: number; largest: number; total?: number; withResults: number; childNoun: [string, string] }) {
+	const format = useFormatter();
+	return (
+		<span className="flex w-full min-w-0 flex-col gap-2">
+			<span className="flex min-w-0 items-baseline gap-3">
+				<span className="min-w-0 flex-1">{name}</span>
+				{total ? <span className="shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60">{shareOf(format, count, total)}</span> : null}
+				<span className="shrink-0 text-lg font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
+			</span>
+			<span aria-hidden className="block h-1.5 w-full overflow-hidden rounded-full bg-accent/10">
+				<span className="block h-full rounded-full bg-accent" style={{ width: barWidth(count, largest) }} />
+			</span>
+			{withResults > 0 && (
+				<span className="text-sm text-black/60 dark:text-white/60">
+					{format.number(withResults)} {withResults === 1 ? childNoun[0] : childNoun[1]}
+				</span>
+			)}
+		</span>
+	);
+}
+
 export function InnerCollectionList({
 	data,
 	facetDistribution,
@@ -306,7 +329,10 @@ export function InnerCollectionList({
 	selectedCollections,
 	hierarchy,
 	total,
+	childNoun = ["collection", "collections"],
 }: {
+	/** What a section's children are called, one and many, for how many of them have results. */
+	childNoun?: [string, string];
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
 	handleCheckboxChange: (key: string) => void;
@@ -347,6 +373,9 @@ export function InnerCollectionList({
 		);
 	}, [hierarchy, data, filteredFacetDistribution]);
 
+	const sectionCount = (key: string) => filteredFacetDistribution.collectionsAncestry[key] ?? 0;
+	const largestSection = Math.max(1, ...displayedCollections.map((collection) => sectionCount(collection.key)));
+
 	return displayedCollections.length > 0 ? (
 		<Accordion
 			defaultSelectedKeys={
@@ -383,7 +412,17 @@ export function InnerCollectionList({
 			{displayedCollections.map((collection) => (
 				<AccordionItem
 					key={collection.key}
-					title={collection.title || collection.name}
+					aria-label={collection.title || collection.name || undefined}
+					title={
+						<SectionTitle
+							name={collection.title || collection.name || collection.key}
+							count={sectionCount(collection.key)}
+							largest={largestSection}
+							total={total}
+							withResults={(collection.children ?? []).filter((child) => sectionCount(child.key) > 0).length}
+							childNoun={childNoun}
+						/>
+					}
 				>
 					<CollectionCategory
 						collection={collection}
@@ -624,6 +663,7 @@ function TopicTree({
 			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
 			hierarchy={hierarchy}
 			total={total}
+			childNoun={["field", "fields"]}
 		/>
 	);
 }
