@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { useQueryState } from "nuqs";
 import { usePathname } from "@/i18n/routing";
 import { useResourceHref } from "@/hooks/useResourceHref";
@@ -10,8 +9,8 @@ import type { Item, ListItem } from "@/app/api/item/types";
 
 /**
  * A link to a publication's page as a result card makes it: the current search comes along with where to go back to,
- * pointing at it starts loading the page's covers, and `fullPrefetch` loads the whole page ahead, which the page
- * then reads again once it opens.
+ * pointing at it starts loading the page's covers, and `fullPrefetch` loads the whole page ahead. A click on a page
+ * loaded ahead marks it, so the page reads the record again once it opens.
  */
 export function useItemLink(item: Item | ListItem | undefined, { fullPrefetch = false } = {}) {
 	const [referrer] = useQueryState("referrer");
@@ -19,9 +18,6 @@ export function useItemLink(item: Item | ListItem | undefined, { fullPrefetch = 
 	const resourceHref = useResourceHref();
 	const key = item?.key;
 	const prefetched = fullPrefetch && key ? key : undefined;
-	useEffect(() => {
-		if (prefetched) markFullyPrefetched(prefetched);
-	}, [prefetched]);
 	const prepare = () => preloadItemCovers(item);
 	return {
 		href: key
@@ -35,5 +31,8 @@ export function useItemLink(item: Item | ListItem | undefined, { fullPrefetch = 
 		onPointerEnter: prepare,
 		onFocus: prepare,
 		onTouchStart: prepare,
+		onClick: () => {
+			if (prefetched) markFullyPrefetched(prefetched);
+		},
 	};
 }

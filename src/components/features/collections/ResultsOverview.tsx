@@ -311,11 +311,15 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
  * One of the most cited results, linked as a result card links: it loads the page ahead and its covers on approach,
  * and hands its list copy over on click, so the page opens at once from it while the full record loads.
  */
-function CitedRow({ item }: { item: ListItem }) {
+function CitedRow({ item, stale }: { item: ListItem; stale: boolean }) {
 	const format = useFormatter();
-	const link = useItemLink(item, { fullPrefetch: true });
+	// A row kept from the last query while the next one loads must not load its page ahead.
+	const link = useItemLink(item, { fullPrefetch: !stale });
 	const { setLastFetchedData } = useLastFetchedData();
-	const handOff = () => setLastFetchedData({ items: [item] } as ItemsGetResponse);
+	const handOff = () => {
+		link.onClick();
+		setLastFetchedData({ items: [item] } as ItemsGetResponse);
+	};
 	return (
 		<li>
 			{/* The list is widened by this row's padding, so its clip never cuts the row's hover. */}
@@ -371,7 +375,7 @@ function MostCited() {
 				{data && !error && cited.length === 0 && (
 					<li className="px-2 text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
 				)}
-				{!error && cited.map((item) => <CitedRow key={item.key} item={item} />)}
+				{!error && cited.map((item) => <CitedRow key={item.key} item={item} stale={stale} />)}
 			</ol>
 		</SidebarCard>
 	);
