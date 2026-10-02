@@ -21,7 +21,7 @@ export async function LibraryHighlights() {
 			{latest && digests && (
 				<SidebarCard id="highlights-digests" title="Latest digests" link={{ href: "/digests", label: "All digests" }}>
 					{/* The digests page's own cover, so an edition looks the same wherever it shows. */}
-					<div className="pt-2">
+					<div className="px-3 pt-2">
 						<DigestCover edition={latest} libraryName={digests.library} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />
 					</div>
 					{earlier.length > 0 && (
