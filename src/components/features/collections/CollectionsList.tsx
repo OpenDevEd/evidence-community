@@ -322,7 +322,7 @@ function SectionTitle({ name, count, total, childCount, childNoun }: { name: str
 		<span className="@container block w-full min-w-0">
 			{/* Each mark sits on the name's first line (2xl: a 32px line). */}
 			<span className="flex w-full min-w-0 items-start gap-3">
-				{total ? <span className="mt-1.5 flex"><ShareRing share={count / total} /></span> : null}
+				{total ? <span className="mt-1.5 flex shrink-0"><ShareRing share={count / total} /></span> : null}
 				<span className="min-w-0 flex-1 break-words">{name}</span>
 				<span className="sr-only">
 					{format.number(childCount)} {childCount === 1 ? childNoun[0] : childNoun[1]}
