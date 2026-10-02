@@ -416,8 +416,9 @@ export function InnerCollectionList({
 				// The title takes the row's width and no more, so a long name truncates instead of pushing the figures out.
 				titleWrapper: "min-w-0 flex-1",
 				title: "w-full min-w-0 text-black/80 dark:text-white/80 font-base text-2xl",
-				indicator: "text-black/80 dark:text-white/80",
-				trigger: "p-0",
+				// The chevron sits on the name's first line with the figures, however many lines the name takes.
+				indicator: "self-start mt-2 text-black/80 dark:text-white/80",
+				trigger: "p-0 items-start",
 				base: "mb-4 last:mb-0",
 				content: "py-0 pt-2",
 			}}
