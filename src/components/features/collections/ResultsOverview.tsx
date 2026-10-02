@@ -18,7 +18,7 @@ import { PdfCover } from "@/components/features/items/PdfCover";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import type { ListItem } from "@/app/api/item/types";
-import type { AuthorActivity } from "@/lib/search";
+import type { AuthorsActivity } from "@/lib/search";
 import { useItemLink } from "@/hooks/useItemLink";
 import { useLastFetchedData } from "@/context/Providers";
 
@@ -34,14 +34,23 @@ const RAMP = ["bg-accent", "bg-accent/80", "bg-accent/60", "bg-accent/45", "bg-a
  * A block of the sidebar in the result cards' language: a white card with a Montserrat heading, and the block's own
  * actions in the tinted band along its foot, where a result card keeps Cite and Copy link.
  */
-export function SidebarCard({ id, title, aside, footer, link, children }: { id: string; title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; children: React.ReactNode }) {
+export function SidebarCard({ id, title, aside, footer, link, band, children }: { id: string; title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; /** A tinted head for the card, holding its heading and a summary of what is below. */ band?: React.ReactNode; children: React.ReactNode }) {
+	const heading = (
+		<div className="flex min-h-8 items-center justify-between gap-4">
+			<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
+			{aside}
+		</div>
+	);
 	return (
 		<section aria-labelledby={id} className="w-full rounded-2xl bg-card_light dark:bg-card">
-			<div className="flex flex-col gap-5 p-6">
-				<div className="flex min-h-8 items-center justify-between gap-4">
-					<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
-					{aside}
+			{band && (
+				<div className="flex flex-col gap-4 rounded-t-2xl bg-accent/[0.07] px-6 pt-6 pb-5 dark:bg-accent/10">
+					{heading}
+					{band}
 				</div>
+			)}
+			<div className="flex flex-col gap-5 p-6">
+				{!band && heading}
 				{children}
 			</div>
 			{(footer || link) && (
@@ -330,31 +339,69 @@ function activeSpan(years: Record<string, number> | undefined) {
 	return { first: sorted[0], last: sorted[sorted.length - 1], peak: busiest[0] };
 }
 
+/** A person's or organisation's initials, from the first two words of their name. */
+function initialsOf(name: string) {
+	return name.replace(/[^\p{L}\s-]/gu, "").split(/[\s-]+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
+}
+
 /**
- * The people with the most results, each with when they published and how much. Pointing at one (or focusing it) shows
- * their span of years in the header and, over the strips of the others, how many results each shares with them.
+ * The band at the head of the top authors: how many authors the results have, and the ten's publications by year,
+ * each publication counted once however many of them wrote it. The author pointed at is drawn over it in full.
+ */
+function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCount: number | undefined; combined: Record<string, number> | undefined; focusedYears: Record<string, number> | undefined; axis: number[] }) {
+	const format = useFormatter();
+	const totals = axis.map((year) => combined?.[year] ?? 0);
+	const largest = Math.max(1, ...totals);
+	return (
+		<>
+			<p className="flex items-baseline gap-2">
+				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">
+					{authorCount === undefined ? "–" : authorCount >= 10_000 ? `${format.number(10_000)}+` : format.number(authorCount)}
+				</span>
+				<span className={`text-sm ${MUTED}`}>authors in these results</span>
+			</p>
+			<span aria-hidden className="flex h-14 items-end gap-[3px]">
+				{axis.map((year, index) => {
+					const own = focusedYears?.[year] ?? 0;
+					return (
+						<span key={year} className="relative h-full flex-1">
+							<span className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-accent/25 transition-[height] duration-300 motion-reduce:transition-none" style={{ height: totals[index] ? `${Math.max(4, (totals[index] / largest) * 100)}%` : "0%" }} />
+							<span className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-accent transition-[height] duration-300 motion-reduce:transition-none" style={{ height: own ? `${Math.max(4, (own / largest) * 100)}%` : "0%" }} />
+						</span>
+					);
+				})}
+			</span>
+		</>
+	);
+}
+
+/**
+ * The people with the most results: who they are and where they publish from, when they published, and how much.
+ * Pointing at one (or focusing it) shows their span of years in the header, draws their years in the band, and, over
+ * the strips of the others, how many results each shares with them.
  */
 function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string; onSelect: (author: string) => void }) {
 	const format = useFormatter();
-	const { queryParams } = useFiltersContext();
+	const { queryParams, authorCount } = useFiltersContext();
 	const [focused, setFocused] = useState<string | null>(null);
 	const rows = sortedCounts(counts);
 	const names = rows.map(([name]) => name);
 	// The strips ask for themselves after the list, so the list never waits on them.
 	const { page, sort, ...filters } = queryParams;
 	const base = buildItemsQuery(filters, "/author-activity");
-	const { data: activity } = useSWR<Record<string, AuthorActivity>>(
+	const { data: activity } = useSWR<AuthorsActivity>(
 		names.length ? `${base}${base.includes("?") ? "&" : "?"}${names.map((name) => `name=${encodeURIComponent(name)}`).join("&")}` : null,
 		fetcher,
 		{ keepPreviousData: true, revalidateOnFocus: false },
 	);
 	if (rows.length === 0) return null;
-	// One axis for every row: the last twenty years any of these authors published in.
-	const known = names.flatMap((name) => Object.keys(activity?.[name]?.years ?? {}).map(Number)).filter((year) => Number.isInteger(year) && year > 1000);
+	const byAuthor = activity?.byAuthor;
+	// One axis for every row and the band: the last twenty years any of these authors published in.
+	const known = Object.keys(activity?.combined ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
 	const last = known.length ? Math.max(...known) : new Date().getFullYear();
 	const axis = Array.from({ length: ACTIVITY_YEARS }, (_, index) => last - ACTIVITY_YEARS + 1 + index);
-	const together = focused ? activity?.[focused]?.together : undefined;
-	const span = focused ? activeSpan(activity?.[focused]?.years) : null;
+	const together = focused ? byAuthor?.[focused]?.together : undefined;
+	const span = focused ? activeSpan(byAuthor?.[focused]?.years) : null;
 	return (
 		<SidebarCard
 			id="results-authors"
@@ -365,19 +412,28 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 					{span ? `${span.first === span.last ? span.first : `${span.first}–${span.last}`}, most in ${span.peak}` : `${axis[0]}–${last}`}
 				</span>
 			}
+			band={<AuthorsBand authorCount={authorCount} combined={activity?.combined} focusedYears={focused ? byAuthor?.[focused]?.years : undefined} axis={axis} />}
 		>
-			<ul className="@container -mx-3 -mt-2 flex flex-col" onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
+			<ul className="@container -mx-3 -my-3 flex flex-col" onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
 				{rows.map(([name, count]) => {
 					const chosen = name === selected;
 					const shared = focused && name !== focused && activity ? (together?.[name] ?? 0) : null;
+					const institution = byAuthor?.[name]?.institution;
 					return (
 						<li key={name}>
-							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} onPointerEnter={() => setFocused(name)} onFocus={() => setFocused(name)} className={twMerge("flex h-11 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", focused === name && "bg-black/5 dark:bg-white/5")}>
-								<TruncatedText text={name} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
+							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} onPointerEnter={() => setFocused(name)} onFocus={() => setFocused(name)} className={twMerge("flex h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", focused === name && "bg-black/5 dark:bg-white/5")}>
+								<span aria-hidden className={twMerge("flex size-9 shrink-0 items-center justify-center rounded-full font-heading text-sm font-semibold transition-colors", chosen || focused === name ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80")}>
+									{initialsOf(name)}
+								</span>
+								<span className="flex min-w-0 flex-1 flex-col">
+									<TruncatedText text={name} className={twMerge("text-base font-medium leading-5", chosen && "text-accent")} />
+									{/* The line is there before its institution arrives, so the row keeps its height. */}
+									<span className={`h-4 truncate text-xs leading-4 ${MUTED}`}>{institution ?? ""}</span>
+								</span>
 								<Tick shown={chosen} />
 								<span className="relative flex shrink-0">
 									<span className={twMerge("flex transition-opacity duration-200 motion-reduce:transition-none", shared === 0 && "opacity-25", shared ? "opacity-30" : "")}>
-										<ActivityStrip years={activity?.[name]?.years} axis={axis} />
+										<ActivityStrip years={byAuthor?.[name]?.years} axis={axis} />
 									</span>
 									{shared ? (
 										<span className="absolute inset-0 flex items-center justify-center">

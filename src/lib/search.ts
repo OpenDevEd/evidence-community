@@ -98,6 +98,8 @@ type SearchFacetsResult = {
 	 * its own filter (topics, years, item types), the results without that filter.
 	 */
 	totals: FacetTotals;
+	/** How many different authors the results have, up to the facet's limit of 10,000. */
+	authorCount: number;
 };
 
 export type FacetTotals = Record<string, number>;
@@ -463,6 +465,7 @@ export async function getPublicFacets(
 		topicResults?.facetDistribution,
 		...ownResults.map((result) => result.facetDistribution),
 	);
+	const authorCount = Object.keys(searchResults.facetDistribution?.fullNames ?? {}).length;
 	if (searchResults.facetDistribution?.fullNames) {
 		searchResults.facetDistribution.fullNames = topAuthors(searchResults.facetDistribution.fullNames);
 	}
@@ -474,6 +477,7 @@ export async function getPublicFacets(
 			country,
 		),
 		totals,
+		authorCount,
 	};
 }
 
@@ -554,34 +558,51 @@ export type AuthorActivity = {
 	years: Record<string, number>;
 	/** How many of their results each of the other named authors shares. */
 	together: Record<string, number>;
+	/** The institution most of their results name, if any does. */
+	institution: string | null;
+};
+
+export type AuthorsActivity = {
+	byAuthor: Record<string, AuthorActivity>;
+	/** The results any of the named authors wrote, by year: a publication several of them wrote counts once. */
+	combined: Record<string, number>;
 };
 
 /**
- * Each author's results by year under the current search and filters, and how many of them each other named author
- * shares, for the top authors in the sidebar. One small search per author, side by side.
+ * Each author's results by year under the current search and filters, how many of them each other named author shares,
+ * and their main institution, plus all their results together by year, for the top authors in the sidebar. One small
+ * search per author and one for them all, side by side.
  */
 export async function getAuthorActivity(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	names: readonly string[],
-): Promise<Record<string, AuthorActivity>> {
+): Promise<AuthorsActivity> {
 	const libraryConfig = await getLibraryConfig();
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 	const asked = names.slice(0, AUTHOR_ACTIVITY_LIMIT);
-	const results = await Promise.all(
-		asked.map((name) =>
+	const institutions = libraryConfig.filters.institution.mode !== "hidden";
+	const [all, ...results] = await Promise.all([
+		index.search(search, {
+			offset: 0, limit: 0, attributesToSearchOn, facets: ["year"],
+			filter: [...finalFilters, meilisearchIn("fullNames", asked)],
+		}),
+		...asked.map((name) =>
 			index.search(search, {
-				offset: 0, limit: 0, attributesToSearchOn, facets: ["year", "fullNames"],
+				offset: 0, limit: 0, attributesToSearchOn,
+				facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
 				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
 			}),
 		),
-	);
-	return Object.fromEntries(asked.map((name, position) => {
+	]);
+	const byAuthor = Object.fromEntries(asked.map((name, position) => {
 		const distribution = results[position]?.facetDistribution ?? {};
 		const coauthors = (distribution.fullNames ?? {}) as Record<string, number>;
 		// Only the other named authors leave the server, not everyone they wrote with.
 		const together = Object.fromEntries(asked.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
-		return [name, { years: (distribution.year ?? {}) as Record<string, number>, together }];
+		const institution = Object.entries((distribution[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
+		return [name, { years: (distribution.year ?? {}) as Record<string, number>, together, institution }];
 	}));
+	return { byAuthor, combined: (all.facetDistribution?.year ?? {}) as Record<string, number> };
 }
