@@ -28,6 +28,7 @@ const filters = {
 	queryParams: {
 		collections: [] as string[],
 		institution: [] as string[],
+		type: [] as string[],
 		author: "",
 		range: "",
 	} as Record<string, unknown>,
@@ -36,6 +37,7 @@ const filters = {
 	handleClearFilters: vi.fn(),
 	handleRangeChange: vi.fn(),
 	handleAuthorSelect: vi.fn(),
+	handleTypeSelect: vi.fn(),
 	handleInstitutionSelect: vi.fn(),
 	handleCheckboxChange: vi.fn(),
 };
@@ -59,6 +61,7 @@ describe("the chips showing which filters are on", () => {
 			collections: [],
 			institution: [],
 			topics: [],
+			type: [],
 			author: "",
 			range: "",
 		};
