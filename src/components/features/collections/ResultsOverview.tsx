@@ -42,8 +42,9 @@ export function SidebarCard({ id, title, aside, footer, link, band, children }: 
 	// One grey per card: a card with actions keeps its grey for the foot that holds them, and its head stays white.
 	const hasFoot = Boolean(footer || link);
 	return (
-		<section aria-labelledby={id} className="w-full rounded-2xl bg-card_light dark:bg-card">
-			<div className={twMerge("flex flex-col gap-4 rounded-t-2xl px-6 py-5", !hasFoot && SIDEBAR_GREY)}>
+		// Square on a phone, where the Explore sheet runs every card edge to edge, as the filter card does.
+		<section aria-labelledby={id} className="w-full bg-card_light sm:rounded-2xl dark:bg-card">
+			<div className={twMerge("flex flex-col gap-4 px-6 py-5 sm:rounded-t-2xl", !hasFoot && SIDEBAR_GREY)}>
 				<div className="flex min-h-8 items-center justify-between gap-4">
 					<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
 					{aside}
@@ -52,7 +53,7 @@ export function SidebarCard({ id, title, aside, footer, link, band, children }: 
 			</div>
 			<div className={twMerge("flex flex-col gap-5 p-6", hasFoot && "pt-1")}>{children}</div>
 			{hasFoot && (
-				<div className={twMerge("flex justify-end gap-2 rounded-b-2xl p-2", SIDEBAR_GREY)}>
+				<div className={twMerge("flex justify-end gap-2 p-2 sm:rounded-b-2xl", SIDEBAR_GREY)}>
 					{footer}
 					{link && (
 						<Button as={Link} role="link" href={link.href} size="sm" endContent={<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="size-3.5" />}>

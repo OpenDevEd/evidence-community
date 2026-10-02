@@ -1069,7 +1069,8 @@ export default function CollectionsList({
 						/>
 					</section>
 				)}
-				<div className={twMerge("mt-4 flex flex-col gap-4", isModal && "px-6")}>
+				{/* In the Explore sheet the cards run edge to edge, as the filter card does. */}
+				<div className="mt-4 flex flex-col gap-4">
 					<ResultsOverview
 						facetDistribution={facetDistribution}
 						range={range}
@@ -1083,7 +1084,7 @@ export default function CollectionsList({
 					/>
 				</div>
 			</Skeleton>
-			{highlights && <div className={twMerge("mt-4", isModal && "px-6 pb-6")}>{highlights}</div>}
+			{highlights && <div className={twMerge("mt-4", isModal && "pb-6 [&_nav]:px-6")}>{highlights}</div>}
 		</aside>
 	);
 }
