@@ -12,10 +12,14 @@ it("focuses the selected option and preserves it when its collection changes", a
 	let picker!: ReturnType<typeof useAutocomplete>;
 	const onSelectionChange = vi.fn();
 	let search!: (value: string) => void;
+	// The picker's state reaches the test through a callback, so rendering never writes to the test's variables itself.
+	const expose = (state: ReturnType<typeof useAutocomplete>, setQuery: (value: string) => void) => {
+		picker = state;
+		search = setQuery;
+	};
 	function Picker({ expanded }: { expanded: boolean }) {
 		const [query, setQuery] = useState("");
-		search = setQuery;
-		picker = useAutocomplete({
+		const state = useAutocomplete({
 			label: "Topics",
 			selectedKey: null,
 			inputValue: query,
@@ -34,6 +38,7 @@ it("focuses the selected option and preserves it when its collection changes", a
 							: []),
 					],
 		});
+		expose(state, setQuery);
 		return null;
 	}
 	const container = document.createElement("div");
@@ -80,13 +85,17 @@ it("keeps a focus the reader cleared while the options stay the same", async () 
 		<AutocompleteItem key="2025">2025</AutocompleteItem>,
 		<AutocompleteItem key="2024">2024</AutocompleteItem>,
 	];
+	const expose = (state: ReturnType<typeof useAutocomplete>) => {
+		picker = state;
+	};
 	function Picker() {
-		picker = useAutocomplete({
+		const state = useAutocomplete({
 			label: "Year",
 			allowsCustomValue: true,
 			defaultInputValue: "20",
 			children: years,
 		});
+		expose(state);
 		return null;
 	}
 	const container = document.createElement("div");
