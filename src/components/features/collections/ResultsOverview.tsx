@@ -35,21 +35,23 @@ const RAMP = ["bg-accent", "bg-accent/80", "bg-accent/60", "bg-accent/45", "bg-a
 export const SIDEBAR_GREY = "bg-[#E8E6E1] dark:bg-secondary";
 
 /**
- * A block of the sidebar, built as the filter card is: a grey head with the heading and a summary of the block, its
- * content on white, and its own actions, if it has any, in a grey foot.
+ * A block of the sidebar, built as the filter card is: a grey head with the heading and a summary of the block and its
+ * content on white. A block with actions keeps them in a grey foot instead, under a white head.
  */
 export function SidebarCard({ id, title, aside, footer, link, band, children }: { id: string; title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; /** A summary of what is below, under the heading in the card's head. */ band?: React.ReactNode; children: React.ReactNode }) {
+	// One grey per card: a card with actions keeps its grey for the foot that holds them, and its head stays white.
+	const hasFoot = Boolean(footer || link);
 	return (
 		<section aria-labelledby={id} className="w-full rounded-2xl bg-card_light dark:bg-card">
-			<div className={twMerge("flex flex-col gap-4 rounded-t-2xl px-6 py-5", SIDEBAR_GREY)}>
+			<div className={twMerge("flex flex-col gap-4 rounded-t-2xl px-6 py-5", !hasFoot && SIDEBAR_GREY)}>
 				<div className="flex min-h-8 items-center justify-between gap-4">
 					<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
 					{aside}
 				</div>
 				{band}
 			</div>
-			<div className="flex flex-col gap-5 p-6">{children}</div>
-			{(footer || link) && (
+			<div className={twMerge("flex flex-col gap-5 p-6", hasFoot && "pt-1")}>{children}</div>
+			{hasFoot && (
 				<div className={twMerge("flex justify-end gap-2 rounded-b-2xl p-2", SIDEBAR_GREY)}>
 					{footer}
 					{link && (
