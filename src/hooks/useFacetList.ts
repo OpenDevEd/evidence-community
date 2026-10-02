@@ -19,6 +19,8 @@ export type FacetListItem = {
     section?: string;
     hide?: boolean;
     isSelected?: boolean;
+    /** Said in place of a count the option cannot give truthfully, such as how many countries a region holds. */
+    note?: string;
 };
 
 type useFacetListReturn = [FacetListItem[], CategoriesDistribution]

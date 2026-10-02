@@ -28,7 +28,7 @@ import { createContext, Fragment, type ReactNode, useContext, useMemo, useState 
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs";
@@ -59,7 +59,7 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { ResultsOverview } from "./ResultsOverview";
+import { ResultsOverview, resultsTotal, shareOf } from "./ResultsOverview";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -74,6 +74,29 @@ function searchedFacetItems(
 	);
 }
 
+/** An option with its figures at a glance: its count and share of the results, and a bar against the largest option. */
+function FacetOption({ label, count, largest, share, arrow, note }: { label: string; count: number | null; largest: number; share: string | null; arrow: "open" | "closed" | null; note?: string }) {
+	const format = useFormatter();
+	return (
+		<span className="flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
+			<span className="flex min-w-0 items-center gap-2">
+				<TruncatedText text={label} className="flex-1 leading-5" />
+				{arrow && (
+					<HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4 shrink-0", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />
+				)}
+				{note && <span className="shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60">{note}</span>}
+				{share && <span className="shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60">{share}</span>}
+				{count !== null && <span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(count)}</span>}
+			</span>
+			{count !== null && (
+				<span aria-hidden className="block h-1 w-full overflow-hidden rounded-full bg-accent/10">
+					<span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.max(2, (count / largest) * 100)}%` }} />
+				</span>
+			)}
+		</span>
+	);
+}
+
 function FacetPicker({
 	label,
 	placeholder,
@@ -84,6 +107,7 @@ function FacetPicker({
 	facetName,
 	searchList,
 	fixedHeight = false,
+	total,
 }: {
 	label: string;
 	placeholder: string;
@@ -94,7 +118,10 @@ function FacetPicker({
 	facetName?: string;
 	searchList?: FacetListItem[];
 	fixedHeight?: boolean;
+	/** How many results there are, for each option's share of them. */
+	total?: number;
 }) {
+	const format = useFormatter();
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
 	const displayedList = searchedFacetItems(list, searchList, search);
@@ -111,6 +138,10 @@ function FacetPicker({
 	);
 
 	const allSectionNames = Object.keys(groupedBySection);
+	const countOf = (item: FacetListItem) =>
+		item.count ?? (facetName ? facetDistribution?.[facetName]?.[item.key] ?? 0 : 0);
+	// Each option's bar is measured against the largest option on show.
+	const largest = Math.max(1, ...displayedList.filter((item) => !item.hide && !item.hideCount).map(countOf));
 
 	return (
 		<div className="w-full flex flex-col gap-2" onKeyDownCapture={(event) => {
@@ -229,7 +260,7 @@ function FacetPicker({
 												startContent={item.startContent}
 												aria-label={item.label}
 												key={item.key}
-												classNames={{ title: "min-w-0" }}
+												classNames={{ title: "min-w-0 w-full" }}
 												style={item.style}
 												textValue={item.label}
 												selectedIcon={
@@ -246,46 +277,14 @@ function FacetPicker({
 													) : undefined
 												}
 											>
-												<span className="text-black dark:text-white flex min-w-0 items-center gap-2">
-													<span
-														className={twMerge(
-															"text-black/60 dark:text-white/60",
-															item.hideCount &&
-																"hidden",
-														)}
-													>
-														{`(${
-															item.count !==
-															undefined
-																? item.count
-																: facetDistribution &&
-																	  facetName
-																	? facetDistribution?.[
-																			facetName!
-																		]?.[
-																			item
-																				.key
-																		] || 0
-																	: "0"
-														})`}
-													</span>
-													<TruncatedText
-														text={item.label}
-														className="leading-5"
-													/>
-													{item.showArrow && (
-														<HugeiconsIcon
-															icon={
-																ArrowDown01Icon
-															}
-															className={twMerge(
-																"size-4 shrink-0",
-																!item.isSelected &&
-																	"-rotate-90 rtl:rotate-90",
-															)}
-														/>
-													)}
-												</span>
+												<FacetOption
+													label={item.label}
+													count={item.hideCount ? null : countOf(item)}
+													largest={largest}
+													share={!item.hideCount && total ? shareOf(format, countOf(item), total) : null}
+													arrow={item.showArrow ? (item.isSelected ? "open" : "closed") : null}
+													note={item.note}
+												/>
 											</AutocompleteItem>
 										);
 									})
@@ -487,7 +486,9 @@ function TopicFilter({
 	counts,
 	onChange,
 	selected,
+	total,
 }: {
+	total: number;
 	counts: Record<string, number> | undefined;
 	onChange: (topics: string[]) => void;
 	selected: string[];
@@ -547,6 +548,7 @@ function TopicFilter({
 	return (
 		<FacetPicker
 			fixedHeight
+			total={total}
 			label="Topics"
 			placeholder="Select topics"
 			selectedKey={selected}
@@ -638,6 +640,7 @@ function FiltersList({
 	const { filters, topics } = useLibraryConfig();
 	const topicPicker = topics.enabled && !topicsAsTree;
 	const isInstitutionEnabled = filters.institution.mode !== "hidden";
+	const total = resultsTotal(facetDistribution);
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
 	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
@@ -678,6 +681,19 @@ function FiltersList({
 			),
 		(a, b) => a.localeCompare(b),
 	);
+	// A region's count would add up its countries, counting a publication about two of them twice, so a region says
+	// how many of its countries have results instead.
+	const countriesWithNotes = useMemo(
+		() =>
+			countries.map((item) => {
+				if (!item.hideCount || item.key.split(" > ").length > 2) return item;
+				const found = Object.entries(facetDistribution?.country ?? {}).filter(
+					([path, count]) => count > 0 && path.startsWith(`${item.key} > `) && /^[A-Z]{2}$/.test(path.split(" > ").pop() ?? ""),
+				).length;
+				return { ...item, note: found === 1 ? "1 country" : `${found} countries` };
+			}),
+		[countries, facetDistribution],
+	);
 	const [countries_uncategorized] = useFacetList(
 		facetDistribution!,
 		"country_uncategorized",
@@ -697,12 +713,13 @@ function FiltersList({
 			isCountryFocusEnabled && (
 				<FacetPicker
 					key={"country-focus-filter"}
+					total={total}
 					label={t("countryFilter")}
 					placeholder={t("countryFilterDescription")}
 					selectedKey={queryParams.country}
 					onSelectionChange={handleCountrySelect}
 					facetDistribution={facetDistribution}
-					list={countries}
+					list={countriesWithNotes}
 					facetName="country"
 					searchList={countries_uncategorized.map((item) => ({
 						...item,
@@ -717,8 +734,9 @@ function FiltersList({
 		queryParams.country,
 		handleCountrySelect,
 		facetDistribution,
-		countries,
+		countriesWithNotes,
 		countries_uncategorized,
+		total,
 	]);
 
 	const institutionFilter = useMemo(() => {
@@ -726,6 +744,7 @@ function FiltersList({
 			isInstitutionEnabled && (
 				<FacetPicker
 					key="institution-filter"
+					total={total}
 					label={institutionLabel}
 					placeholder={institutionLabel}
 					selectedKey={queryParams.institution}
@@ -743,6 +762,7 @@ function FiltersList({
 		institutions,
 		isInstitutionEnabled,
 		queryParams.institution,
+		total,
 	]);
 
 	const moreFilters = useMemo(() => {
@@ -752,6 +772,7 @@ function FiltersList({
 				{countryFocusFilter}
 				{topicPicker ? (
 					<TopicFilter
+						total={total}
 						counts={facetDistribution?.topicAncestors}
 						onChange={handleTopicsChange}
 						selected={queryParams.topics}
@@ -766,6 +787,7 @@ function FiltersList({
 		institutionFilter,
 		queryParams.topics,
 		topicPicker,
+		total,
 	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;

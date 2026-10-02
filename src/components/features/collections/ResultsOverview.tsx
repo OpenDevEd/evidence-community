@@ -62,6 +62,16 @@ function useExpandTransition(): Transition {
 	return useReducedMotion() ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] };
 }
 
+/** A part of the results as a share: whole percents, with one decimal below 1%. */
+export function shareOf(format: ReturnType<typeof useFormatter>, count: number, total: number) {
+	return format.number(count / total, { style: "percent", maximumFractionDigits: count / total < 0.01 ? 1 : 0 });
+}
+
+/** How many results there are: each has exactly one item type, so the type counts add up to them. */
+export function resultsTotal(facetDistribution: FacetDistribution | undefined) {
+	return Object.values(facetDistribution?.itemType ?? {}).reduce((sum, count) => sum + count, 0);
+}
+
 function Tick({ shown }: { shown: boolean }) {
 	return shown ? <HugeiconsIcon icon={Tick01Icon} aria-hidden className="size-4 shrink-0 text-accent" /> : null;
 }
@@ -221,7 +231,7 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 					<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone(index), dimmed(type) && "opacity-25")} />
 					<TruncatedText text={label(type)} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
 					<Tick shown={chosen} />
-					<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{format.number(count / total, { style: "percent", maximumFractionDigits: count / total < 0.01 ? 1 : 0 })}</span>
+					<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{shareOf(format, count, total)}</span>
 					<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
 				</button>
 			</li>
