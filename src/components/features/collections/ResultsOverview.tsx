@@ -10,6 +10,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import useSWR from "swr";
+import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
 import { Link } from "@/i18n/routing";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
@@ -419,11 +420,13 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 					const chosen = name === selected;
 					const shared = focused && name !== focused && activity ? (together?.[name] ?? 0) : null;
 					const institution = byAuthor?.[name]?.institution;
+					const photo = byAuthor?.[name]?.photo;
 					return (
 						<li key={name}>
 							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} onPointerEnter={() => setFocused(name)} onFocus={() => setFocused(name)} className={twMerge("flex h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", focused === name && "bg-black/5 dark:bg-white/5")}>
-								<span aria-hidden className={twMerge("hidden size-9 shrink-0 items-center justify-center rounded-full font-heading @[24rem]:flex text-sm font-semibold transition-colors", chosen || focused === name ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80")}>
-									{initialsOf(name)}
+								{/* Their profile photo when they have one, else their initials. */}
+								<span aria-hidden className={twMerge("hidden size-9 shrink-0 items-center justify-center overflow-hidden rounded-full font-heading text-sm font-semibold transition-colors @[24rem]:flex", photo ? (chosen || focused === name ? "ring-2 ring-black/85 dark:ring-white" : "") : chosen || focused === name ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80")}>
+									{photo ? <Image unoptimized src={photo} alt="" width={36} height={36} className="size-full object-cover" /> : initialsOf(name)}
 								</span>
 								<span className="flex min-w-0 flex-1 flex-col">
 									<TruncatedText text={name} className={twMerge("text-base font-medium leading-5", chosen && "text-accent")} />

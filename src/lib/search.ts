@@ -34,6 +34,9 @@ import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { itemPageAttachments } from "./attachment-visibility";
 import { getDatabaseForConfig } from "@/db";
 import { readTopicTree, resolveTopicAncestry } from "./topics/catalog";
+import { creatorFullName } from "./search-index/projection";
+import { readAuthorProfiles } from "./authors/catalog-server";
+import type { Author } from "@/app/api/item/types";
 import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
 
 /**
@@ -560,6 +563,8 @@ export type AuthorActivity = {
 	together: Record<string, number>;
 	/** The institution most of their results name, if any does. */
 	institution: string | null;
+	/** Their photo, when one of their results links them to an author profile that has one. */
+	photo: string | null;
 };
 
 export type AuthorsActivity = {
@@ -590,19 +595,27 @@ export async function getAuthorActivity(
 		}),
 		...asked.map((name) =>
 			index.search(search, {
-				offset: 0, limit: 0, attributesToSearchOn,
+				offset: 0, attributesToSearchOn,
+				// One of their results, to find the profile their name is linked to on it.
+				limit: 1, attributesToRetrieve: ["creators"],
 				facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
 				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
 			}),
 		),
 	]);
+	const profileIds = asked.map((name, position) => {
+		const creators = ((results[position]?.hits[0] as ListItem | undefined)?.creators ?? []) as Author[];
+		return creators.find((creator) => creatorFullName(creator) === name)?.authorProfileId ?? null;
+	});
+	const profiles = new Map((await readAuthorProfiles(profileIds.filter((id): id is string => Boolean(id)))).map((profile) => [profile.id, profile]));
 	const byAuthor = Object.fromEntries(asked.map((name, position) => {
 		const distribution = results[position]?.facetDistribution ?? {};
 		const coauthors = (distribution.fullNames ?? {}) as Record<string, number>;
 		// Only the other named authors leave the server, not everyone they wrote with.
 		const together = Object.fromEntries(asked.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
 		const institution = Object.entries((distribution[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
-		return [name, { years: (distribution.year ?? {}) as Record<string, number>, together, institution }];
+		const photo = profileIds[position] ? (profiles.get(profileIds[position]!)?.photo ?? null) : null;
+		return [name, { years: (distribution.year ?? {}) as Record<string, number>, together, institution, photo }];
 	}));
 	return { byAuthor, combined: (all.facetDistribution?.year ?? {}) as Record<string, number> };
 }

@@ -128,19 +128,13 @@ function splitValues(value: string | null) {
 		: [];
 }
 
+/** The name a record's author is searched and filtered by: its full name, else its first and last names. */
+export function creatorFullName(creator: { name?: string | null; firstName?: string | null; lastName?: string | null }) {
+	return creator.name?.trim() || [creator.firstName, creator.lastName].filter(Boolean).join(" ").trim();
+}
+
 function creatorNames(creators: ItemRow["creators"]) {
-	return uniqueSorted(
-		(creators ?? [])
-			.map(
-				(creator) =>
-					creator.name?.trim() ||
-					[creator.firstName, creator.lastName]
-						.filter(Boolean)
-						.join(" ")
-						.trim(),
-			)
-			.filter(Boolean),
-	);
+	return uniqueSorted((creators ?? []).map(creatorFullName).filter(Boolean));
 }
 
 function fullTextPages(value: string | null) {
