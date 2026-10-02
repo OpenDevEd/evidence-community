@@ -1019,7 +1019,7 @@ export default function CollectionsList({
 						{customFilter}
 					</div>
 				)}
-				<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20", SIDEBAR_GREY, !isCollectionsEnabled && !topicsAsTree && "rounded-b-2xl")}>
+				<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, !isCollectionsEnabled && !topicsAsTree && "rounded-b-2xl")}>
 					{filters.years.enabled && (
 						<YearFilter
 							key={range}
