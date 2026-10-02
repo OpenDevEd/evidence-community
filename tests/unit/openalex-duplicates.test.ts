@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { duplicateWorkKeys, planDuplicates, uncertainDuplicateDois, workFacts } from "@/lib/source-ingestion/openalex/duplicates";
+import { dataCiteVersions, duplicateWorkKeys, planDuplicates, uncertainDuplicateDois, workFacts } from "@/lib/source-ingestion/openalex/duplicates";
 
 const work = (key: string, doi: string | null, title = "TVET teachers in Ethiopia", date = "2026-09-28") => ({
 	key,
@@ -81,23 +81,23 @@ describe("OpenAlex duplicate records", () => {
 		const versionOf = new Map([["10.5281/zenodo.492", new Set(["10.5281/zenodo.491"])]]);
 
 		it("withdraws a live repeat and keeps a skipped one skipped while the record kept instead is live", () => {
-			expect(planDuplicates([concept, { ...version, itemKey: "ITEM0002" }], [], versionOf, false)).toEqual({
+			expect(planDuplicates([concept, { ...version, itemKey: "ITEM0002" }], [], versionOf, new Set())).toEqual({
 				withdraw: [{ recordKey: "W2", itemKey: "ITEM0002", keptItemKey: "ITEM0001" }],
 				keepSkipped: [],
 				release: [],
 			});
-			expect(planDuplicates([concept], [version], versionOf, false)).toEqual({
+			expect(planDuplicates([concept], [version], versionOf, new Set())).toEqual({
 				withdraw: [],
 				keepSkipped: [{ recordKey: "W2", itemKey: "ITEM0001", keptItemKey: "ITEM0001" }],
 				release: [],
 			});
 		});
 
-		it("brings a skipped work back once it no longer repeats a live record, unless DataCite could not be asked", () => {
+		it("brings a skipped work back once it no longer repeats a live record, unless DataCite did not answer for it", () => {
 			// The record kept instead left, or DataCite no longer links them.
-			expect(planDuplicates([], [version], versionOf, false).release).toEqual(["W2"]);
-			expect(planDuplicates([concept], [version], new Map(), false).release).toEqual(["W2"]);
-			expect(planDuplicates([concept], [version], new Map(), true).release).toEqual([]);
+			expect(planDuplicates([], [version], versionOf, new Set()).release).toEqual(["W2"]);
+			expect(planDuplicates([concept], [version], new Map(), new Set()).release).toEqual(["W2"]);
+			expect(planDuplicates([concept], [version], new Map(), new Set(["10.5281/zenodo.492"])).release).toEqual([]);
 		});
 
 		it("lets a failed DataCite lookup hold back only the repeats that needed it", () => {
@@ -105,13 +105,54 @@ describe("OpenAlex duplicate records", () => {
 			const figshareVersion = work("W8", "10.26181/32278425.v1", "Figshare study");
 			const liveZenodo = { ...work("W5", "10.5281/zenodo.700", "Zenodo study"), itemKey: "ITEM0005" };
 			const skippedZenodo = work("W6", "10.5281/zenodo.701", "Zenodo study");
-			expect(planDuplicates([liveZenodo], [figshareVersion, skippedZenodo], new Map(), true).release).toEqual(["W8"]);
+			expect(planDuplicates([liveZenodo], [figshareVersion, skippedZenodo], new Map(), new Set(["10.5281/zenodo.700", "10.5281/zenodo.701"])).release).toEqual(["W8"]);
 		});
 
 		it("never withdraws a live record for a work that is not live", () => {
 			const skippedConcept = work("W1", "10.5281/zenodo.491");
 			const liveVersion = { ...version, itemKey: "ITEM0002" };
-			expect(planDuplicates([liveVersion], [skippedConcept], versionOf, false).withdraw).toEqual([]);
+			expect(planDuplicates([liveVersion], [skippedConcept], versionOf, new Set()).withdraw).toEqual([]);
+		});
+	});
+
+	describe("asking DataCite", () => {
+		const record = (doi: string, concept?: string) => ({
+			attributes: { doi, relatedIdentifiers: concept ? [{ relationType: "IsVersionOf", relatedIdentifier: concept, relatedIdentifierType: "DOI" }] : [] },
+		});
+		const dois = (count: number, from: number) => Array.from({ length: count }, (_, index) => `10.5281/zenodo.${from + index}`);
+		const sleeps: number[] = [];
+		const sleep = async (ms: number) => {
+			sleeps.push(ms);
+		};
+
+		it("tries a batch DataCite fails again, backing off", async () => {
+			let calls = 0;
+			const fetchImpl = (async () => (++calls < 3 ? new Response("Bad gateway", { status: 502 }) : Response.json({ data: [record("10.5281/zenodo.492", "10.5281/zenodo.491")] }))) as typeof fetch;
+			sleeps.length = 0;
+			const result = await dataCiteVersions(["10.5281/zenodo.492", "10.5281/zenodo.491"], fetchImpl, sleep);
+			expect(result.versionsOf).toEqual(new Map([["10.5281/zenodo.492", new Set(["10.5281/zenodo.491"])]]));
+			expect(result.unresolved).toEqual(new Set());
+			expect(sleeps).toEqual([1_000, 2_000]);
+		});
+
+		it("leaves only a batch DataCite never answers undecided, and does not retry a refused request", async () => {
+			const first = dois(50, 1000);
+			const second = dois(10, 2000);
+			let refusedCalls = 0;
+			const fetchImpl = (async (input: RequestInfo | URL) => {
+				const ids = new URL(String(input)).searchParams.get("ids")!.split(",");
+				return ids[0] === first[0] ? new Response("Bad gateway", { status: 502 }) : Response.json({ data: [record(second[1]!, second[0])] });
+			}) as typeof fetch;
+			const result = await dataCiteVersions([...first, ...second], fetchImpl, sleep);
+			expect(result.unresolved).toEqual(new Set(first));
+			expect(result.versionsOf).toEqual(new Map([[second[1], new Set([second[0]])]]));
+
+			const refusing = (async () => {
+				refusedCalls++;
+				return new Response("Bad request", { status: 400 });
+			}) as typeof fetch;
+			expect((await dataCiteVersions(second, refusing, sleep)).unresolved).toEqual(new Set(second));
+			expect(refusedCalls).toBe(1);
 		});
 	});
 });

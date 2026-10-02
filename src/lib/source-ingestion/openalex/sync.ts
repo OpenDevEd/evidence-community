@@ -1022,6 +1022,7 @@ async function withdrawDuplicates(scan: Scan) {
 		context.sourceConnection.key,
 		{ startedAt: scan.cursor.startedAt, full: scan.cursor.mode === "full" },
 		scan.options.fetch,
+		scan.options.sleep,
 	);
 	// A repeat that no longer repeats a record the scan keeps is written again first, from OpenAlex's stored
 	// record, before reconciling; the withdrawal below then stops skipping it.

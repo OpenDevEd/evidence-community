@@ -20,6 +20,10 @@ type VersionsOf = ReadonlyMap<string, ReadonlySet<string>>;
 const DATACITE_DOIS = "https://api.datacite.org/dois";
 const DATACITE_BATCH = 50;
 const DATACITE_TIMEOUT_MS = 20_000;
+// DataCite answers some batches with a 500 or 502 now and then; a batch is tried this many times before its pairs
+// are left undecided for this run.
+const DATACITE_ATTEMPTS = 5;
+const MAX_DATACITE_DELAY_MS = 60_000;
 const REPEATED_PREFIX = /^10\.\d{4,9}\/(?=10\.\d{4,9}\/)/u;
 const FIGSHARE_VERSION = /\.v\d+$/u;
 
@@ -99,26 +103,58 @@ function versionTargets(record: DataCiteRecord) {
 	);
 }
 
-/** What DataCite records as versions of other DOIs, for the DOIs it has. */
-async function dataCiteVersions(dois: readonly string[], fetchImpl: typeof fetch) {
+/** One batch of DataCite's records, or null when DataCite would not answer it after its tries. */
+async function dataCiteBatch(dois: readonly string[], fetchImpl: typeof fetch, sleep: (ms: number) => Promise<void>) {
+	const url = new URL(DATACITE_DOIS);
+	url.searchParams.set("ids", dois.join(","));
+	url.searchParams.set("page[size]", String(DATACITE_BATCH));
+	url.searchParams.set("fields[dois]", "doi,relatedIdentifiers");
+	for (let attempt = 0; attempt < DATACITE_ATTEMPTS; attempt++) {
+		let delay = Math.min(MAX_DATACITE_DELAY_MS, 1_000 * 2 ** attempt);
+		try {
+			const response = await fetchImpl(url, {
+				headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:contact@opendeved.net)" },
+				signal: AbortSignal.timeout(DATACITE_TIMEOUT_MS),
+			});
+			if (response.ok) return ((await response.json()) as { data?: DataCiteRecord[] }).data ?? [];
+			await response.body?.cancel();
+			// Another try will not change a refusal of the request itself.
+			if (response.status !== 429 && response.status < 500) return null;
+			const retryAfter = Number(response.headers.get("retry-after"));
+			if (Number.isFinite(retryAfter)) delay = Math.min(MAX_DATACITE_DELAY_MS, Math.max(delay, retryAfter * 1_000));
+		} catch {
+			// A lost connection or a timeout is tried again like a 5xx.
+		}
+		if (attempt < DATACITE_ATTEMPTS - 1) await sleep(delay);
+	}
+	return null;
+}
+
+/**
+ * What DataCite records as versions of other DOIs, for the DOIs it has, and the DOIs whose batch it would not
+ * answer. One batch that fails leaves only its own DOIs undecided.
+ */
+export async function dataCiteVersions(
+	dois: readonly string[],
+	fetchImpl: typeof fetch,
+	sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+) {
 	const versionsOf = new Map<string, Set<string>>();
+	const unresolved = new Set<string>();
 	for (let start = 0; start < dois.length; start += DATACITE_BATCH) {
-		const url = new URL(DATACITE_DOIS);
-		url.searchParams.set("ids", dois.slice(start, start + DATACITE_BATCH).join(","));
-		url.searchParams.set("page[size]", String(DATACITE_BATCH));
-		url.searchParams.set("fields[dois]", "doi,relatedIdentifiers");
-		const response = await fetchImpl(url, {
-			headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:contact@opendeved.net)" },
-			signal: AbortSignal.timeout(DATACITE_TIMEOUT_MS),
-		});
-		if (!response.ok) throw new Error(`DataCite answered ${response.status}`);
-		for (const record of ((await response.json()) as { data?: DataCiteRecord[] }).data ?? []) {
+		const batch = dois.slice(start, start + DATACITE_BATCH);
+		const records = await dataCiteBatch(batch, fetchImpl, sleep);
+		if (!records) {
+			for (const doi of batch) unresolved.add(doi);
+			continue;
+		}
+		for (const record of records) {
 			const targets = versionTargets(record);
 			const doi = record.attributes?.doi?.toLowerCase();
 			if (doi && targets.length) versionsOf.set(doi, new Set(targets));
 		}
 	}
-	return versionsOf;
+	return { versionsOf, unresolved };
 }
 
 /** What OpenAlex itself says about a work, from its own record, so library edits never change the comparison. */
@@ -158,16 +194,21 @@ export type DuplicatePlan = { withdraw: DuplicateRecord[]; keepSkipped: Duplicat
 /**
  * Splits the source's records and the works this run skipped into what to withdraw, keep skipping or bring back.
  * Only a live record is kept instead of another. A skipped work that no longer repeats a live record comes back,
- * unless its own comparison needed DataCite, which could not be asked.
+ * unless its own comparison needed a DataCite answer that did not come.
  */
 export function planDuplicates(
 	live: readonly (WorkFacts & { itemKey: string })[],
 	skipped: readonly WorkFacts[],
 	versionsOf: VersionsOf,
-	dataCiteFailed: boolean,
+	unresolved: ReadonlySet<string>,
 ): DuplicatePlan {
 	const keptFor = duplicateWorkKeys([...live, ...skipped], versionsOf);
-	const undecided = new Set(dataCiteFailed ? [...uncertainPairs([...live, ...skipped])].flat().map((work) => work.key) : []);
+	const undecided = new Set(
+		[...uncertainPairs([...live, ...skipped])]
+			.filter((pair) => pair.some((work) => unresolved.has(cleanDoi(work.doi!))))
+			.flat()
+			.map((work) => work.key),
+	);
 	const liveItem = new Map(live.map((record) => [record.key, record.itemKey]));
 	const repeatOf = (key: string) => {
 		const kept = keptFor.get(key);
@@ -208,25 +249,22 @@ export async function findDuplicateRecords(
 	sourceConnectionKey: string,
 	scan: { startedAt: string; full: boolean },
 	fetchImpl: typeof fetch = fetch,
+	sleep?: (ms: number) => Promise<void>,
 ): Promise<DuplicatePlan> {
 	const live = await liveRecords(database, sourceConnectionKey, scan.full ? scan.startedAt : null);
 	const skipped = await skippedRecords(database, sourceConnectionKey, scan.startedAt);
-	let versionsOf: VersionsOf = new Map();
-	let dataCiteFailed = false;
 	const uncertain = uncertainDuplicateDois([...live, ...skipped]);
-	if (uncertain.length) {
-		try {
-			versionsOf = await dataCiteVersions(uncertain, fetchImpl);
-		} catch (error) {
-			dataCiteFailed = true;
-			console.warn("DataCite could not be asked whether OpenAlex works are versions of each other; keeping them as they are", {
-				sourceConnectionKey,
-				dois: uncertain.length,
-				error: error instanceof Error ? error.message : String(error),
-			});
-		}
+	const { versionsOf, unresolved } = uncertain.length
+		? await dataCiteVersions(uncertain, fetchImpl, sleep)
+		: { versionsOf: new Map<string, Set<string>>(), unresolved: new Set<string>() };
+	if (unresolved.size) {
+		console.warn("DataCite did not answer for some OpenAlex works that may be versions of each other; keeping those as they are", {
+			sourceConnectionKey,
+			unanswered: unresolved.size,
+			asked: uncertain.length,
+		});
 	}
-	return planDuplicates(live, skipped, versionsOf, dataCiteFailed);
+	return planDuplicates(live, skipped, versionsOf, unresolved);
 }
 
 /**
