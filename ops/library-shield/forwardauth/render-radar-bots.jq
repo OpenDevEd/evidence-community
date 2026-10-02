@@ -15,6 +15,16 @@ def regex_escape:
 	| gsub("\\?"; "\\\\?")
 	| gsub("\""; "\\\"");
 
+# Radar escapes a few patterns as regexes; unescape them so regex_escape can
+# treat every pattern as literal text. A verified bot listed without patterns
+# keeps its name when the name is itself a UA token such as "ExaSearchBot".
+def patterns:
+	(.userAgentPatterns // []) as $listed
+	| if ($listed | length) == 0 and (.name | type == "string" and test("^[A-Za-z0-9-]+bot$"; "i"))
+		then [.name] else $listed end
+	| .[]
+	| if type == "string" then gsub("\\\\(?<c>.)"; .c) else . end;
+
 def usable:
 	type == "string" and length > 0 and (test("[\\r\\n]") | not);
 
@@ -23,7 +33,7 @@ def training($bots; $rule):
 	| ([
 		$bots[]
 		| select(.category as $category | ($rule.categories // []) | index($category))
-		| .userAgentPatterns[]?
+		| patterns
 	] + ($rule.add // []))
 	| map(select(usable))
 	| unique_by(ascii_downcase)
@@ -38,13 +48,15 @@ def allowed($bots; $rule; $training):
 	| ([
 		$bots[]
 		| (.category | if type == "string" and test("^[A-Z_]+$") then . else "OTHER" end) as $category
-		| .userAgentPatterns[]?
+		| patterns
 		| {pattern: ., category: $category}
 	] + ($rule.add // {} | to_entries | map(.key as $category | .value[] | {pattern: ., category: $category})))
 	| map(select(.pattern | usable))
 	| unique_by(.pattern | ascii_downcase)
 	| map(select(.pattern | ascii_downcase as $value | $blocked | index($value) | not))
-	| sort_by(.pattern | ascii_downcase);
+	# nginx takes the first matching regex, so longer, more specific patterns go
+	# first: Y!J-BRW must not land in J-BRW's budget.
+	| sort_by([-(.pattern | length), (.pattern | ascii_downcase)]);
 
 (.result.bots // .bots) as $bots
 | $policy[0] as $rules

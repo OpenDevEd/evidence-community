@@ -235,6 +235,12 @@ assert_code 'non-AI search crawler passes' 204
 request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)'
 assert_code 'SEO crawler passes' 204
 
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; scraping@nytimes.com)'
+assert_code 'Radar regex-escaped pattern matches' 204
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; ExaSearchBot/1.0; +https://crawler.exa.ai/)'
+assert_code 'bot Radar lists without patterns passes' 204
+
 request_decision GET '/lib/MI3J6SZH' 'text/html' 'Googlebot/2.1'
 assert_code 'recognized search crawler passes' 204
 
