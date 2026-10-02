@@ -6,7 +6,6 @@ import {
 	Cancel01Icon,
 	FilterIcon,
 	ListViewIcon,
-	Tick01Icon,
 } from "@hugeicons/core-free-icons";
 import {
 	Accordion,
@@ -240,22 +239,9 @@ function FacetPicker({
 												startContent={item.startContent}
 												aria-label={item.label}
 												key={item.key}
-												classNames={{ title: "min-w-0 w-full" }}
+												classNames={{ title: "min-w-0 w-full", selectedIcon: "hidden" }}
 												style={item.style}
 												textValue={item.label}
-												selectedIcon={
-													isMultiSelect &&
-													(item.isSelected !==
-													undefined
-														? item.isSelected
-														: selectedKey.includes(
-																item.key,
-															)) ? (
-														<HugeiconsIcon
-															icon={Tick01Icon}
-														/>
-													) : undefined
-												}
 											>
 												<FacetOption
 													label={item.label}
@@ -267,6 +253,7 @@ function FacetPicker({
 													arrow={item.showArrow ? (item.isSelected ? "open" : "closed") : null}
 													note={item.note}
 													emphasis={item.emphasis}
+													selected={isMultiSelect && (item.isSelected ?? selectedKey.includes(item.key))}
 												/>
 											</AutocompleteItem>
 										);

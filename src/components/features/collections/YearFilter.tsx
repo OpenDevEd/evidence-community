@@ -80,7 +80,7 @@ function YearPicker({
 			{years.map((year) => {
 				const count = counts?.[year] ?? 0;
 				return (
-					<AutocompleteItem aria-label={year} key={year} textValue={year} classNames={{ title: "min-w-0 w-full" }}>
+					<AutocompleteItem aria-label={year} key={year} textValue={year} classNames={{ title: "min-w-0 w-full", selectedIcon: "hidden" }}>
 						<FacetOption
 							label={year}
 							count={counts ? count : null}
@@ -89,6 +89,7 @@ function YearPicker({
 							shareValue={null}
 							arrow={null}
 							arrowSlot={false}
+							selected={year === selectedKey}
 						/>
 					</AutocompleteItem>
 				);

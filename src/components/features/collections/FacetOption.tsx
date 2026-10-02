@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormatter } from "next-intl";
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { twMerge } from "@/lib/tw-merge";
@@ -24,10 +24,20 @@ export function ShareRing({ share }: { share: number }) {
  * An option with its figures at a glance. A heading with a count (a topic domain) reads as a tree's section does: a
  * ring for its share, then its name and figures. Other options show a bar against the largest option under them. The
  * chevron of an option that opens sits at the end, in a slot every option keeps when any can open, so counts line up.
+ * A chosen option drops its figures for a tick; the dropdowns hide the list's own tick slot, so no option keeps room
+ * for one.
  */
-export function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false }: { label: string; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean }) {
+export function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false, selected = false }: { label: string; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean; /** A chosen option is its name and a tick, nothing else. */ selected?: boolean }) {
 	const format = useFormatter();
 	const heading = emphasis && count !== null;
+	if (selected) {
+		return (
+			<span className="flex w-full min-w-0 items-center gap-2 text-black dark:text-white">
+				<TruncatedText text={label} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
+				<HugeiconsIcon icon={Tick01Icon} aria-hidden className="size-4 shrink-0 text-accent" />
+			</span>
+		);
+	}
 	return (
 		// Measured against its own width: a narrow option, such as one of the From and To year pickers, leaves the share out.
 		<span className="@container flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
