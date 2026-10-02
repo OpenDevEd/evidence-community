@@ -539,8 +539,12 @@ function published(journey: NonNullable<HomeData["journey"]>): Happening {
 function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData | null; cover?: string; copy?: ListItem }) {
 	const handOff = use(HandOff);
 	const journey = data?.journey ?? null;
-	const dated = steps.some((step) => happened(step, data).when);
-	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${journey ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
+	// Until the figures arrive, a review step counts as dated and a followed publication as likely, so both keep their space.
+	const dated = steps.some((step) => (data ? happened(step, data).when : step.type === "arrival" || step.type === "publication"));
+	const covered = journey !== null || !data;
+	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
+	// The line keeps its place on the cover: a row of dates above the line moves the cover down with the line.
+	const coverPlace = `self-start ${dated ? "lg:mt-9" : ""}`;
 	const timeline = (
 		<ol className={`relative grid gap-x-10 gap-y-10 lg:gap-y-0 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
 			<span aria-hidden className={`${track} bg-[rgb(var(--ink-rgb)/0.18)]`} />
@@ -548,20 +552,25 @@ function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData 
 			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} data={data} dated={dated} last={index === steps.length - 1} />)}
 		</ol>
 	);
-	if (!journey) return timeline;
+	if (!covered) return timeline;
 	return (
 		<div className="grid gap-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-16">
 			{/* The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing
 			    over it as it comes into view; it turns to face the reader under the pointer. */}
-			<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className="group relative z-10 block max-w-[12rem] self-start outline-offset-4 [perspective:1100px]">
-				<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-					<PdfCover src={cover} alt="" width={192} />
-					{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
-					<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-						<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
-					</motion.span>
-				</span>
-			</Link>
+			{journey ? (
+				<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className={`group relative z-10 block max-w-[12rem] outline-offset-4 [perspective:1100px] ${coverPlace}`}>
+					<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+						<PdfCover src={cover} alt="" width={192} />
+						{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
+						<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+							<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
+						</motion.span>
+					</span>
+				</Link>
+			) : (
+				// The cover's place while the figures load, so the steps do not narrow when it arrives.
+				<span aria-hidden className={`block aspect-[3/4] w-full max-w-[12rem] ${coverPlace}`} />
+			)}
 			{timeline}
 		</div>
 	);
