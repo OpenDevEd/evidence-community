@@ -582,8 +582,8 @@ function TopicFilter({
 		<FacetPicker
 			fixedHeight
 			total={total}
-			label="Topics"
-			placeholder="Select topics"
+			label={t("topics")}
+			placeholder={t("selectTopics")}
 			selectedKey={selected}
 			list={shown.map(({ node, depth }) => row(node, depth))}
 			searchList={shown.map(({ node }) => row(node, null))}

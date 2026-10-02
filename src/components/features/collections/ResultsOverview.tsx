@@ -435,7 +435,7 @@ function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCoun
 		<>
 			<p className="flex items-baseline gap-2">
 				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{authorCountLabel(format, authorCount)}</span>
-				<span className={`text-sm ${MUTED}`}>{t("authorsInResults")}</span>
+				<span className={`text-sm ${MUTED}`}>{t("authorsInResults", { count: authorCount ?? 0 })}</span>
 			</p>
 			<span aria-hidden className="flex h-14 items-end gap-[3px]">
 				{axis.map((year, index) => (
