@@ -488,7 +488,7 @@ const HAPPENINGS: Record<StepType, (step: Step, data: Figures | null) => Happeni
 	arrival: (_, data) => (data?.journey ? { when: data.journey.submittedAt, body: arrived(data.journey) } : {}),
 	publication: (_, data) => (data?.journey ? published(data.journey) : {}),
 	search: (_, data) => ({ figure: searched(data?.pipeline) }),
-	sync: (_, data) => ({ figure: counted(data?.pipeline?.added, "new records in the last 30 days") }),
+	sync: (_, data) => ({ figure: counted(data?.pipeline?.added, "new in the last 30 days") }),
 	duplicates: (_, data) => ({ figure: counted(data?.pipeline?.merged, "repeated records merged") }),
 	fulltext: (_, data) => ({ figure: counted(data?.attachments?.withPdf, "records with full text") }),
 	text: (step) => ({ figure: step.figure }),
@@ -544,7 +544,7 @@ function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData 
 	// Beside a cover the line always crosses it below its top edge, at the height a row of dates puts it, whether or
 	// not any step has a date.
 	const dated = covered || steps.some((step) => happened(step, data).when);
-	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
+	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-40" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
 	const coverPlace = "self-start";
 	const timeline = (
 		<ol className={`relative grid gap-x-10 gap-y-10 lg:gap-y-0 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
@@ -584,34 +584,32 @@ function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData 
 function TimelineStep({ step, data, dated, last }: { step: Step; data: HomeData | null; dated: boolean; last: boolean }) {
 	const { when, body, figure, loading } = shown(step, data);
 	return (
-		<li className={`relative pl-10 lg:grid lg:grid-rows-subgrid lg:pl-0 ${dated ? "lg:row-span-5" : "lg:row-span-4"}`}>
+		<li className="relative pl-10 lg:pl-0">
 			{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
 			<span aria-hidden className={`absolute left-[7px] top-4 w-0.5 bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
 			{/* On wide screens the dates share one row above the track, so every node sits on the line. */}
 			{dated ? <StepDate when={when} /> : null}
 			<span aria-hidden className={`absolute left-0 top-1 block size-4 rounded-full border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)] lg:relative lg:left-auto lg:top-auto ${dated ? "lg:mt-3" : ""}`} />
 			<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
-			<StepOutcome figure={figure} body={body} hidden={loading} />
-			<div>{step.text ? <p className="mt-3 text-sm leading-6 opacity-75">{step.text}</p> : null}</div>
+			<div aria-hidden={loading || undefined} className={loading ? "invisible" : ""}>
+				{figure ? <p className="mt-4 font-heading text-3xl font-semibold leading-none tracking-tight tabular-nums xl:text-4xl">{figure.value}</p> : null}
+			</div>
+			{/* What the figure counts runs straight into the step's words, so a label that wraps moves only its own column. */}
+			<div>
+				<StepOutcome label={figure?.label} body={figure ? undefined : body} hidden={loading} />
+				{step.text ? <p className="mt-2 text-sm leading-6 opacity-75">{step.text}</p> : null}
+			</div>
 		</li>
 	);
 }
 
-/** A step's figure, or what happened to the followed publication; its row is kept even when empty. */
-function StepOutcome({ figure, body, hidden }: { figure?: StepFigureValue; body?: React.ReactNode; hidden: boolean }) {
+/** What a step's figure counts, or what happened to the followed publication. */
+function StepOutcome({ label, body, hidden }: { label?: string; body?: React.ReactNode; hidden: boolean }) {
+	if (!label && !body) return null;
 	return (
-		<div aria-hidden={hidden || undefined} className={hidden ? "invisible" : ""}>
-			{figure ? <StepFigure figure={figure} /> : body ? <div className="mt-3 text-base leading-7">{body}</div> : null}
+		<div aria-hidden={hidden || undefined} className={`text-base ${label ? "mt-1.5 leading-6" : "mt-3 leading-7"} ${hidden ? "invisible" : ""}`}>
+			{label ?? body}
 		</div>
-	);
-}
-
-function StepFigure({ figure }: { figure: StepFigureValue }) {
-	return (
-		<p className="mt-4 flex flex-col gap-1.5">
-			<span className="font-heading text-4xl font-semibold leading-none tracking-tight tabular-nums">{figure.value}</span>
-			<span className="text-base leading-6">{figure.label}</span>
-		</p>
 	);
 }
 
