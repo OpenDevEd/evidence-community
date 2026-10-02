@@ -41,6 +41,12 @@ entry points are patched, along with their type declarations.
 The existing Select disabled-button fix and FreeSoloPopover exit cleanup remain.
 The old Popover accessibility-hiding workaround is superseded by upstream's
 removal of the redundant effect.
+Autocomplete keeps focus on the selected option as hierarchical filters expand,
+and falls back to the first enabled option only when the active option is gone.
+This retains first-match selection while searching. The regression check is
+`tests/unit/autocomplete-focus.test.tsx`.
+Non-virtualized lists also use their actual scroll container for keyboard focus,
+so moving through long results scrolls the dropdown instead of the page.
 
 `tests/e2e/admin.spec.ts` covers tooltip cleanup, nested selects, adjacent
 popovers, dropdown-to-dialog transitions, Tabs inside dialogs, and touch input
