@@ -313,21 +313,22 @@ function ShareRing({ share }: { share: number }) {
 }
 
 /**
- * A section of a tree in one line: a ring filled to its share of the results, its name, and its share and count. A
- * narrow sidebar leaves the share's figure out and keeps the ring.
+ * A section of a tree: a ring filled to its share of the results, its name, and its share and count. A long name
+ * wraps, with the ring and figures on its first line; a narrow sidebar leaves the share's figure out and keeps the ring.
  */
 function SectionTitle({ name, count, total, childCount, childNoun }: { name: string; count: number; total?: number; childCount: number; childNoun: [string, string] }) {
 	const format = useFormatter();
 	return (
 		<span className="@container block w-full min-w-0">
-			<span className="flex w-full min-w-0 items-center gap-3">
-				{total ? <ShareRing share={count / total} /> : null}
-				<TruncatedText text={name} className="min-w-0 flex-1" />
+			{/* Each mark sits on the name's first line (2xl: a 32px line). */}
+			<span className="flex w-full min-w-0 items-start gap-3">
+				{total ? <span className="mt-1.5 flex"><ShareRing share={count / total} /></span> : null}
+				<span className="min-w-0 flex-1 break-words">{name}</span>
 				<span className="sr-only">
 					{format.number(childCount)} {childCount === 1 ? childNoun[0] : childNoun[1]}
 				</span>
-				{total ? <span className="hidden shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60 @[20rem]:block">{shareOf(format, count, total)}</span> : null}
-				<span className="shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
+				{total ? <span className="mt-2.5 hidden shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60 @[20rem]:block">{shareOf(format, count, total)}</span> : null}
+				<span className="mt-1.5 shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
 			</span>
 		</span>
 	);
