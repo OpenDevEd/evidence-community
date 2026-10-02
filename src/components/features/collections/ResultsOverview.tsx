@@ -422,7 +422,7 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 					return (
 						<li key={name}>
 							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} onPointerEnter={() => setFocused(name)} onFocus={() => setFocused(name)} className={twMerge("flex h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", focused === name && "bg-black/5 dark:bg-white/5")}>
-								<span aria-hidden className={twMerge("flex size-9 shrink-0 items-center justify-center rounded-full font-heading text-sm font-semibold transition-colors", chosen || focused === name ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80")}>
+								<span aria-hidden className={twMerge("hidden size-9 shrink-0 items-center justify-center rounded-full font-heading @[24rem]:flex text-sm font-semibold transition-colors", chosen || focused === name ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80")}>
 									{initialsOf(name)}
 								</span>
 								<span className="flex min-w-0 flex-1 flex-col">
