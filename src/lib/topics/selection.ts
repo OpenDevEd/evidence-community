@@ -53,3 +53,22 @@ export function toggleTopicSelection(
 
 	return [...new Set([...selected, ...topicAncestry(id, byId)])];
 }
+
+/**
+ * A domain stays chosen only while something under it is: the topic tree shows a domain as its section's heading, not
+ * as a box, so a domain left behind on its own would filter the results with no way to see or clear it. Topics the tree
+ * doesn't know are kept.
+ */
+export function withoutBareRoots(
+	selected: readonly string[],
+	nodes: readonly TopicSelectionNode[],
+) {
+	const parents = new Map(nodes.map((node) => [node.id, node.parent]));
+	const rootOf = (id: string): string => {
+		const parent = parents.get(id);
+		return parent ? rootOf(parent) : id;
+	};
+	const isRoot = (id: string) => parents.get(id) === null;
+	const kept = new Set(selected.filter((id) => !isRoot(id)).map(rootOf));
+	return selected.filter((id) => !isRoot(id) || kept.has(id));
+}

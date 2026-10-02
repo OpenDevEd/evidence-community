@@ -520,7 +520,6 @@ function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props:
 
 /** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
 export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
-	const { search } = useLibraryConfig();
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
 		null,
 	);
@@ -567,14 +566,11 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			if (props.queryParams.sort) {
 				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
 			}
-			if (props.queryParams.scope) {
-				props.handleScopeChange(new Set([search.defaultScope]));
-			}
 			if (props.queryParams.page) {
 				props.handlePageChange(1);
 			}
 		}
-	}, [props.queryParams.country, search.defaultScope]);
+	}, [props.queryParams.country]);
 
 	return (
 		<main

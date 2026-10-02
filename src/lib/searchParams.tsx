@@ -5,6 +5,7 @@ import {
 	parseAsString,
 	parseAsInteger,
 	createSerializer,
+	type inferParserType,
 } from "nuqs/server";
 
 export const searchParamsLoader = {
@@ -36,6 +37,9 @@ export const searchParamsLoader = {
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
+	type: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+		scroll: true,
+	}),
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
 };
@@ -43,3 +47,11 @@ export const searchParamsLoader = {
 export const serializeSearchParams = createSerializer(searchParamsLoader);
 
 export const loadSearchParams = createLoader(searchParamsLoader);
+
+type SearchParams = inferParserType<typeof searchParamsLoader>;
+const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author", "collections", "topics", "type"] as const;
+
+/** The params that decide which results a search returns, so a cache keyed on them ignores page, order and where the reader came from. */
+export function resultParams(params: SearchParams) {
+	return Object.fromEntries(RESULT_PARAMS.map((key) => [key, params[key]])) as Pick<SearchParams, (typeof RESULT_PARAMS)[number]>;
+}

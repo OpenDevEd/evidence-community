@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { twMerge } from "@/lib/tw-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
@@ -14,47 +14,56 @@ import { FacetDistribution } from "meilisearch";
 import { useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
 
+/** Whether a section's list is opened past its collapsed height, kept for the visit so it stays open as the reader moves around. */
+function useSeeMore(key: string) {
+	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
+	const expanded: boolean = globalExpanded[key] ?? false;
+	const setExpanded = (value: boolean) => setGlobalExpanded((current: Record<string, boolean>) => ({ ...current, [key]: value }));
+	return [expanded, setExpanded] as const;
+}
+
+/**
+ * Whether a list is taller than its collapsed height, and whether a change to that should fade. Measured before the
+ * first paint, so a section opening shows its See more and fade at once rather than adding them after; only later
+ * changes, such as a filter shortening the list, fade. The observer follows the list's height.
+ */
+function useListOverflow(ref: React.RefObject<HTMLDivElement | null>, key: string) {
+	const [overflow, setOverflow] = useState({ shown: false, fade: false });
+	useLayoutEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		setOverflow({ shown: element.scrollHeight > MAX_COLLAPSED_HEIGHT, fade: false });
+		const observer = new ResizeObserver(() => {
+			const shown = element.scrollHeight > MAX_COLLAPSED_HEIGHT;
+			setOverflow((current) => (current.shown === shown ? current : { shown, fade: true }));
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, [ref, key]);
+	return overflow;
+}
+
 export default function CollectionCategory({
 	collection,
 	hierarchy,
 	selectedCollections,
 	handleCheckboxChange,
 	facetDistribution,
+	total,
 }: {
 	collection: Collection;
 	hierarchy: Collection[];
 	selectedCollections: string[];
 	handleCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
+	total?: number;
 }) {
 	const t = useTranslations("ui");
 	const ref = useRef<HTMLDivElement>(null);
-	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
-	const expanded = globalExpanded[collection.key] ?? false;
-	const setExpanded = (value: boolean | ((previous: boolean) => boolean)) => {
-		setGlobalExpanded((current: Record<string, boolean>) => {
-			const previous = current[collection.key] ?? false;
-			return {
-				...current,
-				[collection.key]:
-					typeof value === "boolean" ? value : value(previous),
-			};
-		});
-	};
-	const [hasOverflow, setHasOverflow] = useState(false);
+	const [expanded, setExpanded] = useSeeMore(collection.key);
+	const overflow = useListOverflow(ref, collection.key);
+	const hasOverflow = overflow.shown;
 
-	useEffect(() => {
-		const element = ref.current;
-		if (!element) return;
-
-		const observer = new ResizeObserver(() => {
-			setHasOverflow(element.scrollHeight > MAX_COLLAPSED_HEIGHT);
-		});
-		observer.observe(element);
-
-		return () => observer.disconnect();
-	}, [collection.key]);
-	
 	return (
 		<div className="relative">
 			<div
@@ -74,6 +83,7 @@ export default function CollectionCategory({
 					selectedCollections={selectedCollections}
 					onCheckboxChange={handleCheckboxChange}
 					facetDistribution={facetDistribution}
+					total={total}
 				/>
 			</div>
 			{hasOverflow && (
@@ -87,7 +97,7 @@ export default function CollectionCategory({
 			<AnimatePresence mode="wait" initial={false}>
 				{hasOverflow && (
 					<motion.div
-						initial={{ opacity: 0 }}
+						initial={overflow.fade ? { opacity: 0 } : false}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
 						className={twMerge(

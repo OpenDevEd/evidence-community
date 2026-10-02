@@ -5,7 +5,7 @@ import { CompassIcon, GridViewIcon, HelpCircleIcon, ListViewIcon } from "@hugeic
 import { SkipLink } from "@/components/layout/SkipLink";
 
 import { Button } from "@/components/nextui/Button";
-import CollectionsList from "@/components/features/collections/CollectionsList";
+import CollectionsList, { LibraryHighlightsSlot } from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
@@ -480,7 +480,7 @@ function MainContent() {
 	);
 }
 
-export default function EvidenceLibrary() {
+export default function EvidenceLibrary({ highlights }: { highlights?: ReactNode }) {
 	const { engaged } = useInlineChatLayout();
 	const { theme } = useLibraryConfig();
 	return (
@@ -495,7 +495,9 @@ export default function EvidenceLibrary() {
 			)}
 		>
 			<div className="flex gap-[var(--library-gap)] [--library-gap:2rem] xl:[--library-gap:2.5rem] flex-col lg:flex-row lg:[container-type:inline-size]">
-				<MainContent />
+				<LibraryHighlightsSlot value={highlights}>
+					<MainContent />
+				</LibraryHighlightsSlot>
 			</div>
 		</PageContainer>
 	);

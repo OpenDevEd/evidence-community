@@ -6,7 +6,6 @@ import {
 	Cancel01Icon,
 	FilterIcon,
 	ListViewIcon,
-	Tick01Icon,
 } from "@hugeicons/core-free-icons";
 import {
 	Accordion,
@@ -24,11 +23,11 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
-import { Fragment, useContext, useMemo, useState } from "react";
+import { createContext, Fragment, type ReactNode, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs";
@@ -56,8 +55,11 @@ import {
 import { YearFilter } from "./YearFilter";
 import { useTopicTree } from "@/lib/topics/client";
 import type { TopicTreeNode } from "@/lib/topics/contract";
-import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
+import { topicAncestry, toggleTopicSelection, withoutBareRoots } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { useFiltersContext } from "@/context/FiltersProvider";
+import { ResultsOverview, shareOf, SIDEBAR_GREY, useFacetTotal } from "./ResultsOverview";
+import { FacetOption, ShareRing } from "./FacetOption";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -72,6 +74,7 @@ function searchedFacetItems(
 	);
 }
 
+/** An option with its figures at a glance: its count and share of the results, and a bar against the largest option. */
 function FacetPicker({
 	label,
 	placeholder,
@@ -82,6 +85,7 @@ function FacetPicker({
 	facetName,
 	searchList,
 	fixedHeight = false,
+	total,
 }: {
 	label: string;
 	placeholder: string;
@@ -92,7 +96,10 @@ function FacetPicker({
 	facetName?: string;
 	searchList?: FacetListItem[];
 	fixedHeight?: boolean;
+	/** How many results there are, for each option's share of them. */
+	total?: number;
 }) {
+	const format = useFormatter();
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
 	const displayedList = searchedFacetItems(list, searchList, search);
@@ -109,6 +116,11 @@ function FacetPicker({
 	);
 
 	const allSectionNames = Object.keys(groupedBySection);
+	const countOf = (item: FacetListItem) =>
+		item.count ?? (facetName ? facetDistribution?.[facetName]?.[item.key] ?? 0 : 0);
+	// Each option's bar is measured against the largest option on show; headings carry a ring instead.
+	const largest = Math.max(1, ...displayedList.filter((item) => !item.hide && !item.hideCount && !item.emphasis).map(countOf));
+	const arrowSlot = displayedList.some((item) => item.showArrow);
 
 	return (
 		<div className="w-full flex flex-col gap-2" onKeyDownCapture={(event) => {
@@ -223,68 +235,30 @@ function FacetPicker({
 									.map((itemAny: any) => {
 										const item = itemAny as FacetListItem;
 										if (item.hide) return null;
+										// An option with no results is left out, unless it is chosen and so needs a way back.
+										const chosen = isMultiSelect && (item.isSelected ?? selectedKey.includes(item.key));
+										if (!chosen && (item.hideCount ? item.noteCount === 0 : countOf(item) === 0)) return null;
 										return (
 											<AutocompleteItem
 												startContent={item.startContent}
 												aria-label={item.label}
 												key={item.key}
-												classNames={{ title: "min-w-0" }}
+												classNames={{ title: "min-w-0 w-full", selectedIcon: "hidden" }}
 												style={item.style}
 												textValue={item.label}
-												selectedIcon={
-													isMultiSelect &&
-													(item.isSelected !==
-													undefined
-														? item.isSelected
-														: selectedKey.includes(
-																item.key,
-															)) ? (
-														<HugeiconsIcon
-															icon={Tick01Icon}
-														/>
-													) : undefined
-												}
 											>
-												<span className="text-black dark:text-white flex min-w-0 items-center gap-2">
-													<span
-														className={twMerge(
-															"text-black/60 dark:text-white/60",
-															item.hideCount &&
-																"hidden",
-														)}
-													>
-														{`(${
-															item.count !==
-															undefined
-																? item.count
-																: facetDistribution &&
-																	  facetName
-																	? facetDistribution?.[
-																			facetName!
-																		]?.[
-																			item
-																				.key
-																		] || 0
-																	: "0"
-														})`}
-													</span>
-													<TruncatedText
-														text={item.label}
-														className="leading-5"
-													/>
-													{item.showArrow && (
-														<HugeiconsIcon
-															icon={
-																ArrowDown01Icon
-															}
-															className={twMerge(
-																"size-4 shrink-0",
-																!item.isSelected &&
-																	"-rotate-90 rtl:rotate-90",
-															)}
-														/>
-													)}
-												</span>
+												<FacetOption
+													label={item.label}
+													count={item.hideCount ? null : countOf(item)}
+													largest={largest}
+													share={!item.hideCount && total ? shareOf(format, countOf(item), total) : null}
+													shareValue={!item.hideCount && total ? countOf(item) / total : null}
+													arrowSlot={arrowSlot}
+													arrow={item.showArrow ? (item.isSelected ? "open" : "closed") : null}
+													note={item.note}
+													emphasis={item.emphasis}
+													selected={chosen}
+												/>
 											</AutocompleteItem>
 										);
 									})
@@ -298,6 +272,32 @@ function FacetPicker({
 	);
 }
 
+/**
+ * A section of a tree: a ring filled to its share of the results, its name, and its share and count. A long name
+ * wraps, with the ring and figures on its first line; a narrow sidebar leaves the share's figure out and keeps the ring.
+ */
+function SectionTitle({ name, count, total, childCount, childCountKey }: { name: string; count: number; total?: number; childCount: number; childCountKey: ChildCountKey }) {
+	const format = useFormatter();
+	const t = useTranslations("sidebar");
+	return (
+		<span className="@container block w-full min-w-0">
+			{/* Each mark sits on the name's first line (2xl: a 32px line). */}
+			<span className="flex w-full min-w-0 items-start gap-3">
+				{total ? <span className="mt-1.5 flex shrink-0"><ShareRing share={count / total} /></span> : null}
+				<span className="min-w-0 flex-1 break-words">{name}</span>
+				<span className="sr-only">
+					{t(childCountKey, { count: childCount })}
+				</span>
+				{total ? <span className="mt-2.5 hidden shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60 @[20rem]:block">{shareOf(format, count, total)}</span> : null}
+				<span className="mt-1.5 shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
+			</span>
+		</span>
+	);
+}
+
+/** How a section says how many of its children have results: collections, or a topic domain's fields. */
+type ChildCountKey = "collectionCount" | "fieldCount";
+
 export function InnerCollectionList({
 	data,
 	facetDistribution,
@@ -305,13 +305,19 @@ export function InnerCollectionList({
 	handleCountrySelect,
 	selectedCollections,
 	hierarchy,
+	total,
+	childCountKey = "collectionCount",
 }: {
+	/** How a section says how many of its children have results. */
+	childCountKey?: ChildCountKey;
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
 	handleCheckboxChange: (key: string) => void;
 	handleCountrySelect: (country: string) => void;
 	selectedCollections: string[];
 	hierarchy: Collection[];
+	/** How many results there are, for each row's share of them. */
+	total?: number;
 }) {
 	const { filters } = useLibraryConfig();
 	const defaultExpanded = filters.collectionsExpanded;
@@ -344,6 +350,8 @@ export function InnerCollectionList({
 		);
 	}, [hierarchy, data, filteredFacetDistribution]);
 
+	const sectionCount = (key: string) => filteredFacetDistribution.collectionsAncestry[key] ?? 0;
+
 	return displayedCollections.length > 0 ? (
 		<Accordion
 			defaultSelectedKeys={
@@ -369,9 +377,12 @@ export function InnerCollectionList({
 			variant="shadow"
 			className="bg-card_light dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
 			itemClasses={{
-				title: "text-black/80 dark:text-white/80 font-base text-2xl",
-				indicator: "text-black/80 dark:text-white/80",
-				trigger: "p-0",
+				// The title takes the row's width and no more, so a long name truncates instead of pushing the figures out.
+				titleWrapper: "min-w-0 flex-1",
+				title: "w-full min-w-0 text-black/80 dark:text-white/80 font-base text-2xl",
+				// The chevron sits on the name's first line with the figures, however many lines the name takes.
+				indicator: "self-start mt-2 text-black/80 dark:text-white/80",
+				trigger: "p-0 items-start",
 				base: "mb-4 last:mb-0",
 				content: "py-0 pt-2",
 			}}
@@ -380,7 +391,16 @@ export function InnerCollectionList({
 			{displayedCollections.map((collection) => (
 				<AccordionItem
 					key={collection.key}
-					title={collection.title || collection.name}
+					aria-label={collection.title || collection.name || undefined}
+					title={
+						<SectionTitle
+							name={collection.title || collection.name || collection.key}
+							count={sectionCount(collection.key)}
+							total={total}
+							childCount={(collection.children ?? []).filter((child) => sectionCount(child.key) > 0).length}
+							childCountKey={childCountKey}
+						/>
+					}
 				>
 					<CollectionCategory
 						collection={collection}
@@ -388,17 +408,27 @@ export function InnerCollectionList({
 						selectedCollections={selectedCollections}
 						handleCheckboxChange={handleCheckboxChange}
 						facetDistribution={filteredFacetDistribution}
+						total={total}
 					/>
 				</AccordionItem>
 			))}
 		</Accordion>
 	) : (
-		<div className="text-lg bg-card_light dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
+		<TreeNotice>
 			<HugeiconsIcon
 				icon={Cancel01Icon}
 				className="stroke-current size-6"
 			/>
 			<span>{t("noFacetsFound")}</span>
+		</TreeNotice>
+	);
+}
+
+/** A tree's place when it has nothing to show, in a card of its own. */
+function TreeNotice({ children }: { children: React.ReactNode }) {
+	return (
+		<div className="text-lg bg-card_light dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
+			{children}
 		</div>
 	);
 }
@@ -452,12 +482,9 @@ function CountryParser(
 		style: {
 			paddingLeft: `${numberOfParts * 1.5 + 0.5}rem`,
 		},
-		hideCount:
-			ancestry.length <= 2
-				? true
-				: queryParamValue && Array.isArray(queryParamValue)
-					? queryParamValue.includes(country)
-					: false,
+		// A region's count would add up its countries, counting a publication about two of them twice. A chosen country
+		// keeps its count: the option hides its figures itself, and keeps their room.
+		hideCount: ancestry.length <= 2,
 		hide: !isParentSelected,
 		query: ancestry,
 		onSelectionChange,
@@ -486,12 +513,15 @@ function TopicFilter({
 	counts,
 	onChange,
 	selected,
+	total,
 }: {
+	total: number;
 	counts: Record<string, number> | undefined;
 	onChange: (topics: string[]) => void;
 	selected: string[];
 }) {
 	const tree = useTopicTree();
+	const t = useTranslations("sidebar");
 
 	if (tree.error) {
 		return (
@@ -499,13 +529,13 @@ function TopicFilter({
 				role="status"
 				className="flex items-center gap-2 text-sm text-black/55 dark:text-white/55"
 			>
-				<span>Could not load topics.</span>
+				<span>{t("topicsFailed")}</span>
 				<Button
 					size="xs"
 					variant="transparent"
 					onPress={() => void tree.mutate()}
 				>
-					Try again
+					{t("tryAgain")}
 				</Button>
 			</div>
 		);
@@ -526,9 +556,14 @@ function TopicFilter({
 		})
 		.sort((left, right) => left.path.localeCompare(right.path));
 	const parents = new Set(shown.map(({ node }) => node.parent));
+	// A domain heads the list as it heads a section of the tree, with how many of its fields have results.
+	const fieldsOf = (id: string) => shown.filter(({ node }) => node.parent === id).length;
 	const row = (node: TopicTreeNode, depth: number | null): FacetListItem => ({
 		key: node.id,
 		label: node.name,
+		...(depth !== null && node.parent === null
+			? { emphasis: true, note: t("fieldCount", { count: fieldsOf(node.id) }) }
+			: {}),
 		count: counts?.[node.id],
 		showArrow: depth !== null && parents.has(node.id),
 		style:
@@ -546,11 +581,70 @@ function TopicFilter({
 	return (
 		<FacetPicker
 			fixedHeight
-			label="Topics"
-			placeholder="Select topics"
+			total={total}
+			label={t("topics")}
+			placeholder={t("selectTopics")}
 			selectedKey={selected}
 			list={shown.map(({ node, depth }) => row(node, depth))}
 			searchList={shown.map(({ node }) => row(node, null))}
+		/>
+	);
+}
+
+/**
+ * Topics in the collections' place, for a library without collections: each domain is a section and its fields,
+ * subfields and topics open under it, through the same tree and counts the collections use.
+ */
+function TopicTree({
+	counts,
+	onChange,
+	selected,
+	total,
+}: {
+	total: number;
+	counts: Record<string, number> | undefined;
+	onChange: (topics: string[]) => void;
+	selected: string[];
+}) {
+	const tree = useTopicTree();
+	const nodes = useMemo(() => tree.data?.nodes ?? [], [tree.data]);
+	const { hierarchy, collections } = useMemo(() => {
+		const children = new Map<string | null, TopicTreeNode[]>();
+		for (const node of nodes) children.set(node.parent, [...(children.get(node.parent) ?? []), node]);
+		const flat: Collection[] = [];
+		// Shaped as the collection tree the accordion reads; topics have no other collection fields.
+		const toCollection = (node: TopicTreeNode, level: number, root: string): Collection => {
+			const shaped = {
+				key: node.id,
+				name: node.name,
+				parentCollection: node.parent,
+				level,
+				originalFacet: root,
+				children: (children.get(node.id) ?? []).map((child) => toCollection(child, level + 1, root)),
+			} as unknown as Collection;
+			flat.push(shaped);
+			return shaped;
+		};
+		return {
+			hierarchy: (children.get(null) ?? []).map((root) => toCollection(root, 0, root.id)),
+			collections: flat,
+		};
+	}, [nodes]);
+
+	if (tree.error) return <TopicsFailed onRetry={() => void tree.mutate()} />;
+	// Nothing until the catalog arrives, rather than a moment of "no topics".
+	if (!tree.data) return null;
+	return (
+		<InnerCollectionList
+			data={{ collections }}
+			facetDistribution={{ collectionsAncestry: counts ?? {} }}
+			handleCheckboxChange={(id) => onChange(withoutBareRoots(toggleTopicSelection(selected, id, nodes), nodes))}
+			handleCountrySelect={() => undefined}
+			// A domain is its section's heading, never a box inside it, though choosing a field chooses its domain too.
+			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
+			hierarchy={hierarchy}
+			total={total}
+			childCountKey="fieldCount"
 		/>
 	);
 }
@@ -561,15 +655,22 @@ function FiltersList({
 	handleInstitutionSelect,
 	handleTopicsChange,
 	facetDistribution,
+	topicsAsTree,
 }: {
 	queryParams: inferParserType<typeof searchParamsLoader>;
 	handleCountrySelect: (country: string) => void;
 	handleInstitutionSelect: (institution: string) => void;
 	handleTopicsChange: (topics: string[]) => void;
 	facetDistribution: FacetDistribution | undefined;
+	/** The topics are a tree below the filters instead of a picker among them. */
+	topicsAsTree: boolean;
 }) {
 	const { filters, topics } = useLibraryConfig();
+	const topicPicker = topics.enabled && !topicsAsTree;
 	const isInstitutionEnabled = filters.institution.mode !== "hidden";
+	const total = useFacetTotal("*");
+	// Topics are counted without the topic filter, so their shares are out of the results without it.
+	const topicTotal = useFacetTotal("topicAncestors");
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
 	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
@@ -577,10 +678,11 @@ function FiltersList({
 	const enabledCount = [
 		isInstitutionEnabled,
 		isCountryFocusEnabled,
-		topics.enabled,
+		topicPicker,
 	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
+	const sidebar = useTranslations("sidebar");
 
 	const [institutions] = useFacetList(
 		facetDistribution!,
@@ -610,6 +712,19 @@ function FiltersList({
 			),
 		(a, b) => a.localeCompare(b),
 	);
+	// A region's count would add up its countries, counting a publication about two of them twice, so a region says
+	// how many of its countries have results instead.
+	const countriesWithNotes = useMemo(
+		() =>
+			countries.map((item) => {
+				if (!item.hideCount || item.key.split(" > ").length > 2) return item;
+				const found = Object.entries(facetDistribution?.country ?? {}).filter(
+					([path, count]) => count > 0 && path.startsWith(`${item.key} > `) && /^[A-Z]{2}$/.test(path.split(" > ").pop() ?? ""),
+				).length;
+				return { ...item, note: sidebar("countryCount", { count: found }), noteCount: found, emphasis: !item.key.includes(" > ") };
+			}),
+		[countries, facetDistribution, sidebar],
+	);
 	const [countries_uncategorized] = useFacetList(
 		facetDistribution!,
 		"country_uncategorized",
@@ -629,12 +744,13 @@ function FiltersList({
 			isCountryFocusEnabled && (
 				<FacetPicker
 					key={"country-focus-filter"}
+					total={total}
 					label={t("countryFilter")}
 					placeholder={t("countryFilterDescription")}
 					selectedKey={queryParams.country}
 					onSelectionChange={handleCountrySelect}
 					facetDistribution={facetDistribution}
-					list={countries}
+					list={countriesWithNotes}
 					facetName="country"
 					searchList={countries_uncategorized.map((item) => ({
 						...item,
@@ -649,8 +765,9 @@ function FiltersList({
 		queryParams.country,
 		handleCountrySelect,
 		facetDistribution,
-		countries,
+		countriesWithNotes,
 		countries_uncategorized,
+		total,
 	]);
 
 	const institutionFilter = useMemo(() => {
@@ -658,6 +775,7 @@ function FiltersList({
 			isInstitutionEnabled && (
 				<FacetPicker
 					key="institution-filter"
+					total={total}
 					label={institutionLabel}
 					placeholder={institutionLabel}
 					selectedKey={queryParams.institution}
@@ -675,6 +793,7 @@ function FiltersList({
 		institutions,
 		isInstitutionEnabled,
 		queryParams.institution,
+		total,
 	]);
 
 	const moreFilters = useMemo(() => {
@@ -682,8 +801,9 @@ function FiltersList({
 			<>
 				{institutionFilter}
 				{countryFocusFilter}
-				{topics.enabled ? (
+				{topicPicker ? (
 					<TopicFilter
+						total={topicTotal}
 						counts={facetDistribution?.topicAncestors}
 						onChange={handleTopicsChange}
 						selected={queryParams.topics}
@@ -697,7 +817,8 @@ function FiltersList({
 		handleTopicsChange,
 		institutionFilter,
 		queryParams.topics,
-		topics.enabled,
+		topicPicker,
+		topicTotal,
 	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
@@ -788,6 +909,115 @@ function FiltersList({
 	);
 }
 
+/** The library page's highlights, rendered on the server, for both the sidebar and the Explore sheet. */
+export const LibraryHighlightsSlot = createContext<ReactNode>(null);
+
+/** The grey filter card: the year picker and the filter dropdowns. */
+function FilterCard({ facetDistribution, range, onRangeChange, queryParams, handleCountrySelect, handleInstitutionSelect, handleTopicsChange, topicsAsTree, roundFoot }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; handleCountrySelect: (country: string) => void; handleInstitutionSelect: (institution: string) => void; handleTopicsChange: (topics: string[]) => void; topicsAsTree: boolean; roundFoot: boolean }) {
+	const { filters } = useLibraryConfig();
+	const years = useMemo(() => Object.keys(facetDistribution?.year ?? {}).sort((left, right) => Number(right) - Number(left)), [facetDistribution]);
+	return (
+		<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, roundFoot && "rounded-b-2xl")}>
+			{filters.years.enabled && <YearFilter key={range} range={range} onRangeChange={onRangeChange} years={years} counts={facetDistribution?.year} />}
+			<FiltersList
+				queryParams={queryParams}
+				handleCountrySelect={handleCountrySelect}
+				handleInstitutionSelect={handleInstitutionSelect}
+				handleTopicsChange={handleTopicsChange}
+				facetDistribution={facetDistribution}
+				topicsAsTree={topicsAsTree}
+			/>
+		</section>
+	);
+}
+
+/** The collections tree, under the filter card. */
+function CollectionsTreeSection(props: Omit<React.ComponentProps<typeof InnerCollectionList>, "total">) {
+	const total = useFacetTotal("collectionsAncestry");
+	return (
+		<section className="w-full">
+			<InnerCollectionList {...props} total={total} />
+		</section>
+	);
+}
+
+/** A library's featured institution as a filter button over the filter card, when the library features one. */
+function FeaturedInstitution({ chosen, onSelect, isModal }: { chosen: string[]; onSelect: (institution: string) => void; isModal: boolean }) {
+	const t = useTranslations("ui");
+	const { filters, institutions } = useLibraryConfig();
+	if (filters.institution.mode !== "facet-with-featured-value") return null;
+	const featured = filters.institution.featuredValue;
+	if (!featured) return null;
+	const isChosen = chosen.includes(featured);
+	const logoUrl = findInstitutionWithLogo(institutions, featured)?.logoUrl;
+	return (
+		<div className={twMerge("w-full", isModal && "px-6")}>
+			<Button
+				color={isChosen ? "tertiary" : "secondary"}
+				variant={isChosen ? "solid" : "flat"}
+				onPress={() => onSelect(featured)}
+				className="w-full flex justify-start mb-4"
+				startContent={logoUrl ? <InstitutionLogo alt="" logoUrl={logoUrl} /> : undefined}
+				endContent={<HugeiconsIcon icon={FilterIcon} className="size-5 ml-auto" />}
+			>
+				{t("filterBy")} {featured}
+			</Button>
+		</div>
+	);
+}
+
+/** The topic catalog could not load: said in the tree's place, with a way to ask again, instead of an empty tree. */
+function TopicsFailed({ onRetry }: { onRetry: () => void }) {
+	const t = useTranslations("sidebar");
+	return (
+		<TreeNotice>
+			<span role="status">{t("topicsFailed")}</span>
+			<Button size="sm" onPress={onRetry}>{t("tryAgain")}</Button>
+		</TreeNotice>
+	);
+}
+
+/** The topic tree, in the collections' place, for a library without collections. */
+function TopicTreeSection({ counts, onChange, selected }: { counts: Record<string, number> | undefined; onChange: (topics: string[]) => void; selected: string[] }) {
+	const total = useFacetTotal("topicAncestors");
+	const t = useTranslations("sidebar");
+	return (
+		<section className="w-full" aria-label={t("topics")}>
+			<TopicTree total={total} counts={counts} onChange={onChange} selected={selected} />
+		</section>
+	);
+}
+
+/** The cards under the filters: what the results are made of. In the Explore sheet they run edge to edge, as the filter card does. */
+function SidebarCards({ facetDistribution, range, onRangeChange, queryParams, inExplore }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; inExplore: boolean }) {
+	const { filters } = useLibraryConfig();
+	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
+	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
+	return (
+		<div className="mt-4 flex flex-col gap-4">
+			<ResultsOverview
+				facetDistribution={facetDistribution}
+				range={range}
+				types={queryParams.type}
+				author={queryParams.author}
+				onRangeChange={onRangeChange}
+				onTypeSelect={handleTypeSelect}
+				onAuthorSelect={handleAuthorSelect}
+				showYears={filters.years.enabled}
+				showAuthors={isAuthorFilterEnabled}
+				inExplore={inExplore}
+			/>
+		</div>
+	);
+}
+
+/** The library page's highlights, rendered on the server, under everything else; the Explore sheet keeps the map and statistics buttons off its edges. */
+function HighlightsSlot({ isModal }: { isModal: boolean }) {
+	const highlights = useContext(LibraryHighlightsSlot);
+	if (!highlights) return null;
+	return <div className={twMerge("mt-4", isModal && "pb-6 [&_nav]:px-6")}>{highlights}</div>;
+}
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -817,62 +1047,8 @@ export default function CollectionsList({
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useLibraryFeature("collections");
-	const { filters, institutions: configuredInstitutions } =
-		useLibraryConfig();
-	const configuredYears = useMemo(
-		() =>
-			Object.keys(facetDistribution?.year ?? {}).sort(
-				(left, right) => Number(right) - Number(left),
-			),
-		[facetDistribution],
-	);
-	const customFilterInstitution =
-		filters.institution.mode === "facet-with-featured-value"
-			? filters.institution.featuredValue
-			: undefined;
-
-	const customFilter = useMemo(() => {
-		if (!customFilterInstitution) return null;
-		const isCustomFilterInstitutionSelected =
-			queryParams.institution.includes(customFilterInstitution || "");
-		const configuredInstitution = findInstitutionWithLogo(
-			configuredInstitutions,
-			customFilterInstitution,
-		);
-		return (
-			<Button
-				color={
-					isCustomFilterInstitutionSelected ? "tertiary" : "secondary"
-				}
-				variant={isCustomFilterInstitutionSelected ? "solid" : "flat"}
-				onPress={() => handleInstitutionSelect(customFilterInstitution)}
-				className="w-full flex justify-start mb-4"
-				startContent={
-					configuredInstitution?.logoUrl ? (
-						<InstitutionLogo
-							alt=""
-							logoUrl={configuredInstitution.logoUrl}
-						/>
-					) : undefined
-				}
-				endContent={
-					<HugeiconsIcon
-						icon={FilterIcon}
-						className="size-5 ml-auto"
-					/>
-				}
-			>
-				{t("filterBy")} {customFilterInstitution}
-			</Button>
-		);
-	}, [
-		configuredInstitutions,
-		customFilterInstitution,
-		queryParams.institution,
-		handleInstitutionSelect,
-		t,
-	]);
-
+	const { topics } = useLibraryConfig();
+	const topicsAsTree = topics.enabled && !isCollectionsEnabled;
 	return (
 		<aside
 			id="collections"
@@ -889,49 +1065,45 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:lg:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				{customFilter && (
-					<div className={twMerge("w-full", isModal && "px-6")}>
-						{customFilter}
-					</div>
-				)}
-				<section className="w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
-					{filters.years.enabled && (
-						<YearFilter
-							key={range}
-							range={range}
-							onRangeChange={handleRangeChange}
-							years={configuredYears}
-						/>
-					)}
-					<FiltersList
-						queryParams={queryParams}
-						handleCountrySelect={handleCountrySelect}
-						handleInstitutionSelect={handleInstitutionSelect}
-						handleTopicsChange={handleTopicsChange}
-						facetDistribution={facetDistribution}
-					/>
-				</section>
+				<FeaturedInstitution chosen={queryParams.institution} onSelect={handleInstitutionSelect} isModal={isModal} />
+				<FilterCard
+					facetDistribution={facetDistribution}
+					range={range}
+					onRangeChange={handleRangeChange}
+					queryParams={queryParams}
+					handleCountrySelect={handleCountrySelect}
+					handleInstitutionSelect={handleInstitutionSelect}
+					handleTopicsChange={handleTopicsChange}
+					topicsAsTree={topicsAsTree}
+					// Nothing hangs under it when there is no tree, so it rounds its own foot.
+					roundFoot={!isCollectionsEnabled && !topicsAsTree}
+				/>
 				{isCollectionsEnabled && (
-					<section className="w-full">
-						{/* <div className="p-4 pt-6 pb-0 bg-card_light dark:bg-card">
-						<Input
-							placeholder={t("searchCollections")}
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-						/>
-					</div> */}
-
-						<InnerCollectionList
-							data={data}
-							facetDistribution={facetDistribution}
-							handleCheckboxChange={handleCheckboxChange}
-							handleCountrySelect={handleCountrySelect}
-							selectedCollections={selectedCollections}
-							hierarchy={hierarchy}
-						/>
-					</section>
+					<CollectionsTreeSection
+						data={data}
+						facetDistribution={facetDistribution}
+						handleCheckboxChange={handleCheckboxChange}
+						handleCountrySelect={handleCountrySelect}
+						selectedCollections={selectedCollections}
+						hierarchy={hierarchy}
+					/>
 				)}
+				{topicsAsTree && (
+					<TopicTreeSection
+						counts={facetDistribution?.topicAncestors}
+						onChange={handleTopicsChange}
+						selected={queryParams.topics}
+					/>
+				)}
+				<SidebarCards
+					facetDistribution={facetDistribution}
+					range={range}
+					onRangeChange={handleRangeChange}
+					queryParams={queryParams}
+					inExplore={isModal}
+				/>
 			</Skeleton>
+			<HighlightsSlot isModal={isModal} />
 		</aside>
 	);
 }

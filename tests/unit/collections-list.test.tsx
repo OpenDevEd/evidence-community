@@ -12,7 +12,15 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/actions", () => ({ convertItem: vi.fn() }));
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: keyof typeof messages.ui) => messages.ui[key],
+	useFormatter: () => ({ number: (value: number) => String(value) }),
 }));
+// The sidebar always lives inside the app's filter state; these tests need only its shape.
+vi.mock("@/context/FiltersProvider", async () => {
+	const { loadSearchParams } = await import("@/lib/searchParams");
+	return {
+		useFiltersContext: () => ({ facetTotals: undefined, queryParams: loadSearchParams({}), handleTypeSelect: vi.fn(), handleAuthorSelect: vi.fn() }),
+	};
+});
 vi.mock("@/context/Providers", () => ({
 	CacheContext: createContext({ globalExpanded: {}, accordionGlobalExpanded: null }),
 }));
@@ -50,6 +58,7 @@ describe("collection choices for filtered results", () => {
 	let root: Root;
 	beforeEach(() => {
 		vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+		vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);

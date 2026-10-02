@@ -722,7 +722,8 @@ for (const profileAvailable of [true, false]) {
 				await author.click();
 				await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && url.searchParams.get("author") === name);
 				await expect(page.getByRole("link").filter({ has: page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }) })).toBeVisible();
-				const authorChip = page.getByRole("button").filter({ hasText: name });
+				// The filter's chip, by its accessible name: the top authors in the sidebar list the same name as a button.
+				const authorChip = page.getByRole("button", { name: `Author ${name}`, exact: true });
 				await authorChip.click();
 				await expect(page).toHaveURL(url => !url.searchParams.has("author"));
 				await expect(authorChip).toHaveCount(0);

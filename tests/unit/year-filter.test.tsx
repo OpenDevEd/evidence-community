@@ -6,6 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: string) => key,
+	useFormatter: () => ({ number: (value: number) => String(value) }),
+}));
+vi.mock("@/context/FiltersProvider", () => ({
+	useFiltersContext: () => ({ facetTotals: undefined }),
 }));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: () => false,

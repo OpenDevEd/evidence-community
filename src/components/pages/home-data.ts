@@ -279,3 +279,11 @@ async function latestDigests(locale: string): Promise<HomeData["digests"]> {
 	const { editions } = await listDigestEditions(await getDatabaseForConfig(config), config, locale);
 	return editions.length > 0 ? { library: config.identity.name, editions: editions.slice(0, 3) } : null;
 }
+
+/** The library's latest digests for the listing's sidebar, counted again at most once a minute. */
+export async function loadLatestDigests(locale: string): Promise<HomeData["digests"]> {
+	const config = await getLibraryConfig();
+	return staleWhileRevalidate(`digests:${config.revision}:${locale}`, 60_000, () =>
+		latestDigests(locale).catch(fallback("digests", null)),
+	);
+}

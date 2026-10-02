@@ -36,7 +36,9 @@ export function PdfCover({ src, alt, ref, onLoad, className, sizes = PAGE_SIZES,
 	const [loaded, setLoaded] = useState(false);
 	if (!src) return <TitlePage title={title} className={className} />;
 	return (
-		<Skeleton isLoaded={loaded} className="w-full rounded-xl">
+		// NextUI shows a skeleton's content once any skeleton around it has loaded, so inside another loaded one the cover
+		// would appear before its image and pop in; it stays hidden until its own image is ready, then fades in.
+		<Skeleton isLoaded={loaded} className="w-full rounded-xl" classNames={{ content: loaded ? undefined : "!opacity-0" }}>
 			<CoverImage
 				ref={(element) => {
 					// A cover the browser already holds, for example when the item page draws it again after its quick first

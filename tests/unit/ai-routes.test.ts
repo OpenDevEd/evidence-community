@@ -455,6 +455,7 @@ describe("AI routes", () => {
 			author: "",
 			collections: [],
 			topics: ["T12260"],
+			type: [],
 		};
 
 		await chat(chatRequest({ searchContext }));
@@ -495,6 +496,7 @@ describe("AI routes", () => {
 			author: "",
 			collections: [],
 			topics: [],
+			type: [],
 			readerList: { userId: "reader-amina", collectionId },
 		});
 

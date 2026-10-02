@@ -34,6 +34,9 @@ import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { itemPageAttachments } from "./attachment-visibility";
 import { getDatabaseForConfig } from "@/db";
 import { readTopicTree, resolveTopicAncestry } from "./topics/catalog";
+import { creatorFullName } from "./search-index/projection";
+import { readAuthorProfiles } from "./authors/catalog-server";
+import type { Author } from "@/app/api/item/types";
 import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
 
 /**
@@ -93,7 +96,14 @@ type SearchItemsResult = SearchCountOnlyResult & {
 
 type SearchFacetsResult = {
 	facetDistribution: FacetDistribution;
+	/**
+	 * How many results each facet's counts are out of: `*` for the filtered results, and for a facet counted without
+	 * its own filter (topics, years, item types), the results without that filter.
+	 */
+	totals: FacetTotals;
 };
+
+type FacetTotals = Record<string, number>;
 
 async function getCachedDisplayedAttributes(
 	configRevision: string,
@@ -162,6 +172,8 @@ type SearchFilterInput = {
 	institution: string[];
 	range: string | null;
 	scope: string;
+	/** Item types, any of them. */
+	type?: readonly string[];
 };
 
 /** An empty search has no relevance to sort by, so it shows the newest first. */
@@ -184,6 +196,7 @@ function buildSearchFilters({
 	institution,
 	range,
 	scope,
+	type = [],
 }: SearchFilterInput) {
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -193,6 +206,7 @@ function buildSearchFilters({
 		),
 		...createCountryFilters(country),
 		author ? meilisearchEquals("fullNames", author) : null,
+		type.length ? meilisearchIn("itemType", type) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
 		...collections.map((collection) =>
 			meilisearchEquals("collectionsAncestry", collection),
@@ -226,6 +240,7 @@ export function resolveSearchRequest(
 	const facetFilters = buildSearchFilters({
 		author: searchParams.author || "",
 		collections: searchParams.collections || [],
+		type: searchParams.type ?? [],
 		country,
 		hiddenTags: libraryConfig.content.tags.hidden,
 		institution,
@@ -418,7 +433,13 @@ export async function getPublicFacets(
 
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 
-	const [searchResults, topicResults] = await Promise.all([
+	// A chosen year range or item type still shows the other years and types, so each is counted without its own filter.
+	const ownFilters = [
+		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
+		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
+	].filter(({ facet, active }) => active && facets.includes(facet));
+
+	const [searchResults, topicResults, ...ownResults] = await Promise.all([
 		index.search(search, {
 			offset: 0, limit: 0, attributesToSearchOn, facets, filter: finalFilters,
 		}),
@@ -427,10 +448,24 @@ export async function getPublicFacets(
 				offset: 0, limit: 0, attributesToSearchOn, facets: ["topicAncestors"], filter: facetFilters,
 			})
 			: null,
+		...ownFilters.map(({ facet, without }) =>
+			index.search(search, {
+				offset: 0, limit: 0, attributesToSearchOn, facets: [facet],
+				filter: resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters,
+			}),
+		),
 	]);
-	if (topicResults?.facetDistribution) {
-		searchResults.facetDistribution = {...searchResults.facetDistribution, ...topicResults.facetDistribution};
-	}
+	const totals: FacetTotals = { "*": searchResults.estimatedTotalHits ?? 0 };
+	if (topicResults) totals.topicAncestors = topicResults.estimatedTotalHits ?? 0;
+	ownFilters.forEach(({ facet }, index) => {
+		totals[facet] = ownResults[index].estimatedTotalHits ?? 0;
+	});
+	searchResults.facetDistribution = Object.assign(
+		{},
+		searchResults.facetDistribution,
+		topicResults?.facetDistribution,
+		...ownResults.map((result) => result.facetDistribution),
+	);
 
 	return {
 		facetDistribution: publicFacetDistribution(
@@ -438,6 +473,7 @@ export async function getPublicFacets(
 			facets,
 			country,
 		),
+		totals,
 	};
 }
 
@@ -498,4 +534,108 @@ export async function getItemsPaginationMeta(
 		totalItems,
 		totalPages: Math.ceil(totalItems / limitNum),
 	};
+}
+
+/** How many people the sidebar ranks. */
+const TOP_AUTHORS = 10;
+
+export type AuthorActivity = {
+	name: string;
+	/** Their results under the search and filters. */
+	count: number;
+	/** Their results by year. */
+	years: Record<string, number>;
+	/** How many of their results each of the other top authors shares. */
+	together: Record<string, number>;
+	/** The institution most of their results name, if any does. */
+	institution: string | null;
+	/** Their photo, when one of their results links them to an author profile that has one. */
+	photo: string | null;
+};
+
+export type TopAuthors = {
+	/** How many different people the results name, up to the facet's limit of 10,000. */
+	authorCount: number;
+	authors: AuthorActivity[];
+	/** The results any of the top authors wrote, by year: a publication several of them wrote counts once. */
+	combined: Record<string, number>;
+};
+
+/**
+ * The people with the most results under a search and filters, and for each when they published, whom they share work
+ * with, their main institution and photo. Ranking them counts every name in the results, the costliest search the
+ * sidebar makes, so it runs here, apart from the facets the filters need and only for the sidebar, and its answer is
+ * kept for five minutes per search and filters. Everything after the ranking goes in one multi-search request.
+ */
+async function readTopAuthors(
+	_configRevision: string,
+	libraryConfig: LibraryServerConfig,
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+): Promise<TopAuthors> {
+	"use cache";
+	cacheLife({ revalidate: 300 });
+	// Cleared with every public record when an editor clears the public cache.
+	cacheTag("library");
+	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
+	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
+	const { client, index } = await getMeilisearchForConfig(libraryConfig);
+	const ranked = await index.search(search, { offset: 0, limit: 0, attributesToSearchOn, facets: ["fullNames"], filter: finalFilters });
+	const everyone = (ranked.facetDistribution?.fullNames ?? {}) as Record<string, number>;
+	const top = Object.entries(everyone)
+		.filter(([name]) => name.trim().length > 1)
+		.sort((left, right) => right[1] - left[1])
+		.slice(0, TOP_AUTHORS);
+	const names = top.map(([name]) => name);
+	if (names.length === 0) return { authorCount: 0, authors: [], combined: {} };
+	const institutions = libraryConfig.filters.institution.mode !== "hidden";
+	const indexUid = index.uid;
+	const { results } = await client.multiSearch({
+		queries: [
+			{ indexUid, q: search, limit: 0, attributesToSearchOn, facets: ["year"], filter: [...finalFilters, meilisearchIn("fullNames", names)] },
+			...names.map((name) => ({
+				indexUid, q: search, attributesToSearchOn,
+				// One of their results, to find the profile their name is linked to on it.
+				limit: 1, attributesToRetrieve: ["creators"],
+				facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
+				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
+			})),
+		],
+	});
+	const [all, ...perAuthor] = results;
+	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits[0] as ListItem | undefined, name));
+	const profiles = new Map((await readAuthorProfiles(profileIds.filter((id): id is string => Boolean(id)))).map((profile) => [profile.id, profile]));
+	const authors = top.map(([name, count], position): AuthorActivity => {
+		const distribution = (perAuthor[position]?.facetDistribution ?? {}) as Record<string, Record<string, number>>;
+		const profileId = profileIds[position];
+		return {
+			name,
+			count,
+			years: distribution.year ?? {},
+			together: sharedWith(name, names, distribution.fullNames ?? {}),
+			institution: mostNamed(distribution[INSTITUTION_FILTER_FIELD] ?? {}),
+			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
+		};
+	});
+	return { authorCount: Object.keys(everyone).length, authors, combined: (all?.facetDistribution?.year ?? {}) as Record<string, number> };
+}
+
+/** The profile a result links an author to, found by the name the index files them under. */
+function profileIdOf(hit: ListItem | undefined, name: string) {
+	const creators = (hit?.creators ?? []) as Author[];
+	return creators.find((creator) => creatorFullName(creator) === name)?.authorProfileId ?? null;
+}
+
+/** How many results an author shares with each of the other named authors; only those leave the server, not everyone they wrote with. */
+function sharedWith(name: string, names: readonly string[], coauthors: Record<string, number>) {
+	return Object.fromEntries(names.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
+}
+
+/** The value most results name in a facet, if any does. */
+function mostNamed(counts: Record<string, number>) {
+	return Object.entries(counts).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
+}
+
+export async function getTopAuthors(searchParams: Partial<inferParserType<typeof searchParamsLoader>>) {
+	const libraryConfig = await getLibraryConfig();
+	return readTopAuthors(libraryConfig.revision, libraryConfig, searchParams);
 }
