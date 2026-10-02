@@ -153,8 +153,9 @@ const config: Config = {
 				102: "1.02",
 			},
 			transitionDuration: {
-				// The header and the chat column open and close together.
-				split: "450ms",
+				// The header and the chat column open and close together. A short, even ease lets the plane's spring and its
+				// bounce read as one motion; a long expo-out did most of the move on the first frame, then settled apart.
+				split: "250ms",
 			},
 			height: {
 				navbar: "6.5rem",
@@ -227,7 +228,7 @@ const config: Config = {
 			},
 			transitionTimingFunction: {
 				// The header and the chat column open and close together.
-				split: "cubic-bezier(0.16,1,0.3,1)",
+				split: "cubic-bezier(0.4,0,0.2,1)",
 				spring: "cubic-bezier(0.68, -0.6, 0.32, 1.6)",
 				"bounce-custom": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
 			},
