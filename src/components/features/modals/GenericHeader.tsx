@@ -1,6 +1,7 @@
 import { ModalHeader } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";
-import { LuX } from "react-icons/lu";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { twMerge } from "@/lib/tw-merge";
 import { useTranslations } from "next-intl";
@@ -54,7 +55,8 @@ export default function GenericHeader({
 						className={twMerge("px-0 lg:px-0", classNames?.button)}
 						aria-label={t("closePopupAriaLabel")}
 						startContent={
-							<LuX
+							<HugeiconsIcon
+								icon={Cancel01Icon}
 								className={twMerge(
 									"size-6",
 									classNames?.buttonIcon,

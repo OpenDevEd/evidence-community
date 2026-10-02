@@ -1,9 +1,7 @@
 "use client";
 
-import { AiOutlineCompass } from "react-icons/ai";
-import { IoGrid } from "react-icons/io5";
-import { BiHelpCircle } from "react-icons/bi";
-import { HiOutlineViewList } from "react-icons/hi";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { CompassIcon, GridViewIcon, HelpCircleIcon, ListViewIcon } from "@hugeicons/core-free-icons";
 import { SkipLink } from "@/components/layout/SkipLink";
 
 import { Button } from "@/components/nextui/Button";
@@ -151,7 +149,7 @@ function SearchTabContent({
 						<>
 							<Button
 								startContent={
-									<AiOutlineCompass className="size-6 shrink-0" />
+									<HugeiconsIcon icon={CompassIcon} className="size-6 shrink-0" />
 								}
 								className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
 								onPress={onExploreOpen}
@@ -172,7 +170,8 @@ function SearchTabContent({
 						onPress={onHelpOpen}
 						aria-label={t("helpAriaLabel")}
 					>
-						<BiHelpCircle
+						<HugeiconsIcon
+							icon={HelpCircleIcon}
 							aria-label={t("helpIconAriaLabel")}
 							className="size-6"
 						/>
@@ -267,9 +266,10 @@ function SearchTabContent({
 								onPress={() => setView("list")}
 								aria-label={t("viewAsListAriaLabel")}
 							>
-								<HiOutlineViewList
+								<HugeiconsIcon
+									icon={ListViewIcon}
 									aria-label={t("viewAsListAriaLabel")}
-									className="size-6"
+									className="size-5"
 								/>
 							</Button>
 							<Button
@@ -281,9 +281,10 @@ function SearchTabContent({
 								onPress={() => setView("grid")}
 								aria-label={t("viewAsGridAriaLabel")}
 							>
-								<IoGrid
+								<HugeiconsIcon
+									icon={GridViewIcon}
 									aria-label={t("viewAsGridAriaLabel")}
-									className="size-4"
+									className="size-5"
 								/>
 							</Button>
 						</div>

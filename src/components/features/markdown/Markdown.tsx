@@ -1,6 +1,7 @@
 "use client";
 
-import { BiSolidBookContent } from "react-icons/bi";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BookOpen01Icon } from "@hugeicons/core-free-icons";
 import { visit } from "unist-util-visit";
 
 // The tree shape the visitor works on, taken from the visitor itself so no
@@ -206,7 +207,7 @@ function PageCitationSpan({
 function SectionHighlight({ children }: { children: ReactNode }) {
 	return (
 		<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
-			<BiSolidBookContent className="text-accent-400" />
+			<HugeiconsIcon icon={BookOpen01Icon} className="text-accent-400" />
 			<span className="dark:text-white/60 text-black/60 text-xs font-normal">
 				Section
 			</span>

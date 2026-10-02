@@ -1,6 +1,7 @@
 "use client";
 
-import { BiTrash } from "react-icons/bi";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 
 import {
 	ModalBody,
@@ -109,7 +110,7 @@ function ScreeningFieldRow({
 					onPress={onRemove}
 					className="!p-0"
 				>
-					<BiTrash className="size-4" />
+					<HugeiconsIcon icon={Delete02Icon} className="size-4" />
 				</Button>
 			</div>
 		</motion.div>
