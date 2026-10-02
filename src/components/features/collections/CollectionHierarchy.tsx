@@ -4,12 +4,18 @@ import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
 import { useMemo, memo } from "react";
+import { useFormatter } from "next-intl";
+import { shareOf } from "./ResultsOverview";
 interface CollectionHierarchyProps {
 	collectionData: Collection;
 	collections: Collection[];
 	selectedCollections: string[];
 	onCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
+	/** How many results there are, for each row's share of them. */
+	total?: number;
+	/** The largest count among this row and its siblings, which its bar is measured against. */
+	largest?: number;
 }
 
 function hasSelectedDescendant(
@@ -30,7 +36,10 @@ function CollectionHierarchy({
 	selectedCollections,
 	onCheckboxChange,
 	facetDistribution,
+	total,
+	largest = 1,
 }: CollectionHierarchyProps) {
+	const format = useFormatter();
 	const level = collectionData.level || 0;
 	const isSelected = selectedCollections.includes(collectionData.key);
 	
@@ -54,6 +63,8 @@ function CollectionHierarchy({
 	}, [collectionData.children]);
 
 	const hasChildren = children.length > 0;
+	const countOf = (key: string) => facetDistribution?.collectionsAncestry[key] || 0;
+	const childLargest = Math.max(1, ...children.map((child) => countOf(child.key)));
 
 	// Memoize the descendant selection check
 	const isDescendantSelected = useMemo(() => {
@@ -93,22 +104,27 @@ function CollectionHierarchy({
 					style={checkboxStyle}
 					className="collection"
 					classNames={{
-						label: "text-black/60 dark:text-white/60",
+						base: "w-full max-w-full",
+						label: "min-w-0 flex-1 text-black/60 dark:text-white/60",
 					}}
 				>
-					<div className="">
-						{collectionData.name}
-						{!isSelected && (
-							<span className="dark:opacity-75 ltr:ml-1 rtl:mr-1">
-								({count})
+					<span className="flex w-full min-w-0 flex-col gap-1.5">
+						<span className="flex min-w-0 items-baseline gap-2">
+							<span className="min-w-0 flex-1">
+								{collectionData.name}
+								{hasChildren && (
+									<span className="dark:opacity-75 ltr:ml-2 rtl:mr-2 inline-block translate-y-0.5">
+										<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
+									</span>
+								)}
 							</span>
-						)}
-						{hasChildren && (
-							<div className="dark:opacity-75 ltr:ml-2 rtl:mr-2 inline-block translate-y-0.5">
-								<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
-							</div>
-						)}
-					</div>
+							{total ? <span className="shrink-0 text-xs tabular-nums">{shareOf(format, count, total)}</span> : null}
+							<span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
+						</span>
+						<span aria-hidden className="block h-1 w-full overflow-hidden rounded-full bg-accent/10">
+							<span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.max(2, (count / largest) * 100)}%` }} />
+						</span>
+					</span>
 				</Checkbox>
 			)}
 			{(isSelected || isDescendantSelected || level === 0) &&
@@ -120,6 +136,8 @@ function CollectionHierarchy({
 						selectedCollections={selectedCollections}
 						onCheckboxChange={onCheckboxChange}
 						facetDistribution={facetDistribution}
+						total={total}
+						largest={childLargest}
 					/>
 				))}
 		</>

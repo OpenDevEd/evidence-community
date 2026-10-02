@@ -305,6 +305,7 @@ export function InnerCollectionList({
 	handleCountrySelect,
 	selectedCollections,
 	hierarchy,
+	total,
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
@@ -312,6 +313,8 @@ export function InnerCollectionList({
 	handleCountrySelect: (country: string) => void;
 	selectedCollections: string[];
 	hierarchy: Collection[];
+	/** How many results there are, for each row's share of them. */
+	total?: number;
 }) {
 	const { filters } = useLibraryConfig();
 	const defaultExpanded = filters.collectionsExpanded;
@@ -388,6 +391,7 @@ export function InnerCollectionList({
 						selectedCollections={selectedCollections}
 						handleCheckboxChange={handleCheckboxChange}
 						facetDistribution={filteredFacetDistribution}
+						total={total}
 					/>
 				</AccordionItem>
 			))}
@@ -578,7 +582,9 @@ function TopicTree({
 	counts,
 	onChange,
 	selected,
+	total,
 }: {
+	total: number;
 	counts: Record<string, number> | undefined;
 	onChange: (topics: string[]) => void;
 	selected: string[];
@@ -617,6 +623,7 @@ function TopicTree({
 			// A domain is its section's heading, never a box inside it, though choosing a field chooses its domain too.
 			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
 			hierarchy={hierarchy}
+			total={total}
 		/>
 	);
 }
@@ -1022,12 +1029,14 @@ export default function CollectionsList({
 							handleCountrySelect={handleCountrySelect}
 							selectedCollections={selectedCollections}
 							hierarchy={hierarchy}
+							total={resultsTotal(facetDistribution)}
 						/>
 					</section>
 				)}
 				{topicsAsTree && (
 					<section className="w-full" aria-label="Topics">
 						<TopicTree
+							total={resultsTotal(facetDistribution)}
 							counts={facetDistribution?.topicAncestors}
 							onChange={handleTopicsChange}
 							selected={queryParams.topics}

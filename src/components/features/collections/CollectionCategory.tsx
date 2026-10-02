@@ -20,12 +20,14 @@ export default function CollectionCategory({
 	selectedCollections,
 	handleCheckboxChange,
 	facetDistribution,
+	total,
 }: {
 	collection: Collection;
 	hierarchy: Collection[];
 	selectedCollections: string[];
 	handleCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
+	total?: number;
 }) {
 	const t = useTranslations("ui");
 	const ref = useRef<HTMLDivElement>(null);
@@ -74,6 +76,7 @@ export default function CollectionCategory({
 					selectedCollections={selectedCollections}
 					onCheckboxChange={handleCheckboxChange}
 					facetDistribution={facetDistribution}
+					total={total}
 				/>
 			</div>
 			{hasOverflow && (
