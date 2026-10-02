@@ -18,7 +18,7 @@ function renderMenu({links = false, gapMaps = false, controls = false} = {}) {
 	const config = projectPublicLibraryConfig(libraryConfigSchema.parse(minimalLibraryConfig));
 	config.navigation.links = [{id: "library", label: "Library", href: "/lib", visible: links, target: "self", children: []}];
 	config.gapMaps = gapMaps ? projectPublicLibraryConfig(libraryConfigSchema.parse(maximalLibraryConfig)).gapMaps : [];
-	const elements: NavbarElementConfig[] = controls ? [{id: "theme-switcher", enabled: () => true, placement: {mobile: "mobileMenu", tablet: "dropdown", desktop: "inline"}, component: () => <button>Theme</button>}] : [];
+	const elements: NavbarElementConfig[] = controls ? [{id: "theme-switcher", enabled: () => true, placement: "mobileMenu", component: () => <button>Theme</button>}] : [];
 	return renderToStaticMarkup(
 		<NextIntlClientProvider locale="en-GB" messages={messages} timeZone="UTC">
 			<LibraryConfigProvider config={config}>

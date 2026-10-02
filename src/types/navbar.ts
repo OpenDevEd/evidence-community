@@ -1,14 +1,12 @@
 import type { Reader } from "@/components/layout/navbar/ReaderSession";
 import type { LibraryFeatures } from "@/config/library-config/features";
 
-// Breakpoint definitions matching Tailwind config
-// mobile: < xl (< 1280px)
-// tablet: xl to 2xl (1280px - 1536px)
-// desktop: 2xl+ (>= 1536px)
-export type NavbarBreakpoint = "mobile" | "tablet" | "desktop";
-
-// Where an element can be placed at each breakpoint
-export type NavbarPlacement = "inline" | "dropdown" | "mobileMenu" | "hidden";
+/**
+ * Where an element sits once the links fold into the phone menu: beside the
+ * menu button, or inside the menu. Wider than that, the header's measured
+ * steps place the actions (`navbarActionSteps`).
+ */
+export type NavbarPlacement = "inline" | "mobileMenu";
 
 // Style variants from the runtime library configuration
 export type NavbarStyleVariant = "small" | "wide";
@@ -32,8 +30,7 @@ export interface NavbarElementConfig {
 		features: LibraryFeatures,
 		session: Reader | null
 	) => boolean;
-	// Where element appears at each breakpoint
-	placement: Record<NavbarBreakpoint, NavbarPlacement>;
+	placement: NavbarPlacement;
 	// Component to render
 	component: React.ComponentType<NavbarElementProps>;
 	// Sort order within placement container (lower = first)
@@ -47,11 +44,3 @@ export interface NavbarContext {
 	theme: string | undefined;
 	setTheme: (theme: string) => void;
 }
-
-// Helper type for grouping elements by placement
-export type ElementsByPlacement = {
-	inline: NavbarElementConfig[];
-	dropdown: NavbarElementConfig[];
-	mobileMenu: NavbarElementConfig[];
-	hidden: NavbarElementConfig[];
-};

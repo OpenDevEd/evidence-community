@@ -15,10 +15,9 @@ import {
  * - id: Unique identifier
  * - enabled: Function to check if an element should render from runtime
  *   features and session state
- * - placement: Where element appears at each breakpoint
- *   - mobile (<xl): 'inline' = visible outside hamburger, 'mobileMenu' = inside hamburger
- *   - tablet (xl-2xl): 'inline' = visible, 'dropdown' = inside condensed dropdown
- *   - desktop (2xl+): 'inline' = expanded/visible
+ * - placement: once the links fold into the phone menu, 'inline' stays beside
+ *   the menu button and 'mobileMenu' goes inside it. Wider than that, the
+ *   header's measured steps place the actions (src/lib/navbar-actions.ts).
  * - component: React component to render
  * - order: Sort order within placement container (lower = first)
  */
@@ -27,11 +26,7 @@ export const navbarElements: NavbarElementConfig[] = [
 		id: "theme-switcher",
 		enabled: (features) =>
 			isLibraryFeatureEnabled(features, "themeSwitcher"),
-		placement: {
-			mobile: "mobileMenu", // In hamburger menu
-			tablet: "dropdown", // In condensed dropdown
-			desktop: "inline", // Expanded inline
-		},
+		placement: "mobileMenu",
 		component: ThemeSwitcher,
 		order: 1,
 	},
@@ -39,11 +34,7 @@ export const navbarElements: NavbarElementConfig[] = [
 		id: "language-switcher",
 		enabled: (features) =>
 			isLibraryFeatureEnabled(features, "languageSwitcher"),
-		placement: {
-			mobile: "mobileMenu", // In hamburger menu
-			tablet: "dropdown", // In condensed dropdown
-			desktop: "inline", // Expanded inline
-		},
+		placement: "mobileMenu",
 		component: LanguageSwitcher,
 		order: 2,
 	},
@@ -51,22 +42,14 @@ export const navbarElements: NavbarElementConfig[] = [
 		id: "login-button",
 		enabled: (features, session) =>
 			isLibraryFeatureEnabled(features, "readerAccounts") && !session,
-		placement: {
-			mobile: "inline", // Always visible on mobile (outside hamburger)
-			tablet: "dropdown", // In condensed dropdown
-			desktop: "inline", // Expanded inline
-		},
+		placement: "inline",
 		component: LoginButton,
 		order: 3,
 	},
 	{
 		id: "user-menu",
 		enabled: (_, session) => !!session,
-		placement: {
-			mobile: "inline", // Avatar visible on mobile (outside hamburger)
-			tablet: "dropdown", // Profile/logout in condensed dropdown
-			desktop: "inline", // Avatar with dropdown
-		},
+		placement: "inline",
 		component: UserMenu,
 		order: 4,
 	},
@@ -83,14 +66,13 @@ export function getEnabledElements(
 }
 
 /**
- * Helper function to get elements by placement for a specific breakpoint
+ * The enabled elements with this placement on a phone, in order.
  */
 export function getElementsByPlacement(
 	elements: NavbarElementConfig[],
-	breakpoint: "mobile" | "tablet" | "desktop",
-	placement: "inline" | "dropdown" | "mobileMenu" | "hidden"
+	placement: NavbarElementConfig["placement"],
 ): NavbarElementConfig[] {
 	return elements
-		.filter((el) => el.placement[breakpoint] === placement)
+		.filter((el) => el.placement === placement)
 		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }

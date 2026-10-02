@@ -80,7 +80,10 @@ export default async function Base({
 	// for, so it is gone.
 	const storedConsent =
 		(await cookies()).get(ANALYTICS_CONSENT_COOKIE_NAME)?.value ?? null;
-	const libraryConfig = projectPublicLibraryConfig(await getLibraryConfig());
+	// One configuration snapshot for the page: an activation mid-render must not
+	// give the header's fit styles a different library than the header itself.
+	const serverConfig = await getLibraryConfig();
+	const libraryConfig = projectPublicLibraryConfig(serverConfig);
 	const dir = getLangDir(locale);
 	return (
 		<html lang={locale} dir={dir} className="no-scrollbar" suppressHydrationWarning>
@@ -94,7 +97,7 @@ export default async function Base({
 				/>
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
-				<NavbarFitStyles locale={locale} />
+				<NavbarFitStyles config={serverConfig} locale={locale} />
 				<LibraryConfigProvider config={libraryConfig}>
 					<BaseContent
 						gapmaps={libraryConfig.gapMaps}

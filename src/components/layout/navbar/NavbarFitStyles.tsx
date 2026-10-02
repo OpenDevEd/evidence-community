@@ -1,6 +1,8 @@
 import "server-only";
 
-import { getLibraryConfig } from "@/config/library-config/server";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { navbarActionSteps, navbarSettings } from "@/lib/navbar-actions";
 import { computeNavbarFit, navbarFitCss } from "@/lib/navbar-fit";
 
 /**
@@ -17,11 +19,11 @@ const FIRST_MEASUREMENT_WAIT_MS = 1_500;
  * and on the first frame. Without a measurement it falls back to the fixed
  * xl and 2xl breakpoints.
  */
-export async function NavbarFitStyles({ locale }: { locale: string }) {
-	const config = await getLibraryConfig();
+export async function NavbarFitStyles({ config, locale }: { config: LibraryServerConfig; locale: string }) {
 	const fit = await Promise.race([
 		computeNavbarFit(config, locale, config.identity.assets.logoLight),
 		new Promise<null>((resolve) => setTimeout(() => resolve(null), FIRST_MEASUREMENT_WAIT_MS)),
 	]);
-	return <style data-navbar-fit={fit ? `${fit.links} ${fit.full}` : "fallback"}>{navbarFitCss(fit)}</style>;
+	const stepCount = navbarActionSteps(navbarSettings(config), isLibraryFeatureEnabled(config.features, "readerAccounts")).length;
+	return <style data-navbar-fit={fit ? fit.steps.join(" ") : "fallback"}>{navbarFitCss(fit, stepCount)}</style>;
 }
