@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { getFormatter, getLocale } from "next-intl/server";
 import { Link } from "@/i18n/routing";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -11,6 +12,8 @@ const ROW = "group/row flex min-w-0 flex-col gap-1 rounded-xl p-2 -mx-2 outline-
 
 /** The library as a whole, under the filters: its latest digests, and the pages that show the results another way. */
 export async function LibraryHighlights() {
+	// The library config is only known per request, so this never prerenders.
+	await connection();
 	const [locale, format, config] = await Promise.all([getLocale(), getFormatter(), getLibraryConfig()]);
 	const digests = await loadLatestDigests(locale);
 	const pages = getRuntimePageAvailability(config);
