@@ -34,12 +34,16 @@ export function queryTerms(queries: readonly string[]) {
 		const parts = tokens(oql);
 		for (const [index, part] of parts.entries()) {
 			if (TOPIC.test(part)) topics.add(part);
-			if (!searches(parts, index)) continue;
-			for (const token of clause(parts, index + 1)) {
-				const term = token.replace(/^"|"$/gu, "").trim().toLowerCase();
-				if (term && token !== "(" && token !== ")" && !OPERATORS.has(term)) terms.add(term);
-			}
+			if (searches(parts, index)) for (const term of clauseTerms(parts, index + 1)) terms.add(term);
 		}
 	}
 	return { terms: terms.size, topics: topics.size };
+}
+
+/** The words and phrases one `has` clause looks for, without its brackets and operators. */
+function clauseTerms(parts: string[], start: number) {
+	return clause(parts, start)
+		.filter((token) => token !== "(" && token !== ")")
+		.map((token) => token.replace(/^"|"$/gu, "").trim().toLowerCase())
+		.filter((term) => term && !OPERATORS.has(term));
 }
