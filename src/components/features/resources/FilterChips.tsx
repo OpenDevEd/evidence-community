@@ -15,10 +15,7 @@ import { getCountryInfo } from "@/lib/utils";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import useSWR from "swr";
 import { fetchTopicCatalog, useTopicTree } from "@/lib/topics/client";
-import {
-	selectionFrontier,
-	toggleTopicSelection,
-} from "@/lib/topics/selection";
+import { toggleTopicSelection, topicAncestry } from "@/lib/topics/selection";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -124,6 +121,14 @@ export function getFilterChipState(
 }
 
 /** Its own component so only these chips wait, behind their own boundary, for the server's topic names on a first visit. */
+/** What a topic is in the catalog's tree, by the shape of its ID. */
+function topicLevel(id: string) {
+	if (id.startsWith("domains/")) return "Domain";
+	if (id.startsWith("fields/")) return "Field";
+	if (id.startsWith("subfields/")) return "Subfield";
+	return "Topic";
+}
+
 function TopicChips({
 	onChange,
 	selected,
@@ -148,13 +153,15 @@ function TopicChips({
 	}
 	const nodes = [...tree, ...(unknownNodes.data ?? [])];
 	const byId = new Map(nodes.map((node) => [node.id, node]));
-	const frontier = [
-		...selectionFrontier(selected, nodes),
+	// One chip per chosen topic, its whole path in order, as collections show theirs: closing one closes what is under it.
+	const pathOf = (id: string) => topicAncestry(id, byId).map((step) => byId.get(step)?.name ?? step).join(" > ");
+	const chips = [
+		...selected.filter((id) => byId.has(id)).sort((left, right) => pathOf(left).localeCompare(pathOf(right))),
 		// A topic the catalog doesn't know still gets a chip, so it can be removed.
 		...selected.filter((id) => !byId.has(id)),
 	];
 
-	return frontier.map((id) => {
+	return chips.map((id) => {
 		const node = byId.get(id);
 		return (
 			<motion.div
@@ -165,7 +172,7 @@ function TopicChips({
 				transition={{ duration: 0.2 }}
 			>
 				<Chip
-					group="Topic"
+					group={topicLevel(id)}
 					title={node?.name ?? t("unknownTopic")}
 					callback={() =>
 						onChange(
