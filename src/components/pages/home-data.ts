@@ -250,3 +250,21 @@ async function latestDigests(locale: string): Promise<HomeData["digests"]> {
 	const { editions } = await listDigestEditions(await getDatabaseForConfig(config), config, locale);
 	return editions.length > 0 ? { library: config.identity.name, editions: editions.slice(0, 3) } : null;
 }
+
+export type LibraryHighlights = {
+	cited: (HomeData["cited"][number] & { cover?: string })[];
+	digests: HomeData["digests"];
+};
+
+/** The library listing's sidebar: its most cited publications with their first pages, and its latest digests. */
+export async function loadLibraryHighlights(locale: string): Promise<LibraryHighlights> {
+	const config = await getLibraryConfig();
+	return staleWhileRevalidate(`highlights:${config.revision}:${locale}`, 60_000, async () => {
+		const [cited, digests] = await Promise.all([
+			mostCited().catch(fallback("most cited", [])),
+			latestDigests(locale).catch(fallback("digests", null)),
+		]);
+		const covers = await coversOf(cited.map((row) => row.key)).catch(fallback("covers", {} as Record<string, string>));
+		return { cited: cited.map((row) => ({ ...row, cover: covers[row.key] })), digests };
+	});
+}

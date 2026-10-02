@@ -24,7 +24,7 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
-import { Fragment, useContext, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
@@ -58,6 +58,8 @@ import { useTopicTree } from "@/lib/topics/client";
 import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { useFiltersContext } from "@/context/FiltersProvider";
+import { ResultsOverview } from "./ResultsOverview";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -554,20 +556,75 @@ function TopicFilter({
 	);
 }
 
+/**
+ * Topics in the collections' place, for a library without collections: each domain is a section and its fields,
+ * subfields and topics open under it, through the same tree and counts the collections use.
+ */
+function TopicTree({
+	counts,
+	onChange,
+	selected,
+}: {
+	counts: Record<string, number> | undefined;
+	onChange: (topics: string[]) => void;
+	selected: string[];
+}) {
+	const tree = useTopicTree();
+	const nodes = useMemo(() => tree.data?.nodes ?? [], [tree.data]);
+	const { hierarchy, collections } = useMemo(() => {
+		const children = new Map<string | null, TopicTreeNode[]>();
+		for (const node of nodes) children.set(node.parent, [...(children.get(node.parent) ?? []), node]);
+		const flat: Collection[] = [];
+		// Shaped as the collection tree the accordion reads; topics have no other collection fields.
+		const toCollection = (node: TopicTreeNode, level: number, root: string): Collection => {
+			const shaped = {
+				key: node.id,
+				name: node.name,
+				parentCollection: node.parent,
+				level,
+				originalFacet: root,
+				children: (children.get(node.id) ?? []).map((child) => toCollection(child, level + 1, root)),
+			} as unknown as Collection;
+			flat.push(shaped);
+			return shaped;
+		};
+		return {
+			hierarchy: (children.get(null) ?? []).map((root) => toCollection(root, 0, root.id)),
+			collections: flat,
+		};
+	}, [nodes]);
+
+	return (
+		<InnerCollectionList
+			data={{ collections }}
+			facetDistribution={{ collectionsAncestry: counts ?? {} }}
+			handleCheckboxChange={(id) => onChange(toggleTopicSelection(selected, id, nodes))}
+			handleCountrySelect={() => undefined}
+			// A domain is its section's heading, never a box inside it, though choosing a field chooses its domain too.
+			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
+			hierarchy={hierarchy}
+		/>
+	);
+}
+
 function FiltersList({
 	queryParams,
 	handleCountrySelect,
 	handleInstitutionSelect,
 	handleTopicsChange,
 	facetDistribution,
+	topicsAsTree,
 }: {
 	queryParams: inferParserType<typeof searchParamsLoader>;
 	handleCountrySelect: (country: string) => void;
 	handleInstitutionSelect: (institution: string) => void;
 	handleTopicsChange: (topics: string[]) => void;
 	facetDistribution: FacetDistribution | undefined;
+	/** The topics are a tree below the filters instead of a picker among them. */
+	topicsAsTree: boolean;
 }) {
 	const { filters, topics } = useLibraryConfig();
+	const topicPicker = topics.enabled && !topicsAsTree;
 	const isInstitutionEnabled = filters.institution.mode !== "hidden";
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
@@ -576,7 +633,7 @@ function FiltersList({
 	const enabledCount = [
 		isInstitutionEnabled,
 		isCountryFocusEnabled,
-		topics.enabled,
+		topicPicker,
 	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
@@ -681,7 +738,7 @@ function FiltersList({
 			<>
 				{institutionFilter}
 				{countryFocusFilter}
-				{topics.enabled ? (
+				{topicPicker ? (
 					<TopicFilter
 						counts={facetDistribution?.topicAncestors}
 						onChange={handleTopicsChange}
@@ -696,7 +753,7 @@ function FiltersList({
 		handleTopicsChange,
 		institutionFilter,
 		queryParams.topics,
-		topics.enabled,
+		topicPicker,
 	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
@@ -795,6 +852,7 @@ export default function CollectionsList({
 	handleTopicsChange,
 	isModal = false,
 	queryParams,
+	after,
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
@@ -808,9 +866,15 @@ export default function CollectionsList({
 	handleTopicsChange: (topics: string[]) => void;
 	hierarchy: Collection[];
 	queryParams: inferParserType<typeof searchParamsLoader>;
+	/** Shown below everything else, outside the loading placeholder. */
+	after?: ReactNode;
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useLibraryFeature("collections");
+	const { topics } = useLibraryConfig();
+	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
+	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
+	const topicsAsTree = topics.enabled && !isCollectionsEnabled;
 	const { filters, institutions: configuredInstitutions } =
 		useLibraryConfig();
 	const configuredYears = useMemo(
@@ -888,7 +952,7 @@ export default function CollectionsList({
 						{customFilter}
 					</div>
 				)}
-				<section className="w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
+				<section className={twMerge("w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20", !isCollectionsEnabled && !topicsAsTree && "rounded-b-2xl")}>
 					{filters.years.enabled && (
 						<YearFilter
 							key={range}
@@ -903,6 +967,7 @@ export default function CollectionsList({
 						handleInstitutionSelect={handleInstitutionSelect}
 						handleTopicsChange={handleTopicsChange}
 						facetDistribution={facetDistribution}
+						topicsAsTree={topicsAsTree}
 					/>
 				</section>
 				{isCollectionsEnabled && (
@@ -925,7 +990,30 @@ export default function CollectionsList({
 						/>
 					</section>
 				)}
+				{topicsAsTree && (
+					<section className="w-full" aria-label="Topics">
+						<TopicTree
+							counts={facetDistribution?.topicAncestors}
+							onChange={handleTopicsChange}
+							selected={queryParams.topics}
+						/>
+					</section>
+				)}
+				<div className={twMerge("mt-4 flex flex-col gap-4", isModal && "px-6")}>
+					<ResultsOverview
+						facetDistribution={facetDistribution}
+						range={range}
+						types={queryParams.type}
+						author={queryParams.author}
+						onRangeChange={handleRangeChange}
+						onTypeSelect={handleTypeSelect}
+						onAuthorSelect={handleAuthorSelect}
+						showYears={filters.years.enabled}
+						showAuthors={isAuthorFilterEnabled}
+					/>
+				</div>
 			</Skeleton>
+			{after && <div className="mt-4">{after}</div>}
 		</aside>
 	);
 }

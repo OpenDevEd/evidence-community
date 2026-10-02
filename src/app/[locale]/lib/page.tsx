@@ -11,6 +11,8 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
 import { readSelectedTopicNames } from "@/lib/topics/server";
 import { SelectedTopicNames } from "@/components/topics/SelectedTopicNames";
+import { LibraryHighlights } from "@/components/features/collections/LibraryHighlights";
+import { Suspense } from "react";
 
 async function getCachedPaginationMeta(
   queryParams: Parameters<typeof getItemsPaginationMeta>[0],
@@ -116,7 +118,13 @@ export default function Lib(props: {
   return (
     <>
       <SelectedTopicNames names={names}>
-        <EvidenceLibrary />
+        <EvidenceLibrary
+          highlights={
+            <Suspense fallback={null}>
+              <LibraryHighlights />
+            </Suspense>
+          }
+        />
       </SelectedTopicNames>
       <RuntimeMetadata />
     </>

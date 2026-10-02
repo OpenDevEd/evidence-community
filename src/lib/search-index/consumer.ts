@@ -1130,6 +1130,7 @@ export async function ensureSearchIndex(
 					collectionsAncestry: "count",
 					country: "count",
 					topicAncestors: "count",
+					fullNames: "count",
 					[INSTITUTION_FILTER_FIELD]: "count",
 				},
 			},

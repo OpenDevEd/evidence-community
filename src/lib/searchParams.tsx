@@ -36,6 +36,9 @@ export const searchParamsLoader = {
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
+	type: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+		scroll: true,
+	}),
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
 };

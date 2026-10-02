@@ -3,6 +3,7 @@ import {
 	type PlatformSearchScope,
 } from "./catalogs";
 import { INSTITUTION_FILTER_FIELD } from "./institutions";
+import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeSearch = Omit<LibraryPublicConfig["search"], "embeddings">;
@@ -55,7 +56,8 @@ export function getRuntimeSearchFacets(
 	filters: RuntimeFilters,
 	topicsEnabled: boolean,
 ) {
-	const facets = ["collectionsAncestry"];
+	// Item types, PDFs and authors describe the results beside the list.
+	const facets = ["collectionsAncestry", "itemType", PDF_PRESENCE_ATTRIBUTE, "fullNames"];
 	if (topicsEnabled) {
 		facets.push("topicAncestors");
 	}

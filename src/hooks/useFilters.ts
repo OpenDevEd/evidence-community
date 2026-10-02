@@ -230,6 +230,17 @@ export function useFilters() {
 		[setParams],
 	);
 
+	const handleTypeSelect = useCallback(
+		(type: string) =>
+			setParams({
+				type: params.type.includes(type)
+					? params.type.filter((value) => value !== type)
+					: [...params.type, type],
+				page: 1,
+			}),
+		[params.type, setParams],
+	);
+
 	const handleClearFilters = useCallback(() => {
 		setParams({
 			author: "",
@@ -238,6 +249,7 @@ export function useFilters() {
 			collections: [],
 			range: "",
 			topics: [],
+			type: [],
 		});
 	}, [setParams]);
 
@@ -305,6 +317,7 @@ export function useFilters() {
 		handleInstitutionSelect,
 		handleCountrySelect,
 		handleTopicsChange,
+		handleTypeSelect,
 		handleClearFilters,
 		handleCheckboxChange,
 		collectionsData,

@@ -162,6 +162,8 @@ type SearchFilterInput = {
 	institution: string[];
 	range: string | null;
 	scope: string;
+	/** Item types, any of them. */
+	type?: readonly string[];
 };
 
 /** An empty search has no relevance to sort by, so it shows the newest first. */
@@ -184,6 +186,7 @@ function buildSearchFilters({
 	institution,
 	range,
 	scope,
+	type = [],
 }: SearchFilterInput) {
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -193,6 +196,7 @@ function buildSearchFilters({
 		),
 		...createCountryFilters(country),
 		author ? meilisearchEquals("fullNames", author) : null,
+		type.length ? meilisearchIn("itemType", type) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
 		...collections.map((collection) =>
 			meilisearchEquals("collectionsAncestry", collection),
@@ -226,6 +230,7 @@ export function resolveSearchRequest(
 	const facetFilters = buildSearchFilters({
 		author: searchParams.author || "",
 		collections: searchParams.collections || [],
+		type: searchParams.type ?? [],
 		country,
 		hiddenTags: libraryConfig.content.tags.hidden,
 		institution,
@@ -418,7 +423,13 @@ export async function getPublicFacets(
 
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 
-	const [searchResults, topicResults] = await Promise.all([
+	// A chosen year range or item type still shows the other years and types, so each is counted without its own filter.
+	const ownFilters = [
+		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
+		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
+	].filter(({ facet, active }) => active && facets.includes(facet));
+
+	const [searchResults, topicResults, ...ownResults] = await Promise.all([
 		index.search(search, {
 			offset: 0, limit: 0, attributesToSearchOn, facets, filter: finalFilters,
 		}),
@@ -427,9 +438,21 @@ export async function getPublicFacets(
 				offset: 0, limit: 0, attributesToSearchOn, facets: ["topicAncestors"], filter: facetFilters,
 			})
 			: null,
+		...ownFilters.map(({ facet, without }) =>
+			index.search(search, {
+				offset: 0, limit: 0, attributesToSearchOn, facets: [facet],
+				filter: resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters,
+			}),
+		),
 	]);
-	if (topicResults?.facetDistribution) {
-		searchResults.facetDistribution = {...searchResults.facetDistribution, ...topicResults.facetDistribution};
+	searchResults.facetDistribution = Object.assign(
+		{},
+		searchResults.facetDistribution,
+		topicResults?.facetDistribution,
+		...ownResults.map((result) => result.facetDistribution),
+	);
+	if (searchResults.facetDistribution?.fullNames) {
+		searchResults.facetDistribution.fullNames = topAuthors(searchResults.facetDistribution.fullNames);
 	}
 
 	return {
@@ -439,6 +462,16 @@ export async function getPublicFacets(
 			country,
 		),
 	};
+}
+
+/** The ten people with the most results; the rest of the up to 10,000 names never leave the server. */
+function topAuthors(counts: Record<string, number>) {
+	return Object.fromEntries(
+		Object.entries(counts)
+			.filter(([name]) => name.trim().length > 1)
+			.sort((left, right) => right[1] - left[1])
+			.slice(0, 10),
+	);
 }
 
 /** Facet counts with each country facet's raw values kept beside its regions. */

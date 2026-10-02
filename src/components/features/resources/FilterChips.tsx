@@ -107,6 +107,7 @@ export function getFilterChipState(
 		(queryParams.institution?.length || 0) +
 		topicFilters.length +
 		(queryParams.author ? 1 : 0) +
+		(queryParams.type?.length || 0) +
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
@@ -189,6 +190,7 @@ export function FilterChips() {
 	const itemsContext = useFiltersContext();
 	const { topics } = useLibraryConfig();
 	const t = useTranslations("ui");
+	const itemTypeName = useTranslations("itemType");
 	const selectedTopics = topics.enabled
 		? (itemsContext.queryParams.topics ?? [])
 		: [];
@@ -242,6 +244,25 @@ export function FilterChips() {
 							/>
 						</motion.div>
 					)}
+					{itemsContext.queryParams.type.map((type) => (
+						<motion.div
+							key={"type-" + type}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								group={t("typeLabel")}
+								title={itemTypeName.has(type) ? itemTypeName(type) : type}
+								callback={() => itemsContext.handleTypeSelect(type)}
+								classNames={{
+									button: "bg-success/80 dark:bg-success/80",
+									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
+					))}
 					{countryFacetOptions.map((facet) => {
 						const values = itemsContext.queryParams[
 							facet.queryParam

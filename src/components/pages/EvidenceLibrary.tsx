@@ -454,7 +454,7 @@ function CollectionsSidebar({
 	);
 }
 
-function MainContent() {
+function MainContent({ highlights }: { highlights?: ReactNode }) {
 	const props = useItemsList();
 	const { engaged } = useInlineChatLayout();
 	return (
@@ -472,6 +472,7 @@ function MainContent() {
 					handleInstitutionSelect={props.handleInstitutionSelect}
 					handleCountrySelect={props.handleCountrySelect}
 					handleTopicsChange={props.handleTopicsChange}
+					after={highlights}
 				/>
 			</CollectionsSidebar>
 			<ItemsList props={props} />
@@ -479,7 +480,7 @@ function MainContent() {
 	);
 }
 
-export default function EvidenceLibrary() {
+export default function EvidenceLibrary({ highlights }: { highlights?: ReactNode }) {
 	const { engaged } = useInlineChatLayout();
 	const { theme } = useLibraryConfig();
 	return (
@@ -494,7 +495,7 @@ export default function EvidenceLibrary() {
 			)}
 		>
 			<div className="flex gap-[var(--library-gap)] [--library-gap:2rem] xl:[--library-gap:2.5rem] flex-col lg:flex-row lg:[container-type:inline-size]">
-				<MainContent />
+				<MainContent highlights={highlights} />
 			</div>
 		</PageContainer>
 	);
