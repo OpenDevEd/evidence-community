@@ -774,6 +774,12 @@ automatically before the next operation.
   30 days, and the repeats merged away. `fulltext` counts the records with a
   PDF. A `text` step can carry a figure its owner writes. Each count is set
   large under the step's name, and a count of nothing shows nothing.
+  Steps can also carry an `icon`, any Hugeicon id, and a typed step without one
+  shows its type's icon. These types, `icon` and `figure` only widen the
+  schema, so saved configurations need no migration. Rollback: an older runtime
+  rejects a revision that uses them, so before rolling a library back to an
+  image older than these step types, activate a configuration revision without
+  them first.
 - The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
   `exports.atom`. It lists the 50 most recently added records.
 - Exports read a fixed list of citation columns. Stored full text, cover

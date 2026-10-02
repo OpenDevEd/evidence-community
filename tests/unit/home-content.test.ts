@@ -21,11 +21,13 @@ describe("home page content", () => {
 		expect(contentFrom(home, stepTitles).questions).toEqual(["", "Mine?"]);
 	});
 
-	it("needs a title on a text-only step, but not on a typed one", () => {
+	it("needs a title on a text-only step, but not on a typed one, and keeps a written figure to text steps", () => {
 		expect(parseHome({ curation: { steps: [{ type: "arrival" }] } }).success).toBe(true);
 		const untitled = parseHome({ curation: { steps: [{ type: "text", text: "Words" }] } });
 		expect(untitled.success).toBe(false);
 		expect(untitled.error?.issues[0]?.path).toEqual(["home", "curation", "steps", 0, "title"]);
+		const counted = parseHome({ curation: { steps: [{ type: "search", figure: { value: "1", label: "Ignored" } }] } });
+		expect(counted.error?.issues[0]?.path).toEqual(["home", "curation", "steps", 0, "figure"]);
 	});
 
 	it("names typed steps after their type and shows a chosen editor from the people OpenScholar filled in", () => {

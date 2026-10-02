@@ -922,6 +922,12 @@
     "stepSearch": "عُثر عليه بالبحث",
     "stepSync": "يُحدَّث باستمرار",
     "stepDuplicates": "دُمجت النسخ المكررة",
-    "stepFullText": "أُضيف النص الكامل"
+    "stepFullText": "أُضيف النص الكامل",
+    "figureTerms": "{count, plural, one {مصطلح بحث} other {مصطلحات بحث}}",
+    "figureAndTopics": "و{topics, plural, one {# موضوع بحثي} other {# موضوعات بحثية}}",
+    "figureTopics": "{count, plural, one {موضوع بحثي} other {موضوعات بحثية}}",
+    "figureAdded": "جديدة في آخر 30 يومًا",
+    "figureMerged": "{count, plural, one {سجل مكرر دُمج} other {سجلات مكررة دُمجت}}",
+    "figureFullText": "{count, plural, one {سجل بنص كامل} other {سجلات بنص كامل}}"
   }
 }

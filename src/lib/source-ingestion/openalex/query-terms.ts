@@ -1,37 +1,45 @@
-const OPERATORS = new Set(["or", "and", "not", "stemmed"]);
+const OPERATORS = new Set(["or", "and", "not", "stemmed", "where"]);
+const TOPIC = /^T\d{4,}$/u;
 
-/** Where a `has` clause's words end: its closing bracket, or the end of the single word or phrase after it. */
-function clauseEnd(oql: string, start: number) {
-	if (oql[start] !== "(") return start + (oql.slice(start).match(/^"[^"]*"|^\S+/u)?.[0].length ?? 0);
+/** OQL as quoted phrases, brackets and bare words, so nothing inside quotes is ever read as part of the query. */
+function tokens(oql: string) {
+	return oql.match(/"[^"]*"|[()]|[^\s()"]+/gu) ?? [];
+}
+
+/** The tokens a text search looks for: the bracketed group after `has`, or its single word or phrase. */
+function clause(parts: string[], start: number) {
+	if (parts[start] !== "(") return parts.slice(start, start + 1);
 	let depth = 0;
-	for (let index = start; index < oql.length; index++) {
-		if (oql[index] === '"') index = oql.indexOf('"', index + 1);
-		else if (oql[index] === "(") depth++;
-		else if (oql[index] === ")" && --depth === 0) return index + 1;
-		if (index < 0) break;
+	for (let index = start; index < parts.length; index++) {
+		if (parts[index] === "(") depth++;
+		else if (parts[index] === ")" && --depth === 0) return parts.slice(start, index + 1);
 	}
-	return oql.length;
+	return parts.slice(start);
+}
+
+/** A `has` after a field name is a text search; after an operator or bracket it is a flag such as `has DOI is (true)`. */
+function searches(parts: string[], index: number) {
+	const field = parts[index - 1];
+	return parts[index]!.toLowerCase() === "has" && field !== undefined && field !== "(" && !field.startsWith('"') && !OPERATORS.has(field.toLowerCase());
 }
 
 /**
  * What OQL searches each count once across the queries, as a reader would count them: the words and phrases its
- * `has` clauses look for, and the OpenAlex topics it names.
+ * `<field> has ...` clauses look for, and the OpenAlex topics it names.
  */
 export function queryTerms(queries: readonly string[]) {
 	const terms = new Set<string>();
 	const topics = new Set<string>();
 	for (const oql of queries) {
-		// A text search is `<field> has ...`; a `has` straight after an operator is a flag such as `has DOI is (true)`.
-		const has = /(?<=[\w/.]\s+)(?<!\b(?:and|or|not|where)\s+)has\b\s*/giu;
-		while (has.exec(oql)) {
-			const end = clauseEnd(oql, has.lastIndex);
-			for (const [, quoted, word] of oql.slice(has.lastIndex, end).matchAll(/"([^"]+)"|([^\s()"]+)/gu)) {
-				const term = (quoted ?? word)!.trim().toLowerCase();
-				if (term && !OPERATORS.has(term)) terms.add(term);
+		const parts = tokens(oql);
+		for (const [index, part] of parts.entries()) {
+			if (TOPIC.test(part)) topics.add(part);
+			if (!searches(parts, index)) continue;
+			for (const token of clause(parts, index + 1)) {
+				const term = token.replace(/^"|"$/gu, "").trim().toLowerCase();
+				if (term && token !== "(" && token !== ")" && !OPERATORS.has(term)) terms.add(term);
 			}
-			has.lastIndex = end;
 		}
-		for (const [topic] of oql.replace(/"[^"]*"/gu, "").matchAll(/\bT\d{4,}\b/gu)) topics.add(topic);
 	}
 	return { terms: terms.size, topics: topics.size };
 }

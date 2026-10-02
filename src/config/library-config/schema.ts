@@ -1799,6 +1799,10 @@ const homeSchema = z
 							.refine((step) => step.type !== "text" || step.title, {
 								message: "A text-only step needs a title",
 								path: ["title"],
+							})
+							.refine((step) => step.type === "text" || !step.figure, {
+								message: "Only a text step carries its own figure; the others count theirs",
+								path: ["figure"],
 							}),
 					)
 					.max(5)

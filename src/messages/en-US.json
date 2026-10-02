@@ -911,6 +911,12 @@
     "stepSearch": "Found by search",
     "stepSync": "Kept up to date",
     "stepDuplicates": "Duplicates merged",
-    "stepFullText": "Full text added"
+    "stepFullText": "Full text added",
+    "figureTerms": "{count, plural, one {search term} other {search terms}}",
+    "figureAndTopics": "and {topics, plural, one {# research topic} other {# research topics}}",
+    "figureTopics": "{count, plural, one {research topic} other {research topics}}",
+    "figureAdded": "new in the last 30 days",
+    "figureMerged": "{count, plural, one {repeated record merged} other {repeated records merged}}",
+    "figureFullText": "{count, plural, one {record with full text} other {records with full text}}"
   }
 }

@@ -923,6 +923,12 @@
     "stepSearch": "Imepatikana kwa utafutaji",
     "stepSync": "Husasishwa kila mara",
     "stepDuplicates": "Nakala rudufu zimeunganishwa",
-    "stepFullText": "Maandishi kamili yameongezwa"
+    "stepFullText": "Maandishi kamili yameongezwa",
+    "figureTerms": "{count, plural, one {neno la utafutaji} other {maneno ya utafutaji}}",
+    "figureAndTopics": "na {topics, plural, one {mada # ya utafiti} other {mada # za utafiti}}",
+    "figureTopics": "{count, plural, one {mada ya utafiti} other {mada za utafiti}}",
+    "figureAdded": "mapya katika siku 30 zilizopita",
+    "figureMerged": "{count, plural, one {rekodi rudufu imeunganishwa} other {rekodi rudufu zimeunganishwa}}",
+    "figureFullText": "{count, plural, one {rekodi yenye maandishi kamili} other {rekodi zenye maandishi kamili}}"
   }
 }

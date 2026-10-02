@@ -470,7 +470,9 @@ const longDay = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", y
 const TIMELINE_COLUMNS: Record<number, string> = { 1: "", 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
 
 /** A count set large under a step's name, with what it counts. */
-type StepFigureValue = { value: string; label: string };
+type FigureKey = "figureTerms" | "figureTopics" | "figureAdded" | "figureMerged" | "figureFullText";
+/** A counted figure's label is a translated message for its count; a text step's is its owner's words. */
+type StepFigureValue = { value: string; label: string | { key: FigureKey; count: number; topics?: number } };
 
 type Happening = { when?: string; body?: React.ReactNode; figure?: StepFigureValue };
 
@@ -489,15 +491,15 @@ const HAPPENINGS: Record<StepType, (step: Step, data: Figures | null) => Happeni
 	arrival: (_, data) => (data?.journey ? { when: data.journey.submittedAt, body: arrived(data.journey) } : {}),
 	publication: (_, data) => (data?.journey ? published(data.journey) : {}),
 	search: (_, data) => ({ figure: searched(data?.pipeline) }),
-	sync: (_, data) => ({ figure: counted(data?.pipeline?.added, "new in the last 30 days") }),
-	duplicates: (_, data) => ({ figure: counted(data?.pipeline?.merged, "repeated records merged") }),
-	fulltext: (_, data) => ({ figure: counted(data?.attachments?.withPdf, "records with full text") }),
+	sync: (_, data) => ({ figure: figureOf(data?.pipeline?.added, "figureAdded") }),
+	duplicates: (_, data) => ({ figure: figureOf(data?.pipeline?.merged, "figureMerged") }),
+	fulltext: (_, data) => ({ figure: figureOf(data?.attachments?.withPdf, "figureFullText") }),
 	text: (step) => ({ figure: step.figure }),
 };
 
 function searched(pipeline: HomeData["pipeline"] | undefined) {
-	if (pipeline?.terms && pipeline.topics) return counted(pipeline.terms, `search terms and ${number.format(pipeline.topics)} research topics`);
-	return counted(pipeline?.terms, "search terms") ?? counted(pipeline?.topics, "research topics");
+	if (pipeline?.terms && pipeline.topics) return figureOf(pipeline.terms, "figureTerms", pipeline.topics);
+	return figureOf(pipeline?.terms, "figureTerms") ?? figureOf(pipeline?.topics, "figureTopics");
 }
 
 /** Stands in for the library's figures while they load, so a counted step keeps the size its line will take. */
@@ -509,8 +511,8 @@ const LOADING_FIGURES: Figures = {
 
 const COUNTED_TYPES = new Set<StepType>(["search", "sync", "duplicates", "fulltext"]);
 
-function counted(count: number | undefined, label: string): StepFigureValue | undefined {
-	return count ? { value: number.format(count), label } : undefined;
+function figureOf(count: number | undefined, key: FigureKey, topics?: number): StepFigureValue | undefined {
+	return count ? { value: number.format(count), label: { key, count, topics } } : undefined;
 }
 
 function arrived(journey: NonNullable<HomeData["journey"]>) {
@@ -638,11 +640,13 @@ function StepValue({ value, hidden }: { value?: string; hidden: boolean }) {
 }
 
 /** What a step's figure counts, or what happened to the followed publication. */
-function StepOutcome({ label, body, hidden }: { label?: string; body?: React.ReactNode; hidden: boolean }) {
+function StepOutcome({ label, body, hidden }: { label?: StepFigureValue["label"]; body?: React.ReactNode; hidden: boolean }) {
+	const t = useTranslations("homePage");
 	if (!label && !body) return null;
+	const words = typeof label === "object" ? `${t(label.key, { count: label.count })}${label.topics ? ` ${t("figureAndTopics", { topics: label.topics })}` : ""}` : label;
 	return (
 		<div aria-hidden={hidden || undefined} className={`text-base ${label ? "mt-1.5 leading-6" : "mt-3 leading-7"} ${hidden ? "invisible" : ""}`}>
-			{label ?? body}
+			{words ?? body}
 		</div>
 	);
 }

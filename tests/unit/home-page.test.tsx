@@ -152,7 +152,8 @@ describe("the library's home page", () => {
 		await render({ email: null, page: false }, { ...data, pipeline: { terms: 159, topics: 29, added: 1240, merged: 0 } }, { ...about, curation: { steps } });
 
 		const bodies = steps.map(({ title }) => [...container.querySelectorAll("li")].find((step) => step.querySelector("h3")?.textContent === title)?.textContent);
-		expect(bodies[0]).toMatch(/159.*29/);
+		// The page test translates to message keys: the topics join the terms' label.
+		expect(bodies[0]).toMatch(/159.*figureTerms.*figureAndTopics/);
 		expect(bodies[1]).toContain("1,240");
 		expect(bodies[2]).toBe("duplicates");
 		expect(bodies[3]).toContain("60");
