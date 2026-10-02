@@ -101,8 +101,6 @@ type SearchFacetsResult = {
 	 * its own filter (topics, years, item types), the results without that filter.
 	 */
 	totals: FacetTotals;
-	/** How many different authors the results have, up to the facet's limit of 10,000. */
-	authorCount: number;
 };
 
 export type FacetTotals = Record<string, number>;
@@ -468,10 +466,6 @@ export async function getPublicFacets(
 		topicResults?.facetDistribution,
 		...ownResults.map((result) => result.facetDistribution),
 	);
-	const authorCount = Object.keys(searchResults.facetDistribution?.fullNames ?? {}).length;
-	if (searchResults.facetDistribution?.fullNames) {
-		searchResults.facetDistribution.fullNames = topAuthors(searchResults.facetDistribution.fullNames);
-	}
 
 	return {
 		facetDistribution: publicFacetDistribution(
@@ -480,18 +474,7 @@ export async function getPublicFacets(
 			country,
 		),
 		totals,
-		authorCount,
 	};
-}
-
-/** The ten people with the most results; the rest of the up to 10,000 names never leave the server. */
-function topAuthors(counts: Record<string, number>) {
-	return Object.fromEntries(
-		Object.entries(counts)
-			.filter(([name]) => name.trim().length > 1)
-			.sort((left, right) => right[1] - left[1])
-			.slice(0, 10),
-	);
 }
 
 /** Facet counts with each country facet's raw values kept beside its regions. */
@@ -553,13 +536,16 @@ export async function getItemsPaginationMeta(
 	};
 }
 
-/** At most this many authors are counted per request: the sidebar's top authors. */
-export const AUTHOR_ACTIVITY_LIMIT = 10;
+/** How many people the sidebar ranks. */
+const TOP_AUTHORS = 10;
 
 export type AuthorActivity = {
+	name: string;
+	/** Their results under the search and filters. */
+	count: number;
 	/** Their results by year. */
 	years: Record<string, number>;
-	/** How many of their results each of the other named authors shares. */
+	/** How many of their results each of the other top authors shares. */
 	together: Record<string, number>;
 	/** The institution most of their results name, if any does. */
 	institution: string | null;
@@ -567,55 +553,71 @@ export type AuthorActivity = {
 	photo: string | null;
 };
 
-export type AuthorsActivity = {
-	byAuthor: Record<string, AuthorActivity>;
-	/** The results any of the named authors wrote, by year: a publication several of them wrote counts once. */
+export type TopAuthors = {
+	/** How many different people the results name, up to the facet's limit of 10,000. */
+	authorCount: number;
+	authors: AuthorActivity[];
+	/** The results any of the top authors wrote, by year: a publication several of them wrote counts once. */
 	combined: Record<string, number>;
 };
 
 /**
- * Each author's results by year under the current search and filters, how many of them each other named author shares,
- * and their main institution, plus all their results together by year, for the top authors in the sidebar. One small
- * search per author and one for them all, side by side.
+ * The people with the most results under a search and filters, and for each when they published, whom they share work
+ * with, their main institution and photo. Ranking them counts every name in the results, the costliest search the
+ * sidebar makes, so it runs here, apart from the facets the filters need and only for the sidebar, and its answer is
+ * kept for five minutes per search and filters. Everything after the ranking goes in one multi-search request.
  */
-export async function getAuthorActivity(
+async function readTopAuthors(
+	_configRevision: string,
+	libraryConfig: LibraryServerConfig,
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	names: readonly string[],
-): Promise<AuthorsActivity> {
-	const libraryConfig = await getLibraryConfig();
+): Promise<TopAuthors> {
+	"use cache";
+	cacheLife({ revalidate: 300 });
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-	const asked = names.slice(0, AUTHOR_ACTIVITY_LIMIT);
+	const { client, index } = await getMeilisearchForConfig(libraryConfig);
+	const ranked = await index.search(search, { offset: 0, limit: 0, attributesToSearchOn, facets: ["fullNames"], filter: finalFilters });
+	const everyone = (ranked.facetDistribution?.fullNames ?? {}) as Record<string, number>;
+	const top = Object.entries(everyone)
+		.filter(([name]) => name.trim().length > 1)
+		.sort((left, right) => right[1] - left[1])
+		.slice(0, TOP_AUTHORS);
+	const names = top.map(([name]) => name);
+	if (names.length === 0) return { authorCount: 0, authors: [], combined: {} };
 	const institutions = libraryConfig.filters.institution.mode !== "hidden";
-	const [all, ...results] = await Promise.all([
-		index.search(search, {
-			offset: 0, limit: 0, attributesToSearchOn, facets: ["year"],
-			filter: [...finalFilters, meilisearchIn("fullNames", asked)],
-		}),
-		...asked.map((name) =>
-			index.search(search, {
-				offset: 0, attributesToSearchOn,
+	const indexUid = index.uid;
+	const { results } = await client.multiSearch({
+		queries: [
+			{ indexUid, q: search, limit: 0, attributesToSearchOn, facets: ["year"], filter: [...finalFilters, meilisearchIn("fullNames", names)] },
+			...names.map((name) => ({
+				indexUid, q: search, attributesToSearchOn,
 				// One of their results, to find the profile their name is linked to on it.
 				limit: 1, attributesToRetrieve: ["creators"],
 				facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
 				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
-			}),
-		),
-	]);
-	const profileIds = asked.map((name, position) => {
-		const creators = ((results[position]?.hits[0] as ListItem | undefined)?.creators ?? []) as Author[];
+			})),
+		],
+	});
+	const [all, ...perAuthor] = results;
+	const profileIds = names.map((name, position) => {
+		const creators = ((perAuthor[position]?.hits[0] as ListItem | undefined)?.creators ?? []) as Author[];
 		return creators.find((creator) => creatorFullName(creator) === name)?.authorProfileId ?? null;
 	});
 	const profiles = new Map((await readAuthorProfiles(profileIds.filter((id): id is string => Boolean(id)))).map((profile) => [profile.id, profile]));
-	const byAuthor = Object.fromEntries(asked.map((name, position) => {
-		const distribution = results[position]?.facetDistribution ?? {};
+	const authors = top.map(([name, count], position) => {
+		const distribution = perAuthor[position]?.facetDistribution ?? {};
 		const coauthors = (distribution.fullNames ?? {}) as Record<string, number>;
-		// Only the other named authors leave the server, not everyone they wrote with.
-		const together = Object.fromEntries(asked.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
+		// Only the other top authors leave the server, not everyone they wrote with.
+		const together = Object.fromEntries(names.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
 		const institution = Object.entries((distribution[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
-		const photo = profileIds[position] ? (profiles.get(profileIds[position]!)?.photo ?? null) : null;
-		return [name, { years: (distribution.year ?? {}) as Record<string, number>, together, institution, photo }];
-	}));
-	return { byAuthor, combined: (all.facetDistribution?.year ?? {}) as Record<string, number> };
+		const profileId = profileIds[position];
+		return { name, count, years: (distribution.year ?? {}) as Record<string, number>, together, institution, photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null };
+	});
+	return { authorCount: Object.keys(everyone).length, authors, combined: (all?.facetDistribution?.year ?? {}) as Record<string, number> };
+}
+
+export async function getTopAuthors(searchParams: Partial<inferParserType<typeof searchParamsLoader>>) {
+	const libraryConfig = await getLibraryConfig();
+	return readTopAuthors(libraryConfig.revision, libraryConfig, searchParams);
 }

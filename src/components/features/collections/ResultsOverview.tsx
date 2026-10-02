@@ -19,7 +19,7 @@ import { PdfCover } from "@/components/features/items/PdfCover";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import type { ListItem } from "@/app/api/item/types";
-import type { AuthorsActivity } from "@/lib/search";
+import type { TopAuthors } from "@/lib/search";
 import { useItemLink } from "@/hooks/useItemLink";
 import { useLastFetchedData } from "@/context/Providers";
 
@@ -383,22 +383,18 @@ function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCoun
  * Pointing at one (or focusing it) shows their span of years in the header, draws their years in the band, and, over
  * the strips of the others, how many results each shares with them.
  */
-function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string; onSelect: (author: string) => void }) {
+function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (author: string) => void }) {
 	const format = useFormatter();
-	const { queryParams, authorCount } = useFiltersContext();
+	const { queryParams } = useFiltersContext();
 	const [focused, setFocused] = useState<string | null>(null);
-	const rows = sortedCounts(counts);
-	const names = rows.map(([name]) => name);
-	// The strips ask for themselves after the list, so the list never waits on them.
+	// Ranked and described in one request of their own, which the server keeps for a few minutes: ranking authors is the
+	// costliest count the sidebar asks for, so the filters' facets never wait on it. Pages and order don't change it.
 	const { page, sort, ...filters } = queryParams;
-	const base = buildItemsQuery(filters, "/author-activity");
-	const { data: activity } = useSWR<AuthorsActivity>(
-		names.length ? `${base}${base.includes("?") ? "&" : "?"}${names.map((name) => `name=${encodeURIComponent(name)}`).join("&")}` : null,
-		fetcher,
-		{ keepPreviousData: true, revalidateOnFocus: false },
-	);
-	if (rows.length === 0) return null;
-	const byAuthor = activity?.byAuthor;
+	const { data: activity } = useSWR<TopAuthors>(buildItemsQuery(filters, "/top-authors"), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
+	if (activity && activity.authors.length === 0) return null;
+	const authorCount = activity?.authorCount;
+	const rows = activity?.authors.map((entry) => [entry.name, entry.count] as const) ?? [];
+	const byAuthor = activity ? Object.fromEntries(activity.authors.map((entry) => [entry.name, entry])) : undefined;
 	// One axis for every row and the band: the last twenty years any of these authors published in.
 	const known = Object.keys(activity?.combined ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
 	const last = known.length ? Math.max(...known) : new Date().getFullYear();
@@ -417,7 +413,19 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 			}
 			band={<AuthorsBand authorCount={authorCount} combined={activity?.combined} focusedYears={focused ? byAuthor?.[focused]?.years : undefined} axis={axis} />}
 		>
-			<ul className="@container -mx-3 -my-3 flex flex-col" onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
+			{!activity && (
+				// The rows' room, held until the first answer, so the card doesn't grow when it arrives.
+				<ul aria-hidden className="-mx-3 -my-3 flex flex-col">
+					{Array.from({ length: 10 }, (_, index) => (
+						<li key={index} className="flex h-14 items-center gap-3 px-3">
+							<Skeleton className="h-4 flex-1 rounded-md" />
+							<Skeleton className="h-6 w-24 rounded-md" />
+							<Skeleton className="h-4 w-10 rounded-md" />
+						</li>
+					))}
+				</ul>
+			)}
+			<ul className={twMerge("@container -mx-3 -my-3 flex flex-col", !activity && "hidden")} onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
 				{rows.map(([name, count]) => {
 					const chosen = name === selected;
 					const shared = focused && name !== focused && activity ? (together?.[name] ?? 0) : null;
@@ -560,7 +568,7 @@ export function ResultsOverview({
 		<>
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
-			{showAuthors && <AuthorRows counts={facetDistribution?.fullNames} selected={author} onSelect={onAuthorSelect} />}
+			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} />}
 			<MostCited />
 		</>
 	);

@@ -327,7 +327,6 @@ export function useFilters() {
 		selectedCollections,
 		facetDistribution: facetsData?.facetDistribution,
 		facetTotals: facetsData?.totals,
-		authorCount: facetsData?.authorCount,
 		noteData,
 		isNoteLoading,
 	};
