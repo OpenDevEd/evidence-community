@@ -93,7 +93,14 @@ type SearchItemsResult = SearchCountOnlyResult & {
 
 type SearchFacetsResult = {
 	facetDistribution: FacetDistribution;
+	/**
+	 * How many results each facet's counts are out of: `*` for the filtered results, and for a facet counted without
+	 * its own filter (topics, years, item types), the results without that filter.
+	 */
+	totals: FacetTotals;
 };
+
+export type FacetTotals = Record<string, number>;
 
 async function getCachedDisplayedAttributes(
 	configRevision: string,
@@ -445,6 +452,11 @@ export async function getPublicFacets(
 			}),
 		),
 	]);
+	const totals: FacetTotals = { "*": searchResults.estimatedTotalHits ?? 0 };
+	if (topicResults) totals.topicAncestors = topicResults.estimatedTotalHits ?? 0;
+	ownFilters.forEach(({ facet }, index) => {
+		totals[facet] = ownResults[index].estimatedTotalHits ?? 0;
+	});
 	searchResults.facetDistribution = Object.assign(
 		{},
 		searchResults.facetDistribution,
@@ -461,6 +473,7 @@ export async function getPublicFacets(
 			facets,
 			country,
 		),
+		totals,
 	};
 }
 

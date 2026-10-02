@@ -62,14 +62,22 @@ function useExpandTransition(): Transition {
 	return useReducedMotion() ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] };
 }
 
-/** A part of the results as a share: whole percents, with one decimal below 1%. */
+/** A part of the results as a share: whole percents, one decimal below 1%, and "<0.1%" for less. */
 export function shareOf(format: ReturnType<typeof useFormatter>, count: number, total: number) {
-	return format.number(count / total, { style: "percent", maximumFractionDigits: count / total < 0.01 ? 1 : 0 });
+	const share = count / total;
+	if (count > 0 && share < 0.001) return `<${format.number(0.001, { style: "percent", maximumFractionDigits: 1 })}`;
+	return format.number(share, { style: "percent", maximumFractionDigits: share < 0.01 ? 1 : 0 });
 }
 
-/** How many results there are: each has exactly one item type, so the type counts add up to them. */
-export function resultsTotal(facetDistribution: FacetDistribution | undefined) {
-	return Object.values(facetDistribution?.itemType ?? {}).reduce((sum, count) => sum + count, 0);
+/** A bar's width for a count against the largest: a sliver at least for any count, nothing for none. */
+export function barWidth(count: number, largest: number) {
+	return count > 0 ? `${Math.max(2, (count / largest) * 100)}%` : "0%";
+}
+
+/** How many results a facet's counts are out of: its own base when it is counted without its filter, else all of them. */
+export function useFacetTotal(facet: string) {
+	const { facetTotals } = useFiltersContext();
+	return facetTotals?.[facet] ?? facetTotals?.["*"] ?? 0;
 }
 
 function Tick({ shown }: { shown: boolean }) {
@@ -306,7 +314,7 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 									<span className="shrink-0 text-base font-bold tabular-nums">{format.number(count)}</span>
 								</span>
 								<span aria-hidden className="block h-1.5 w-full overflow-hidden rounded-full bg-accent/10">
-									<span className={twMerge("block h-full rounded-full", chosen ? "bg-accent" : "bg-accent/70")} style={{ width: `${Math.max(2, (count / max) * 100)}%` }} />
+									<span className={twMerge("block h-full rounded-full", chosen ? "bg-accent" : "bg-accent/70")} style={{ width: barWidth(count, max) }} />
 								</span>
 							</button>
 						</li>

@@ -326,6 +326,7 @@ export function useFilters() {
 		hierarchy,
 		selectedCollections,
 		facetDistribution: facetsData?.facetDistribution,
+		facetTotals: facetsData?.totals,
 		noteData,
 		isNoteLoading,
 	};

@@ -59,7 +59,7 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { ResultsOverview, resultsTotal, shareOf } from "./ResultsOverview";
+import { barWidth, ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -90,7 +90,7 @@ function FacetOption({ label, count, largest, share, arrow, note }: { label: str
 			</span>
 			{count !== null && (
 				<span aria-hidden className="block h-1 w-full overflow-hidden rounded-full bg-accent/10">
-					<span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.max(2, (count / largest) * 100)}%` }} />
+					<span className="block h-full rounded-full bg-accent/70" style={{ width: barWidth(count, largest) }} />
 				</span>
 			)}
 		</span>
@@ -647,7 +647,9 @@ function FiltersList({
 	const { filters, topics } = useLibraryConfig();
 	const topicPicker = topics.enabled && !topicsAsTree;
 	const isInstitutionEnabled = filters.institution.mode !== "hidden";
-	const total = resultsTotal(facetDistribution);
+	const total = useFacetTotal("*");
+	// Topics are counted without the topic filter, so their shares are out of the results without it.
+	const topicTotal = useFacetTotal("topicAncestors");
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
 	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
@@ -779,7 +781,7 @@ function FiltersList({
 				{countryFocusFilter}
 				{topicPicker ? (
 					<TopicFilter
-						total={total}
+						total={topicTotal}
 						counts={facetDistribution?.topicAncestors}
 						onChange={handleTopicsChange}
 						selected={queryParams.topics}
@@ -794,7 +796,7 @@ function FiltersList({
 		institutionFilter,
 		queryParams.topics,
 		topicPicker,
-		total,
+		topicTotal,
 	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
@@ -917,6 +919,8 @@ export default function CollectionsList({
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
 	const topicsAsTree = topics.enabled && !isCollectionsEnabled;
+	const collectionsTotal = useFacetTotal("collectionsAncestry");
+	const topicsTotal = useFacetTotal("topicAncestors");
 	const { filters, institutions: configuredInstitutions } =
 		useLibraryConfig();
 	const configuredYears = useMemo(
@@ -1029,14 +1033,14 @@ export default function CollectionsList({
 							handleCountrySelect={handleCountrySelect}
 							selectedCollections={selectedCollections}
 							hierarchy={hierarchy}
-							total={resultsTotal(facetDistribution)}
+							total={collectionsTotal}
 						/>
 					</section>
 				)}
 				{topicsAsTree && (
 					<section className="w-full" aria-label="Topics">
 						<TopicTree
-							total={resultsTotal(facetDistribution)}
+							total={topicsTotal}
 							counts={facetDistribution?.topicAncestors}
 							onChange={handleTopicsChange}
 							selected={queryParams.topics}

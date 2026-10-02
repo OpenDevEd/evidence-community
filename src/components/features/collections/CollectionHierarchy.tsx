@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
 import { useMemo, memo } from "react";
 import { useFormatter } from "next-intl";
-import { shareOf } from "./ResultsOverview";
+import { barWidth, shareOf } from "./ResultsOverview";
 interface CollectionHierarchyProps {
 	collectionData: Collection;
 	collections: Collection[];
@@ -122,7 +122,7 @@ function CollectionHierarchy({
 							<span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
 						</span>
 						<span aria-hidden className="block h-1 w-full overflow-hidden rounded-full bg-accent/10">
-							<span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.max(2, (count / largest) * 100)}%` }} />
+							<span className="block h-full rounded-full bg-accent/70" style={{ width: barWidth(count, largest) }} />
 						</span>
 					</span>
 				</Checkbox>
