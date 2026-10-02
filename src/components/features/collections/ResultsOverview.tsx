@@ -390,8 +390,9 @@ function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (autho
 	// Ranked and described in one request of their own, which the server keeps for a few minutes: ranking authors is the
 	// costliest count the sidebar asks for, so the filters' facets never wait on it. Pages and order don't change it.
 	const { page, sort, ...filters } = queryParams;
-	const { data: activity } = useSWR<TopAuthors>(buildItemsQuery(filters, "/top-authors"), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
-	if (activity && activity.authors.length === 0) return null;
+	const { data: activity, error, isValidating, mutate } = useSWR<TopAuthors>(buildItemsQuery(filters, "/top-authors"), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
+	// Kept from the last search while the next loads: dimmed and out of reach until it matches.
+	const stale = Boolean(activity) && isValidating;
 	const authorCount = activity?.authorCount;
 	const rows = activity?.authors.map((entry) => [entry.name, entry.count] as const) ?? [];
 	const byAuthor = activity ? Object.fromEntries(activity.authors.map((entry) => [entry.name, entry])) : undefined;
@@ -413,9 +414,15 @@ function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (autho
 			}
 			band={<AuthorsBand authorCount={authorCount} combined={activity?.combined} focusedYears={focused ? byAuthor?.[focused]?.years : undefined} axis={axis} />}
 		>
-			{!activity && (
-				// The rows' room, held until the first answer, so the card doesn't grow when it arrives.
-				<ul aria-hidden className="-mx-3 -my-3 flex flex-col">
+			{/* Always the room of ten rows, whatever the answer, so the card never grows or shrinks as it arrives. */}
+			<div className="-mx-3 -my-3 h-[35rem]">
+			{error && !isValidating ? (
+				<div className={`flex flex-col items-start gap-3 px-3 text-base ${MUTED}`}>
+					Could not load the top authors.
+					<Button size="sm" onPress={() => void mutate()}>Try again</Button>
+				</div>
+			) : !activity ? (
+				<ul aria-hidden className="flex flex-col">
 					{Array.from({ length: 10 }, (_, index) => (
 						<li key={index} className="flex h-14 items-center gap-3 px-3">
 							<Skeleton className="h-4 flex-1 rounded-md" />
@@ -424,8 +431,10 @@ function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (autho
 						</li>
 					))}
 				</ul>
-			)}
-			<ul className={twMerge("@container -mx-3 -my-3 flex flex-col", !activity && "hidden")} onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
+			) : activity.authors.length === 0 ? (
+				<p className={`px-3 text-base ${MUTED}`}>No authors are named in these results.</p>
+			) : (
+			<ul inert={stale || undefined} className={twMerge("@container flex flex-col transition-opacity", stale && "opacity-50")} onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
 				{rows.map(([name, count]) => {
 					const chosen = name === selected;
 					const shared = focused && name !== focused && activity ? (together?.[name] ?? 0) : null;
@@ -464,6 +473,8 @@ function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (autho
 					);
 				})}
 			</ul>
+			)}
+			</div>
 		</SidebarCard>
 	);
 }

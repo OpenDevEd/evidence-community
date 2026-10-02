@@ -574,6 +574,8 @@ async function readTopAuthors(
 ): Promise<TopAuthors> {
 	"use cache";
 	cacheLife({ revalidate: 300 });
+	// Cleared with every public record when an editor clears the public cache.
+	cacheTag("library");
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 	const { client, index } = await getMeilisearchForConfig(libraryConfig);
