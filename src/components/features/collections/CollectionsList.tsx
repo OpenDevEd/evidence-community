@@ -465,12 +465,9 @@ function CountryParser(
 		style: {
 			paddingLeft: `${numberOfParts * 1.5 + 0.5}rem`,
 		},
-		hideCount:
-			ancestry.length <= 2
-				? true
-				: queryParamValue && Array.isArray(queryParamValue)
-					? queryParamValue.includes(country)
-					: false,
+		// A region's count would add up its countries, counting a publication about two of them twice. A chosen country
+		// keeps its count: the option hides its figures itself, and keeps their room.
+		hideCount: ancestry.length <= 2,
 		hide: !isParentSelected,
 		query: ancestry,
 		onSelectionChange,
