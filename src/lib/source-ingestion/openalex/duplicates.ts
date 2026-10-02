@@ -126,7 +126,7 @@ async function dataCiteBatch(dois: readonly string[], fetchImpl: typeof fetch, s
 			await response.body?.cancel();
 			failure = `DataCite returned ${response.status}`;
 			// Another try will not change a refusal of the request itself.
-			if (response.status !== 429 && response.status < 500) return { failure };
+			if (response.status !== 429 && response.status < 500) return { failure, refused: true };
 			delay = retryDelay(response, attempt);
 		} catch (error) {
 			// A lost connection, a timeout or a malformed answer is tried again like a 5xx.
@@ -134,7 +134,7 @@ async function dataCiteBatch(dois: readonly string[], fetchImpl: typeof fetch, s
 		}
 		await sleep(delay);
 	}
-	return { failure };
+	return { failure, refused: false };
 }
 
 /**
@@ -153,21 +153,28 @@ export async function dataCiteVersions(
 	let failedInRow = 0;
 	for (let start = 0; start < dois.length; start += DATACITE_BATCH) {
 		const batch = dois.slice(start, start + DATACITE_BATCH);
-		const answer = failedInRow < DATACITE_OUTAGE_BATCHES ? await dataCiteBatch(batch, fetchImpl, sleep) : { failure: `skipped after ${failedInRow} failed batches in a row` };
-		if ("failure" in answer) {
-			failedInRow++;
-			failure = answer.failure;
-			for (const doi of batch) unresolved.add(doi);
+		const answer = failedInRow < DATACITE_OUTAGE_BATCHES ? await dataCiteBatch(batch, fetchImpl, sleep) : null;
+		if (answer?.records) {
+			failedInRow = 0;
+			addVersions(versionsOf, answer.records);
 			continue;
 		}
-		failedInRow = 0;
-		for (const record of answer.records) {
-			const targets = versionTargets(record);
-			const doi = record.attributes?.doi?.toLowerCase();
-			if (doi && targets.length) versionsOf.set(doi, new Set(targets));
+		for (const doi of batch) unresolved.add(doi);
+		// A refused request says nothing about DataCite being down; the reason kept is the last one DataCite gave.
+		if (answer) {
+			failure = answer.failure;
+			failedInRow += answer.refused ? 0 : 1;
 		}
 	}
 	return { versionsOf, unresolved, failure };
+}
+
+function addVersions(versionsOf: Map<string, Set<string>>, records: DataCiteRecord[]) {
+	for (const record of records) {
+		const targets = versionTargets(record);
+		const doi = record.attributes?.doi?.toLowerCase();
+		if (doi && targets.length) versionsOf.set(doi, new Set(targets));
+	}
 }
 
 /** What OpenAlex itself says about a work, from its own record, so library edits never change the comparison. */

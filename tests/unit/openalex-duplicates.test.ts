@@ -164,7 +164,7 @@ describe("OpenAlex duplicate records", () => {
 			}) as typeof fetch;
 			const result = await dataCiteVersions(asked, down, sleep);
 			expect(result.unresolved).toEqual(new Set(asked));
-			expect(result.failure).toBeTruthy();
+			expect(result.failure).toContain("502");
 			// Three batches of five tries each, then the other seven batches are not asked for.
 			expect(calls).toBe(15);
 		});
