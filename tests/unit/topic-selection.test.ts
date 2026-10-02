@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	selectionFrontier,
 	toggleTopicSelection,
+	withoutBareRoots,
 	type TopicSelectionNode,
 } from "@/lib/topics/selection";
 
@@ -77,5 +78,17 @@ describe("topic selection", () => {
 		expect(selectionFrontier(["T12260", "unknown"], nodes)).toEqual([
 			"T12260",
 		]);
+	});
+});
+
+describe("domains in the topic tree", () => {
+	it("drops a domain once nothing under it is chosen", () => {
+		const cleared = toggleTopicSelection(["domains/3", "fields/17"], "fields/17", nodes);
+		expect(cleared).toEqual(["domains/3"]);
+		expect(withoutBareRoots(cleared, nodes)).toEqual([]);
+	});
+
+	it("keeps a domain while something under it is chosen, and topics it doesn't know", () => {
+		expect(withoutBareRoots(["domains/3", "fields/17", "T99999"], nodes)).toEqual(["domains/3", "fields/17", "T99999"]);
 	});
 });

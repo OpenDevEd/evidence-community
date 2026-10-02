@@ -40,8 +40,15 @@ describe("the library result set the assistant can see", () => {
 			author: "",
 			collections: [],
 			topics: [],
+			type: [],
 			readerList: null,
 		});
+	});
+
+	it("keeps the chosen item types, so the assistant reads the same results the list shows", () => {
+		const chosen = context({ type: ["Thesis", "Report"] });
+		expect(chosen.type).toEqual(["Thesis", "Report"]);
+		expect(JSON.parse(librarySearchContextSummary(chosen)).itemTypes).toEqual(["Thesis", "Report"]);
 	});
 
 	it("survives a half-typed year range instead of throwing", () => {

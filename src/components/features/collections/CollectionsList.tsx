@@ -55,7 +55,7 @@ import {
 import { YearFilter } from "./YearFilter";
 import { useTopicTree } from "@/lib/topics/client";
 import type { TopicTreeNode } from "@/lib/topics/contract";
-import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
+import { topicAncestry, toggleTopicSelection, withoutBareRoots } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import { ResultsOverview, shareOf, SIDEBAR_GREY, useFacetTotal } from "./ResultsOverview";
@@ -577,18 +577,6 @@ function TopicFilter({
 	);
 }
 
-/** Domains have no box in the tree, so one stays chosen only while something under it is. */
-function withoutBareDomains(selected: string[], nodes: readonly TopicTreeNode[]) {
-	const parents = new Map(nodes.map((node) => [node.id, node.parent]));
-	const domainOf = (id: string): string => {
-		const parent = parents.get(id);
-		return parent ? domainOf(parent) : id;
-	};
-	const isDomain = (id: string) => parents.get(id) === null;
-	const kept = new Set(selected.filter((id) => !isDomain(id)).map(domainOf));
-	return selected.filter((id) => !isDomain(id) || kept.has(id));
-}
-
 /**
  * Topics in the collections' place, for a library without collections: each domain is a section and its fields,
  * subfields and topics open under it, through the same tree and counts the collections use.
@@ -633,7 +621,7 @@ function TopicTree({
 		<InnerCollectionList
 			data={{ collections }}
 			facetDistribution={{ collectionsAncestry: counts ?? {} }}
-			handleCheckboxChange={(id) => onChange(withoutBareDomains(toggleTopicSelection(selected, id, nodes), nodes))}
+			handleCheckboxChange={(id) => onChange(withoutBareRoots(toggleTopicSelection(selected, id, nodes), nodes))}
 			handleCountrySelect={() => undefined}
 			// A domain is its section's heading, never a box inside it, though choosing a field chooses its domain too.
 			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
@@ -906,6 +894,99 @@ function FiltersList({
 /** The library page's highlights, rendered on the server, for both the sidebar and the Explore sheet. */
 export const LibraryHighlightsSlot = createContext<ReactNode>(null);
 
+/** The grey filter card: the year picker and the filter dropdowns. */
+function FilterCard({ facetDistribution, range, onRangeChange, queryParams, handleCountrySelect, handleInstitutionSelect, handleTopicsChange, topicsAsTree, roundFoot }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; handleCountrySelect: (country: string) => void; handleInstitutionSelect: (institution: string) => void; handleTopicsChange: (topics: string[]) => void; topicsAsTree: boolean; roundFoot: boolean }) {
+	const { filters } = useLibraryConfig();
+	const years = useMemo(() => Object.keys(facetDistribution?.year ?? {}).sort((left, right) => Number(right) - Number(left)), [facetDistribution]);
+	return (
+		<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, roundFoot && "rounded-b-2xl")}>
+			{filters.years.enabled && <YearFilter key={range} range={range} onRangeChange={onRangeChange} years={years} counts={facetDistribution?.year} />}
+			<FiltersList
+				queryParams={queryParams}
+				handleCountrySelect={handleCountrySelect}
+				handleInstitutionSelect={handleInstitutionSelect}
+				handleTopicsChange={handleTopicsChange}
+				facetDistribution={facetDistribution}
+				topicsAsTree={topicsAsTree}
+			/>
+		</section>
+	);
+}
+
+/** The collections tree, under the filter card. */
+function CollectionsTreeSection(props: Omit<React.ComponentProps<typeof InnerCollectionList>, "total">) {
+	const total = useFacetTotal("collectionsAncestry");
+	return (
+		<section className="w-full">
+			<InnerCollectionList {...props} total={total} />
+		</section>
+	);
+}
+
+/** A library's featured institution as a filter button over the filter card, when the library features one. */
+function FeaturedInstitution({ chosen, onSelect, isModal }: { chosen: string[]; onSelect: (institution: string) => void; isModal: boolean }) {
+	const t = useTranslations("ui");
+	const { filters, institutions } = useLibraryConfig();
+	if (filters.institution.mode !== "facet-with-featured-value") return null;
+	const featured = filters.institution.featuredValue;
+	if (!featured) return null;
+	const isChosen = chosen.includes(featured);
+	const logoUrl = findInstitutionWithLogo(institutions, featured)?.logoUrl;
+	return (
+		<div className={twMerge("w-full", isModal && "px-6")}>
+			<Button
+				color={isChosen ? "tertiary" : "secondary"}
+				variant={isChosen ? "solid" : "flat"}
+				onPress={() => onSelect(featured)}
+				className="w-full flex justify-start mb-4"
+				startContent={logoUrl ? <InstitutionLogo alt="" logoUrl={logoUrl} /> : undefined}
+				endContent={<HugeiconsIcon icon={FilterIcon} className="size-5 ml-auto" />}
+			>
+				{t("filterBy")} {featured}
+			</Button>
+		</div>
+	);
+}
+
+/** The topic tree, in the collections' place, for a library without collections. */
+function TopicTreeSection({ counts, onChange, selected }: { counts: Record<string, number> | undefined; onChange: (topics: string[]) => void; selected: string[] }) {
+	const total = useFacetTotal("topicAncestors");
+	return (
+		<section className="w-full" aria-label="Topics">
+			<TopicTree total={total} counts={counts} onChange={onChange} selected={selected} />
+		</section>
+	);
+}
+
+/** The cards under the filters: what the results are made of. In the Explore sheet they run edge to edge, as the filter card does. */
+function SidebarCards({ facetDistribution, range, onRangeChange, queryParams }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader> }) {
+	const { filters } = useLibraryConfig();
+	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
+	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
+	return (
+		<div className="mt-4 flex flex-col gap-4">
+			<ResultsOverview
+				facetDistribution={facetDistribution}
+				range={range}
+				types={queryParams.type}
+				author={queryParams.author}
+				onRangeChange={onRangeChange}
+				onTypeSelect={handleTypeSelect}
+				onAuthorSelect={handleAuthorSelect}
+				showYears={filters.years.enabled}
+				showAuthors={isAuthorFilterEnabled}
+			/>
+		</div>
+	);
+}
+
+/** The library page's highlights, rendered on the server, under everything else; the Explore sheet keeps the map and statistics buttons off its edges. */
+function HighlightsSlot({ isModal }: { isModal: boolean }) {
+	const highlights = useContext(LibraryHighlightsSlot);
+	if (!highlights) return null;
+	return <div className={twMerge("mt-4", isModal && "pb-6 [&_nav]:px-6")}>{highlights}</div>;
+}
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -936,68 +1017,7 @@ export default function CollectionsList({
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useLibraryFeature("collections");
 	const { topics } = useLibraryConfig();
-	const highlights = useContext(LibraryHighlightsSlot);
-	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
-	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
 	const topicsAsTree = topics.enabled && !isCollectionsEnabled;
-	const collectionsTotal = useFacetTotal("collectionsAncestry");
-	const topicsTotal = useFacetTotal("topicAncestors");
-	const { filters, institutions: configuredInstitutions } =
-		useLibraryConfig();
-	const configuredYears = useMemo(
-		() =>
-			Object.keys(facetDistribution?.year ?? {}).sort(
-				(left, right) => Number(right) - Number(left),
-			),
-		[facetDistribution],
-	);
-	const customFilterInstitution =
-		filters.institution.mode === "facet-with-featured-value"
-			? filters.institution.featuredValue
-			: undefined;
-
-	const customFilter = useMemo(() => {
-		if (!customFilterInstitution) return null;
-		const isCustomFilterInstitutionSelected =
-			queryParams.institution.includes(customFilterInstitution || "");
-		const configuredInstitution = findInstitutionWithLogo(
-			configuredInstitutions,
-			customFilterInstitution,
-		);
-		return (
-			<Button
-				color={
-					isCustomFilterInstitutionSelected ? "tertiary" : "secondary"
-				}
-				variant={isCustomFilterInstitutionSelected ? "solid" : "flat"}
-				onPress={() => handleInstitutionSelect(customFilterInstitution)}
-				className="w-full flex justify-start mb-4"
-				startContent={
-					configuredInstitution?.logoUrl ? (
-						<InstitutionLogo
-							alt=""
-							logoUrl={configuredInstitution.logoUrl}
-						/>
-					) : undefined
-				}
-				endContent={
-					<HugeiconsIcon
-						icon={FilterIcon}
-						className="size-5 ml-auto"
-					/>
-				}
-			>
-				{t("filterBy")} {customFilterInstitution}
-			</Button>
-		);
-	}, [
-		configuredInstitutions,
-		customFilterInstitution,
-		queryParams.institution,
-		handleInstitutionSelect,
-		t,
-	]);
-
 	return (
 		<aside
 			id="collections"
@@ -1014,77 +1034,44 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:lg:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				{customFilter && (
-					<div className={twMerge("w-full", isModal && "px-6")}>
-						{customFilter}
-					</div>
-				)}
-				<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, !isCollectionsEnabled && !topicsAsTree && "rounded-b-2xl")}>
-					{filters.years.enabled && (
-						<YearFilter
-							key={range}
-							range={range}
-							onRangeChange={handleRangeChange}
-							years={configuredYears}
-							counts={facetDistribution?.year}
-						/>
-					)}
-					<FiltersList
-						queryParams={queryParams}
-						handleCountrySelect={handleCountrySelect}
-						handleInstitutionSelect={handleInstitutionSelect}
-						handleTopicsChange={handleTopicsChange}
-						facetDistribution={facetDistribution}
-						topicsAsTree={topicsAsTree}
-					/>
-				</section>
+				<FeaturedInstitution chosen={queryParams.institution} onSelect={handleInstitutionSelect} isModal={isModal} />
+				<FilterCard
+					facetDistribution={facetDistribution}
+					range={range}
+					onRangeChange={handleRangeChange}
+					queryParams={queryParams}
+					handleCountrySelect={handleCountrySelect}
+					handleInstitutionSelect={handleInstitutionSelect}
+					handleTopicsChange={handleTopicsChange}
+					topicsAsTree={topicsAsTree}
+					// Nothing hangs under it when there is no tree, so it rounds its own foot.
+					roundFoot={!isCollectionsEnabled && !topicsAsTree}
+				/>
 				{isCollectionsEnabled && (
-					<section className="w-full">
-						{/* <div className="p-4 pt-6 pb-0 bg-card_light dark:bg-card">
-						<Input
-							placeholder={t("searchCollections")}
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-						/>
-					</div> */}
-
-						<InnerCollectionList
-							data={data}
-							facetDistribution={facetDistribution}
-							handleCheckboxChange={handleCheckboxChange}
-							handleCountrySelect={handleCountrySelect}
-							selectedCollections={selectedCollections}
-							hierarchy={hierarchy}
-							total={collectionsTotal}
-						/>
-					</section>
+					<CollectionsTreeSection
+						data={data}
+						facetDistribution={facetDistribution}
+						handleCheckboxChange={handleCheckboxChange}
+						handleCountrySelect={handleCountrySelect}
+						selectedCollections={selectedCollections}
+						hierarchy={hierarchy}
+					/>
 				)}
 				{topicsAsTree && (
-					<section className="w-full" aria-label="Topics">
-						<TopicTree
-							total={topicsTotal}
-							counts={facetDistribution?.topicAncestors}
-							onChange={handleTopicsChange}
-							selected={queryParams.topics}
-						/>
-					</section>
-				)}
-				{/* In the Explore sheet the cards run edge to edge, as the filter card does. */}
-				<div className="mt-4 flex flex-col gap-4">
-					<ResultsOverview
-						facetDistribution={facetDistribution}
-						range={range}
-						types={queryParams.type}
-						author={queryParams.author}
-						onRangeChange={handleRangeChange}
-						onTypeSelect={handleTypeSelect}
-						onAuthorSelect={handleAuthorSelect}
-						showYears={filters.years.enabled}
-						showAuthors={isAuthorFilterEnabled}
+					<TopicTreeSection
+						counts={facetDistribution?.topicAncestors}
+						onChange={handleTopicsChange}
+						selected={queryParams.topics}
 					/>
-				</div>
+				)}
+				<SidebarCards
+					facetDistribution={facetDistribution}
+					range={range}
+					onRangeChange={handleRangeChange}
+					queryParams={queryParams}
+				/>
 			</Skeleton>
-			{highlights && <div className={twMerge("mt-4", isModal && "pb-6 [&_nav]:px-6")}>{highlights}</div>}
+			<HighlightsSlot isModal={isModal} />
 		</aside>
 	);
 }

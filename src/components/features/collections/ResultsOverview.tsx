@@ -19,7 +19,7 @@ import { PdfCover } from "@/components/features/items/PdfCover";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import type { ListItem } from "@/app/api/item/types";
-import type { TopAuthors } from "@/lib/search";
+import type { AuthorActivity, TopAuthors } from "@/lib/search";
 import { useItemLink } from "@/hooks/useItemLink";
 import { useLastFetchedData } from "@/context/Providers";
 
@@ -97,24 +97,49 @@ function sortedCounts(counts: Record<string, number> | undefined) {
 	return Object.entries(counts ?? {}).filter(([, count]) => count > 0).sort((left, right) => right[1] - left[1]);
 }
 
-/** The last thirty years that have results, one bar each. Click a bar for that year, drag across bars for a range, click the chosen year again to clear it. */
-function YearBars({ counts, range, onRangeChange }: { counts: Record<string, number> | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void }) {
-	const format = useFormatter();
-	const [hovered, setHovered] = useState<number | null>(null);
-	const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
-	const dragged = useRef(false);
+type Span = [number, number];
+
+/** The last thirty years that have results, one per bar, and the busiest of them; none when no result has a year. */
+function yearAxis(counts: Record<string, number> | undefined) {
 	const known = Object.keys(counts ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
 	if (known.length === 0) return null;
 	const last = Math.max(...known);
 	const first = Math.max(Math.min(...known), last - YEARS_SHOWN + 1);
 	const years = Array.from({ length: last - first + 1 }, (_, index) => first + index);
-	const [rangeStart, rangeEnd] = range.includes("-") ? range.split("-").map(Number) : [Number(range), Number(range)];
-	const chosen = drag
-		? [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)]
-		: range
-			? [rangeStart || first, rangeEnd || last]
-			: null;
-	// A drag over several bars sets a range; the click that ends it must not also pick its first year.
+	const countOf = (year: number) => counts?.[year] ?? 0;
+	const peak = years.reduce((best, year) => (countOf(year) > countOf(best) ? year : best), years[0]);
+	return { first, last, years, peak, countOf };
+}
+
+/** The years a drag covers, else the chosen range, open ends running to the axis's ends. */
+function chosenSpan(range: string, drag: { from: number; to: number } | null, first: number, last: number): Span | null {
+	if (drag) return [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)];
+	if (!range) return null;
+	const [start, end] = range.includes("-") ? range.split("-").map(Number) : [Number(range), Number(range)];
+	return [start || first, end || last];
+}
+
+/** The figure on show: the bar pointed at, else the chosen years, else the busiest year. */
+function yearReadout(axis: NonNullable<ReturnType<typeof yearAxis>>, hovered: number | null, chosen: Span | null) {
+	if (hovered !== null) return { value: axis.countOf(hovered), label: `in ${hovered}` };
+	if (!chosen) return { value: axis.countOf(axis.peak), label: `in ${axis.peak}, the busiest year` };
+	const value = axis.years.filter((year) => year >= chosen[0] && year <= chosen[1]).reduce((sum, year) => sum + axis.countOf(year), 0);
+	return { value, label: chosen[0] === chosen[1] ? `in ${chosen[0]}` : `in ${chosen[0]}–${chosen[1]}` };
+}
+
+/**
+ * Picking years on the bars: a click picks a year (and a second click on it clears it), a drag over several bars picks a
+ * range. Touch keeps sending a drag's events to the bar it began on, so the bar under the pointer is found by position.
+ */
+function useYearPicking(range: string, onRangeChange: (start: string | null, end: string | null) => void) {
+	const [hovered, setHovered] = useState<number | null>(null);
+	const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+	// The click that ends a drag over several bars must not also pick the year it began on.
+	const dragged = useRef(false);
+	const yearAt = (event: React.PointerEvent) => {
+		const bar = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-year]");
+		return bar ? Number(bar.dataset.year) : null;
+	};
 	const commit = () => {
 		if (!drag) return;
 		setDrag(null);
@@ -122,34 +147,106 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 		dragged.current = true;
 		onRangeChange(String(Math.min(drag.from, drag.to)), String(Math.max(drag.from, drag.to)));
 	};
-	// Touch keeps sending a drag's events to the bar it began on, so the bar is found by position.
-	const yearAt = (event: React.PointerEvent) => {
-		const bar = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-year]");
-		return bar ? Number(bar.dataset.year) : null;
+	const surface = {
+		onPointerDown: (event: React.PointerEvent) => {
+			dragged.current = false;
+			const year = yearAt(event);
+			if (year !== null) setDrag({ from: year, to: year });
+		},
+		onPointerMove: (event: React.PointerEvent) => {
+			const year = yearAt(event);
+			if (event.pointerType === "mouse") setHovered(year);
+			if (drag && year !== null && year !== drag.to) setDrag({ ...drag, to: year });
+		},
+		onPointerLeave: () => {
+			setHovered(null);
+			commit();
+		},
+		onPointerUp: commit,
+		onPointerCancel: () => setDrag(null),
 	};
-	const countOf = (year: number) => counts?.[year] ?? 0;
-	const peak = years.reduce((best, year) => (countOf(year) > countOf(best) ? year : best), years[0]);
-	// The figure on show: the bar pointed at, else the chosen years, else the busiest year, whose bar is marked.
-	const readout =
-		hovered !== null
-			? { value: countOf(hovered), label: `in ${hovered}` }
-			: chosen
-				? { value: years.filter((year) => year >= chosen[0] && year <= chosen[1]).reduce((sum, year) => sum + countOf(year), 0), label: chosen[0] === chosen[1] ? `in ${chosen[0]}` : `in ${chosen[0]}–${chosen[1]}` }
-				: { value: countOf(peak), label: `in ${peak}, the busiest year` };
-	const marked = hovered ?? (chosen ? null : peak);
-	// Decades name the axis; a span shorter than one names its ends.
-	const ticks = new Set(last - first >= 10 ? years.filter((year) => year % 10 === 0) : [first, last]);
+	const pick = (year: number) => {
+		if (dragged.current) {
+			dragged.current = false;
+			return;
+		}
+		onRangeChange(range === String(year) ? null : String(year), null);
+	};
+	return { hovered, drag, surface, pick };
+}
 
+function barTone(inChosen: boolean, marked: boolean, anyChosen: boolean) {
+	if (inChosen || marked) return "bg-accent";
+	return anyChosen ? "bg-accent/25" : "bg-accent/45";
+}
+
+/** One bar per year, the busiest or pointed-at one in full and the chosen ones over the rest. */
+function YearColumns({ axis, chosen, marked, picking }: { axis: NonNullable<ReturnType<typeof yearAxis>>; chosen: Span | null; marked: number | null; picking: ReturnType<typeof useYearPicking> }) {
+	const format = useFormatter();
+	return (
+		<div className="flex h-36 touch-none select-none items-end gap-[2px] border-b border-black/10 dark:border-white/10" {...picking.surface}>
+			{axis.years.map((year) => {
+				const count = axis.countOf(year);
+				const inChosen = Boolean(chosen && year >= chosen[0] && year <= chosen[1]);
+				return (
+					<button
+						key={year}
+						type="button"
+						aria-label={`${year}: ${format.number(count)}`}
+						aria-pressed={inChosen}
+						data-year={year}
+						onClick={() => picking.pick(year)}
+						className="flex h-full flex-1 items-end outline-none focus-visible:ring-2 focus-visible:ring-accent"
+					>
+						<span
+							className={twMerge("block w-full rounded-t-[4px] transition-colors", barTone(inChosen, year === marked, chosen !== null))}
+							style={{ height: count ? `${Math.max(3, (count / axis.countOf(axis.peak)) * 100)}%` : "2px" }}
+						/>
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
+/** Decades name the axis; a span shorter than one names its ends. */
+function YearTicks({ axis }: { axis: NonNullable<ReturnType<typeof yearAxis>> }) {
+	const ticks = new Set(axis.last - axis.first >= 10 ? axis.years.filter((year) => year % 10 === 0) : [axis.first, axis.last]);
+	return (
+		<div aria-hidden className="flex gap-[2px] pt-1.5 text-xs tabular-nums text-black/50 dark:text-white/50">
+			{axis.years.map((year) => (
+				<span key={year} className="relative h-4 flex-1">
+					{ticks.has(year) && <span className="absolute left-1/2 -translate-x-1/2">{year}</span>}
+				</span>
+			))}
+		</div>
+	);
+}
+
+/** A large figure and what it counts, for a card's head. */
+function HeadFigure({ value, label }: { value: React.ReactNode; label: React.ReactNode }) {
+	return (
+		<p className="flex items-baseline gap-2" aria-live="polite">
+			<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{value}</span>
+			<span className={`text-sm ${MUTED}`}>{label}</span>
+		</p>
+	);
+}
+
+/** The last thirty years that have results, one bar each. Click a bar for that year, drag across bars for a range, click the chosen year again to clear it. */
+function YearBars({ counts, range, onRangeChange }: { counts: Record<string, number> | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void }) {
+	const format = useFormatter();
+	const picking = useYearPicking(range, onRangeChange);
+	const axis = yearAxis(counts);
+	if (!axis) return null;
+	const chosen = chosenSpan(range, picking.drag, axis.first, axis.last);
+	const readout = yearReadout(axis, picking.hovered, chosen);
 	return (
 		<SidebarCard
 			id="results-years"
 			title="Years"
-			band={
-				<p className="flex items-baseline gap-2" aria-live="polite">
-					<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(readout.value)}</span>
-					<span className={`text-sm ${MUTED}`}>{readout.label}</span>
-				</p>
-			}
+			// One label that the bar pointed at replaces, so nothing beside it moves.
+			band={<HeadFigure value={format.number(readout.value)} label={readout.label} />}
 			aside={
 				<span className="flex h-8 items-center">
 					{range && (
@@ -161,101 +258,81 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 			}
 		>
 			<div>
-				<div
-					className="flex h-36 touch-none select-none items-end gap-[2px] border-b border-black/10 dark:border-white/10"
-					onPointerDown={(event) => {
-						dragged.current = false;
-						const year = yearAt(event);
-						if (year !== null) setDrag({ from: year, to: year });
-					}}
-					onPointerMove={(event) => {
-						const year = yearAt(event);
-						if (event.pointerType === "mouse") setHovered(year);
-						if (drag && year !== null && year !== drag.to) setDrag({ ...drag, to: year });
-					}}
-					onPointerLeave={() => {
-						setHovered(null);
-						commit();
-					}}
-					onPointerUp={commit}
-					onPointerCancel={() => setDrag(null)}
-				>
-					{years.map((year) => {
-						const count = countOf(year);
-						const inChosen = chosen && year >= chosen[0] && year <= chosen[1];
-						return (
-							<button
-								key={year}
-								type="button"
-								aria-label={`${year}: ${format.number(count)}`}
-								aria-pressed={Boolean(inChosen)}
-								data-year={year}
-								onClick={() => {
-									if (dragged.current) {
-										dragged.current = false;
-										return;
-									}
-									onRangeChange(range === String(year) ? null : String(year), null);
-								}}
-								className="flex h-full flex-1 items-end outline-none focus-visible:ring-2 focus-visible:ring-accent"
-							>
-								<span
-									className={twMerge(
-										"block w-full rounded-t-[4px] transition-colors",
-										inChosen || year === marked ? "bg-accent" : chosen ? "bg-accent/25" : "bg-accent/45",
-									)}
-									style={{ height: count ? `${Math.max(3, (count / countOf(peak)) * 100)}%` : "2px" }}
-								/>
-							</button>
-						);
-					})}
-				</div>
-				<div aria-hidden className="flex gap-[2px] pt-1.5 text-xs tabular-nums text-black/50 dark:text-white/50">
-					{years.map((year) => (
-						<span key={year} className="relative h-4 flex-1">
-							{ticks.has(year) && <span className="absolute left-1/2 -translate-x-1/2">{year}</span>}
-						</span>
-					))}
-				</div>
+				<YearColumns axis={axis} chosen={chosen} marked={picking.hovered ?? (chosen ? null : axis.peak)} picking={picking} />
+				<YearTicks axis={axis} />
 			</div>
 		</SidebarCard>
+	);
+}
+
+const toneOf = (index: number) => RAMP[Math.min(index, RAMP.length - 1)];
+
+/** One type: its swatch, name, share and count; choosing it filters the results. */
+function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect }: { label: string; count: number; total: number; tone: string; chosen: boolean; dimmed: boolean; onSelect: () => void }) {
+	const format = useFormatter();
+	return (
+		<li>
+			{/* The ring sits inside the row, so the opening list's clip never cuts it. */}
+			<button type="button" aria-pressed={chosen} onClick={onSelect} className="flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
+				<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone, dimmed && "opacity-25")} />
+				<TruncatedText text={label} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
+				<Tick shown={chosen} />
+				<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{shareOf(format, count, total)}</span>
+				<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
+			</button>
+		</li>
+	);
+}
+
+/** How many of the results have a PDF, as a figure and a meter. */
+function PdfShare({ pdf }: { pdf: Record<string, number> | undefined }) {
+	const format = useFormatter();
+	const withPdf = pdf?.true ?? 0;
+	const withPdfOf = withPdf + (pdf?.false ?? 0);
+	if (withPdfOf === 0) return null;
+	return (
+		<div className="flex flex-col gap-2 border-t border-black/5 pt-4 dark:border-white/10">
+			<div className="flex items-baseline justify-between gap-4">
+				<span className="flex items-baseline gap-2">
+					<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(withPdf / withPdfOf, { style: "percent" })}</span>
+					<span className="text-base font-medium">with a PDF</span>
+				</span>
+				<span className={`text-sm tabular-nums ${MUTED}`}>
+					{format.number(withPdf)} of {format.number(withPdfOf)}
+				</span>
+			</div>
+			<meter className="sr-only" min={0} max={withPdfOf} value={withPdf} />
+			<span aria-hidden className="block h-2 overflow-hidden rounded-full bg-accent/15">
+				<span className="block h-full rounded-full bg-accent" style={{ width: `${(withPdf / withPdfOf) * 100}%` }} />
+			</span>
+		</div>
 	);
 }
 
 /** Item types as parts of the results: one bar split by type, then a row per type with its swatch, share and count. */
 function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, number> | undefined; selected: string[]; onSelect: (type: string) => void; pdf: Record<string, number> | undefined }) {
 	const typeName = useTranslations("itemType");
-	const format = useFormatter();
 	const [all, setAll] = useState(false);
 	const expand = useExpandTransition();
 	const rows = sortedCounts(counts);
 	if (rows.length === 0) return null;
 	const total = rows.reduce((sum, [, count]) => sum + count, 0);
-	const tone = (index: number) => RAMP[Math.min(index, RAMP.length - 1)];
 	const dimmed = (type: string) => selected.length > 0 && !selected.includes(type);
 	// Chosen types stay listed even when they are not among the largest; the rest open beneath them.
 	const isTop = ([type]: [string, number], index: number) => index < TYPES_SHOWN || selected.includes(type);
-	const top = rows.filter(isTop);
+	const typeRow = ([type, count]: [string, number]) => (
+		<TypeRow
+			key={type}
+			label={typeName.has(type) ? typeName(type) : type}
+			count={count}
+			total={total}
+			tone={toneOf(rows.findIndex(([key]) => key === type))}
+			chosen={selected.includes(type)}
+			dimmed={dimmed(type)}
+			onSelect={() => onSelect(type)}
+		/>
+	);
 	const rest = rows.filter((row, index) => !isTop(row, index));
-	const withPdf = pdf?.true ?? 0;
-	const withPdfOf = withPdf + (pdf?.false ?? 0);
-	const label = (type: string) => (typeName.has(type) ? typeName(type) : type);
-	const typeRow = ([type, count]: [string, number]) => {
-		const index = rows.findIndex(([key]) => key === type);
-		const chosen = selected.includes(type);
-		return (
-			<li key={type}>
-				{/* The ring sits inside the row, so the opening list's clip never cuts it. */}
-				<button type="button" aria-pressed={chosen} onClick={() => onSelect(type)} className="flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
-					<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone(index), dimmed(type) && "opacity-25")} />
-					<TruncatedText text={label(type)} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
-					<Tick shown={chosen} />
-					<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{shareOf(format, count, total)}</span>
-					<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
-				</button>
-			</li>
-		);
-	};
 
 	return (
 		<SidebarCard
@@ -264,20 +341,14 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
 					{rows.map(([type, count], index) => (
-						<span key={type} className={twMerge("h-full transition-opacity", tone(index), dimmed(type) && "opacity-25")} style={{ flexGrow: count, flexBasis: 0 }} />
+						<span key={type} className={twMerge("h-full transition-opacity", toneOf(index), dimmed(type) && "opacity-25")} style={{ flexGrow: count, flexBasis: 0 }} />
 					))}
 				</div>
 			}
-			footer={
-				rows.length > TYPES_SHOWN && (
-					<Button size="sm" onPress={() => setAll(!all)} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5 transition-transform duration-300 motion-reduce:transition-none", all && "rotate-180")} />}>
-						{all ? "Fewer types" : `All ${rows.length} types`}
-					</Button>
-				)
-			}
+			footer={rows.length > TYPES_SHOWN && <AllToggle open={all} count={rows.length} onToggle={() => setAll(!all)} />}
 		>
 			<div className="-mx-3 -mt-2">
-				<ul className="flex flex-col">{top.map(typeRow)}</ul>
+				<ul className="flex flex-col">{rows.filter(isTop).map(typeRow)}</ul>
 				<AnimatePresence initial={false}>
 					{all && rest.length > 0 && (
 						<motion.ul key="rest" initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={expand} className="flex flex-col overflow-hidden">
@@ -286,24 +357,17 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 					)}
 				</AnimatePresence>
 			</div>
-			{withPdfOf > 0 && (
-				<div className="flex flex-col gap-2 border-t border-black/5 pt-4 dark:border-white/10">
-					<div className="flex items-baseline justify-between gap-4">
-						<span className="flex items-baseline gap-2">
-							<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(withPdf / withPdfOf, { style: "percent" })}</span>
-							<span className="text-base font-medium">with a PDF</span>
-						</span>
-						<span className={`text-sm tabular-nums ${MUTED}`}>
-							{format.number(withPdf)} of {format.number(withPdfOf)}
-						</span>
-					</div>
-					<meter className="sr-only" min={0} max={withPdfOf} value={withPdf} />
-					<span aria-hidden className="block h-2 overflow-hidden rounded-full bg-accent/15">
-						<span className="block h-full rounded-full bg-accent" style={{ width: `${(withPdf / withPdfOf) * 100}%` }} />
-					</span>
-				</div>
-			)}
+			<PdfShare pdf={pdf} />
 		</SidebarCard>
+	);
+}
+
+/** Opens the rest of a list and closes it again. */
+function AllToggle({ open, count, onToggle }: { open: boolean; count: number; onToggle: () => void }) {
+	return (
+		<Button size="sm" onPress={onToggle} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5 transition-transform duration-300 motion-reduce:transition-none", open && "rotate-180")} />}>
+			{open ? "Fewer types" : `All ${count} types`}
+		</Button>
 	);
 }
 
@@ -355,27 +419,153 @@ function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCoun
 	const format = useFormatter();
 	const totals = axis.map((year) => combined?.[year] ?? 0);
 	const largest = Math.max(1, ...totals);
+	const height = (count: number) => (count ? `${Math.max(4, (count / largest) * 100)}%` : "0%");
 	return (
 		<>
 			<p className="flex items-baseline gap-2">
-				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">
-					{authorCount === undefined ? "–" : authorCount >= 10_000 ? `${format.number(10_000)}+` : format.number(authorCount)}
-				</span>
+				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{authorCountLabel(format, authorCount)}</span>
 				<span className={`text-sm ${MUTED}`}>authors in these results</span>
 			</p>
 			<span aria-hidden className="flex h-14 items-end gap-[3px]">
-				{axis.map((year, index) => {
-					const own = focusedYears?.[year] ?? 0;
-					return (
-						<span key={year} className="relative h-full flex-1">
-							<span className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-accent/25 transition-[height] duration-300 motion-reduce:transition-none" style={{ height: totals[index] ? `${Math.max(4, (totals[index] / largest) * 100)}%` : "0%" }} />
-							<span className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-accent transition-[height] duration-300 motion-reduce:transition-none" style={{ height: own ? `${Math.max(4, (own / largest) * 100)}%` : "0%" }} />
-						</span>
-					);
-				})}
+				{axis.map((year, index) => (
+					<span key={year} className="relative h-full flex-1">
+						<span className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-accent/25 transition-[height] duration-300 motion-reduce:transition-none" style={{ height: height(totals[index]) }} />
+						<span className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-accent transition-[height] duration-300 motion-reduce:transition-none" style={{ height: height(focusedYears?.[year] ?? 0) }} />
+					</span>
+				))}
 			</span>
 		</>
 	);
+}
+
+/** The facet counts at most 10,000 names, so more reads as "10,000+"; a dash until the count arrives. */
+function authorCountLabel(format: ReturnType<typeof useFormatter>, authorCount: number | undefined) {
+	if (authorCount === undefined) return "–";
+	return authorCount >= 10_000 ? `${format.number(10_000)}+` : format.number(authorCount);
+}
+
+/**
+ * The top authors under the current search and filters, from a request of their own that the server keeps for a few
+ * minutes: ranking authors is the costliest count the sidebar asks for, so the filters' facets never wait on it. Pages
+ * and order don't change it. One year axis serves every row and the band: the last twenty years any of them published in.
+ */
+function useTopAuthors() {
+	const { queryParams } = useFiltersContext();
+	const { page, sort, ...filters } = queryParams;
+	const { data, error, isValidating, mutate } = useSWR<TopAuthors>(buildItemsQuery(filters, "/top-authors"), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
+	const byAuthor = new Map(data?.authors.map((entry) => [entry.name, entry]));
+	const known = Object.keys(data?.combined ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
+	const last = known.length ? Math.max(...known) : new Date().getFullYear();
+	const axis = Array.from({ length: ACTIVITY_YEARS }, (_, index) => last - ACTIVITY_YEARS + 1 + index);
+	// Kept from the last search while the next loads: dimmed and out of reach until it matches.
+	return { data, error, isValidating, retry: () => void mutate(), stale: Boolean(data) && isValidating, byAuthor, axis };
+}
+
+/** Their profile photo when they have one, else their initials. */
+function AuthorBadge({ name, photo, highlighted }: { name: string; photo: string | null; highlighted: boolean }) {
+	const tone = photo ? (highlighted ? "ring-2 ring-black/85 dark:ring-white" : "") : highlighted ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80";
+	return (
+		<span aria-hidden className={twMerge("hidden size-9 shrink-0 items-center justify-center overflow-hidden rounded-full font-heading text-sm font-semibold transition-colors @[24rem]:flex", tone)}>
+			{photo ? <Image unoptimized src={photo} alt="" width={36} height={36} className="size-full object-cover" /> : initialsOf(name)}
+		</span>
+	);
+}
+
+/** An author's strip, with how many results they share with the author pointed at over it; one who shares none fades. */
+function StripWithShared({ years, axis, shared, focused }: { years: Record<string, number> | undefined; axis: number[]; shared: number | null; focused: string | null }) {
+	const format = useFormatter();
+	return (
+		<span className="relative flex shrink-0">
+			<span className={twMerge("flex transition-opacity duration-200 motion-reduce:transition-none", shared === 0 && "opacity-25", shared ? "opacity-30" : "")}>
+				<ActivityStrip years={years} axis={axis} />
+			</span>
+			{shared ? (
+				<span className="absolute inset-0 flex items-center justify-center">
+					<span className="flex items-center gap-1 rounded-full bg-black/85 px-2 py-0.5 text-xs font-semibold tabular-nums text-white dark:bg-white dark:text-black">
+						<HugeiconsIcon icon={UserMultiple02Icon} aria-hidden className="size-3.5" />
+						{format.number(shared)}
+						<span className="sr-only">together with {focused}</span>
+					</span>
+				</span>
+			) : null}
+		</span>
+	);
+}
+
+/** One author: badge, name and institution, when they published, and how many results; choosing them filters by them. */
+function AuthorRow({ author, axis, chosen, focused, shared, onSelect, onFocus }: { author: AuthorActivity; axis: number[]; chosen: boolean; focused: string | null; shared: number | null; onSelect: () => void; onFocus: () => void }) {
+	const format = useFormatter();
+	const highlighted = focused === author.name;
+	return (
+		<li>
+			<button type="button" aria-pressed={chosen} onClick={onSelect} onPointerEnter={onFocus} onFocus={onFocus} className={twMerge("flex h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", highlighted && "bg-black/5 dark:bg-white/5")}>
+				<AuthorBadge name={author.name} photo={author.photo} highlighted={chosen || highlighted} />
+				<span className="flex min-w-0 flex-1 flex-col">
+					<TruncatedText text={author.name} className={twMerge("text-base font-medium leading-5", chosen && "text-accent")} />
+					<span className={`h-4 truncate text-xs leading-4 ${MUTED}`}>{author.institution ?? ""}</span>
+				</span>
+				<Tick shown={chosen} />
+				<StripWithShared years={author.years} axis={axis} shared={shared} focused={focused} />
+				<span className="w-12 shrink-0 text-right text-base font-bold tabular-nums">{format.number(author.count)}</span>
+			</button>
+		</li>
+	);
+}
+
+/** Ten placeholder rows, the room the answer will take. */
+function AuthorPlaceholders() {
+	return (
+		<ul aria-hidden className="flex flex-col">
+			{Array.from({ length: 10 }, (_, index) => (
+				<li key={index} className="flex h-14 items-center gap-3 px-3">
+					<Skeleton className="h-4 flex-1 rounded-md" />
+					<Skeleton className="h-6 w-24 rounded-md" />
+					<Skeleton className="h-4 w-10 rounded-md" />
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/** A card's failure, with a way to ask again. */
+function LoadFailure({ what, onRetry }: { what: string; onRetry: () => void }) {
+	return (
+		<div className={`flex flex-col items-start gap-3 px-3 text-base ${MUTED}`}>
+			Could not load the {what}.
+			<Button size="sm" onPress={onRetry}>Try again</Button>
+		</div>
+	);
+}
+
+/** The list in whichever state it is in: failed, loading, empty, or the authors. */
+function AuthorList({ authors, focus, selected, onSelect }: { authors: ReturnType<typeof useTopAuthors>; focus: [string | null, (name: string | null) => void]; selected: string; onSelect: (author: string) => void }) {
+	const [focused, setFocused] = focus;
+	if (authors.error && !authors.isValidating) return <LoadFailure what="top authors" onRetry={authors.retry} />;
+	if (!authors.data) return <AuthorPlaceholders />;
+	if (authors.data.authors.length === 0) return <p className={`px-3 text-base ${MUTED}`}>No authors are named in these results.</p>;
+	const together = focused ? authors.byAuthor.get(focused)?.together : undefined;
+	return (
+		<ul inert={authors.stale || undefined} className={twMerge("@container flex flex-col transition-opacity", authors.stale && "opacity-50")} onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
+			{authors.data.authors.map((author) => (
+				<AuthorRow
+					key={author.name}
+					author={author}
+					axis={authors.axis}
+					chosen={author.name === selected}
+					focused={focused}
+					shared={focused && author.name !== focused ? (together?.[author.name] ?? 0) : null}
+					onSelect={() => onSelect(author.name)}
+					onFocus={() => setFocused(author.name)}
+				/>
+			))}
+		</ul>
+	);
+}
+
+/** The header's label: the axis's years, or the span and busiest year of the author pointed at. */
+function spanLabel(span: ReturnType<typeof activeSpan>, axis: number[]) {
+	if (!span) return `${axis[0]}–${axis[axis.length - 1]}`;
+	return `${span.first === span.last ? span.first : `${span.first}–${span.last}`}, most in ${span.peak}`;
 }
 
 /**
@@ -384,24 +574,9 @@ function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCoun
  * the strips of the others, how many results each shares with them.
  */
 function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (author: string) => void }) {
-	const format = useFormatter();
-	const { queryParams } = useFiltersContext();
 	const [focused, setFocused] = useState<string | null>(null);
-	// Ranked and described in one request of their own, which the server keeps for a few minutes: ranking authors is the
-	// costliest count the sidebar asks for, so the filters' facets never wait on it. Pages and order don't change it.
-	const { page, sort, ...filters } = queryParams;
-	const { data: activity, error, isValidating, mutate } = useSWR<TopAuthors>(buildItemsQuery(filters, "/top-authors"), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
-	// Kept from the last search while the next loads: dimmed and out of reach until it matches.
-	const stale = Boolean(activity) && isValidating;
-	const authorCount = activity?.authorCount;
-	const rows = activity?.authors.map((entry) => [entry.name, entry.count] as const) ?? [];
-	const byAuthor = activity ? Object.fromEntries(activity.authors.map((entry) => [entry.name, entry])) : undefined;
-	// One axis for every row and the band: the last twenty years any of these authors published in.
-	const known = Object.keys(activity?.combined ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
-	const last = known.length ? Math.max(...known) : new Date().getFullYear();
-	const axis = Array.from({ length: ACTIVITY_YEARS }, (_, index) => last - ACTIVITY_YEARS + 1 + index);
-	const together = focused ? byAuthor?.[focused]?.together : undefined;
-	const span = focused ? activeSpan(byAuthor?.[focused]?.years) : null;
+	const authors = useTopAuthors();
+	const focusedYears = focused ? authors.byAuthor.get(focused)?.years : undefined;
 	return (
 		<SidebarCard
 			id="results-authors"
@@ -409,71 +584,14 @@ function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (autho
 			// One label that the author pointed at replaces, so nothing beside it moves.
 			aside={
 				<span className={`text-xs tabular-nums ${MUTED}`} aria-live="polite">
-					{span ? `${span.first === span.last ? span.first : `${span.first}–${span.last}`}, most in ${span.peak}` : `${axis[0]}–${last}`}
+					{spanLabel(focused ? activeSpan(focusedYears) : null, authors.axis)}
 				</span>
 			}
-			band={<AuthorsBand authorCount={authorCount} combined={activity?.combined} focusedYears={focused ? byAuthor?.[focused]?.years : undefined} axis={axis} />}
+			band={<AuthorsBand authorCount={authors.data?.authorCount} combined={authors.data?.combined} focusedYears={focusedYears} axis={authors.axis} />}
 		>
 			{/* Always the room of ten rows, whatever the answer, so the card never grows or shrinks as it arrives. */}
 			<div className="-mx-3 -my-3 h-[35rem]">
-			{error && !isValidating ? (
-				<div className={`flex flex-col items-start gap-3 px-3 text-base ${MUTED}`}>
-					Could not load the top authors.
-					<Button size="sm" onPress={() => void mutate()}>Try again</Button>
-				</div>
-			) : !activity ? (
-				<ul aria-hidden className="flex flex-col">
-					{Array.from({ length: 10 }, (_, index) => (
-						<li key={index} className="flex h-14 items-center gap-3 px-3">
-							<Skeleton className="h-4 flex-1 rounded-md" />
-							<Skeleton className="h-6 w-24 rounded-md" />
-							<Skeleton className="h-4 w-10 rounded-md" />
-						</li>
-					))}
-				</ul>
-			) : activity.authors.length === 0 ? (
-				<p className={`px-3 text-base ${MUTED}`}>No authors are named in these results.</p>
-			) : (
-			<ul inert={stale || undefined} className={twMerge("@container flex flex-col transition-opacity", stale && "opacity-50")} onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
-				{rows.map(([name, count]) => {
-					const chosen = name === selected;
-					const shared = focused && name !== focused && activity ? (together?.[name] ?? 0) : null;
-					const institution = byAuthor?.[name]?.institution;
-					const photo = byAuthor?.[name]?.photo;
-					return (
-						<li key={name}>
-							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} onPointerEnter={() => setFocused(name)} onFocus={() => setFocused(name)} className={twMerge("flex h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", focused === name && "bg-black/5 dark:bg-white/5")}>
-								{/* Their profile photo when they have one, else their initials. */}
-								<span aria-hidden className={twMerge("hidden size-9 shrink-0 items-center justify-center overflow-hidden rounded-full font-heading text-sm font-semibold transition-colors @[24rem]:flex", photo ? (chosen || focused === name ? "ring-2 ring-black/85 dark:ring-white" : "") : chosen || focused === name ? "bg-black/85 text-white dark:bg-white dark:text-black" : "bg-accent/15 text-black/80 dark:text-white/80")}>
-									{photo ? <Image unoptimized src={photo} alt="" width={36} height={36} className="size-full object-cover" /> : initialsOf(name)}
-								</span>
-								<span className="flex min-w-0 flex-1 flex-col">
-									<TruncatedText text={name} className={twMerge("text-base font-medium leading-5", chosen && "text-accent")} />
-									{/* The line is there before its institution arrives, so the row keeps its height. */}
-									<span className={`h-4 truncate text-xs leading-4 ${MUTED}`}>{institution ?? ""}</span>
-								</span>
-								<Tick shown={chosen} />
-								<span className="relative flex shrink-0">
-									<span className={twMerge("flex transition-opacity duration-200 motion-reduce:transition-none", shared === 0 && "opacity-25", shared ? "opacity-30" : "")}>
-										<ActivityStrip years={byAuthor?.[name]?.years} axis={axis} />
-									</span>
-									{shared ? (
-										<span className="absolute inset-0 flex items-center justify-center">
-											<span className="flex items-center gap-1 rounded-full bg-black/85 px-2 py-0.5 text-xs font-semibold tabular-nums text-white dark:bg-white dark:text-black">
-												<HugeiconsIcon icon={UserMultiple02Icon} aria-hidden className="size-3.5" />
-												{format.number(shared)}
-												<span className="sr-only">together with {focused}</span>
-											</span>
-										</span>
-									) : null}
-								</span>
-								<span className="w-12 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
-							</button>
-						</li>
-					);
-				})}
-			</ul>
-			)}
+				<AuthorList authors={authors} focus={[focused, setFocused]} selected={selected} onSelect={onSelect} />
 			</div>
 		</SidebarCard>
 	);
@@ -511,43 +629,50 @@ function CitedRow({ item, stale }: { item: ListItem; stale: boolean }) {
 	);
 }
 
-/** The most cited of the results in view, three at most. Its box keeps the height of three rows, so the sidebar never moves as they load or change. */
-function MostCited() {
+function CitedPlaceholders() {
+	return Array.from({ length: CITED_SHOWN }, (_, index) => (
+		<li key={index} className="flex gap-4 p-2">
+			<Skeleton className="h-[5.33rem] w-16 shrink-0 rounded-md" />
+			<span className="flex flex-1 flex-col gap-2 pt-1">
+				<Skeleton className="h-4 w-full rounded-md" />
+				<Skeleton className="h-4 w-1/3 rounded-md" />
+			</span>
+		</li>
+	));
+}
+
+/** The most cited of the results in view, three at most, as the results list would sort them by citations. */
+function useMostCited() {
 	const { queryParams } = useFiltersContext();
 	const query = buildItemsQuery({ ...queryParams, sort: "mostCited", page: 1 });
-	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(
-		`${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}`,
-		fetcher,
-		{ keepPreviousData: true, revalidateOnFocus: false },
-	);
-	const cited = data?.items.filter((item) => item.citationCount) ?? [];
+	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(`${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}`, fetcher, { keepPreviousData: true, revalidateOnFocus: false });
 	// Kept from the last query while the new one loads: dimmed and out of reach until it matches.
-	const stale = Boolean(data) && isValidating;
+	return { data, failed: Boolean(error) && !isValidating, isValidating, retry: () => void mutate(), stale: Boolean(data) && isValidating, cited: data?.items.filter((item) => item.citationCount) ?? [] };
+}
 
+/** The list in whichever state it is in: failed, loading, nothing cited, or the results. */
+function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
+	if (cited.failed) {
+		return (
+			<li className="flex flex-col items-start gap-3 px-2 text-base text-black/60 dark:text-white/60">
+				Could not load the most cited results.
+				<Button size="sm" onPress={cited.retry}>Try again</Button>
+			</li>
+		);
+	}
+	if (!cited.data) return <CitedPlaceholders />;
+	if (cited.cited.length === 0) return <li className="px-2 text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>;
+	return cited.cited.map((item) => <CitedRow key={item.key} item={item} stale={cited.stale} />);
+}
+
+/** The most cited of the results in view, three at most. Its box keeps the height of three rows, so the sidebar never moves as they load or change. */
+function MostCited() {
+	const cited = useMostCited();
 	return (
 		<SidebarCard id="results-cited" title="Most cited">
 			{/* Three rows of a cover beside its count and a two-line title; every state keeps this height. */}
-			<ol aria-busy={isValidating} inert={stale || undefined} className={twMerge("-mx-2 -mt-2 flex h-[20.5rem] flex-col gap-2 overflow-hidden transition-opacity", stale && "opacity-50")}>
-				{error && !isValidating && (
-					<li className="flex flex-col items-start gap-3 px-2 text-base text-black/60 dark:text-white/60">
-						Could not load the most cited results.
-						<Button size="sm" onPress={() => void mutate()}>Try again</Button>
-					</li>
-				)}
-				{!data && !error &&
-					Array.from({ length: CITED_SHOWN }, (_, index) => (
-						<li key={index} className="flex gap-4 p-2">
-							<Skeleton className="h-[5.33rem] w-16 shrink-0 rounded-md" />
-							<span className="flex flex-1 flex-col gap-2 pt-1">
-								<Skeleton className="h-4 w-full rounded-md" />
-								<Skeleton className="h-4 w-1/3 rounded-md" />
-							</span>
-						</li>
-					))}
-				{data && !error && cited.length === 0 && (
-					<li className="px-2 text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
-				)}
-				{!error && cited.map((item) => <CitedRow key={item.key} item={item} stale={stale} />)}
+			<ol aria-busy={cited.isValidating} inert={cited.stale || undefined} className={twMerge("-mx-2 -mt-2 flex h-[20.5rem] flex-col gap-2 overflow-hidden transition-opacity", cited.stale && "opacity-50")}>
+				<CitedList cited={cited} />
 			</ol>
 		</SidebarCard>
 	);

@@ -27,28 +27,39 @@ export function ShareRing({ share }: { share: number }) {
  * A chosen option drops its figures for a tick; the dropdowns hide the list's own tick slot, so no option keeps room
  * for one.
  */
-export function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false, selected = false }: { label: string; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean; /** A chosen option shows its name and a tick: its figures stay in place, invisible, so it keeps its height. */ selected?: boolean }) {
+type OptionFigures = { count: number | null; share: string | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; heading: boolean; hidden: string };
+
+/** An option's note, share, count and chevron, in that order; a heading's note is for screen readers only. */
+function Figures({ count, share, arrow, arrowSlot, note, heading, hidden }: OptionFigures) {
 	const format = useFormatter();
+	return (
+		<>
+			{note && <span className={heading ? "sr-only" : twMerge("shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60", hidden)}>{note}</span>}
+			{share && <span className={twMerge("hidden shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60 @[12rem]:block", hidden)}>{share}</span>}
+			{count !== null && <span className={twMerge("min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums", hidden)}>{format.number(count)}</span>}
+			{arrowSlot && (
+				<span className={twMerge("flex size-4 shrink-0", hidden)}>
+					{arrow && <HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />}
+				</span>
+			)}
+		</>
+	);
+}
+
+export function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false, selected = false }: { label: string; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean; /** A chosen option shows its name and a tick: its figures stay in place, invisible, so it keeps its height. */ selected?: boolean }) {
 	const heading = emphasis && count !== null;
-	const figure = selected ? "invisible" : "";
+	const hidden = selected ? "invisible" : "";
 	return (
 		// Measured against its own width: a narrow option, such as one of the From and To year pickers, leaves the share out.
 		<span className="@container flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
 			<span className="relative flex min-w-0 items-center gap-2">
-				{heading && shareValue !== null && <span className={twMerge("flex shrink-0", figure)}><ShareRing share={shareValue} /></span>}
+				{heading && shareValue !== null && <span className={twMerge("flex shrink-0", hidden)}><ShareRing share={shareValue} /></span>}
 				<TruncatedText text={label} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
-				{note && <span className={heading ? "sr-only" : twMerge("shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60", figure)}>{note}</span>}
-				{share && <span className={twMerge("hidden shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60 @[12rem]:block", figure)}>{share}</span>}
-				{count !== null && <span className={twMerge("min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums", figure)}>{format.number(count)}</span>}
-				{arrowSlot && (
-					<span className={twMerge("flex size-4 shrink-0", figure)}>
-						{arrow && <HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />}
-					</span>
-				)}
+				<Figures count={count} share={share} arrow={arrow} arrowSlot={arrowSlot} note={note} heading={heading} hidden={hidden} />
 				{selected && <HugeiconsIcon icon={Tick01Icon} aria-hidden className="absolute end-0 top-1/2 size-4 -translate-y-1/2 text-accent" />}
 			</span>
 			{count !== null && !heading && (
-				<span aria-hidden className={twMerge("block h-1 overflow-hidden rounded-full bg-accent/10", arrowSlot && "mr-6 rtl:ml-6 rtl:mr-0", figure)}>
+				<span aria-hidden className={twMerge("block h-1 overflow-hidden rounded-full bg-accent/10", arrowSlot && "mr-6 rtl:ml-6 rtl:mr-0", hidden)}>
 					<span className="block h-full rounded-full bg-accent/70" style={{ width: barWidth(count, largest) }} />
 				</span>
 			)}

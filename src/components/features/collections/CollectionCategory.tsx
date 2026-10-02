@@ -14,6 +14,35 @@ import { FacetDistribution } from "meilisearch";
 import { useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
 
+/** Whether a section's list is opened past its collapsed height, kept for the visit so it stays open as the reader moves around. */
+function useSeeMore(key: string) {
+	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
+	const expanded: boolean = globalExpanded[key] ?? false;
+	const setExpanded = (value: boolean) => setGlobalExpanded((current: Record<string, boolean>) => ({ ...current, [key]: value }));
+	return [expanded, setExpanded] as const;
+}
+
+/**
+ * Whether a list is taller than its collapsed height, and whether a change to that should fade. Measured before the
+ * first paint, so a section opening shows its See more and fade at once rather than adding them after; only later
+ * changes, such as a filter shortening the list, fade. The observer follows the list's height.
+ */
+function useListOverflow(ref: React.RefObject<HTMLDivElement | null>, key: string) {
+	const [overflow, setOverflow] = useState({ shown: false, fade: false });
+	useLayoutEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		setOverflow({ shown: element.scrollHeight > MAX_COLLAPSED_HEIGHT, fade: false });
+		const observer = new ResizeObserver(() => {
+			const shown = element.scrollHeight > MAX_COLLAPSED_HEIGHT;
+			setOverflow((current) => (current.shown === shown ? current : { shown, fade: true }));
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, [ref, key]);
+	return overflow;
+}
+
 export default function CollectionCategory({
 	collection,
 	hierarchy,
@@ -31,38 +60,10 @@ export default function CollectionCategory({
 }) {
 	const t = useTranslations("ui");
 	const ref = useRef<HTMLDivElement>(null);
-	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
-	const expanded = globalExpanded[collection.key] ?? false;
-	const setExpanded = (value: boolean | ((previous: boolean) => boolean)) => {
-		setGlobalExpanded((current: Record<string, boolean>) => {
-			const previous = current[collection.key] ?? false;
-			return {
-				...current,
-				[collection.key]:
-					typeof value === "boolean" ? value : value(previous),
-			};
-		});
-	};
-	// Whether the list is taller than its collapsed height, and whether a change to that should fade.
-	const [overflow, setOverflow] = useState({ shown: false, fade: false });
+	const [expanded, setExpanded] = useSeeMore(collection.key);
+	const overflow = useListOverflow(ref, collection.key);
 	const hasOverflow = overflow.shown;
 
-	// Measured before the first paint, so a section opening shows its See more and fade at once rather than adding them
-	// after; only later changes, such as a filter shortening the list, fade. The observer follows the list's height.
-	useLayoutEffect(() => {
-		const element = ref.current;
-		if (!element) return;
-		setOverflow({ shown: element.scrollHeight > MAX_COLLAPSED_HEIGHT, fade: false });
-
-		const observer = new ResizeObserver(() => {
-			const shown = element.scrollHeight > MAX_COLLAPSED_HEIGHT;
-			setOverflow((current) => (current.shown === shown ? current : { shown, fade: true }));
-		});
-		observer.observe(element);
-
-		return () => observer.disconnect();
-	}, [collection.key]);
-	
 	return (
 		<div className="relative">
 			<div

@@ -103,7 +103,7 @@ type SearchFacetsResult = {
 	totals: FacetTotals;
 };
 
-export type FacetTotals = Record<string, number>;
+type FacetTotals = Record<string, number>;
 
 async function getCachedDisplayedAttributes(
 	configRevision: string,
@@ -602,21 +602,37 @@ async function readTopAuthors(
 		],
 	});
 	const [all, ...perAuthor] = results;
-	const profileIds = names.map((name, position) => {
-		const creators = ((perAuthor[position]?.hits[0] as ListItem | undefined)?.creators ?? []) as Author[];
-		return creators.find((creator) => creatorFullName(creator) === name)?.authorProfileId ?? null;
-	});
+	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits[0] as ListItem | undefined, name));
 	const profiles = new Map((await readAuthorProfiles(profileIds.filter((id): id is string => Boolean(id)))).map((profile) => [profile.id, profile]));
-	const authors = top.map(([name, count], position) => {
-		const distribution = perAuthor[position]?.facetDistribution ?? {};
-		const coauthors = (distribution.fullNames ?? {}) as Record<string, number>;
-		// Only the other top authors leave the server, not everyone they wrote with.
-		const together = Object.fromEntries(names.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
-		const institution = Object.entries((distribution[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
+	const authors = top.map(([name, count], position): AuthorActivity => {
+		const distribution = (perAuthor[position]?.facetDistribution ?? {}) as Record<string, Record<string, number>>;
 		const profileId = profileIds[position];
-		return { name, count, years: (distribution.year ?? {}) as Record<string, number>, together, institution, photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null };
+		return {
+			name,
+			count,
+			years: distribution.year ?? {},
+			together: sharedWith(name, names, distribution.fullNames ?? {}),
+			institution: mostNamed(distribution[INSTITUTION_FILTER_FIELD] ?? {}),
+			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
+		};
 	});
 	return { authorCount: Object.keys(everyone).length, authors, combined: (all?.facetDistribution?.year ?? {}) as Record<string, number> };
+}
+
+/** The profile a result links an author to, found by the name the index files them under. */
+function profileIdOf(hit: ListItem | undefined, name: string) {
+	const creators = (hit?.creators ?? []) as Author[];
+	return creators.find((creator) => creatorFullName(creator) === name)?.authorProfileId ?? null;
+}
+
+/** How many results an author shares with each of the other named authors; only those leave the server, not everyone they wrote with. */
+function sharedWith(name: string, names: readonly string[], coauthors: Record<string, number>) {
+	return Object.fromEntries(names.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
+}
+
+/** The value most results name in a facet, if any does. */
+function mostNamed(counts: Record<string, number>) {
+	return Object.entries(counts).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
 }
 
 export async function getTopAuthors(searchParams: Partial<inferParserType<typeof searchParamsLoader>>) {
