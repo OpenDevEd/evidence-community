@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { twMerge } from "@/lib/tw-merge";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
@@ -48,6 +48,7 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 	const format = useFormatter();
 	const [hovered, setHovered] = useState<number | null>(null);
 	const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+	const dragged = useRef(false);
 	const known = Object.keys(counts ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
 	if (known.length === 0) return null;
 	const last = Math.max(...known);
@@ -60,13 +61,18 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 		: range
 			? [rangeStart || first, rangeEnd || last]
 			: null;
+	// A drag over several bars sets a range; the click that ends it must not also pick its first year.
 	const commit = () => {
 		if (!drag) return;
-		const [start, end] = [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)];
 		setDrag(null);
-		if (start === end && range === String(start)) onRangeChange(null, null);
-		else if (start === end) onRangeChange(String(start), null);
-		else onRangeChange(String(start), String(end));
+		if (drag.from === drag.to) return;
+		dragged.current = true;
+		onRangeChange(String(Math.min(drag.from, drag.to)), String(Math.max(drag.from, drag.to)));
+	};
+	// Touch keeps sending a drag's events to the bar it began on, so the bar is found by position.
+	const yearAt = (event: React.PointerEvent) => {
+		const bar = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-year]");
+		return bar ? Number(bar.dataset.year) : null;
 	};
 	const readout = hovered !== null ? `${hovered}: ${format.number(counts?.[hovered] ?? 0)}` : null;
 
@@ -79,11 +85,22 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 			</div>
 			<div
 				className="flex h-28 touch-none select-none items-end gap-[2px]"
+				onPointerDown={(event) => {
+					dragged.current = false;
+					const year = yearAt(event);
+					if (year !== null) setDrag({ from: year, to: year });
+				}}
+				onPointerMove={(event) => {
+					const year = yearAt(event);
+					if (event.pointerType === "mouse") setHovered(year);
+					if (drag && year !== null && year !== drag.to) setDrag({ ...drag, to: year });
+				}}
 				onPointerLeave={() => {
 					setHovered(null);
 					commit();
 				}}
 				onPointerUp={commit}
+				onPointerCancel={() => setDrag(null)}
 			>
 				{years.map((year) => {
 					const count = counts?.[year] ?? 0;
@@ -94,16 +111,13 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 							type="button"
 							aria-label={`${year}: ${format.number(count)}`}
 							aria-pressed={Boolean(inChosen)}
-							onPointerDown={() => setDrag({ from: year, to: year })}
-							onPointerEnter={() => {
-								setHovered(year);
-								if (drag) setDrag({ ...drag, to: year });
-							}}
-							onKeyDown={(event) => {
-								if (event.key === "Enter" || event.key === " ") {
-									event.preventDefault();
-									onRangeChange(range === String(year) ? null : String(year), null);
+							data-year={year}
+							onClick={() => {
+								if (dragged.current) {
+									dragged.current = false;
+									return;
 								}
+								onRangeChange(range === String(year) ? null : String(year), null);
 							}}
 							className="group/bar flex h-full flex-1 items-end outline-none focus-visible:ring-2 focus-visible:ring-accent"
 						>

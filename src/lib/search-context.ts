@@ -34,6 +34,8 @@ export const librarySearchContextSchema = z
 		author: z.string().trim().max(300),
 		collections: filterValuesSchema,
 		topics: filterValuesSchema,
+		/** Item types, any of them. */
+		type: filterValuesSchema.default([]),
 		/** A reader's bookmarks, or one of their collections, when the list is on a profile. */
 		readerList: z
 			.object({
@@ -85,6 +87,7 @@ export function normalizeLibrarySearchContext(
 		author: (value.author ?? "").trim().slice(0, MAX_FILTER_VALUE_LENGTH),
 		collections: filterValues(value.collections),
 		topics: filterValues(value.topics),
+		type: filterValues(value.type),
 		readerList: value.readerList ?? null,
 	});
 }
@@ -102,6 +105,7 @@ export function librarySearchContextSummary(
 		author: context.author || undefined,
 		collections: context.collections,
 		topics: context.topics,
+		itemTypes: context.type,
 		readerList: context.readerList
 			? context.readerList.collectionId
 				? "one of this reader's collections, as shown on their profile"

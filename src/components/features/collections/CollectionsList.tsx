@@ -24,7 +24,7 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
-import { Fragment, type ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, Fragment, type ReactNode, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
@@ -556,6 +556,18 @@ function TopicFilter({
 	);
 }
 
+/** Domains have no box in the tree, so one stays chosen only while something under it is. */
+function withoutBareDomains(selected: string[], nodes: readonly TopicTreeNode[]) {
+	const parents = new Map(nodes.map((node) => [node.id, node.parent]));
+	const domainOf = (id: string): string => {
+		const parent = parents.get(id);
+		return parent ? domainOf(parent) : id;
+	};
+	const isDomain = (id: string) => parents.get(id) === null;
+	const kept = new Set(selected.filter((id) => !isDomain(id)).map(domainOf));
+	return selected.filter((id) => !isDomain(id) || kept.has(id));
+}
+
 /**
  * Topics in the collections' place, for a library without collections: each domain is a section and its fields,
  * subfields and topics open under it, through the same tree and counts the collections use.
@@ -598,7 +610,7 @@ function TopicTree({
 		<InnerCollectionList
 			data={{ collections }}
 			facetDistribution={{ collectionsAncestry: counts ?? {} }}
-			handleCheckboxChange={(id) => onChange(toggleTopicSelection(selected, id, nodes))}
+			handleCheckboxChange={(id) => onChange(withoutBareDomains(toggleTopicSelection(selected, id, nodes), nodes))}
 			handleCountrySelect={() => undefined}
 			// A domain is its section's heading, never a box inside it, though choosing a field chooses its domain too.
 			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
@@ -839,6 +851,9 @@ function FiltersList({
 	);
 }
 
+/** The library page's highlights, rendered on the server, for both the sidebar and the Explore sheet. */
+export const LibraryHighlightsSlot = createContext<ReactNode>(null);
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -852,7 +867,6 @@ export default function CollectionsList({
 	handleTopicsChange,
 	isModal = false,
 	queryParams,
-	after,
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
@@ -866,12 +880,11 @@ export default function CollectionsList({
 	handleTopicsChange: (topics: string[]) => void;
 	hierarchy: Collection[];
 	queryParams: inferParserType<typeof searchParamsLoader>;
-	/** Shown below everything else, outside the loading placeholder. */
-	after?: ReactNode;
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useLibraryFeature("collections");
 	const { topics } = useLibraryConfig();
+	const highlights = useContext(LibraryHighlightsSlot);
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
 	const topicsAsTree = topics.enabled && !isCollectionsEnabled;
@@ -1013,7 +1026,7 @@ export default function CollectionsList({
 					/>
 				</div>
 			</Skeleton>
-			{after && <div className="mt-4">{after}</div>}
+			{highlights && <div className={twMerge("mt-4", isModal && "px-6 pb-6")}>{highlights}</div>}
 		</aside>
 	);
 }

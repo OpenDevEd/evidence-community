@@ -7,7 +7,7 @@ import { HiOutlineViewList } from "react-icons/hi";
 import { SkipLink } from "@/components/layout/SkipLink";
 
 import { Button } from "@/components/nextui/Button";
-import CollectionsList from "@/components/features/collections/CollectionsList";
+import CollectionsList, { LibraryHighlightsSlot } from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
@@ -454,7 +454,7 @@ function CollectionsSidebar({
 	);
 }
 
-function MainContent({ highlights }: { highlights?: ReactNode }) {
+function MainContent() {
 	const props = useItemsList();
 	const { engaged } = useInlineChatLayout();
 	return (
@@ -472,7 +472,6 @@ function MainContent({ highlights }: { highlights?: ReactNode }) {
 					handleInstitutionSelect={props.handleInstitutionSelect}
 					handleCountrySelect={props.handleCountrySelect}
 					handleTopicsChange={props.handleTopicsChange}
-					after={highlights}
 				/>
 			</CollectionsSidebar>
 			<ItemsList props={props} />
@@ -495,7 +494,9 @@ export default function EvidenceLibrary({ highlights }: { highlights?: ReactNode
 			)}
 		>
 			<div className="flex gap-[var(--library-gap)] [--library-gap:2rem] xl:[--library-gap:2.5rem] flex-col lg:flex-row lg:[container-type:inline-size]">
-				<MainContent highlights={highlights} />
+				<LibraryHighlightsSlot value={highlights}>
+					<MainContent />
+				</LibraryHighlightsSlot>
 			</div>
 		</PageContainer>
 	);
