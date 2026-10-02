@@ -29,12 +29,13 @@ export function FacetOption({ label, count, largest, share, shareValue, arrow, a
 	const format = useFormatter();
 	const heading = emphasis && count !== null;
 	return (
-		<span className="flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
+		// Measured against its own width: a narrow option, such as one of the From and To year pickers, leaves the share out.
+		<span className="@container flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
 			<span className="flex min-w-0 items-center gap-2">
 				{heading && shareValue !== null && <ShareRing share={shareValue} />}
 				<TruncatedText text={label} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
 				{note && <span className={heading ? "sr-only" : "shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60"}>{note}</span>}
-				{share && <span className="shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60">{share}</span>}
+				{share && <span className="hidden shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60 @[12rem]:block">{share}</span>}
 				{count !== null && <span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(count)}</span>}
 				{arrowSlot && (
 					<span className="flex size-4 shrink-0">
