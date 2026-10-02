@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowDown01Icon, ArrowRight01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -33,7 +33,7 @@ export function SidebarCard({ id, title, aside, footer, link, children }: { id: 
 	return (
 		<section aria-labelledby={id} className="w-full rounded-2xl bg-card_light dark:bg-card">
 			<div className="flex flex-col gap-5 p-6">
-				<div className="flex items-baseline justify-between gap-4">
+				<div className="flex min-h-8 items-center justify-between gap-4">
 					<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
 					{aside}
 				</div>
@@ -72,7 +72,6 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 	const last = Math.max(...known);
 	const first = Math.max(Math.min(...known), last - YEARS_SHOWN + 1);
 	const years = Array.from({ length: last - first + 1 }, (_, index) => first + index);
-	const max = Math.max(...years.map((year) => counts?.[year] ?? 0), 1);
 	const [rangeStart, rangeEnd] = range.includes("-") ? range.split("-").map(Number) : [Number(range), Number(range)];
 	const chosen = drag
 		? [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)]
@@ -92,64 +91,94 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 		const bar = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-year]");
 		return bar ? Number(bar.dataset.year) : null;
 	};
-	const readout = hovered !== null ? `${hovered}: ${format.number(counts?.[hovered] ?? 0)}` : null;
+	const countOf = (year: number) => counts?.[year] ?? 0;
+	const peak = years.reduce((best, year) => (countOf(year) > countOf(best) ? year : best), years[0]);
+	// The figure on show: the bar pointed at, else the chosen years, else the busiest year, whose bar is marked.
+	const readout =
+		hovered !== null
+			? { value: countOf(hovered), label: `in ${hovered}` }
+			: chosen
+				? { value: years.filter((year) => year >= chosen[0] && year <= chosen[1]).reduce((sum, year) => sum + countOf(year), 0), label: chosen[0] === chosen[1] ? `in ${chosen[0]}` : `in ${chosen[0]}–${chosen[1]}` }
+				: { value: countOf(peak), label: `in ${peak}, the busiest year` };
+	const marked = hovered ?? (chosen ? null : peak);
+	// Decades name the axis; a span shorter than one names its ends.
+	const ticks = new Set(last - first >= 10 ? years.filter((year) => year % 10 === 0) : [first, last]);
 
 	return (
-		// One label that the hovered bar replaces, so nothing beside it moves.
-		<SidebarCard id="results-years" title="Years" aside={<span className={`text-sm tabular-nums ${MUTED}`}>{readout ?? (chosen ? (chosen[0] === chosen[1] ? chosen[0] : `${chosen[0]}–${chosen[1]}`) : `${first}–${last}`)}</span>}>
-			<div
-				className="flex h-28 touch-none select-none items-end gap-[2px]"
-				onPointerDown={(event) => {
-					dragged.current = false;
-					const year = yearAt(event);
-					if (year !== null) setDrag({ from: year, to: year });
-				}}
-				onPointerMove={(event) => {
-					const year = yearAt(event);
-					if (event.pointerType === "mouse") setHovered(year);
-					if (drag && year !== null && year !== drag.to) setDrag({ ...drag, to: year });
-				}}
-				onPointerLeave={() => {
-					setHovered(null);
-					commit();
-				}}
-				onPointerUp={commit}
-				onPointerCancel={() => setDrag(null)}
-			>
-				{years.map((year) => {
-					const count = counts?.[year] ?? 0;
-					const inChosen = chosen && year >= chosen[0] && year <= chosen[1];
-					return (
-						<button
-							key={year}
-							type="button"
-							aria-label={`${year}: ${format.number(count)}`}
-							aria-pressed={Boolean(inChosen)}
-							data-year={year}
-							onClick={() => {
-								if (dragged.current) {
-									dragged.current = false;
-									return;
-								}
-								onRangeChange(range === String(year) ? null : String(year), null);
-							}}
-							className="group/bar flex h-full flex-1 items-end outline-none focus-visible:ring-2 focus-visible:ring-accent"
-						>
-							<span
-								className={twMerge(
-									"block w-full rounded-t-[3px] transition-colors",
-									inChosen ? "bg-accent" : chosen ? "bg-accent/25" : "bg-accent/60",
-									"group-hover/bar:bg-accent",
-								)}
-								style={{ height: count ? `${Math.max(3, (count / max) * 100)}%` : "1px" }}
-							/>
-						</button>
-					);
-				})}
-			</div>
-			<div className="-mt-3 flex justify-between text-xs tabular-nums text-black/50 dark:text-white/50">
-				<span>{first}</span>
-				<span>{last}</span>
+		<SidebarCard
+			id="results-years"
+			title="Years"
+			aside={
+				<span className="flex h-8 items-center">
+					{range && (
+						<Button size="sm" onPress={() => onRangeChange(null, null)} startContent={<HugeiconsIcon icon={Cancel01Icon} aria-hidden className="size-3.5" />}>
+							Clear
+						</Button>
+					)}
+				</span>
+			}
+		>
+			<p className="-mt-2 flex items-baseline gap-2" aria-live="polite">
+				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(readout.value)}</span>
+				<span className={`text-sm ${MUTED}`}>{readout.label}</span>
+			</p>
+			<div>
+				<div
+					className="flex h-36 touch-none select-none items-end gap-[2px] border-b border-black/10 dark:border-white/10"
+					onPointerDown={(event) => {
+						dragged.current = false;
+						const year = yearAt(event);
+						if (year !== null) setDrag({ from: year, to: year });
+					}}
+					onPointerMove={(event) => {
+						const year = yearAt(event);
+						if (event.pointerType === "mouse") setHovered(year);
+						if (drag && year !== null && year !== drag.to) setDrag({ ...drag, to: year });
+					}}
+					onPointerLeave={() => {
+						setHovered(null);
+						commit();
+					}}
+					onPointerUp={commit}
+					onPointerCancel={() => setDrag(null)}
+				>
+					{years.map((year) => {
+						const count = countOf(year);
+						const inChosen = chosen && year >= chosen[0] && year <= chosen[1];
+						return (
+							<button
+								key={year}
+								type="button"
+								aria-label={`${year}: ${format.number(count)}`}
+								aria-pressed={Boolean(inChosen)}
+								data-year={year}
+								onClick={() => {
+									if (dragged.current) {
+										dragged.current = false;
+										return;
+									}
+									onRangeChange(range === String(year) ? null : String(year), null);
+								}}
+								className="flex h-full flex-1 items-end outline-none focus-visible:ring-2 focus-visible:ring-accent"
+							>
+								<span
+									className={twMerge(
+										"block w-full rounded-t-[4px] transition-colors",
+										inChosen || year === marked ? "bg-accent" : chosen ? "bg-accent/25" : "bg-accent/45",
+									)}
+									style={{ height: count ? `${Math.max(3, (count / countOf(peak)) * 100)}%` : "2px" }}
+								/>
+							</button>
+						);
+					})}
+				</div>
+				<div aria-hidden className="flex gap-[2px] pt-1.5 text-xs tabular-nums text-black/50 dark:text-white/50">
+					{years.map((year) => (
+						<span key={year} className="relative h-4 flex-1">
+							{ticks.has(year) && <span className="absolute left-1/2 -translate-x-1/2">{year}</span>}
+						</span>
+					))}
+				</div>
 			</div>
 		</SidebarCard>
 	);
