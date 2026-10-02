@@ -76,10 +76,11 @@ function CollectionHierarchy({
 		);
 	}, [collectionData, hasChildren, selectedCollections]);
 
-	// Memoize the style object to prevent unnecessary re-renders
-	const checkboxStyle = useMemo(() => ({
-		marginLeft: `${(level - 1) * 16}px`
-	}), [level]);
+	// Each level starts further in and gives up that much width, so its figures stay inside the card.
+	const checkboxStyle = useMemo(() => {
+		const indent = `${(level - 1) * 16}px`;
+		return { marginInlineStart: indent, width: `calc(100% - ${indent})` };
+	}, [level]);
 
 	// Memoize the size prop
 	const checkboxSize = useMemo(() => 
