@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { getFormatter, getLocale } from "next-intl/server";
+import { getFormatter, getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/routing";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimePageAvailability } from "@/config/library-config/pages";
@@ -14,7 +14,7 @@ const ROW = "group/row flex min-w-0 flex-col gap-1 rounded-xl p-2 -mx-2 outline-
 export async function LibraryHighlights() {
 	// The library config is only known per request, so this never prerenders.
 	await connection();
-	const [locale, format, config] = await Promise.all([getLocale(), getFormatter(), getLibraryConfig()]);
+	const [locale, format, t, config] = await Promise.all([getLocale(), getFormatter(), getTranslations("sidebar"), getLibraryConfig()]);
 	const digests = await loadLatestDigests(locale);
 	const pages = getRuntimePageAvailability(config);
 	const [latest, ...earlier] = digests?.editions ?? [];
@@ -22,7 +22,7 @@ export async function LibraryHighlights() {
 	return (
 		<div className="flex flex-col gap-4">
 			{latest && digests && (
-				<SidebarCard id="highlights-digests" title="Latest digests" link={{ href: "/digests", label: "All digests" }}>
+				<SidebarCard id="highlights-digests" title={t("latestDigests")} link={{ href: "/digests", label: t("allDigests") }}>
 					{/* The digests page's own cover, so an edition looks the same wherever it shows. */}
 					<div className="px-3 pt-2">
 						<DigestCover edition={latest} libraryName={digests.library} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />

@@ -237,7 +237,7 @@ function FacetPicker({
 										if (item.hide) return null;
 										// An option with no results is left out, unless it is chosen and so needs a way back.
 										const chosen = isMultiSelect && (item.isSelected ?? selectedKey.includes(item.key));
-										if (!chosen && (item.hideCount ? item.note?.startsWith("0 ") : countOf(item) === 0)) return null;
+										if (!chosen && (item.hideCount ? item.noteCount === 0 : countOf(item) === 0)) return null;
 										return (
 											<AutocompleteItem
 												startContent={item.startContent}
@@ -276,8 +276,9 @@ function FacetPicker({
  * A section of a tree: a ring filled to its share of the results, its name, and its share and count. A long name
  * wraps, with the ring and figures on its first line; a narrow sidebar leaves the share's figure out and keeps the ring.
  */
-function SectionTitle({ name, count, total, childCount, childNoun }: { name: string; count: number; total?: number; childCount: number; childNoun: [string, string] }) {
+function SectionTitle({ name, count, total, childCount, childCountKey }: { name: string; count: number; total?: number; childCount: number; childCountKey: ChildCountKey }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	return (
 		<span className="@container block w-full min-w-0">
 			{/* Each mark sits on the name's first line (2xl: a 32px line). */}
@@ -285,7 +286,7 @@ function SectionTitle({ name, count, total, childCount, childNoun }: { name: str
 				{total ? <span className="mt-1.5 flex shrink-0"><ShareRing share={count / total} /></span> : null}
 				<span className="min-w-0 flex-1 break-words">{name}</span>
 				<span className="sr-only">
-					{format.number(childCount)} {childCount === 1 ? childNoun[0] : childNoun[1]}
+					{t(childCountKey, { count: childCount })}
 				</span>
 				{total ? <span className="mt-2.5 hidden shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60 @[20rem]:block">{shareOf(format, count, total)}</span> : null}
 				<span className="mt-1.5 shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
@@ -293,6 +294,9 @@ function SectionTitle({ name, count, total, childCount, childNoun }: { name: str
 		</span>
 	);
 }
+
+/** How a section says how many of its children have results: collections, or a topic domain's fields. */
+type ChildCountKey = "collectionCount" | "fieldCount";
 
 export function InnerCollectionList({
 	data,
@@ -302,10 +306,10 @@ export function InnerCollectionList({
 	selectedCollections,
 	hierarchy,
 	total,
-	childNoun = ["collection", "collections"],
+	childCountKey = "collectionCount",
 }: {
-	/** What a section's children are called, one and many, for how many of them have results. */
-	childNoun?: [string, string];
+	/** How a section says how many of its children have results. */
+	childCountKey?: ChildCountKey;
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
 	handleCheckboxChange: (key: string) => void;
@@ -394,7 +398,7 @@ export function InnerCollectionList({
 							count={sectionCount(collection.key)}
 							total={total}
 							childCount={(collection.children ?? []).filter((child) => sectionCount(child.key) > 0).length}
-							childNoun={childNoun}
+							childCountKey={childCountKey}
 						/>
 					}
 				>
@@ -410,12 +414,21 @@ export function InnerCollectionList({
 			))}
 		</Accordion>
 	) : (
-		<div className="text-lg bg-card_light dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
+		<TreeNotice>
 			<HugeiconsIcon
 				icon={Cancel01Icon}
 				className="stroke-current size-6"
 			/>
 			<span>{t("noFacetsFound")}</span>
+		</TreeNotice>
+	);
+}
+
+/** A tree's place when it has nothing to show, in a card of its own. */
+function TreeNotice({ children }: { children: React.ReactNode }) {
+	return (
+		<div className="text-lg bg-card_light dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
+			{children}
 		</div>
 	);
 }
@@ -508,6 +521,7 @@ function TopicFilter({
 	selected: string[];
 }) {
 	const tree = useTopicTree();
+	const t = useTranslations("sidebar");
 
 	if (tree.error) {
 		return (
@@ -515,13 +529,13 @@ function TopicFilter({
 				role="status"
 				className="flex items-center gap-2 text-sm text-black/55 dark:text-white/55"
 			>
-				<span>Could not load topics.</span>
+				<span>{t("topicsFailed")}</span>
 				<Button
 					size="xs"
 					variant="transparent"
 					onPress={() => void tree.mutate()}
 				>
-					Try again
+					{t("tryAgain")}
 				</Button>
 			</div>
 		);
@@ -548,7 +562,7 @@ function TopicFilter({
 		key: node.id,
 		label: node.name,
 		...(depth !== null && node.parent === null
-			? { emphasis: true, note: fieldsOf(node.id) === 1 ? "1 field" : `${fieldsOf(node.id)} fields` }
+			? { emphasis: true, note: t("fieldCount", { count: fieldsOf(node.id) }) }
 			: {}),
 		count: counts?.[node.id],
 		showArrow: depth !== null && parents.has(node.id),
@@ -617,6 +631,9 @@ function TopicTree({
 		};
 	}, [nodes]);
 
+	if (tree.error) return <TopicsFailed onRetry={() => void tree.mutate()} />;
+	// Nothing until the catalog arrives, rather than a moment of "no topics".
+	if (!tree.data) return null;
 	return (
 		<InnerCollectionList
 			data={{ collections }}
@@ -627,7 +644,7 @@ function TopicTree({
 			selectedCollections={selected.filter((id) => !hierarchy.some((root) => root.key === id))}
 			hierarchy={hierarchy}
 			total={total}
-			childNoun={["field", "fields"]}
+			childCountKey="fieldCount"
 		/>
 	);
 }
@@ -665,6 +682,7 @@ function FiltersList({
 	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
+	const sidebar = useTranslations("sidebar");
 
 	const [institutions] = useFacetList(
 		facetDistribution!,
@@ -703,9 +721,9 @@ function FiltersList({
 				const found = Object.entries(facetDistribution?.country ?? {}).filter(
 					([path, count]) => count > 0 && path.startsWith(`${item.key} > `) && /^[A-Z]{2}$/.test(path.split(" > ").pop() ?? ""),
 				).length;
-				return { ...item, note: found === 1 ? "1 country" : `${found} countries`, emphasis: !item.key.includes(" > ") };
+				return { ...item, note: sidebar("countryCount", { count: found }), noteCount: found, emphasis: !item.key.includes(" > ") };
 			}),
-		[countries, facetDistribution],
+		[countries, facetDistribution, sidebar],
 	);
 	const [countries_uncategorized] = useFacetList(
 		facetDistribution!,
@@ -948,11 +966,23 @@ function FeaturedInstitution({ chosen, onSelect, isModal }: { chosen: string[]; 
 	);
 }
 
+/** The topic catalog could not load: said in the tree's place, with a way to ask again, instead of an empty tree. */
+function TopicsFailed({ onRetry }: { onRetry: () => void }) {
+	const t = useTranslations("sidebar");
+	return (
+		<TreeNotice>
+			<span role="status">{t("topicsFailed")}</span>
+			<Button size="sm" onPress={onRetry}>{t("tryAgain")}</Button>
+		</TreeNotice>
+	);
+}
+
 /** The topic tree, in the collections' place, for a library without collections. */
 function TopicTreeSection({ counts, onChange, selected }: { counts: Record<string, number> | undefined; onChange: (topics: string[]) => void; selected: string[] }) {
 	const total = useFacetTotal("topicAncestors");
+	const t = useTranslations("sidebar");
 	return (
-		<section className="w-full" aria-label="Topics">
+		<section className="w-full" aria-label={t("topics")}>
 			<TopicTree total={total} counts={counts} onChange={onChange} selected={selected} />
 		</section>
 	);

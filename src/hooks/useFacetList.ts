@@ -21,6 +21,8 @@ export type FacetListItem = {
     isSelected?: boolean;
     /** Said in place of a count the option cannot give truthfully, such as how many countries a region holds. */
     note?: string;
+    /** The number a note gives, so an option whose note counts nothing is left out as one with no results is. */
+    noteCount?: number;
     /** A heading of the list, as a tree's section is: its name and bar stand out. */
     emphasis?: boolean;
 };

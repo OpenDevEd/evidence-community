@@ -99,6 +99,8 @@ function sortedCounts(counts: Record<string, number> | undefined) {
 
 type Span = [number, number];
 
+type Translate = ReturnType<typeof useTranslations>;
+
 /** The last thirty years that have results, one per bar, the busiest of them and every year with results; none when no result has a year. */
 function yearAxis(counts: Record<string, number> | undefined) {
 	const known = Object.keys(counts ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
@@ -121,12 +123,12 @@ function chosenSpan(range: string, drag: { from: number; to: number } | null, fi
 }
 
 /** The figure on show: the bar pointed at, else the chosen years, else the busiest year. */
-function yearReadout(axis: NonNullable<ReturnType<typeof yearAxis>>, hovered: number | null, chosen: Span | null) {
-	if (hovered !== null) return { value: axis.countOf(hovered), label: `in ${hovered}` };
-	if (!chosen) return { value: axis.countOf(axis.peak), label: `in ${axis.peak}, the busiest year` };
+function yearReadout(axis: NonNullable<ReturnType<typeof yearAxis>>, hovered: number | null, chosen: Span | null, t: Translate) {
+	if (hovered !== null) return { value: axis.countOf(hovered), label: t("inYear", { year: String(hovered) }) };
+	if (!chosen) return { value: axis.countOf(axis.peak), label: t("busiestYear", { year: String(axis.peak) }) };
 	// Every year with results counts, including those older than the bars.
 	const value = axis.known.filter((year) => year >= chosen[0] && year <= chosen[1]).reduce((sum, year) => sum + axis.countOf(year), 0);
-	return { value, label: chosen[0] === chosen[1] ? `in ${chosen[0]}` : `in ${chosen[0]}–${chosen[1]}` };
+	return { value, label: chosen[0] === chosen[1] ? t("inYear", { year: String(chosen[0]) }) : t("inYears", { from: String(chosen[0]), to: String(chosen[1]) }) };
 }
 
 /**
@@ -185,6 +187,7 @@ function barTone(inChosen: boolean, marked: boolean, anyChosen: boolean) {
 /** One bar per year, the busiest or pointed-at one in full and the chosen ones over the rest. */
 function YearColumns({ axis, chosen, marked, picking }: { axis: NonNullable<ReturnType<typeof yearAxis>>; chosen: Span | null; marked: number | null; picking: ReturnType<typeof useYearPicking> }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	return (
 		<div className="flex h-36 touch-none select-none items-end gap-[2px] border-b border-black/10 dark:border-white/10" {...picking.surface}>
 			{axis.years.map((year) => {
@@ -194,7 +197,7 @@ function YearColumns({ axis, chosen, marked, picking }: { axis: NonNullable<Retu
 					<button
 						key={year}
 						type="button"
-						aria-label={`${year}: ${format.number(count)}`}
+						aria-label={t("yearBar", { year: String(year), count: format.number(count) })}
 						aria-pressed={inChosen}
 						data-year={year}
 						onClick={() => picking.pick(year)}
@@ -238,22 +241,23 @@ function HeadFigure({ value, label }: { value: React.ReactNode; label: React.Rea
 /** The last thirty years that have results, one bar each. Click a bar for that year, drag across bars for a range, click the chosen year again to clear it. */
 function YearBars({ counts, range, onRangeChange }: { counts: Record<string, number> | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	const picking = useYearPicking(range, onRangeChange);
 	const axis = yearAxis(counts);
 	if (!axis) return null;
 	const chosen = chosenSpan(range, picking.drag, axis.earliest, axis.last);
-	const readout = yearReadout(axis, picking.hovered, chosen);
+	const readout = yearReadout(axis, picking.hovered, chosen, t);
 	return (
 		<SidebarCard
 			id="results-years"
-			title="Years"
+			title={t("years")}
 			// One label that the bar pointed at replaces, so nothing beside it moves.
 			band={<HeadFigure value={format.number(readout.value)} label={readout.label} />}
 			aside={
 				<span className="flex h-8 items-center">
 					{range && (
 						<Button size="sm" onPress={() => onRangeChange(null, null)} startContent={<HugeiconsIcon icon={Cancel01Icon} aria-hidden className="size-3.5" />}>
-							Clear
+							{t("clear")}
 						</Button>
 					)}
 				</span>
@@ -289,6 +293,7 @@ function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect }: { labe
 /** How many of the results have a PDF, as a figure and a meter. */
 function PdfShare({ pdf }: { pdf: Record<string, number> | undefined }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	const withPdf = pdf?.true ?? 0;
 	const withPdfOf = withPdf + (pdf?.false ?? 0);
 	if (withPdfOf === 0) return null;
@@ -297,11 +302,9 @@ function PdfShare({ pdf }: { pdf: Record<string, number> | undefined }) {
 			<div className="flex items-baseline justify-between gap-4">
 				<span className="flex items-baseline gap-2">
 					<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(withPdf / withPdfOf, { style: "percent" })}</span>
-					<span className="text-base font-medium">with a PDF</span>
+					<span className="text-base font-medium">{t("withPdf")}</span>
 				</span>
-				<span className={`text-sm tabular-nums ${MUTED}`}>
-					{format.number(withPdf)} of {format.number(withPdfOf)}
-				</span>
+				<span className={`text-sm tabular-nums ${MUTED}`}>{t("countOf", { count: format.number(withPdf), total: format.number(withPdfOf) })}</span>
 			</div>
 			<meter className="sr-only" min={0} max={withPdfOf} value={withPdf} />
 			<span aria-hidden className="block h-2 overflow-hidden rounded-full bg-accent/15">
@@ -314,6 +317,7 @@ function PdfShare({ pdf }: { pdf: Record<string, number> | undefined }) {
 /** Item types as parts of the results: one bar split by type, then a row per type with its swatch, share and count. */
 function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, number> | undefined; selected: string[]; onSelect: (type: string) => void; pdf: Record<string, number> | undefined }) {
 	const typeName = useTranslations("itemType");
+	const t = useTranslations("sidebar");
 	const [all, setAll] = useState(false);
 	const expand = useExpandTransition();
 	const rows = sortedCounts(counts);
@@ -339,7 +343,7 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 	return (
 		<SidebarCard
 			id="results-types"
-			title="Types"
+			title={t("types")}
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
 					{rows.map(([type, count], index) => (
@@ -366,9 +370,10 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 
 /** Opens the rest of a list and closes it again. */
 function AllToggle({ open, count, onToggle }: { open: boolean; count: number; onToggle: () => void }) {
+	const t = useTranslations("sidebar");
 	return (
 		<Button size="sm" onPress={onToggle} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5 transition-transform duration-300 motion-reduce:transition-none", open && "rotate-180")} />}>
-			{open ? "Fewer types" : `All ${count} types`}
+			{open ? t("fewerTypes") : t("allTypes", { count })}
 		</Button>
 	);
 }
@@ -384,9 +389,10 @@ function ActivityStrip({ years, axis }: { years: Record<string, number> | undefi
 	const counts = axis.map((year) => years?.[year] ?? 0);
 	const busiest = Math.max(0, ...counts);
 	const peak = busiest > 0 ? axis[counts.indexOf(busiest)] : null;
+	const t = useTranslations("sidebar");
 	return (
 		<span className="flex h-6 w-16 shrink-0 items-end gap-px border-b border-black/10 @[20rem]:w-24 dark:border-white/10">
-			{peak !== null && <span className="sr-only">Most results in {peak}</span>}
+			{peak !== null && <span className="sr-only">{t("mostResultsIn", { year: String(peak) })}</span>}
 			{counts.map((count, index) => (
 				<span
 					key={axis[index]}
@@ -419,6 +425,7 @@ function initialsOf(name: string) {
  */
 function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCount: number | undefined; combined: Record<string, number> | undefined; focusedYears: Record<string, number> | undefined; axis: number[] }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	const totals = axis.map((year) => combined?.[year] ?? 0);
 	const largest = Math.max(1, ...totals);
 	const height = (count: number) => (count ? `${Math.max(4, (count / largest) * 100)}%` : "0%");
@@ -426,7 +433,7 @@ function AuthorsBand({ authorCount, combined, focusedYears, axis }: { authorCoun
 		<>
 			<p className="flex items-baseline gap-2">
 				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{authorCountLabel(format, authorCount)}</span>
-				<span className={`text-sm ${MUTED}`}>authors in these results</span>
+				<span className={`text-sm ${MUTED}`}>{t("authorsInResults")}</span>
 			</p>
 			<span aria-hidden className="flex h-14 items-end gap-[3px]">
 				{axis.map((year, index) => (
@@ -476,6 +483,7 @@ function AuthorBadge({ name, photo, highlighted }: { name: string; photo: string
 /** An author's strip, with how many results they share with the author pointed at over it; one who shares none fades. */
 function StripWithShared({ years, axis, shared, focused }: { years: Record<string, number> | undefined; axis: number[]; shared: number | null; focused: string | null }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	return (
 		<span className="relative flex shrink-0">
 			<span className={twMerge("flex transition-opacity duration-200 motion-reduce:transition-none", shared === 0 && "opacity-25", shared ? "opacity-30" : "")}>
@@ -486,7 +494,7 @@ function StripWithShared({ years, axis, shared, focused }: { years: Record<strin
 					<span className="flex items-center gap-1 rounded-full bg-black/85 px-2 py-0.5 text-xs font-semibold tabular-nums text-white dark:bg-white dark:text-black">
 						<HugeiconsIcon icon={UserMultiple02Icon} aria-hidden className="size-3.5" />
 						{format.number(shared)}
-						<span className="sr-only">together with {focused}</span>
+						<span className="sr-only">{t("togetherWith", { name: focused ?? "" })}</span>
 					</span>
 				</span>
 			) : null}
@@ -530,11 +538,12 @@ function AuthorPlaceholders() {
 }
 
 /** A card's failure, with a way to ask again. */
-function LoadFailure({ what, onRetry }: { what: string; onRetry: () => void }) {
+function LoadFailure({ message, onRetry }: { message: string; onRetry: () => void }) {
+	const t = useTranslations("sidebar");
 	return (
 		<div className={`flex flex-col items-start gap-3 px-3 text-base ${MUTED}`}>
-			Could not load the {what}.
-			<Button size="sm" onPress={onRetry}>Try again</Button>
+			{message}
+			<Button size="sm" onPress={onRetry}>{t("tryAgain")}</Button>
 		</div>
 	);
 }
@@ -542,9 +551,10 @@ function LoadFailure({ what, onRetry }: { what: string; onRetry: () => void }) {
 /** The list in whichever state it is in: failed, loading, empty, or the authors. */
 function AuthorList({ authors, focus, selected, onSelect }: { authors: ReturnType<typeof useTopAuthors>; focus: [string | null, (name: string | null) => void]; selected: string; onSelect: (author: string) => void }) {
 	const [focused, setFocused] = focus;
-	if (authors.error && !authors.isValidating) return <LoadFailure what="top authors" onRetry={authors.retry} />;
+	const t = useTranslations("sidebar");
+	if (authors.error && !authors.isValidating) return <LoadFailure message={t("authorsFailed")} onRetry={authors.retry} />;
 	if (!authors.data) return <AuthorPlaceholders />;
-	if (authors.data.authors.length === 0) return <p className={`px-3 text-base ${MUTED}`}>No authors are named in these results.</p>;
+	if (authors.data.authors.length === 0) return <p className={`px-3 text-base ${MUTED}`}>{t("noAuthors")}</p>;
 	const together = focused ? authors.byAuthor.get(focused)?.together : undefined;
 	return (
 		<ul inert={authors.stale || undefined} className={twMerge("@container flex flex-col transition-opacity", authors.stale && "opacity-50")} onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
@@ -565,9 +575,9 @@ function AuthorList({ authors, focus, selected, onSelect }: { authors: ReturnTyp
 }
 
 /** The header's label: the axis's years, or the span and busiest year of the author pointed at. */
-function spanLabel(span: ReturnType<typeof activeSpan>, axis: number[]) {
+function spanLabel(span: ReturnType<typeof activeSpan>, axis: number[], t: Translate) {
 	if (!span) return `${axis[0]}–${axis[axis.length - 1]}`;
-	return `${span.first === span.last ? span.first : `${span.first}–${span.last}`}, most in ${span.peak}`;
+	return t("authorSpan", { span: span.first === span.last ? String(span.first) : `${span.first}–${span.last}`, year: String(span.peak) });
 }
 
 /**
@@ -577,16 +587,17 @@ function spanLabel(span: ReturnType<typeof activeSpan>, axis: number[]) {
  */
 function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (author: string) => void }) {
 	const [focused, setFocused] = useState<string | null>(null);
+	const t = useTranslations("sidebar");
 	const authors = useTopAuthors();
 	const focusedYears = focused ? authors.byAuthor.get(focused)?.years : undefined;
 	return (
 		<SidebarCard
 			id="results-authors"
-			title={selected ? "Author and co-authors" : "Top authors"}
+			title={selected ? t("authorAndCoauthors") : t("topAuthors")}
 			// One label that the author pointed at replaces, so nothing beside it moves.
 			aside={
 				<span className={`text-xs tabular-nums ${MUTED}`} aria-live="polite">
-					{spanLabel(focused ? activeSpan(focusedYears) : null, authors.axis)}
+					{spanLabel(focused ? activeSpan(focusedYears) : null, authors.axis, t)}
 				</span>
 			}
 			band={<AuthorsBand authorCount={authors.data?.authorCount} combined={authors.data?.combined} focusedYears={focusedYears} axis={authors.axis} />}
@@ -605,6 +616,7 @@ function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (autho
  */
 function CitedRow({ item, stale }: { item: ListItem; stale: boolean }) {
 	const format = useFormatter();
+	const t = useTranslations("sidebar");
 	// A row kept from the last query while the next one loads must not load its page ahead.
 	const link = useItemLink(item, { fullPrefetch: !stale });
 	const { setLastFetchedData } = useLastFetchedData();
@@ -622,7 +634,7 @@ function CitedRow({ item, stale }: { item: ListItem; stale: boolean }) {
 				<span className="flex min-w-0 flex-1 flex-col gap-1.5">
 					<span className="flex items-baseline gap-1.5">
 						<span className="font-heading text-2xl font-semibold leading-none tabular-nums">{format.number(item.citationCount ?? 0)}</span>
-						<span className={`text-sm ${MUTED}`}>{item.citationCount === 1 ? "citation" : "citations"}</span>
+						<span className={`text-sm ${MUTED}`}>{t("citations", { count: item.citationCount ?? 0 })}</span>
 					</span>
 					<span className="line-clamp-2 text-base font-medium leading-snug text-black/80 transition-colors group-hover/row:text-accent dark:text-white/80">{item.title || item.key}</span>
 				</span>
@@ -654,24 +666,26 @@ function useMostCited() {
 
 /** The list in whichever state it is in: failed, loading, nothing cited, or the results. */
 function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
+	const t = useTranslations("sidebar");
 	if (cited.failed) {
 		return (
 			<li className="flex flex-col items-start gap-3 px-2 text-base text-black/60 dark:text-white/60">
-				Could not load the most cited results.
-				<Button size="sm" onPress={cited.retry}>Try again</Button>
+				{t("citedFailed")}
+				<Button size="sm" onPress={cited.retry}>{t("tryAgain")}</Button>
 			</li>
 		);
 	}
 	if (!cited.data) return <CitedPlaceholders />;
-	if (cited.cited.length === 0) return <li className="px-2 text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>;
+	if (cited.cited.length === 0) return <li className="px-2 text-base text-black/60 dark:text-white/60">{t("noCited")}</li>;
 	return cited.cited.map((item) => <CitedRow key={item.key} item={item} stale={cited.stale} />);
 }
 
 /** The most cited of the results in view, three at most. Its box keeps the height of three rows, so the sidebar never moves as they load or change. */
 function MostCited() {
 	const cited = useMostCited();
+	const t = useTranslations("sidebar");
 	return (
-		<SidebarCard id="results-cited" title="Most cited">
+		<SidebarCard id="results-cited" title={t("mostCited")}>
 			{/* Three rows of a cover beside its count and a two-line title; every state keeps this height. */}
 			<ol aria-busy={cited.isValidating} inert={cited.stale || undefined} className={twMerge("-mx-2 -mt-2 flex h-[20.5rem] flex-col gap-2 overflow-hidden transition-opacity", cited.stale && "opacity-50")}>
 				<CitedList cited={cited} />

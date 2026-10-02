@@ -120,15 +120,15 @@ export function getFilterChipState(
 	};
 }
 
-/** Its own component so only these chips wait, behind their own boundary, for the server's topic names on a first visit. */
-/** What a topic is in the catalog's tree, by the shape of its ID. */
+/** What a topic is in the catalog's tree, by the shape of its ID: its level's name in the sidebar messages, none for a topic. */
 function topicLevel(id: string) {
-	if (id.startsWith("domains/")) return "Domain";
-	if (id.startsWith("fields/")) return "Field";
-	if (id.startsWith("subfields/")) return "Subfield";
-	return "Topic";
+	if (id.startsWith("domains/")) return "domain";
+	if (id.startsWith("fields/")) return "field";
+	if (id.startsWith("subfields/")) return "subfield";
+	return null;
 }
 
+/** Its own component so only these chips wait, behind their own boundary, for the server's topic names on a first visit. */
 function TopicChips({
 	onChange,
 	selected,
@@ -137,6 +137,7 @@ function TopicChips({
 	selected: string[];
 }) {
 	const t = useTranslations("ui");
+	const sidebar = useTranslations("sidebar");
 	const tree = useTopicTree({ seeded: true }).data?.nodes;
 	// A topic no public item carries, from a saved link say, is looked up by ID.
 	const unknown = tree
@@ -161,6 +162,11 @@ function TopicChips({
 		...selected.filter((id) => !byId.has(id)),
 	];
 
+	const levelName = (id: string) => {
+		const level = topicLevel(id);
+		return level ? sidebar(level) : t("topic");
+	};
+
 	return chips.map((id) => {
 		const node = byId.get(id);
 		return (
@@ -172,7 +178,7 @@ function TopicChips({
 				transition={{ duration: 0.2 }}
 			>
 				<Chip
-					group={topicLevel(id)}
+					group={levelName(id)}
 					title={node?.name ?? t("unknownTopic")}
 					callback={() =>
 						onChange(
