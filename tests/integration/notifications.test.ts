@@ -153,6 +153,29 @@ it("excludes the first Zotero sync but includes subsequent additions, including 
   });
 }, 120_000);
 
+it("excludes an import source's first run but includes what it adds later, and backfills those additions", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await client.query(`INSERT INTO "sourceConnection" ("key", "provider", "scopeKind") VALUES ('openalex-test', 'openalex', 'query')`);
+    const add = async (key: string) => {
+      await client.query('INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, $2, $1)', [key, "openalex-test"]);
+      await client.query('INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title") VALUES ($1, $2, $1, $3, $4)', [key, "openalex-test", "JournalArticle", "Imported work"]);
+    };
+    const eligible = async () => Object.fromEntries((await db.select().from(notificationItem)).map(row => [row.itemKey, row.eligible]));
+    await add("FIRST222");
+    await client.query(`INSERT INTO "sourceSyncState" ("sourceConnectionKey", "lastSuccessAt") VALUES ('openalex-test', now())`);
+    await add("LATER222");
+    expect(await eligible()).toMatchObject({FIRST222: false, LATER222: true});
+
+    // The old rule left later additions out; the backfill takes back only those.
+    await client.query(`INSERT INTO "sourceSyncRun" ("sourceConnectionKey", "workerId", "status", "startedAt", "finishedAt", "result") VALUES ('openalex-test', 'worker', 'succeeded', '2026-09-28T00:00:00Z', '2026-09-28T01:00:00Z', '{}')`);
+    await client.query(`UPDATE "notificationItem" SET "eligible" = false, "firstPublishedAt" = CASE "itemKey" WHEN 'FIRST222' THEN timestamptz '2026-09-28T00:30:00Z' ELSE timestamptz '2026-09-29T02:00:00Z' END`);
+    const backfill = readFileSync("drizzle/0075_import-source-additions-notify.sql", "utf8").split("--> statement-breakpoint").filter(statement => /^\s*(--.*\n\s*)*UPDATE/.test(statement));
+    expect(backfill).toHaveLength(1);
+    await client.query(backfill[0]);
+    expect(await eligible()).toMatchObject({FIRST222: false, LATER222: true});
+  });
+}, 120_000);
+
 it("does not resend accepted or ambiguous SMTP deliveries, and skips expired confirmations", async () => {
   await withIsolatedPublicationDatabase(async db => {
     smtp.sendMail.mockReset().mockResolvedValue({accepted: ["reader@example.org"]});
