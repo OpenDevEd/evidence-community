@@ -591,16 +591,21 @@ function TimelineStep({ step, data, dated, last }: { step: Step; data: HomeData 
 			{dated ? <StepDate when={when} /> : null}
 			<span aria-hidden className={`absolute left-0 top-1 block size-4 rounded-full border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)] lg:relative lg:left-auto lg:top-auto ${dated ? "lg:mt-3" : ""}`} />
 			<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
-			<div aria-hidden={loading || undefined} className={loading ? "invisible" : ""}>
-				{figure ? <p className="mt-4 font-heading text-3xl font-semibold leading-none tracking-tight tabular-nums xl:text-4xl">{figure.value}</p> : null}
-			</div>
-			{/* What the figure counts runs straight into the step's words, so a label that wraps moves only its own column. */}
-			<div>
-				<StepOutcome label={figure?.label} body={figure ? undefined : body} hidden={loading} />
-				{step.text ? <p className="mt-2 text-sm leading-6 opacity-75">{step.text}</p> : null}
-			</div>
+			<StepValue value={figure?.value} hidden={loading} />
+			<StepOutcome label={figure?.label} body={figure ? undefined : body} hidden={loading} />
+			<StepWords text={step.text} />
 		</li>
 	);
+}
+
+function StepWords({ text }: { text?: string }) {
+	return text ? <p className="mt-2 text-sm leading-6 opacity-75">{text}</p> : null;
+}
+
+/** A step's figure, set large. */
+function StepValue({ value, hidden }: { value?: string; hidden: boolean }) {
+	if (!value) return null;
+	return <p aria-hidden={hidden || undefined} className={`mt-4 font-heading text-3xl font-semibold leading-none tracking-tight tabular-nums xl:text-4xl ${hidden ? "invisible" : ""}`}>{value}</p>;
 }
 
 /** What a step's figure counts, or what happened to the followed publication. */
