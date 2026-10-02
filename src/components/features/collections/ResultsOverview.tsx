@@ -194,8 +194,8 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 					const chosen = selected.includes(type);
 					return (
 						<li key={type}>
-							<button type="button" aria-pressed={chosen} onClick={() => onSelect(type)} className={twMerge("flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5", dimmed(type) && "opacity-60")}>
-								<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px]", tone(index))} />
+							<button type="button" aria-pressed={chosen} onClick={() => onSelect(type)} className={twMerge("flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5")}>
+								<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone(index), dimmed(type) && "opacity-25")} />
 								<TruncatedText text={label(type)} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
 								<Tick shown={chosen} />
 								<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{format.number(count / total, { style: "percent", maximumFractionDigits: count / total < 0.01 ? 1 : 0 })}</span>
