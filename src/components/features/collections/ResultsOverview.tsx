@@ -27,7 +27,7 @@ const TYPES_SHOWN = 6;
 
 const MUTED = "text-black/60 dark:text-white/60";
 // The accent from strong to faint, one step per part, so a part's swatch and its slice of the bar match.
-export const RAMP = ["bg-accent", "bg-accent/80", "bg-accent/60", "bg-accent/45", "bg-accent/30", "bg-accent/20", "bg-accent/10"];
+const RAMP = ["bg-accent", "bg-accent/80", "bg-accent/60", "bg-accent/45", "bg-accent/30", "bg-accent/20", "bg-accent/10"];
 
 /**
  * A block of the sidebar in the result cards' language: a white card with a Montserrat heading, and the block's own

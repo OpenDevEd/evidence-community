@@ -59,7 +59,7 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { barWidth, RAMP, ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
+import { barWidth, ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -299,34 +299,36 @@ function FacetPicker({
 	);
 }
 
-const SECTION_PARTS_SHOWN = 6;
+/** A small ring filled to a share: a sliver at least for any count, empty for none. */
+function ShareRing({ share }: { share: number }) {
+	const radius = 7;
+	const circumference = 2 * Math.PI * radius;
+	const filled = share > 0 ? Math.max(0.03, Math.min(1, share)) : 0;
+	return (
+		<svg aria-hidden viewBox="0 0 20 20" className="size-5 shrink-0 -rotate-90 rtl:rotate-90 rtl:-scale-y-100">
+			<circle cx="10" cy="10" r={radius} fill="none" strokeWidth="3.5" className="stroke-accent/15" />
+			<circle cx="10" cy="10" r={radius} fill="none" strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${filled * circumference} ${circumference}`} className="stroke-accent" />
+		</svg>
+	);
+}
 
 /**
- * A section of a tree in one line: its name, its share and count, and one small bar that says two things. Its width is
- * the section's size against the other sections; its parts are the section's children with results, largest first,
- * so the bar shows how the section divides. Past six children, the rest share the last part.
+ * A section of a tree in one line: a ring filled to its share of the results, its name, and its share and count. A
+ * narrow sidebar leaves the share's figure out and keeps the ring.
  */
-function SectionTitle({ name, count, largest, total, parts, childNoun }: { name: string; count: number; largest: number; total?: number; parts: number[]; childNoun: [string, string] }) {
+function SectionTitle({ name, count, total, childCount, childNoun }: { name: string; count: number; total?: number; childCount: number; childNoun: [string, string] }) {
 	const format = useFormatter();
-	const shown = [...parts.slice(0, SECTION_PARTS_SHOWN), parts.slice(SECTION_PARTS_SHOWN).reduce((sum, part) => sum + part, 0)].filter((part) => part > 0);
 	return (
-		// Measured against its own width: a narrow sidebar gets a shorter bar and leaves the share out.
 		<span className="@container block w-full min-w-0">
-		<span className="flex w-full min-w-0 items-center gap-2 @[22rem]:gap-3">
-			<TruncatedText text={name} className="min-w-0 flex-1" />
-			<span className="sr-only">
-				{format.number(parts.length)} {parts.length === 1 ? childNoun[0] : childNoun[1]}
-			</span>
-			<span className="flex w-12 shrink-0 justify-end @[22rem]:w-20" aria-hidden>
-				<span className="flex h-2 gap-px overflow-hidden rounded-full bg-accent/10" style={{ width: barWidth(count, largest) }}>
-					{(shown.length ? shown : [count]).map((part, index) => (
-						<span key={index} className={RAMP[Math.min(index, RAMP.length - 1)]} style={{ flexGrow: part, flexBasis: 0 }} />
-					))}
+			<span className="flex w-full min-w-0 items-center gap-3">
+				{total ? <ShareRing share={count / total} /> : null}
+				<TruncatedText text={name} className="min-w-0 flex-1" />
+				<span className="sr-only">
+					{format.number(childCount)} {childCount === 1 ? childNoun[0] : childNoun[1]}
 				</span>
+				{total ? <span className="hidden shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60 @[20rem]:block">{shareOf(format, count, total)}</span> : null}
+				<span className="shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
 			</span>
-			{total ? <span className="hidden w-10 shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60 @[22rem]:block">{shareOf(format, count, total)}</span> : null}
-			<span className="shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white @[22rem]:w-14">{format.number(count)}</span>
-		</span>
 		</span>
 	);
 }
@@ -384,7 +386,6 @@ export function InnerCollectionList({
 	}, [hierarchy, data, filteredFacetDistribution]);
 
 	const sectionCount = (key: string) => filteredFacetDistribution.collectionsAncestry[key] ?? 0;
-	const largestSection = Math.max(1, ...displayedCollections.map((collection) => sectionCount(collection.key)));
 
 	return displayedCollections.length > 0 ? (
 		<Accordion
@@ -429,9 +430,8 @@ export function InnerCollectionList({
 						<SectionTitle
 							name={collection.title || collection.name || collection.key}
 							count={sectionCount(collection.key)}
-							largest={largestSection}
 							total={total}
-							parts={(collection.children ?? []).map((child) => sectionCount(child.key)).filter((part) => part > 0).sort((left, right) => right - left)}
+							childCount={(collection.children ?? []).filter((child) => sectionCount(child.key) > 0).length}
 							childNoun={childNoun}
 						/>
 					}
