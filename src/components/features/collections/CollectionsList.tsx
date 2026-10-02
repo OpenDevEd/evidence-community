@@ -84,7 +84,7 @@ function FacetOption({ label, count, largest, share, arrow, note }: { label: str
 				{arrow && (
 					<HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4 shrink-0", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />
 				)}
-				{note && <span className="shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60">{note}</span>}
+				{note && <span className="min-w-20 shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60">{note}</span>}
 				{share && <span className="shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60">{share}</span>}
 				{count !== null && <span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(count)}</span>}
 			</span>
