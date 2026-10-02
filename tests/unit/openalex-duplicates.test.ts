@@ -154,5 +154,19 @@ describe("OpenAlex duplicate records", () => {
 			expect((await dataCiteVersions(second, refusing, sleep)).unresolved).toEqual(new Set(second));
 			expect(refusedCalls).toBe(1);
 		});
+
+		it("stops asking once DataCite is down, and says why", async () => {
+			const asked = dois(500, 3000);
+			let calls = 0;
+			const down = (async () => {
+				calls++;
+				return new Response("Bad gateway", { status: 502 });
+			}) as typeof fetch;
+			const result = await dataCiteVersions(asked, down, sleep);
+			expect(result.unresolved).toEqual(new Set(asked));
+			expect(result.failure).toBeTruthy();
+			// Three batches of five tries each, then the other seven batches are not asked for.
+			expect(calls).toBe(15);
+		});
 	});
 });

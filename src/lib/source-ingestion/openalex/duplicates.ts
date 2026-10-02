@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { normalizeDoi } from "@/lib/doi";
+import { backoff, failureText, retryDelay } from "./client";
 import type { DuplicateRecord } from "./reconciliation";
 
 /** What two records are compared on: their key, normalised DOI, title and publication date. */
@@ -23,7 +24,8 @@ const DATACITE_TIMEOUT_MS = 20_000;
 // DataCite answers some batches with a 500 or 502 now and then; a batch is tried this many times before its pairs
 // are left undecided for this run.
 const DATACITE_ATTEMPTS = 5;
-const MAX_DATACITE_DELAY_MS = 60_000;
+// A whole outage would otherwise cost every batch its tries: a run of AIED asks about 490 batches.
+const DATACITE_OUTAGE_BATCHES = 3;
 const REPEATED_PREFIX = /^10\.\d{4,9}\/(?=10\.\d{4,9}\/)/u;
 const FIGSHARE_VERSION = /\.v\d+$/u;
 
@@ -103,36 +105,42 @@ function versionTargets(record: DataCiteRecord) {
 	);
 }
 
-/** One batch of DataCite's records, or null when DataCite would not answer it after its tries. */
+/**
+ * One batch of DataCite's records, or why DataCite would not answer it after its tries. A failed try waits its
+ * backoff or DataCite's Retry-After, the last one too, so the next batch does not start inside DataCite's cooldown.
+ */
 async function dataCiteBatch(dois: readonly string[], fetchImpl: typeof fetch, sleep: (ms: number) => Promise<void>) {
 	const url = new URL(DATACITE_DOIS);
 	url.searchParams.set("ids", dois.join(","));
 	url.searchParams.set("page[size]", String(DATACITE_BATCH));
 	url.searchParams.set("fields[dois]", "doi,relatedIdentifiers");
+	let failure = "";
 	for (let attempt = 0; attempt < DATACITE_ATTEMPTS; attempt++) {
-		let delay = Math.min(MAX_DATACITE_DELAY_MS, 1_000 * 2 ** attempt);
+		let delay = backoff(attempt);
 		try {
 			const response = await fetchImpl(url, {
 				headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:contact@opendeved.net)" },
 				signal: AbortSignal.timeout(DATACITE_TIMEOUT_MS),
 			});
-			if (response.ok) return ((await response.json()) as { data?: DataCiteRecord[] }).data ?? [];
+			if (response.ok) return { records: ((await response.json()) as { data?: DataCiteRecord[] }).data ?? [] };
 			await response.body?.cancel();
+			failure = `DataCite returned ${response.status}`;
 			// Another try will not change a refusal of the request itself.
-			if (response.status !== 429 && response.status < 500) return null;
-			const retryAfter = Number(response.headers.get("retry-after"));
-			if (Number.isFinite(retryAfter)) delay = Math.min(MAX_DATACITE_DELAY_MS, Math.max(delay, retryAfter * 1_000));
-		} catch {
-			// A lost connection or a timeout is tried again like a 5xx.
+			if (response.status !== 429 && response.status < 500) return { failure };
+			delay = retryDelay(response, attempt);
+		} catch (error) {
+			// A lost connection, a timeout or a malformed answer is tried again like a 5xx.
+			failure = failureText(error);
 		}
-		if (attempt < DATACITE_ATTEMPTS - 1) await sleep(delay);
+		await sleep(delay);
 	}
-	return null;
+	return { failure };
 }
 
 /**
  * What DataCite records as versions of other DOIs, for the DOIs it has, and the DOIs whose batch it would not
- * answer. One batch that fails leaves only its own DOIs undecided.
+ * answer, with the last reason it gave. One batch that fails leaves only its own DOIs undecided; after
+ * DATACITE_OUTAGE_BATCHES failed batches in a row DataCite counts as down and the rest are not asked for.
  */
 export async function dataCiteVersions(
 	dois: readonly string[],
@@ -141,20 +149,25 @@ export async function dataCiteVersions(
 ) {
 	const versionsOf = new Map<string, Set<string>>();
 	const unresolved = new Set<string>();
+	let failure: string | undefined;
+	let failedInRow = 0;
 	for (let start = 0; start < dois.length; start += DATACITE_BATCH) {
 		const batch = dois.slice(start, start + DATACITE_BATCH);
-		const records = await dataCiteBatch(batch, fetchImpl, sleep);
-		if (!records) {
+		const answer = failedInRow < DATACITE_OUTAGE_BATCHES ? await dataCiteBatch(batch, fetchImpl, sleep) : { failure: `skipped after ${failedInRow} failed batches in a row` };
+		if ("failure" in answer) {
+			failedInRow++;
+			failure = answer.failure;
 			for (const doi of batch) unresolved.add(doi);
 			continue;
 		}
-		for (const record of records) {
+		failedInRow = 0;
+		for (const record of answer.records) {
 			const targets = versionTargets(record);
 			const doi = record.attributes?.doi?.toLowerCase();
 			if (doi && targets.length) versionsOf.set(doi, new Set(targets));
 		}
 	}
-	return { versionsOf, unresolved };
+	return { versionsOf, unresolved, failure };
 }
 
 /** What OpenAlex itself says about a work, from its own record, so library edits never change the comparison. */
@@ -254,14 +267,15 @@ export async function findDuplicateRecords(
 	const live = await liveRecords(database, sourceConnectionKey, scan.full ? scan.startedAt : null);
 	const skipped = await skippedRecords(database, sourceConnectionKey, scan.startedAt);
 	const uncertain = uncertainDuplicateDois([...live, ...skipped]);
-	const { versionsOf, unresolved } = uncertain.length
+	const { versionsOf, unresolved, failure } = uncertain.length
 		? await dataCiteVersions(uncertain, fetchImpl, sleep)
-		: { versionsOf: new Map<string, Set<string>>(), unresolved: new Set<string>() };
+		: { versionsOf: new Map<string, Set<string>>(), unresolved: new Set<string>(), failure: undefined };
 	if (unresolved.size) {
 		console.warn("DataCite did not answer for some OpenAlex works that may be versions of each other; keeping those as they are", {
 			sourceConnectionKey,
 			unanswered: unresolved.size,
 			asked: uncertain.length,
+			failure,
 		});
 	}
 	return planDuplicates(live, skipped, versionsOf, unresolved);
