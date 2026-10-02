@@ -549,25 +549,39 @@ export async function getItemsPaginationMeta(
 /** At most this many authors are counted per request: the sidebar's top authors. */
 export const AUTHOR_ACTIVITY_LIMIT = 10;
 
+export type AuthorActivity = {
+	/** Their results by year. */
+	years: Record<string, number>;
+	/** How many of their results each of the other named authors shares. */
+	together: Record<string, number>;
+};
+
 /**
- * Each author's results by year under the current search and filters, for the activity strips beside the top authors.
- * One small search per author, side by side.
+ * Each author's results by year under the current search and filters, and how many of them each other named author
+ * shares, for the top authors in the sidebar. One small search per author, side by side.
  */
 export async function getAuthorActivity(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	names: readonly string[],
-): Promise<Record<string, Record<string, number>>> {
+): Promise<Record<string, AuthorActivity>> {
 	const libraryConfig = await getLibraryConfig();
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 	const { index } = await getMeilisearchForConfig(libraryConfig);
+	const asked = names.slice(0, AUTHOR_ACTIVITY_LIMIT);
 	const results = await Promise.all(
-		names.slice(0, AUTHOR_ACTIVITY_LIMIT).map((name) =>
+		asked.map((name) =>
 			index.search(search, {
-				offset: 0, limit: 0, attributesToSearchOn, facets: ["year"],
+				offset: 0, limit: 0, attributesToSearchOn, facets: ["year", "fullNames"],
 				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
 			}),
 		),
 	);
-	return Object.fromEntries(names.map((name, index) => [name, (results[index]?.facetDistribution?.year ?? {}) as Record<string, number>]));
+	return Object.fromEntries(asked.map((name, position) => {
+		const distribution = results[position]?.facetDistribution ?? {};
+		const coauthors = (distribution.fullNames ?? {}) as Record<string, number>;
+		// Only the other named authors leave the server, not everyone they wrote with.
+		const together = Object.fromEntries(asked.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
+		return [name, { years: (distribution.year ?? {}) as Record<string, number>, together }];
+	}));
 }

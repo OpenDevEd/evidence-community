@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, Tick01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -18,6 +18,7 @@ import { PdfCover } from "@/components/features/items/PdfCover";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import type { ItemsGetResponse } from "@/app/api/items/types";
 import type { ListItem } from "@/app/api/item/types";
+import type { AuthorActivity } from "@/lib/search";
 import { useItemLink } from "@/hooks/useItemLink";
 import { useLastFetchedData } from "@/context/Providers";
 
@@ -320,36 +321,74 @@ function ActivityStrip({ years, axis }: { years: Record<string, number> | undefi
 	);
 }
 
-/** The people with the most results, each with when they published and how much. */
+/** The span of years an author published in, and their busiest one. */
+function activeSpan(years: Record<string, number> | undefined) {
+	const known = Object.entries(years ?? {}).map(([year, count]) => [Number(year), count] as const).filter(([year, count]) => Number.isInteger(year) && year > 1000 && count > 0);
+	if (known.length === 0) return null;
+	const sorted = known.map(([year]) => year).sort((left, right) => left - right);
+	const busiest = known.reduce((best, entry) => (entry[1] > best[1] ? entry : best));
+	return { first: sorted[0], last: sorted[sorted.length - 1], peak: busiest[0] };
+}
+
+/**
+ * The people with the most results, each with when they published and how much. Pointing at one (or focusing it) shows
+ * their span of years in the header and, over the strips of the others, how many results each shares with them.
+ */
 function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string; onSelect: (author: string) => void }) {
 	const format = useFormatter();
 	const { queryParams } = useFiltersContext();
+	const [focused, setFocused] = useState<string | null>(null);
 	const rows = sortedCounts(counts);
 	const names = rows.map(([name]) => name);
 	// The strips ask for themselves after the list, so the list never waits on them.
 	const { page, sort, ...filters } = queryParams;
 	const base = buildItemsQuery(filters, "/author-activity");
-	const { data: activity } = useSWR<Record<string, Record<string, number>>>(
+	const { data: activity } = useSWR<Record<string, AuthorActivity>>(
 		names.length ? `${base}${base.includes("?") ? "&" : "?"}${names.map((name) => `name=${encodeURIComponent(name)}`).join("&")}` : null,
 		fetcher,
 		{ keepPreviousData: true, revalidateOnFocus: false },
 	);
 	if (rows.length === 0) return null;
 	// One axis for every row: the last twenty years any of these authors published in.
-	const known = names.flatMap((name) => Object.keys(activity?.[name] ?? {}).map(Number)).filter((year) => Number.isInteger(year) && year > 1000);
+	const known = names.flatMap((name) => Object.keys(activity?.[name]?.years ?? {}).map(Number)).filter((year) => Number.isInteger(year) && year > 1000);
 	const last = known.length ? Math.max(...known) : new Date().getFullYear();
 	const axis = Array.from({ length: ACTIVITY_YEARS }, (_, index) => last - ACTIVITY_YEARS + 1 + index);
+	const together = focused ? activity?.[focused]?.together : undefined;
+	const span = focused ? activeSpan(activity?.[focused]?.years) : null;
 	return (
-		<SidebarCard id="results-authors" title={selected ? "Author and co-authors" : "Top authors"} aside={<span className={`text-xs tabular-nums ${MUTED}`}>{axis[0]}–{last}</span>}>
-			<ul className="@container -mx-3 -mt-2 flex flex-col">
+		<SidebarCard
+			id="results-authors"
+			title={selected ? "Author and co-authors" : "Top authors"}
+			// One label that the author pointed at replaces, so nothing beside it moves.
+			aside={
+				<span className={`text-xs tabular-nums ${MUTED}`} aria-live="polite">
+					{span ? `${span.first === span.last ? span.first : `${span.first}–${span.last}`}, most in ${span.peak}` : `${axis[0]}–${last}`}
+				</span>
+			}
+		>
+			<ul className="@container -mx-3 -mt-2 flex flex-col" onPointerLeave={() => setFocused(null)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(null)}>
 				{rows.map(([name, count]) => {
 					const chosen = name === selected;
+					const shared = focused && name !== focused && activity ? (together?.[name] ?? 0) : null;
 					return (
 						<li key={name}>
-							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} className="flex h-11 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
+							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} onPointerEnter={() => setFocused(name)} onFocus={() => setFocused(name)} className={twMerge("flex h-11 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5", focused === name && "bg-black/5 dark:bg-white/5")}>
 								<TruncatedText text={name} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
 								<Tick shown={chosen} />
-								<ActivityStrip years={activity?.[name]} axis={axis} />
+								<span className="relative flex shrink-0">
+									<span className={twMerge("flex transition-opacity duration-200 motion-reduce:transition-none", shared === 0 && "opacity-25", shared ? "opacity-30" : "")}>
+										<ActivityStrip years={activity?.[name]?.years} axis={axis} />
+									</span>
+									{shared ? (
+										<span className="absolute inset-0 flex items-center justify-center">
+											<span className="flex items-center gap-1 rounded-full bg-black/85 px-2 py-0.5 text-xs font-semibold tabular-nums text-white dark:bg-white dark:text-black">
+												<HugeiconsIcon icon={UserMultiple02Icon} aria-hidden className="size-3.5" />
+												{format.number(shared)}
+												<span className="sr-only">together with {focused}</span>
+											</span>
+										</span>
+									) : null}
+								</span>
 								<span className="w-12 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
 							</button>
 						</li>
