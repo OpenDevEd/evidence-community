@@ -59,7 +59,7 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { barWidth, ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
+import { barWidth, RAMP, ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -299,25 +299,31 @@ function FacetPicker({
 	);
 }
 
-/** A section of a tree with its figures at a glance: its count and share of the results, a bar against the other
- * sections, and how many of its children have results. A publication counts once however many children hold it. */
-function SectionTitle({ name, count, largest, total, withResults, childNoun }: { name: string; count: number; largest: number; total?: number; withResults: number; childNoun: [string, string] }) {
+const SECTION_PARTS_SHOWN = 6;
+
+/**
+ * A section of a tree in one line: its name, its share and count, and one small bar that says two things. Its width is
+ * the section's size against the other sections; its parts are the section's children with results, largest first,
+ * so the bar shows how the section divides. Past six children, the rest share the last part.
+ */
+function SectionTitle({ name, count, largest, total, parts, childNoun }: { name: string; count: number; largest: number; total?: number; parts: number[]; childNoun: [string, string] }) {
 	const format = useFormatter();
+	const shown = [...parts.slice(0, SECTION_PARTS_SHOWN), parts.slice(SECTION_PARTS_SHOWN).reduce((sum, part) => sum + part, 0)].filter((part) => part > 0);
 	return (
-		<span className="flex w-full min-w-0 flex-col gap-2">
-			<span className="flex min-w-0 items-baseline gap-3">
-				<span className="min-w-0 flex-1">{name}</span>
-				{total ? <span className="shrink-0 text-sm tabular-nums text-black/60 dark:text-white/60">{shareOf(format, count, total)}</span> : null}
-				<span className="shrink-0 text-lg font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
+		<span className="flex w-full min-w-0 items-center gap-3">
+			<TruncatedText text={name} className="min-w-0 flex-1" />
+			<span className="sr-only">
+				{format.number(parts.length)} {parts.length === 1 ? childNoun[0] : childNoun[1]}
 			</span>
-			<span aria-hidden className="block h-1.5 w-full overflow-hidden rounded-full bg-accent/10">
-				<span className="block h-full rounded-full bg-accent" style={{ width: barWidth(count, largest) }} />
-			</span>
-			{withResults > 0 && (
-				<span className="text-sm text-black/60 dark:text-white/60">
-					{format.number(withResults)} {withResults === 1 ? childNoun[0] : childNoun[1]}
+			<span className="flex w-24 shrink-0 justify-end" aria-hidden>
+				<span className="flex h-2 gap-px overflow-hidden rounded-full bg-accent/10" style={{ width: barWidth(count, largest) }}>
+					{(shown.length ? shown : [count]).map((part, index) => (
+						<span key={index} className={RAMP[Math.min(index, RAMP.length - 1)]} style={{ flexGrow: part, flexBasis: 0 }} />
+					))}
 				</span>
-			)}
+			</span>
+			{total ? <span className="w-10 shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60">{shareOf(format, count, total)}</span> : null}
+			<span className="w-14 shrink-0 text-right text-base font-semibold tabular-nums text-black dark:text-white">{format.number(count)}</span>
 		</span>
 	);
 }
@@ -402,10 +408,10 @@ export function InnerCollectionList({
 			variant="shadow"
 			className="bg-card_light dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
 			itemClasses={{
-				title: "text-black/80 dark:text-white/80 font-base text-2xl",
+				title: "text-black/80 dark:text-white/80 font-base text-xl",
 				indicator: "text-black/80 dark:text-white/80",
 				trigger: "p-0",
-				base: "mb-4 last:mb-0",
+				base: "mb-3 last:mb-0",
 				content: "py-0 pt-2",
 			}}
 			showDivider={false}
@@ -420,7 +426,7 @@ export function InnerCollectionList({
 							count={sectionCount(collection.key)}
 							largest={largestSection}
 							total={total}
-							withResults={(collection.children ?? []).filter((child) => sectionCount(child.key) > 0).length}
+							parts={(collection.children ?? []).map((child) => sectionCount(child.key)).filter((part) => part > 0).sort((left, right) => right - left)}
 							childNoun={childNoun}
 						/>
 					}
