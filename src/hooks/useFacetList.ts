@@ -21,6 +21,8 @@ export type FacetListItem = {
     isSelected?: boolean;
     /** Said in place of a count the option cannot give truthfully, such as how many countries a region holds. */
     note?: string;
+    /** A heading of the list, as a tree's section is: its name and bar stand out. */
+    emphasis?: boolean;
 };
 
 type useFacetListReturn = [FacetListItem[], CategoriesDistribution]

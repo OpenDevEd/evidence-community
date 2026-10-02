@@ -75,12 +75,12 @@ function searchedFacetItems(
 }
 
 /** An option with its figures at a glance: its count and share of the results, and a bar against the largest option. */
-function FacetOption({ label, count, largest, share, arrow, note }: { label: string; count: number | null; largest: number; share: string | null; arrow: "open" | "closed" | null; note?: string }) {
+function FacetOption({ label, count, largest, share, arrow, note, emphasis = false }: { label: string; count: number | null; largest: number; share: string | null; arrow: "open" | "closed" | null; note?: string; emphasis?: boolean }) {
 	const format = useFormatter();
 	return (
 		<span className="flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
 			<span className="flex min-w-0 items-center gap-2">
-				<TruncatedText text={label} className="flex-1 leading-5" />
+				<TruncatedText text={label} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
 				{arrow && (
 					<HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4 shrink-0", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />
 				)}
@@ -89,8 +89,8 @@ function FacetOption({ label, count, largest, share, arrow, note }: { label: str
 				{count !== null && <span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(count)}</span>}
 			</span>
 			{count !== null && (
-				<span aria-hidden className="block h-1 w-full overflow-hidden rounded-full bg-accent/10">
-					<span className="block h-full rounded-full bg-accent/70" style={{ width: barWidth(count, largest) }} />
+				<span aria-hidden className={twMerge("block h-1 w-full overflow-hidden rounded-full bg-accent/10", emphasis && "h-1.5")}>
+					<span className={twMerge("block h-full rounded-full bg-accent/70", emphasis && "bg-accent")} style={{ width: barWidth(count, largest) }} />
 				</span>
 			)}
 		</span>
@@ -284,6 +284,7 @@ function FacetPicker({
 													share={!item.hideCount && total ? shareOf(format, countOf(item), total) : null}
 													arrow={item.showArrow ? (item.isSelected ? "open" : "closed") : null}
 													note={item.note}
+													emphasis={item.emphasis}
 												/>
 											</AutocompleteItem>
 										);
@@ -571,9 +572,14 @@ function TopicFilter({
 		})
 		.sort((left, right) => left.path.localeCompare(right.path));
 	const parents = new Set(shown.map(({ node }) => node.parent));
+	// A domain heads the list as it heads a section of the tree, with how many of its fields have results.
+	const fieldsOf = (id: string) => shown.filter(({ node }) => node.parent === id).length;
 	const row = (node: TopicTreeNode, depth: number | null): FacetListItem => ({
 		key: node.id,
 		label: node.name,
+		...(depth !== null && node.parent === null
+			? { emphasis: true, note: fieldsOf(node.id) === 1 ? "1 field" : `${fieldsOf(node.id)} fields` }
+			: {}),
 		count: counts?.[node.id],
 		showArrow: depth !== null && parents.has(node.id),
 		style:
@@ -739,7 +745,7 @@ function FiltersList({
 				const found = Object.entries(facetDistribution?.country ?? {}).filter(
 					([path, count]) => count > 0 && path.startsWith(`${item.key} > `) && /^[A-Z]{2}$/.test(path.split(" > ").pop() ?? ""),
 				).length;
-				return { ...item, note: found === 1 ? "1 country" : `${found} countries` };
+				return { ...item, note: found === 1 ? "1 country" : `${found} countries`, emphasis: !item.key.includes(" > ") };
 			}),
 		[countries, facetDistribution],
 	);
