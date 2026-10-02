@@ -241,12 +241,14 @@ async function pipelineFigures(home: LibraryHomeConfig | undefined, now: Date): 
 		.select({ key: sourceConnection.key, config: sourceConnection.config })
 		.from(sourceConnection)
 		.where(and(eq(sourceConnection.provider, "openalex"), eq(sourceConnection.status, "active")));
-	if (sources.length === 0) return null;
 	const keys = sources.map((source) => source.key);
 	const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
+	// New records count whatever brought them in; only the search and its repeats need an OpenAlex search.
 	const [[added], [merged]] = await Promise.all([
 		db.select({ count: count() }).from(item).where(and(publicParentVisibility(db, config.content.tags.hidden), gte(item.createdAt, monthAgo))),
-		db.select({ count: count() }).from(sourceRecordAlias).where(and(inArray(sourceRecordAlias.sourceConnectionKey, keys), eq(sourceRecordAlias.kind, "duplicate-of"))),
+		keys.length > 0
+			? db.select({ count: count() }).from(sourceRecordAlias).where(and(inArray(sourceRecordAlias.sourceConnectionKey, keys), eq(sourceRecordAlias.kind, "duplicate-of")))
+			: [{ count: 0 }],
 	]);
 	const queries = sources.flatMap((source) => openAlexConnectionConfigSchema.safeParse(source.config).data?.approvedQuery.query.oql ?? []);
 	return { ...queryTerms(queries), added: added?.count ?? 0, merged: merged?.count ?? 0 };

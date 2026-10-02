@@ -21,7 +21,8 @@ export function queryTerms(queries: readonly string[]) {
 	const terms = new Set<string>();
 	const topics = new Set<string>();
 	for (const oql of queries) {
-		const has = /\bhas\b\s*/giu;
+		// A text search is `<field> has ...`; a `has` straight after an operator is a flag such as `has DOI is (true)`.
+		const has = /(?<=[\w/.]\s+)(?<!\b(?:and|or|not|where)\s+)has\b\s*/giu;
 		while (has.exec(oql)) {
 			const end = clauseEnd(oql, has.lastIndex);
 			for (const [, quoted, word] of oql.slice(has.lastIndex, end).matchAll(/"([^"]+)"|([^\s()"]+)/gu)) {
