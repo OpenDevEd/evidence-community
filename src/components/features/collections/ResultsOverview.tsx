@@ -213,18 +213,27 @@ function MostCited() {
 	const format = useFormatter();
 	const { queryParams } = useFiltersContext();
 	const query = buildItemsQuery({ ...queryParams, sort: "mostCited", page: 1 });
-	const { data, isValidating } = useSWR<ItemsGetResponse>(
+	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(
 		`${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}`,
 		fetcher,
 		{ keepPreviousData: true, revalidateOnFocus: false },
 	);
 	const cited = data?.items.filter((item) => item.citationCount) ?? [];
+	// Kept from the last query while the new one loads: dimmed and out of reach until it matches.
+	const stale = Boolean(data) && isValidating;
 
 	return (
 		<section className={CARD} aria-labelledby="results-cited" aria-busy={isValidating}>
 			<h4 id="results-cited" className={HEADING}>Most cited</h4>
-			<ol className={twMerge("flex min-h-[16rem] flex-col gap-2 transition-opacity", isValidating && data && "pointer-events-none opacity-50")}>
-				{!data &&
+			{/* Three rows of a cover beside a two-line title and its count; every state keeps this height. */}
+			<ol inert={stale || undefined} className={twMerge("flex h-[16.75rem] flex-col gap-2 overflow-hidden transition-opacity", stale && "opacity-50")}>
+				{error && !isValidating && (
+					<li className="flex flex-col items-start gap-3 text-base text-black/60 dark:text-white/60">
+						Could not load the most cited results.
+						<Button size="sm" onPress={() => void mutate()}>Try again</Button>
+					</li>
+				)}
+				{!data && !error &&
 					Array.from({ length: CITED_SHOWN }, (_, index) => (
 						<li key={index} className="flex gap-4 p-2">
 							<Skeleton className="h-16 w-12 shrink-0 rounded-md" />
@@ -234,10 +243,10 @@ function MostCited() {
 							</span>
 						</li>
 					))}
-				{data && cited.length === 0 && (
+				{data && !error && cited.length === 0 && (
 					<li className="text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
 				)}
-				{cited.map((item) => (
+				{!error && cited.map((item) => (
 					<li key={item.key}>
 						<Link href={`/lib/${item.key}`} className="group -mx-2 flex min-w-0 gap-4 rounded-xl p-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5">
 							<span className="block w-12 shrink-0 self-start overflow-hidden rounded-md shadow-sm [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
