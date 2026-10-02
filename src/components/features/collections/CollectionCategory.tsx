@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { twMerge } from "@/lib/tw-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
@@ -43,14 +43,20 @@ export default function CollectionCategory({
 			};
 		});
 	};
-	const [hasOverflow, setHasOverflow] = useState(false);
+	// Whether the list is taller than its collapsed height, and whether a change to that should fade.
+	const [overflow, setOverflow] = useState({ shown: false, fade: false });
+	const hasOverflow = overflow.shown;
 
-	useEffect(() => {
+	// Measured before the first paint, so a section opening shows its See more and fade at once rather than adding them
+	// after; only later changes, such as a filter shortening the list, fade. The observer follows the list's height.
+	useLayoutEffect(() => {
 		const element = ref.current;
 		if (!element) return;
+		setOverflow({ shown: element.scrollHeight > MAX_COLLAPSED_HEIGHT, fade: false });
 
 		const observer = new ResizeObserver(() => {
-			setHasOverflow(element.scrollHeight > MAX_COLLAPSED_HEIGHT);
+			const shown = element.scrollHeight > MAX_COLLAPSED_HEIGHT;
+			setOverflow((current) => (current.shown === shown ? current : { shown, fade: true }));
 		});
 		observer.observe(element);
 
@@ -90,7 +96,7 @@ export default function CollectionCategory({
 			<AnimatePresence mode="wait" initial={false}>
 				{hasOverflow && (
 					<motion.div
-						initial={{ opacity: 0 }}
+						initial={overflow.fade ? { opacity: 0 } : false}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
 						className={twMerge(
