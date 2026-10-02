@@ -17,6 +17,9 @@ import { useFiltersContext } from "@/context/FiltersProvider";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import type { ItemsGetResponse } from "@/app/api/items/types";
+import type { ListItem } from "@/app/api/item/types";
+import { useItemLink } from "@/hooks/useItemLink";
+import { useLastFetchedData } from "@/context/Providers";
 
 const YEARS_SHOWN = 30;
 const CITED_SHOWN = 3;
@@ -304,9 +307,36 @@ function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, num
 	);
 }
 
+/**
+ * One of the most cited results, linked as a result card links: it loads the page ahead and its covers on approach,
+ * and hands its list copy over on click, so the page opens at once from it while the full record loads.
+ */
+function CitedRow({ item }: { item: ListItem }) {
+	const format = useFormatter();
+	const link = useItemLink(item, { fullPrefetch: true });
+	const { setLastFetchedData } = useLastFetchedData();
+	const handOff = () => setLastFetchedData({ items: [item] } as ItemsGetResponse);
+	return (
+		<li>
+			{/* The list is widened by this row's padding, so its clip never cuts the row's hover. */}
+			<Link {...link} onClick={handOff} className="group/row flex min-w-0 gap-4 rounded-xl p-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
+				<span className="block w-16 shrink-0 self-start overflow-hidden rounded-md shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/row:-translate-y-0.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+					<PdfCover src={item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage} alt="" width={64} title={item.title ?? undefined} />
+				</span>
+				<span className="flex min-w-0 flex-1 flex-col gap-1.5">
+					<span className="flex items-baseline gap-1.5">
+						<span className="font-heading text-2xl font-semibold leading-none tabular-nums">{format.number(item.citationCount ?? 0)}</span>
+						<span className={`text-sm ${MUTED}`}>{item.citationCount === 1 ? "citation" : "citations"}</span>
+					</span>
+					<span className="line-clamp-2 text-base font-medium leading-snug text-black/80 transition-colors group-hover/row:text-accent dark:text-white/80">{item.title || item.key}</span>
+				</span>
+			</Link>
+		</li>
+	);
+}
+
 /** The most cited of the results in view, three at most. Its box keeps the height of three rows, so the sidebar never moves as they load or change. */
 function MostCited() {
-	const format = useFormatter();
 	const { queryParams } = useFiltersContext();
 	const query = buildItemsQuery({ ...queryParams, sort: "mostCited", page: 1 });
 	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(
@@ -341,23 +371,7 @@ function MostCited() {
 				{data && !error && cited.length === 0 && (
 					<li className="px-2 text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
 				)}
-				{!error && cited.map((item) => (
-					<li key={item.key}>
-						{/* The list is widened by this row's padding, so its clip never cuts the row's hover. */}
-							<Link href={`/lib/${item.key}`} className="group/row flex min-w-0 gap-4 rounded-xl p-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5">
-							<span className="block w-16 shrink-0 self-start overflow-hidden rounded-md shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/row:-translate-y-0.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-								<PdfCover src={item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage} alt="" width={64} title={item.title ?? undefined} />
-							</span>
-							<span className="flex min-w-0 flex-1 flex-col gap-1.5">
-								<span className="flex items-baseline gap-1.5">
-									<span className="font-heading text-2xl font-semibold leading-none tabular-nums">{format.number(item.citationCount ?? 0)}</span>
-									<span className={`text-sm ${MUTED}`}>{item.citationCount === 1 ? "citation" : "citations"}</span>
-								</span>
-								<span className="line-clamp-2 text-base font-medium leading-snug text-black/80 transition-colors group-hover/row:text-accent dark:text-white/80">{item.title || item.key}</span>
-							</span>
-						</Link>
-					</li>
-				))}
+				{!error && cited.map((item) => <CitedRow key={item.key} item={item} />)}
 			</ol>
 		</SidebarCard>
 	);

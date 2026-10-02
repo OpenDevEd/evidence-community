@@ -20,12 +20,11 @@ import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { FuturePublicationHint } from "./FuturePublicationHint";
 import { isFuturePublication } from "@/lib/bibliographic-date";
-import { Link, usePathname, useRouter } from "@/i18n/routing";
-import { markFullyPrefetched } from "@/components/features/newlib/RefreshPrefetchedItem";
+import { Link } from "@/i18n/routing";
 import { preloadItemCovers } from "./PdfCover";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { cloneElement, useState, useEffect, useMemo, useId, useRef } from "react";
+import { cloneElement, useState, useMemo, useId, useRef } from "react";
 import CopyButton from "./CopyButton";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
@@ -35,8 +34,8 @@ import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
-import { useQueryState } from "nuqs";
 import { useResourceHref } from "@/hooks/useResourceHref";
+import { useItemLink } from "@/hooks/useItemLink";
 import { hasAnyTag, hasTag } from "@/lib/tags";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
@@ -556,12 +555,9 @@ export default function Resource({
 	position?: number;
 }) {
 	const titleId = useId();
-	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
 	const tNav = useTranslations("nav");
 	const format = useFormatter();
-	const router = useRouter();
-	const currentPath = usePathname();
 
 	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } =
 		useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
@@ -584,32 +580,11 @@ export default function Resource({
 	);
 	const gapMapHref = matchedGapMaps[0]?.href ?? null;
 
-	const resourceHref = useResourceHref();
-
 	// A loading card may still hold the previous results' keys, and a new tab cannot use this page's prefetch cache.
-	const fullPrefetch = Boolean(
-		finalItemData?.key &&
-			!finalIsLoading &&
-			!openLinksInNewTab &&
-			(position ?? Infinity) < FULL_PREFETCH_CARDS,
-	);
-	const prepare = () => preloadItemCovers(finalItemData);
-	const fullPrefetchKey = fullPrefetch ? finalItemData?.key : undefined;
-	useEffect(() => {
-		if (fullPrefetchKey) markFullyPrefetched(fullPrefetchKey);
-	}, [fullPrefetchKey]);
-	const itemTargetHref = finalItemData?.key
-		? resourceHref(finalItemData.key, {
-				set: {
-					referrer:
-						referrer ??
-						"/" +
-							(currentPath.startsWith("/lib")
-								? "lib"
-								: currentPath.split("/").slice(1).join("/")),
-				},
-			})
-		: "";
+	const itemLink = useItemLink(finalItemData, {
+		fullPrefetch: !finalIsLoading && !openLinksInNewTab && (position ?? Infinity) < FULL_PREFETCH_CARDS,
+	});
+	const itemTargetHref = itemLink.href;
 	const article = (
 		<ResourceArticle
 			titleId={titleId}
@@ -665,11 +640,7 @@ export default function Resource({
 					aria-labelledby={titleId}
 					target={openLinksInNewTab ? "_blank" : undefined}
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
-					href={finalItemData?.key ? itemTargetHref : ""}
-					prefetch={fullPrefetch || undefined}
-					onPointerEnter={prepare}
-					onFocus={prepare}
-					onTouchStart={prepare}
+					{...itemLink}
 					className={twMerge(
 						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 						!finalItemData?.key && "!pointer-events-none",
