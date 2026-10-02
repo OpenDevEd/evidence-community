@@ -75,22 +75,31 @@ function searchedFacetItems(
 }
 
 /** An option with its figures at a glance: its count and share of the results, and a bar against the largest option. */
-function FacetOption({ label, count, largest, share, arrow, note, emphasis = false }: { label: string; count: number | null; largest: number; share: string | null; arrow: "open" | "closed" | null; note?: string; emphasis?: boolean }) {
+/**
+ * An option with its figures at a glance. A heading with a count (a topic domain) reads as a tree's section does: a
+ * ring for its share, then its name and figures. Other options show a bar against the largest option under them. The
+ * chevron of an option that opens sits at the end, in a slot every option keeps when any can open, so counts line up.
+ */
+function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false }: { label: string; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean }) {
 	const format = useFormatter();
+	const heading = emphasis && count !== null;
 	return (
 		<span className="flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
 			<span className="flex min-w-0 items-center gap-2">
+				{heading && shareValue !== null && <ShareRing share={shareValue} />}
 				<TruncatedText text={label} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
-				{arrow && (
-					<HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4 shrink-0", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />
-				)}
-				{note && <span className="min-w-20 shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60">{note}</span>}
+				{note && <span className={heading ? "sr-only" : "shrink-0 text-right text-xs tabular-nums text-black/60 dark:text-white/60"}>{note}</span>}
 				{share && <span className="shrink-0 text-xs tabular-nums text-black/60 dark:text-white/60">{share}</span>}
 				{count !== null && <span className="min-w-8 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(count)}</span>}
+				{arrowSlot && (
+					<span className="flex size-4 shrink-0">
+						{arrow && <HugeiconsIcon icon={ArrowDown01Icon} className={twMerge("size-4", arrow === "closed" && "-rotate-90 rtl:rotate-90")} />}
+					</span>
+				)}
 			</span>
-			{count !== null && (
-				<span aria-hidden className={twMerge("block h-1 w-full overflow-hidden rounded-full bg-accent/10", emphasis && "h-1.5")}>
-					<span className={twMerge("block h-full rounded-full bg-accent/70", emphasis && "bg-accent")} style={{ width: barWidth(count, largest) }} />
+			{count !== null && !heading && (
+				<span aria-hidden className={twMerge("block h-1 overflow-hidden rounded-full bg-accent/10", arrowSlot && "mr-6 rtl:ml-6 rtl:mr-0")}>
+					<span className="block h-full rounded-full bg-accent/70" style={{ width: barWidth(count, largest) }} />
 				</span>
 			)}
 		</span>
@@ -140,8 +149,9 @@ function FacetPicker({
 	const allSectionNames = Object.keys(groupedBySection);
 	const countOf = (item: FacetListItem) =>
 		item.count ?? (facetName ? facetDistribution?.[facetName]?.[item.key] ?? 0 : 0);
-	// Each option's bar is measured against the largest option on show.
-	const largest = Math.max(1, ...displayedList.filter((item) => !item.hide && !item.hideCount).map(countOf));
+	// Each option's bar is measured against the largest option on show; headings carry a ring instead.
+	const largest = Math.max(1, ...displayedList.filter((item) => !item.hide && !item.hideCount && !item.emphasis).map(countOf));
+	const arrowSlot = displayedList.some((item) => item.showArrow);
 
 	return (
 		<div className="w-full flex flex-col gap-2" onKeyDownCapture={(event) => {
@@ -282,6 +292,8 @@ function FacetPicker({
 													count={item.hideCount ? null : countOf(item)}
 													largest={largest}
 													share={!item.hideCount && total ? shareOf(format, countOf(item), total) : null}
+													shareValue={!item.hideCount && total ? countOf(item) / total : null}
+													arrowSlot={arrowSlot}
 													arrow={item.showArrow ? (item.isSelected ? "open" : "closed") : null}
 													note={item.note}
 													emphasis={item.emphasis}
