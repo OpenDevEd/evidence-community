@@ -76,9 +76,10 @@ function CollectionHierarchy({
 		);
 	}, [collectionData, hasChildren, selectedCollections]);
 
-	// Each level starts further in and gives up that much width, so its figures stay inside the card.
+	// Each level below the first starts further in and gives up that much width, so its figures stay inside the card.
+	// A chosen top-level collection shows as a row too, level with the first.
 	const checkboxStyle = useMemo(() => {
-		const indent = `${(level - 1) * 16}px`;
+		const indent = `${Math.max(0, level - 1) * 16}px`;
 		return { marginInlineStart: indent, width: `calc(100% - ${indent})` };
 	}, [level]);
 
