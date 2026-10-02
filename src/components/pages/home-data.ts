@@ -12,7 +12,10 @@ import { staleWhileRevalidate } from "@/lib/stale-while-revalidate";
 import { getComprehensiveStats, peekComprehensiveStats } from "@/app/[locale]/statistics/queries/get-comprehensive-stats";
 import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { sourceConnection, sourceRecordAlias } from "@/db/schema/source";
+import { openAlexConnectionConfigSchema } from "@/lib/source-ingestion/openalex/schema";
+import { queryTerms } from "@/lib/source-ingestion/openalex/query-terms";
 import { itemReview } from "@/db/schema/review";
 import { listDigestEditions } from "@/lib/notifications/public";
 import { publicItemVisibility, publicParentVisibility } from "@/lib/public-item-visibility";
@@ -94,7 +97,7 @@ function languageName(value: string) {
 
 
 /** The library's counts from its cached statistics; without them every count is empty. */
-function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries" | "countryPaths" | "collections" | "topics" | "covers" | "recent" | "journey" | "cited" | "copies" | "examples" | "ai" | "digests"> {
+function figuresFrom(stats: Stats | null, now: Date): Omit<HomeData, "countries" | "countryPaths" | "collections" | "topics" | "covers" | "recent" | "journey" | "pipeline" | "cited" | "copies" | "examples" | "ai" | "digests"> {
 	if (!stats) return { publications: 0, authors: 0, years: [], itemTypes: [], institutions: [], languages: [], publishers: [], journals: [], attachments: null, citations: null, collaboration: null, productivity: null, updated: now };
 	const { attachmentStats: attachments, citationStats: citations, collaborationStats: collaboration, authorProductivityStats: productivity } = stats;
 	return {
@@ -138,7 +141,7 @@ async function countHomeData(now: Date, locale: string, home: LibraryHomeConfig 
 			return log(error);
 		};
 	};
-	const [stats, withPdf, facets, collections, cited, digests, journey] = await Promise.all([
+	const [stats, withPdf, facets, collections, cited, digests, journey, pipeline] = await Promise.all([
 		peekComprehensiveStats().catch(soft("statistics", null)),
 		// The shelf shows first pages, so it lists the newest records with a PDF: the "full text only" scope.
 		getPublicItems({ sort: "desc", scope: "documents" }).catch(soft("newest publications", null)),
@@ -147,6 +150,7 @@ async function countHomeData(now: Date, locale: string, home: LibraryHomeConfig 
 		mostCited().catch(soft("most cited", [])),
 		latestDigests(locale).catch(soft("digests", null)),
 		latestJourney(home?.followed, home?.directory ?? []).catch(soft("followed publication", null)),
+		pipelineFigures(home, now).catch(soft("source figures", null)),
 	]);
 	const shelf = withPdf?.items ?? [];
 	const config = await getLibraryConfig();
@@ -168,6 +172,7 @@ async function countHomeData(now: Date, locale: string, home: LibraryHomeConfig 
 		// Up to eighteen, so the hero's three columns each show their own first pages; the publications row shows six.
 		recent: shelf.filter((row) => covers[row.key]).slice(0, 18),
 		journey,
+		pipeline,
 		// The list can be minutes old: a record hidden since then has no public copy and leaves it.
 		cited: cited.filter((row) => copies.some((copy) => copy.key === row.key)),
 		ai: isLibraryFeatureEnabled(config.features, "aiSearch"),
@@ -223,6 +228,30 @@ async function addedJourney(db: Database, hidden: readonly string[], key: string
 	if (!row) return null;
 	const when = (row.dateAdded ?? row.createdAt).toISOString();
 	return { key: row.key, title: row.title || row.key, reviewed: false, submittedAt: when, reviewer: null, publishedAt: when, doi: normalizeDoi(row.doi) };
+}
+
+const COUNTED_STEPS = new Set(["search", "sync", "duplicates"]);
+
+/** What the steps that count the library's OpenAlex searches show; read only when the home page has such a step. */
+async function pipelineFigures(home: LibraryHomeConfig | undefined, now: Date): Promise<HomeData["pipeline"]> {
+	if (!home?.curation.steps.some((step) => COUNTED_STEPS.has(step.type))) return null;
+	const config = await getLibraryConfig();
+	const db = await getDatabaseForConfig(config);
+	const sources = await db
+		.select({ key: sourceConnection.key, config: sourceConnection.config })
+		.from(sourceConnection)
+		.where(and(eq(sourceConnection.provider, "openalex"), eq(sourceConnection.status, "active")));
+	const keys = sources.map((source) => source.key);
+	const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
+	// New records count whatever brought them in; only the search and its repeats need an OpenAlex search.
+	const [[added], [merged]] = await Promise.all([
+		db.select({ count: count() }).from(item).where(and(publicParentVisibility(db, config.content.tags.hidden), gte(item.createdAt, monthAgo))),
+		keys.length > 0
+			? db.select({ count: count() }).from(sourceRecordAlias).where(and(inArray(sourceRecordAlias.sourceConnectionKey, keys), eq(sourceRecordAlias.kind, "duplicate-of")))
+			: [{ count: 0 }],
+	]);
+	const queries = sources.flatMap((source) => openAlexConnectionConfigSchema.safeParse(source.config).data?.approvedQuery.query.oql ?? []);
+	return { ...queryTerms(queries), added: added?.count ?? 0, merged: merged?.count ?? 0 };
 }
 
 /** First pages of the given publications' PDFs, from their attachments. */
