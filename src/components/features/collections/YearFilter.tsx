@@ -2,7 +2,7 @@
 
 import { AutocompleteItem } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
@@ -11,18 +11,27 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Input } from "../../nextui/Input";
 import { Switch } from "../../nextui/Switch";
+import { FacetOption } from "./FacetOption";
+import { shareOf, useFacetTotal } from "./ResultsOverview";
 
 function YearPicker({
 	label,
 	selectedKey,
 	onSelectionChange,
 	years,
+	counts,
 }: {
 	label?: string;
 	selectedKey: string | null;
 	onSelectionChange: (value: string | number | null) => void;
 	years: readonly string[];
+	/** Results per year, counted without the year filter. */
+	counts?: Record<string, number>;
 }) {
+	const format = useFormatter();
+	// Years are counted without the year filter, so their shares are out of the results without it.
+	const total = useFacetTotal("year");
+	const largest = Math.max(1, ...years.map((year) => counts?.[year] ?? 0));
 	const [debouncedOnSelectionChange] = useDebounce(
 		onSelectionChange,
 		500,
@@ -66,12 +75,24 @@ function YearPicker({
 						"placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 				},
 			}}
+			itemHeight={48}
 		>
-			{years.map((year) => (
-				<AutocompleteItem aria-label={year} key={year}>
-					{year}
-				</AutocompleteItem>
-			))}
+			{years.map((year) => {
+				const count = counts?.[year] ?? 0;
+				return (
+					<AutocompleteItem aria-label={year} key={year} textValue={year} classNames={{ title: "min-w-0 w-full" }}>
+						<FacetOption
+							label={year}
+							count={counts ? count : null}
+							largest={largest}
+							share={counts && total ? shareOf(format, count, total) : null}
+							shareValue={null}
+							arrow={null}
+							arrowSlot={false}
+						/>
+					</AutocompleteItem>
+				);
+			})}
 		</Autocomplete>
 	);
 }
@@ -80,10 +101,12 @@ export function YearFilter({
 	range,
 	onRangeChange,
 	years,
+	counts,
 }: {
 	range: string;
 	onRangeChange: (start: string | null, end: string | null) => void;
 	years: readonly string[];
+	counts?: Record<string, number>;
 }) {
 	const t = useTranslations("ui");
 	const [start = "", end = ""] = range.split("-");
@@ -131,6 +154,7 @@ export function YearFilter({
 									onRangeChange(String(key || ""), end)
 								}
 								years={years}
+								counts={counts}
 							/>
 							<YearPicker
 								label={t("to")}
@@ -139,6 +163,7 @@ export function YearFilter({
 									onRangeChange(start, String(key || ""))
 								}
 								years={years}
+								counts={counts}
 							/>
 						</motion.div>
 					) : (
@@ -157,6 +182,7 @@ export function YearFilter({
 									onRangeChange(String(key || ""), null)
 								}
 								years={years}
+								counts={counts}
 							/>
 						</motion.div>
 					)}
