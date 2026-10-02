@@ -1,6 +1,7 @@
 "use client";
 
-import { LuHash, LuType, LuCheck, LuX, LuUser } from "react-icons/lu";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Cancel01Icon, HashtagIcon, TextFontIcon, Tick01Icon, UserIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
@@ -72,10 +73,10 @@ function visibleMessageParts(message: Message): VisibleMessagePart[] {
 
 /** The icon that stands for one answer's type, or its yes-or-no value. */
 function ScreeningFieldIcon({ type, value }: { type: string; value: unknown }) {
-	if (type === "number") return <LuHash />;
-	if (type === "string") return <LuType />;
+	if (type === "number") return <HugeiconsIcon icon={HashtagIcon} />;
+	if (type === "string") return <HugeiconsIcon icon={TextFontIcon} />;
 
-	return value === true ? <LuCheck /> : <LuX />;
+	return value === true ? <HugeiconsIcon icon={Tick01Icon} /> : <HugeiconsIcon icon={Cancel01Icon} />;
 }
 
 /** What the screening run found for one publication. */
@@ -261,7 +262,7 @@ function MessageAvatar({
 			)}
 		>
 			{message.role === "user" ? (
-				<LuUser className="size-4 text-white" />
+				<HugeiconsIcon icon={UserIcon} className="size-4 text-white" />
 			) : (
 				React.createElement(
 					getAIModelPresentation(modelId, ai.providers).icon,

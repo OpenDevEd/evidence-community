@@ -15,7 +15,8 @@ import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST } from "@/lib/utils";
 import { useMemo, useState } from "react";
-import { BsStars } from "react-icons/bs";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { useLocalStorage } from "usehooks-ts";
 import { MotionConfig, motion } from "framer-motion";
 import { AIHistory } from "@/types/ai";
@@ -181,7 +182,7 @@ function AiMenu({
 					)}
 					size={variant === "inline" ? "sm" : "lg"}
 				>
-					<BsStars />
+					<HugeiconsIcon icon={SparklesIcon} />
 					{variant === "inline" && label}
 				</Button>
 			</DropdownTrigger>

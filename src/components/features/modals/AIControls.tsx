@@ -1,10 +1,5 @@
-import { BiChevronDown, BiSolidBookContent, BiCopy } from "react-icons/bi";
-import {
-	BsBodyText,
-	BsCodeSlash,
-	BsFiletypeCsv,
-	BsMarkdown,
-} from "react-icons/bs";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { ArrowDown01Icon, Copy01Icon, Csv01Icon, Download01Icon, HashtagIcon, SourceCodeIcon, TextIcon } from "@hugeicons/core-free-icons";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
 import { DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
@@ -121,7 +116,8 @@ function AIControls({
 					}
 					startContent={buttonIcon}
 					endContent={
-						<BiChevronDown
+						<HugeiconsIcon
+							icon={ArrowDown01Icon}
 							className={
 								appearance === "inline"
 									? "size-3.5 opacity-70"
@@ -183,39 +179,39 @@ export function AIGeneratedContentControls({
 	const copyControls: Control[] = [
 		{
 			label: t("copyAsPlainText"),
-			icon: <BsBodyText />,
+			icon: <HugeiconsIcon icon={TextIcon} />,
 			action: "plaintext",
 		},
 		{
 			label: t("copyAsMarkdown"),
-			icon: <BsMarkdown />,
+			icon: <HugeiconsIcon icon={HashtagIcon} />,
 			action: "markdown",
 		},
-		{ label: t("copyAsHTML"), icon: <BsCodeSlash />, action: "html" },
+		{ label: t("copyAsHTML"), icon: <HugeiconsIcon icon={SourceCodeIcon} />, action: "html" },
 	];
 	const exportControls: Control[] = [
 		{
 			label: t("exportAsPlainText"),
-			icon: <BsBodyText />,
+			icon: <HugeiconsIcon icon={TextIcon} />,
 			action: "plaintext",
 		},
 		{
 			label: t("exportAsMarkdown"),
-			icon: <BsBodyText />,
+			icon: <HugeiconsIcon icon={HashtagIcon} />,
 			action: "markdown",
 		},
-		{ label: t("exportAsHTML"), icon: <BsCodeSlash />, action: "html" },
+		{ label: t("exportAsHTML"), icon: <HugeiconsIcon icon={SourceCodeIcon} />, action: "html" },
 	];
 
 	if (includeCsv) {
 		copyControls.push({
 			label: t("copyAsCSV"),
-			icon: <BsFiletypeCsv />,
+			icon: <HugeiconsIcon icon={Csv01Icon} />,
 			action: "csv",
 		});
 		exportControls.push({
 			label: t("exportAsCSV"),
-			icon: <BsFiletypeCsv />,
+			icon: <HugeiconsIcon icon={Csv01Icon} />,
 			action: "csv",
 		});
 	}
@@ -227,7 +223,7 @@ export function AIGeneratedContentControls({
 				getContent={getContent}
 				type="copy"
 				buttonLabel={t("copy")}
-				buttonIcon={<BiCopy />}
+				buttonIcon={<HugeiconsIcon icon={Copy01Icon} />}
 				isDisabled={isDisabled}
 				appearance={appearance}
 			/>
@@ -236,7 +232,7 @@ export function AIGeneratedContentControls({
 				getContent={getContent}
 				type="download"
 				buttonLabel={t("export")}
-				buttonIcon={<BiSolidBookContent />}
+				buttonIcon={<HugeiconsIcon icon={Download01Icon} />}
 				downloadName={downloadName}
 				isDisabled={isDisabled}
 				appearance={appearance}

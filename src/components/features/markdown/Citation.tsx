@@ -1,7 +1,7 @@
 "use client";
 
-import { BiBookOpen } from "react-icons/bi";
-import { LuExternalLink } from "react-icons/lu";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { BookOpen01Icon, LinkSquare01Icon } from "@hugeicons/core-free-icons";
 import { CoverImage } from "@/components/features/items/CoverImage";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
@@ -96,7 +96,7 @@ function CitationChipContents({ children }: { children: ReactNode }) {
 				aria-hidden="true"
 				className="grid size-icon-md shrink-0 place-items-center rounded-full bg-accent/[0.12] text-accent transition-colors group-hover/chip:bg-accent group-hover/chip:text-white dark:bg-accent/20"
 			>
-				<BiBookOpen className="size-icon-xs" />
+				<HugeiconsIcon icon={BookOpen01Icon} className="size-icon-xs" />
 			</span>
 			{children}
 		</>
@@ -294,7 +294,7 @@ function PdfOpenLink({ href }: { href: string }) {
 				rel="noopener noreferrer"
 				className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-black/[0.055] px-2 text-xs font-semibold text-black/65 no-underline transition-colors hover:bg-accent/[0.12] hover:text-accent dark:bg-white/[0.08] dark:text-white/70 dark:hover:bg-accent/[0.15] dark:hover:text-accent"
 			>
-				<LuExternalLink className="size-3.5" aria-hidden="true" />
+				<HugeiconsIcon icon={LinkSquare01Icon} className="size-3.5" aria-hidden="true" />
 				{t("openDocument")}
 			</a>
 		</div>
@@ -322,7 +322,7 @@ function PdfCover({
 				/>
 			) : (
 				<div className="flex h-full items-center justify-center text-accent/70">
-					<BiBookOpen className="size-6" aria-hidden="true" />
+					<HugeiconsIcon icon={BookOpen01Icon} className="size-6" aria-hidden="true" />
 				</div>
 			)}
 		</div>

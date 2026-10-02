@@ -1,6 +1,7 @@
 "use client";
 
-import { AiOutlineCompass } from "react-icons/ai";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { CompassIcon } from "@hugeicons/core-free-icons";
 
 import { type ComponentProps, type ReactNode, use, useState } from "react";
 import { useChat } from "@ai-sdk/react";
@@ -216,7 +217,7 @@ export function EngagedLibraryPanel({
 						<Tooltip content={t("explore")}>
 							<Button
 								startContent={
-									<AiOutlineCompass className="size-5 shrink-0" />
+									<HugeiconsIcon icon={CompassIcon} className="size-5 shrink-0" />
 								}
 								aria-label={t("explore")}
 								className="h-11 min-w-11 shrink-0 lg:px-0 lg:@[34rem]:px-4"

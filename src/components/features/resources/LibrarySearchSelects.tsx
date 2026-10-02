@@ -1,8 +1,7 @@
 "use client";
 
-import type { IconType } from "react-icons";
-import { GiArchiveResearch } from "react-icons/gi";
-import { FaSort } from "react-icons/fa";
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { BookSearchIcon, Sorting01Icon } from "@hugeicons/core-free-icons";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
@@ -18,13 +17,14 @@ function DropDownIcon({
 	className,
 	label,
 }: {
-	Icon: IconType;
+	Icon: IconSvgElement;
 	className?: string;
 	label?: string;
 }) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon
+			<HugeiconsIcon
+				icon={Icon}
 				className={twMerge("w-full h-full", className)}
 				aria-label={label}
 			/>
@@ -57,7 +57,7 @@ export function SortComponent({
 
 	return (
 		<Select
-			startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
+			startContent={<DropDownIcon label="Sort icon" Icon={Sorting01Icon} />}
 			selectedKeys={
 				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
 			}
@@ -108,7 +108,7 @@ export function ScopeComponent({
 	return (
 		<Select
 			startContent={
-				<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
+				<DropDownIcon label="Scope icon" Icon={BookSearchIcon} />
 			}
 			color="tertiary"
 			selectedKeys={
