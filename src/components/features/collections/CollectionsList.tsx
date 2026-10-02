@@ -414,10 +414,10 @@ export function InnerCollectionList({
 			itemClasses={{
 				// The title takes the row's width and no more, so a long name truncates instead of pushing the figures out.
 				titleWrapper: "min-w-0 flex-1",
-				title: "w-full min-w-0 text-black/80 dark:text-white/80 font-base text-xl",
+				title: "w-full min-w-0 text-black/80 dark:text-white/80 font-base text-2xl",
 				indicator: "text-black/80 dark:text-white/80",
 				trigger: "p-0",
-				base: "mb-3 last:mb-0",
+				base: "mb-4 last:mb-0",
 				content: "py-0 pt-2",
 			}}
 			showDivider={false}
