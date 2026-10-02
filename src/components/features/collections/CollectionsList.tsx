@@ -58,7 +58,7 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
+import { ResultsOverview, shareOf, SIDEBAR_GREY, useFacetTotal } from "./ResultsOverview";
 import { FacetOption, ShareRing } from "./FacetOption";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
@@ -1019,7 +1019,7 @@ export default function CollectionsList({
 						{customFilter}
 					</div>
 				)}
-				<section className={twMerge("w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20", !isCollectionsEnabled && !topicsAsTree && "rounded-b-2xl")}>
+				<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20", SIDEBAR_GREY, !isCollectionsEnabled && !topicsAsTree && "rounded-b-2xl")}>
 					{filters.years.enabled && (
 						<YearFilter
 							key={range}

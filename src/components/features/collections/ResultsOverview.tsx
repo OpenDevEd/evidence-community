@@ -31,31 +31,26 @@ const MUTED = "text-black/60 dark:text-white/60";
 // The accent from strong to faint, one step per part, so a part's swatch and its slice of the bar match.
 const RAMP = ["bg-accent", "bg-accent/80", "bg-accent/60", "bg-accent/45", "bg-accent/30", "bg-accent/20", "bg-accent/10"];
 
+/** The sidebar's grey: the filter card's, and every card's head and foot, so the column reads as one set. */
+export const SIDEBAR_GREY = "bg-[#E8E6E1] dark:bg-secondary";
+
 /**
- * A block of the sidebar in the result cards' language: a white card with a Montserrat heading, and the block's own
- * actions in the tinted band along its foot, where a result card keeps Cite and Copy link.
+ * A block of the sidebar, built as the filter card is: a grey head with the heading and a summary of the block, its
+ * content on white, and its own actions, if it has any, in a grey foot.
  */
-export function SidebarCard({ id, title, aside, footer, link, band, children }: { id: string; title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; /** A tinted head for the card, holding its heading and a summary of what is below. */ band?: React.ReactNode; children: React.ReactNode }) {
-	const heading = (
-		<div className="flex min-h-8 items-center justify-between gap-4">
-			<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
-			{aside}
-		</div>
-	);
+export function SidebarCard({ id, title, aside, footer, link, band, children }: { id: string; title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; /** A summary of what is below, under the heading in the card's head. */ band?: React.ReactNode; children: React.ReactNode }) {
 	return (
 		<section aria-labelledby={id} className="w-full rounded-2xl bg-card_light dark:bg-card">
-			{band && (
-				<div className="flex flex-col gap-4 rounded-t-2xl bg-accent/[0.07] px-6 pt-6 pb-5 dark:bg-accent/10">
-					{heading}
-					{band}
+			<div className={twMerge("flex flex-col gap-4 rounded-t-2xl px-6 py-5", SIDEBAR_GREY)}>
+				<div className="flex min-h-8 items-center justify-between gap-4">
+					<h4 id={id} className="font-heading text-xl font-medium text-black dark:text-white/80">{title}</h4>
+					{aside}
 				</div>
-			)}
-			<div className="flex flex-col gap-5 p-6">
-				{!band && heading}
-				{children}
+				{band}
 			</div>
+			<div className="flex flex-col gap-5 p-6">{children}</div>
 			{(footer || link) && (
-				<div className="flex justify-end gap-2 rounded-b-2xl bg-black/[4%] p-2 dark:bg-secondary">
+				<div className={twMerge("flex justify-end gap-2 rounded-b-2xl p-2", SIDEBAR_GREY)}>
 					{footer}
 					{link && (
 						<Button as={Link} role="link" href={link.href} size="sm" endContent={<HugeiconsIcon icon={ArrowRight01Icon} aria-hidden className="size-3.5" />}>
@@ -146,6 +141,12 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 		<SidebarCard
 			id="results-years"
 			title="Years"
+			band={
+				<p className="flex items-baseline gap-2" aria-live="polite">
+					<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(readout.value)}</span>
+					<span className={`text-sm ${MUTED}`}>{readout.label}</span>
+				</p>
+			}
 			aside={
 				<span className="flex h-8 items-center">
 					{range && (
@@ -156,10 +157,6 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 				</span>
 			}
 		>
-			<p className="-mt-2 flex items-baseline gap-2" aria-live="polite">
-				<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{format.number(readout.value)}</span>
-				<span className={`text-sm ${MUTED}`}>{readout.label}</span>
-			</p>
 			<div>
 				<div
 					className="flex h-36 touch-none select-none items-end gap-[2px] border-b border-black/10 dark:border-white/10"
@@ -261,6 +258,13 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 		<SidebarCard
 			id="results-types"
 			title="Types"
+			band={
+				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
+					{rows.map(([type, count], index) => (
+						<span key={type} className={twMerge("h-full transition-opacity", tone(index), dimmed(type) && "opacity-25")} style={{ flexGrow: count, flexBasis: 0 }} />
+					))}
+				</div>
+			}
 			footer={
 				rows.length > TYPES_SHOWN && (
 					<Button size="sm" onPress={() => setAll(!all)} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5 transition-transform duration-300 motion-reduce:transition-none", all && "rotate-180")} />}>
@@ -269,11 +273,6 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 				)
 			}
 		>
-			<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
-				{rows.map(([type, count], index) => (
-					<span key={type} className={twMerge("h-full transition-opacity", tone(index), dimmed(type) && "opacity-25")} style={{ flexGrow: count, flexBasis: 0 }} />
-				))}
-			</div>
 			<div className="-mx-3 -mt-2">
 				<ul className="flex flex-col">{top.map(typeRow)}</ul>
 				<AnimatePresence initial={false}>
