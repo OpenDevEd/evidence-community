@@ -478,7 +478,8 @@ type Happening = { when?: string; body?: React.ReactNode; figure?: StepFigureVal
 
 /**
  * What a step's type shows: from the publication the timeline follows (or the editor chosen for it), or from what the
- * library counts of its searches and records. A count of nothing shows nothing.
+ * library counts of its searches and records. A count shows once it arrives, zero included, so the space kept for it
+ * while the figures load is always filled.
  */
 function happened(step: Step, data: Figures | null): Happening {
 	return step.type ? HAPPENINGS[step.type](step, data) : {};
@@ -498,8 +499,8 @@ const HAPPENINGS: Record<StepType, (step: Step, data: Figures | null) => Happeni
 };
 
 function searched(pipeline: HomeData["pipeline"] | undefined) {
-	if (pipeline?.terms && pipeline.topics) return figureOf(pipeline.terms, "figureTerms", pipeline.topics);
-	return figureOf(pipeline?.terms, "figureTerms") ?? figureOf(pipeline?.topics, "figureTopics");
+	if (pipeline?.topics && !pipeline.terms) return figureOf(pipeline.topics, "figureTopics");
+	return figureOf(pipeline?.terms, "figureTerms", pipeline?.topics || undefined);
 }
 
 /** Stands in for the library's figures while they load, so a counted step keeps the size its line will take. */
@@ -512,7 +513,7 @@ const LOADING_FIGURES: Figures = {
 const COUNTED_TYPES = new Set<StepType>(["search", "sync", "duplicates", "fulltext"]);
 
 function figureOf(count: number | undefined, key: FigureKey, topics?: number): StepFigureValue | undefined {
-	return count ? { value: number.format(count), label: { key, count, topics } } : undefined;
+	return count === undefined ? undefined : { value: number.format(count), label: { key, count, topics } };
 }
 
 function arrived(journey: NonNullable<HomeData["journey"]>) {

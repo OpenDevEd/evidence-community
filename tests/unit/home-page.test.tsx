@@ -144,7 +144,7 @@ describe("the library's home page", () => {
 		expect([...container.querySelectorAll("ol time")].map((time) => time.getAttribute("dateTime"))).toEqual([added]);
 	});
 
-	it("fills the library's own steps in from its searches and records, leaving out a count of nothing", async () => {
+	it("fills the library's own steps in from its searches and records, showing a zero as a zero", async () => {
 		const steps = [
 			...(["search", "sync", "duplicates", "fulltext"] as const).map((type) => ({ type, title: type, text: "" })),
 			{ type: "text" as const, title: "screened", text: "", figure: { value: "25,000", label: "AI screening judgements" } },
@@ -155,7 +155,7 @@ describe("the library's home page", () => {
 		// The page test translates to message keys: the topics join the terms' label.
 		expect(bodies[0]).toMatch(/159.*figureTerms.*figureAndTopics/);
 		expect(bodies[1]).toContain("1,240");
-		expect(bodies[2]).toBe("duplicates");
+		expect(bodies[2]).toMatch(/^duplicates0/);
 		expect(bodies[3]).toContain("60");
 		expect(bodies[4]).toContain("25,000");
 		// Counted steps carry no date, so the track has no date row.

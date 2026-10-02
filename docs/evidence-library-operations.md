@@ -773,7 +773,8 @@ automatically before the next operation.
   words, phrases and topics their OQL looks for, the records added in the last
   30 days, and the repeats merged away. `fulltext` counts the records with a
   PDF. A `text` step can carry a figure its owner writes. Each count is set
-  large under the step's name, and a count of nothing shows nothing.
+  large under the step's name; a zero shows as 0, so the page does not move
+  when the figures arrive.
   Steps can also carry an `icon`, any Hugeicon id, and a typed step without one
   shows its type's icon. These types, `icon` and `figure` only widen the
   schema, so saved configurations need no migration. Rollback: an older runtime
