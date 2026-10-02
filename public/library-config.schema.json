@@ -2578,6 +2578,9 @@
 										"minLength": 1,
 										"maxLength": 64
 									},
+									"icon": {
+										"$ref": "#/$defs/PlatformNavbarIconId"
+									},
 									"figure": {
 										"type": "object",
 										"properties": {

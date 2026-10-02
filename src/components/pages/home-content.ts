@@ -9,6 +9,17 @@ export function defaultContent(name: string): HomeContent {
 	};
 }
 
+/** The icon a typed step shows when its owner chose none. */
+const STEP_ICONS: Record<Exclude<StepType, "text">, string> = {
+	arrival: "InboxDownloadIcon",
+	check: "UserCheck01Icon",
+	publication: "BookOpen01Icon",
+	search: "Search01Icon",
+	sync: "RefreshIcon",
+	duplicates: "GitMergeIcon",
+	fulltext: "Pdf01Icon",
+};
+
 /** The Home card's answers as the page draws them: a typed step without a title is named after its type, and a step's chosen editor is looked up among the people OpenScholar filled in. */
 export function contentFrom(home: LibraryHomeConfig, stepTitles: Record<Exclude<StepType, "text">, string>): HomeContent {
 	const person = (id: string) => home.people.find((entry) => entry.id === id) ?? home.directory.find((entry) => entry.id === id);
@@ -24,6 +35,7 @@ export function contentFrom(home: LibraryHomeConfig, stepTitles: Record<Exclude<
 					text: step.text ?? "",
 					editor: editor && { name: editor.name, photo: editor.photo },
 					figure: step.figure,
+					icon: step.icon ?? (step.type === "text" ? undefined : STEP_ICONS[step.type]),
 				};
 			}),
 		},

@@ -1790,6 +1790,8 @@ const homeSchema = z
 								text: nonEmptyStringSchema(240).optional(),
 								/** A check step shows this person instead of whoever approved the followed publication. */
 								editor: singleLineStringSchema(64).optional(),
+								/** The icon on the step's node; a typed step without one shows its type's own. */
+								icon: platformNavbarIconSchema.optional(),
 								/** A text step's own figure, written by the owner: the number and what it counts. */
 								figure: z.object({ value: singleLineStringSchema(16), label: singleLineStringSchema(60) }).strict().optional(),
 							})

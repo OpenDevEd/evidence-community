@@ -36,6 +36,7 @@ import { examplesKey, listedRows, regionNames, type Row } from "./home-explorer"
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 
 // Below the fold and heavy: the citation formatter with its styles. It loads when the reader nears it (see WhenNear),
 // not with the page.
@@ -167,7 +168,7 @@ export type HomeContent = {
 	 * terms, its last update, the repeats it merged and its records with full text. A text step is its words only.
 	 * `editor` is a chosen person from the team, shown on an editor check instead of whoever approved it.
 	 */
-	curation?: { text?: string; steps?: { title: string; text: string; type?: StepType; editor?: { name: string; photo?: string }; figure?: { value: string; label: string } }[] };
+	curation?: { text?: string; steps?: { title: string; text: string; type?: StepType; editor?: { name: string; photo?: string }; figure?: { value: string; label: string }; icon?: string }[] };
 	team?: string;
 	/** The people who run the library, shown in the team band. `photo` is an image address. */
 	editors?: { name: string; title?: string; location?: string; photo?: string }[];
@@ -537,43 +538,48 @@ function published(journey: NonNullable<HomeData["journey"]>): Happening {
  * a reviewed publication, its first page stands at the start of the track; without one the track carries the steps.
  */
 function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData | null; cover?: string; copy?: ListItem }) {
-	const handOff = use(HandOff);
 	const journey = data?.journey ?? null;
 	// Until the figures arrive a followed publication is likely, so its cover keeps its place.
 	const covered = journey !== null || !data;
 	// Beside a cover the line always crosses it below its top edge, at the height a row of dates puts it, whether or
 	// not any step has a date.
 	const dated = covered || steps.some((step) => happened(step, data).when);
-	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-40" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
-	const coverPlace = "self-start";
+	const shape = steps.some((step) => step.icon) ? ICON_NODES : PLAIN_NODES;
+	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-40" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? shape.datedTrack : shape.track}`;
 	const timeline = (
 		<ol className={`relative grid gap-x-10 gap-y-10 lg:gap-y-0 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
 			<span aria-hidden className={`${track} bg-[rgb(var(--ink-rgb)/0.18)]`} />
 			<motion.span aria-hidden initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={seen} transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1], delay: 0.2 }} className={`${track} origin-left bg-[rgb(var(--color-accent-700))]`} />
-			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} data={data} dated={dated} last={index === steps.length - 1} />)}
+			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} data={data} dated={dated} shape={shape} index={index} last={index === steps.length - 1} />)}
 		</ol>
 	);
 	if (!covered) return timeline;
 	return (
 		<div className="grid gap-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-16">
-			{/* The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing
-			    over it as it comes into view; it turns to face the reader under the pointer. */}
-			{journey ? (
-				<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className={`group relative z-10 block max-w-[12rem] outline-offset-4 [perspective:1100px] ${coverPlace}`}>
-					<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-						<PdfCover src={cover} alt="" width={192} />
-						{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
-						<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-							<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
-						</motion.span>
-					</span>
-				</Link>
-			) : (
-				// The cover's place while the figures load, so the steps do not narrow when it arrives.
-				<span aria-hidden className={`block aspect-[3/4] w-full max-w-[12rem] ${coverPlace}`} />
-			)}
+			<TimelineCover journey={journey} cover={cover} copy={copy} />
 			{timeline}
 		</div>
+	);
+}
+
+/** The followed publication's cover beside the track, or its place while the figures load. */
+function TimelineCover({ journey, cover, copy }: { journey: HomeData["journey"]; cover?: string; copy?: ListItem }) {
+	const handOff = use(HandOff);
+	// The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing over it
+	// as it comes into view; it turns to face the reader under the pointer.
+	return journey ? (
+		<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className={`group relative z-10 block max-w-[12rem] outline-offset-4 [perspective:1100px] self-start`}>
+			<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+				<PdfCover src={cover} alt="" width={192} />
+				{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
+				<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+					<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
+				</motion.span>
+			</span>
+		</Link>
+	) : (
+		// The cover's place while the figures load, so the steps do not narrow when it arrives.
+		<span aria-hidden className="block aspect-[3/4] w-full max-w-[12rem] self-start" />
 	);
 }
 
@@ -581,20 +587,43 @@ function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData 
  * One step on the track: its date, its node, its name, what happened or its figure, and its words. On wide screens
  * each of these is a row shared by every step, so names, figures and words line up across the columns.
  */
-function TimelineStep({ step, data, dated, last }: { step: Step; data: HomeData | null; dated: boolean; last: boolean }) {
+function TimelineStep({ step, data, dated, shape, index, last }: { step: Step; data: HomeData | null; dated: boolean; shape: NodeShape; index: number; last: boolean }) {
 	const { when, body, figure, loading } = shown(step, data);
 	return (
-		<li className="relative pl-10 lg:pl-0">
+		<li className={`relative lg:pl-0 ${shape.indent}`}>
 			{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
-			<span aria-hidden className={`absolute left-[7px] top-4 w-0.5 bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
+			<span aria-hidden className={`absolute w-0.5 ${shape.rail} bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
 			{/* On wide screens the dates share one row above the track, so every node sits on the line. */}
 			{dated ? <StepDate when={when} /> : null}
-			<span aria-hidden className={`absolute left-0 top-1 block size-4 rounded-full border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)] lg:relative lg:left-auto lg:top-auto ${dated ? "lg:mt-3" : ""}`} />
-			<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
+			<StepNode icon={step.icon} shape={shape} dated={dated} index={index} />
+			<h3 className={`font-heading text-xl font-semibold tracking-tight ${shape.title} ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
 			<StepValue value={figure?.value} hidden={loading} />
 			<StepOutcome label={figure?.label} body={figure ? undefined : body} hidden={loading} />
 			<StepWords text={step.text} />
 		</li>
+	);
+}
+
+/**
+ * Where the track and a step's parts sit around its node. With an icon on any step every node is a ring the icon's
+ * size, so the line runs through their centres; otherwise the nodes are small rings.
+ */
+type NodeShape = { node: string; track: string; datedTrack: string; indent: string; rail: string; title: string };
+const PLAIN_NODES: NodeShape = { node: "top-1 size-4", track: "top-[7px]", datedTrack: "top-[43px]", indent: "pl-10", rail: "left-[7px] top-4", title: "lg:mt-7" };
+const ICON_NODES: NodeShape = { node: "top-0 size-11", track: "top-[21px]", datedTrack: "top-[57px]", indent: "pl-16", rail: "left-[21px] top-11", title: "pt-2 lg:mt-5 lg:pt-0" };
+
+const RING = "border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)]";
+/** An icon node: the icon cut out of a solid disc in the accent. */
+const DISC = "bg-[rgb(var(--color-accent-700))] text-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:text-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)]";
+
+/** A step's node on the track. Icons pop in one after another as the line draws through them. */
+function StepNode({ icon, shape, dated, index }: { icon?: string; shape: NodeShape; dated: boolean; index: number }) {
+	const place = `absolute left-0 grid place-items-center rounded-full lg:relative lg:left-auto lg:top-auto ${shape.node} ${dated ? "lg:mt-3" : ""}`;
+	if (shape === PLAIN_NODES) return <span aria-hidden className={`${place} ${RING}`} />;
+	return (
+		<motion.span aria-hidden initial={{ scale: 0.4, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={seen} transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.3 + index * 0.16 }} className={`${place} ${DISC}`}>
+			{icon ? <RuntimeAsset reference={icon} alt="" width={22} height={22} /> : null}
+		</motion.span>
 	);
 }
 
