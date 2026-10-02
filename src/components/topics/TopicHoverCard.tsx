@@ -20,14 +20,11 @@ function openScholarUrl(base: string, path: string) {
 	return new URL(path, base).toString();
 }
 
-function directoryUrl(base: string, id: string, name: string) {
-	const key = id.startsWith("domains/")
-		? "domain"
-		: id.startsWith("fields/")
-			? "field"
-			: "q";
-	const query = new URLSearchParams({ [key]: key === "q" ? name : id });
-	return openScholarUrl(base, `/topics?${query}`);
+/** Opens OpenScholar's topic directory filtered to a domain, field or subfield. */
+function directoryUrl(base: string, id: string) {
+	// "subfields/3312" filters with ?subfield=subfields/3312.
+	const level = id.slice(0, id.indexOf("s/"));
+	return openScholarUrl(base, `/topics?${new URLSearchParams({ [level]: id })}`);
 }
 
 export function TopicHoverCard({
@@ -84,7 +81,7 @@ export function TopicHoverCard({
 								...detail.data.path.map((node, index) => ({
 									...node,
 									key: node.id,
-									href: directoryUrl(publicBaseUrl, node.id, node.name),
+									href: directoryUrl(publicBaseUrl, node.id),
 									title: ["Domain", "Field", "Subfield"][index],
 								})),
 								{
