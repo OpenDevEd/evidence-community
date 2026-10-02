@@ -84,7 +84,7 @@ function logRetry(reason: string, attempt: number, delayMs: number, waitedMs: nu
 	});
 }
 
-function failureText(error: unknown) {
+export function failureText(error: unknown) {
 	if (!(error instanceof Error)) return String(error);
 	const cause = error.cause as { code?: string; message?: string } | undefined;
 	return cause ? `${error.message} (${cause.code ?? cause.message})` : error.message;
@@ -125,9 +125,9 @@ async function throwIfSearchTimeout(response: Response) {
 	return new Response(body, { status: response.status, headers: response.headers });
 }
 
-const backoff = (attempt: number) => Math.min(MAX_RETRY_DELAY_MS, 1_000 * 2 ** attempt);
+export const backoff = (attempt: number) => Math.min(MAX_RETRY_DELAY_MS, 1_000 * 2 ** attempt);
 
-function retryDelay(response: Response, attempt: number) {
+export function retryDelay(response: Response, attempt: number) {
 	const retryAfter = response.headers.get("retry-after");
 	const seconds = Number(retryAfter);
 	const requestedDelay = Number.isFinite(seconds)
