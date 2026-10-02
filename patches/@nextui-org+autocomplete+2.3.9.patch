@@ -1,5 +1,5 @@
 diff --git a/node_modules/@nextui-org/autocomplete/dist/autocomplete.js b/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
-index 1d43d70..dd1e840 100644
+index 1d43d70..a60761a 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
 +++ b/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
 @@ -45,7 +45,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
@@ -48,7 +48,7 @@ index 1d43d70..dd1e840 100644
      }
      state.selectionManager.setFocusedKey(key);
 -  }, [state.collection, state.disabledKeys]);
-+  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
++  }, [state.collection, state.disabledKeys, state.inputValue]);
    (0, import_react.useEffect)(() => {
      if (isOpen) {
        if (popoverRef.current && inputWrapperRef.current) {
@@ -69,7 +69,7 @@ index 1d43d70..dd1e840 100644
      };
    };
 diff --git a/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs b/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
-index 021f527..a53601a 100644
+index 021f527..78dc80c 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
 +++ b/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
 @@ -12,7 +12,6 @@ import { clsx, dataAttr, objectToDeps } from "@nextui-org/shared-utils";
@@ -118,7 +118,7 @@ index 021f527..a53601a 100644
      }
      state.selectionManager.setFocusedKey(key);
 -  }, [state.collection, state.disabledKeys]);
-+  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
++  }, [state.collection, state.disabledKeys, state.inputValue]);
    useEffect(() => {
      if (isOpen) {
        if (popoverRef.current && inputWrapperRef.current) {
@@ -139,7 +139,7 @@ index 021f527..a53601a 100644
      };
    };
 diff --git a/node_modules/@nextui-org/autocomplete/dist/index.js b/node_modules/@nextui-org/autocomplete/dist/index.js
-index 431d596..c5108a6 100644
+index 431d596..bc27460 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/index.js
 +++ b/node_modules/@nextui-org/autocomplete/dist/index.js
 @@ -51,7 +51,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
@@ -188,7 +188,7 @@ index 431d596..c5108a6 100644
      }
      state.selectionManager.setFocusedKey(key);
 -  }, [state.collection, state.disabledKeys]);
-+  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
++  }, [state.collection, state.disabledKeys, state.inputValue]);
    (0, import_react.useEffect)(() => {
      if (isOpen) {
        if (popoverRef.current && inputWrapperRef.current) {
@@ -209,7 +209,7 @@ index 431d596..c5108a6 100644
      };
    };
 diff --git a/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js b/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
-index fadb2d4..9d56ad1 100644
+index fadb2d4..eb3bbdf 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
 +++ b/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
 @@ -35,7 +35,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
@@ -258,7 +258,7 @@ index fadb2d4..9d56ad1 100644
      }
      state.selectionManager.setFocusedKey(key);
 -  }, [state.collection, state.disabledKeys]);
-+  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
++  }, [state.collection, state.disabledKeys, state.inputValue]);
    (0, import_react.useEffect)(() => {
      if (isOpen) {
        if (popoverRef.current && inputWrapperRef.current) {

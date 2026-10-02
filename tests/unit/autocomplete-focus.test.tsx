@@ -71,3 +71,35 @@ it("focuses the selected option and preserves it when its collection changes", a
 		container.remove();
 	}
 });
+
+it("keeps a focus the reader cleared while the options stay the same", async () => {
+	// Moving the text cursor (ArrowLeft or ArrowRight) clears the active option, so Tab keeps what was typed.
+	let picker!: ReturnType<typeof useAutocomplete>;
+	// The same option elements on every render, as an Autocomplete's children are while only its own state changes.
+	const years = [
+		<AutocompleteItem key="2025">2025</AutocompleteItem>,
+		<AutocompleteItem key="2024">2024</AutocompleteItem>,
+	];
+	function Picker() {
+		picker = useAutocomplete({
+			label: "Year",
+			allowsCustomValue: true,
+			defaultInputValue: "20",
+			children: years,
+		});
+		return null;
+	}
+	const container = document.createElement("div");
+	document.body.append(container);
+	const root = createRoot(container);
+	try {
+		await act(async () => root.render(<Picker />));
+		await act(async () => picker.getPopoverProps().state!.open());
+		await act(async () => picker.getListBoxProps().state!.selectionManager.setFocusedKey("2024"));
+		await act(async () => picker.getListBoxProps().state!.selectionManager.setFocusedKey(null));
+		expect(picker.getListBoxProps().state!.selectionManager.focusedKey).toBeNull();
+	} finally {
+		await act(async () => root.unmount());
+		container.remove();
+	}
+});
