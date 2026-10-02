@@ -99,19 +99,20 @@ function sortedCounts(counts: Record<string, number> | undefined) {
 
 type Span = [number, number];
 
-/** The last thirty years that have results, one per bar, and the busiest of them; none when no result has a year. */
+/** The last thirty years that have results, one per bar, the busiest of them and every year with results; none when no result has a year. */
 function yearAxis(counts: Record<string, number> | undefined) {
 	const known = Object.keys(counts ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
 	if (known.length === 0) return null;
 	const last = Math.max(...known);
-	const first = Math.max(Math.min(...known), last - YEARS_SHOWN + 1);
+	const earliest = Math.min(...known);
+	const first = Math.max(earliest, last - YEARS_SHOWN + 1);
 	const years = Array.from({ length: last - first + 1 }, (_, index) => first + index);
 	const countOf = (year: number) => counts?.[year] ?? 0;
 	const peak = years.reduce((best, year) => (countOf(year) > countOf(best) ? year : best), years[0]);
-	return { first, last, years, peak, countOf };
+	return { earliest, first, last, years, known, peak, countOf };
 }
 
-/** The years a drag covers, else the chosen range, open ends running to the axis's ends. */
+/** The years a drag covers, else the chosen range, open ends running to the earliest and latest years with results. */
 function chosenSpan(range: string, drag: { from: number; to: number } | null, first: number, last: number): Span | null {
 	if (drag) return [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)];
 	if (!range) return null;
@@ -123,7 +124,8 @@ function chosenSpan(range: string, drag: { from: number; to: number } | null, fi
 function yearReadout(axis: NonNullable<ReturnType<typeof yearAxis>>, hovered: number | null, chosen: Span | null) {
 	if (hovered !== null) return { value: axis.countOf(hovered), label: `in ${hovered}` };
 	if (!chosen) return { value: axis.countOf(axis.peak), label: `in ${axis.peak}, the busiest year` };
-	const value = axis.years.filter((year) => year >= chosen[0] && year <= chosen[1]).reduce((sum, year) => sum + axis.countOf(year), 0);
+	// Every year with results counts, including those older than the bars.
+	const value = axis.known.filter((year) => year >= chosen[0] && year <= chosen[1]).reduce((sum, year) => sum + axis.countOf(year), 0);
 	return { value, label: chosen[0] === chosen[1] ? `in ${chosen[0]}` : `in ${chosen[0]}–${chosen[1]}` };
 }
 
@@ -239,7 +241,7 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 	const picking = useYearPicking(range, onRangeChange);
 	const axis = yearAxis(counts);
 	if (!axis) return null;
-	const chosen = chosenSpan(range, picking.drag, axis.first, axis.last);
+	const chosen = chosenSpan(range, picking.drag, axis.earliest, axis.last);
 	const readout = yearReadout(axis, picking.hovered, chosen);
 	return (
 		<SidebarCard
