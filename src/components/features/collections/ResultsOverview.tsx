@@ -10,6 +10,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import useSWR from "swr";
+import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
 import { Link } from "@/i18n/routing";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useFiltersContext } from "@/context/FiltersProvider";
@@ -51,6 +52,11 @@ export function SidebarCard({ id, title, aside, footer, link, children }: { id: 
 			)}
 		</section>
 	);
+}
+
+/** How a list opens and closes in the sidebar: quick out, soft landing, and at once for readers who ask for less motion. */
+function useExpandTransition(): Transition {
+	return useReducedMotion() ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] };
 }
 
 function Tick({ shown }: { shown: boolean }) {
@@ -189,16 +195,35 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 	const typeName = useTranslations("itemType");
 	const format = useFormatter();
 	const [all, setAll] = useState(false);
+	const expand = useExpandTransition();
 	const rows = sortedCounts(counts);
 	if (rows.length === 0) return null;
 	const total = rows.reduce((sum, [, count]) => sum + count, 0);
 	const tone = (index: number) => RAMP[Math.min(index, RAMP.length - 1)];
 	const dimmed = (type: string) => selected.length > 0 && !selected.includes(type);
-	// Chosen types stay listed even when they are not among the largest.
-	const shown = all ? rows : rows.filter(([type], index) => index < TYPES_SHOWN || selected.includes(type));
+	// Chosen types stay listed even when they are not among the largest; the rest open beneath them.
+	const isTop = ([type]: [string, number], index: number) => index < TYPES_SHOWN || selected.includes(type);
+	const top = rows.filter(isTop);
+	const rest = rows.filter((row, index) => !isTop(row, index));
 	const withPdf = pdf?.true ?? 0;
 	const withPdfOf = withPdf + (pdf?.false ?? 0);
 	const label = (type: string) => (typeName.has(type) ? typeName(type) : type);
+	const typeRow = ([type, count]: [string, number]) => {
+		const index = rows.findIndex(([key]) => key === type);
+		const chosen = selected.includes(type);
+		return (
+			<li key={type}>
+				{/* The ring sits inside the row, so the opening list's clip never cuts it. */}
+				<button type="button" aria-pressed={chosen} onClick={() => onSelect(type)} className="flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
+					<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone(index), dimmed(type) && "opacity-25")} />
+					<TruncatedText text={label(type)} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
+					<Tick shown={chosen} />
+					<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{format.number(count / total, { style: "percent", maximumFractionDigits: count / total < 0.01 ? 1 : 0 })}</span>
+					<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
+				</button>
+			</li>
+		);
+	};
 
 	return (
 		<SidebarCard
@@ -206,7 +231,7 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 			title="Types"
 			footer={
 				rows.length > TYPES_SHOWN && (
-					<Button size="sm" onPress={() => setAll(!all)} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5", all && "rotate-180")} />}>
+					<Button size="sm" onPress={() => setAll(!all)} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5 transition-transform duration-300 motion-reduce:transition-none", all && "rotate-180")} />}>
 						{all ? "Fewer types" : `All ${rows.length} types`}
 					</Button>
 				)
@@ -217,23 +242,16 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 					<span key={type} className={twMerge("h-full transition-opacity", tone(index), dimmed(type) && "opacity-25")} style={{ flexGrow: count, flexBasis: 0 }} />
 				))}
 			</div>
-			<ul className="-mx-3 -mt-2 flex flex-col">
-				{shown.map(([type, count]) => {
-					const index = rows.findIndex(([key]) => key === type);
-					const chosen = selected.includes(type);
-					return (
-						<li key={type}>
-							<button type="button" aria-pressed={chosen} onClick={() => onSelect(type)} className={twMerge("flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5")}>
-								<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone(index), dimmed(type) && "opacity-25")} />
-								<TruncatedText text={label(type)} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
-								<Tick shown={chosen} />
-								<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{format.number(count / total, { style: "percent", maximumFractionDigits: count / total < 0.01 ? 1 : 0 })}</span>
-								<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
-							</button>
-						</li>
-					);
-				})}
-			</ul>
+			<div className="-mx-3 -mt-2">
+				<ul className="flex flex-col">{top.map(typeRow)}</ul>
+				<AnimatePresence initial={false}>
+					{all && rest.length > 0 && (
+						<motion.ul key="rest" initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={expand} className="flex flex-col overflow-hidden">
+							{rest.map(typeRow)}
+						</motion.ul>
+					)}
+				</AnimatePresence>
+			</div>
 			{withPdfOf > 0 && (
 				<div className="flex flex-col gap-2 border-t border-black/5 pt-4 dark:border-white/10">
 					<div className="flex items-baseline justify-between gap-4">
@@ -303,9 +321,9 @@ function MostCited() {
 	return (
 		<SidebarCard id="results-cited" title="Most cited">
 			{/* Three rows of a cover beside its count and a two-line title; every state keeps this height. */}
-			<ol aria-busy={isValidating} inert={stale || undefined} className={twMerge("-mt-2 flex h-[20.5rem] flex-col gap-2 overflow-hidden transition-opacity", stale && "opacity-50")}>
+			<ol aria-busy={isValidating} inert={stale || undefined} className={twMerge("-mx-2 -mt-2 flex h-[20.5rem] flex-col gap-2 overflow-hidden transition-opacity", stale && "opacity-50")}>
 				{error && !isValidating && (
-					<li className="flex flex-col items-start gap-3 text-base text-black/60 dark:text-white/60">
+					<li className="flex flex-col items-start gap-3 px-2 text-base text-black/60 dark:text-white/60">
 						Could not load the most cited results.
 						<Button size="sm" onPress={() => void mutate()}>Try again</Button>
 					</li>
@@ -321,12 +339,13 @@ function MostCited() {
 						</li>
 					))}
 				{data && !error && cited.length === 0 && (
-					<li className="text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
+					<li className="px-2 text-base text-black/60 dark:text-white/60">Nothing in these results is cited yet.</li>
 				)}
 				{!error && cited.map((item) => (
 					<li key={item.key}>
-						<Link href={`/lib/${item.key}`} className="group -mx-2 flex min-w-0 gap-4 rounded-xl p-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5">
-							<span className="block w-16 shrink-0 self-start overflow-hidden rounded-md shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+						{/* The list is widened by this row's padding, so its clip never cuts the row's hover. */}
+							<Link href={`/lib/${item.key}`} className="group/row flex min-w-0 gap-4 rounded-xl p-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5">
+							<span className="block w-16 shrink-0 self-start overflow-hidden rounded-md shadow-md transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/row:-translate-y-0.5 motion-reduce:transition-none [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
 								<PdfCover src={item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage} alt="" width={64} title={item.title ?? undefined} />
 							</span>
 							<span className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -334,7 +353,7 @@ function MostCited() {
 									<span className="font-heading text-2xl font-semibold leading-none tabular-nums">{format.number(item.citationCount ?? 0)}</span>
 									<span className={`text-sm ${MUTED}`}>{item.citationCount === 1 ? "citation" : "citations"}</span>
 								</span>
-								<span className="line-clamp-2 text-base font-medium leading-snug text-black/80 transition-colors group-hover:text-accent dark:text-white/80">{item.title || item.key}</span>
+								<span className="line-clamp-2 text-base font-medium leading-snug text-black/80 transition-colors group-hover/row:text-accent dark:text-white/80">{item.title || item.key}</span>
 							</span>
 						</Link>
 					</li>
