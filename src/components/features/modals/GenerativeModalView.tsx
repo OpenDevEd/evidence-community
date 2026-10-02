@@ -9,11 +9,8 @@ import { ModalContent } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { useFormatter } from "next-intl";
 import React from "react";
-import { BiTrash } from "react-icons/bi";
-import { BsClockHistory } from "react-icons/bs";
-import { ImSpinner8 } from "react-icons/im";
-import { IoChevronDown } from "react-icons/io5";
-import { RiErrorWarningFill } from "react-icons/ri";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { AlertCircleIcon, ArrowDown01Icon, Delete02Icon, HistoryIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 import type { useStickToBottom } from "use-stick-to-bottom";
 
 import AIHeader from "../ai/AIHeader";
@@ -80,11 +77,11 @@ function renderHistoryItem({
 			startContent={
 				<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
 					{isCurrentLoading ? (
-						<ImSpinner8 className="h-full animate-spin fill-white" />
+						<HugeiconsIcon icon={Loading03Icon} className="h-full animate-spin text-white" />
 					) : (
 						React.createElement(HistoryModelIcon, {
 							className:
-								"h-full fill-white group-[.icon-container:hover]:scale-90 transition-all duration-300",
+								"h-full text-white [&:not([fill=none])]:fill-current group-[.icon-container:hover]:scale-90 transition-all duration-300",
 						})
 					)}
 				</div>
@@ -197,7 +194,7 @@ function ContentToolbar({
 		<div className="w-full dark:bg-secondary bg-white lg:rounded-tl-3xl p-2 flex gap-1 shrink-0">
 			<Button
 				size="sm"
-				startContent={<BsClockHistory />}
+				startContent={<HugeiconsIcon icon={HistoryIcon} />}
 				onPress={onHistoryOpen}
 				className="lg:hidden"
 			>
@@ -210,7 +207,7 @@ function ContentToolbar({
 			<Button
 				size="sm"
 				className="ltr:ml-auto rtl:mr-auto dark:hover:bg-red-600 min-w-0"
-				startContent={<BiTrash />}
+				startContent={<HugeiconsIcon icon={Delete02Icon} />}
 				isDisabled={deleteDisabled}
 				onPress={onDelete}
 				aria-label={deleteAriaLabel}
@@ -246,7 +243,7 @@ function GenerationError({
 					prefersReducedMotion ? { duration: 0 } : { delay: 0.5 }
 				}
 			>
-				<RiErrorWarningFill className="size-32 opacity-50" />
+				<HugeiconsIcon icon={AlertCircleIcon} className="size-32 opacity-50" />
 				<p>{errorMessage}</p>
 				<Button
 					size="sm"
@@ -323,7 +320,7 @@ function GeneratedContent({
 					aria-label={jumpToLatestLabel}
 					onPress={() => void scrollToBottom()}
 				>
-					<IoChevronDown className="size-4" />
+					<HugeiconsIcon icon={ArrowDown01Icon} className="size-4" />
 				</Button>
 			)}
 		</div>

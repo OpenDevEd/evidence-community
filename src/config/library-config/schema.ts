@@ -1753,8 +1753,11 @@ const processingSchema = z
 	.strict()
 	.prefault({});
 
-/** What a step of the curation timeline shows: a typed step is dated from the followed publication's review. */
-const HOME_STEP_TYPES = ["arrival", "check", "publication", "text"] as const;
+/**
+ * What a step of the curation timeline shows: arrival, check and publication are dated from the followed publication's
+ * review; search, sync, duplicates and fulltext count from the library's OpenAlex searches and records.
+ */
+const HOME_STEP_TYPES = ["arrival", "check", "publication", "search", "sync", "duplicates", "fulltext", "text"] as const;
 
 /** A person in OpenScholar, as the platform fills them in when the library is published. */
 const homePersonSchema = z
@@ -1787,11 +1790,19 @@ const homeSchema = z
 								text: nonEmptyStringSchema(240).optional(),
 								/** A check step shows this person instead of whoever approved the followed publication. */
 								editor: singleLineStringSchema(64).optional(),
+								/** The icon on the step's node; a typed step without one shows its type's own. */
+								icon: platformNavbarIconSchema.optional(),
+								/** A text step's own figure, written by the owner: the number and what it counts. */
+								figure: z.object({ value: singleLineStringSchema(16), label: singleLineStringSchema(60) }).strict().optional(),
 							})
 							.strict()
 							.refine((step) => step.type !== "text" || step.title, {
 								message: "A text-only step needs a title",
 								path: ["title"],
+							})
+							.refine((step) => step.type === "text" || !step.figure, {
+								message: "Only a text step carries its own figure; the others count theirs",
+								path: ["figure"],
 							}),
 					)
 					.max(5)

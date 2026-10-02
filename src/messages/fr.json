@@ -918,6 +918,16 @@
     "joinSubject": "Devenir éditeur",
     "stepArrival": "Soumis",
     "stepCheck": "Vérifié par un éditeur",
-    "stepPublication": "Publié"
+    "stepPublication": "Publié",
+    "stepSearch": "Trouvé par recherche",
+    "stepSync": "Tenu à jour",
+    "stepDuplicates": "Doublons fusionnés",
+    "stepFullText": "Texte intégral ajouté",
+    "figureTerms": "{count, plural, one {terme de recherche} other {termes de recherche}}",
+    "figureAndTopics": "et {topics, plural, one {# thème de recherche} other {# thèmes de recherche}}",
+    "figureTopics": "{count, plural, one {thème de recherche} other {thèmes de recherche}}",
+    "figureAdded": "nouveaux ces 30 derniers jours",
+    "figureMerged": "{count, plural, one {doublon fusionné} other {doublons fusionnés}}",
+    "figureFullText": "{count, plural, one {notice avec texte intégral} other {notices avec texte intégral}}"
   }
 }

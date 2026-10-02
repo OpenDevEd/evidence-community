@@ -918,6 +918,16 @@
     "joinSubject": "संपादक के रूप में जुड़ना",
     "stepArrival": "जमा किया गया",
     "stepCheck": "संपादक द्वारा जाँचा गया",
-    "stepPublication": "प्रकाशित"
+    "stepPublication": "प्रकाशित",
+    "stepSearch": "खोज से मिला",
+    "stepSync": "लगातार अद्यतन",
+    "stepDuplicates": "दोहराव मिलाए गए",
+    "stepFullText": "पूरा पाठ जोड़ा गया",
+    "figureTerms": "{count, plural, other {खोज शब्द}}",
+    "figureAndTopics": "और {topics, plural, other {# शोध विषय}}",
+    "figureTopics": "{count, plural, other {शोध विषय}}",
+    "figureAdded": "पिछले 30 दिनों में नए",
+    "figureMerged": "{count, plural, other {दोहराए गए रिकॉर्ड मिलाए गए}}",
+    "figureFullText": "{count, plural, other {पूरे पाठ वाले रिकॉर्ड}}"
   }
 }

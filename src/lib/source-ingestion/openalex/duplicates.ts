@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { normalizeDoi } from "@/lib/doi";
+import { backoff, failureText, retryDelay } from "./client";
 import type { DuplicateRecord } from "./reconciliation";
 
 /** What two records are compared on: their key, normalised DOI, title and publication date. */
@@ -20,6 +21,11 @@ type VersionsOf = ReadonlyMap<string, ReadonlySet<string>>;
 const DATACITE_DOIS = "https://api.datacite.org/dois";
 const DATACITE_BATCH = 50;
 const DATACITE_TIMEOUT_MS = 20_000;
+// DataCite answers some batches with a 500 or 502 now and then; a batch is tried this many times before its pairs
+// are left undecided for this run.
+const DATACITE_ATTEMPTS = 5;
+// A whole outage would otherwise cost every batch its tries: a run of AIED asks about 490 batches.
+const DATACITE_OUTAGE_BATCHES = 3;
 const REPEATED_PREFIX = /^10\.\d{4,9}\/(?=10\.\d{4,9}\/)/u;
 const FIGSHARE_VERSION = /\.v\d+$/u;
 
@@ -99,26 +105,76 @@ function versionTargets(record: DataCiteRecord) {
 	);
 }
 
-/** What DataCite records as versions of other DOIs, for the DOIs it has. */
-async function dataCiteVersions(dois: readonly string[], fetchImpl: typeof fetch) {
+/**
+ * One batch of DataCite's records, or why DataCite would not answer it after its tries. A failed try waits its
+ * backoff or DataCite's Retry-After, the last one too, so the next batch does not start inside DataCite's cooldown.
+ */
+async function dataCiteBatch(dois: readonly string[], fetchImpl: typeof fetch, sleep: (ms: number) => Promise<void>) {
+	const url = new URL(DATACITE_DOIS);
+	url.searchParams.set("ids", dois.join(","));
+	url.searchParams.set("page[size]", String(DATACITE_BATCH));
+	url.searchParams.set("fields[dois]", "doi,relatedIdentifiers");
+	let failure = "";
+	for (let attempt = 0; attempt < DATACITE_ATTEMPTS; attempt++) {
+		let delay = backoff(attempt);
+		try {
+			const response = await fetchImpl(url, {
+				headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:contact@opendeved.net)" },
+				signal: AbortSignal.timeout(DATACITE_TIMEOUT_MS),
+			});
+			if (response.ok) return { records: ((await response.json()) as { data?: DataCiteRecord[] }).data ?? [] };
+			await response.body?.cancel();
+			failure = `DataCite returned ${response.status}`;
+			// Another try will not change a refusal of the request itself.
+			if (response.status !== 429 && response.status < 500) return { failure, refused: true };
+			delay = retryDelay(response, attempt);
+		} catch (error) {
+			// A lost connection, a timeout or a malformed answer is tried again like a 5xx.
+			failure = failureText(error);
+		}
+		await sleep(delay);
+	}
+	return { failure, refused: false };
+}
+
+/**
+ * What DataCite records as versions of other DOIs, for the DOIs it has, and the DOIs whose batch it would not
+ * answer, with the last reason it gave. One batch that fails leaves only its own DOIs undecided; after
+ * DATACITE_OUTAGE_BATCHES failed batches in a row DataCite counts as down and the rest are not asked for.
+ */
+export async function dataCiteVersions(
+	dois: readonly string[],
+	fetchImpl: typeof fetch,
+	sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+) {
 	const versionsOf = new Map<string, Set<string>>();
+	const unresolved = new Set<string>();
+	let failure: string | undefined;
+	let failedInRow = 0;
 	for (let start = 0; start < dois.length; start += DATACITE_BATCH) {
-		const url = new URL(DATACITE_DOIS);
-		url.searchParams.set("ids", dois.slice(start, start + DATACITE_BATCH).join(","));
-		url.searchParams.set("page[size]", String(DATACITE_BATCH));
-		url.searchParams.set("fields[dois]", "doi,relatedIdentifiers");
-		const response = await fetchImpl(url, {
-			headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:contact@opendeved.net)" },
-			signal: AbortSignal.timeout(DATACITE_TIMEOUT_MS),
-		});
-		if (!response.ok) throw new Error(`DataCite answered ${response.status}`);
-		for (const record of ((await response.json()) as { data?: DataCiteRecord[] }).data ?? []) {
-			const targets = versionTargets(record);
-			const doi = record.attributes?.doi?.toLowerCase();
-			if (doi && targets.length) versionsOf.set(doi, new Set(targets));
+		const batch = dois.slice(start, start + DATACITE_BATCH);
+		const answer = failedInRow < DATACITE_OUTAGE_BATCHES ? await dataCiteBatch(batch, fetchImpl, sleep) : null;
+		if (answer?.records) {
+			failedInRow = 0;
+			addVersions(versionsOf, answer.records);
+			continue;
+		}
+		for (const doi of batch) unresolved.add(doi);
+		// A refused request says nothing about DataCite being down; the reason kept is the last one DataCite gave.
+		if (answer) {
+			failure = answer.failure;
+			failedInRow += answer.refused ? 0 : 1;
 		}
 	}
-	return versionsOf;
+	return { versionsOf, unresolved, failure };
+}
+
+function addVersions(versionsOf: Map<string, Set<string>>, records: DataCiteRecord[]) {
+	for (const record of records) {
+		const targets = versionTargets(record);
+		const doi = record.attributes?.doi?.toLowerCase();
+		if (doi && targets.length) versionsOf.set(doi, new Set(targets));
+	}
 }
 
 /** What OpenAlex itself says about a work, from its own record, so library edits never change the comparison. */
@@ -158,16 +214,21 @@ export type DuplicatePlan = { withdraw: DuplicateRecord[]; keepSkipped: Duplicat
 /**
  * Splits the source's records and the works this run skipped into what to withdraw, keep skipping or bring back.
  * Only a live record is kept instead of another. A skipped work that no longer repeats a live record comes back,
- * unless its own comparison needed DataCite, which could not be asked.
+ * unless its own comparison needed a DataCite answer that did not come.
  */
 export function planDuplicates(
 	live: readonly (WorkFacts & { itemKey: string })[],
 	skipped: readonly WorkFacts[],
 	versionsOf: VersionsOf,
-	dataCiteFailed: boolean,
+	unresolved: ReadonlySet<string>,
 ): DuplicatePlan {
 	const keptFor = duplicateWorkKeys([...live, ...skipped], versionsOf);
-	const undecided = new Set(dataCiteFailed ? [...uncertainPairs([...live, ...skipped])].flat().map((work) => work.key) : []);
+	const undecided = new Set(
+		[...uncertainPairs([...live, ...skipped])]
+			.filter((pair) => pair.some((work) => unresolved.has(cleanDoi(work.doi!))))
+			.flat()
+			.map((work) => work.key),
+	);
 	const liveItem = new Map(live.map((record) => [record.key, record.itemKey]));
 	const repeatOf = (key: string) => {
 		const kept = keptFor.get(key);
@@ -208,25 +269,23 @@ export async function findDuplicateRecords(
 	sourceConnectionKey: string,
 	scan: { startedAt: string; full: boolean },
 	fetchImpl: typeof fetch = fetch,
+	sleep?: (ms: number) => Promise<void>,
 ): Promise<DuplicatePlan> {
 	const live = await liveRecords(database, sourceConnectionKey, scan.full ? scan.startedAt : null);
 	const skipped = await skippedRecords(database, sourceConnectionKey, scan.startedAt);
-	let versionsOf: VersionsOf = new Map();
-	let dataCiteFailed = false;
 	const uncertain = uncertainDuplicateDois([...live, ...skipped]);
-	if (uncertain.length) {
-		try {
-			versionsOf = await dataCiteVersions(uncertain, fetchImpl);
-		} catch (error) {
-			dataCiteFailed = true;
-			console.warn("DataCite could not be asked whether OpenAlex works are versions of each other; keeping them as they are", {
-				sourceConnectionKey,
-				dois: uncertain.length,
-				error: error instanceof Error ? error.message : String(error),
-			});
-		}
+	const { versionsOf, unresolved, failure } = uncertain.length
+		? await dataCiteVersions(uncertain, fetchImpl, sleep)
+		: { versionsOf: new Map<string, Set<string>>(), unresolved: new Set<string>(), failure: undefined };
+	if (unresolved.size) {
+		console.warn("DataCite did not answer for some OpenAlex works that may be versions of each other; keeping those as they are", {
+			sourceConnectionKey,
+			unanswered: unresolved.size,
+			asked: uncertain.length,
+			failure,
+		});
 	}
-	return planDuplicates(live, skipped, versionsOf, dataCiteFailed);
+	return planDuplicates(live, skipped, versionsOf, unresolved);
 }
 
 /**

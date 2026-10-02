@@ -67,6 +67,7 @@ const data: HomeData = {
 	countryPaths: { KE: "Africa > Eastern Africa > KE" },
 	covers: {},
 	journey: { key: "ITEM1", title: "Coaching teachers in Kenya", reviewed: true, submittedAt: "2026-05-01T00:00:00.000Z", reviewer: { name: "Omar Haddad", photo: null }, publishedAt: "2026-05-20T00:00:00.000Z", doi: "10.1234/coach" },
+	pipeline: null,
 	cited: [],
 	copies: [],
 	examples: {},
@@ -104,11 +105,11 @@ describe("the library's home page", () => {
 		vi.unstubAllGlobals();
 	});
 
-	async function render(contact: { email: string | null; page: boolean }, figures: HomeData = data) {
+	async function render(contact: { email: string | null; page: boolean }, figures: HomeData = data, content: HomeContent = about) {
 		await act(async () => {
 			root.render(
 				<LibraryConfigProvider config={config}>
-					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={about} rich={rich} data={Promise.resolve(figures)} tones={tones} ramp={[tone, tone]} shapes={[]} />
+					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={content} rich={rich} data={Promise.resolve(figures)} tones={tones} ramp={[tone, tone]} shapes={[]} />
 				</LibraryConfigProvider>,
 			);
 		});
@@ -141,6 +142,24 @@ describe("the library's home page", () => {
 		expect(container.textContent).not.toContain("Arrived for review");
 		// Only its arrival is dated: nobody checked it on a known day.
 		expect([...container.querySelectorAll("ol time")].map((time) => time.getAttribute("dateTime"))).toEqual([added]);
+	});
+
+	it("fills the library's own steps in from its searches and records, showing a zero as a zero", async () => {
+		const steps = [
+			...(["search", "sync", "duplicates", "fulltext"] as const).map((type) => ({ type, title: type, text: "" })),
+			{ type: "text" as const, title: "screened", text: "", figure: { value: "25,000", label: "AI screening judgements" } },
+		];
+		await render({ email: null, page: false }, { ...data, pipeline: { terms: 159, topics: 29, added: 1240, merged: 0 } }, { ...about, curation: { steps } });
+
+		const bodies = steps.map(({ title }) => [...container.querySelectorAll("li")].find((step) => step.querySelector("h3")?.textContent === title)?.textContent);
+		// The page test translates to message keys: the topics join the terms' label.
+		expect(bodies[0]).toMatch(/159.*figureTerms.*figureAndTopics/);
+		expect(bodies[1]).toContain("1,240");
+		expect(bodies[2]).toMatch(/^duplicates0/);
+		expect(bodies[3]).toContain("60");
+		expect(bodies[4]).toContain("25,000");
+		// Counted steps carry no date, so the track has no date row.
+		expect(container.querySelectorAll("ol time")).toHaveLength(0);
 	});
 
 	it("shows a link it cannot follow as its words", async () => {

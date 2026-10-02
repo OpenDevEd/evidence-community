@@ -918,6 +918,16 @@
     "joinSubject": "Quero ser editor",
     "stepArrival": "Enviado",
     "stepCheck": "Verificado por um editor",
-    "stepPublication": "Publicado"
+    "stepPublication": "Publicado",
+    "stepSearch": "Encontrado por pesquisa",
+    "stepSync": "Mantido atualizado",
+    "stepDuplicates": "Duplicatas unidas",
+    "stepFullText": "Texto completo adicionado",
+    "figureTerms": "{count, plural, one {termo de pesquisa} other {termos de pesquisa}}",
+    "figureAndTopics": "e {topics, plural, one {# tema de pesquisa} other {# temas de pesquisa}}",
+    "figureTopics": "{count, plural, one {tema de pesquisa} other {temas de pesquisa}}",
+    "figureAdded": "novos nos últimos 30 dias",
+    "figureMerged": "{count, plural, one {registro duplicado unido} other {registros duplicados unidos}}",
+    "figureFullText": "{count, plural, one {registro com texto completo} other {registros com texto completo}}"
   }
 }

@@ -30,11 +30,13 @@ import type { CitationItem } from "@/lib/citation-formats";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
 import type { ListItem } from "@/app/api/item/types";
+import type { LibraryHomeConfig } from "@/config/library-config/schema";
 import HomeMap, { type MapShape } from "./HomeMap";
 import { examplesKey, listedRows, regionNames, type Row } from "./home-explorer";
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 
 // Below the fold and heavy: the citation formatter with its styles. It loads when the reader nears it (see WhenNear),
 // not with the page.
@@ -108,6 +110,12 @@ export type HomeData = {
 	/** The publication the curation steps follow, from submission to publication. */
 	/** `reviewed` is false for a publication that was only added: it came in and went public at once. */
 	journey: { key: string; title: string; reviewed: boolean; submittedAt: string; reviewer: { name: string; photo: string | null } | null; publishedAt: string; doi: string | null } | null;
+	/**
+	 * How the library's OpenAlex searches build it, for the steps that count it: the words, phrases and topics they
+	 * search for, the records added in the last 30 days and the repeats merged away. Null
+	 * when no step needs it or the library has no OpenAlex search.
+	 */
+	pipeline: { terms: number; topics: number; added: number; merged: number } | null;
 	/** The most cited publications, for the citations preview. */
 	cited: { key: string; title: string; citations: number }[];
 	/** The most cited and followed publications as a result list holds them, for their item pages to open with. */
@@ -149,17 +157,18 @@ function plural(name: string) {
  * bulleted lists, stored as that subset of Markdown; everything else is plain text. `headings` renames a section; a
  * blank one keeps the translated default.
  */
-export type StepType = "arrival" | "check" | "publication" | "text";
+export type StepType = LibraryHomeConfig["curation"]["steps"][number]["type"];
 
 export type HomeContent = {
 	/** One short paragraph under the library's tagline (Identity) in the hero. */
 	intro?: string;
 	/**
-	 * The steps a publication takes into the library. A step's type decides what the timeline fills in from the
-	 * publication it follows: the date it arrived, the editor who checked it, its DOI; a text step is its words only.
+	 * The steps a publication takes into the library. A step's type decides what the timeline fills in: from the
+	 * publication it follows, the date it arrived, the editor who checked it, its DOI; from the library, its search
+	 * terms, its last update, the repeats it merged and its records with full text. A text step is its words only.
 	 * `editor` is a chosen person from the team, shown on an editor check instead of whoever approved it.
 	 */
-	curation?: { text?: string; steps?: { title: string; text: string; type?: StepType; editor?: { name: string; photo?: string } }[] };
+	curation?: { text?: string; steps?: { title: string; text: string; type?: StepType; editor?: { name: string; photo?: string }; figure?: { value: string; label: string }; icon?: string }[] };
 	team?: string;
 	/** The people who run the library, shown in the team band. `photo` is an image address. */
 	editors?: { name: string; title?: string; location?: string; photo?: string }[];
@@ -444,8 +453,8 @@ function Curation({ curation, statement, heading, data }: { curation: NonNullabl
 			{curation.text && <Reading className={leadFor(curation.text)}>{statement}</Reading>}
 			{steps && (
 				<div className={curation.text ? "mt-16 lg:mt-20" : ""}>
-					<Suspense fallback={<Timeline steps={steps} journey={null} />}>
-						<WithData data={data}>{(figures) => <Timeline steps={steps} journey={figures.journey} cover={figures.journey ? figures.covers[figures.journey.key] : undefined} copy={figures.copies.find((copy) => copy.key === figures.journey?.key)} />}</WithData>
+					<Suspense fallback={<Timeline steps={steps} data={null} />}>
+						<WithData data={data}>{(figures) => <Timeline steps={steps} data={figures} cover={figures.journey ? figures.covers[figures.journey.key] : undefined} copy={figures.copies.find((copy) => copy.key === figures.journey?.key)} />}</WithData>
 					</Suspense>
 				</div>
 			)}
@@ -460,14 +469,51 @@ const longDay = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", y
 /** Timeline columns on wide screens, one per step; below that the steps run down one vertical track. */
 const TIMELINE_COLUMNS: Record<number, string> = { 1: "", 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
 
-type Happening = { when?: string; body?: React.ReactNode };
+/** A count set large under a step's name, with what it counts. */
+type FigureKey = "figureTerms" | "figureTopics" | "figureAdded" | "figureMerged" | "figureFullText";
+/** A counted figure's label is a translated message for its count; a text step's is its owner's words. */
+type StepFigureValue = { value: string; label: string | { key: FigureKey; count: number; topics?: number } };
 
-/** What a step's type shows, from the publication the timeline follows (or the editor chosen for it). */
-function happened(step: Step, journey: HomeData["journey"]): Happening {
-	if (step.type === "check") return checked(step, journey);
-	if (!journey) return {};
-	if (step.type === "arrival") return { when: journey.submittedAt, body: arrived(journey) };
-	return step.type === "publication" ? published(journey) : {};
+type Happening = { when?: string; body?: React.ReactNode; figure?: StepFigureValue };
+
+/**
+ * What a step's type shows: from the publication the timeline follows (or the editor chosen for it), or from what the
+ * library counts of its searches and records. A count shows once it arrives, zero included, so the space kept for it
+ * while the figures load is always filled.
+ */
+function happened(step: Step, data: Figures | null): Happening {
+	return step.type ? HAPPENINGS[step.type](step, data) : {};
+}
+
+type Figures = Pick<HomeData, "journey" | "pipeline" | "attachments">;
+
+const HAPPENINGS: Record<StepType, (step: Step, data: Figures | null) => Happening> = {
+	check: (step, data) => checked(step, data?.journey ?? null),
+	arrival: (_, data) => (data?.journey ? { when: data.journey.submittedAt, body: arrived(data.journey) } : {}),
+	publication: (_, data) => (data?.journey ? published(data.journey) : {}),
+	search: (_, data) => ({ figure: searched(data?.pipeline) }),
+	sync: (_, data) => ({ figure: figureOf(data?.pipeline?.added, "figureAdded") }),
+	duplicates: (_, data) => ({ figure: figureOf(data?.pipeline?.merged, "figureMerged") }),
+	fulltext: (_, data) => ({ figure: figureOf(data?.attachments?.withPdf, "figureFullText") }),
+	text: (step) => ({ figure: step.figure }),
+};
+
+function searched(pipeline: HomeData["pipeline"] | undefined) {
+	if (pipeline?.topics && !pipeline.terms) return figureOf(pipeline.topics, "figureTopics");
+	return figureOf(pipeline?.terms, "figureTerms", pipeline?.topics || undefined);
+}
+
+/** Stands in for the library's figures while they load, so a counted step keeps the size its line will take. */
+const LOADING_FIGURES: Figures = {
+	journey: null,
+	pipeline: { terms: 100, topics: 10, added: 1_000, merged: 1_000 },
+	attachments: { total: 0, itemsWith: 0, withPdf: 10_000, percentage: 0 },
+};
+
+const COUNTED_TYPES = new Set<StepType>(["search", "sync", "duplicates", "fulltext"]);
+
+function figureOf(count: number | undefined, key: FigureKey, topics?: number): StepFigureValue | undefined {
+	return count === undefined ? undefined : { value: number.format(count), label: { key, count, topics } };
 }
 
 function arrived(journey: NonNullable<HomeData["journey"]>) {
@@ -494,51 +540,122 @@ function published(journey: NonNullable<HomeData["journey"]>): Happening {
  * The steps on one track, each a node with its date above and its name, what happened and its words below. Following
  * a reviewed publication, its first page stands at the start of the track; without one the track carries the steps.
  */
-function Timeline({ steps, journey, cover, copy }: { steps: Step[]; journey: HomeData["journey"]; cover?: string; copy?: ListItem }) {
-	const handOff = use(HandOff);
-	const dated = steps.some((step) => happened(step, journey).when);
-	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${journey ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
+function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData | null; cover?: string; copy?: ListItem }) {
+	const journey = data?.journey ?? null;
+	// Until the figures arrive a followed publication is likely, so its cover keeps its place.
+	const covered = journey !== null || !data;
+	// Beside a cover the line always crosses it below its top edge, at the height a row of dates puts it, whether or
+	// not any step has a date.
+	const dated = covered || steps.some((step) => happened(step, data).when);
+	const shape = steps.some((step) => step.icon) ? ICON_NODES : PLAIN_NODES;
+	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-40" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? shape.datedTrack : shape.track}`;
 	const timeline = (
-		<ol className={`relative grid gap-x-10 gap-y-10 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
+		<ol className={`relative grid gap-x-10 gap-y-10 lg:gap-y-0 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
 			<span aria-hidden className={`${track} bg-[rgb(var(--ink-rgb)/0.18)]`} />
 			<motion.span aria-hidden initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={seen} transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1], delay: 0.2 }} className={`${track} origin-left bg-[rgb(var(--color-accent-700))]`} />
-			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} journey={journey} dated={dated} last={index === steps.length - 1} />)}
+			{steps.map((step, index) => <TimelineStep key={`${step.title}-${index}`} step={step} data={data} dated={dated} shape={shape} index={index} last={index === steps.length - 1} />)}
 		</ol>
 	);
-	if (!journey) return timeline;
+	if (!covered) return timeline;
 	return (
 		<div className="grid gap-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-16">
-			{/* The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing
-			    over it as it comes into view; it turns to face the reader under the pointer. */}
-			<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className="group relative z-10 block max-w-[12rem] self-start outline-offset-4 [perspective:1100px]">
-				<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
-					<PdfCover src={cover} alt="" width={192} />
-					{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
-					<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-						<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
-					</motion.span>
-				</span>
-			</Link>
+			<TimelineCover journey={journey} cover={cover} copy={copy} />
 			{timeline}
 		</div>
 	);
 }
 
-/** One step on the track: its date, its node, its name, what happened and its words. */
-function TimelineStep({ step, journey, dated, last }: { step: Step; journey: HomeData["journey"]; dated: boolean; last: boolean }) {
-	const { when, body } = happened(step, journey);
+/** The followed publication's cover beside the track, or its place while the figures load. */
+function TimelineCover({ journey, cover, copy }: { journey: HomeData["journey"]; cover?: string; copy?: ListItem }) {
+	const handOff = use(HandOff);
+	// The publication as a printed thing: turned towards its journey, pages showing at the edge, a light passing over it
+	// as it comes into view; it turns to face the reader under the pointer.
+	return journey ? (
+		<Link href={`/lib/${journey.key}`} {...handOff(copy)} aria-label={journey.title} className={`group relative z-10 block max-w-[12rem] outline-offset-4 [perspective:1100px] self-start`}>
+			<span className="relative block rounded-xl shadow-[3px_3px_0_-1px_#f6f3ec,4px_4px_0_-1px_rgb(0_0_0/0.2),7px_7px_0_-2px_#ebe6da,8px_8px_0_-2px_rgb(0_0_0/0.2),28px_32px_44px_-14px_rgb(0_0_0/0.6)] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateY(20deg)_rotateX(4deg)] group-hover:[transform:rotateY(0deg)_rotateX(0deg)] motion-reduce:transition-none motion-reduce:[transform:none] [&_img]:aspect-[3/4] [&_img]:object-cover [&_img]:object-top">
+				<PdfCover src={cover} alt="" width={192} />
+				{/* The cover triggers the sweep: the light starts clipped outside it, where it could never be seen to be in view. */}
+				<motion.span aria-hidden initial="rest" whileInView="swept" viewport={seen} className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+					<motion.span variants={{ rest: { x: "-110%" }, swept: { x: "110%", transition: { duration: 2.4, delay: 0.8, ease: [0.45, 0, 0.25, 1] } } }} className="absolute -inset-y-1/4 left-0 w-[150%] -skew-x-[22deg] bg-[linear-gradient(100deg,transparent_22%,rgb(255_255_255/0.06)_38%,rgb(255_255_255/0.2)_50%,rgb(255_255_255/0.06)_62%,transparent_78%)] mix-blend-screen" />
+				</motion.span>
+			</span>
+		</Link>
+	) : (
+		// The cover's place while the figures load, so the steps do not narrow when it arrives.
+		<span aria-hidden className="block aspect-[3/4] w-full max-w-[12rem] self-start" />
+	);
+}
+
+/**
+ * One step on the track: its date, its node, its name, what happened or its figure, and its words. On wide screens
+ * each of these is a row shared by every step, so names, figures and words line up across the columns.
+ */
+function TimelineStep({ step, data, dated, shape, index, last }: { step: Step; data: HomeData | null; dated: boolean; shape: NodeShape; index: number; last: boolean }) {
+	const { when, body, figure, loading } = shown(step, data);
 	return (
-		<li className="relative pl-10 lg:pl-0">
+		<li className={`relative lg:pl-0 ${shape.indent}`}>
 			{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
-			<span aria-hidden className={`absolute left-[7px] top-4 w-0.5 bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
+			<span aria-hidden className={`absolute w-0.5 ${shape.rail} bg-[rgb(var(--color-accent-700))] lg:hidden ${last ? "h-16 [mask-image:linear-gradient(to_bottom,black,transparent)]" : "-bottom-10"}`} />
 			{/* On wide screens the dates share one row above the track, so every node sits on the line. */}
 			{dated ? <StepDate when={when} /> : null}
-			<span aria-hidden className={`absolute left-0 top-1 block size-4 rounded-full border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)] lg:relative lg:left-auto lg:top-auto ${dated ? "lg:mt-3" : ""}`} />
-			<h3 className={`font-heading text-xl font-semibold tracking-tight lg:mt-7 ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
-			{body ? <div className="mt-3 text-base leading-7">{body}</div> : null}
-			{step.text ? <p className={`mt-3 leading-6 ${body ? "text-sm opacity-75" : "text-base"}`}>{step.text}</p> : null}
+			<StepNode icon={step.icon} shape={shape} dated={dated} index={index} />
+			<h3 className={`font-heading text-xl font-semibold tracking-tight ${shape.title} ${dated && when ? "mt-1" : ""}`}>{step.title}</h3>
+			<StepValue value={figure?.value} hidden={loading} />
+			<StepOutcome label={figure?.label} body={figure ? undefined : body} hidden={loading} />
+			<StepWords text={step.text} />
 		</li>
 	);
+}
+
+/**
+ * Where the track and a step's parts sit around its node. With an icon on any step every node is a ring the icon's
+ * size, so the line runs through their centres; otherwise the nodes are small rings.
+ */
+type NodeShape = { node: string; track: string; datedTrack: string; indent: string; rail: string; title: string };
+const PLAIN_NODES: NodeShape = { node: "top-1 size-4", track: "top-[7px]", datedTrack: "top-[43px]", indent: "pl-10", rail: "left-[7px] top-4", title: "lg:mt-7" };
+const ICON_NODES: NodeShape = { node: "top-0 size-11", track: "top-[21px]", datedTrack: "top-[57px]", indent: "pl-16", rail: "left-[21px] top-11", title: "pt-2 lg:mt-5 lg:pt-0" };
+
+const RING = "border-2 border-[rgb(var(--color-accent-700))] bg-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:bg-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)]";
+/** An icon node: the icon cut out of a solid disc in the accent. */
+const DISC = "bg-[rgb(var(--color-accent-700))] text-[var(--band-bg)] shadow-[0_0_0_4px_var(--band-bg),0_0_14px_rgb(var(--color-accent-700)/0.6)] dark:text-[var(--band-bg-dark)] dark:shadow-[0_0_0_4px_var(--band-bg-dark),0_0_14px_rgb(var(--color-accent-700)/0.6)]";
+
+/** A step's node on the track. Icons pop in one after another as the line draws through them. */
+function StepNode({ icon, shape, dated, index }: { icon?: string; shape: NodeShape; dated: boolean; index: number }) {
+	const place = `absolute left-0 grid place-items-center rounded-full lg:relative lg:left-auto lg:top-auto ${shape.node} ${dated ? "lg:mt-3" : ""}`;
+	if (shape === PLAIN_NODES) return <span aria-hidden className={`${place} ${RING}`} />;
+	return (
+		<motion.span aria-hidden initial={{ scale: 0.4, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={seen} transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.3 + index * 0.16 }} className={`${place} ${DISC}`}>
+			{icon ? <RuntimeAsset reference={icon} alt="" width={22} height={22} /> : null}
+		</motion.span>
+	);
+}
+
+function StepWords({ text }: { text?: string }) {
+	return text ? <p className="mt-2 text-sm leading-6 opacity-75">{text}</p> : null;
+}
+
+/** A step's figure, set large. */
+function StepValue({ value, hidden }: { value?: string; hidden: boolean }) {
+	if (!value) return null;
+	return <p aria-hidden={hidden || undefined} className={`mt-4 font-heading text-3xl font-semibold leading-none tracking-tight tabular-nums xl:text-4xl ${hidden ? "invisible" : ""}`}>{value}</p>;
+}
+
+/** What a step's figure counts, or what happened to the followed publication. */
+function StepOutcome({ label, body, hidden }: { label?: StepFigureValue["label"]; body?: React.ReactNode; hidden: boolean }) {
+	const t = useTranslations("homePage");
+	if (!label && !body) return null;
+	const words = typeof label === "object" ? `${t(label.key, { count: label.count })}${label.topics ? ` ${t("figureAndTopics", { topics: label.topics })}` : ""}` : label;
+	return (
+		<div aria-hidden={hidden || undefined} className={`text-base ${label ? "mt-1.5 leading-6" : "mt-3 leading-7"} ${hidden ? "invisible" : ""}`}>
+			{words ?? body}
+		</div>
+	);
+}
+
+/** What a step shows; while the figures load, a counted step lays out an invisible stand-in figure. */
+function shown(step: Step, data: HomeData | null) {
+	const loading = !data && step.type !== undefined && COUNTED_TYPES.has(step.type);
+	return { ...happened(step, loading ? LOADING_FIGURES : data), loading };
 }
 
 /** A step's date; an undated step keeps the row empty on wide screens so its node stays on the track. */
