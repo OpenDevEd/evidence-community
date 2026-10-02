@@ -545,3 +545,29 @@ export async function getItemsPaginationMeta(
 		totalPages: Math.ceil(totalItems / limitNum),
 	};
 }
+
+/** At most this many authors are counted per request: the sidebar's top authors. */
+export const AUTHOR_ACTIVITY_LIMIT = 10;
+
+/**
+ * Each author's results by year under the current search and filters, for the activity strips beside the top authors.
+ * One small search per author, side by side.
+ */
+export async function getAuthorActivity(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	names: readonly string[],
+): Promise<Record<string, Record<string, number>>> {
+	const libraryConfig = await getLibraryConfig();
+	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
+	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
+	const { index } = await getMeilisearchForConfig(libraryConfig);
+	const results = await Promise.all(
+		names.slice(0, AUTHOR_ACTIVITY_LIMIT).map((name) =>
+			index.search(search, {
+				offset: 0, limit: 0, attributesToSearchOn, facets: ["year"],
+				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
+			}),
+		),
+	);
+	return Object.fromEntries(names.map((name, index) => [name, (results[index]?.facetDistribution?.year ?? {}) as Record<string, number>]));
+}

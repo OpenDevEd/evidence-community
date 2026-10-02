@@ -294,28 +294,63 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 	);
 }
 
-/** The people with the most results: a name over a bar of their share of the leader's count. */
+const ACTIVITY_YEARS = 20;
+
+/**
+ * When an author published, as one column per year on an axis every row shares, each scaled to the author's own busiest
+ * year: the shape says when they were active, the count beside it says how much. Its box is the same before the years
+ * arrive, so the row never moves.
+ */
+function ActivityStrip({ years, axis }: { years: Record<string, number> | undefined; axis: number[] }) {
+	const counts = axis.map((year) => years?.[year] ?? 0);
+	const busiest = Math.max(0, ...counts);
+	const peak = busiest > 0 ? axis[counts.indexOf(busiest)] : null;
+	return (
+		<span className="flex h-6 w-16 shrink-0 items-end gap-px border-b border-black/10 @[20rem]:w-24 dark:border-white/10">
+			{peak !== null && <span className="sr-only">Most results in {peak}</span>}
+			{counts.map((count, index) => (
+				<span
+					key={axis[index]}
+					aria-hidden
+					className={twMerge("flex-1 rounded-t-[2px] transition-[height] duration-300 motion-reduce:transition-none", axis[index] === peak ? "bg-accent" : "bg-accent/50")}
+					style={{ height: count > 0 ? `${Math.max(12, (count / busiest) * 100)}%` : "0%" }}
+				/>
+			))}
+		</span>
+	);
+}
+
+/** The people with the most results, each with when they published and how much. */
 function AuthorRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string; onSelect: (author: string) => void }) {
 	const format = useFormatter();
+	const { queryParams } = useFiltersContext();
 	const rows = sortedCounts(counts);
+	const names = rows.map(([name]) => name);
+	// The strips ask for themselves after the list, so the list never waits on them.
+	const { page, sort, ...filters } = queryParams;
+	const base = buildItemsQuery(filters, "/author-activity");
+	const { data: activity } = useSWR<Record<string, Record<string, number>>>(
+		names.length ? `${base}${base.includes("?") ? "&" : "?"}${names.map((name) => `name=${encodeURIComponent(name)}`).join("&")}` : null,
+		fetcher,
+		{ keepPreviousData: true, revalidateOnFocus: false },
+	);
 	if (rows.length === 0) return null;
-	const max = rows[0][1];
+	// One axis for every row: the last twenty years any of these authors published in.
+	const known = names.flatMap((name) => Object.keys(activity?.[name] ?? {}).map(Number)).filter((year) => Number.isInteger(year) && year > 1000);
+	const last = known.length ? Math.max(...known) : new Date().getFullYear();
+	const axis = Array.from({ length: ACTIVITY_YEARS }, (_, index) => last - ACTIVITY_YEARS + 1 + index);
 	return (
-		<SidebarCard id="results-authors" title={selected ? "Author and co-authors" : "Top authors"}>
-			<ul className="-mx-3 -mt-2 flex flex-col">
+		<SidebarCard id="results-authors" title={selected ? "Author and co-authors" : "Top authors"} aside={<span className={`text-xs tabular-nums ${MUTED}`}>{axis[0]}–{last}</span>}>
+			<ul className="@container -mx-3 -mt-2 flex flex-col">
 				{rows.map(([name, count]) => {
 					const chosen = name === selected;
 					return (
 						<li key={name}>
-							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} className="flex w-full min-w-0 flex-col gap-1.5 rounded-xl px-3 py-2 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5">
-								<span className="flex w-full min-w-0 items-center gap-3">
-									<TruncatedText text={name} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
-									<Tick shown={chosen} />
-									<span className="shrink-0 text-base font-bold tabular-nums">{format.number(count)}</span>
-								</span>
-								<span aria-hidden className="block h-1.5 w-full overflow-hidden rounded-full bg-accent/10">
-									<span className={twMerge("block h-full rounded-full", chosen ? "bg-accent" : "bg-accent/70")} style={{ width: barWidth(count, max) }} />
-								</span>
+							<button type="button" aria-pressed={chosen} onClick={() => onSelect(name)} className="flex h-11 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
+								<TruncatedText text={name} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
+								<Tick shown={chosen} />
+								<ActivityStrip years={activity?.[name]} axis={axis} />
+								<span className="w-12 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
 							</button>
 						</li>
 					);
