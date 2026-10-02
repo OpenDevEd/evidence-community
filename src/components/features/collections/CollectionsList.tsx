@@ -135,6 +135,7 @@ function FacetPicker({
 					scrollShadowProps={{
 						isEnabled: false,
 						size: 0,
+						className: "scroll-py-0",
 					}}
 					selectedKey={isMultiSelect ? null : selectedKey}
 					inputValue={search}
@@ -700,6 +701,7 @@ function FiltersList({
 	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
+	const [moreFiltersMoving, setMoreFiltersMoving] = useState(false);
 	const setIsMoreFiltersOpen = (value: boolean) => {
 		setGlobalExpanded((prev: Record<string, boolean>) => ({
 			...prev,
@@ -748,11 +750,15 @@ function FiltersList({
 				</div>
 				<AnimatePresence initial={false}>
 					{isMoreFiltersOpen && (
+						// Clipped only while it opens or closes: open, the fields' focus outlines and glow reach past its edges.
 						<motion.div
 							initial={{ height: 0 }}
 							animate={{ height: "auto" }}
-							exit={{ height: 0 }}
-							className="flex flex-col gap-4 overflow-hidden"
+							// A closing section keeps the props it had, so its clip is part of the exit itself.
+							exit={{ height: 0, overflow: "hidden" }}
+							onAnimationStart={() => setMoreFiltersMoving(true)}
+							onAnimationComplete={() => setMoreFiltersMoving(false)}
+							className={twMerge("flex flex-col gap-4", moreFiltersMoving && "overflow-hidden")}
 							id="more-filters-content"
 							role="region"
 							aria-labelledby="more-filters-heading"

@@ -1,5 +1,5 @@
 diff --git a/node_modules/@nextui-org/autocomplete/dist/autocomplete.js b/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
-index 1d43d70..d4fff34 100644
+index 1d43d70..dd1e840 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
 +++ b/node_modules/@nextui-org/autocomplete/dist/autocomplete.js
 @@ -45,7 +45,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
@@ -10,7 +10,57 @@ index 1d43d70..d4fff34 100644
  function useAutocomplete(originalProps) {
    var _a, _b, _c, _d, _e;
    const globalContext = (0, import_system.useProviderContext)();
-@@ -336,7 +335,6 @@ function useAutocomplete(originalProps) {
+@@ -91,6 +90,7 @@ function useAutocomplete(originalProps) {
+     ...otherProps
+   } = props;
+   const { contains } = (0, import_i18n.useFilter)(filterOptions);
++  const selectionFocusRef = (0, import_react.useRef)(null);
+   let state = (0, import_combobox.useComboBoxState)({
+     ...originalProps,
+     children,
+@@ -99,6 +99,13 @@ function useAutocomplete(originalProps) {
+     shouldCloseOnBlur,
+     allowsEmptyCollection,
+     defaultFilter: defaultFilter && typeof defaultFilter === "function" ? defaultFilter : contains,
++    onSelectionChange: (key) => {
++      if (key != null) {
++        selectionFocusRef.current = key;
++        state.selectionManager.setFocusedKey(key);
++      }
++      originalProps.onSelectionChange?.(key);
++    },
+     onOpenChange: (open, menuTrigger2) => {
+       onOpenChange == null ? void 0 : onOpenChange(open, menuTrigger2);
+       if (!open) {
+@@ -216,12 +223,18 @@ function useAutocomplete(originalProps) {
+     }
+   }, [inputRef.current]);
+   (0, import_react.useEffect)(() => {
++    const focusedKey = selectionFocusRef.current ?? state.selectionManager.focusedKey;
++    selectionFocusRef.current = null;
++    if (focusedKey != null && state.collection.getItem(focusedKey) && !state.disabledKeys.has(focusedKey)) {
++      state.selectionManager.setFocusedKey(focusedKey);
++      return;
++    }
+     let key = state.collection.getFirstKey();
+     while (key && state.disabledKeys.has(key)) {
+       key = state.collection.getKeyAfter(key);
+     }
+     state.selectionManager.setFocusedKey(key);
+-  }, [state.collection, state.disabledKeys]);
++  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
+   (0, import_react.useEffect)(() => {
+     if (isOpen) {
+       if (popoverRef.current && inputWrapperRef.current) {
+@@ -305,6 +318,7 @@ function useAutocomplete(originalProps) {
+     return {
+       state,
+       ref: listBoxRef,
++      scrollRef: shouldVirtualize ? listBoxRef : scrollShadowRef,
+       isVirtualized: shouldVirtualize,
+       virtualization: shouldVirtualize ? {
+         maxListboxHeight,
+@@ -336,7 +350,6 @@ function useAutocomplete(originalProps) {
            )
          })
        },
@@ -19,7 +69,7 @@ index 1d43d70..d4fff34 100644
      };
    };
 diff --git a/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs b/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
-index 021f527..5238df2 100644
+index 021f527..a53601a 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
 +++ b/node_modules/@nextui-org/autocomplete/dist/chunk-KYTIVWEB.mjs
 @@ -12,7 +12,6 @@ import { clsx, dataAttr, objectToDeps } from "@nextui-org/shared-utils";
@@ -30,7 +80,57 @@ index 021f527..5238df2 100644
  function useAutocomplete(originalProps) {
    var _a, _b, _c, _d, _e;
    const globalContext = useProviderContext();
-@@ -303,7 +302,6 @@ function useAutocomplete(originalProps) {
+@@ -58,6 +57,7 @@ function useAutocomplete(originalProps) {
+     ...otherProps
+   } = props;
+   const { contains } = useFilter(filterOptions);
++  const selectionFocusRef = useRef(null);
+   let state = useComboBoxState({
+     ...originalProps,
+     children,
+@@ -66,6 +66,13 @@ function useAutocomplete(originalProps) {
+     shouldCloseOnBlur,
+     allowsEmptyCollection,
+     defaultFilter: defaultFilter && typeof defaultFilter === "function" ? defaultFilter : contains,
++    onSelectionChange: (key) => {
++      if (key != null) {
++        selectionFocusRef.current = key;
++        state.selectionManager.setFocusedKey(key);
++      }
++      originalProps.onSelectionChange?.(key);
++    },
+     onOpenChange: (open, menuTrigger2) => {
+       onOpenChange == null ? void 0 : onOpenChange(open, menuTrigger2);
+       if (!open) {
+@@ -183,12 +190,18 @@ function useAutocomplete(originalProps) {
+     }
+   }, [inputRef.current]);
+   useEffect(() => {
++    const focusedKey = selectionFocusRef.current ?? state.selectionManager.focusedKey;
++    selectionFocusRef.current = null;
++    if (focusedKey != null && state.collection.getItem(focusedKey) && !state.disabledKeys.has(focusedKey)) {
++      state.selectionManager.setFocusedKey(focusedKey);
++      return;
++    }
+     let key = state.collection.getFirstKey();
+     while (key && state.disabledKeys.has(key)) {
+       key = state.collection.getKeyAfter(key);
+     }
+     state.selectionManager.setFocusedKey(key);
+-  }, [state.collection, state.disabledKeys]);
++  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
+   useEffect(() => {
+     if (isOpen) {
+       if (popoverRef.current && inputWrapperRef.current) {
+@@ -272,6 +285,7 @@ function useAutocomplete(originalProps) {
+     return {
+       state,
+       ref: listBoxRef,
++      scrollRef: shouldVirtualize ? listBoxRef : scrollShadowRef,
+       isVirtualized: shouldVirtualize,
+       virtualization: shouldVirtualize ? {
+         maxListboxHeight,
+@@ -303,7 +317,6 @@ function useAutocomplete(originalProps) {
            )
          })
        },
@@ -39,7 +139,7 @@ index 021f527..5238df2 100644
      };
    };
 diff --git a/node_modules/@nextui-org/autocomplete/dist/index.js b/node_modules/@nextui-org/autocomplete/dist/index.js
-index 431d596..e275d5b 100644
+index 431d596..c5108a6 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/index.js
 +++ b/node_modules/@nextui-org/autocomplete/dist/index.js
 @@ -51,7 +51,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
@@ -50,7 +150,57 @@ index 431d596..e275d5b 100644
  function useAutocomplete(originalProps) {
    var _a, _b, _c, _d, _e;
    const globalContext = (0, import_system.useProviderContext)();
-@@ -342,7 +341,6 @@ function useAutocomplete(originalProps) {
+@@ -97,6 +96,7 @@ function useAutocomplete(originalProps) {
+     ...otherProps
+   } = props;
+   const { contains } = (0, import_i18n.useFilter)(filterOptions);
++  const selectionFocusRef = (0, import_react.useRef)(null);
+   let state = (0, import_combobox.useComboBoxState)({
+     ...originalProps,
+     children,
+@@ -105,6 +105,13 @@ function useAutocomplete(originalProps) {
+     shouldCloseOnBlur,
+     allowsEmptyCollection,
+     defaultFilter: defaultFilter && typeof defaultFilter === "function" ? defaultFilter : contains,
++    onSelectionChange: (key) => {
++      if (key != null) {
++        selectionFocusRef.current = key;
++        state.selectionManager.setFocusedKey(key);
++      }
++      originalProps.onSelectionChange?.(key);
++    },
+     onOpenChange: (open, menuTrigger2) => {
+       onOpenChange == null ? void 0 : onOpenChange(open, menuTrigger2);
+       if (!open) {
+@@ -222,12 +229,18 @@ function useAutocomplete(originalProps) {
+     }
+   }, [inputRef.current]);
+   (0, import_react.useEffect)(() => {
++    const focusedKey = selectionFocusRef.current ?? state.selectionManager.focusedKey;
++    selectionFocusRef.current = null;
++    if (focusedKey != null && state.collection.getItem(focusedKey) && !state.disabledKeys.has(focusedKey)) {
++      state.selectionManager.setFocusedKey(focusedKey);
++      return;
++    }
+     let key = state.collection.getFirstKey();
+     while (key && state.disabledKeys.has(key)) {
+       key = state.collection.getKeyAfter(key);
+     }
+     state.selectionManager.setFocusedKey(key);
+-  }, [state.collection, state.disabledKeys]);
++  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
+   (0, import_react.useEffect)(() => {
+     if (isOpen) {
+       if (popoverRef.current && inputWrapperRef.current) {
+@@ -311,6 +324,7 @@ function useAutocomplete(originalProps) {
+     return {
+       state,
+       ref: listBoxRef,
++      scrollRef: shouldVirtualize ? listBoxRef : scrollShadowRef,
+       isVirtualized: shouldVirtualize,
+       virtualization: shouldVirtualize ? {
+         maxListboxHeight,
+@@ -342,7 +356,6 @@ function useAutocomplete(originalProps) {
            )
          })
        },
@@ -59,7 +209,7 @@ index 431d596..e275d5b 100644
      };
    };
 diff --git a/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js b/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
-index fadb2d4..b4b6caf 100644
+index fadb2d4..9d56ad1 100644
 --- a/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
 +++ b/node_modules/@nextui-org/autocomplete/dist/use-autocomplete.js
 @@ -35,7 +35,6 @@ var import_shared_utils = require("@nextui-org/shared-utils");
@@ -70,7 +220,57 @@ index fadb2d4..b4b6caf 100644
  function useAutocomplete(originalProps) {
    var _a, _b, _c, _d, _e;
    const globalContext = (0, import_system.useProviderContext)();
-@@ -326,7 +325,6 @@ function useAutocomplete(originalProps) {
+@@ -81,6 +80,7 @@ function useAutocomplete(originalProps) {
+     ...otherProps
+   } = props;
+   const { contains } = (0, import_i18n.useFilter)(filterOptions);
++  const selectionFocusRef = (0, import_react.useRef)(null);
+   let state = (0, import_combobox.useComboBoxState)({
+     ...originalProps,
+     children,
+@@ -89,6 +89,13 @@ function useAutocomplete(originalProps) {
+     shouldCloseOnBlur,
+     allowsEmptyCollection,
+     defaultFilter: defaultFilter && typeof defaultFilter === "function" ? defaultFilter : contains,
++    onSelectionChange: (key) => {
++      if (key != null) {
++        selectionFocusRef.current = key;
++        state.selectionManager.setFocusedKey(key);
++      }
++      originalProps.onSelectionChange?.(key);
++    },
+     onOpenChange: (open, menuTrigger2) => {
+       onOpenChange == null ? void 0 : onOpenChange(open, menuTrigger2);
+       if (!open) {
+@@ -206,12 +213,18 @@ function useAutocomplete(originalProps) {
+     }
+   }, [inputRef.current]);
+   (0, import_react.useEffect)(() => {
++    const focusedKey = selectionFocusRef.current ?? state.selectionManager.focusedKey;
++    selectionFocusRef.current = null;
++    if (focusedKey != null && state.collection.getItem(focusedKey) && !state.disabledKeys.has(focusedKey)) {
++      state.selectionManager.setFocusedKey(focusedKey);
++      return;
++    }
+     let key = state.collection.getFirstKey();
+     while (key && state.disabledKeys.has(key)) {
+       key = state.collection.getKeyAfter(key);
+     }
+     state.selectionManager.setFocusedKey(key);
+-  }, [state.collection, state.disabledKeys]);
++  }, [state.collection, state.disabledKeys, state.inputValue, state.selectionManager.focusedKey]);
+   (0, import_react.useEffect)(() => {
+     if (isOpen) {
+       if (popoverRef.current && inputWrapperRef.current) {
+@@ -295,6 +308,7 @@ function useAutocomplete(originalProps) {
+     return {
+       state,
+       ref: listBoxRef,
++      scrollRef: shouldVirtualize ? listBoxRef : scrollShadowRef,
+       isVirtualized: shouldVirtualize,
+       virtualization: shouldVirtualize ? {
+         maxListboxHeight,
+@@ -326,7 +340,6 @@ function useAutocomplete(originalProps) {
            )
          })
        },
