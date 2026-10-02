@@ -539,12 +539,13 @@ function published(journey: NonNullable<HomeData["journey"]>): Happening {
 function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData | null; cover?: string; copy?: ListItem }) {
 	const handOff = use(HandOff);
 	const journey = data?.journey ?? null;
-	// Until the figures arrive, a review step counts as dated and a followed publication as likely, so both keep their space.
-	const dated = steps.some((step) => (data ? happened(step, data).when : step.type === "arrival" || step.type === "publication"));
+	// Until the figures arrive a followed publication is likely, so its cover keeps its place.
 	const covered = journey !== null || !data;
+	// Beside a cover the line always crosses it below its top edge, at the height a row of dates puts it, whether or
+	// not any step has a date.
+	const dated = covered || steps.some((step) => happened(step, data).when);
 	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-16" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? "top-[43px]" : "top-[7px]"}`;
-	// The line keeps its place on the cover: a row of dates above the line moves the cover down with the line.
-	const coverPlace = `self-start ${dated ? "lg:mt-9" : ""}`;
+	const coverPlace = "self-start";
 	const timeline = (
 		<ol className={`relative grid gap-x-10 gap-y-10 lg:gap-y-0 ${TIMELINE_COLUMNS[Math.min(steps.length, 5)]}`}>
 			<span aria-hidden className={`${track} bg-[rgb(var(--ink-rgb)/0.18)]`} />
