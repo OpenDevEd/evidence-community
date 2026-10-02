@@ -19,13 +19,13 @@ trap cleanup EXIT
 	--output "$generated_policy"
 
 grep -Fq '"~*GPTBot" 1;' "$generated_policy"
-grep -Fq '"~*OAI-SearchBot" 1;' "$generated_policy"
-grep -Fq '"~*ChatGPT-User" 1;' "$generated_policy"
-if awk '/map \$http_user_agent \$ode_training_crawler/,/^}/' "$generated_policy" | grep -Fq 'Google-CloudVertexBot'; then
+grep -Fq '"~*OAI-SearchBot" SEARCH_ENGINE_CRAWLER;' "$generated_policy"
+grep -Fq '"~*ChatGPT-User" AI_ASSISTANT;' "$generated_policy"
+if awk '/map \$http_user_agent \$ode_training_crawler/,/^}/' "$generated_policy" | grep -F 'CloudVertexBot' >/dev/null; then
 	printf 'FAIL %-42s still classified as training\n' 'policy override removes Vertex crawler'
 	exit 1
 fi
-awk '/map \$http_user_agent \$ode_allowed_crawler/,/^}/' "$generated_policy" | grep -Fq 'Google-CloudVertexBot'
+awk '/map \$http_user_agent \$ode_allowed_crawler/,/^}/' "$generated_policy" | grep -F 'CloudVertexBot' >/dev/null
 printf 'ok   %-42s generated\n' 'Radar policy snapshot'
 
 docker build --quiet -t "$image_tag" "$script_dir/forwardauth" >/dev/null
@@ -205,6 +205,36 @@ assert_code 'Google user agent passes' 204
 request_decision GET '/lib/MI3J6SZH' 'text/html' 'facebookexternalhit/1.1'
 assert_code 'Meta link preview passes' 204
 
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Claude-User/1.0'
+assert_code 'Claude user fetch passes' 204
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'CCBot/2.0 (https://commoncrawl.org/faq/)'
+assert_code 'unverified training crawler is forbidden' 403
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; Bytespider; spider-feedback@bytedance.com)'
+assert_code 'ByteDance training crawler is forbidden' 403
+
+for preview in \
+	'Discord|Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' \
+	'X|Twitterbot/1.0' \
+	'Slack|Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)' \
+	'LinkedIn|LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)' \
+	'WhatsApp|WhatsApp/2.23.20.0' \
+	'Bluesky|Mozilla/5.0 (compatible; Bluesky Cardyb/1.1; +mailto:support@bsky.app)'
+do
+	request_decision GET '/lib/MI3J6SZH' 'text/html' "${preview#*|}"
+	assert_code "${preview%%|*} link preview passes" 204
+done
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; archive.org_bot +http://archive.org/details/archive.org_bot)'
+assert_code 'Internet Archive passes' 204
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)'
+assert_code 'non-AI search crawler passes' 204
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)'
+assert_code 'SEO crawler passes' 204
+
 request_decision GET '/lib/MI3J6SZH' 'text/html' 'Googlebot/2.1'
 assert_code 'recognized search crawler passes' 204
 
@@ -216,9 +246,12 @@ for crawler_index in $(seq 1 25); do
 	fi
 done
 if [ "$crawler_rejections" -eq 0 ]; then
-	printf 'FAIL %-42s no requests were limited\n' 'crawler variants share hostname budget'
+	printf 'FAIL %-42s no requests were limited\n' 'crawler variants share category budget'
 	exit 1
 fi
-printf 'ok   %-42s %s rejected\n' 'crawler variants share hostname budget' "$crawler_rejections"
+printf 'ok   %-42s %s rejected\n' 'crawler variants share category budget' "$crawler_rejections"
+
+request_decision GET '/lib/MI3J6SZH' 'text/html' 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
+assert_code 'search crawl leaves preview budget alone' 204
 
 printf '\nshield contract passed\n'

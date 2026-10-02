@@ -1,13 +1,16 @@
 # Evidence Library browser shield
 
-Origin-side scraper speed bump for the Evidence Library deployments. First-time
-browser visits get a short "Checking your browser" page that sets a cookie via
-JavaScript and reloads; non-JavaScript scrapers stall there. The cookie is then
-required for dynamic pages, APIs, RSC requests, and prefetches. Static assets,
-robots, sitemaps, feeds, exports, unAPI discovery, the authenticated feature
-flag sync, and recognized search or user-triggered crawlers have narrow explicit
-bypasses. Training crawlers are denied, while allowed automated clients still
-share a crawler rate limit.
+Origin-side guard for the Evidence Library deployments. It blocks AI training
+crawlers and networks caught hammering the servers. Everything else gets in:
+every bot in Cloudflare Radar's verified directory that is not a training
+crawler, such as search engines, assistants, link previews, archivers and feed
+readers, plus anyone running a real browser.
+
+Unknown clients get a short "Checking your browser" page that sets a cookie via
+JavaScript and reloads, so scrapers posing as ordinary browsers stall there. The
+cookie lasts 30 days and is then required for dynamic pages, APIs, RSC
+requests, and prefetches. Static assets, robots, sitemaps, feeds, exports,
+unAPI discovery, and the authenticated feature flag sync never need it.
 
 ## How it works
 
@@ -19,9 +22,9 @@ One Traefik `forwardAuth` middleware (`ode-library-shield@file`) asks the
   `403`
 - explicitly denied Cloudflare source IPs are intercepted by a high-priority
   Traefik router and sent to the shield's fixed `403` response
-- training crawlers and known bulk scrapers → `403`
-- recognized search, assistant, and user-triggered crawlers → pass, sharing a
-  3 req/s budget (burst 15) per hostname
+- training crawlers → `403`
+- every other recognized bot → pass. Each Radar category gets its own 3 req/s
+  budget (burst 15) per hostname, so a search crawl cannot starve link previews
 - every client, including blocked crawlers, can fetch `robots.txt`
 - cookie present, or a static/robots/sitemap/feed/export/unAPI/sync path →
   pass
@@ -45,11 +48,13 @@ keeps the last valid map and does not interrupt Nginx.
 [forwardauth/radar-policy.json](forwardauth/radar-policy.json) contains only the
 local policy layer:
 
-- Radar `AI_CRAWLER` bots are blocked as training crawlers.
-- `AI_ASSISTANT`, `AI_SEARCH`, and `SEARCH_ENGINE_CRAWLER` bots are allowed
-  through the shared crawler budget.
-- Explicit additions/removals cover agents whose Radar category does not match
-  the desired policy, plus known bulk SEO scrapers.
+- Radar `AI_CRAWLER` bots are blocked as training crawlers, along with
+  Bytespider, CCBot, and FacebookBot, which Radar does not verify.
+- Every other verified bot is allowed under its Radar category.
+- Explicit additions cover bots Radar misses or matches too narrowly, such as
+  Slack's `Slackbot-LinkExpanding`, WhatsApp, Mastodon, and Perplexity.
+  `CloudVertexBot` is removed from training because it fetches on a user's
+  request.
 
 Optional environment variables on the shield application:
 
@@ -137,4 +142,4 @@ ops/library-shield/probe.sh docs-kaleidoscopio.opendev.space docs.opendeved.net
 Each hostname is checked for: challenge on uncookied HTML, real page with a
 cookie, dynamic API and RSC denial without a cookie, cookied API access,
 `robots.txt` passing, training crawlers receiving `403`, and assistant search
-agents passing through the shared crawler budget.
+agents passing through their category's crawler budget.

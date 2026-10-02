@@ -1,43 +1,14 @@
 {
 	"training": {
 		"categories": ["AI_CRAWLER"],
-		"add": [],
-		"remove": ["Google-CloudVertexBot"]
+		"add": ["Bytespider", "CCBot", "FacebookBot"],
+		"remove": ["CloudVertexBot"]
 	},
 	"allowed": {
-		"categories": [
-			"AI_ASSISTANT",
-			"AI_SEARCH",
-			"SEARCH_ENGINE_CRAWLER"
-		],
-		"add": [
-			"Amzn-SearchBot",
-			"Amzn-User",
-			"BingPreview",
-			"facebookexternalhit",
-			"Google-Agent",
-			"Google-CloudVertexBot",
-			"Google-GeminiNotebook",
-			"Meta-ExternalFetcher",
-			"Meta-WebIndexer"
-		],
-		"remove": []
-	},
-	"blockedScraper": {
-		"categories": [],
-		"add": [
-			"AhrefsBot",
-			"AliyunSecBot",
-			"Baiduspider",
-			"DataForSeoBot",
-			"DotBot",
-			"MJ12bot",
-			"PetalBot",
-			"SemrushBot",
-			"SleepBot",
-			"YandexBot",
-			"YisouSpider"
-		],
-		"remove": []
+		"add": {
+			"AI_ASSISTANT": ["Amzn-User", "Google-GeminiNotebook", "Perplexity-User"],
+			"AI_SEARCH": ["PerplexityBot"],
+			"PAGE_PREVIEW": ["Bluesky Cardyb", "Mastodon/", "redditbot", "Slackbot-LinkExpanding", "WhatsApp/"]
+		}
 	}
 }
