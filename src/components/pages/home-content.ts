@@ -1,5 +1,5 @@
 import type { LibraryHomeConfig } from "@/config/library-config/schema";
-import type { HomeContent, HomeData } from "./HomePage";
+import type { HomeContent, HomeData, StepType } from "./HomePage";
 
 /** What a library shows before anyone answers the Home card: only what is true of every library. */
 export function defaultContent(name: string): HomeContent {
@@ -10,7 +10,7 @@ export function defaultContent(name: string): HomeContent {
 }
 
 /** The Home card's answers as the page draws them: a typed step without a title is named after its type, and a step's chosen editor is looked up among the people OpenScholar filled in. */
-export function contentFrom(home: LibraryHomeConfig, stepTitles: Record<"arrival" | "check" | "publication", string>): HomeContent {
+export function contentFrom(home: LibraryHomeConfig, stepTitles: Record<Exclude<StepType, "text">, string>): HomeContent {
 	const person = (id: string) => home.people.find((entry) => entry.id === id) ?? home.directory.find((entry) => entry.id === id);
 	return {
 		intro: home.intro,
@@ -23,6 +23,7 @@ export function contentFrom(home: LibraryHomeConfig, stepTitles: Record<"arrival
 					title: step.title ?? (step.type === "text" ? "" : stepTitles[step.type]),
 					text: step.text ?? "",
 					editor: editor && { name: editor.name, photo: editor.photo },
+					figure: step.figure,
 				};
 			}),
 		},

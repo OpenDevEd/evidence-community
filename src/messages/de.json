@@ -918,6 +918,10 @@
     "joinSubject": "Mitwirkung als Redakteur",
     "stepArrival": "Eingereicht",
     "stepCheck": "Von der Redaktion geprüft",
-    "stepPublication": "Veröffentlicht"
+    "stepPublication": "Veröffentlicht",
+    "stepSearch": "Per Suche gefunden",
+    "stepSync": "Laufend aktualisiert",
+    "stepDuplicates": "Duplikate zusammengeführt",
+    "stepFullText": "Volltext hinzugefügt"
   }
 }

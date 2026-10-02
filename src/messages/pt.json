@@ -918,6 +918,10 @@
     "joinSubject": "Quero ser editor",
     "stepArrival": "Enviado",
     "stepCheck": "Verificado por um editor",
-    "stepPublication": "Publicado"
+    "stepPublication": "Publicado",
+    "stepSearch": "Encontrado por pesquisa",
+    "stepSync": "Mantido atualizado",
+    "stepDuplicates": "Duplicatas unidas",
+    "stepFullText": "Texto completo adicionado"
   }
 }

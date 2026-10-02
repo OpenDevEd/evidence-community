@@ -918,6 +918,10 @@
     "joinSubject": "Joining as an editor",
     "stepArrival": "Submitted",
     "stepCheck": "Checked by an editor",
-    "stepPublication": "Published"
+    "stepPublication": "Published",
+    "stepSearch": "Found by search",
+    "stepSync": "Kept up to date",
+    "stepDuplicates": "Duplicates merged",
+    "stepFullText": "Full text added"
   }
 }

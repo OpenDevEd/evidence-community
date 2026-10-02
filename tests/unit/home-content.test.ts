@@ -4,7 +4,7 @@ import { contentFrom, defaultContent } from "@/components/pages/home-content";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 
-const stepTitles = { arrival: "Submitted", check: "Checked by an editor", publication: "Published" };
+const stepTitles = { arrival: "Submitted", check: "Checked by an editor", publication: "Published", search: "Found by search", sync: "Kept up to date", duplicates: "Duplicates merged", fulltext: "Full text added" };
 
 function parseHome(home: unknown) {
 	return libraryConfigSchema.safeParse({ ...maximalLibraryConfig, home });

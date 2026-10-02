@@ -918,6 +918,10 @@
     "joinSubject": "Devenir éditeur",
     "stepArrival": "Soumis",
     "stepCheck": "Vérifié par un éditeur",
-    "stepPublication": "Publié"
+    "stepPublication": "Publié",
+    "stepSearch": "Trouvé par recherche",
+    "stepSync": "Tenu à jour",
+    "stepDuplicates": "Doublons fusionnés",
+    "stepFullText": "Texte intégral ajouté"
   }
 }

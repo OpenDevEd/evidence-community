@@ -110,7 +110,15 @@ export default async function Home({ params }: Props) {
 	const { locale } = await params;
 	const t = await getTranslations({ locale, namespace: "homePage" });
 	const about = config.home
-		? contentFrom(config.home, { arrival: t("stepArrival"), check: t("stepCheck"), publication: t("stepPublication") })
+		? contentFrom(config.home, {
+				arrival: t("stepArrival"),
+				check: t("stepCheck"),
+				publication: t("stepPublication"),
+				search: t("stepSearch"),
+				sync: t("stepSync"),
+				duplicates: t("stepDuplicates"),
+				fulltext: t("stepFullText"),
+			})
 		: defaultContent(config.identity.name);
 	// Not awaited: the page renders now and each part built from these figures streams in when they arrive.
 	const data = loadHomeData(locale, config);

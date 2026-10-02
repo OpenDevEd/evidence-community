@@ -919,6 +919,10 @@
     "joinSubject": "Kujiunga kama mhariri",
     "stepArrival": "Imewasilishwa",
     "stepCheck": "Imekaguliwa na mhariri",
-    "stepPublication": "Imechapishwa"
+    "stepPublication": "Imechapishwa",
+    "stepSearch": "Imepatikana kwa utafutaji",
+    "stepSync": "Husasishwa kila mara",
+    "stepDuplicates": "Nakala rudufu zimeunganishwa",
+    "stepFullText": "Maandishi kamili yameongezwa"
   }
 }

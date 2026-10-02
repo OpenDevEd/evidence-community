@@ -918,6 +918,10 @@
     "joinSubject": "संपादक के रूप में जुड़ना",
     "stepArrival": "जमा किया गया",
     "stepCheck": "संपादक द्वारा जाँचा गया",
-    "stepPublication": "प्रकाशित"
+    "stepPublication": "प्रकाशित",
+    "stepSearch": "खोज से मिला",
+    "stepSync": "लगातार अद्यतन",
+    "stepDuplicates": "दोहराव मिलाए गए",
+    "stepFullText": "पूरा पाठ जोड़ा गया"
   }
 }

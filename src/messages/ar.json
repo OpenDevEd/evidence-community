@@ -918,6 +918,10 @@
     "joinSubject": "الانضمام كمحرر",
     "stepArrival": "أُرسل",
     "stepCheck": "راجعه محرر",
-    "stepPublication": "نُشر"
+    "stepPublication": "نُشر",
+    "stepSearch": "عُثر عليه بالبحث",
+    "stepSync": "يُحدَّث باستمرار",
+    "stepDuplicates": "دُمجت النسخ المكررة",
+    "stepFullText": "أُضيف النص الكامل"
   }
 }

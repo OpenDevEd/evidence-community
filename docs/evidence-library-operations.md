@@ -767,6 +767,13 @@ automatically before the next operation.
   whoever approved the followed publication; the directory never reaches the
   browser. Without `home` the page shows a generated introduction and the
   suggestion button.
+- A curation step's type decides what the page fills in. `arrival`, `check`
+  and `publication` follow one publication through review. `search`, `sync`
+  and `duplicates` count from the library's active OpenAlex searches: the
+  words, phrases and topics their OQL looks for, the records added in the last
+  30 days, and the repeats merged away. `fulltext` counts the records with a
+  PDF. A `text` step can carry a figure its owner writes. Each count is set
+  large under the step's name, and a count of nothing shows nothing.
 - The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
   `exports.atom`. It lists the 50 most recently added records.
 - Exports read a fixed list of citation columns. Stored full text, cover

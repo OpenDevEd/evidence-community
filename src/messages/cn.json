@@ -918,6 +918,10 @@
     "joinSubject": "申请成为编辑",
     "stepArrival": "已提交",
     "stepCheck": "经编辑审核",
-    "stepPublication": "已发布"
+    "stepPublication": "已发布",
+    "stepSearch": "经检索收录",
+    "stepSync": "持续更新",
+    "stepDuplicates": "已合并重复记录",
+    "stepFullText": "已添加全文"
   }
 }
