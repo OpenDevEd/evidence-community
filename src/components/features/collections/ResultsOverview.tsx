@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, Tick01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { twMerge } from "@/lib/tw-merge";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
@@ -14,6 +14,7 @@ import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
 import { Link } from "@/i18n/routing";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
+import { resultParams } from "@/lib/searchParams";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -38,9 +39,10 @@ export const SIDEBAR_GREY = "bg-[#E8E6E1] dark:bg-secondary";
  * A block of the sidebar, built as the filter card is: a grey head with the heading and a summary of the block and its
  * content on white. A block with actions keeps them in a grey foot instead, under a white head.
  */
-export function SidebarCard({ id, title, aside, footer, link, band, children }: { id: string; title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; /** A summary of what is below, under the heading in the card's head. */ band?: React.ReactNode; children: React.ReactNode }) {
+export function SidebarCard({ title, aside, footer, link, band, children }: { title: React.ReactNode; aside?: React.ReactNode; footer?: React.ReactNode; link?: { href: string; label: string }; /** A summary of what is below, under the heading in the card's head. */ band?: React.ReactNode; children: React.ReactNode }) {
 	// One grey per card: a card with actions keeps its grey for the foot that holds them, and its head stays white.
 	const hasFoot = Boolean(footer || link);
+	const id = useId();
 	return (
 		// Square on a phone, where the Explore sheet runs every card edge to edge, as the filter card does.
 		<section aria-labelledby={id} className="w-full bg-card_light sm:rounded-2xl dark:bg-card">
@@ -144,12 +146,14 @@ function useYearPicking(range: string, onRangeChange: (start: string | null, end
 		const bar = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-year]");
 		return bar ? Number(bar.dataset.year) : null;
 	};
-	const commit = () => {
+	// The year under the released pointer ends the drag, as its last move may not have rendered yet.
+	const commit = (event?: React.PointerEvent) => {
 		if (!drag) return;
+		const to = (event ? yearAt(event) : null) ?? drag.to;
 		setDrag(null);
-		if (drag.from === drag.to) return;
+		if (drag.from === to) return;
 		dragged.current = true;
-		onRangeChange(String(Math.min(drag.from, drag.to)), String(Math.max(drag.from, drag.to)));
+		onRangeChange(String(Math.min(drag.from, to)), String(Math.max(drag.from, to)));
 	};
 	const surface = {
 		onPointerDown: (event: React.PointerEvent) => {
@@ -166,7 +170,7 @@ function useYearPicking(range: string, onRangeChange: (start: string | null, end
 			setHovered(null);
 			commit();
 		},
-		onPointerUp: commit,
+		onPointerUp: (event: React.PointerEvent) => commit(event),
 		onPointerCancel: () => setDrag(null),
 	};
 	const pick = (year: number) => {
@@ -249,7 +253,6 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 	const readout = yearReadout(axis, picking.hovered, chosen, t);
 	return (
 		<SidebarCard
-			id="results-years"
 			title={t("years")}
 			// One label that the bar pointed at replaces, so nothing beside it moves.
 			band={<HeadFigure value={format.number(readout.value)} label={readout.label} />}
@@ -342,7 +345,6 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 
 	return (
 		<SidebarCard
-			id="results-types"
 			title={t("types")}
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
@@ -458,10 +460,9 @@ function authorCountLabel(format: ReturnType<typeof useFormatter>, authorCount: 
  * minutes: ranking authors is the costliest count the sidebar asks for, so the filters' facets never wait on it. Pages
  * and order don't change it. One year axis serves every row and the band: the last twenty years any of them published in.
  */
-function useTopAuthors() {
+function useTopAuthors(shown: boolean) {
 	const { queryParams } = useFiltersContext();
-	const { page, sort, ...filters } = queryParams;
-	const { data, error, isValidating, mutate } = useSWR<TopAuthors>(buildItemsQuery(filters, "/top-authors"), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
+	const { data, error, isValidating, mutate } = useSWR<TopAuthors>(shown ? buildItemsQuery(resultParams(queryParams), "/top-authors") : null, fetcher, { keepPreviousData: true, revalidateOnFocus: false });
 	const byAuthor = new Map(data?.authors.map((entry) => [entry.name, entry]));
 	const known = Object.keys(data?.combined ?? {}).map(Number).filter((year) => Number.isInteger(year) && year > 1000);
 	const last = known.length ? Math.max(...known) : new Date().getFullYear();
@@ -585,14 +586,13 @@ function spanLabel(span: ReturnType<typeof activeSpan>, axis: number[], t: Trans
  * Pointing at one (or focusing it) shows their span of years in the header, draws their years in the band, and, over
  * the strips of the others, how many results each shares with them.
  */
-function AuthorRows({ selected, onSelect }: { selected: string; onSelect: (author: string) => void }) {
+function AuthorRows({ selected, onSelect, shown }: { selected: string; onSelect: (author: string) => void; shown: boolean }) {
 	const [focused, setFocused] = useState<string | null>(null);
 	const t = useTranslations("sidebar");
-	const authors = useTopAuthors();
+	const authors = useTopAuthors(shown);
 	const focusedYears = focused ? authors.byAuthor.get(focused)?.years : undefined;
 	return (
 		<SidebarCard
-			id="results-authors"
 			title={selected ? t("authorAndCoauthors") : t("topAuthors")}
 			// One label that the author pointed at replaces, so nothing beside it moves.
 			aside={
@@ -656,10 +656,10 @@ function CitedPlaceholders() {
 }
 
 /** The most cited of the results in view, three at most, as the results list would sort them by citations. */
-function useMostCited() {
+function useMostCited(shown: boolean) {
 	const { queryParams } = useFiltersContext();
-	const query = buildItemsQuery({ ...queryParams, sort: "mostCited", page: 1 });
-	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(`${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}`, fetcher, { keepPreviousData: true, revalidateOnFocus: false });
+	const query = buildItemsQuery({ ...resultParams(queryParams), sort: "mostCited", page: 1 });
+	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(shown ? `${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}` : null, fetcher, { keepPreviousData: true, revalidateOnFocus: false });
 	// Kept from the last query while the new one loads: dimmed and out of reach until it matches.
 	return { data, failed: Boolean(error) && !isValidating, isValidating, retry: () => void mutate(), stale: Boolean(data) && isValidating, cited: data?.items.filter((item) => item.citationCount) ?? [] };
 }
@@ -681,17 +681,34 @@ function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
 }
 
 /** The most cited of the results in view, three at most. Its box keeps the height of three rows, so the sidebar never moves as they load or change. */
-function MostCited() {
-	const cited = useMostCited();
+function MostCited({ shown }: { shown: boolean }) {
+	const cited = useMostCited(shown);
 	const t = useTranslations("sidebar");
 	return (
-		<SidebarCard id="results-cited" title={t("mostCited")}>
+		<SidebarCard title={t("mostCited")}>
 			{/* Three rows of a cover beside its count and a two-line title; every state keeps this height. */}
 			<ol aria-busy={cited.isValidating} inert={cited.stale || undefined} className={twMerge("-mx-2 -mt-2 flex h-[20.5rem] flex-col gap-2 overflow-hidden transition-opacity", cited.stale && "opacity-50")}>
 				<CitedList cited={cited} />
 			</ol>
 		</SidebarCard>
 	);
+}
+
+const WIDE = "(min-width: 1024px)";
+
+function subscribeToWidth(onChange: () => void) {
+	const query = window.matchMedia(WIDE);
+	query.addEventListener("change", onChange);
+	return () => query.removeEventListener("change", onChange);
+}
+
+/**
+ * Whether this sidebar is on screen: the page's own shows from the lg breakpoint, where CSS stops hiding it, and
+ * Explore's whenever it is open. Below lg the page's copy stays mounted but hidden, so it must not ask for its own figures.
+ */
+function useShown(inExplore: boolean) {
+	const wide = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(WIDE).matches, () => false);
+	return inExplore || wide;
 }
 
 /** What the results under the current search and filters are made of; every row and bar filters the list. */
@@ -705,6 +722,7 @@ export function ResultsOverview({
 	onAuthorSelect,
 	showYears,
 	showAuthors,
+	inExplore,
 }: {
 	facetDistribution: FacetDistribution | undefined;
 	range: string;
@@ -715,13 +733,15 @@ export function ResultsOverview({
 	onAuthorSelect: (author: string) => void;
 	showYears: boolean;
 	showAuthors: boolean;
+	inExplore: boolean;
 }) {
+	const shown = useShown(inExplore);
 	return (
 		<>
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
-			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} />}
-			<MostCited />
+			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} shown={shown} />}
+			<MostCited shown={shown} />
 		</>
 	);
 }

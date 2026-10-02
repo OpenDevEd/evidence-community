@@ -159,11 +159,7 @@ export function useFilters() {
 
 	const handleAuthorSelect = useCallback(
 		(author: string) => {
-			if (author === params.author) {
-				setParams({ author: "" });
-			} else {
-				setParams({ author });
-			}
+			setParams({ author: author === params.author ? "" : author, page: 1 });
 		},
 		[params.author, setParams],
 	);

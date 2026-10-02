@@ -58,6 +58,7 @@ describe("collection choices for filtered results", () => {
 	let root: Root;
 	beforeEach(() => {
 		vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+		vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);

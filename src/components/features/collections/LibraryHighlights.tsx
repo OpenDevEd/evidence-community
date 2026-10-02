@@ -22,7 +22,7 @@ export async function LibraryHighlights() {
 	return (
 		<div className="flex flex-col gap-4">
 			{latest && digests && (
-				<SidebarCard id="highlights-digests" title={t("latestDigests")} link={{ href: "/digests", label: t("allDigests") }}>
+				<SidebarCard title={t("latestDigests")} link={{ href: "/digests", label: t("allDigests") }}>
 					{/* The digests page's own cover, so an edition looks the same wherever it shows. */}
 					<div className="px-3 pt-2">
 						<DigestCover edition={latest} libraryName={digests.library} href={`/digests/${latest.slug}`} locale={locale} titleAs="h3" />

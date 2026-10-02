@@ -989,7 +989,7 @@ function TopicTreeSection({ counts, onChange, selected }: { counts: Record<strin
 }
 
 /** The cards under the filters: what the results are made of. In the Explore sheet they run edge to edge, as the filter card does. */
-function SidebarCards({ facetDistribution, range, onRangeChange, queryParams }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader> }) {
+function SidebarCards({ facetDistribution, range, onRangeChange, queryParams, inExplore }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; inExplore: boolean }) {
 	const { filters } = useLibraryConfig();
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
@@ -1005,6 +1005,7 @@ function SidebarCards({ facetDistribution, range, onRangeChange, queryParams }: 
 				onAuthorSelect={handleAuthorSelect}
 				showYears={filters.years.enabled}
 				showAuthors={isAuthorFilterEnabled}
+				inExplore={inExplore}
 			/>
 		</div>
 	);
@@ -1099,6 +1100,7 @@ export default function CollectionsList({
 					range={range}
 					onRangeChange={handleRangeChange}
 					queryParams={queryParams}
+					inExplore={isModal}
 				/>
 			</Skeleton>
 			<HighlightsSlot isModal={isModal} />
