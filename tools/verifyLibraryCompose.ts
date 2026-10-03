@@ -380,6 +380,13 @@ function requirePublicationAndWeb(services: Record<string, ComposeService>) {
 		services.web.labels?.["traefik.docker.network"] === "coolify",
 		"The public proxy must reach web through the shared Coolify network",
 	);
+	// Coolify adds these middlewares to every router it creates for web, so a
+	// library's platform address is challenged like its custom domains.
+	requireCondition(
+		services.web.labels?.["coolify.traefik.middlewares"] ===
+			"ode-library-shield@file",
+		"Every address Coolify routes to web must pass through the library shield",
+	);
 	requireCondition(
 		services.web.depends_on?.redis?.condition === "service_healthy",
 		"Web must wait for private Redis",
