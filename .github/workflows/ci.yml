@@ -189,6 +189,9 @@ jobs:
           docker buildx use evidence-library-runtime
           docker buildx inspect --bootstrap
 
+      - name: Check the library compose contract
+        run: npm run test:library-compose
+
       - name: Run end-to-end and integration tests
         env:
           INTEGRATION_DATABASE_URL: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports['5432'] }}/postgres

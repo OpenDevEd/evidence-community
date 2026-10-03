@@ -41,6 +41,10 @@ services:
         labels:
             <<: *runtime-labels
             traefik.docker.network: coolify
+            # Coolify adds these middlewares to every router it creates for
+            # this service, so the platform address gets the browser check
+            # that custom domains get from their own route file.
+            coolify.traefik.middlewares: ode-library-shield@file
         restart: unless-stopped
         expose:
             - "3000"

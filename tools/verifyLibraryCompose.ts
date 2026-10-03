@@ -359,6 +359,19 @@ function requireRuntimeServices(services: Record<string, ComposeService>) {
 	}
 }
 
+function requireProxyLabels(labels: Record<string, string>) {
+	requireCondition(
+		labels["traefik.docker.network"] === "coolify",
+		"The public proxy must reach web through the shared Coolify network",
+	);
+	// Coolify adds these middlewares to every router it creates for web, so a
+	// library's platform address is challenged like its custom domains.
+	requireCondition(
+		labels["coolify.traefik.middlewares"] === "ode-library-shield@file",
+		"Every address Coolify routes to web must pass through the library shield",
+	);
+}
+
 function requirePublicationAndWeb(services: Record<string, ComposeService>) {
 	const publicationWorker = services["publication-worker"];
 	requireCondition(
@@ -376,10 +389,7 @@ function requirePublicationAndWeb(services: Record<string, ComposeService>) {
 		JSON.stringify(services.web.expose) === JSON.stringify(["3000"]),
 		"Only the web service may expose port 3000",
 	);
-	requireCondition(
-		services.web.labels?.["traefik.docker.network"] === "coolify",
-		"The public proxy must reach web through the shared Coolify network",
-	);
+	requireProxyLabels(services.web.labels ?? {});
 	requireCondition(
 		services.web.depends_on?.redis?.condition === "service_healthy",
 		"Web must wait for private Redis",
