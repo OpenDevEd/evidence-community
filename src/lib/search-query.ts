@@ -6,7 +6,7 @@ import {
 	resolveRuntimeSearchScope,
 	type RuntimeSearch,
 } from "@/config/library-config/search";
-import { SORT_OPTIONS } from "@/constants/items";
+import { ITEMS_PER_PAGE, SORT_OPTIONS } from "@/constants/items";
 import { COUNTRIES } from "@/constants/misc";
 import { findEntryByPath } from "./country";
 import { SEARCH_RESULT_LIMIT } from "./search-filter-constants";
@@ -69,9 +69,9 @@ function resolveOffered(
 const isKnownPlace = (place: string) =>
 	Object.hasOwn(COUNTRIES, place) || findEntryByPath(place) !== null;
 
-/** A page that can hold a result. Any other opens on the first. */
-const isReachablePage = (page: number) =>
-	Number.isInteger(page) && page >= 1 && page <= SEARCH_RESULT_LIMIT;
+/** The last page that can hold a result, which depends on how many a page holds. */
+export const lastReachablePage = (perPage: number) =>
+	Math.ceil(SEARCH_RESULT_LIMIT / perPage);
 
 function resolveCountry(
 	places: string[] | undefined,
@@ -94,7 +94,9 @@ function resolveCountry(
 export function resolveSearchQuery<P extends SearchParams>(
 	params: P,
 	config: SearchQueryConfig,
+	perPage: number = ITEMS_PER_PAGE,
 ) {
+	const page = Number(params.page);
 	const resolved = {
 		sort: resolveSort(params.sort),
 		scope: resolveScope(params.scope, config.search),
@@ -120,7 +122,11 @@ export function resolveSearchQuery<P extends SearchParams>(
 			institution: resolved.institution.value,
 			country: resolved.country.value,
 			topics: resolved.topics.value,
-			page: isReachablePage(Number(params.page)) ? Number(params.page) : 1,
+			// A page that cannot hold a result opens on the first.
+			page:
+				Number.isInteger(page) && page >= 1 && page <= lastReachablePage(perPage)
+					? page
+					: 1,
 		},
 		issues: Object.entries(resolved).flatMap(
 			([parameter, { issue }]): QueryIssue[] =>

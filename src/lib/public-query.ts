@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { ITEMS_PER_PAGE, MAX_ITEMS_PER_PAGE } from "@/constants/items";
-import { resolveSearchTopicNodes } from "./search";
 import {
+	lastReachablePage,
 	resolveSearchQuery,
 	type QueryIssue,
 	type SearchQueryConfig,
 } from "./search-query";
-import { SEARCH_RESULT_LIMIT } from "./search-filter-constants";
 import { loadSearchParams, RESULT_PARAMS } from "./searchParams";
 
 const WHOLE_NUMBER = /^[1-9]\d*$/u;
@@ -80,18 +79,21 @@ export function readPublicQuery(
 			? undefined
 			: Number(given("perPage"));
 	const heavy = given("includeHeavyFields");
-	const search = resolveSearchQuery(loadSearchParams(searchParams), config);
+	const search = resolveSearchQuery(
+		loadSearchParams(searchParams),
+		config,
+		perPage,
+	);
 	return {
 		params: search.params,
 		perPage,
 		includeHeavyFields: heavy === "true",
 		issues: [
 			...nameIssues(searchParams, names),
-			// The last page that can hold a result depends on how many a page holds.
 			...numberIssue(
 				"page",
 				given("page"),
-				Math.ceil(SEARCH_RESULT_LIMIT / (perPage ?? ITEMS_PER_PAGE)),
+				lastReachablePage(perPage ?? ITEMS_PER_PAGE),
 			),
 			...perPageIssues,
 			...(heavy === null || heavy === "true" || heavy === "false"
@@ -119,27 +121,10 @@ export async function readPublicRequest(
 	// Read the request first: that is what tells the build this answer cannot
 	// be prepared ahead of time, before it reaches for a library's settings.
 	const searchParams = new URL(request.url).searchParams;
-	const config = await getLibraryConfig();
-	const query = readPublicQuery(searchParams, config, options);
-	// A topic the library does not have would filter nothing and return every result.
-	const topics = new Set(
-		(await resolveSearchTopicNodes(query.params, config)).map(({ id }) => id),
-	);
-	const unknown = query.params.topics.filter((id) => !topics.has(id));
-	const issues = [
-		...query.issues,
-		...(unknown.length > 0
-			? [
-					{
-						parameter: "topics",
-						message: `topics takes the IDs the library lists. Unknown: ${unknown.join(", ")}.`,
-					},
-				]
-			: []),
-	];
-	if (issues.length === 0) return query;
+	const query = readPublicQuery(searchParams, await getLibraryConfig(), options);
+	if (query.issues.length === 0) return query;
 	return NextResponse.json(
-		{ error: issues[0]?.message, issues },
+		{ error: query.issues[0]?.message, issues: query.issues },
 		{ status: 400, headers: { "Cache-Control": "no-store" } },
 	);
 }

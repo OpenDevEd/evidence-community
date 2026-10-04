@@ -222,10 +222,11 @@ export function resolveSearchRequest(
 		topics?: { enabled: boolean };
 	},
 	topicNodes: readonly TopicSelectionNode[] = [],
+	perPage: number = ITEMS_PER_PAGE,
 ) {
 	const {
 		params: { page: pageNum, scope, institution, country, range, topics },
-	} = resolveSearchQuery(searchParams, libraryConfig);
+	} = resolveSearchQuery(searchParams, libraryConfig, perPage);
 	const search = searchParams.search || "";
 	const facetFilters = buildSearchFilters({
 		author: searchParams.author || "",
@@ -237,7 +238,10 @@ export function resolveSearchRequest(
 		range,
 		scope,
 	});
-	const topicIds = selectionFrontier(topics, topicNodes);
+	// A topic the library does not have matches nothing, as an unknown type
+	// does. Left out of the filter, it would match everything.
+	const known = selectionFrontier(topics, topicNodes);
+	const topicIds = known.length > 0 ? known : topics;
 	const finalFilters = [
 		...facetFilters,
 		...(topicIds.length ? [meilisearchIn("topicAncestors", topicIds)] : []),
@@ -331,7 +335,12 @@ export async function getPublicItems(
 		sortOption,
 		finalFilters,
 		attributesToSearchOn,
-	} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
+	} = resolveSearchRequest(
+		searchParams,
+		libraryConfig,
+		topicNodes,
+		options.perPage,
+	);
 
 	const pageSize = options.perPage ?? limitNum;
 	const page = pageNum;

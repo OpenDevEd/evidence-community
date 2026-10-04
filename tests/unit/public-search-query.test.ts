@@ -2,12 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/config/library-config/server", () => ({
-	getLibraryConfig: async () => served.config,
-}));
-// The topic catalogue knows one topic.
-vi.mock("@/lib/search", () => ({
-	resolveSearchTopicNodes: async (params: { topics?: string[] }) =>
-		(params.topics ?? []).flatMap((id) => (id === "T1" ? [{ id, parent: null }] : [])),
+	getLibraryConfig: async () => config,
 }));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -23,7 +18,6 @@ import {
 const config = projectPublicLibraryConfig(
 	libraryConfigSchema.parse(cloneLibraryConfig(maximalLibraryConfig)),
 );
-const served = { config };
 const items = { paged: true, perPage: true, includeHeavyFields: true } as const;
 const read = (query: string, options: Parameters<typeof readPublicQuery>[2] = items) =>
 	readPublicQuery(new URLSearchParams(query), config, options);
@@ -131,22 +125,6 @@ describe("the answer to a request an endpoint cannot honour", () => {
 		]);
 	});
 
-	it("names a topic the library does not have, which would otherwise filter nothing", async () => {
-		served.config = { ...config, topics: { enabled: true } };
-		const refused = await readPublicRequest(
-			new Request("https://library.example.org/api/items?topics=T1,T999"),
-			items,
-		);
-		const accepted = await readPublicRequest(
-			new Request("https://library.example.org/api/items?topics=T1"),
-			items,
-		);
-		served.config = config;
-		if (!(refused instanceof Response)) throw new Error("The request was accepted");
-		expect((await refused.json()).error).toContain("T999");
-		expect(accepted).toMatchObject({ params: { topics: ["T1"] } });
-	});
-
 	it("is the search itself when the request is sound", async () => {
 		const answer = await readPublicRequest(
 			new Request("https://library.example.org/api/items?search=tutoring&perPage=50"),
@@ -174,10 +152,18 @@ describe("a page address", () => {
 	});
 
 	it("opens on the first page when the page number is beyond any result", () => {
-		const { params } = resolveSearchQuery(
-			loadSearchParams(new URLSearchParams("page=1000000000000000000000")),
-			config,
-		);
-		expect(params.page).toBe(1);
+		const page = (query: string, perPage?: number) =>
+			resolveSearchQuery(
+				loadSearchParams(new URLSearchParams(query)),
+				config,
+				perPage,
+			).params.page;
+		expect(page("page=1000000000000000000000")).toBe(1);
+		// A listing holds 20 a page, so its last page is 500,000: the same one the API accepts.
+		expect(page("page=500000")).toBe(500000);
+		expect(page("page=500001")).toBe(1);
+		expect(named("page=500001")).toEqual(["page"]);
+		// A smaller page reaches further.
+		expect(page("page=500001", 1)).toBe(500001);
 	});
 });
