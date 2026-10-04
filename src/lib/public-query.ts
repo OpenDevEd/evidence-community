@@ -116,8 +116,11 @@ export async function readPublicRequest(
 	request: Request,
 	options?: EndpointOptions,
 ) {
+	// Read the request first: that is what tells the build this answer cannot
+	// be prepared ahead of time, before it reaches for a library's settings.
+	const searchParams = new URL(request.url).searchParams;
 	const config = await getLibraryConfig();
-	const query = readPublicQuery(new URL(request.url).searchParams, config, options);
+	const query = readPublicQuery(searchParams, config, options);
 	// A topic the library does not have would filter nothing and return every result.
 	const topics = new Set(
 		(await resolveSearchTopicNodes(query.params, config)).map(({ id }) => id),
