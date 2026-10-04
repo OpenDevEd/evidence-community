@@ -127,6 +127,8 @@ workflow.
 
 - During implementation, run the smallest local test, type check, lint target,
   or service check that can catch the current defect.
+- Before every push, run `npm run quality:fallow -- --base origin/main` and fix
+  what it reports. It takes about a second, and CI blocks on the same check.
 - Use red, green, clean up for new plain logic. Use test-after for integration
   work where the real boundary must exist first.
 - Test behavior, roles, labels, data, API responses, database state, and real
