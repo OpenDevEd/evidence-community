@@ -25,7 +25,7 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Pagination } from "@/components/nextui/Pagination";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import { searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
+import { listingParams, searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -275,7 +275,7 @@ export default function NavbarSearch() {
 	// An empty search is a valid query (it just browses everything matching the
 	// current scope/filters), so we gate the fetch on the dropdown being open
 	// rather than on there being search text — only fetching when it's shown.
-	const query = isOpen ? buildItemsQuery(runtimeParams, "/items") : null;
+	const query = isOpen ? buildItemsQuery(listingParams(runtimeParams), "/items") : null;
 
 	const { data, isLoading, isValidating } = useSWR<ItemsGetResponse>(
 		query,

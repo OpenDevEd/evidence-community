@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/config/library-config/server", () => ({
-	getLibraryConfig: async () => config,
+	getLibraryConfig: async () => served.config,
+}));
+// The topic catalogue knows one topic.
+vi.mock("@/lib/search", () => ({
+	resolveSearchTopicNodes: async (params: { topics?: string[] }) =>
+		(params.topics ?? []).flatMap((id) => (id === "T1" ? [{ id, parent: null }] : [])),
 }));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -18,7 +23,8 @@ import {
 const config = projectPublicLibraryConfig(
 	libraryConfigSchema.parse(cloneLibraryConfig(maximalLibraryConfig)),
 );
-const items = { perPage: true, includeHeavyFields: true } as const;
+const served = { config };
+const items = { paged: true, perPage: true, includeHeavyFields: true } as const;
 const read = (query: string, options: Parameters<typeof readPublicQuery>[2] = items) =>
 	readPublicQuery(new URLSearchParams(query), config, options);
 const named = (query: string, options?: Parameters<typeof readPublicQuery>[2]) =>
@@ -47,8 +53,17 @@ describe("a request to a public list endpoint", () => {
 
 	it("names an option the endpoint does not have", () => {
 		expect(named("search=tutoring&paperLikeOnly=true")).toEqual(["paperLikeOnly"]);
-		// The facets endpoint has no page size.
-		expect(named("search=tutoring&perPage=50", {})).toEqual(["perPage"]);
+		// The facets endpoint has no page, order or page size.
+		expect(named("search=tutoring&perPage=50&page=2&sort=bogus", {})).toEqual([
+			"perPage",
+			"page",
+			"sort",
+		]);
+		// Where a reader came from stays on the page; the API has no use for it.
+		expect(named("search=tutoring&referrer=%2Flib&message=hello")).toEqual([
+			"referrer",
+			"message",
+		]);
 	});
 
 	it("names a sort or scope the library does not offer, and lists the ones it does", () => {
@@ -70,6 +85,10 @@ describe("a request to a public list endpoint", () => {
 		expect(named("page=two")).toEqual(["page"]);
 		// Past the last result any library can return.
 		expect(named("page=1000000000000000000000")).toEqual(["page"]);
+		// The last page depends on how many results a page holds.
+		expect(named("page=100000&perPage=100")).toEqual([]);
+		expect(named("page=100001&perPage=100")).toEqual(["page"]);
+		expect(named("page=100001")).toEqual([]);
 		expect(named("perPage=0")).toEqual(["perPage"]);
 		expect(named("perPage=101")).toEqual(["perPage"]);
 		expect(named("perPage=20.5")).toEqual(["perPage"]);
@@ -110,6 +129,22 @@ describe("the answer to a request an endpoint cannot honour", () => {
 			"paperLikeOnly",
 			"sort",
 		]);
+	});
+
+	it("names a topic the library does not have, which would otherwise filter nothing", async () => {
+		served.config = { ...config, topics: { enabled: true } };
+		const refused = await readPublicRequest(
+			new Request("https://library.example.org/api/items?topics=T1,T999"),
+			items,
+		);
+		const accepted = await readPublicRequest(
+			new Request("https://library.example.org/api/items?topics=T1"),
+			items,
+		);
+		served.config = config;
+		if (!(refused instanceof Response)) throw new Error("The request was accepted");
+		expect((await refused.json()).error).toContain("T999");
+		expect(accepted).toMatchObject({ params: { topics: ["T1"] } });
 	});
 
 	it("is the search itself when the request is sound", async () => {

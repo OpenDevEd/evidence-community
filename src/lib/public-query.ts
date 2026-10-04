@@ -1,17 +1,33 @@
 import { NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { MAX_ITEMS_PER_PAGE } from "@/constants/items";
+import { ITEMS_PER_PAGE, MAX_ITEMS_PER_PAGE } from "@/constants/items";
+import { resolveSearchTopicNodes } from "./search";
 import {
 	resolveSearchQuery,
 	type QueryIssue,
 	type SearchQueryConfig,
 } from "./search-query";
 import { SEARCH_RESULT_LIMIT } from "./search-filter-constants";
-import { loadSearchParams, searchParamsLoader } from "./searchParams";
+import { loadSearchParams, RESULT_PARAMS } from "./searchParams";
 
 const WHOLE_NUMBER = /^[1-9]\d*$/u;
-/** The options an endpoint may have besides the search itself. */
-type EndpointOptions = { perPage?: boolean; includeHeavyFields?: boolean };
+/** What an endpoint takes besides the search itself. */
+type EndpointOptions = {
+	/** A page of the results, in an order. */
+	paged?: boolean;
+	perPage?: boolean;
+	includeHeavyFields?: boolean;
+};
+
+/** Every option this endpoint has. A page address carries more, which stay on the page. */
+function endpointNames(options: EndpointOptions) {
+	return new Set<string>([
+		...RESULT_PARAMS,
+		...(options.paged ? ["page", "sort"] : []),
+		...(options.perPage ? ["perPage"] : []),
+		...(options.includeHeavyFields ? ["includeHeavyFields"] : []),
+	]);
+}
 
 /** Names the endpoint does not have, and names given more than once. */
 function nameIssues(searchParams: URLSearchParams, names: Set<string>) {
@@ -56,23 +72,28 @@ export function readPublicQuery(
 	config: SearchQueryConfig,
 	options: EndpointOptions = {},
 ) {
-	const names = new Set([
-		...Object.keys(searchParamsLoader),
-		...Object.keys(options),
-	]);
-	const perPage = options.perPage ? searchParams.get("perPage") : null;
-	const heavy = options.includeHeavyFields
-		? searchParams.get("includeHeavyFields")
-		: null;
+	const names = endpointNames(options);
+	const given = (name: string) => (names.has(name) ? searchParams.get(name) : null);
+	const perPageIssues = numberIssue("perPage", given("perPage"), MAX_ITEMS_PER_PAGE);
+	const perPage =
+		given("perPage") === null || perPageIssues.length > 0
+			? undefined
+			: Number(given("perPage"));
+	const heavy = given("includeHeavyFields");
 	const search = resolveSearchQuery(loadSearchParams(searchParams), config);
 	return {
 		params: search.params,
-		perPage: perPage === null ? undefined : Number(perPage),
+		perPage,
 		includeHeavyFields: heavy === "true",
 		issues: [
 			...nameIssues(searchParams, names),
-			...numberIssue("page", searchParams.get("page"), SEARCH_RESULT_LIMIT),
-			...numberIssue("perPage", perPage, MAX_ITEMS_PER_PAGE),
+			// The last page that can hold a result depends on how many a page holds.
+			...numberIssue(
+				"page",
+				given("page"),
+				Math.ceil(SEARCH_RESULT_LIMIT / (perPage ?? ITEMS_PER_PAGE)),
+			),
+			...perPageIssues,
 			...(heavy === null || heavy === "true" || heavy === "false"
 				? []
 				: [
@@ -81,7 +102,8 @@ export function readPublicQuery(
 							message: "includeHeavyFields must be true or false.",
 						},
 					]),
-			...search.issues,
+			// An option the endpoint does not have is already named above.
+			...search.issues.filter(({ parameter }) => names.has(parameter)),
 		],
 	};
 }
@@ -94,14 +116,27 @@ export async function readPublicRequest(
 	request: Request,
 	options?: EndpointOptions,
 ) {
-	const query = readPublicQuery(
-		new URL(request.url).searchParams,
-		await getLibraryConfig(),
-		options,
+	const config = await getLibraryConfig();
+	const query = readPublicQuery(new URL(request.url).searchParams, config, options);
+	// A topic the library does not have would filter nothing and return every result.
+	const topics = new Set(
+		(await resolveSearchTopicNodes(query.params, config)).map(({ id }) => id),
 	);
-	if (query.issues.length === 0) return query;
+	const unknown = query.params.topics.filter((id) => !topics.has(id));
+	const issues = [
+		...query.issues,
+		...(unknown.length > 0
+			? [
+					{
+						parameter: "topics",
+						message: `topics takes the IDs the library lists. Unknown: ${unknown.join(", ")}.`,
+					},
+				]
+			: []),
+	];
+	if (issues.length === 0) return query;
 	return NextResponse.json(
-		{ error: query.issues[0]?.message, issues: query.issues },
+		{ error: issues[0]?.message, issues },
 		{ status: 400, headers: { "Cache-Control": "no-store" } },
 	);
 }

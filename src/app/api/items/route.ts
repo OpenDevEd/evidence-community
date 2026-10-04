@@ -6,6 +6,7 @@ import { readPublicRequest } from "@/lib/public-query";
 
 export async function GET(request: NextRequest) {
 	const query = await readPublicRequest(request, {
+		paged: true,
 		perPage: true,
 		includeHeavyFields: true,
 	});
