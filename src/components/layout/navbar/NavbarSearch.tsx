@@ -25,7 +25,7 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Pagination } from "@/components/nextui/Pagination";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import { searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
+import { listingParams, searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -35,9 +35,9 @@ import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import {
 	getRuntimeSearchScopeOptions,
-	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
+import { resolveSearchQuery } from "@/lib/search-query";
 import {
 	PublicationHoverPreview,
 	PublicationStatusBadges,
@@ -200,6 +200,7 @@ export default function NavbarSearch() {
 		filters,
 		institutions: configuredInstitutions,
 		search,
+		topics,
 	} = useLibraryConfig();
 
 	// The item currently being viewed (when the bar is on an item/citation page),
@@ -218,15 +219,8 @@ export default function NavbarSearch() {
 	const scope = resolveRuntimeSearchScope(params.scope, search);
 	const sort = params.sort;
 	const runtimeParams = useMemo(
-		() => ({
-			...params,
-			scope,
-			range: normalizeRuntimeYearRange(params.range, filters),
-			institution:
-				filters.institution.mode === "hidden" ? [] : params.institution,
-			country: search.country ? params.country : [],
-		}),
-		[filters, params, scope, search],
+		() => resolveSearchQuery(params, { filters, search, topics }).params,
+		[filters, params, search, topics],
 	);
 
 	// How many library filters (collections / institutions / author / countries)
@@ -281,7 +275,7 @@ export default function NavbarSearch() {
 	// An empty search is a valid query (it just browses everything matching the
 	// current scope/filters), so we gate the fetch on the dropdown being open
 	// rather than on there being search text — only fetching when it's shown.
-	const query = isOpen ? buildItemsQuery(runtimeParams, "/items") : null;
+	const query = isOpen ? buildItemsQuery(listingParams(runtimeParams), "/items") : null;
 
 	const { data, isLoading, isValidating } = useSWR<ItemsGetResponse>(
 		query,

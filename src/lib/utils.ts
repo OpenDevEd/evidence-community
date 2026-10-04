@@ -1,7 +1,7 @@
 import { Item } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
-import { loadSearchParams, serializeSearchParams } from "./searchParams";
+import { loadSearchParams, resultParams, serializeSearchParams } from "./searchParams";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 
 export function parseRequestLinks(value: string) {
@@ -101,8 +101,7 @@ export function buildItemsQuery(params: any, url: string = "/items"): string {
 export function buildFacetsQuery(params: any): string {
 	// Facets depend on the filters, not on page/sort — dropping them keeps the
 	// SWR key stable across pagination and sorting so the request edge-caches.
-	const { page, sort, ...facetParams } = params;
-	return `/facets${serializeSearchParams(facetParams)}`;
+	return `/facets${serializeSearchParams(resultParams(params))}`;
 }
 
 export function firstNonNullOrEmpty<T>(

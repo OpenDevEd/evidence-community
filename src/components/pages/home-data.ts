@@ -185,7 +185,7 @@ async function countHomeData(now: Date, locale: string, home: LibraryHomeConfig 
  * so the first cards of every view come with the page. One small search per view, side by side.
  */
 async function rowExamples(filters: string[]): Promise<HomeData["examples"]> {
-	return Object.fromEntries(await Promise.all(filters.map(async (filter) => [examplesKey(filter), await getPublicItems(defaultParams(new URLSearchParams(`${filter}&sort=desc`)), { limit: 2 })] as const)));
+	return Object.fromEntries(await Promise.all(filters.map(async (filter) => [examplesKey(filter), await getPublicItems(defaultParams(new URLSearchParams(`${filter}&sort=desc`)), { perPage: 2 })] as const)));
 }
 
 /**
@@ -268,7 +268,7 @@ async function coversOf(keys: string[]): Promise<Record<string, string>> {
 
 /** The first three publications of the "Most cited" sort that anything cites. */
 async function mostCited() {
-	const { items } = await getPublicItems({ sort: "mostCited" }, { limit: 3 });
+	const { items } = await getPublicItems({ sort: "mostCited" }, { perPage: 3 });
 	return items.flatMap((row) =>
 		row.citationCount ? [{ key: row.key, title: row.title || row.key, citations: row.citationCount }] : [],
 	);

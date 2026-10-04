@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo } from "react";
 import useSWR from "swr";
 import { usePathname } from "next/navigation";
 import { fetcher, buildItemsQuery } from "@/lib/utils";
+import { listingParams } from "@/lib/searchParams";
 import { CacheContext, useLastFetchedData } from "@/context/Providers";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { useFiltersContext } from "@/context/FiltersProvider";
@@ -23,10 +24,9 @@ function useItemsResults(
 
 	const itemsQuery = useMemo(
 		() =>
-			buildItemsQuery(
-				params,
-				userData ? `/user/items/${userData.id}` : "/items"
-			),
+			userData
+				? buildItemsQuery(params, `/user/items/${userData.id}`)
+				: buildItemsQuery(listingParams(params), "/items"),
 		[params, userData]
 	);
 

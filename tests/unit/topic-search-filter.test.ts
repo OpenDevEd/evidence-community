@@ -44,6 +44,16 @@ describe("topic search filters", () => {
 		);
 	});
 
+	it("matches nothing for a topic the library does not have, where no filter would match everything", () => {
+		const request = resolveSearchRequest(
+			{ topics: ["T999"] },
+			{ ...config, topics: { enabled: true } },
+			nodes,
+		);
+
+		expect(request.finalFilters).toContain('topicAncestors IN ["T999"]');
+	});
+
 	it("ignores topic URL state when the feature is disabled", () => {
 		const request = resolveSearchRequest(
 			{ topics: ["T12260"] },

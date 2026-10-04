@@ -19,10 +19,7 @@ import {
 import { isAdminPath, normalizePathname } from "@/lib/path";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
-import {
-	normalizeRuntimeYearRange,
-	resolveRuntimeSearchScope,
-} from "@/config/library-config/search";
+import { resolveSearchQuery } from "@/lib/search-query";
 
 const SWR_OPTIONS = {
 	keepPreviousData: true,
@@ -67,17 +64,11 @@ export function useFilters() {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 	const config = useLibraryConfig();
 	const { features, filters, search } = config;
+	// What the address says, put right for this library, so the API is only
+	// ever asked for a search it offers.
 	const runtimeParams = useMemo(
-		() => ({
-			...params,
-			scope: resolveRuntimeSearchScope(params.scope, search),
-			range: normalizeRuntimeYearRange(params.range, filters),
-			institution:
-				filters.institution.mode === "hidden" ? [] : params.institution,
-			country: search.country ? params.country : [],
-			topics: config.topics.enabled ? params.topics : [],
-		}),
-		[config.topics.enabled, filters, params, search],
+		() => resolveSearchQuery(params, { filters, search, topics: config.topics }).params,
+		[config.topics, filters, params, search],
 	);
 
 	// Raw search params, only needed downstream for atom-feed serialization.
