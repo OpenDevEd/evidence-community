@@ -35,9 +35,9 @@ import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import {
 	getRuntimeSearchScopeOptions,
-	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
+import { resolveSearchQuery } from "@/lib/search-query";
 import {
 	PublicationHoverPreview,
 	PublicationStatusBadges,
@@ -200,6 +200,7 @@ export default function NavbarSearch() {
 		filters,
 		institutions: configuredInstitutions,
 		search,
+		topics,
 	} = useLibraryConfig();
 
 	// The item currently being viewed (when the bar is on an item/citation page),
@@ -218,15 +219,8 @@ export default function NavbarSearch() {
 	const scope = resolveRuntimeSearchScope(params.scope, search);
 	const sort = params.sort;
 	const runtimeParams = useMemo(
-		() => ({
-			...params,
-			scope,
-			range: normalizeRuntimeYearRange(params.range, filters),
-			institution:
-				filters.institution.mode === "hidden" ? [] : params.institution,
-			country: search.country ? params.country : [],
-		}),
-		[filters, params, scope, search],
+		() => resolveSearchQuery(params, { filters, search, topics }).params,
+		[filters, params, search, topics],
 	);
 
 	// How many library filters (collections / institutions / author / countries)

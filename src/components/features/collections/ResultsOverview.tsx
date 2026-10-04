@@ -659,7 +659,7 @@ function CitedPlaceholders() {
 function useMostCited(shown: boolean) {
 	const { queryParams } = useFiltersContext();
 	const query = buildItemsQuery({ ...resultParams(queryParams), sort: "mostCited", page: 1 });
-	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(shown ? `${query}${query.includes("?") ? "&" : "?"}limit=${CITED_SHOWN}` : null, fetcher, { keepPreviousData: true, revalidateOnFocus: false });
+	const { data, error, isValidating, mutate } = useSWR<ItemsGetResponse>(shown ? `${query}${query.includes("?") ? "&" : "?"}perPage=${CITED_SHOWN}` : null, fetcher, { keepPreviousData: true, revalidateOnFocus: false });
 	// Kept from the last query while the new one loads: dimmed and out of reach until it matches.
 	return { data, failed: Boolean(error) && !isValidating, isValidating, retry: () => void mutate(), stale: Boolean(data) && isValidating, cited: data?.items.filter((item) => item.citationCount) ?? [] };
 }

@@ -3,6 +3,8 @@ export {
 } from "@/config/library-config/catalogs";
 
 export const ITEMS_PER_PAGE = 20;
+/** The most results one request may ask for. More than this is what paging is for. */
+export const MAX_ITEMS_PER_PAGE = 100;
 
 export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment", "Annotation"];
 

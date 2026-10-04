@@ -48,4 +48,4 @@ export function firstFilters(rows: ReturnType<typeof listedRows>) {
 }
 
 /** Where the explorer asks for a row's two newest publications; the server sends its answers under the same address. */
-export const examplesKey = (filter: string) => `/items?${filter}&sort=desc&limit=2`;
+export const examplesKey = (filter: string) => `/items?${filter}&sort=desc&perPage=2`;

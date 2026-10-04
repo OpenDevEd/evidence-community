@@ -12,8 +12,6 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import {
 	getRuntimeSearchAttributes,
 	getRuntimeSearchFacets,
-	normalizeRuntimeYearRange,
-	resolveRuntimeSearchScope,
 	type RuntimeSearch,
 } from "@/config/library-config/search";
 import type {
@@ -26,6 +24,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getMeilisearchForConfig } from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
+import { resolveSearchQuery } from "./search-query";
 import { formatRange } from "./utils";
 import { meilisearchEquals, meilisearchIn } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
@@ -224,19 +223,10 @@ export function resolveSearchRequest(
 	},
 	topicNodes: readonly TopicSelectionNode[] = [],
 ) {
-	const pageNum = Math.max(1, Number(searchParams.page || 1));
+	const {
+		params: { page: pageNum, scope, institution, country, range, topics },
+	} = resolveSearchQuery(searchParams, libraryConfig);
 	const search = searchParams.search || "";
-	const scope = resolveRuntimeSearchScope(
-		searchParams.scope,
-		libraryConfig.search,
-	);
-	const institution =
-		libraryConfig.filters.institution.mode === "hidden"
-			? []
-			: searchParams.institution || [];
-	const country = libraryConfig.search.country
-		? searchParams.country || []
-		: [];
 	const facetFilters = buildSearchFilters({
 		author: searchParams.author || "",
 		collections: searchParams.collections || [],
@@ -244,15 +234,10 @@ export function resolveSearchRequest(
 		country,
 		hiddenTags: libraryConfig.content.tags.hidden,
 		institution,
-		range: normalizeRuntimeYearRange(
-			searchParams.range,
-			libraryConfig.filters,
-		),
+		range,
 		scope,
 	});
-	const topicIds = libraryConfig.topics?.enabled
-		? selectionFrontier(searchParams.topics ?? [], topicNodes)
-		: [];
+	const topicIds = selectionFrontier(topics, topicNodes);
 	const finalFilters = [
 		...facetFilters,
 		...(topicIds.length ? [meilisearchIn("topicAncestors", topicIds)] : []),
@@ -329,8 +314,8 @@ export async function getPublicItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	options: {
 		includeHeavyFields?: boolean;
-		/** Fewer results than a listing page, from the start of the list: a preview. */
-		limit?: number;
+		/** Results on one page, when not a listing page's worth. */
+		perPage?: number;
 	} = {},
 ): Promise<SearchItemsResult> {
 	const libraryConfig = await getLibraryConfig();
@@ -348,10 +333,8 @@ export async function getPublicItems(
 		attributesToSearchOn,
 	} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
-	const pageSize = options.limit
-		? Math.min(Math.max(1, Math.floor(options.limit)), limitNum)
-		: limitNum;
-	const page = options.limit ? 1 : pageNum;
+	const pageSize = options.perPage ?? limitNum;
+	const page = pageNum;
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
 		? displayedAttributes
