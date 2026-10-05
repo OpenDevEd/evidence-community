@@ -1,6 +1,6 @@
 import { Cite } from "@citation-js/core";
 import { describe, expect, it } from "vitest";
-import { exportCitationItems } from "@/lib/citation-export";
+import { exportCitationItems, formatCitationExport } from "@/lib/citation-export";
 import { itemToCitationData } from "@/lib/citation-data";
 import { formatCitations } from "@/lib/citation-formatter";
 
@@ -17,6 +17,87 @@ const report = {
 };
 
 describe("citation downloads", () => {
+	it.each([
+		[{ firstName: "John", lastName: "Smith, Jr." }, "{Smith, Jr.}, John"],
+		[{ firstName: "John, Jr.", lastName: "Smith" }, "Smith, {John, Jr.}"],
+		[{ name: "Research and Development" }, "{Research and Development}"],
+		[{ name: "Smith, Jr., John" }, "{Smith, Jr., John}"],
+		[{ firstName: "Research And Development", lastName: "Team" }, "Team, {Research And Development}"],
+		[{ firstName: "LLP", lastName: "Ernst AND Young" }, "{Ernst AND Young}, LLP"],
+		[{ firstName: "Research\tand\tDevelopment", lastName: "Team" }, "Team, {Research\tand\tDevelopment}"],
+	])("protects BibTeX name parts from delimiter parsing: %j", (creator, encoded) => {
+		const bib = exportCitationItems([{ ...report, creators: [{ ...creator, creatorType: "author" }] }], "bibtex");
+		expect(bib).toContain(`author = {${encoded}}`);
+	});
+	it("does not add empty RIS notes to ordinary creator names", () => {
+		const ris = exportCitationItems([{ ...report, creators: [{ firstName: "Sam", lastName: "Park", creatorType: "author" }] }], "ris");
+		expect(ris).not.toMatch(/^N1\s+-\s*$/m);
+	});
+
+	it.each(["article", "thesis"])("preserves the access date alongside the %s publication note", type => {
+		const data = { ...itemToCitationData(report)!, type, accessed: { "date-parts": [[2025, 1, 2]] } };
+		const bib = formatCitationExport(data, "bibtex");
+		expect(new Cite(bib).data[0].accessed).toEqual(data.accessed);
+		expect(bib).toContain("Publication type:");
+	});
+
+	it("separates the RIS publication type from its creator recovery note", () => {
+		const ris = exportCitationItems([{ ...report, itemType: "Thesis" }], "ris");
+		expect(ris).toContain("Publication type: Thesis. RIS import");
+	});
+
+	it("retains original ambiguous RIS creator names in an HTML-safe recovery note", () => {
+		const creators = [{ name: "Équipe <R&D>, unité 2", creatorType: "author" }, { firstName: "John", lastName: "Smith, Jr.", creatorType: "editor" }];
+		const ris = exportCitationItems([{ ...report, creators }], "ris");
+		const note = String(new Cite(ris).data[0].note);
+		expect(note).toContain("Équipe &lt;R&amp;D&gt;, unité 2");
+		expect(note).toContain("Smith, Jr.");
+		expect(note).toContain("John");
+		expect(note).not.toContain("<R&D>");
+	});
+
+	it("keeps preprints distinct from journal articles without changing their CSL display type", async () => {
+		const item = { ...report, itemType: "Preprint" };
+		const data = itemToCitationData(item)!;
+		expect(data.type).toBe("article");
+		const ris = exportCitationItems([item], "ris");
+		expect(ris).toMatch(/^TY  - MANSCPT\n/);
+		expect(ris).toContain("M3  - Preprint");
+		expect(ris).toContain("Publication type: Preprint");
+		const bib = exportCitationItems([item], "bibtex");
+		expect(bib).toMatch(/^@unpublished\{/);
+		expect(bib).toContain("type = {Preprint}");
+		expect(bib).toContain("Publication type: Preprint");
+		expect((await formatCitations(data, "en-GB")).bibtex.text).toBe(bib);
+		expect(data.type).toBe("article");
+		expect(exportCitationItems([{ ...item, itemType: "JournalArticle" }], "ris")).toMatch(/^TY  - JOUR\n/);
+	});
+
+	it.each([
+		[undefined, "misc", "Thesis"],
+		["Diploma thesis", "misc", "Diploma thesis"],
+		["Master's thesis", "mastersthesis", "Master's thesis"],
+		["Doctoral thesis", "phdthesis", "Doctoral thesis"],
+		["Doctoral dissertation", "phdthesis", "Doctoral dissertation"],
+		["PhD dissertation", "phdthesis", "PhD dissertation"],
+		["Ph.D. thesis", "phdthesis", "Ph.D. thesis"],
+		["PhD", "phdthesis", "PhD"],
+		["MSc thesis", "mastersthesis", "MSc thesis"],
+		["Master’s thesis", "mastersthesis", "Master’s thesis"],
+	])("preserves thesis type %s without inventing a degree", (type, bibType, genre) => {
+		const item = { ...report, itemType: "Thesis", type };
+		const bib = exportCitationItems([item], "bibtex");
+		expect(bib).toMatch(new RegExp(`^@${bibType}\\{`));
+		expect(bib).toContain("Publication type: Thesis");
+		if (bibType === "misc") expect(bib).toContain(`type = {${genre}}`);
+		const ris = exportCitationItems([item], "ris");
+		expect(ris).toMatch(/^TY  - THES\n/);
+		expect(ris).toContain(`M3  - ${genre}`);
+	});
+
+	it("does not turn a report into a thesis based on its report-type label", () => {
+		expect(exportCitationItems([{ ...report, type: "Doctoral thesis" }], "bibtex")).toMatch(/^@techreport\{/);
+	});
 	it.each([undefined, "https://library.example"])("matches the picker BibTeX with library base URL %s", async baseUrl => {
 		const citations = await formatCitations(itemToCitationData(report)!, "en-GB", baseUrl ? `${baseUrl}/lib/REPORT01` : undefined);
 		const download = exportCitationItems([report], "bibtex", baseUrl);

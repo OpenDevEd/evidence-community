@@ -12,13 +12,17 @@ index 806bae3..d974d09 100644
    biber: {
      annotationMarker: '+an',
 diff --git a/node_modules/@citation-js/plugin-bibtex/lib-mjs/mapping/bibtex.js b/node_modules/@citation-js/plugin-bibtex/lib-mjs/mapping/bibtex.js
-index 68afa12..2edf621 100644
+index 68afa12..6a09e78 100644
 --- a/node_modules/@citation-js/plugin-bibtex/lib-mjs/mapping/bibtex.js
 +++ b/node_modules/@citation-js/plugin-bibtex/lib-mjs/mapping/bibtex.js
-@@ -16,6 +16,21 @@ export default new util.Translator([{
+@@ -16,6 +16,25 @@ export default new util.Translator([{
        return `[Online; accessed ${formatDate(accessed)}]`;
      }
    }
++}, {
++  source: 'urldate',
++  target: 'accessed',
++  convert: Converters.DATE
 +}, {
 +  source: 'abstract',
 +  target: 'abstract'
@@ -37,8 +41,24 @@ index 68afa12..2edf621 100644
  }, {
    source: 'annote',
    target: 'annote'
+@@ -217,10 +236,11 @@ export default new util.Translator([{
+     },
+     toSource(targetType, genre) {
+       const type = types.target[targetType] || 'misc';
+-      if (/^(master'?s|diploma) thesis$/i.test(genre)) {
+-        return ['mastersthesis'];
+-      } else if (/^(phd|doctoral) thesis$/i.test(genre)) {
+-        return ['phdthesis'];
++      const degree = (genre || '').replace(/[.’]/g, '').trim();
++      if (targetType === 'thesis' && /^(master'?s?|msc|ms|ma)(?:\s+(thesis|dissertation))?$/i.test(degree)) {
++        return ['mastersthesis', genre];
++      } else if (targetType === 'thesis' && /^(phd|doctoral)(?:\s+(thesis|dissertation))?$/i.test(degree)) {
++        return ['phdthesis', genre];
+       } else {
+         return [type, genre];
+       }
 diff --git a/node_modules/@citation-js/plugin-bibtex/lib-mjs/output/value.js b/node_modules/@citation-js/plugin-bibtex/lib-mjs/output/value.js
-index 1a86eb1..bb1804a 100644
+index 1a86eb1..acc907f 100644
 --- a/node_modules/@citation-js/plugin-bibtex/lib-mjs/output/value.js
 +++ b/node_modules/@citation-js/plugin-bibtex/lib-mjs/output/value.js
 @@ -43,7 +43,7 @@ function escapeCharacter(char) {
@@ -58,10 +78,31 @@ index 1a86eb1..bb1804a 100644
 -    return name.family.includes(listDelimiters.list) ? name.family : `{${name.family}}`;
 +  if (name.family && !name.prefix && !name.given && !name.suffix) {
 +    const family = escapeValue(name.family);
-+    return family.includes(listDelimiters.list) ? family : `{${family}}`;
++    return `{${family}}`;
    }
    const parts = [''];
    if (name.prefix && name.family) {
+@@ -82,7 +83,10 @@ function formatName(name) {
+   } else {
+     parts.push(name.given);
+   }
+-  return escapeValue(parts.join(', ').trim());
++  return parts.map(part => {
++    const value = escapeValue(part || '');
++    return /,|\sand\s/i.test(value) ? `{${value}}` : value;
++  }).join(', ').trim();
+ }
+ function formatTitle(title) {
+   return formatRichText(title).split(/(:\s*)/).map((part, i) => i % 2 ? part : part.replace(/([^\\])\b([a-z]*[A-Z].*?)\b/g, '$1{$2}')).join('');
+@@ -106,7 +110,7 @@ function formatList(values, valueType, listType) {
+   const delimiter = listDelimiters[listType];
+   return values.map(value => {
+     const formatted = formatSingleValue(value, valueType);
+-    return formatted.includes(delimiter) ? `{${formatted}}` : formatted;
++    return valueType !== 'name' && formatted.includes(delimiter) ? `{${formatted}}` : formatted;
+   }).join(delimiter);
+ }
+ function formatAnnotationValue(values) {
 diff --git a/node_modules/@citation-js/plugin-bibtex/lib/config.js b/node_modules/@citation-js/plugin-bibtex/lib/config.js
 index 7b821b1..a5ff407 100644
 --- a/node_modules/@citation-js/plugin-bibtex/lib/config.js
@@ -76,13 +117,17 @@ index 7b821b1..a5ff407 100644
    biber: {
      annotationMarker: '+an',
 diff --git a/node_modules/@citation-js/plugin-bibtex/lib/mapping/bibtex.js b/node_modules/@citation-js/plugin-bibtex/lib/mapping/bibtex.js
-index 0593af9..99985d4 100644
+index 0593af9..0c4adb8 100644
 --- a/node_modules/@citation-js/plugin-bibtex/lib/mapping/bibtex.js
 +++ b/node_modules/@citation-js/plugin-bibtex/lib/mapping/bibtex.js
-@@ -23,6 +23,21 @@ var _default = exports.default = new _core.util.Translator([{
+@@ -23,6 +23,25 @@ var _default = exports.default = new _core.util.Translator([{
        return `[Online; accessed ${(0, _date.format)(accessed)}]`;
      }
    }
++}, {
++  source: 'urldate',
++  target: 'accessed',
++  convert: _shared.Converters.DATE
 +}, {
 +  source: 'abstract',
 +  target: 'abstract'
@@ -101,8 +146,24 @@ index 0593af9..99985d4 100644
  }, {
    source: 'annote',
    target: 'annote'
+@@ -224,10 +243,11 @@ var _default = exports.default = new _core.util.Translator([{
+     },
+     toSource(targetType, genre) {
+       const type = _bibtexTypes.default.target[targetType] || 'misc';
+-      if (/^(master'?s|diploma) thesis$/i.test(genre)) {
+-        return ['mastersthesis'];
+-      } else if (/^(phd|doctoral) thesis$/i.test(genre)) {
+-        return ['phdthesis'];
++      const degree = (genre || '').replace(/[.’]/g, '').trim();
++      if (targetType === 'thesis' && /^(master'?s?|msc|ms|ma)(?:\s+(thesis|dissertation))?$/i.test(degree)) {
++        return ['mastersthesis', genre];
++      } else if (targetType === 'thesis' && /^(phd|doctoral)(?:\s+(thesis|dissertation))?$/i.test(degree)) {
++        return ['phdthesis', genre];
+       } else {
+         return [type, genre];
+       }
 diff --git a/node_modules/@citation-js/plugin-bibtex/lib/output/value.js b/node_modules/@citation-js/plugin-bibtex/lib/output/value.js
-index 9c817cf..2d5dcd6 100644
+index 9c817cf..123eecf 100644
 --- a/node_modules/@citation-js/plugin-bibtex/lib/output/value.js
 +++ b/node_modules/@citation-js/plugin-bibtex/lib/output/value.js
 @@ -51,7 +51,7 @@ function escapeCharacter(char) {
@@ -122,7 +183,28 @@ index 9c817cf..2d5dcd6 100644
 -    return name.family.includes(listDelimiters.list) ? name.family : `{${name.family}}`;
 +  if (name.family && !name.prefix && !name.given && !name.suffix) {
 +    const family = escapeValue(name.family);
-+    return family.includes(listDelimiters.list) ? family : `{${family}}`;
++    return `{${family}}`;
    }
    const parts = [''];
    if (name.prefix && name.family) {
+@@ -90,7 +91,10 @@ function formatName(name) {
+   } else {
+     parts.push(name.given);
+   }
+-  return escapeValue(parts.join(', ').trim());
++  return parts.map(part => {
++    const value = escapeValue(part || '');
++    return /,|\sand\s/i.test(value) ? `{${value}}` : value;
++  }).join(', ').trim();
+ }
+ function formatTitle(title) {
+   return formatRichText(title).split(/(:\s*)/).map((part, i) => i % 2 ? part : part.replace(/([^\\])\b([a-z]*[A-Z].*?)\b/g, '$1{$2}')).join('');
+@@ -114,7 +118,7 @@ function formatList(values, valueType, listType) {
+   const delimiter = listDelimiters[listType];
+   return values.map(value => {
+     const formatted = formatSingleValue(value, valueType);
+-    return formatted.includes(delimiter) ? `{${formatted}}` : formatted;
++    return valueType !== 'name' && formatted.includes(delimiter) ? `{${formatted}}` : formatted;
+   }).join(delimiter);
+ }
+ function formatAnnotationValue(values) {
