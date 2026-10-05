@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 // The download menu talks to the server; the chips do not.
@@ -70,6 +70,11 @@ describe("the chips showing which filters are on", () => {
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
+	});
+
+	afterEach(async () => {
+		await act(async () => root.unmount());
+		container.remove();
 	});
 
 	async function render() {
