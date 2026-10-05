@@ -19,7 +19,7 @@ import { getDatabaseForConfig } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { GET, getItem } from "@/app/api/item/[key]/route";
 import { GET as readCitation } from "@/app/api/item/[key]/citation/route";
-import { readCitationRecordsPage } from "@/lib/library-export-records";
+import { readCitationRecordsByKeys, readPublicLibraryKeys } from "@/lib/library-export-records";
 import { exportCitationItems } from "@/lib/citation-export";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { publicationTestConfig } from "../fixtures/publication-config";
@@ -91,7 +91,7 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect(publication.DOI).toBe("10.5555/childddd");
 		expect(await citation("PUBAAAAA")).toContain("10.5555/childddd");
 		expect((await getPublicItemCards(database, ["PUBAAAAA", "HIDDENNN", "CHILDDDD"], config)).map(card => [card.key, card.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
-		const exportRecords = await readCitationRecordsPage(config, null, 10);
+		const exportRecords = await readCitationRecordsByKeys(config, await readPublicLibraryKeys(config, 10));
 		expect(exportRecords.map(record => [record.key, record.DOI])).toEqual([["PUBAAAAA", "10.5555/childddd"]]);
 		const citationResponse = await readCitation(new NextRequest("https://library.example.org/api/item/PUBAAAAA/citation"), { params: Promise.resolve({ key: "PUBAAAAA" }) });
 		const citationData = await citationResponse.json();
@@ -119,7 +119,7 @@ it("reads committed publications before indexing, and immediately respects edits
 		expect((await (await read("PUBAAAAA")).json()).item.DOI).toBeNull();
 		expect(await citation("PUBAAAAA")).not.toContain("10.5555/");
 		expect((await getPublicItemCard(database, "PUBAAAAA", config))?.DOI).toBeNull();
-		expect((await readCitationRecordsPage(config, null, 10))[0].DOI).toBeNull();
+		expect((await readCitationRecordsByKeys(config, await readPublicLibraryKeys(config, 10)))[0].DOI).toBeNull();
 		await client.query(`UPDATE item SET "DOI" = null WHERE key = 'PUBAAAAA'`);
 		for (const key of ["HIDDENNN", "CHILDDDD", "DELETEDD", "MISSINGG"]) {
 			const missing = await read(key);
@@ -171,7 +171,7 @@ it("uses current registered identifiers across public records, citations, cards 
 		expect((await (await read("ZENDAAAA")).json()).item.DOI).toBe(doi);
 		expect(await citation("ZENDAAAA")).toContain(doi);
 		expect((await getPublicItemCard(database, "ZENDAAAA", config))?.DOI).toBe(doi);
-		const exported = await readCitationRecordsPage(config, null, 10);
+		const exported = await readCitationRecordsByKeys(config, await readPublicLibraryKeys(config, 10));
 		expect(exported.map((record) => [record.key, record.DOI])).toEqual([["IMPRTAAA", "10.5555/external"], ["RESERVAA", null], ["ZENDAAAA", doi]]);
 		const reserved = (await (await read("RESERVAA")).json()).item;
 		expect(reserved.DOI).toBeNull();
@@ -187,7 +187,7 @@ it("uses current registered identifiers across public records, citations, cards 
 		await client.query('UPDATE item SET deleted = 1 WHERE key = \'ZENDAAAA\'');
 		expect((await read("ZENDAAAA")).status).toBe(404);
 		expect(await getPublicItemCard(database, "ZENDAAAA", config)).toBeNull();
-		expect((await readCitationRecordsPage(config, null, 10)).map((record) => record.key)).toEqual(["IMPRTAAA", "RESERVAA"]);
+		expect((await readCitationRecordsByKeys(config, await readPublicLibraryKeys(config, 10))).map((record) => record.key)).toEqual(["IMPRTAAA", "RESERVAA"]);
 	});
 }, 120_000);
 

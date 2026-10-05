@@ -3,7 +3,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Download01Icon } from "@hugeicons/core-free-icons";
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
 	Listbox,
 	ListboxItem,
@@ -28,7 +28,7 @@ import {
 } from "@/context/LibraryConfigProvider";
 import { toast } from "@/components/layout/Toast";
 import { trackContentAction } from "@/lib/analytics";
-import { downloadFile, saveDownload } from "@/lib/download";
+import { DownloadError, downloadFile, saveDownload } from "@/lib/download";
 import { CitationStylePicker } from "@/components/features/items/CitationStylePicker";
 import { useCitationStyle } from "@/hooks/useCitationStyle";
 import { CITATION_FORMATS, type CitationStyle } from "@/lib/citation-formats";
@@ -80,9 +80,11 @@ export function DownloadButton({
 
 function CitationDownloads({
 	loading,
+	disabled,
 	onDownload,
 }: {
 	loading: DownloadFormat | null;
+	disabled: boolean;
 	onDownload: (format: "txt" | "html", style: CitationStyle) => void;
 }) {
 	const t = useTranslations("ui");
@@ -95,7 +97,7 @@ function CitationDownloads({
 				selected={selected}
 				onSelect={setStyle}
 				excludeBibtex
-				isDisabled={Boolean(loading)}
+				isDisabled={disabled || Boolean(loading)}
 				className="h-10 min-h-10 w-full max-w-full sm:max-w-full px-3"
 			/>
 			{error ? (
@@ -113,7 +115,7 @@ function CitationDownloads({
 						size="sm"
 						className="h-10 flex-1 px-3"
 						isDisabled={
-							!selected || Boolean(loading) || Boolean(error)
+							disabled || !selected || Boolean(loading) || Boolean(error)
 						}
 						isLoading={loading === format}
 						startContent={
@@ -202,13 +204,15 @@ async function downloadReferenceFile(
 	fileName: string,
 	action?: (format: BibliographicExportFormat) => Promise<string>,
 	hrefForFormat?: (format: BibliographicExportFormat) => string,
+	requestInit?: RequestInit,
 ) {
 	const filename = `${fileName}.${getLibraryExportExtension(format)}`;
-	if (hrefForFormat) return downloadFile(hrefForFormat(format), filename);
+	if (hrefForFormat) return downloadFile(hrefForFormat(format), filename, requestInit);
 	if (!action) throw new Error("A download action or URL is required");
 	const content = await action(format);
 	if (!content.trim())
 		throw new Error("Citation conversion returned no content");
+	requestInit?.signal?.throwIfAborted();
 	saveDownload(
 		new Blob([content], {
 			type:
@@ -226,11 +230,13 @@ async function downloadFormattedFile(
 	locale: string,
 	path?: string,
 	style?: CitationStyle,
+	requestInit?: RequestInit,
 ) {
 	if (!path || !style) throw new Error("A citation and style are required");
 	const query = new URLSearchParams({ style: style.id, format });
 	await downloadFile(`${path}?${query}`, `${fileName}.${format}`, {
-		headers: { "Accept-Language": locale },
+		...requestInit,
+		headers: { ...requestInit?.headers, "Accept-Language": locale },
 	});
 }
 
@@ -244,6 +250,9 @@ export function DownloadModal({
 	formats,
 	description,
 	citationPath,
+	requestInit,
+	children,
+	isDisabled = false,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -254,14 +263,28 @@ export function DownloadModal({
 	formats?: readonly BibliographicExportFormat[];
 	description?: string;
 	citationPath?: string;
+	requestInit?: RequestInit;
+	children?: (loading: boolean) => ReactNode;
+	isDisabled?: boolean;
 }) {
 	const t = useTranslations("ui");
 	const locale = useLocale();
 	const [loading, setLoading] = useState<DownloadFormat | null>(null);
+	const controller = useRef<AbortController | null>(null);
+	// Stop the browser request when the dialog's owner leaves the page.
+	useEffect(() => () => controller.current?.abort(), []);
+	const close = () => {
+		controller.current?.abort();
+		onClose();
+	};
 	const { exports, citations } = useLibraryConfig();
 	const availableFormats = formats ?? getEnabledCitationFormats(exports);
 
 	async function download(format: DownloadFormat, style?: CitationStyle) {
+		if (controller.current) return;
+		const attempt = new AbortController();
+		controller.current = attempt;
+		const init = { ...requestInit, signal: attempt.signal };
 		setLoading(format);
 		try {
 			if (format === "txt" || format === "html") {
@@ -271,6 +294,7 @@ export function DownloadModal({
 					locale,
 					citationPath,
 					style,
+					init,
 				);
 			} else {
 				await downloadReferenceFile(
@@ -278,6 +302,7 @@ export function DownloadModal({
 					fileName,
 					action,
 					hrefForFormat,
+					init,
 				);
 			}
 			trackContentAction({
@@ -287,6 +312,7 @@ export function DownloadModal({
 			});
 			onClose();
 		} catch (error) {
+			if (attempt.signal.aborted) return;
 			console.error("Citation download failed", {
 				format,
 				style: style?.id,
@@ -295,9 +321,10 @@ export function DownloadModal({
 			toast({
 				type: "error",
 				title: t("downloadFailed"),
-				description: t("tryAgainLater"),
+				description: error instanceof DownloadError && error.code && ["exportTooLarge", "exportChanged", "exportPrivate", "exportNotFound", "exportInvalid"].includes(error.code) ? t(error.code) : t("tryAgainLater"),
 			});
 		} finally {
+			controller.current = null;
 			setLoading(null);
 		}
 	}
@@ -306,18 +333,19 @@ export function DownloadModal({
 		<DialogModal
 			size="md"
 			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-			onClose={onClose}
+			onOpenChange={(open) => { if (!open) controller.current?.abort(); onOpenChange(open); }}
+			onClose={close}
 			scrollBehavior="inside"
 		>
 			<ModalContent>
 				<GenericHeader
 					startContent={<HugeiconsIcon icon={Download01Icon} />}
-					onClose={onClose}
+					onClose={close}
 				>
-					{t(hrefForFormat ? "downloadLibrary" : "download")}
+					{t(requestInit ? "download" : hrefForFormat ? "downloadLibrary" : "download")}
 				</GenericHeader>
 				<ModalBody className="gap-6 px-6 pb-6 pt-2">
+					{children?.(Boolean(loading))}
 					{description && (
 						<p className="text-sm text-default-500">
 							{description}
@@ -326,12 +354,13 @@ export function DownloadModal({
 					{citations.enabled && citationPath && (
 						<CitationDownloads
 							loading={loading}
+							disabled={isDisabled}
 							onDownload={download}
 						/>
 					)}
 					<ReferenceManagerDownloads
 						formats={availableFormats}
-						loading={Boolean(loading)}
+						loading={isDisabled || Boolean(loading)}
 						onDownload={download}
 					/>
 				</ModalBody>

@@ -49,7 +49,7 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { DownloadModal } from "../newlib/DownloadModal";
-import { CardBody, useDisclosure } from "@nextui-org/react";
+import { CardBody, Radio, RadioGroup, useDisclosure } from "@nextui-org/react";
 import { ItemsContext } from "@/context/ItemsContext";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import {
@@ -70,7 +70,7 @@ import { Item } from "@/app/api/item/types";
 import { Card } from "@/components/nextui/Card";
 import { Divider } from "@/components/nextui/Divider";
 import {
-	getDownloadableRecordCount,
+	LIBRARY_EXPORT_RECORD_CAP,
 	getEnabledCitationFormats,
 	getLibraryExportPath,
 } from "@/config/library-config/exports";
@@ -186,9 +186,26 @@ function ContentActions() {
 	const isDownloadEnabled = useLibraryFeature("downloads");
 	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
 	const availableFormats = getEnabledCitationFormats(exports);
-	// The whole-library file stops at the cap, so the button shows the cap
-	// rather than a number the download cannot deliver.
-	const downloadableRecords = getDownloadableRecordCount(totalItems);
+	const items = use(ItemsContext);
+	const [scope, setScope] = useState<"results" | "library">("results");
+	const [held, setHeld] = useState<{ context: ReturnType<typeof normalizeLibrarySearchContext>; count: number } | null>(null);
+	const [libraryCount, setLibraryCount] = useState(totalItems);
+	const downloadableRecords = scope === "library" ? libraryCount : held?.count ?? 0;
+	const tooLarge = downloadableRecords > LIBRARY_EXPORT_RECORD_CAP;
+	const openDownload = () => {
+		const params = items.queryParams;
+		const hasResults = !items.isItemsFetching && !items.itemsError && Boolean(items.itemsData);
+		// Select fields without repairing malformed values: the export endpoint must refuse them.
+		setHeld(hasResults ? { context: {
+			search: params.search, scope: params.scope, sort: params.sort, range: params.range,
+			institution: params.institution, country: params.country, author: params.author,
+			collections: params.collections, topics: params.topics, type: params.type,
+			readerList: items.userData ? { userId: items.userData.id, collectionId: params.collectionId ?? "" } : null,
+		}, count: items.itemsData?.totalItems ?? 0 } : null);
+		setLibraryCount(totalItems);
+		setScope(hasResults ? "results" : "library");
+		onOpen();
+	};
 
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
@@ -196,32 +213,30 @@ function ContentActions() {
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				onClose={onClose}
-				hrefForFormat={getLibraryExportPath}
+				hrefForFormat={(format) => `/api/exports/${format}`}
 				citationPath="/api/exports/citation"
 				formats={availableFormats}
-				fileName={identity.shortName}
-				description={t(
-					totalItems > downloadableRecords
-						? "downloadLibraryLimited"
-						: "downloadLibraryDescription",
-					{ count: downloadableRecords, total: totalItems },
-				)}
-			/>
+				fileName={`${identity.shortName}-${scope}`}
+				requestInit={{ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scope === "results" ? { scope, context: held?.context, expectedCount: downloadableRecords } : { scope, expectedCount: downloadableRecords }) }}
+				isDisabled={tooLarge || downloadableRecords === 0}
+				description={tooLarge ? t("exportTooLarge") : t("downloadLibraryDescription", { count: downloadableRecords })}
+			>
+				{(busy) => <RadioGroup aria-label={t("exportScope")} value={scope} onValueChange={(value) => setScope(value as "results" | "library")} isDisabled={busy}>
+					<Radio value="results" isDisabled={!held}>{t("exportCurrentResults")}{held ? ` (${format.number(held.count)})` : ""}</Radio>
+					<Radio value="library">{t("exportWholeLibrary")} ({format.number(libraryCount)})</Radio>
+				</RadioGroup>}
+			</DownloadModal>
 			{isDownloadEnabled && (availableFormats.length > 0 || citations.enabled) && (
 				<Button
-					data-download-record-count={downloadableRecords}
 					endContent={
 						<HugeiconsIcon
 							icon={Download01Icon}
 							className="size-6"
 						/>
 					}
-					onPress={onOpen}
+					onPress={openDownload}
 				>
-					{t("downloadLibrary")}{" "}
-					<span className="opacity-60">
-						{format.number(downloadableRecords)}
-					</span>
+					{t("download")}
 				</Button>
 			)}
 			{isAtomFeedEnabled && exports.atom && (

@@ -1,5 +1,13 @@
 {
   "ui": {
+    "exportScope": "导出范围",
+    "exportCurrentResults": "当前结果",
+    "exportWholeLibrary": "整个文献库",
+    "exportTooLarge": "每次最多导出 20,000 篇出版物。请缩小结果范围后重试。",
+    "exportChanged": "所选记录已更改。请刷新结果后重试。",
+    "exportPrivate": "此收藏夹为私密。请使用有权访问的账户登录。",
+    "exportNotFound": "此收藏夹已不存在。",
+    "exportInvalid": "无法按这些筛选条件导出。请检查结果后重试。",
     "bookmarksStat": "书签",
     "collectionsStat": "收藏夹",
     "firstBookmarkStat": "首个书签",
@@ -39,7 +47,6 @@
     "copyFailedHelp": "请检查浏览器的剪贴板权限，然后重试。",
     "referenceLabel": "篇参考文献",
     "libraryCitationLabel": "次库内引用",
-    "downloadLibraryLimited": "共 {total, number} 篇出版物中的前 {count, number} 篇。请选择引用格式。",
     "downloadLibraryDescription": "共 {count, number} 篇出版物。请选择引用格式。",
     "downloadFailed": "下载失败",
     "downloadLibrary": "下载文献库",

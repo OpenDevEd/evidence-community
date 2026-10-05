@@ -15,7 +15,6 @@ vi.mock("@/lib/actions", () => ({
 }));
 
 vi.mock("@/lib/library-export-records", () => ({
-	readCitationRecordsPage: vi.fn(),
 	readNewestRecords: vi.fn(),
 }));
 
@@ -76,7 +75,7 @@ beforeEach(() => {
 });
 
 describe("whole-library citation stream", () => {
-	it("stops at the documented record cap", async () => {
+	it("refuses an oversized export instead of returning a truncated bibliography", async () => {
 		let issued = 0;
 		const readPage: CitationRecordReader = async (_afterKey, limit) =>
 			Array.from(
@@ -84,11 +83,8 @@ describe("whole-library citation stream", () => {
 				() => ({ key: `K${String(issued++).padStart(6, "0")}` }) as never,
 			);
 
-		const body = await readAll(streamCitationRecords(readPage, "ris"));
-
-		expect(issued).toBe(LIBRARY_EXPORT_RECORD_CAP);
-		expect(keysIn(body)).toHaveLength(LIBRARY_EXPORT_RECORD_CAP);
-		expect(body).toContain("entry-K000000");
+		await expect(readAll(streamCitationRecords(readPage, "ris"))).rejects.toThrow(/20,000/);
+		expect(issued).toBe(LIBRARY_EXPORT_RECORD_CAP + 1);
 	});
 
 	it("reads the library in whole pages", async () => {

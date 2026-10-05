@@ -1,5 +1,13 @@
 {
   "ui": {
+    "exportScope": "Exportumfang",
+    "exportCurrentResults": "Aktuelle Ergebnisse",
+    "exportWholeLibrary": "Gesamte Bibliothek",
+    "exportTooLarge": "Ein Export darf höchstens 20.000 Publikationen enthalten. Grenzen Sie die Ergebnisse ein und versuchen Sie es erneut.",
+    "exportChanged": "Die ausgewählten Datensätze haben sich geändert. Aktualisieren Sie die Ergebnisse und versuchen Sie es erneut.",
+    "exportPrivate": "Diese Sammlung ist privat. Melden Sie sich mit einem berechtigten Konto an.",
+    "exportNotFound": "Diese Sammlung existiert nicht mehr.",
+    "exportInvalid": "Diese Filter können nicht exportiert werden. Prüfen Sie die Ergebnisse und versuchen Sie es erneut.",
     "bookmarksStat": "Lesezeichen",
     "collectionsStat": "{count, plural, one {Sammlung} other {Sammlungen}}",
     "firstBookmarkStat": "Erstes Lesezeichen",
@@ -39,7 +47,6 @@
     "copyFailedHelp": "Prüfen Sie die Zwischenablage-Berechtigung Ihres Browsers und versuchen Sie es erneut.",
     "referenceLabel": "{count, plural, one {Referenz} other {Referenzen}}",
     "libraryCitationLabel": "{count, plural, one {Zitation in dieser Bibliothek} other {Zitationen in dieser Bibliothek}}",
-    "downloadLibraryLimited": "Die ersten {count, number} von {total, number} Publikationen. Zitierformat auswählen.",
     "downloadLibraryDescription": "{count, plural, one {# Publikation} other {# Publikationen}}. Zitierformat auswählen.",
     "downloadFailed": "Download fehlgeschlagen",
     "downloadLibrary": "Bibliothek herunterladen",

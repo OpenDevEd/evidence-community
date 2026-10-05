@@ -9,12 +9,23 @@ export function saveDownload(blob: Blob, filename: string) {
 	URL.revokeObjectURL(objectUrl);
 }
 
+export class DownloadError extends Error {
+	constructor(readonly code: string | undefined, readonly status: number) {
+		super(`Download failed: ${status}`);
+	}
+}
+
 export async function downloadFile(
 	url: string,
 	filename: string,
 	init?: RequestInit,
 ) {
 	const response = await fetch(url, init);
-	if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-	saveDownload(await response.blob(), filename);
+	if (!response.ok) {
+		const error = await response.json().catch(() => null);
+		throw new DownloadError(error?.code, response.status);
+	}
+	const blob = await response.blob();
+	init?.signal?.throwIfAborted();
+	saveDownload(blob, filename);
 }

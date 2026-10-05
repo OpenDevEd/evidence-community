@@ -1,5 +1,13 @@
 {
   "ui": {
+    "exportScope": "Âmbito da exportação",
+    "exportCurrentResults": "Resultados atuais",
+    "exportWholeLibrary": "Biblioteca completa",
+    "exportTooLarge": "Uma exportação pode conter até 20.000 publicações. Refine os resultados e tente novamente.",
+    "exportChanged": "Os registos selecionados mudaram. Atualize os resultados e tente novamente.",
+    "exportPrivate": "Esta coleção é privada. Inicie sessão com uma conta autorizada.",
+    "exportNotFound": "Esta coleção já não existe.",
+    "exportInvalid": "Não é possível exportar com estes filtros. Verifique os resultados e tente novamente.",
     "bookmarksStat": "{count, plural, one {Favorito} other {Favoritos}}",
     "collectionsStat": "{count, plural, one {Coleção} other {Coleções}}",
     "firstBookmarkStat": "Primeiro favorito",
@@ -39,7 +47,6 @@
     "copyFailedHelp": "Verifique a permissão da área de transferência no navegador e tente novamente.",
     "referenceLabel": "{count, plural, one {referência} other {referências}}",
     "libraryCitationLabel": "{count, plural, one {citação nesta biblioteca} other {citações nesta biblioteca}}",
-    "downloadLibraryLimited": "As primeiras {count, number} de {total, number} publicações. Escolha um formato de citação.",
     "downloadLibraryDescription": "{count, plural, one {# publicação} other {# publicações}}. Escolha um formato de citação.",
     "downloadFailed": "Falha no download",
     "downloadLibrary": "Baixar biblioteca",

@@ -1,5 +1,13 @@
 {
   "ui": {
+    "exportScope": "نطاق التصدير",
+    "exportCurrentResults": "النتائج الحالية",
+    "exportWholeLibrary": "المكتبة كاملة",
+    "exportTooLarge": "يمكن تصدير 20,000 منشور كحد أقصى. قلّل عدد النتائج وحاول مجددًا.",
+    "exportChanged": "تغيّرت السجلات المحددة. حدّث النتائج وحاول مجددًا.",
+    "exportPrivate": "هذه المجموعة خاصة. سجّل الدخول بحساب يمكنه فتحها.",
+    "exportNotFound": "لم تعد هذه المجموعة موجودة.",
+    "exportInvalid": "لا يمكن التصدير بهذه المرشحات. تحقّق من النتائج وحاول مجددًا.",
     "bookmarksStat": "الإشارات المرجعية",
     "collectionsStat": "المجموعات",
     "firstBookmarkStat": "أول إشارة مرجعية",
@@ -39,7 +47,6 @@
     "copyFailedHelp": "تحقق من إذن الحافظة في متصفحك ثم حاول مجددًا.",
     "referenceLabel": "{count, plural, one {مرجع} two {مرجعان} few {مراجع} other {مرجعًا}}",
     "libraryCitationLabel": "{count, plural, one {اقتباس في هذه المكتبة} two {اقتباسان في هذه المكتبة} few {اقتباسات في هذه المكتبة} other {اقتباسًا في هذه المكتبة}}",
-    "downloadLibraryLimited": "أول {count, number} من أصل {total, number} منشورًا. اختر تنسيق الاقتباس.",
     "downloadLibraryDescription": "{count, number} من المنشورات. اختر تنسيق الاقتباس.",
     "downloadFailed": "فشل التنزيل",
     "downloadLibrary": "تنزيل المكتبة",

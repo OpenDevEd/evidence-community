@@ -11,7 +11,8 @@ import {
 
 const mocks = vi.hoisted(() => ({
 	getLibraryConfig: vi.fn(),
-	readCitationRecordsPage: vi.fn(),
+	readPublicLibraryKeys: vi.fn(),
+	readCitationRecordsByKeys: vi.fn(),
 	readNewestRecords: vi.fn(),
 }));
 
@@ -25,7 +26,8 @@ vi.mock("@/config/library-config/server", () => ({
 }));
 
 vi.mock("@/lib/library-export-records", () => ({
-	readCitationRecordsPage: mocks.readCitationRecordsPage,
+	readPublicLibraryKeys: mocks.readPublicLibraryKeys,
+	readCitationRecordsByKeys: mocks.readCitationRecordsByKeys,
 	readNewestRecords: mocks.readNewestRecords,
 }));
 
@@ -37,7 +39,7 @@ vi.mock("@/lib/actions", () => ({
 	),
 }));
 
-import { GET } from "@/app/api/exports/[format]/route";
+import { GET, POST } from "@/app/api/exports/[format]/route";
 
 function configWith(changes: {
 	ris?: boolean;
@@ -66,18 +68,17 @@ function requestFor(format: string, query = "") {
 	);
 }
 
-/** Serves the given record keys through the keyset reader the route uses. */
+/** The database boundary returns public keys and their saved metadata. */
 function libraryHolding(...keys: string[]) {
 	const sorted = [...keys].sort();
-	mocks.readCitationRecordsPage.mockImplementation(
+	mocks.readPublicLibraryKeys.mockImplementation(async (_config: unknown, limit: number) => sorted.slice(0, limit));
+	mocks.readCitationRecordsByKeys.mockImplementation(
 		async (
 			_config: unknown,
-			afterKey: string | null,
-			limit: number,
+			selected: string[],
 		) =>
 			sorted
-				.filter((key) => (afterKey === null ? true : key > afterKey))
-				.slice(0, limit)
+				.filter((key) => selected.includes(key))
 				.map((key) => ({ key, itemType: "Report", title: `Record ${key}`, date: "2026", creators: [{ firstName: "Jane", lastName: "Smith", creatorType: "author" }] })),
 	);
 }
@@ -89,6 +90,17 @@ beforeEach(() => {
 });
 
 describe("whole-library citation files", () => {
+	it.each(["ris", "bibtex", "atom"])("accepts a HEAD probe for %s", async format => {
+		const response = await GET(new Request(`https://library.example.org/api/exports/${format}`, { method: "HEAD" }), { params: Promise.resolve({ format }) });
+		expect(response.status).toBe(200);
+		await response.body?.cancel();
+	});
+
+	it("refuses a file when the displayed count no longer matches the selected records", async () => {
+		const response = await POST(new Request("https://library.example.org/api/exports/ris", { method: "POST", body: JSON.stringify({ scope: "library", expectedCount: 2 }) }), { params: Promise.resolve({ format: "ris" }) });
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({ code: "exportChanged" });
+	});
 	it("builds the RIS file from the library's own records", async () => {
 		libraryHolding("ABCD1234", "EFGH5678");
 
@@ -116,14 +128,13 @@ describe("whole-library citation files", () => {
 		expect(await response.text()).toContain("@article{ABCD1234,");
 	});
 
-	it("walks the record key instead of counting from an offset", async () => {
+	it("reports the complete captured count and scope", async () => {
 		libraryHolding("ABCD1234", "EFGH5678");
 
-		await (await requestFor("ris")).text();
-
-		expect(
-			mocks.readCitationRecordsPage.mock.calls.map((call) => call[1]),
-		).toEqual([null, "EFGH5678"]);
+		const response = await requestFor("ris");
+		expect(response.headers.get("X-Export-Count")).toBe("2");
+		expect(response.headers.get("X-Export-Scope")).toBe("library");
+		expect((await response.text()).match(/ID  - /g)).toHaveLength(2);
 	});
 
 	it.each([
@@ -131,12 +142,12 @@ describe("whole-library citation files", () => {
 		["downloads are off", { downloads: false, atomFeed: false }],
 	])("returns 404 when %s", async (_name, changes) => {
 		mocks.getLibraryConfig.mockResolvedValue(configWith(changes));
-		mocks.readCitationRecordsPage.mockClear();
+		mocks.readPublicLibraryKeys.mockClear();
 
 		const response = await requestFor("ris");
 
 		expect(response.status).toBe(404);
-		expect(mocks.readCitationRecordsPage).not.toHaveBeenCalled();
+		expect(mocks.readPublicLibraryKeys).not.toHaveBeenCalled();
 	});
 
 	it("returns 404 for a format the library does not publish", async () => {
@@ -145,6 +156,11 @@ describe("whole-library citation files", () => {
 });
 
 describe("whole-library Atom feed", () => {
+	it("allows feed-reader tracking parameters without treating them as export filters", async () => {
+		const response = await requestFor("atom", "utm_source=reader");
+		expect(response.status).toBe(200);
+		expect(XMLValidator.validate(await response.text())).toBe(true);
+	});
 	const parser = new XMLParser({
 		ignoreAttributes: false,
 		attributeNamePrefix: "@",
@@ -204,9 +220,9 @@ describe("whole-library Atom feed", () => {
 
 
 describe("formatted bibliography downloads", () => {
- it("numbers the whole library in one Vancouver bibliography", async () => {
+ it("numbers a POST selection in one Vancouver bibliography after reading its body", async () => {
   libraryHolding("AAAA1111", "BBBB2222");
-  const response = await requestFor("citation", "style=vancouver&format=txt");
+  const response = await POST(new Request("https://library.example.org/api/exports/citation?style=vancouver&format=txt", { method: "POST", body: JSON.stringify({ scope: "library" }) }), { params: Promise.resolve({ format: "citation" }) });
   expect(response.status).toBe(200);
   expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
   expect(await response.text()).toMatch(/^1\. Smith J\. Record AAAA1111[\s\S]*\n\n2\. Smith J\. Record BBBB2222/);
