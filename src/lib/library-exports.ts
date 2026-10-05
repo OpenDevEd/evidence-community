@@ -8,10 +8,8 @@ import {
 } from "@/config/library-config/exports";
 import type { Item } from "@/app/api/item/types";
 import { convertItem } from "@/lib/actions";
-import {
-	readCitationRecordsPage,
-	readNewestRecords,
-} from "@/lib/library-export-records";
+import { readNewestRecords } from "@/lib/library-export-records";
+import { exportTooLarge } from "./library-export-request";
 import { buildSiteUrl } from "@/lib/site-url";
 import { itemToCitationData } from "@/lib/citation-data";
 import type { CitationData } from "@/lib/citation-formats";
@@ -68,26 +66,22 @@ export async function convertRecordsToCitations(
 }
 
 /**
- * Writes the whole library as one RIS or BibTeX file.
- *
- * Records are read a page at a time, walking the record key upwards, so the
- * response starts before the last record has been read, memory stays flat, and
- * a record added or removed during the write cannot duplicate or skip another
- * record. Writing stops after `LIBRARY_EXPORT_RECORD_CAP` records.
+ * Read a bounded selection page by page. An extra row fails the download.
  */
 async function* citationRecordPages(readPage: CitationRecordReader) {
 	let afterKey: string | null = null;
 	let read = 0;
-	while (read < LIBRARY_EXPORT_RECORD_CAP) {
+	while (read <= LIBRARY_EXPORT_RECORD_CAP) {
 		const records = await readPage(
 			afterKey,
 			Math.min(
 				LIBRARY_EXPORT_PAGE_SIZE,
-				LIBRARY_EXPORT_RECORD_CAP - read,
+				LIBRARY_EXPORT_RECORD_CAP + 1 - read,
 			),
 		);
 		if (!records.length) return;
 		read += records.length;
+		if (read > LIBRARY_EXPORT_RECORD_CAP) throw exportTooLarge();
 		afterKey = String(records[records.length - 1].key);
 		yield records;
 	}
@@ -120,12 +114,10 @@ export function streamCitationRecords(
 
 /** CSL needs the complete set to sort, disambiguate names and assign reference numbers. */
 export async function readLibraryCitationData(
-	config: LibraryServerConfig,
+	readPage: CitationRecordReader,
 ): Promise<CitationData[]> {
 	const data: CitationData[] = [];
-	for await (const records of citationRecordPages((afterKey, limit) =>
-		readCitationRecordsPage(config, afterKey, limit),
-	)) {
+	for await (const records of citationRecordPages(readPage)) {
 		for (const record of records) {
 			const citation = itemToCitationData(record);
 			if (!citation)
@@ -134,16 +126,6 @@ export async function readLibraryCitationData(
 		}
 	}
 	return data;
-}
-
-export function streamLibraryCitations(
-	config: LibraryServerConfig,
-	format: BibliographicExportFormat,
-) {
-	return streamCitationRecords(
-		(afterKey, limit) => readCitationRecordsPage(config, afterKey, limit),
-		format,
-	);
 }
 
 function toRfc3339(value: unknown, fallback: Date) {

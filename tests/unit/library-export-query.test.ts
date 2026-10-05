@@ -10,10 +10,9 @@ vi.mock("@/db", () => ({ getDatabaseForConfig: vi.fn() }));
 
 import { schema } from "@/db/database-schema";
 import {
-	buildCitationRecordsQuery,
+	buildPublicLibraryKeysQuery,
 	buildNewestRecordsQuery,
 } from "@/lib/library-export-records";
-import { CITATION_RECORD_COLUMNS } from "@/lib/citation-record-columns";
 
 // Drizzle only touches the client when a query runs, so an empty client is
 // enough to compile a query to real SQL.
@@ -36,30 +35,16 @@ function configWithHiddenTags(hidden: string[]) {
 }
 
 describe("whole-library citation query", () => {
-	const compiled = buildCitationRecordsQuery(
+	const compiled = buildPublicLibraryKeysQuery(
 		database,
 		configWithHiddenTags(["Hide-Me", "embargo"]),
-		"ABCD1234",
 		250,
 	).toSQL();
 
-	it("walks the record key upwards from the last one written", () => {
-		expect(compiled.sql).toContain(`"item"."key" > $`);
+	it("captures ordered keys in a single bounded query", () => {
 		expect(compiled.sql).toMatch(/order by "item"\."key" asc/iu);
-		expect(compiled.params).toContain("ABCD1234");
 		expect(compiled.params).toContain(250);
 		expect(compiled.sql).not.toMatch(/offset/iu);
-	});
-
-	it("starts at the beginning when there is no cursor yet", () => {
-		const first = buildCitationRecordsQuery(
-			database,
-			configWithHiddenTags([]),
-			null,
-			250,
-		).toSQL();
-
-		expect(first.sql).not.toContain(`"item"."key" > $`);
 	});
 
 	it("leaves out deleted records, child records and notes", () => {
@@ -84,20 +69,17 @@ describe("whole-library citation query", () => {
 	});
 
 	it("asks for no hidden-tag check when the library has no hidden tags", () => {
-		const withoutHiddenTags = buildCitationRecordsQuery(
+		const withoutHiddenTags = buildPublicLibraryKeysQuery(
 			database,
 			configWithHiddenTags([]),
-			null,
 			250,
 		).toSQL();
 
 		expect(withoutHiddenTags.sql).not.toMatch(/not exists/iu);
 	});
 
-	it("reads only the allow-listed citation columns", () => {
-		expect(selectedColumns(compiled.sql)).toEqual([
-			...CITATION_RECORD_COLUMNS,
-		]);
+	it("holds only record keys until the bounded selection is known", () => {
+		expect(selectedColumns(compiled.sql)).toEqual(["key"]);
 	});
 });
 

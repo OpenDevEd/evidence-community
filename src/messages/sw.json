@@ -1,5 +1,13 @@
 {
   "ui": {
+    "exportScope": "Wigo wa uhamishaji",
+    "exportCurrentResults": "Matokeo ya sasa",
+    "exportWholeLibrary": "Maktaba nzima",
+    "exportTooLarge": "Unaweza kuhamisha hadi machapisho 20,000 kwa wakati mmoja. Punguza matokeo na ujaribu tena.",
+    "exportChanged": "Rekodi zilizochaguliwa zimebadilika. Sasisha matokeo na ujaribu tena.",
+    "exportPrivate": "Mkusanyiko huu ni wa faragha. Ingia kwa akaunti yenye ruhusa.",
+    "exportNotFound": "Mkusanyiko huu haupo tena.",
+    "exportInvalid": "Haiwezekani kuhamisha kwa vichujio hivi. Kagua matokeo na ujaribu tena.",
     "bookmarksStat": "Alamisho",
     "collectionsStat": "{count, plural, one {Mkusanyiko} other {Mikusanyiko}}",
     "firstBookmarkStat": "Alamisho la kwanza",
@@ -39,7 +47,6 @@
     "copyFailedHelp": "Angalia ruhusa ya ubao wa kunakili kwenye kivinjari chako kisha ujaribu tena.",
     "referenceLabel": "{count, plural, one {rejeleo} other {marejeleo}}",
     "libraryCitationLabel": "{count, plural, one {nukuu katika maktaba hii} other {nukuu katika maktaba hii}}",
-    "downloadLibraryLimited": "Machapisho {count, number} ya kwanza kati ya {total, number}. Chagua umbizo la nukuu.",
     "downloadLibraryDescription": "Machapisho {count, number}. Chagua umbizo la nukuu.",
     "downloadFailed": "Upakuaji umeshindwa",
     "downloadLibrary": "Pakua maktaba",

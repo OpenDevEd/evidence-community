@@ -8,7 +8,7 @@ import {
 	count,
 	max,
 	desc,
-	gt,
+	inArray,
 	sql,
 } from "drizzle-orm";
 
@@ -51,28 +51,16 @@ function publicRecordCondition(
 	return publicParentVisibility(database, config.content.tags.hidden);
 }
 
-/**
- * The query behind one page of a whole-library citation file.
- *
- * Paging walks the primary key upwards rather than counting from an offset.
- * A record added or removed while the file is being written can therefore
- * never make an untouched record appear twice or be skipped.
- */
-export function buildCitationRecordsQuery(
+/** Capture the whole-library selection in one database snapshot. */
+export function buildPublicLibraryKeysQuery(
 	database: Database,
 	config: LibraryServerConfig,
-	afterKey: string | null,
 	limit: number,
 ) {
 	return database
-		.select(selectionFor(CITATION_RECORD_COLUMNS))
+		.select({ key: item.key })
 		.from(item)
-		.where(
-			and(
-				publicRecordCondition(database, config),
-				afterKey ? gt(item.key, afterKey) : undefined,
-			),
-		)
+		.where(publicRecordCondition(database, config))
 		.orderBy(asc(item.key))
 		.limit(limit);
 }
@@ -91,18 +79,28 @@ export function buildNewestRecordsQuery(
 		.limit(limit);
 }
 
-export async function readCitationRecordsPage(
-	config: LibraryServerConfig,
-	afterKey: string | null,
-	limit: number,
-): Promise<Item[]> {
+/** Capture only keys, in one database snapshot; the caller rejects the extra row. */
+export async function readPublicLibraryKeys(config: LibraryServerConfig, limit: number) {
 	const database = await getDatabaseForConfig(config);
-	const records = await buildCitationRecordsQuery(
-		database,
-		config,
-		afterKey,
-		limit,
-	);
+	return (await buildPublicLibraryKeysQuery(database, config, limit)).map(row => row.key);
+}
+
+/** The held order comes from the selection; bibliographic fields and visibility come from PostgreSQL. */
+export async function readCitationRecordsByKeys(config: LibraryServerConfig, keys: string[]): Promise<Item[]> {
+	if (!keys.length) return [];
+	const database = await getDatabaseForConfig(config);
+	const records = await database.select(selectionFor(CITATION_RECORD_COLUMNS)).from(item)
+		.where(and(publicRecordCondition(database, config), inArray(item.key, keys)));
+	const hydrated = await hydrateCitationRecords(database, config, records);
+	const byKey = new Map(hydrated.map(record => [record.key, record]));
+	return keys.flatMap(key => byKey.has(key) ? [byKey.get(key)!] : []);
+}
+
+async function hydrateCitationRecords(
+	database: Database,
+	config: LibraryServerConfig,
+	records: Record<string, unknown>[],
+): Promise<Item[]> {
 
 	const [tags, identifiers, doiAttachments] = await Promise.all([
 		readItemTags(database, records.map(record => String(record.key))),
@@ -116,10 +114,10 @@ export async function readCitationRecordsPage(
 	return records.map((record) => ({
 		...record,
 		tags: tags.get(String(record.key)) ?? [],
-		publicationIdentifiers: identifiers.get(record.key),
+		publicationIdentifiers: identifiers.get(String(record.key)),
 		DOI: resolvePublicDoi({
-			...record, attachments: doiAttachments.get(record.key),
-			publicationIdentifiers: identifiers.get(record.key),
+			...record, attachments: doiAttachments.get(String(record.key)),
+			publicationIdentifiers: identifiers.get(String(record.key)),
 		}),
 	})) as Item[];
 }

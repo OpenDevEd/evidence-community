@@ -14,10 +14,7 @@ export type BibliographicExportFormat =
 export type LibraryExportFormat =
 	(typeof LIBRARY_EXPORT_FORMATS)[number];
 
-// How many records one whole-library citation file may contain. A library
-// with more records stops at this many; the rest stay reachable one record at
-// a time. The cap keeps a single request inside a sensible memory and time
-// budget, and the download button never promises more than this.
+// Larger selections are refused before starting the download.
 export const LIBRARY_EXPORT_RECORD_CAP = 20_000;
 
 const EXPORT_PATHS = {
@@ -72,12 +69,6 @@ export function getRecordCitationLinks(
 		contentType: getLibraryExportContentType(format).split(";", 1)[0],
 		path: `/lib/${key}/export/${format}`,
 	}));
-}
-
-// The whole-library file stops at the cap, so the download button must not
-// promise more records than the file will hold.
-export function getDownloadableRecordCount(totalRecords: number) {
-	return Math.min(Math.max(0, totalRecords), LIBRARY_EXPORT_RECORD_CAP);
 }
 
 export function getLibraryExportPath(format: LibraryExportFormat) {

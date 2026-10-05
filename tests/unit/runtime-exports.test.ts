@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	getDownloadableRecordCount,
 	getEnabledCitationFormats,
 	getLibraryExportContentType,
 	getLibraryExportPath,
 	getRecordCitationLinks,
-	LIBRARY_EXPORT_RECORD_CAP,
 } from "@/config/library-config/exports";
 
 describe("runtime exports", () => {
@@ -46,17 +44,6 @@ describe("runtime exports", () => {
 		expect(getLibraryExportContentType(format)).toBe(type);
 	});
 
-	// The whole-library file stops at the cap, so the download button must not
-	// offer a bigger number than the file can hold.
-	it.each([
-		[0, 0],
-		[42, 42],
-		[LIBRARY_EXPORT_RECORD_CAP, LIBRARY_EXPORT_RECORD_CAP],
-		[LIBRARY_EXPORT_RECORD_CAP + 1, LIBRARY_EXPORT_RECORD_CAP],
-		[500_000, LIBRARY_EXPORT_RECORD_CAP],
-	])("offers %i records as %i", (total, offered) => {
-		expect(getDownloadableRecordCount(total)).toBe(offered);
-	});
 });
 
 describe("record page citation links", () => {

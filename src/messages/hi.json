@@ -1,5 +1,13 @@
 {
   "ui": {
+    "exportScope": "निर्यात का दायरा",
+    "exportCurrentResults": "वर्तमान परिणाम",
+    "exportWholeLibrary": "पूरी लाइब्रेरी",
+    "exportTooLarge": "एक निर्यात में अधिकतम 20,000 प्रकाशन हो सकते हैं। परिणाम सीमित करें और फिर कोशिश करें।",
+    "exportChanged": "चुने गए रिकॉर्ड बदल गए हैं। परिणाम रीफ़्रेश करें और फिर कोशिश करें।",
+    "exportPrivate": "यह संग्रह निजी है। ऐसे खाते से साइन इन करें जिसे इसे खोलने की अनुमति है।",
+    "exportNotFound": "यह संग्रह अब मौजूद नहीं है।",
+    "exportInvalid": "इन फ़िल्टर के साथ निर्यात नहीं किया जा सकता। परिणाम जाँचें और फिर कोशिश करें।",
     "bookmarksStat": "बुकमार्क",
     "collectionsStat": "संग्रह",
     "firstBookmarkStat": "पहला बुकमार्क",
@@ -39,7 +47,6 @@
     "copyFailedHelp": "अपने ब्राउज़र की क्लिपबोर्ड अनुमति जाँचें और फिर कोशिश करें।",
     "referenceLabel": "संदर्भ",
     "libraryCitationLabel": "इस लाइब्रेरी में उद्धरण",
-    "downloadLibraryLimited": "{total, number} में से पहले {count, number} प्रकाशन। उद्धरण का प्रारूप चुनें।",
     "downloadLibraryDescription": "{count, number} प्रकाशन। उद्धरण का प्रारूप चुनें।",
     "downloadFailed": "डाउनलोड नहीं हो सका",
     "downloadLibrary": "लाइब्रेरी डाउनलोड करें",

@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
-import { buildCitationRecordsQuery, readPublicLibraryStatus } from "@/lib/library-export-records";
+import { buildPublicLibraryKeysQuery, readPublicLibraryStatus } from "@/lib/library-export-records";
 
 vi.mock("server-only", () => ({}));
 
@@ -26,7 +26,7 @@ it("counts exported publications and their latest update, excluding hidden and u
 		await client.query('INSERT INTO "tag" ("name") VALUES (\'Hidden\')');
 		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\')');
 		expect(await readPublicLibraryStatus(database, config)).toEqual({ totalItems: 2, latestPublicationUpdatedAt: new Date("2026-09-10T15:30:00Z") });
-		expect((await buildCitationRecordsQuery(database, config, null, 250)).map(record => record.key)).toEqual(["PUBAAAAA", "PUBBBBBB"]);
+		expect((await buildPublicLibraryKeysQuery(database, config, 250)).map(record => record.key)).toEqual(["PUBAAAAA", "PUBBBBBB"]);
 		await client.query('UPDATE "item" SET "deleted" = 1 WHERE "key" = \'PUBBBBBB\'');
 		expect(await readPublicLibraryStatus(database, config)).toEqual({ totalItems: 1, latestPublicationUpdatedAt: new Date("2026-09-09T09:00:00Z") });
 	});
