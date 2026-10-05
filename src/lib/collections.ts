@@ -68,6 +68,18 @@ export function recursiveFind(
   return undefined;
 }
 
+export function withoutCollections(
+  collection: Collection,
+  keys: string[]
+): Collection {
+  return {
+    ...collection,
+    children: collection.children
+      ?.filter((child) => !keys.includes(child.key))
+      .map((child) => withoutCollections(child, keys)),
+  };
+}
+
 export function flattenHierarchy(
   collections: Collection[]
 ): Collection[] {

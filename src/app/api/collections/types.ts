@@ -9,6 +9,13 @@ export type Collection = InferSelectModel<typeof collection> & {
   originalFacet?: string;
 }
 
+export type CollectionConfig = {
+  title: string;
+  enabled: boolean;
+  legacyKey?: string;
+  hidden?: string[];
+};
+
 export type CollectionsGetResponse = {
   collections: Collection[];
 };

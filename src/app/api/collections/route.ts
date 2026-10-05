@@ -5,14 +5,15 @@ import {
 	buildHierarchy,
 	flattenHierarchy,
 	recursiveFind,
+	withoutCollections,
 } from "@/lib/collections";
-import { Collection, CollectionsGetResponse } from "./types";
+import { Collection, CollectionConfig, CollectionsGetResponse } from "./types";
 import config from "@/constants/config.json";
 import { getCachedCollections } from "../cache";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 export async function getCollections() {
-	const configCollections =
+	const configCollections: Record<string, CollectionConfig> =
 		config.collections[
 			(process.env.MEILI_INDEX ||
 				config.index) as keyof typeof config.collections
@@ -24,11 +25,11 @@ export async function getCollections() {
 
 	const filteredCollections = Object.entries(configCollections)
 		.filter(([_, config]) => config.enabled)
-		.map(([key, config]) => {
+		.map(([key, { hidden = [], ...config }]) => {
 			const collection = recursiveFind(key, hierarchy);
 			if (!collection) return undefined;
 			return {
-				...collection,
+				...withoutCollections(collection, hidden),
 				...config,
 				parentCollection: null,
 				ancestry: undefined,

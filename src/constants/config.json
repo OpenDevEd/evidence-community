@@ -292,20 +292,16 @@
 			}
 		},
 		"itemsAime": {
-			"93FIW7A4": {
+			"CFHBA73N": {
 				"title": "Empirical studies",
 				"enabled": true,
-				"legacyKey": "empirical"
+				"legacyKey": "empirical",
+				"hidden": ["ZS7ICZXS", "Q8JUUPGM", "U7D3WUXB"]
 			},
-			"3DUXL8D5": {
-				"title": "Empirical studies",
+			"ZMSE62ZV": {
+				"title": "Conceptual studies",
 				"enabled": true,
 				"legacyKey": "conceptual"
-			},
-			"CSL5G5P6": {
-				"title": "Technical methods",
-				"enabled": true,
-				"legacyKey": "technical"
 			}
 		},
 		"itemsClimate": {
