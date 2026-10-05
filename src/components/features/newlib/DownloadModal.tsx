@@ -57,22 +57,16 @@ export function DownloadButton({
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				onClose={onClose}
-				fileName={fileName}
-				citationPath={
-					itemData?.key
+				source={{
+					fileName,
+					citationPath: itemData?.key
 						? `/api/item/${encodeURIComponent(itemData.key)}/export/citation`
-						: undefined
-				}
-				action={
-					action ??
-					(async (format) => {
-						if (!itemData)
-							throw new Error(
-								"Item data is required for download",
-							);
+						: undefined,
+					action: action ?? (async (format) => {
+						if (!itemData) throw new Error("Item data is required for download");
 						return convertItem(itemData, format);
-					})
-				}
+					}),
+				}}
 			/>
 		</>
 	);
@@ -240,35 +234,13 @@ async function downloadFormattedFile(
 	});
 }
 
-export function DownloadModal({
-	isOpen,
-	onOpenChange,
-	onClose,
-	action,
-	hrefForFormat,
-	fileName,
-	formats,
-	description,
-	citationPath,
-	requestInit,
-	children,
-	isDisabled = false,
-}: {
-	isOpen: boolean;
-	onOpenChange: (open: boolean) => void;
-	onClose: () => void;
-	action?: (format: BibliographicExportFormat) => Promise<string>;
-	hrefForFormat?: (format: BibliographicExportFormat) => string;
-	fileName: string;
-	formats?: readonly BibliographicExportFormat[];
-	description?: string;
-	citationPath?: string;
-	requestInit?: RequestInit;
-	children?: (loading: boolean) => ReactNode;
-	isDisabled?: boolean;
-}) {
+function downloadErrorCode(error: unknown) {
+	if (error instanceof DownloadError && error.code && ["exportTooLarge", "exportChanged", "exportPrivate", "exportNotFound", "exportInvalid"].includes(error.code)) return error.code;
+	return "tryAgainLater";
+}
+
+function useDownloadAttempt(run: (format: DownloadFormat, style: CitationStyle | undefined, signal: AbortSignal) => Promise<void>, onClose: () => void) {
 	const t = useTranslations("ui");
-	const locale = useLocale();
 	const [loading, setLoading] = useState<DownloadFormat | null>(null);
 	const controller = useRef<AbortController | null>(null);
 	// Stop the browser request when the dialog's owner leaves the page.
@@ -277,34 +249,13 @@ export function DownloadModal({
 		controller.current?.abort();
 		onClose();
 	};
-	const { exports, citations } = useLibraryConfig();
-	const availableFormats = formats ?? getEnabledCitationFormats(exports);
-
 	async function download(format: DownloadFormat, style?: CitationStyle) {
 		if (controller.current) return;
 		const attempt = new AbortController();
 		controller.current = attempt;
-		const init = { ...requestInit, signal: attempt.signal };
 		setLoading(format);
 		try {
-			if (format === "txt" || format === "html") {
-				await downloadFormattedFile(
-					format,
-					fileName,
-					locale,
-					citationPath,
-					style,
-					init,
-				);
-			} else {
-				await downloadReferenceFile(
-					format,
-					fileName,
-					action,
-					hrefForFormat,
-					init,
-				);
-			}
+			await run(format, style, attempt.signal);
 			trackContentAction({
 				action: "download",
 				context: "library_records",
@@ -321,19 +272,68 @@ export function DownloadModal({
 			toast({
 				type: "error",
 				title: t("downloadFailed"),
-				description: error instanceof DownloadError && error.code && ["exportTooLarge", "exportChanged", "exportPrivate", "exportNotFound", "exportInvalid"].includes(error.code) ? t(error.code) : t("tryAgainLater"),
+				description: t(downloadErrorCode(error)),
 			});
 		} finally {
 			controller.current = null;
 			setLoading(null);
 		}
 	}
+	return { loading, download, close, abort: () => controller.current?.abort() };
+}
+
+export function DownloadModal({
+	isOpen,
+	onOpenChange,
+	onClose,
+	source,
+	description,
+	children,
+	isDisabled = false,
+}: {
+	isOpen: boolean;
+	onOpenChange: (open: boolean) => void;
+	onClose: () => void;
+	source: {
+		action?: (format: BibliographicExportFormat) => Promise<string>;
+		hrefForFormat?: (format: BibliographicExportFormat) => string;
+		fileName: string;
+		formats?: readonly BibliographicExportFormat[];
+		citationPath?: string;
+		requestInit?: RequestInit;
+	};
+	description?: string;
+	children?: (loading: boolean) => ReactNode;
+	isDisabled?: boolean;
+}) {
+	const { action, hrefForFormat, fileName, formats, citationPath, requestInit } = source;
+	const t = useTranslations("ui");
+	const locale = useLocale();
+	const { exports, citations } = useLibraryConfig();
+	const availableFormats = formats ?? getEnabledCitationFormats(exports);
+	const { loading, download, close, abort } = useDownloadAttempt(async (format, style, signal) => {
+		const init = { ...requestInit, signal };
+		if (format === "txt" || format === "html") {
+			await downloadFormattedFile(format, fileName, locale, citationPath, style, init);
+		} else {
+			await downloadReferenceFile(format, fileName, action, hrefForFormat, init);
+		}
+	}, onClose);
+	const title = hrefForFormat && !requestInit ? "downloadLibrary" : "download";
+	const handleOpenChange = (open: boolean) => {
+		if (!open) abort();
+		onOpenChange(open);
+	};
+	const citationDownloads = citations.enabled && citationPath ? (
+		<CitationDownloads loading={loading} disabled={isDisabled} onDownload={download} />
+	) : null;
+	const descriptionContent = description ? <p className="text-sm text-default-500">{description}</p> : null;
 
 	return (
 		<DialogModal
 			size="md"
 			isOpen={isOpen}
-			onOpenChange={(open) => { if (!open) controller.current?.abort(); onOpenChange(open); }}
+			onOpenChange={handleOpenChange}
 			onClose={close}
 			scrollBehavior="inside"
 		>
@@ -342,22 +342,12 @@ export function DownloadModal({
 					startContent={<HugeiconsIcon icon={Download01Icon} />}
 					onClose={close}
 				>
-					{t(requestInit ? "download" : hrefForFormat ? "downloadLibrary" : "download")}
+					{t(title)}
 				</GenericHeader>
 				<ModalBody className="gap-6 px-6 pb-6 pt-2">
 					{children?.(Boolean(loading))}
-					{description && (
-						<p className="text-sm text-default-500">
-							{description}
-						</p>
-					)}
-					{citations.enabled && citationPath && (
-						<CitationDownloads
-							loading={loading}
-							disabled={isDisabled}
-							onDownload={download}
-						/>
-					)}
+					{descriptionContent}
+					{citationDownloads}
 					<ReferenceManagerDownloads
 						formats={availableFormats}
 						loading={isDisabled || Boolean(loading)}

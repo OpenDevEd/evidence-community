@@ -43,6 +43,36 @@ function isFormatAvailable(
 	return config.features.downloads && config.exports[format];
 }
 
+function validateExportParameters(request: Request, format: string) {
+	const query = new URL(request.url).searchParams;
+	const allowed = format === "citation" ? ["style", "format"] : [];
+	if (format !== "atom" && [...query.keys()].some(key => !allowed.includes(key) || query.getAll(key).length !== 1)) {
+		throw new LibraryExportError("exportInvalid", "Unsupported or repeated export parameter.", 400);
+	}
+}
+
+async function formattedExportResponse(request: Request, config: LibraryServerConfig, selection: LibraryExportRequest) {
+	if (!config.features.downloads || !config.citations.enabled)
+		return notFound();
+	const citation = await resolveCitationDownload(request);
+	if (!citation) return notFound();
+	const prepared = await prepareLibraryExport(config, selection, request);
+	const records = await readLibraryCitationData(prepared.readPage);
+	request.signal.throwIfAborted();
+	const response = citationDownloadResponse(records, citation, {
+		locale: await getRuntimeRequestLocale(request),
+		numbered: true,
+		fileName: config.identity.shortName,
+		libraryBaseUrl: config.citations.showUrl
+			? config.identity.baseUrl
+			: undefined,
+	});
+	response.headers.set("Cache-Control", "private, no-store");
+	response.headers.set("X-Export-Count", String(prepared.count));
+	response.headers.set("X-Export-Scope", selection.scope);
+	return response;
+}
+
 async function exportResponse(
 	request: Request,
 	{ params }: { params: Promise<{ format: string }> },
@@ -50,35 +80,10 @@ async function exportResponse(
 ) {
 	// Every export reads live records, so nothing here may be prerendered.
 	await connection();
-
 	const { format } = await params;
 	const config = await getLibraryConfig();
-	const query = new URL(request.url).searchParams;
-	const allowed = format === "citation" ? ["style", "format"] : [];
-	if (format !== "atom" && [...query.keys()].some(key => !allowed.includes(key) || query.getAll(key).length !== 1)) {
-		throw new LibraryExportError("exportInvalid", "Unsupported or repeated export parameter.", 400);
-	}
-	if (format === "citation") {
-		if (!config.features.downloads || !config.citations.enabled)
-			return notFound();
-		const citation = await resolveCitationDownload(request);
-		if (!citation) return notFound();
-		const prepared = await prepareLibraryExport(config, selection, request);
-		const records = await readLibraryCitationData(prepared.readPage);
-		request.signal.throwIfAborted();
-		const response = citationDownloadResponse(records, citation, {
-			locale: await getRuntimeRequestLocale(request),
-			numbered: true,
-			fileName: config.identity.shortName,
-			libraryBaseUrl: config.citations.showUrl
-				? config.identity.baseUrl
-				: undefined,
-		});
-		response.headers.set("Cache-Control", "private, no-store");
-		response.headers.set("X-Export-Count", String(prepared.count));
-		response.headers.set("X-Export-Scope", selection.scope);
-		return response;
-	}
+	validateExportParameters(request, format);
+	if (format === "citation") return formattedExportResponse(request, config, selection);
 	if (!isLibraryExportFormat(format)) return notFound();
 	if (!isFormatAvailable(config, format)) return notFound();
 

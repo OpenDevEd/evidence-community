@@ -176,57 +176,77 @@ function ResourcesList({
 	);
 }
 
-function ContentActions() {
+function captureExportResults(items: ReturnType<typeof useItemsList>): { context: ReturnType<typeof normalizeLibrarySearchContext>; count: number } | null {
+	if (items.isItemsFetching || items.itemsError || !items.itemsData) return null;
+	const params = items.queryParams;
+	// Select fields without repairing malformed values: the export endpoint must refuse them.
+	return { context: {
+		search: params.search, scope: params.scope, sort: params.sort, range: params.range,
+		institution: params.institution, country: params.country, author: params.author,
+		collections: params.collections, topics: params.topics, type: params.type,
+		readerList: items.userData ? { userId: items.userData.id, collectionId: params.collectionId ?? "" } : null,
+	}, count: items.itemsData.totalItems };
+}
+
+function exportDownloadDetails(scope: "results" | "library", libraryCount: number, held: ReturnType<typeof captureExportResults>) {
+	if (scope === "results") return {
+		request: { scope, context: held?.context },
+		count: held?.count ?? 0,
+		tooLarge: false,
+		description: "downloadDescription",
+	};
+	const tooLarge = libraryCount > LIBRARY_EXPORT_RECORD_CAP;
+	return {
+		request: { scope, expectedCount: libraryCount },
+		count: libraryCount,
+		tooLarge,
+		description: tooLarge ? "exportTooLarge" : "downloadLibraryDescription",
+	};
+}
+
+function LibraryDownload() {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const { status } = useContext(CacheContext) as CacheContextType;
 	const totalItems = status.totalItems;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const { exports, identity, citations } = useLibraryConfig();
-	const isDownloadEnabled = useLibraryFeature("downloads");
-	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
 	const availableFormats = getEnabledCitationFormats(exports);
 	const items = use(ItemsContext);
 	const [scope, setScope] = useState<"results" | "library">("results");
 	const [held, setHeld] = useState<{ context: ReturnType<typeof normalizeLibrarySearchContext>; count: number } | null>(null);
 	const [libraryCount, setLibraryCount] = useState(totalItems);
-	const downloadableRecords = scope === "library" ? libraryCount : held?.count ?? 0;
-	const tooLarge = downloadableRecords > LIBRARY_EXPORT_RECORD_CAP;
+	const download = exportDownloadDetails(scope, libraryCount, held);
 	const openDownload = () => {
-		const params = items.queryParams;
-		const hasResults = !items.isItemsFetching && !items.itemsError && Boolean(items.itemsData);
-		// Select fields without repairing malformed values: the export endpoint must refuse them.
-		setHeld(hasResults ? { context: {
-			search: params.search, scope: params.scope, sort: params.sort, range: params.range,
-			institution: params.institution, country: params.country, author: params.author,
-			collections: params.collections, topics: params.topics, type: params.type,
-			readerList: items.userData ? { userId: items.userData.id, collectionId: params.collectionId ?? "" } : null,
-		}, count: items.itemsData?.totalItems ?? 0 } : null);
+		const results = captureExportResults(items);
+		setHeld(results);
 		setLibraryCount(totalItems);
-		setScope(hasResults ? "results" : "library");
+		setScope(results ? "results" : "library");
 		onOpen();
 	};
 
 	return (
-		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
+		<>
 			<DownloadModal
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				onClose={onClose}
-				hrefForFormat={(format) => `/api/exports/${format}`}
-				citationPath="/api/exports/citation"
-				formats={availableFormats}
-				fileName={`${identity.shortName}-${scope}`}
-				requestInit={{ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scope === "results" ? { scope, context: held?.context, expectedCount: downloadableRecords } : { scope, expectedCount: downloadableRecords }) }}
-				isDisabled={tooLarge || downloadableRecords === 0}
-				description={tooLarge ? t("exportTooLarge") : t("downloadLibraryDescription", { count: downloadableRecords })}
+				source={{
+					hrefForFormat: (format) => `/api/exports/${format}`,
+					citationPath: "/api/exports/citation",
+					formats: availableFormats,
+					fileName: `${identity.shortName}-${scope}`,
+					requestInit: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(download.request) },
+				}}
+				isDisabled={download.tooLarge || download.count === 0}
+				description={t(download.description, { count: download.count })}
 			>
 				{(busy) => <RadioGroup aria-label={t("exportScope")} value={scope} onValueChange={(value) => setScope(value as "results" | "library")} isDisabled={busy}>
-					<Radio value="results" isDisabled={!held}>{t("exportCurrentResults")}{held ? ` (${format.number(held.count)})` : ""}</Radio>
+					<Radio value="results" isDisabled={!held}>{t("exportCurrentResults")}{held ? ` (≈${format.number(held.count)})` : ""}</Radio>
 					<Radio value="library">{t("exportWholeLibrary")} ({format.number(libraryCount)})</Radio>
 				</RadioGroup>}
 			</DownloadModal>
-			{isDownloadEnabled && (availableFormats.length > 0 || citations.enabled) && (
+			{(availableFormats.length > 0 || citations.enabled) && (
 				<Button
 					endContent={
 						<HugeiconsIcon
@@ -239,6 +259,18 @@ function ContentActions() {
 					{t("download")}
 				</Button>
 			)}
+		</>
+	);
+}
+
+function ContentActions() {
+	const t = useTranslations("ui");
+	const { exports } = useLibraryConfig();
+	const isDownloadEnabled = useLibraryFeature("downloads");
+	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
+	return (
+		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
+			{isDownloadEnabled && <LibraryDownload />}
 			{isAtomFeedEnabled && exports.atom && (
 				<Button
 					onPress={() => {

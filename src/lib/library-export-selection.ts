@@ -1,13 +1,15 @@
 import "server-only";
+import { createHash } from "node:crypto";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { LIBRARY_EXPORT_RECORD_CAP } from "@/config/library-config/exports";
 import { getDatabaseForConfig } from "@/db";
 import { getMeilisearchForConfig } from "./meilisearch";
 import { meilisearchIn } from "./meilisearch-filter";
-import { readReaderListKeys } from "./readers/data";
+import { readReaderListKeys, readReaderListRevision } from "./readers/data";
 import { getSignedInReader } from "./readers/session";
 import { resolveSearchQuery } from "./search-query";
+import type { LibrarySearchContext } from "./search-context";
 import { resolveSearchRequest, resolveSearchTopicNodes } from "./search";
 import { readCitationRecordsByKeys, readPublicLibraryKeys } from "./library-export-records";
 import type { CitationRecordReader } from "./library-exports";
@@ -26,62 +28,67 @@ async function idleSearchRevision(client: Awaited<ReturnType<typeof getMeilisear
 	return JSON.stringify(revisions);
 }
 
-export async function prepareLibraryExport(config: LibraryServerConfig, selection: LibraryExportRequest, request: Request) {
+async function prepareReaderList(config: LibraryServerConfig, readerList: LibrarySearchContext["readerList"], request: Request) {
 	const checkAborted = () => request.signal.throwIfAborted();
-	const readerList = selection.scope === "results" ? selection.context.readerList : null;
-	async function readerKeys() {
+	async function readerState(includeKeys: boolean) {
 		checkAborted();
 		if (!readerList) return undefined;
 		if (!config.features.readerAccounts) throw new LibraryExportError("exportInvalid", "This library has no reader lists.", 400);
 		const viewer = await getSignedInReader(request.headers, config);
-		const result = await readReaderListKeys(await getDatabaseForConfig(config), readerList, viewer?.id ?? null);
+		const read = includeKeys ? readReaderListKeys : readReaderListRevision;
+		const result = await read(await getDatabaseForConfig(config), readerList, viewer?.id ?? null);
 		if ("refused" in result) throw new LibraryExportError(result.refused === 403 ? "exportPrivate" : "exportNotFound", result.refused === 403 ? "This collection is private." : "There is no such collection.", result.refused);
-		return result.keys.sort();
+		return result;
 	}
-	const allowedKeys = await readerKeys();
-	const readerRevision = JSON.stringify(allowedKeys);
+	const initialReader = await readerState(true);
+	const allowedKeys = initialReader && "keys" in initialReader ? initialReader.keys.sort() : undefined;
+	const readerRevision = allowedKeys ? createHash("sha256").update(allowedKeys.join(",")).digest("hex") : undefined;
 	async function checkReader() {
-		if (JSON.stringify(await readerKeys()) !== readerRevision) throw exportChanged();
+		const current = await readerState(false);
+		if (current && "revision" in current && current.revision !== readerRevision) throw exportChanged();
 	}
-	let keys: string[];
-	if (selection.scope === "library") {
-		keys = await readPublicLibraryKeys(config, LIBRARY_EXPORT_RECORD_CAP + 1);
-	} else {
-		const { context } = selection;
-		const { issues } = resolveSearchQuery(context, config);
-		if (issues.length) throw new LibraryExportError("exportInvalid", issues.map(issue => issue.message).join(" "), 400);
-		keys = [];
-		if (allowedKeys?.length !== 0) {
-			const { client, index } = await getMeilisearchForConfig(config);
-			const revision = await idleSearchRevision(client, index.uid);
-			const settings = await index.getSettings();
-			if ((settings.pagination?.maxTotalHits ?? 1000) <= LIBRARY_EXPORT_RECORD_CAP) throw new LibraryExportError("exportChanged", "The search index is not ready for complete exports.");
-			const topics = await resolveSearchTopicNodes(context, config);
-			const query = resolveSearchRequest(context, config, topics);
-			const seen = new Set<string>();
-			while (keys.length <= LIBRARY_EXPORT_RECORD_CAP) {
-				checkAborted();
-				const limit = Math.min(500, LIBRARY_EXPORT_RECORD_CAP + 1 - keys.length);
-				const page = await index.search<{ key: string }>(query.search, {
-					offset: keys.length, limit, attributesToRetrieve: ["key"], attributesToSearchOn: query.attributesToSearchOn,
-					...(query.sortOption ? { sort: query.sortOption } : {}),
-					filter: [...query.finalFilters, ...(allowedKeys ? [meilisearchIn("key", allowedKeys)] : [])],
-				});
-				for (const hit of page.hits) {
-					if (typeof hit.key !== "string" || seen.has(hit.key)) throw exportChanged();
-					seen.add(hit.key);
-					keys.push(hit.key);
-				}
-				if (page.hits.length < limit) break;
-			}
-			if (await idleSearchRevision(client, index.uid) !== revision) throw exportChanged();
+	return { allowedKeys, checkReader };
+}
+
+async function collectSearchKeys(index: Awaited<ReturnType<typeof getMeilisearchForConfig>>["index"], query: ReturnType<typeof resolveSearchRequest>, allowedKeys: string[] | undefined, signal: AbortSignal) {
+	const keys: string[] = [];
+	const seen = new Set<string>();
+	const filter = [...query.finalFilters, ...(allowedKeys ? [meilisearchIn("key", allowedKeys)] : [])];
+	while (keys.length <= LIBRARY_EXPORT_RECORD_CAP) {
+		signal.throwIfAborted();
+		const limit = Math.min(500, LIBRARY_EXPORT_RECORD_CAP + 1 - keys.length);
+		const page = await index.search<{ key: string }>(query.search, {
+			offset: keys.length, limit, attributesToRetrieve: ["key"], attributesToSearchOn: query.attributesToSearchOn,
+			...(query.sortOption ? { sort: query.sortOption } : {}), filter,
+		});
+		for (const hit of page.hits) {
+			if (typeof hit.key !== "string" || seen.has(hit.key)) throw exportChanged();
+			seen.add(hit.key);
+			keys.push(hit.key);
 		}
+		if (page.hits.length < limit) break;
 	}
-	if (keys.length > LIBRARY_EXPORT_RECORD_CAP) throw exportTooLarge();
-	if (selection.expectedCount !== undefined && keys.length !== selection.expectedCount) throw exportChanged();
-	await checkReader();
+	return keys;
+}
+
+async function readSearchKeys(config: LibraryServerConfig, context: LibrarySearchContext, allowedKeys: string[] | undefined, signal: AbortSignal) {
+	const { issues } = resolveSearchQuery(context, config);
+	if (issues.length) throw new LibraryExportError("exportInvalid", issues.map(issue => issue.message).join(" "), 400);
+	if (allowedKeys?.length === 0) return [];
+	const { client, index } = await getMeilisearchForConfig(config);
+	const revision = await idleSearchRevision(client, index.uid);
+	const settings = await index.getSettings();
+	if ((settings.pagination?.maxTotalHits ?? 1000) <= LIBRARY_EXPORT_RECORD_CAP) throw new LibraryExportError("exportChanged", "The search index is not ready for complete exports.");
+	const topics = await resolveSearchTopicNodes(context, config);
+	const query = resolveSearchRequest(context, config, topics);
+	const keys = await collectSearchKeys(index, query, allowedKeys, signal);
+	if (await idleSearchRevision(client, index.uid) !== revision) throw exportChanged();
+	return keys;
+}
+
+function createRecordReader(config: LibraryServerConfig, keys: string[], checkReader: () => Promise<void>): CitationRecordReader {
 	const positions = new Map(keys.map((key, index) => [key, index]));
-	const readPage: CitationRecordReader = async (afterKey, limit) => {
+	return async (afterKey, limit) => {
 		await checkReader();
 		if (afterKey !== null && !positions.has(afterKey)) throw exportChanged();
 		const offset = afterKey === null ? 0 : positions.get(afterKey)! + 1;
@@ -91,5 +98,16 @@ export async function prepareLibraryExport(config: LibraryServerConfig, selectio
 		await checkReader();
 		return records;
 	};
-	return { count: keys.length, readPage };
+}
+
+export async function prepareLibraryExport(config: LibraryServerConfig, selection: LibraryExportRequest, request: Request) {
+	const readerList = selection.scope === "results" ? selection.context.readerList : null;
+	const { allowedKeys, checkReader } = await prepareReaderList(config, readerList, request);
+	const keys = selection.scope === "library"
+		? await readPublicLibraryKeys(config, LIBRARY_EXPORT_RECORD_CAP + 1)
+		: await readSearchKeys(config, selection.context, allowedKeys, request.signal);
+	if (keys.length > LIBRARY_EXPORT_RECORD_CAP) throw exportTooLarge();
+	if (selection.expectedCount !== undefined && keys.length !== selection.expectedCount) throw exportChanged();
+	await checkReader();
+	return { count: keys.length, readPage: createRecordReader(config, keys, checkReader) };
 }

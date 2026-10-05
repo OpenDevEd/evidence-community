@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
@@ -114,27 +114,41 @@ export type ReaderListRequest = { userId: string; collectionId: string };
  * as the viewer may see them. Someone else's private collection is refused
  * and a collection that is not the reader's does not exist here.
  */
-export async function readReaderListKeys(
+async function readerListQuery(
 	database: Database,
 	{ userId, collectionId }: ReaderListRequest,
 	viewerUserId: string | null,
-): Promise<{ keys: string[] } | { refused: 403 | 404 }> {
+) {
 	if (!collectionId) {
-		const rows = await database.select({ itemKey: readerBookmark.itemKey }).from(readerBookmark).where(eq(readerBookmark.userId, userId));
-		return { keys: rows.map((row) => row.itemKey) };
+		return { query: database.select({ itemKey: readerBookmark.itemKey }).from(readerBookmark).where(eq(readerBookmark.userId, userId)) };
 	}
-	if (!isReaderCollectionId(collectionId)) return { refused: 404 };
+	if (!isReaderCollectionId(collectionId)) return { refused: 404 as const };
 	const collection = await database.query.readerCollection.findFirst({
 		where: and(eq(readerCollection.id, collectionId), eq(readerCollection.userId, userId)),
 		columns: { private: true },
 	});
-	if (!collection) return { refused: 404 };
-	if (collection.private && viewerUserId !== userId) return { refused: 403 };
-	const rows = await database
+	if (!collection) return { refused: 404 as const };
+	if (collection.private && viewerUserId !== userId) return { refused: 403 as const };
+	return { query: database
 		.select({ itemKey: readerCollectionItem.itemKey })
 		.from(readerCollectionItem)
-		.where(eq(readerCollectionItem.collectionId, collectionId));
+		.where(eq(readerCollectionItem.collectionId, collectionId)) };
+}
+
+export async function readReaderListKeys(database: Database, request: ReaderListRequest, viewerUserId: string | null): Promise<{ keys: string[] } | { refused: 403 | 404 }> {
+	const selection = await readerListQuery(database, request, viewerUserId);
+	if (selection.refused) return { refused: selection.refused };
+	const rows = await selection.query;
 	return { keys: rows.map((row) => row.itemKey) };
+}
+
+/** Compare membership without sending the entire collection over the network for every export page. */
+export async function readReaderListRevision(database: Database, request: ReaderListRequest, viewerUserId: string | null): Promise<{ revision: string } | { refused: 403 | 404 }> {
+	const selection = await readerListQuery(database, request, viewerUserId);
+	if (selection.refused) return { refused: selection.refused };
+	const membership = selection.query.as("membership");
+	const [state] = await database.select({ revision: sql<string>`encode(sha256(convert_to(coalesce(string_agg(${membership.itemKey}, ',' order by ${membership.itemKey} collate "C"), ''), 'UTF8')), 'hex')` }).from(membership);
+	return state;
 }
 
 /** Adds or removes a bookmark and answers whether the record is bookmarked now. */
