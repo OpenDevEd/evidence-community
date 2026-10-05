@@ -52,9 +52,7 @@ describe("single-record download options", () => {
 					isOpen
 					onOpenChange={vi.fn()}
 					onClose={vi.fn()}
-					action={vi.fn(async () => "TY  - JOUR")}
-					fileName="ABCD1234"
-					citationPath={citationPath}
+					source={{ action: vi.fn(async () => "TY  - JOUR"), fileName: "ABCD1234", citationPath }}
 				/>,
 			);
 		});
