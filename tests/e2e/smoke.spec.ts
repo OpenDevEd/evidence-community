@@ -1082,14 +1082,16 @@ test("keeps the whole-library export total independent of the search", async ({ 
 	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
 	await dismissConsent(page);
 	await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }).first()).toBeVisible();
-	const button = page.getByRole("button", { name: /^Download library/ });
-	const count = Number((await button.innerText()).match(/([\d,]+)\s*$/)?.[1].replaceAll(",", ""));
-	expect(count).toBeGreaterThan(0);
+	const button = page.getByRole("button", { name: "Download", exact: true });
 	await button.click();
-	await page.route("**/lib/export/ris", route => route.fulfill({status: 503, body: "Unavailable"}));
+	const wholeLibrary = page.getByRole("radio", { name: /^Whole library/ });
+	const count = Number((await wholeLibrary.ariaSnapshot()).match(/\(([\d,]+)\)/)?.[1].replaceAll(",", ""));
+	expect(count).toBeGreaterThan(0);
+	await wholeLibrary.check();
+	await page.route("**/api/exports/ris", route => route.fulfill({status: 503, body: "Unavailable"}));
 	await page.getByRole("option", {name: /^RIS/}).click();
 	await expect(page.getByText("Download failed", {exact: true})).toBeVisible();
-	await page.unroute("**/lib/export/ris");
+	await page.unroute("**/api/exports/ris");
 
 	const downloadStarted = page.waitForEvent("download");
 	await page.getByRole("option", { name: /^RIS/ }).click();
@@ -1129,4 +1131,3 @@ for (const width of [1200, 390]) {
 		await expect(page.locator("#page-content")).toBeFocused();
 	});
 }
-
