@@ -225,7 +225,7 @@ const parts: { shows: Part; title: string; text: string; has: (data: HomeData) =
 	{ shows: "publications", title: "Publications", text: "The latest additions, each with its abstract and, where the licence allows, the PDF.", has: (data) => data.recent.length > 0 },
 	{ shows: "ai", title: "Ask the library", text: "Answers come from the publications and their full text, and name their sources.", has: (data) => data.ai },
 	{ shows: "citations", title: "Citations", text: "The publications cited most often. Each page links to what it cites and what cites it.", has: (data) => data.cited.length > 0 },
-	{ shows: "digests", title: "Digests", text: "A regular summary of new additions.", has: (data) => Boolean(data.digests?.editions.length) },
+	{ shows: "digests", title: "Digests", text: "A regular summary of recent publications.", has: (data) => Boolean(data.digests?.editions.length) },
 ];
 
 function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeData; surface: Tone; questions?: string[] }) {

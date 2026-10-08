@@ -144,8 +144,8 @@ function EmptyArchive({next, settings}: {next: DigestDate | null; settings: Dige
 }
 
 function firstEdition(next: DigestDate | null) {
-  // A send date with nothing new is skipped, so the date is only when the first one is due.
-  return next ? `The first is due on ${next.weekday}, if new publications have been added by then.` : "The first will appear after new publications are added.";
+  // A send date with nothing to cover is skipped, so the date is only when the first one is due.
+  return next ? `The first is due on ${next.weekday}, if there are publications to cover by then.` : "The first will appear when there are publications to cover.";
 }
 
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
