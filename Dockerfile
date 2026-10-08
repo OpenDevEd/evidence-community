@@ -45,9 +45,17 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM ${RUNTIME_IMAGE} AS library-runtime
 
 # Local fonts for publication previews, including Arabic, Indic and CJK scripts.
+# jemalloc replaces glibc's allocator, which keeps memory that reading PDFs has freed. An idle import worker held 17 GB.
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends fontconfig fonts-noto-core fonts-noto-cjk \
+	&& apt-get install -y --no-install-recommends fontconfig fonts-noto-core fonts-noto-cjk libjemalloc2 \
+	&& ln -s "$(ls /usr/lib/*-linux-gnu/libjemalloc.so.2)" /usr/local/lib/libjemalloc.so.2 \
 	&& rm -rf /var/lib/apt/lists/*
+
+# A worker thread that has gone idle returns its memory only through jemalloc's background thread.
+ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
+ENV MALLOC_CONF=background_thread:true
+# The loader only warns about a preload it cannot open, so the build fails here instead.
+RUN node -e "process.exit(require('node:fs').readFileSync('/proc/self/maps', 'utf8').includes('libjemalloc') ? 0 : 1)"
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
