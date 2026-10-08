@@ -156,18 +156,6 @@ jobs:
       - self-hosted
       - evidence-library-runtime
     timeout-minutes: 45
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_PASSWORD: integration
-        ports:
-          - 5432/tcp
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
       PLAYWRIGHT_WORKERS: "4"
       # Eight took the admin suite from 98 to 65 seconds on the CI guest. The
@@ -184,6 +172,27 @@ jobs:
       - name: Install Chromium
         run: ./node_modules/.bin/playwright install chromium
 
+      # Each runtime runner has its own rootless Docker, and each daemon hands out host ports
+      # from the same range without knowing the others' bindings, so a service container's
+      # random port can collide with another job's. The integration database takes a port
+      # the guest reports free, and tries another if a job takes it first.
+      - name: Start the integration database
+        run: |
+          set -euo pipefail
+          name="integration-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${RUNNER_NAME}"
+          echo "INTEGRATION_DB_CONTAINER=$name" >> "$GITHUB_ENV"
+          for attempt in 1 2 3 4 5; do
+            port="$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')"
+            if docker run -d --name "$name" -e POSTGRES_PASSWORD=integration -p "127.0.0.1:$port:5432" \
+              --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30 pgvector/pgvector:pg17 > /dev/null; then
+              break
+            fi
+            docker rm -f "$name" > /dev/null 2>&1 || true
+            [ "$attempt" = 5 ] && { echo "::error::No free port for the integration database"; exit 1; }
+          done
+          until [ "$(docker inspect -f '{{.State.Health.Status}}' "$name")" = healthy ]; do sleep 1; done
+          echo "INTEGRATION_DATABASE_URL=postgresql://postgres:integration@localhost:$port/postgres" >> "$GITHUB_ENV"
+
       - name: Use the persistent Docker builder
         run: |
           docker buildx use evidence-library-runtime
@@ -193,8 +202,6 @@ jobs:
         run: npm run test:library-compose
 
       - name: Run end-to-end and integration tests
-        env:
-          INTEGRATION_DATABASE_URL: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports['5432'] }}/postgres
         run: |
           # The integration tests need only their own database, so they run
           # beside the acceptance suite instead of holding a second runner.
@@ -226,6 +233,10 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Remove the integration database
+        if: always()
+        run: docker rm -f "${INTEGRATION_DB_CONTAINER:-}" > /dev/null 2>&1 || true
 
   ci:
     name: CI
