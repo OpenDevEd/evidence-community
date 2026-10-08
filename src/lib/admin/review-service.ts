@@ -1,4 +1,8 @@
 import { captureItemReviewSnapshot } from "./review-snapshot";
+import { readPublicationRepositorySnapshot } from "@/lib/publication/repository";
+import { lockedZenodoIdentifierPolicy } from "@/lib/publication/zenodo-policy";
+import { ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
+import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { activateCrossrefPublicationInTransaction } from "@/lib/publication/crossref-activation-service";
 import { activateZenodoPublicationInTransaction } from "@/lib/publication/zenodo-activation-service";
@@ -66,6 +70,7 @@ export async function reviewChildKeys(
 export async function getItemPublishingChoice(
 	db: Database | DatabaseTransaction,
 	itemKey: string,
+	config: Pick<LibraryServerConfig, "services">,
 ): Promise<PublishingChoiceState> {
 	const [record] = await db
 		.select({
@@ -79,13 +84,23 @@ export async function getItemPublishingChoice(
 		)
 		.where(eq(itemIdentity.key, itemKey));
 	if (!record) throw new ItemNotFoundError(itemKey);
-	return record;
+	const snapshot = await readPublicationRepositorySnapshot(db, itemKey, config.services.publication.crossref.environment);
+	return {
+		...record,
+		lockedIdentifierPolicy: lockedZenodoIdentifierPolicy(snapshot, config.services.publication.zenodo.environment),
+	};
+}
+
+function assertPublishingChoiceAllowed(state: PublishingChoiceState, choice: PublishingChoice | null) {
+	if (choice && zenodoPolicyChangeReason(state.lockedIdentifierPolicy, choice.identifierPolicy))
+		throw new ZenodoIdentifierPolicyLockedError();
 }
 
 export async function setItemPublishingChoice(
 	db: Database,
 	itemKey: string,
 	input: unknown,
+	config: Pick<LibraryServerConfig, "services">,
 ) {
 	const choice = publishingChoiceSchema.nullable().parse(input);
 	return db.transaction(async (transaction) => {
@@ -105,8 +120,10 @@ export async function setItemPublishingChoice(
 			throw new AdminValidationError(
 				"Choose identifiers on the parent item.",
 			);
+		const state = await getItemPublishingChoice(transaction, itemKey, config);
+		assertPublishingChoiceAllowed(state, choice);
 		if (choice === null) {
-			if (!(await getItemPublishingChoice(transaction, itemKey)).canClear)
+			if (!state.canClear)
 				throw new AdminValidationError(
 					"Identifiers have already been activated for this item and cannot be removed.",
 				);
@@ -129,6 +146,7 @@ export async function setItemPublishingChoice(
 async function submissionPublishingChoice(
 	transaction: DatabaseTransaction,
 	itemKey: string,
+	config: Pick<LibraryServerConfig, "services">,
 ) {
 	const [pending] = await transaction
 		.select({ id: itemReview.id })
@@ -157,17 +175,16 @@ async function submissionPublishingChoice(
 		throw new AdminValidationError(
 			"Resolve the working draft conflicts before submitting again.",
 		);
-	const [choiceRow] = await transaction
-		.select()
-		.from(itemPublishingChoice)
-		.where(eq(itemPublishingChoice.itemKey, itemKey));
-	return choiceRow?.choice ?? null;
+	const state = await getItemPublishingChoice(transaction, itemKey, config);
+	assertPublishingChoiceAllowed(state, state.choice);
+	return state.choice;
 }
 
 export async function submitItemReview(
 	db: Database,
 	rootKey: string,
 	actor: ReviewActor,
+	config: Pick<LibraryServerConfig, "services">,
 ) {
 	return db.transaction(async (transaction) => {
 		const children = await reviewChildKeys(transaction, rootKey);
@@ -189,6 +206,7 @@ export async function submitItemReview(
 		const publishingChoice = await submissionPublishingChoice(
 			transaction,
 			rootKey,
+			config,
 		);
 		const { records, capturedFiles } = await captureItemReviewSnapshot(
 			transaction,

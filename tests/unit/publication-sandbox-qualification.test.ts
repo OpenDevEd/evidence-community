@@ -2,10 +2,26 @@ import { describe, expect, it } from "vitest";
 
 import {
 	applySandboxDraftChanges,
+	assertSandboxConfiguration,
 	zenodoFile,
 } from "../../tools/publicationSandboxQualification";
 
 describe("publication sandbox qualification", () => {
+	const expected = {baseUrl: "https://sandbox.example.org", libraryId: "qa-library", prefix: "10.53832", namespace: "qa."};
+	const configuration = {...expected, crossrefEnvironment: "test" as const, zenodoEnvironment: "sandbox" as const};
+	it("accepts the explicitly confirmed library and sandbox providers", () => {
+		expect(() => assertSandboxConfiguration(configuration, expected)).not.toThrow();
+	});
+	it.each([
+		{libraryId: "another-library"},
+		{baseUrl: "https://another.example.org"},
+		{crossrefEnvironment: "production" as const},
+		{zenodoEnvironment: "production" as const},
+		{prefix: "10.99999"},
+		{namespace: "another."},
+	])("rejects an unconfirmed runtime before qualification writes: %j", changes => {
+		expect(() => assertSandboxConfiguration({...configuration, ...changes}, expected)).toThrow();
+	});
 	it("keeps the full draft payload when changing metadata", () => {
 		expect(
 			applySandboxDraftChanges(

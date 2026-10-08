@@ -5,11 +5,14 @@ import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Link01Icon, Tick01Icon, Add01Icon } from "@hugeicons/core-free-icons";
 import type { getAdminCrossrefReservation } from "./admin-api";
+import type { PublishingChoiceState } from "@/lib/admin/review-contract";
+import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
 
 type Props = {
 	reservation:
 		Awaited<ReturnType<typeof getAdminCrossrefReservation>> | undefined;
 	policy: "reuse-crossref" | "mint-zenodo" | undefined;
+	lockedPolicy: PublishingChoiceState["lockedIdentifierPolicy"] | undefined;
 	readOnly: boolean;
 	saving: boolean;
 	onReserve: () => void;
@@ -19,6 +22,7 @@ type Props = {
 export function CrossrefIdentifierControls({
 	reservation,
 	policy,
+	lockedPolicy,
 	readOnly,
 	saving,
 	onReserve,
@@ -76,6 +80,7 @@ export function CrossrefIdentifierControls({
 					options={[
 						{
 							key: "reuse-crossref",
+							disabledReason: zenodoPolicyChangeReason(lockedPolicy, "reuse-crossref"),
 							label: "Use Crossref DOI",
 							content: (
 								<>
@@ -89,6 +94,7 @@ export function CrossrefIdentifierControls({
 						},
 						{
 							key: "mint-zenodo",
+							disabledReason: zenodoPolicyChangeReason(lockedPolicy, "mint-zenodo"),
 							label: "Separate DOI",
 							content: (
 								<>

@@ -13,17 +13,45 @@ import { parseAdminItemListRequest } from "../../src/lib/admin/item-list-contrac
 import { getAdminPdfObject } from "../../src/lib/admin/file-cover-query";
 import { getAdminReviewSnapshot } from "../../src/lib/admin/review-query";
 import { AdminValidationError } from "../../src/lib/admin/errors";
-import { itemReview } from "../../src/db/schema/review";
+import { itemReview, itemPublishingChoice } from "../../src/db/schema/review";
 import { item } from "../../src/db/schema/tables/item";
 import { itemFilePublication, sourceConnection } from "../../src/db/schema/source";
 import { itemFieldOverride, itemSourceValue } from "../../src/db/schema/topics";
-import { publicationTarget, publicationSyncJob } from "../../src/db/schema/publication";
+import { publicationTarget, publicationSyncJob, publicationSyncState } from "../../src/db/schema/publication";
+import { ZenodoIdentifierPolicyLockedError } from "../../src/lib/publication/errors";
 import { getItemPublishingChoice, correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../../src/lib/admin/review-service";
 import { createNativeItemDraft, publishItemDraft as publishNativeItemDraft, saveItemDraft as saveNativeItemDraft, getItemDraft as getNativeItemDraft, openItemDraft as openNativeItemDraft, discardItemDraft, removeNativeItem, unpublishNativeItem } from "../../src/lib/admin/native-item-service";
 import { stageNativePdfUpload, completeNativePdfUpload, discardNativePdfDraft, stageNativePdfRemoval, undoNativePdfRemoval } from "../../src/lib/admin/native-file-service";
 const reviewConfig = libraryConfigSchema.parse({...maximalLibraryConfig, sources: []});
 const PUBLICATION_TAGS = ["publish-record"] as const;
 const noFileActor = {userId: "no-file-creator", role: "creator"} as const;
+it.each(["reuse-crossref", "mint-zenodo"] as const)("rejects incompatible %s choices before save and submission, while preserving valid routes", async (policy) => {
+	await withIsolatedPublicationDatabase(async db => {
+		const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Locked identifier", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});
+		const compatible = {route: "crossref-zenodo", identifierPolicy: policy};
+		const incompatible = policy === "reuse-crossref" ? {route: "zenodo", identifierPolicy: "mint-zenodo"} : {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"};
+		await db.insert(publicationTarget).values({itemKey: draft.itemKey, provider: "zenodo", environment: "sandbox", identifierPolicy: policy, requestedBy: "editor"});
+		// Activation without a provider write must still permit a different choice.
+		await setItemPublishingChoice(db, draft.itemKey, incompatible, reviewConfig);
+		assert.equal((await getItemPublishingChoice(db, draft.itemKey, reviewConfig)).lockedIdentifierPolicy, null);
+		await db.insert(publicationSyncState).values({itemKey: draft.itemKey, provider: "zenodo", environment: "sandbox", identifierPolicy: policy, unpublishedDraftDepositionId: "12345"});
+		await assert.rejects(submitItemReview(db, draft.itemKey, noFileActor, reviewConfig), ZenodoIdentifierPolicyLockedError);
+		assert.equal((await db.select().from(itemReview)).length, 0);
+		await setItemPublishingChoice(db, draft.itemKey, compatible, reviewConfig);
+		await assert.rejects(setItemPublishingChoice(db, draft.itemKey, incompatible, reviewConfig), ZenodoIdentifierPolicyLockedError);
+		assert.deepEqual((await db.select().from(itemPublishingChoice))[0]?.choice, compatible);
+		assert.equal((await getItemPublishingChoice(db, draft.itemKey, reviewConfig)).lockedIdentifierPolicy, policy);
+		const productionConfig = structuredClone(reviewConfig);
+		productionConfig.services.publication.zenodo.environment = "production";
+		assert.equal((await getItemPublishingChoice(db, draft.itemKey, productionConfig)).lockedIdentifierPolicy, null);
+		if (policy === "mint-zenodo") {
+			await setItemPublishingChoice(db, draft.itemKey, {route: "zenodo", identifierPolicy: policy}, reviewConfig);
+			await setItemPublishingChoice(db, draft.itemKey, compatible, reviewConfig);
+		}
+		const review = await submitItemReview(db, draft.itemKey, noFileActor, reviewConfig);
+		assert.deepEqual(review.snapshot.publishingChoice, compatible);
+	});
+});
 it("hides topic source conflicts from reviews while Topics are off", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const draft = await createNativeItemDraft(db, {
@@ -48,7 +76,7 @@ it("hides topic source conflicts from reviews while Topics are off", async () =>
 				sourceConnectionKey: "oa",
 			},
 		]);
-		const review = await submitItemReview(db, draft.itemKey, noFileActor);
+		const review = await submitItemReview(db, draft.itemKey, noFileActor, reviewConfig);
 		const snapshot = await getAdminReviewSnapshot(db, review.id, {
 			topicsEnabled: false,
 		});
@@ -65,15 +93,15 @@ it('allows no identifiers by default and after clearing a choice, and publishes 
   const storage = new MemoryFileStorage();
   for (const route of [null, "zenodo", "crossref-zenodo"] as const) {
    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Publication without identifiers"});
-   assert.deepEqual(await getItemPublishingChoice(db, draft.itemKey), {choice: null, canClear: true});
+   assert.deepEqual(await getItemPublishingChoice(db, draft.itemKey, reviewConfig), {choice: null, canClear: true, lockedIdentifierPolicy: null});
    if (route) {
-    await setItemPublishingChoice(db, draft.itemKey, route === "zenodo" ? {route, identifierPolicy: "mint-zenodo"} : {route, identifierPolicy: "reuse-crossref"});
-    await setItemPublishingChoice(db, draft.itemKey, null);
-    assert.equal((await getItemPublishingChoice(db, draft.itemKey)).choice, null);
+    await setItemPublishingChoice(db, draft.itemKey, route === "zenodo" ? {route, identifierPolicy: "mint-zenodo"} : {route, identifierPolicy: "reuse-crossref"}, reviewConfig);
+    await setItemPublishingChoice(db, draft.itemKey, null, reviewConfig);
+    assert.equal((await getItemPublishingChoice(db, draft.itemKey, reviewConfig)).choice, null);
    }
-   const review = await submitItemReview(db, draft.itemKey, noFileActor);
+   const review = await submitItemReview(db, draft.itemKey, noFileActor, reviewConfig);
    assert.equal(review.snapshot.publishingChoice, null);
-   await setItemPublishingChoice(db, draft.itemKey, {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"});
+   await setItemPublishingChoice(db, draft.itemKey, {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"}, reviewConfig);
    const result = await approveItemReview(db, storage, {reviewId: review.id, expectedRevision: review.revision, publicationTags: PUBLICATION_TAGS}, {userId: "editor", role: "editor"}, reviewConfig);
    assert.equal(result.review.state, "published");
    assert.equal((await db.select().from(item).where(eq(item.key, draft.itemKey))).length, 1);
@@ -91,9 +119,9 @@ it('publishes the frozen identifier choice without a PDF and resolves later draf
         await publishNativeItemDraft(db, citationTarget.itemKey);
         const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{creatorType: "author", name: "Learning Lab"}], links: {cites: [citationTarget.itemKey], related: []} });
 
-		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
-		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor);
-        await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
+		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, reviewConfig);
+		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor, reviewConfig);
+        await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" }, reviewConfig);
 		let creatorDenied = false;
 		try { await approveItemReview(db, reviewStorage, { reviewId: noFileReview.id, expectedRevision: noFileReview.revision, publicationTags: PUBLICATION_TAGS }, noFileActor, reviewConfig); }
 		catch (error) { creatorDenied = error instanceof AdminValidationError; }
@@ -127,8 +155,8 @@ it('publishes the frozen identifier choice without a PDF and resolves later draf
 
         const activatedTargets = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, noFileDraft.itemKey));
         assert(activatedTargets.length === 2 && activatedTargets.every(target => target.activatedAt !== null), "Approval used the later draft route instead of its submitted Crossref and Zenodo choice");
-        assert.equal((await getItemPublishingChoice(db, noFileDraft.itemKey)).canClear, false);
-        await assert.rejects(setItemPublishingChoice(db, noFileDraft.itemKey, null), AdminValidationError);
+        assert.equal((await getItemPublishingChoice(db, noFileDraft.itemKey, reviewConfig)).canClear, false);
+        await assert.rejects(setItemPublishingChoice(db, noFileDraft.itemKey, null, reviewConfig), AdminValidationError);
         const activationJobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, noFileDraft.itemKey));
         assert(activationJobs.length === 2 && activationJobs.every(job => job.processedAt === null), "Approval failed to queue both providers without files");
 
@@ -152,7 +180,7 @@ it('clears conflicts when their working draft is discarded or attachment removed
             }
             const field = removeChild ? "note" : "title";
             const opened = await openNativeItemDraft(db, target.itemKey);
-            const submission = await submitItemReview(db, root.itemKey, noFileActor);
+            const submission = await submitItemReview(db, root.itemKey, noFileActor, reviewConfig);
             await saveNativeItemDraft(db, {itemKey: target.itemKey, expectedDraftGeneration: opened.generation, expectedDraftRevision: opened.draftRevision, expectedPayload: opened.payload, payload: {...opened.payload, [field]: "Later working value"}});
             const correctedSubmission = await correctItemReview(db, {reviewId: submission.id, expectedRevision: submission.revision, records: submission.snapshot.records.filter(record => record.itemKey === target.itemKey).map(record => ({...record, payload: {...record.payload, [field]: "Approved correction"}}))}, {userId: "recovery-editor", role: "editor"});
             const approval = await approveItemReview(db, reviewStorage, {reviewId: submission.id, expectedRevision: correctedSubmission.revision, publicationTags: PUBLICATION_TAGS}, {userId: "recovery-editor", role: "editor"}, reviewConfig);
@@ -162,7 +190,7 @@ it('clears conflicts when their working draft is discarded or attachment removed
             const [cleared] = await db.select().from(itemReview).where(eq(itemReview.id, submission.id));
             assert(!cleared?.remainingConflicts[target.itemKey], "Discarded edits left a conflict blocking resubmission");
             assert(cleared.revision === approval.review.revision + 1, "Conflict removal did not invalidate the old review revision");
-            const resubmission = await submitItemReview(db, root.itemKey, noFileActor);
+            const resubmission = await submitItemReview(db, root.itemKey, noFileActor, reviewConfig);
             await resolveItemReview(db, {reviewId: resubmission.id, expectedRevision: resubmission.revision, action: "withdrawn"}, noFileActor);
         }
 
@@ -183,7 +211,7 @@ it('submits the materialized draft after source updates without changing the pub
   assert(displayed);
   assert.equal(displayed.payload.title, "Working title");
   assert.equal(displayed.payload.abstractNote, "Updated source abstract");
-  const submitted = await submitItemReview(db, created.itemKey, noFileActor);
+  const submitted = await submitItemReview(db, created.itemKey, noFileActor, reviewConfig);
   const record = submitted.snapshot.records.find(record => record.itemKey === created.itemKey);
   assert.equal(record?.baseRevision, sourceUpdate!.revision);
   assert.deepEqual(record?.payload, displayed.payload);
@@ -202,7 +230,7 @@ it('rejects approval when public data changes after submission', async () => {
 
         await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, staleRoot.itemKey));
         await publishNativeItemDraft(db, staleRoot.itemKey);
-        const staleSubmission = await submitItemReview(db, staleRoot.itemKey, noFileActor);
+        const staleSubmission = await submitItemReview(db, staleRoot.itemKey, noFileActor, reviewConfig);
         const citing = await createNativeItemDraft(db, {itemType: "Report", title: "New citation", links: {cites: [staleRoot.itemKey], related: []}});
 
         await publishNativeItemDraft(db, citing.itemKey);
@@ -224,12 +252,12 @@ it('keeps an imported restoration private until approved', async () => {
         const imported = await createNativeItemDraft(db, { itemType: "Report", title: "Imported restoration" });
 
         await db.update(itemIdentity).set({ kind: "imported" }).where(eq(itemIdentity.key, imported.itemKey));
-        const importedSubmission = await submitItemReview(db, imported.itemKey, noFileActor);
+        const importedSubmission = await submitItemReview(db, imported.itemKey, noFileActor, reviewConfig);
         const reviewer = { userId: "restoration-editor", role: "editor" } as const;
         await approveItemReview(db, reviewStorage, { reviewId: importedSubmission.id, expectedRevision: importedSubmission.revision, publicationTags: PUBLICATION_TAGS }, reviewer, reviewConfig);
         await unpublishNativeItem(db, imported.itemKey);
         await openNativeItemDraft(db, imported.itemKey);
-        const restoration = await submitItemReview(db, imported.itemKey, noFileActor);
+        const restoration = await submitItemReview(db, imported.itemKey, noFileActor, reviewConfig);
         const [beforeRestore] = await db.select().from(item).where(eq(item.key, imported.itemKey));
         assert(beforeRestore?.deleted === 1, "Submitting restoration made the item public without approval");
         await approveItemReview(db, reviewStorage, { reviewId: restoration.id, expectedRevision: restoration.revision, publicationTags: PUBLICATION_TAGS }, reviewer, reviewConfig);
@@ -250,9 +278,9 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		const reviewStage = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "submitted.pdf", expectedSizeBytes: reviewPdf.byteLength, expectedSha256: fileHash(reviewPdf), maxPdfBytes: 10_000_000 });
 		reviewStorage.privateFiles.set(reviewStage.upload.path, reviewPdf);
 		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: reviewStage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
+		await setItemPublishingChoice(db, reviewParent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" }, reviewConfig);
 		const actor = { userId: "review-test-creator", role: "creator" } as const;
-		const captured = await submitItemReview(db, reviewParent.itemKey, actor);
+		const captured = await submitItemReview(db, reviewParent.itemKey, actor, reviewConfig);
         const getAdminPdfCover = async (...[database, storage, key, revision, reviewId]: [typeof db, typeof reviewStorage, string, number, string?]) => (await getAdminPdfObject(database, storage, key, revision, "cover", reviewId)).bytes;
         const originalCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision);
         const submittedPdf = await getAdminPdfObject(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision, "file", captured.id);
@@ -263,7 +291,7 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
         await assert.rejects(getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision + 1, captured.id), /not found/i);
         const resolvedRoot = await createNativeItemDraft(db, {itemType: "Report", title: "Already reviewed"});
         await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, resolvedRoot.itemKey));
-        const resolvedSubmission = await submitItemReview(db, resolvedRoot.itemKey, actor);
+        const resolvedSubmission = await submitItemReview(db, resolvedRoot.itemKey, actor, reviewConfig);
         await approveItemReview(db, reviewStorage, {reviewId: resolvedSubmission.id, expectedRevision: resolvedSubmission.revision, publicationTags: PUBLICATION_TAGS}, {userId: "editor", role: "editor"}, reviewConfig);
 		const queued = await getAdminItemListPage(db, parseAdminItemListRequest({ reviewQueue: true }));
 		assert(queued.items.some((entry) => entry.key === reviewParent.itemKey), "Submitted root is missing from review queue");
@@ -296,7 +324,7 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		await discardNativePdfDraft(db, reviewStorage, reviewAttachment.itemKey);
 		assert(reviewStorage.privateFiles.has(reviewStage.upload.path), "Discarding a later draft deleted the submitted PDF");
 		assert(!reviewStorage.privateFiles.has(reviewReplacement.upload.path), "Discarding an unreferenced working PDF leaked its object");
-		const nextReview = await submitItemReview(db, reviewParent.itemKey, actor);
+		const nextReview = await submitItemReview(db, reviewParent.itemKey, actor, reviewConfig);
 		const withdrawn = await resolveItemReview(db, { reviewId: nextReview.id, expectedRevision: nextReview.revision, action: "withdrawn" }, actor);
 		assert(withdrawn.state === "withdrawn", "Creator could not withdraw their review");
 		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
@@ -305,7 +333,7 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		assert(reviewStorage.publicFiles.has(stillPublic.objectPath), "Staging removal deleted the public PDF");
 		await undoNativePdfRemoval(db, reviewAttachment.itemKey);
 		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
-		const removalReview = await submitItemReview(db, reviewParent.itemKey, actor);
+		const removalReview = await submitItemReview(db, reviewParent.itemKey, actor, reviewConfig);
 		const laterUpload = await stageNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, filename: "after-removal.pdf", expectedSizeBytes: replacementPdf.byteLength, expectedSha256: fileHash(replacementPdf), maxPdfBytes: 10_000_000 });
 		reviewStorage.privateFiles.set(laterUpload.upload.path, replacementPdf);
 		await completeNativePdfUpload(db, reviewStorage, { itemKey: reviewAttachment.itemKey, expectedUploadRevision: laterUpload.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
@@ -326,8 +354,8 @@ it('opens a reviewable parent draft when an attachment is added to a published r
     const attachment = await createNativeItemDraft(db, {itemType: 'Attachment', title: 'New PDF', parentItem: parent.itemKey});
     const draft = await getNativeItemDraft(db, parent.itemKey);
     assert.equal(draft.payload.title, 'Published report');
-    await setItemPublishingChoice(db, parent.itemKey, {route: 'zenodo', identifierPolicy: 'mint-zenodo'});
-    const review = await submitItemReview(db, parent.itemKey, noFileActor);
+    await setItemPublishingChoice(db, parent.itemKey, {route: 'zenodo', identifierPolicy: 'mint-zenodo'}, reviewConfig);
+    const review = await submitItemReview(db, parent.itemKey, noFileActor, reviewConfig);
     assert.deepEqual(review.snapshot.records.map(record => record.itemKey).sort(), [parent.itemKey, attachment.itemKey].sort());
   });
 });

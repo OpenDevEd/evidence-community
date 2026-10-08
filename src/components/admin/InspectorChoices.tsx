@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 const styles = {
 	tabs: {
@@ -29,7 +30,7 @@ export function InspectorChoices<Key extends string>({
 }: {
 	label: string;
 	value: Key | undefined;
-	options: readonly { key: Key; label: string; content: ReactNode }[];
+	options: readonly { key: Key; label: string; content: ReactNode; disabledReason?: string }[];
 	onChange: (key: Key) => void;
 	disabled?: boolean;
 	variant?: keyof typeof styles;
@@ -38,17 +39,20 @@ export function InspectorChoices<Key extends string>({
 	return (
 		<div role="group" aria-label={label} className={style.group}>
 			{options.map((option) => (
+				<Tooltip key={option.key} content={option.disabledReason} isDisabled={!option.disabledReason}>
+				<span className="flex min-w-0 flex-1" tabIndex={option.disabledReason ? 0 : undefined}>
 				<button
-					key={option.key}
 					type="button"
-					disabled={disabled}
+					disabled={disabled || Boolean(option.disabledReason)}
 					aria-label={option.label}
 					aria-pressed={value === option.key}
 					onClick={() => onChange(option.key)}
-					className={`${style.button} ${value === option.key ? style.active : style.inactive}`}
+					className={`${style.button} ${value === option.key ? style.active : style.inactive} disabled:pointer-events-none`}
 				>
 					{option.content}
 				</button>
+				</span>
+				</Tooltip>
 			))}
 		</div>
 	);

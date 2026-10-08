@@ -63,7 +63,7 @@ it("publishes the reviewed country set, keeps later edits private, and preserves
 		const submitted = await submitItemReview(db, created.itemKey, {
 			userId: "country-creator",
 			role: "creator",
-		});
+		}, config);
 		await edit(created.itemKey, ["TZ"]);
 		expect(await focus(created.itemKey)).toEqual(["KE", "UG"]);
 		await approveItemReview(

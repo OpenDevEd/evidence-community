@@ -1,3 +1,4 @@
+import { assertZenodoPolicyMayChange } from "./zenodo-policy";
 import { stateFor } from "./state-adapter";
 import { lockLatestPublicationJob } from "./queue";
 import { and, eq, isNull, ne } from "drizzle-orm";
@@ -18,7 +19,6 @@ import { resolveBibliographicDoi } from "./bibliographic-doi";
 import {
 	ZenodoActivationConfigurationError,
 	ZenodoActivationValidationError,
-	ZenodoIdentifierPolicyLockedError,
 	PublicationItemNotFoundError,
 } from "./errors";
 import {
@@ -223,38 +223,6 @@ function receipt(input: {
 			: null,
 	};
 }
-
-function zenodoHasStarted(snapshot: PublicationRepositorySnapshot, environment: ZenodoPublicationEnvironment) {
-	return (
-		snapshot.identifiers.some(
-			(identifier) =>
-				identifier.registrar === "zenodo" &&
-				identifier.environment === environment,
-		) ||
-		snapshot.states.some(
-			(state) =>
-				state.provider === "zenodo" &&
-				state.environment === environment &&
-				Boolean(
-					state.lastPayloadHash ||
-					state.zenodoRecordId ||
-					state.unpublishedDraftDepositionId,
-				),
-		) ||
-		snapshot.journals.some(
-			(journal) =>
-				journal.provider === "zenodo" &&
-				journal.environment === environment,
-		) ||
-		snapshot.jobs.some(
-			(job) =>
-				job.provider === "zenodo" &&
-				job.environment === environment &&
-				Boolean(job.processedAt || job.leaseOwner),
-		)
-	);
-}
-
 function requireZenodoActivationRecord(
 	snapshot: PublicationRepositorySnapshot,
 ) {
@@ -349,25 +317,6 @@ function prepareZenodoActivation(input: {
 		waitingOn,
 	};
 }
-
-function assertZenodoPolicyMayChange(
-	snapshot: PublicationRepositorySnapshot,
-	policy: ZenodoIdentifierPolicy,
-environment: ZenodoPublicationEnvironment,
-) {
-	const existingTarget = snapshot.targets.find(
-		(target) =>
-			target.provider === "zenodo" && target.environment === environment,
-	);
-	if (
-		existingTarget?.identifierPolicy &&
-		existingTarget.identifierPolicy !== policy &&
-		zenodoHasStarted(snapshot, environment)
-	) {
-		throw new ZenodoIdentifierPolicyLockedError();
-	}
-}
-
 async function saveZenodoActivationTarget(
 	transaction: DatabaseTransaction,
 	input: {

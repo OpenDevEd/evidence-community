@@ -1,3 +1,5 @@
+import { ZENODO_POLICY_LOCKED_MESSAGE } from "./identifier-policy";
+
 export class PublicationItemNotFoundError extends Error {
 	constructor(itemKey: string) {
 		super(`Item ${itemKey} was not found`);
@@ -80,9 +82,7 @@ export class ZenodoActivationValidationError extends Error {
 
 export class ZenodoIdentifierPolicyLockedError extends Error {
 	constructor() {
-		super(
-			"This record has already been sent to Zenodo. Its DOI choice cannot be changed.",
-		);
+		super(ZENODO_POLICY_LOCKED_MESSAGE);
 		this.name = "ZenodoIdentifierPolicyLockedError";
 	}
 }

@@ -93,7 +93,7 @@ it("publishes submitted topics while preserving a newer working topic draft", as
 			},
 			enabledPolicy,
 		);
-		const submitted = await submitItemReview(db, draft.itemKey, creator);
+		const submitted = await submitItemReview(db, draft.itemKey, creator, enabledConfig);
 		await saveItemDraft(
 			db,
 			{
@@ -144,7 +144,7 @@ it("keeps a changed submitted topic assignment private when Topics are disabled"
 			},
 			enabledPolicy,
 		);
-		const submitted = await submitItemReview(db, created.itemKey, creator);
+		const submitted = await submitItemReview(db, created.itemKey, creator, enabledConfig);
 
 		await approveReview(db, submitted, disabledConfig);
 		const [published] = await db
@@ -174,7 +174,7 @@ it("publishes a manual record without a DOI using catalog topic IDs", async () =
 			},
 			enabledPolicy,
 		);
-		const submitted = await submitItemReview(db, draft.itemKey, creator);
+		const submitted = await submitItemReview(db, draft.itemKey, creator, enabledConfig);
 
 		await approveReview(db, submitted);
 		const [published] = await db
@@ -199,7 +199,7 @@ it("publishes a topic review for an imported work with a URL-only PDF child", as
   const key = imported.itemKeys.W888!;
   const draft = await openItemDraft(db, key, enabledPolicy);
   await saveItemDraft(db, {itemKey: key, expectedDraftRevision: draft.draftRevision, expectedPayload: draft.payload, payload: {...draft.payload, topics: ["T12260"]}}, enabledPolicy);
-  const submitted = await submitItemReview(db, key, creator);
+  const submitted = await submitItemReview(db, key, creator, enabledConfig);
   await approveReview(db, submitted);
   expect((await db.select().from(item).where(eq(item.key, key)))[0]?.topics).toEqual(["T12260"]);
   const child = (await db.select().from(item).where(eq(item.parentItem, key)))[0];

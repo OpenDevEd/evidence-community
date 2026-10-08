@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 
 const itemKey = z.string().refine(isCanonicalRecordKey);
@@ -7,7 +8,11 @@ export const publishingChoiceSchema = z.discriminatedUnion("route", [
 	z.object({ route: z.literal("crossref-zenodo"), identifierPolicy: z.enum(["reuse-crossref", "mint-zenodo"]) }),
 ]);
 export type PublishingChoice = z.infer<typeof publishingChoiceSchema>;
-export type PublishingChoiceState = {choice: PublishingChoice | null; canClear: boolean};
+export type PublishingChoiceState = {
+	choice: PublishingChoice | null;
+	canClear: boolean;
+	lockedIdentifierPolicy: ZenodoIdentifierPolicy | null;
+};
 
 export const reviewRecordSchema = z.object({
 	itemKey,

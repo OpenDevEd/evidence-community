@@ -3,21 +3,26 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { PDFDocument, StandardFonts } from "pdf-lib";
+import { chromium } from "@playwright/test";
 
-import type { AdminPublicationWorkerOverview } from "../src/lib/admin/publication-worker-contract";
+import type { AdminPublicationWorkerOverview, AdminPublicationRuntimeOverview } from "../src/lib/admin/publication-worker-contract";
 import type {
 	AdminSearchIndexReceipt,
 	AdminSearchIndexReceiptStatus,
 } from "../src/lib/admin/search-index-contract";
 import type { AdminPublicationView } from "../src/lib/publication/admin-publication-view";
+import type { AdminItemDetail } from "../src/lib/admin/types";
 import { createAdminTestSession } from "./adminSession";
+
+import type { SavedReview } from "../src/lib/admin/review-contract";
 
 type QualificationMode = "crossref" | "zenodo" | "lifecycle";
 
 type PublicationSandboxEvidence = {
-	schemaVersion: 1;
+	schemaVersion: 2;
 	runId: string;
 	baseUrl: string;
+	libraryId: string;
 	createdAt: string;
 	updatedAt: string;
 	parent?: {
@@ -49,6 +54,7 @@ type PublicationSandboxEvidence = {
 		size: number;
 		sha256: string;
 		md5: string;
+		approved?: boolean;
 	};
 	zenodo?: {
 		recordId: string;
@@ -61,6 +67,7 @@ type PublicationSandboxEvidence = {
 type AdminDraft = {
 	itemKey: string;
 	draftRevision: number;
+	generation: string;
 	payload: Record<string, unknown>;
 };
 
@@ -69,7 +76,6 @@ type IndexingMutation = {
 	item?: { revision?: number };
 };
 
-const expectedHost = "docs-pen.opendev.space";
 const defaultTimeoutMs = 20 * 60 * 1000;
 
 function requiredEnvironment(name: string) {
@@ -95,17 +101,13 @@ function pause(milliseconds: number) {
 
 function settings() {
 	const confirmation = requiredEnvironment("PUBLICATION_SANDBOX_CONFIRM");
-	assert(
-		confirmation === "docs-pen",
-		"PUBLICATION_SANDBOX_CONFIRM must be docs-pen",
-	);
 	const baseUrl = new URL(
 		requiredEnvironment("PUBLICATION_SANDBOX_BASE_URL"),
 	);
 	assert(baseUrl.protocol === "https:", "Sandbox checks require HTTPS");
 	assert(
-		baseUrl.hostname === expectedHost && baseUrl.pathname === "/",
-		`Sandbox checks may run only against https://${expectedHost}`,
+		baseUrl.pathname === "/" && !baseUrl.search && !baseUrl.hash && !baseUrl.username && !baseUrl.password && confirmation === baseUrl.origin,
+		"PUBLICATION_SANDBOX_CONFIRM must match the exact HTTPS origin, without a path, query, or credentials",
 	);
 	const runId = requiredEnvironment("PUBLICATION_SANDBOX_RUN_ID");
 	assert(
@@ -129,6 +131,7 @@ function settings() {
 	);
 	return {
 		baseUrl: baseUrl.origin,
+		libraryId: requiredEnvironment("PUBLICATION_SANDBOX_LIBRARY_ID"),
 		runId,
 		prefix,
 		namespace,
@@ -141,9 +144,10 @@ function loadEvidence(input: ReturnType<typeof settings>) {
 	if (!existsSync(input.evidencePath)) {
 		const now = new Date().toISOString();
 		return {
-			schemaVersion: 1,
+			schemaVersion: 2,
 			runId: input.runId,
 			baseUrl: input.baseUrl,
+			libraryId: input.libraryId,
 			createdAt: now,
 			updatedAt: now,
 		} satisfies PublicationSandboxEvidence;
@@ -151,9 +155,9 @@ function loadEvidence(input: ReturnType<typeof settings>) {
 	const evidence = JSON.parse(
 		readFileSync(input.evidencePath, "utf8"),
 	) as PublicationSandboxEvidence;
-	assert(evidence.schemaVersion === 1, "Unsupported evidence file version");
+	assert(evidence.schemaVersion === 2, "Unsupported evidence file version");
 	assert(
-		evidence.runId === input.runId && evidence.baseUrl === input.baseUrl,
+		evidence.runId === input.runId && evidence.baseUrl === input.baseUrl && evidence.libraryId === input.libraryId,
 		"The saved evidence belongs to another run or website",
 	);
 	return evidence;
@@ -189,6 +193,8 @@ class AdminClient {
 			...init,
 			headers,
 			cache: "no-store",
+			redirect: "error",
+			signal: AbortSignal.timeout(60_000),
 		});
 		const text = await response.text();
 		if (!response.ok) {
@@ -269,7 +275,7 @@ function assertHealthyOverview(overview: AdminPublicationWorkerOverview) {
 	assert(!overview.queue.hasFailed, "The publication queue has failed work");
 }
 
-async function verifyRuntime(client: AdminClient) {
+async function verifyRuntime(client: AdminClient, input: ReturnType<typeof settings>) {
 	const health = await client.request<{ state?: string }>(
 		"/api/library-config/health",
 	);
@@ -277,11 +283,46 @@ async function verifyRuntime(client: AdminClient) {
 		health.state === "active",
 		"The library configuration is not active",
 	);
-	const overview = await client.request<AdminPublicationWorkerOverview>(
+	const overview = await client.request<AdminPublicationRuntimeOverview>(
 		"/api/admin/publication",
 	);
+	assertSandboxConfiguration(overview.configuration, input);
 	assertHealthyOverview(overview);
 	return overview;
+}
+
+export function assertSandboxConfiguration(
+	configuration: AdminPublicationRuntimeOverview["configuration"],
+	expected: {baseUrl: string; libraryId: string; prefix: string; namespace: string},
+) {
+	assert(
+		configuration?.libraryId === expected.libraryId &&
+			configuration.baseUrl.replace(/\/$/u, "") === expected.baseUrl,
+		"The runtime does not match the confirmed sandbox library and URL",
+	);
+	assert(
+		configuration.crossrefEnvironment === "test" && configuration.zenodoEnvironment === "sandbox",
+		"Qualification requires Crossref Test and Zenodo Sandbox",
+	);
+	assert(
+		configuration.prefix === expected.prefix && configuration.namespace === expected.namespace,
+		"The runtime DOI prefix or namespace does not match the confirmed sandbox",
+	);
+}
+
+async function publishReviewed(client: AdminClient, key: string, timeoutMs: number) {
+	const {reviews} = await client.request<{reviews: SavedReview[]}>(`/api/admin/items/${key}/review`);
+	const pending = reviews.find(review => review.state === "pending");
+	const review = pending ?? (await client.request<{review: SavedReview}>(
+		`/api/admin/items/${key}/review`, {method: "POST"},
+	)).review;
+	const approved = await client.request<IndexingMutation & {review: SavedReview}>(
+		`/api/admin/reviews/${review.id}`,
+		{method: "POST", body: JSON.stringify({action: "approve", expectedRevision: review.revision})},
+	);
+	assert(approved.review.state === "published", "The Editor did not publish the submitted snapshot");
+	await waitForReceipts(client, approved.indexingReceipts, timeoutMs);
+	return (await publication(client, key)).canonicalRevision;
 }
 
 async function createParent(
@@ -290,7 +331,7 @@ async function createParent(
 	evidence: PublicationSandboxEvidence,
 ) {
 	if (evidence.parent) return evidence.parent;
-	const title = `Docs Pen sandbox publication ${input.runId}`;
+	const title = `Sandbox publication ${input.runId}`;
 	const response = await client.request<{ draft: AdminDraft }>(
 		"/api/admin/items/drafts",
 		{
@@ -300,7 +341,7 @@ async function createParent(
 				title,
 				date: new Date().toISOString().slice(0, 10),
 				abstractNote:
-					"A disposable publication used to verify the docs-pen sandbox workflow.",
+					"A disposable publication used to verify the sandbox review workflow.",
 				publisher: "OpenDevEd",
 				creators: [
 					{
@@ -312,14 +353,7 @@ async function createParent(
 			}),
 		},
 	);
-	const published = await client.request<IndexingMutation>(
-		`/api/admin/items/${response.draft.itemKey}/publish`,
-		{ method: "POST", body: "{}" },
-	);
-	await waitForReceipts(client, published.indexingReceipts, input.timeoutMs);
-	const revision = published.item?.revision;
-	assert(typeof revision === "number", "Published record has no revision");
-	evidence.parent = { key: response.draft.itemKey, title, revision };
+	evidence.parent = { key: response.draft.itemKey, title, revision: 0 };
 	saveEvidence(input.evidencePath, evidence);
 	return evidence.parent;
 }
@@ -331,43 +365,20 @@ async function runCrossref(
 ) {
 	if (evidence.crossref) return evidence.crossref;
 	const parent = await createParent(client, input, evidence);
-	const before = await publication(client, parent.key);
-	assert(
-		before.providers.crossref.environment === "test",
-		"Crossref is not using Test",
-	);
-	assert(
-		before.doiNamespace?.prefix === input.prefix &&
-			before.doiNamespace.suffixNamespace === input.namespace,
-		"The configured DOI namespace does not match the confirmed docs-pen namespace",
-	);
-	assert(
-		before.providers.crossref.blockers.length === 0,
-		`Crossref activation is blocked: ${before.providers.crossref.blockers.join("; ")}`,
-	);
 	let progress = evidence.crossrefProgress;
 	if (!progress) {
-		const activationPath = `/api/admin/items/${parent.key}/publication/crossref/activate`;
-		const first = await client.request<{
-			activation: { doi: string; job: { id: number } };
-		}>(activationPath, { method: "POST" });
-		const second = await client.request<{
-			activation: { doi: string; job: { id: number } };
-		}>(activationPath, { method: "POST" });
-		assert(
-			first.activation.doi === second.activation.doi,
-			"Crossref activation is not idempotent",
-		);
-		assert(
-			first.activation.doi.startsWith(
-				`${input.prefix}/${input.namespace}`,
-			),
-			"Crossref reserved a DOI outside the docs-pen namespace",
-		);
-		progress = {
-			doi: first.activation.doi,
-			jobId: first.activation.job.id,
-		};
+		await client.request(`/api/admin/items/${parent.key}/publishing-choice`, {method: "PUT", body: JSON.stringify({route: "crossref-zenodo", identifierPolicy: "reuse-crossref"})});
+		const reservePath = `/api/admin/items/${parent.key}/publication/crossref/reserve`;
+		const first = await client.request<{reservation: {doi: string}}>(reservePath, {method: "POST"});
+		const second = await client.request<{reservation: {doi: string}}>(reservePath, {method: "POST"});
+		assert(first.reservation.doi === second.reservation.doi, "Crossref reservation is not idempotent");
+		assert(first.reservation.doi.startsWith(`${input.prefix}/${input.namespace}`), "Crossref reserved a DOI outside the confirmed sandbox namespace");
+		parent.revision = await publishReviewed(client, parent.key, input.timeoutMs);
+		const activated = await publication(client, parent.key);
+		assert(activated.providers.crossref.exact.targetActive && activated.providers.zenodo.exact.targetActive, "Approval did not activate both providers");
+		const jobId = activated.providers.crossref.exact.job?.id;
+		assert(typeof jobId === "number", "Approval did not queue Crossref publication");
+		progress = {doi: first.reservation.doi, jobId};
 		evidence.crossrefProgress = progress;
 		saveEvidence(input.evidencePath, evidence);
 	}
@@ -408,9 +419,10 @@ async function runCrossref(
 		saveEvidence(input.evidencePath, evidence);
 	}
 	assert(pendingSubmission, "Crossref submission evidence is missing");
+	const originalBatchId = pendingSubmission.batchId;
 
 	const editedTitle =
-		progress.editedTitle ?? `${parent.title} — metadata update`;
+		progress.editedTitle ?? `${parent.title}, metadata update`;
 	let editedRevision = progress.editedRevision;
 	if (!editedRevision) {
 		const draft = (
@@ -425,6 +437,7 @@ async function runCrossref(
 				method: "PUT",
 				body: JSON.stringify({
 					expectedDraftRevision: draft.draftRevision,
+					expectedDraftGeneration: draft.generation,
 					expectedPayload: draft.payload,
 					payload: applySandboxDraftChanges(draft.payload, {
 						title: editedTitle,
@@ -432,20 +445,7 @@ async function runCrossref(
 				}),
 			},
 		);
-		const republished = await client.request<IndexingMutation>(
-			`/api/admin/items/${parent.key}/publish`,
-			{ method: "POST", body: "{}" },
-		);
-		await waitForReceipts(
-			client,
-			republished.indexingReceipts,
-			input.timeoutMs,
-		);
-		editedRevision = republished.item?.revision;
-		assert(
-			typeof editedRevision === "number",
-			"Edited record has no revision",
-		);
+		editedRevision = await publishReviewed(client, parent.key, input.timeoutMs);
 		progress.editedTitle = editedTitle;
 		progress.editedRevision = editedRevision;
 		evidence.parent = {
@@ -463,7 +463,7 @@ async function runCrossref(
 		read: () => publication(client, parent.key),
 		onRead(view) {
 			const observed = view.providers.crossref.exact.pendingSubmission;
-			if (!redepositSubmission && observed) {
+			if (!redepositSubmission && observed && observed.batchId !== originalBatchId) {
 				redepositSubmission = observed;
 				progress.redepositSubmission = observed;
 				saveEvidence(input.evidencePath, evidence);
@@ -502,11 +502,13 @@ async function runCrossref(
 	return evidence.crossref;
 }
 
-async function createPdf(runId: string) {
-	const document = await PDFDocument.create();
+async function createPdf(runId: string, createdAt: string) {
+	const document = await PDFDocument.create({ updateMetadata: false });
+	document.setCreationDate(new Date(createdAt));
+	document.setModificationDate(new Date(createdAt));
 	const font = await document.embedFont(StandardFonts.Helvetica);
 	const page = document.addPage([612, 792]);
-	page.drawText(`Docs Pen sandbox publication ${runId}`, {
+	page.drawText(`Sandbox publication ${runId}`, {
 		x: 72,
 		y: 700,
 		size: 20,
@@ -527,6 +529,67 @@ async function uploadSignedPdf(signedUrl: string, pdf: Uint8Array) {
 	assert(response.ok, `Signed PDF upload returned ${response.status}`);
 }
 
+async function prepareAttachment(
+	client: AdminClient,
+	input: ReturnType<typeof settings>,
+	evidence: PublicationSandboxEvidence,
+) {
+	const pdf = await createPdf(input.runId, evidence.createdAt);
+	if (!evidence.attachment) {
+		const attachment = await client.request<{ draft: AdminDraft }>(
+			"/api/admin/items/drafts",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					itemType: "Attachment",
+					parentItem: evidence.parent!.key,
+					title: `Sandbox PDF ${input.runId}`,
+				}),
+			},
+		);
+		evidence.attachment = {
+			key: attachment.draft.itemKey,
+			filename: `sandbox-${input.runId}.pdf`,
+			size: pdf.byteLength,
+			sha256: createHash("sha256").update(pdf).digest("hex"),
+			md5: createHash("md5").update(pdf).digest("hex"),
+		};
+		saveEvidence(input.evidencePath, evidence);
+	}
+	const attachment = evidence.attachment;
+	const { item: { fileDraft, filePublication } } = await client.request<{ item: AdminItemDetail }>(`/api/admin/items/${attachment.key}`);
+	if (fileDraft?.readyAt || filePublication) {
+		const ready = fileDraft?.readyAt
+			? { filename: fileDraft.filename, sha256: fileDraft.actualSha256, size: fileDraft.actualSizeBytes }
+			: { filename: filePublication!.filename, sha256: filePublication!.sha256, size: filePublication!.sizeBytes };
+		assert(ready.filename === attachment.filename && ready.sha256 === attachment.sha256 && ready.size === attachment.size, "The saved attachment does not match the qualification PDF");
+	} else {
+		assert(createHash("sha256").update(pdf).digest("hex") === attachment.sha256, "The resumed qualification PDF changed");
+		const staged = await client.request<{
+			fileDraft: { uploadRevision: number };
+			upload: { signedUrl: string };
+		}>(`/api/admin/items/${attachment.key}/file`, {
+			method: "POST",
+			body: JSON.stringify({
+				expectedSha256: attachment.sha256,
+				expectedSizeBytes: attachment.size,
+				filename: attachment.filename,
+			}),
+		});
+		await uploadSignedPdf(staged.upload.signedUrl, pdf);
+		await client.request(
+			`/api/admin/items/${attachment.key}/file/complete`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					expectedUploadRevision: staged.fileDraft.uploadRevision,
+				}),
+			},
+		);
+	}
+	return attachment;
+}
+
 async function runZenodo(
 	client: AdminClient,
 	input: ReturnType<typeof settings>,
@@ -535,85 +598,13 @@ async function runZenodo(
 	if (evidence.zenodo) return evidence.zenodo;
 	const crossref = await runCrossref(client, input, evidence);
 	const parent = evidence.parent!;
-	if (!evidence.attachment) {
-		const attachment = await client.request<{ draft: AdminDraft }>(
-			"/api/admin/items/drafts",
-			{
-				method: "POST",
-				body: JSON.stringify({
-					itemType: "Attachment",
-					parentItem: parent.key,
-					title: `Sandbox PDF ${input.runId}`,
-				}),
-			},
-		);
-		const pdf = await createPdf(input.runId);
-		const sha256 = createHash("sha256").update(pdf).digest("hex");
-		const md5 = createHash("md5").update(pdf).digest("hex");
-		const filename = `docs-pen-${input.runId}.pdf`;
-		const staged = await client.request<{
-			fileDraft: { uploadRevision: number };
-			upload: { signedUrl: string };
-		}>(`/api/admin/items/${attachment.draft.itemKey}/file`, {
-			method: "POST",
-			body: JSON.stringify({
-				expectedSha256: sha256,
-				expectedSizeBytes: pdf.byteLength,
-				filename,
-			}),
-		});
-		await uploadSignedPdf(staged.upload.signedUrl, pdf);
-		await client.request(
-			`/api/admin/items/${attachment.draft.itemKey}/file/complete`,
-			{
-				method: "POST",
-				body: JSON.stringify({
-					expectedUploadRevision: staged.fileDraft.uploadRevision,
-				}),
-			},
-		);
-		const itemPublished = await client.request<IndexingMutation>(
-			`/api/admin/items/${attachment.draft.itemKey}/publish`,
-			{ method: "POST", body: "{}" },
-		);
-		await waitForReceipts(
-			client,
-			itemPublished.indexingReceipts,
-			input.timeoutMs,
-		);
-		const filePublished = await client.request<IndexingMutation>(
-			`/api/admin/items/${attachment.draft.itemKey}/file/publish`,
-			{
-				method: "POST",
-				body: JSON.stringify({
-					expectedUploadRevision: staged.fileDraft.uploadRevision,
-				}),
-			},
-		);
-		await waitForReceipts(
-			client,
-			filePublished.indexingReceipts,
-			input.timeoutMs,
-		);
-		evidence.attachment = {
-			key: attachment.draft.itemKey,
-			filename,
-			size: pdf.byteLength,
-			sha256,
-			md5,
-		};
+	const attachment = await prepareAttachment(client, input, evidence);
+	if (!attachment.approved) {
+		await publishReviewed(client, parent.key, input.timeoutMs);
+		attachment.approved = true;
 		saveEvidence(input.evidencePath, evidence);
 	}
-	const activation = await client.request<{
-		activation: { identifierPolicy: string };
-	}>(`/api/admin/items/${parent.key}/publication/zenodo/activate`, {
-		method: "POST",
-		body: JSON.stringify({ identifierPolicy: "reuse-crossref" }),
-	});
-	assert(
-		activation.activation.identifierPolicy === "reuse-crossref",
-		"Zenodo did not reuse the verified Crossref DOI",
-	);
+
 	const settled = await waitFor({
 		description: "Zenodo Sandbox publication",
 		timeoutMs: input.timeoutMs,
@@ -684,32 +675,21 @@ async function verifyFinishedLifecycle(
 		"Sandbox evidence is incomplete",
 	);
 	await client.login();
-	await verifyRuntime(client);
+	await verifyRuntime(client, input);
 	const view = await publication(client, evidence.parent.key);
 	assert(
 		view.providers.crossref.displayState === "synced" &&
 			view.providers.zenodo.displayState === "synced",
-		"Publication state did not survive a new admin session",
+		"Both providers must remain synced after rechecking admin access",
 	);
-	const publicItem = await client.request<{ item?: Record<string, unknown> }>(
-		`/api/item/${evidence.parent.key}`,
-	);
-	assert(
-		publicItem.item?.title === evidence.crossref.editedTitle,
-		"The public search record does not contain the edited title",
-	);
-	assert(
-		publicItem.item?.DOI === evidence.crossref.doi,
-		"The public search record does not contain the managed DOI",
-	);
-	const page = await fetch(
-		new URL(`/lib/${evidence.parent.key}`, input.baseUrl),
-	);
-	const pageText = await page.text();
-	assert(
-		page.ok && pageText.includes(evidence.crossref.editedTitle),
-		"The public item page does not show the edited title",
-	);
+	await waitFor({
+		description: "the approved title and DOI in public search",
+		timeoutMs: input.timeoutMs,
+		read: () => client.request<{item?: Record<string, unknown>}>(`/api/item/${evidence.parent!.key}`),
+		accept: result => result.item?.title === evidence.crossref!.editedTitle && result.item?.DOI === evidence.crossref!.doi,
+	});
+
+	await verifyPublicPage(input.baseUrl, evidence.parent.key, evidence.crossref.editedTitle);
 	const zenodoResponse = await fetch(
 		`https://sandbox.zenodo.org/api/records/${evidence.zenodo.recordId}`,
 		{ cache: "no-store" },
@@ -735,6 +715,17 @@ async function verifyFinishedLifecycle(
 	saveEvidence(input.evidencePath, evidence);
 }
 
+async function verifyPublicPage(baseUrl: string, key: string, title: string) {
+	const browser = await chromium.launch();
+	try {
+		const page = await browser.newPage();
+		await page.goto(new URL(`/lib/${key}`, baseUrl).toString());
+		await page.getByRole("heading", {name: title, exact: true}).waitFor({timeout: 60_000});
+	} finally {
+		await browser.close();
+	}
+}
+
 export async function runPublicationSandboxQualification(
 	mode: QualificationMode,
 ) {
@@ -742,7 +733,7 @@ export async function runPublicationSandboxQualification(
 	const evidence = loadEvidence(input);
 	const client = new AdminClient(input.baseUrl);
 	await client.login();
-	await verifyRuntime(client);
+	await verifyRuntime(client, input);
 	if (mode === "crossref") {
 		await runCrossref(client, input, evidence);
 	} else if (mode === "zenodo") {

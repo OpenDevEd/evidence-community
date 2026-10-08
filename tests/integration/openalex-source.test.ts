@@ -337,7 +337,7 @@ it("publishes a library PDF on an OpenAlex record and keeps both through later s
 		const staged = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "copy.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
 		storage.privateFiles.set(staged.upload.path, pdf);
 		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: staged.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
-		const review = await submitItemReview(db, record!.key, { userId: "creator", role: "creator" });
+		const review = await submitItemReview(db, record!.key, { userId: "creator", role: "creator" }, libraryConfigSchema.parse(maximalLibraryConfig));
 		await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision, publicationTags: ["publish-record"] }, { userId: "editor", role: "editor" }, libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] }));
 
 		const libraryCopy = async () => (await db.select().from(item).where(eq(item.key, attachment.itemKey)))[0];
