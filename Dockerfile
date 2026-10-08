@@ -51,9 +51,8 @@ RUN apt-get update \
 	&& ln -s "$(ls /usr/lib/*-linux-gnu/libjemalloc.so.2)" /usr/local/lib/libjemalloc.so.2 \
 	&& rm -rf /var/lib/apt/lists/*
 
-# A worker thread that has gone idle returns its memory only through jemalloc's background thread.
+# Without jemalloc's background thread: with it, setpriv aborts in the entrypoint when it changes user.
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
-ENV MALLOC_CONF=background_thread:true
 # The loader only warns about a preload it cannot open, so the build fails here instead.
 RUN node -e "process.exit(require('node:fs').readFileSync('/proc/self/maps', 'utf8').includes('libjemalloc') ? 0 : 1)"
 
