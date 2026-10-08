@@ -47,15 +47,17 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
  * institutions and citations. The journal and withdrawal flags come from the
  * OpenAlex record, so other sources score on the rest. A preprint and its
  * article, or two deposits of one upload, count once: records with one title
- * and first author are one work, and the best-ranked of them stands for it.
+ * and first author's surname are one work. The record with an abstract stands
+ * for it, since that is what the writer reads; between two that both have one
+ * or both lack one, the published record does.
  */
 async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
   const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
     WITH candidate AS (
       SELECT ${item.key} AS key, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
         ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
-        CASE WHEN length(coalesce(${item.title}, '')) >= 25
-          THEN lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g')) || '|' || lower(coalesce(${item.creators} -> 0 ->> 'lastName', ${item.creators} -> 0 ->> 'name', ''))
+        CASE WHEN length(coalesce(${item.title}, '')) >= 25 AND author.surname <> ''
+          THEN lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g')) || '|' || author.surname
           ELSE ${item.key} END AS work,
         CASE WHEN record.core THEN 3 ELSE 0 END
           + CASE WHEN metric.refs >= 10 THEN 2 WHEN metric.refs > 0 THEN 1 ELSE 0 END
@@ -64,6 +66,8 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
           - CASE WHEN ${item.itemType}::text IN ('Dataset', 'ComputerProgram') THEN 1 ELSE 0 END
           - CASE WHEN record.withdrawn THEN 10 ELSE 0 END AS score
       FROM ${item}
+      -- A creator is stored as first and last name, or as one name the way OpenAlex gives it.
+      CROSS JOIN LATERAL (SELECT lower(coalesce(nullif(${item.creators} -> 0 ->> 'lastName', ''), substring(${item.creators} -> 0 ->> 'name' from '(\\S+)\\s*$'), '')) AS surname) author
       LEFT JOIN LATERAL (SELECT max("citedByCount") AS citations, max("referencedWorksCount") AS refs
         FROM "itemCitationMetric" WHERE "itemKey" = ${item.key}) metric ON true
       LEFT JOIN LATERAL (SELECT bool_or("payload" #>> '{primary_location,source,is_core}' = 'true') AS core,
