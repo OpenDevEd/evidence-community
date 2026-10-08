@@ -190,7 +190,16 @@ jobs:
             docker rm -f "$name" > /dev/null 2>&1 || true
             [ "$attempt" = 5 ] && { echo "::error::No free port for the integration database"; exit 1; }
           done
-          until [ "$(docker inspect -f '{{.State.Health.Status}}' "$name")" = healthy ]; do sleep 1; done
+          for second in $(seq 1 120); do
+            health="$(docker inspect -f '{{.State.Health.Status}}' "$name" 2>/dev/null || echo missing)"
+            [ "$health" = healthy ] && break
+            if [ "$health" = unhealthy ] || [ "$health" = missing ] || [ "$second" = 120 ]; then
+              docker logs --tail 50 "$name" 2>&1 || true
+              echo "::error::The integration database is $health after $second seconds"
+              exit 1
+            fi
+            sleep 1
+          done
           echo "INTEGRATION_DATABASE_URL=postgresql://postgres:integration@localhost:$port/postgres" >> "$GITHUB_ENV"
 
       - name: Use the persistent Docker builder
