@@ -48,9 +48,11 @@ Meilisearch, Mailpit, workers, and local external-service fixtures. It runs
 every desktop and mobile browser check, verifies live configuration activation
 and rollback, then removes all test data and containers. The normal local run
 keeps the large admin suite at one worker for stability; GitHub uses four on an
-isolated self-hosted runner. Read the aggregate `CI` result for the exact head
-before merging. The current GitHub plan cannot require that result for this
-private repository.
+isolated self-hosted runner. `EVIDENCE_LIBRARY_ACCEPTANCE_SCOPE=smoke` runs what a
+pull request runs: Amber alone, its API checks and the browser tests tagged
+`@smoke`. Read the aggregate `CI` result for the exact head before merging, and
+the full run on `main` after it. The current GitHub plan cannot require that
+result for this private repository.
 
 ## Documentation
 

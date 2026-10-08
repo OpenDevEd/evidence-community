@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { dismissConsent } from "./consent";
 
-test("contact validates before sending and exposes field errors", async ({ page }) => {
+test("contact validates before sending and exposes field errors", { tag: "@smoke" }, async ({ page }) => {
 	test.skip(process.env.PLAYWRIGHT_EXPECTED_EMAIL === "false", "Contact is disabled for this library.");
 	await page.goto("/contact");
 	await dismissConsent(page);

@@ -43,7 +43,8 @@ beforeAll(async () => {
 		execFileSync("docker", ["run", "--detach", "--rm", "--name", ownedContainer, "--publish", `127.0.0.1:${port}:7700`, "--env", "MEILI_NO_ANALYTICS=true", "getmeili/meilisearch:v1.54"]);
 		host = `http://127.0.0.1:${port}`;
 	}
-	client = new Meilisearch({ host, apiKey: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY });
+	// Beside the acceptance stack on the CI guest's 8 vCPUs, a task can take longer than the client's default five seconds.
+	client = new Meilisearch({ host, apiKey: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY, defaultWaitOptions: { timeout: 30_000 } });
 	await vi.waitFor(async () => expect((await client.health()).status).toBe("available"), { timeout: 15_000 });
 });
 

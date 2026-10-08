@@ -34,7 +34,7 @@ test.beforeEach(async ({ page }) => {
 	await expect(askButton(page)).toBeVisible();
 });
 
-test("opens the chat beside the results and closes it again", async ({
+test("opens the chat beside the results and closes it again", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	await expect(chatPanel(page)).toHaveCount(0);

@@ -808,7 +808,7 @@ test.describe("overlay lifecycle", () => {
 	});
 });
 
-test("starts OpenScholar sign-in from /admin, keeps the session, and signs out", async ({
+test("starts OpenScholar sign-in from /admin, keeps the session, and signs out", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	test.setTimeout(90_000);
@@ -860,7 +860,7 @@ test("starts OpenScholar sign-in from /admin, keeps the session, and signs out",
 	expect(again.headers().location).toBe(new URL("/api/admin/sign-in?return=%2Fadmin", baseUrl).toString());
 });
 
-test("answers admin requests on the library's own rules", async ({ page }) => {
+test("answers admin requests on the library's own rules", { tag: "@smoke" }, async ({ page }) => {
 	const baseUrl = process.env.PLAYWRIGHT_BASE_URL!;
 	const disabledLocale = process.env.PLAYWRIGHT_EXPECTED_DISABLED_LOCALE!;
 	expect(disabledLocale).toBeTruthy();
@@ -915,7 +915,7 @@ test("tells someone without a role which organisation to ask", async ({ page }) 
 	await expect(page.getByRole("button", { name: "Create Item" })).toHaveCount(0);
 });
 
-test("edits an imported record and shows its writeback lifecycle", async ({
+test("edits an imported record and shows its writeback lifecycle", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	await mockCompletedIndexing(page);
@@ -2793,7 +2793,7 @@ test.skip(
 	"External targets must explicitly confirm that the admin UI is enabled.",
 );
 
-test("creates an item through a pointer click in the new-item popover", async ({
+test("creates an item through a pointer click in the new-item popover", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	let submittedPayload: unknown;
@@ -4737,7 +4737,7 @@ test("configures columns, density, sizing, and persists computed table geometry"
 	).toBeGreaterThan(beforeWidth + 35);
 });
 
-test("lets Creators assign records but prevents library management actions", async ({
+test("lets Creators assign records but prevents library management actions", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	const batchRequests: unknown[] = [];

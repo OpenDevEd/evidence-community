@@ -145,7 +145,7 @@ test("switches citation statistics between library links and source metrics", as
 	);
 });
 
-test("redirects the root route to the evidence library", async ({
+test("redirects the root route to the evidence library", { tag: "@smoke" }, async ({
 	request,
 }) => {
 	const response = await request.get("/", { maxRedirects: 0 });
@@ -229,7 +229,7 @@ test("gzips JSON from route handlers when the browser accepts it", async ({
 	expect(response.headers()["content-encoding"]).toBe("gzip");
 });
 
-test("renders identity assets, logo CSS, colors, and fonts from runtime configuration", async ({
+test("renders identity assets, logo CSS, colors, and fonts from runtime configuration", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	if (expectedLoadedLogo) {
@@ -296,7 +296,7 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 	}
 });
 
-test("renders navigation, footer, contact, and legal data from runtime configuration", async ({
+test("renders navigation, footer, contact, and legal data from runtime configuration", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	await page.goto("/lib");
@@ -746,7 +746,7 @@ for (const profileAvailable of [true, false]) {
 	});
 }
 
-test("copies the selected citation style from a result card without opening the item", async ({ page, context }) => {
+test("copies the selected citation style from a result card without opening the item", { tag: "@smoke" }, async ({ page, context }) => {
 	test.skip(!expectedSearchItemKey, "Requires a public record in this runtime.");
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
@@ -914,7 +914,7 @@ test("filters institution suggestions by typed name", async ({ page }) => {
 	await expect.poll(() => new URL(page.url()).searchParams.get("institution")).toContain("South Institute");
 });
 
-test("enforces runtime search scopes, filters, embeddings, and citation URLs", async ({
+test("enforces runtime search scopes, filters, embeddings, and citation URLs", { tag: "@smoke" }, async ({
 	page,
 	request,
 }) => {
@@ -1077,7 +1077,7 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 });
 
 
-test("keeps the whole-library export total independent of the search", async ({ page }) => {
+test("keeps the whole-library export total independent of the search", { tag: "@smoke" }, async ({ page }) => {
 	test.skip(!expectedSearchItemKey || process.env.PLAYWRIGHT_EXPECTED_EXPORT_RIS !== "true", "Requires a public record and RIS exports.");
 	await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
 	await dismissConsent(page);

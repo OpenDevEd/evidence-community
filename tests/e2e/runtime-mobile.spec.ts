@@ -38,7 +38,7 @@ test("switches citation statistics between library links and source metrics on m
 	);
 });
 
-test("renders the runtime navigation and feature controls on mobile", async ({
+test("renders the runtime navigation and feature controls on mobile", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	await page.goto("/lib");
