@@ -5,12 +5,14 @@ import { normalizeDoi } from "@/lib/doi";
 import { backoff, failureText, retryDelay } from "./client";
 import type { DuplicateRecord } from "./reconciliation";
 
-/** What two records are compared on: their key, normalised DOI, title and publication date. */
+/** What two records are compared on: their key, normalised DOI, title, publication date and first author. */
 export type WorkFacts = {
 	key: string;
 	doi: string | null;
 	title: string | null;
 	date: string | null;
+	/** OpenAlex's id for the first author, so versions uploaded on different days are still compared. */
+	author: string | null;
 	/** Registered with DataCite, which records Zenodo's versions; only pairs of such works are asked about. */
 	dataCite: boolean;
 };
@@ -27,7 +29,9 @@ const DATACITE_ATTEMPTS = 5;
 // A whole outage would otherwise cost every batch its tries: a run of AIED asks about 490 batches.
 const DATACITE_OUTAGE_BATCHES = 3;
 const REPEATED_PREFIX = /^10\.\d{4,9}\/(?=10\.\d{4,9}\/)/u;
-const FIGSHARE_VERSION = /\.v\d+$/u;
+// How a repository writes the DOI of one version, capturing the unversioned DOI: `.v2` (figshare, preprints.org),
+// Mendeley Data's `.1` and the AEA trial registry's `-1.0`. A bare number says nothing: a book's chapters end `-2`.
+const VERSIONED_DOIS = [/^(.+)\.v\d+$/u, /^(10\.17632\/.+)\.\d+$/u, /^(10\.1257\/rct\..+)-\d+\.\d+$/u];
 
 /** A DOI as OpenAlex should have written it: no doubled prefix, no trailing punctuation. */
 function cleanDoi(doi: string) {
@@ -37,30 +41,60 @@ function cleanDoi(doi: string) {
 }
 
 const workNumber = (key: string) => Number(key.replace(/^\D+/u, "")) || Number.POSITIVE_INFINITY;
-const sameWork = (work: WorkFacts) => `${work.title?.trim().toLowerCase() ?? ""}|${work.date ?? ""}`;
+const titleOf = (work: WorkFacts) => work.title?.trim().toLowerCase() ?? "";
+
+/** Whether a DOI is `base` with a version added. */
+const isVersionOf = (doi: string, base: string) => VERSIONED_DOIS.some((pattern) => pattern.exec(doi)?.[1] === base);
 
 /**
- * Which of two records with the same title and date to keep, or null when they are not the same upload. A Zenodo
- * upload has a concept DOI and a DOI per version, and figshare adds `.v1` to its own; OpenAlex lists each as a
- * work. The concept or unversioned DOI is kept, since it always leads to the latest version.
+ * Of two DOIs written as `.v1` and `.v3` of one DOI neither record has, the later version's index, or null. Only
+ * the explicit `.vN` form counts: two Zenodo DOIs also differ only in their last number, and DataCite decides those.
+ */
+function laterVersion(a: string, b: string) {
+	const [ma, mb] = [a, b].map((doi) => /^(.+)\.v(\d+)$/u.exec(doi));
+	if (!ma || !mb || ma[1] !== mb[1] || ma[2] === mb[2]) return null;
+	return Number(ma[2]) > Number(mb[2]) ? 0 : 1;
+}
+
+/**
+ * Which of two records with the same title, and the same date or first author, to keep, or null when they are
+ * not the same upload. A Zenodo upload has a concept DOI and a DOI per version, and figshare, Mendeley Data and
+ * registries add a version to their own; OpenAlex lists each as a work. The concept or unversioned DOI is kept,
+ * since it always leads to the latest version; of two versions alone, the later one is.
  */
 function keptOf(a: WorkFacts, b: WorkFacts, versionsOf: VersionsOf): WorkFacts | null {
 	const [ca, cb] = [cleanDoi(a.doi!), cleanDoi(b.doi!)];
-	if (ca === cb) {
-		const aClean = a.doi === ca;
-		if (aClean !== (b.doi === cb)) return aClean ? a : b;
-		return workNumber(a.key) <= workNumber(b.key) ? a : b;
-	}
-	if (ca.replace(FIGSHARE_VERSION, "") === cb) return b;
-	if (cb.replace(FIGSHARE_VERSION, "") === ca) return a;
+	if (ca === cb) return cleanerOf(a, b, ca);
+	const byName = keptByDoiName(a, b, ca, cb);
+	if (byName) return byName;
 	if (versionsOf.get(ca)?.has(cb)) return b;
 	if (versionsOf.get(cb)?.has(ca)) return a;
 	return null;
 }
 
+/** Of two records OpenAlex gave one DOI written two ways, the cleanly written one, else the older work. */
+function cleanerOf(a: WorkFacts, b: WorkFacts, clean: string) {
+	const aClean = a.doi === clean;
+	if (aClean !== (b.doi === clean)) return aClean ? a : b;
+	return workNumber(a.key) <= workNumber(b.key) ? a : b;
+}
+
+/** The record kept when the DOIs themselves name the versions: the unversioned one, or the later of two `.vN`. */
+function keptByDoiName(a: WorkFacts, b: WorkFacts, ca: string, cb: string) {
+	if (isVersionOf(ca, cb)) return b;
+	if (isVersionOf(cb, ca)) return a;
+	const later = laterVersion(ca, cb);
+	return later === null ? null : later === 0 ? a : b;
+}
+
+/** Pairs of records with one title that share a date or a first author, each pair once. */
 function* candidatePairs(works: readonly WorkFacts[]) {
-	for (const group of Map.groupBy(works.filter((work) => work.doi && work.title), sameWork).values()) {
-		for (const [index, work] of group.entries()) for (const other of group.slice(index + 1)) yield [work, other] as const;
+	for (const group of Map.groupBy(works.filter((work) => work.doi && work.title), titleOf).values()) {
+		for (const [index, work] of group.entries()) {
+			for (const other of group.slice(index + 1)) {
+				if ((work.date ?? "") === (other.date ?? "") || (work.author !== null && work.author === other.author)) yield [work, other] as const;
+			}
+		}
 	}
 }
 
@@ -186,6 +220,7 @@ export function workFacts(raw: Record<string, unknown>): WorkFacts {
 		doi: normalizeDoi(text(raw.doi) ?? text(ids?.doi)),
 		title: text(raw.title) ?? text(raw.display_name),
 		date: text(raw.publication_date),
+		author: text((raw.authorships as { author?: { id?: unknown } }[] | undefined)?.[0]?.author?.id),
 		dataCite: Array.isArray(raw.indexed_in) && raw.indexed_in.includes("datacite"),
 	};
 }
@@ -196,7 +231,8 @@ async function liveRecords(database: Database, sourceConnectionKey: string, read
 		SELECT links."itemKey" AS "itemKey", jsonb_build_object(
 			'id', snapshot.payload -> 'id', 'doi', snapshot.payload -> 'doi', 'ids', snapshot.payload -> 'ids',
 			'title', snapshot.payload -> 'title', 'display_name', snapshot.payload -> 'display_name',
-			'publication_date', snapshot.payload -> 'publication_date', 'indexed_in', snapshot.payload -> 'indexed_in'
+			'publication_date', snapshot.payload -> 'publication_date', 'indexed_in', snapshot.payload -> 'indexed_in',
+			'authorships', jsonb_build_array(jsonb_build_object('author', snapshot.payload #> '{authorships,0,author}'))
 		) AS payload
 		FROM "itemSourceLink" links
 		JOIN item i ON i.key = links."itemKey"
