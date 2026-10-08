@@ -49,6 +49,9 @@ export default defineConfig({
 		server: { deps: { inline: ["next-intl"] } },
 		clearMocks: true,
 		restoreMocks: true,
+		// The CI guest's 8 vCPUs run these beside the static checks and runtime jobs, where a
+		// jsdom render that takes two seconds alone can pass Vitest's default five.
+		testTimeout: 15_000,
 		projects: [
 			// Files share one module graph per worker, which saves importing every module again for
 			// each file: most of the suite's CPU. A file that mocks a module, or needs jsdom, keeps
