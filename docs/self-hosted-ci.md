@@ -11,7 +11,7 @@ No hosted runner service is part of the workflow.
 | Count | Label | CPU boundary | Memory limit | Work |
 |---:|---|---:|---:|---|
 | 4 | `evidence-library-light` | any guest CPU | 8 GiB each | static checks with Fallow, unit tests, the final result and release notes |
-| 3 | `evidence-library-runtime` | any guest CPU, 6 cores at most per user | 32 GiB each | Docker build, runtime acceptance and the database integration tests |
+| 1 | `evidence-library-runtime` | any guest CPU, 6 cores at most | 32 GiB | Docker build, runtime acceptance and the database integration tests |
 | 1 | `evidence-library-release` | any guest CPU, 6 cores at most | 32 GiB | select, publish and record the exact green runtime commit |
 
 The guest has 8 virtual CPUs (24 until 2026-10-08), 48 GiB of memory and a 300 GiB sparse disk.
@@ -24,13 +24,14 @@ runners), `user.slice` (rootless Docker) and `evidence-library-heavy.slice`
 the guest. Until 2026-09-28 each light runner was pinned to two CPUs, and the
 unit tests took 264 seconds instead of 82 on six.
 
-The runtime runners are `new-el-ci-runtime`, `-2` and `-3`, run by the users
-`gha-runtime`, `gha-runtime-2` and `gha-runtime-3`. Each user owns a separate
-rootless Docker daemon and persistent BuildKit builder: `evidence-library-runtime`
-for tests and `evidence-library-release` for publication. A single runtime job
-used about 6 GiB of memory, so three can run at once. Each job picks free ports
-when it starts, but releases them again before Docker binds them, so two jobs
-can rarely pick the same port and one fails; rerun it.
+The runtime runner is `new-el-ci-runtime`, run by `gha-runtime`. Each heavy user owns a
+separate rootless Docker daemon and persistent BuildKit builder: `evidence-library-runtime`
+for tests and `evidence-library-release` for publication. One runtime job needs the
+whole 8-vCPU guest: when three ran at once, each took three times as long and
+timed out, so `new-el-ci-runtime-2` and `-3` (users `gha-runtime-2` and `-3`) stay
+registered but their services are disabled. Rootless Docker daemons hand out
+host ports without seeing each other's bindings, so CI containers publish a
+port the guest reports free instead of a random one.
 
 Keep rootless Docker's user managers under `user.slice`. Moving a manager to
 the listener slice stops Docker from creating container scopes. Put the
@@ -120,7 +121,7 @@ A pull request uses two light runners and one runtime runner:
 - `Unit tests` runs Vitest.
 - `Runtime and integration` builds the image and runs the complete acceptance
   suite with four Playwright workers, eight for the admin suite. The database
-  integration tests run beside it against their own PostgreSQL service. Inside
+  integration tests run beside it against their own PostgreSQL container. Inside
   the acceptance suite, the repository Compose check and the Indigo browser
   suite run in the background while the Amber checks run.
 
