@@ -109,7 +109,7 @@ jobs:
           )
           pids=()
           for i in "${!names[@]}"; do
-            bash -c "${commands[$i]}" > "$RUNNER_TEMP/check-$i.log" 2>&1 &
+            TIMEFORMAT="Took %R s, %U s user and %S s system CPU." bash -c "time ${commands[$i]}" > "$RUNNER_TEMP/check-$i.log" 2>&1 &
             pids+=("$!")
           done
           failed=()
