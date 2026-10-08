@@ -1,8 +1,13 @@
 #!/bin/sh
 set -eu
 
+# jemalloc's background thread returns the memory of threads that have gone idle, such as the PDF workers
+# after an import. It starts with the service and not before: setpriv aborts when it changes user with the
+# thread running.
+service_allocator="MALLOC_CONF=background_thread:true"
+
 if [ "$(id -u)" != "0" ]; then
-	exec "$@"
+	exec env "$service_allocator" "$@"
 fi
 
 config_path="${LIBRARY_CONFIG_PATH:-}"
@@ -35,4 +40,4 @@ if [ -n "$config_path" ]; then
 		|| config_access_error
 fi
 
-exec setpriv --reuid 1001 --regid 1001 --init-groups -- "$@"
+exec setpriv --reuid 1001 --regid 1001 --init-groups -- env "$service_allocator" "$@"
