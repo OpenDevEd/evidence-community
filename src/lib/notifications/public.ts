@@ -22,10 +22,10 @@ export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages:
 
 // Lists read these small columns only, never an edition's stored publications.
 const summaryColumns = {
-  id: notificationEdition.id, publishedAt: notificationEdition.publishedAt, title: notificationEdition.title,
+  id: notificationEdition.id, windowEnd: notificationEdition.windowEnd, title: notificationEdition.title,
   summary: notificationEdition.summary, publicationCount: notificationEdition.publicationCount, cover: notificationEdition.cover,
 };
-type SummaryRow = {id: string; publishedAt: Date | null; title: string | null; summary: string | null; publicationCount: number; cover: string | null};
+type SummaryRow = {id: string; windowEnd: Date; title: string | null; summary: string | null; publicationCount: number; cover: string | null};
 
 function digestDate(value: Date, locale: string, config: LibraryServerConfig): DigestDate {
   const text = (options: Intl.DateTimeFormatOptions) => value.toLocaleString(locale, {...options, timeZone: config.notifications.schedule.timezone});
@@ -37,7 +37,8 @@ function digestDate(value: Date, locale: string, config: LibraryServerConfig): D
 }
 
 function editionSummary(row: SummaryRow, locale: string, config: LibraryServerConfig): DigestSummary {
-  return {slug: row.id, published: digestDate(row.publishedAt!, locale, config), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover};
+  // An edition is dated by the end of its period, so one written later for a past period keeps that period's date.
+  return {slug: row.id, published: digestDate(row.windowEnd, locale, config), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover};
 }
 const visibleEdition = and(eq(notificationEdition.stream, "digest"), isNotNull(notificationEdition.publishedAt));
 
