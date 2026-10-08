@@ -8,8 +8,9 @@ on:
     branches:
       - main
   workflow_dispatch:
-  # The full suite once a night, for what changes without a commit: base images, dependencies
-  # resolved at build time, and the date.
+  # The full runtime suite once a night, for what changes without a commit: base images,
+  # dependencies resolved at build time, and the date. Static checks and unit tests already
+  # passed on the same commit.
   schedule:
     - cron: "23 2 * * *"
 
@@ -70,7 +71,7 @@ jobs:
   static-checks:
     name: Static checks
     needs: tested
-    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on:
       - self-hosted
       - evidence-library-light
@@ -133,7 +134,7 @@ jobs:
   unit-tests:
     name: Unit tests
     needs: tested
-    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on:
       - self-hosted
       - evidence-library-light
@@ -296,6 +297,8 @@ jobs:
         run: |
           if [ "$TESTED" = true ]; then
             echo "A pull request run already passed the static checks and unit tests on this tree."
+          elif [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            echo "The nightly run checks what changes without a commit, so it runs the runtime job alone."
           else
             test "$STATIC_CHECKS" = success
             test "$UNIT_TESTS" = success

@@ -125,7 +125,7 @@ A pull request uses two light runners and one runtime runner:
 - `Runtime and integration` builds the image and runs the acceptance suite with
   four Playwright workers. On a pull request it runs the smoke scope: Amber alone,
   its API checks, and the browser tests tagged `@smoke`. On `main`, the nightly
-  run (02:23 UTC) and a dispatched run it runs everything: both libraries, every
+  run (02:23 UTC, which runs this job alone) and a dispatched run it runs everything: both libraries, every
   browser spec and the publication interface, with the Indigo browser suite in the
   background while the Amber checks run. A failed nightly run reopens or opens
   "[EL-15] Nightly CI fails on main". The database integration tests run beside
