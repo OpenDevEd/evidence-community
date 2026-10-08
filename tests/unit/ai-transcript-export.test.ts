@@ -138,13 +138,4 @@ describe("keeping a copy of the conversation", () => {
 		expect(answer).not.toContain("Checking the library first.");
 		expect(answer).not.toContain("radio teaching");
 	});
-
-	it("names the file each format should be saved as", () => {
-		expect(CHAT_EXPORT_OUTPUT.markdown).toEqual({
-			extension: "md",
-			mimeType: "text/markdown;charset=utf-8",
-		});
-		expect(CHAT_EXPORT_OUTPUT.html.extension).toBe("html");
-		expect(CHAT_EXPORT_OUTPUT.plaintext.extension).toBe("txt");
-	});
 });

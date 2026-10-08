@@ -18,7 +18,7 @@ const record = {
 	page: "101-109",
 };
 const bytesFor = async (url: string) =>
-	new Response(await readFile(resolve("public", url.slice(1))));
+	new Response(new Uint8Array(await readFile(resolve("public", url.slice(1)))));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("additional citation styles", () => {

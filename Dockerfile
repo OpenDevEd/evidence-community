@@ -69,6 +69,13 @@ RUN groupadd --system --gid 1001 nodejs \
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoint
 
 COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# next-intl's config plugin loads @swc/core, which unpacks its native addon into a cache on first use.
+# The service runs as nextjs with root's HOME, so the image ships the unpacked addon in a cache nextjs owns.
+ENV SWC_NATIVE_BINDING_CACHE=/app/.cache/swc
+RUN install -d -o nextjs -g nodejs -m 700 /app/.cache /app/.cache/swc \
+	&& setpriv --reuid 1001 --regid 1001 --init-groups -- node -e "require('@swc/core')"
+
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/docs ./docs
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next

@@ -1,3 +1,7 @@
 {
-	"ignoreDependencies": ["drizzle-kit", "react-dom"]
+	"ignoreDependencies": [
+		"drizzle-kit",
+		"react-dom",
+		"typescript7"
+	]
 }

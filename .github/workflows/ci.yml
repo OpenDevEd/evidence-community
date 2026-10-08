@@ -75,7 +75,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Fallow reads the source without installed dependencies, so it runs first.
       - name: Test the comparison rules
         run: bash tests/ci/fallow-comparison.test.sh
 
@@ -90,32 +89,27 @@ jobs:
           comparison_sha="$(bash .github/scripts/resolve-fallow-comparison.sh)"
           echo "sha=$comparison_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare job-local npm tools
-        run: |
-          echo "NPM_CONFIG_PREFIX=$RUNNER_TEMP/npm-global" >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/npm-global/bin" >> "$GITHUB_PATH"
-
-      - name: Block new code-quality problems
-        uses: fallow-rs/fallow@ecf5a314fd3e10974acb4f5a7f867c433030522d # v3.17.0
-        with:
-          command: audit
-          version: 3.17.0
-          gate: new-only
-          changed-since: ${{ steps.comparison.outputs.sha }}
-          fail-on-issues: true
-          annotations: true
-
       - uses: ./.github/actions/setup-project
 
-      - name: Lint, type check and generated schemas
+      # The four checks share the runner's CPUs. Each writes its own log, printed whole once
+      # all four have finished. Fallow and ESLint keep their caches on the runner's disk, so
+      # a check after a small change reads only what changed.
+      - name: Fallow, lint, type check and generated schemas
+        env:
+          COMPARISON_SHA: ${{ steps.comparison.outputs.sha }}
         run: |
-          # The three checks share the runner's CPUs. Each writes its own log,
-          # printed whole once all three have finished.
-          names=("Lint" "Type check" "Generated schemas")
-          commands=("npm run lint" "npm run typecheck" "npm run schema:check")
+          eslint_cache="$HOME/.cache/new-el-eslint/"
+          export FALLOW_CACHE_DIR="$HOME/.cache/new-el-fallow"
+          names=("Fallow" "Lint" "Type check" "Generated schemas")
+          commands=(
+            "npx fallow audit --gate new-only --changed-since $COMPARISON_SHA --fail-on-issues --format github-annotations"
+            "npm run lint -- --cache --cache-strategy content --cache-location $eslint_cache"
+            "npm run typecheck"
+            "npm run schema:check"
+          )
           pids=()
           for i in "${!names[@]}"; do
-            bash -c "${commands[$i]}" > "$RUNNER_TEMP/check-$i.log" 2>&1 &
+            TIMEFORMAT="Took %R s, %U s user and %S s system CPU." bash -c "time ${commands[$i]}" > "$RUNNER_TEMP/check-$i.log" 2>&1 &
             pids+=("$!")
           done
           failed=()
@@ -157,10 +151,9 @@ jobs:
       - evidence-library-runtime
     timeout-minutes: 45
     env:
+      # The public suites flake above four. On the 8-vCPU guest the admin suite takes the same
+      # time and CPU with four workers as with eight.
       PLAYWRIGHT_WORKERS: "4"
-      # Eight took the admin suite from 98 to 65 seconds on the CI guest. The
-      # public suites flake above four.
-      PLAYWRIGHT_ADMIN_WORKERS: "8"
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -181,7 +174,7 @@ jobs:
           set -euo pipefail
           # A job that died before its cleanup leaves its database holding a port. This Docker
           # serves only this runner, which runs one job at a time, so any such container is stale.
-          docker ps -aq --filter "name=^integration-db-" | xargs -r docker rm -f > /dev/null
+          docker ps -aq --filter "name=^integration-db-" | xargs -r docker rm -fv > /dev/null
           name="integration-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${RUNNER_NAME}"
           echo "INTEGRATION_DB_CONTAINER=$name" >> "$GITHUB_ENV"
           for attempt in 1 2 3 4 5; do
@@ -212,6 +205,25 @@ jobs:
 
       - name: Check the library compose contract
         run: npm run test:library-compose
+
+      # The deployment checks start their own containers: the repository's Compose stack and a
+      # root-owned config. A pull request that changes no deployment file skips them; main and
+      # a diff that can't be read run them.
+      - name: Decide the deployment checks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" && changed="$(git diff --name-only "$BASE_SHA" HEAD)"; then
+            if grep -qE '^(Dockerfile|docker/|docker-bake|compose\.|entrypoint\.sh|tests/acceptance/|tools/(runRuntimeAcceptance|verifyLibraryCompose)\.ts|src/lib/deployment/|drizzle/|package(-lock)?\.json$|next\.config\.|\.github/workflows/ci\.yml)' <<< "$changed"; then
+              echo "A deployment file changed: running the deployment checks."
+            else
+              echo "EVIDENCE_LIBRARY_ACCEPTANCE_DEPLOYMENT_CHECKS=false" >> "$GITHUB_ENV"
+              echo "No deployment file changed: skipping the deployment checks."
+            fi
+          else
+            echo "Could not read the changed files: running the deployment checks."
+          fi
 
       - name: Run end-to-end and integration tests
         run: |
@@ -248,7 +260,7 @@ jobs:
 
       - name: Remove the integration database
         if: always()
-        run: docker rm -f "${INTEGRATION_DB_CONTAINER:-}" > /dev/null 2>&1 || true
+        run: docker rm -fv "${INTEGRATION_DB_CONTAINER:-}" > /dev/null 2>&1 || true
 
   ci:
     name: CI

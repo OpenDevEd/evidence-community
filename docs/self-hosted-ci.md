@@ -1,6 +1,6 @@
 # Self-hosted CI
 
-Last checked: **2026-09-28**
+Last checked: **2026-10-08**
 
 GitHub schedules and reports every CI job. An isolated Ubuntu 24.04 KVM guest
 named `new-el-ci` executes the jobs on the development Hetzner server.
@@ -11,10 +11,12 @@ No hosted runner service is part of the workflow.
 | Count | Label | CPU boundary | Memory limit | Work |
 |---:|---|---:|---:|---|
 | 4 | `evidence-library-light` | any guest CPU | 8 GiB each | static checks with Fallow, unit tests, the final result and release notes |
-| 3 | `evidence-library-runtime` | any guest CPU, 16 cores at most per user | 32 GiB each | Docker build, runtime acceptance and the database integration tests |
-| 1 | `evidence-library-release` | any guest CPU, 16 cores at most | 32 GiB | select, publish and record the exact green runtime commit |
+| 1 | `evidence-library-runtime` | any guest CPU, 6 cores at most | 32 GiB | Docker build, runtime acceptance and the database integration tests |
+| 1 | `evidence-library-release` | any guest CPU, 6 cores at most | 32 GiB | select, publish and record the exact green runtime commit |
 
-The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk.
+The guest has 8 virtual CPUs (24 until 2026-10-08), 48 GiB of memory and a 300 GiB sparse disk.
+While no job runs, the `ci-idle-reclaim.timer` drops the guest's file cache every five
+minutes, and virtio free page reporting hands that memory back to the host.
 No runner is pinned to CPUs. A job running alone uses every idle CPU, and when
 jobs compete the kernel shares CPU time between `system.slice` (the light
 runners), `user.slice` (rootless Docker) and `evidence-library-heavy.slice`
@@ -22,17 +24,18 @@ runners), `user.slice` (rootless Docker) and `evidence-library-heavy.slice`
 the guest. Until 2026-09-28 each light runner was pinned to two CPUs, and the
 unit tests took 264 seconds instead of 82 on six.
 
-The runtime runners are `new-el-ci-runtime`, `-2` and `-3`, run by the users
-`gha-runtime`, `gha-runtime-2` and `gha-runtime-3`. Each user owns a separate
-rootless Docker daemon and persistent BuildKit builder: `evidence-library-runtime`
-for tests and `evidence-library-release` for publication. A single runtime job
-used about 6 GiB of memory, so three can run at once. Each job picks free ports
-when it starts, but releases them again before Docker binds them, so two jobs
-can rarely pick the same port and one fails; rerun it.
+The runtime runner is `new-el-ci-runtime`, run by `gha-runtime`. Each heavy user owns a
+separate rootless Docker daemon and persistent BuildKit builder: `evidence-library-runtime`
+for tests and `evidence-library-release` for publication. One runtime job needs the
+whole 8-vCPU guest: when three ran at once, each took three times as long and
+timed out, so `new-el-ci-runtime-2` and `-3` (users `gha-runtime-2` and `-3`) stay
+registered but their services are disabled. Rootless Docker daemons hand out
+host ports without seeing each other's bindings, so CI containers publish a
+port the guest reports free instead of a random one.
 
 Keep rootless Docker's user managers under `user.slice`. Moving a manager to
 the listener slice stops Docker from creating container scopes. Put the
-`CPUQuota=1600%` and `MemoryMax=32G` limits on the user slice of every heavy
+`CPUQuota=600%`, `AllowedCPUs=0-7` and `MemoryMax=32G` limits on the user slice of every heavy
 user instead: `gha-runtime`, `gha-runtime-2`, `gha-runtime-3` and `gha-release`.
 Check them with `systemctl show user-$(id -u <user>).slice -p AllowedCPUs -p CPUQuotaPerSecUSec -p MemoryMax`.
 
@@ -113,14 +116,18 @@ only a cache or container that belongs to this CI guest.
 
 A pull request uses two light runners and one runtime runner:
 
-- `Static checks` runs Fallow on the source alone, then installs dependencies
-  and runs lint, the type check and the generated-schema check at the same time.
-- `Unit tests` runs Vitest.
+- `Static checks` installs dependencies, then runs Fallow, lint, the type check
+  (TypeScript 7) and the generated-schema check at the same time. Fallow and ESLint
+  keep their caches in the runner user's `~/.cache`, so a warm run reads only
+  what changed.
+- `Unit tests` runs Vitest. Files share one module graph per worker unless they
+  mock a module or need jsdom; see `vitest.config.ts`.
 - `Runtime and integration` builds the image and runs the complete acceptance
-  suite with four Playwright workers, eight for the admin suite. The database
-  integration tests run beside it against their own PostgreSQL service. Inside
-  the acceptance suite, the repository Compose check and the Indigo browser
-  suite run in the background while the Amber checks run.
+  suite with four Playwright workers. The database integration tests run beside
+  it against their own PostgreSQL container. Inside the acceptance suite, the
+  Indigo browser suite runs in the background while the Amber checks run. The
+  deployment checks (the repository Compose stack and a root-owned config) run
+  on `main` and on pull requests that change a deployment file.
 
 The aggregate `CI` job records the tree a passing pull request run tested as an
 artifact named `ci-passed-<tree>`. A push to `main` whose tree matches skips the

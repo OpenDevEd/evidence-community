@@ -520,7 +520,7 @@ async function createPdf(runId: string, createdAt: string) {
 async function uploadSignedPdf(signedUrl: string, pdf: Uint8Array) {
 	const body = new FormData();
 	body.append("cacheControl", "3600");
-	body.append("", new Blob([pdf], { type: "application/pdf" }));
+	body.append("", new Blob([new Uint8Array(pdf)], { type: "application/pdf" }));
 	const response = await fetch(signedUrl, {
 		method: "PUT",
 		body,

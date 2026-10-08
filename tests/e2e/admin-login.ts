@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from "@playwright/test";
+import { expect, type BrowserContext, type Page } from "@playwright/test";
 
 import { cookieHeader, mintReaderSessionCookies } from "../../tools/readerTestSession";
 
@@ -78,5 +78,11 @@ export async function openAdmin(page: Page, returnPath = "/admin") {
 	await page.goto(new URL(returnPath, process.env.PLAYWRIGHT_BASE_URL ?? page.url()).toString(), {
 		waitUntil: "domcontentloaded",
 	});
-	await page.getByRole("button", { name: "Create Item" }).waitFor({ state: "visible" });
+	const create = page.getByRole("button", { name: "Create Item" });
+	await create.waitFor({ state: "visible" });
+	// The server renders the button before React attaches its handlers, and a click before
+	// then does nothing. React marks each element it has hydrated with its props.
+	await expect
+		.poll(() => create.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__reactProps$"))))
+		.toBe(true);
 }

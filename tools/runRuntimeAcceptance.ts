@@ -1784,7 +1784,6 @@ async function runBrowserSuiteInBackground(profile: Profile) {
 function runAdminBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} admin browser suite`);
 	const adminWorkers =
-		process.env.PLAYWRIGHT_ADMIN_WORKERS ??
 		process.env.PLAYWRIGHT_WORKERS ??
 		(process.env.CI ? undefined : "1");
 	const environment = playwrightEnvironment(`${profile.name}-admin`, {
@@ -3264,8 +3263,13 @@ function imageId(reference: string) {
 	return result.status === 0 ? result.stdout.trim() : null;
 }
 
+// The deployment checks start their own containers: the repository's Compose stack and a
+// root-owned config. CI skips them on a pull request that changes no deployment file.
+const deploymentChecks = process.env.EVIDENCE_LIBRARY_ACCEPTANCE_DEPLOYMENT_CHECKS !== "false";
+
 async function startAcceptanceInfrastructure(profiles: Profile[]) {
-	await verifyRootOwnedConfigStartup();
+	if (deploymentChecks) await verifyRootOwnedConfigStartup();
+	else console.log("Skipping the deployment checks: no deployment file changed.");
 	compose(
 		"up",
 		"--wait",
@@ -3414,7 +3418,7 @@ async function runAcceptance() {
 	try {
 		buildAcceptanceImage();
 		await startAcceptanceInfrastructure(profiles);
-		const repositoryCompose = startRepositoryComposeCheck();
+		const repositoryCompose = deploymentChecks ? startRepositoryComposeCheck() : Promise.resolve();
 		await startAcceptanceSearchWorkers(profiles);
 		await seedAcceptanceRecords(profiles);
 		await runAcceptanceBehavior(profiles, repositoryCompose);
