@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
+import { createServer, type AddressInfo } from "node:net";
 import { generateCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { Meilisearch } from "meilisearch";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -32,9 +34,14 @@ beforeAll(async () => {
 	host = process.env.EVIDENCE_LIBRARY_TEST_MEILI_URL ?? "";
 	if (!host) {
 		ownedContainer = `export-selection-${randomUUID()}`;
-		execFileSync("docker", ["run", "--detach", "--rm", "--name", ownedContainer, "--publish", "127.0.0.1::7700", "--env", "MEILI_NO_ANALYTICS=true", "getmeili/meilisearch:v1.54"]);
-		const address = execFileSync("docker", ["port", ownedContainer, "7700"], { encoding: "utf8" }).trim();
-		host = `http://${address}`;
+		// The CI guest runs several rootless Docker daemons, and each hands out host ports without
+		// seeing the others' bindings, so take a port the guest reports free.
+		const probe = createServer().listen(0, "127.0.0.1");
+		await once(probe, "listening");
+		const { port } = probe.address() as AddressInfo;
+		probe.close();
+		execFileSync("docker", ["run", "--detach", "--rm", "--name", ownedContainer, "--publish", `127.0.0.1:${port}:7700`, "--env", "MEILI_NO_ANALYTICS=true", "getmeili/meilisearch:v1.54"]);
+		host = `http://127.0.0.1:${port}`;
 	}
 	client = new Meilisearch({ host, apiKey: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY });
 	await vi.waitFor(async () => expect((await client.health()).status).toBe("available"), { timeout: 15_000 });
