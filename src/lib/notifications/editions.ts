@@ -57,7 +57,7 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       SELECT ${item.key} AS key, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
         ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
         CASE WHEN length(coalesce(${item.title}, '')) >= 25 AND author.surname <> ''
-          THEN lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g')) || '|' || author.surname
+          THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname
           ELSE ${item.key} END AS work,
         CASE WHEN record.core THEN 3 ELSE 0 END
           + CASE WHEN metric.refs >= 10 THEN 2 WHEN metric.refs > 0 THEN 1 ELSE 0 END
@@ -66,8 +66,11 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
           - CASE WHEN ${item.itemType}::text IN ('Dataset', 'ComputerProgram') THEN 1 ELSE 0 END
           - CASE WHEN record.withdrawn THEN 10 ELSE 0 END AS score
       FROM ${item}
-      -- A creator is stored as first and last name, or as one name the way OpenAlex gives it.
-      CROSS JOIN LATERAL (SELECT lower(coalesce(nullif(${item.creators} -> 0 ->> 'lastName', ''), substring(${item.creators} -> 0 ->> 'name' from '(\\S+)\\s*$'), '')) AS surname) author
+      -- The first author, or the first creator when none is marked as an author. A creator is stored as first and
+      -- last name, or as one name the way OpenAlex gives it.
+      CROSS JOIN LATERAL (SELECT lower(coalesce(nullif(first.creator ->> 'lastName', ''), substring(first.creator ->> 'name' from '(\\S+)\\s*$'), '')) AS surname
+        FROM (SELECT (SELECT creator FROM jsonb_array_elements(coalesce(${item.creators}, '[]'::jsonb)) WITH ORDINALITY AS listed(creator, position)
+          ORDER BY (creator ->> 'creatorType' = 'author') DESC NULLS LAST, position LIMIT 1) AS creator) first) author
       LEFT JOIN LATERAL (SELECT max("citedByCount") AS citations, max("referencedWorksCount") AS refs
         FROM "itemCitationMetric" WHERE "itemKey" = ${item.key}) metric ON true
       LEFT JOIN LATERAL (SELECT bool_or("payload" #>> '{primary_location,source,is_core}' = 'true') AS core,

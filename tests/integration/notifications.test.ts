@@ -378,7 +378,8 @@ it("counts a preprint and its article as one publication and lists the article",
       [key, itemType, title, "A study of attention in classrooms. ".repeat(8), JSON.stringify(creators)]);
     const mills = [{creatorType: "author", firstName: "Caitlin", lastName: "Mills"}];
     await version("PUBAAAAA", "Preprint", "Attention in classrooms: a field experiment", mills);
-    await version("PUBAAAAB", "JournalArticle", "Attention in Classrooms - A Field Experiment", mills);
+    // The article's title ends in a full stop and lists its editor before its author.
+    await version("PUBAAAAB", "JournalArticle", "Attention in Classrooms - A Field Experiment.", [{creatorType: "editor", firstName: "Ada", lastName: "Reyes"}, ...mills]);
     // A third copy from a source that stores the author as one name.
     await version("PUBAAAAD", "Preprint", "Attention in classrooms: a field experiment", [{creatorType: "author", name: "Caitlin Mills"}]);
     // The same title by another first author, or by no named author, is another publication.

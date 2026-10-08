@@ -43,17 +43,35 @@ function cleanDoi(doi: string) {
 const workNumber = (key: string) => Number(key.replace(/^\D+/u, "")) || Number.POSITIVE_INFINITY;
 const titleOf = (work: WorkFacts) => work.title?.trim().toLowerCase() ?? "";
 
+/** A versioned DOI's unversioned DOI and its version as numbers, or null when the DOI names no version. */
+function versionParts(doi: string) {
+	for (const pattern of VERSIONED_DOIS) {
+		const base = pattern.exec(doi)?.[1];
+		if (base) return { base, version: (doi.slice(base.length).match(/\d+/gu) ?? []).map(Number) };
+	}
+	return null;
+}
+
 /** Whether a DOI is `base` with a version added. */
-const isVersionOf = (doi: string, base: string) => VERSIONED_DOIS.some((pattern) => pattern.exec(doi)?.[1] === base);
+const isVersionOf = (doi: string, base: string) => versionParts(doi)?.base === base;
+
+function compareVersions(a: readonly number[], b: readonly number[]) {
+	for (let part = 0; part < Math.max(a.length, b.length); part++) {
+		const difference = (a[part] ?? 0) - (b[part] ?? 0);
+		if (difference) return difference;
+	}
+	return 0;
+}
 
 /**
- * Of two DOIs written as `.v1` and `.v3` of one DOI neither record has, the later version's index, or null. Only
- * the explicit `.vN` form counts: two Zenodo DOIs also differ only in their last number, and DataCite decides those.
+ * Of two versions of one DOI neither record has, such as `.v1` and `.v3`, the later one's index, or null. Only the
+ * named version forms count: two Zenodo DOIs also differ only in their last number, and DataCite decides those.
  */
 function laterVersion(a: string, b: string) {
-	const [ma, mb] = [a, b].map((doi) => /^(.+)\.v(\d+)$/u.exec(doi));
-	if (!ma || !mb || ma[1] !== mb[1] || ma[2] === mb[2]) return null;
-	return Number(ma[2]) > Number(mb[2]) ? 0 : 1;
+	const [pa, pb] = [versionParts(a), versionParts(b)];
+	if (!pa || !pb || pa.base !== pb.base) return null;
+	const order = compareVersions(pa.version, pb.version);
+	return order === 0 ? null : order > 0 ? 0 : 1;
 }
 
 /**

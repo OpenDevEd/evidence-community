@@ -39,6 +39,9 @@ describe("OpenAlex duplicate records", () => {
 			work("W6", "10.6084/m9.figshare.334.v3", "Survey data"),
 		];
 		expect(duplicateWorkKeys(records, new Map())).toEqual(new Map([["W1", "W2"], ["W3", "W4"], ["W5", "W6"]]));
+		// Two Mendeley Data or registry versions with no unversioned record: the later one is kept.
+		const versions = [work("W11", "10.17632/2cj9z82nhj.1", title), work("W12", "10.17632/2cj9z82nhj.2", title), work("W13", "10.1257/rct.19229-2.0", "A trial"), work("W14", "10.1257/rct.19229-1.1", "A trial")];
+		expect(duplicateWorkKeys(versions, new Map())).toEqual(new Map([["W11", "W12"], ["W14", "W13"]]));
 		// Two Zenodo DOIs also differ only in a number; without DataCite's word they stay apart.
 		expect(duplicateWorkKeys([work("W7", "10.5281/zenodo.491"), work("W8", "10.5281/zenodo.492")], new Map())).toEqual(new Map());
 		// A chapter named like its book is not a version of the book.
