@@ -151,10 +151,9 @@ jobs:
       - evidence-library-runtime
     timeout-minutes: 45
     env:
+      # The public suites flake above four. On the 8-vCPU guest the admin suite takes the same
+      # time and CPU with four workers as with eight.
       PLAYWRIGHT_WORKERS: "4"
-      # Eight took the admin suite from 98 to 65 seconds on the CI guest. The
-      # public suites flake above four.
-      PLAYWRIGHT_ADMIN_WORKERS: "8"
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

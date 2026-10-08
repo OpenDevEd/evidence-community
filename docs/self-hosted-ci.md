@@ -116,14 +116,18 @@ only a cache or container that belongs to this CI guest.
 
 A pull request uses two light runners and one runtime runner:
 
-- `Static checks` runs Fallow on the source alone, then installs dependencies
-  and runs lint, the type check and the generated-schema check at the same time.
-- `Unit tests` runs Vitest.
+- `Static checks` installs dependencies, then runs Fallow, lint, the type check
+  (TypeScript 7) and the generated-schema check at the same time. Fallow and ESLint
+  keep their caches in the runner user's `~/.cache`, so a warm run reads only
+  what changed.
+- `Unit tests` runs Vitest. Files share one module graph per worker unless they
+  mock a module or need jsdom; see `vitest.config.ts`.
 - `Runtime and integration` builds the image and runs the complete acceptance
-  suite with four Playwright workers, eight for the admin suite. The database
-  integration tests run beside it against their own PostgreSQL container. Inside
-  the acceptance suite, the repository Compose check and the Indigo browser
-  suite run in the background while the Amber checks run.
+  suite with four Playwright workers. The database integration tests run beside
+  it against their own PostgreSQL container. Inside the acceptance suite, the
+  Indigo browser suite runs in the background while the Amber checks run. The
+  deployment checks (the repository Compose stack and a root-owned config) run
+  on `main` and on pull requests that change a deployment file.
 
 The aggregate `CI` job records the tree a passing pull request run tested as an
 artifact named `ci-passed-<tree>`. A push to `main` whose tree matches skips the
