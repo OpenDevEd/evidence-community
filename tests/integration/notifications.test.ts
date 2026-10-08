@@ -381,6 +381,8 @@ it("writes a past period's digest by publication date, rewrites it in the same r
     await dated(client, "PUBAAAAB", "2026-09-01");
     const first = await prepareDigestForPeriod(db, publishedConfig, period);
     expect(first).toMatchObject({status: "queued", publicationCount: 1});
+    // An email still waiting from an earlier send of this edition must not go out with the rewrite.
+    await client.query(`UPDATE "notificationDelivery" SET status = 'queued', "nextAttemptAt" = now() WHERE "editionId" = $1`, [first.status === "queued" ? first.editionId : null]);
     const digest = {title: "August", summary: "One study.", markdown: "See [Mills, 2026](/lib/PUBAAAAA)", model: "openai/gpt-6-luna", reasoning: "max"};
     const openScholar = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({digest}));
     try {
@@ -399,6 +401,13 @@ it("writes a past period's digest by publication date, rewrites it in the same r
     // The reader confirmed before the period ended, so a scheduled edition would have queued an email.
     expect((await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, editions[0].id))).map(delivery => delivery.status)).toEqual(["skipped"]);
     expect((await db.select().from(notificationState))[0]).toEqual(schedule);
+    // A period that ends when the next scheduled digest is due: the schedule moves past it and keeps the digest.
+    const due = schedule.nextDigestAt!;
+    await dated(client, "PUBAAAAD", "2026-09-10");
+    const manual = await prepareDigestForPeriod(db, publishedConfig, {start: new Date("2026-09-09T00:00:00Z"), end: due});
+    expect(await prepareNotificationEditions(db, publishedConfig, due)).toEqual({status: "empty"});
+    expect((await db.select().from(notificationState))[0].digestThrough).toEqual(due);
+    expect((await db.select().from(notificationEdition).where(eq(notificationEdition.windowEnd, due))).map(edition => edition.id)).toEqual([manual.status === "queued" ? manual.editionId : null]);
     expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, published: {date: "1 September 2026"}});
   });
 }, 120_000);

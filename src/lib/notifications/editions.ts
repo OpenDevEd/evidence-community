@@ -132,7 +132,13 @@ async function prepareWindow(
 ): Promise<DigestPreparation> {
   if (window.end <= window.start) return { status: "empty" };
   const editionId = randomUUID();
-  await tx.insert(notificationEdition).values({ id: editionId, stream: window.stream, windowStart: window.start, windowEnd: window.end, publications: [] });
+  const cursor = window.stream === "hourly" ? { hourlyThrough: window.end } : { digestThrough: window.end, nextDigestAt: nextDigestDate(config.notifications.schedule, window.end) };
+  // A digest written by hand for a period that ends here stands; the schedule moves past it.
+  const inserted = await tx.insert(notificationEdition).values({ id: editionId, stream: window.stream, windowStart: window.start, windowEnd: window.end, publications: [] }).onConflictDoNothing().returning({ id: notificationEdition.id });
+  if (!inserted.length) {
+    await tx.update(notificationState).set(cursor);
+    return { status: "empty" };
+  }
   // Additions are marked as covered whatever a digest covers, so a library that
   // later switches to additions starts from this edition.
   let { total, keys } = await coverCandidates(tx, config, enabledAt, window, editionId);
@@ -151,7 +157,7 @@ async function prepareWindow(
     await tx.update(notificationEdition).set({ publications, publicationCount: total, cover }).where(eq(notificationEdition.id, editionId));
     if (window.stream === "digest") result = { status: "queued", editionId, publicationCount: total };
   }
-  await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { digestThrough: window.end, nextDigestAt: nextDigestDate(config.notifications.schedule, window.end) });
+  await tx.update(notificationState).set(cursor);
   return result;
 }
 
@@ -207,7 +213,8 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     await tx.execute(sql`
       INSERT INTO "notificationDelivery" ("messageKey", "subscriberId", "editionId", "status", "nextAttemptAt")
       SELECT ${id} || ':' || "id"::text, "id", ${id}::uuid, 'skipped', NULL FROM "notificationSubscriber"
-      ON CONFLICT DO NOTHING
+      ON CONFLICT ("messageKey") DO UPDATE SET "status" = 'skipped', "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL
+        WHERE "notificationDelivery"."status" = 'queued'
     `);
     return { status: "queued", editionId: id, publicationCount: total };
   });
