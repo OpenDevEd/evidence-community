@@ -40,5 +40,8 @@ export default defineConfig({
             "tests/integration/source-restart.test.ts",
 		],
 		maxWorkers: 1,
+		// These run beside the runtime acceptance stack on the CI guest's 8 vCPUs, where a
+		// database round trip that takes a second alone can pass Vitest's default five.
+		testTimeout: 15_000,
 	},
 });
