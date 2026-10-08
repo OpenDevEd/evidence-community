@@ -2,7 +2,7 @@ import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { item } from "@/db/schema/tables/item";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, gt, isNull, lte, notInArray, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNull, lt, lte, notInArray, sql, type SQL } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { notificationEdition, notificationItem, notificationState } from "@/db/schema/notifications";
@@ -29,6 +29,46 @@ function uncovered(db: DatabaseTransaction, config: LibraryServerConfig, enabled
     isNull(window.stream === "digest" ? notificationItem.digestEditionId : notificationItem.hourlyEditionId),
     gt(notificationItem.firstPublishedAt, enabledAt), lte(notificationItem.firstPublishedAt, window.end),
   );
+}
+
+// Publications dated from the day the window starts up to the day before it
+// ends, in the library's time zone. A record without a full date belongs to no period.
+function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, window: Pick<NotificationWindow, "start" | "end">) {
+  const day = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: config.notifications.schedule.timezone });
+  return and(
+    publicParentVisibility(db, config.content.tags.hidden), notInArray(item.itemType, ["Attachment", "Note"]),
+    sql`${item.date} ~ '^\\d{4}-\\d{2}-\\d{2}'`, gte(item.date, day(window.start)), lt(item.date, day(window.end)),
+  );
+}
+
+/**
+ * Counts a digest's publications and picks the ones it lists, best first: a
+ * real abstract, then a score of the journal's standing, references, known
+ * institutions and citations. The journal and withdrawal flags come from the
+ * OpenAlex record, so other sources score on the rest.
+ */
+async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
+  const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
+    WITH candidate AS (
+      SELECT ${item.key} AS key, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
+        CASE WHEN record.core THEN 3 ELSE 0 END
+          + CASE WHEN metric.refs >= 10 THEN 2 WHEN metric.refs > 0 THEN 1 ELSE 0 END
+          + CASE WHEN EXISTS (SELECT 1 FROM "itemInstitution" WHERE "itemKey" = ${item.key}) THEN 1 ELSE 0 END
+          + 2 * ln(1 + coalesce(metric.citations, 0))
+          - CASE WHEN ${item.itemType}::text IN ('Dataset', 'ComputerProgram') THEN 1 ELSE 0 END
+          - CASE WHEN record.withdrawn THEN 10 ELSE 0 END AS score
+      FROM ${item}
+      LEFT JOIN LATERAL (SELECT max("citedByCount") AS citations, max("referencedWorksCount") AS refs
+        FROM "itemCitationMetric" WHERE "itemKey" = ${item.key}) metric ON true
+      LEFT JOIN LATERAL (SELECT bool_or("payload" #>> '{primary_location,source,is_core}' = 'true') AS core,
+          bool_or("payload" ->> 'is_retracted' = 'true' OR "payload" ->> 'is_paratext' = 'true') AS withdrawn
+        FROM "sourceSnapshot" WHERE "itemKey" = ${item.key}) record ON true
+      WHERE ${candidates}
+    )
+    SELECT (SELECT count(*)::int FROM candidate) AS total,
+      ARRAY(SELECT key FROM candidate ORDER BY abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}) AS keys
+  `);
+  return { total: result.total, keys: result.keys ?? [] };
 }
 
 /**
@@ -83,6 +123,17 @@ function notificationWindows(state: typeof notificationState.$inferSelect, diges
   return windows;
 }
 
+/** How many publications the edition covers, and the keys of those it lists. */
+async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow, editionId: string) {
+  // Additions are marked as covered whatever a digest covers, so a library that
+  // later switches to additions starts from this edition.
+  const additions = await coverCandidates(tx, config, enabledAt, window, editionId);
+  if (window.stream === "hourly") return additions;
+  return rankPublications(tx, config.notifications.digestCovers === "published"
+    ? publishedIn(tx, config, window)
+    : inArray(item.key, tx.select({ key: notificationItem.itemKey }).from(notificationItem).where(eq(notificationItem.digestEditionId, editionId))));
+}
+
 async function prepareWindow(
   tx: DatabaseTransaction,
   config: LibraryServerConfig,
@@ -92,8 +143,14 @@ async function prepareWindow(
 ): Promise<DigestPreparation> {
   if (window.end <= window.start) return { status: "empty" };
   const editionId = randomUUID();
-  await tx.insert(notificationEdition).values({ id: editionId, stream: window.stream, windowStart: window.start, windowEnd: window.end, publications: [] });
-  const { total, keys } = await coverCandidates(tx, config, enabledAt, window, editionId);
+  const cursor = window.stream === "hourly" ? { hourlyThrough: window.end } : { digestThrough: window.end, nextDigestAt: nextDigestDate(config.notifications.schedule, window.end) };
+  // A digest written by hand for a period that ends here stands; the schedule moves past it.
+  const inserted = await tx.insert(notificationEdition).values({ id: editionId, stream: window.stream, windowStart: window.start, windowEnd: window.end, publications: [] }).onConflictDoNothing().returning({ id: notificationEdition.id });
+  if (!inserted.length) {
+    await tx.update(notificationState).set(cursor);
+    return { status: "empty" };
+  }
+  const { total, keys } = await editionPublications(tx, config, enabledAt, window, editionId);
   const publications = await listPublications(tx, config, keys);
   let result: DigestPreparation = { status: "empty" };
   if (!publications.length) {
@@ -104,7 +161,7 @@ async function prepareWindow(
     await tx.update(notificationEdition).set({ publications, publicationCount: total, cover }).where(eq(notificationEdition.id, editionId));
     if (window.stream === "digest") result = { status: "queued", editionId, publicationCount: total };
   }
-  await tx.update(notificationState).set(window.stream === "hourly" ? { hourlyThrough: window.end } : { digestThrough: window.end, nextDigestAt: nextDigestDate(config.notifications.schedule, window.end) });
+  await tx.update(notificationState).set(cursor);
   return result;
 }
 
@@ -139,6 +196,31 @@ export async function prepareNotificationEditions(
       if (prepared.status === "queued") result = prepared;
     }
     return result;
+  });
+}
+
+/**
+ * Writes the digest of a past period by publication date, or rewrites the
+ * edition that already ends when it does, in the same record. Additions are not
+ * consulted and the schedule does not move. No subscriber is emailed.
+ */
+export async function prepareDigestForPeriod(db: Database, config: LibraryServerConfig, period: { start: Date; end: Date }): Promise<DigestPreparation> {
+  if (!config.notifications.enabled) return { status: "disabled" };
+  return db.transaction(async tx => {
+    const { total, keys } = await rankPublications(tx, publishedIn(tx, config, period));
+    const publications = await listPublications(tx, config, keys);
+    if (!publications.length) return { status: "empty" };
+    const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
+    const edition = { windowStart: period.start, publications, publicationCount: total, cover, publishedAt: null, attempts: 0, nextAttemptAt: new Date(), leaseToken: null, leaseExpiresAt: null, lastError: null };
+    const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, ...edition })
+      .onConflictDoUpdate({ target: [notificationEdition.stream, notificationEdition.windowEnd], set: edition }).returning({ id: notificationEdition.id });
+    await tx.execute(sql`
+      INSERT INTO "notificationDelivery" ("messageKey", "subscriberId", "editionId", "status", "nextAttemptAt")
+      SELECT ${id} || ':' || "id"::text, "id", ${id}::uuid, 'skipped', NULL FROM "notificationSubscriber"
+      ON CONFLICT ("messageKey") DO UPDATE SET "status" = 'skipped', "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL
+        WHERE "notificationDelivery"."status" = 'queued'
+    `);
+    return { status: "queued", editionId: id, publicationCount: total };
   });
 }
 
@@ -188,7 +270,7 @@ async function requestDigest(config: LibraryServerConfig, edition: typeof notifi
   const service = config.authentication.openScholar;
   const response = await fetch(new URL("/api/v1/evidence-libraries/digests/generate", service.convexSiteUrl), {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}` },
-    body: JSON.stringify({ libraryId: service.libraryId, editionId: edition.id, locale: config.localization.defaultLocale, periodStart: edition.windowStart.toISOString(), periodEnd: edition.windowEnd.toISOString(), publications: edition.publications.map(({ item: _item, ...metadata }) => metadata) }),
+    body: JSON.stringify({ libraryId: service.libraryId, editionId: edition.id, locale: config.localization.defaultLocale, periodStart: edition.windowStart.toISOString(), periodEnd: edition.windowEnd.toISOString(), publicationCount: edition.publicationCount, publications: edition.publications.map(({ item: _item, ...metadata }) => metadata) }),
     signal: AbortSignal.any([AbortSignal.timeout(210_000), ...(signal ? [signal] : [])]),
   });
   if (response.status === 202) return null;

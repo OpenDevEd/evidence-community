@@ -906,6 +906,36 @@ A shorter month uses its last day. Manual sends and scheduled sends share the
 same digest cutoff and publication deduplication. Empty manual sends leave the
 cutoff unchanged. Changing frequency preserves already announced publications.
 
+`notifications.digestCovers` chooses what a digest covers. `published`, the
+default, takes the publications dated from the day the period starts up to the
+day before it ends, in the schedule's timezone, whenever they were added. A
+record without a full `YYYY-MM-DD` date belongs to no period. `added` takes the
+publications added to the library in the period. Instant emails always announce
+additions.
+
+A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
+period has more, the ones kept are ranked: a record with an abstract of at least
+200 characters first, then by a score of 3 for a journal OpenAlex marks as core,
+2 for ten or more references (1 for fewer), 1 for a known institution and twice
+the natural log of one plus the citation count. A dataset or software record
+loses 1, and a retracted record or paratext loses 10.
+
+To write the digest of a past period, or rewrite the edition that already ends
+when it does, send the period to the manual digest route with the library's
+machine credential:
+
+```sh
+curl -X POST "$LIBRARY_URL/api/v1/openscholar/digests" \
+  -H "Authorization: Bearer $MACHINE_CREDENTIAL" -H "Content-Type: application/json" \
+  -d '{"period":{"start":"2026-09-01T00:00:00Z","end":"2026-10-01T00:00:00Z"}}'
+```
+
+It always selects by publication date, keeps the edition's record and address,
+leaves the schedule alone and emails no subscriber. The period's days are read
+in the schedule's timezone, so a library outside UTC gives its own midnights,
+such as `2026-09-01T00:00:00-04:00`. To rewrite an existing edition, send its
+exact `windowStart` and `windowEnd`.
+
 This release replaces `notifications.weekly` with `notifications.schedule` and
 renames the subscriber preference and edition stream to `digest`. Migration
 `0058` preserves subscriber tokens, editions and cutoffs. OpenScholar owner

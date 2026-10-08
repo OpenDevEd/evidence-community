@@ -144,8 +144,8 @@ function EmptyArchive({next, settings}: {next: DigestDate | null; settings: Dige
 }
 
 function firstEdition(next: DigestDate | null) {
-  // A send date with nothing new is skipped, so the date is only when the first one is due.
-  return next ? `The first is due on ${next.weekday}, if new publications have been added by then.` : "The first will appear after new publications are added.";
+  // A send date with nothing to cover is skipped, so the date is only when the first one is due.
+  return next ? `The first is due on ${next.weekday}, if there are publications to cover by then.` : "The first will appear when there are publications to cover.";
 }
 
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
@@ -182,7 +182,7 @@ function EditionBody({edition: pending, cards, href}: {edition: Promise<DigestEd
           <DigestContent edition={edition} />
           <section className="mt-10" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
-            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>The first {edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} added in this period.</p>}
+            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period.</p>}
             <Suspense fallback={<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{edition.keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>}><EditionCards cards={cards} /></Suspense>
             <PageControls page={edition.page} pages={edition.pages} href={href} />
           </section>

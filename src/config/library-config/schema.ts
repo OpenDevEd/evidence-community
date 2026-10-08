@@ -1704,6 +1704,8 @@ const digestTimeFields = {
 
 const notificationsSchema = z.object({
 	enabled: z.boolean().default(false),
+	// What a digest covers: publications dated in its period, or publications added to the library in it.
+	digestCovers: z.enum(["published", "added"]).default("published"),
 	schedule: z.discriminatedUnion("frequency", [
 		z.object({frequency: z.literal("weekly"), weekday: z.number().int().min(0).max(6), ...digestTimeFields}).strict(),
 		z.object({frequency: z.literal("monthly"), dayOfMonth: z.number().int().min(1).max(31), ...digestTimeFields}).strict(),

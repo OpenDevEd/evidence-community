@@ -11,13 +11,13 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { createNativeItemDraft, publishItemDraft, openItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { notificationDelivery, notificationEdition, notificationItem, notificationState, notificationSubscriber } from "@/db/schema/notifications";
-import { prepareNotificationEditions, generateNotificationEdition } from "@/lib/notifications/editions";
+import { prepareNotificationEditions, prepareDigestForPeriod, generateNotificationEdition } from "@/lib/notifications/editions";
 import { getDigestEdition, getNextDigestEdition, listDigestEditions, listEarlierDigests } from "@/lib/notifications/public";
 import { runNotificationCycle } from "@/lib/notifications/worker";
 import { deliverNotification } from "@/lib/notifications/delivery";
 import { requestSubscription, confirmSubscription, updateSubscription } from "@/lib/notifications/subscriptions";
 
-const config = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], notifications: {enabled: true, schedule: {frequency: "weekly", weekday: 1, time: "09:00", timezone: "UTC"}}, updatedAt: "2026-09-09T00:00:00Z"});
+const config = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], notifications: {enabled: true, digestCovers: "added", schedule: {frequency: "weekly", weekday: 1, time: "09:00", timezone: "UTC"}}, updatedAt: "2026-09-09T00:00:00Z"});
 
 it.each([
   {schedule: {frequency: "weekly" as const, weekday: 1, time: "09:00", timezone: "UTC"}, scheduledAt: new Date("2026-09-14T09:00:00Z")},
@@ -342,6 +342,73 @@ it("covers every publication in the window, lists the first thousand and carries
     // Records deleted after publishing drop out of the pages instead of leaving gaps.
     await client.query(`UPDATE item SET deleted = 1 WHERE key = ANY($1)`, [edition.publications.slice(0, 4).map(p => p.key)]);
     expect(await getDigestEdition(db, config, "en-GB", edition.id, 1)).toMatchObject({listed: 996, pages: 83, keys: edition.publications.slice(4, 16).map(p => p.key)});
+  });
+}, 120_000);
+
+const publishedConfig = {...config, notifications: {...config.notifications, digestCovers: "published" as const}};
+const dated = (client: {query: (text: string, values: unknown[]) => Promise<unknown>}, key: string, date: string, abstract: string | null = null) => client.query(
+  `WITH identity AS (INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1))
+   INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", title, date, "abstractNote") VALUES ($1, 'native', $1, 'Report', 'Publication ' || $1, $2, $3)`, [key, date, abstract]);
+
+it("covers what was published in the period whenever it was added, and lists a record with an abstract first", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
+    // Every record is added today, long after these periods, so none counts as an addition in them.
+    await dated(client, "PUBAAAAA", "2026-09-09");
+    await dated(client, "PUBAAAAB", "2026-09-13", "A study of attention in classrooms. ".repeat(8));
+    await dated(client, "PUBAAAAC", "2026-09-14");
+    await dated(client, "PUBAAAAD", "2019-05-01", "An older study that only now entered the library. ".repeat(8));
+    await dated(client, "PUBAAAAE", "2026");
+    expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-14T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 2});
+    const [first] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(first.publications.map(publication => publication.key)).toEqual(["PUBAAAAB", "PUBAAAAA"]);
+    // The day the digest goes out belongs to the next period.
+    expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-21T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 1});
+    const editions = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(editions.find(edition => edition.id !== first.id)!.publications.map(publication => publication.key)).toEqual(["PUBAAAAC"]);
+  });
+}, 120_000);
+
+it("writes a past period's digest by publication date, rewrites it in the same record and emails no one", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
+    await requestSubscription(db, {email: "reader@example.org", digest: true, instant: false});
+    const [subscriber] = await db.select().from(notificationSubscriber);
+    expect(await confirmSubscription(db, subscriber.token, new Date("2026-07-01T00:00:00Z"))).toBe(true);
+    const [schedule] = await db.select().from(notificationState);
+    const period = {start: new Date("2026-08-01T00:00:00Z"), end: new Date("2026-09-01T00:00:00Z")};
+    await dated(client, "PUBAAAAA", "2026-08-03");
+    await dated(client, "PUBAAAAB", "2026-09-01");
+    const first = await prepareDigestForPeriod(db, publishedConfig, period);
+    expect(first).toMatchObject({status: "queued", publicationCount: 1});
+    // An email still waiting from an earlier send of this edition must not go out with the rewrite.
+    await client.query(`UPDATE "notificationDelivery" SET status = 'queued', "nextAttemptAt" = now() WHERE "editionId" = $1`, [first.status === "queued" ? first.editionId : null]);
+    const digest = {title: "August", summary: "One study.", markdown: "See [Mills, 2026](/lib/PUBAAAAA)", model: "openai/gpt-6-luna", reasoning: "max"};
+    const openScholar = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({digest}));
+    try {
+      expect(await generateNotificationEdition(db, publishedConfig)).toBe(true);
+      await dated(client, "PUBAAAAC", "2026-08-20");
+      expect(await prepareDigestForPeriod(db, publishedConfig, period)).toEqual({...first, publicationCount: 2});
+      const [rewriting] = await db.select().from(notificationEdition);
+      expect(rewriting).toMatchObject({windowStart: period.start, windowEnd: period.end, publicationCount: 2, publishedAt: null});
+      expect(await generateNotificationEdition(db, publishedConfig)).toBe(true);
+    } finally {
+      openScholar.mockRestore();
+    }
+    const editions = await db.select().from(notificationEdition);
+    expect(editions).toHaveLength(1);
+    expect(editions[0].publishedAt).toBeInstanceOf(Date);
+    // The reader confirmed before the period ended, so a scheduled edition would have queued an email.
+    expect((await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, editions[0].id))).map(delivery => delivery.status)).toEqual(["skipped"]);
+    expect((await db.select().from(notificationState))[0]).toEqual(schedule);
+    // A period that ends when the next scheduled digest is due: the schedule moves past it and keeps the digest.
+    const due = schedule.nextDigestAt!;
+    await dated(client, "PUBAAAAD", "2026-09-10");
+    const manual = await prepareDigestForPeriod(db, publishedConfig, {start: new Date("2026-09-09T00:00:00Z"), end: due});
+    expect(await prepareNotificationEditions(db, publishedConfig, due)).toEqual({status: "empty"});
+    expect((await db.select().from(notificationState))[0].digestThrough).toEqual(due);
+    expect((await db.select().from(notificationEdition).where(eq(notificationEdition.windowEnd, due))).map(edition => edition.id)).toEqual([manual.status === "queued" ? manual.editionId : null]);
+    expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, published: {date: "1 September 2026"}});
   });
 }, 120_000);
 

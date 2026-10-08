@@ -96,7 +96,7 @@ function subscriptionContent(
 		subject = `Confirm email updates from ${identity.name}`;
 		title = "Confirm your email updates";
 		text = `Confirm your email updates: ${confirm}\n\nThis link expires after 24 hours. If you did not subscribe, ignore this email.`;
-		content = `<p style="${emailStyles.paragraph}">One last step to receive updates from <strong style="color:#202822">${escapeHtml(identity.name)}</strong>.</p>${subscriber.digest ? emailPanel("Library digest", "A summary of new additions, with links to the publications.") : ""}${subscriber.instant ? emailPanel("New publications", "Updates when publications are added.") : ""}${button("Confirm email updates", confirm)}<p style="font-size:13px;line-height:1.7;color:#797b73;margin:22px 0 0">This link is valid for 24 hours. If you didn’t request these updates, you can ignore this email.</p>`;
+		content = `<p style="${emailStyles.paragraph}">One last step to receive updates from <strong style="color:#202822">${escapeHtml(identity.name)}</strong>.</p>${subscriber.digest ? emailPanel("Library digest", "A summary of recent publications, with links to them.") : ""}${subscriber.instant ? emailPanel("New publications", "Updates when publications are added.") : ""}${button("Confirm email updates", confirm)}<p style="font-size:13px;line-height:1.7;color:#797b73;margin:22px 0 0">This link is valid for 24 hours. If you didn’t request these updates, you can ignore this email.</p>`;
 	}
 	return { subject, text, content, title, detail };
 }
