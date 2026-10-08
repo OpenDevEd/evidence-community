@@ -75,7 +75,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Fallow reads the source without installed dependencies, so it runs first.
       - name: Test the comparison rules
         run: bash tests/ci/fallow-comparison.test.sh
 
@@ -90,29 +89,24 @@ jobs:
           comparison_sha="$(bash .github/scripts/resolve-fallow-comparison.sh)"
           echo "sha=$comparison_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare job-local npm tools
-        run: |
-          echo "NPM_CONFIG_PREFIX=$RUNNER_TEMP/npm-global" >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/npm-global/bin" >> "$GITHUB_PATH"
-
-      - name: Block new code-quality problems
-        uses: fallow-rs/fallow@ecf5a314fd3e10974acb4f5a7f867c433030522d # v3.17.0
-        with:
-          command: audit
-          version: 3.17.0
-          gate: new-only
-          changed-since: ${{ steps.comparison.outputs.sha }}
-          fail-on-issues: true
-          annotations: true
-
       - uses: ./.github/actions/setup-project
 
-      - name: Lint, type check and generated schemas
+      # The four checks share the runner's CPUs. Each writes its own log, printed whole once
+      # all four have finished. Fallow and ESLint keep their caches on the runner's disk, so
+      # a check after a small change reads only what changed.
+      - name: Fallow, lint, type check and generated schemas
+        env:
+          COMPARISON_SHA: ${{ steps.comparison.outputs.sha }}
         run: |
-          # The three checks share the runner's CPUs. Each writes its own log,
-          # printed whole once all three have finished.
-          names=("Lint" "Type check" "Generated schemas")
-          commands=("npm run lint" "npm run typecheck" "npm run schema:check")
+          eslint_cache="$HOME/.cache/new-el-eslint/"
+          export FALLOW_CACHE_DIR="$HOME/.cache/new-el-fallow"
+          names=("Fallow" "Lint" "Type check" "Generated schemas")
+          commands=(
+            "npx fallow audit --gate new-only --changed-since $COMPARISON_SHA --fail-on-issues --format github-annotations"
+            "npm run lint -- --cache --cache-strategy content --cache-location $eslint_cache"
+            "npm run typecheck"
+            "npm run schema:check"
+          )
           pids=()
           for i in "${!names[@]}"; do
             bash -c "${commands[$i]}" > "$RUNNER_TEMP/check-$i.log" 2>&1 &
