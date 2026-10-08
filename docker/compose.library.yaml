@@ -198,9 +198,11 @@ services:
             MEILI_EXPERIMENTAL_LEGACY_SEARCH: "true"
             # Meilisearch sizes indexing from the machine, not the slice above:
             # half the host's threads and two-thirds of its memory. These keep
-            # one library's reindex inside its share of the budget.
+            # one library's reindex inside its share of the budget: three
+            # libraries reindexing at once take about 24 GB, leaving room for
+            # their workers under the slice's 56 GB before memory is reclaimed.
             MEILI_MAX_INDEXING_THREADS: "8"
-            MEILI_MAX_INDEXING_MEMORY: "16 GiB"
+            MEILI_MAX_INDEXING_MEMORY: "8 GiB"
         # Meilisearch keeps a file open for every queued batch; the default
         # limit of 1,024 is too low for a large library's first import.
         ulimits:
