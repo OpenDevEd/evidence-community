@@ -123,6 +123,17 @@ function notificationWindows(state: typeof notificationState.$inferSelect, diges
   return windows;
 }
 
+/** How many publications the edition covers, and the keys of those it lists. */
+async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow, editionId: string) {
+  // Additions are marked as covered whatever a digest covers, so a library that
+  // later switches to additions starts from this edition.
+  const additions = await coverCandidates(tx, config, enabledAt, window, editionId);
+  if (window.stream === "hourly") return additions;
+  return rankPublications(tx, config.notifications.digestCovers === "published"
+    ? publishedIn(tx, config, window)
+    : inArray(item.key, tx.select({ key: notificationItem.itemKey }).from(notificationItem).where(eq(notificationItem.digestEditionId, editionId))));
+}
+
 async function prepareWindow(
   tx: DatabaseTransaction,
   config: LibraryServerConfig,
@@ -139,14 +150,7 @@ async function prepareWindow(
     await tx.update(notificationState).set(cursor);
     return { status: "empty" };
   }
-  // Additions are marked as covered whatever a digest covers, so a library that
-  // later switches to additions starts from this edition.
-  let { total, keys } = await coverCandidates(tx, config, enabledAt, window, editionId);
-  if (window.stream === "digest") {
-    ({ total, keys } = await rankPublications(tx, config.notifications.digestCovers === "published"
-      ? publishedIn(tx, config, window)
-      : inArray(item.key, tx.select({ key: notificationItem.itemKey }).from(notificationItem).where(eq(notificationItem.digestEditionId, editionId)))));
-  }
+  const { total, keys } = await editionPublications(tx, config, enabledAt, window, editionId);
   const publications = await listPublications(tx, config, keys);
   let result: DigestPreparation = { status: "empty" };
   if (!publications.length) {
