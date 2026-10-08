@@ -369,6 +369,29 @@ it("covers what was published in the period whenever it was added, and lists a r
   });
 }, 120_000);
 
+it("counts a preprint and its article as one publication and lists the article", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
+    const version = (key: string, itemType: string, title: string, creators: object[]) => client.query(
+      `WITH identity AS (INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1))
+       INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", title, date, "abstractNote", creators) VALUES ($1, 'native', $1, $2, $3, '2026-09-10', $4, $5::jsonb)`,
+      [key, itemType, title, "A study of attention in classrooms. ".repeat(8), JSON.stringify(creators)]);
+    const mills = [{creatorType: "author", firstName: "Caitlin", lastName: "Mills"}];
+    await version("PUBAAAAA", "Preprint", "Attention in classrooms: a field experiment", mills);
+    // The article's title ends in a full stop and lists its editor before its author.
+    await version("PUBAAAAB", "JournalArticle", "Attention in Classrooms - A Field Experiment.", [{creatorType: "editor", firstName: "Ada", lastName: "Reyes"}, ...mills]);
+    // A third copy from a source that stores the author as one name.
+    await version("PUBAAAAD", "Preprint", "Attention in classrooms: a field experiment", [{creatorType: "author", name: "Caitlin Mills"}]);
+    // The same title by another first author, or by no named author, is another publication.
+    await version("PUBAAAAC", "JournalArticle", "Attention in classrooms: a field experiment", [{creatorType: "author", firstName: "Joy", lastName: "Okafor"}]);
+    await version("PUBAAAAE", "Report", "Annual report of the ministry of education", []);
+    await version("PUBAAAAF", "Report", "Annual report of the ministry of education", []);
+    expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-14T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 4});
+    const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(edition.publications.map(publication => publication.key).sort()).toEqual(["PUBAAAAB", "PUBAAAAC", "PUBAAAAE", "PUBAAAAF"]);
+  });
+}, 120_000);
+
 it("writes a past period's digest by publication date, rewrites it in the same record and emails no one", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));

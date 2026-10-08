@@ -45,12 +45,20 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
  * Counts a digest's publications and picks the ones it lists, best first: a
  * real abstract, then a score of the journal's standing, references, known
  * institutions and citations. The journal and withdrawal flags come from the
- * OpenAlex record, so other sources score on the rest.
+ * OpenAlex record, so other sources score on the rest. A preprint and its
+ * article, or two deposits of one upload, count once: records with one title
+ * and first author's surname are one work. The record with an abstract stands
+ * for it, since that is what the writer reads; between two that both have one
+ * or both lack one, the published record does.
  */
 async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
   const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
     WITH candidate AS (
       SELECT ${item.key} AS key, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
+        ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
+        CASE WHEN length(coalesce(${item.title}, '')) >= 25 AND author.surname <> ''
+          THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname
+          ELSE ${item.key} END AS work,
         CASE WHEN record.core THEN 3 ELSE 0 END
           + CASE WHEN metric.refs >= 10 THEN 2 WHEN metric.refs > 0 THEN 1 ELSE 0 END
           + CASE WHEN EXISTS (SELECT 1 FROM "itemInstitution" WHERE "itemKey" = ${item.key}) THEN 1 ELSE 0 END
@@ -58,15 +66,22 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
           - CASE WHEN ${item.itemType}::text IN ('Dataset', 'ComputerProgram') THEN 1 ELSE 0 END
           - CASE WHEN record.withdrawn THEN 10 ELSE 0 END AS score
       FROM ${item}
+      -- The first author, or the first creator when none is marked as an author. A creator is stored as first and
+      -- last name, or as one name the way OpenAlex gives it.
+      CROSS JOIN LATERAL (SELECT lower(coalesce(nullif(first.creator ->> 'lastName', ''), substring(first.creator ->> 'name' from '(\\S+)\\s*$'), '')) AS surname
+        FROM (SELECT (SELECT creator FROM jsonb_array_elements(coalesce(${item.creators}, '[]'::jsonb)) WITH ORDINALITY AS listed(creator, position)
+          ORDER BY (creator ->> 'creatorType' = 'author') DESC NULLS LAST, position LIMIT 1) AS creator) first) author
       LEFT JOIN LATERAL (SELECT max("citedByCount") AS citations, max("referencedWorksCount") AS refs
         FROM "itemCitationMetric" WHERE "itemKey" = ${item.key}) metric ON true
       LEFT JOIN LATERAL (SELECT bool_or("payload" #>> '{primary_location,source,is_core}' = 'true') AS core,
           bool_or("payload" ->> 'is_retracted' = 'true' OR "payload" ->> 'is_paratext' = 'true') AS withdrawn
         FROM "sourceSnapshot" WHERE "itemKey" = ${item.key}) record ON true
       WHERE ${candidates}
+    ), chosen AS (
+      SELECT DISTINCT ON (work) key, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
     )
-    SELECT (SELECT count(*)::int FROM candidate) AS total,
-      ARRAY(SELECT key FROM candidate ORDER BY abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}) AS keys
+    SELECT (SELECT count(*)::int FROM chosen) AS total,
+      ARRAY(SELECT key FROM chosen ORDER BY abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}) AS keys
   `);
   return { total: result.total, keys: result.keys ?? [] };
 }
@@ -211,7 +226,8 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     const publications = await listPublications(tx, config, keys);
     if (!publications.length) return { status: "empty" };
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
-    const edition = { windowStart: period.start, publications, publicationCount: total, cover, publishedAt: null, attempts: 0, nextAttemptAt: new Date(), leaseToken: null, leaseExpiresAt: null, lastError: null };
+    // The worker compares the next attempt with the database's clock, so that clock sets it.
+    const edition = { windowStart: period.start, publications, publicationCount: total, cover, publishedAt: null, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null };
     const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, ...edition })
       .onConflictDoUpdate({ target: [notificationEdition.stream, notificationEdition.windowEnd], set: edition }).returning({ id: notificationEdition.id });
     await tx.execute(sql`
