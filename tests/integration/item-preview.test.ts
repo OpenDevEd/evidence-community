@@ -55,7 +55,7 @@ it("previews a submitted review as submitted, and the working draft as edited si
 		await publishItemDraft(db, created.itemKey);
 		const opened = await openItemDraft(db, created.itemKey);
 		await saveItemDraft(db, { itemKey: created.itemKey, expectedDraftRevision: opened.draftRevision, expectedPayload: opened.payload, payload: { ...opened.payload, title: "Submitted title" } });
-		const review = await submitItemReview(db, created.itemKey, { userId: "creator", role: "creator" });
+		const review = await submitItemReview(db, created.itemKey, { userId: "creator", role: "creator" }, config);
 		const submitted = await getItemDraft(db, created.itemKey);
 		await saveItemDraft(db, { itemKey: created.itemKey, expectedDraftRevision: submitted.draftRevision, expectedPayload: submitted.payload, payload: { ...submitted.payload, title: "Later working title" } });
 		const before = await savedState(db);
@@ -73,7 +73,7 @@ it("names what stops publishing instead of previewing", async () => {
 		const blocked = (message: RegExp | null, field?: string) => (error: unknown) =>
 			error instanceof AdminValidationError && (field ? Boolean(error.fields[field]) : message!.test(error.message));
 		const zenodo = await createNativeItemDraft(db, { itemType: "Report", title: "Report for Zenodo" });
-		await setItemPublishingChoice(db, zenodo.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" });
+		await setItemPublishingChoice(db, zenodo.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" }, config);
 		await expect(previewItem(db, zenodo.itemKey, config)).rejects.toSatisfy(blocked(null, "creators"));
 
 		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "Report with a PDF on its way" });
@@ -83,7 +83,7 @@ it("names what stops publishing instead of previewing", async () => {
 		await expect(previewItem(db, parent.itemKey, config)).rejects.toSatisfy(blocked(/Wait for the PDF upload/));
 
 		const reviewed = await createNativeItemDraft(db, { itemType: "Report", title: "Reviewed report" });
-		const review = await submitItemReview(db, reviewed.itemKey, { userId: "creator", role: "creator" });
+		const review = await submitItemReview(db, reviewed.itemKey, { userId: "creator", role: "creator" }, config);
 		await publishItemDraft(db, reviewed.itemKey);
 		await expect(previewItem(db, reviewed.itemKey, config, review.id)).rejects.toSatisfy(blocked(/changed after submission/));
 	});
@@ -92,8 +92,8 @@ it("names what stops publishing instead of previewing", async () => {
 it("shows the Crossref DOI a review reserves, before approval and after", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const draft = await createNativeItemDraft(db, { itemType: "Report", title: "Report with a DOI", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
-		await setItemPublishingChoice(db, draft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" });
-		const review = await submitItemReview(db, draft.itemKey, { userId: "creator", role: "creator" });
+		await setItemPublishingChoice(db, draft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, config);
+		const review = await submitItemReview(db, draft.itemKey, { userId: "creator", role: "creator" }, config);
 
 		const preview = await previewItem(db, draft.itemKey, config, review.id);
 

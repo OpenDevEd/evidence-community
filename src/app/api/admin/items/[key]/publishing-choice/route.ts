@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { ADMIN_CONTENT_PERMISSION } from "@/lib/admin/access";
 import { handleAdminJson, readAdminJson } from "@/lib/admin/http";
 import {
@@ -10,18 +11,20 @@ import {
 type Context = { params: Promise<{ key: string }> };
 export async function GET(request: NextRequest, { params }: Context) {
 	const { key } = await params;
-	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () =>
-		getItemPublishingChoice(await getDatabase(), key),
-	);
+	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () => {
+		const config = await getLibraryConfig();
+		return getItemPublishingChoice(await getDatabaseForConfig(config), key, config);
+	});
 }
 export function PUT(request: NextRequest, { params }: Context) {
 	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () => {
-		const [{ key }, db, body] = await Promise.all([
+		const [{ key }, config, body] = await Promise.all([
 			params,
-			getDatabase(),
+			getLibraryConfig(),
 			readAdminJson(request),
 		]);
-		await setItemPublishingChoice(db, key, body);
-		return getItemPublishingChoice(db, key);
+		const db = await getDatabaseForConfig(config);
+		await setItemPublishingChoice(db, key, body, config);
+		return getItemPublishingChoice(db, key, config);
 	});
 }

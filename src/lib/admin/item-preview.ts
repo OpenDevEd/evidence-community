@@ -44,7 +44,7 @@ async function publishWorkingDrafts(transaction: DatabaseTransaction, rootKey: s
 	const keys = [rootKey, ...(await reviewChildKeys(transaction, rootKey))];
 	const [drafts, { choice }] = await Promise.all([
 		transaction.select({ key: itemDraft.itemKey }).from(itemDraft).where(inArray(itemDraft.itemKey, keys)),
-		getItemPublishingChoice(transaction, rootKey),
+		getItemPublishingChoice(transaction, rootKey, config),
 	]);
 	const drafted = keys.filter((key) => drafts.some((draft) => draft.key === key));
 	// What submitting for review checks, for the whole family, so the preview names every blocker.

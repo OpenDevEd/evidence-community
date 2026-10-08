@@ -50,3 +50,14 @@ export const adminPublicationWorkerOverviewSchema = z
 export type AdminPublicationWorkerOverview = z.infer<
 	typeof adminPublicationWorkerOverviewSchema
 >;
+
+export type AdminPublicationRuntimeOverview = AdminPublicationWorkerOverview & {
+	configuration: {
+		libraryId: string;
+		baseUrl: string;
+		crossrefEnvironment: "test" | "production";
+		zenodoEnvironment: "sandbox" | "production";
+		prefix: string | null;
+		namespace: string | null;
+	};
+};

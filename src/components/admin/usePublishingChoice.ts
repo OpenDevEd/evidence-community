@@ -55,6 +55,7 @@ export function usePublishingChoice(
 					optimisticData: (current) => ({
 						choice: next,
 						canClear: current?.canClear ?? true,
+						lockedIdentifierPolicy: current?.lockedIdentifierPolicy ?? null,
 					}),
 					rollbackOnError: true,
 					populateCache: true,

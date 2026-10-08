@@ -866,25 +866,35 @@ through the library's database and does not need these values.
 
 ## Real publication sandbox checks
 
-These commands may write only to the docs-pen Crossref Test and Zenodo Sandbox
-accounts. They create one record and reuse one saved evidence file across all
-three checks.
+These commands require a disposable library configured with Crossref Test and
+Zenodo Sandbox. Use an Editor or Owner session. They reserve a DOI on a draft,
+submit it for review, approve the snapshot, then repeat review and approval for
+the metadata update and PDF. They reuse one evidence file across all three checks.
 
 ```bash
-export PUBLICATION_SANDBOX_CONFIRM=docs-pen
-export PUBLICATION_SANDBOX_BASE_URL=https://docs-pen.opendev.space
-export PUBLICATION_SANDBOX_RUN_ID=docs-pen-$(date +%Y%m%d-%H%M%S)
+export PUBLICATION_SANDBOX_BASE_URL=https://your-sandbox-library.example.org
+export PUBLICATION_SANDBOX_CONFIRM=https://your-sandbox-library.example.org
+export PUBLICATION_SANDBOX_LIBRARY_ID=your-openscholar-library-id
+export PUBLICATION_SANDBOX_RUN_ID=publication-$(date +%Y%m%d-%H%M%S)
 export PUBLICATION_EXPECTED_CROSSREF_PREFIX=10.53832
-export PUBLICATION_EXPECTED_CROSSREF_NAMESPACE=docs-pen.
+export PUBLICATION_EXPECTED_CROSSREF_NAMESPACE=your-confirmed-sandbox-namespace
 export PUBLICATION_SANDBOX_EVIDENCE_PATH=/tmp/${PUBLICATION_SANDBOX_RUN_ID}.json
 npm run test:crossref-test-live
 npm run test:zenodo-sandbox-live
 npm run test:publication-sandbox-lifecycle
 ```
 
+Check the target in OpenScholar and type its origin separately into
+`PUBLICATION_SANDBOX_CONFIRM`. The lifecycle check also needs Playwright's
+Chromium browser (`npx playwright install chromium`).
+
 The scripts stop before creating a record unless the website, provider
 environments, DOI prefix, namespace, admin login, and publication worker all
-match docs-pen. The final JSON contains the record keys, DOI, Crossref Test
+match the explicitly confirmed library. Both provider environments are checked
+before any record is created. The runtime must include this qualification
+preflight endpoint. Start a new run and evidence file when changing libraries;
+evidence from the old direct-publish script is not accepted. A failed run can
+resume with the same run ID and evidence file. The final JSON contains the record keys, DOI, Crossref Test
 submission IDs, Zenodo Sandbox record ID, and PDF hashes. It does not contain
 provider credentials.
 

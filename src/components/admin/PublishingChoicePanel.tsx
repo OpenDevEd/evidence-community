@@ -6,11 +6,19 @@ import { Switch } from "@/components/nextui/Switch";
 import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
 import type { AdminItemDetail } from "@/lib/admin/types";
-import type { PublishingChoice } from "@/lib/admin/review-contract";
+import type { PublishingChoice, PublishingChoiceState } from "@/lib/admin/review-contract";
 import type { usePublishingChoice } from "./usePublishingChoice";
 import { CrossrefIdentifierControls } from "./CrossrefIdentifierControls";
 import { PublicationArchiveFiles } from "./PublicationArchiveFiles";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
+
+function defaultPublishingChoice(lockedPolicy: PublishingChoiceState["lockedIdentifierPolicy"] | undefined): PublishingChoice {
+	return lockedPolicy === "reuse-crossref"
+		? { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }
+		: { route: "zenodo", identifierPolicy: "mint-zenodo" };
+}
+
 export function PublishingChoicePanel({
 	detail,
 	readOnly = false,
@@ -28,6 +36,8 @@ export function PublishingChoicePanel({
 	const value = choice === undefined ? saved.data?.choice : choice;
 	const route = value?.route;
 	const enabled = Boolean(value);
+	const lockedPolicy = saved.data?.lockedIdentifierPolicy;
+	const crossrefPolicy = lockedPolicy === "mint-zenodo" ? "mint-zenodo" : "reuse-crossref";
 	const controlsDisabled =
 		readOnly || saving || saved.isLoading || Boolean(saved.error);
 	const setRoute = (route: string) =>
@@ -36,7 +46,7 @@ export function PublishingChoicePanel({
 				? { route, identifierPolicy: "mint-zenodo" }
 				: {
 						route: "crossref-zenodo",
-						identifierPolicy: "reuse-crossref",
+						identifierPolicy: crossrefPolicy,
 					},
 		);
 	const setPolicy = (identifierPolicy: "reuse-crossref" | "mint-zenodo") =>
@@ -79,12 +89,7 @@ export function PublishingChoicePanel({
 							}
 							onValueChange={(selected) => {
 								void save(
-									selected
-										? {
-												route: "zenodo",
-												identifierPolicy: "mint-zenodo",
-											}
-										: null,
+									selected ? defaultPublishingChoice(lockedPolicy) : null,
 								);
 							}}
 						/>
@@ -105,6 +110,7 @@ export function PublishingChoicePanel({
 						options={[
 							{
 								key: "zenodo",
+								disabledReason: zenodoPolicyChangeReason(lockedPolicy, "mint-zenodo"),
 								label: "Zenodo",
 								content: (
 									<ZenodoIcon
@@ -115,6 +121,7 @@ export function PublishingChoicePanel({
 							},
 							{
 								key: "crossref-zenodo",
+								disabledReason: zenodoPolicyChangeReason(lockedPolicy, crossrefPolicy),
 								label: "Crossref + Zenodo",
 								content: (
 									<>
@@ -141,6 +148,7 @@ export function PublishingChoicePanel({
 							<CrossrefIdentifierControls
 								reservation={reservation.data}
 								policy={value?.identifierPolicy}
+								lockedPolicy={lockedPolicy}
 								readOnly={readOnly}
 								saving={saving}
 								onReserve={onReserve}

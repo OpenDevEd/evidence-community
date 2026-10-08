@@ -410,7 +410,7 @@ async function verify(database: Database, client: Client) {
 	await setItemPublishingChoice(database, "CRACTAAH", {
 		route: "crossref-zenodo",
 		identifierPolicy: "reuse-crossref",
-	});
+	}, config);
 	const reservedExisting = await reserveCrossrefDoi(
 		database,
 		"CRACTAAH",
@@ -1136,7 +1136,7 @@ async function verifyDraftReservation(database: Database, client: Client) {
 	await setItemPublishingChoice(database, draft.itemKey, {
 		route: "crossref-zenodo",
 		identifierPolicy: "reuse-crossref",
-	});
+	}, config);
 	const reservations = await Promise.all(
 		Array.from({ length: 4 }, () =>
 			reserveCrossrefDoi(database, draft.itemKey, config, "creator"),
@@ -1223,7 +1223,7 @@ it("keeps production reservations and settlement separate from Test", async () =
 		await setItemPublishingChoice(database, testDraft.itemKey, {
 			route: "crossref-zenodo",
 			identifierPolicy: "reuse-crossref",
-		});
+		}, config);
 		await reserveCrossrefDoi(
 			database,
 			testDraft.itemKey,
@@ -1249,7 +1249,7 @@ it("keeps production reservations and settlement separate from Test", async () =
 		await setItemPublishingChoice(database, draft.itemKey, {
 			route: "crossref-zenodo",
 			identifierPolicy: "reuse-crossref",
-		});
+		}, config);
 		const reserved = await reserveCrossrefDoi(
 			database,
 			draft.itemKey,
