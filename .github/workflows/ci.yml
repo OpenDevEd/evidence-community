@@ -8,18 +8,24 @@ on:
     branches:
       - main
   workflow_dispatch:
+  # The full suite once a night, for what changes without a commit: base images, dependencies
+  # resolved at build time, and the date.
+  schedule:
+    - cron: "23 2 * * *"
 
 permissions:
   contents: read
 
-# Only the newest commit on a branch needs to finish.
+# Only the newest commit on a branch needs to finish. The nightly run has its own group, so it
+# never cancels the run of a merge, whose success publishes the runtime image.
 concurrency:
-  group: ci-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: ci-${{ github.event_name == 'schedule' && 'nightly' || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   # A pull request run tests the merge result. When it passed, it records the
-  # tree it tested. A push whose tree matches has nothing new to test.
+  # tree it tested. A push whose tree matches skips the static checks and unit
+  # tests; the runtime job still runs the full suite.
   tested:
     name: Tested tree
     if: github.event_name == 'push'
@@ -143,14 +149,17 @@ jobs:
 
   runtime:
     name: Runtime acceptance and integration
-    # This suite includes every browser spec and builds the production image.
+    # Builds the production image. A pull request runs the smoke scope: Amber, its API checks
+    # and the browser tests tagged @smoke. main and the nightly run run every browser spec on
+    # both libraries, so a push to main runs this even when its tree passed as a pull request.
     needs: tested
-    if: ${{ !cancelled() && needs.tested.outputs.passed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on:
       - self-hosted
       - evidence-library-runtime
     timeout-minutes: 45
     env:
+      EVIDENCE_LIBRARY_ACCEPTANCE_SCOPE: ${{ github.event_name == 'pull_request' && 'smoke' || 'full' }}
       # The public suites flake above four. On the 8-vCPU guest the admin suite takes the same
       # time and CPU with four workers as with eight.
       PLAYWRIGHT_WORKERS: "4"
@@ -269,6 +278,9 @@ jobs:
       - evidence-library-light
     timeout-minutes: 5
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      issues: write
     needs:
       - tested
       - static-checks
@@ -283,12 +295,41 @@ jobs:
           RUNTIME: ${{ needs.runtime.result }}
         run: |
           if [ "$TESTED" = true ]; then
-            echo "A pull request run already passed this tree."
-            exit 0
+            echo "A pull request run already passed the static checks and unit tests on this tree."
+          else
+            test "$STATIC_CHECKS" = success
+            test "$UNIT_TESTS" = success
           fi
-          test "$STATIC_CHECKS" = success
-          test "$UNIT_TESTS" = success
           test "$RUNTIME" = success
+
+      # A failure reopens the newest issue with this title, open or closed, or opens one in EL-15.
+      # The job's token can't add issues to the organization's board.
+      - name: Report a failed nightly run
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          auth="Authorization: Bearer $GITHUB_TOKEN"
+          title="[EL-15] Nightly CI fails on main"
+          body="The full suite failed on $GITHUB_SHA: $RUN_URL"
+          issue="$(curl -fsS -G -H "$auth" "$GITHUB_API_URL/search/issues" \
+            --data-urlencode "q=repo:$GITHUB_REPOSITORY is:issue in:title \"$title\"" \
+            | jq -r --arg title "$title" '[.items[] | select(.title == $title)] | max_by(.number) | .number // empty')"
+          if [ -n "$issue" ]; then
+            curl -fsS -X PATCH -H "$auth" -d '{"state": "open"}' "$api/issues/$issue" > /dev/null
+            jq -n --arg body "$body" '{body: $body}' | curl -fsS -H "$auth" -d @- "$api/issues/$issue/comments" > /dev/null
+            echo "Reopened and commented on issue #$issue."
+          else
+            milestone="$(curl -fsS -H "$auth" "$api/milestones?state=open&per_page=100" \
+              | jq -r 'map(select(.title | startswith("EL-15 ")))[0].number // empty')"
+            [ -n "$milestone" ] || echo "::warning::No open EL-15 milestone, so the issue has none."
+            jq -n --arg title "$title" --arg body "$body" --arg milestone "$milestone" \
+              '{title: $title, body: $body} + (if $milestone == "" then {} else {milestone: ($milestone | tonumber)} end)' \
+              | curl -fsS -H "$auth" -d @- "$api/issues" | jq -r '"Opened issue #\(.number)."'
+          fi
 
       - name: Name the tested tree
         id: tree

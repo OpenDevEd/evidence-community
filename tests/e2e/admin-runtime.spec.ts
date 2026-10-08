@@ -68,7 +68,7 @@ const protectedAdminRequests = [
 
 test.skip(!runtimeE2e, "requires the disposable Evidence Library runtime");
 
-test("rejects every protected admin request without a session", async ({
+test("rejects every protected admin request without a session", { tag: "@smoke" }, async ({
 	request,
 }) => {
 	for (const [method, path] of protectedAdminRequests) {
@@ -260,7 +260,7 @@ test("resolves concurrent draft fields without losing either session's other cha
 	}
 });
 
-test("lets an Editor publish and update a record without stale client navigation", async ({
+test("lets an Editor publish and update a record without stale client navigation", { tag: "@smoke" }, async ({
 	page,
 	browser,
 }, testInfo) => {

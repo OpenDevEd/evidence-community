@@ -12,7 +12,7 @@ const consentTitle =
 	process.env.PLAYWRIGHT_EXPECTED_CONSENT_TITLE ??
 	"Help Us Improve Your Experience";
 
-test("a new reader is asked for consent only for configured analytics", async ({
+test("a new reader is asked for consent only for configured analytics", { tag: "@smoke" }, async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });

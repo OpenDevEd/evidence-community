@@ -814,10 +814,9 @@ async function waitForRepositoryComposeWorkerRestarts<T extends string>(
 	);
 }
 
-async function verifyBaseAcceptanceServicesSurvived() {
+async function verifyBaseAcceptanceServicesSurvived(profiles: Profile[]) {
 	await waitForComposeServiceHealthy("postgres");
-	await waitForComposeServiceHealthy("amber-meilisearch");
-	await waitForComposeServiceHealthy("indigo-meilisearch");
+	for (const profile of profiles) await waitForComposeServiceHealthy(`${profile.name}-meilisearch`);
 	console.log("Repository Compose teardown left the base services healthy.");
 }
 
@@ -1759,7 +1758,7 @@ function browserSuiteRuns(profile: Profile) {
 	];
 	return suites.map(([suite, files, project]) => ({
 		label: `${profile.name}-${suite}`,
-		args: ["playwright", "test", ...files, "--project", project],
+		args: ["playwright", "test", ...files, "--project", project, ...smokeFilter],
 		environment: playwrightEnvironment(`${profile.name}-${suite}`, {
 			...commandEnvironment,
 			...publicExpectations(profile),
@@ -1804,6 +1803,7 @@ function runAdminBrowserSuite(profile: Profile) {
 				"playwright",
 				"test",
 				...arguments_,
+				...smokeFilter,
 				...(adminWorkers ? ["--workers", adminWorkers] : []),
 			],
 			environment,
@@ -3227,10 +3227,8 @@ function cleanupAbandonedProjects() {
 }
 
 function loadAcceptanceProfiles() {
-	return [
-		loadProfile("amber", amberPort, amberMeilisearchPort),
-		loadProfile("indigo", indigoPort, indigoMeilisearchPort),
-	];
+	const amber = loadProfile("amber", amberPort, amberMeilisearchPort);
+	return smoke ? [amber] : [amber, loadProfile("indigo", indigoPort, indigoMeilisearchPort)];
 }
 
 function prepareAcceptanceRuntime(profiles: Profile[]) {
@@ -3266,6 +3264,10 @@ function imageId(reference: string) {
 // The deployment checks start their own containers: the repository's Compose stack and a
 // root-owned config. CI skips them on a pull request that changes no deployment file.
 const deploymentChecks = process.env.EVIDENCE_LIBRARY_ACCEPTANCE_DEPLOYMENT_CHECKS !== "false";
+// A pull request runs the smoke scope: Amber alone, its API checks, and the browser tests tagged
+// @smoke. main and the nightly run run everything, Indigo and the publication interface included.
+const smoke = process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SCOPE === "smoke";
+const smokeFilter = smoke ? ["--grep", "@smoke", "--pass-with-no-tests"] : [];
 
 async function startAcceptanceInfrastructure(profiles: Profile[]) {
 	if (deploymentChecks) await verifyRootOwnedConfigStartup();
@@ -3276,8 +3278,7 @@ async function startAcceptanceInfrastructure(profiles: Profile[]) {
 		"--wait-timeout",
 		"180",
 		"postgres",
-		"amber-meilisearch",
-		"indigo-meilisearch",
+		...profiles.map((profile) => `${profile.name}-meilisearch`),
 	);
 	for (const profile of profiles) await seedSharedSearchIndexes(profile);
 }
@@ -3296,9 +3297,9 @@ function startRepositoryComposeCheck() {
 
 async function runRepositoryComposeCheck() {
 	await initializeAcceptancePorts();
-	const [amber] = loadAcceptanceProfiles();
-	await verifyRepositoryComposeStartup(amber);
-	await verifyBaseAcceptanceServicesSurvived();
+	const profiles = loadAcceptanceProfiles();
+	await verifyRepositoryComposeStartup(profiles[0]);
+	await verifyBaseAcceptanceServicesSurvived(profiles);
 }
 
 async function startAcceptanceSearchWorkers(profiles: Profile[]) {
@@ -3307,8 +3308,7 @@ async function startAcceptanceSearchWorkers(profiles: Profile[]) {
 		"--wait",
 		"--wait-timeout",
 		"180",
-		"amber-search-indexer",
-		"indigo-search-indexer",
+		...profiles.map((profile) => `${profile.name}-search-indexer`),
 	);
 	// Health passes before the startup rebuild finishes, and the records
 	// seeded next must not race it.
@@ -3342,62 +3342,56 @@ async function runAcceptanceBehavior(
 	profiles: Profile[],
 	repositoryCompose: Promise<void>,
 ) {
-	await verifySearchQueueIsolation(profiles);
+	const [amber, indigo] = profiles;
+	if (indigo) await verifySearchQueueIsolation(profiles);
 	compose(
 		"up",
 		"--wait",
 		"--wait-timeout",
 		"180",
-		"amber",
-		"indigo",
-		"amber-search-indexer",
-		"indigo-search-indexer",
+		...profiles.flatMap((profile) => [profile.name, `${profile.name}-search-indexer`]),
 	);
 	// Counts collector requests, so it runs before anything else sends them.
 	profiles.forEach(verifyServerAnalyticsTransport);
 	// The Amber checks below touch only Amber. Indigo's suite shares the mail
 	// catcher with Amber's suite, so it must finish before Amber's starts.
-	const indigoSuite = runBrowserSuiteInBackground(profiles[1]);
+	const indigoSuite = indigo ? runBrowserSuiteInBackground(indigo) : Promise.resolve();
 	// Awaited below; a failure before then must not end the process.
 	indigoSuite.catch(() => undefined);
-	await verifyLiveConfigLifecycle(profiles[0]);
-	await verifyPublicationLifecycle(profiles[0]);
-	await verifyZenodoReuseExternalLifecycle(profiles[0]);
-	await verifyPublicationAdminInterface(profiles[0]);
-	await verifyOpenScholarReadApi(profiles[0]);
-	await verifyOwnerLegalText(profiles[0]);
-	await verifyNoteRedirects(profiles[0]);
+	await verifyLiveConfigLifecycle(amber);
+	await verifyPublicationLifecycle(amber);
+	await verifyZenodoReuseExternalLifecycle(amber);
+	if (!smoke) await verifyPublicationAdminInterface(amber);
+	await verifyOpenScholarReadApi(amber);
+	await verifyOwnerLegalText(amber);
+	await verifyNoteRedirects(amber);
 	await indigoSuite;
-	runBrowserSuite(profiles[0]);
-	runAdminBrowserSuite(profiles[0]);
+	runBrowserSuite(amber);
+	runAdminBrowserSuite(amber);
 	await repositoryCompose;
 	verifyJunitReports();
 	cleanupAcceptanceUsers();
 }
 
-function reportAcceptanceSuccess() {
-	console.log("\nRuntime acceptance passed for Amber and Indigo.");
+function reportAcceptanceSuccess(profiles: Profile[]) {
+	console.log(`\nRuntime acceptance${smoke ? " smoke" : ""} passed for ${profiles.map((profile) => profile.name).join(" and ")}.`);
 	if (!keepRunning) return;
-	console.log(
-		`Amber: http://127.0.0.1:${amberPort}\nIndigo: http://127.0.0.1:${indigoPort}\nCompose project: ${composeProject}`,
-	);
+	for (const profile of profiles) console.log(`${profile.name}: http://127.0.0.1:${profile.port}`);
+	console.log(`Compose project: ${composeProject}`);
 }
 
-function reportAcceptanceFailure(error: unknown): never {
+function reportAcceptanceFailure(profiles: Profile[], error: unknown): never {
 	compose(
 		"logs",
 		"--no-color",
 		"--tail",
 		"200",
-		"amber",
-		"indigo",
+		...profiles.flatMap((profile) => [profile.name, `${profile.name}-meilisearch`]),
 		"fixture",
 		"runtime-provider-fake",
 		"amber-publication-worker",
 		"mailpit",
 		"postgres",
-		"amber-meilisearch",
-		"indigo-meilisearch",
 	);
 	throw error;
 }
@@ -3422,10 +3416,10 @@ async function runAcceptance() {
 		await startAcceptanceSearchWorkers(profiles);
 		await seedAcceptanceRecords(profiles);
 		await runAcceptanceBehavior(profiles, repositoryCompose);
-		reportAcceptanceSuccess();
+		reportAcceptanceSuccess(profiles);
 	} catch (error) {
 		await stopRunsInBackground();
-		reportAcceptanceFailure(error);
+		reportAcceptanceFailure(profiles, error);
 	} finally {
 		cleanupAcceptanceRuntime();
 	}

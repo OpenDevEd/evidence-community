@@ -474,7 +474,7 @@ test("sends analytics only for the configured and consented profile", async ({
 	expect(network.eventRequests).toEqual([]);
 });
 
-test("offers OpenScholar sign-in only where reader accounts are on", async ({
+test("offers OpenScholar sign-in only where reader accounts are on", { tag: "@smoke" }, async ({
 	page,
 	request,
 }) => {

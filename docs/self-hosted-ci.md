@@ -122,17 +122,21 @@ A pull request uses two light runners and one runtime runner:
   what changed.
 - `Unit tests` runs Vitest. Files share one module graph per worker unless they
   mock a module or need jsdom; see `vitest.config.ts`.
-- `Runtime and integration` builds the image and runs the complete acceptance
-  suite with four Playwright workers. The database integration tests run beside
-  it against their own PostgreSQL container. Inside the acceptance suite, the
-  Indigo browser suite runs in the background while the Amber checks run. The
-  deployment checks (the repository Compose stack and a root-owned config) run
-  on `main` and on pull requests that change a deployment file.
+- `Runtime and integration` builds the image and runs the acceptance suite with
+  four Playwright workers. On a pull request it runs the smoke scope: Amber alone,
+  its API checks, and the browser tests tagged `@smoke`. On `main`, the nightly
+  run (02:23 UTC) and a dispatched run it runs everything: both libraries, every
+  browser spec and the publication interface, with the Indigo browser suite in the
+  background while the Amber checks run. A failed nightly run reopens or opens
+  "[EL-15] Nightly CI fails on main". The database integration tests run beside
+  it against their own PostgreSQL container. The deployment checks (the repository
+  Compose stack and a root-owned config) run on `main` and on pull requests that
+  change a deployment file.
 
 The aggregate `CI` job records the tree a passing pull request run tested as an
 artifact named `ci-passed-<tree>`. A push to `main` whose tree matches skips the
-lanes, so the runtime image can publish right after the merge. A push that
-merged onto a newer `main` has a different tree and runs everything.
+static checks and unit tests and still runs the full runtime suite, whose success
+publishes the runtime image.
 
 Each runner user keeps its last two installed dependency trees under
 `~/.cache/evidence-library-install`, keyed by Node's version and the Git

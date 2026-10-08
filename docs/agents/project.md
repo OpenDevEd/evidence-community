@@ -105,8 +105,11 @@ The command list in `package.json` is authoritative.
   are integration checks. Run only the command that owns the changed contract.
 
 GitHub CI runs on the isolated self-hosted runners documented in
-`docs/self-hosted-ci.md`. It owns the full static checks, runtime acceptance,
-and the aggregate `CI` result on the exact PR head. The runtime job uses four
+`docs/self-hosted-ci.md`. It owns the full static checks and the aggregate `CI`
+result on the exact PR head. A pull request runs the acceptance smoke scope (Amber
+and the browser tests tagged `@smoke`); `main` and the nightly run run the full
+suite on both libraries. A merge is done only when that full run on `main` passes:
+fix or revert a failure there before other work. The runtime job uses four
 Playwright workers.
 
 GitHub can't enforce the aggregate `CI` check on this private repository
