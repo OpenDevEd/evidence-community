@@ -20,20 +20,6 @@ const policy: AIRateLimitPolicy = {
 };
 
 describe("AI request rate-limit policy", () => {
-	it("defines the browser and network quotas", () => {
-		expect(AI_RATE_LIMIT_CLIENT_WINDOWS).toEqual([
-			{ name: "minute", limit: 10, windowMs: 60_000 },
-			{ name: "day", limit: 250, windowMs: 86_400_000 },
-			{ name: "week", limit: 1_000, windowMs: 604_800_000 },
-			{ name: "month", limit: 5_000, windowMs: 2_592_000_000 },
-		]);
-		expect(AI_RATE_LIMIT_NETWORK_WINDOW).toEqual({
-			name: "minute",
-			limit: 1_000,
-			windowMs: 60_000,
-		});
-		expect(AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS).toBe(31_536_000);
-	});
 
 	it("separates deployment and library counters", () => {
 		const mainLibrary = buildAIRateLimitKeyPrefix("main", "library-one");

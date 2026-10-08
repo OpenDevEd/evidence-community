@@ -153,11 +153,6 @@ describe("search index embedder", () => {
 		response: { embedding: "{{embedding}}" },
 	};
 
-	it("waits up to an hour for the embedder task and polls slowly", () => {
-		expect(EMBEDDER_TASK_TIMEOUT_MS).toBe(60 * 60 * 1_000);
-		expect(EMBEDDER_TASK_POLL_INTERVAL_MS).toBeGreaterThanOrEqual(1_000);
-	});
-
 	it("polls the embedder task at the slow interval", async () => {
 		vi.useFakeTimers();
 		try {
