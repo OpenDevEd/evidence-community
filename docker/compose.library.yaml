@@ -19,8 +19,15 @@ x-runtime-networks: &runtime-networks
     - private
     - coolify
 
+# Every library on a host shares one systemd slice, which the host caps (16
+# cores, 64 GB on hetzner), so libraries reindexing at once slow each other
+# down instead of starving the other services on the machine. Docker creates
+# the slice with no limits on a host that doesn't define it.
+x-library-budget: &library-budget libraries.slice
+
 services:
     web:
+        cgroup_parent: *library-budget
         init: true
         image: "${RUNTIME_IMAGE:?runtime image digest is required}"
         pull_policy: missing
@@ -66,6 +73,7 @@ services:
             retries: 3
 
     search-indexer:
+        cgroup_parent: *library-budget
         init: true
         image: "${RUNTIME_IMAGE:?runtime image digest is required}"
         pull_policy: missing
@@ -100,6 +108,7 @@ services:
         restart: unless-stopped
 
     source-sync:
+        cgroup_parent: *library-budget
         init: true
         image: "${RUNTIME_IMAGE:?runtime image digest is required}"
         pull_policy: missing
@@ -123,6 +132,7 @@ services:
         restart: unless-stopped
 
     source-writeback:
+        cgroup_parent: *library-budget
         init: true
         image: "${RUNTIME_IMAGE:?runtime image digest is required}"
         pull_policy: missing
@@ -143,6 +153,7 @@ services:
         restart: unless-stopped
 
     publication-worker:
+        cgroup_parent: *library-budget
         init: true
         image: "${RUNTIME_IMAGE:?runtime image digest is required}"
         pull_policy: missing
@@ -169,6 +180,7 @@ services:
         restart: unless-stopped
 
     meilisearch:
+        cgroup_parent: *library-budget
         init: true
         image: getmeili/meilisearch:v1.54
         environment:
@@ -184,6 +196,11 @@ services:
             # The previous path returns the same totals, facets and hits
             # (apart from the order of exactly tied scores) in under 0.2 s.
             MEILI_EXPERIMENTAL_LEGACY_SEARCH: "true"
+            # Meilisearch sizes indexing from the machine, not the slice above:
+            # half the host's threads and two-thirds of its memory. These keep
+            # one library's reindex inside its share of the budget.
+            MEILI_MAX_INDEXING_THREADS: "8"
+            MEILI_MAX_INDEXING_MEMORY: "16 GiB"
         # Meilisearch keeps a file open for every queued batch; the default
         # limit of 1,024 is too low for a large library's first import.
         ulimits:
@@ -212,6 +229,7 @@ services:
         restart: unless-stopped
 
     redis:
+        cgroup_parent: *library-budget
         image: redis:7.2-alpine
         init: true
         # Redis is an ephemeral rate-limit store. Mask the image's declared /data
