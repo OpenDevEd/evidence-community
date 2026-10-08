@@ -186,6 +186,25 @@ jobs:
       - name: Check the library compose contract
         run: npm run test:library-compose
 
+      # The deployment checks start their own containers: the repository's Compose stack and a
+      # root-owned config. A pull request that changes no deployment file skips them; main and
+      # a diff that can't be read run them.
+      - name: Decide the deployment checks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" && changed="$(git diff --name-only "$BASE_SHA" HEAD)"; then
+            if grep -qE '^(Dockerfile|docker/|docker-bake|compose\.|entrypoint\.sh|tests/acceptance/|tools/(runRuntimeAcceptance|verifyLibraryCompose)\.ts|src/lib/deployment/|drizzle/|package(-lock)?\.json$|next\.config\.|\.github/workflows/ci\.yml)' <<< "$changed"; then
+              echo "A deployment file changed: running the deployment checks."
+            else
+              echo "EVIDENCE_LIBRARY_ACCEPTANCE_DEPLOYMENT_CHECKS=false" >> "$GITHUB_ENV"
+              echo "No deployment file changed: skipping the deployment checks."
+            fi
+          else
+            echo "Could not read the changed files: running the deployment checks."
+          fi
+
       - name: Run end-to-end and integration tests
         env:
           INTEGRATION_DATABASE_URL: postgresql://postgres:integration@localhost:${{ job.services.postgres.ports['5432'] }}/postgres

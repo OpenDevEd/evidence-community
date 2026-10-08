@@ -1,6 +1,6 @@
 # Self-hosted CI
 
-Last checked: **2026-09-28**
+Last checked: **2026-10-08**
 
 GitHub schedules and reports every CI job. An isolated Ubuntu 24.04 KVM guest
 named `new-el-ci` executes the jobs on the development Hetzner server.
@@ -11,10 +11,12 @@ No hosted runner service is part of the workflow.
 | Count | Label | CPU boundary | Memory limit | Work |
 |---:|---|---:|---:|---|
 | 4 | `evidence-library-light` | any guest CPU | 8 GiB each | static checks with Fallow, unit tests, the final result and release notes |
-| 3 | `evidence-library-runtime` | any guest CPU, 16 cores at most per user | 32 GiB each | Docker build, runtime acceptance and the database integration tests |
-| 1 | `evidence-library-release` | any guest CPU, 16 cores at most | 32 GiB | select, publish and record the exact green runtime commit |
+| 3 | `evidence-library-runtime` | any guest CPU, 6 cores at most per user | 32 GiB each | Docker build, runtime acceptance and the database integration tests |
+| 1 | `evidence-library-release` | any guest CPU, 6 cores at most | 32 GiB | select, publish and record the exact green runtime commit |
 
-The guest has 24 virtual CPUs, 48 GiB of memory and a 300 GiB sparse disk.
+The guest has 8 virtual CPUs (24 until 2026-10-08), 48 GiB of memory and a 300 GiB sparse disk.
+While no job runs, the `ci-idle-reclaim.timer` drops the guest's file cache every five
+minutes, and virtio free page reporting hands that memory back to the host.
 No runner is pinned to CPUs. A job running alone uses every idle CPU, and when
 jobs compete the kernel shares CPU time between `system.slice` (the light
 runners), `user.slice` (rootless Docker) and `evidence-library-heavy.slice`
@@ -32,7 +34,7 @@ can rarely pick the same port and one fails; rerun it.
 
 Keep rootless Docker's user managers under `user.slice`. Moving a manager to
 the listener slice stops Docker from creating container scopes. Put the
-`CPUQuota=1600%` and `MemoryMax=32G` limits on the user slice of every heavy
+`CPUQuota=600%`, `AllowedCPUs=0-7` and `MemoryMax=32G` limits on the user slice of every heavy
 user instead: `gha-runtime`, `gha-runtime-2`, `gha-runtime-3` and `gha-release`.
 Check them with `systemctl show user-$(id -u <user>).slice -p AllowedCPUs -p CPUQuotaPerSecUSec -p MemoryMax`.
 
