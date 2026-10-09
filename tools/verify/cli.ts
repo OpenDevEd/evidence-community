@@ -22,8 +22,10 @@ const ROOT = git(["rev-parse", "--show-toplevel"], process.cwd());
 const STATE = path.join(ROOT, ".verify");
 const PATHS: Paths = { root: ROOT, state: STATE, stackFile: path.join(STATE, "stack.json") };
 const LAST_PASS = path.join(STATE, "last-pass.json");
-// Files a person sees. Route handlers and other .ts files under src/app are not.
-const USER_FACING = /^src\/(app|components|styles)\/.+\.(tsx|css)$/;
+// Files a person sees: components, styles and pages, and the .ts modules
+// beside components and styles. Route handlers and other .ts files under
+// src/app are not.
+const USER_FACING = /^src\/((app|components|styles)\/.+\.(tsx|css)|(components|styles)\/.+\.ts)$/;
 // Elements whose movement is their job: progress bars, Next's dev badge, and
 // anything a page marks with data-verify-ignore.
 const ALWAYS_ALLOWED = ["[role=progressbar]", "[data-verify-ignore]", "nextjs-portal"];
@@ -48,7 +50,7 @@ async function up(values: Values) {
 	await serve(PATHS, stack, "branch", { cwd: ROOT, built, build: () => buildBranch(PATHS, built) });
 	if (values.base !== "none") await serveMain(stack);
 	console.log(`Branch: ${stack.branch!.url}`);
-	if (stack.main) console.log(`origin/main (${stack.main.built.slice(0, 8)}): ${stack.main.url}`);
+	if (stack.main) console.log(`main (${stack.main.built.slice(0, 8)}, where this branch starts): ${stack.main.url}`);
 	if (values.open) openOnce(stack);
 }
 
@@ -89,7 +91,7 @@ async function browserProblems(): Promise<string[]> {
 function printStack(stack: Stack) {
 	console.log(`Fixture services: ${stackRunning(PATHS, stack) ? "running" : "not running"} (${stack.project})`);
 	console.log(describeServer("Branch", stack.branch, stack.branch?.built !== fingerprint(ROOT)));
-	console.log(describeServer("origin/main", stack.main, false));
+	console.log(describeServer("main", stack.main, false));
 }
 
 async function status() {
@@ -146,10 +148,10 @@ function liveStack(target: string): Stack {
 	return stack;
 }
 
-/** The origin/main server to compare with. */
+/** The server running the main commit this branch starts from. */
 function mainServer(stack: Stack): string {
-	if (!running(stack.main)) throw new Error("origin/main isn't running. Run `npm run verify -- up` (or pass --base none).");
-	if (stack.main!.built !== git(["rev-parse", "origin/main"], ROOT)) console.log("origin/main moved since its build; `npm run verify -- up` rebuilds it.");
+	if (!running(stack.main)) throw new Error("The main build isn't running. Run `npm run verify -- up` (or pass --base none).");
+	if (stack.main!.built !== mainCommit(PATHS, false)) throw new Error("This branch now starts from a different main commit. Run `npm run verify -- up` to build it, then check.");
 	return stack.main!.url;
 }
 
@@ -180,7 +182,7 @@ async function comparisonFor(target: string, values: Values, mode: "shift" | "sh
 	return {
 		local: stack.branch!.url,
 		base: baseFor(stack, values, mode),
-		baseName: "origin/main",
+		baseName: `main (${stack.main?.built.slice(0, 8)})`,
 		target,
 		browsers: String(values.browser ?? DEFAULT_BROWSERS[mode]).split(","),
 		options: await optionsFor(stack, values, mode),
@@ -213,20 +215,21 @@ function skip(reason: string) {
 const HELP = `Usage: npm run verify -- <command>
 
   up [--open] [--fresh]    Start the acceptance fixture services with the verify records, and serve
-                           production builds of this branch and of origin/main on them, each on its
-                           own port. Rebuilds what changed. --fresh starts the data again; --open
-                           opens the branch in the default browser once; --base none skips origin/main.
+                           production builds of this branch and of the main commit it starts from on
+                           them, each on its own port. Rebuilds what changed. --fresh starts the data
+                           again; --open opens the branch in the default browser once; --base none
+                           skips main.
   down                     Stop both servers and remove the fixture services.
   status                   Show what runs and check the environment.
   shift <path> [options]   Load <path> in Chromium and Firefox with data slowed by 600ms, then do the
-                           same on origin/main, and fail on any layout shift, flash or page error that
-                           origin/main doesn't have. Writes screenshots.
+                           same on main, and fail on any layout shift, flash or page error that main
+                           doesn't have and that shows again on a second run. Writes screenshots.
   shot <path> [options]    Screenshots only (Chromium, no slowdown).
   skip "<reason>"          Record why this change needs no browser check.
 
 Options for shift and shot:
   --do "<step>"            Repeat for each action: click <selector>, hover <selector>,
-                           fill <selector> <text>, press <key>, wait <ms>, goto <path>.
+                           fill <selector> => <text>, press <key>, wait <ms>, goto <path>.
                            Selectors are Playwright selectors: css, text=..., role=button[name="Save"].
                            Steps run on both servers, which share one database: keep them to
                            interactions that save nothing, or run \`up --fresh\` afterwards.
@@ -237,7 +240,7 @@ Options for shift and shot:
   --width <px> --height <px>  Viewport, default 1440x900. Use 390 x 844 for a phone.
   --full                   Full-page screenshots.
   --quiet <ms>             How long the page must hold still to count as settled (default 1500).
-  --base none              Don't compare with origin/main.`;
+  --base none              Don't compare with main.`;
 
 const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
 	up: (values) => locked(() => up(values)),

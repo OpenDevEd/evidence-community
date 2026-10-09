@@ -30,7 +30,7 @@ const NOT_BUILT = [":!*.md", ":!docs", ":!plans", ":!tests", ":!tools", ":!ops",
 
 type Ports = { postgres: number; meilisearch: number; fixture: number; appHttps: number; fake: number; redis: number; branch: number; main: number };
 export type Server = { pid: number; port: number; url: string; log: string; built: string; cwd: string };
-export type Stack = { project: string; ports: Ports; config: string; ca: string; branch?: Server; main?: Server; opened?: boolean };
+export type Stack = { project: string; ports: Ports; config: string; ca: string; ready?: boolean; branch?: Server; main?: Server; opened?: boolean };
 export type Paths = { root: string; state: string; stackFile: string };
 
 /** What the working tree holds that a production build bakes in: the commit, uncommitted changes and untracked files. */
@@ -155,6 +155,19 @@ async function createStack(paths: Paths): Promise<Stack> {
 	const stack: Stack = { project: `el-verify-${hashOf(paths.root).toString(16)}`, ports: await pickPorts(paths.root), config: path.join(runtime, "library.json"), ca: path.join(runtime, "root.crt") };
 	mkdirSync(runtime, { recursive: true });
 	writeJson(paths.stackFile, stack);
+	try {
+		initialize(paths, stack);
+	} catch (error) {
+		// A stack that stopped halfway has missing records or config; start again next time.
+		await stopStack(paths, stack);
+		throw error;
+	}
+	stack.ready = true;
+	writeJson(paths.stackFile, stack);
+	return stack;
+}
+
+function initialize(paths: Paths, stack: Stack) {
 	console.log("Starting the fixture services (Postgres, Meilisearch, Redis, the OpenScholar fake)...");
 	compose(paths, stack, ["up", "--detach", "--wait", "--wait-timeout", "180", ...SERVICES]);
 	console.log("Adding the verify records...");
@@ -163,14 +176,16 @@ async function createStack(paths: Paths): Promise<Stack> {
 	writeConfig(paths, stack);
 	console.log("Indexing them for search...");
 	run("npx", ["tsx", "tools/runSearchIndexer.ts"], { cwd: paths.root, env: libraryEnvironment(stack), log: path.join(paths.state, "indexer.log") });
-	return stack;
 }
+
+/** Whether a stack finished setting up and still runs. */
+const usable = (paths: Paths, stack: Stack) => stack.ready === true && stackRunning(paths, stack);
 
 /** The fixture services with the verify records in them, started once and kept until `down`. */
 export async function ensureStack(paths: Paths, fresh: boolean): Promise<Stack> {
 	const existing = readJson<Stack>(paths.stackFile);
 	if (!existing) return createStack(paths);
-	if (!fresh && stackRunning(paths, existing)) return existing;
+	if (!fresh && usable(paths, existing)) return existing;
 	await stopStack(paths, existing);
 	return createStack(paths);
 }
@@ -244,6 +259,8 @@ async function current(server: Server | undefined, built: string, port: number):
 
 /** Starts a server and records it at once, so `down` can stop it even if it never answers; stops it if it doesn't. */
 async function start(paths: Paths, stack: Stack, slot: "branch" | "main", cwd: string, built: string) {
+	// Something else answering on the port would pass for the new server.
+	if (await listening(stack.ports[slot])) throw new Error(`Port ${stack.ports[slot]} is in use by another process. Stop it, or run \`npm run verify -- down\` and \`up\` again for new ports.`);
 	const server = spawnServer(stack, cwd, stack.ports[slot], path.join(paths.state, `${slot}.log`), built);
 	stack[slot] = server;
 	writeJson(paths.stackFile, stack);
@@ -284,10 +301,14 @@ export function buildBranch(paths: Paths, built: string) {
 	writeJson(marker, { built, buildId: buildId(paths.root) });
 }
 
-/** The commit origin/main is at, fetched now. */
-export function mainCommit(paths: Paths): string {
-	run("git", ["fetch", "--quiet", "origin", "main"], { cwd: paths.root });
-	return git(["rev-parse", "origin/main"], paths.root);
+/**
+ * The main commit this branch starts from (its merge base with origin/main,
+ * fetched now). Comparing with a newer main would count main's own later
+ * changes as this branch's.
+ */
+export function mainCommit(paths: Paths, fetch = true): string {
+	if (fetch) run("git", ["fetch", "--quiet", "origin", "main"], { cwd: paths.root });
+	return git(["merge-base", "HEAD", "origin/main"], paths.root);
 }
 
 function createMain(paths: Paths, dir: string, sha: string) {
@@ -299,11 +320,19 @@ function createMain(paths: Paths, dir: string, sha: string) {
 	writeJson(path.join(dir, ".verify-built"), { sha });
 }
 
-// ponytail: keeps the three newest builds; a server another worktree still runs from an older one loses its files.
+/** The main builds a live server of any worktree of this repository runs from. */
+function mainsInUse(paths: Paths): Set<string> {
+	const worktrees = git(["worktree", "list", "--porcelain"], paths.root).split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9));
+	const servers = worktrees.map((root) => readJson<Stack>(path.join(root, ".verify", "stack.json"))?.main);
+	return new Set(servers.filter((server): server is Server => !!server && runsNext(server.pid, server.port)).map((server) => server.cwd));
+}
+
+/** Removes all but the three newest main builds, keeping any a live server runs from. */
 function pruneMains(paths: Paths, keep: string) {
+	const used = mainsInUse(paths).add(keep);
 	const builds = readdirSync(MAIN_CACHE).filter((name) => name.startsWith("main-")).map((name) => path.join(MAIN_CACHE, name));
 	const newest = builds.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-	for (const old of newest.filter((dir) => dir !== keep).slice(2)) run("git", ["worktree", "remove", "--force", old], { cwd: paths.root });
+	for (const old of newest.slice(3).filter((dir) => !used.has(dir))) run("git", ["worktree", "remove", "--force", old], { cwd: paths.root });
 }
 
 /** A production build of origin/main at `sha` in the shared cache, made once under a lock and never changed after. Returns its folder. */
