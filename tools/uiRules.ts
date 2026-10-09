@@ -27,14 +27,10 @@ const FIX: Record<Rule, string> = {
 	"loading-text": 'no "Loading" text; show a spinner, or hold the final size until the data is there.',
 };
 
-// Bare `transition` and `transition-all` cover opacity and transform too; an
-// arbitrary list counts when it names either.
-const TRANSITION = /(?:^|[\s"'`])(?:[\w-]+:)*transition(?:-all|-opacity|-transform|-\[[^\]]*(?:opacity|transform|translate|scale|rotate|all)[^\]]*\])?(?=$|[\s"'`])/;
-// Every animation counts, the built-in spin, pulse, ping and bounce too: they
-// animate transform or opacity.
-const CSS_ANIMATION = /(?:^|[\s"'`])(?:[\w[\]=-]+:)*(fade-enter|animate-(?!none(?=$|[\s"'`]))[\w[\]-]+)/;
-// Variants that style a pseudo-element, a different box from the element itself.
-const PSEUDO_ELEMENT = /(^|:)(before|after|placeholder|file|marker|selection|first-letter|first-line|backdrop):/;
+// The utilities that move opacity or transform. Bare `transition` and
+// `transition-all` cover both; an arbitrary list counts when it names one.
+const MOVING = new Set(["opacity", "transform", "translate", "scale", "rotate", "all"]);
+const PSEUDO_ELEMENTS = new Set(["before", "after", "placeholder", "file", "marker", "selection", "first-letter", "first-line", "backdrop"]);
 const FRAMER_PROPS = new Set(["initial", "animate", "exit", "layout", "layoutId", "variants", "whileHover", "whileTap", "whileInView", "whileFocus", "whileDrag"]);
 // The `uppercase` utility with variants or the important mark (`sm:uppercase`,
 // `uppercase!`), looked for only where classes are written so prose that says
@@ -50,12 +46,31 @@ const LOADING = /^loading\b[^.!?]{0,40}(…|\.\.\.)?$/i;
 
 const allowed = (line: string | undefined, rule: Rule) => new RegExp(`ui-rules-allow:\\s*${rule}\\s+--\\s*\\S`).test(line ?? "");
 
-/** A class list without the classes that style a pseudo-element. */
-const ownClasses = (classes: string) =>
-	classes
-		.split(/[\s"'`{}]+/)
-		.filter((token) => !PSEUDO_ELEMENT.test(token))
-		.join(" ");
+/** A class without its variants and important mark: `hover:transition-opacity!` is `transition-opacity`. */
+const utility = (token: string) => (token.split(":").at(-1) ?? "").replace(/^!|!$/g, "");
+/** The box a class styles: the element, or a pseudo-element its variants name (`before:`). */
+const box = (token: string) => token.split(":").slice(0, -1).find((variant) => PSEUDO_ELEMENTS.has(variant)) ?? "";
+
+function transitionsMovement(token: string): boolean {
+	const name = utility(token);
+	const list = name.match(/^transition-\[(.+)\]$/)?.[1];
+	if (list) return list.split(",").some((property) => MOVING.has(property.trim()));
+	return /^transition(-all|-opacity|-transform)?$/.test(name);
+}
+
+const animates = (token: string) => /^(fade-enter|animate-[\w[\]-]+)$/.test(utility(token)) && utility(token) !== "animate-none";
+
+/** The classes of a class list, grouped by the box they style. */
+function boxes(classes: string): Map<string, string[]> {
+	const groups = new Map<string, string[]>();
+	for (const token of classes.split(/[\s"'`{}()]+/).filter(Boolean)) groups.set(box(token), [...(groups.get(box(token)) ?? []), token]);
+	return groups;
+}
+
+/** Whether one box both animates and transitions opacity or transform; Framer props animate the element itself. */
+function clashes(classes: string, framer: boolean): boolean {
+	return [...boxes(classes)].some(([target, tokens]) => tokens.some(transitionsMovement) && ((framer && target === "") || tokens.some(animates)));
+}
 
 type Scan = { file: string; source: ts.SourceFile; lines: string[]; found: string[] };
 
@@ -143,8 +158,7 @@ const nativeTooltip = (node: ts.JsxOpeningLikeElement, tag: string, read: Attrib
 function checkElement(scan: Scan, node: ts.JsxOpeningLikeElement) {
 	const tag = node.tagName.getText(scan.source);
 	const read = readAttributes(node, scan.source);
-	const own = ownClasses(read.className);
-	if (TRANSITION.test(own) && (read.framer || CSS_ANIMATION.test(own))) report(scan, node, "animation-clash");
+	if (clashes(read.className, read.framer)) report(scan, node, "animation-clash");
 	if (nativeTooltip(node, tag, read)) report(scan, read.title!, "native-title");
 }
 

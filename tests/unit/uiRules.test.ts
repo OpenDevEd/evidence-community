@@ -15,11 +15,14 @@ describe("animation-clash", () => {
 		expect(rules(`export const X = () => <div className="animate-pulse transition-opacity">x</div>;`)).toEqual(["animation-clash"]);
 		expect(rules(`export const Y = () => <div className="animate-spin transition-[color,background-color]">y</div>;`)).toEqual([]);
 		expect(rules(`export const Z = () => <div className="animate-none transition-opacity">z</div>;`)).toEqual([]);
+		expect(rules(`export const Z2 = () => <div className="animate-none! transition-opacity">z</div>;`)).toEqual([]);
+		expect(rules(`export const Z3 = () => <div className="animate-in transition-[fill-opacity,transform-origin]">z</div>;`)).toEqual([]);
 	});
 
 	it("lets an animated element transition only colours, and a pseudo-element transition its own opacity", () => {
 		expect(rules(`export const C = () => <motion.div variants={items} className="border transition-colors">c</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D = () => <motion.div animate={{ opacity: 1 }} className="before:opacity-100 before:transition-opacity">d</motion.div>;`)).toEqual([]);
+		expect(rules(`export const D2 = () => <div className="before:animate-pulse before:transition-opacity">d</div>;`)).toEqual(["animation-clash"]);
 	});
 });
 
