@@ -97,6 +97,8 @@ type Scan = {
 	// The class lists each constant adds, read once.
 	lists: Map<ts.Node, string[]>;
 	loadingKeys: ReadonlySet<string>;
+	// The variables and properties the file renders as JSX children, by name: `statusText`, `.label`.
+	rendered: Set<string>;
 	found: string[];
 };
 
@@ -227,54 +229,93 @@ function passesThrough(parent: ts.Node, child: ts.Node): boolean {
 	return ts.isBinaryExpression(parent) && RENDERING_OPERATORS.includes(parent.operatorToken.kind);
 }
 
-/** Whether a string is rendered as a JSX child, directly or through a condition. */
-function renderedInJsx(node: ts.Node): boolean {
+/** The node a value lands in once it passes through parentheses and conditions. */
+function destination(node: ts.Node): ts.Node | undefined {
 	let child = node;
-	for (let parent = node.parent; parent; child = parent, parent = parent.parent) {
-		if (ts.isJsxExpression(parent)) return !ts.isJsxAttribute(parent.parent);
-		if (!passesThrough(parent, child)) return false;
+	let parent = node.parent;
+	while (parent && passesThrough(parent, child)) {
+		child = parent;
+		parent = parent.parent;
 	}
-	return false;
+	return parent;
+}
+
+/** Whether a value is rendered as a JSX child, directly or through a condition. */
+function renderedInJsx(node: ts.Node): boolean {
+	const target = destination(node);
+	return !!target && ts.isJsxExpression(target) && !ts.isJsxAttribute(target.parent);
+}
+
+/** The variables and properties a file renders as JSX children, by name: `{statusText}` gives `statusText`, `{config.label}` gives `.label`. */
+function renderedNames(source: ts.SourceFile): Set<string> {
+	const names = new Set<string>();
+	const collect = (node: ts.Node) => {
+		if (ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node.parent) && renderedInJsx(node)) names.add(node.text);
+		if (ts.isPropertyAccessExpression(node) && renderedInJsx(node)) names.add(`.${node.name.text}`);
+		ts.forEachChild(node, collect);
+	};
+	collect(source);
+	return names;
+}
+
+/** Whether a value is shown as text: rendered as a JSX child, or held in a variable or property the file renders. */
+function shown(scan: Scan, node: ts.Node): boolean {
+	const target = destination(node);
+	if (!target) return false;
+	if (ts.isJsxExpression(target)) return !ts.isJsxAttribute(target.parent);
+	if (ts.isVariableDeclaration(target) && ts.isIdentifier(target.name)) return scan.rendered.has(target.name.text);
+	return ts.isPropertyAssignment(target) && scan.rendered.has(`.${target.name.getText(scan.source)}`);
 }
 
 const isStringLike = (node: ts.Node): node is ts.StringLiteralLike | ts.TemplateLiteralLikeNode =>
 	ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
 
+const TRANSLATION_APIS = new Set(["useTranslations", "getTranslations"]);
+
+/** Whether a called name translates: named like `t`, `tc` or `tUI`, or bound to useTranslations() or getTranslations(). */
+function translates(callee: ts.Expression): boolean {
+	if (!ts.isIdentifier(callee)) return false;
+	if (TRANSLATE.test(callee.text)) return true;
+	const value = declaredValue(callee);
+	const call = value && (ts.isAwaitExpression(value) ? value.expression : value);
+	return !!call && ts.isCallExpression(call) && ts.isIdentifier(call.expression) && TRANSLATION_APIS.has(call.expression.text);
+}
+
 /** The translation call a string is the key of, as in `t("loadingData")`. */
 function translationCall(node: ts.Node): ts.CallExpression | undefined {
 	const call = node.parent;
 	if (!ts.isCallExpression(call) || call.arguments[0] !== node) return undefined;
-	return ts.isIdentifier(call.expression) && TRANSLATE.test(call.expression.text) ? call : undefined;
+	return translates(call.expression) ? call : undefined;
 }
 
-/** Whether a node sits in an element only screen readers get, where a Loading label names a spinner. */
-function screenReaderOnly(node: ts.Node, source: ts.SourceFile): boolean {
+/** Whether a node sits in an element only screen readers get, in every class its condition can give, where a Loading label names a spinner. */
+function screenReaderOnly(scan: Scan, node: ts.Node): boolean {
 	for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
 		if (!ts.isJsxElement(parent)) continue;
-		const className = parent.openingElement.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "className");
-		return SR_ONLY.test(className?.getText(source) ?? "");
+		const className = parent.openingElement.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(scan.source) === "className");
+		return classLists(scan, className && ts.isJsxAttribute(className) ? className.initializer : undefined).every((list) => SR_ONLY.test(list));
 	}
 	return false;
 }
 
-/** Whether a string shows a Loading label as a JSX child: the label itself, or the key of a translated one. */
+/** Whether a string shows a Loading label as text: the label itself, or the key of a translated one. */
 function showsLoading(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode): boolean {
 	const whole = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
-	if (whole && LOADING.test(node.text.trim()) && renderedInJsx(node)) return true;
+	if (whole && LOADING.test(node.text.trim()) && shown(scan, node)) return true;
 	const call = translationCall(node);
-	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && renderedInJsx(call);
+	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && shown(scan, call);
 }
 
 function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode) {
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (showsLoading(scan, node) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
+	if (showsLoading(scan, node) && !screenReaderOnly(scan, node)) report(scan, node, "loading-text");
 }
 
 function checkText(scan: Scan, node: ts.JsxText) {
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (LOADING.test(node.text.trim()) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
+	if (LOADING.test(node.text.trim()) && !screenReaderOnly(scan, node)) report(scan, node, "loading-text");
 }
 
 /** Whether a Framer prop is set to a literal false (`layout={false}`), which turns its animation off. */
@@ -324,7 +365,7 @@ function visit(scan: Scan, node: ts.Node) {
 /** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
 export function sourceProblems(file: string, text: string, loadingKeys: ReadonlySet<string> = new Set()): string[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, found: [] };
+	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, rendered: renderedNames(source), found: [] };
 	visit(scan, source);
 	return scan.found;
 }
@@ -402,7 +443,7 @@ function applyList(list: string): [string, Declaration][] {
  * One rule's declarations, in source order, for each box and variant they
  * apply under; `@apply` utilities join where they're written. A variant
  * (`hover:animate-none`) adds to its box's own declarations, never replaces
- * them outside that state.
+ * them outside that state; each box is also checked with all its variants.
  */
 function ruleDeclarations(body: string): Declaration[][] {
 	const scopes = new Map<string, Declaration[]>([["|", []]]);
@@ -413,7 +454,20 @@ function ruleDeclarations(body: string): Declaration[][] {
 		if (applied) for (const [key, declaration] of applyList(applied)) add(key, declaration);
 		else if (value.length) add("|", [name.trim().toLowerCase(), value.join(":").trim()]);
 	}
-	return [...scopes].map(([key, declarations]) => (key.endsWith("|") ? declarations : [...(scopes.get(`${key.split("|")[0]}|`) ?? []), ...declarations]));
+	return [...scopes.keys()].flatMap((key) => [scopeDeclarations(scopes, key, variantsOf(key)), scopeDeclarations(scopes, key, boxVariants(scopes, key))]);
+}
+
+const variantsOf = (key: string) => key.split("|")[1].split(":").filter(Boolean);
+const boxOf = (key: string) => key.split("|")[0];
+/** Every variant a box's utilities use, for checking the box with all of them at once, as when it is hovered in dark mode. */
+const boxVariants = (scopes: Map<string, Declaration[]>, key: string) => [...scopes.keys()].filter((other) => boxOf(other) === boxOf(key)).flatMap(variantsOf);
+
+/** A box's declarations under these variants: each state on top of every less specific state it includes, `dark:hover:` on `dark:` on the base. */
+function scopeDeclarations(scopes: Map<string, Declaration[]>, key: string, variants: string[]): Declaration[] {
+	return [...scopes]
+		.filter(([other]) => boxOf(other) === boxOf(key) && variantsOf(other).every((variant) => variants.includes(variant)))
+		.sort(([a], [b]) => variantsOf(a).length - variantsOf(b).length)
+		.flatMap(([, declarations]) => declarations);
 }
 
 /** Whether one box of a CSS rule, in any state, both animates and transitions opacity or transform. */
