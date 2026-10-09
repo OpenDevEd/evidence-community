@@ -1,0 +1,6 @@
+# Added to tests/acceptance/compose.yaml by `npm run verify -- up`: the
+# library runs on this machine, outside Docker, so Redis needs a port too.
+services:
+  redis:
+    ports:
+      - "${VERIFY_REDIS_PORT:?redis port is required}:6379"

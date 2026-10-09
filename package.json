@@ -14,6 +14,7 @@
 		"typecheck": "next typegen && node node_modules/typescript7/bin/tsc --noEmit",
 		"quality:fallow": "fallow audit --gate new-only --fail-on-issues --format json --quiet --explain",
 		"check": "npm run lint && npm run typecheck && npm run schema:check && npm run check:ai-wording && npm run test:unit",
+		"verify": "tsx ./tools/verify/cli.ts",
 		"check:ai-wording": "tsx ./tools/checkAIWording.ts",
 		"check:changed": "npm run check && npm run quality:fallow -- --base origin/main",
 		"test": "vitest run",
