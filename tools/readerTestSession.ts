@@ -30,7 +30,11 @@ const databases = new Map<string, LibraryDatabase>();
 export async function mintReaderSessionCookies(target: ReaderTestSessionTarget, clerkUserId: string, options: ReaderOptions = {}) {
 	let database = databases.get(target.databaseUrl);
 	if (!database) {
-		database = drizzle(target.databaseUrl);
+		const opened = drizzle(target.databaseUrl);
+		// The pool outlives the test stack: when its database stops, the idle
+		// connection's termination must not end the process. The next query reconnects.
+		opened.$client.on("error", () => {});
+		database = opened;
 		databases.set(target.databaseUrl, database);
 	}
 	return mintReaderSessionCookiesIn(database, target, clerkUserId, options);
