@@ -24,6 +24,7 @@ describe("animation-clash", () => {
 		expect(rules(`export const C = () => <motion.div variants={items} className="border transition-colors">c</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D = () => <motion.div animate={{ opacity: 1 }} className="before:opacity-100 before:transition-opacity">d</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D2 = () => <div className="before:animate-pulse before:transition-opacity">d</div>;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const D3 = () => <m.div layout className="transition-all">d</m.div>;`)).toEqual(["animation-clash"]);
 	});
 
 	it("reads class constants where they are written and where className uses them", () => {
@@ -68,6 +69,9 @@ describe("animation-clash", () => {
 		expect(css(".a { animation: none, rise 1s; transition: opacity 1s; }")).toBe(1);
 		expect(css(".a { animation: rise 1s; transition: 150ms !important; }")).toBe(1);
 		expect(css(".a { animation: rise 1s; animation-name: none; transition: opacity 1s; }")).toBe(0);
+		expect(css(".a { @apply animate-pulse transition-opacity; }")).toBe(1);
+		expect(css(".a {\n\t@apply animate-pulse;\n\ttransition: opacity 1s;\n}")).toBe(1);
+		expect(css(".a { @apply scroll-mt-20 xl:scroll-mt-0 transition-opacity; }")).toBe(0);
 	});
 
 	it("reads the two sides of a condition as separate class lists", () => {
