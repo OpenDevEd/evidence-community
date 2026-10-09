@@ -86,9 +86,14 @@ export function recorder(config: { allow: string }) {
 		const style = getComputedStyle(element);
 		return !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(style.backgroundColor) || style.backgroundImage !== "none" || style.boxShadow !== "none" || hasBorder(style);
 	};
-	// A switch's thumb sliding over is its own transition, by design; whatever
-	// it pushes still counts, because that element isn't animating.
-	const animating = (element: HTMLElement) => element.getAnimations().some((animation) => animation.playState === "running");
+	// A switch's thumb sliding over is its own transition of its margin, by
+	// design; whatever it pushes still counts, because that element isn't
+	// animating. A fade or slide moves no layout box, so it exempts nothing.
+	const LAYOUT = /^(margin|padding|width|height|top|left|right|bottom|inset|min|max|flex|grid|gap)/i;
+	const animatedProperties = (animation: Animation) =>
+		"transitionProperty" in animation ? [String(animation.transitionProperty)] : (animation.effect as KeyframeEffect | null)?.getKeyframes().flatMap((frame) => Object.keys(frame)) ?? [];
+	const movesLayout = (animation: Animation) => animation.playState === "running" && animatedProperties(animation).some((property) => LAYOUT.test(property));
+	const animating = (element: HTMLElement) => element.getAnimations().some(movesLayout);
 
 	function idFor(element: HTMLElement): number {
 		let id = ids.get(element);

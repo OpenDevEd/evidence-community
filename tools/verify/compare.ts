@@ -92,8 +92,11 @@ const anyNew = (local: SiteRun, onBase: boolean[][]) => local.phases.some((phase
  * second run only happens when something looks new.
  */
 async function again(comparison: Comparison, browser: string, local: SiteRun, onBase: boolean[][]): Promise<boolean[][]> {
-	if (!anyNew(local, onBase)) return local.phases.map((phase) => phase.items.map(() => true));
+	const all = local.phases.map((phase) => phase.items.map(() => true));
+	if (!anyNew(local, onBase)) return all;
 	const second = await runSite(browser, comparison.local, comparison.target, comparison.options, null, true);
+	// A second run that stopped short shows nothing about the phases it missed.
+	if (second.stopped) return all;
 	return local.phases.map((phase, index) => knownAfterLooks(phase.items, [second.phases[index]?.items ?? []]));
 }
 

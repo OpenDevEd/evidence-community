@@ -218,6 +218,14 @@ describe("matchKnown", () => {
 		expect(matchKnown([{ ...item("shift", ["thumb"]), deltas: [move(-3)] }], [{ ...item("shift", ["thumb"]), deltas: [move(-2)] }])).toEqual([false]);
 	});
 
+	it("lets each small piece use up the move it matches, so repeated 4px jumps here need as many there", () => {
+		const move = (dh: number) => ({ dx: 0, dy: 0, dw: 0, dh });
+		const base = [{ ...item("shift", ["card"]), deltas: [move(4)] }];
+		const jump = { ...item("shift", ["card"]), deltas: [move(4)] };
+		expect(matchKnown([jump, jump, jump], base)).toEqual([true, false, false]);
+		expect(matchKnown([{ ...item("shift", ["card", "card"]), deltas: [move(4), move(4)] }], base)).toEqual([false]);
+	});
+
 	it("matches flashes and errors only by the same kind and text", () => {
 		const local = [item("text-flash", ["12 papers"]), item("error", ["boom"]), item("brief-text", ["12 papers"])];
 		const base = [item("text-flash", ["12 papers"]), item("error", ["other"])];

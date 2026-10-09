@@ -15,8 +15,8 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { open, parseStep, type RunOptions } from "./browser";
 import { compare, printShots, report, type Comparison } from "./compare";
 import { hookStop } from "./hook";
-import { buildBranch, buildMain, ensureStack, fingerprint, mainCheckout, mainCommit, serve, stackRunning, stopStack, type Paths, type Stack } from "./stack";
-import { git, readJson, runsNext, withTimeout, writeJson } from "./util";
+import { buildBranch, buildMain, ensureStack, fingerprint, mainCommit, mainDir, serve, stackRunning, stopStack, type Paths, type Stack } from "./stack";
+import { git, readJson, runsNext, withLock, withTimeout, writeJson } from "./util";
 
 const ROOT = git(["rev-parse", "--show-toplevel"], process.cwd());
 const STATE = path.join(ROOT, ".verify");
@@ -32,11 +32,13 @@ const ADMINS: Record<string, string> = { editor: "user_acceptance_admin", creato
 
 type Values = Record<string, string | boolean | string[] | undefined>;
 
-const running = (server: Stack["branch"]) => !!server && runsNext(server.pid);
+const running = (server: Stack["branch"]) => !!server && runsNext(server.pid, server.port);
+// Only one run at a time changes this worktree's servers.
+const locked = <T>(run: () => Promise<T>) => withLock(path.join(STATE, "lock"), "this worktree's other verify run", run);
 
 async function serveMain(stack: Stack) {
 	const sha = mainCommit(PATHS);
-	await serve(PATHS, stack, "main", { cwd: mainCheckout, built: sha, build: () => buildMain(PATHS, sha) });
+	await serve(PATHS, stack, "main", { cwd: mainDir(sha), built: sha, build: () => buildMain(PATHS, sha).then(() => undefined) });
 }
 
 async function up(values: Values) {
@@ -186,16 +188,19 @@ async function comparisonFor(target: string, values: Values, mode: "shift" | "sh
 	};
 }
 
-function recordPass(comparison: Comparison) {
+function recordPass(comparison: Comparison, built: string) {
+	// Code changed during the check isn't in the build it checked.
+	if (fingerprint(ROOT) !== built) return console.log("The code changed during the check, so no pass is recorded. Run `npm run verify -- up`, then check again.");
 	const steps = comparison.options.steps.map((step) => step.label);
 	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), target: comparison.target, steps, browsers: comparison.browsers });
 }
 
 async function drive(target: string, values: Values, mode: "shift" | "shot") {
+	const built = fingerprint(ROOT);
 	const comparison = await comparisonFor(target, values, mode);
 	const outcome = await compare(comparison);
 	if (mode === "shot") return printShots(outcome.shots);
-	if (report(comparison, outcome)) recordPass(comparison);
+	if (report(comparison, outcome)) recordPass(comparison, built);
 	else process.exitCode = 1;
 }
 
@@ -235,8 +240,8 @@ Options for shift and shot:
   --base none              Don't compare with origin/main.`;
 
 const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
-	up: (values) => up(values),
-	down: () => down(),
+	up: (values) => locked(() => up(values)),
+	down: () => locked(() => down()),
 	status: () => status(),
 	shift: (values, rest) => drive(rest[0] ?? "", values, "shift"),
 	shot: (values, rest) => drive(rest[0] ?? "", values, "shot"),

@@ -2,7 +2,7 @@
 // run the same file; keep them in step.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
@@ -35,11 +35,11 @@ export function members(group: number): string[] {
 }
 
 /**
- * Whether a process group still runs the Next.js server it was recorded for.
- * A pid can be reused after a crash or a reboot, so a group that no longer
- * runs Next.js is never signalled.
+ * Whether a process group still runs the Next.js server it was recorded for,
+ * on its port. A pid can be reused after a crash or a reboot, so a group that
+ * doesn't run exactly that server is never signalled.
  */
-export const runsNext = (group: number) => members(group).some((command) => /\bnext\b/.test(command));
+export const runsNext = (group: number, port: number) => members(group).some((command) => /\bnext\b/.test(command) && command.includes(`-p ${port}`));
 
 export function listening(port: number): Promise<boolean> {
 	return new Promise((resolve) => {
@@ -73,6 +73,41 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, what: string): P
 	});
 	// A finished check clears its limit, so the process can exit.
 	return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
+const alive = (pid: number) => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+/** Takes the lock, or clears one whose holder has died. Returns whether this process holds it. */
+function claim(lock: string): boolean {
+	try {
+		mkdirSync(lock);
+		writeFileSync(path.join(lock, "pid"), String(process.pid));
+		return true;
+	} catch {
+		const holder = Number(readJson<number>(path.join(lock, "pid")));
+		if (holder && !alive(holder)) rmSync(lock, { recursive: true, force: true });
+		return false;
+	}
+}
+
+/** Runs `run` while holding a lock folder, waiting for whoever holds it now, so two runs never change the same servers at once. */
+export async function withLock<T>(lock: string, what: string, run: () => Promise<T>): Promise<T> {
+	mkdirSync(path.dirname(lock), { recursive: true });
+	for (const deadline = Date.now() + 15 * 60_000; !claim(lock); await sleep(1_000)) {
+		if (Date.now() > deadline) throw new Error(`Waited 15 minutes for ${what}; ${lock} is held by another run.`);
+	}
+	try {
+		return await run();
+	} finally {
+		rmSync(lock, { recursive: true, force: true });
+	}
 }
 
 /** A file-name-safe form of a route or step, for run folders and screenshots. */

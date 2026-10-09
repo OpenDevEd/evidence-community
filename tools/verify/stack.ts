@@ -4,18 +4,20 @@
 
 import { execFileSync, spawn, type StdioOptions } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
 import { cacheFonts } from "./browser";
 import { seedSql } from "./seed";
-import { git, listening, members, readJson, runsNext, sleep, stopGroup, writeJson } from "./util";
+import { git, listening, members, readJson, runsNext, sleep, stopGroup, withLock, writeJson } from "./util";
 
 const COMPOSE_FILES = ["tests/acceptance/compose.yaml", "tools/verify/compose.yaml"];
 const SERVICES = ["postgres", "amber-meilisearch", "redis", "fixture", "runtime-provider-fake"];
-// One build of origin/main, shared by every worktree of this repository.
-const MAIN_CACHE = path.join(homedir(), ".cache", "new-el-verify", "main");
+// Builds of origin/main, one per commit and never changed once built, shared
+// by every worktree of this repository.
+const MAIN_CACHE = path.join(homedir(), ".cache", "new-el-verify");
+export const mainDir = (sha: string) => path.join(MAIN_CACHE, `main-${sha.slice(0, 12)}`);
 // The acceptance library's OpenScholar identity (tools/runRuntimeAcceptance.ts); the fake knows these.
 const AMBER = {
 	libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
@@ -27,7 +29,7 @@ const INDIGO = { libraryId: "kg2k5yaf2g58kz9kw7h3k2j3v6zq5h4p", machineCredentia
 const NOT_BUILT = [":!*.md", ":!docs", ":!plans", ":!tests", ":!tools", ":!ops", ":!design-prototypes", ":!.agents", ":!.claude", ":!.github"];
 
 type Ports = { postgres: number; meilisearch: number; fixture: number; appHttps: number; fake: number; redis: number; branch: number; main: number };
-export type Server = { pid: number; url: string; log: string; built: string };
+export type Server = { pid: number; port: number; url: string; log: string; built: string; cwd: string };
 export type Stack = { project: string; ports: Ports; config: string; ca: string; branch?: Server; main?: Server; opened?: boolean };
 export type Paths = { root: string; state: string; stackFile: string };
 
@@ -142,6 +144,7 @@ function writeConfig(paths: Paths, stack: Stack) {
 	Object.assign(config.services.redis, { url: `redis://127.0.0.1:${ports.redis}` });
 	Object.assign(config.services.storage, { url: `http://127.0.0.1:${ports.fake}` });
 	Object.assign(config.services.zotero, { translationUrl: `http://127.0.0.1:${ports.fake}` });
+	for (const map of config.gapMaps ?? []) map.sourceUrl = String(map.sourceUrl).replace("https://fixture/", `https://localhost:${ports.fixture}/`);
 	writeJson(stack.config, config);
 }
 
@@ -173,7 +176,7 @@ export async function ensureStack(paths: Paths, fresh: boolean): Promise<Stack> 
 }
 
 async function stopServer(server: Server | undefined, name: string): Promise<boolean> {
-	if (!server || !runsNext(server.pid) || (await stopGroup(server.pid))) return true;
+	if (!server || !runsNext(server.pid, server.port) || (await stopGroup(server.pid))) return true;
 	console.log(`The ${name} server (process group ${server.pid}) is still running.`);
 	return false;
 }
@@ -197,18 +200,21 @@ async function answers(url: string): Promise<boolean> {
 	}
 }
 
-/** Starts `next start` from a built checkout, in its own process group, and waits until it answers. */
-async function startServer(stack: Stack, cwd: string, port: number, log: string, built: string): Promise<Server> {
+/** Starts `next start` from a built checkout, in its own process group. */
+function spawnServer(stack: Stack, cwd: string, port: number, log: string, built: string): Server {
 	const out = openSync(log, "a");
 	const child = spawn("npx", ["next", "start", "-p", String(port)], { cwd, env: libraryEnvironment(stack), detached: true, stdio: ["ignore", out, out] });
 	child.unref();
-	const server: Server = { pid: child.pid!, url: `http://localhost:${port}`, log, built };
+	return { pid: child.pid!, port, url: `http://localhost:${port}`, log, built, cwd };
+}
+
+/** Waits until the server answers; fails if it exits or takes longer than two minutes. */
+async function ready(server: Server) {
 	for (const deadline = Date.now() + 120_000; !(await answers(`${server.url}/lib`)); await sleep(1_000)) {
 		// Just started here, so any process left in its group is the server.
-		if (members(server.pid).length === 0) throw new Error(`The server in ${cwd} exited. See ${log}.`);
-		if (Date.now() > deadline) throw new Error(`The server in ${cwd} did not answer within 2 minutes. See ${log}.`);
+		if (members(server.pid).length === 0) throw new Error(`The server in ${server.cwd} exited. See ${server.log}.`);
+		if (Date.now() > deadline) throw new Error(`The server in ${server.cwd} did not answer within 2 minutes. See ${server.log}.`);
 	}
-	return server;
 }
 
 /**
@@ -233,42 +239,49 @@ async function warm(url: string) {
 
 /** Whether a server is still the build it was started for, and answering. */
 async function current(server: Server | undefined, built: string, port: number): Promise<boolean> {
-	return !!server && server.built === built && runsNext(server.pid) && (await listening(port));
+	return !!server && server.built === built && runsNext(server.pid, port) && (await listening(port));
 }
 
-/** Serves `cwd`'s build on `port` as `slot`, replacing an older one, and warms it. */
-export async function serve(paths: Paths, stack: Stack, slot: "branch" | "main", options: { cwd: string; built: string; build: () => void }) {
-	const port = stack.ports[slot];
-	if (await current(stack[slot], options.built, port)) return;
-	await stopServer(stack[slot], slot);
-	options.build();
-	stack[slot] = await startServer(stack, options.cwd, port, path.join(paths.state, `${slot}.log`), options.built);
+/** Starts a server and records it at once, so `down` can stop it even if it never answers; stops it if it doesn't. */
+async function start(paths: Paths, stack: Stack, slot: "branch" | "main", cwd: string, built: string) {
+	const server = spawnServer(stack, cwd, stack.ports[slot], path.join(paths.state, `${slot}.log`), built);
+	stack[slot] = server;
 	writeJson(paths.stackFile, stack);
+	try {
+		await ready(server);
+	} catch (error) {
+		await stopGroup(server.pid);
+		delete stack[slot];
+		writeJson(paths.stackFile, stack);
+		throw error;
+	}
+}
+
+/** Serves `cwd`'s build on its port as `slot`, replacing an older one, and warms it. */
+export async function serve(paths: Paths, stack: Stack, slot: "branch" | "main", options: { cwd: string; built: string; build: () => void | Promise<void> }) {
+	if (await current(stack[slot], options.built, stack.ports[slot])) return;
+	await stopServer(stack[slot], slot);
+	await options.build();
+	await start(paths, stack, slot, options.cwd, options.built);
 	await warm(`${stack[slot]!.url}/lib`);
 }
 
-/** A production build of this worktree, skipped when `.next` already holds one of the same code. */
+const buildId = (dir: string) => {
+	try {
+		return readFileSync(path.join(dir, ".next", "BUILD_ID"), "utf8");
+	} catch {
+		return null;
+	}
+};
+
+/** A production build of this worktree, skipped when `.next` still holds the one made from the same code. */
 export function buildBranch(paths: Paths, built: string) {
 	const marker = path.join(paths.state, "branch-built.json");
-	if (readJson<{ built: string }>(marker)?.built === built) return;
+	const last = readJson<{ built: string; buildId: string }>(marker);
+	if (last?.built === built && last.buildId === buildId(paths.root)) return;
 	console.log("Building this branch for production...");
 	run("npm", ["run", "build"], { cwd: paths.root, log: path.join(paths.state, "branch-build.log") });
-	writeJson(marker, { built });
-}
-
-function checkoutMain(paths: Paths, sha: string) {
-	if (existsSync(MAIN_CACHE)) return run("git", ["checkout", "--quiet", "--detach", sha], { cwd: MAIN_CACHE });
-	mkdirSync(path.dirname(MAIN_CACHE), { recursive: true });
-	return run("git", ["worktree", "add", "--detach", MAIN_CACHE, sha], { cwd: paths.root });
-}
-
-function installMain(paths: Paths, sha: string) {
-	const lock = createHash("sha1").update(readFileSync(path.join(MAIN_CACHE, "package-lock.json"))).digest("hex");
-	const installed = path.join(MAIN_CACHE, ".verify-installed");
-	if (readJson<{ lock: string }>(installed)?.lock === lock) return;
-	console.log(`Installing origin/main (${sha.slice(0, 8)})...`);
-	run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: MAIN_CACHE, log: path.join(paths.state, "main-build.log") });
-	writeJson(installed, { lock });
+	writeJson(marker, { built, buildId: buildId(paths.root) });
 }
 
 /** The commit origin/main is at, fetched now. */
@@ -277,15 +290,28 @@ export function mainCommit(paths: Paths): string {
 	return git(["rev-parse", "origin/main"], paths.root);
 }
 
-/** A production build of origin/main in the shared cache, rebuilt when origin/main moves. */
-export function buildMain(paths: Paths, sha: string) {
-	const marker = path.join(MAIN_CACHE, ".verify-built");
-	if (readJson<{ sha: string }>(marker)?.sha === sha) return;
-	checkoutMain(paths, sha);
-	installMain(paths, sha);
-	console.log(`Building origin/main (${sha.slice(0, 8)}) for comparison...`);
-	run("npm", ["run", "build"], { cwd: MAIN_CACHE, log: path.join(paths.state, "main-build.log") });
-	writeJson(marker, { sha });
+function createMain(paths: Paths, dir: string, sha: string) {
+	const log = path.join(paths.state, "main-build.log");
+	if (!existsSync(dir)) run("git", ["worktree", "add", "--detach", dir, sha], { cwd: paths.root });
+	console.log(`Installing and building origin/main (${sha.slice(0, 8)}) for comparison...`);
+	run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: dir, log });
+	run("npm", ["run", "build"], { cwd: dir, log });
+	writeJson(path.join(dir, ".verify-built"), { sha });
 }
 
-export const mainCheckout = MAIN_CACHE;
+// ponytail: keeps the three newest builds; a server another worktree still runs from an older one loses its files.
+function pruneMains(paths: Paths, keep: string) {
+	const builds = readdirSync(MAIN_CACHE).filter((name) => name.startsWith("main-")).map((name) => path.join(MAIN_CACHE, name));
+	const newest = builds.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+	for (const old of newest.filter((dir) => dir !== keep).slice(2)) run("git", ["worktree", "remove", "--force", old], { cwd: paths.root });
+}
+
+/** A production build of origin/main at `sha` in the shared cache, made once under a lock and never changed after. Returns its folder. */
+export async function buildMain(paths: Paths, sha: string): Promise<string> {
+	const dir = mainDir(sha);
+	await withLock(`${dir}.lock`, `the origin/main build at ${sha.slice(0, 8)}`, async () => {
+		if (readJson<{ sha: string }>(path.join(dir, ".verify-built"))?.sha !== sha) createMain(paths, dir, sha);
+	});
+	pruneMains(paths, dir);
+	return dir;
+}

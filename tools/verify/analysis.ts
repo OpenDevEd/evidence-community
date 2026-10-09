@@ -158,11 +158,10 @@ const takes = (piece: Sides, left: Sides) => piece.every((value, index) => !move
 
 // A few pixels of a move land differently on each site: the last 4px of a
 // growth can come after the baseline here and before it there. Such a piece
-// needs the site to move the element the same way, at least as far, and
-// leaves that move for the rest of it.
+// needs what is left of the site's move to go the same way, at least as far.
 const fragment = (delta: Sides | null) => !!delta && delta.every((value) => Math.abs(value) <= 4);
 const within = (piece: number, whole: number) => Math.round(piece) === 0 || (Math.sign(piece) === Math.sign(whole) && Math.abs(piece) <= Math.abs(whole));
-const partOf = (piece: Sides, whole: Sides) => piece.every((value, index) => within(value, whole[index]));
+const partOf = (piece: Sides, left: Sides) => piece.every((value, index) => within(value, left[index]));
 
 // An element movement, text or error the comparison site showed. A movement
 // keeps what is left of it on each side once moves here are matched to it.
@@ -183,14 +182,14 @@ function vouchers(base: Item[]): Vouch[] {
 function fits(entry: Vouch, kind: string, key: string, delta: Sides | null): boolean {
 	if (entry.kind !== kind || entry.key !== key) return false;
 	if (!delta || !entry.move) return !entry.used;
-	if (fragment(delta)) return partOf(delta, entry.move);
-	return !entry.used && takes(delta, entry.left!);
+	if (entry.used) return false;
+	return fragment(delta) ? partOf(delta, entry.left!) : takes(delta, entry.left!);
 }
 
-/** Uses up the sides of the entry this element moved here; returns how to give them back. */
+/** Uses up as much of the entry as this element moved here; returns how to give it back. */
 function take(entry: Vouch, delta: Sides | null): () => void {
 	const before = { left: entry.left, used: entry.used };
-	entry.left = delta && entry.left ? (entry.left.map((value, index) => (moved(delta[index]) ? 0 : value)) as Sides) : entry.left;
+	entry.left = delta && entry.left ? (entry.left.map((value, index) => (moved(delta[index]) ? value - delta[index] : value)) as Sides) : entry.left;
 	entry.used = !entry.left || !entry.left.some(moved);
 	return () => Object.assign(entry, before);
 }
@@ -205,7 +204,7 @@ function vouchedFor(pool: Vouch[], item: Item): boolean {
 			for (const giveBack of undo) giveBack();
 			return false;
 		}
-		if (!fragment(delta)) undo.push(take(entry, delta));
+		undo.push(take(entry, delta));
 	}
 	return true;
 }
