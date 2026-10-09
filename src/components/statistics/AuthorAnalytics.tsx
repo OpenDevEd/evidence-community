@@ -177,7 +177,7 @@ export function AuthorAnalytics({
 									<motion.div
 										key={index}
 										variants={itemVariants}
-										className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300"
+										className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-colors duration-300"
 									>
 										<div className="flex items-center gap-3 flex-1 min-w-0">
 											<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
@@ -190,15 +190,13 @@ export function AuthorAnalytics({
 												<div className="font-semibold text-black dark:text-white text-sm truncate">
 													{author.displayName || t("unknownAuthor")}
 												</div>
-												<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
+												<div className="text-xs text-black/60 dark:text-white/60 space-x-3">
 													<span className="text-blue-600 dark:text-blue-400 font-medium">
 														{author.itemCount.toLocaleString()} {t("itemsLowercase")}
 													</span>
-													<span>•</span>
 													<span className="text-emerald-600 dark:text-emerald-400 font-medium">
 														{author.totalCitations.toLocaleString()} {t("citationsLowercase")}
 													</span>
-													<span>•</span>
 													<span className="text-amber-600 dark:text-amber-400 font-medium">
 														{author.countryCount} {t("countriesLowercase")}
 													</span>

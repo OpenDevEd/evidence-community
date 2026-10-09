@@ -174,11 +174,8 @@ function PreviewByline({
 					{authors}
 				</span>
 			)}
-			{authors && fullDate && (
-				<span className="text-black/25 dark:text-white/25">·</span>
-			)}
 			{fullDate && (
-				<span className="shrink-0 text-black/40 dark:text-white/40">
+				<span className="ms-1 shrink-0 text-black/40 dark:text-white/40">
 					{fullDate}
 				</span>
 			)}

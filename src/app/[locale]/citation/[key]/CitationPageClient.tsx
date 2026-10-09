@@ -384,7 +384,7 @@ function CitationYearChart({
 					<div className="flex h-full w-full gap-4">
 						{/* Y-Axis Label */}
 						<div className="flex items-center justify-center w-6 shrink-0">
-							<div className="-rotate-90 whitespace-nowrap flex items-center gap-2 text-tiny uppercase tracking-widest font-bold text-default-400">
+							<div className="-rotate-90 whitespace-nowrap flex items-center gap-2 text-tiny font-bold text-default-400">
 								<HugeiconsIcon
 									icon={QuoteUpIcon}
 									className="rotate-90"
@@ -414,7 +414,7 @@ function CitationYearChart({
 													icon={Calendar01Icon}
 													className="text-default-400 text-tiny"
 												/>
-												<span className="text-tiny font-bold uppercase tracking-wider text-default-500">
+												<span className="text-tiny font-bold text-default-500">
 													{tooltipState.year}
 												</span>
 											</div>
@@ -427,7 +427,7 @@ function CitationYearChart({
 													<span className="text-xl font-bold text-accent">
 														{tooltipState.count}
 													</span>
-													<span className="text-tiny font-medium text-accent/60 uppercase tracking-wide">
+													<span className="text-tiny font-medium text-accent/60">
 														{t(
 															"citationsLowercase",
 														)}
@@ -443,7 +443,7 @@ function CitationYearChart({
 
 							{/* X-Axis Label */}
 							<div className="h-6 shrink-0 flex items-center justify-center mt-2">
-								<div className="flex items-center gap-2 text-tiny uppercase tracking-widest font-bold text-default-400">
+								<div className="flex items-center gap-2 text-tiny font-bold text-default-400">
 									<HugeiconsIcon
 										icon={Calendar01Icon}
 										className="text-default-300"
@@ -586,7 +586,7 @@ function CitationsCountryChart({
 											).length
 										}
 									</span>
-									<span className="text-xs uppercase tracking-wider font-medium text-black/50 dark:text-white/50">
+									<span className="text-xs font-medium text-black/50 dark:text-white/50">
 										{t("countries")}
 									</span>
 								</div>
@@ -618,7 +618,7 @@ function CitationsCountryChart({
 														className="w-4 h-3 shadow-sm"
 													/>
 												)}
-												<span className="text-tiny font-bold uppercase tracking-wider text-default-500 truncate max-w-[150px]">
+												<span className="text-tiny font-bold text-default-500 truncate max-w-[150px]">
 													{tooltipState.country ===
 													"UNKNOWN"
 														? t(
@@ -640,7 +640,7 @@ function CitationsCountryChart({
 													<span className="text-xl font-bold text-accent">
 														{tooltipState.count}
 													</span>
-													<span className="text-tiny font-medium text-accent/60 uppercase tracking-wide">
+													<span className="text-tiny font-medium text-accent/60">
 														(
 														{
 															tooltipState.percentage
@@ -714,7 +714,7 @@ function CitationsCountryChart({
 											<span className="text-lg font-bold text-black dark:text-white">
 												{item.count}
 											</span>
-											<span className="text-[10px] uppercase tracking-wider font-bold text-black/30 dark:text-white/30">
+											<span className="text-[10px] font-bold text-black/30 dark:text-white/30">
 												{t("citationsColumn")}
 											</span>
 										</div>

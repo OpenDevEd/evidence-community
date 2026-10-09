@@ -577,7 +577,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 								<motion.div
 									key={index}
 									variants={itemVariants}
-									className="relative p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300 hover:scale-[1.02] group"
+									className="relative p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-colors duration-300 hover:scale-[1.02] group"
 								>
 									<div className="flex items-center gap-3">
 										<div className="flex items-center gap-2 flex-shrink-0">
@@ -595,15 +595,13 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 											<div className="font-semibold text-black dark:text-white text-sm truncate group-hover:text-accent transition-colors">
 											{country.countryName}
 										</div>
-											<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
+											<div className="text-xs text-black/60 dark:text-white/60 space-x-3">
 												<span className="text-blue-600 dark:text-blue-400 font-medium">
 													{country.itemCount.toLocaleString()}
 												</span>
-												<span>•</span>
 												<span className="text-emerald-600 dark:text-emerald-400 font-medium">
 											{country.authorCount.toLocaleString()}
 												</span>
-												<span>•</span>
 												<span className="text-purple-600 dark:text-purple-400 font-medium">
 													H:{country.hIndex}
 												</span>

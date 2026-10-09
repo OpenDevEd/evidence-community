@@ -119,7 +119,7 @@ function WritebackDialogForm({
 								{text.here}
 							</p>
 						</div>
-						<span className="text-[11px] font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
+						<span className="text-[11px] font-medium text-black/40 dark:text-white/40">
 							Always
 						</span>
 					</div>

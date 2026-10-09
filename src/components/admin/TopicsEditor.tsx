@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Add01Icon, TagsIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Loading03Icon, TagsIcon } from "@hugeicons/core-free-icons";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -123,9 +123,9 @@ export function TopicsEditor({
 					</Button>
 				</div>
 			) : ids.length ? (
-				<p className="text-xs text-black/45 dark:text-white/45">
-					Loading topics...
-				</p>
+				<span aria-label="Loading topics" className="flex h-4 items-center text-black/45 dark:text-white/45" role="status">
+					<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin motion-reduce:animate-none" size={14} />
+				</span>
 			) : (
 				<p className="text-xs leading-relaxed text-black/45 dark:text-white/45">
 					No topics yet.
@@ -152,9 +152,7 @@ export function TopicsEditor({
 										<span className="text-black/45 dark:text-white/45">
 											OpenAlex score{" "}
 											{imported.score.toFixed(2)}
-											{imported.primary
-												? " · Primary"
-												: ""}
+											{imported.primary ? <span className="ml-2 font-medium">Primary</span> : null}
 										</span>
 									</span>
 									{!readOnly && !selected ? (

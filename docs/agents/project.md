@@ -97,6 +97,12 @@ The command list in `package.json` is authoritative.
   what it reports. It takes about a second, and CI blocks on the same check.
 - Run the matching type, lint, schema, browser, or real-service check only when
   its boundary changed.
+- `npm run check:ui-rules` runs in CI and enforces the UI rules agents kept
+  breaking: no animation that also transitions opacity or transform, no
+  uppercase labels, no native `title` tooltips, no dot separators (code and
+  `src/messages`), and no "Loading" text. Each error names the fix. A line that
+  needs an exception says why on the line before it:
+  `// ui-rules-allow: <rule> -- <reason>`. The rules live in `tools/uiRules.ts`.
 - A PR creation or update uses those targeted checks, not a full local
   `npm run check:changed` run.
 - Prove a change a person sees with `npm run verify` (the `verify` skill): `up`,

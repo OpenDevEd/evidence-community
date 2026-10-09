@@ -243,7 +243,7 @@ export function InternationalCollaboration({ collaborationStats }: International
 									<motion.div
 										key={index}
 										variants={itemVariants}
-										className="p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300"
+										className="p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-colors duration-300"
 									>
 										<div className="flex items-start justify-between gap-3">
 											<div className="flex items-center gap-2 flex-shrink-0">

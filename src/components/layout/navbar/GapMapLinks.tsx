@@ -41,7 +41,7 @@ export default function GapMapLinks({
 				data-is-mobile={isMobile}
 				className={twMerge(
 					"flex gap-2 text-lg items-center justify-center font-medium",
-					styleVariant === "wide" && "uppercase font-base"
+					styleVariant === "wide" && "font-base"
 				)}
 			>
 				<HugeiconsIcon icon={MapsIcon} className={twMerge("size-6 shrink-0", styleVariant === "wide" && "size-5")} />

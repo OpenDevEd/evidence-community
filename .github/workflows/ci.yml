@@ -98,21 +98,22 @@ jobs:
 
       - uses: ./.github/actions/setup-project
 
-      # The four checks share the runner's CPUs. Each writes its own log, printed whole once
-      # all four have finished. Fallow and ESLint keep their caches on the runner's disk, so
+      # The five checks share the runner's CPUs. Each writes its own log, printed whole once
+      # all five have finished. Fallow and ESLint keep their caches on the runner's disk, so
       # a check after a small change reads only what changed.
-      - name: Fallow, lint, type check and generated schemas
+      - name: Fallow, lint, type check, generated schemas and UI rules
         env:
           COMPARISON_SHA: ${{ steps.comparison.outputs.sha }}
         run: |
           eslint_cache="$HOME/.cache/new-el-eslint/"
           export FALLOW_CACHE_DIR="$HOME/.cache/new-el-fallow"
-          names=("Fallow" "Lint" "Type check" "Generated schemas")
+          names=("Fallow" "Lint" "Type check" "Generated schemas" "UI rules")
           commands=(
             "npx fallow audit --gate new-only --changed-since $COMPARISON_SHA --fail-on-issues --format github-annotations"
             "npm run lint -- --cache --cache-strategy content --cache-location $eslint_cache"
             "npm run typecheck"
             "npm run schema:check"
+            "npm run check:ui-rules"
           )
           pids=()
           for i in "${!names[@]}"; do
