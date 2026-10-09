@@ -93,6 +93,8 @@ The command list in `package.json` is authoritative.
 
 - Run the smallest relevant unit test while coding:
   `npm test -- <test-file>`.
+- Before every push, run `npm run quality:fallow -- --base origin/main` and fix
+  what it reports. It takes about a second, and CI blocks on the same check.
 - Run the matching type, lint, schema, browser, or real-service check only when
   its boundary changed.
 - A PR creation or update uses those targeted checks, not a full local
