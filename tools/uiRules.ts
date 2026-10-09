@@ -11,7 +11,10 @@ import ts from "typescript";
  * over the same property: Firefox then jumps back and forth as an animation
  * ends, and a Framer layout animation wobbles. Tailwind's bare `transition`
  * covers opacity and transform too, so only explicit property lists are safe
- * on animated elements. A `before:` or `after:` class styles another box.
+ * on animated elements. A `before:` or `after:` class styles another box. A
+ * class string or `cn(...)` call that clashes by itself is reported where it
+ * is written; a constant from the same file is read where className uses it;
+ * and each stylesheet rule is checked the same way.
  *
  * OpenScholar runs the same rules (scripts/check-ui-rules.mjs in
  * OpenDevEd/openalex-count); keep the two in step.
@@ -69,24 +72,63 @@ function boxes(classes: string): Map<string, string[]> {
 	return groups;
 }
 
-/** Every class list a className can produce: the two sides of `a ? b : c` never apply together. */
-function classLists(node: ts.Node | undefined, source: ts.SourceFile): string[] {
-	if (!node) return [""];
-	if (ts.isConditionalExpression(node)) return [...classLists(node.whenTrue, source), ...classLists(node.whenFalse, source)];
-	const children = node.getChildren(source);
-	if (children.length === 0) return [node.getText(source)];
-	return children.reduce<string[]>((lists, child) => {
-		const texts = classLists(child, source);
-		return lists.flatMap((list) => texts.map((text) => `${list} ${text}`));
-	}, [""]);
-}
-
 /** Whether one box both animates and transitions opacity or transform; Framer props animate the element itself. */
 function clashes(classes: string, framer: boolean): boolean {
 	return [...boxes(classes)].some(([target, tokens]) => tokens.some(transitionsMovement) && ((framer && target === "") || tokens.some(animates)));
 }
 
-type Scan = { file: string; source: ts.SourceFile; lines: string[]; loadingKeys: ReadonlySet<string>; found: string[] };
+type Scan = {
+	file: string;
+	source: ts.SourceFile;
+	lines: string[];
+	constants: Map<string, ts.Expression>;
+	loadingKeys: ReadonlySet<string>;
+	found: string[];
+};
+
+// The helpers that join their arguments into one class list; cva and tv take alternatives instead.
+const JOINERS = new Set(["cn", "clsx", "cx", "twMerge", "classNames"]);
+const joins = (node: ts.Node) => ts.isCallExpression(node) && ts.isIdentifier(node.expression) && JOINERS.has(node.expression.text);
+/** A class list written as one value: a string, a template, or a call joining classes. */
+const classValue = (node: ts.Node) => ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node) || joins(node);
+
+/** The value of a same-file variable an identifier reads, when it holds classes. */
+function constantValue(scan: Scan, node: ts.Node): ts.Expression | undefined {
+	if (!ts.isIdentifier(node) || (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) return undefined;
+	const value = scan.constants.get(node.text);
+	return value && (classValue(value) || ts.isConditionalExpression(value)) ? value : undefined;
+}
+
+/**
+ * Every class list a className can produce: the two sides of `a ? b : c`
+ * never apply together, and a same-file constant adds the classes it holds.
+ */
+function classLists(scan: Scan, node: ts.Node | undefined, seen: ReadonlySet<ts.Node> = new Set()): string[] {
+	if (!node) return [""];
+	if (ts.isConditionalExpression(node)) return [...classLists(scan, node.whenTrue, seen), ...classLists(scan, node.whenFalse, seen)];
+	const value = constantValue(scan, node);
+	// A constant that clashes by itself is reported where it is written.
+	if (value) return seen.has(value) || clashesAlone(scan, value, seen) ? [""] : classLists(scan, value, new Set([...seen, value]));
+	const children = node.getChildren(scan.source);
+	if (children.length === 0) return [node.getText(scan.source)];
+	return children.reduce<string[]>((lists, child) => {
+		const texts = classLists(scan, child, seen);
+		return lists.flatMap((list) => texts.map((text) => `${list} ${text}`));
+	}, [""]);
+}
+
+/** Whether a class value clashes by itself, wherever it is used. */
+function clashesAlone(scan: Scan, node: ts.Node, seen: ReadonlySet<ts.Node> = new Set()): boolean {
+	return classValue(node) && classLists(scan, node, new Set([...seen, node])).some((list) => clashes(list, false));
+}
+
+/** Whether a node is part of a larger class list: an element's className, a joining call, or a template. */
+function insideClassList(node: ts.Node, source: ts.SourceFile): boolean {
+	for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
+		if (joins(parent) || ts.isTemplateExpression(parent) || (ts.isJsxAttribute(parent) && parent.name.getText(source) === "className")) return true;
+	}
+	return false;
+}
 
 function report(scan: Scan, node: ts.Node, rule: Rule) {
 	const line = scan.source.getLineAndCharacterOfPosition(node.getStart(scan.source)).line;
@@ -159,12 +201,13 @@ function checkText(scan: Scan, node: ts.JsxText) {
 
 type Attributes = { classLists: string[]; framer: boolean; title: ts.JsxAttribute | null };
 
-function readAttributes(node: ts.JsxOpeningLikeElement, source: ts.SourceFile): Attributes {
+function readAttributes(node: ts.JsxOpeningLikeElement, scan: Scan): Attributes {
+	const source = scan.source;
 	const tag = node.tagName.getText(source);
 	const read: Attributes = { classLists: [""], framer: false, title: null };
 	for (const attribute of node.attributes.properties.filter(ts.isJsxAttribute)) {
 		const name = attribute.name.getText(source);
-		if (name === "className") read.classLists = classLists(attribute.initializer, source);
+		if (name === "className") read.classLists = classLists(scan, attribute.initializer);
 		if (name === "title") read.title = attribute;
 		read.framer ||= FRAMER_PROPS.has(name) && tag.startsWith("motion.");
 	}
@@ -183,30 +226,74 @@ const nativeTooltip = (node: ts.JsxOpeningLikeElement, tag: string, read: Attrib
 
 function checkElement(scan: Scan, node: ts.JsxOpeningLikeElement) {
 	const tag = node.tagName.getText(scan.source);
-	const read = readAttributes(node, scan.source);
+	const read = readAttributes(node, scan);
 	if (read.classLists.some((list) => clashes(list, read.framer))) report(scan, node, "animation-clash");
 	if (nativeTooltip(node, tag, read)) report(scan, read.title!, "native-title");
 }
 
 function visit(scan: Scan, node: ts.Node) {
+	if (classValue(node) && !insideClassList(node, scan.source) && clashesAlone(scan, node)) report(scan, node, "animation-clash");
 	if (isStringLike(node)) checkString(scan, node);
 	if (ts.isJsxText(node)) checkText(scan, node);
 	if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) checkElement(scan, node);
 	ts.forEachChild(node, (child) => visit(scan, child));
 }
 
+/** Every variable in a file with the value it starts with. */
+function constants(source: ts.SourceFile): Map<string, ts.Expression> {
+	const found = new Map<string, ts.Expression>();
+	const collect = (node: ts.Node) => {
+		if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) found.set(node.name.text, node.initializer);
+		ts.forEachChild(node, collect);
+	};
+	collect(source);
+	return found;
+}
+
 /** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
 export function sourceProblems(file: string, text: string, loadingKeys: ReadonlySet<string> = new Set()): string[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-	const scan: Scan = { file, source, lines: text.split("\n"), loadingKeys, found: [] };
+	const scan: Scan = { file, source, lines: text.split("\n"), constants: constants(source), loadingKeys, found: [] };
 	visit(scan, source);
 	return scan.found;
 }
 
-/** Uppercase declarations in one stylesheet. */
+// The words of a CSS transition that name no property.
+const TIMING = /^(ease(-in|-out|-in-out)?|linear|step-start|step-end|allow-discrete|normal|-?[\d.]+m?s)$/;
+
+/** Whether one item of a CSS transition list moves opacity or transform; an item that names no property transitions all. */
+function cssItemMoves(item: string): boolean {
+	const words = item.split(/\s+/).filter((word) => word && !TIMING.test(word));
+	return words.length === 0 || words.some((word) => MOVING.has(word));
+}
+
+/** Whether one CSS rule both animates and transitions opacity or transform. */
+function cssClashes(declarations: string): boolean {
+	const values = new Map(
+		declarations
+			.split(";")
+			.map((declaration) => declaration.split(":"))
+			.filter((parts) => parts.length > 1)
+			.map(([name, ...value]) => [name.trim().toLowerCase(), value.join(":").trim()]),
+	);
+	const animation = values.get("animation") ?? values.get("animation-name") ?? "none";
+	const transition = values.get("transition") ?? values.get("transition-property") ?? "none";
+	// Functions go first: the commas inside cubic-bezier() don't separate transitions.
+	return !/^none\b/i.test(animation) && transition.replace(/[\w-]+\([^)]*\)/g, " ").split(",").some(cssItemMoves);
+}
+
+/** Uppercase declarations, and rules that animate and transition opacity or transform, in one stylesheet. */
 export function stylesheetProblems(file: string, text: string): string[] {
 	const lines = text.split("\n");
-	return lines.flatMap((line, index) => (UPPERCASE_CSS.test(line) && !allowed(lines[index - 1], "uppercase") ? [`${file}:${index + 1} uppercase: ${FIX.uppercase}`] : []));
+	const uppercase = lines.flatMap((line, index) => (UPPERCASE_CSS.test(line) && !allowed(lines[index - 1], "uppercase") ? [`${file}:${index + 1} uppercase: ${FIX.uppercase}`] : []));
+	// Comments blanked with their newlines kept, so a brace in one can't open a rule.
+	const plain = text.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " "));
+	const clashing = [...plain.matchAll(/\{([^{}]*)\}/g)]
+		.filter((rule) => cssClashes(rule[1]))
+		.map((rule) => plain.slice(0, rule.index).split("\n").length)
+		.filter((line) => !allowed(lines[line - 2], "animation-clash"))
+		.map((line) => `${file}:${line} animation-clash: ${FIX["animation-clash"]}`);
+	return [...uppercase, ...clashing];
 }
 
 /** Every string in a messages file, with the key that holds it. */

@@ -26,6 +26,24 @@ describe("animation-clash", () => {
 		expect(rules(`export const D2 = () => <div className="before:animate-pulse before:transition-opacity">d</div>;`)).toEqual(["animation-clash"]);
 	});
 
+	it("reads class constants where they are written and where className uses them", () => {
+		expect(rules(`const FX = "animate-pulse transition-opacity";\nexport const H = () => <div className={FX} />;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const rowClass = (on: boolean) => cn("animate-in", on && "transition-opacity");`)).toEqual(["animation-clash"]);
+		expect(rules(`const card = "rounded-lg transition-all";\nexport const I = () => <motion.div layout className={card} />;`)).toEqual(["animation-clash"]);
+		expect(rules(`const FADE = "animate-in";\nexport const J = () => <div className={cn(FADE, "transition-opacity")} />;`)).toEqual(["animation-clash"]);
+		expect(rules(`const ENTER = "animate-in";\nconst MOVE = "transition-opacity";\nexport const K = ({ e }) => <div className={e ? ENTER : MOVE} />;`)).toEqual([]);
+		expect(rules(`export const button = tv({ variants: { enter: { true: "animate-in" }, move: { true: "transition-opacity" } } });`)).toEqual([]);
+	});
+
+	it("checks each stylesheet rule for the same clash", () => {
+		const css = (text: string) => stylesheetProblems("src/styles/a.module.css", text);
+		expect(css(".a {\n\tanimation: rise 200ms;\n\ttransition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);\n}")).toEqual(["src/styles/a.module.css:1 animation-clash: animates and transitions opacity or transform; put the animation on a wrapper, or transition only colours, borders and shadows."]);
+		expect(css(".a { animation: rise 200ms; transition: 150ms cubic-bezier(0.2, 0, 0, 1); }")).toHaveLength(1);
+		expect(css(".a { animation: rise 200ms; transition: color 150ms, border-color 150ms; }")).toEqual([]);
+		expect(css("@media (prefers-reduced-motion: reduce) {\n\t.a { animation: none; transition: all 1s; }\n}")).toEqual([]);
+		expect(css("/* ui-rules-allow: animation-clash -- the fade runs after the rise ends */\n.a { animation: rise 1s; transition: opacity 1s; }")).toEqual([]);
+	});
+
 	it("reads the two sides of a condition as separate class lists", () => {
 		expect(rules(`export const E = ({ entering }) => <div className={entering ? "animate-in" : "transition-opacity"}>e</div>;`)).toEqual([]);
 		expect(rules(`export const F = ({ on }) => <div className={cn("animate-in", on ? "transition-opacity" : "")}>f</div>;`)).toEqual(["animation-clash"]);
