@@ -59,7 +59,7 @@ describe("loading the body font", () => {
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		const fetch = vi.fn().mockRejectedValue(new Error("timed out"));
 		vi.stubGlobal("fetch", fetch);
-		const config = { ...base, theme: { ...base.theme, fonts: { ...base.theme.fonts, body: { source: "google" as const, family: "Retry Sans" } } } };
+		const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, theme: { ...maximalLibraryConfig.theme, fonts: { ...maximalLibraryConfig.theme.fonts, body: { source: "google", family: "Poppins" } } } });
 		try {
 			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
 			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
