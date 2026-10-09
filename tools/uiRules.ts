@@ -346,18 +346,50 @@ const cssAnimates = (animation: Declaration | undefined) => !!animation && cssLi
 const cssMoves = (transition: Declaration | undefined) =>
 	!!transition && cssList(transition[1]).some((item) => (transition[0] === "transition" ? cssItemMoves(item) : MOVING.has(item)));
 
-/** Whether one CSS rule both animates and transitions opacity or transform, through declarations or Tailwind's `@apply`. */
-function cssClashes(body: string): boolean {
-	const parts = body.split(";").map((part) => part.trim());
-	const declarations = parts
-		.map((declaration) => declaration.split(":"))
-		.filter((pieces) => pieces.length > 1)
-		.map(([name, ...value]): Declaration => [name.trim().toLowerCase(), value.join(":").trim()]);
-	// The rule's own box: `before:` utilities style a pseudo-element.
-	const applied = parts.filter((part) => part.startsWith("@apply ")).flatMap((part) => part.slice(7).split(/\s+/)).filter((token) => box(token) === "");
-	const animated = cssAnimates(cascade(declarations, ["animation", "animation-name"])) || applied.some(animates);
-	return animated && (cssMoves(cascade(declarations, ["transition", "transition-property"])) || applied.some(transitionsMovement));
+// `transition`, `transition-colors` or `transition-[opacity]`; `transition-discrete` and `transition-normal` set behaviour, not properties.
+const TRANSITION_UTILITY = /^transition(?!-(none|discrete|normal)$)(-|$)/;
+const APPLIED_NONE: Record<string, Declaration> = { "animate-none": ["animation", "none"], "transition-none": ["transition-property", "none"] };
+
+/** What one `@apply` utility sets, as the cascade sees it: an animation, or the properties a transition covers. */
+function appliedValue(token: string): Declaration | undefined {
+	const name = utility(token);
+	if (animates(token)) return ["animation", name];
+	if (TRANSITION_UTILITY.test(name)) return ["transition-property", transitionsMovement(token) ? "all" : "color"];
+	return APPLIED_NONE[name];
 }
+
+/** What one `@apply` utility declares, !important when it carries Tailwind's `!` mark. */
+function appliedDeclaration(token: string): Declaration | undefined {
+	const declaration = appliedValue(token);
+	const important = /^!|!$/.test(token.split(":").at(-1) ?? "");
+	return declaration && important ? [declaration[0], `${declaration[1]} !important`] : declaration;
+}
+
+/** The declarations an `@apply` list makes, each with the box it styles. */
+const applyList = (list: string) =>
+	list.split(/\s+/).flatMap((token): [string, Declaration][] => {
+		const declaration = appliedDeclaration(token);
+		return declaration ? [[box(token), declaration]] : [];
+	});
+
+/** One rule's declarations by the box they style, in source order; `@apply` utilities join where they're written, and `before:` ones style a pseudo-element. */
+function ruleDeclarations(body: string): Map<string, Declaration[]> {
+	const boxes = new Map<string, Declaration[]>([["", []]]);
+	const add = (target: string, declaration: Declaration) => boxes.set(target, [...(boxes.get(target) ?? []), declaration]);
+	for (const part of body.split(";").map((piece) => piece.trim())) {
+		const applied = part.match(/^@apply\s+([\s\S]+)$/)?.[1];
+		const [name, ...value] = part.split(":");
+		if (applied) for (const [target, declaration] of applyList(applied)) add(target, declaration);
+		else if (value.length) add("", [name.trim().toLowerCase(), value.join(":").trim()]);
+	}
+	return boxes;
+}
+
+/** Whether one box of a CSS rule both animates and transitions opacity or transform. */
+const cssClashes = (body: string) =>
+	[...ruleDeclarations(body).values()].some(
+		(declarations) => cssAnimates(cascade(declarations, ["animation", "animation-name"])) && cssMoves(cascade(declarations, ["transition", "transition-property"])),
+	);
 
 /** Each CSS rule's own declarations, without the rules nested in it, and where its brace opens. */
 function cssRules(text: string): { start: number; body: string }[] {

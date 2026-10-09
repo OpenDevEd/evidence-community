@@ -72,6 +72,12 @@ describe("animation-clash", () => {
 		expect(css(".a { @apply animate-pulse transition-opacity; }")).toBe(1);
 		expect(css(".a {\n\t@apply animate-pulse;\n\ttransition: opacity 1s;\n}")).toBe(1);
 		expect(css(".a { @apply scroll-mt-20 xl:scroll-mt-0 transition-opacity; }")).toBe(0);
+		expect(css(".a { @apply animate-pulse transition-opacity; animation: none; }")).toBe(0);
+		expect(css(".a { @apply animate-pulse transition-opacity; transition-property: color; }")).toBe(0);
+		expect(css(".a { @apply before:animate-pulse before:transition-opacity; }")).toBe(1);
+		expect(css(".a { @apply before:animate-pulse; transition: opacity 1s; }")).toBe(0);
+		expect(css(".a { @apply\n\tanimate-pulse\ttransition-opacity; }")).toBe(1);
+		expect(css(".a { @apply animate-pulse transition-opacity!; transition-property: color; }")).toBe(1);
 	});
 
 	it("reads the two sides of a condition as separate class lists", () => {
