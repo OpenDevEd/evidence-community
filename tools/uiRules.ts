@@ -43,6 +43,8 @@ const CLASS_NAMES = /(class(name)?(es|s)?|styles?|variants?|texttransform)$/i;
 const DOT = /[·•]|&(?:middot|bull|#183|#x0*b7|#8226|#x2022);/i;
 // A short status label ("Loading", "Loading author profile..."), not a sentence that mentions loading.
 const LOADING = /^loading\b[^.!?]{0,40}(…|\.\.\.)?$/i;
+// The translation functions: `t`, and `tc` or `tUI` for a second namespace.
+const TRANSLATE = /^t([a-z]|[A-Z]\w*)?$/;
 
 const allowed = (line: string | undefined, rule: Rule) => new RegExp(`ui-rules-allow:\\s*${rule}\\s+--\\s*\\S`).test(line ?? "");
 
@@ -67,12 +69,24 @@ function boxes(classes: string): Map<string, string[]> {
 	return groups;
 }
 
+/** Every class list a className can produce: the two sides of `a ? b : c` never apply together. */
+function classLists(node: ts.Node | undefined, source: ts.SourceFile): string[] {
+	if (!node) return [""];
+	if (ts.isConditionalExpression(node)) return [...classLists(node.whenTrue, source), ...classLists(node.whenFalse, source)];
+	const children = node.getChildren(source);
+	if (children.length === 0) return [node.getText(source)];
+	return children.reduce<string[]>((lists, child) => {
+		const texts = classLists(child, source);
+		return lists.flatMap((list) => texts.map((text) => `${list} ${text}`));
+	}, [""]);
+}
+
 /** Whether one box both animates and transitions opacity or transform; Framer props animate the element itself. */
 function clashes(classes: string, framer: boolean): boolean {
 	return [...boxes(classes)].some(([target, tokens]) => tokens.some(transitionsMovement) && ((framer && target === "") || tokens.some(animates)));
 }
 
-type Scan = { file: string; source: ts.SourceFile; lines: string[]; found: string[] };
+type Scan = { file: string; source: ts.SourceFile; lines: string[]; loadingKeys: ReadonlySet<string>; found: string[] };
 
 function report(scan: Scan, node: ts.Node, rule: Rule) {
 	const line = scan.source.getLineAndCharacterOfPosition(node.getStart(scan.source)).line;
@@ -116,12 +130,26 @@ function renderedInJsx(node: ts.Node): boolean {
 const isStringLike = (node: ts.Node): node is ts.StringLiteralLike | ts.TemplateLiteralLikeNode =>
 	ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
 
+/** The translation call a string is the key of, as in `t("loadingData")`. */
+function translationCall(node: ts.Node): ts.CallExpression | undefined {
+	const call = node.parent;
+	if (!ts.isCallExpression(call) || call.arguments[0] !== node) return undefined;
+	return ts.isIdentifier(call.expression) && TRANSLATE.test(call.expression.text) ? call : undefined;
+}
+
+/** Whether a string shows a Loading label as a JSX child: the label itself, or the key of a translated one. */
+function showsLoading(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode): boolean {
+	const whole = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
+	if (whole && LOADING.test(node.text.trim())) return renderedInJsx(node);
+	const call = translationCall(node);
+	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && renderedInJsx(call);
+}
+
 function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode) {
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	const whole = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
-	if (whole && LOADING.test(node.text.trim()) && renderedInJsx(node)) report(scan, node, "loading-text");
+	if (showsLoading(scan, node)) report(scan, node, "loading-text");
 }
 
 function checkText(scan: Scan, node: ts.JsxText) {
@@ -129,16 +157,14 @@ function checkText(scan: Scan, node: ts.JsxText) {
 	if (LOADING.test(node.text.trim())) report(scan, node, "loading-text");
 }
 
-type Attributes = { className: string; style: string; framer: boolean; title: ts.JsxAttribute | null };
+type Attributes = { classLists: string[]; framer: boolean; title: ts.JsxAttribute | null };
 
 function readAttributes(node: ts.JsxOpeningLikeElement, source: ts.SourceFile): Attributes {
 	const tag = node.tagName.getText(source);
-	const read: Attributes = { className: "", style: "", framer: false, title: null };
+	const read: Attributes = { classLists: [""], framer: false, title: null };
 	for (const attribute of node.attributes.properties.filter(ts.isJsxAttribute)) {
 		const name = attribute.name.getText(source);
-		const value = attribute.initializer?.getText(source) ?? "";
-		if (name === "className") read.className = value;
-		if (name === "style") read.style = value;
+		if (name === "className") read.classLists = classLists(attribute.initializer, source);
 		if (name === "title") read.title = attribute;
 		read.framer ||= FRAMER_PROPS.has(name) && tag.startsWith("motion.");
 	}
@@ -152,13 +178,13 @@ const TITLED_ELEMENTS = new Set(["iframe", "link"]);
 /** Whether an element shows nothing a pointer could rest on: self-closing, or only whitespace inside. */
 const empty = (node: ts.JsxOpeningLikeElement) =>
 	ts.isJsxSelfClosingElement(node) || (ts.isJsxElement(node.parent) && node.parent.children.every((child) => ts.isJsxText(child) && child.text.trim() === ""));
-const unApi = (node: ts.JsxOpeningLikeElement, tag: string, className: string) => tag === "abbr" && /(?:^|[\s"'`])unapi-id(?=$|[\s"'`])/.test(className) && empty(node);
-const nativeTooltip = (node: ts.JsxOpeningLikeElement, tag: string, read: Attributes) => !!read.title && /^[a-z]/.test(tag) && !TITLED_ELEMENTS.has(tag) && !unApi(node, tag, read.className);
+const unApi = (node: ts.JsxOpeningLikeElement, tag: string, lists: string[]) => tag === "abbr" && lists.every((list) => /(?:^|[\s"'`])unapi-id(?=$|[\s"'`])/.test(list)) && empty(node);
+const nativeTooltip = (node: ts.JsxOpeningLikeElement, tag: string, read: Attributes) => !!read.title && /^[a-z]/.test(tag) && !TITLED_ELEMENTS.has(tag) && !unApi(node, tag, read.classLists);
 
 function checkElement(scan: Scan, node: ts.JsxOpeningLikeElement) {
 	const tag = node.tagName.getText(scan.source);
 	const read = readAttributes(node, scan.source);
-	if (clashes(read.className, read.framer)) report(scan, node, "animation-clash");
+	if (read.classLists.some((list) => clashes(list, read.framer))) report(scan, node, "animation-clash");
 	if (nativeTooltip(node, tag, read)) report(scan, read.title!, "native-title");
 }
 
@@ -169,10 +195,10 @@ function visit(scan: Scan, node: ts.Node) {
 	ts.forEachChild(node, (child) => visit(scan, child));
 }
 
-/** The problems in one .ts or .tsx file. */
-export function sourceProblems(file: string, text: string): string[] {
+/** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
+export function sourceProblems(file: string, text: string, loadingKeys: ReadonlySet<string> = new Set()): string[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-	const scan: Scan = { file, source, lines: text.split("\n"), found: [] };
+	const scan: Scan = { file, source, lines: text.split("\n"), loadingKeys, found: [] };
 	visit(scan, source);
 	return scan.found;
 }
@@ -199,4 +225,16 @@ export function messageProblems(file: string, text: string): string[] {
 	return strings(JSON.parse(text), "")
 		.filter(([, value]) => DOT.test(value))
 		.map(([key]) => `${file}:${lines.findIndex((line) => line.includes(`"${key}"`)) + 1} dot-separator: ${FIX["dot-separator"]}`);
+}
+
+/**
+ * The message keys that are Loading labels, so a translated label is caught
+ * where it is rendered. A key counts only when every message of that name is
+ * one, since the namespace a call reads from isn't known here.
+ */
+export function loadingKeys(text: string): string[] {
+	const messages = strings(JSON.parse(text), "");
+	const loading = ([, value]: [string, string]) => LOADING.test(value.trim());
+	const other = new Set(messages.filter((message) => !loading(message)).map(([key]) => key));
+	return messages.filter((message) => loading(message) && !other.has(message[0])).map(([key]) => key);
 }

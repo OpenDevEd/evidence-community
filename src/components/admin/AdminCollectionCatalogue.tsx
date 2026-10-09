@@ -1559,6 +1559,7 @@ export function AdminCollectionCatalogue({
 									) : null
 								) : (
 									<button
+										aria-busy={row.kind === "loading" || undefined}
 										aria-disabled={row.kind === "loading"}
 										className={`flex h-full w-full items-center gap-2 rounded-lg px-3 text-left text-[11px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${row.kind === "loading" ? "cursor-wait text-black/35 dark:text-white/35" : "text-accent-300 hover:bg-accent/[0.08] dark:text-accent-700"}`}
 										aria-level={row.depth + 1}

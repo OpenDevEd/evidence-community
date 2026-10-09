@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { messageProblems, sourceProblems, stylesheetProblems } from "../../tools/uiRules";
+import { loadingKeys, messageProblems, sourceProblems, stylesheetProblems } from "../../tools/uiRules";
 
-const rules = (code: string) => sourceProblems("src/components/Example.tsx", code).map((problem) => problem.split(" ")[1].replace(":", ""));
+const rules = (code: string, loading = new Set<string>()) =>
+	sourceProblems("src/components/Example.tsx", code, loading).map((problem) => problem.split(" ")[1].replace(":", ""));
 
 describe("animation-clash", () => {
 	it("catches an animated element that also transitions opacity or transform", () => {
@@ -23,6 +24,12 @@ describe("animation-clash", () => {
 		expect(rules(`export const C = () => <motion.div variants={items} className="border transition-colors">c</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D = () => <motion.div animate={{ opacity: 1 }} className="before:opacity-100 before:transition-opacity">d</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D2 = () => <div className="before:animate-pulse before:transition-opacity">d</div>;`)).toEqual(["animation-clash"]);
+	});
+
+	it("reads the two sides of a condition as separate class lists", () => {
+		expect(rules(`export const E = ({ entering }) => <div className={entering ? "animate-in" : "transition-opacity"}>e</div>;`)).toEqual([]);
+		expect(rules(`export const F = ({ on }) => <div className={cn("animate-in", on ? "transition-opacity" : "")}>f</div>;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const G = ({ on }) => <div className={on ? \`animate-in \${on && "transition-all"}\` : "border"}>g</div>;`)).toEqual(["animation-clash"]);
 	});
 });
 
@@ -75,6 +82,15 @@ describe("loading-text", () => {
 		expect(rules(`export const R = () => <span>Loading topics...</span>;`)).toEqual(["loading-text"]);
 		expect(rules(`export const S = ({ pending, value }) => <span>{pending ? "Loading…" : value}</span>;`)).toEqual(["loading-text"]);
 		expect(rules("export const S2 = () => <span>{`Loading...`}</span>;")).toEqual(["loading-text"]);
+	});
+
+	it("catches a translated Loading label where it is rendered, not where it names a spinner", () => {
+		const loading = new Set(loadingKeys('{ "Items": { "loadingData": "Loading Data", "retry": "Retry" }, "A": { "status": "Loading…" }, "B": { "status": "Ready" } }'));
+		expect(loading).toEqual(new Set(["loadingData"]));
+		expect(rules(`export const T1 = ({ t }) => <p role="status">{t("loadingData")}</p>;`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export const T2 = ({ tUI }) => <p>{busy && tUI("Items.loadingData")}</p>;`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export const T3 = ({ t }) => <div role="status" aria-label={t("loadingData")}><Spinner /></div>;`, loading)).toEqual([]);
+		expect(rules(`export const T4 = ({ t }) => <p>{t("retry")}</p>;`, loading)).toEqual([]);
 	});
 
 	it("lets Loading pass as an attribute, a condition or a sentence", () => {

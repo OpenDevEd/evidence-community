@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
+import { Spinner } from "@/components/nextui/Spinner";
 import { twMerge } from "@/lib/tw-merge";
 import { CITATION_FORMATS, type CitationStyle } from "@/lib/citation-formats";
 import {
@@ -237,13 +238,10 @@ function StyleMenu({
 					})}
 				</div>
 			</div>
-			{isLoading && (
-				<p
-					role="status"
-					className="px-4 py-3 text-sm text-black/50 dark:text-white/50"
-				>
-					{t("loadingData")}
-				</p>
+			{isLoading && matches.length === 0 && (
+				<div role="status" aria-label={t("loadingData")} className="flex justify-center px-4 py-3">
+					<Spinner size="sm" aria-hidden="true" />
+				</div>
 			)}
 			{error && (
 				<div role="alert" className="px-4 py-3 text-sm">
