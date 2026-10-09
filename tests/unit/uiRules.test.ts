@@ -85,6 +85,11 @@ describe("animation-clash", () => {
 		expect(css(".a { @apply animate-pulse transition-opacity hover:animate-none; }")).toBe(1);
 		expect(css(".a { @apply transition-opacity hover:animate-pulse; }")).toBe(1);
 		expect(css(".a { @apply animate-pulse hover:transition-colors; }")).toBe(0);
+		expect(css(".a { @apply dark:animate-spin dark:hover:transition; }")).toBe(1);
+		expect(css(".a { @apply dark:animate-spin hover:transition; }")).toBe(1);
+		expect(css(".a { @apply motion-safe:animate-spin motion-reduce:transition-opacity; }")).toBe(0);
+		expect(css(".a { @apply md:animate-spin max-md:transition-opacity; }")).toBe(0);
+		expect(css(".a { @apply enabled:animate-spin disabled:transition-opacity; }")).toBe(0);
 	});
 
 	it("reads the two sides of a condition as separate class lists", () => {
@@ -155,9 +160,36 @@ describe("loading-text", () => {
 		expect(rules(`export const T5 = ({ t }) => <p>{t("loading")}</p>;`, new Set(loadingKeys('{ "Common": { "loading": "Loading…" } }')))).toEqual(["loading-text"]);
 	});
 
+	it("follows a Loading label into a variable or property the file renders, and finds translators by binding", () => {
+		const loading = new Set(["loading"]);
+		expect(rules(`export function A({ t }) {\n\tconst status = t("loading");\n\treturn <p>{status}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function B({ t }) {\n\tconst config = { caption: t("loading") };\n\treturn <p>{config.caption}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function C({ t }) {\n\tconst label = t("loading");\n\treturn <Spinner aria-label={label} />;\n}`, loading)).toEqual([]);
+		expect(rules(`export function D() {\n\tconst status = "Loading…";\n\treturn <p>{status}</p>;\n}`)).toEqual(["loading-text"]);
+		expect(rules(`export function E() {\n\tconst tcc = useTranslations("common");\n\treturn <p>{tcc("loading")}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export async function F() {\n\tconst common = await getTranslations("common");\n\treturn <p>{common("loading")}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function G() {\n\tconst tool = (key) => key;\n\treturn <p>{tool("loading")}</p>;\n}`, loading)).toEqual([]);
+		expect(rules(`export function H() {\n\treturn <p>{useTranslations("ui")("loading")}</p>;\n}`, loading)).toEqual(["loading-text"]);
+	});
+
+	it("follows the binding a label is stored in, never its name elsewhere or a condition", () => {
+		const loading = new Set(["loading"]);
+		expect(rules(`export function A({ t }) {\n\tconst status = t("loading");\n\treturn <Spinner aria-label={status} />;\n}\nexport function B({ value }) {\n\tconst status = value;\n\treturn <p>{status}</p>;\n}`, loading)).toEqual([]);
+		expect(rules(`export function C({ t }) {\n\tconst label = t("loading");\n\treturn <span className="sr-only">{label}</span>;\n}`, loading)).toEqual([]);
+		expect(rules(`export function D({ t }) {\n\tconst status = t("loading");\n\treturn <p>{status && <Spinner />}</p>;\n}`, loading)).toEqual([]);
+		expect(rules(`export function E({ t }) {\n\tconst status = t("loading") as string;\n\treturn <p>{status}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function F({ t }) {\n\tconst first = t("loading");\n\tconst second = first;\n\treturn <p>{second}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function G({ t }) {\n\tlet status;\n\tstatus = t("loading");\n\treturn <p>{status}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function H({ t, value }) {\n\tconst hidden = { label: t("loading") };\n\tconst seen = { label: value };\n\treturn <p aria-label={hidden.label}>{seen.label}</p>;\n}`, loading)).toEqual([]);
+		expect(rules(`export function I({ t, busy }) {\n\tconst config = () => (busy ? { label: t("loading") } : { label: "Go" });\n\tconst button = config();\n\treturn <button>{button.label}</button>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function J({ t }) {\n\treturn <p>{t.rich("loading", { b: (chunks) => <b>{chunks}</b> })}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function K({ t }) {\n\treturn <span className="sr-only md:not-sr-only">{t("loading")}</span>;\n}`, loading)).toEqual(["loading-text"]);
+	});
+
 	it("lets text only screen readers get name a spinner", () => {
 		expect(rules(`export const T6 = () => <span className="sr-only">Loading…</span>;`)).toEqual([]);
 		expect(rules(`export const T7 = ({ t }) => <span className="sr-only">{t("loadingData")}</span>;`, new Set(["loadingData"]))).toEqual([]);
+		expect(rules(`export const T8 = ({ hidden }) => <span className={hidden ? "sr-only" : ""}>Loading…</span>;`)).toEqual(["loading-text"]);
 	});
 
 	it("lets Loading pass as an attribute, a condition or a sentence", () => {

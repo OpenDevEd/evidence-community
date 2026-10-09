@@ -97,6 +97,8 @@ type Scan = {
 	// The class lists each constant adds, read once.
 	lists: Map<ts.Node, string[]>;
 	loadingKeys: ReadonlySet<string>;
+	// What the file renders as text: the variables, and the properties within each top-level declaration.
+	rendered: Rendered;
 	found: string[];
 };
 
@@ -116,14 +118,20 @@ function boundNames(name: ts.BindingName): string[] {
 const declares = (block: ts.Block | ts.SourceFile, name: string) =>
 	block.statements.flatMap((statement) => (ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])).find((declaration) => boundNames(declaration.name).includes(name));
 
-/** The value an identifier's variable starts with, found as scopes resolve it; a parameter or a destructured name has none. */
-function declaredValue(node: ts.Identifier): ts.Expression | undefined {
+/** The variable an identifier reads, found as scopes resolve it; a parameter has none. */
+function declarationOf(node: ts.Identifier): ts.VariableDeclaration | undefined {
 	for (let scope: ts.Node | undefined = node.parent; scope; scope = scope.parent) {
 		if (ts.isFunctionLike(scope) && scope.parameters.some((parameter) => boundNames(parameter.name).includes(node.text))) return undefined;
 		const declaration = ts.isBlock(scope) || ts.isSourceFile(scope) ? declares(scope, node.text) : undefined;
-		if (declaration) return ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
+		if (declaration) return declaration;
 	}
 	return undefined;
+}
+
+/** The value an identifier's variable starts with; a parameter or a destructured name has none. */
+function declaredValue(node: ts.Identifier): ts.Expression | undefined {
+	const declaration = declarationOf(node);
+	return declaration && ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
 }
 
 /** An expression without `( )`, `as`, `satisfies` or `!` around it. */
@@ -220,61 +228,167 @@ function classContext(node: ts.Node, source: ts.SourceFile): boolean {
 
 const RENDERING_OPERATORS = [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken];
 
-/** Whether a value passes through this parent unchanged on its way to being rendered. */
+const typeOnly = (node: ts.Node) => ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node);
+
+/** Whether a value passes through this parent on its way to being rendered: `a && b` shows only b, a is its condition. */
 function passesThrough(parent: ts.Node, child: ts.Node): boolean {
-	if (ts.isParenthesizedExpression(parent)) return true;
+	if (typeOnly(parent)) return true;
 	if (ts.isConditionalExpression(parent)) return parent.condition !== child;
-	return ts.isBinaryExpression(parent) && RENDERING_OPERATORS.includes(parent.operatorToken.kind);
+	if (!ts.isBinaryExpression(parent) || !RENDERING_OPERATORS.includes(parent.operatorToken.kind)) return false;
+	return parent.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken || parent.right === child;
 }
 
-/** Whether a string is rendered as a JSX child, directly or through a condition. */
-function renderedInJsx(node: ts.Node): boolean {
+/** The node a value lands in once it passes through parentheses and conditions. */
+function destination(node: ts.Node): ts.Node | undefined {
 	let child = node;
-	for (let parent = node.parent; parent; child = parent, parent = parent.parent) {
-		if (ts.isJsxExpression(parent)) return !ts.isJsxAttribute(parent.parent);
-		if (!passesThrough(parent, child)) return false;
+	let parent = node.parent;
+	while (parent && passesThrough(parent, child)) {
+		child = parent;
+		parent = parent.parent;
 	}
-	return false;
+	return parent;
+}
+
+/** Whether a value is rendered as a JSX child, directly or through a condition. */
+function renderedInJsx(node: ts.Node): boolean {
+	const target = destination(node);
+	return !!target && ts.isJsxExpression(target) && !ts.isJsxAttribute(target.parent);
+}
+
+type Rendered = { variables: Set<ts.VariableDeclaration>; properties: Set<string> };
+
+/** The statement directly in the file that holds a node: properties are matched by name only within it. */
+function topLevel(node: ts.Node): ts.Node {
+	let current = node;
+	while (current.parent && !ts.isSourceFile(current.parent)) current = current.parent;
+	return current;
+}
+
+/** The key a rendered property is matched by: its object's variable when the object is written into one (`const config = { label }`), otherwise its name within the top-level declaration, for an object a function returns. */
+function propertyKey(holder: ts.Node, name: string): string {
+	return ts.isVariableDeclaration(holder) ? `variable ${holder.pos}:${name}` : `top ${topLevel(holder).pos}:${name}`;
+}
+
+/** The variable an object literal is written into, or the object itself when it goes elsewhere. */
+function objectHolder(object: ts.Node): ts.Node {
+	const target = destination(object);
+	return target && ts.isVariableDeclaration(target) ? target : object;
+}
+
+/** The variable a rendered `object.property` reads its object from, when that object is a literal written into it. */
+function readObjectHolder(access: ts.PropertyAccessExpression): ts.Node {
+	const base = unwrap(access.expression);
+	const declaration = ts.isIdentifier(base) ? declarationOf(base) : undefined;
+	const value = declaration?.initializer && unwrap(declaration.initializer);
+	return declaration && value && ts.isObjectLiteralExpression(value) ? declaration : access;
+}
+
+/** Marks a rendered variable, and the variables it was copied from (`const b = a`). */
+function markVariable(variables: Set<ts.VariableDeclaration>, node: ts.Identifier) {
+	for (let declaration = declarationOf(node); declaration && !variables.has(declaration); ) {
+		variables.add(declaration);
+		const value = declaration.initializer && unwrap(declaration.initializer);
+		declaration = value && ts.isIdentifier(value) ? declarationOf(value) : undefined;
+	}
+}
+
+/** What a file renders as text: `{status}` marks the variable `status`, `{config.label}` the property `label` in that top-level declaration. Screen-reader-only text marks nothing. */
+function renderedValues(scan: Scan): Rendered {
+	const rendered: Rendered = { variables: new Set(), properties: new Set() };
+	const collect = (node: ts.Node) => {
+		const visible = (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) && renderedInJsx(node) && !screenReaderOnly(scan, node);
+		if (visible && ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node.parent)) markVariable(rendered.variables, node);
+		if (visible && ts.isPropertyAccessExpression(node)) rendered.properties.add(propertyKey(readObjectHolder(node), node.name.text));
+		ts.forEachChild(node, collect);
+	};
+	collect(scan.source);
+	return rendered;
+}
+
+/** The variable or property a value is assigned to after its declaration: `status = value`, `config.label = value`. */
+function assignedTo(target: ts.Node, value: ts.Node): string | ts.VariableDeclaration | undefined {
+	if (!ts.isBinaryExpression(target) || target.operatorToken.kind !== ts.SyntaxKind.EqualsToken || target.right !== value) return undefined;
+	const left = unwrap(target.left);
+	if (ts.isIdentifier(left)) return declarationOf(left);
+	return ts.isPropertyAccessExpression(left) ? propertyKey(readObjectHolder(left), left.name.text) : undefined;
+}
+
+/** Whether a value is shown as text: rendered as a JSX child, or held in a variable or property the file renders. */
+function shown(scan: Scan, node: ts.Node): boolean {
+	const target = destination(node);
+	if (!target) return false;
+	if (ts.isJsxExpression(target)) return !ts.isJsxAttribute(target.parent);
+	if (ts.isVariableDeclaration(target)) return scan.rendered.variables.has(target);
+	if (ts.isPropertyAssignment(target)) return scan.rendered.properties.has(propertyKey(objectHolder(target.parent), target.name.getText(scan.source)));
+	const assigned = assignedTo(target, destinationChild(node, target));
+	return typeof assigned === "string" ? scan.rendered.properties.has(assigned) : !!assigned && scan.rendered.variables.has(assigned);
+}
+
+/** The child of `target` that a value travelled through to reach it. */
+function destinationChild(node: ts.Node, target: ts.Node): ts.Node {
+	let child = node;
+	while (child.parent && child.parent !== target) child = child.parent;
+	return child;
 }
 
 const isStringLike = (node: ts.Node): node is ts.StringLiteralLike | ts.TemplateLiteralLikeNode =>
 	ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
 
+const TRANSLATION_APIS = new Set(["useTranslations", "getTranslations"]);
+
+/** Whether an expression makes a translator: `useTranslations(...)`, or `await getTranslations(...)`. */
+function translationFactory(node: ts.Expression | undefined): boolean {
+	const value = node && unwrap(node);
+	const call = value && (ts.isAwaitExpression(value) ? unwrap(value.expression) : value);
+	return !!call && ts.isCallExpression(call) && ts.isIdentifier(call.expression) && TRANSLATION_APIS.has(call.expression.text);
+}
+
+// next-intl's ways to read a message besides calling the translator: `t.rich("key")`, `t.markup("key")`, `t.raw("key")`.
+const TRANSLATION_METHODS = new Set(["rich", "markup", "raw"]);
+
+/** Whether a called expression translates: named like `t`, `tc` or `tUI`, bound to a translation factory, one called directly, or one of its message methods. */
+function translates(callee: ts.Expression): boolean {
+	if (ts.isPropertyAccessExpression(callee)) return TRANSLATION_METHODS.has(callee.name.text) && translates(callee.expression);
+	if (!ts.isIdentifier(callee)) return translationFactory(callee);
+	return TRANSLATE.test(callee.text) || translationFactory(declaredValue(callee));
+}
+
 /** The translation call a string is the key of, as in `t("loadingData")`. */
 function translationCall(node: ts.Node): ts.CallExpression | undefined {
 	const call = node.parent;
 	if (!ts.isCallExpression(call) || call.arguments[0] !== node) return undefined;
-	return ts.isIdentifier(call.expression) && TRANSLATE.test(call.expression.text) ? call : undefined;
+	return translates(call.expression) ? call : undefined;
 }
 
-/** Whether a node sits in an element only screen readers get, where a Loading label names a spinner. */
-function screenReaderOnly(node: ts.Node, source: ts.SourceFile): boolean {
+/** Whether a node sits in an element only screen readers get, in every class its condition can give, where a Loading label names a spinner. */
+function screenReaderOnly(scan: Scan, node: ts.Node): boolean {
 	for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
 		if (!ts.isJsxElement(parent)) continue;
-		const className = parent.openingElement.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "className");
-		return SR_ONLY.test(className?.getText(source) ?? "");
+		const className = parent.openingElement.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(scan.source) === "className");
+		// `not-sr-only` under any variant shows the text again, as `sr-only md:not-sr-only` does on wide screens.
+		return classLists(scan, className && ts.isJsxAttribute(className) ? className.initializer : undefined).every((list) => SR_ONLY.test(list) && !/not-sr-only/.test(list));
 	}
 	return false;
 }
 
-/** Whether a string shows a Loading label as a JSX child: the label itself, or the key of a translated one. */
+/** Whether a string shows a Loading label as text: the label itself, or the key of a translated one. */
 function showsLoading(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode): boolean {
 	const whole = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
-	if (whole && LOADING.test(node.text.trim()) && renderedInJsx(node)) return true;
+	if (whole && LOADING.test(node.text.trim()) && shown(scan, node)) return true;
 	const call = translationCall(node);
-	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && renderedInJsx(call);
+	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && shown(scan, call);
 }
 
 function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode) {
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (showsLoading(scan, node) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
+	if (showsLoading(scan, node) && !screenReaderOnly(scan, node)) report(scan, node, "loading-text");
 }
 
 function checkText(scan: Scan, node: ts.JsxText) {
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (LOADING.test(node.text.trim()) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
+	if (LOADING.test(node.text.trim()) && !screenReaderOnly(scan, node)) report(scan, node, "loading-text");
 }
 
 /** Whether a Framer prop is set to a literal false (`layout={false}`), which turns its animation off. */
@@ -324,7 +438,8 @@ function visit(scan: Scan, node: ts.Node) {
 /** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
 export function sourceProblems(file: string, text: string, loadingKeys: ReadonlySet<string> = new Set()): string[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, found: [] };
+	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, rendered: { variables: new Set(), properties: new Set() }, found: [] };
+	scan.rendered = renderedValues(scan);
 	visit(scan, source);
 	return scan.found;
 }
@@ -402,7 +517,8 @@ function applyList(list: string): [string, Declaration][] {
  * One rule's declarations, in source order, for each box and variant they
  * apply under; `@apply` utilities join where they're written. A variant
  * (`hover:animate-none`) adds to its box's own declarations, never replaces
- * them outside that state.
+ * them outside that state; each box is also checked with each pair of its
+ * states together, unless they can never hold at once.
  */
 function ruleDeclarations(body: string): Declaration[][] {
 	const scopes = new Map<string, Declaration[]>([["|", []]]);
@@ -413,7 +529,40 @@ function ruleDeclarations(body: string): Declaration[][] {
 		if (applied) for (const [key, declaration] of applyList(applied)) add(key, declaration);
 		else if (value.length) add("|", [name.trim().toLowerCase(), value.join(":").trim()]);
 	}
-	return [...scopes].map(([key, declarations]) => (key.endsWith("|") ? declarations : [...(scopes.get(`${key.split("|")[0]}|`) ?? []), ...declarations]));
+	const keys = [...scopes.keys()];
+	return keys.flatMap((key) =>
+		keys
+			.filter((other) => boxOf(other) === boxOf(key))
+			.map((other) => [...new Set([...variantsOf(key), ...variantsOf(other)])])
+			.filter(compatible)
+			.map((variants) => scopeDeclarations(scopes, key, variants)),
+	);
+}
+
+const variantsOf = (key: string) => key.split("|")[1].split(":").filter(Boolean);
+const boxOf = (key: string) => key.split("|")[0];
+// Variants that never hold at once; a breakpoint never holds with its `max-` form either.
+const EXCLUSIVE = [
+	["motion-safe", "motion-reduce"],
+	["portrait", "landscape"],
+	["ltr", "rtl"],
+	["dark", "light"],
+	["enabled", "disabled"],
+	["required", "optional"],
+	["valid", "invalid"],
+	["user-valid", "user-invalid"],
+	["in-range", "out-of-range"],
+];
+/** Whether variants can all hold at once, as `dark:` and `hover:` do when the page is dark and hovered. */
+const compatible = (variants: string[]) =>
+	!EXCLUSIVE.some(([a, b]) => variants.includes(a) && variants.includes(b)) && !variants.some((variant) => variants.includes(`max-${variant}`));
+
+/** A box's declarations under these variants: each state on top of every less specific state it includes, `dark:hover:` on `dark:` on the base. */
+function scopeDeclarations(scopes: Map<string, Declaration[]>, key: string, variants: string[]): Declaration[] {
+	return [...scopes]
+		.filter(([other]) => boxOf(other) === boxOf(key) && variantsOf(other).every((variant) => variants.includes(variant)))
+		.sort(([a], [b]) => variantsOf(a).length - variantsOf(b).length)
+		.flatMap(([, declarations]) => declarations);
 }
 
 /** Whether one box of a CSS rule, in any state, both animates and transitions opacity or transform. */
