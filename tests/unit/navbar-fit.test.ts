@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
-import { navbarFitCss, navbarWidths } from "@/lib/navbar-fit";
+import { computeNavbarFit, navbarFitCss, navbarWidths } from "@/lib/navbar-fit";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 
 const base = libraryConfigSchema.parse(maximalLibraryConfig);
@@ -50,5 +50,26 @@ describe("header widths", () => {
 		expect(navbarFitCss(null, 1)).not.toContain("1536px");
 		const two = navbarFitCss(null, 2);
 		expect(two.indexOf("1280px")).toBeLessThan(two.indexOf("1536px"));
+	});
+});
+
+describe("loading the body font", () => {
+	it("tries a failed load again a minute later, not on every page in between", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const fetch = vi.fn().mockRejectedValue(new Error("timed out"));
+		vi.stubGlobal("fetch", fetch);
+		const config = { ...base, theme: { ...base.theme, fonts: { ...base.theme.fonts, body: { source: "google" as const, family: "Retry Sans" } } } };
+		try {
+			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(fetch).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(fetch).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.unstubAllGlobals();
+			vi.useRealTimers();
+		}
 	});
 });

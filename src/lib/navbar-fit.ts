@@ -37,6 +37,12 @@ const LOGO_MAX_WIDTH = 192; // max-w-logo-header (12rem)
 const SAFETY = 8;
 
 const fontCache = new Map<string, Promise<string | null>>();
+/**
+ * A failed load is tried again after this long. A slow font server on a
+ * worker's first page would otherwise leave the header on the fixed
+ * breakpoints until the process restarts.
+ */
+const FONT_RETRY_MS = 60_000;
 
 /** Registers a Google font weight with the canvas and answers its alias. */
 function loadGoogleFont(family: string, weight: number) {
@@ -61,6 +67,9 @@ function loadGoogleFont(family: string, weight: number) {
 			return alias;
 		})().catch(() => null);
 		fontCache.set(key, pending);
+		void pending.then((alias) => {
+			if (!alias) setTimeout(() => fontCache.delete(key), FONT_RETRY_MS).unref();
+		});
 	}
 	return pending;
 }
