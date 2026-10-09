@@ -603,30 +603,36 @@ function InlineChatColumn({
 }) {
 	const { theme } = useLibraryConfig();
 	return (
+		// The column enters with an animation and leaves with a transition, on
+		// two elements: on one they fight over opacity and transform, and
+		// Firefox jumps when the animation ends.
 		<div
 			inert={!engaged || undefined}
 			className={twMerge(
-				"min-w-0 origin-bottom animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 lg:sticky lg:top-[4.75rem] motion-reduce:animate-none motion-reduce:transition-none lg:col-start-1 lg:row-start-1",
+				"min-w-0 origin-bottom animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 lg:sticky lg:top-[4.75rem] motion-reduce:animate-none lg:col-start-1 lg:row-start-1",
 
 				theme.layout === "small"
 					? "xl:top-[8.125rem]"
 					: "xl:top-[6.5rem]",
 
 				"lg:overflow-hidden",
-
-				"transition-[opacity,transform] ease-in",
-
-				engaged
-					? "opacity-100"
-					: "pointer-events-none translate-y-6 scale-[0.97] opacity-0",
 			)}
 		>
-			<div className="lg:ms-auto lg:w-[calc((100cqw-1.5rem)*5/9)] xl:w-[calc((100cqw-2rem)*5/9)]">
-				<InlineLibraryChat
-					key={modelId}
-					modelId={modelId}
-					searchContext={searchContext}
-				/>
+			<div
+				className={twMerge(
+					"origin-bottom transition-[opacity,transform] duration-300 ease-in motion-reduce:transition-none",
+					engaged
+						? "opacity-100"
+						: "pointer-events-none translate-y-6 scale-[0.97] opacity-0",
+				)}
+			>
+				<div className="lg:ms-auto lg:w-[calc((100cqw-1.5rem)*5/9)] xl:w-[calc((100cqw-2rem)*5/9)]">
+					<InlineLibraryChat
+						key={modelId}
+						modelId={modelId}
+						searchContext={searchContext}
+					/>
+				</div>
 			</div>
 		</div>
 	);

@@ -10,6 +10,13 @@ describe("animation-clash", () => {
 		expect(rules(`export const B = () => <motion.div variants={items} className="border transition-all">b</motion.div>;`)).toEqual(["animation-clash"]);
 	});
 
+	it("catches arbitrary transition lists and the built-in animations", () => {
+		expect(rules(`export const W = () => <div className="animate-in transition-[opacity,transform]">w</div>;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const X = () => <div className="animate-pulse transition-opacity">x</div>;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const Y = () => <div className="animate-spin transition-[color,background-color]">y</div>;`)).toEqual([]);
+		expect(rules(`export const Z = () => <div className="animate-none transition-opacity">z</div>;`)).toEqual([]);
+	});
+
 	it("lets an animated element transition only colours, and a pseudo-element transition its own opacity", () => {
 		expect(rules(`export const C = () => <motion.div variants={items} className="border transition-colors">c</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D = () => <motion.div animate={{ opacity: 1 }} className="before:opacity-100 before:transition-opacity">d</motion.div>;`)).toEqual([]);
@@ -35,6 +42,7 @@ describe("native-title", () => {
 	it("catches a native tooltip on a built-in element", () => {
 		expect(rules(`export const G = () => <button title="Save">g</button>;`)).toEqual(["native-title"]);
 		expect(rules(`export const H = () => <abbr className="notunapi-id" title="x">h</abbr>;`)).toEqual(["native-title"]);
+		expect(rules(`export const H2 = () => <abbr className="unapi-id" title="Record key">Record</abbr>;`)).toEqual(["native-title"]);
 	});
 
 	it("lets components, iframes, links and the empty unAPI record key keep a title", () => {
@@ -63,6 +71,7 @@ describe("loading-text", () => {
 	it("catches a short Loading label as JSX text or a rendered string", () => {
 		expect(rules(`export const R = () => <span>Loading topics...</span>;`)).toEqual(["loading-text"]);
 		expect(rules(`export const S = ({ pending, value }) => <span>{pending ? "Loading…" : value}</span>;`)).toEqual(["loading-text"]);
+		expect(rules("export const S2 = () => <span>{`Loading...`}</span>;")).toEqual(["loading-text"]);
 	});
 
 	it("lets Loading pass as an attribute, a condition or a sentence", () => {

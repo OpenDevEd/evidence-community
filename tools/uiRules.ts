@@ -27,8 +27,12 @@ const FIX: Record<Rule, string> = {
 	"loading-text": 'no "Loading" text; show a spinner, or hold the final size until the data is there.',
 };
 
-const TRANSITION = /(?:^|[\s"'`])(?:[\w-]+:)*transition(?:-all|-opacity|-transform)?(?=$|[\s"'`])/;
-const CSS_ANIMATION = /(?:^|[\s"'`])(?:[\w[\]=-]+:)*(animate-in|animate-out|fade-enter|animate-(?!none|spin|pulse|ping|bounce)[\w[\]-]+)/;
+// Bare `transition` and `transition-all` cover opacity and transform too; an
+// arbitrary list counts when it names either.
+const TRANSITION = /(?:^|[\s"'`])(?:[\w-]+:)*transition(?:-all|-opacity|-transform|-\[[^\]]*(?:opacity|transform|translate|scale|rotate|all)[^\]]*\])?(?=$|[\s"'`])/;
+// Every animation counts, the built-in spin, pulse, ping and bounce too: they
+// animate transform or opacity.
+const CSS_ANIMATION = /(?:^|[\s"'`])(?:[\w[\]=-]+:)*(fade-enter|animate-(?!none(?=$|[\s"'`]))[\w[\]-]+)/;
 // Variants that style a pseudo-element, a different box from the element itself.
 const PSEUDO_ELEMENT = /(^|:)(before|after|placeholder|file|marker|selection|first-letter|first-line|backdrop):/;
 const FRAMER_PROPS = new Set(["initial", "animate", "exit", "layout", "layoutId", "variants", "whileHover", "whileTap", "whileInView", "whileFocus", "whileDrag"]);
@@ -101,7 +105,8 @@ function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteral
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (ts.isStringLiteral(node) && LOADING.test(node.text.trim()) && renderedInJsx(node)) report(scan, node, "loading-text");
+	const whole = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
+	if (whole && LOADING.test(node.text.trim()) && renderedInJsx(node)) report(scan, node, "loading-text");
 }
 
 function checkText(scan: Scan, node: ts.JsxText) {
@@ -129,15 +134,18 @@ function readAttributes(node: ts.JsxOpeningLikeElement, source: ts.SourceFile): 
 // names the resource it points to, and the empty unAPI abbr carries a record
 // key for Zotero; none of them is a tooltip.
 const TITLED_ELEMENTS = new Set(["iframe", "link"]);
-const unApi = (tag: string, className: string) => tag === "abbr" && /(?:^|[\s"'`])unapi-id(?=$|[\s"'`])/.test(className);
-const nativeTooltip = (tag: string, read: Attributes) => !!read.title && /^[a-z]/.test(tag) && !TITLED_ELEMENTS.has(tag) && !unApi(tag, read.className);
+/** Whether an element shows nothing a pointer could rest on: self-closing, or only whitespace inside. */
+const empty = (node: ts.JsxOpeningLikeElement) =>
+	ts.isJsxSelfClosingElement(node) || (ts.isJsxElement(node.parent) && node.parent.children.every((child) => ts.isJsxText(child) && child.text.trim() === ""));
+const unApi = (node: ts.JsxOpeningLikeElement, tag: string, className: string) => tag === "abbr" && /(?:^|[\s"'`])unapi-id(?=$|[\s"'`])/.test(className) && empty(node);
+const nativeTooltip = (node: ts.JsxOpeningLikeElement, tag: string, read: Attributes) => !!read.title && /^[a-z]/.test(tag) && !TITLED_ELEMENTS.has(tag) && !unApi(node, tag, read.className);
 
 function checkElement(scan: Scan, node: ts.JsxOpeningLikeElement) {
 	const tag = node.tagName.getText(scan.source);
 	const read = readAttributes(node, scan.source);
 	const own = ownClasses(read.className);
 	if (TRANSITION.test(own) && (read.framer || CSS_ANIMATION.test(own))) report(scan, node, "animation-clash");
-	if (nativeTooltip(tag, read)) report(scan, read.title!, "native-title");
+	if (nativeTooltip(node, tag, read)) report(scan, read.title!, "native-title");
 }
 
 function visit(scan: Scan, node: ts.Node) {
