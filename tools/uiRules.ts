@@ -264,6 +264,25 @@ function topLevel(node: ts.Node): ts.Node {
 	return current;
 }
 
+/** The key a rendered property is matched by: its object's variable when the object is written into one (`const config = { label }`), otherwise its name within the top-level declaration, for an object a function returns. */
+function propertyKey(holder: ts.Node, name: string): string {
+	return ts.isVariableDeclaration(holder) ? `variable ${holder.pos}:${name}` : `top ${topLevel(holder).pos}:${name}`;
+}
+
+/** The variable an object literal is written into, or the object itself when it goes elsewhere. */
+function objectHolder(object: ts.Node): ts.Node {
+	const target = destination(object);
+	return target && ts.isVariableDeclaration(target) ? target : object;
+}
+
+/** The variable a rendered `object.property` reads its object from, when that object is a literal written into it. */
+function readObjectHolder(access: ts.PropertyAccessExpression): ts.Node {
+	const base = unwrap(access.expression);
+	const declaration = ts.isIdentifier(base) ? declarationOf(base) : undefined;
+	const value = declaration?.initializer && unwrap(declaration.initializer);
+	return declaration && value && ts.isObjectLiteralExpression(value) ? declaration : access;
+}
+
 /** Marks a rendered variable, and the variables it was copied from (`const b = a`). */
 function markVariable(variables: Set<ts.VariableDeclaration>, node: ts.Identifier) {
 	for (let declaration = declarationOf(node); declaration && !variables.has(declaration); ) {
@@ -279,11 +298,19 @@ function renderedValues(scan: Scan): Rendered {
 	const collect = (node: ts.Node) => {
 		const visible = (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) && renderedInJsx(node) && !screenReaderOnly(scan, node);
 		if (visible && ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node.parent)) markVariable(rendered.variables, node);
-		if (visible && ts.isPropertyAccessExpression(node)) rendered.properties.add(`${topLevel(node).pos}:${node.name.text}`);
+		if (visible && ts.isPropertyAccessExpression(node)) rendered.properties.add(propertyKey(readObjectHolder(node), node.name.text));
 		ts.forEachChild(node, collect);
 	};
 	collect(scan.source);
 	return rendered;
+}
+
+/** The variable or property a value is assigned to after its declaration: `status = value`, `config.label = value`. */
+function assignedTo(target: ts.Node, value: ts.Node): string | ts.VariableDeclaration | undefined {
+	if (!ts.isBinaryExpression(target) || target.operatorToken.kind !== ts.SyntaxKind.EqualsToken || target.right !== value) return undefined;
+	const left = unwrap(target.left);
+	if (ts.isIdentifier(left)) return declarationOf(left);
+	return ts.isPropertyAccessExpression(left) ? propertyKey(readObjectHolder(left), left.name.text) : undefined;
 }
 
 /** Whether a value is shown as text: rendered as a JSX child, or held in a variable or property the file renders. */
@@ -292,7 +319,16 @@ function shown(scan: Scan, node: ts.Node): boolean {
 	if (!target) return false;
 	if (ts.isJsxExpression(target)) return !ts.isJsxAttribute(target.parent);
 	if (ts.isVariableDeclaration(target)) return scan.rendered.variables.has(target);
-	return ts.isPropertyAssignment(target) && scan.rendered.properties.has(`${topLevel(target).pos}:${target.name.getText(scan.source)}`);
+	if (ts.isPropertyAssignment(target)) return scan.rendered.properties.has(propertyKey(objectHolder(target.parent), target.name.getText(scan.source)));
+	const assigned = assignedTo(target, destinationChild(node, target));
+	return typeof assigned === "string" ? scan.rendered.properties.has(assigned) : !!assigned && scan.rendered.variables.has(assigned);
+}
+
+/** The child of `target` that a value travelled through to reach it. */
+function destinationChild(node: ts.Node, target: ts.Node): ts.Node {
+	let child = node;
+	while (child.parent && child.parent !== target) child = child.parent;
+	return child;
 }
 
 const isStringLike = (node: ts.Node): node is ts.StringLiteralLike | ts.TemplateLiteralLikeNode =>
@@ -307,8 +343,12 @@ function translationFactory(node: ts.Expression | undefined): boolean {
 	return !!call && ts.isCallExpression(call) && ts.isIdentifier(call.expression) && TRANSLATION_APIS.has(call.expression.text);
 }
 
-/** Whether a called expression translates: named like `t`, `tc` or `tUI`, bound to a translation factory, or one called directly. */
+// next-intl's ways to read a message besides calling the translator: `t.rich("key")`, `t.markup("key")`, `t.raw("key")`.
+const TRANSLATION_METHODS = new Set(["rich", "markup", "raw"]);
+
+/** Whether a called expression translates: named like `t`, `tc` or `tUI`, bound to a translation factory, one called directly, or one of its message methods. */
 function translates(callee: ts.Expression): boolean {
+	if (ts.isPropertyAccessExpression(callee)) return TRANSLATION_METHODS.has(callee.name.text) && translates(callee.expression);
 	if (!ts.isIdentifier(callee)) return translationFactory(callee);
 	return TRANSLATE.test(callee.text) || translationFactory(declaredValue(callee));
 }
@@ -325,7 +365,8 @@ function screenReaderOnly(scan: Scan, node: ts.Node): boolean {
 	for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
 		if (!ts.isJsxElement(parent)) continue;
 		const className = parent.openingElement.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(scan.source) === "className");
-		return classLists(scan, className && ts.isJsxAttribute(className) ? className.initializer : undefined).every((list) => SR_ONLY.test(list));
+		// `not-sr-only` under any variant shows the text again, as `sr-only md:not-sr-only` does on wide screens.
+		return classLists(scan, className && ts.isJsxAttribute(className) ? className.initializer : undefined).every((list) => SR_ONLY.test(list) && !/not-sr-only/.test(list));
 	}
 	return false;
 }
@@ -501,7 +542,17 @@ function ruleDeclarations(body: string): Declaration[][] {
 const variantsOf = (key: string) => key.split("|")[1].split(":").filter(Boolean);
 const boxOf = (key: string) => key.split("|")[0];
 // Variants that never hold at once; a breakpoint never holds with its `max-` form either.
-const EXCLUSIVE = [["motion-safe", "motion-reduce"], ["portrait", "landscape"], ["ltr", "rtl"], ["dark", "light"]];
+const EXCLUSIVE = [
+	["motion-safe", "motion-reduce"],
+	["portrait", "landscape"],
+	["ltr", "rtl"],
+	["dark", "light"],
+	["enabled", "disabled"],
+	["required", "optional"],
+	["valid", "invalid"],
+	["user-valid", "user-invalid"],
+	["in-range", "out-of-range"],
+];
 /** Whether variants can all hold at once, as `dark:` and `hover:` do when the page is dark and hovered. */
 const compatible = (variants: string[]) =>
 	!EXCLUSIVE.some(([a, b]) => variants.includes(a) && variants.includes(b)) && !variants.some((variant) => variants.includes(`max-${variant}`));

@@ -89,6 +89,7 @@ describe("animation-clash", () => {
 		expect(css(".a { @apply dark:animate-spin hover:transition; }")).toBe(1);
 		expect(css(".a { @apply motion-safe:animate-spin motion-reduce:transition-opacity; }")).toBe(0);
 		expect(css(".a { @apply md:animate-spin max-md:transition-opacity; }")).toBe(0);
+		expect(css(".a { @apply enabled:animate-spin disabled:transition-opacity; }")).toBe(0);
 	});
 
 	it("reads the two sides of a condition as separate class lists", () => {
@@ -178,6 +179,11 @@ describe("loading-text", () => {
 		expect(rules(`export function D({ t }) {\n\tconst status = t("loading");\n\treturn <p>{status && <Spinner />}</p>;\n}`, loading)).toEqual([]);
 		expect(rules(`export function E({ t }) {\n\tconst status = t("loading") as string;\n\treturn <p>{status}</p>;\n}`, loading)).toEqual(["loading-text"]);
 		expect(rules(`export function F({ t }) {\n\tconst first = t("loading");\n\tconst second = first;\n\treturn <p>{second}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function G({ t }) {\n\tlet status;\n\tstatus = t("loading");\n\treturn <p>{status}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function H({ t, value }) {\n\tconst hidden = { label: t("loading") };\n\tconst seen = { label: value };\n\treturn <p aria-label={hidden.label}>{seen.label}</p>;\n}`, loading)).toEqual([]);
+		expect(rules(`export function I({ t, busy }) {\n\tconst config = () => (busy ? { label: t("loading") } : { label: "Go" });\n\tconst button = config();\n\treturn <button>{button.label}</button>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function J({ t }) {\n\treturn <p>{t.rich("loading", { b: (chunks) => <b>{chunks}</b> })}</p>;\n}`, loading)).toEqual(["loading-text"]);
+		expect(rules(`export function K({ t }) {\n\treturn <span className="sr-only md:not-sr-only">{t("loading")}</span>;\n}`, loading)).toEqual(["loading-text"]);
 	});
 
 	it("lets text only screen readers get name a spinner", () => {
