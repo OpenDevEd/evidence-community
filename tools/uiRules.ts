@@ -1,5 +1,7 @@
 import ts from "typescript";
 
+import tailwindConfig from "../tailwind.config";
+
 /**
  * The UI rules agents kept breaking, read from source so each problem names
  * the fix. A line that needs an exception says why on the line before it:
@@ -59,11 +61,19 @@ const utility = (token: string) => (token.split(":").at(-1) ?? "").replace(/^!|!
 /** The box a class styles: the element, or a pseudo-element its variants name (`before:`). */
 const box = (token: string) => token.split(":").slice(0, -1).find((variant) => PSEUDO_ELEMENTS.has(variant)) ?? "";
 
+/** Whether a comma-separated list of CSS properties names one that moves opacity or transform. */
+const movesAny = (properties: string) => properties.split(",").some((property) => MOVING.has(property.trim()));
+
+// The transition utilities tailwind.config.ts adds (`transition-chrome`), by whether they move opacity or transform.
+const CONFIGURED_TRANSITIONS = new Map(
+	Object.entries(tailwindConfig.theme?.extend?.transitionProperty ?? {}).map(([name, properties]) => [`transition-${name}`, movesAny(String(properties))]),
+);
+
 function transitionsMovement(token: string): boolean {
 	const name = utility(token);
 	const list = name.match(/^transition-\[(.+)\]$/)?.[1];
-	if (list) return list.split(",").some((property) => MOVING.has(property.trim()));
-	return /^transition(-all|-opacity|-transform)?$/.test(name);
+	if (list) return movesAny(list);
+	return CONFIGURED_TRANSITIONS.get(name) ?? /^transition(-all|-opacity|-transform)?$/.test(name);
 }
 
 const animates = (token: string) => /^(fade-enter|animate-[\w[\]-]+)$/.test(utility(token)) && utility(token) !== "animate-none";
@@ -267,6 +277,10 @@ function checkText(scan: Scan, node: ts.JsxText) {
 	if (LOADING.test(node.text.trim()) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
 }
 
+/** Whether a Framer prop is set to a literal false (`layout={false}`), which turns its animation off. */
+const switchedOff = (attribute: ts.JsxAttribute) =>
+	!!attribute.initializer && ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression?.kind === ts.SyntaxKind.FalseKeyword;
+
 type Attributes = { classLists: string[]; framer: boolean; title: ts.JsxAttribute | null };
 
 function readAttributes(node: ts.JsxOpeningLikeElement, scan: Scan): Attributes {
@@ -277,7 +291,7 @@ function readAttributes(node: ts.JsxOpeningLikeElement, scan: Scan): Attributes 
 		const name = attribute.name.getText(source);
 		if (name === "className") read.classLists = classLists(scan, attribute.initializer);
 		if (name === "title") read.title = attribute;
-		read.framer ||= FRAMER_PROPS.has(name) && MOTION_TAG.test(tag);
+		read.framer ||= FRAMER_PROPS.has(name) && MOTION_TAG.test(tag) && !switchedOff(attribute);
 	}
 	return read;
 }
@@ -358,36 +372,53 @@ function appliedValue(token: string): Declaration | undefined {
 	return APPLIED_NONE[name];
 }
 
-/** What one `@apply` utility declares, !important when it carries Tailwind's `!` mark. */
-function appliedDeclaration(token: string): Declaration | undefined {
+/** What one `@apply` utility declares, !important when it or the whole directive carries the mark. */
+function appliedDeclaration(token: string, directiveImportant: boolean): Declaration | undefined {
 	const declaration = appliedValue(token);
-	const important = /^!|!$/.test(token.split(":").at(-1) ?? "");
+	const important = directiveImportant || /^!|!$/.test(token.split(":").at(-1) ?? "");
 	return declaration && important ? [declaration[0], `${declaration[1]} !important`] : declaration;
 }
 
-/** The declarations an `@apply` list makes, each with the box it styles. */
-const applyList = (list: string) =>
-	list.split(/\s+/).flatMap((token): [string, Declaration][] => {
-		const declaration = appliedDeclaration(token);
-		return declaration ? [[box(token), declaration]] : [];
-	});
+/** The state or screen variants a utility applies under (`hover:`, `md:`); pseudo-elements are its box instead. */
+const scope = (token: string) =>
+	token
+		.split(":")
+		.slice(0, -1)
+		.filter((variant) => !PSEUDO_ELEMENTS.has(variant))
+		.join(":");
 
-/** One rule's declarations by the box they style, in source order; `@apply` utilities join where they're written, and `before:` ones style a pseudo-element. */
-function ruleDeclarations(body: string): Map<string, Declaration[]> {
-	const boxes = new Map<string, Declaration[]>([["", []]]);
-	const add = (target: string, declaration: Declaration) => boxes.set(target, [...(boxes.get(target) ?? []), declaration]);
+/** The declarations an `@apply` list makes, each keyed by the box it styles and the variants it applies under. */
+function applyList(list: string): [string, Declaration][] {
+	const tokens = list.split(/\s+/).filter(Boolean);
+	// `@apply a b !important` makes every utility in it important.
+	const important = tokens.includes("!important");
+	return tokens.flatMap((token) => {
+		const declaration = token === "!important" ? undefined : appliedDeclaration(token, important);
+		return declaration ? [[`${box(token)}|${scope(token)}`, declaration] as [string, Declaration]] : [];
+	});
+}
+
+/**
+ * One rule's declarations, in source order, for each box and variant they
+ * apply under; `@apply` utilities join where they're written. A variant
+ * (`hover:animate-none`) adds to its box's own declarations, never replaces
+ * them outside that state.
+ */
+function ruleDeclarations(body: string): Declaration[][] {
+	const scopes = new Map<string, Declaration[]>([["|", []]]);
+	const add = (key: string, declaration: Declaration) => scopes.set(key, [...(scopes.get(key) ?? []), declaration]);
 	for (const part of body.split(";").map((piece) => piece.trim())) {
 		const applied = part.match(/^@apply\s+([\s\S]+)$/)?.[1];
 		const [name, ...value] = part.split(":");
-		if (applied) for (const [target, declaration] of applyList(applied)) add(target, declaration);
-		else if (value.length) add("", [name.trim().toLowerCase(), value.join(":").trim()]);
+		if (applied) for (const [key, declaration] of applyList(applied)) add(key, declaration);
+		else if (value.length) add("|", [name.trim().toLowerCase(), value.join(":").trim()]);
 	}
-	return boxes;
+	return [...scopes].map(([key, declarations]) => (key.endsWith("|") ? declarations : [...(scopes.get(`${key.split("|")[0]}|`) ?? []), ...declarations]));
 }
 
-/** Whether one box of a CSS rule both animates and transitions opacity or transform. */
+/** Whether one box of a CSS rule, in any state, both animates and transitions opacity or transform. */
 const cssClashes = (body: string) =>
-	[...ruleDeclarations(body).values()].some(
+	ruleDeclarations(body).some(
 		(declarations) => cssAnimates(cascade(declarations, ["animation", "animation-name"])) && cssMoves(cascade(declarations, ["transition", "transition-property"])),
 	);
 

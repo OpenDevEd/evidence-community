@@ -25,6 +25,9 @@ describe("animation-clash", () => {
 		expect(rules(`export const D = () => <motion.div animate={{ opacity: 1 }} className="before:opacity-100 before:transition-opacity">d</motion.div>;`)).toEqual([]);
 		expect(rules(`export const D2 = () => <div className="before:animate-pulse before:transition-opacity">d</div>;`)).toEqual(["animation-clash"]);
 		expect(rules(`export const D3 = () => <m.div layout className="transition-all">d</m.div>;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const D4 = () => <m.div layout={false} className="transition-all">d</m.div>;`)).toEqual([]);
+		expect(rules(`export const D5 = () => <div className="animate-in transition-chrome">d</div>;`)).toEqual(["animation-clash"]);
+		expect(rules(`export const D6 = () => <div className="animate-in transition-composer">d</div>;`)).toEqual([]);
 	});
 
 	it("reads class constants where they are written and where className uses them", () => {
@@ -78,6 +81,10 @@ describe("animation-clash", () => {
 		expect(css(".a { @apply before:animate-pulse; transition: opacity 1s; }")).toBe(0);
 		expect(css(".a { @apply\n\tanimate-pulse\ttransition-opacity; }")).toBe(1);
 		expect(css(".a { @apply animate-pulse transition-opacity!; transition-property: color; }")).toBe(1);
+		expect(css(".a { @apply animate-pulse transition-opacity !important; animation: none; }")).toBe(1);
+		expect(css(".a { @apply animate-pulse transition-opacity hover:animate-none; }")).toBe(1);
+		expect(css(".a { @apply transition-opacity hover:animate-pulse; }")).toBe(1);
+		expect(css(".a { @apply animate-pulse hover:transition-colors; }")).toBe(0);
 	});
 
 	it("reads the two sides of a condition as separate class lists", () => {
