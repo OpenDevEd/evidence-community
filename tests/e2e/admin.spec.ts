@@ -4248,9 +4248,10 @@ test("pages and virtualizes large collection catalogues while loading sources la
 	await expect(loadMore).toBeVisible();
 	await loadMore.focus();
 	await page.keyboard.press("Enter");
-	const loadingMore = tree.getByRole("treeitem", { name: "Loading" });
+	// While it loads, the row keeps its name and is announced as busy.
+	const loadingMore = tree.getByRole("treeitem", { name: "Load more", disabled: true });
 	await expect(loadingMore).toBeFocused();
-	await expect(loadingMore).toHaveAttribute("aria-disabled", "true");
+	await expect(loadingMore).toHaveAttribute("aria-busy", "true");
 	releasePaginationFailure();
 	const retryMore = tree.getByRole("treeitem", { name: "Try again" });
 	await expect(retryMore).toBeFocused();
