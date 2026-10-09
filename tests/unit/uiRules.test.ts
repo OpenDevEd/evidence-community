@@ -35,6 +35,21 @@ describe("animation-clash", () => {
 		expect(rules(`export const button = tv({ variants: { enter: { true: "animate-in" }, move: { true: "transition-opacity" } } });`)).toEqual([]);
 	});
 
+	it("follows a constant through as const, aliases and scopes, and never reads a condition as classes", () => {
+		expect(rules(`const FX = "transition-opacity" as const;\nexport const L = () => <motion.div layout className={FX} />;`)).toEqual(["animation-clash"]);
+		expect(rules(`const BASE = "transition-all";\nconst FX = BASE;\nexport const M = () => <motion.div layout className={FX} />;`)).toEqual(["animation-clash"]);
+		expect(rules(`export function N() {\n\tconst classes = "transition-opacity";\n\treturn <motion.div layout className={classes} />;\n}\nexport function O() {\n\tconst classes = "border";\n\treturn <div className={classes} />;\n}`)).toEqual(["animation-clash"]);
+		expect(rules(`const classes = "transition-all";\nexport const P = ({ classes }) => <motion.div layout className={classes} />;`)).toEqual([]);
+		expect(rules(`const test = "transition-opacity";\nexport const Q = () => <div className={test && "animate-in"} />;`)).toEqual([]);
+	});
+
+	it("reads a long chain of constants in bounded time", () => {
+		const chain = Array.from({ length: 30 }, (_, index) => `const C${index + 1} = cn(C${index}, on ? "px-${index}" : "py-${index}");`).join("\n");
+		const started = performance.now();
+		expect(rules(`const on = true;\nconst C0 = "border";\n${chain}\nexport const R = () => <div className={C30} />;`)).toEqual([]);
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
 	it("checks each stylesheet rule for the same clash", () => {
 		const css = (text: string) => stylesheetProblems("src/styles/a.module.css", text);
 		expect(css(".a {\n\tanimation: rise 200ms;\n\ttransition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);\n}")).toEqual(["src/styles/a.module.css:1 animation-clash: animates and transitions opacity or transform; put the animation on a wrapper, or transition only colours, borders and shadows."]);
@@ -42,6 +57,17 @@ describe("animation-clash", () => {
 		expect(css(".a { animation: rise 200ms; transition: color 150ms, border-color 150ms; }")).toEqual([]);
 		expect(css("@media (prefers-reduced-motion: reduce) {\n\t.a { animation: none; transition: all 1s; }\n}")).toEqual([]);
 		expect(css("/* ui-rules-allow: animation-clash -- the fade runs after the rise ends */\n.a { animation: rise 1s; transition: opacity 1s; }")).toEqual([]);
+	});
+
+	it("reads stylesheet rules the way CSS applies them", () => {
+		const css = (text: string) => stylesheetProblems("src/styles/a.module.css", text).length;
+		expect(css(".a {\n\t&:hover { color: red; }\n\tanimation: rise 1s;\n\ttransition: opacity 1s;\n\t&:focus { color: blue; }\n}")).toBe(1);
+		expect(css(".a { animation: rise 1s; transition: all 1s; transition-property: color; }")).toBe(0);
+		expect(css(".a { animation: rise 1s; transition: color 1s; transition-property: opacity; }")).toBe(1);
+		expect(css(".a { animation: rise 1s; transition-property: color !important; transition: all 1s; }")).toBe(0);
+		expect(css(".a { animation: none, rise 1s; transition: opacity 1s; }")).toBe(1);
+		expect(css(".a { animation: rise 1s; transition: 150ms !important; }")).toBe(1);
+		expect(css(".a { animation: rise 1s; animation-name: none; transition: opacity 1s; }")).toBe(0);
 	});
 
 	it("reads the two sides of a condition as separate class lists", () => {
@@ -109,6 +135,12 @@ describe("loading-text", () => {
 		expect(rules(`export const T2 = ({ tUI }) => <p>{busy && tUI("Items.loadingData")}</p>;`, loading)).toEqual(["loading-text"]);
 		expect(rules(`export const T3 = ({ t }) => <div role="status" aria-label={t("loadingData")}><Spinner /></div>;`, loading)).toEqual([]);
 		expect(rules(`export const T4 = ({ t }) => <p>{t("retry")}</p>;`, loading)).toEqual([]);
+		expect(rules(`export const T5 = ({ t }) => <p>{t("loading")}</p>;`, new Set(loadingKeys('{ "Common": { "loading": "Loading…" } }')))).toEqual(["loading-text"]);
+	});
+
+	it("lets text only screen readers get name a spinner", () => {
+		expect(rules(`export const T6 = () => <span className="sr-only">Loading…</span>;`)).toEqual([]);
+		expect(rules(`export const T7 = ({ t }) => <span className="sr-only">{t("loadingData")}</span>;`, new Set(["loadingData"]))).toEqual([]);
 	});
 
 	it("lets Loading pass as an attribute, a condition or a sentence", () => {

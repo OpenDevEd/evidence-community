@@ -48,6 +48,7 @@ const DOT = /[·•]|&(?:middot|bull|#183|#x0*b7|#8226|#x2022);/i;
 const LOADING = /^loading\b[^.!?]{0,40}(…|\.\.\.)?$/i;
 // The translation functions: `t`, and `tc` or `tUI` for a second namespace.
 const TRANSLATE = /^t([a-z]|[A-Z]\w*)?$/;
+const SR_ONLY = /(?:^|[\s"'`])sr-only(?=$|[\s"'`])/;
 
 const allowed = (line: string | undefined, rule: Rule) => new RegExp(`ui-rules-allow:\\s*${rule}\\s+--\\s*\\S`).test(line ?? "");
 
@@ -81,7 +82,8 @@ type Scan = {
 	file: string;
 	source: ts.SourceFile;
 	lines: string[];
-	constants: Map<string, ts.Expression>;
+	// The class lists each constant adds, read once.
+	lists: Map<ts.Node, string[]>;
 	loadingKeys: ReadonlySet<string>;
 	found: string[];
 };
@@ -92,11 +94,66 @@ const joins = (node: ts.Node) => ts.isCallExpression(node) && ts.isIdentifier(no
 /** A class list written as one value: a string, a template, or a call joining classes. */
 const classValue = (node: ts.Node) => ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node) || joins(node);
 
-/** The value of a same-file variable an identifier reads, when it holds classes. */
-function constantValue(scan: Scan, node: ts.Node): ts.Expression | undefined {
-	if (!ts.isIdentifier(node) || (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) return undefined;
-	const value = scan.constants.get(node.text);
-	return value && (classValue(value) || ts.isConditionalExpression(value)) ? value : undefined;
+/** The names a declaration or parameter binds, through destructuring. */
+function boundNames(name: ts.BindingName): string[] {
+	if (ts.isIdentifier(name)) return [name.text];
+	return name.elements.flatMap((element) => (ts.isOmittedExpression(element) ? [] : boundNames(element.name)));
+}
+
+/** The variable a block declares under this name, if any. */
+const declares = (block: ts.Block | ts.SourceFile, name: string) =>
+	block.statements.flatMap((statement) => (ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])).find((declaration) => boundNames(declaration.name).includes(name));
+
+/** The value an identifier's variable starts with, found as scopes resolve it; a parameter or a destructured name has none. */
+function declaredValue(node: ts.Identifier): ts.Expression | undefined {
+	for (let scope: ts.Node | undefined = node.parent; scope; scope = scope.parent) {
+		if (ts.isFunctionLike(scope) && scope.parameters.some((parameter) => boundNames(parameter.name).includes(node.text))) return undefined;
+		const declaration = ts.isBlock(scope) || ts.isSourceFile(scope) ? declares(scope, node.text) : undefined;
+		if (declaration) return ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
+	}
+	return undefined;
+}
+
+/** An expression without `( )`, `as`, `satisfies` or `!` around it. */
+const unwrap = (node: ts.Expression): ts.Expression =>
+	ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node) ? unwrap(node.expression) : node;
+
+/** Whether an identifier reads a variable, rather than naming a property. */
+const readsVariable = (node: ts.Node): node is ts.Identifier =>
+	ts.isIdentifier(node) && !((ts.isPropertyAccessExpression(node.parent) || ts.isPropertyAssignment(node.parent)) && node.parent.name === node);
+const holdsClasses = (value: ts.Expression) => classValue(value) || ts.isConditionalExpression(value) || ts.isBinaryExpression(value) || ts.isIdentifier(value);
+
+/** The value of the same-file constant an identifier reads, when it can hold classes. */
+function constantValue(node: ts.Node): ts.Expression | undefined {
+	const initializer = readsVariable(node) ? declaredValue(node) : undefined;
+	const value = initializer && unwrap(initializer);
+	return value && holdsClasses(value) ? value : undefined;
+}
+
+// ponytail: past 64 combinations the lists merge into one, which can report a clash between exclusive branches.
+const MAX_LISTS = 64;
+const capped = (lists: string[]) => {
+	const unique = [...new Set(lists)];
+	return unique.length > MAX_LISTS ? [[...new Set(unique.join(" ").split(/\s+/))].join(" ")] : unique;
+};
+
+/** What a logical operator can give: `a && b` gives b or nothing, `a || b` and `a ?? b` give one side. */
+function logicalLists(scan: Scan, node: ts.BinaryExpression, seen: ReadonlySet<ts.Node>): string[] | undefined {
+	const kind = node.operatorToken.kind;
+	if (kind === ts.SyntaxKind.AmpersandAmpersandToken) return capped([...classLists(scan, node.right, seen), ""]);
+	if (kind !== ts.SyntaxKind.BarBarToken && kind !== ts.SyntaxKind.QuestionQuestionToken) return undefined;
+	return capped([...classLists(scan, node.left, seen), ...classLists(scan, node.right, seen)]);
+}
+
+/** The class lists a constant adds. One that clashes by itself is reported where it is written, so it adds none here. */
+function constantLists(scan: Scan, value: ts.Expression, seen: ReadonlySet<ts.Node>): string[] {
+	if (seen.has(value)) return [""];
+	const cached = scan.lists.get(value);
+	if (cached) return cached;
+	const lists = classLists(scan, value, new Set([...seen, value]));
+	const added = classValue(value) && lists.some((list) => clashes(list, false)) ? [""] : lists;
+	scan.lists.set(value, added);
+	return added;
 }
 
 /**
@@ -105,22 +162,21 @@ function constantValue(scan: Scan, node: ts.Node): ts.Expression | undefined {
  */
 function classLists(scan: Scan, node: ts.Node | undefined, seen: ReadonlySet<ts.Node> = new Set()): string[] {
 	if (!node) return [""];
-	if (ts.isConditionalExpression(node)) return [...classLists(scan, node.whenTrue, seen), ...classLists(scan, node.whenFalse, seen)];
-	const value = constantValue(scan, node);
-	// A constant that clashes by itself is reported where it is written.
-	if (value) return seen.has(value) || clashesAlone(scan, value, seen) ? [""] : classLists(scan, value, new Set([...seen, value]));
+	if (ts.isConditionalExpression(node)) return capped([...classLists(scan, node.whenTrue, seen), ...classLists(scan, node.whenFalse, seen)]);
+	const logical = ts.isBinaryExpression(node) ? logicalLists(scan, node, seen) : undefined;
+	if (logical) return logical;
+	const value = constantValue(node);
+	if (value) return constantLists(scan, value, seen);
 	const children = node.getChildren(scan.source);
 	if (children.length === 0) return [node.getText(scan.source)];
 	return children.reduce<string[]>((lists, child) => {
 		const texts = classLists(scan, child, seen);
-		return lists.flatMap((list) => texts.map((text) => `${list} ${text}`));
+		return capped(lists.flatMap((list) => texts.map((text) => `${list} ${text}`)));
 	}, [""]);
 }
 
 /** Whether a class value clashes by itself, wherever it is used. */
-function clashesAlone(scan: Scan, node: ts.Node, seen: ReadonlySet<ts.Node> = new Set()): boolean {
-	return classValue(node) && classLists(scan, node, new Set([...seen, node])).some((list) => clashes(list, false));
-}
+const clashesAlone = (scan: Scan, node: ts.Node) => classValue(node) && classLists(scan, node, new Set([node])).some((list) => clashes(list, false));
 
 /** Whether a node is part of a larger class list: an element's className, a joining call, or a template. */
 function insideClassList(node: ts.Node, source: ts.SourceFile): boolean {
@@ -179,10 +235,20 @@ function translationCall(node: ts.Node): ts.CallExpression | undefined {
 	return ts.isIdentifier(call.expression) && TRANSLATE.test(call.expression.text) ? call : undefined;
 }
 
+/** Whether a node sits in an element only screen readers get, where a Loading label names a spinner. */
+function screenReaderOnly(node: ts.Node, source: ts.SourceFile): boolean {
+	for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
+		if (!ts.isJsxElement(parent)) continue;
+		const className = parent.openingElement.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "className");
+		return SR_ONLY.test(className?.getText(source) ?? "");
+	}
+	return false;
+}
+
 /** Whether a string shows a Loading label as a JSX child: the label itself, or the key of a translated one. */
 function showsLoading(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode): boolean {
 	const whole = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
-	if (whole && LOADING.test(node.text.trim())) return renderedInJsx(node);
+	if (whole && LOADING.test(node.text.trim()) && renderedInJsx(node)) return true;
 	const call = translationCall(node);
 	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && renderedInJsx(call);
 }
@@ -191,12 +257,12 @@ function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteral
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (showsLoading(scan, node)) report(scan, node, "loading-text");
+	if (showsLoading(scan, node) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
 }
 
 function checkText(scan: Scan, node: ts.JsxText) {
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
-	if (LOADING.test(node.text.trim())) report(scan, node, "loading-text");
+	if (LOADING.test(node.text.trim()) && !screenReaderOnly(node, scan.source)) report(scan, node, "loading-text");
 }
 
 type Attributes = { classLists: string[]; framer: boolean; title: ts.JsxAttribute | null };
@@ -239,21 +305,10 @@ function visit(scan: Scan, node: ts.Node) {
 	ts.forEachChild(node, (child) => visit(scan, child));
 }
 
-/** Every variable in a file with the value it starts with. */
-function constants(source: ts.SourceFile): Map<string, ts.Expression> {
-	const found = new Map<string, ts.Expression>();
-	const collect = (node: ts.Node) => {
-		if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) found.set(node.name.text, node.initializer);
-		ts.forEachChild(node, collect);
-	};
-	collect(source);
-	return found;
-}
-
 /** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
 export function sourceProblems(file: string, text: string, loadingKeys: ReadonlySet<string> = new Set()): string[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-	const scan: Scan = { file, source, lines: text.split("\n"), constants: constants(source), loadingKeys, found: [] };
+	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, found: [] };
 	visit(scan, source);
 	return scan.found;
 }
@@ -261,25 +316,60 @@ export function sourceProblems(file: string, text: string, loadingKeys: Readonly
 // The words of a CSS transition that name no property.
 const TIMING = /^(ease(-in|-out|-in-out)?|linear|step-start|step-end|allow-discrete|normal|-?[\d.]+m?s)$/;
 
-/** Whether one item of a CSS transition list moves opacity or transform; an item that names no property transitions all. */
+/** Whether one item of a `transition` shorthand moves opacity or transform; an item that names no property transitions all. */
 function cssItemMoves(item: string): boolean {
 	const words = item.split(/\s+/).filter((word) => word && !TIMING.test(word));
 	return words.length === 0 || words.some((word) => MOVING.has(word));
 }
 
+type Declaration = [property: string, value: string];
+
+/** The declaration of these properties that applies: a later one wins unless an earlier one is !important. Its value comes without the !important. */
+function cascade(declarations: Declaration[], properties: string[]): Declaration | undefined {
+	let applied: Declaration | undefined;
+	let important = false;
+	for (const [property, value] of declarations.filter(([name]) => properties.includes(name))) {
+		const strong = /!important\s*$/i.test(value);
+		if (strong || !important) applied = [property, value.replace(/!important\s*$/i, "").trim()];
+		important ||= strong;
+	}
+	return applied;
+}
+
+/** A comma-separated CSS list; functions go first, so the commas inside cubic-bezier() don't split it. */
+const cssList = (value: string) => value.replace(/[\w-]+\([^)]*\)/g, " ").split(",").map((item) => item.trim());
+
 /** Whether one CSS rule both animates and transitions opacity or transform. */
-function cssClashes(declarations: string): boolean {
-	const values = new Map(
-		declarations
-			.split(";")
-			.map((declaration) => declaration.split(":"))
-			.filter((parts) => parts.length > 1)
-			.map(([name, ...value]) => [name.trim().toLowerCase(), value.join(":").trim()]),
-	);
-	const animation = values.get("animation") ?? values.get("animation-name") ?? "none";
-	const transition = values.get("transition") ?? values.get("transition-property") ?? "none";
-	// Functions go first: the commas inside cubic-bezier() don't separate transitions.
-	return !/^none\b/i.test(animation) && transition.replace(/[\w-]+\([^)]*\)/g, " ").split(",").some(cssItemMoves);
+function cssClashes(body: string): boolean {
+	const declarations = body
+		.split(";")
+		.map((declaration) => declaration.split(":"))
+		.filter((parts) => parts.length > 1)
+		.map(([name, ...value]): Declaration => [name.trim().toLowerCase(), value.join(":").trim()]);
+	const animation = cascade(declarations, ["animation", "animation-name"]);
+	const transition = cascade(declarations, ["transition", "transition-property"]);
+	if (!animation || !transition) return false;
+	const animates = cssList(animation[1]).some((item) => item !== "" && !/(^|\s)none(\s|$)/i.test(item));
+	const moves = cssList(transition[1]).some((item) => (transition[0] === "transition" ? cssItemMoves(item) : MOVING.has(item)));
+	return animates && moves;
+}
+
+/** Each CSS rule's own declarations, without the rules nested in it, and where its brace opens. */
+function cssRules(text: string): { start: number; body: string }[] {
+	const rules: { start: number; body: string }[] = [];
+	const open: { start: number; body: string }[] = [];
+	for (let index = 0; index < text.length; index++) {
+		const parent = open.at(-1);
+		if (text[index] === "{") {
+			// The text since the parent's last declaration is the nested rule's selector.
+			if (parent) parent.body = parent.body.replace(/[^;]*$/, "");
+			open.push({ start: index, body: "" });
+		} else if (text[index] === "}") {
+			rules.push(...open.splice(-1));
+			if (open.length) open[open.length - 1].body += ";";
+		} else if (parent) parent.body += text[index];
+	}
+	return rules;
 }
 
 /** Uppercase declarations, and rules that animate and transition opacity or transform, in one stylesheet. */
@@ -288,9 +378,10 @@ export function stylesheetProblems(file: string, text: string): string[] {
 	const uppercase = lines.flatMap((line, index) => (UPPERCASE_CSS.test(line) && !allowed(lines[index - 1], "uppercase") ? [`${file}:${index + 1} uppercase: ${FIX.uppercase}`] : []));
 	// Comments blanked with their newlines kept, so a brace in one can't open a rule.
 	const plain = text.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " "));
-	const clashing = [...plain.matchAll(/\{([^{}]*)\}/g)]
-		.filter((rule) => cssClashes(rule[1]))
-		.map((rule) => plain.slice(0, rule.index).split("\n").length)
+	const clashing = cssRules(plain)
+		.filter((rule) => cssClashes(rule.body))
+		.map((rule) => plain.slice(0, rule.start).split("\n").length)
+		.sort((a, b) => a - b)
 		.filter((line) => !allowed(lines[line - 2], "animation-clash"))
 		.map((line) => `${file}:${line} animation-clash: ${FIX["animation-clash"]}`);
 	return [...uppercase, ...clashing];
