@@ -97,8 +97,8 @@ type Scan = {
 	// The class lists each constant adds, read once.
 	lists: Map<ts.Node, string[]>;
 	loadingKeys: ReadonlySet<string>;
-	// The variables and properties the file renders as JSX children, by name: `statusText`, `.label`.
-	rendered: Set<string>;
+	// What the file renders as text: the variables, and the properties within each top-level declaration.
+	rendered: Rendered;
 	found: string[];
 };
 
@@ -118,14 +118,20 @@ function boundNames(name: ts.BindingName): string[] {
 const declares = (block: ts.Block | ts.SourceFile, name: string) =>
 	block.statements.flatMap((statement) => (ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])).find((declaration) => boundNames(declaration.name).includes(name));
 
-/** The value an identifier's variable starts with, found as scopes resolve it; a parameter or a destructured name has none. */
-function declaredValue(node: ts.Identifier): ts.Expression | undefined {
+/** The variable an identifier reads, found as scopes resolve it; a parameter has none. */
+function declarationOf(node: ts.Identifier): ts.VariableDeclaration | undefined {
 	for (let scope: ts.Node | undefined = node.parent; scope; scope = scope.parent) {
 		if (ts.isFunctionLike(scope) && scope.parameters.some((parameter) => boundNames(parameter.name).includes(node.text))) return undefined;
 		const declaration = ts.isBlock(scope) || ts.isSourceFile(scope) ? declares(scope, node.text) : undefined;
-		if (declaration) return ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
+		if (declaration) return declaration;
 	}
 	return undefined;
+}
+
+/** The value an identifier's variable starts with; a parameter or a destructured name has none. */
+function declaredValue(node: ts.Identifier): ts.Expression | undefined {
+	const declaration = declarationOf(node);
+	return declaration && ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
 }
 
 /** An expression without `( )`, `as`, `satisfies` or `!` around it. */
@@ -222,11 +228,14 @@ function classContext(node: ts.Node, source: ts.SourceFile): boolean {
 
 const RENDERING_OPERATORS = [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken];
 
-/** Whether a value passes through this parent unchanged on its way to being rendered. */
+const typeOnly = (node: ts.Node) => ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node);
+
+/** Whether a value passes through this parent on its way to being rendered: `a && b` shows only b, a is its condition. */
 function passesThrough(parent: ts.Node, child: ts.Node): boolean {
-	if (ts.isParenthesizedExpression(parent)) return true;
+	if (typeOnly(parent)) return true;
 	if (ts.isConditionalExpression(parent)) return parent.condition !== child;
-	return ts.isBinaryExpression(parent) && RENDERING_OPERATORS.includes(parent.operatorToken.kind);
+	if (!ts.isBinaryExpression(parent) || !RENDERING_OPERATORS.includes(parent.operatorToken.kind)) return false;
+	return parent.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken || parent.right === child;
 }
 
 /** The node a value lands in once it passes through parentheses and conditions. */
@@ -246,16 +255,35 @@ function renderedInJsx(node: ts.Node): boolean {
 	return !!target && ts.isJsxExpression(target) && !ts.isJsxAttribute(target.parent);
 }
 
-/** The variables and properties a file renders as JSX children, by name: `{statusText}` gives `statusText`, `{config.label}` gives `.label`. */
-function renderedNames(source: ts.SourceFile): Set<string> {
-	const names = new Set<string>();
+type Rendered = { variables: Set<ts.VariableDeclaration>; properties: Set<string> };
+
+/** The statement directly in the file that holds a node: properties are matched by name only within it. */
+function topLevel(node: ts.Node): ts.Node {
+	let current = node;
+	while (current.parent && !ts.isSourceFile(current.parent)) current = current.parent;
+	return current;
+}
+
+/** Marks a rendered variable, and the variables it was copied from (`const b = a`). */
+function markVariable(variables: Set<ts.VariableDeclaration>, node: ts.Identifier) {
+	for (let declaration = declarationOf(node); declaration && !variables.has(declaration); ) {
+		variables.add(declaration);
+		const value = declaration.initializer && unwrap(declaration.initializer);
+		declaration = value && ts.isIdentifier(value) ? declarationOf(value) : undefined;
+	}
+}
+
+/** What a file renders as text: `{status}` marks the variable `status`, `{config.label}` the property `label` in that top-level declaration. Screen-reader-only text marks nothing. */
+function renderedValues(scan: Scan): Rendered {
+	const rendered: Rendered = { variables: new Set(), properties: new Set() };
 	const collect = (node: ts.Node) => {
-		if (ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node.parent) && renderedInJsx(node)) names.add(node.text);
-		if (ts.isPropertyAccessExpression(node) && renderedInJsx(node)) names.add(`.${node.name.text}`);
+		const visible = (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) && renderedInJsx(node) && !screenReaderOnly(scan, node);
+		if (visible && ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node.parent)) markVariable(rendered.variables, node);
+		if (visible && ts.isPropertyAccessExpression(node)) rendered.properties.add(`${topLevel(node).pos}:${node.name.text}`);
 		ts.forEachChild(node, collect);
 	};
-	collect(source);
-	return names;
+	collect(scan.source);
+	return rendered;
 }
 
 /** Whether a value is shown as text: rendered as a JSX child, or held in a variable or property the file renders. */
@@ -263,8 +291,8 @@ function shown(scan: Scan, node: ts.Node): boolean {
 	const target = destination(node);
 	if (!target) return false;
 	if (ts.isJsxExpression(target)) return !ts.isJsxAttribute(target.parent);
-	if (ts.isVariableDeclaration(target) && ts.isIdentifier(target.name)) return scan.rendered.has(target.name.text);
-	return ts.isPropertyAssignment(target) && scan.rendered.has(`.${target.name.getText(scan.source)}`);
+	if (ts.isVariableDeclaration(target)) return scan.rendered.variables.has(target);
+	return ts.isPropertyAssignment(target) && scan.rendered.properties.has(`${topLevel(target).pos}:${target.name.getText(scan.source)}`);
 }
 
 const isStringLike = (node: ts.Node): node is ts.StringLiteralLike | ts.TemplateLiteralLikeNode =>
@@ -272,13 +300,17 @@ const isStringLike = (node: ts.Node): node is ts.StringLiteralLike | ts.Template
 
 const TRANSLATION_APIS = new Set(["useTranslations", "getTranslations"]);
 
-/** Whether a called name translates: named like `t`, `tc` or `tUI`, or bound to useTranslations() or getTranslations(). */
-function translates(callee: ts.Expression): boolean {
-	if (!ts.isIdentifier(callee)) return false;
-	if (TRANSLATE.test(callee.text)) return true;
-	const value = declaredValue(callee);
-	const call = value && (ts.isAwaitExpression(value) ? value.expression : value);
+/** Whether an expression makes a translator: `useTranslations(...)`, or `await getTranslations(...)`. */
+function translationFactory(node: ts.Expression | undefined): boolean {
+	const value = node && unwrap(node);
+	const call = value && (ts.isAwaitExpression(value) ? unwrap(value.expression) : value);
 	return !!call && ts.isCallExpression(call) && ts.isIdentifier(call.expression) && TRANSLATION_APIS.has(call.expression.text);
+}
+
+/** Whether a called expression translates: named like `t`, `tc` or `tUI`, bound to a translation factory, or one called directly. */
+function translates(callee: ts.Expression): boolean {
+	if (!ts.isIdentifier(callee)) return translationFactory(callee);
+	return TRANSLATE.test(callee.text) || translationFactory(declaredValue(callee));
 }
 
 /** The translation call a string is the key of, as in `t("loadingData")`. */
@@ -365,7 +397,8 @@ function visit(scan: Scan, node: ts.Node) {
 /** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
 export function sourceProblems(file: string, text: string, loadingKeys: ReadonlySet<string> = new Set()): string[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, rendered: renderedNames(source), found: [] };
+	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, rendered: { variables: new Set(), properties: new Set() }, found: [] };
+	scan.rendered = renderedValues(scan);
 	visit(scan, source);
 	return scan.found;
 }
@@ -443,7 +476,8 @@ function applyList(list: string): [string, Declaration][] {
  * One rule's declarations, in source order, for each box and variant they
  * apply under; `@apply` utilities join where they're written. A variant
  * (`hover:animate-none`) adds to its box's own declarations, never replaces
- * them outside that state; each box is also checked with all its variants.
+ * them outside that state; each box is also checked with each pair of its
+ * states together, unless they can never hold at once.
  */
 function ruleDeclarations(body: string): Declaration[][] {
 	const scopes = new Map<string, Declaration[]>([["|", []]]);
@@ -454,13 +488,23 @@ function ruleDeclarations(body: string): Declaration[][] {
 		if (applied) for (const [key, declaration] of applyList(applied)) add(key, declaration);
 		else if (value.length) add("|", [name.trim().toLowerCase(), value.join(":").trim()]);
 	}
-	return [...scopes.keys()].flatMap((key) => [scopeDeclarations(scopes, key, variantsOf(key)), scopeDeclarations(scopes, key, boxVariants(scopes, key))]);
+	const keys = [...scopes.keys()];
+	return keys.flatMap((key) =>
+		keys
+			.filter((other) => boxOf(other) === boxOf(key))
+			.map((other) => [...new Set([...variantsOf(key), ...variantsOf(other)])])
+			.filter(compatible)
+			.map((variants) => scopeDeclarations(scopes, key, variants)),
+	);
 }
 
 const variantsOf = (key: string) => key.split("|")[1].split(":").filter(Boolean);
 const boxOf = (key: string) => key.split("|")[0];
-/** Every variant a box's utilities use, for checking the box with all of them at once, as when it is hovered in dark mode. */
-const boxVariants = (scopes: Map<string, Declaration[]>, key: string) => [...scopes.keys()].filter((other) => boxOf(other) === boxOf(key)).flatMap(variantsOf);
+// Variants that never hold at once; a breakpoint never holds with its `max-` form either.
+const EXCLUSIVE = [["motion-safe", "motion-reduce"], ["portrait", "landscape"], ["ltr", "rtl"], ["dark", "light"]];
+/** Whether variants can all hold at once, as `dark:` and `hover:` do when the page is dark and hovered. */
+const compatible = (variants: string[]) =>
+	!EXCLUSIVE.some(([a, b]) => variants.includes(a) && variants.includes(b)) && !variants.some((variant) => variants.includes(`max-${variant}`));
 
 /** A box's declarations under these variants: each state on top of every less specific state it includes, `dark:hover:` on `dark:` on the base. */
 function scopeDeclarations(scopes: Map<string, Declaration[]>, key: string, variants: string[]): Declaration[] {
