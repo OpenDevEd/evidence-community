@@ -99,6 +99,11 @@ The command list in `package.json` is authoritative.
   its boundary changed.
 - A PR creation or update uses those targeted checks, not a full local
   `npm run check:changed` run.
+- Prove a change a person sees with `npm run verify` (the `verify` skill): `up`,
+  `shift <route>` with a `--do` step for each changed interaction, look at the
+  screenshots, then `down`. It compares with the main commit the branch
+  starts from, on the same seeded data. A stop hook on the user's machine sends an agent back while a changed
+  page has no passing `shift`.
 - Verify changed runtime behavior with the focused browser or service check.
   The full `npm run test:acceptance` suite belongs to CI, or an explicitly
   requested full-suite diagnosis. Clean up disposable acceptance environments
