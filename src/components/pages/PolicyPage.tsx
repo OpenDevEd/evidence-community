@@ -88,7 +88,7 @@ function createHeading(level: HeadingTag, chapterLevel?: number) {
 					<span>{children}</span>
 					<span
 						aria-hidden="true"
-						className="mt-1 text-xs font-semibold uppercase tracking-[0.24em] text-black/25 opacity-0 transition-opacity group-hover:opacity-100 dark:text-white/25"
+						className="mt-1 text-xs font-semibold text-black/25 opacity-0 transition-opacity group-hover:opacity-100 dark:text-white/25"
 					>
 						#
 					</span>
@@ -164,7 +164,7 @@ const markdownComponents: Components = {
 		</thead>
 	),
 	th: ({ children }) => (
-		<th className="px-4 py-3 text-left text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-black/60 dark:text-white/60">
+		<th className="px-4 py-3 text-left text-[0.8rem] font-semibold text-black/60 dark:text-white/60">
 			{children}
 		</th>
 	),

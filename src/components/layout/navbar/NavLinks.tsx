@@ -68,7 +68,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant, onNavigate }: LinkIt
 				data-is-mobile={isMobile}
 				className={twMerge(
 					"flex gap-2 text-lg items-center justify-center font-medium",
-					styleVariant === "wide" && "uppercase font-base"
+					styleVariant === "wide" && "font-base"
 				)}
 			>
 				{link.icon && (

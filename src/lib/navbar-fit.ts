@@ -115,15 +115,13 @@ export function navbarWidths(
 	labels: NavbarLabels,
 	logo: number,
 ): NavbarFit {
-	const wide = config.theme.layout === "wide";
-	const label = (value: string) => (wide ? value.toUpperCase() : value);
 	const items = getVisibleRuntimeLinks(config.navigation.links).map(
 		(link) =>
 			(link.icon ? LINK_ICON + LINK_ICON_GAP : 0) +
-			measure(label(labels.link(link.label))) +
+			measure(labels.link(link.label)) +
 			(getVisibleRuntimeLinks(link.children).length > 0 ? SUBMENU_TRIGGER : 0),
 	);
-	if (config.gapMaps.length > 0) items.push(LINK_ICON + LINK_ICON_GAP + measure(label(labels.gapMaps)));
+	if (config.gapMaps.length > 0) items.push(LINK_ICON + LINK_ICON_GAP + measure(labels.gapMaps));
 	const links = items.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, items.length - 1);
 
 	const readerAccounts = isLibraryFeatureEnabled(config.features, "readerAccounts");

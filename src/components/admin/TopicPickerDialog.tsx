@@ -11,6 +11,7 @@ import {
 import {
 	ArrowRight01Icon,
 	Cancel01Icon,
+	Loading03Icon,
 	Search01Icon,
 	TagsIcon,
 	Tick01Icon,
@@ -224,6 +225,7 @@ function MoreTopics({
 				variant="transparent"
 				className="h-8 w-full text-xs"
 				isDisabled={loadingMore}
+				startContent={loadingMore ? <HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin motion-reduce:animate-none" size={14} /> : undefined}
 				onPress={() =>
 					catalog.error
 						? void catalog.mutate()
@@ -232,11 +234,7 @@ function MoreTopics({
 							)
 				}
 			>
-				{catalog.error
-					? "Try again"
-					: loadingMore
-						? "Loading"
-						: "Show more"}
+				{catalog.error ? "Try again" : "Show more"}
 			</Button>
 		</div>
 	);

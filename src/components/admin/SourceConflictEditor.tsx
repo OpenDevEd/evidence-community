@@ -48,7 +48,7 @@ importedTopics,
 						{topic ? (
 							<span className="ml-2 text-black/45 dark:text-white/45">
 								OpenAlex score {topic.score.toFixed(2)}
-								{topic.primary ? " · Primary" : ""}
+								{topic.primary ? <span className="ml-2 font-medium">Primary</span> : null}
 							</span>
 						) : null}
 					</span>

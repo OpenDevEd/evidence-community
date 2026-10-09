@@ -94,7 +94,6 @@ function CollectionLoadingStatus() {
 			role="status"
 		>
 			<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin motion-reduce:animate-none" size={14} />
-			Loading
 		</div>
 	);
 }
@@ -739,9 +738,7 @@ export function AdminCollectionPicker({
 															}
 															variant="transparent"
 														>
-															{loadingMore
-																? "Loading"
-																: "Load more"}
+															Load more
 														</Button>
 													</div>
 												);

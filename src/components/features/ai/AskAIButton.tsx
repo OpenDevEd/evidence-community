@@ -23,21 +23,25 @@ export function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }
 	if (!revealed) return null;
 
 	return (
-		// A plain button: press handling inside the search field's own
-		// content breaks the one the rest of the site uses.
-		<button
-			type="button"
-			onMouseDown={(event) => event.preventDefault()}
-			onClick={onAsk}
-			// Smaller on a phone, where the search field is shorter and
-			// there is no keyboard to show a shortcut for.
-			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 motion-reduce:animate-none lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:pl-3 lg:pr-1.5 lg:text-sm"
-		>
-			<HugeiconsIcon icon={SparklesIcon} className="size-3.5 shrink-0 lg:size-4" />
-			{tAI("askAI")}
-			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
-				{hint}
-			</kbd>
-		</button>
+		// The rise-in plays on a wrapper: on the button it would fight the
+		// hover scale's transform transition, and Firefox jumps when it ends.
+		<span className="flex shrink-0 animate-rise-in self-center motion-reduce:animate-none">
+			{/* A plain button: press handling inside the search field's own
+				content breaks the one the rest of the site uses. */}
+			<button
+				type="button"
+				onMouseDown={(event) => event.preventDefault()}
+				onClick={onAsk}
+				// Smaller on a phone, where the search field is shorter and
+				// there is no keyboard to show a shortcut for.
+				className="flex h-7 items-center gap-1 rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:pl-3 lg:pr-1.5 lg:text-sm"
+			>
+				<HugeiconsIcon icon={SparklesIcon} className="size-3.5 shrink-0 lg:size-4" />
+				{tAI("askAI")}
+				<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
+					{hint}
+				</kbd>
+			</button>
+		</span>
 	);
 }

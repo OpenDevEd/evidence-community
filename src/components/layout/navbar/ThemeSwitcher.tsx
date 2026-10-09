@@ -18,7 +18,6 @@ type ThemeSwitcherProps = NavbarElementProps & {
 
 export default function ThemeSwitcher({
 	variant,
-	styleVariant,
 	showLabel,
 	toolbar = false,
 }: ThemeSwitcherProps) {
@@ -87,12 +86,7 @@ export default function ThemeSwitcher({
 				)}
 			/>
 			{showLabel && (
-				<span
-					className={twMerge(
-						"text-lg text-accent",
-						styleVariant === "wide" ? "uppercase" : ""
-					)}
-				>
+				<span className="text-lg text-accent">
 					{["dark", "light"].map((themeToMatch) => (
 						<span
 							key={themeToMatch}

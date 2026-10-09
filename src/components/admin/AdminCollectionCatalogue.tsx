@@ -1598,7 +1598,7 @@ export function AdminCollectionCatalogue({
 										{row.kind === "loading" ? (
 											<>
 												<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin" size={13} />
-												Loading
+												Load more
 											</>
 										) : row.kind === "error" ? (
 											"Try again"

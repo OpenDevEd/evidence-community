@@ -229,7 +229,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 													<HugeiconsIcon icon={Building02Icon} className="text-black/40 dark:text-white/40" />
 												</div>
 											}
-											description={countryName ? `${countryName} • ${institution.count.toLocaleString()} items` : `${institution.count.toLocaleString()} items`}
+											description={countryName ? `${countryName}, ${institution.count.toLocaleString()} items` : `${institution.count.toLocaleString()} items`}
 										>
 											{institution.value}
 										</AutocompleteItem>

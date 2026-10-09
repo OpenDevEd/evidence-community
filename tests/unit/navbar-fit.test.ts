@@ -39,10 +39,11 @@ describe("header widths", () => {
 		expect(steps[0]).toBeGreaterThan(steps[1]!);
 	});
 
-	it("measures labels in capitals for the wide header", () => {
-		const small = navbarWidths({ ...base, theme: { ...base.theme, layout: "small" } }, measure, labels, 120);
-		const wide = navbarWidths({ ...base, theme: { ...base.theme, layout: "wide" } }, (value) => (value === value.toUpperCase() ? value.length * 12 : value.length * 10), labels, 120);
-		expect(wide.steps.at(-1)).toBeGreaterThan(small.steps.at(-1)!);
+	it("measures labels as both headers show them, never in capitals", () => {
+		const capitalsWider = (value: string) => (value === value.toUpperCase() ? value.length * 12 : value.length * 10);
+		const small = navbarWidths({ ...base, theme: { ...base.theme, layout: "small" } }, capitalsWider, labels, 120);
+		const wide = navbarWidths({ ...base, theme: { ...base.theme, layout: "wide" } }, capitalsWider, labels, 120);
+		expect(wide.steps).toEqual(small.steps);
 	});
 
 	it("shows the links from the xl breakpoint when the font could not be measured, even with one arrangement", () => {

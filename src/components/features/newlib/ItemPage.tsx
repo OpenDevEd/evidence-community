@@ -1077,7 +1077,7 @@ export function ItemCollections({ item }: { item: Item | undefined }) {
 				{Object.entries(groupedCollections).map(
 					([title, collections]) => (
 						<div key={title}>
-							<h4 className="text-base font-medium uppercase text-black/60 dark:text-white/60 mb-2">
+							<h4 className="text-base font-medium text-black/60 dark:text-white/60 mb-2">
 								{title}
 							</h4>
 							<ul className="text-base text-black/60 dark:text-white/60 flex flex-wrap gap-2">

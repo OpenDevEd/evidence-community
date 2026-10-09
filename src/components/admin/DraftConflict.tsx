@@ -101,7 +101,7 @@ function CreatorConflictValue({ creator }: { creator: Record<string, unknown> })
 			</span>
 			{affiliations.length > 0 && (
 				<span className="text-black/45 dark:text-white/45">
-					{affiliations.join(" · ")}
+					{affiliations.join("; ")}
 				</span>
 			)}
 		</span>
