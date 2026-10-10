@@ -241,6 +241,10 @@ export function seedSql(): string {
 	COLLECTIONS.forEach((collection, index) => statements.push(...collectionRows(collection, index, members.get(collection.key)!)));
 	for (let week = 1; week <= 6; week++) statements.push(digestRow(week));
 	statements.push(...digestEditorialRows());
+	// A few records cite one another, so a card and a record page have references and citations to count.
+	for (const [from, to] of [["V2222223", "V2222224"], ["V2222223", "V2222225"], ["V2222223", "V2222226"], ["V2222223", "V2222227"], ["V2222225", "V2222223"]]) {
+		statements.push(`INSERT INTO "itemLink" ("fromKey", "toKey", "kind", "origin") VALUES (${sql(from)}, ${sql(to)}, 'cites', 'manual');`);
+	}
 	statements.push(
 		`UPDATE "status" SET "totalRecords" = (SELECT count(*) FROM "item" WHERE "deleted" = 0), "totalItems" = (SELECT count(*) FROM "item" WHERE "deleted" = 0 AND "parentItem" IS NULL), "databaseUpdatedAt" = '2026-09-01T00:00:00Z' WHERE "id" = 1;`,
 	);
