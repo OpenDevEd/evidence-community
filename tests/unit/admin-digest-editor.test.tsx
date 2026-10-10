@@ -14,6 +14,9 @@ import * as api from "@/components/admin/admin-api";
 import { AdminDigestEditor } from "@/components/admin/AdminDigestEditor";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// jsdom lays nothing out, and the editor asks a range where the selection is before it scrolls to it.
+Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => new DOMRect();
 const mocked = vi.mocked(api);
 const ID = "5e9558ce-ed55-4dc4-a44b-d1cbd3f9af64";
 const START = "## Heat\n\n**Kenya.** Parks cooled their surroundings [Mills, 2026](/lib/ABCD2345).";
