@@ -252,7 +252,24 @@ function Chip({ editor, mark }: MarkViewRendererProps) {
 	</InlineCitationCard>;
 }
 
-const Citation = Link.extend({ addMarkView() { return ReactMarkViewRenderer(Chip); } });
+/**
+ * The address of one of this library's records as a citation holds it, `/lib/KEY`. A browser's clipboard writes links
+ * out in full, so a citation copied from this site arrives with the site's own address in front.
+ */
+function citationHref(href: string | null) {
+	if (!href || CITE.test(href)) return href;
+	try {
+		const url = new URL(href, window.location.origin);
+		return url.origin === window.location.origin && CITE.test(url.pathname) ? url.pathname : href;
+	} catch {
+		return href;
+	}
+}
+
+const Citation = Link.extend({
+	addMarkView() { return ReactMarkViewRenderer(Chip); },
+	addAttributes() { return { ...this.parent?.(), href: { default: null, parseHTML: (element: HTMLElement) => citationHref(element.getAttribute("href")) } }; },
+});
 
 /**
  * A chip reached with Tab opens with Enter or Space, as a click does. In a browser the editor sees the key first and
@@ -297,7 +314,7 @@ const KIT = StarterKit.configure({
 export function AdminDigestEditor({ editionId, markdown, onChange, tools }: { editionId: string; markdown: string; onChange: (markdown: string) => void; /** Where the formatting buttons go: the pane's own bar, so nothing floats over the text. */ tools: HTMLElement | null }) {
 	const editor = useEditor({
 		// Only a citation is a link here: a link to anywhere else, pasted in with its text, comes in as the text alone.
-		extensions: [KIT, Citation.configure({ openOnClick: false, autolink: false, linkOnPaste: false, isAllowedUri: (url) => CITE.test(url) }), Markdown],
+		extensions: [KIT, Citation.configure({ openOnClick: false, autolink: false, linkOnPaste: false, isAllowedUri: (url) => CITE.test(citationHref(url) ?? "") }), Markdown],
 		content: markdown,
 		contentType: "markdown",
 		// The page renders on the server first, where there is no editor.

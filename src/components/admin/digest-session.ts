@@ -16,6 +16,17 @@ type DigestSnapshot = {
 };
 
 const SAVE_AFTER_MS = 700;
+// A request that outlives its page may carry 64 KB at most, all such requests of the page together.
+const MOST_LEAVING_BYTES = 60_000;
+
+/**
+ * Whether text can be sent as the page is left. Text the library is sure to refuse cannot, and neither can text too
+ * long for a request that outlives its page: both need the person to stay.
+ */
+function canLeaveWith(words: AdminDigestWords) {
+	const filled = [words.title, words.summary, words.markdown].every((value) => value.trim() !== "");
+	return filled && new Blob([JSON.stringify(words)]).size <= MOST_LEAVING_BYTES;
+}
 
 /**
  * One open edition while a person works on it. The text on screen is saved a moment after they stop typing, one save
@@ -72,9 +83,10 @@ export class DigestSession {
 	 * the edition, or a save is still on its way and this text is newer.
 	 */
 	leave() {
-		clearTimeout(this.timer);
 		if (!this.unsaved) return true;
-		if (this.snapshot.stale || this.snapshot.problem !== null || this.sending) return false;
+		// The pause after typing keeps running when the text cannot go now, so it is still saved if the person stays.
+		if (this.snapshot.stale || this.snapshot.problem !== null || this.sending || !canLeaveWith(this.snapshot.words)) return false;
+		clearTimeout(this.timer);
 		this.unsaved = false;
 		// A page kept in the browser's back and forward cache comes back with this session, so it takes the answer as any save's.
 		void saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words, true)

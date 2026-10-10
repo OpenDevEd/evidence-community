@@ -124,6 +124,38 @@ describe("the text a person has in hand for a digest", () => {
     expect(session.leave()).toBe(false);
   });
 
+  it("asks before leaving with text that cannot be sent on the way out, and still saves it if the person stays", async () => {
+    const session = new DigestSession(digest(3), words);
+    // An emptied title the library has not refused yet: sending it would lose the summary typed with it.
+    session.change({ title: "", summary: "A new summary." });
+    expect(session.leave()).toBe(false);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    // Text too long for a request that outlives its page.
+    session.change({ title: "August", markdown: "مرحبا ".repeat(6000) });
+    expect(session.leave()).toBe(false);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    // The person stays: the pause after typing still ends in a save.
+    api.saveAdminDigest.mockResolvedValue(digest(4));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.saveAdminDigest).toHaveBeenCalledTimes(1);
+    expect(api.saveAdminDigest.mock.calls[0]).toHaveLength(3);
+  });
+
+  it("saves the newer text after an older save when the person chose to stay", async () => {
+    const older = held();
+    api.saveAdminDigest.mockReturnValueOnce(older.answer).mockResolvedValue(digest(5, { ...words, title: "Newer" }));
+    const session = new DigestSession(digest(3), words);
+    session.change({ title: "Older" });
+    await vi.advanceTimersByTimeAsync(700);
+    session.change({ title: "Newer" });
+    // The older save is still on its way, so the newer text cannot go yet: the browser asks, and the person stays.
+    expect(session.leave()).toBe(false);
+    older.finish(digest(4, { ...words, title: "Older" }));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.saveAdminDigest).toHaveBeenLastCalledWith("edition", 4, { ...words, title: "Newer" });
+    expect(session.read().digest.revision).toBe(5);
+  });
+
   it("says which field the library refused, in its words", async () => {
     const refused = Object.assign(new api.AdminApiError("Check the highlighted fields and try again.", "validation_failed"), { fields: { note: "Keep the note to 2,000 characters." } });
     api.saveAdminDigest.mockRejectedValueOnce(refused);

@@ -128,7 +128,8 @@ describe("the digest's text editor", () => {
 	it("takes a pasted link to anywhere else as its text alone", async () => {
 		const editor = container.querySelector<HTMLElement>(".ProseMirror")!;
 		const paste = new Event("paste", { bubbles: true, cancelable: true });
-		const html = '<p>See <a href="https://example.org/paper">the outside paper</a> and <a href="/lib/WXYZ6789">Okoro and Adu, 2026</a>.</p>';
+		// A browser's clipboard writes a citation copied from this site with the site's own address in front.
+		const html = `<p>See <a href="https://example.org/paper">the outside paper</a> and <a href="${window.location.origin}/lib/WXYZ6789">Okoro and Adu, 2026</a>.</p>`;
 		Object.defineProperty(paste, "clipboardData", { value: { getData: (type: string) => (type === "text/html" ? html : "See the outside paper and Okoro and Adu, 2026."), files: [], items: [], types: ["text/html", "text/plain"] } });
 		await act(async () => { editor.focus(); editor.dispatchEvent(paste); });
 		await settle();
