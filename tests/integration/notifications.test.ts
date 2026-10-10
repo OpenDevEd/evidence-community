@@ -369,7 +369,7 @@ it("covers what was published in the period whenever it was added, and lists a r
   });
 }, 120_000);
 
-it("skips scheduled digests while paused, then covers everything since the last one", async () => {
+it("skips scheduled digests while paused, then covers everything since the last one at the next scheduled time", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const paused = {...publishedConfig, notifications: {...publishedConfig.notifications, pausedSince: "2026-09-13T08:00:00.000Z"}};
     const digests = () => db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
@@ -378,17 +378,18 @@ it("skips scheduled digests while paused, then covers everything since the last 
     await dated(client, "PAUSAAAA", "2026-09-10");
     await dated(client, "PAUSAAAB", "2026-09-16");
     await dated(client, "PAUSAAAC", "2026-09-24");
-    for (const monday of ["2026-09-14T09:00:00Z", "2026-09-21T09:00:00Z"]) {
-      expect(await prepareNotificationEditions(db, paused, new Date(monday))).toEqual({status: "empty"});
+    // The worker sees the pause on Sunday, is down on Monday when a digest was due, and is back the Monday after.
+    for (const cycle of ["2026-09-13T12:00:00Z", "2026-09-21T09:00:00Z"]) {
+      expect(await prepareNotificationEditions(db, paused, new Date(cycle))).toEqual({status: "empty"});
     }
     expect(await digests()).toHaveLength(0);
-    // The place is kept and the schedule moves on, so no date is promised and nothing is owed for the skipped weeks.
-    expect((await db.select().from(notificationState))[0]).toMatchObject({digestThrough: enabledAt, nextDigestAt: new Date("2026-09-28T09:00:00Z")});
+    expect((await db.select().from(notificationState))[0]).toMatchObject({digestThrough: enabledAt, digestPaused: true});
     expect(await getNextDigestEdition(db, paused, "en-GB")).toBeNull();
 
-    // Resuming mid-week sends nothing until the next scheduled time.
+    // Resuming on a Tuesday sends nothing for the Mondays that passed: the digest waits for the next one.
     expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-22T12:00:00Z"))).toEqual({status: "empty"});
     expect(await digests()).toHaveLength(0);
+    expect((await db.select().from(notificationState))[0]).toMatchObject({digestThrough: enabledAt, digestPaused: false, nextDigestAt: new Date("2026-09-28T09:00:00Z")});
     expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-28T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 3});
     const [edition] = await digests();
     expect(edition).toMatchObject({windowStart: enabledAt, windowEnd: new Date("2026-09-28T09:00:00Z")});
@@ -396,9 +397,12 @@ it("skips scheduled digests while paused, then covers everything since the last 
   });
 }, 120_000);
 
-it("reaches a month back after a long pause, and never carries older additions into a later digest", async () => {
+it.each([
+  {name: "beside a recent addition", recent: true},
+  {name: "when the first digest after the pause has nothing else", recent: false},
+])("reaches a month back after a long pause and never lists an older addition, $name", async ({recent}) => {
   await withIsolatedPublicationDatabase(async (db, client) => {
-    const paused = {...config, notifications: {...config.notifications, pausedSince: "2026-09-13T08:00:00.000Z"}};
+    const paused = {...config, notifications: {...config.notifications, pausedSince: "2026-06-05T08:00:00.000Z"}};
     const digests = () => db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest")).orderBy(notificationEdition.windowEnd);
     const added = async (title: string, at: string) => {
       const draft = await createNativeItemDraft(db, {itemType: "Report", title});
@@ -407,21 +411,35 @@ it("reaches a month back after a long pause, and never carries older additions i
       return draft.itemKey;
     };
     await prepareNotificationEditions(db, config, new Date("2026-06-01T00:00:00Z"));
-    const old = await added("Added early in the pause", "2026-06-10T10:00:00Z");
-    const recent = await added("Added in the last month", "2026-09-20T10:00:00Z");
-    expect(await prepareNotificationEditions(db, paused, new Date("2026-09-21T09:00:00Z"))).toEqual({status: "empty"});
+    await added("Added early in the pause", "2026-06-10T10:00:00Z");
+    const listed = recent ? [await added("Added in the last month", "2026-09-20T10:00:00Z")] : [];
+    await prepareNotificationEditions(db, paused, new Date("2026-09-21T09:00:00Z"));
+    await prepareNotificationEditions(db, config, new Date("2026-09-22T12:00:00Z"));
     expect(await digests()).toHaveLength(0);
 
-    expect(await prepareNotificationEditions(db, config, new Date("2026-09-28T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 1});
-    const [first] = await digests();
-    expect(first).toMatchObject({windowStart: new Date("2026-08-27T09:00:00Z"), windowEnd: new Date("2026-09-28T09:00:00Z")});
-    expect(first.publications.map(publication => publication.key)).toEqual([recent]);
-    // The older addition is settled with this digest, so the next one does not pick it up.
-    const [settled] = await db.select().from(notificationItem).where(eq(notificationItem.itemKey, old));
-    expect(settled.digestEditionId).toBe(first.id);
+    const reach = new Date("2026-08-27T09:00:00Z");
+    expect(await prepareNotificationEditions(db, config, new Date("2026-09-28T09:00:00Z"))).toMatchObject(recent ? {status: "queued", publicationCount: 1} : {status: "empty"});
+    const first = await digests();
+    expect(first.map(edition => ({start: edition.windowStart, keys: edition.publications.map(publication => publication.key)}))).toEqual(recent ? [{start: reach, keys: listed}] : []);
+    // The older addition stays out of the next digest too, whether or not that first digest was kept.
     const next = await added("Added the week after", "2026-09-30T10:00:00Z");
     expect(await prepareNotificationEditions(db, config, new Date("2026-10-05T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 1});
-    expect((await digests())[1].publications.map(publication => publication.key)).toEqual([next]);
+    expect((await digests()).at(-1)!.publications.map(publication => publication.key)).toEqual([next]);
+  });
+}, 120_000);
+
+it("lists everything since the last digest for a library that was never paused, however long that is", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, config, new Date("2026-06-01T00:00:00Z"));
+    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Added while the worker was down"});
+    await publishItemDraft(db, draft.itemKey);
+    await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', ["2026-06-02T10:00:00Z", draft.itemKey]);
+    // Forty days later, with no cycle in between, an owner asks for a digest by hand.
+    expect(await prepareNotificationEditions(db, config, new Date("2026-07-11T12:00:00Z"), {manualDigest: true})).toMatchObject({status: "queued", publicationCount: 1});
+    const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(edition).toMatchObject({windowStart: new Date("2026-06-01T00:00:00Z"), windowEnd: new Date("2026-07-11T12:00:00Z")});
+    expect(edition.publications.map(publication => publication.key)).toEqual([draft.itemKey]);
+    expect((await db.select().from(notificationState))[0].digestFloor).toBeNull();
   });
 }, 120_000);
 

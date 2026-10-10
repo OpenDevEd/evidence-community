@@ -19,20 +19,20 @@ const EDITION_LISTED_LIMIT = 1000;
 /** How soon to ask OpenScholar again while it writes a digest in the background. */
 const DIGEST_CHECK_MS = 15_000;
 /**
- * How far back one digest reaches: a month. A digest that follows a pause, or a worker that was down, covers what it
- * missed up to here and no further. The extra day keeps a 31-day month that crosses a clock change whole.
+ * How far back the first digest after a pause reaches: a month. The extra day keeps a 31-day month that crosses a
+ * clock change whole.
  */
 const DIGEST_REACH_MS = 32 * 86_400_000;
 
 // Publications this stream has not covered yet, up to the end of the window.
 // That includes commits that landed after an earlier window closed and items
 // revealed since, but never what an earlier edition counted past its cap.
-function uncovered(db: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow) {
+function uncovered(db: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow) {
   return and(
     publicParentVisibility(db, config.content.tags.hidden),
     eq(notificationItem.eligible, true), notInArray(item.itemType, ["Attachment", "Note"]),
     isNull(window.stream === "digest" ? notificationItem.digestEditionId : notificationItem.hourlyEditionId),
-    gt(notificationItem.firstPublishedAt, enabledAt), lte(notificationItem.firstPublishedAt, window.end),
+    gt(notificationItem.firstPublishedAt, after), lte(notificationItem.firstPublishedAt, window.end),
   );
 }
 
@@ -96,9 +96,9 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
  * were plus the first ones to list. One statement, so a commit landing mid-way
  * is either covered and counted here or left for the next edition.
  */
-async function coverCandidates(db: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow, editionId: string) {
+async function coverCandidates(db: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string) {
   const column = window.stream === "digest" ? sql.identifier("digestEditionId") : sql.identifier("hourlyEditionId");
-  const candidates = db.select({ key: notificationItem.itemKey }).from(notificationItem).innerJoin(item, eq(item.key, notificationItem.itemKey)).where(uncovered(db, config, enabledAt, window));
+  const candidates = db.select({ key: notificationItem.itemKey }).from(notificationItem).innerJoin(item, eq(item.key, notificationItem.itemKey)).where(uncovered(db, config, after, window));
   const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
     WITH covered AS (
       UPDATE "notificationItem" SET ${column} = ${editionId}
@@ -131,39 +131,38 @@ export type DigestPreparation =
   | { status: "queued"; editionId: string; publicationCount: number }
   | { status: "empty" | "disabled" };
 
-type NotificationWindow = { stream: NotificationStream; start: Date; end: Date; /** A digest whose period was cut to a month lists nothing first published before it. */ since?: Date };
+type NotificationWindow = { stream: NotificationStream; start: Date; end: Date };
 
-function notificationWindows(state: typeof notificationState.$inferSelect, digestAt: Date, now: Date, manualDigest: boolean): NotificationWindow[] {
+/** The additions a stream may still cover were first published after this: since the library began sending, or for digests since the floor a long pause left. */
+function additionsAfter(state: typeof notificationState.$inferSelect, stream: NotificationStream) {
+  return stream === "digest" && state.digestFloor && state.digestFloor > state.enabledAt! ? state.digestFloor : state.enabledAt!;
+}
+
+function notificationWindows(state: typeof notificationState.$inferSelect, digestAt: Date | null, now: Date, manualDigest: boolean): NotificationWindow[] {
   const windows: NotificationWindow[] = [];
   const hourlyEnd = completedHourlyWindow(now);
   // A restart combines overdue additions instead of sending one email per missed hour.
   const hourlyNext = new Date(completedHourlyWindow(state.hourlyThrough!).getTime() + 3_600_000);
   if (!manualDigest && hourlyNext <= hourlyEnd) windows.push({ stream: "hourly", start: state.hourlyThrough!, end: hourlyEnd });
-  if (manualDigest || digestAt <= now) {
-    const end = manualDigest ? now : digestAt;
-    const reach = new Date(end.getTime() - DIGEST_REACH_MS);
-    const start = state.digestThrough!;
-    windows.push(start < reach ? { stream: "digest", start: reach, end, since: reach } : { stream: "digest", start, end });
-  }
+  if (manualDigest || (digestAt && digestAt <= now)) windows.push({ stream: "digest", start: state.digestThrough!, end: manualDigest ? now : digestAt! });
   return windows;
 }
 
 /** How many publications the edition covers, and the keys of those it lists. */
-async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, enabledAt: Date, window: NotificationWindow, editionId: string) {
+async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string) {
   // Additions are marked as covered whatever a digest covers, so a library that
   // later switches to additions starts from this edition.
-  const additions = await coverCandidates(tx, config, enabledAt, window, editionId);
+  const additions = await coverCandidates(tx, config, after, window, editionId);
   if (window.stream === "hourly") return additions;
   return rankPublications(tx, config.notifications.digestCovers === "published"
     ? publishedIn(tx, config, window)
-    // Everything uncovered is marked above, so nothing older than the period carries into a later digest; it is not listed here either.
-    : inArray(item.key, tx.select({ key: notificationItem.itemKey }).from(notificationItem).where(and(eq(notificationItem.digestEditionId, editionId), window.since && gt(notificationItem.firstPublishedAt, window.since)))));
+    : inArray(item.key, tx.select({ key: notificationItem.itemKey }).from(notificationItem).where(eq(notificationItem.digestEditionId, editionId))));
 }
 
 async function prepareWindow(
   tx: DatabaseTransaction,
   config: LibraryServerConfig,
-  enabledAt: Date,
+  after: Date,
   window: NotificationWindow,
   manualDigest: boolean,
 ): Promise<DigestPreparation> {
@@ -176,7 +175,7 @@ async function prepareWindow(
     await tx.update(notificationState).set(cursor);
     return { status: "empty" };
   }
-  const { total, keys } = await editionPublications(tx, config, enabledAt, window, editionId);
+  const { total, keys } = await editionPublications(tx, config, after, window, editionId);
   const publications = await listPublications(tx, config, keys);
   let result: DigestPreparation = { status: "empty" };
   if (!publications.length) {
@@ -191,16 +190,39 @@ async function prepareWindow(
   return result;
 }
 
-/** When the next scheduled digest is due, moved on when the schedule changed or the library is paused. */
-async function scheduledDigestDate(tx: DatabaseTransaction, config: LibraryServerConfig, state: typeof notificationState.$inferSelect, now: Date, manualDigest: boolean) {
-  const changed = !isDeepStrictEqual(JSON.parse(state.schedule), config.notifications.schedule);
-  // A paused library skips its scheduled digests and keeps its place: the first digest after the pause covers
-  // everything since the last one. A digest an owner asks for by hand is still written.
-  const skipped = config.notifications.pausedSince !== null && !manualDigest && state.nextDigestAt! <= now;
-  if (!changed && !skipped) return state.nextDigestAt!;
-  const digestAt = nextDigestDate(config.notifications.schedule, now);
-  await tx.update(notificationState).set({ schedule: JSON.stringify(config.notifications.schedule), nextDigestAt: digestAt });
-  return digestAt;
+type State = typeof notificationState.$inferSelect;
+
+/** What a schedule change, a pause or its end changes about when the next scheduled digest is due. */
+function scheduleChange(config: LibraryServerConfig, state: State, now: Date) {
+  const paused = config.notifications.pausedSince !== null;
+  const resumed = state.digestPaused && !paused;
+  const patch: Partial<State> = paused === state.digestPaused ? {} : { digestPaused: paused };
+  if (resumed || !isDeepStrictEqual(JSON.parse(state.schedule), config.notifications.schedule)) {
+    Object.assign(patch, { schedule: JSON.stringify(config.notifications.schedule), nextDigestAt: nextDigestDate(config.notifications.schedule, now) });
+  }
+  return { paused, resumed, patch };
+}
+
+/** The digest that ends a pause reaches a month back from its end. When the last digest is older, it starts there. */
+function reachChange(state: State, end: Date | null): Partial<State> {
+  if (!end) return {};
+  const reach = new Date(end.getTime() - DIGEST_REACH_MS);
+  return state.digestThrough! < reach ? { digestThrough: reach, digestFloor: reach } : {};
+}
+
+/**
+ * Where the digest stands after a schedule change, a pause or its end: the state as it now is, and when the next
+ * scheduled digest is due (never, while paused). A paused library keeps its place, so the first digest after the pause
+ * covers everything since the last one, up to a month back. That digest goes out at the next scheduled time after the
+ * pause ends, not for a time that passed during it. A digest an owner asks for by hand is written even while paused.
+ */
+async function digestCursor(tx: DatabaseTransaction, config: LibraryServerConfig, state: State, now: Date, manualDigest: boolean) {
+  const { paused, resumed, patch } = scheduleChange(config, state, now);
+  // The digest that ends the pause: the next scheduled one, or one asked for by hand during it.
+  const end = resumed ? patch.nextDigestAt! : paused && manualDigest ? now : null;
+  Object.assign(patch, reachChange(state, end));
+  const current = Object.keys(patch).length ? (await tx.update(notificationState).set(patch).returning())[0] : state;
+  return { state: current, digestAt: paused ? null : current.nextDigestAt! };
 }
 
 /** Each window and its metadata snapshot are saved together before any provider call. */
@@ -220,13 +242,13 @@ export async function prepareNotificationEditions(
     }
     if (!state.enabled) {
       const enabledAt = new Date(Math.min(now.getTime(), new Date(config.updatedAt).getTime()));
-      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, digestThrough: enabledAt, nextDigestAt: nextDigestDate(config.notifications.schedule, enabledAt), schedule }).returning();
+      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, digestThrough: enabledAt, nextDigestAt: nextDigestDate(config.notifications.schedule, enabledAt), schedule, digestPaused: false, digestFloor: null }).returning();
       if (!manualDigest) return { status: "empty" };
     }
-    const digestAt = await scheduledDigestDate(tx, config, state, now, manualDigest);
+    const cursor = await digestCursor(tx, config, state, now, manualDigest);
     let result: DigestPreparation = { status: "empty" };
-    for (const window of notificationWindows(state, digestAt, now, manualDigest)) {
-      const prepared = await prepareWindow(tx, config, state.enabledAt!, window, manualDigest);
+    for (const window of notificationWindows(cursor.state, cursor.digestAt, now, manualDigest)) {
+      const prepared = await prepareWindow(tx, config, additionsAfter(cursor.state, window.stream), window, manualDigest);
       if (prepared.status === "queued") result = prepared;
     }
     return result;
