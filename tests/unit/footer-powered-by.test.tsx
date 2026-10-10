@@ -35,6 +35,8 @@ vi.mock("@/components/library/LibraryIdentity", () => ({
 }));
 
 const configState = { poweredBy: true };
+// The link goes to the OpenScholar the library belongs to, taken from its own page there.
+const openScholar = `${new URL(libraryConfigSchema.parse(minimalLibraryConfig).authentication.openScholar.libraryUrl).origin}/`;
 
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => {
@@ -49,12 +51,12 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 }));
 
 describe("footer powered-by link", () => {
-	it("links to OpenScholar when the setting is on", () => {
+	it("links to the library's own OpenScholar when the setting is on", () => {
 		configState.poweredBy = true;
 		const markup = renderToStaticMarkup(<Footer />);
 
 		expect(markup).toContain('data-library-powered-by=""');
-		expect(markup).toContain('href="https://openscholar.ai"');
+		expect(markup).toContain(`href="${openScholar}"`);
 		expect(markup).toContain("poweredBy");
 	});
 
@@ -63,6 +65,6 @@ describe("footer powered-by link", () => {
 		const markup = renderToStaticMarkup(<Footer />);
 
 		expect(markup).not.toContain("data-library-powered-by");
-		expect(markup).not.toContain("https://openscholar.ai");
+		expect(markup).not.toContain(openScholar);
 	});
 });

@@ -2343,7 +2343,7 @@ test("returns to the open draft after finishing link selection in a narrow windo
 	const title = inspector.getByRole("textbox", { name: "Title", exact: true });
 	await expect(title).toBeEnabled();
 
-	await inspector.getByRole("button", { name: "Add to Cites" }).click();
+	await inspector.getByRole("button", { name: "Add to References" }).click();
 	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
 	await page.locator('[data-admin-link-pick-banner="cites"]').getByRole("button", { name: "Done" }).click();
 	await expect(title).toBeVisible();
@@ -2946,7 +2946,7 @@ test("keeps add controls disabled until a working draft is opened", async ({ pag
 	await mockPublishedBook(page);
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-	const labels = ["Add creator", "Add to Cites", "Add to collection", "Add attachment", "Add PDF"];
+	const labels = ["Add creator", "Add to References", "Add to collection", "Add attachment", "Add PDF"];
 	for (const name of labels) await expect(inspector.getByRole("button", { name, exact: true })).toBeDisabled();
 	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	for (const name of labels) await expect(inspector.getByRole("button", { name, exact: true })).toBeEnabled();

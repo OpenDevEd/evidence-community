@@ -121,7 +121,7 @@ describe("AdminLinksEditor", () => {
 		return onChange;
 	}
 
-	async function selectTab(label: "Cites" | "Related" | "Cited by") {
+	async function selectTab(label: "References" | "Related" | "Citations") {
 		const tab = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
 		expect(tab).not.toBeNull();
 		await act(async () => tab!.click());
@@ -133,7 +133,7 @@ describe("AdminLinksEditor", () => {
 			itemType: "Book",
 			links: { cites: ["AAAA2345", "NEWW2345"], related: [] },
 		});
-		await selectTab("Cites");
+		await selectTab("References");
 
 		const cites = [...container.querySelectorAll('[data-admin-link-kind="cites"]')]
 			.filter((node) => node.closest('[data-admin-link-list="cites"]'))
@@ -155,7 +155,7 @@ describe("AdminLinksEditor", () => {
 		expect(sourceRow?.querySelector('[aria-label="Read only"]')).not.toBeNull();
 		expect(sourceRow?.textContent).toContain("Main Zotero group");
 
-		await selectTab("Cited by");
+		await selectTab("Citations");
 		const incoming = container.querySelector('[data-admin-link-list="citedBy"]');
 		expect(incoming?.textContent).toContain("Citing book");
 		expect(incoming?.querySelector('button[aria-label^="Remove"]')).toBeNull();
@@ -167,7 +167,7 @@ describe("AdminLinksEditor", () => {
 			links: { cites: ["AAAA2345"], related: ["BBBB2345"] },
 		});
 		const remove = container.querySelector<HTMLButtonElement>(
-			'button[aria-label="Remove Kept book from Cites"]',
+			'button[aria-label="Remove Kept book from References"]',
 		);
 		expect(remove).not.toBeNull();
 		await act(async () => remove!.click());
@@ -220,7 +220,7 @@ describe("AdminLinksEditor", () => {
 		expect(open).not.toBeNull();
 		await act(async () => open!.click());
 		expect(onOpenRecord).toHaveBeenCalledWith("AAAA2345");
-		await selectTab("Cited by");
+		await selectTab("Citations");
 		// Incoming rows open too
 		const openIncoming = container.querySelector<HTMLButtonElement>(
 			'button[aria-label="Open Citing book"]',
@@ -232,14 +232,14 @@ describe("AdminLinksEditor", () => {
 		const onStartPick = vi.fn();
 		const onChange = vi.fn();
 		await render({ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }, onChange, true, { onStartPick });
-		for (const kind of ["Cites", "Related"] as const) {
+		for (const kind of ["References", "Related"] as const) {
 			await selectTab(kind);
 			const add = container.querySelector<HTMLButtonElement>("button[data-admin-link-pick]");
 			expect(add?.disabled).toBe(true);
 			await act(async () => add!.click());
 			expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
 		}
-		await selectTab("Cited by");
+		await selectTab("Citations");
 		expect(container.querySelector("button[data-admin-link-pick]")).toBeNull();
 		expect(onStartPick).not.toHaveBeenCalled();
 		expect(onChange).not.toHaveBeenCalled();

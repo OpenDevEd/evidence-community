@@ -126,7 +126,11 @@ describe("public library configuration", () => {
 		// Only the account page reaches the browser: never the OAuth client secret,
 		// the machine credential or the session secret.
 		expect(publicConfig.authentication).toEqual({
-			openScholar: { accountUrl: serverConfig.authentication.openScholar.accountUrl },
+			openScholar: {
+				accountUrl: serverConfig.authentication.openScholar.accountUrl,
+				// Only the site of the library's page on OpenScholar, never the page itself.
+				siteUrl: new URL(serverConfig.authentication.openScholar.libraryUrl).origin,
+			},
 		});
 
 		for (const privateValue of [

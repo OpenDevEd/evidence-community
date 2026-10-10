@@ -230,6 +230,7 @@ it("refuses text a digest cannot hold, with the reason", async () => {
     await expect(save("See [the paper](https://example.org/paper).")).rejects.toThrow("must point to a publication in this library");
     await expect(save("![chart](/chart.png)")).rejects.toThrow("cannot hold images");
     await expect(save("<script>alert(1)</script>")).rejects.toThrow("Remove the HTML");
+    await expect(save("x".repeat(50_001))).rejects.toThrow("Keep the digest's text under 50,000 characters.");
     await expect(save("### Too deep\n\nText.")).rejects.toThrow("one level of heading");
     await expect(save("- a list")).rejects.toThrow("headings, paragraphs, bold and citations only");
     // A citation has to lead somewhere readers can go.

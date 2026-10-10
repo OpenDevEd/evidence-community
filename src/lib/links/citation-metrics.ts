@@ -4,7 +4,7 @@ import type { SourceProvider } from "@opendeved/evidence-library-core";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { sourceConnection } from "@/db/schema/source";
 import { itemCitationMetric } from "@/db/schema/tables/itemCitationMetric";
-import { sourceDisplayLabel, sourceProviderName } from "@/lib/admin/source-label";
+import { sourceDisplayLabel } from "@/lib/admin/source-label";
 import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 type Executor = Database | DatabaseTransaction;
@@ -53,8 +53,9 @@ export async function getSourceCitationMetricsForKeys(
 		const metric: SourceCitationMetric = {
 			sourceConnectionKey: row.sourceConnectionKey,
 			// These are OpenAlex's own counts, whichever search imported the work.
+			// Readers see them under OpenScholar's name, where the full lists open.
 			sourceLabel: openAlex
-				? sourceProviderName("openalex")
+				? "OpenScholar"
 				: sourceDisplayLabel({
 						key: row.sourceConnectionKey,
 						provider: row.provider,

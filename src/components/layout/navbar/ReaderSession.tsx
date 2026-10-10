@@ -41,6 +41,12 @@ export function useReaderSession() {
 	};
 }
 
+/** Builds an address on the OpenScholar this library belongs to, from a path there. No link names a host of its own. */
+export function useOpenScholarUrl() {
+	const site = useLibraryConfig().authentication.openScholar.siteUrl;
+	return (path = "/") => new URL(path, site).toString();
+}
+
 /** The OpenScholar account page, where readers change their name, avatar and sign-in settings. */
 export function useOpenScholarAccountUrl() {
 	return useLibraryConfig().authentication.openScholar.accountUrl;

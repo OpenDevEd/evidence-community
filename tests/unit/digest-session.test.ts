@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => {
   class AdminApiError extends Error {
+    fields: Record<string, string> = {};
     constructor(message: string, readonly code: string) { super(message); }
   }
   return { AdminApiError, saveAdminDigest: vi.fn(), moveAdminDigest: vi.fn() };
@@ -100,6 +101,68 @@ describe("the text a person has in hand for a digest", () => {
     expect(session.read()).toMatchObject({ digest: { revision: 4, state: "published" }, words: { note: "Typed while publishing" } });
     await vi.advanceTimersByTimeAsync(0);
     expect(api.saveAdminDigest).toHaveBeenCalledWith("edition", 4, { ...words, note: "Typed while publishing" });
+  });
+
+  it("sends what was typed at once when the page is left, and says when text would be lost", async () => {
+    api.saveAdminDigest.mockResolvedValue(digest(4, { ...words, title: "Typed a moment ago" }));
+    const session = new DigestSession(digest(3), words);
+    expect(session.leave()).toBe(true);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    session.change({ title: "Typed a moment ago" });
+    // No waiting for the pause after typing: the page is going.
+    expect(session.leave()).toBe(true);
+    expect(api.saveAdminDigest).toHaveBeenCalledWith("edition", 3, { ...words, title: "Typed a moment ago" }, true);
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.saveAdminDigest).toHaveBeenCalledTimes(1);
+    expect(session.read().digest.revision).toBe(4);
+
+    // Text the library refused cannot be sent on the way out, so the person is asked first.
+    api.saveAdminDigest.mockRejectedValueOnce(new api.AdminApiError("Give the digest a title.", "validation_failed"));
+    session.change({ title: "" });
+    await vi.advanceTimersByTimeAsync(700);
+    expect(session.read().problem).toBe("Give the digest a title.");
+    expect(session.leave()).toBe(false);
+  });
+
+  it("asks before leaving with text that cannot be sent on the way out, and still saves it if the person stays", async () => {
+    const session = new DigestSession(digest(3), words);
+    // An emptied title the library has not refused yet: sending it would lose the summary typed with it.
+    session.change({ title: "", summary: "A new summary." });
+    expect(session.leave()).toBe(false);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    // Text too long for a request that outlives its page.
+    session.change({ title: "August", markdown: "مرحبا ".repeat(6000) });
+    expect(session.leave()).toBe(false);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    // The person stays: the pause after typing still ends in a save.
+    api.saveAdminDigest.mockResolvedValue(digest(4));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.saveAdminDigest).toHaveBeenCalledTimes(1);
+    expect(api.saveAdminDigest.mock.calls[0]).toHaveLength(3);
+  });
+
+  it("saves the newer text after an older save when the person chose to stay", async () => {
+    const older = held();
+    api.saveAdminDigest.mockReturnValueOnce(older.answer).mockResolvedValue(digest(5, { ...words, title: "Newer" }));
+    const session = new DigestSession(digest(3), words);
+    session.change({ title: "Older" });
+    await vi.advanceTimersByTimeAsync(700);
+    session.change({ title: "Newer" });
+    // The older save is still on its way, so the newer text cannot go yet: the browser asks, and the person stays.
+    expect(session.leave()).toBe(false);
+    older.finish(digest(4, { ...words, title: "Older" }));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.saveAdminDigest).toHaveBeenLastCalledWith("edition", 4, { ...words, title: "Newer" });
+    expect(session.read().digest.revision).toBe(5);
+  });
+
+  it("says which field the library refused, in its words", async () => {
+    const refused = Object.assign(new api.AdminApiError("Check the highlighted fields and try again.", "validation_failed"), { fields: { note: "Keep the note to 2,000 characters." } });
+    api.saveAdminDigest.mockRejectedValueOnce(refused);
+    const session = new DigestSession(digest(3), words);
+    session.change({ note: "x".repeat(2001) });
+    await vi.advanceTimersByTimeAsync(700);
+    expect(session.read().problem).toBe("Keep the note to 2,000 characters.");
   });
 
   it("saves what is on screen before a step, takes the step from the saved revision, and shows the text the library answers with", async () => {

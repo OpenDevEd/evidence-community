@@ -7,6 +7,7 @@ import {
 	Building03Icon,
 	Folder01Icon,
 	Mortarboard01Icon,
+	ArrowUpRight01Icon,
 } from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
@@ -18,7 +19,7 @@ import { RelationsType } from "@/types/item";
 import { siDoi } from "simple-icons";
 import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useTranslations, useLocale } from "next-intl";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import { Divider, Spinner } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -46,9 +47,11 @@ import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
+import { openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
 import LikeButton from "../items/LikeButton";
-import { AddButton } from "../items/Resource";
+import { AddButton, CitationCounts } from "../items/Resource";
 import {
 	createContext,
 	use,
@@ -1161,9 +1164,36 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 	);
 }
 
+/** The tab a card's count asks for in the address, and the list each tab shows. */
+const ASKED_TAB: Record<string, string> = { references: "cites", citations: "citedBy" };
+const TAB_LIST: Record<string, OpenScholarList> = { cites: "references", citedBy: "citations" };
+
+/**
+ * What OpenAlex lists in all for a record's references or citations, beside what the library holds, opening the whole
+ * list in OpenScholar. Nothing for a record that is not an OpenAlex work, or a list OpenAlex has none of.
+ */
+function OpenScholarTotal({ item, tab }: { item: Item | undefined; tab: string }) {
+	const t = useTranslations("ui");
+	const locale = useLocale();
+	const openScholar = useOpenScholarUrl();
+	const list = openScholarList(item, TAB_LIST[tab]);
+	if (!list?.total) return null;
+	return (
+		<a href={openScholar(list.path)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+			{t("onOpenAlex", { count: list.total.toLocaleString(locale) })}
+			<HugeiconsIcon icon={ArrowUpRight01Icon} aria-hidden size={14} />
+		</a>
+	);
+}
+
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const [selectedTab, setSelectedTab] = useState("general");
+	// A card's reference count opens this page on its References list, and its citation count on Citations.
+	const asked = useSearchParams().get("links");
+	// The tab the address asks for, until the reader picks another. A new address asks again, without an effect.
+	const [picked, setPicked] = useState<{ asked: string | null; tab: string } | null>(null);
+	const selectedTab = picked?.asked === asked ? picked.tab : ASKED_TAB[asked ?? ""] ?? "general";
+	const setSelectedTab = (tab: string) => setPicked({ asked, tab });
 
 	const descriptions: Record<string, string> = {
 		general: t("relatedResourcesByCitation"),
@@ -1183,11 +1213,15 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 			item.links.related.length > 0),
 	);
 
+	// How many of the record's references and citations the library holds, out of all OpenAlex counts. Shown even when
+	// the library holds none, since the totals still open in OpenScholar.
+	const counts = <div className="@container"><CitationCounts itemData={item} /></div>;
 	// OpenAlex records show provider relations elsewhere; only in-library links belong here.
-	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return null;
+	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return counts;
 
 	return (
 		<div className="flex flex-col gap-4">
+			{counts}
 			<div className="w-full">
 				<Relations
 					links={item?.links}
@@ -1197,8 +1231,9 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 					showTabsOnly={true}
 				/>
 			</div>
-			<p className="text-black/60 dark:text-white/60">
+			<p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-black/60 dark:text-white/60">
 				{descriptions[activeTab] || descriptions.general}
+				<OpenScholarTotal item={item} tab={activeTab} />
 			</p>
 			<Relations
 				links={item?.links}

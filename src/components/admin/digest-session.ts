@@ -16,6 +16,19 @@ type DigestSnapshot = {
 };
 
 const SAVE_AFTER_MS = 700;
+// A request that outlives its page may carry 64 KB at most, all such requests of the page together.
+const MOST_LEAVING_BYTES = 60_000;
+
+/**
+ * Whether text can be sent as the page is left. Text the library is sure to refuse cannot (an empty or over-long
+ * field, by the limits the library holds a digest to), and neither can text too long for a request that outlives its
+ * page: both need the person to stay.
+ */
+function canLeaveWith(words: AdminDigestWords) {
+	const filled = [words.title, words.summary, words.markdown].every((value) => value.trim() !== "");
+	const short = words.title.length <= 200 && words.summary.length <= 1000 && words.note.length <= 2000;
+	return filled && short && new Blob([JSON.stringify(words)]).size <= MOST_LEAVING_BYTES;
+}
 
 /**
  * One open edition while a person works on it. The text on screen is saved a moment after they stop typing, one save
@@ -31,6 +44,7 @@ export class DigestSession {
 	private readonly listeners = new Set<() => void>();
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private unsaved = false;
+	private sending = false;
 	private saving: Promise<void> = Promise.resolve();
 
 	constructor(digest: AdminDigest, words: AdminDigestWords) {
@@ -50,8 +64,10 @@ export class DigestSession {
 	}
 
 	private refuse(error: unknown) {
+		// The library names the field it refused and why; that says more than its general message.
+		const field = error instanceof AdminApiError ? Object.values(error.fields)[0] : undefined;
 		this.set({
-			problem: error instanceof Error ? error.message : "The digest could not be saved. Try again.",
+			problem: field ?? (error instanceof Error ? error.message : "The digest could not be saved. Try again."),
 			stale: this.snapshot.stale || (error instanceof AdminApiError && error.code === "conflict"),
 		});
 	}
@@ -61,6 +77,23 @@ export class DigestSession {
 		this.set({ words: { ...this.snapshot.words, ...patch } });
 		clearTimeout(this.timer);
 		this.timer = setTimeout(() => void this.save(), SAVE_AFTER_MS);
+	}
+
+	/**
+	 * Sends what is on screen as the page is left, without waiting for the pause after typing: the request outlives the
+	 * page. True when nothing is left behind, false when text stays unsaved: the library refused it, someone else changed
+	 * the edition, or a save is still on its way and this text is newer.
+	 */
+	leave() {
+		if (!this.unsaved) return true;
+		// The pause after typing keeps running when the text cannot go now, so it is still saved if the person stays.
+		if (this.snapshot.stale || this.snapshot.problem !== null || this.sending || this.snapshot.busy !== null || !canLeaveWith(this.snapshot.words)) return false;
+		clearTimeout(this.timer);
+		this.unsaved = false;
+		// A page kept in the browser's back and forward cache comes back with this session, so it takes the answer as any save's.
+		void saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words, true)
+			.then((digest) => this.set({ digest, problem: null }), (error) => { this.unsaved = true; this.refuse(error); });
+		return true;
 	}
 
 	/** Nothing typed waits to be saved and no step is under way, so a newer answer from the library can take this one's place. */
@@ -73,6 +106,7 @@ export class DigestSession {
 		if (this.snapshot.stale) return false;
 		if (!this.unsaved) return true;
 		this.unsaved = false;
+		this.sending = true;
 		try {
 			this.set({ digest: await saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words), problem: null });
 			return true;
@@ -80,6 +114,8 @@ export class DigestSession {
 			this.unsaved = true;
 			this.refuse(error);
 			return false;
+		} finally {
+			this.sending = false;
 		}
 	}
 

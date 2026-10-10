@@ -365,7 +365,7 @@ describe("OpenAlex PDF processing", () => {
 					});
 					const [work] = await database.select({ key: item.key }).from(item).where(eq(item.itemType, "JournalArticle"));
 					expect(await getSourceCitationMetrics(database, work!.key)).toEqual([
-						expect.objectContaining({ sourceLabel: "OpenAlex", citedByCount: 5 }),
+						expect.objectContaining({ sourceLabel: "OpenScholar", citedByCount: 5 }),
 					]);
 				}
 				await database

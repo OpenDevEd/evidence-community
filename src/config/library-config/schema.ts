@@ -2181,7 +2181,11 @@ const publicAiSchema = z
 
 const publicAuthenticationSchema = z
 	.object({
-		openScholar: z.object({ accountUrl: publicHttpsUrlSchema }).strict(),
+		openScholar: z.object({
+			accountUrl: publicHttpsUrlSchema,
+			/** The OpenScholar this library belongs to, which every link to OpenScholar is built on. */
+			siteUrl: publicHttpsOriginSchema,
+		}).strict(),
 	})
 	.strict();
 

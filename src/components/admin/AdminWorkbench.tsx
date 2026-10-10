@@ -2551,7 +2551,7 @@ export default function AdminWorkbench({
 									>
 										<span className="min-w-0 flex-1">
 											Tick or click records to add them under{" "}
-											<strong>{activeLinkPick === "cites" ? "Cites" : "Related"}</strong>{" "}
+											<strong>{activeLinkPick === "cites" ? "References" : "Related"}</strong>{" "}
 											for “{detail.title || detail.key}”; click or untick again to remove. Esc to finish.
 										</span>
 										<Button

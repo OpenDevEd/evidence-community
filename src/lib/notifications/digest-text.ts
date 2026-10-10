@@ -3,11 +3,14 @@ import { z } from "zod";
 import { AdminValidationError } from "@/lib/admin/errors";
 import type { DigestDraft } from "./types";
 
+const MOST_TEXT = 50_000;
+const TOO_LONG = "Keep the digest's text under 50,000 characters.";
+
 // The same limits the writer's own text is held to.
 export const digestDraftSchema = z.object({
   title: z.string().trim().min(1, "Give the digest a title.").max(200),
   summary: z.string().trim().min(1, "Give the digest a summary.").max(1000),
-  markdown: z.string().trim().min(1, "The digest has no text.").max(50_000),
+  markdown: z.string().trim().min(1, "The digest has no text.").max(MOST_TEXT),
   note: z.string().trim().max(2000),
 }).strict();
 
@@ -52,6 +55,9 @@ export function citedKeys(markdown: string) {
 
 /** A person's text for a digest, trimmed and checked. The title and summary are one line of plain text each. */
 export function checkedDigestDraft(input: unknown): Required<DigestDraft> {
+  // Said in the editor's own word for the field: the schema would call it Markdown.
+  const text = (input as { markdown?: unknown } | null)?.markdown;
+  if (typeof text === "string" && text.trim().length > MOST_TEXT) throw new AdminValidationError(TOO_LONG, { markdown: TOO_LONG });
   const draft = digestDraftSchema.parse(input);
   for (const [field, label] of [["title", "title"], ["summary", "summary"]] as const) {
     if (/[\r\n]/.test(draft[field])) throw new AdminValidationError(`Keep the ${label} on one line.`, { [field]: "Remove the line break." });

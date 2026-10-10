@@ -880,8 +880,9 @@ export function getAdminDigests(query: AdminDigestsQuery) {
 export async function getAdminDigest(id: string) {
 	return (await requestJson<{ digest: AdminDigest }>(digestPath(id))).digest;
 }
-export async function saveAdminDigest(id: string, expectedRevision: number, words: AdminDigestWords) {
-	const { digest } = await requestJson<{ digest: AdminDigest }>(digestPath(id), { method: "PUT", body: JSON.stringify({ expectedRevision, words }) });
+/** `leaving` sends the save as the page is being left, so the request outlives it. */
+export async function saveAdminDigest(id: string, expectedRevision: number, words: AdminDigestWords, leaving = false) {
+	const { digest } = await requestJson<{ digest: AdminDigest }>(digestPath(id), { method: "PUT", body: JSON.stringify({ expectedRevision, words }), keepalive: leaving });
 	void mutate(digestList).catch(() => undefined);
 	return digest;
 }

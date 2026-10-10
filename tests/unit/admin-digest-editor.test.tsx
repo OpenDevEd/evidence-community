@@ -90,4 +90,52 @@ describe("the digest's text editor", () => {
 		await settle();
 		expect(saved.at(-1)).toBe("## Heat\n\n**Kenya.** Parks cooled their surroundings [Okoro and Adu, 2026](/lib/WXYZ6789).");
 	});
+	it("does not cite a row from the search before while a new search is on its way", async () => {
+		await press(byText("button", "Cite"));
+		await settle();
+		// The next search is held open: the rows still on show answer the old one.
+		let answer!: (value: Awaited<ReturnType<typeof api.getAdminDigestPapers>>) => void;
+		mocked.getAdminDigestPapers.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+		const search = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+		const enter = () => act(async () => { search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "parks");
+			search.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await settle();
+		const before = saved.length;
+		await enter();
+		await settle();
+		expect(saved).toHaveLength(before);
+		// Once the matching rows are there, Enter cites the first of them.
+		await act(async () => { answer(page([mills])); });
+		await settle();
+		await enter();
+		await settle();
+		expect(saved.at(-1)!.split("[Mills, 2026](/lib/ABCD2345)")).toHaveLength(3);
+	});
+
+	it("reaches a chip with the keyboard, and opens it with Enter", async () => {
+		const chip = container.querySelector<HTMLElement>(".ProseMirror [data-citation]")!;
+		expect(chip.tabIndex).toBe(0);
+		await act(async () => { chip.focus(); chip.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+		await settle();
+		expect(document.querySelector('[aria-label="Change this citation"]')).not.toBeNull();
+		// The key opened the chip; it was not typed into the text.
+		expect(saved).toEqual([]);
+	});
+
+	it("takes a pasted link to anywhere else as its text alone", async () => {
+		const editor = container.querySelector<HTMLElement>(".ProseMirror")!;
+		const paste = new Event("paste", { bubbles: true, cancelable: true });
+		// A browser's clipboard writes a citation copied from this site with the site's own address in front.
+		const html = `<p>See <a href="https://example.org/paper">the outside paper</a> and <a href="${window.location.origin}/lib/WXYZ6789">Okoro and Adu, 2026</a>.</p>`;
+		Object.defineProperty(paste, "clipboardData", { value: { getData: (type: string) => (type === "text/html" ? html : "See the outside paper and Okoro and Adu, 2026."), files: [], items: [], types: ["text/html", "text/plain"] } });
+		await act(async () => { editor.focus(); editor.dispatchEvent(paste); });
+		await settle();
+		expect(saved.at(-1)).toContain("the outside paper");
+		expect(saved.at(-1)).not.toContain("example.org");
+		// A citation pasted with it stays a citation.
+		expect(saved.at(-1)).toContain("[Okoro and Adu, 2026](/lib/WXYZ6789)");
+	});
 });
