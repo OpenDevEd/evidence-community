@@ -145,6 +145,96 @@ function NewCollectionButton({ onCreate }: { onCreate: () => void }) {
 	);
 }
 
+/** The library's sources: one narrows the records to those it brought in, and its badge opens what its sync is doing. */
+function SourceList({ source, sources, onSelectSource, onOpenSourceSync }: { source: string | null; sources: AdminSource[]; onSelectSource: (key: string) => void; onOpenSourceSync: (key: string) => void }) {
+	return (
+		<>
+		<NavigationHeading icon={DatabaseIcon} title="Sources" />
+		<div className={navigationListSurfaceClass}>
+			{sources.map((entry) => {
+				return (
+					<div className="flex items-center" key={entry.key}>
+					<button
+						aria-pressed={source === entry.key}
+						className={`${navigationItemClass} min-w-0 flex-1 ${
+							source === entry.key
+								? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+								: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
+						}`}
+						onClick={() =>
+							onSelectSource(
+								source === entry.key ? "all" : entry.key,
+							)
+						}
+						type="button"
+					>
+						<span className="grid size-3.5 shrink-0 place-items-center">
+							<SourceProviderIcon
+								provider={entry.provider}
+								size={14}
+							/>
+						</span>
+						<span className="min-w-0 flex-1 truncate">
+							{entry.label}
+						</span>
+						{entry.status === "paused" ? (
+							<HugeiconsIcon icon={PauseIcon} aria-label="Paused" size={11} />
+						) : entry.writeback?.enabled &&
+						  entry.writeback.supported ? (
+							<HugeiconsIcon icon={CloudUploadIcon} aria-label="Writeback enabled" size={11} />
+						) : entry.readOnly ? (
+							<HugeiconsIcon icon={SquareLock01Icon} aria-label="Writeback unavailable" size={11} />
+						) : null}
+					</button>
+					{entry.activity ? (
+						<AdminSourceStatusBadge
+							activity={entry.activity}
+							label={entry.label}
+							onClick={() => onOpenSourceSync(entry.key)}
+						/>
+					) : null}
+					</div>
+				);
+			})}
+		</div>
+		</>
+	);
+}
+
+/**
+ * What the admin shows: records of a kind, the records awaiting review, or the digests. The queue and the digests carry
+ * how many wait for an Editor or Owner.
+ */
+function KindList({ kind, reviewQueue, onSelectKind, onSelectReviewQueue }: { kind: string | null; reviewQueue: boolean; onSelectKind: (kind: "all" | "created" | "imported") => void; onSelectReviewQueue: () => void }) {
+	const digests = useContext(DigestsPage);
+	const { data: awaitingReview = 0 } = useSWR("admin-review-count", getAdminReviewCount);
+	const onDigests = digests?.selected ?? false;
+	return (
+		<div className="shrink-0">
+			<NavigationHeading icon={ListIcon} title="Kind" />
+			<div className={navigationListSurfaceClass}>
+				{kindOptions.map(({ key, label, icon }) => <NavigationItem key={key} icon={icon} label={label} pressed={!onDigests && kind === key} onPress={() => onSelectKind(key)} />)}
+				<NavigationItem icon={InboxIcon} label="Review queue" count={awaitingReview} pressed={!onDigests && reviewQueue} onPress={onSelectReviewQueue} />
+				{digests && <NavigationItem icon={News01Icon} label="Digests" count={digests.waiting} pressed={onDigests} onPress={digests.onOpen} />}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The lists under Kind follow the page it chose. Digests have states of their own and no sources or collections, so
+ * while they are the page their state list stands in for the records' lists.
+ */
+function PageLists({ children }: { children: ReactNode }) {
+	const digests = useContext(DigestsPage);
+	if (!digests?.selected) return children;
+	return (
+		<div className="shrink-0">
+			<StateList title="Digest state" options={digestStateOptions} selected={digests.show} onSelect={digests.onShow} />
+		</div>
+	);
+}
+
 export function AdminNavigation({
 	kind,
 	onSelectKind,
@@ -187,10 +277,6 @@ export function AdminNavigation({
 	state: AdminRecordState | "all" | null;
 }) {
 	const navigationRef = useRef<HTMLElement>(null);
-	const digests = useContext(DigestsPage);
-	const { data: awaitingReview = 0 } = useSWR("admin-review-count", getAdminReviewCount);
-	// The Kind list chooses the page: records of a kind, records awaiting review, or the digests. The lists below follow it.
-	const onDigests = digests?.selected ?? false;
 
 	return (
 		<nav
@@ -198,69 +284,10 @@ export function AdminNavigation({
 			aria-label="Admin filters and collections"
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
+			<KindList kind={kind} reviewQueue={reviewQueue} onSelectKind={onSelectKind} onSelectReviewQueue={onSelectReviewQueue} />
+			<PageLists>
 			<div className="shrink-0">
-				<NavigationHeading icon={ListIcon} title="Kind" />
-				<div className={navigationListSurfaceClass}>
-					{kindOptions.map(({ key, label, icon }) => <NavigationItem key={key} icon={icon} label={label} pressed={!onDigests && kind === key} onPress={() => onSelectKind(key)} />)}
-					<NavigationItem icon={InboxIcon} label="Review queue" count={awaitingReview} pressed={!onDigests && reviewQueue} onPress={onSelectReviewQueue} />
-					{digests && <NavigationItem icon={News01Icon} label="Digests" count={digests.waiting} pressed={onDigests} onPress={digests.onOpen} />}
-				</div>
-			</div>
-			{digests && onDigests ? (
-				<div className="shrink-0">
-					<StateList title="Digest state" options={digestStateOptions} selected={digests.show} onSelect={digests.onShow} />
-				</div>
-			) : (<>
-			<div className="shrink-0">
-				<NavigationHeading icon={DatabaseIcon} title="Sources" />
-				<div className={navigationListSurfaceClass}>
-					{sources.map((entry) => {
-						return (
-							<div className="flex items-center" key={entry.key}>
-							<button
-								aria-pressed={source === entry.key}
-								className={`${navigationItemClass} min-w-0 flex-1 ${
-									source === entry.key
-										? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-										: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
-								}`}
-								onClick={() =>
-									onSelectSource(
-										source === entry.key ? "all" : entry.key,
-									)
-								}
-								type="button"
-							>
-								<span className="grid size-3.5 shrink-0 place-items-center">
-									<SourceProviderIcon
-										provider={entry.provider}
-										size={14}
-									/>
-								</span>
-								<span className="min-w-0 flex-1 truncate">
-									{entry.label}
-								</span>
-								{entry.status === "paused" ? (
-									<HugeiconsIcon icon={PauseIcon} aria-label="Paused" size={11} />
-								) : entry.writeback?.enabled &&
-								  entry.writeback.supported ? (
-									<HugeiconsIcon icon={CloudUploadIcon} aria-label="Writeback enabled" size={11} />
-								) : entry.readOnly ? (
-									<HugeiconsIcon icon={SquareLock01Icon} aria-label="Writeback unavailable" size={11} />
-								) : null}
-							</button>
-							{entry.activity ? (
-								<AdminSourceStatusBadge
-									activity={entry.activity}
-									label={entry.label}
-									onClick={() => onOpenSourceSync(entry.key)}
-								/>
-							) : null}
-							</div>
-						);
-					})}
-				</div>
-
+				<SourceList source={source} sources={sources} onSelectSource={onSelectSource} onOpenSourceSync={onOpenSourceSync} />
 				<StateList title="Record state" options={stateOptions} selected={state} onSelect={onSelectState} />
 			</div>
 
@@ -289,7 +316,7 @@ export function AdminNavigation({
 					sources={sources}
 				/>
 			</div>
-			</>)}
+			</PageLists>
 		</nav>
 	);
 }
