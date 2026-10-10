@@ -52,7 +52,7 @@ function EditorNote({ edition }: { edition: DigestEdition }) {
     <blockquote className="whitespace-pre-line text-base leading-7">{edition.note}</blockquote>
     <figcaption className="mt-4 flex items-center gap-3 text-sm">
       <Face person={edition.by} size={36} />
-      <span className="font-medium">{edition.by.name}</span><span className={muted}>{DIGEST_SIGNER_ROLE[edition.by.role]}</span>
+      <span className="font-medium">{edition.by.name}</span>{edition.by.role && <span className={muted}>{DIGEST_SIGNER_ROLE[edition.by.role]}</span>}
     </figcaption>
   </figure>;
 }

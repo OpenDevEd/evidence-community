@@ -489,9 +489,11 @@ export default function AdminWorkbench({
 	const digestsOpen = digestsParam !== null;
 	const selectNavigationFilter = useCallback((next: Parameters<typeof setFilters>[0]) => {
 		setFilters(next);
-		void setDigestsParam(null);
+		// Only when the digests view is open: an address update on every keystroke of a search races with the
+		// filters' own, and typed characters are lost.
+		if (digestsOpen) void setDigestsParam(null);
 		setMobilePane("list");
-	}, [setFilters, setDigestsParam]);
+	}, [setFilters, digestsOpen, setDigestsParam]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");

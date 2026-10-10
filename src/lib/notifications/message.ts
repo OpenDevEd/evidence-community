@@ -116,10 +116,10 @@ function digestSignedBy(config: LibraryServerConfig, edition: EmailEdition) {
 	const face = by.photo ? `<img src="${escapeHtml(by.photo)}" alt="" width="28" height="28" style="width:28px;height:28px;border-radius:50%;vertical-align:middle;margin-right:10px">` : "";
 	const name = `<strong style="color:#202822">${escapeHtml(by.name)}</strong>`;
 	if (!edition.note) return { html: `<p style="${signedLine};margin-bottom:22px">${face}Checked by ${name}</p>`, text: `Checked by ${by.name}\n\n` };
-	const role = DIGEST_SIGNER_ROLE[by.role];
+	const role = by.role ? DIGEST_SIGNER_ROLE[by.role] : null;
 	return {
-		html: `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 26px;background:#f7f7f3;border-radius:12px"><tr><td style="padding:22px"><p style="${emailStyles.paragraph};margin:0 0 12px">${escapeHtml(edition.note).replace(/\n/g, "<br>")}</p><p style="${signedLine}">${face}${name} &nbsp;${role}</p></td></tr></table>`,
-		text: `${edition.note}\n${by.name}, ${role}\n\n`,
+		html: `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 26px;background:#f7f7f3;border-radius:12px"><tr><td style="padding:22px"><p style="${emailStyles.paragraph};margin:0 0 12px">${escapeHtml(edition.note).replace(/\n/g, "<br>")}</p><p style="${signedLine}">${face}${name}${role ? ` &nbsp;${role}` : ""}</p></td></tr></table>`,
+		text: `${edition.note}\n${by.name}${role ? `, ${role}` : ""}\n\n`,
 	};
 }
 

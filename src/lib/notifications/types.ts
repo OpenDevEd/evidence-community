@@ -17,9 +17,12 @@ export type DigestText = { title: string; summary: string; markdown: string };
 export type DigestDraft = DigestText & { note?: string };
 /** Someone on the library's team as they were when they acted: their OpenScholar account, name and photo. */
 export type DigestPerson = { id: string; name: string; photo: string | null };
-/** The Editor or Owner who published an edition, as readers are told when the library names who checks its digests. */
-export type DigestSigner = DigestPerson & { role: "editor" | "owner" };
+/**
+ * The Editor or Owner who published an edition, as readers are told when the library names who checks its digests.
+ * An edition published by the first release of the admin has no role recorded.
+ */
+export type DigestSigner = DigestPerson & { role?: "editor" | "owner" };
 /** A signer's role as readers see it under their name. */
-export const DIGEST_SIGNER_ROLE = { editor: "Editor", owner: "Owner" } as const satisfies Record<DigestSigner["role"], string>;
+export const DIGEST_SIGNER_ROLE = { editor: "Editor", owner: "Owner" } as const satisfies Record<NonNullable<DigestSigner["role"]>, string>;
 /** A step in an edition's history. AI writes; the rest are a person's. */
 export type DigestEventKind = "written" | "edited" | "submitted" | "withdrawn" | "returned" | "published";
