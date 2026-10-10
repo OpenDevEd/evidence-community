@@ -65,6 +65,10 @@ describe("analyzePhase on a page load", () => {
 		// A dialog growing 10 px, a pixel at a time, with its last pixels far apart.
 		const tailAt = [0, 9, 16, 25, 33, 41, 50, 58, 83, 138];
 		expect(analyzePhase(tailAt.map((at) => frame(500 + at, { moved: [{ id: 1, dx: 0, dy: 0, dw: 0, dh: 1 }] })), load)).toEqual([]);
+		// The same sections in a busy Firefox: what pushes them arrives over the first two frames, and a frame is dropped near the end.
+		const busy = [2, 14, 12, 15, 6, 11, 2, 2, 3, 1];
+		const busyAt = [0, 16, 31, 40, 73, 86, 108, 117, 172, 213];
+		expect(analyzePhase(busy.map((dy, index) => frame(500 + busyAt[index], { moved: [{ id: 1, dx: 0, dy, dw: 0, dh: 0 }], added: index < 2 ? [{ id: 50 + index, box: [0, 0, 300, 20] }] : [] })), load)).toEqual([]);
 		// Five rows popping in one after another are not a slide.
 		expect(analyzePhase([0, 100, 200, 300, 400].map((at) => frame(500 + at, { moved: [{ id: 1, dx: 0, dy: 20, dw: 0, dh: 0 }] })), load)).not.toEqual([]);
 	});
@@ -73,6 +77,24 @@ describe("analyzePhase on a page load", () => {
 		const slide = Array.from({ length: 12 }, (_, step) => frame(500 + step * 16, { moved: [{ id: 1, dx: 0, dy: 0, dw: 0, dh: 10 }, ...(step === 3 ? [{ id: 2, dx: 0, dy: 2, dw: 0, dh: 0 }] : [])] }));
 		expect(analyzePhase(slide, load)).toEqual([]);
 		expect(analyzePhase([frame(500, { moved: [{ id: 2, dx: 0, dy: 2, dw: 0, dh: 0 }] })], load)).toHaveLength(1);
+	});
+
+	it("reports what only looks like a slide: a long one with one big step, a wobble, and rows arriving one after another", () => {
+		const moves = (sizes: number[], added: (index: number) => boolean = () => false) =>
+			sizes.map((dy, index) => frame(500 + index * 16, { moved: [{ id: 1, dx: 0, dy, dw: 0, dh: 0 }], added: added(index) ? [{ id: 50 + index, box: [0, 0, 300, 20] as [number, number, number, number] }] : [] }));
+		// Fifty-nine steps of 10 px and one of 60: a long slide doesn't buy a bigger jump.
+		expect(analyzePhase(moves([...Array(30).fill(10), 60, ...Array(29).fill(10)]), load)).toHaveLength(1);
+		// Back and forth, frame after frame.
+		expect(analyzePhase(moves([10, -10, 10, -10, 10, -10]), load)).toHaveLength(1);
+		// A footer pushed 20 px by a new row in each of six frames in a row.
+		expect(analyzePhase(moves(Array(6).fill(20), () => true), load)).toHaveLength(1);
+		// One overshoot and return is how a spring settles.
+		expect(analyzePhase(moves([14, 18, 16, 12, 8, 5, 3, -3, -2, -1]), load)).toEqual([]);
+	});
+
+	it("keeps a jump out and back that happens beside a slide", () => {
+		const slide = Array.from({ length: 12 }, (_, step) => frame(500 + step * 16, { moved: [{ id: 1, dx: 0, dy: 0, dw: 0, dh: 10 }, ...(step === 3 ? [{ id: 2, dx: 0, dy: 100, dw: 0, dh: 0 }] : step === 4 ? [{ id: 2, dx: 0, dy: -100, dw: 0, dh: 0 }] : [])] }));
+		expect(analyzePhase(slide, load)).toHaveLength(1);
 	});
 
 	it("still reports a jump that is followed by a few small settling steps", () => {
