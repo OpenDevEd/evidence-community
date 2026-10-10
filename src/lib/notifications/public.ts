@@ -30,6 +30,8 @@ export type DigestEdition = DigestSummary & {markdown: string; note: string | nu
  * edition has any. `keys` on the edition then holds the other publications; `listed` still counts both.
  */
 export type DigestReviews = {listed: number; page: number; pages: number; keys: string[]};
+/** The records an edition's page shows cards for: this page of its reviews, then this page of the others. */
+export const editionCardKeys = (edition: DigestEdition) => [...(edition.reviews?.keys ?? []), ...edition.keys];
 export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages: number};
 
 // Lists read these small columns only, never an edition's stored publications.

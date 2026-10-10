@@ -37,6 +37,7 @@ import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
+import { openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
 import { useItemLink } from "@/hooks/useItemLink";
 import { hasAnyTag, hasTag } from "@/lib/tags";
 import { generateCOinS } from "@/lib/coins";
@@ -152,19 +153,19 @@ function CitationCounts({
 	const key = itemData?.key ?? "";
 	// OpenAlex's own totals, as of the last import.
 	const source = itemData?.citationMetrics?.[0];
-	const work = /^W\d+$/.test(itemData?.sourceRecordKey ?? "") ? itemData!.sourceRecordKey : null;
+	const there = (list: OpenScholarList) => { const path = openScholarList(itemData, list)?.path; return path && openScholar(path); };
 	const counts = [
 		{
 			id: "references", icon: ArrowUpRight01Icon, tone: "reference" as const, colour: "text-violet-700 dark:text-violet-300",
 			held: itemData?.links?.cites.length ?? 0, total: source?.referencedWorksCount ?? null,
-			here: `${resourceHref(key, { set: { links: "references" } })}#relations-tabs`, there: work && openScholar(`/results?citedBy=${work}`),
+			here: `${resourceHref(key, { set: { links: "references" } })}#relations-tabs`, there: there("references"),
 			label: (count: number) => t("referenceLabel", { count }),
 			words: (held: number, total: number | null) => total === null ? t("referencesHeldOnly", { held }) : t("referencesHeld", { held, total }),
 		},
 		{
 			id: "citations", icon: ArrowDownLeft01Icon, tone: "library" as const, colour: "text-accent",
 			held: itemData?.links?.citedBy.length ?? 0, total: source?.citedByCount ?? null,
-			here: resourceHref(key, { base: "/citation" }), there: work && openScholar(`/results?cites=${work}`),
+			here: resourceHref(key, { base: "/citation" }), there: there("citations"),
 			label: (count: number) => t("citationLabel", { count }),
 			words: (held: number, total: number | null) => total === null ? t("citationsHeldOnly", { held }) : t("citationsHeld", { held, total }),
 		},

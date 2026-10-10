@@ -49,6 +49,7 @@ import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
+import { openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
 import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import {
@@ -1163,19 +1164,32 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 	);
 }
 
+/** The tab a card's count asks for in the address, and the list each tab shows. */
+const ASKED_TAB: Record<string, string> = { references: "cites", citations: "citedBy" };
+const TAB_LIST: Record<string, OpenScholarList> = { cites: "references", citedBy: "citations" };
+
+/**
+ * What OpenAlex lists in all for a record's references or citations, beside what the library holds, opening the whole
+ * list in OpenScholar. Nothing for a record that is not an OpenAlex work, or a list OpenAlex has none of.
+ */
+function OpenScholarTotal({ item, tab }: { item: Item | undefined; tab: string }) {
+	const t = useTranslations("ui");
+	const openScholar = useOpenScholarUrl();
+	const list = openScholarList(item, TAB_LIST[tab]);
+	if (!list?.total) return null;
+	return (
+		<a href={openScholar(list.path)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+			{t("onOpenAlex", { count: list.total.toLocaleString() })}
+			<HugeiconsIcon icon={ArrowUpRight01Icon} aria-hidden size={14} />
+		</a>
+	);
+}
+
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	// A card's reference count opens this page on its References list, and its citation count on Citations.
 	const asked = useSearchParams().get("links");
-	const openScholar = useOpenScholarUrl();
-	const [selectedTab, setSelectedTab] = useState(asked === "references" ? "cites" : asked === "citations" ? "citedBy" : "general");
-	// What OpenAlex lists in all, beside what the library holds, opening the whole list in OpenScholar.
-	const source = item?.citationMetrics?.[0];
-	const work = /^W\d+$/.test(item?.sourceRecordKey ?? "") ? item!.sourceRecordKey : null;
-	const beyond: Record<string, { count: number | null | undefined; filter: string }> = {
-		cites: { count: source?.referencedWorksCount, filter: "citedBy" },
-		citedBy: { count: source?.citedByCount, filter: "cites" },
-	};
+	const [selectedTab, setSelectedTab] = useState(ASKED_TAB[asked ?? ""] ?? "general");
 
 	const descriptions: Record<string, string> = {
 		general: t("relatedResourcesByCitation"),
@@ -1211,12 +1225,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 			</div>
 			<p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-black/60 dark:text-white/60">
 				{descriptions[activeTab] || descriptions.general}
-				{work && beyond[activeTab]?.count ? (
-					<a href={openScholar(`/results?${beyond[activeTab].filter}=${work}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
-						{t("onOpenAlex", { count: beyond[activeTab].count!.toLocaleString() })}
-						<HugeiconsIcon icon={ArrowUpRight01Icon} aria-hidden size={14} />
-					</a>
-				) : null}
+				<OpenScholarTotal item={item} tab={activeTab} />
 			</p>
 			<Relations
 				links={item?.links}

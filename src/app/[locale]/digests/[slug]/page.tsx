@@ -1,6 +1,6 @@
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { getDigestEdition, listEarlierDigests, pageNumber } from "@/lib/notifications/public";
+import { editionCardKeys, getDigestEdition, listEarlierDigests, pageNumber } from "@/lib/notifications/public";
 import { readSubscription } from "@/lib/notifications/subscriptions";
 import { readPublicItems } from "@/lib/search-index/projection";
 import { readAuthorProfiles } from "@/lib/authors/catalog-server";
@@ -21,7 +21,7 @@ export default async function Page({params, searchParams}: Props) {
   const reviewsPage = searchParams.then(value => pageNumber(value.reviews));
   const edition = readDigests(current, async (db, config, locale) => getDigestEdition(db, config, locale, slug, await page, await reviewsPage));
   // This page's cards and their authors are read with the page, so nothing loads in the browser.
-  const cards = edition.then(value => readDigests(current, (db, config) => readEditionCards(db, config, [...(value?.reviews?.keys ?? []), ...(value?.keys ?? [])])));
+  const cards = edition.then(value => readDigests(current, (db, config) => readEditionCards(db, config, value ? editionCardKeys(value) : [])));
   return <DigestPages view="edition" slug={slug} earlier={readDigests(current, (db, config, locale) => listEarlierDigests(db, config, locale, slug))} edition={edition} cards={cards} />;
 }
 
