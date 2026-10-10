@@ -34,6 +34,7 @@ import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { SortHeader } from "./AdminSortHeader";
 import { AnimatePresence, motion } from "framer-motion";
 import type { AdminDigestsQuery, DigestAction, DigestState } from "@/lib/notifications/editorial";
 import { DIGEST_SIGNER_ROLE, type DigestEventKind, type DigestPerson, type DigestSigner } from "@/lib/notifications/types";
@@ -180,31 +181,8 @@ function Signed({ by, published }: { by: DigestPerson | null; published: boolean
 const segment = (active: boolean) => `inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${active ? "bg-white text-black shadow-sm dark:bg-white/10 dark:text-white" : `${muted} hover:text-black/80 dark:hover:text-white/80`}`;
 const range = (page: number, total: number, rows: number) => (total ? `${(page - 1) * rows + 1} to ${Math.min(page * rows, total)} of ${total}` : "None");
 
-const SHOWS: [Show, string][] = [["all", "All"], ["draft", "Drafts"], ["review", "In review"], ["published", "Published"]];
 const ROWS = 20;
 const NO_TITLE: Partial<Record<DigestState, string>> = { writing: "AI is writing this digest" };
-
-function ListHeader({ digests }: { digests: Digests }) {
-	const { list, query, setQuery } = digests;
-	return <div className={`flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-1.5 ${line}`}>
-		<h2 className="text-[13px] font-semibold">Digests</h2>
-		{/* On a phone the filters take a row of their own, under the title and the sort. */}
-		<div className="order-last flex w-full overflow-x-auto rounded-xl bg-black/[0.05] p-0.5 dark:bg-white/[0.06] sm:order-none sm:ml-auto sm:w-auto">
-			{SHOWS.map(([show, label]) => <button key={show} type="button" aria-pressed={query.show === show} onClick={() => setQuery({ ...query, show, page: 1 })} className={`h-8 ${segment(query.show === show)}`}>
-				{label}<span className="inline-block min-w-4 text-left tabular-nums opacity-60">{list?.counts[show] ?? ""}</span>
-			</button>)}
-		</div>
-		<Select
-			aria-label="Sort digests" size="sm" className="ml-auto w-32 sm:ml-0" classNames={{ trigger: "h-9 min-h-9 rounded-lg", value: "text-xs" }}
-			startContent={<HugeiconsIcon icon={Sorting05Icon} aria-hidden size={14} className={`shrink-0 ${muted}`} />}
-			selectedKeys={new Set([query.sort])} disallowEmptySelection
-			onSelectionChange={(keys) => setQuery({ ...query, sort: [...keys][0] === "oldest" ? "oldest" : "newest", page: 1 })}
-		>
-			<SelectItem key="newest" classNames={{ title: "text-[13px]" }}>Newest</SelectItem>
-			<SelectItem key="oldest" classNames={{ title: "text-[13px]" }}>Oldest</SelectItem>
-		</Select>
-	</div>;
-}
 
 function ListRow({ edition, onOpen }: { edition: AdminDigestList["editions"][number]; onOpen: () => void }) {
 	return <li>
@@ -238,9 +216,9 @@ function ListFooter({ list, onPage }: { list: AdminDigestList | undefined; onPag
 function DigestList({ digests }: { digests: Digests }) {
 	const { list, query, setQuery } = digests;
 	return <div className="flex min-h-0 flex-1 flex-col">
-		<ListHeader digests={digests} />
-		<div className={`${columns} shrink-0 border-b py-3 text-[11px] font-semibold ${line} ${muted}`}>
-			<span>Edition</span><span className={wideOnly}>Covers</span><span className={notOnPhone}>Publications</span><span>State</span><span className={notOnPhone}>Checked by</span>
+		{/* The same header as the record table: a column's name sorts by it. Which digests are listed is chosen in the navigation, as it is for records. */}
+		<div className={`${columns} h-10 shrink-0 border-b bg-card_light text-[11px] font-semibold text-black/40 dark:bg-card dark:text-white/40 ${line}`}>
+			<SortHeader columnId="edition" label="Edition" sort="edition" sortDirection={query.sort === "oldest" ? "asc" : "desc"} tabIndex={0} onSort={() => setQuery({ ...query, sort: query.sort === "oldest" ? "newest" : "oldest", page: 1 })} /><span className={wideOnly}>Covers</span><span className={notOnPhone}>Publications</span><span>State</span><span className={notOnPhone}>Checked by</span>
 		</div>
 		<ul className={`min-h-0 flex-1 overflow-y-auto ${digests.listStale ? "pointer-events-none opacity-50" : ""}`}>
 			{list ? <ListRows list={list} all={query.show === "all"} onOpen={digests.open} /> : Array.from({ length: 6 }, (_, index) => <li key={index} className={`${columns} h-[3.75rem] border-b ${line}`}>{rowPlaceholder}</li>)}

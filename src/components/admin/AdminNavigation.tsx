@@ -2,12 +2,14 @@
 
 import { useAdminSession } from "./AdminSessionProvider";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { ReviewQueueEntry } from "./ReviewQueueEntry";
+import useSWR from "swr";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, SquareLock01Icon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle01Icon, CloudUploadIcon, DatabaseIcon, Delete02Icon, FileClockIcon, FileImportIcon, FilePlusIcon, InboxIcon, ListIcon, Folder01Icon, FolderAddIcon, LibraryIcon, News01Icon, SquareLock01Icon, PauseIcon, PencilIcon } from "@hugeicons/core-free-icons";
+import { getAdminReviewCount } from "./admin-api";
+import { DigestsPage, type DigestShow } from "./admin-digests-page";
 
 import { AdminSourceStatusBadge } from "./AdminSourceStatus";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useContext, useRef } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
@@ -56,6 +58,43 @@ const stateOptions: Array<{
 	{ icon: Delete02Icon, key: "deleted", label: "Deleted" },
 ];
 
+const digestStateOptions: Array<{ icon: typeof CheckmarkCircle01Icon; key: DigestShow; label: string }> = [
+	{ icon: News01Icon, key: "all", label: "All digests" },
+	{ icon: FileClockIcon, key: "draft", label: "Drafts" },
+	{ icon: InboxIcon, key: "review", label: "In review" },
+	{ icon: CheckmarkCircle01Icon, key: "published", label: "Published" },
+];
+
+const pressedItemClass = "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white";
+const idleItemClass = "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]";
+
+/** One choice in a navigation list. `count` is how many wait there for an Editor or Owner. */
+function NavigationItem({ icon, label, count, pressed, onPress }: { icon: typeof Folder01Icon; label: string; count?: number; pressed: boolean; onPress: () => void }) {
+	return (
+		<button type="button" aria-pressed={pressed} className={`${navigationItemClass} ${pressed ? pressedItemClass : idleItemClass}`} onClick={onPress}>
+			<HugeiconsIcon icon={icon} aria-hidden size={14} />
+			<span className="min-w-0 flex-1 truncate">{label}</span>
+			{count !== undefined && (
+				<span className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-md px-1 text-[10px] font-semibold tabular-nums ${count ? "bg-accent/15 text-accent-300 dark:text-accent-700" : "bg-black/5 text-black/40 dark:text-white/40"}`}>
+					{count}
+				</span>
+			)}
+		</button>
+	);
+}
+
+/** Which of the page's records or digests are listed, by where they stand. The choices follow the page on show. */
+function StateList<Key extends string>({ title, options, selected, onSelect }: { title: string; options: Array<{ icon: typeof Folder01Icon; key: Key; label: string }>; selected: Key | null; onSelect: (key: Key) => void }) {
+	return (
+		<>
+			<NavigationHeading icon={CheckmarkCircle01Icon} title={title} />
+			<div className={navigationListSurfaceClass}>
+				{options.map((entry) => <NavigationItem key={entry.key} icon={entry.icon} label={entry.label} pressed={selected === entry.key} onPress={() => onSelect(entry.key)} />)}
+			</div>
+		</>
+	);
+}
+
 function NavigationHeading({
 	action,
 	icon: Icon,
@@ -103,6 +142,96 @@ function NewCollectionButton({ onCreate }: { onCreate: () => void }) {
 				</button>
 			</span>
 		</Tooltip>
+	);
+}
+
+/** The library's sources: one narrows the records to those it brought in, and its badge opens what its sync is doing. */
+function SourceList({ source, sources, onSelectSource, onOpenSourceSync }: { source: string | null; sources: AdminSource[]; onSelectSource: (key: string) => void; onOpenSourceSync: (key: string) => void }) {
+	return (
+		<>
+		<NavigationHeading icon={DatabaseIcon} title="Sources" />
+		<div className={navigationListSurfaceClass}>
+			{sources.map((entry) => {
+				return (
+					<div className="flex items-center" key={entry.key}>
+					<button
+						aria-pressed={source === entry.key}
+						className={`${navigationItemClass} min-w-0 flex-1 ${
+							source === entry.key
+								? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+								: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
+						}`}
+						onClick={() =>
+							onSelectSource(
+								source === entry.key ? "all" : entry.key,
+							)
+						}
+						type="button"
+					>
+						<span className="grid size-3.5 shrink-0 place-items-center">
+							<SourceProviderIcon
+								provider={entry.provider}
+								size={14}
+							/>
+						</span>
+						<span className="min-w-0 flex-1 truncate">
+							{entry.label}
+						</span>
+						{entry.status === "paused" ? (
+							<HugeiconsIcon icon={PauseIcon} aria-label="Paused" size={11} />
+						) : entry.writeback?.enabled &&
+						  entry.writeback.supported ? (
+							<HugeiconsIcon icon={CloudUploadIcon} aria-label="Writeback enabled" size={11} />
+						) : entry.readOnly ? (
+							<HugeiconsIcon icon={SquareLock01Icon} aria-label="Writeback unavailable" size={11} />
+						) : null}
+					</button>
+					{entry.activity ? (
+						<AdminSourceStatusBadge
+							activity={entry.activity}
+							label={entry.label}
+							onClick={() => onOpenSourceSync(entry.key)}
+						/>
+					) : null}
+					</div>
+				);
+			})}
+		</div>
+		</>
+	);
+}
+
+/**
+ * What the admin shows: records of a kind, the records awaiting review, or the digests. The queue and the digests carry
+ * how many wait for an Editor or Owner.
+ */
+function KindList({ kind, reviewQueue, onSelectKind, onSelectReviewQueue }: { kind: string | null; reviewQueue: boolean; onSelectKind: (kind: "all" | "created" | "imported") => void; onSelectReviewQueue: () => void }) {
+	const digests = useContext(DigestsPage);
+	const { data: awaitingReview = 0 } = useSWR("admin-review-count", getAdminReviewCount);
+	const onDigests = digests?.selected ?? false;
+	return (
+		<div className="shrink-0">
+			<NavigationHeading icon={ListIcon} title="Kind" />
+			<div className={navigationListSurfaceClass}>
+				{kindOptions.map(({ key, label, icon }) => <NavigationItem key={key} icon={icon} label={label} pressed={!onDigests && kind === key} onPress={() => onSelectKind(key)} />)}
+				<NavigationItem icon={InboxIcon} label="Review queue" count={awaitingReview} pressed={!onDigests && reviewQueue} onPress={onSelectReviewQueue} />
+				{digests && <NavigationItem icon={News01Icon} label="Digests" count={digests.waiting} pressed={onDigests} onPress={digests.onOpen} />}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The lists under Kind follow the page it chose. Digests have states of their own and no sources or collections, so
+ * while they are the page their state list stands in for the records' lists.
+ */
+function PageLists({ children }: { children: ReactNode }) {
+	const digests = useContext(DigestsPage);
+	if (!digests?.selected) return children;
+	return (
+		<div className="shrink-0">
+			<StateList title="Digest state" options={digestStateOptions} selected={digests.show} onSelect={digests.onShow} />
+		</div>
 	);
 }
 
@@ -155,96 +284,11 @@ export function AdminNavigation({
 			aria-label="Admin filters and collections"
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
-			<ReviewQueueEntry selected={reviewQueue} onPress={onSelectReviewQueue} />
+			<KindList kind={kind} reviewQueue={reviewQueue} onSelectKind={onSelectKind} onSelectReviewQueue={onSelectReviewQueue} />
+			<PageLists>
 			<div className="shrink-0">
-				<NavigationHeading icon={ListIcon} title="Kind" />
-				<div className={navigationListSurfaceClass}>
-					{kindOptions.map(({ key, label, icon }) => (
-						<button
-							key={key}
-							type="button"
-							aria-pressed={kind === key}
-							className={`${navigationItemClass} ${kind === key ? "bg-accent/[0.12] font-medium" : "text-black/60 dark:text-white/60"}`}
-							onClick={() => onSelectKind(key)}
-						>
-							<HugeiconsIcon icon={icon} aria-hidden size={14} />
-							{label}
-						</button>
-					))}
-				</div>
-			</div>
-			<div className="shrink-0">
-				<NavigationHeading icon={DatabaseIcon} title="Sources" />
-				<div className={navigationListSurfaceClass}>
-					{sources.map((entry) => {
-						return (
-							<div className="flex items-center" key={entry.key}>
-							<button
-								aria-pressed={source === entry.key}
-								className={`${navigationItemClass} min-w-0 flex-1 ${
-									source === entry.key
-										? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-										: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
-								}`}
-								onClick={() =>
-									onSelectSource(
-										source === entry.key ? "all" : entry.key,
-									)
-								}
-								type="button"
-							>
-								<span className="grid size-3.5 shrink-0 place-items-center">
-									<SourceProviderIcon
-										provider={entry.provider}
-										size={14}
-									/>
-								</span>
-								<span className="min-w-0 flex-1 truncate">
-									{entry.label}
-								</span>
-								{entry.status === "paused" ? (
-									<HugeiconsIcon icon={PauseIcon} aria-label="Paused" size={11} />
-								) : entry.writeback?.enabled &&
-								  entry.writeback.supported ? (
-									<HugeiconsIcon icon={CloudUploadIcon} aria-label="Writeback enabled" size={11} />
-								) : entry.readOnly ? (
-									<HugeiconsIcon icon={SquareLock01Icon} aria-label="Writeback unavailable" size={11} />
-								) : null}
-							</button>
-							{entry.activity ? (
-								<AdminSourceStatusBadge
-									activity={entry.activity}
-									label={entry.label}
-									onClick={() => onOpenSourceSync(entry.key)}
-								/>
-							) : null}
-							</div>
-						);
-					})}
-				</div>
-
-				<NavigationHeading icon={CheckmarkCircle01Icon} title="Record state" />
-				<div className={navigationListSurfaceClass}>
-					{stateOptions.map((entry) => {
-						const Icon = entry.icon;
-						return (
-							<button
-								key={entry.key}
-								aria-pressed={state === entry.key}
-								className={`${navigationItemClass} ${
-									state === entry.key
-										? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-										: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
-								}`}
-								onClick={() => onSelectState(entry.key)}
-								type="button"
-							>
-								<HugeiconsIcon icon={Icon} aria-hidden size={14} />
-								{entry.label}
-							</button>
-						);
-					})}
-				</div>
+				<SourceList source={source} sources={sources} onSelectSource={onSelectSource} onOpenSourceSync={onOpenSourceSync} />
+				<StateList title="Record state" options={stateOptions} selected={state} onSelect={onSelectState} />
 			</div>
 
 			<NavigationHeading
@@ -272,6 +316,7 @@ export function AdminNavigation({
 					sources={sources}
 				/>
 			</div>
+			</PageLists>
 		</nav>
 	);
 }

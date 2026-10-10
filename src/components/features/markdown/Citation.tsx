@@ -389,28 +389,40 @@ export function PublicationLinkPreview({
 	}
 
 	if (!data?.item) return null;
+	const preview = publicationPreviewData(data.item, {
+		contentTags: content.tags,
+		etAl: t("etAl"),
+		formatter,
+		institutions,
+	});
 
 	return (
-		<div className="p-3">
-			<div className="mb-2 flex items-center justify-between gap-3 border-b border-black/[0.06] pb-2 dark:border-white/[0.08]">
+		<div className="relative p-3">
+			{/* The whole card opens the publication in a new tab. The copy button stays a control of its own, above the link. */}
+			<Link
+				href={href}
+				target="_blank"
+				rel="noopener noreferrer"
+				// The title as the card shows it, in plain text. A record without one is named by its key.
+				aria-label={preview.title === "-" ? itemKey : preview.title}
+				className="absolute inset-0 rounded-[inherit] transition-colors hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus dark:hover:bg-white/[0.04]"
+			/>
+			<div className="pointer-events-none relative mb-2 flex items-center justify-between gap-3 border-b border-black/[0.06] pb-2 dark:border-white/[0.08]">
 				<span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-black/45 dark:text-white/45">
 					<SiteFavicon className="size-3.5 rounded-favicon" />
 					<span className="truncate">{identity.name}</span>
 				</span>
-				<CitationCopyLink href={href} itemKey={itemKey} />
+				<span className="pointer-events-auto"><CitationCopyLink href={href} itemKey={itemKey} /></span>
 			</div>
+			<div className="pointer-events-none relative">
 			<PublicationHoverPreview
-				preview={publicationPreviewData(data.item, {
-					contentTags: content.tags,
-					etAl: t("etAl"),
-					formatter,
-					institutions,
-				})}
+				preview={preview}
 				comingSoonLabel={t("inProgress")}
 				institutionAlt={(name) => t("institutionLogoAlt", { name })}
 				internalLabel={t("internal")}
 				noAbstractLabel={t("noAbstract")}
 			/>
+			</div>
 		</div>
 	);
 }

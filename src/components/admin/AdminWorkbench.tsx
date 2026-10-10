@@ -7,7 +7,7 @@ import { documentAttachment, uploadPdfFile, validatePdf, type PdfUploadStep } fr
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { parseAsString, useQueryState } from "nuqs";
 import { AdminDigestsInspector, AdminDigestsMain, useAdminDigests } from "./AdminDigests";
-import { DigestsQueue } from "./ReviewQueueEntry";
+import { DigestsPage, digestShowFor, recordStateFor, type DigestShow } from "./admin-digests-page";
 import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, Files01Icon, Logout01Icon, FilterHorizontalIcon, FileEditIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
@@ -487,13 +487,19 @@ export default function AdminWorkbench({
 	const [digestsParam, setDigestsParam] = useQueryState("digests", parseAsString);
 	const digests = useAdminDigests(digestsParam, (value) => void setDigestsParam(value));
 	const digestsOpen = digestsParam !== null;
+	const digestsShow = digests.query.show;
 	const selectNavigationFilter = useCallback((next: Parameters<typeof setFilters>[0]) => {
-		setFilters(next);
+		// Leaving the digests for records keeps the state the digests were narrowed to, where records have it too.
+		setFilters(digestsOpen ? (current) => {
+			const chosen = typeof next === "function" ? next(current) : next;
+			const state = recordStateFor(digestsShow);
+			return { ...chosen, filters: setSingleAdminItemFilter(chosen.filters, "state", state === "all" ? null : state) };
+		} : next);
 		// Only when the digests view is open: an address update on every keystroke of a search races with the
 		// filters' own, and typed characters are lost.
 		if (digestsOpen) void setDigestsParam(null);
 		setMobilePane("list");
-	}, [setFilters, digestsOpen, setDigestsParam]);
+	}, [setFilters, digestsOpen, digestsShow, setDigestsParam]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
@@ -2062,7 +2068,23 @@ export default function AdminWorkbench({
 
 
 	const digestsWaiting = digests.waiting;
-	const digestsQueue = useMemo(() => ({ selected: digestsOpen, waiting: digestsWaiting, onPress: () => { void setDigestsParam(digestsOpen ? null : "list"); setMobilePane("list"); } }), [digestsOpen, digestsWaiting, setDigestsParam]);
+	const { setQuery: setDigestsQuery, close: showDigestList } = digests;
+	const digestsPage = useMemo(() => ({
+		selected: digestsOpen,
+		waiting: digestsWaiting,
+		show: digestsShow,
+		// Coming from records, the digests keep the state the records were narrowed to, where digests have it too.
+		onOpen: () => {
+			if (!digestsOpen) setDigestsQuery((query) => ({ ...query, page: 1, show: digestShowFor(stateFilter) }));
+			showDigestList();
+			setMobilePane("list");
+		},
+		onShow: (show: DigestShow) => {
+			setDigestsQuery((query) => ({ ...query, page: 1, show }));
+			showDigestList();
+			setMobilePane("list");
+		},
+	}), [digestsOpen, digestsWaiting, digestsShow, stateFilter, setDigestsQuery, showDigestList]);
 	const navigationPane = useMemo(() => (<AdminNavigation
 									reviewQueue={filters.reviewQueue}
 									onSelectReviewQueue={() => selectNavigationFilter((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
@@ -2441,7 +2463,7 @@ export default function AdminWorkbench({
 								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
-								<DigestsQueue value={digestsQueue}>{navigationPane}</DigestsQueue>
+								<DigestsPage value={digestsPage}>{navigationPane}</DigestsPage>
 							</div>
 						</div>
 					</aside>

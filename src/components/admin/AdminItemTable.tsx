@@ -1,6 +1,7 @@
 "use client";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { SortHeader } from "./AdminSortHeader";
 import { ordinaryItemTags } from "@/lib/item-display";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
@@ -524,45 +525,6 @@ function TableViewControls({
 				</PopoverContent>
 			</Popover>
 		</div>
-	);
-}
-
-function SortHeader({
-	columnId,
-	label,
-	onSort,
-	sort,
-	sortDirection,
-}: {
-	columnId: AdminItemSortColumnId;
-	label: string;
-	onSort: (sort: AdminItemSortColumnId) => void;
-	sort: AdminItemSortColumnId;
-	sortDirection: "asc" | "desc";
-}) {
-	const selected = sort === columnId;
-	const Icon = selected
-		? sortDirection === "asc"
-			? ArrowUp01Icon
-			: ArrowDown01Icon
-		: ArrowUpDownIcon;
-	return (
-		<button
-			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus dark:hover:text-white/70"
-			onClick={() => onSort(columnId)}
-			tabIndex={-1}
-			type="button"
-		>
-			<span className="truncate">{label}</span>
-			<HugeiconsIcon
-				icon={Icon}
-				aria-hidden
-				className={
-					selected ? "shrink-0 opacity-80" : "shrink-0 opacity-30"
-				}
-				size={12}
-			/>
-		</button>
 	);
 }
 
