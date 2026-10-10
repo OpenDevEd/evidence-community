@@ -278,16 +278,15 @@ test("renders identity assets, logo CSS, colors, and fonts from runtime configur
 		.first();
 	await expect(favicon).toHaveAttribute("href", expectedFaviconUrl);
 
-	const fontStylesheet = page.locator(
-		'link[rel="stylesheet"][href^="https://fonts.googleapis.com/css2"]',
-	);
-	await expect(fontStylesheet).toHaveCount(1);
-	const fontHref = await fontStylesheet.getAttribute("href");
-	expect(
-		new URL(fontHref!).searchParams
-			.getAll("family")
-			.map((family) => family.split(":")[0]),
-	).toEqual(expectedGoogleFontFamilies);
+	// The theme's Google fonts are served by the library itself (next/font), never linked from Google.
+	await expect(page.locator('link[href^="https://fonts.googleapis.com"]')).toHaveCount(0);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				[...document.fonts].filter((face) => face.status === "loaded").map((face) => face.family.replace(/"/g, "")),
+			),
+		)
+		.toEqual(expect.arrayContaining(expectedGoogleFontFamilies));
 
 	if (expectedThemeClass) {
 		await expect(page.locator("html")).toHaveClass(

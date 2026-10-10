@@ -15,7 +15,8 @@ import { cookies } from "next/headers";
 
 import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
-import { LibraryThemeStyles } from "@/components/library/LibraryThemeStyles";
+import { LibraryThemeStyles, themeGoogleFonts } from "@/components/library/LibraryThemeStyles";
+import { PLATFORM_FONTS } from "@/components/library/platform-fonts";
 import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { getSignedInReader } from "@/lib/readers/session";
@@ -85,8 +86,10 @@ export default async function Base({
 	const serverConfig = await getLibraryConfig();
 	const libraryConfig = projectPublicLibraryConfig(serverConfig);
 	const dir = getLangDir(locale);
+	// Only the library's own fonts are set on the page, so only those are preloaded.
+	const fontVariables = themeGoogleFonts(libraryConfig.theme).map((family) => PLATFORM_FONTS[family].variable);
 	return (
-		<html lang={locale} dir={dir} className="no-scrollbar" suppressHydrationWarning>
+		<html lang={locale} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
 			<body>
 				<ConsentDefaultsScript />
 				<link
