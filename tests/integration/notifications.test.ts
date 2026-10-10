@@ -466,7 +466,7 @@ it("counts a preprint and its article as one publication and lists the article",
   });
 }, 120_000);
 
-it("writes a past period's digest by publication date, rewrites it in the same record and emails no one", async () => {
+it("writes a past period's digest by publication date, rewrites it as a draft while readers keep the published text, and emails no one", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
     await requestSubscription(db, {email: "reader@example.org", digest: true, instant: false});
@@ -484,17 +484,31 @@ it("writes a past period's digest by publication date, rewrites it in the same r
     const openScholar = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({digest}));
     try {
       expect(await generateNotificationEdition(db, publishedConfig)).toBe(true);
+      const words = {title: digest.title, summary: digest.summary, markdown: digest.markdown};
+      const [written] = await db.select().from(notificationEdition);
+      // A new edition is published as it is written, and the text AI wrote is kept beside it.
+      expect(written).toMatchObject({...words, ai: words, draft: null, nextAttemptAt: null});
+      expect(written.publishedAt).toBeInstanceOf(Date);
       await dated(client, "PUBAAAAC", "2026-08-20");
       expect(await prepareDigestForPeriod(db, publishedConfig, period)).toEqual({...first, publicationCount: 2});
+      // While the rewrite waits, readers still have the edition.
       const [rewriting] = await db.select().from(notificationEdition);
-      expect(rewriting).toMatchObject({windowStart: period.start, windowEnd: period.end, publicationCount: 2, publishedAt: null});
+      expect(rewriting).toMatchObject({windowStart: period.start, windowEnd: period.end, publicationCount: 2, publishedAt: written.publishedAt, ...words});
+      expect(await getDigestEdition(db, publishedConfig, "en-GB", rewriting.id)).toMatchObject({title: "August", markdown: digest.markdown});
+      const again = {...digest, title: "August, rewritten", markdown: "See [Mills, 2026](/lib/PUBAAAAA) and [Okoro, 2026](/lib/PUBAAAAC)"};
+      openScholar.mockImplementation(async () => Response.json({digest: again}));
       expect(await generateNotificationEdition(db, publishedConfig)).toBe(true);
+      // The rewrite is a draft: nothing a reader sees has changed.
+      const rewritten = {title: again.title, summary: again.summary, markdown: again.markdown};
+      expect((await db.select().from(notificationEdition))[0]).toMatchObject({...words, publishedAt: written.publishedAt, ai: rewritten, draft: rewritten, nextAttemptAt: null});
+      expect(await getDigestEdition(db, publishedConfig, "en-GB", rewriting.id)).toMatchObject({title: "August", markdown: digest.markdown});
+      // Nothing is left to write, so the worker does not ask for the text again.
+      expect(await generateNotificationEdition(db, publishedConfig)).toBe(false);
     } finally {
       openScholar.mockRestore();
     }
     const editions = await db.select().from(notificationEdition);
     expect(editions).toHaveLength(1);
-    expect(editions[0].publishedAt).toBeInstanceOf(Date);
     // The reader confirmed before the period ended, so a scheduled edition would have queued an email.
     expect((await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, editions[0].id))).map(delivery => delivery.status)).toEqual(["skipped"]);
     expect((await db.select().from(notificationState))[0]).toEqual(schedule);
@@ -506,6 +520,26 @@ it("writes a past period's digest by publication date, rewrites it in the same r
     expect((await db.select().from(notificationState))[0].digestThrough).toEqual(due);
     expect((await db.select().from(notificationEdition).where(eq(notificationEdition.windowEnd, due))).map(edition => edition.id)).toEqual([manual.status === "queued" ? manual.editionId : null]);
     expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, published: {date: "1 September 2026"}});
+  });
+}, 120_000);
+
+// Execute the real backfill over editions published before AI's text was kept beside them.
+it("keeps the published text as AI's text for every digest published before drafts, and writes none of them again", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const edition = (end: string, values: object) => ({stream: "digest" as const, windowStart: new Date("2026-08-01T00:00:00Z"), windowEnd: new Date(end), publications: [], ...values});
+    const text = {title: "September", summary: "Two studies.", markdown: "## Reading\n\nA study."};
+    const [published, waiting] = await db.insert(notificationEdition).values([
+      // A published edition whose attempt time was never cleared must not be taken for one waiting to be written.
+      edition("2026-09-01T00:00:00Z", {...text, publishedAt: new Date("2026-09-01T00:05:00Z"), nextAttemptAt: new Date("2026-09-01T00:00:00Z")}),
+      edition("2026-09-08T00:00:00Z", {nextAttemptAt: new Date("2026-09-08T00:00:00Z")}),
+    ]).returning();
+    await client.query('UPDATE "notificationEdition" SET "ai" = NULL');
+    const backfill = readFileSync("drizzle/0077_digest-ai-text-and-draft.sql", "utf8").split("--> statement-breakpoint").filter(statement => /^\s*(--.*\n\s*)*UPDATE/.test(statement));
+    expect(backfill).toHaveLength(2);
+    for (const statement of backfill) await client.query(statement);
+    const rows = await db.select().from(notificationEdition).orderBy(notificationEdition.windowEnd);
+    expect(rows[0]).toMatchObject({id: published.id, ai: text, draft: null, nextAttemptAt: null});
+    expect(rows[1]).toMatchObject({id: waiting.id, ai: null, nextAttemptAt: waiting.nextAttemptAt});
   });
 }, 120_000);
 
