@@ -1189,7 +1189,10 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	// A card's reference count opens this page on its References list, and its citation count on Citations.
 	const asked = useSearchParams().get("links");
-	const [selectedTab, setSelectedTab] = useState(ASKED_TAB[asked ?? ""] ?? "general");
+	// The tab the address asks for, until the reader picks another. A new address asks again, without an effect.
+	const [picked, setPicked] = useState<{ asked: string | null; tab: string } | null>(null);
+	const selectedTab = picked?.asked === asked ? picked.tab : ASKED_TAB[asked ?? ""] ?? "general";
+	const setSelectedTab = (tab: string) => setPicked({ asked, tab });
 
 	const descriptions: Record<string, string> = {
 		general: t("relatedResourcesByCitation"),

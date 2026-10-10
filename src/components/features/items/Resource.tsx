@@ -188,10 +188,10 @@ function CitationCounts({
 					<CountTooltip key={id} tone={tone} icon={icon} text={words(held, all)}>
 						<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
 							<HugeiconsIcon icon={icon} className="size-3.5" />
-							{held > 0 ? <Link href={here} className={number}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
+							{held > 0 ? <Link href={here} aria-label={words(held, null)} className={number}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
 							{all !== null && <>
 								<span className="opacity-60">{t("of")}</span>
-								{there ? <a href={there} target="_blank" rel="noreferrer" className={number}>{all.toLocaleString()}</a> : <span className="font-semibold tabular-nums">{all.toLocaleString()}</span>}
+								{there ? <a href={there} target="_blank" rel="noreferrer" aria-label={`${all.toLocaleString()} ${label(all)}, ${t("onOpenAlex", { count: all.toLocaleString() })}`} className={number}>{all.toLocaleString()}</a> : <span className="font-semibold tabular-nums">{all.toLocaleString()}</span>}
 							</>}
 							<span data-count-label className={twMerge("opacity-70", labelClassName)}>{label(all ?? held)}</span>
 						</span>

@@ -22,6 +22,7 @@ vi.mock("@/lib/actions", () => ({ convertItem: vi.fn() }));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		ai: { providers: [] },
+		authentication: { openScholar: { accountUrl: "https://openscholar.example/account", siteUrl: "https://openscholar.example" } },
 		features: { aiSearch: true, deepResearch: true },
 		identity: {
 			name: "Test Library",
