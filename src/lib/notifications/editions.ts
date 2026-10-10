@@ -269,7 +269,8 @@ export async function prepareNotificationEditions(
 
 /**
  * Writes the digest of a past period by publication date, or rewrites the
- * edition that already ends when it does, in the same record. Additions are not
+ * edition that already ends when it does, in the same record. A digest readers
+ * already have stays up: its new text arrives as a draft. Additions are not
  * consulted and the schedule does not move. No subscriber is emailed.
  */
 export async function prepareDigestForPeriod(db: Database, config: LibraryServerConfig, period: { start: Date; end: Date }): Promise<DigestPreparation> {
@@ -280,7 +281,7 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     if (!publications.length) return { status: "empty" };
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
     // The worker compares the next attempt with the database's clock, so that clock sets it.
-    const edition = { windowStart: period.start, publications, publicationCount: total, cover, publishedAt: null, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null };
+    const edition = { windowStart: period.start, publications, publicationCount: total, cover, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null };
     const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, ...edition })
       .onConflictDoUpdate({ target: [notificationEdition.stream, notificationEdition.windowEnd], set: edition }).returning({ id: notificationEdition.id });
     await tx.execute(sql`
@@ -298,12 +299,12 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
   const token = randomUUID();
   const result = await db.execute<{ id: string }>(sql`
     UPDATE "notificationEdition" SET "leaseToken" = ${token}, "leaseExpiresAt" = now() + interval '5 minutes'
-    WHERE "id" = (SELECT "id" FROM "notificationEdition" WHERE "publishedAt" IS NULL AND "nextAttemptAt" <= now()
+    WHERE "id" = (SELECT "id" FROM "notificationEdition" WHERE "nextAttemptAt" <= now()
       AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now()) ORDER BY "windowEnd" FOR UPDATE SKIP LOCKED LIMIT 1)
     RETURNING "id"
   `);
   if (!result.rows[0]) return false;
-  const owned = and(eq(notificationEdition.id, result.rows[0].id), eq(notificationEdition.leaseToken, token), isNull(notificationEdition.publishedAt));
+  const owned = and(eq(notificationEdition.id, result.rows[0].id), eq(notificationEdition.leaseToken, token));
   const [edition] = await db.select().from(notificationEdition).where(owned);
   if (!edition) return false;
   try {
@@ -316,8 +317,14 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
       return true;
     }
     await db.transaction(async tx => {
-      const saved = await tx.update(notificationEdition).set({ ...output, publishedAt: new Date(), nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned).returning({ id: notificationEdition.id });
-      if (!saved.length) return;
+      const { model, reasoning, ...words } = output;
+      const ai = words.markdown === null ? null : { ...words, markdown: words.markdown };
+      // A digest readers already have is rewritten as a draft: what they see stays until the new text is published.
+      const rewritten = edition.publishedAt !== null;
+      const saved = await tx.update(notificationEdition)
+        .set({ model, reasoning, ai, ...(rewritten ? { draft: ai } : { ...words, publishedAt: new Date() }), nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null })
+        .where(owned).returning({ id: notificationEdition.id });
+      if (!saved.length || rewritten) return;
       await tx.execute(sql`
         INSERT INTO "notificationDelivery" ("messageKey", "subscriberId", "editionId")
         SELECT ${edition.id} || ':' || "id"::text, "id", ${edition.id}::uuid FROM "notificationSubscriber"

@@ -954,6 +954,13 @@ in the schedule's timezone, so a library outside UTC gives its own midnights,
 such as `2026-09-01T00:00:00-04:00`. To rewrite an existing edition, send its
 exact `windowStart` and `windowEnd`.
 
+A new edition is published as soon as it is written. Rewriting an edition
+readers already have leaves it up: its list of publications is replaced at
+once, and the new text is saved as a draft (`notificationEdition.draft`) until
+it is published. Each edition keeps the text AI wrote in `ai`, beside the
+title, summary and text readers see. An edition waits to be written while its
+`nextAttemptAt` is set.
+
 This release replaces `notifications.weekly` with `notifications.schedule` and
 renames the subscriber preference and edition stream to `digest`. Migration
 `0058` preserves subscriber tokens, editions and cutoffs. OpenScholar owner

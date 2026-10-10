@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
-import type { NotificationPublication, NotificationStream } from "@/lib/notifications/types";
+import type { DigestText, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
 
 const date = (name: string) => timestamp(name, {withTimezone: true});
 export const notificationItem = pgTable("notificationItem", {
@@ -57,15 +57,21 @@ export const notificationEdition = pgTable("notificationEdition", {
   title: text("title"),
   summary: text("summary"),
   markdown: text("markdown"),
+  // Readers see the title, summary and text above once this is set.
   publishedAt: date("publishedAt"),
+  // The same three as AI wrote them, kept so a person's changes can be told from them.
+  ai: jsonb("ai").$type<DigestText>(),
+  // Text nobody has published yet: a rewrite of a digest readers already have.
+  draft: jsonb("draft").$type<DigestText>(),
   model: text("model"),
   reasoning: text("reasoning"),
   attempts: integer("attempts").notNull().default(0),
+  // An edition waits to be written while this is set. It is cleared when the text is saved or the attempts run out.
   nextAttemptAt: date("nextAttemptAt").defaultNow(),
   leaseToken: text("leaseToken"),
   leaseExpiresAt: date("leaseExpiresAt"),
   lastError: text("lastError"),
-}, table => [uniqueIndex("notificationEdition_window_unique").on(table.stream, table.windowEnd), index("notificationEdition_pending_idx").on(table.nextAttemptAt).where(sql`${table.publishedAt} IS NULL`)]);
+}, table => [uniqueIndex("notificationEdition_window_unique").on(table.stream, table.windowEnd), index("notificationEdition_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
 
 export const notificationDelivery = pgTable("notificationDelivery", {
   messageKey: text("messageKey").primaryKey(),
