@@ -19,5 +19,7 @@ export type DigestDraft = DigestText & { note?: string };
 export type DigestPerson = { id: string; name: string; photo: string | null };
 /** The Editor or Owner who published an edition, as readers are told when the library names who checks its digests. */
 export type DigestSigner = DigestPerson & { role: "editor" | "owner" };
+/** A signer's role as readers see it under their name. */
+export const DIGEST_SIGNER_ROLE = { editor: "Editor", owner: "Owner" } as const satisfies Record<DigestSigner["role"], string>;
 /** A step in an edition's history. AI writes; the rest are a person's. */
 export type DigestEventKind = "written" | "edited" | "submitted" | "withdrawn" | "returned" | "published";

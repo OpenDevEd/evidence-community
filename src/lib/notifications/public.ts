@@ -6,6 +6,7 @@ import { notificationEdition, notificationState } from "@/db/schema/notification
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { nextDigestDate } from "./schedule";
+import type { DigestSigner } from "./types";
 
 const ARCHIVE_PAGE_SIZE = 20;
 const EDITION_PAGE_SIZE = 12;
@@ -15,17 +16,30 @@ const EDITION_PAGE_SIZE = 12;
  * browser's time zone data can disagree with the server's, and the page would not hydrate.
  */
 export type DigestDate = {at: string; day: string; month: string; monthYear: string; weekday: string; dayName: string; date: string; time: string};
-export type DigestSummary = {slug: string; published: DigestDate; title: string; summary: string; publicationCount: number; cover: string | null};
-/** An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`. */
-export type DigestEdition = DigestSummary & {markdown: string; listed: number; page: number; pages: number; keys: string[]};
+/** Who stands behind a digest: the Editor or Owner who checked it, or null when it went out as AI wrote it. Their account is not told. */
+export type DigestSignature = Omit<DigestSigner, "id"> | null;
+/** `by` is left out when the library does not tell readers who checks its digests. */
+export type DigestSummary = {slug: string; published: DigestDate; title: string; summary: string; publicationCount: number; cover: string | null; by?: DigestSignature};
+/**
+ * An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`.
+ * `note` is the words of the person who checked it, shown above the text with their name, so only when readers are told who that is.
+ */
+export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]};
 export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages: number};
 
 // Lists read these small columns only, never an edition's stored publications.
 const summaryColumns = {
   id: notificationEdition.id, windowEnd: notificationEdition.windowEnd, title: notificationEdition.title,
   summary: notificationEdition.summary, publicationCount: notificationEdition.publicationCount, cover: notificationEdition.cover,
+  checkedBy: notificationEdition.checkedBy,
 };
-type SummaryRow = {id: string; windowEnd: Date; title: string | null; summary: string | null; publicationCount: number; cover: string | null};
+type SummaryRow = {id: string; windowEnd: Date; title: string | null; summary: string | null; publicationCount: number; cover: string | null; checkedBy: DigestSigner | null};
+
+/** Who checked an edition, as readers are told. Undefined when the library does not say. */
+export function digestSignature(config: LibraryServerConfig, checkedBy: DigestSigner | null): DigestSignature | undefined {
+  if (!config.notifications.attribution) return undefined;
+  return checkedBy && {name: checkedBy.name, photo: checkedBy.photo, role: checkedBy.role};
+}
 
 function digestDate(value: Date, locale: string, config: LibraryServerConfig): DigestDate {
   const text = (options: Intl.DateTimeFormatOptions) => value.toLocaleString(locale, {...options, timeZone: config.notifications.schedule.timezone});
@@ -38,7 +52,8 @@ function digestDate(value: Date, locale: string, config: LibraryServerConfig): D
 
 function editionSummary(row: SummaryRow, locale: string, config: LibraryServerConfig): DigestSummary {
   // An edition is dated by the end of its period, so one written later for a past period keeps that period's date.
-  return {slug: row.id, published: digestDate(row.windowEnd, locale, config), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover};
+  const by = digestSignature(config, row.checkedBy);
+  return {slug: row.id, published: digestDate(row.windowEnd, locale, config), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover, ...(by === undefined ? {} : {by})};
 }
 const visibleEdition = and(eq(notificationEdition.stream, "digest"), isNotNull(notificationEdition.publishedAt));
 
@@ -89,7 +104,7 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
-  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown})
+  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, note: notificationEdition.note})
     .from(notificationEdition).where(and(visibleEdition, eq(notificationEdition.id, uuid))).limit(1);
   if (!row) return undefined;
   // Pages hold only the listed records that are public now, so hiding one
@@ -104,7 +119,8 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
   const {rows: keys} = await db.execute<{key: string}>(sql`
     SELECT stored.entry->>'key' AS key ${listedNow}
     ORDER BY stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
-  return {...editionSummary(row, locale, config), markdown: row.markdown!, listed, page: current, pages, keys: keys.map(entry => entry.key)};
+  const summary = editionSummary(row, locale, config);
+  return {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, listed, page: current, pages, keys: keys.map(entry => entry.key)};
 }
 
 export async function getNextDigestEdition(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestDate | null> {

@@ -5,13 +5,14 @@ import { useLocale } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
-import { Calendar03Icon, ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
-import type { DigestArchivePage, DigestDate, DigestEdition, DigestSummary } from "@/lib/notifications/public";
+import { AiMagicIcon, Calendar03Icon, ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
+import type { DigestArchivePage, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { Pagination } from "@/components/nextui/Pagination";
 import { describeDigestSchedule, timeZoneLabel } from "@/lib/notifications/schedule";
+import { DIGEST_SIGNER_ROLE } from "@/lib/notifications/types";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -22,7 +23,7 @@ import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Mark
 
 
 import { SectionTitle } from "@/components/typography/SectionTitle";
-import { Icon, TextLink, muted } from "./DigestPrimitives";
+import { Face, Icon, TextLink, muted } from "./DigestPrimitives";
 import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
 import { Subscription, type Preferences } from "./Subscription";
 
@@ -33,15 +34,33 @@ function PageControls({page, pages, href}: {page: number; pages: number; href: (
   return <Pagination showControls page={page} total={pages} onChange={next => router.push(href(next), {scroll: false})} className="mt-6 flex justify-center" />;
 }
 
+/** Who stands behind an edition: the person who checked it, or that AI wrote it and nobody has. Nothing when the library does not say. */
+function Attribution({ by }: { by: DigestSignature | undefined }) {
+  if (by === undefined) return null;
+  return by
+    ? <span className="inline-flex items-center gap-1.5"><Face person={by} size={18} />Checked by {by.name}</span>
+    : <span className="inline-flex items-center gap-1.5"><Icon value={AiMagicIcon} size={14} />Written by AI</span>;
+}
 function EditionMeta({ edition }: { edition: DigestSummary }) {
   const locale = useLocale();
-  return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={Calendar03Icon} size={14} /><time dateTime={edition.published.at}>{edition.published.date}</time></span><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(edition.publicationCount, locale)}</span></div>;
+  return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={Calendar03Icon} size={14} /><time dateTime={edition.published.at}>{edition.published.date}</time></span><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(edition.publicationCount, locale)}</span><Attribution by={edition.by} /></div>;
+}
+/** The words of the person who checked the edition, above its text. */
+function EditorNote({ edition }: { edition: DigestEdition }) {
+  if (!edition.note || !edition.by) return null;
+  return <figure className="mb-9 rounded-2xl bg-card_light p-5 dark:bg-card">
+    <blockquote className="whitespace-pre-line text-base leading-7">{edition.note}</blockquote>
+    <figcaption className="mt-4 flex items-center gap-3 text-sm">
+      <Face person={edition.by} size={36} />
+      <span className="font-medium">{edition.by.name}</span><span className={muted}>{DIGEST_SIGNER_ROLE[edition.by.role]}</span>
+    </figcaption>
+  </figure>;
 }
 function DigestContent({ edition }: { edition: DigestEdition }) {
   return <AIMarkdown>{edition.markdown}</AIMarkdown>;
 }
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
-type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; timezone: string; schedule: string};
+type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; /** An editor publishes each digest, so the next one has a day and no time. */ approval: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
 type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>};
 export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
@@ -55,7 +74,7 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 export default function DigestPages(props: ArchiveProps | EditionProps | PreferencesProps) {
   const locale = useLocale(); const base = "/digests";
   const {identity, notifications} = useLibraryConfig();
-  const settings = {libraryName: identity.name, enabled: notifications.enabled, sending: notifications.enabled && notifications.pausedSince === null, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
+  const settings = {libraryName: identity.name, enabled: notifications.enabled, sending: notifications.enabled && notifications.pausedSince === null, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
   if (props.view === "preferences") return <DigestPreferences {...props} settings={settings} base={base} />;
   if (props.view === "archive") return <DigestArchive {...props} settings={settings} base={base} locale={locale} />;
   return <DigestDetail {...props} settings={settings} base={base} />;
@@ -103,7 +122,7 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
   if (!next) return null;
   return <div className={nextEditionRow}>
     <time dateTime={next.at} aria-label={next.weekday} className="grid h-full w-16 shrink-0 place-content-center rounded-xl bg-accent/10 text-center text-accent"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
-    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>Next edition</p><p className="mt-1 truncate font-medium">{next.dayName} at {next.time}</p><TruncatedText text={timeZoneLabel(settings.timezone)} className={`mt-0.5 text-xs ${muted}`} /></div>
+    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>Next edition</p><p className="mt-1 truncate font-medium">{settings.approval ? next.dayName : `${next.dayName} at ${next.time}`}</p><TruncatedText text={settings.approval ? "Once an editor has checked it" : timeZoneLabel(settings.timezone)} className={`mt-0.5 text-xs ${muted}`} /></div>
   </div>;
 }
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
@@ -111,7 +130,7 @@ function ArchiveList({editions, nextEdition, settings, base, locale}: {editions:
   if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
   return <>{items.map(item => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[56px_minmax(0,1fr)_18px] items-start gap-4 rounded-2xl bg-card_light p-5 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055] sm:grid-cols-[64px_minmax(0,1fr)_18px] sm:gap-5">
             <time dateTime={item.published.at} aria-label={item.published.date} className="rounded-xl bg-black/[0.04] px-1 py-3 text-center dark:bg-white/[0.04]"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(item.published.day)}</span><span className={`mt-2 block text-xs ${muted}`}>{item.published.month}</span></time>
-            <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><MarkdownExcerpt className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt><span className={`mt-3 inline-flex items-center gap-1.5 text-xs ${muted}`}><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
+            <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><MarkdownExcerpt className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt><span className={`mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span><Attribution by={item.by} /></span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
           </Link>)}
     <PageControls page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} /></>;
 }
@@ -179,6 +198,7 @@ function EditionBody({edition: pending, cards, href}: {edition: Promise<DigestEd
   if (!edition) notFound();
   return <>
           <header className="mb-9"><h1 className="text-3xl font-medium leading-tight">{edition.title}</h1><div className="mt-5"><EditionMeta edition={edition} /></div></header>
+          <EditorNote edition={edition} />
           <DigestContent edition={edition} />
           <section className="mt-10" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>

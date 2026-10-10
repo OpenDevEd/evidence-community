@@ -39,6 +39,9 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 		id: "preview",
 		stream: "digest",
 		title: "Attention, feedback and the everyday classroom",
+		// Shown only when the library tells readers who checks its digests.
+		checkedBy: { id: "preview", name: "Ama Mensah", photo: null, role: "editor" },
+		note: "Start with the paper on attention: it is the one the others build on.",
 		windowStart: new Date("2026-09-07T00:00:00Z"),
 		windowEnd: new Date("2026-09-14T00:00:00Z"),
 		publications,
