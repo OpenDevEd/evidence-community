@@ -20,6 +20,7 @@ import { Input } from "@/components/nextui/Input";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type { DigestPaper, DigestPapersQuery } from "@/lib/notifications/editorial";
 import { getAdminDigestCited, getAdminDigestPapers } from "./admin-api";
@@ -53,6 +54,16 @@ const firstPage = (cited: string[]): DigestPapersQuery => ({ query: "", show: "a
 /** A page of the edition's publications. The button that opens the picker reads its first page, so the list is there when it opens. */
 function usePapers(editionId: string, query: DigestPapersQuery) {
 	return useSWR(["admin-digest-papers", editionId, query] as const, ([, id, value]) => getAdminDigestPapers(id, value), { keepPreviousData: true, revalidateOnFocus: false });
+}
+
+/**
+ * The page for what is typed in the search. `behind` is true while the rows on show still answer an earlier search or
+ * page: Enter must not cite one of them.
+ */
+function useSearchedPapers(editionId: string, query: DigestPapersQuery, typed: string) {
+	const search = useDeferredValue(typed);
+	const list = usePapers(editionId, { ...query, query: search });
+	return { ...list, behind: typed !== search || list.isLoading };
 }
 
 /** The publications the text cites, for naming a chip's own. Read with the picker's first page, before either is needed. */
@@ -155,6 +166,21 @@ function Pages({ page, pages, total, onChange }: { page: number; pages: number; 
 	</div>;
 }
 
+type RowsProps = { id: string; /** Undefined before the first answer. */ rows: DigestPaper[] | undefined; failed: boolean; dimmed: boolean; active: number; setActive: (index: number) => void; current?: Current; cited: string[]; onPick: (paper: DigestPaper) => void };
+
+/**
+ * Five rows of one height, whatever matches, so nothing moves while the editor types or turns the page. Rows kept from
+ * the page before are dimmed until the new ones arrive. Opened before its first page has arrived, the list shows its
+ * rows' places, so they fill in where they stand.
+ */
+function Rows({ id, rows, failed, dimmed, active, setActive, current, cited, onPick }: RowsProps) {
+	return <ul role="listbox" id={id} aria-label="Publications in this edition" className={`h-[17.5rem] shrink-0 px-1 transition-opacity ${dimmed ? "pointer-events-none opacity-50" : ""}`}>
+		{rows?.map((paper, index) => <PaperRow key={paper.key} id={`${id}-${paper.key}`} paper={paper} active={index === active} current={current} cited={cited} onRest={() => setActive(index)} onPick={() => onPick(paper)} />)}
+		{!rows && !failed && Array.from({ length: ROWS }, (_, index) => <li key={index} role="presentation" className="flex h-14 flex-col justify-center gap-2 px-3"><Skeleton className="h-3.5 w-4/5 rounded-md" /><Skeleton className="h-3 w-2/5 rounded-md" /></li>)}
+		{!rows?.length && <Empty loaded={rows !== undefined} failed={failed} />}
+	</ul>;
+}
+
 /**
  * The edition's publications to cite from, a page at a time: searched, narrowed to reviews or to those the text leaves
  * out, and sorted. A row cites its publication; the button beside it opens the publication instead. On a chip it names
@@ -166,8 +192,7 @@ function Papers({ cited, current, onPick, onRemove }: { cited: string[]; current
 	const [query, setQuery] = useState(firstPage(cited));
 	const [active, setActive] = useState(0);
 	const list = useId();
-	const search = useDeferredValue(typed);
-	const { data, error, isLoading } = usePapers(editionId, { ...query, query: search, cited });
+	const { data, error, isLoading, behind } = useSearchedPapers(editionId, { ...query, cited }, typed);
 	// Before the first answer the list is empty and stands on its first page.
 	const { papers: rows, page, pages } = data ?? { papers: [], page: 1, pages: 1 };
 	const narrow = (patch: Partial<DigestPapersQuery>) => { setQuery({ ...query, page: 1, ...patch }); setActive(0); };
@@ -177,17 +202,13 @@ function Papers({ cited, current, onPick, onRemove }: { cited: string[]; current
 			<Input
 				autoFocus size="sm" role="combobox" aria-label="Search this edition's publications" placeholder="Search this edition's publications" aria-expanded aria-autocomplete="list" aria-controls={list}
 				aria-activedescendant={rows[active] ? `${list}-${rows[active].key}` : undefined}
-				value={typed} onValueChange={(value) => { setTyped(value); narrow({}); }} onKeyDown={rowKeys(rows, active, setActive, onPick)}
+				value={typed} onValueChange={(value) => { setTyped(value); narrow({}); }} onKeyDown={rowKeys(behind ? [] : rows, active, setActive, onPick)}
 				startContent={<HugeiconsIcon icon={Search01Icon} className="size-4 shrink-0 text-black/40 dark:text-white/40" />}
 				classNames={{ inputWrapper: "h-9 min-h-9 rounded-lg border-0 bg-black/[0.035] shadow-none dark:bg-white/[0.045]", input: "text-sm" }}
 			/>
 			<Narrow query={query} counts={data?.counts} onChange={narrow} />
 		</div>
-		{/* Five rows of one height, whatever matches, so nothing moves while the editor types or turns the page. Rows kept from the page before are dimmed until the new ones arrive. */}
-		<ul role="listbox" id={list} aria-label="Publications in this edition" className={`h-[17.5rem] shrink-0 px-1 transition-opacity ${isLoading && data ? "pointer-events-none opacity-50" : ""}`}>
-			{rows.map((paper, index) => <PaperRow key={paper.key} id={`${list}-${paper.key}`} paper={paper} active={index === active} current={current} cited={cited} onRest={() => setActive(index)} onPick={() => onPick(paper)} />)}
-			{!rows.length && <Empty loaded={data !== undefined} failed={error !== undefined} />}
-		</ul>
+		<Rows id={list} rows={data?.papers} failed={error !== undefined} dimmed={isLoading && data !== undefined} active={active} setActive={setActive} current={current} cited={cited} onPick={onPick} />
 		<Pages page={page} pages={pages} total={data?.total} onChange={(next) => { setQuery({ ...query, page: next }); setActive(0); }} />
 	</>;
 }
@@ -220,7 +241,7 @@ function Chip({ editor, mark }: MarkViewRendererProps) {
 		<Popover isOpen={picking !== null} onOpenChange={(open) => { setResting(false); setPicking(open ? chip.current?.textContent ?? "" : null); }} placement="bottom-start" shouldCloseOnScroll={false}>
 			<PopoverTrigger>
 				<InlineCitationCardTrigger>
-					<span ref={chip} className={`${CHIP} cursor-pointer transition-colors hover:bg-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-accent/20 dark:hover:bg-accent/30`}><MarkViewContent /></span>
+					<span ref={chip} data-citation tabIndex={0} role="button" aria-haspopup="dialog" /* Reached with Tab, a chip opens with Enter or Space as a click does. The editor leaves keys pressed on a chip alone. */ onKeyDown={(event) => { if (!event.defaultPrevented && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); chip.current?.click(); } }} className={`${CHIP} cursor-pointer transition-colors hover:bg-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-accent/20 dark:hover:bg-accent/30`}><MarkViewContent /></span>
 				</InlineCitationCardTrigger>
 			</PopoverTrigger>
 			<PopoverContent aria-label="Change this citation" className={MENU}>{picking !== null && <Papers cited={cited} current={{ key: itemKey, label: picking }} onPick={replace} onRemove={remove} />}</PopoverContent>
@@ -232,6 +253,7 @@ function Chip({ editor, mark }: MarkViewRendererProps) {
 }
 
 const Citation = Link.extend({ addMarkView() { return ReactMarkViewRenderer(Chip); } });
+
 
 function CiteTool({ editor, editionId, cited }: { editor: Editor; editionId: string; cited: string[] }) {
 	const [open, setOpen] = useState(false);
@@ -262,7 +284,8 @@ const KIT = StarterKit.configure({
 
 export function AdminDigestEditor({ editionId, markdown, onChange, tools }: { editionId: string; markdown: string; onChange: (markdown: string) => void; /** Where the formatting buttons go: the pane's own bar, so nothing floats over the text. */ tools: HTMLElement | null }) {
 	const editor = useEditor({
-		extensions: [KIT, Citation.configure({ openOnClick: false, autolink: false, linkOnPaste: false }), Markdown],
+		// Only a citation is a link here: a link to anywhere else, pasted in with its text, comes in as the text alone.
+		extensions: [KIT, Citation.configure({ openOnClick: false, autolink: false, linkOnPaste: false, isAllowedUri: (url) => CITE.test(url) }), Markdown],
 		content: markdown,
 		contentType: "markdown",
 		// The page renders on the server first, where there is no editor.

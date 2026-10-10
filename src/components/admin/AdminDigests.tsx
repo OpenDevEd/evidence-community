@@ -2,7 +2,7 @@
 
 // Digests in the admin. AI writes each one. The library's team reads it, changes it and sends it for review, and an
 // Editor or Owner publishes it under their own name. As with a record, readers see a change only once it is published.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import {
 	AiMagicIcon,
@@ -34,6 +34,7 @@ import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { AnimatePresence, motion } from "framer-motion";
 import type { AdminDigestsQuery, DigestAction, DigestState } from "@/lib/notifications/editorial";
 import { DIGEST_SIGNER_ROLE, type DigestEventKind, type DigestPerson, type DigestSigner } from "@/lib/notifications/types";
 import { ADDED, ChangedLine, ChangedText, REMOVED } from "./AdminDigestChanges";
@@ -99,6 +100,25 @@ function useSessions() {
 	};
 }
 
+/**
+ * The browser leaving the page: a reload, a closed tab, or Back to another site. What was typed in the moment before is
+ * sent at once, and when it cannot be (the library refused it, or someone else changed the edition) the browser asks
+ * before it is lost.
+ */
+function useLeaving(session: DigestSession | null) {
+	useEffect(() => {
+		if (!session) return;
+		const leave = () => { session.leave(); };
+		const ask = (event: BeforeUnloadEvent) => { if (!session.leave()) event.preventDefault(); };
+		window.addEventListener("pagehide", leave);
+		window.addEventListener("beforeunload", ask);
+		return () => {
+			window.removeEventListener("pagehide", leave);
+			window.removeEventListener("beforeunload", ask);
+		};
+	}, [session]);
+}
+
 /** The open edition and the text a person has in hand for it. */
 function useOpenDigest(openId: string | null) {
 	const detail = useSWR(openId ? (["admin-digest", openId] as const) : null, ([, id]) => getAdminDigest(id), {
@@ -115,6 +135,7 @@ function useOpenDigest(openId: string | null) {
 	const snapshot = useDigestSnapshot(session);
 	/** Loads the edition afresh, dropping what this person had typed since someone else changed it. */
 	const reload = () => detail.mutate().then((fresh) => sessions.hold(sessionToStart(fresh, undefined)));
+	useLeaving(session);
 	return { digest: snapshot ? snapshot.digest : loaded, missing: Boolean(detail.error) && !loaded, session, snapshot, reload };
 }
 
@@ -258,12 +279,13 @@ const TABS: [View, string, IconSvgElement][] = [["write", "Write", PencilEdit02I
 /** The open edition's bar: back to the list, its period, the editor's buttons, and how the text is shown. */
 function EditionBar({ digests, shown, locked, hasText, edits, setTools }: { digests: Digests; shown: View; locked: boolean; hasText: boolean; edits: number; setTools: (node: HTMLElement | null) => void }) {
 	return <div className={`flex h-12 shrink-0 items-center gap-2 border-b px-2 ${line}`}>
-		<Button aria-label="All digests" isIconOnly size="xs" variant="transparent" onPress={digests.close}><HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={16} /></Button>
-		<span className={`min-w-0 flex-1 truncate text-xs ${muted}`}>{digests.digest?.period}</span>
-		<div ref={setTools} className="flex gap-0.5" />
-		<div className="flex rounded-xl bg-black/[0.05] p-0.5 dark:bg-white/[0.06]">
-			{TABS.map(([key, label, icon]) => <button key={key} type="button" aria-pressed={shown === key} disabled={!hasText || (locked && key === "write")} onClick={() => digests.setView(key)} className={`h-8 disabled:opacity-40 ${segment(shown === key)}`}>
-				<HugeiconsIcon icon={icon} aria-hidden size={14} />{label}
+		<Button aria-label="All digests" isIconOnly size="xs" variant="transparent" className="shrink-0" onPress={digests.close}><HugeiconsIcon icon={ArrowLeft01Icon} aria-hidden size={16} /></Button>
+		{/* A phone has no room for the period beside the tools, and the views go by their icons. */}
+		<span className={`min-w-0 flex-1 truncate text-xs ${muted}`}><span className="hidden sm:inline">{digests.digest?.period}</span></span>
+		<div ref={setTools} className="flex shrink-0 gap-0.5" />
+		<div className="flex shrink-0 rounded-xl bg-black/[0.05] p-0.5 dark:bg-white/[0.06]">
+			{TABS.map(([key, label, icon]) => <button key={key} type="button" aria-label={label} aria-pressed={shown === key} disabled={!hasText || (locked && key === "write")} onClick={() => digests.setView(key)} className={`h-8 disabled:opacity-40 ${segment(shown === key)}`}>
+				<HugeiconsIcon icon={icon} aria-hidden size={14} /><span className="hidden sm:inline">{label}</span>
 				{/* The count's place is kept from the first frame, so the tabs do not move when the edition arrives. */}
 				{key === "changes" && <span className="min-w-4 text-left tabular-nums text-accent">{edits || ""}</span>}
 			</button>)}
@@ -434,11 +456,16 @@ function Trail({ digest }: { digest: AdminDigest }) {
 	const steps: Step[] = digest.events.map((event) => ({ icon: EVENT[event.kind].icon, who: event.actor?.name ?? "AI", did: EVENT[event.kind].did, at: event.at, actor: event.actor }));
 	if (digest.sent) steps.push({ icon: SentIcon, who: readers(digest.sent.readers), did: "received it", at: digest.sent.at, actor: null });
 	return <ol className={`border-y py-2 ${line}`}>
-		{steps.map((step, index) => <li key={index} className="flex items-center gap-3 px-4 py-2 text-[13px]">
-			{step.actor ? <Face person={step.actor} size={28} /> : <span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/[0.05] dark:bg-white/[0.07]"><HugeiconsIcon icon={step.icon} aria-hidden size={14} /></span>}
-			<span className="min-w-0 flex-1"><span className="block truncate font-medium">{step.who}</span><span className={`block truncate text-xs ${muted}`}>{step.did}</span></span>
-			<span className={`shrink-0 text-[11px] tabular-nums ${muted}`}>{time(step.at)}</span>
-		</li>)}
+		{/* A step that happens while the edition is open, such as this person's first save, opens its row instead of pushing the fields below down in one frame. */}
+		<AnimatePresence initial={false}>
+			{steps.map((step, index) => <motion.li key={index} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} transition={{ duration: 0.2, ease: "easeOut" }} className="overflow-hidden">
+				<span className="flex items-center gap-3 px-4 py-2 text-[13px]">
+					{step.actor ? <Face person={step.actor} size={28} /> : <span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/[0.05] dark:bg-white/[0.07]"><HugeiconsIcon icon={step.icon} aria-hidden size={14} /></span>}
+					<span className="min-w-0 flex-1"><span className="block truncate font-medium">{step.who}</span><span className={`block truncate text-xs ${muted}`}>{step.did}</span></span>
+					<span className={`shrink-0 text-[11px] tabular-nums ${muted}`}>{time(step.at)}</span>
+				</span>
+			</motion.li>)}
+		</AnimatePresence>
 	</ol>;
 }
 

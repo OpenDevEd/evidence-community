@@ -31,6 +31,7 @@ export class DigestSession {
 	private readonly listeners = new Set<() => void>();
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private unsaved = false;
+	private sending = false;
 	private saving: Promise<void> = Promise.resolve();
 
 	constructor(digest: AdminDigest, words: AdminDigestWords) {
@@ -50,8 +51,10 @@ export class DigestSession {
 	}
 
 	private refuse(error: unknown) {
+		// The library names the field it refused and why; that says more than its general message.
+		const field = error instanceof AdminApiError ? Object.values(error.fields)[0] : undefined;
 		this.set({
-			problem: error instanceof Error ? error.message : "The digest could not be saved. Try again.",
+			problem: field ?? (error instanceof Error ? error.message : "The digest could not be saved. Try again."),
 			stale: this.snapshot.stale || (error instanceof AdminApiError && error.code === "conflict"),
 		});
 	}
@@ -61,6 +64,22 @@ export class DigestSession {
 		this.set({ words: { ...this.snapshot.words, ...patch } });
 		clearTimeout(this.timer);
 		this.timer = setTimeout(() => void this.save(), SAVE_AFTER_MS);
+	}
+
+	/**
+	 * Sends what is on screen as the page is left, without waiting for the pause after typing: the request outlives the
+	 * page. True when nothing is left behind, false when text stays unsaved: the library refused it, someone else changed
+	 * the edition, or a save is still on its way and this text is newer.
+	 */
+	leave() {
+		clearTimeout(this.timer);
+		if (!this.unsaved) return true;
+		if (this.snapshot.stale || this.snapshot.problem !== null || this.sending) return false;
+		this.unsaved = false;
+		// A page kept in the browser's back and forward cache comes back with this session, so it takes the answer as any save's.
+		void saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words, true)
+			.then((digest) => this.set({ digest, problem: null }), (error) => { this.unsaved = true; this.refuse(error); });
+		return true;
 	}
 
 	/** Nothing typed waits to be saved and no step is under way, so a newer answer from the library can take this one's place. */
@@ -73,6 +92,7 @@ export class DigestSession {
 		if (this.snapshot.stale) return false;
 		if (!this.unsaved) return true;
 		this.unsaved = false;
+		this.sending = true;
 		try {
 			this.set({ digest: await saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words), problem: null });
 			return true;
@@ -80,6 +100,8 @@ export class DigestSession {
 			this.unsaved = true;
 			this.refuse(error);
 			return false;
+		} finally {
+			this.sending = false;
 		}
 	}
 
