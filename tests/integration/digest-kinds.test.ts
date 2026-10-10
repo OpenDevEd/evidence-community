@@ -110,3 +110,33 @@ it("takes OpenAlex's word that a record may be a review, and leaves a retracted 
     expect(marks(edition.publications)).toEqual([["PUBAAAAB", true, null], ["PUBAAAAA", false, null]]);
   });
 }, 120_000);
+
+it("lists an edition's meta-analyses and reviews apart from its other publications, each with its own pages", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const keys = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => `${prefix}AAAA${"ABCDEFGHJKLMNPQRSTUVWXYZ"[index]}`);
+    const reviews = keys("REV", 14);
+    const studies = keys("STU", 15);
+    for (const key of [...reviews, ...studies]) await publication(client, key, `Publication ${key}`);
+    const entry = (key: string, kind?: string) => ({ key, title: `Publication ${key}`, creators: [], date: "2026-08-10", abstract: null, publicationType: "Report", doi: null, ...(kind ? { kind } : {}) });
+    // Stored as a digest lists them: reviews first. One was read as a single study, so it belongs with the others.
+    const publications = [...reviews.map((key, index) => entry(key, index === 13 ? "study" : index % 2 ? "review" : "meta-analysis")), ...studies.map(key => entry(key))];
+    const [edition] = await db.insert(notificationEdition).values({ stream: "digest", windowStart: period.start, windowEnd: period.end, publications: publications as never, publicationCount: 29, title: "August", summary: "Many.", markdown: "Text.", publishedAt: period.end, nextAttemptAt: null }).returning();
+    const { getDigestEdition } = await import("@/lib/notifications/public");
+
+    const first = await getDigestEdition(db, config, "en-GB", edition.id);
+    expect(first).toMatchObject({ listed: 29, page: 1, pages: 2, reviews: { listed: 13, page: 1, pages: 2 } });
+    expect(first?.reviews?.keys).toEqual(reviews.slice(0, 12));
+    expect(first?.keys).toEqual([reviews[13], ...studies.slice(0, 11)]);
+    // Turning one list's page leaves the other where it was.
+    const turned = await getDigestEdition(db, config, "en-GB", edition.id, 1, 2);
+    expect(turned?.reviews).toMatchObject({ page: 2, keys: reviews.slice(12, 13) });
+    expect(turned?.keys).toEqual(first?.keys);
+    expect((await getDigestEdition(db, config, "en-GB", edition.id, 2, 1))?.keys).toEqual(studies.slice(11));
+
+    // An edition with no review is one list, as before.
+    await db.update(notificationEdition).set({ publications: studies.map(key => entry(key)) as never }).where(eq(notificationEdition.id, edition.id));
+    const plain = await getDigestEdition(db, config, "en-GB", edition.id);
+    expect(plain).toMatchObject({ listed: 15, pages: 2 });
+    expect(plain).not.toHaveProperty("reviews");
+  });
+}, 120_000);

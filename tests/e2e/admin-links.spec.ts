@@ -63,9 +63,9 @@ test("links two records, shows both sides, and removes the link again", async ({
 	let inspector = await openRecord(page, citingKey);
 	await inspector.getByRole("button", { name: "Edit" }).click();
 	const links = inspector.getByRole("group", { name: "Links", includeHidden: true });
-	await links.getByRole("button", { name: "Add to Cites" }).click();
+	await links.getByRole("button", { name: "Add to References" }).click();
 	const banner = page.locator('[data-admin-link-pick-banner="cites"]');
-	await expect(banner).toContainText("Tick or click records to add them under Cites");
+	await expect(banner).toContainText("Tick or click records to add them under References");
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 	await page.getByRole("textbox", { name: "Search records" }).fill(citedTitle);
 	const citedRow = page.locator(`[data-record-key="${citedKey}"]`);
@@ -112,7 +112,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await page.keyboard.press("Escape");
 	await expect(relatedBanner).toHaveCount(0);
 
-	await links.getByRole("button", { name: "Cites", exact: true }).click();
+	await links.getByRole("button", { name: "References", exact: true }).click();
 	const addedRow = links.locator(
 		`[data-admin-link-list="cites"] [data-admin-link-key="${citedKey}"]`,
 	);
@@ -138,9 +138,9 @@ test("links two records, shows both sides, and removes the link again", async ({
 		.click();
 	await expect(inspector.getByRole("heading", { name: citedTitle })).toBeVisible();
 
-	// The other side sees "Cited by"
+	// The other side sees "Citations"
 	inspector = await openRecord(page, citedKey);
-	await inspector.getByRole("button", { name: "Cited by", exact: true }).click();
+	await inspector.getByRole("button", { name: "Citations", exact: true }).click();
 	const citedBy = inspector.locator('[data-admin-link-list="citedBy"]');
 	await expect(citedBy).toContainText(citingTitle);
 	await expect(citedBy.locator(`[data-admin-link-key="${citingKey}"]`)).toHaveAttribute(
@@ -176,9 +176,9 @@ test("links two records, shows both sides, and removes the link again", async ({
 		inspector.locator(`[data-admin-link-list="related"] [data-admin-link-key="${citedKey}"]`),
 	).toHaveCount(0);
 	await inspector.getByRole("button", { name: "Edit" }).click();
-	await inspector.getByRole("button", { name: "Cites", exact: true }).click();
+	await inspector.getByRole("button", { name: "References", exact: true }).click();
 	const removeButton = inspector.getByRole("button", {
-		name: `Remove ${citedTitle} from Cites`,
+		name: `Remove ${citedTitle} from References`,
 	});
 	await removeButton.click();
 	const removedRow = inspector.locator(

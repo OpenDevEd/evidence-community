@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, count, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
@@ -24,7 +24,12 @@ export type DigestSummary = {slug: string; published: DigestDate; title: string;
  * An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`.
  * `note` is the words of the person who checked it, shown above the text with their name, so only when readers are told who that is.
  */
-export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]};
+export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews};
+/**
+ * One page of an edition's meta-analyses and reviews, which are a list of their own with its own pages when the
+ * edition has any. `keys` on the edition then holds the other publications; `listed` still counts both.
+ */
+export type DigestReviews = {listed: number; page: number; pages: number; keys: string[]};
 export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages: number};
 
 // Lists read these small columns only, never an edition's stored publications.
@@ -101,7 +106,7 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
   return rows.map(row => editionSummary(row, locale, config));
 }
 
-export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1): Promise<DigestEdition | undefined> {
+export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1, reviewsPage = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
   const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, note: notificationEdition.note})
@@ -113,14 +118,23 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
     FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) WITH ORDINALITY AS stored(entry, position)
     JOIN ${item} ON ${item.key} = stored.entry->>'key'
     WHERE ${notificationEdition.id} = ${uuid} AND ${publicParentVisibility(db, config.content.tags.hidden)}`;
-  const {rows: [{listed}]} = await db.execute<{listed: number}>(sql`SELECT count(*)::int AS listed ${listedNow}`);
-  const pages = Math.max(1, Math.ceil(listed / EDITION_PAGE_SIZE));
-  const current = Math.min(page, pages);
-  const {rows: keys} = await db.execute<{key: string}>(sql`
-    SELECT stored.entry->>'key' AS key ${listedNow}
-    ORDER BY stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
+  // A record read as a meta-analysis or a review. One nobody has read yet is listed with the others.
+  const review = sql`coalesce(stored.entry->>'kind' IN ('meta-analysis', 'review'), false)`;
+  const list = async (which: SQL, wanted: number) => {
+    const {rows: [{listed}]} = await db.execute<{listed: number}>(sql`SELECT count(*)::int AS listed ${listedNow} ${which}`);
+    const pages = Math.max(1, Math.ceil(listed / EDITION_PAGE_SIZE));
+    const current = Math.min(wanted, pages);
+    const {rows: keys} = await db.execute<{key: string}>(sql`
+      SELECT stored.entry->>'key' AS key ${listedNow} ${which}
+      ORDER BY stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
+    return {listed, page: current, pages, keys: keys.map(entry => entry.key)};
+  };
   const summary = editionSummary(row, locale, config);
-  return {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, listed, page: current, pages, keys: keys.map(entry => entry.key)};
+  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null};
+  const reviews = await list(sql`AND ${review}`, reviewsPage);
+  if (!reviews.listed) return {...edition, ...await list(sql``, page)};
+  const others = await list(sql`AND NOT ${review}`, page);
+  return {...edition, ...others, listed: others.listed + reviews.listed, reviews};
 }
 
 export async function getNextDigestEdition(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestDate | null> {

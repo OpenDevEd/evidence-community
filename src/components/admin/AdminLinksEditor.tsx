@@ -22,10 +22,10 @@ import { type AdminLinkRowPlan, planAdminLinks } from "./admin-links";
 import { firstAdminFieldError } from "./admin-validation";
 
 const OUTGOING_TITLES: Record<AdminItemLinkKind, string> = {
-	cites: "Cites",
+	cites: "References",
 	related: "Related",
 };
-const CITED_BY_TITLE = "Cited by";
+const CITED_BY_TITLE = "Citations";
 const CHANGE_LABELS: Record<AdminLinkRowPlan["change"], string | null> = {
 	added: "Added in this draft",
 	removed: "Removed in this draft",
@@ -187,7 +187,7 @@ export function AdminLinksEditor({
 	};
 
 	const tabs = [
-		{ key: "cites", label: "Cites", icon: ArrowUpRight01Icon, rows: plan.outgoing.cites },
+		{ key: "cites", label: OUTGOING_TITLES.cites, icon: ArrowUpRight01Icon, rows: plan.outgoing.cites },
 		{ key: "related", label: "Related", icon: Link02Icon, rows: plan.outgoing.related },
 		{ key: "citedBy", label: CITED_BY_TITLE, icon: ArrowDownLeft01Icon, rows: plan.citedBy },
 	] as const;

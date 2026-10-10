@@ -173,7 +173,7 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
       <TextLink href={base} back>All digests</TextLink>
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-12">
         <article className="min-w-0 lg:col-span-8 xl:col-span-9">
-          <Suspense fallback={<EditionLoading />}><EditionBody edition={edition} cards={cards} href={next => next > 1 ? `${base}/${slug}?page=${next}` : `${base}/${slug}`} /></Suspense>
+          <Suspense fallback={<EditionLoading />}><EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} /></Suspense>
         </article>
         <aside className="space-y-8 lg:col-span-4 xl:col-span-3">
           <section aria-label="Past digests">
@@ -192,7 +192,7 @@ function EditionLoading() {
     <div className="space-y-3"><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-4/5 rounded-lg" /></div>
   </div>;
 }
-function EditionBody({edition: pending, cards, href}: {edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>; href: (page: number) => string}) {
+function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>; path: string}) {
   const edition = use(pending);
   const locale = useLocale();
   if (!edition) notFound();
@@ -203,16 +203,45 @@ function EditionBody({edition: pending, cards, href}: {edition: Promise<DigestEd
           <section className="mt-10" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
             {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: every meta-analysis and review, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
-            <Suspense fallback={<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{edition.keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>}><EditionCards cards={cards} /></Suspense>
-            <PageControls page={edition.page} pages={edition.pages} href={href} />
+            <EditionLists edition={edition} cards={cards} path={path} locale={locale} />
           </section>
   </>;
 }
-function EditionCards({cards: pending}: {cards: Promise<EditionCardsData>}) {
+/** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
+function EditionLists({edition, cards, path, locale}: {edition: DigestEdition; cards: Promise<EditionCardsData>; path: string; locale: string}) {
+  const {reviews} = edition;
+  const list = (keys: string[], page: number, pages: number, href: (next: number) => string) => <>
+    <Suspense fallback={<CardsLoading keys={keys} />}><EditionCards cards={cards} keys={keys} /></Suspense>
+    <PageControls page={page} pages={pages} href={href} />
+  </>;
+  if (!reviews) return list(edition.keys, edition.page, edition.pages, next => address(path, next));
+  return <>
+    <ListHeading title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
+    {list(reviews.keys, reviews.page, reviews.pages, next => address(path, edition.page, next))}
+    <div className="mt-12"><ListHeading title="Other publications" count={edition.listed - reviews.listed} locale={locale} /></div>
+    {list(edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}
+  </>;
+}
+const cardGrid = "grid grid-cols-1 gap-4 sm:grid-cols-2";
+/** An edition page's address: each list keeps the page the other is on. */
+function address(path: string, page: number, reviews = 1) {
+  const query = new URLSearchParams();
+  if (page > 1) query.set("page", String(page));
+  if (reviews > 1) query.set("reviews", String(reviews));
+  return query.size ? `${path}?${query}` : path;
+}
+function ListHeading({title, count, locale}: {title: string; count: number; locale: string}) {
+  return <h3 className="mb-4 flex items-baseline gap-2 text-lg font-medium">{title}<span className={`text-xs font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
+}
+function CardsLoading({keys}: {keys: string[]}) {
+  return <div className={cardGrid}>{keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>;
+}
+function EditionCards({cards: pending, keys}: {cards: Promise<EditionCardsData>; /** The cards of one list, in its order. */ keys: string[]}) {
   const {cards, profiles} = use(pending);
+  const listed = keys.flatMap(key => cards.find(card => card.key === key) ?? []);
   // The server read the authors with the cards, so no card looks them up on its own.
   return <AuthorProfilesContext value={new Map(profiles.map(profile => [profile.id, profile]))}>
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{cards.map(card => <Resource key={card.key} as="div" abstract={false} hideUnapi itemData={card} />)}</div>
+    <div className={cardGrid}>{listed.map(card => <Resource key={card.key} as="div" abstract={false} hideUnapi itemData={card} />)}</div>
   </AuthorProfilesContext>;
 }
 function PastDigests({earlier, base}: {earlier: Promise<DigestSummary[]>; base: string}) {

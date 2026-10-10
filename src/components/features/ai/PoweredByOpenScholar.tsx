@@ -3,13 +3,15 @@
 import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
 import OpenScholar from "@/components/icons/OpenScholar";
+import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
 
 /** "Powered by OpenScholar" attribution under the chat composer and in the footer. Its logo scales with the text. */
 export function PoweredByOpenScholar({ className }: { className?: string }) {
 	const t = useTranslations("ai");
+	const openScholar = useOpenScholarUrl();
 	return (
 		<a
-			href="https://openscholar.ai"
+			href={openScholar()}
 			target="_blank"
 			rel="noopener noreferrer"
 			className={twMerge(

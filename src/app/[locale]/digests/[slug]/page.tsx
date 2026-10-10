@@ -9,7 +9,7 @@ import SubscriptionAction from "@/components/digests/SubscriptionAction";
 import type { Preferences } from "@/components/digests/Subscription";
 import { readDigests } from "../read";
 
-type Props = {params: Promise<{locale: string; slug: string}>; searchParams: Promise<{token?: string; page?: string}>};
+type Props = {params: Promise<{locale: string; slug: string}>; searchParams: Promise<{token?: string; page?: string; reviews?: string}>};
 export default async function Page({params, searchParams}: Props) {
   const {locale, slug} = await params;
   const current = Promise.resolve(locale);
@@ -17,9 +17,11 @@ export default async function Page({params, searchParams}: Props) {
   if (slug === "confirm" || slug === "unsubscribe") return <SubscriptionAction token={token} action={slug} locale={locale} />;
   if (slug === "preferences") return <DigestPages view="preferences" token={token} subscriber={readDigests(current, async db => readPreferences(db, await token))} />;
   const page = searchParams.then(value => pageNumber(value.page));
-  const edition = readDigests(current, async (db, config, locale) => getDigestEdition(db, config, locale, slug, await page));
+  // The reviews list has pages of its own, kept in `reviews`.
+  const reviewsPage = searchParams.then(value => pageNumber(value.reviews));
+  const edition = readDigests(current, async (db, config, locale) => getDigestEdition(db, config, locale, slug, await page, await reviewsPage));
   // This page's cards and their authors are read with the page, so nothing loads in the browser.
-  const cards = edition.then(value => readDigests(current, (db, config) => readEditionCards(db, config, value?.keys ?? [])));
+  const cards = edition.then(value => readDigests(current, (db, config) => readEditionCards(db, config, [...(value?.reviews?.keys ?? []), ...(value?.keys ?? [])])));
   return <DigestPages view="edition" slug={slug} earlier={readDigests(current, (db, config, locale) => listEarlierDigests(db, config, locale, slug))} edition={edition} cards={cards} />;
 }
 

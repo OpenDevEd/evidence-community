@@ -65,7 +65,11 @@ export function projectPublicLibraryConfig(
 		analytics: config.analytics,
 		notifications: config.notifications,
 		authentication: {
-			openScholar: { accountUrl: config.authentication.openScholar.accountUrl },
+			openScholar: {
+				accountUrl: config.authentication.openScholar.accountUrl,
+				// The site of the library's own page there: a library set up from another OpenScholar links to that one.
+				siteUrl: new URL(config.authentication.openScholar.libraryUrl).origin,
+			},
 		},
 	});
 

@@ -8,7 +8,7 @@ import {
 	CalendarClockIcon,
 	Download01Icon,
 	File02Icon,
-	QuoteUpIcon,
+	ArrowDownLeft01Icon,
 } from "@hugeicons/core-free-icons";
 import { Item } from "@/app/api/item/types";
 import { Button } from "@/components/nextui/Button";
@@ -54,7 +54,7 @@ function ItemCitationButton({
 			size="sm"
 			color={isCitationPage ? "accent" : "secondary"}
 			startContent={
-				<HugeiconsIcon icon={QuoteUpIcon} className="size-4" />
+				<HugeiconsIcon icon={ArrowDownLeft01Icon} className="size-4" />
 			}
 			endContent={
 				<HugeiconsIcon

@@ -7,6 +7,7 @@ import {
 	Building03Icon,
 	Folder01Icon,
 	Mortarboard01Icon,
+	ArrowUpRight01Icon,
 } from "@hugeicons/core-free-icons";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
@@ -46,7 +47,8 @@ import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
 import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import {
@@ -1163,7 +1165,17 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const [selectedTab, setSelectedTab] = useState("general");
+	// A card's reference count opens this page on its References list, and its citation count on Citations.
+	const asked = useSearchParams().get("links");
+	const openScholar = useOpenScholarUrl();
+	const [selectedTab, setSelectedTab] = useState(asked === "references" ? "cites" : asked === "citations" ? "citedBy" : "general");
+	// What OpenAlex lists in all, beside what the library holds, opening the whole list in OpenScholar.
+	const source = item?.citationMetrics?.[0];
+	const work = /^W\d+$/.test(item?.sourceRecordKey ?? "") ? item!.sourceRecordKey : null;
+	const beyond: Record<string, { count: number | null | undefined; filter: string }> = {
+		cites: { count: source?.referencedWorksCount, filter: "citedBy" },
+		citedBy: { count: source?.citedByCount, filter: "cites" },
+	};
 
 	const descriptions: Record<string, string> = {
 		general: t("relatedResourcesByCitation"),
@@ -1197,8 +1209,14 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 					showTabsOnly={true}
 				/>
 			</div>
-			<p className="text-black/60 dark:text-white/60">
+			<p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-black/60 dark:text-white/60">
 				{descriptions[activeTab] || descriptions.general}
+				{work && beyond[activeTab]?.count ? (
+					<a href={openScholar(`/results?${beyond[activeTab].filter}=${work}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+						{t("onOpenAlex", { count: beyond[activeTab].count!.toLocaleString() })}
+						<HugeiconsIcon icon={ArrowUpRight01Icon} aria-hidden size={14} />
+					</a>
+				) : null}
 			</p>
 			<Relations
 				links={item?.links}

@@ -1,13 +1,14 @@
 import { CitationControl } from "./CitationControl";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import {
 	Add01Icon,
 	Alert02Icon,
+	ArrowDownLeft01Icon,
 	ArrowRight01Icon,
+	ArrowUpRight01Icon,
 	CalendarClockIcon,
 	MapsIcon,
-	QuoteUpIcon,
 } from "@hugeicons/core-free-icons";
 import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
@@ -35,6 +36,7 @@ import { PrefetchKind } from "next/dist/client/components/router-reducer/router-
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useResourceHref } from "@/hooks/useResourceHref";
+import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
 import { useItemLink } from "@/hooks/useItemLink";
 import { hasAnyTag, hasTag } from "@/lib/tags";
 import { generateCOinS } from "@/lib/coins";
@@ -134,6 +136,11 @@ function FixURL(url: string | null) {
 	return url;
 }
 
+/**
+ * A record's references (what it cites) and citations (who cites it), each as "held of total": how many this
+ * library holds, and how many OpenAlex lists in all. The first number opens the library's list, the second the
+ * whole list in OpenScholar. A direction with nothing on either side is left out.
+ */
 function CitationCounts({
 	itemData,
 }: {
@@ -141,94 +148,55 @@ function CitationCounts({
 }) {
 	const t = useTranslations("ui");
 	const resourceHref = useResourceHref();
-	const citesCount = itemData?.links?.cites.length ?? 0;
-	const citedByCount = itemData?.links?.citedBy.length ?? 0;
-	// A source that counts no citations has nothing to show.
-	const sourceMetrics = (itemData?.citationMetrics ?? []).filter(
-		(metric) => (metric.citedByCount ?? 0) > 0,
-	);
+	const openScholar = useOpenScholarUrl();
+	const key = itemData?.key ?? "";
+	// OpenAlex's own totals, as of the last import.
+	const source = itemData?.citationMetrics?.[0];
+	const work = /^W\d+$/.test(itemData?.sourceRecordKey ?? "") ? itemData!.sourceRecordKey : null;
+	const counts = [
+		{
+			id: "references", icon: ArrowUpRight01Icon, tone: "reference" as const, colour: "text-violet-700 dark:text-violet-300",
+			held: itemData?.links?.cites.length ?? 0, total: source?.referencedWorksCount ?? null,
+			here: `${resourceHref(key, { set: { links: "references" } })}#relations-tabs`, there: work && openScholar(`/results?citedBy=${work}`),
+			label: (count: number) => t("referenceLabel", { count }),
+			words: (held: number, total: number | null) => total === null ? t("referencesHeldOnly", { held }) : t("referencesHeld", { held, total }),
+		},
+		{
+			id: "citations", icon: ArrowDownLeft01Icon, tone: "library" as const, colour: "text-accent",
+			held: itemData?.links?.citedBy.length ?? 0, total: source?.citedByCount ?? null,
+			here: resourceHref(key, { base: "/citation" }), there: work && openScholar(`/results?cites=${work}`),
+			label: (count: number) => t("citationLabel", { count }),
+			words: (held: number, total: number | null) => total === null ? t("citationsHeldOnly", { held }) : t("citationsHeld", { held, total }),
+		},
+	].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
+	if (counts.length === 0) return null;
 
-	if (citesCount === 0 && citedByCount === 0 && sourceMetrics.length === 0) {
-		return null;
-	}
-
-	// Below 720px the buttons beside these counts lose their labels, so the
-	// counts do too; the tooltip and screen readers still get the words.
-	const labelClassName = "sr-only @[720px]:not-sr-only @[720px]:whitespace-nowrap";
-	// Only the library citations open a page, so only they look like a button;
-	// the other counts are coloured text.
-	const statClassName = "inline-flex items-center gap-1.5 h-8 px-1.5 text-xs font-medium";
+	// A narrow card drops the words; the tooltip and screen readers still get them.
+	const labelClassName = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
+	const number = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
 	return (
 		<div
 			data-count-row
-			className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
+			className="flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap"
 			onClick={(e) => e.stopPropagation()}
 		>
-			{citedByCount > 0 && (
-				<CountTooltip
-					tone="library"
-					text={`${citedByCount} ${t("libraryCitationLabel", { count: citedByCount })}`}
-				>
-					<Link
-						href={resourceHref(itemData?.key ?? "", {
-							base: "/citation",
-						})}
-						className="inline-flex shrink-0 items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
-					>
-						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
-						<span>{citedByCount}</span>
-						<span data-count-label className={twMerge("text-accent/70", labelClassName)}>
-							{t("libraryCitationLabel", { count: citedByCount })}
+			{counts.map(({ id, icon, tone, colour, held, total, here, there, label, words }) => {
+				// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
+				const all = total !== null && total >= held ? total : null;
+				return (
+					<CountTooltip key={id} tone={tone} icon={icon} text={words(held, all)}>
+						<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
+							<HugeiconsIcon icon={icon} className="size-3.5" />
+							{held > 0 ? <Link href={here} className={number}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
+							{all !== null && <>
+								<span className="opacity-60">{t("of")}</span>
+								{there ? <a href={there} target="_blank" rel="noreferrer" className={number}>{all.toLocaleString()}</a> : <span className="font-semibold tabular-nums">{all.toLocaleString()}</span>}
+							</>}
+							<span data-count-label className={twMerge("opacity-70", labelClassName)}>{label(all ?? held)}</span>
 						</span>
-						<HugeiconsIcon
-							icon={ArrowRight01Icon}
-							className="size-3 opacity-50 ml-0.5"
-						/>
-					</Link>
-				</CountTooltip>
-			)}
-			{citesCount > 0 && (
-				<CountTooltip
-					tone="reference"
-					text={`${citesCount} ${t("referenceLabel", { count: citesCount })}`}
-				>
-					<span
-						className={twMerge(
-							statClassName,
-							"shrink-0 text-violet-700 dark:text-violet-300",
-						)}
-					>
-						<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
-						<span>{citesCount}</span>
-						<span data-count-label className={labelClassName}>
-							{t("referenceLabel", { count: citesCount })}
-						</span>
-					</span>
-				</CountTooltip>
-			)}
-			{sourceMetrics.map((metric) => (
-				<CountTooltip
-					key={metric.sourceConnectionKey}
-					tone="source"
-					text={`${metric.citedByCount} ${metric.sourceLabel} ${t("citationsLowercase")}`}
-				>
-					<span
-						className={twMerge(
-							statClassName,
-							"min-w-0 text-cyan-700 dark:text-cyan-300",
-						)}
-					>
-						<HugeiconsIcon
-							icon={QuoteUpIcon}
-							className="size-3.5 shrink-0"
-						/>
-						<span>{metric.citedByCount}</span>
-						<span data-count-label className={twMerge(labelClassName, "@[720px]:truncate")}>
-							{metric.sourceLabel} {t("citationsLowercase")}
-						</span>
-					</span>
-				</CountTooltip>
-			))}
+					</CountTooltip>
+				);
+			})}
 		</div>
 	);
 }
@@ -264,10 +232,12 @@ function countLabelIsShortened(trigger: HTMLElement | null) {
 /** Shows the count's full wording only when the card cannot. */
 function CountTooltip({
 	tone,
+	icon,
 	text,
 	children,
 }: {
 	tone: keyof typeof COUNT_TOOLTIP_TONES;
+	icon: IconSvgElement;
 	text: string;
 	children: React.ReactElement<{ ref?: React.Ref<HTMLElement> }>;
 }) {
@@ -281,7 +251,7 @@ function CountTooltip({
 			}
 			content={
 				<span className="inline-flex items-center gap-1.5">
-					<HugeiconsIcon icon={QuoteUpIcon} className="size-3.5" />
+					<HugeiconsIcon icon={icon} className="size-3.5" />
 					{text}
 				</span>
 			}
