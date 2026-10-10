@@ -2,10 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-	buildGoogleFontsUrl,
 	buildThemeColorCss,
 	buildThemeFontCss,
 	LibraryThemeStyles,
+	themeGoogleFonts,
 } from "@/components/library/LibraryThemeStyles";
 import {
 	createLibraryConfigSchema,
@@ -106,26 +106,23 @@ describe("runtime theme assets", () => {
 			source: "google",
 			family: "Ubuntu",
 		});
-		expect(buildGoogleFontsUrl(minimalTheme)).toBe(
-			"https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap",
-		);
+		expect(themeGoogleFonts(minimalTheme)).toEqual(["Ubuntu"]);
 
 		const markup = renderToStaticMarkup(
 			<LibraryThemeStyles theme={minimalTheme} />,
 		);
 
 		expect(markup).toContain('data-library-theme="true"');
-		expect(markup).toContain("family=Ubuntu:wght@400;500;700");
-		expect(markup).not.toContain("@font-face");
+		// next/font serves the font from the library itself: nothing is asked of Google.
+		expect(markup).not.toContain("fonts.googleapis.com");
+		expect(markup).toContain("--font-body:var(--font-ubuntu),sans-serif");
 	});
 
 	it("renders the wide system fixture with Google and WOFF2 fonts", () => {
 		expect(maximalTheme.layout).toBe("wide");
 		expect(maximalTheme.defaultMode).toBe("system");
 		expect(maximalTheme.forcedMode).toBeNull();
-		expect(buildGoogleFontsUrl(maximalTheme)).toBe(
-			"https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&display=swap",
-		);
+		expect(themeGoogleFonts(maximalTheme)).toEqual(["Montserrat"]);
 
 		const fontCss = buildThemeFontCss(maximalTheme);
 		expect(fontCss).toContain(
@@ -133,22 +130,10 @@ describe("runtime theme assets", () => {
 		);
 		expect(fontCss).toContain("font-weight:100 900");
 		expect(fontCss).toContain(
-			'--font-heading:"Montserrat",sans-serif',
+			"--font-heading:var(--font-montserrat),sans-serif",
 		);
 		expect(fontCss).toContain(
 			'--font-body:"Maximal Sans",sans-serif',
-		);
-	});
-
-	it("sorts configured weights for valid Google Fonts requests", () => {
-		const input = structuredClone(
-			maximalLibraryConfig,
-		) as LibraryConfigInput;
-		input.theme.fonts!.weights = [700, 300, 500, 400];
-		const theme = libraryConfigSchema.parse(input).theme;
-
-		expect(buildGoogleFontsUrl(theme)).toBe(
-			"https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&display=swap",
 		);
 	});
 
@@ -160,11 +145,9 @@ describe("runtime theme assets", () => {
 		input.theme.fonts!.body = { source: "google", family: "Poppins" };
 		const theme = libraryConfigSchema.parse(input).theme;
 
-		expect(buildGoogleFontsUrl(theme)).toBe(
-			"https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700&display=swap",
-		);
+		expect(themeGoogleFonts(theme)).toEqual(["Poppins"]);
 		expect(buildThemeFontCss(theme)).toContain(
-			'--font-heading:"Poppins",sans-serif;--font-body:"Poppins",sans-serif',
+			"--font-heading:var(--font-poppins),sans-serif;--font-body:var(--font-poppins),sans-serif",
 		);
 	});
 

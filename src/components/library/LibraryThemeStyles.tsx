@@ -68,34 +68,20 @@ export function buildThemeColorCss(theme: Theme) {
 	return `:root{${declarations.join(";")}}:root.light,:root.dark{--nextui-focus:${nextUiFocus}}`;
 }
 
-function googleFontFamilyQuery(
-	font: Extract<ThemeFont, { source: "google" }>,
-	weights: Theme["fonts"]["weights"],
-) {
-	const sortedWeights = [...weights].sort((a, b) => a - b);
-	return `family=${encodeURIComponent(font.family).replace(/%20/g, "+")}:wght@${sortedWeights.join(";")}`;
+/** The Google fonts a theme uses, each once. */
+export function themeGoogleFonts(theme: Theme) {
+	const families = [theme.fonts.heading, theme.fonts.body].flatMap((font) => (font.source === "google" ? [font.family] : []));
+	return [...new Set(families)];
 }
 
-export function buildGoogleFontsUrl(theme: Theme) {
-	const googleFonts = [
-		theme.fonts.heading,
-		theme.fonts.body,
-	].filter(
-		(font): font is Extract<ThemeFont, { source: "google" }> =>
-			font.source === "google",
-	);
-	const uniqueFamilies = Array.from(
-		new Map(googleFonts.map((font) => [font.family, font])).values(),
-	);
-
-	if (!uniqueFamilies.length) return null;
-
-	const families = uniqueFamilies
-		.map((font) =>
-			googleFontFamilyQuery(font, theme.fonts.weights),
-		)
-		.join("&");
-	return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+/**
+ * A theme font's family list. A Google font is self-hosted by next/font, which
+ * sets `--font-montserrat`, `--font-poppins` or `--font-ubuntu` (platform-fonts.ts)
+ * to the font and its size-adjusted fallback.
+ */
+function fontStack(font: ThemeFont) {
+	const family = font.source === "google" ? `var(--font-${font.family.toLowerCase()})` : JSON.stringify(font.family);
+	return `${family},sans-serif`;
 }
 
 function fontFaceCss(
@@ -130,30 +116,11 @@ export function buildThemeFontCss(theme: Theme) {
 		.map((font) => fontFaceCss(font))
 		.join("");
 
-	return `${faces}:root{--font-heading:${JSON.stringify(theme.fonts.heading.family)},sans-serif;--font-body:${JSON.stringify(theme.fonts.body.family)},sans-serif}`;
+	return `${faces}:root{--font-heading:${fontStack(theme.fonts.heading)};--font-body:${fontStack(theme.fonts.body)}}`;
 }
 
 export function LibraryThemeStyles({ theme }: { theme: Theme }) {
-	const googleFontsUrl = buildGoogleFontsUrl(theme);
 	const css = `${buildThemeColorCss(theme)}${buildThemeFontCss(theme)}`;
 
-	return (
-		<>
-			{googleFontsUrl ? (
-				<>
-					<link rel="preconnect" href="https://fonts.googleapis.com" />
-					<link
-						rel="preconnect"
-						href="https://fonts.gstatic.com"
-						crossOrigin="anonymous"
-					/>
-					<link rel="stylesheet" href={googleFontsUrl} />
-				</>
-			) : null}
-			<style
-				data-library-theme
-				dangerouslySetInnerHTML={{ __html: css }}
-			/>
-		</>
-	);
+	return <style data-library-theme dangerouslySetInnerHTML={{ __html: css }} />;
 }
