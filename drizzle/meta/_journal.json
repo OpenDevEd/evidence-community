@@ -561,6 +561,13 @@
       "when": 1791664743432,
       "tag": "0079_digest-silent-editions",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1791665955629,
+      "tag": "0080_digest-publication-kinds",
+      "breakpoints": true
     }
   ]
 }

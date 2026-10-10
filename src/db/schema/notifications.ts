@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
-import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner, DigestText, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
+import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner, DigestText, NotificationPublication, NotificationStream, PublicationKind } from "@/lib/notifications/types";
 
 const date = (name: string) => timestamp(name, {withTimezone: true});
 export const notificationItem = pgTable("notificationItem", {
@@ -16,6 +16,13 @@ export const notificationItem = pgTable("notificationItem", {
   index("notificationItem_hourly_pending_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true AND ${table.hourlyEditionId} IS NULL`),
   index("notificationItem_digest_pending_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true AND ${table.digestEditionId} IS NULL`),
 ]);
+
+// What a likely meta-analysis or review was read as, kept so a record is read once.
+export const notificationItemKind = pgTable("notificationItemKind", {
+  itemKey: varchar("itemKey", {length: 8}).primaryKey(),
+  kind: text("kind").$type<PublicationKind>().notNull(),
+  readAt: date("readAt").notNull().defaultNow(),
+});
 
 export const notificationState = pgTable("notificationState", {
   singleton: boolean("singleton").primaryKey().default(true),
@@ -73,6 +80,9 @@ export const notificationEdition = pgTable("notificationEdition", {
   checkedBy: jsonb("checkedBy").$type<DigestSigner>(),
   // Written by hand for a past period: emailed to nobody, whenever it is published.
   silent: boolean("silent").notNull().default(false),
+  // When this attempt first asked OpenScholar for the digest. Just before, the stored publications take on what
+  // their records have been read as; they then stay as sent while the answer is awaited, since a changed request starts the writer again.
+  requestedAt: date("requestedAt"),
   model: text("model"),
   reasoning: text("reasoning"),
   attempts: integer("attempts").notNull().default(0),

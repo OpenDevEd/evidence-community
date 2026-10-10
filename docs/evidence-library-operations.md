@@ -947,11 +947,28 @@ role. Their account ID is never sent to readers. Off, the default, readers see
 neither the name nor the note.
 
 A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
-period has more, the ones kept are ranked: a record with an abstract of at least
-200 characters first, then by a score of 3 for a journal OpenAlex marks as core,
-2 for ten or more references (1 for fewer), 1 for a known institution and twice
-the natural log of one plus the citation count. A dataset or software record
-loses 1, and a retracted record or paratext loses 10.
+period has more, every meta-analysis and review comes first, then the rest are
+ranked: a record with an abstract of at least 200 characters first, then by a
+score of 3 for a journal OpenAlex marks as core, 2 for ten or more references
+(1 for fewer), 1 for a known institution and twice the natural log of one plus
+the citation count. A dataset or software record loses 1. A retracted record
+or a journal's front matter is in no digest. The digest's page says how its
+publications were chosen whenever it lists fewer than the period has.
+
+A meta-analysis or review is told from a single study by reading it. A record
+is a likely one when its title, its abstract or its OpenAlex type (`review`)
+suggests it; the patterns are in `src/lib/notifications/kinds.ts` and are wide
+on purpose. The library sends `candidate` for every publication in a digest
+request, and OpenScholar has Jev read the title and abstract of each candidate
+that has no answer yet. The answers come back as `kinds` (`meta-analysis`,
+`review` or `study`), also when the writer itself fails, and are kept in
+`notificationItemKind` and on the edition's stored publications, which later
+requests send as `kind`. An edition listed before another digest had a record
+read takes that answer on when its own request first goes out
+(`notificationEdition.requestedAt`). So a record is read once, only when a
+digest first covers it, and never because it sits in the library. A read that fails leaves
+the record a likely review: it is listed first and read again with the next
+digest that covers it.
 
 To write the digest of a past period, or rewrite the edition that already ends
 when it does, send the period to the manual digest route with the library's
