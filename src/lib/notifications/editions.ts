@@ -88,8 +88,8 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       -- A retracted record, or a journal's front matter, is in no digest.
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (
-      -- One record stands for a work, and the work is a review when any of its records is one.
-      SELECT DISTINCT ON (work) key, bool_or(review) OVER (PARTITION BY work) AS review, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
+      -- One record stands for a work. Its own title, abstract and type say whether it is a likely review, since it is the one sent to be read.
+      SELECT DISTINCT ON (work) key, review, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
     )
     SELECT (SELECT count(*)::int FROM chosen) AS total,
       -- Every meta-analysis and review of the period is listed, then the rest in rank order.

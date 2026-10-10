@@ -48,7 +48,8 @@ const withKinds = sql`(
 export async function savePublicationKinds(db: Database | DatabaseTransaction, edition: Pick<typeof notificationEdition.$inferSelect, "id" | "publications">, kinds: Record<string, PublicationKind> | undefined) {
   const read = edition.publications.flatMap(publication => (kinds?.[publication.key] ? [{ itemKey: publication.key, kind: kinds[publication.key]! }] : []));
   if (!read.length) return;
-  await db.insert(notificationItemKind).values(read).onConflictDoUpdate({ target: notificationItemKind.itemKey, set: { kind: sql`excluded."kind"`, readAt: sql`now()` } });
+  // The first answer stands: two digests asked at once can both have a record read, and the second must not change what the first was told.
+  await db.insert(notificationItemKind).values(read).onConflictDoNothing();
   await db.update(notificationEdition).set({ publications: withKinds }).where(eq(notificationEdition.id, edition.id));
 }
 
