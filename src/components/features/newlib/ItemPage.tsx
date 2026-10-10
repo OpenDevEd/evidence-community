@@ -19,7 +19,7 @@ import { RelationsType } from "@/types/item";
 import { siDoi } from "simple-icons";
 import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useTranslations, useLocale } from "next-intl";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import { Divider, Spinner } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -1174,12 +1174,13 @@ const TAB_LIST: Record<string, OpenScholarList> = { cites: "references", citedBy
  */
 function OpenScholarTotal({ item, tab }: { item: Item | undefined; tab: string }) {
 	const t = useTranslations("ui");
+	const locale = useLocale();
 	const openScholar = useOpenScholarUrl();
 	const list = openScholarList(item, TAB_LIST[tab]);
 	if (!list?.total) return null;
 	return (
 		<a href={openScholar(list.path)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
-			{t("onOpenAlex", { count: list.total.toLocaleString() })}
+			{t("onOpenAlex", { count: list.total.toLocaleString(locale) })}
 			<HugeiconsIcon icon={ArrowUpRight01Icon} aria-hidden size={14} />
 		</a>
 	);

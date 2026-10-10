@@ -23,7 +23,7 @@ import { FuturePublicationHint } from "./FuturePublicationHint";
 import { isFuturePublication } from "@/lib/bibliographic-date";
 import { Link } from "@/i18n/routing";
 import { preloadItemCovers } from "./PdfCover";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useTranslations, useLocale } from "next-intl";
 import { Button } from "@/components/nextui/Button";
 import { cloneElement, useState, useMemo, useId, useRef } from "react";
 import CopyButton from "./CopyButton";
@@ -148,6 +148,8 @@ export function CitationCounts({
 	itemData: Item | ListItem | undefined;
 }) {
 	const t = useTranslations("ui");
+	// The reader's chosen language, so the server and the browser write a total the same way.
+	const locale = useLocale();
 	const resourceHref = useResourceHref();
 	const openScholar = useOpenScholarUrl();
 	const key = itemData?.key ?? "";
@@ -191,7 +193,7 @@ export function CitationCounts({
 							{held > 0 ? <Link href={here} aria-label={words(held, null)} className={number}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
 							{all !== null && <>
 								<span className="opacity-60">{t("of")}</span>
-								{there ? <a href={there} target="_blank" rel="noreferrer" aria-label={`${all.toLocaleString()} ${label(all)}, ${t("onOpenAlex", { count: all.toLocaleString() })}`} className={number}>{all.toLocaleString()}</a> : <span className="font-semibold tabular-nums">{all.toLocaleString()}</span>}
+								{there ? <a href={there} target="_blank" rel="noreferrer" aria-label={`${all.toLocaleString(locale)} ${label(all)}, ${t("onOpenAlex", { count: all.toLocaleString(locale) })}`} className={number}>{all.toLocaleString(locale)}</a> : <span className="font-semibold tabular-nums">{all.toLocaleString(locale)}</span>}
 							</>}
 							<span data-count-label className={twMerge("opacity-70", labelClassName)}>{label(all ?? held)}</span>
 						</span>

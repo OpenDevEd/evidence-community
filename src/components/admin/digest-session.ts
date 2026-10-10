@@ -20,12 +20,14 @@ const SAVE_AFTER_MS = 700;
 const MOST_LEAVING_BYTES = 60_000;
 
 /**
- * Whether text can be sent as the page is left. Text the library is sure to refuse cannot, and neither can text too
- * long for a request that outlives its page: both need the person to stay.
+ * Whether text can be sent as the page is left. Text the library is sure to refuse cannot (an empty or over-long
+ * field, by the limits the library holds a digest to), and neither can text too long for a request that outlives its
+ * page: both need the person to stay.
  */
 function canLeaveWith(words: AdminDigestWords) {
 	const filled = [words.title, words.summary, words.markdown].every((value) => value.trim() !== "");
-	return filled && new Blob([JSON.stringify(words)]).size <= MOST_LEAVING_BYTES;
+	const short = words.title.length <= 200 && words.summary.length <= 1000 && words.note.length <= 2000;
+	return filled && short && new Blob([JSON.stringify(words)]).size <= MOST_LEAVING_BYTES;
 }
 
 /**
@@ -85,7 +87,7 @@ export class DigestSession {
 	leave() {
 		if (!this.unsaved) return true;
 		// The pause after typing keeps running when the text cannot go now, so it is still saved if the person stays.
-		if (this.snapshot.stale || this.snapshot.problem !== null || this.sending || !canLeaveWith(this.snapshot.words)) return false;
+		if (this.snapshot.stale || this.snapshot.problem !== null || this.sending || this.snapshot.busy !== null || !canLeaveWith(this.snapshot.words)) return false;
 		clearTimeout(this.timer);
 		this.unsaved = false;
 		// A page kept in the browser's back and forward cache comes back with this session, so it takes the answer as any save's.

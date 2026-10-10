@@ -208,7 +208,7 @@ function Papers({ cited, current, onPick, onRemove }: { cited: string[]; current
 			/>
 			<Narrow query={query} counts={data?.counts} onChange={narrow} />
 		</div>
-		<Rows id={list} rows={data?.papers} failed={error !== undefined} dimmed={isLoading && data !== undefined} active={active} setActive={setActive} current={current} cited={cited} onPick={onPick} />
+		<Rows id={list} rows={data?.papers} failed={error !== undefined} dimmed={behind && data !== undefined} active={active} setActive={setActive} current={current} cited={cited} onPick={onPick} />
 		<Pages page={page} pages={pages} total={data?.total} onChange={(next) => { setQuery({ ...query, page: next }); setActive(0); }} />
 	</>;
 }
