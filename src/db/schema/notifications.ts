@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
-import type { DigestText, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
+import type { DigestDraft, DigestEventKind, DigestPerson, DigestText, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
 
 const date = (name: string) => timestamp(name, {withTimezone: true});
 export const notificationItem = pgTable("notificationItem", {
@@ -61,8 +61,16 @@ export const notificationEdition = pgTable("notificationEdition", {
   publishedAt: date("publishedAt"),
   // The same three as AI wrote them, kept so a person's changes can be told from them.
   ai: jsonb("ai").$type<DigestText>(),
-  // Text nobody has published yet: a rewrite of a digest readers already have.
-  draft: jsonb("draft").$type<DigestText>(),
+  // Text nobody has published yet: AI's rewrite of a digest readers already have, or a person's changes.
+  draft: jsonb("draft").$type<DigestDraft>(),
+  // Goes up with every change to the draft or to where the edition stands, so two people never overwrite each other unseen.
+  draftRevision: integer("draftRevision").notNull().default(0),
+  // Set while the draft waits for an Editor or Owner.
+  reviewRequestedAt: date("reviewRequestedAt"),
+  // The editor's own words above the digest, as published.
+  note: text("note"),
+  // Who published the text readers see. Nobody, when it went out as AI wrote it.
+  checkedBy: jsonb("checkedBy").$type<DigestPerson>(),
   model: text("model"),
   reasoning: text("reasoning"),
   attempts: integer("attempts").notNull().default(0),
@@ -72,6 +80,16 @@ export const notificationEdition = pgTable("notificationEdition", {
   leaseExpiresAt: date("leaseExpiresAt"),
   lastError: text("lastError"),
 }, table => [uniqueIndex("notificationEdition_window_unique").on(table.stream, table.windowEnd), index("notificationEdition_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
+
+// What happened to an edition, in order: AI wrote it, people edited it, sent it for review, sent it back, published it.
+export const notificationEditionEvent = pgTable("notificationEditionEvent", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  editionId: uuid("editionId").notNull().references(() => notificationEdition.id, {onDelete: "cascade"}),
+  at: date("at").notNull().defaultNow(),
+  kind: text("kind").$type<DigestEventKind>().notNull(),
+  // The person who did it. Nobody, when AI wrote the text.
+  actor: jsonb("actor").$type<DigestPerson>(),
+}, table => [index("notificationEditionEvent_edition_idx").on(table.editionId, table.at)]);
 
 export const notificationDelivery = pgTable("notificationDelivery", {
   messageKey: text("messageKey").primaryKey(),

@@ -15,15 +15,22 @@ const queueStyles = {
 		arrow: "text-black/25 group-hover:translate-x-0.5 dark:text-white/25",
 	},
 };
-export function ReviewQueueEntry({
+/** A card at the head of the admin navigation that opens a queue: its icon, name, what waits in it, and how many. */
+export function QueueCard({
+	icon,
+	title,
+	detail,
+	count,
 	selected,
 	onPress,
 }: {
+	icon: typeof InboxIcon;
+	title: string;
+	detail: string;
+	count: number;
 	selected: boolean;
 	onPress: () => void;
 }) {
-	const { data } = useSWR("admin-review-count", getAdminReviewCount);
-	const count = data ?? 0;
 	const style = queueStyles[selected ? "selected" : "idle"];
 	return (
 		<div className="px-2 pb-2 pt-3">
@@ -37,17 +44,17 @@ export function ReviewQueueEntry({
 					className={`grid size-8 shrink-0 place-items-center rounded-lg ${style.icon}`}
 				>
 					<HugeiconsIcon
-						icon={InboxIcon}
+						icon={icon}
 						size={17}
 						strokeWidth={1.7}
 					/>
 				</span>
 				<span className="min-w-0 flex-1">
 					<span className="block text-[13px] font-semibold">
-						Review queue
+						{title}
 					</span>
 					<span className="mt-0.5 block text-[11px] text-black/45 dark:text-white/45">
-						Awaiting review
+						{detail}
 					</span>
 				</span>
 				<span
@@ -63,4 +70,15 @@ export function ReviewQueueEntry({
 			</button>
 		</div>
 	);
+}
+
+export function ReviewQueueEntry({
+	selected,
+	onPress,
+}: {
+	selected: boolean;
+	onPress: () => void;
+}) {
+	const { data } = useSWR("admin-review-count", getAdminReviewCount);
+	return <QueueCard icon={InboxIcon} title="Review queue" detail="Awaiting review" count={data ?? 0} selected={selected} onPress={onPress} />;
 }
