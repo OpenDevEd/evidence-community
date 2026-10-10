@@ -15,7 +15,10 @@ export function SortHeader<Column extends string>({
 	onSort: (sort: Column) => void;
 	sort: Column;
 	sortDirection: "asc" | "desc";
-	/** The record table moves through its header with the arrow keys, so its buttons stay out of the Tab order. A plain list passes 0. */
+	/**
+	 * The record table moves through its header with the arrow keys, so its buttons stay out of the Tab order, and its
+	 * column header says which way it is sorted. A plain list has neither: it passes 0, and the button says the order itself.
+	 */
 	tabIndex?: number;
 }) {
 	const selected = sort === columnId;
@@ -32,6 +35,7 @@ export function SortHeader<Column extends string>({
 			type="button"
 		>
 			<span className="truncate">{label}</span>
+			{tabIndex === 0 && selected && <span className="sr-only">{sortDirection === "asc" ? ", sorted ascending" : ", sorted descending"}</span>}
 			<HugeiconsIcon
 				icon={Icon}
 				aria-hidden

@@ -86,8 +86,10 @@ describe("digests in the admin", () => {
 		expect(text()).toContain("No name");
 		expect([...container.querySelectorAll("a")].find((link) => link.textContent === "Digest settings")?.href).toBe("https://openscholar.example/libraries/amber/configuration?section=notifications");
 		// The Edition column sorts the list, as a column of the record table does.
-		await press(button("Edition")[0]);
+		expect(button(/^Edition/)[0]!.textContent).toBe("Edition, sorted descending");
+		await press(button(/^Edition/)[0]);
 		expect(mocked.getAdminDigests).toHaveBeenLastCalledWith({ page: 1, show: "all", sort: "oldest" });
+		expect(button(/^Edition/)[0]!.textContent).toBe("Edition, sorted ascending");
 		await press(button(/Heat and harvests/)[0]);
 		await settle();
 		expect(text()).toContain(`${ID} waiting`);

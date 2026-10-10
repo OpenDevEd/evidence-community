@@ -19,7 +19,7 @@ vi.mock("@/lib/utils", async (original) => ({ ...(await original<typeof import("
 
 import { PublicationLinkPreview } from "@/components/features/markdown/Citation";
 
-const ITEM = { key: "ABCD2345", title: "Parks and heat in Nairobi", creators: [{ name: "Ada Mills", creatorType: "author" }], date: "2026-10-01", abstractNote: "Parks cooled their surroundings.", itemType: "JournalArticle", tags: [] };
+const ITEM = { key: "ABCD2345", title: "<i>Parks</i> and heat in Nairobi", creators: [{ name: "Ada Mills", creatorType: "author" }], date: "2026-10-01", abstractNote: "Parks cooled their surroundings.", itemType: "JournalArticle", tags: [] };
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root;
@@ -39,6 +39,7 @@ it("opens the publication in a new tab from anywhere on its card, and keeps the 
 	const link = container.querySelector<HTMLAnchorElement>('a[href$="/lib/ABCD2345"]');
 	expect(link).not.toBeNull();
 	expect(link!.target).toBe("_blank");
+	// Named as the card shows the title, without the record's markup.
 	expect(link!.getAttribute("aria-label")).toBe("Parks and heat in Nairobi");
 	// The link is the card's own layer; the copy button is not inside it.
 	expect(link!.querySelector("button")).toBeNull();

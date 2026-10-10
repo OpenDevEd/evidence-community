@@ -389,6 +389,12 @@ export function PublicationLinkPreview({
 	}
 
 	if (!data?.item) return null;
+	const preview = publicationPreviewData(data.item, {
+		contentTags: content.tags,
+		etAl: t("etAl"),
+		formatter,
+		institutions,
+	});
 
 	return (
 		<div className="relative p-3">
@@ -397,7 +403,8 @@ export function PublicationLinkPreview({
 				href={href}
 				target="_blank"
 				rel="noopener noreferrer"
-				aria-label={data.item.title ?? undefined}
+				// The title as the card shows it, in plain text. A record without one is named by its key.
+				aria-label={preview.title === "-" ? itemKey : preview.title}
 				className="absolute inset-0 rounded-[inherit] transition-colors hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus dark:hover:bg-white/[0.04]"
 			/>
 			<div className="pointer-events-none relative mb-2 flex items-center justify-between gap-3 border-b border-black/[0.06] pb-2 dark:border-white/[0.08]">
@@ -409,12 +416,7 @@ export function PublicationLinkPreview({
 			</div>
 			<div className="pointer-events-none relative">
 			<PublicationHoverPreview
-				preview={publicationPreviewData(data.item, {
-					contentTags: content.tags,
-					etAl: t("etAl"),
-					formatter,
-					institutions,
-				})}
+				preview={preview}
 				comingSoonLabel={t("inProgress")}
 				institutionAlt={(name) => t("institutionLogoAlt", { name })}
 				internalLabel={t("internal")}
