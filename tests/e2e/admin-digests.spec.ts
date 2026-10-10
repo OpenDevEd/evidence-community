@@ -13,8 +13,10 @@ const saved = (page: Page, method: "PUT" | "POST") =>
 
 test("a Creator's change to a digest reaches readers only once an Editor publishes it", { tag: "@smoke" }, async ({ page, browser }) => {
 	test.setTimeout(120_000);
-	const title = `Homework and feedback, read closely ${Date.now()}`;
-	const note = "Start with the study of next-day feedback.";
+	// Both are new each run, so the test can run again on a library where it has already published them.
+	const run = Date.now();
+	const title = `Homework and feedback, read closely ${run}`;
+	const note = `Start with the study of next-day feedback. ${run}`;
 
 	// The Creator changes the title, adds a note and sends the digest for review.
 	const creatorContext = await browser.newContext();
@@ -42,7 +44,7 @@ test("a Creator's change to a digest reaches readers only once an Editor publish
 	const reader = await (await browser.newContext()).newPage();
 	await reader.goto(new URL(`/digests/${editionId}`, process.env.PLAYWRIGHT_BASE_URL).toString());
 	await dismissConsent(reader);
-	await expect(reader.getByRole("heading", { level: 1 })).not.toContainText("read closely");
+	await expect(reader.getByRole("heading", { level: 1 })).not.toContainText(String(run));
 
 	// The Editor finds it waiting, sees what changed, and publishes it.
 	await openAdmin(page, "/admin?digests=list");
@@ -51,12 +53,12 @@ test("a Creator's change to a digest reaches readers only once an Editor publish
 	await row.click();
 	await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title);
 	await page.getByRole("button", { name: /^Changes/ }).click();
-	await expect(page.locator("ins").filter({ hasText: "closely" })).toBeVisible();
+	await expect(page.locator("ins").filter({ hasText: String(run) }).first()).toBeVisible();
 	const published = saved(page, "POST");
 	await page.locator("#admin-inspector-pane").getByRole("button", { name: "Publish changes" }).click();
 	await published;
 	await expect(page.locator("#admin-inspector-pane").getByText("Published", { exact: true })).toBeVisible();
-	await expect(page.locator("#admin-inspector-pane").getByText("published it")).toBeVisible();
+	await expect(page.locator("#admin-inspector-pane").getByText("published it").last()).toBeVisible();
 
 	await reader.reload();
 	await expect(reader.getByRole("heading", { level: 1 })).toHaveText(title);
