@@ -37,6 +37,7 @@ npm run verify -- skip "<reason>"     # record why a change needs no browser che
 - **layout shift**: an element moved or resized after the page settled, measured within its container: content carried along by a moving container is reported once, as the container. Transforms and opacity never count, so fades and slides are fine, and neither does an element moving through its own CSS transition (a switch's thumb). An element that draws no background, border or shadow counts only when it moves, never when it resizes: a wrapper growing around new content is seen through the content and the elements it pushes.
 - **text disappeared and came back** or **showed for only N ms**: a flash. A number counting up or down in place is fine.
 - **element showed for only N ms**: a blink. A placeholder replaced in the same place and size is fine.
+- **popped in N ms after its dialog opened**: something arrived inside a dialog, sheet, popover or menu after it had opened, without fading in. It read its data only once it was open. Have the data there when it opens: read it where the trigger is, which is mounted while the overlay is shut, and pass it in. What can only come later, such as search results, fades in or is uncovered by a frame that grows. Judged in the step that opens the overlay, so give `shift` a `--do` step that opens each one you changed.
 - **uncaught error**, a request answering HTTP 500 or more, and **never settled**.
 
 Then it runs the same steps on main, on the same data. A problem fails the run only when main doesn't have it and it shows again on a second run of this branch: a race during loading comes and goes, and is printed as a note instead. The problems main also has are listed as not from this branch: leave them unless the user asked for them, and mention them in your report.
@@ -49,7 +50,7 @@ Each check answers the analytics consent dialog first, as a returning visitor ha
 
 ## The stop hook
 
-A stop hook runs `npm run verify -- hook stop` when an agent tries to finish. It lives on the user's machine, not in this repository: `~/.agents/hooks/verify-stop.sh`, registered for Stop in `~/.claude/settings.json`, `~/.claudeekitabu/settings.json` and `~/.codex/hooks.json`. If files under `src/app`, `src/components` or `src/styles` changed (`.tsx` and `.css`, and `.ts` beside components and styles) in this session and no `shift` has passed since, it sends the agent back with the files to check. If nothing a person sees changed, or the user said not to test, run `skip "<reason>"` and give the same reason in your reply.
+A stop hook runs `npm run verify -- hook stop` when an agent tries to finish. It lives on the user's machine, not in this repository: `~/.agents/hooks/verify-stop.sh`, registered for Stop in `~/.claude/settings.json`, `~/.claudeekitabu/settings.json` and `~/.codex/hooks.json`. If files under `src/app`, `src/components` or `src/styles` changed (`.tsx` and `.css`, and `.ts` beside components and styles) in this session and no `shift` has passed since, it sends the agent back with the files to check. It also sends the agent back when a changed file holds a dialog, sheet, popover or menu and the passing `shift` opened none. If nothing a person sees changed, or the user said not to test, run `skip "<reason>"` and give the same reason in your reply.
 
 ## Files
 
