@@ -54,7 +54,7 @@ function editionId(id: string) {
 }
 
 function nextEditionDate(config: LibraryServerConfig, state: typeof notificationState.$inferSelect | undefined) {
-  if (!config.notifications.enabled) return null;
+  if (!config.notifications.enabled || config.notifications.pausedSince !== null) return null;
   const now = new Date();
   const currentSchedule = state?.schedule === JSON.stringify(config.notifications.schedule);
   if (currentSchedule && state?.enabled && state.nextDigestAt && state.nextDigestAt > now) return state.nextDigestAt;

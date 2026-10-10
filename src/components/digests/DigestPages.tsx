@@ -41,7 +41,7 @@ function DigestContent({ edition }: { edition: DigestEdition }) {
   return <AIMarkdown>{edition.markdown}</AIMarkdown>;
 }
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
-type DigestSettings = {libraryName: string; enabled: boolean; timezone: string; schedule: string};
+type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
 type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>};
 export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
@@ -55,7 +55,7 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 export default function DigestPages(props: ArchiveProps | EditionProps | PreferencesProps) {
   const locale = useLocale(); const base = "/digests";
   const {identity, notifications} = useLibraryConfig();
-  const settings = {libraryName: identity.name, enabled: notifications.enabled, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
+  const settings = {libraryName: identity.name, enabled: notifications.enabled, sending: notifications.enabled && notifications.pausedSince === null, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
   if (props.view === "preferences") return <DigestPreferences {...props} settings={settings} base={base} />;
   if (props.view === "archive") return <DigestArchive {...props} settings={settings} base={base} locale={locale} />;
   return <DigestDetail {...props} settings={settings} base={base} />;
@@ -80,7 +80,7 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
-          {settings.enabled && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
+          {settings.sending && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
         </div>
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
@@ -108,7 +108,7 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
 }
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const {editions: items, page, pages} = use(editions);
-  if (!items.length) return <EmptyArchive next={settings.enabled ? use(nextEdition) : null} settings={settings} />;
+  if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
   return <>{items.map(item => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[56px_minmax(0,1fr)_18px] items-start gap-4 rounded-2xl bg-card_light p-5 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055] sm:grid-cols-[64px_minmax(0,1fr)_18px] sm:gap-5">
             <time dateTime={item.published.at} aria-label={item.published.date} className="rounded-xl bg-black/[0.04] px-1 py-3 text-center dark:bg-white/[0.04]"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(item.published.day)}</span><span className={`mt-2 block text-xs ${muted}`}>{item.published.month}</span></time>
             <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><MarkdownExcerpt className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt><span className={`mt-3 inline-flex items-center gap-1.5 text-xs ${muted}`}><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
@@ -119,7 +119,7 @@ function ArchiveList({editions, nextEdition, settings, base, locale}: {editions:
 /** Before the first edition: the first row is kept for it, dated when it is scheduled, and the rows after it wait faintly below. */
 function EmptyArchive({next, settings}: {next: DigestDate | null; settings: DigestSettings}) {
   // A library that sends no digests is not promised an edition.
-  const [title, text] = settings.enabled
+  const [title, text] = settings.sending
     ? ["Editions will collect here", `Each digest sums up the publications added since the one before. ${firstEdition(next)}`]
     : ["No editions yet", "This library is not sending digests at the moment."];
   const tile = "rounded-xl px-1 py-3 text-center";
@@ -208,5 +208,5 @@ function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest:
   const next = use(nextEdition);
   return edition
     ? <DigestCover edition={edition} libraryName={settings.libraryName} href={`${base}/${edition.slug}`} locale={locale} />
-    : <FirstEditionCover libraryName={settings.libraryName} sending={settings.enabled} next={settings.enabled ? next : null} />;
+    : <FirstEditionCover libraryName={settings.libraryName} sending={settings.sending} next={settings.sending ? next : null} />;
 }

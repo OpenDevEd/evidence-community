@@ -923,6 +923,14 @@ record without a full `YYYY-MM-DD` date belongs to no period. `added` takes the
 publications added to the library in the period. Instant emails always announce
 additions.
 
+`notifications.pausedSince`, the time digests were paused, stops scheduled
+digests without turning subscriptions off. No digest is prepared while it is
+set; emails about additions, digests already prepared and a digest an owner
+asks for by hand are unaffected. When the pause ends, the digest goes out at
+the next scheduled time, never for a time that passed during the pause, and
+covers everything since the last digest, up to a month back (32 days).
+Additions older than that are in no digest.
+
 A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
 period has more, the ones kept are ranked: a record with an abstract of at least
 200 characters first, then by a score of 3 for a journal OpenAlex marks as core,
