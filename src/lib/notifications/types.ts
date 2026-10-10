@@ -8,8 +8,14 @@ export type NotificationPublication = {
   abstract: string | null;
   publicationType: string;
   doi: string | null;
+  /** Its title, abstract or OpenAlex type suggests a meta-analysis or a review. Absent from editions listed before records were marked. */
+  candidate?: boolean;
+  /** What reading it found, once it has been read. */
+  kind?: PublicationKind;
   item: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>;
 };
+/** What a likely review turned out to be when its title and abstract were read. */
+export type PublicationKind = "meta-analysis" | "review" | "study";
 export type NotificationStream = "hourly" | "digest";
 /** A digest's words: what the writer returns, and what an edition publishes. */
 export type DigestText = { title: string; summary: string; markdown: string };
