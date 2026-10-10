@@ -7,6 +7,8 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { notificationEdition, notificationItem, notificationState } from "@/db/schema/notifications";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
+import { AdminValidationError } from "@/lib/admin/errors";
+import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
 import type { NotificationPublication, NotificationStream } from "./types";
 
@@ -276,6 +278,10 @@ export async function prepareNotificationEditions(
 export async function prepareDigestForPeriod(db: Database, config: LibraryServerConfig, period: { start: Date; end: Date }): Promise<DigestPreparation> {
   if (!config.notifications.enabled) return { status: "disabled" };
   return db.transaction(async tx => {
+    // A rewrite replaces the draft, so one a person has changed is not rewritten under them.
+    const [existing] = await tx.select({ id: notificationEdition.id, draft: notificationEdition.draft, ai: notificationEdition.ai, note: notificationEdition.note, publishedAt: notificationEdition.publishedAt }).from(notificationEdition)
+      .where(and(eq(notificationEdition.stream, "digest"), eq(notificationEdition.windowEnd, period.end))).for("update");
+    if (existing && await draftIsEdited(tx, existing)) throw new AdminValidationError("This digest has changes that are not published. Publish them, or change its text back, before rewriting it.");
     const { total, keys } = await rankPublications(tx, publishedIn(tx, config, period));
     const publications = await listPublications(tx, config, keys);
     if (!publications.length) return { status: "empty" };
@@ -322,16 +328,14 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
       // A digest readers already have is rewritten as a draft: what they see stays until the new text is published.
       const rewritten = edition.publishedAt !== null;
       const saved = await tx.update(notificationEdition)
-        .set({ model, reasoning, ai, ...(rewritten ? { draft: ai } : { ...words, publishedAt: new Date() }), nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null })
+        .set({
+          model, reasoning, ai, nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null,
+          ...(rewritten ? { draft: ai, reviewRequestedAt: null, draftRevision: edition.draftRevision + 1 } : { ...words, publishedAt: new Date() }),
+        })
         .where(owned).returning({ id: notificationEdition.id });
-      if (!saved.length || rewritten) return;
-      await tx.execute(sql`
-        INSERT INTO "notificationDelivery" ("messageKey", "subscriberId", "editionId")
-        SELECT ${edition.id} || ':' || "id"::text, "id", ${edition.id}::uuid FROM "notificationSubscriber"
-        WHERE "confirmedAt" IS NOT NULL AND "confirmedAt" <= ${edition.windowEnd}
-          AND (CASE WHEN ${edition.stream} = 'digest' THEN "digest" ELSE "instant" END)
-        ON CONFLICT DO NOTHING
-      `);
+      if (!saved.length) return;
+      if (ai) await recordDigestEvent(tx, edition.id, "written", null);
+      if (!rewritten) await queueEditionDeliveries(tx, edition);
     });
   } catch (error) {
     const attempts = edition.attempts + 1;

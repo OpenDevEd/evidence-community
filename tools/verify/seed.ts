@@ -205,12 +205,38 @@ function digestRow(week: number): string {
 	return `INSERT INTO "notificationEdition" ("id", "stream", "windowStart", "windowEnd", "publications", "title", "summary", "markdown", "publishedAt", "nextAttemptAt") VALUES (${values.join(", ")});`;
 }
 
+/**
+ * What the admin's digest pages need to be tried on: each edition lists thirty of the seeded publications and cites
+ * three, its text is kept as AI's with a first step in its history, the newest edition waits unpublished as AI wrote
+ * it, and the one before has a creator's changes waiting for review. Written in SQL over the rows above, so it draws
+ * nothing from the seed's random sequence.
+ */
+function digestEditorialRows(): string[] {
+	const edition = (week: number) => sql(`00000000-0000-4000-8000-${pad(week, 12)}`);
+	const label = `coalesce(i.creators->0->>'lastName', 'Unknown') || ', ' || left(i.date, 4)`;
+	const listed = `(SELECT i.*, row_number() OVER (ORDER BY i.key) AS n FROM item i WHERE i.deleted = 0 AND i."parentItem" IS NULL AND i."itemType" NOT IN ('Attachment', 'Note') ORDER BY i.key LIMIT 30) i`;
+	const creator = `'{"id": "user_acceptance_creator", "name": "Verify creator", "photo": null}'::jsonb`;
+	return [
+		`UPDATE "notificationEdition" SET "publicationCount" = 30, "publications" = (SELECT jsonb_agg(jsonb_build_object('key', i.key, 'title', i.title, 'creators', (SELECT coalesce(jsonb_agg(named.name) FILTER (WHERE named.name <> ''), '[]'::jsonb) FROM jsonb_array_elements(coalesce(i.creators, '[]'::jsonb)) c, LATERAL (SELECT coalesce(nullif(c->>'name', ''), concat_ws(' ', c->>'firstName', c->>'lastName')) AS name) named), 'date', i.date, 'abstract', i."abstractNote", 'publicationType', i."itemType", 'doi', i."DOI", 'kind', CASE WHEN i.n % 11 = 0 THEN 'meta-analysis' WHEN i.n % 4 = 0 THEN 'review' ELSE 'study' END) ORDER BY i.n) FROM ${listed}) WHERE "stream" = 'digest';`,
+		`UPDATE "notificationEdition" SET "markdown" = "markdown" || E'\n\n## Publications to start with\n\n' || (SELECT string_agg('One study adds to this [' || ${label} || '](/lib/' || i.key || ').', ' ' ORDER BY i.n) FROM ${listed} WHERE i.n <= 3) WHERE "stream" = 'digest';`,
+		`UPDATE "notificationEdition" SET "ai" = jsonb_build_object('title', "title", 'summary', "summary", 'markdown', "markdown") WHERE "stream" = 'digest';`,
+		`INSERT INTO "notificationEditionEvent" ("editionId", "at", "kind") SELECT "id", "publishedAt", 'written' FROM "notificationEdition" WHERE "stream" = 'digest';`,
+		// The newest edition: AI wrote it and nobody has published it.
+		`UPDATE "notificationEdition" SET "draft" = "ai", "title" = NULL, "summary" = NULL, "markdown" = NULL, "publishedAt" = NULL WHERE "id" = ${edition(6)};`,
+		// The one before: readers have it, and a creator's changes wait for an editor.
+		`UPDATE "notificationEdition" SET "draft" = jsonb_build_object('title', "title" || ', read closely', 'summary', "summary", 'markdown', replace("markdown", 'One study adds to this', 'A second study adds to this'), 'note', 'Start with the first publication listed.'), "draftRevision" = 2, "reviewRequestedAt" = "publishedAt" + interval '2 days' WHERE "id" = ${edition(5)};`,
+		`INSERT INTO "notificationEditionEvent" ("editionId", "at", "kind", "actor") SELECT "id", "publishedAt" + interval '1 day', 'edited', ${creator} FROM "notificationEdition" WHERE "id" = ${edition(5)};`,
+		`INSERT INTO "notificationEditionEvent" ("editionId", "at", "kind", "actor") SELECT "id", "publishedAt" + interval '2 days', 'submitted', ${creator} FROM "notificationEdition" WHERE "id" = ${edition(5)};`,
+	];
+}
+
 export function seedSql(): string {
 	const members = new Map<string, string[]>(COLLECTIONS.map((collection) => [collection.key, []]));
 	const statements = COLLECTIONS.map((collection) => `INSERT INTO "collectionIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(collection.key)}, 'native', ${sql(collection.key)});`);
 	for (let index = 1; index <= SEED_ITEM_COUNT; index++) statements.push(...itemRows(index, members));
 	COLLECTIONS.forEach((collection, index) => statements.push(...collectionRows(collection, index, members.get(collection.key)!)));
 	for (let week = 1; week <= 6; week++) statements.push(digestRow(week));
+	statements.push(...digestEditorialRows());
 	statements.push(
 		`UPDATE "status" SET "totalRecords" = (SELECT count(*) FROM "item" WHERE "deleted" = 0), "totalItems" = (SELECT count(*) FROM "item" WHERE "deleted" = 0 AND "parentItem" IS NULL), "databaseUpdatedAt" = '2026-09-01T00:00:00Z' WHERE "id" = 1;`,
 	);

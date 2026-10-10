@@ -28,6 +28,7 @@ export default defineConfig({
             "tests/integration/item-cache-version.test.ts",
             "tests/integration/country-focus.test.ts",
             "tests/integration/notifications.test.ts",
+            "tests/integration/digest-editorial.test.ts",
             "tests/integration/public-library-status.test.ts",
             "tests/integration/reader-collection-privacy.test.ts",
             "tests/integration/reader-accounts.test.ts",

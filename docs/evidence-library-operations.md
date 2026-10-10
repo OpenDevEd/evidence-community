@@ -961,6 +961,20 @@ it is published. Each edition keeps the text AI wrote in `ai`, beside the
 title, summary and text readers see. An edition waits to be written while its
 `nextAttemptAt` is set.
 
+The library's team works on digests in `/admin`, under Digests. Anyone with a
+role can change an edition's title, summary, text and editor's note; the change
+is saved as the edition's draft and readers keep the published text, as with a
+record. A Creator sends the draft for review and can take it back. An Editor or
+Owner sends it back or publishes it. Publishing an edition for the first time
+emails its subscribers; publishing a change to one readers already have updates
+the page and sends nothing. The person who publishes is recorded with their
+name and photo as they were then (`checkedBy`), and each step is kept in
+`notificationEditionEvent`. Every save carries the revision it was made from
+(`draftRevision`), so a save over someone else's newer text is refused. Saved
+text may hold second-level headings, paragraphs, bold and links to public
+records of the library, and nothing else. An edition whose draft a person has
+changed is not rewritten: the rewrite route answers with the reason.
+
 This release replaces `notifications.weekly` with `notifications.schedule` and
 renames the subscriber preference and edition stream to `digest`. Migration
 `0058` preserves subscriber tokens, editions and cutoffs. OpenScholar owner

@@ -21,7 +21,8 @@ export {
 	type AdminPermission,
 } from "./permissions";
 
-export type AdminSession = { clerkUserId: string; role: AdminRole };
+/** Who is acting in /admin: their OpenScholar account and role, with their name and photo as their account has them now. */
+export type AdminSession = { clerkUserId: string; role: AdminRole; name: string; image: string | null };
 
 export type AdminSessionAuthorization =
 	| { session: AdminSession; status: "authorized" }
@@ -94,6 +95,6 @@ export async function authorizeAdminRequest(
 	const answer = await readAdminRole(config, reader.clerkUserId);
 	if (!answer) return { status: "unavailable" };
 	if (!("role" in answer)) return { organisationName: answer.organisationName, status: "no_access" };
-	const session = { clerkUserId: reader.clerkUserId, role: answer.role };
+	const session = { clerkUserId: reader.clerkUserId, role: answer.role, name: reader.name, image: reader.image };
 	return { session, status: adminRoleHasPermission(session.role, permission) ? "authorized" : "forbidden" };
 }
