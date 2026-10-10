@@ -947,8 +947,9 @@ role. Their account ID is never sent to readers. Off, the default, readers see
 neither the name nor the note.
 
 A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
-period has more, every meta-analysis and review comes first, then the rest are
-ranked: a record with an abstract of at least 200 characters first, then by a
+period has more, every meta-analysis and review comes first, then the likely
+ones nobody has read yet, as many as one request has read (300), then the rest
+are ranked: a record with an abstract of at least 200 characters first, then by a
 score of 3 for a journal OpenAlex marks as core, 2 for ten or more references
 (1 for fewer), 1 for a known institution and twice the natural log of one plus
 the citation count. A dataset or software record loses 1. A retracted record
