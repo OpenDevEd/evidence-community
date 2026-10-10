@@ -12,7 +12,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import type { BrowserContext, Page } from "@playwright/test";
 
-import { open, parseStep, type RunOptions } from "./browser";
+import { earlyStep, open, parseStep, type RunOptions } from "./browser";
 import { compare, printShots, report, type Comparison } from "./compare";
 import { hookStop } from "./hook";
 import { buildBranch, buildMain, ensureStack, fingerprint, mainCommit, mainDir, serve, stackRunning, stopStack, type Paths, type Stack } from "./stack";
@@ -165,8 +165,11 @@ const list = (value: unknown) => (value as string[] | undefined) ?? [];
 
 async function optionsFor(stack: Stack, values: Values, mode: string): Promise<RunOptions> {
 	const shift = mode === "shift";
+	const steps = list(values.do).map(parseStep);
+	if (values.early === true) earlyStep(steps);
 	return {
-		steps: list(values.do).map(parseStep),
+		steps,
+		early: values.early === true,
 		slow: number(values.slow, shift ? 600 : 0),
 		quietMs: number(values.quiet, 1_500),
 		viewport: { width: number(values.width, 1440), height: number(values.height, 900) },
@@ -242,7 +245,10 @@ Options for shift and shot:
   --width <px> --height <px>  Viewport, default 1440x900. Use 390 x 844 for a phone.
   --full                   Full-page screenshots.
   --quiet <ms>             How long the page must hold still to count as settled (default 1500).
-  --base none              Don't compare with main.`;
+  --base none              Don't compare with main.
+  --early                  Take the first --do step as soon as its target answers clicks, before the
+                           page's data has arrived, and judge only what happens in the dialog, sheet,
+                           popover or menu it opens. For anything a person can open while the page loads.`;
 
 const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
 	up: (values) => locked(() => up(values)),
@@ -267,6 +273,7 @@ const OPTIONS = {
 	full: { type: "boolean" },
 	quiet: { type: "string" },
 	base: { type: "string" },
+	early: { type: "boolean" },
 } as const;
 
 async function main() {

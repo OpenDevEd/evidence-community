@@ -106,11 +106,11 @@ export function recorder(config: { allow: string }) {
 	}
 
 	type Frame = {
-		moved: { id: number; dx: number; dy: number; dw: number; dh: number }[];
+		moved: { id: number; dx: number; dy: number; dw: number; dh: number; within?: number }[];
 		added: { id: number; box: number[]; within?: number; entering?: boolean }[];
 		opened: number[];
 		fresh: Set<Element>;
-		removed: { id: number; box: number[] }[];
+		removed: { id: number; box: number[]; within?: number }[];
 		textAdded: string[];
 		textRemoved: string[];
 		deltas: Map<number, number[]>;
@@ -121,8 +121,11 @@ export function recorder(config: { allow: string }) {
 		if (!(element instanceof HTMLElement)) return [0, 0];
 		let at = frame.positions.get(element);
 		if (!at) {
+			// offsetLeft counts from inside the offset parent's border. Leaving the border out would move
+			// everything in a bordered card by its width when the card stops being the offset parent, as
+			// one does when its opening transform ends.
 			const parent = position(frame, element.offsetParent);
-			at = [parent[0] + element.offsetLeft, parent[1] + element.offsetTop];
+			at = [parent[0] + (element.offsetParent?.clientLeft ?? 0) + element.offsetLeft, parent[1] + (element.offsetParent?.clientTop ?? 0) + element.offsetTop];
 			frame.positions.set(element, at);
 		}
 		return at;
@@ -130,23 +133,30 @@ export function recorder(config: { allow: string }) {
 
 	const tracked = (element: Element) => ids.has(element) && last.has(ids.get(element)!);
 
-	/** The nearest ancestor measured before, whose movement this frame a child may share. */
+	/** The nearest measured ancestor, whose movement this frame a child may share. */
 	function trackedParent(element: HTMLElement): Element | null {
 		let parent = element.parentElement;
 		while (parent && !tracked(parent)) parent = parent.parentElement;
 		return parent;
 	}
 
+	// The smaller of how far something moved on screen and how far within its parent.
+	const least = (onScreen: number, inParent: number) => (Math.abs(inParent) < Math.abs(onScreen) ? inParent : onScreen);
+
 	/**
-	 * How an element moved within its nearest measured parent this frame. A
-	 * child carried along by a moving parent hasn't moved at all, and one that
-	 * moved with its parent and also grew has only grown, whichever frames the
-	 * two changes land in.
+	 * How an element moved by itself this frame. A child carried along by a
+	 * moving parent hasn't moved at all, and one that moved with its parent and
+	 * also grew has only grown, whichever frames the two changes land in. One
+	 * that holds still on screen while its parent's edge moves away, a row under
+	 * the part of a card that grows upward, hasn't moved either.
 	 */
 	function ownDelta(frame: Frame, element: HTMLElement, delta: number[]): number[] {
 		const parent = trackedParent(element);
+		// A parent that clips, measured for the first time this frame, is a wrapper opening around the
+		// element: it was cut off until now and has moved with the wrapper, not by itself.
+		if (parent && frame.fresh.has(parent) && clips(parent, false)) return [0, 0, delta[2], delta[3]];
 		const moved = parent && frame.deltas.get(ids.get(parent)!);
-		return moved ? [delta[0] - moved[0], delta[1] - moved[1], delta[2], delta[3]] : delta;
+		return moved ? [least(delta[0], delta[0] - moved[0]), least(delta[1], delta[1] - moved[1]), delta[2], delta[3]] : delta;
 	}
 
 	const still = (delta: number[]) => delta.every((value) => Math.abs(value) < 1);
@@ -162,14 +172,23 @@ export function recorder(config: { allow: string }) {
 		return was || shown.get(id) === true;
 	}
 
+	// A dialog, sheet, popover or menu: what opens over the page.
+	const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+
+	// The overlay each element is, or is inside, noted when it is first measured: one that has gone can't say.
+	const overlays = new Map<number, number>();
+	const within = (id: number): { within?: number } => (overlays.has(id) ? { within: overlays.get(id) } : {});
+
+	function noteOverlay(element: HTMLElement, id: number) {
+		const overlay = element.closest(OVERLAY);
+		if (overlay && ids.has(overlay)) overlays.set(id, ids.get(overlay)!);
+	}
+
 	function measureMoved(frame: Frame, element: HTMLElement, id: number, delta: number[]) {
 		frame.deltas.set(id, delta);
 		const own = visible(element, ownDelta(frame, element, delta));
-		if (seenNow(element, id) && !still(own) && !animating(element)) frame.moved.push({ id, dx: own[0], dy: own[1], dw: own[2], dh: own[3] });
+		if (seenNow(element, id) && !still(own) && !animating(element)) frame.moved.push({ id, dx: own[0], dy: own[1], dw: own[2], dh: own[3], ...within(id) });
 	}
-
-	// A dialog, sheet, popover or menu: what opens over the page.
-	const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"]';
 	// A frame that cuts off what is outside it; with `scrollers`, a scrolling list too.
 	const clips = (element: Element, scrollers: boolean) => (scrollers ? /hidden|clip|auto|scroll/ : /hidden|clip/).test(getComputedStyle(element).overflowY);
 
@@ -229,6 +248,7 @@ export function recorder(config: { allow: string }) {
 		const previous = last.get(id);
 		last.set(id, box);
 		if (!previous) {
+			noteOverlay(element, id);
 			shown.set(id, onScreen(element));
 			if (shown.get(id)) frame.added.push({ id, box, ...arrival(frame, element) });
 			// A sheet starts off screen and slides in, so an overlay opening is noted wherever it is.
@@ -244,8 +264,9 @@ export function recorder(config: { allow: string }) {
 		for (const [id, box] of last) {
 			if (seen.has(id)) continue;
 			last.delete(id);
-			if (shown.get(id)) frame.removed.push({ id, box });
+			if (shown.get(id)) frame.removed.push({ id, box, ...within(id) });
 			shown.delete(id);
+			overlays.delete(id);
 		}
 	}
 
