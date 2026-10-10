@@ -74,7 +74,7 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 export default function DigestPages(props: ArchiveProps | EditionProps | PreferencesProps) {
   const locale = useLocale(); const base = "/digests";
   const {identity, notifications} = useLibraryConfig();
-  const settings = {libraryName: identity.name, enabled: notifications.enabled, sending: notifications.enabled && notifications.pausedSince === null, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
+  const settings = {libraryName: identity.name, enabled: notifications.enabled, sending: notifications.enabled && notifications.pausedSince === null, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale, notifications.approval)};
   if (props.view === "preferences") return <DigestPreferences {...props} settings={settings} base={base} />;
   if (props.view === "archive") return <DigestArchive {...props} settings={settings} base={base} locale={locale} />;
   return <DigestDetail {...props} settings={settings} base={base} />;

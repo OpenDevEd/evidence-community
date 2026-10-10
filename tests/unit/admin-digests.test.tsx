@@ -192,7 +192,8 @@ describe("digests in the admin", () => {
 		await show(ID, "editor");
 		await press(button("Preview")[0]);
 		expect(container.querySelector("main figure")?.textContent).toContain("Start with the parks study.");
-		expect(container.querySelector("main figure")?.textContent).toContain("Gugulethu Dube");
+		// Signed as readers will see it: the name and role of the person about to publish.
+		expect(container.querySelector("main figcaption")?.textContent).toBe("Gugulethu DubeEditor");
 		await act(async () => root.unmount());
 		root = createRoot(container);
 		// A library that does not name who checks its digests shows readers no note, and says so where it is written.

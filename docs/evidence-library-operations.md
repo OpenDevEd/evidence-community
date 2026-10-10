@@ -964,7 +964,8 @@ curl -X POST "$LIBRARY_URL/api/v1/openscholar/digests" \
 ```
 
 It always selects by publication date, keeps the edition's record and address,
-leaves the schedule alone and emails no subscriber. The period's days are read
+leaves the schedule alone and emails no subscriber, also when the library asks
+for approval and a person publishes it later (`notificationEdition.silent`). The period's days are read
 in the schedule's timezone, so a library outside UTC gives its own midnights,
 such as `2026-09-01T00:00:00-04:00`. To rewrite an existing edition, send its
 exact `windowStart` and `windowEnd`.

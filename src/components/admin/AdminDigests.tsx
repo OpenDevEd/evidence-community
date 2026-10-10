@@ -35,7 +35,7 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import type { AdminDigestsQuery, DigestAction, DigestState } from "@/lib/notifications/editorial";
-import type { DigestEventKind, DigestPerson } from "@/lib/notifications/types";
+import { DIGEST_SIGNER_ROLE, type DigestEventKind, type DigestPerson, type DigestSigner } from "@/lib/notifications/types";
 import { ADDED, ChangedLine, ChangedText, REMOVED } from "./AdminDigestChanges";
 import { changesBetween, editCount } from "./digest-changes";
 import { AdminDigestEditor } from "./AdminDigestEditor";
@@ -300,7 +300,7 @@ function ChangesView({ changed, words }: { changed: Changed | null; words: Words
  */
 function PreviewView({ digest, words }: { digest: AdminDigest; words: Words }) {
 	const account = useAdminSession();
-	const mine = account.canPublish ? { id: account.userId, name: account.name, photo: account.image } : null;
+	const mine: DigestSigner | null = account.role === "creator" ? null : { id: account.userId, name: account.name, photo: account.image, role: account.role };
 	const signer = words.note === digest.published?.note ? digest.checkedBy : mine;
 	return <>
 		<h1 className="text-3xl font-medium leading-tight">{words.title}</h1>
@@ -309,7 +309,7 @@ function PreviewView({ digest, words }: { digest: AdminDigest; words: Words }) {
 			<span className="inline-flex items-center gap-1.5"><HugeiconsIcon icon={BookOpen01Icon} aria-hidden size={14} />{digest.publicationCount.toLocaleString("en-GB")} publications</span>
 			{digest.attribution && <Signed by={digest.checkedBy} published={digest.published !== null} />}
 		</div>
-		{digest.attribution && words.note && <figure className="mt-7 rounded-2xl bg-black/[0.03] p-5 dark:bg-white/[0.04]"><blockquote className="text-base leading-7">{words.note}</blockquote>{signer && <figcaption className="mt-3 flex items-center gap-2.5 text-sm font-medium"><Face person={signer} size={28} />{signer.name}</figcaption>}</figure>}
+		{digest.attribution && words.note && <figure className="mt-7 rounded-2xl bg-black/[0.03] p-5 dark:bg-white/[0.04]"><blockquote className="text-base leading-7">{words.note}</blockquote>{signer && <figcaption className="mt-3 flex items-center gap-2.5 text-sm"><Face person={signer} size={28} /><span className="font-medium">{signer.name}</span>{signer.role && <span className={muted}>{DIGEST_SIGNER_ROLE[signer.role]}</span>}</figcaption>}</figure>}
 		<div className="mt-8"><AIMarkdown>{words.markdown}</AIMarkdown></div>
 	</>;
 }

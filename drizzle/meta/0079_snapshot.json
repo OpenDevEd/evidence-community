@@ -1,5 +1,5 @@
 {
-  "id": "98bed090-25aa-476f-9b43-a7ea163d9138",
+  "id": "f191a785-72cf-4948-9973-4745eb099e4c",
   "prevId": "fb0bb2b6-830c-4435-89f2-38d5b1a26d5e",
   "version": "7",
   "dialect": "postgresql",
@@ -313,6 +313,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "silent": {
+          "name": "silent",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "model": {
           "name": "model",
           "type": "text",
@@ -599,38 +606,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.notificationItemKind": {
-      "name": "notificationItemKind",
-      "schema": "",
-      "columns": {
-        "itemKey": {
-          "name": "itemKey",
-          "type": "varchar(8)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "readAt": {
-          "name": "readAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

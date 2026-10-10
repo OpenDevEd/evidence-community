@@ -2,11 +2,12 @@ import { CronExpressionParser } from "cron-parser";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 export type DigestSchedule = LibraryServerConfig["notifications"]["schedule"];
-export function describeDigestSchedule(schedule: DigestSchedule, locale: string) {
+/** When digests come, as readers are told. `checked` is for a library whose digests wait for an editor: the day holds and the time does not. */
+export function describeDigestSchedule(schedule: DigestSchedule, locale: string, checked = false) {
   const day = schedule.frequency === "weekly"
     ? new Date(Date.UTC(2026, 0, 4 + schedule.weekday, 12)).toLocaleDateString(locale, {weekday: "long", timeZone: "UTC"})
     : `Day ${schedule.dayOfMonth} of each month${schedule.dayOfMonth > 28 ? ", or its last day if shorter," : ""}`;
-  return `${day} at ${schedule.time} ${schedule.timezone}`;
+  return checked ? `${day}, once an editor has checked it` : `${day} at ${schedule.time} ${schedule.timezone}`;
 }
 
 /**

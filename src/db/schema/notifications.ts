@@ -78,6 +78,8 @@ export const notificationEdition = pgTable("notificationEdition", {
   note: text("note"),
   // Who published the text readers see. Nobody, when it went out as AI wrote it.
   checkedBy: jsonb("checkedBy").$type<DigestSigner>(),
+  // Written by hand for a past period: emailed to nobody, whenever it is published.
+  silent: boolean("silent").notNull().default(false),
   model: text("model"),
   reasoning: text("reasoning"),
   attempts: integer("attempts").notNull().default(0),
