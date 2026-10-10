@@ -27,7 +27,7 @@ const LAST_PASS = path.join(STATE, "last-pass.json");
 // src/app are not.
 const USER_FACING = /^src\/((app|components|styles)\/.+\.(tsx|css)|(components|styles)\/.+\.ts)$/;
 // Code that holds something that opens over the page: a dialog, popover or menu.
-const OVERLAY_CODE = /<(Modal|ModalContent|DialogModal|FullScreenModal|PopoverContent|DropdownMenu|DrawerContent)\b|role="(dialog|alertdialog|menu)"/;
+const OVERLAY_CODE = /<\w*(Modal|Popover|Dropdown|Drawer)\w*[\s>]|role="(dialog|alertdialog|menu)"/;
 // Elements whose movement is their job: progress bars, Next's dev badge, and
 // anything a page marks with data-verify-ignore.
 const ALWAYS_ALLOWED = ["[role=progressbar]", "[data-verify-ignore]", "nextjs-portal"];
