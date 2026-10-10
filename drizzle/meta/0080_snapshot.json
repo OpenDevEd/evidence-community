@@ -1,5 +1,5 @@
 {
-  "id": "bb19f0f5-07d5-481c-b41e-83645a224f3c",
+  "id": "560ab937-2beb-4423-9d5c-0b83ebacfe06",
   "prevId": "f191a785-72cf-4948-9973-4745eb099e4c",
   "version": "7",
   "dialect": "postgresql",
@@ -319,6 +319,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "requestedAt": {
+          "name": "requestedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "model": {
           "name": "model",

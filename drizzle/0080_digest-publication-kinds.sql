@@ -3,3 +3,5 @@ CREATE TABLE "notificationItemKind" (
 	"kind" text NOT NULL,
 	"readAt" timestamp with time zone DEFAULT now() NOT NULL
 );
+--> statement-breakpoint
+ALTER TABLE "notificationEdition" ADD COLUMN "requestedAt" timestamp with time zone;

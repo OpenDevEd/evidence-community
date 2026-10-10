@@ -10,7 +10,7 @@ import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
-import { listedAsReview, publicationKindsSchema, publicationMarks, savePublicationKinds } from "./kinds";
+import { listedAsReview, publicationKindsSchema, publicationMarks, savePublicationKinds, startDigestRequest } from "./kinds";
 import type { NotificationPublication, NotificationStream, PublicationKind } from "./types";
 
 function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>) {
@@ -88,7 +88,8 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       -- A retracted record, or a journal's front matter, is in no digest.
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (
-      SELECT DISTINCT ON (work) key, review, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
+      -- One record stands for a work, and the work is a review when any of its records is one.
+      SELECT DISTINCT ON (work) key, bool_or(review) OVER (PARTITION BY work) AS review, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
     )
     SELECT (SELECT count(*)::int FROM chosen) AS total,
       -- Every meta-analysis and review of the period is listed, then the rest in rank order.
@@ -126,8 +127,8 @@ async function listPublications(db: DatabaseTransaction, config: LibraryServerCo
     const card = cards.get(key);
     if (!card) continue;
     const metadata = { ...digestMetadata(card), ...marks.get(key) };
-    // The limit covers the serialized array, so count its brackets and commas too.
-    metadataBytes += Buffer.byteLength(JSON.stringify(metadata)) + (publications.length ? 1 : 2);
+    // The limit covers the serialized array, so count its brackets and commas too, and the answer a likely review gets once it is read.
+    metadataBytes += Buffer.byteLength(JSON.stringify(metadata.candidate ? { kind: "meta-analysis", ...metadata } : metadata)) + (publications.length ? 1 : 2);
     if (metadataBytes > 1_500_000) break;
     publications.push({ ...metadata, item: card });
   }
@@ -292,7 +293,7 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     if (!publications.length) return { status: "empty" };
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
     // The worker compares the next attempt with the database's clock, so that clock sets it.
-    const edition = { windowStart: period.start, publications, publicationCount: total, cover, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null };
+    const edition = { windowStart: period.start, publications, publicationCount: total, cover, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null, requestedAt: null };
     // A new edition for a past period is marked silent, so it emails nobody even when a person publishes it later.
     // One the schedule made keeps its mark, and its readers, through a rewrite.
     const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, silent: true, ...edition })
@@ -321,6 +322,16 @@ function writtenEdition(edition: typeof notificationEdition.$inferSelect, words:
   return { ai, held, changes: { ...words, publishedAt: new Date(), ...(edition.draft ? { draft: null, ...moved } : {}) } };
 }
 
+/** An edition's words: OpenScholar's for a digest, null while it is still writing, or a count for the email about additions. */
+async function editionOutput(db: Database, config: LibraryServerConfig, edition: typeof notificationEdition.$inferSelect, signal?: AbortSignal) {
+  if (edition.stream !== "digest") {
+    const summary = `${edition.publicationCount} new ${edition.publicationCount === 1 ? "publication" : "publications"}`;
+    return { title: "New publications", summary, markdown: null, model: null, reasoning: null, kinds: undefined };
+  }
+  if (!edition.requestedAt) edition.publications = await startDigestRequest(db, edition.id);
+  return requestDigest(config, edition, signal);
+}
+
 export async function generateNotificationEdition(db: Database, config: LibraryServerConfig, signal?: AbortSignal) {
   if (!config.notifications.enabled) return false;
   const token = randomUUID();
@@ -335,9 +346,7 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
   const [edition] = await db.select().from(notificationEdition).where(owned);
   if (!edition) return false;
   try {
-    const output = edition.stream === "digest" ? await requestDigest(config, edition, signal) : {
-      title: "New publications", summary: `${edition.publicationCount} new ${edition.publicationCount === 1 ? "publication" : "publications"}`, markdown: null, model: null, reasoning: null, kinds: undefined,
-    };
+    const output = await editionOutput(db, config, edition, signal);
     if (!output) {
       // OpenScholar is still writing it. Checking back is not a failed attempt.
       await db.update(notificationEdition).set({ nextAttemptAt: new Date(Date.now() + DIGEST_CHECK_MS), leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned);
@@ -359,7 +368,7 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
     const message = error instanceof Error ? error.message : String(error);
     // What OpenScholar read before its writer failed is kept, so the next attempt sends it and nothing is read twice.
     if (error instanceof DigestRequestError) await savePublicationKinds(db, edition, error.kinds).catch(saveError => console.error("Digest publication kinds were not saved", { editionId: edition.id, error: String(saveError) }));
-    await db.update(notificationEdition).set({ attempts, nextAttemptAt: attempts < 6 ? new Date(Date.now() + Math.min(3_600_000, 60_000 * 2 ** attempts)) : null, leaseToken: null, leaseExpiresAt: null, lastError: message.slice(0, 2000) }).where(owned);
+    await db.update(notificationEdition).set({ attempts, nextAttemptAt: attempts < 6 ? new Date(Date.now() + Math.min(3_600_000, 60_000 * 2 ** attempts)) : null, leaseToken: null, leaseExpiresAt: null, lastError: message.slice(0, 2000), requestedAt: null }).where(owned);
     console.error("Digest generation failed", { editionId: edition.id, error: message });
   }
   return true;
