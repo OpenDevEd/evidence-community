@@ -26,6 +26,8 @@ const LAST_PASS = path.join(STATE, "last-pass.json");
 // beside components and styles. Route handlers and other .ts files under
 // src/app are not.
 const USER_FACING = /^src\/((app|components|styles)\/.+\.(tsx|css)|(components|styles)\/.+\.ts)$/;
+// Code that holds something that opens over the page: a dialog, popover or menu.
+const OVERLAY_CODE = /<(ModalContent|DialogModal|PopoverContent|DropdownMenu|DrawerContent)\b|role="(dialog|alertdialog|menu)"/;
 // Elements whose movement is their job: progress bars, Next's dev badge, and
 // anything a page marks with data-verify-ignore.
 const ALWAYS_ALLOWED = ["[role=progressbar]", "[data-verify-ignore]", "nextjs-portal"];
@@ -190,11 +192,11 @@ async function comparisonFor(target: string, values: Values, mode: "shift" | "sh
 	};
 }
 
-function recordPass(comparison: Comparison, built: string) {
+function recordPass(comparison: Comparison, built: string, opened: number) {
 	// Code changed during the check isn't in the build it checked.
 	if (fingerprint(ROOT) !== built) return console.log("The code changed during the check, so no pass is recorded. Run `npm run verify -- up`, then check again.");
 	const steps = comparison.options.steps.map((step) => step.label);
-	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), target: comparison.target, steps, browsers: comparison.browsers });
+	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), target: comparison.target, steps, browsers: comparison.browsers, opened });
 }
 
 async function drive(target: string, values: Values, mode: "shift" | "shot") {
@@ -202,7 +204,7 @@ async function drive(target: string, values: Values, mode: "shift" | "shot") {
 	const comparison = await comparisonFor(target, values, mode);
 	const outcome = await compare(comparison);
 	if (mode === "shot") return printShots(outcome.shots);
-	if (report(comparison, outcome)) recordPass(comparison, built);
+	if (report(comparison, outcome)) recordPass(comparison, built, outcome.opened);
 	else process.exitCode = 1;
 }
 
@@ -249,7 +251,7 @@ const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
 	shift: (values, rest) => drive(rest[0] ?? "", values, "shift"),
 	shot: (values, rest) => drive(rest[0] ?? "", values, "shot"),
 	skip: (_, rest) => skip(rest.join(" ")),
-	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, lastPassFile: LAST_PASS, start: "npm run verify -- up" }),
+	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, overlay: OVERLAY_CODE, lastPassFile: LAST_PASS, start: "npm run verify -- up" }),
 };
 
 const OPTIONS = {
