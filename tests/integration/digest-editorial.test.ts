@@ -151,6 +151,57 @@ it("holds a written digest for an editor when the library asks for approval, and
   });
 }, 120_000);
 
+it("emails nobody a digest written by hand for a past period, even one published later with new readers", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const approving = libraryConfigSchema.parse({ ...config, notifications: { ...config.notifications, approval: true } });
+    await prepareNotificationEditions(db, approving, new Date("2026-09-09T00:00:00Z"));
+    await publication(client, "PUBAAAAA", "2026-08-03");
+    const prepared = await prepareDigestForPeriod(db, approving, period);
+    if (prepared.status !== "queued") throw new Error("The edition was not prepared");
+    const id = prepared.editionId;
+    const openScholar = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ digest: { ...written, model: "openai/gpt-6-luna", reasoning: "max" } }));
+    try {
+      await generateNotificationEdition(db, approving);
+      // A reader who joins after it was prepared has no delivery set aside for them.
+      await requestSubscription(db, { email: "later@example.org", digest: true, instant: false });
+      const [subscriber] = await db.select().from(notificationSubscriber);
+      await confirmSubscription(db, subscriber.token);
+      await moveDigest(db, approving, { id, expectedRevision: 1, action: "publish" }, editor);
+      expect(await getDigestEdition(db, approving, "en-GB", id)).toMatchObject(written);
+      expect(await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, id))).toEqual([]);
+
+    } finally {
+      openScholar.mockRestore();
+    }
+  });
+}, 120_000);
+
+it("publishes a held digest as written once the library stops asking for approval and has it written again", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const approving = libraryConfigSchema.parse({ ...config, notifications: { ...config.notifications, approval: true } });
+    await prepareNotificationEditions(db, approving, new Date("2026-09-09T00:00:00Z"));
+    await publication(client, "PUBAAAAA", "2026-08-03");
+    const prepared = await prepareDigestForPeriod(db, approving, period);
+    if (prepared.status !== "queued") throw new Error("The edition was not prepared");
+    const id = prepared.editionId;
+    const rewrite = { title: "August, rewritten", summary: "One study.", markdown: written.markdown };
+    const openScholar = vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => Response.json({ digest: { ...written, model: "openai/gpt-6-luna", reasoning: "max" } }))
+      .mockImplementation(async () => Response.json({ digest: { ...rewrite, model: "openai/gpt-6-luna", reasoning: "max" } }));
+    try {
+      await generateNotificationEdition(db, approving);
+      await moveDigest(db, approving, { id, expectedRevision: 1, action: "submit" }, creator);
+      expect(await readAdminDigest(db, approving, id)).toMatchObject({ state: "review", revision: 2, published: null });
+      await prepareDigestForPeriod(db, config, period);
+      await generateNotificationEdition(db, config);
+      // Readers have the new text, and the admin holds no older draft that publishing would put back over it.
+      expect(await readAdminDigest(db, config, id)).toMatchObject({ state: "published", revision: 3, words: { ...rewrite, note: "" }, published: { ...rewrite, note: "" } });
+      expect(await getDigestEdition(db, config, "en-GB", id)).toMatchObject(rewrite);
+    } finally {
+      openScholar.mockRestore();
+    }
+  });
+}, 120_000);
+
 it("tells readers who checked a digest, and shows their note, only when the library names them", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const id = await publishedEdition(db, client);

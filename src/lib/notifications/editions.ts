@@ -288,7 +288,9 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
     // The worker compares the next attempt with the database's clock, so that clock sets it.
     const edition = { windowStart: period.start, publications, publicationCount: total, cover, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null };
-    const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, ...edition })
+    // A new edition for a past period is marked silent, so it emails nobody even when a person publishes it later.
+    // One the schedule made keeps its mark, and its readers, through a rewrite.
+    const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, silent: true, ...edition })
       .onConflictDoUpdate({ target: [notificationEdition.stream, notificationEdition.windowEnd], set: edition }).returning({ id: notificationEdition.id });
     await tx.execute(sql`
       INSERT INTO "notificationDelivery" ("messageKey", "subscriberId", "editionId", "status", "nextAttemptAt")
@@ -298,6 +300,20 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     `);
     return { status: "queued", editionId: id, publicationCount: total };
   });
+}
+
+/**
+ * What an edition becomes once its text is written. A digest readers already have is rewritten as a draft: what they
+ * see stays until the new text is published. So is one the library wants a person to approve first: it waits in the
+ * admin and is emailed when published. Any other is published as written, and a draft left from when the library
+ * still asked for approval gives way to it.
+ */
+function writtenEdition(edition: typeof notificationEdition.$inferSelect, words: { title: string; summary: string; markdown: string | null }, approval: boolean) {
+  const ai = words.markdown === null ? null : { ...words, markdown: words.markdown };
+  const held = edition.publishedAt !== null || (ai !== null && approval);
+  const moved = { reviewRequestedAt: null, draftRevision: edition.draftRevision + 1 };
+  if (held) return { ai, held, changes: { draft: ai, ...moved } };
+  return { ai, held, changes: { ...words, publishedAt: new Date(), ...(edition.draft ? { draft: null, ...moved } : {}) } };
 }
 
 export async function generateNotificationEdition(db: Database, config: LibraryServerConfig, signal?: AbortSignal) {
@@ -324,19 +340,13 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
     }
     await db.transaction(async tx => {
       const { model, reasoning, ...words } = output;
-      const ai = words.markdown === null ? null : { ...words, markdown: words.markdown };
-      // A digest readers already have is rewritten as a draft: what they see stays until the new text is published.
-      // So is one the library wants a person to approve first: it waits in the admin and is emailed when published.
-      const held = edition.publishedAt !== null || (ai !== null && config.notifications.approval);
+      const { ai, held, changes } = writtenEdition(edition, words, config.notifications.approval);
       const saved = await tx.update(notificationEdition)
-        .set({
-          model, reasoning, ai, nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null,
-          ...(held ? { draft: ai, reviewRequestedAt: null, draftRevision: edition.draftRevision + 1 } : { ...words, publishedAt: new Date() }),
-        })
+        .set({ model, reasoning, ai, nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null, ...changes })
         .where(owned).returning({ id: notificationEdition.id });
       if (!saved.length) return;
       if (ai) await recordDigestEvent(tx, edition.id, "written", null);
-      if (!held) await queueEditionDeliveries(tx, edition);
+      if (!held && !edition.silent) await queueEditionDeliveries(tx, edition);
     });
   } catch (error) {
     const attempts = edition.attempts + 1;

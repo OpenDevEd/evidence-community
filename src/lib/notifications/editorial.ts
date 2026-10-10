@@ -265,7 +265,8 @@ async function reviewStep(tx: DatabaseTransaction, edition: Edition, action: Exc
 
 /**
  * Publishes the draft: readers now see it, signed by the person who published it. The first time an edition is
- * published it is emailed; publishing changes to an edition readers already have sends nothing.
+ * published it is emailed, unless it was written by hand for a past period; publishing changes to an edition readers
+ * already have sends nothing.
  */
 async function publishDraft(tx: DatabaseTransaction, config: LibraryServerConfig, edition: Edition, actor: DigestActor) {
   const checkedBy = signer(actor);
@@ -280,7 +281,7 @@ async function publishDraft(tx: DatabaseTransaction, config: LibraryServerConfig
     ...text, note: note || null, ai, draft: null, reviewRequestedAt: null, checkedBy,
     publishedAt: edition.publishedAt ?? new Date(), draftRevision: edition.draftRevision + 1,
   }).where(eq(notificationEdition.id, edition.id));
-  if (!edition.publishedAt) await queueEditionDeliveries(tx, edition, new Date());
+  if (!edition.publishedAt && !edition.silent) await queueEditionDeliveries(tx, edition, new Date());
   await recordDigestEvent(tx, edition.id, "published", person(actor));
 }
 

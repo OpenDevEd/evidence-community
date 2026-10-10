@@ -554,6 +554,13 @@
       "when": 1791657615212,
       "tag": "0078_digest-editorial",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1791664743432,
+      "tag": "0079_digest-silent-editions",
+      "breakpoints": true
     }
   ]
 }
