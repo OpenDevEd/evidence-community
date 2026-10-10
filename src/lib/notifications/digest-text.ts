@@ -17,6 +17,8 @@ const lexer = new Marked({ gfm: true });
 // What a person may paste in that a digest cannot hold, with what to do about it.
 const REFUSED: Record<string, string> = { html: "Remove the HTML.", image: "A digest cannot hold images." };
 const PLAIN = new Set(["space", "text", "escape", "br"]);
+// The reader's page draws these as cards and highlights where AI answers use them. A digest's email cannot.
+const DIRECTIVE = /\[(RESOURCE|QUOTE|PAGE|SECTION)\b/;
 const NESTED = new Set(["paragraph", "strong"]);
 
 /**
@@ -25,6 +27,9 @@ const NESTED = new Set(["paragraph", "strong"]);
  * such as an image, a table, raw HTML or a link elsewhere, is refused with the reason.
  */
 function refused(token: Token): string | null {
+  return PLAIN.has(token.type) && DIRECTIVE.test(token.raw) ? "Cite a publication with the Cite button." : refusedMarkup(token);
+}
+function refusedMarkup(token: Token): string | null {
   if (PLAIN.has(token.type)) return null;
   if (NESTED.has(token.type)) return first("tokens" in token ? token.tokens : undefined);
   if (token.type === "heading") return token.depth === 2 ? first(token.tokens) : "Use one level of heading.";

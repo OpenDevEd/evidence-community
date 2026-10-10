@@ -77,10 +77,23 @@ function useDigestList() {
 	return { list: list.data, listStale: list.isLoading && list.data !== undefined, query, setQuery };
 }
 
-/** A session for an edition that has text and is not being written again, unless it is already the one held. */
-function sessionToStart(loaded: AdminDigest | undefined, held: DigestSession | null) {
+/**
+ * A session for an edition that has text and is not being written again. The one already held stays, with what the
+ * person typed, unless it has nothing left to save and the library now answers with a later revision.
+ */
+function sessionToStart(loaded: AdminDigest | undefined, held: DigestSession | undefined) {
 	if (!loaded || !loaded.words || loaded.writing) return null;
-	return held && held.id === loaded.id ? null : new DigestSession(loaded, loaded.words);
+	if (held && !(held.settled && held.read().digest.revision < loaded.revision)) return null;
+	return new DigestSession(loaded, loaded.words);
+}
+
+/** Every edition opened keeps its session, so coming back to one finds the text and the revision it was left with. */
+function useSessions() {
+	const [sessions, setSessions] = useState<ReadonlyMap<string, DigestSession>>(new Map());
+	return {
+		of: (id: string | null) => (id ? sessions.get(id) : undefined),
+		hold: (session: DigestSession | null) => { if (session) setSessions((held) => new Map(held).set(session.id, session)); },
+	};
 }
 
 /** The open edition and the text a person has in hand for it. */
@@ -90,15 +103,15 @@ function useOpenDigest(openId: string | null) {
 		// An edition AI is still writing is asked for again until its text is there.
 		refreshInterval: (latest) => (latest?.writing ? 15_000 : 0),
 	});
-	const [held, setHeld] = useState<DigestSession | null>(null);
+	const sessions = useSessions();
 	const loaded = detail.data && detail.data.id === openId ? detail.data : undefined;
 	// A person's session starts once the open edition has text. Later answers never replace what they have typed.
-	const starting = sessionToStart(loaded, held);
-	if (starting) setHeld(starting);
-	const session = held && held.id === openId ? held : null;
+	const starting = sessionToStart(loaded, sessions.of(openId));
+	if (starting) sessions.hold(starting);
+	const session = starting ?? sessions.of(openId) ?? null;
 	const snapshot = useDigestSnapshot(session);
 	/** Loads the edition afresh, dropping what this person had typed since someone else changed it. */
-	const reload = () => detail.mutate().then((fresh) => setHeld(sessionToStart(fresh, null)));
+	const reload = () => detail.mutate().then((fresh) => sessions.hold(sessionToStart(fresh, undefined)));
 	return { digest: snapshot ? snapshot.digest : loaded, missing: Boolean(detail.error) && !loaded, session, snapshot, reload };
 }
 
@@ -388,6 +401,13 @@ const nextDigest = (overview: AdminDigestList["overview"]) => {
 	return overview.next ? `${overview.next.day}, ${overview.next.time}` : "Not scheduled";
 };
 
+/** The library's settings page on OpenScholar, opened at its digests. */
+function digestSettingsHref(configurationHref: string) {
+	const url = new URL(configurationHref);
+	url.searchParams.set("section", "notifications");
+	return url.toString();
+}
+
 /** What the library's digests are set to do, shown while no edition is open. */
 function Overview({ overview, configurationHref }: { overview: AdminDigestList["overview"] | undefined; configurationHref: string }) {
 	return <div className="flex h-full flex-col">
@@ -395,7 +415,7 @@ function Overview({ overview, configurationHref }: { overview: AdminDigestList["
 			<Row icon={overview?.paused ? PauseIcon : Calendar03Icon} label="Next digest">{overview ? nextDigest(overview) : <Skeleton className="my-0.5 h-4 w-32 rounded-lg" />}</Row>
 			<Row icon={MailSend01Icon} label="Subscribers">{overview ? overview.subscribers.toLocaleString("en-GB") : <Skeleton className="my-0.5 h-4 w-10 rounded-lg" />}</Row>
 		</div>
-		<div className="px-4"><a href={configurationHref} className={`inline-flex items-center gap-1.5 text-xs font-medium hover:text-accent ${muted}`}><HugeiconsIcon icon={Settings02Icon} aria-hidden size={14} />Digest settings</a></div>
+		<div className="px-4"><a href={digestSettingsHref(configurationHref)} className={`inline-flex items-center gap-1.5 text-xs font-medium hover:text-accent ${muted}`}><HugeiconsIcon icon={Settings02Icon} aria-hidden size={14} />Digest settings</a></div>
 	</div>;
 }
 

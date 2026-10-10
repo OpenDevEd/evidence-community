@@ -63,38 +63,55 @@ export class DigestSession {
 		this.timer = setTimeout(() => void this.save(), SAVE_AFTER_MS);
 	}
 
-	/** Saves what is on screen, after any save already on its way. */
+	/** Nothing typed waits to be saved and no step is under way, so a newer answer from the library can take this one's place. */
+	get settled() {
+		return !this.unsaved && this.snapshot.busy === null;
+	}
+
+	/** Sends what is on screen if it has changed. False when the library refused it or someone else changed the edition. */
+	private async write() {
+		if (this.snapshot.stale) return false;
+		if (!this.unsaved) return true;
+		this.unsaved = false;
+		try {
+			this.set({ digest: await saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words), problem: null });
+			return true;
+		} catch (error) {
+			this.unsaved = true;
+			this.refuse(error);
+			return false;
+		}
+	}
+
+	/** Saves what is on screen, after any save or step already on its way. */
 	save() {
 		clearTimeout(this.timer);
-		this.saving = this.saving.then(async () => {
-			if (!this.unsaved || this.snapshot.stale) return;
-			this.unsaved = false;
-			try {
-				this.set({ digest: await saveAdminDigest(this.id, this.snapshot.digest.revision, this.snapshot.words), problem: null });
-			} catch (error) {
-				this.unsaved = true;
-				this.refuse(error);
-			}
-		});
+		this.saving = this.saving.then(async () => { await this.write(); });
 		return this.saving;
 	}
 
 	/** Sends for review, takes back, sends back or publishes, once the text on screen is saved. True when it happened. */
 	async move(action: DigestAction) {
 		this.set({ busy: action });
-		await this.save();
-		try {
-			// Text the library refused stays on screen with the reason; the step waits for it.
-			if (this.unsaved) return false;
-			const digest = await moveAdminDigest(this.id, this.snapshot.digest.revision, action);
-			this.set({ digest, words: digest.words ?? this.snapshot.words, problem: null });
-			return true;
-		} catch (error) {
-			this.refuse(error);
-			return false;
-		} finally {
-			this.set({ busy: null });
-		}
+		clearTimeout(this.timer);
+		let moved = false;
+		// The step takes its turn with the saves, so a save never goes out from the revision the step is about to change.
+		this.saving = this.saving.then(async () => {
+			try {
+				// Text the library refused stays on screen with the reason; the step waits for it.
+				if (!(await this.write())) return;
+				const digest = await moveAdminDigest(this.id, this.snapshot.digest.revision, action);
+				// Text typed while the step was on its way stays on screen, and is saved after it.
+				this.set({ digest, words: this.unsaved ? this.snapshot.words : digest.words ?? this.snapshot.words, problem: null });
+				moved = true;
+			} catch (error) {
+				this.refuse(error);
+			} finally {
+				this.set({ busy: null });
+			}
+		});
+		await this.saving;
+		return moved;
 	}
 }
 

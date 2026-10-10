@@ -84,6 +84,24 @@ describe("the text a person has in hand for a digest", () => {
     expect(session.read()).toMatchObject({ problem: null, digest: { revision: 4 } });
   });
 
+  it("keeps what is typed while a step is on its way, and saves it once the step is done", async () => {
+    const publishing = held();
+    api.moveAdminDigest.mockReturnValue(publishing.answer);
+    api.saveAdminDigest.mockResolvedValue(digest(5, { ...words, note: "Typed while publishing" }));
+    const session = new DigestSession(digest(3), words);
+    const step = session.move("publish");
+    await vi.advanceTimersByTimeAsync(0);
+    session.change({ note: "Typed while publishing" });
+    // The save waits its turn: sent now, it would go out from the revision the step is changing.
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    publishing.finish({ ...digest(4), state: "published" } as AdminDigest);
+    expect(await step).toBe(true);
+    expect(session.read()).toMatchObject({ digest: { revision: 4, state: "published" }, words: { note: "Typed while publishing" } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.saveAdminDigest).toHaveBeenCalledWith("edition", 4, { ...words, note: "Typed while publishing" });
+  });
+
   it("saves what is on screen before a step, takes the step from the saved revision, and shows the text the library answers with", async () => {
     api.saveAdminDigest.mockResolvedValue(digest(4));
     const published = digest(5, { ...words, title: "Typed just now" });

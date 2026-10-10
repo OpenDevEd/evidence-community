@@ -279,9 +279,9 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
   if (!config.notifications.enabled) return { status: "disabled" };
   return db.transaction(async tx => {
     // A rewrite replaces the draft, so one a person has changed is not rewritten under them.
-    const [existing] = await tx.select({ draft: notificationEdition.draft, ai: notificationEdition.ai, note: notificationEdition.note }).from(notificationEdition)
+    const [existing] = await tx.select({ id: notificationEdition.id, draft: notificationEdition.draft, ai: notificationEdition.ai, note: notificationEdition.note, publishedAt: notificationEdition.publishedAt }).from(notificationEdition)
       .where(and(eq(notificationEdition.stream, "digest"), eq(notificationEdition.windowEnd, period.end))).for("update");
-    if (existing && draftIsEdited(existing)) throw new AdminValidationError("This digest has changes that are not published. Publish them, or change its text back, before rewriting it.");
+    if (existing && await draftIsEdited(tx, existing)) throw new AdminValidationError("This digest has changes that are not published. Publish them, or change its text back, before rewriting it.");
     const { total, keys } = await rankPublications(tx, publishedIn(tx, config, period));
     const publications = await listPublications(tx, config, keys);
     if (!publications.length) return { status: "empty" };

@@ -49,7 +49,7 @@ const settle = () => act(async () => { await new Promise((resolve) => setTimeout
 function Panes({ start }: { start: string }) {
 	const [param, setParam] = useState<string | null>(start);
 	const digests = useAdminDigests(param, setParam);
-	return <><main><AdminDigestsMain digests={digests} /></main><aside><AdminDigestsInspector digests={digests} configurationHref="/settings" /></aside><output>{param} waiting {digests.waiting}</output></>;
+	return <><main><AdminDigestsMain digests={digests} /></main><aside><AdminDigestsInspector digests={digests} configurationHref="https://openscholar.example/libraries/amber/configuration?section=sources" /></aside><output>{param} waiting {digests.waiting}</output></>;
 }
 async function show(start: string, role: "creator" | "editor") {
 	await act(async () => root.render(
@@ -81,6 +81,7 @@ describe("digests in the admin", () => {
 		expect(text()).toContain("waiting 2");
 		expect(text()).toContain("Monday 19 October, 09:00");
 		expect(text()).toContain("1,024");
+		expect([...container.querySelectorAll("a")].find((link) => link.textContent === "Digest settings")?.href).toBe("https://openscholar.example/libraries/amber/configuration?section=notifications");
 		await press(button(/^In review/)[0]);
 		expect(mocked.getAdminDigests).toHaveBeenLastCalledWith({ page: 1, show: "review", sort: "newest" });
 		await press(button(/Heat and harvests/)[0]);
@@ -152,6 +153,34 @@ describe("digests in the admin", () => {
 		await settle();
 		expect(container.querySelector<HTMLInputElement>('input[aria-label="Title"]')!.value).toBe("Their title");
 		expect(container.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	it("finds an edition as it was left when it is opened again after another", async () => {
+		const OTHER = "0b0c2a55-55f3-4f0e-9d0e-4f0a3a2f8c11";
+		mocked.getAdminDigests.mockResolvedValue(list([row(ID, "Heat and harvests", "draft"), row(OTHER, "September", "draft")]));
+		// The library answers with the revision it had when the page was loaded, as a cached answer does.
+		mocked.getAdminDigest.mockImplementation(async (id) => digest({ id, words: id === ID ? words : { ...words, title: "September" } }));
+		mocked.saveAdminDigest.mockImplementation(async (_id, revision, saved) => digest({ revision: revision + 1, words: saved }));
+		await show(ID, "creator");
+		const title = () => container.querySelector<HTMLInputElement>('input[aria-label="Title"]')!;
+		const type = (value: string) => act(async () => {
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(title(), value);
+			title().dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await type("Heat, harvests and water");
+		await vi.waitFor(() => expect(mocked.saveAdminDigest).toHaveBeenCalledWith(ID, 3, { ...words, title: "Heat, harvests and water" }), { timeout: 3000 });
+		await settle();
+		await press(container.querySelector('button[aria-label="All digests"]') ?? undefined);
+		await press(button(/September/)[0]);
+		await settle();
+		expect(title().value).toBe("September");
+		await press(container.querySelector('button[aria-label="All digests"]') ?? undefined);
+		await press(button(/Heat and harvests/)[0]);
+		await settle();
+		expect(title().value).toBe("Heat, harvests and water");
+		await type("Heat, harvests, water and work");
+		// The next save goes out from the revision the first one returned, not the one the page was loaded with.
+		await vi.waitFor(() => expect(mocked.saveAdminDigest).toHaveBeenLastCalledWith(ID, 4, { ...words, title: "Heat, harvests, water and work" }), { timeout: 3000 });
 	});
 
 	it("shows an edition AI has not written yet, or could not write, with no text to act on", async () => {

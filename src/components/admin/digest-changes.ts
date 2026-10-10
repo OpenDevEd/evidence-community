@@ -19,8 +19,8 @@ function sharedEnds(a: string[], b: string[]) {
 
 /**
  * For each pair of positions, the longest run of words the rest of both texts share.
- * ponytail: a table of both lengths multiplied. Fine for a digest once the unchanged start and end are cut; the `diff`
- * package if a text ever has tens of thousands of changed words.
+ * ponytail: a table of both lengths multiplied, which `middle` caps. Fine for a digest once the unchanged start and
+ * end are cut; the `diff` package if long texts with little in common ever need their shared words found.
  */
 function sharedRuns(x: string[], y: string[]) {
 	const width = y.length + 1;
@@ -31,8 +31,16 @@ function sharedRuns(x: string[], y: string[]) {
 	return (i: number, j: number) => runs[i * width + j]!;
 }
 
-/** The changed middle of two texts as parts: a word both have, one only the first has, or one only the second has. Removed words come before the ones that replace them. */
+// Two whole digests of ordinary length fit; the table for these many pairs of words takes 8 MB.
+const MOST_PAIRS = 4_000_000;
+
+/**
+ * The changed middle of two texts as parts: a word both have, one only the first has, or one only the second has.
+ * Removed words come before the ones that replace them. Two long texts with little in common are shown as one
+ * replaced by the other, without looking for the words they share.
+ */
 function middle(a: string[], b: string[]): Part[] {
+	if (a.length * b.length > MOST_PAIRS) return [...a.map((text): Part => ({ text, kind: "removed" })), ...b.map((text): Part => ({ text, kind: "added" }))];
 	const [x, y] = [a.map(word), b.map(word)];
 	const shared = sharedRuns(x, y);
 	const parts: Part[] = [];
