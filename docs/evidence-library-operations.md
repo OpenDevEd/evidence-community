@@ -931,6 +931,21 @@ the next scheduled time, never for a time that passed during the pause, and
 covers everything since the last digest, up to a month back (32 days).
 Additions older than that are in no digest.
 
+`notifications.approval` makes a written digest wait for a person. With it on,
+a digest AI has written is saved as the edition's draft and emailed to nobody.
+It appears in `/admin` under Digests, and when an Editor or Owner publishes it
+readers see it and it is emailed to everyone subscribed at that moment,
+including readers who joined while it waited. The digests page then gives the
+day of the next digest without a time. Off, the default, a digest is published
+and emailed as soon as it is written.
+
+`notifications.attribution` tells readers who checked each digest. With it on,
+the digest's page, the list of digests and the email name the Editor or Owner
+who published it, with their photo, or say "Written by AI" for a digest nobody
+checked. The editor's note shows above the text with that person's name and
+role. Their account ID is never sent to readers. Off, the default, readers see
+neither the name nor the note.
+
 A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
 period has more, the ones kept are ranked: a record with an abstract of at least
 200 characters first, then by a score of 3 for a journal OpenAlex marks as core,
@@ -954,7 +969,8 @@ in the schedule's timezone, so a library outside UTC gives its own midnights,
 such as `2026-09-01T00:00:00-04:00`. To rewrite an existing edition, send its
 exact `windowStart` and `windowEnd`.
 
-A new edition is published as soon as it is written. Rewriting an edition
+A new edition is published as soon as it is written, unless the library asks
+for approval (`notifications.approval`). Rewriting an edition
 readers already have leaves it up: its list of publications is replaced at
 once, and the new text is saved as a draft (`notificationEdition.draft`) until
 it is published. Each edition keeps the text AI wrote in `ai`, beside the
@@ -972,7 +988,7 @@ name and photo as they were then (`checkedBy`), and each step is kept in
 `notificationEditionEvent`. Every save carries the revision it was made from
 (`draftRevision`), so a save over someone else's newer text is refused. Saved
 text may hold second-level headings, paragraphs, bold and links to public
-records of the library, and nothing else. An edition whose draft a person has
+records in the edition, and nothing else. An edition whose draft a person has
 changed is not rewritten: the rewrite route answers with the reason.
 
 This release replaces `notifications.weekly` with `notifications.schedule` and

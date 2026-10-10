@@ -7,9 +7,9 @@ import type { Database } from "@/db/database-schema";
 import { notificationDelivery, notificationEdition, notificationEditionEvent, notificationSubscriber } from "@/db/schema/notifications";
 import { generateNotificationEdition, prepareDigestForPeriod, prepareNotificationEditions } from "@/lib/notifications/editions";
 import { readAdminDigest, getDigestPapers, listAdminDigests, listDigestPapers, moveDigest, saveDigestDraft, type DigestActor } from "@/lib/notifications/editorial";
-import { getDigestEdition } from "@/lib/notifications/public";
+import { getDigestEdition, listDigestEditions } from "@/lib/notifications/public";
 import { confirmSubscription, requestSubscription } from "@/lib/notifications/subscriptions";
-import { ItemMutationConflictError } from "@/lib/admin/native-item-service";
+import { ItemMutationConflictError, createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
@@ -114,6 +114,64 @@ it("emails an edition the first time it is published and never for a later chang
   });
 }, 120_000);
 
+it("holds a written digest for an editor when the library asks for approval, and emails it when it is published", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    const approving = libraryConfigSchema.parse({ ...config, notifications: { ...config.notifications, digestCovers: "added", approval: true } });
+    await prepareNotificationEditions(db, approving, new Date("2026-09-09T00:00:00Z"));
+    const subscribe = async (email: string) => {
+      await requestSubscription(db, { email, digest: true, instant: false });
+      const [subscriber] = await db.select().from(notificationSubscriber).where(eq(notificationSubscriber.email, email));
+      await confirmSubscription(db, subscriber.token);
+    };
+    await subscribe("reader@example.org");
+    const added = await createNativeItemDraft(db, { itemType: "Report", title: "Attention in classrooms" });
+    await publishItemDraft(db, added.itemKey);
+    expect(await prepareNotificationEditions(db, approving, new Date(), { manualDigest: true })).toMatchObject({ status: "queued" });
+    const text = { ...written, markdown: `## Reading\n\nSee [Mills, 2026](/lib/${added.itemKey}).` };
+    const openScholar = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ digest: { ...text, model: "openai/gpt-6-luna", reasoning: "max" } }));
+    try { await generateNotificationEdition(db, approving); } finally { openScholar.mockRestore(); }
+    const [{ id }] = await db.select({ id: notificationEdition.id }).from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    const deliveries = () => db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, id));
+
+    // It is written and waits: readers have nothing and nobody is emailed.
+    expect(await readAdminDigest(db, approving, id)).toMatchObject({ state: "draft", words: { ...text, note: "" }, ai: text, published: null, publishedAt: null });
+    expect(await getDigestEdition(db, approving, "en-GB", id)).toBeUndefined();
+    expect((await listDigestEditions(db, approving, "en-GB")).editions).toEqual([]);
+    expect(await deliveries()).toEqual([]);
+    // A Creator can send it for review but not publish it.
+    await expect(moveDigest(db, approving, { id, expectedRevision: 1, action: "publish" }, creator)).rejects.toThrow("Only an Editor or Owner");
+    await moveDigest(db, approving, { id, expectedRevision: 1, action: "submit" }, creator);
+
+    // Someone who subscribes while it waits gets it too.
+    await subscribe("later@example.org");
+    const published = await moveDigest(db, approving, { id, expectedRevision: 2, action: "publish" }, editor);
+    expect(published).toMatchObject({ state: "published", checkedBy: { name: "Gugulethu Dube", role: "editor" } });
+    expect(await getDigestEdition(db, approving, "en-GB", id)).toMatchObject(text);
+    expect((await deliveries()).map(delivery => delivery.status)).toEqual(["queued", "queued"]);
+  });
+}, 120_000);
+
+it("tells readers who checked a digest, and shows their note, only when the library names them", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const id = await publishedEdition(db, client);
+    const naming = libraryConfigSchema.parse({ ...config, notifications: { ...config.notifications, attribution: true } });
+    // As AI wrote it, with nobody's name on it.
+    expect(await getDigestEdition(db, naming, "en-GB", id)).toMatchObject({ by: null, note: null });
+    expect(await getDigestEdition(db, config, "en-GB", id)).not.toHaveProperty("by");
+
+    await saveDigestDraft(db, config, { id, expectedRevision: 0, words: edited }, creator);
+    await moveDigest(db, config, { id, expectedRevision: 1, action: "publish" }, editor);
+    const signed = await getDigestEdition(db, naming, "en-GB", id);
+    // Readers are told the name, photo and role, never the account.
+    expect(signed?.by).toEqual({ name: "Gugulethu Dube", photo: "https://img.example/gugu.png", role: "editor" });
+    expect(signed?.note).toBe("Start with the Kenya study.");
+    expect((await listDigestEditions(db, naming, "en-GB")).editions[0].by).toEqual(signed?.by);
+    const unnamed = await getDigestEdition(db, config, "en-GB", id);
+    expect(unnamed).not.toHaveProperty("by");
+    expect(unnamed?.note).toBeNull();
+  });
+}, 120_000);
+
 it("refuses text a digest cannot hold, with the reason", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const id = await publishedEdition(db, client);
@@ -208,7 +266,7 @@ it("lists every edition a page at a time with where each stands", async () => {
     const base = (index: number) => ({ stream: "digest" as const, windowStart: week(index - 1), windowEnd: week(index), publications: [], publicationCount: index });
     await db.insert(notificationEdition).values([
       ...Array.from({ length: 19 }, (_, index) => ({ ...base(index), ...written, ai: written, publishedAt: week(index), nextAttemptAt: null })),
-      { ...base(19), ...written, ai: written, publishedAt: week(19), nextAttemptAt: null, draft: { ...written, title: "Changed" }, reviewRequestedAt: week(19), checkedBy: { id: "user_editor", name: "Gugulethu Dube", photo: null } },
+      { ...base(19), ...written, ai: written, publishedAt: week(19), nextAttemptAt: null, draft: { ...written, title: "Changed" }, reviewRequestedAt: week(19), checkedBy: { id: "user_editor", name: "Gugulethu Dube", photo: null, role: "editor" } },
       { ...base(20), ai: written, draft: written, nextAttemptAt: null },
       { ...base(21), nextAttemptAt: null, lastError: "OpenScholar digest generation returned 500" },
       { ...base(22) },

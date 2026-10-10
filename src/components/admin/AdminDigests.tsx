@@ -22,6 +22,7 @@ import {
 	SentIcon,
 	Settings02Icon,
 	Sorting05Icon,
+	UserCheck01Icon,
 	ViewIcon,
 } from "@hugeicons/core-free-icons";
 
@@ -293,7 +294,10 @@ function ChangesView({ changed, words }: { changed: Changed | null; words: Words
 	</>;
 }
 
-/** The edition as readers will see it. A note is signed by whoever publishes it: the person who did, or for a new note this person when they may publish. */
+/**
+ * The edition as readers will see it. A note is signed by whoever publishes it: the person who did, or for a new note
+ * this person when they may publish. Readers see neither the name nor the note unless the library names who checks its digests.
+ */
 function PreviewView({ digest, words }: { digest: AdminDigest; words: Words }) {
 	const account = useAdminSession();
 	const mine = account.canPublish ? { id: account.userId, name: account.name, photo: account.image } : null;
@@ -303,9 +307,9 @@ function PreviewView({ digest, words }: { digest: AdminDigest; words: Words }) {
 		<div className={`mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}>
 			<span className="inline-flex items-center gap-1.5"><HugeiconsIcon icon={Calendar03Icon} aria-hidden size={14} />{digest.date}</span>
 			<span className="inline-flex items-center gap-1.5"><HugeiconsIcon icon={BookOpen01Icon} aria-hidden size={14} />{digest.publicationCount.toLocaleString("en-GB")} publications</span>
-			<Signed by={digest.checkedBy} published={digest.published !== null} />
+			{digest.attribution && <Signed by={digest.checkedBy} published={digest.published !== null} />}
 		</div>
-		{words.note && <figure className="mt-7 rounded-2xl bg-black/[0.03] p-5 dark:bg-white/[0.04]"><blockquote className="text-base leading-7">{words.note}</blockquote>{signer && <figcaption className="mt-3 flex items-center gap-2.5 text-sm font-medium"><Face person={signer} size={28} />{signer.name}</figcaption>}</figure>}
+		{digest.attribution && words.note && <figure className="mt-7 rounded-2xl bg-black/[0.03] p-5 dark:bg-white/[0.04]"><blockquote className="text-base leading-7">{words.note}</blockquote>{signer && <figcaption className="mt-3 flex items-center gap-2.5 text-sm font-medium"><Face person={signer} size={28} />{signer.name}</figcaption>}</figure>}
 		<div className="mt-8"><AIMarkdown>{words.markdown}</AIMarkdown></div>
 	</>;
 }
@@ -413,6 +417,8 @@ function Overview({ overview, configurationHref }: { overview: AdminDigestList["
 	return <div className="flex h-full flex-col">
 		<div className="py-2">
 			<Row icon={overview?.paused ? PauseIcon : Calendar03Icon} label="Next digest">{overview ? nextDigest(overview) : <Skeleton className="my-0.5 h-4 w-32 rounded-lg" />}</Row>
+			<Row icon={CheckmarkBadge01Icon} label="Before sending">{overview ? (overview.approval ? "An editor publishes it" : "Sent as AI wrote it") : <Skeleton className="my-0.5 h-4 w-32 rounded-lg" />}</Row>
+			<Row icon={UserCheck01Icon} label="Readers see">{overview ? (overview.attribution ? "Who checked it" : "No name") : <Skeleton className="my-0.5 h-4 w-24 rounded-lg" />}</Row>
 			<Row icon={MailSend01Icon} label="Subscribers">{overview ? overview.subscribers.toLocaleString("en-GB") : <Skeleton className="my-0.5 h-4 w-10 rounded-lg" />}</Row>
 		</div>
 		<div className="px-4"><a href={digestSettingsHref(configurationHref)} className={`inline-flex items-center gap-1.5 text-xs font-medium hover:text-accent ${muted}`}><HugeiconsIcon icon={Settings02Icon} aria-hidden size={14} />Digest settings</a></div>
@@ -433,7 +439,10 @@ function Trail({ digest }: { digest: AdminDigest }) {
 	</ol>;
 }
 
-function Fields({ session, words, locked }: { session: DigestSession; words: Words; locked: boolean }) {
+const NOTE_SHOWN = "A few words of your own, shown above the digest with the name of whoever publishes it";
+const NOTE_HIDDEN = "Not shown to readers: the library does not name who checks its digests";
+
+function Fields({ session, words, locked, attribution }: { session: DigestSession; words: Words; locked: boolean; attribution: boolean }) {
 	return <>
 		<label className="block px-4 pt-4">
 			<span className="text-[13px] font-semibold">Summary</span>
@@ -441,7 +450,7 @@ function Fields({ session, words, locked }: { session: DigestSession; words: Wor
 		</label>
 		<label className="block px-4 py-4">
 			<span className="text-[13px] font-semibold">Editor&apos;s note</span>
-			<textarea value={words.note} disabled={locked} onChange={(event) => session.change({ note: event.target.value })} rows={4} placeholder="A few words of your own, shown above the digest with the name of whoever publishes it" className={field} />
+			<textarea value={words.note} disabled={locked} onChange={(event) => session.change({ note: event.target.value })} rows={4} placeholder={attribution ? NOTE_SHOWN : NOTE_HIDDEN} className={field} />
 		</label>
 	</>;
 }
@@ -456,7 +465,7 @@ export function AdminDigestsInspector({ digests, configurationHref }: { digests:
 		<div className="min-h-0 flex-1 overflow-y-auto">
 			<div className="flex items-center gap-3 px-4 pb-3 pt-4"><DateTile edition={digest} large /><div className="min-w-0"><p className="truncate text-[13px] font-semibold">{digest.period}</p><p className={`mt-1 text-xs ${muted}`}>{digest.publicationCount.toLocaleString("en-GB")} publications</p></div><span className="ml-auto"><StateChip state={digest.state} /></span></div>
 			<Trail digest={digest} />
-			{editing && <Fields session={editing.session} words={editing.snapshot.words} locked={digest.writing} />}
+			{editing && <Fields session={editing.session} words={editing.snapshot.words} locked={digest.writing} attribution={digest.attribution} />}
 		</div>
 		{editing && !digest.writing && <Actions digest={digest} session={editing.session} busy={editing.snapshot.busy} />}
 	</div>;
