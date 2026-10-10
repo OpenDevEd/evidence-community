@@ -241,7 +241,7 @@ function Chip({ editor, mark }: MarkViewRendererProps) {
 		<Popover isOpen={picking !== null} onOpenChange={(open) => { setResting(false); setPicking(open ? chip.current?.textContent ?? "" : null); }} placement="bottom-start" shouldCloseOnScroll={false}>
 			<PopoverTrigger>
 				<InlineCitationCardTrigger>
-					<span ref={chip} data-citation tabIndex={0} role="button" aria-haspopup="dialog" /* Reached with Tab, a chip opens with Enter or Space as a click does. The editor leaves keys pressed on a chip alone. */ onKeyDown={(event) => { if (!event.defaultPrevented && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); chip.current?.click(); } }} className={`${CHIP} cursor-pointer transition-colors hover:bg-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-accent/20 dark:hover:bg-accent/30`}><MarkViewContent /></span>
+					<span ref={chip} data-citation tabIndex={0} role="button" aria-haspopup="dialog" onKeyDown={(event) => { if (!event.defaultPrevented && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); chip.current?.click(); } }} className={`${CHIP} cursor-pointer transition-colors hover:bg-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-accent/20 dark:hover:bg-accent/30`}><MarkViewContent /></span>
 				</InlineCitationCardTrigger>
 			</PopoverTrigger>
 			<PopoverContent aria-label="Change this citation" className={MENU}>{picking !== null && <Papers cited={cited} current={{ key: itemKey, label: picking }} onPick={replace} onRemove={remove} />}</PopoverContent>
@@ -253,6 +253,18 @@ function Chip({ editor, mark }: MarkViewRendererProps) {
 }
 
 const Citation = Link.extend({ addMarkView() { return ReactMarkViewRenderer(Chip); } });
+
+/**
+ * A chip reached with Tab opens with Enter or Space, as a click does. In a browser the editor sees the key first and
+ * would take it as text, so it is answered here; the chip's own handler covers the case where the editor passes it on.
+ */
+function chipKey(_view: unknown, event: KeyboardEvent) {
+	const chip = event.target instanceof HTMLElement && event.target.matches("[data-citation]") ? event.target : null;
+	if (!chip || (event.key !== "Enter" && event.key !== " ")) return false;
+	event.preventDefault();
+	chip.click();
+	return true;
+}
 
 
 function CiteTool({ editor, editionId, cited }: { editor: Editor; editionId: string; cited: string[] }) {
@@ -290,7 +302,7 @@ export function AdminDigestEditor({ editionId, markdown, onChange, tools }: { ed
 		contentType: "markdown",
 		// The page renders on the server first, where there is no editor.
 		immediatelyRender: false,
-		editorProps: { attributes: { class: TEXT, "aria-label": "Digest text" } },
+		editorProps: { attributes: { class: TEXT, "aria-label": "Digest text" }, handleKeyDown: chipKey },
 		onUpdate: ({ editor: current }) => onChange(current.getMarkdown()),
 	});
 	const on = useEditorState({ editor, selector: ({ editor: current }) => ({ heading: current?.isActive("heading", { level: 2 }) ?? false, bold: current?.isActive("bold") ?? false }) });
