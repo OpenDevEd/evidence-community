@@ -202,7 +202,7 @@ function EditionBody({edition: pending, cards, href}: {edition: Promise<DigestEd
           <DigestContent edition={edition} />
           <section className="mt-10" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
-            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period.</p>}
+            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: every meta-analysis and review, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
             <Suspense fallback={<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{edition.keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>}><EditionCards cards={cards} /></Suspense>
             <PageControls page={edition.page} pages={edition.pages} href={href} />
           </section>

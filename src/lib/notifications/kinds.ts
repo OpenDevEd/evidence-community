@@ -16,7 +16,7 @@ const TITLE = "meta[-‐ ]?analy|\\yreview\\y|synthesis|scoping|bibliometric|sta
 const ABSTRACT = "meta[-‐ ]?analy|systematic(ally)? review|scoping review|literature review|narrative review|umbrella review|rapid review|integrative review|evidence synthesis|this review|we review|prisma";
 
 /** True for a record whose title, abstract or OpenAlex type suggests a meta-analysis or a review. */
-export const likelyReview = sql`(coalesce(${item.title}, '') ~* ${TITLE} OR coalesce(${item.abstractNote}, '') ~* ${ABSTRACT}
+const likelyReview = sql`(coalesce(${item.title}, '') ~* ${TITLE} OR coalesce(${item.abstractNote}, '') ~* ${ABSTRACT}
   OR EXISTS (SELECT 1 FROM "sourceSnapshot" WHERE "sourceSnapshot"."itemKey" = ${item.key} AND "sourceSnapshot"."payload" ->> 'type' = 'review'))`;
 
 /** True for a record to list ahead of the rest: one read as a meta-analysis or a review, or a likely one nobody has read yet. */
