@@ -1709,6 +1709,10 @@ const notificationsSchema = z.object({
 	// When digests were paused. No scheduled digest is prepared while it is set, and the first one after it covers
 	// everything since the last digest.
 	pausedSince: utcTimestampSchema.nullable().default(null),
+	// A written digest waits in the admin until an Editor or Owner publishes it. Off, it goes out as AI wrote it.
+	approval: z.boolean().default(false),
+	// Readers are told who checked each digest, or that AI wrote it and nobody did.
+	attribution: z.boolean().default(false),
 	schedule: z.discriminatedUnion("frequency", [
 		z.object({frequency: z.literal("weekly"), weekday: z.number().int().min(0).max(6), ...digestTimeFields}).strict(),
 		z.object({frequency: z.literal("monthly"), dayOfMonth: z.number().int().min(1).max(31), ...digestTimeFields}).strict(),

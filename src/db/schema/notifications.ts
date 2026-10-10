@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
-import type { DigestDraft, DigestEventKind, DigestPerson, DigestText, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
+import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner, DigestText, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
 
 const date = (name: string) => timestamp(name, {withTimezone: true});
 export const notificationItem = pgTable("notificationItem", {
@@ -70,7 +70,9 @@ export const notificationEdition = pgTable("notificationEdition", {
   // The editor's own words above the digest, as published.
   note: text("note"),
   // Who published the text readers see. Nobody, when it went out as AI wrote it.
-  checkedBy: jsonb("checkedBy").$type<DigestPerson>(),
+  checkedBy: jsonb("checkedBy").$type<DigestSigner>(),
+  // Written by hand for a past period: emailed to nobody, whenever it is published.
+  silent: boolean("silent").notNull().default(false),
   model: text("model"),
   reasoning: text("reasoning"),
   attempts: integer("attempts").notNull().default(0),

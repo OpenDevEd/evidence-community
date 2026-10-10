@@ -13,6 +13,8 @@ import {
 	emailStyles,
 	renderLibraryEmail,
 } from "@/lib/emails/library-template";
+import { digestSignature } from "./public";
+import { DIGEST_SIGNER_ROLE } from "./types";
 
 export type EmailSubscriber = Pick<
 	typeof notificationSubscriber.$inferSelect,
@@ -20,7 +22,7 @@ export type EmailSubscriber = Pick<
 >;
 export type EmailEdition = Pick<
 	typeof notificationEdition.$inferSelect,
-	"id" | "title" | "stream" | "windowStart" | "windowEnd" | "markdown" | "publicationCount"
+	"id" | "title" | "stream" | "windowStart" | "windowEnd" | "markdown" | "publicationCount" | "note" | "checkedBy"
 > & {
 	publications: Pick<
 		(typeof notificationEdition.$inferSelect)["publications"][number],
@@ -101,6 +103,26 @@ function subscriptionContent(
 	return { subject, text, content, title, detail };
 }
 
+const signedLine = "font-size:13px;margin:0;color:#797b73";
+
+/**
+ * Who stands behind a digest, above its text, when the library tells readers: the person who checked it with their
+ * note, or that AI wrote it and nobody has. Empty when the library does not say.
+ */
+function digestSignedBy(config: LibraryServerConfig, edition: EmailEdition) {
+	const by = digestSignature(config, edition.checkedBy);
+	if (by === undefined) return { html: "", text: "" };
+	if (!by) return { html: `<p style="${signedLine};margin-bottom:22px">Written by AI</p>`, text: "Written by AI\n\n" };
+	const face = by.photo ? `<img src="${escapeHtml(by.photo)}" alt="" width="28" height="28" style="width:28px;height:28px;border-radius:50%;vertical-align:middle;margin-right:10px">` : "";
+	const name = `<strong style="color:#202822">${escapeHtml(by.name)}</strong>`;
+	if (!edition.note) return { html: `<p style="${signedLine};margin-bottom:22px">${face}Checked by ${name}</p>`, text: `Checked by ${by.name}\n\n` };
+	const role = by.role ? DIGEST_SIGNER_ROLE[by.role] : null;
+	return {
+		html: `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 26px;background:#f7f7f3;border-radius:12px"><tr><td style="padding:22px"><p style="${emailStyles.paragraph};margin:0 0 12px">${escapeHtml(edition.note).replace(/\n/g, "<br>")}</p><p style="${signedLine}">${face}${name}${role ? ` &nbsp;${role}` : ""}</p></td></tr></table>`,
+		text: `${edition.note}\n${by.name}${role ? `, ${role}` : ""}\n\n`,
+	};
+}
+
 // Hourly emails list up to the edition's cap; this line counts the rest.
 function unlisted(edition: EmailEdition) {
 	const rest = edition.publicationCount - edition.publications.length;
@@ -116,6 +138,7 @@ async function editionContent(
 		emailButton(label, href, identity.accent);
 	let content: string,
 		detail: { dateRange: string; publicationCount: number } | undefined;
+	const signed = edition.stream === "digest" ? digestSignedBy(config, edition) : { html: "", text: "" };
 	const title = edition.title ?? `${edition.publicationCount} new publications`;
 	const subject = `${config.identity.shortName}: ${title}`;
 	const editionUrl = new URL(
@@ -129,7 +152,7 @@ async function editionContent(
 			identity.baseUrl,
 			emailStyles,
 		);
-		content = `${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this edition", editionUrl)}</div>`;
+		content = `${signed.html}${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this edition", editionUrl)}</div>`;
 		const date = new Intl.DateTimeFormat(
 			config.localization.defaultLocale,
 			{
@@ -165,6 +188,6 @@ async function editionContent(
 					),
 					...unlisted(edition),
 				].join("\n\n");
-	const text = `${title}\n\n${body}${edition.stream === "digest" ? `\n\nRead online: ${editionUrl}` : ""}`;
+	const text = `${title}\n\n${signed.text}${body}${edition.stream === "digest" ? `\n\nRead online: ${editionUrl}` : ""}`;
 	return { subject, text, content, title, detail };
 }

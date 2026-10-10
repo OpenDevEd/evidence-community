@@ -29,14 +29,14 @@ const creator = { id: "user_creator", name: "Eunice Jengo", photo: null };
 function digest(patch: Partial<api.AdminDigest> = {}): api.AdminDigest {
 	return {
 		id: ID, day: "12", month: "Oct", date: "12 October 2026", period: "5 to 12 October", publicationCount: 298, state: "draft", writing: false, revision: 3,
-		words, error: null, published: null, publishedAt: null, ai, checkedBy: null,
+		words, error: null, published: null, publishedAt: null, ai, checkedBy: null, attribution: true,
 		events: [{ kind: "written", at: "2026-10-12T06:00:00.000Z", actor: null }, { kind: "edited", at: "2026-10-12T14:12:00.000Z", actor: creator }], sent: null, ...patch,
 	};
 }
-const row = (id: string, title: string | null, state: api.AdminDigest["state"], checkedBy: { id: string; name: string; photo: null } | null = null) => ({ id, day: "12", month: "Oct", date: "12 October 2026", period: "5 to 12 October", publicationCount: 298, title, state, checkedBy });
+const row = (id: string, title: string | null, state: api.AdminDigest["state"], checkedBy: { id: string; name: string; photo: null; role: "editor" } | null = null) => ({ id, day: "12", month: "Oct", date: "12 October 2026", period: "5 to 12 October", publicationCount: 298, title, state, checkedBy });
 const list = (editions: ReturnType<typeof row>[]): api.AdminDigestList => ({
 	editions, page: 1, pages: 3, total: 41, counts: { all: 41, draft: 1, review: 2, published: 38 },
-	overview: { sending: true, paused: false, next: { day: "Monday 19 October", time: "09:00" }, subscribers: 1024 },
+	overview: { sending: true, paused: false, approval: true, attribution: false, next: { day: "Monday 19 October", time: "09:00" }, subscribers: 1024 },
 });
 
 let root: Root;
@@ -64,7 +64,7 @@ async function show(start: string, role: "creator" | "editor") {
 
 beforeEach(() => {
 	container = document.createElement("div"); document.body.append(container); root = createRoot(container);
-	mocked.getAdminDigests.mockResolvedValue(list([row(ID, "Heat and harvests", "review"), row("b", null, "writing"), row("c", "September", "published", { id: "user_editor", name: "Gugulethu Dube", photo: null })]));
+	mocked.getAdminDigests.mockResolvedValue(list([row(ID, "Heat and harvests", "review"), row("b", null, "writing"), row("c", "September", "published", { id: "user_editor", name: "Gugulethu Dube", photo: null, role: "editor" })]));
 	mocked.getAdminDigest.mockResolvedValue(digest());
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.resetAllMocks(); });
@@ -81,6 +81,9 @@ describe("digests in the admin", () => {
 		expect(text()).toContain("waiting 2");
 		expect(text()).toContain("Monday 19 October, 09:00");
 		expect(text()).toContain("1,024");
+		// What the library's settings make of a digest: an editor publishes it, and readers are not told who.
+		expect(text()).toContain("An editor publishes it");
+		expect(text()).toContain("No name");
 		expect([...container.querySelectorAll("a")].find((link) => link.textContent === "Digest settings")?.href).toBe("https://openscholar.example/libraries/amber/configuration?section=notifications");
 		await press(button(/^In review/)[0]);
 		expect(mocked.getAdminDigests).toHaveBeenLastCalledWith({ page: 1, show: "review", sort: "newest" });
@@ -106,7 +109,7 @@ describe("digests in the admin", () => {
 
 	it("offers an Editor the way back and publishing, and says what publishing does", async () => {
 		mocked.getAdminDigest.mockResolvedValue(digest({ state: "review" }));
-		mocked.moveAdminDigest.mockResolvedValue(digest({ state: "published", revision: 4, published: words, publishedAt: "2026-10-12T15:00:00.000Z", checkedBy: { id: "user_editor", name: "Gugulethu Dube", photo: null } }));
+		mocked.moveAdminDigest.mockResolvedValue(digest({ state: "published", revision: 4, published: words, publishedAt: "2026-10-12T15:00:00.000Z", checkedBy: { id: "user_editor", name: "Gugulethu Dube", photo: null, role: "editor" } }));
 		await show(ID, "editor");
 		expect(button("Send back")).toHaveLength(1);
 		// Never published, so publishing emails it.
@@ -181,6 +184,24 @@ describe("digests in the admin", () => {
 		await type("Heat, harvests, water and work");
 		// The next save goes out from the revision the first one returned, not the one the page was loaded with.
 		await vi.waitFor(() => expect(mocked.saveAdminDigest).toHaveBeenLastCalledWith(ID, 4, { ...words, title: "Heat, harvests, water and work" }), { timeout: 3000 });
+	});
+
+	it("previews the editor's note only when readers will see it", async () => {
+		const noted = { ...words, note: "Start with the parks study." };
+		mocked.getAdminDigest.mockResolvedValue(digest({ words: noted }));
+		await show(ID, "editor");
+		await press(button("Preview")[0]);
+		expect(container.querySelector("main figure")?.textContent).toContain("Start with the parks study.");
+		// Signed as readers will see it: the name and role of the person about to publish.
+		expect(container.querySelector("main figcaption")?.textContent).toBe("Gugulethu DubeEditor");
+		await act(async () => root.unmount());
+		root = createRoot(container);
+		// A library that does not name who checks its digests shows readers no note, and says so where it is written.
+		mocked.getAdminDigest.mockResolvedValue(digest({ words: noted, attribution: false }));
+		await show(ID, "editor");
+		expect(container.querySelector<HTMLTextAreaElement>('aside textarea[placeholder^="Not shown to readers"]')).not.toBeNull();
+		await press(button("Preview")[0]);
+		expect(container.querySelector("main figure")).toBeNull();
 	});
 
 	it("shows an edition AI has not written yet, or could not write, with no text to act on", async () => {

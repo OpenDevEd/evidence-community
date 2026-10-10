@@ -8,7 +8,7 @@ import { ItemMutationConflictError, ItemNotFoundError } from "@/lib/admin/native
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { checkedDigestDraft, citedKeys, digestDraftSchema } from "./digest-text";
 import { getNextDigestEdition } from "./public";
-import type { DigestDraft, DigestEventKind, DigestPerson } from "./types";
+import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner } from "./types";
 
 /**
  * A digest in the admin. AI writes it; the library's team reads it, changes it, and an Editor or Owner publishes it.
@@ -135,6 +135,8 @@ async function digestOverview(db: Database, config: LibraryServerConfig) {
   return {
     sending: config.notifications.enabled,
     paused: config.notifications.enabled && config.notifications.pausedSince !== null,
+    approval: config.notifications.approval,
+    attribution: config.notifications.attribution,
     next: next && { day: next.weekday, time: next.time },
     subscribers,
   };
@@ -166,6 +168,8 @@ export async function readAdminDigest(db: Database | DatabaseTransaction, config
     // An edition the older runtime published during an update has no record of AI's text: while nobody has checked it, what readers have is AI's.
     ai: edition.ai ?? (published && !edition.checkedBy ? { title: published.title, summary: published.summary, markdown: published.markdown } : null),
     checkedBy: edition.checkedBy,
+    // Whether readers are told who checked it, and so whether they see the editor's note.
+    attribution: config.notifications.attribution,
     events: events.map(event => ({ kind: event.kind, at: event.at.toISOString(), actor: event.actor })),
     sent: sent.readers ? { readers: sent.readers, at: new Date(sent.at!).toISOString() } : null,
   };
@@ -224,6 +228,11 @@ async function recordEdit(tx: DatabaseTransaction, editionId: string, actor: Dig
   else await recordDigestEvent(tx, editionId, "edited", person(actor));
 }
 const person = ({ id, name, photo }: DigestActor): DigestPerson => ({ id, name, photo });
+/** Only an Editor or Owner publishes, so only they sign. */
+function signer(actor: DigestActor): DigestSigner {
+  if (actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can publish a digest.");
+  return { ...person(actor), role: actor.role };
+}
 
 export type DigestAction = "submit" | "withdraw" | "return" | "publish";
 
@@ -256,10 +265,11 @@ async function reviewStep(tx: DatabaseTransaction, edition: Edition, action: Exc
 
 /**
  * Publishes the draft: readers now see it, signed by the person who published it. The first time an edition is
- * published it is emailed; publishing changes to an edition readers already have sends nothing.
+ * published it is emailed, unless it was written by hand for a past period; publishing changes to an edition readers
+ * already have sends nothing.
  */
 async function publishDraft(tx: DatabaseTransaction, config: LibraryServerConfig, edition: Edition, actor: DigestActor) {
-  requirePublisher(actor, "publish a digest");
+  const checkedBy = signer(actor);
   // The text was checked when a person saved it; what AI wrote went through the writer's own checks.
   const words = digestDraftSchema.parse(workingWords(edition));
   await assertCitationsPublic(tx, config, edition, words.markdown);
@@ -268,10 +278,10 @@ async function publishDraft(tx: DatabaseTransaction, config: LibraryServerConfig
   const before = publishedWords(edition);
   const ai = edition.ai ?? (before && !edition.checkedBy ? { title: before.title, summary: before.summary, markdown: before.markdown } : null);
   await tx.update(notificationEdition).set({
-    ...text, note: note || null, ai, draft: null, reviewRequestedAt: null, checkedBy: person(actor),
+    ...text, note: note || null, ai, draft: null, reviewRequestedAt: null, checkedBy,
     publishedAt: edition.publishedAt ?? new Date(), draftRevision: edition.draftRevision + 1,
   }).where(eq(notificationEdition.id, edition.id));
-  if (!edition.publishedAt) await queueEditionDeliveries(tx, edition, new Date());
+  if (!edition.publishedAt && !edition.silent) await queueEditionDeliveries(tx, edition, new Date());
   await recordDigestEvent(tx, edition.id, "published", person(actor));
 }
 
