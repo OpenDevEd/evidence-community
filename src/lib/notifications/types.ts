@@ -17,5 +17,7 @@ export type DigestText = { title: string; summary: string; markdown: string };
 export type DigestDraft = DigestText & { note?: string };
 /** Someone on the library's team as they were when they acted: their OpenScholar account, name and photo. */
 export type DigestPerson = { id: string; name: string; photo: string | null };
+/** The Editor or Owner who published an edition, as readers are told when the library names who checks its digests. */
+export type DigestSigner = DigestPerson & { role: "editor" | "owner" };
 /** A step in an edition's history. AI writes; the rest are a person's. */
 export type DigestEventKind = "written" | "edited" | "submitted" | "withdrawn" | "returned" | "published";

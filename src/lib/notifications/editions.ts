@@ -326,16 +326,17 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
       const { model, reasoning, ...words } = output;
       const ai = words.markdown === null ? null : { ...words, markdown: words.markdown };
       // A digest readers already have is rewritten as a draft: what they see stays until the new text is published.
-      const rewritten = edition.publishedAt !== null;
+      // So is one the library wants a person to approve first: it waits in the admin and is emailed when published.
+      const held = edition.publishedAt !== null || (ai !== null && config.notifications.approval);
       const saved = await tx.update(notificationEdition)
         .set({
           model, reasoning, ai, nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null,
-          ...(rewritten ? { draft: ai, reviewRequestedAt: null, draftRevision: edition.draftRevision + 1 } : { ...words, publishedAt: new Date() }),
+          ...(held ? { draft: ai, reviewRequestedAt: null, draftRevision: edition.draftRevision + 1 } : { ...words, publishedAt: new Date() }),
         })
         .where(owned).returning({ id: notificationEdition.id });
       if (!saved.length) return;
       if (ai) await recordDigestEvent(tx, edition.id, "written", null);
-      if (!rewritten) await queueEditionDeliveries(tx, edition);
+      if (!held) await queueEditionDeliveries(tx, edition);
     });
   } catch (error) {
     const attempts = edition.attempts + 1;
