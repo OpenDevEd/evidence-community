@@ -52,6 +52,18 @@ describe("analyzePhase on a page load", () => {
 		]);
 	});
 
+	it("accepts a number that counts up in place, since the line keeps its words", () => {
+		const findings = analyzePhase(
+			[
+				frame(400, { textAdded: ["Up to 4 credits"] }),
+				frame(416, { textRemoved: ["Up to 4 credits"], textAdded: ["Up to 126 credits"] }),
+				frame(432, { textRemoved: ["Up to 126 credits"], textAdded: ["Up to 1,250 credits"] }),
+			],
+			load,
+		);
+		expect(findings).toEqual([]);
+	});
+
 	it("reports a large element that is removed moments after it appears, but not a small one", () => {
 		const findings = analyzePhase(
 			[

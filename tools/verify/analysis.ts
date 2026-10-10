@@ -83,11 +83,20 @@ function textShown(history: TextHistory, text: string, t: number): Finding[] {
 	return gone !== undefined && t - gone <= FLASH_RETURN_MS ? [{ kind: "text-flash", text, from: gone, to: t }] : [];
 }
 
+// A line with its numbers blanked. A number counting up or down changes its
+// line every frame: the same words with new numbers is one line changing its
+// value, not text blinking.
+const words = (text: string) => text.replace(/\d+(?:[.,]\d+)*/g, "0");
+const besides = (lines: string[], others: string[]) => {
+	const counting = new Set(others.map(words));
+	return lines.filter((text) => !counting.has(words(text)));
+};
+
 function textBlinks(frames: Frame[], since: number): Finding[] {
 	const history: TextHistory = { shownAt: new Map(), goneAt: new Map() };
 	const findings = frames.flatMap((frame) => [
-		...frame.textRemoved.flatMap((text) => textGone(history, text, frame.t, since)),
-		...frame.textAdded.flatMap((text) => textShown(history, text, frame.t)),
+		...besides(frame.textRemoved, frame.textAdded).flatMap((text) => textGone(history, text, frame.t, since)),
+		...besides(frame.textAdded, frame.textRemoved).flatMap((text) => textShown(history, text, frame.t)),
 	]);
 	// Text hidden and then shown again is one flash, not also a blink.
 	const flashes = findings.filter((finding) => finding.kind === "text-flash");
