@@ -1706,6 +1706,9 @@ const notificationsSchema = z.object({
 	enabled: z.boolean().default(false),
 	// What a digest covers: publications dated in its period, or publications added to the library in it.
 	digestCovers: z.enum(["published", "added"]).default("published"),
+	// When digests were paused. No scheduled digest is prepared while it is set, and the first one after it covers
+	// everything since the last digest.
+	pausedSince: utcTimestampSchema.nullable().default(null),
 	schedule: z.discriminatedUnion("frequency", [
 		z.object({frequency: z.literal("weekly"), weekday: z.number().int().min(0).max(6), ...digestTimeFields}).strict(),
 		z.object({frequency: z.literal("monthly"), dayOfMonth: z.number().int().min(1).max(31), ...digestTimeFields}).strict(),

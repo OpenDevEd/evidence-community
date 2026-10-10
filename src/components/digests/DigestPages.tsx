@@ -41,7 +41,7 @@ function DigestContent({ edition }: { edition: DigestEdition }) {
   return <AIMarkdown>{edition.markdown}</AIMarkdown>;
 }
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
-type DigestSettings = {libraryName: string; enabled: boolean; timezone: string; schedule: string};
+type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are paused, so no date is promised for the next one. */ paused: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
 type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>};
 export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
@@ -55,7 +55,7 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 export default function DigestPages(props: ArchiveProps | EditionProps | PreferencesProps) {
   const locale = useLocale(); const base = "/digests";
   const {identity, notifications} = useLibraryConfig();
-  const settings = {libraryName: identity.name, enabled: notifications.enabled, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
+  const settings = {libraryName: identity.name, enabled: notifications.enabled, paused: notifications.pausedSince !== null, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale)};
   if (props.view === "preferences") return <DigestPreferences {...props} settings={settings} base={base} />;
   if (props.view === "archive") return <DigestArchive {...props} settings={settings} base={base} locale={locale} />;
   return <DigestDetail {...props} settings={settings} base={base} />;
@@ -80,7 +80,7 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">Summaries of new publications in this library.</p>
-          {settings.enabled && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
+          {settings.enabled && !settings.paused && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
         </div>
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>

@@ -369,6 +369,62 @@ it("covers what was published in the period whenever it was added, and lists a r
   });
 }, 120_000);
 
+it("skips scheduled digests while paused, then covers everything since the last one", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const paused = {...publishedConfig, notifications: {...publishedConfig.notifications, pausedSince: "2026-09-13T08:00:00.000Z"}};
+    const digests = () => db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    const enabledAt = new Date("2026-09-09T00:00:00Z");
+    await prepareNotificationEditions(db, publishedConfig, enabledAt);
+    await dated(client, "PAUSAAAA", "2026-09-10");
+    await dated(client, "PAUSAAAB", "2026-09-16");
+    await dated(client, "PAUSAAAC", "2026-09-24");
+    for (const monday of ["2026-09-14T09:00:00Z", "2026-09-21T09:00:00Z"]) {
+      expect(await prepareNotificationEditions(db, paused, new Date(monday))).toEqual({status: "empty"});
+    }
+    expect(await digests()).toHaveLength(0);
+    // The place is kept and the schedule moves on, so no date is promised and nothing is owed for the skipped weeks.
+    expect((await db.select().from(notificationState))[0]).toMatchObject({digestThrough: enabledAt, nextDigestAt: new Date("2026-09-28T09:00:00Z")});
+    expect(await getNextDigestEdition(db, paused, "en-GB")).toBeNull();
+
+    // Resuming mid-week sends nothing until the next scheduled time.
+    expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-22T12:00:00Z"))).toEqual({status: "empty"});
+    expect(await digests()).toHaveLength(0);
+    expect(await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-28T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 3});
+    const [edition] = await digests();
+    expect(edition).toMatchObject({windowStart: enabledAt, windowEnd: new Date("2026-09-28T09:00:00Z")});
+    expect(edition.publications.map(publication => publication.key).sort()).toEqual(["PAUSAAAA", "PAUSAAAB", "PAUSAAAC"]);
+  });
+}, 120_000);
+
+it("reaches a month back after a long pause, and never carries older additions into a later digest", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    const paused = {...config, notifications: {...config.notifications, pausedSince: "2026-09-13T08:00:00.000Z"}};
+    const digests = () => db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest")).orderBy(notificationEdition.windowEnd);
+    const added = async (title: string, at: string) => {
+      const draft = await createNativeItemDraft(db, {itemType: "Report", title});
+      await publishItemDraft(db, draft.itemKey);
+      await client.query('UPDATE "notificationItem" SET "firstPublishedAt" = $1 WHERE "itemKey" = $2', [at, draft.itemKey]);
+      return draft.itemKey;
+    };
+    await prepareNotificationEditions(db, config, new Date("2026-06-01T00:00:00Z"));
+    const old = await added("Added early in the pause", "2026-06-10T10:00:00Z");
+    const recent = await added("Added in the last month", "2026-09-20T10:00:00Z");
+    expect(await prepareNotificationEditions(db, paused, new Date("2026-09-21T09:00:00Z"))).toEqual({status: "empty"});
+    expect(await digests()).toHaveLength(0);
+
+    expect(await prepareNotificationEditions(db, config, new Date("2026-09-28T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 1});
+    const [first] = await digests();
+    expect(first).toMatchObject({windowStart: new Date("2026-08-27T09:00:00Z"), windowEnd: new Date("2026-09-28T09:00:00Z")});
+    expect(first.publications.map(publication => publication.key)).toEqual([recent]);
+    // The older addition is settled with this digest, so the next one does not pick it up.
+    const [settled] = await db.select().from(notificationItem).where(eq(notificationItem.itemKey, old));
+    expect(settled.digestEditionId).toBe(first.id);
+    const next = await added("Added the week after", "2026-09-30T10:00:00Z");
+    expect(await prepareNotificationEditions(db, config, new Date("2026-10-05T09:00:00Z"))).toMatchObject({status: "queued", publicationCount: 1});
+    expect((await digests())[1].publications.map(publication => publication.key)).toEqual([next]);
+  });
+}, 120_000);
+
 it("counts a preprint and its article as one publication and lists the article", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
