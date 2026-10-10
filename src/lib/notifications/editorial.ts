@@ -42,11 +42,20 @@ function workingWords(edition: Edition): Words | null {
   return edition.draft ? { ...edition.draft, note: edition.draft.note ?? edition.note ?? "" } : publishedWords(edition);
 }
 const sameWords = (a: Words, b: Words) => a.title === b.title && a.summary === b.summary && a.markdown === b.markdown && a.note === b.note;
-/** A draft a person has changed: it no longer reads as AI wrote it, or it carries a note of its own. */
-export function draftIsEdited(edition: Pick<Edition, "draft" | "ai" | "note">) {
+/**
+ * A draft a person has changed, which a rewrite must not replace: it no longer reads as AI wrote it, or it carries a
+ * note of its own. On an edition readers have, a draft that reads as AI wrote it is either a rewrite nobody has
+ * touched or a person's choice to go back to AI's words. The history tells them apart: a person edited it since AI wrote.
+ */
+export async function draftIsEdited(tx: DatabaseTransaction, edition: Pick<Edition, "id" | "draft" | "ai" | "note" | "publishedAt">) {
   const { draft, ai } = edition;
   if (!draft) return false;
-  return !ai || draft.title !== ai.title || draft.summary !== ai.summary || draft.markdown !== ai.markdown || (draft.note ?? edition.note ?? "") !== (edition.note ?? "");
+  if (!ai || draft.title !== ai.title || draft.summary !== ai.summary || draft.markdown !== ai.markdown || (draft.note ?? edition.note ?? "") !== (edition.note ?? "")) return true;
+  if (!edition.publishedAt) return false;
+  const [last] = await tx.select({ kind: notificationEditionEvent.kind }).from(notificationEditionEvent)
+    .where(and(eq(notificationEditionEvent.editionId, edition.id), inArray(notificationEditionEvent.kind, ["written", "edited"])))
+    .orderBy(desc(notificationEditionEvent.at), desc(notificationEditionEvent.id)).limit(1);
+  return last?.kind === "edited";
 }
 
 export async function recordDigestEvent(tx: DatabaseTransaction, editionId: string, kind: DigestEventKind, actor: DigestPerson | null) {
@@ -175,10 +184,16 @@ async function lockEdition(tx: DatabaseTransaction, id: string, expectedRevision
   return edition;
 }
 
-/** Every citation must lead to a publication readers can open. */
-async function assertCitationsPublic(tx: DatabaseTransaction, config: LibraryServerConfig, markdown: string) {
+/** Every citation must be one of the edition's publications, and one readers can open. */
+async function assertCitationsPublic(tx: DatabaseTransaction, config: LibraryServerConfig, edition: Pick<Edition, "publications">, markdown: string) {
   const keys = citedKeys(markdown);
   if (!keys.length) return;
+  const listed = new Set(edition.publications.map(publication => publication.key));
+  const outside = keys.filter(key => !listed.has(key));
+  if (outside.length) {
+    const message = `${outside.length === 1 ? "A citation points" : `${outside.length} citations point`} to a publication that is not in this digest: ${outside.join(", ")}.`;
+    throw new AdminValidationError(message, { markdown: message });
+  }
   const found = await tx.select({ key: item.key }).from(item).where(and(inArray(item.key, keys), publicParentVisibility(tx, config.content.tags.hidden)));
   const missing = keys.filter(key => !found.some(row => row.key === key));
   if (missing.length) {
@@ -194,7 +209,7 @@ export async function saveDigestDraft(db: Database, config: LibraryServerConfig,
     const edition = await lockEdition(tx, input.id, input.expectedRevision);
     const current = workingWords(edition);
     if (!current) throw new AdminValidationError("This digest has no text to change yet.");
-    await assertCitationsPublic(tx, config, words.markdown);
+    await assertCitationsPublic(tx, config, edition, words.markdown);
     const published = publishedWords(edition);
     const unchanged = published !== null && sameWords(words, published);
     await tx.update(notificationEdition).set({
@@ -256,7 +271,7 @@ async function publishDraft(tx: DatabaseTransaction, config: LibraryServerConfig
   const checkedBy = signer(actor);
   // The text was checked when a person saved it; what AI wrote went through the writer's own checks.
   const words = digestDraftSchema.parse(workingWords(edition));
-  await assertCitationsPublic(tx, config, words.markdown);
+  await assertCitationsPublic(tx, config, edition, words.markdown);
   const { note, ...text } = words;
   // The older runtime kept no record of AI's text. Before a person's text replaces what it published unchecked, that text is kept as AI's.
   const before = publishedWords(edition);

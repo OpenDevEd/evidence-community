@@ -89,11 +89,14 @@ it("emails an edition the first time it is published and never for a later chang
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
     await publication(client, "PUBAAAAA", "2026-08-03");
-    await requestSubscription(db, { email: "reader@example.org", digest: true, instant: false });
-    const [subscriber] = await db.select().from(notificationSubscriber);
-    await confirmSubscription(db, subscriber.token, new Date("2026-07-01T00:00:00Z"));
+    // One reader was subscribed when the period ended, the other joined while the edition waited for an editor.
+    for (const [email, confirmed] of [["reader@example.org", "2026-07-01T00:00:00Z"], ["later@example.org", "2026-09-05T00:00:00Z"]] as const) {
+      await requestSubscription(db, { email, digest: true, instant: false });
+      const [subscriber] = await db.select().from(notificationSubscriber).where(eq(notificationSubscriber.email, email));
+      await confirmSubscription(db, subscriber.token, new Date(confirmed));
+    }
     // An edition AI has written that waits for an editor.
-    const [edition] = await db.insert(notificationEdition).values({ stream: "digest", windowStart: period.start, windowEnd: period.end, publications: [], ai: written, draft: written, nextAttemptAt: null }).returning();
+    const [edition] = await db.insert(notificationEdition).values({ stream: "digest", windowStart: period.start, windowEnd: period.end, publications: [{ key: "PUBAAAAA" }] as never, ai: written, draft: written, nextAttemptAt: null }).returning();
     expect(await getDigestEdition(db, config, "en-GB", edition.id)).toBeUndefined();
     const deliveries = () => db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, edition.id));
 
@@ -101,12 +104,13 @@ it("emails an edition the first time it is published and never for a later chang
     expect(first).toMatchObject({ state: "published", checkedBy: { name: "Gugulethu Dube" } });
     expect(first.publishedAt).not.toBeNull();
     expect(await getDigestEdition(db, config, "en-GB", edition.id)).toMatchObject(written);
-    expect((await deliveries()).map(delivery => delivery.status)).toEqual(["queued"]);
+    // Everyone subscribed when it is published gets it.
+    expect((await deliveries()).map(delivery => delivery.status)).toEqual(["queued", "queued"]);
 
     await saveDigestDraft(db, config, { id: edition.id, expectedRevision: 1, words: { ...written, title: "August, corrected", note: "" } }, editor);
     const second = await moveDigest(db, config, { id: edition.id, expectedRevision: 2, action: "publish" }, editor);
     expect(second.publishedAt).toBe(first.publishedAt);
-    expect(await deliveries()).toHaveLength(1);
+    expect(await deliveries()).toHaveLength(2);
   });
 }, 120_000);
 
@@ -120,7 +124,13 @@ it("refuses text a digest cannot hold, with the reason", async () => {
     await expect(save("### Too deep\n\nText.")).rejects.toThrow("one level of heading");
     await expect(save("- a list")).rejects.toThrow("headings, paragraphs, bold and citations only");
     // A citation has to lead somewhere readers can go.
-    await expect(save("See [Nobody, 2026](/lib/ZZZZZZZZ).")).rejects.toThrow("readers cannot open: ZZZZZZZZ");
+    await client.query(`UPDATE item SET "deleted" = 1 WHERE key = 'PUBAAAAB'`);
+    await expect(save("See [Mills, 2026](/lib/PUBAAAAB).")).rejects.toThrow("readers cannot open: PUBAAAAB");
+    // And it has to be one of this edition's publications, which is all the Cite list offers.
+    await publication(client, "PUBAAAAC", "2026-07-03");
+    await expect(save("See [Mills, 2026](/lib/PUBAAAAC).")).rejects.toThrow("not in this digest: PUBAAAAC");
+    // A card or highlight directive is something the reader's page draws for AI answers; the email would show it raw.
+    await expect(save("[RESOURCE /lib/PUBAAAAA RESOURCE/]")).rejects.toThrow("Cite a publication with the Cite button");
     await expect(save(edited.markdown, { title: "Two\nlines" })).rejects.toThrow("Keep the title on one line");
     await expect(save(edited.markdown, { title: "  " })).rejects.toThrow();
     expect((await readAdminDigest(db, config, id)).state).toBe("published");
@@ -146,6 +156,11 @@ it("does not rewrite a digest under a person's unpublished changes, and replaces
       await saveDigestDraft(db, config, { id, expectedRevision: 2, words: edited }, creator);
       await expect(prepareDigestForPeriod(db, config, period)).rejects.toThrow("changes that are not published");
       expect((await readAdminDigest(db, config, id)).words).toEqual(edited);
+      // Going back to AI's words after publishing their own is a person's change too.
+      await moveDigest(db, config, { id, expectedRevision: 3, action: "publish" }, editor);
+      const back = await saveDigestDraft(db, config, { id, expectedRevision: 4, words: { ...rewrite, note: edited.note } }, creator);
+      expect(back).toMatchObject({ state: "draft", ai: rewrite });
+      await expect(prepareDigestForPeriod(db, config, period)).rejects.toThrow("changes that are not published");
     } finally {
       openScholar.mockRestore();
     }
@@ -220,13 +235,17 @@ it("lists every edition a page at a time with where each stands", async () => {
 it("gives every digest published before histories its first step: AI wrote it when it was published", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const at = new Date("2026-09-01T00:05:00Z");
-    const [published] = await db.insert(notificationEdition).values([
+    const [published, older] = await db.insert(notificationEdition).values([
       { stream: "digest", windowStart: period.start, windowEnd: period.end, publications: [], ...written, ai: written, publishedAt: at, nextAttemptAt: null },
+      // One the older runtime published during an update kept no copy of AI's text.
+      { stream: "digest", windowStart: new Date("2026-07-01T00:00:00Z"), windowEnd: period.start, publications: [], ...written, publishedAt: at, nextAttemptAt: null },
       { stream: "digest", windowStart: period.end, windowEnd: new Date("2026-10-01T00:00:00Z"), publications: [] },
     ]).returning();
     const backfill = readFileSync("drizzle/0078_digest-editorial.sql", "utf8").split("--> statement-breakpoint").filter(statement => /^\s*(--.*\n\s*)*INSERT/.test(statement));
     expect(backfill).toHaveLength(1);
     for (const statement of backfill) await client.query(statement);
-    expect(await db.select().from(notificationEditionEvent)).toMatchObject([{ editionId: published.id, kind: "written", at, actor: null }]);
+    const events = await db.select().from(notificationEditionEvent);
+    expect(events).toHaveLength(2);
+    for (const edition of [published, older]) expect(events).toContainEqual(expect.objectContaining({ editionId: edition.id, kind: "written", at, actor: null }));
   });
 }, 120_000);
