@@ -12,7 +12,8 @@ type Delivery = typeof notificationDelivery.$inferSelect;
 type OwnedDelivery = ReturnType<typeof and>;
 
 function canSendEdition(subscriber: Subscriber, edition: Edition) {
-  if (!subscriber.confirmedAt || !edition.publishedAt) return false;
+  // An edition that is being written again emails nobody, even through a delivery claimed before the rewrite began.
+  if (!subscriber.confirmedAt || !edition.publishedAt || edition.nextAttemptAt) return false;
   return edition.stream === "digest" ? subscriber.digest : subscriber.instant;
 }
 

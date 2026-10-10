@@ -515,6 +515,11 @@ it("writes a past period's digest by publication date, rewrites it as a draft wh
       expect(written.publishedAt).toBeInstanceOf(Date);
       await dated(client, "PUBAAAAC", "2026-08-20");
       expect(await prepareDigestForPeriod(db, publishedConfig, period)).toEqual({...first, publicationCount: 2});
+      // A delivery claimed just before the rewrite began escaped that cancellation; it is refused when it is sent.
+      const [rewriting0] = await db.select({id: notificationEdition.id}).from(notificationEdition);
+      await client.query(`UPDATE "notificationDelivery" SET status = 'queued', "nextAttemptAt" = now() WHERE "editionId" = $1`, [rewriting0.id]);
+      while (await deliverNotification(db, publishedConfig));
+      expect((await db.select().from(notificationDelivery).where(eq(notificationDelivery.editionId, rewriting0.id))).map(delivery => delivery.status)).toEqual(["skipped"]);
       // While the rewrite waits, readers still have the edition.
       const [rewriting] = await db.select().from(notificationEdition);
       expect(rewriting).toMatchObject({windowStart: period.start, windowEnd: period.end, publicationCount: 2, publishedAt: written.publishedAt, ...words});
