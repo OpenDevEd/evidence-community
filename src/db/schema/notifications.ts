@@ -25,8 +25,9 @@ export const notificationState = pgTable("notificationState", {
   digestThrough: date("digestThrough"),
   nextDigestAt: date("nextDigestAt"),
   schedule: text("schedule").notNull(),
-  // The worker has seen the library paused, so the next cycle that finds it running knows the pause just ended.
-  digestPaused: boolean("digestPaused").notNull().default(false),
+  // "paused" once the worker has seen the library paused, then "resumed" from the end of the pause until the first
+  // digest after it. That digest reaches at most a month back.
+  digestPause: text("digestPause").$type<"paused" | "resumed">(),
   // Additions first published up to here are in no digest: they are older than a digest reaches after a long pause.
   digestFloor: date("digestFloor"),
 }, table => [check("notificationState_singleton", sql`${table.singleton} = true`)]);

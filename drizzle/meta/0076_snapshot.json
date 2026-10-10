@@ -1,5 +1,5 @@
 {
-  "id": "5570eaa1-2fef-4a58-8738-b15c65a04510",
+  "id": "07ac2bb1-69a8-452b-ac61-3be72e379a7d",
   "prevId": "6ff6cf7f-c6eb-4814-b34d-b360ae115ed9",
   "version": "7",
   "dialect": "postgresql",
@@ -535,12 +535,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "digestPaused": {
-          "name": "digestPaused",
-          "type": "boolean",
+        "digestPause": {
+          "name": "digestPause",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": false
+          "notNull": false
         },
         "digestFloor": {
           "name": "digestFloor",

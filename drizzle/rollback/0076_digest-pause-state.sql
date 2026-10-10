@@ -3,5 +3,5 @@
 -- forgets that the library was paused and where its digests may start: a
 -- paused library then sends its overdue digest, and additions older than a
 -- month can return to a digest.
-ALTER TABLE "notificationState" DROP COLUMN "digestPaused";--> statement-breakpoint
+ALTER TABLE "notificationState" DROP COLUMN "digestPause";--> statement-breakpoint
 ALTER TABLE "notificationState" DROP COLUMN "digestFloor";

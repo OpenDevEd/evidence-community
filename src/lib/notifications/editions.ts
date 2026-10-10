@@ -195,34 +195,46 @@ type State = typeof notificationState.$inferSelect;
 /** What a schedule change, a pause or its end changes about when the next scheduled digest is due. */
 function scheduleChange(config: LibraryServerConfig, state: State, now: Date) {
   const paused = config.notifications.pausedSince !== null;
-  const resumed = state.digestPaused && !paused;
-  const patch: Partial<State> = paused === state.digestPaused ? {} : { digestPaused: paused };
+  const resumed = !paused && state.digestPause === "paused";
+  const patch: Partial<State> = {};
+  if (paused && state.digestPause !== "paused") patch.digestPause = "paused";
+  if (resumed) patch.digestPause = "resumed";
   if (resumed || !isDeepStrictEqual(JSON.parse(state.schedule), config.notifications.schedule)) {
     Object.assign(patch, { schedule: JSON.stringify(config.notifications.schedule), nextDigestAt: nextDigestDate(config.notifications.schedule, now) });
   }
-  return { paused, resumed, patch };
+  return { paused, patch };
 }
 
-/** The digest that ends a pause reaches a month back from its end. When the last digest is older, it starts there. */
-function reachChange(state: State, end: Date | null): Partial<State> {
-  if (!end) return {};
+/**
+ * The first digest after a pause reaches a month back from its end. When the last digest is older, it starts there.
+ * Once the pause is over, that digest is the last one to be cut.
+ */
+function reachChange(state: State, end: Date, pause: "paused" | "resumed"): Partial<State> {
   const reach = new Date(end.getTime() - DIGEST_REACH_MS);
-  return state.digestThrough! < reach ? { digestThrough: reach, digestFloor: reach } : {};
+  return { ...(state.digestThrough! < reach ? { digestThrough: reach, digestFloor: reach } : {}), ...(pause === "resumed" ? { digestPause: null } : {}) };
+}
+
+/** Where the digest prepared in this cycle ends, when one is. */
+function preparedDigestEnd(digestAt: Date | null, now: Date, manualDigest: boolean) {
+  if (manualDigest) return now;
+  return digestAt && digestAt <= now ? digestAt : null;
 }
 
 /**
  * Where the digest stands after a schedule change, a pause or its end: the state as it now is, and when the next
  * scheduled digest is due (never, while paused). A paused library keeps its place, so the first digest after the pause
- * covers everything since the last one, up to a month back. That digest goes out at the next scheduled time after the
- * pause ends, not for a time that passed during it. A digest an owner asks for by hand is written even while paused.
+ * covers everything since the last one, up to a month back from when that digest ends. The scheduled one goes out at
+ * the next scheduled time after the pause ends, not for a time that passed during it. A digest an owner asks for by
+ * hand is written even while paused.
  */
 async function digestCursor(tx: DatabaseTransaction, config: LibraryServerConfig, state: State, now: Date, manualDigest: boolean) {
-  const { paused, resumed, patch } = scheduleChange(config, state, now);
-  // The digest that ends the pause: the next scheduled one, or one asked for by hand during it.
-  const end = resumed ? patch.nextDigestAt! : paused && manualDigest ? now : null;
-  Object.assign(patch, reachChange(state, end));
+  const { paused, patch } = scheduleChange(config, state, now);
+  const digestAt = paused ? null : patch.nextDigestAt ?? state.nextDigestAt!;
+  const end = preparedDigestEnd(digestAt, now, manualDigest);
+  const pause = "digestPause" in patch ? patch.digestPause : state.digestPause;
+  if (end && pause) Object.assign(patch, reachChange(state, end, pause));
   const current = Object.keys(patch).length ? (await tx.update(notificationState).set(patch).returning())[0] : state;
-  return { state: current, digestAt: paused ? null : current.nextDigestAt! };
+  return { state: current, digestAt };
 }
 
 /** Each window and its metadata snapshot are saved together before any provider call. */
@@ -242,7 +254,7 @@ export async function prepareNotificationEditions(
     }
     if (!state.enabled) {
       const enabledAt = new Date(Math.min(now.getTime(), new Date(config.updatedAt).getTime()));
-      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, digestThrough: enabledAt, nextDigestAt: nextDigestDate(config.notifications.schedule, enabledAt), schedule, digestPaused: false, digestFloor: null }).returning();
+      [state] = await tx.update(notificationState).set({ enabled: true, enabledAt, hourlyThrough: enabledAt, digestThrough: enabledAt, nextDigestAt: nextDigestDate(config.notifications.schedule, enabledAt), schedule, digestPause: null, digestFloor: null }).returning();
       if (!manualDigest) return { status: "empty" };
     }
     const cursor = await digestCursor(tx, config, state, now, manualDigest);
