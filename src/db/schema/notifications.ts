@@ -80,6 +80,9 @@ export const notificationEdition = pgTable("notificationEdition", {
   checkedBy: jsonb("checkedBy").$type<DigestSigner>(),
   // Written by hand for a past period: emailed to nobody, whenever it is published.
   silent: boolean("silent").notNull().default(false),
+  // When this attempt first asked OpenScholar for the digest. Just before, the stored publications take on what
+  // their records have been read as; they then stay as sent while the answer is awaited, since a changed request starts the writer again.
+  requestedAt: date("requestedAt"),
   model: text("model"),
   reasoning: text("reasoning"),
   attempts: integer("attempts").notNull().default(0),

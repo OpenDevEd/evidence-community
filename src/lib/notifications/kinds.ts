@@ -34,14 +34,31 @@ export async function publicationMarks(db: DatabaseTransaction, keys: string[]) 
   return new Map(rows.map((row): [string, Marks] => [row.key, { candidate: row.candidate, ...(row.kind ? { kind: row.kind } : {}) }]));
 }
 
+// The edition's stored publications, each with what its record has been read as. Built in the database from what is
+// stored now, so a list that was replaced while an answer was on its way is never put back.
+const withKinds = sql`(
+  SELECT coalesce(jsonb_agg(CASE WHEN read."kind" IS NULL THEN stored.entry ELSE stored.entry || jsonb_build_object('kind', read."kind") END ORDER BY stored.position), '[]'::jsonb)
+  FROM jsonb_array_elements("notificationEdition"."publications") WITH ORDINALITY AS stored(entry, position)
+  LEFT JOIN "notificationItemKind" read ON read."itemKey" = stored.entry->>'key')`;
+
 /**
  * Keeps what the edition's likely reviews were read as: with each record, so it is never read again, and on the
- * edition's stored publications, which the next request sends. Answers for records the edition does not list are dropped.
+ * edition's stored publications, which the next request sends. Answers for records the edition was not asked about are dropped.
  */
 export async function savePublicationKinds(db: Database | DatabaseTransaction, edition: Pick<typeof notificationEdition.$inferSelect, "id" | "publications">, kinds: Record<string, PublicationKind> | undefined) {
   const read = edition.publications.flatMap(publication => (kinds?.[publication.key] ? [{ itemKey: publication.key, kind: kinds[publication.key]! }] : []));
   if (!read.length) return;
-  await db.insert(notificationItemKind).values(read).onConflictDoUpdate({ target: notificationItemKind.itemKey, set: { kind: sql`excluded."kind"`, readAt: sql`now()` } });
-  const publications = edition.publications.map(publication => (kinds?.[publication.key] ? { ...publication, kind: kinds[publication.key] } : publication));
-  await db.update(notificationEdition).set({ publications }).where(eq(notificationEdition.id, edition.id));
+  // The first answer stands: two digests asked at once can both have a record read, and the second must not change what the first was told.
+  await db.insert(notificationItemKind).values(read).onConflictDoNothing();
+  await db.update(notificationEdition).set({ publications: withKinds }).where(eq(notificationEdition.id, edition.id));
+}
+
+/**
+ * Marks the start of an attempt: the stored publications take on what their records have been read as since the
+ * edition was listed, by another digest that covers them too, so none is read twice. Returns them as they are to be sent.
+ */
+export async function startDigestRequest(db: Database, editionId: string) {
+  const [started] = await db.update(notificationEdition).set({ publications: withKinds, requestedAt: sql`now()` })
+    .where(eq(notificationEdition.id, editionId)).returning({ publications: notificationEdition.publications });
+  return started?.publications ?? [];
 }

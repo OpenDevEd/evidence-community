@@ -202,7 +202,7 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
           <DigestContent edition={edition} />
           <section className="mt-10" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
-            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: every meta-analysis and review, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
+            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: meta-analyses and reviews first, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
             <EditionLists edition={edition} cards={cards} path={path} locale={locale} />
           </section>
   </>;

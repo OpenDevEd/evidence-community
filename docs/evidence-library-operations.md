@@ -963,8 +963,10 @@ request, and OpenScholar has Jev read the title and abstract of each candidate
 that has no answer yet. The answers come back as `kinds` (`meta-analysis`,
 `review` or `study`), also when the writer itself fails, and are kept in
 `notificationItemKind` and on the edition's stored publications, which later
-requests send as `kind`. So a record is read once, only when a digest first
-covers it, and never because it sits in the library. A read that fails leaves
+requests send as `kind`. An edition listed before another digest had a record
+read takes that answer on when its own request first goes out
+(`notificationEdition.requestedAt`). So a record is read once, only when a
+digest first covers it, and never because it sits in the library. A read that fails leaves
 the record a likely review: it is listed first and read again with the next
 digest that covers it.
 

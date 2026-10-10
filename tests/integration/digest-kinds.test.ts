@@ -140,3 +140,43 @@ it("lists an edition's meta-analyses and reviews apart from its other publicatio
     expect(plain).not.toHaveProperty("reviews");
   });
 }, 120_000);
+
+it("sends what another digest already had read, and keeps a list that was replaced while the answer was on its way", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
+    await publication(client, "PUBAAAAB", "Drought: a systematic review");
+    // Two periods cover the record, and both digests are listed before either is written.
+    const august = await prepareDigestForPeriod(db, config, period);
+    const overlap = await prepareDigestForPeriod(db, config, { start: new Date("2026-08-05T00:00:00Z"), end: new Date("2026-09-05T00:00:00Z") });
+    if (august.status !== "queued" || overlap.status !== "queued") throw new Error("The editions were not prepared");
+    let late = false;
+    const service = openScholar(() => Response.json({ digest: { ...written("PUBAAAAB"), kinds: { PUBAAAAB: "review" } } }));
+    const answer = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation(async (...request) => {
+      if (late) {
+        // While OpenScholar writes, the period gains a record and the digest is listed again.
+        late = false;
+        await publication(client, "PUBAAAAC", "Maize under heat", STUDY);
+        await prepareDigestForPeriod(db, config, period);
+      }
+      return answer(...request);
+    });
+    try {
+      await generateNotificationEdition(db, config);
+      await generateNotificationEdition(db, config);
+      // The second digest was listed before the record was read, and still sends the answer instead of having it read again.
+      expect(marks(service.sent[0])).toEqual([["PUBAAAAB", true, null]]);
+      expect(marks(service.sent[1])).toEqual([["PUBAAAAB", true, "review"]]);
+
+      await prepareDigestForPeriod(db, config, period);
+      late = true;
+      await generateNotificationEdition(db, config);
+      const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.id, august.editionId));
+      // The answer came back for the old list. The new list stands, and waits to be written.
+      expect(marks(edition.publications)).toEqual([["PUBAAAAB", true, "review"], ["PUBAAAAC", false, null]]);
+      expect(edition.nextAttemptAt).not.toBeNull();
+    } finally {
+      service.restore();
+    }
+  });
+}, 120_000);
