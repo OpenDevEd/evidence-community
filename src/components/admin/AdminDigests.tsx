@@ -65,8 +65,10 @@ const EVENT: Record<DigestEventKind, { icon: IconSvgElement; did: string }> = {
 const muted = "text-black/50 dark:text-white/50";
 const line = "border-black/[0.06] dark:border-white/[0.06]";
 // The period has its own column where the pane is wide enough to leave the title room; the date tile dates the edition everywhere.
-const columns = "grid grid-cols-[minmax(0,1fr)_6rem_7rem_10rem] items-center gap-4 px-4 2xl:grid-cols-[minmax(0,1fr)_11rem_6rem_7rem_11rem]";
+// A phone has room for the edition and where it stands; the counts and who checked it join from the next width up.
+const columns = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 sm:grid-cols-[minmax(0,1fr)_6rem_7rem_10rem] 2xl:grid-cols-[minmax(0,1fr)_11rem_6rem_7rem_11rem]";
 const wideOnly = "hidden 2xl:block";
+const notOnPhone = "hidden sm:block";
 const day = (at: string) => new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 const time = (at: string) => `${day(at)}, ${new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
 /** Which page of editions is listed, narrowed and sorted how. */
@@ -163,15 +165,16 @@ const NO_TITLE: Partial<Record<DigestState, string>> = { writing: "AI is writing
 
 function ListHeader({ digests }: { digests: Digests }) {
 	const { list, query, setQuery } = digests;
-	return <div className={`flex h-12 shrink-0 items-center gap-3 border-b px-4 ${line}`}>
+	return <div className={`flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-1.5 ${line}`}>
 		<h2 className="text-[13px] font-semibold">Digests</h2>
-		<div className="ml-auto flex rounded-xl bg-black/[0.05] p-0.5 dark:bg-white/[0.06]">
+		{/* On a phone the filters take a row of their own, under the title and the sort. */}
+		<div className="order-last flex w-full overflow-x-auto rounded-xl bg-black/[0.05] p-0.5 dark:bg-white/[0.06] sm:order-none sm:ml-auto sm:w-auto">
 			{SHOWS.map(([show, label]) => <button key={show} type="button" aria-pressed={query.show === show} onClick={() => setQuery({ ...query, show, page: 1 })} className={`h-8 ${segment(query.show === show)}`}>
 				{label}<span className="inline-block min-w-4 text-left tabular-nums opacity-60">{list?.counts[show] ?? ""}</span>
 			</button>)}
 		</div>
 		<Select
-			aria-label="Sort digests" size="sm" className="w-32" classNames={{ trigger: "h-9 min-h-9 rounded-lg", value: "text-xs" }}
+			aria-label="Sort digests" size="sm" className="ml-auto w-32 sm:ml-0" classNames={{ trigger: "h-9 min-h-9 rounded-lg", value: "text-xs" }}
 			startContent={<HugeiconsIcon icon={Sorting05Icon} aria-hidden size={14} className={`shrink-0 ${muted}`} />}
 			selectedKeys={new Set([query.sort])} disallowEmptySelection
 			onSelectionChange={(keys) => setQuery({ ...query, sort: [...keys][0] === "oldest" ? "oldest" : "newest", page: 1 })}
@@ -187,14 +190,14 @@ function ListRow({ edition, onOpen }: { edition: AdminDigestList["editions"][num
 		<button type="button" onClick={onOpen} className={`${columns} h-[3.75rem] w-full border-b text-left text-[13px] transition-colors hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus dark:hover:bg-white/[0.04] ${line}`}>
 			<span className="flex min-w-0 items-center gap-3"><DateTile edition={edition} /><span className={`truncate font-semibold ${edition.title ? "" : muted}`}>{edition.title ?? NO_TITLE[edition.state] ?? "No text"}</span></span>
 			<span className={`truncate ${muted} ${wideOnly}`}>{edition.period}</span>
-			<span className="tabular-nums">{edition.publicationCount.toLocaleString("en-GB")}</span>
+			<span className={`tabular-nums ${notOnPhone}`}>{edition.publicationCount.toLocaleString("en-GB")}</span>
 			<StateChip state={edition.state} />
-			<span className="truncate text-xs"><Signed by={edition.checkedBy} published={edition.state === "published"} /></span>
+			<span className={`truncate text-xs ${notOnPhone}`}><Signed by={edition.checkedBy} published={edition.state === "published"} /></span>
 		</button>
 	</li>;
 }
 
-const rowPlaceholder = <><Skeleton className="h-9 w-4/5 rounded-lg" /><Skeleton className={`h-4 w-24 rounded-lg ${wideOnly}`} /><Skeleton className="h-4 w-10 rounded-lg" /><Skeleton className="h-4 w-16 rounded-lg" /><Skeleton className="h-4 w-28 rounded-lg" /></>;
+const rowPlaceholder = <><Skeleton className="h-9 w-4/5 rounded-lg" /><Skeleton className={`h-4 w-24 rounded-lg ${wideOnly}`} /><Skeleton className={`h-4 w-10 rounded-lg ${notOnPhone}`} /><Skeleton className="h-4 w-16 rounded-lg" /><Skeleton className={`h-4 w-28 rounded-lg ${notOnPhone}`} /></>;
 
 function ListRows({ list, all, onOpen }: { list: AdminDigestList; all: boolean; onOpen: (id: string) => void }) {
 	if (!list.total) return <li className={`px-4 py-6 text-[13px] ${muted}`}>{all ? "No digest has been written yet." : "No digest stands here."}</li>;
@@ -216,7 +219,7 @@ function DigestList({ digests }: { digests: Digests }) {
 	return <div className="flex min-h-0 flex-1 flex-col">
 		<ListHeader digests={digests} />
 		<div className={`${columns} shrink-0 border-b py-3 text-[11px] font-semibold ${line} ${muted}`}>
-			<span>Edition</span><span className={wideOnly}>Covers</span><span>Publications</span><span>State</span><span>Checked by</span>
+			<span>Edition</span><span className={wideOnly}>Covers</span><span className={notOnPhone}>Publications</span><span>State</span><span className={notOnPhone}>Checked by</span>
 		</div>
 		<ul className={`min-h-0 flex-1 overflow-y-auto ${digests.listStale ? "pointer-events-none opacity-50" : ""}`}>
 			{list ? <ListRows list={list} all={query.show === "all"} onOpen={digests.open} /> : Array.from({ length: 6 }, (_, index) => <li key={index} className={`${columns} h-[3.75rem] border-b ${line}`}>{rowPlaceholder}</li>)}

@@ -28,10 +28,11 @@ import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from ".
 import { Subscription, type Preferences } from "./Subscription";
 
 /** The page number lives in the URL, so every page can be shared and reloaded. */
-function PageControls({page, pages, href}: {page: number; pages: number; href: (page: number) => string}) {
+/** `anchor` is the list's own heading: turning its page brings the top of the list back into view, where a shorter page would leave the reader below it. */
+function PageControls({page, pages, href, anchor}: {page: number; pages: number; href: (page: number) => string; anchor?: string}) {
   const router = useRouter();
   if (pages < 2) return null;
-  return <Pagination showControls page={page} total={pages} onChange={next => router.push(href(next), {scroll: false})} className="mt-6 flex justify-center" />;
+  return <Pagination showControls page={page} total={pages} onChange={next => router.push(anchor ? `${href(next)}#${anchor}` : href(next), {scroll: Boolean(anchor)})} className="mt-6 flex justify-center" />;
 }
 
 /** Who stands behind an edition: the person who checked it, or that AI wrote it and nobody has. Nothing when the library does not say. */
@@ -200,7 +201,7 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
           <header className="mb-9"><h1 className="text-3xl font-medium leading-tight">{edition.title}</h1><div className="mt-5"><EditionMeta edition={edition} /></div></header>
           <EditorNote edition={edition} />
           <DigestContent edition={edition} />
-          <section className="mt-10" aria-label="Referenced publications">
+          <section id="publications" className="mt-10 scroll-mt-28" aria-label="Referenced publications">
             <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
             {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: meta-analyses and reviews first, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
             <EditionLists edition={edition} cards={cards} path={path} locale={locale} />
@@ -210,16 +211,16 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
 /** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
 function EditionLists({edition, cards, path, locale}: {edition: DigestEdition; cards: Promise<EditionCardsData>; path: string; locale: string}) {
   const {reviews} = edition;
-  const list = (keys: string[], page: number, pages: number, href: (next: number) => string) => <>
+  const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <>
     <Suspense fallback={<CardsLoading keys={keys} />}><EditionCards cards={cards} keys={keys} /></Suspense>
-    <PageControls page={page} pages={pages} href={href} />
+    <PageControls page={page} pages={pages} href={href} anchor={anchor} />
   </>;
-  if (!reviews) return list(edition.keys, edition.page, edition.pages, next => address(path, next));
+  if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
-    <ListHeading title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
-    {list(reviews.keys, reviews.page, reviews.pages, next => address(path, edition.page, next))}
-    <div className="mt-12"><ListHeading title="Other publications" count={edition.listed - reviews.listed} locale={locale} /></div>
-    {list(edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}
+    <ListHeading id="reviews" title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
+    {list("reviews", reviews.keys, reviews.page, reviews.pages, next => address(path, edition.page, next))}
+    <div className="mt-12"><ListHeading id="other-publications" title="Other publications" count={edition.listed - reviews.listed} locale={locale} /></div>
+    {list("other-publications", edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}
   </>;
 }
 const cardGrid = "grid grid-cols-1 gap-4 sm:grid-cols-2";
@@ -230,8 +231,8 @@ function address(path: string, page: number, reviews = 1) {
   if (reviews > 1) query.set("reviews", String(reviews));
   return query.size ? `${path}?${query}` : path;
 }
-function ListHeading({title, count, locale}: {title: string; count: number; locale: string}) {
-  return <h3 className="mb-4 flex items-baseline gap-2 text-lg font-medium">{title}<span className={`text-xs font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
+function ListHeading({id, title, count, locale}: {id: string; title: string; count: number; locale: string}) {
+  return <h3 id={id} className="mb-4 flex scroll-mt-28 items-baseline gap-2 text-lg font-medium">{title}<span className={`text-xs font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
 }
 function CardsLoading({keys}: {keys: string[]}) {
   return <div className={cardGrid}>{keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>;
