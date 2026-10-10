@@ -362,7 +362,7 @@ function PublicationStrip({
 	);
 }
 
-function PublicationLinkPreview({
+export function PublicationLinkPreview({
 	itemKey,
 	href,
 }: {

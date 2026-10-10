@@ -1,12 +1,13 @@
 import { and, count, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
-import { notificationDelivery, notificationEdition, notificationEditionEvent } from "@/db/schema/notifications";
+import { notificationDelivery, notificationEdition, notificationEditionEvent, notificationSubscriber } from "@/db/schema/notifications";
 import { item } from "@/db/schema/tables/item";
 import { AdminValidationError } from "@/lib/admin/errors";
-import { ItemNotFoundError } from "@/lib/admin/native-item-service";
+import { ItemMutationConflictError, ItemNotFoundError } from "@/lib/admin/native-item-service";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { checkedDigestDraft, citedKeys, digestDraftSchema } from "./digest-text";
+import { getNextDigestEdition } from "./public";
 import type { DigestDraft, DigestEventKind, DigestPerson } from "./types";
 
 /**
@@ -25,7 +26,6 @@ export type DigestState = "writing" | "failed" | "draft" | "review" | "published
 const PAGE_SIZE = 20;
 const PAPERS_PAGE_SIZE = 5;
 const digest = eq(notificationEdition.stream, "digest");
-const CHANGED = "The digest changed. Reload it and try again.";
 
 function editionState(edition: Pick<Edition, "draft" | "reviewRequestedAt" | "publishedAt" | "nextAttemptAt">): DigestState {
   if (edition.draft) return edition.reviewRequestedAt ? "review" : "draft";
@@ -65,7 +65,7 @@ export async function queueEditionDeliveries(tx: DatabaseTransaction, edition: P
 }
 
 /** A digest's period as the team reads it: "September 2026" for a calendar month, else "28 September to 5 October". Days are the library's. */
-export function periodLabel(start: Date, end: Date, timeZone: string) {
+function periodLabel(start: Date, end: Date, timeZone: string) {
   const part = (date: Date, options: Intl.DateTimeFormatOptions) => date.toLocaleDateString("en-GB", { ...options, timeZone });
   const midnight = (date: Date) => part(date, { day: "numeric" }) === "1" && date.toLocaleTimeString("en-GB", { timeZone, hour12: false }) === "00:00:00";
   const month = (date: Date) => part(date, { month: "long", year: "numeric" });
@@ -77,10 +77,11 @@ export function periodLabel(start: Date, end: Date, timeZone: string) {
 
 const when = (config: LibraryServerConfig, edition: Pick<Edition, "windowStart" | "windowEnd">) => {
   const timeZone = config.notifications.schedule.timezone;
-  return { day: edition.windowEnd.toLocaleDateString("en-GB", { day: "numeric", timeZone }), month: edition.windowEnd.toLocaleDateString("en-GB", { month: "short", timeZone }), period: periodLabel(edition.windowStart, edition.windowEnd, timeZone) };
+  const end = (options: Intl.DateTimeFormatOptions) => edition.windowEnd.toLocaleDateString("en-GB", { ...options, timeZone });
+  return { day: end({ day: "numeric" }), month: end({ month: "short" }), date: end({ day: "numeric", month: "long", year: "numeric" }), period: periodLabel(edition.windowStart, edition.windowEnd, timeZone) };
 };
 
-export type AdminDigestRow = { id: string; day: string; month: string; period: string; publicationCount: number; title: string | null; state: DigestState; checkedBy: DigestPerson | null };
+type AdminDigestRow = { id: string; day: string; month: string; date: string; period: string; publicationCount: number; title: string | null; state: DigestState; checkedBy: DigestPerson | null };
 export type AdminDigestsQuery = { page: number; show: "all" | "draft" | "review" | "published"; sort: "newest" | "oldest" };
 
 const hasDraft = isNotNull(notificationEdition.draft);
@@ -110,13 +111,27 @@ export async function listAdminDigests(db: Database, config: LibraryServerConfig
   const editions: AdminDigestRow[] = rows.map(row => ({
     id: row.id, ...when(config, row), publicationCount: row.publicationCount, title: row.draft?.title ?? row.title, state: editionState(row), checkedBy: row.checkedBy,
   }));
-  return { editions, page, pages, total, counts };
+  return { editions, page, pages, total, counts, overview: await digestOverview(db, config) };
 }
 
-export type AdminDigest = Awaited<ReturnType<typeof getAdminDigest>>;
+/** What the library's digests are set to do: when the next one is due, or that they are paused or off, and how many readers get them. */
+async function digestOverview(db: Database, config: LibraryServerConfig) {
+  const [next, [{ subscribers }]] = await Promise.all([
+    getNextDigestEdition(db, config, "en-GB"),
+    db.select({ subscribers: count() }).from(notificationSubscriber).where(and(isNotNull(notificationSubscriber.confirmedAt), eq(notificationSubscriber.digest, true))),
+  ]);
+  return {
+    sending: config.notifications.enabled,
+    paused: config.notifications.enabled && config.notifications.pausedSince !== null,
+    next: next && { day: next.weekday, time: next.time },
+    subscribers,
+  };
+}
+
+export type AdminDigest = Awaited<ReturnType<typeof readAdminDigest>>;
 
 /** One edition as the team works on it: the text in hand, what readers have, what AI wrote, and what happened so far. */
-export async function getAdminDigest(db: Database | DatabaseTransaction, config: LibraryServerConfig, id: string) {
+export async function readAdminDigest(db: Database | DatabaseTransaction, config: LibraryServerConfig, id: string) {
   const [edition] = await db.select().from(notificationEdition).where(and(digest, eq(notificationEdition.id, id)));
   if (!edition) throw new ItemNotFoundError(id);
   const [events, [sent]] = await Promise.all([
@@ -132,6 +147,8 @@ export async function getAdminDigest(db: Database | DatabaseTransaction, config:
     writing: edition.nextAttemptAt !== null,
     revision: edition.draftRevision,
     words: workingWords(edition),
+    // Why the edition has no text, when the writer gave up on it.
+    error: edition.nextAttemptAt === null && !edition.ai && !edition.publishedAt ? edition.lastError : null,
     published,
     publishedAt: edition.publishedAt?.toISOString() ?? null,
     // An edition the older runtime published during an update has no record of AI's text: while nobody has checked it, what readers have is AI's.
@@ -145,7 +162,8 @@ export async function getAdminDigest(db: Database | DatabaseTransaction, config:
 async function lockEdition(tx: DatabaseTransaction, id: string, expectedRevision: number) {
   const [edition] = await tx.select().from(notificationEdition).where(and(digest, eq(notificationEdition.id, id))).for("update");
   if (!edition) throw new ItemNotFoundError(id);
-  if (edition.draftRevision !== expectedRevision) throw new AdminValidationError(CHANGED);
+  // Someone else saved or moved the edition since this person loaded it.
+  if (edition.draftRevision !== expectedRevision) throw new ItemMutationConflictError(id);
   if (edition.nextAttemptAt !== null) throw new AdminValidationError("AI is writing this digest. Try again when it is done.");
   return edition;
 }
@@ -176,7 +194,7 @@ export async function saveDigestDraft(db: Database, config: LibraryServerConfig,
       draft: unchanged ? null : words, draftRevision: edition.draftRevision + 1, ...(unchanged ? { reviewRequestedAt: null } : {}),
     }).where(eq(notificationEdition.id, edition.id));
     if (!sameWords(words, current)) await recordEdit(tx, edition.id, actor);
-    return getAdminDigest(tx, config, edition.id);
+    return readAdminDigest(tx, config, edition.id);
   });
 }
 
@@ -250,7 +268,7 @@ export async function moveDigest(db: Database, config: LibraryServerConfig, inpu
       await tx.update(notificationEdition).set({ reviewRequestedAt: step.reviewRequestedAt, draftRevision: edition.draftRevision + 1 }).where(eq(notificationEdition.id, edition.id));
       await recordDigestEvent(tx, edition.id, step.event, person(actor));
     }
-    return getAdminDigest(tx, config, edition.id);
+    return readAdminDigest(tx, config, edition.id);
   });
 }
 
@@ -266,11 +284,23 @@ const SORTS: Record<DigestPapersQuery["sort"], SQL> = {
 };
 
 /** "Terzi, 2026", "Abebaw and Feleke, 2026" or "Phong et al., 2026": how a citation names its paper. */
-export function citationLabel(creators: string[], date: string | null) {
-  const names = creators.map(name => name.trim().split(/\s+/).at(-1) ?? "").filter(Boolean);
+function citationLabel(creators: readonly unknown[], date: string | null) {
+  // Stored publications come from many releases and sources, so a creator that is not a name is passed over.
+  const names = creators.map(name => (typeof name === "string" ? name.trim().split(/\s+/).at(-1) ?? "" : "")).filter(Boolean);
   const who = names.length === 0 ? "Unknown" : names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names[0]} et al.`;
   const year = /^\d{4}/.exec(date ?? "")?.[0];
   return year ? `${who}, ${year}` : who;
+}
+
+/** The edition's publications with these keys, for naming the ones the text cites. At most a hundred. */
+export async function getDigestPapers(db: Database, config: LibraryServerConfig, id: string, keys: string[]) {
+  if (!keys.length) return { papers: [] as DigestPaper[] };
+  const wanted = sql`ARRAY[${sql.join(keys.slice(0, 100).map(key => sql`${key}`), sql`, `)}]::text[]`;
+  const { rows } = await db.execute<{ key: string; title: string; creators: unknown; date: string | null; review: boolean }>(sql`
+    SELECT stored.entry->>'key' AS key, stored.entry->>'title' AS title, stored.entry->'creators' AS creators, stored.entry->>'date' AS date, coalesce(stored.entry->>'kind' IN ('meta-analysis', 'review'), false) AS review
+    FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) AS stored(entry)
+    WHERE ${notificationEdition.id} = ${id} AND ${digest} AND stored.entry->>'key' = ANY(${wanted})`);
+  return { papers: rows.map((row): DigestPaper => ({ key: row.key, label: citationLabel(Array.isArray(row.creators) ? row.creators : [], row.date), title: row.title, date: row.date, review: row.review })) };
 }
 
 /**
@@ -293,9 +323,9 @@ export async function listDigestPapers(db: Database, config: LibraryServerConfig
   const pages = Math.max(1, Math.ceil(total / PAPERS_PAGE_SIZE));
   const page = Math.min(Math.max(1, query.page), pages);
   const shown = query.show === "reviews" ? review : query.show === "uncited" ? uncited : sql`true`;
-  const { rows } = await db.execute<{ key: string; title: string; creators: string[] | null; date: string | null; review: boolean }>(sql`
+  const { rows } = await db.execute<{ key: string; title: string; creators: unknown; date: string | null; review: boolean }>(sql`
     SELECT stored.entry->>'key' AS key, stored.entry->>'title' AS title, stored.entry->'creators' AS creators, stored.entry->>'date' AS date, coalesce(${review}, false) AS review
     ${listed} AND ${shown} ORDER BY ${SORTS[query.sort]} LIMIT ${PAPERS_PAGE_SIZE} OFFSET ${(page - 1) * PAPERS_PAGE_SIZE}`);
-  const papers: DigestPaper[] = rows.map(row => ({ key: row.key, label: citationLabel(row.creators ?? [], row.date), title: row.title, date: row.date, review: row.review }));
+  const papers: DigestPaper[] = rows.map(row => ({ key: row.key, label: citationLabel(Array.isArray(row.creators) ? row.creators : [], row.date), title: row.title, date: row.date, review: row.review }));
   return { papers, page, pages, total, counts };
 }

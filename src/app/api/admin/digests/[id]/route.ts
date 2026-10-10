@@ -4,7 +4,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import { ADMIN_CONTENT_PERMISSION, ADMIN_PUBLISH_PERMISSION, adminRoleHasPermission, type AdminSession } from "@/lib/admin/access";
 import { adminForbiddenResponse, handleAdminJson, handleAdminResponse, readAdminJson, ADMIN_RESPONSE_HEADERS } from "@/lib/admin/http";
-import { getAdminDigest, moveDigest, saveDigestDraft, type DigestActor } from "@/lib/notifications/editorial";
+import { readAdminDigest, moveDigest, saveDigestDraft, type DigestActor } from "@/lib/notifications/editorial";
 import { NextResponse } from "next/server";
 
 type Context = { params: Promise<{ id: string }> };
@@ -20,7 +20,7 @@ async function runtime() {
 export function GET(request: NextRequest, context: Context) {
   return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () => {
     const [id, { config, db }] = await Promise.all([editionId(context), runtime()]);
-    return { digest: await getAdminDigest(db, config, id) };
+    return { digest: await readAdminDigest(db, config, id) };
   });
 }
 

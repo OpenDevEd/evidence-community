@@ -17,6 +17,5 @@ export type DigestText = { title: string; summary: string; markdown: string };
 export type DigestDraft = DigestText & { note?: string };
 /** Someone on the library's team as they were when they acted: their OpenScholar account, name and photo. */
 export type DigestPerson = { id: string; name: string; photo: string | null };
-export const DIGEST_EVENTS = ["written", "edited", "submitted", "withdrawn", "returned", "published"] as const;
 /** A step in an edition's history. AI writes; the rest are a person's. */
-export type DigestEventKind = (typeof DIGEST_EVENTS)[number];
+export type DigestEventKind = "written" | "edited" | "submitted" | "withdrawn" | "returned" | "published";

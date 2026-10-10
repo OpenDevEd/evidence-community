@@ -27,7 +27,7 @@ const summaryColumns = {
 };
 type SummaryRow = {id: string; windowEnd: Date; title: string | null; summary: string | null; publicationCount: number; cover: string | null};
 
-export function digestDate(value: Date, locale: string, config: LibraryServerConfig): DigestDate {
+function digestDate(value: Date, locale: string, config: LibraryServerConfig): DigestDate {
   const text = (options: Intl.DateTimeFormatOptions) => value.toLocaleString(locale, {...options, timeZone: config.notifications.schedule.timezone});
   return {
     at: value.toISOString(), day: text({day: "2-digit"}), month: text({month: "short"}), monthYear: text({month: "long", year: "numeric"}),

@@ -9,6 +9,7 @@ import type {
 } from "@/lib/admin/institution-countries";
 import type { SavedReview, PublishingChoice, PublishingChoiceState, ReviewRecord } from "@/lib/admin/review-contract";
 import type { getAdminReviewSnapshot } from "@/lib/admin/review-query";
+import type { AdminDigest, AdminDigestsQuery, DigestAction, DigestPapersQuery, listAdminDigests, listDigestPapers } from "@/lib/notifications/editorial";
 
 import type {
 	AdminCollection,
@@ -864,6 +865,37 @@ export async function getAdminPublishingChoice(key: string) {
 }
 export async function saveAdminPublishingChoice(key: string, choice: PublishingChoice | null) {
 	return requestJson<PublishingChoiceState>(`/api/admin/items/${encodeURIComponent(key)}/publishing-choice`, { method: "PUT", body: JSON.stringify(choice) });
+}
+
+export type { AdminDigest };
+export type AdminDigestList = Awaited<ReturnType<typeof listAdminDigests>>;
+type AdminDigestPapers = Awaited<ReturnType<typeof listDigestPapers>>;
+export type AdminDigestWords = NonNullable<AdminDigest["words"]>;
+const digestPath = (id: string) => `/api/admin/digests/${encodeURIComponent(id)}`;
+const digestList = (key: unknown) => Array.isArray(key) && key[0] === "admin-digests";
+
+export function getAdminDigests(query: AdminDigestsQuery) {
+	return requestJson<AdminDigestList>(`/api/admin/digests?${new URLSearchParams({ page: String(query.page), show: query.show, sort: query.sort })}`);
+}
+export async function getAdminDigest(id: string) {
+	return (await requestJson<{ digest: AdminDigest }>(digestPath(id))).digest;
+}
+export async function saveAdminDigest(id: string, expectedRevision: number, words: AdminDigestWords) {
+	const { digest } = await requestJson<{ digest: AdminDigest }>(digestPath(id), { method: "PUT", body: JSON.stringify({ expectedRevision, words }) });
+	void mutate(digestList).catch(() => undefined);
+	return digest;
+}
+export async function moveAdminDigest(id: string, expectedRevision: number, action: DigestAction) {
+	const { digest } = await requestJson<{ digest: AdminDigest }>(digestPath(id), { method: "POST", body: JSON.stringify({ action, expectedRevision }) });
+	void mutate(digestList).catch(() => undefined);
+	return digest;
+}
+export async function getAdminDigestCited(id: string, keys: string[]) {
+	return (await requestJson<{ papers: AdminDigestPapers["papers"] }>(`${digestPath(id)}/papers?${new URLSearchParams({ keys: keys.join(",") })}`)).papers;
+}
+export function getAdminDigestPapers(id: string, query: DigestPapersQuery) {
+	const params = new URLSearchParams({ query: query.query, show: query.show, sort: query.sort, page: String(query.page), cited: query.cited.join(",") });
+	return requestJson<AdminDigestPapers>(`${digestPath(id)}/papers?${params}`);
 }
 
 export async function getAdminReviewCount() {

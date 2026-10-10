@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "@/i18n/routing";
+import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Mail01Icon, ArrowRight01Icon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 export const muted = "text-black/60 dark:text-white/60";
+/** A person's photo, or a person icon when they have none. Never initials. */
+export function Face({ person, size = 20 }: { person: { photo?: string | null }; size?: number }) {
+  return <AuthorAvatar src={person.photo ?? undefined} alt="" className="shrink-0" style={{ width: size, height: size }} />;
+}
 export function Icon({ value, size = 18 }: { value: typeof Mail01Icon; size?: number }) {
   return <HugeiconsIcon icon={value} size={size} aria-hidden className="shrink-0" />;
 }

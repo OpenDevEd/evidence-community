@@ -65,7 +65,7 @@ export default async function AdminPage({
 	}));
 
 	return (
-		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId }}>
+		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId, name: authorization.session.name, image: authorization.session.image }}>
 		<AdminWorkbench
 			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
 			definitions={definitions}

@@ -56,7 +56,7 @@ describe("admin access on the shared session", () => {
 		vi.stubGlobal("fetch", fetcher);
 		expect(await authorizeAdminRequest(signedInHeaders(clerkUserId), ADMIN_PUBLISH_PERMISSION, config)).toEqual({
 			status: "forbidden",
-			session: { clerkUserId, role: "creator" },
+			session: { clerkUserId, role: "creator", name: "Test reader", image: null },
 		});
 		const [url, request] = fetcher.mock.calls[0] as unknown as [URL, RequestInit & { headers: Record<string, string> }];
 		expect(String(url)).toBe("https://access.example.test/api/v1/evidence-libraries/admin-session/check");

@@ -23,6 +23,7 @@ function mocksModules(file: string, seen = new Set<string>()): boolean {
 // build requires an ES module, which a VM context can't, and error handling that checks
 // `instanceof` against errors made in another realm.
 const workerTests = [
+	"tests/unit/admin-digests.test.tsx",
 	"tests/unit/admin-http.test.ts",
 	"tests/unit/ai-chat-window.test.tsx",
 	"tests/unit/ai-inline-chat.test.tsx",

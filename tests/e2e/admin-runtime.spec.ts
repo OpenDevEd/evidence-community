@@ -13,6 +13,11 @@ const expectedKey =
 
 const protectedAdminRequests = [
   ["GET", "/api/admin/reviews"],
+  ["GET", "/api/admin/digests"],
+  ["GET", "/api/admin/digests/018e4a68-274a-487a-a7ce-dbb7f930f271"],
+  ["PUT", "/api/admin/digests/018e4a68-274a-487a-a7ce-dbb7f930f271"],
+  ["POST", "/api/admin/digests/018e4a68-274a-487a-a7ce-dbb7f930f271"],
+  ["GET", "/api/admin/digests/018e4a68-274a-487a-a7ce-dbb7f930f271/papers"],
   ["GET", "/api/admin/reviews/review-id"],
   ["POST", "/api/admin/reviews/review-id"],
   ["GET", "/api/admin/reviews/review-id/files/ABCDEFGH"],

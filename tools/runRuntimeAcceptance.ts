@@ -42,6 +42,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 const subscriptionToken = randomBytes(32).toString("hex");
 const digestEditionId = "018e4a68-274a-487a-a7ce-dbb7f930f271";
 const digestTitle = "Reading routines in the classroom";
+// A second published edition, which the admin's digest test changes and publishes.
+const adminDigestEditionId = "018e4a68-274a-487a-a7ce-dbb7f930f272";
 
 import { parseOpenScholarInstitutionRequest } from "../src/lib/admin/institution-catalog-contract";
 import { buildInstitutionCountsQuery } from "../src/lib/admin/openscholar-institutions";
@@ -1571,6 +1573,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_SUBSCRIPTION_TOKEN: subscriptionToken,
 		PLAYWRIGHT_EXPECTED_DIGEST_ID: digestEditionId,
 		PLAYWRIGHT_EXPECTED_DIGEST_TITLE: digestTitle,
+		PLAYWRIGHT_ADMIN_DIGEST_ID: adminDigestEditionId,
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
 		PLAYWRIGHT_EXPECTED_COOKIE_LINK: getRuntimeLinkHref(config.legal.cookiePolicy, config.identity.baseUrl),
@@ -1813,6 +1816,7 @@ function runAdminBrowserSuite(profile: Profile) {
 	runAdminTests([
 		"tests/e2e/admin.spec.ts",
 		"tests/e2e/admin-runtime.spec.ts",
+		"tests/e2e/admin-digests.spec.ts",
 		"tests/e2e/admin-links.spec.ts",
 		"tests/e2e/admin-brand-logo.spec.ts",
 		"--project",
@@ -3332,6 +3336,7 @@ async function seedAcceptanceRecords(profiles: Profile[]) {
 	for (const profile of profiles) {
 		postgresScalar(profile.name, `INSERT INTO "notificationSubscriber" ("email", "token", "digest", "instant", "confirmedAt", "confirmationExpiresAt") VALUES ('subscription@example.invalid', '${subscriptionToken}', true, true, now(), now() + interval '1 day')`);
 		postgresScalar(profile.name, `INSERT INTO "notificationEdition" ("id", "stream", "windowStart", "windowEnd", "publications", "title", "summary", "markdown", "publishedAt", "nextAttemptAt") VALUES ('${digestEditionId}', 'digest', '2026-01-01T00:00:00Z', '2026-01-08T00:00:00Z', '[]', '${digestTitle}', 'A closer look at **reading routines** and classroom practice.', '## Classroom practice\n\nReading routines connect research with everyday teaching.', '2026-01-08T00:00:00Z', NULL)`);
+		postgresScalar(profile.name, `INSERT INTO "notificationEdition" ("id", "stream", "windowStart", "windowEnd", "publications", "title", "summary", "markdown", "ai", "publishedAt", "nextAttemptAt") VALUES ('${adminDigestEditionId}', 'digest', '2026-01-08T00:00:00Z', '2026-01-15T00:00:00Z', '[]', 'Homework and feedback', 'Two studies of feedback on homework.', '## Homework\n\nFeedback given the next day helped most.', '{"title": "Homework and feedback", "summary": "Two studies of feedback on homework.", "markdown": "## Homework\\n\\nFeedback given the next day helped most."}', '2026-01-15T00:00:00Z', NULL)`);
 		await seedSearch(profile);
 		seedExportRecords(profile);
 		seedRedirectNotes(profile);

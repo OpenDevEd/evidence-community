@@ -6,6 +6,8 @@ import { documentAttachment, uploadPdfFile, validatePdf, type PdfUploadStep } fr
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { parseAsString, useQueryState } from "nuqs";
+import { AdminDigestsInspector, AdminDigestsMain, useAdminDigests } from "./AdminDigests";
+import { DigestsQueue } from "./ReviewQueueEntry";
 import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, Files01Icon, Logout01Icon, FilterHorizontalIcon, FileEditIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
@@ -481,10 +483,15 @@ export default function AdminWorkbench({
 		"inspector" | "list" | "navigation" | "preview"
 	>(() => selectedKey ? "inspector" : "list");
 	const previewOpen = wideLayout ? previewing : mobilePane === "preview";
+	// The digests view. The open edition is in the address, so a link opens it.
+	const [digestsParam, setDigestsParam] = useQueryState("digests", parseAsString);
+	const digests = useAdminDigests(digestsParam, (value) => void setDigestsParam(value));
+	const digestsOpen = digestsParam !== null;
 	const selectNavigationFilter = useCallback((next: Parameters<typeof setFilters>[0]) => {
 		setFilters(next);
+		void setDigestsParam(null);
 		setMobilePane("list");
-	}, [setFilters]);
+	}, [setFilters, setDigestsParam]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
@@ -2052,6 +2059,8 @@ export default function AdminWorkbench({
 	}, [definitions, newItemSearch]);
 
 
+	const digestsWaiting = digests.waiting;
+	const digestsQueue = useMemo(() => ({ selected: digestsOpen, waiting: digestsWaiting, onPress: () => { void setDigestsParam(digestsOpen ? null : "list"); setMobilePane("list"); } }), [digestsOpen, digestsWaiting, setDigestsParam]);
 	const navigationPane = useMemo(() => (<AdminNavigation
 									reviewQueue={filters.reviewQueue}
 									onSelectReviewQueue={() => selectNavigationFilter((current) => ({ ...current, reviewQueue: true, filters: setSingleAdminItemFilter(current.filters, "kind", null) }))}
@@ -2430,7 +2439,7 @@ export default function AdminWorkbench({
 								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
-								{navigationPane}
+								<DigestsQueue value={digestsQueue}>{navigationPane}</DigestsQueue>
 							</div>
 						</div>
 					</aside>
@@ -2443,7 +2452,7 @@ export default function AdminWorkbench({
 							mobilePane === "list" ? "flex" : "hidden"
 						} flex-col xl:flex xl:min-w-0 xl:flex-1`}
 					>
-						<AdminItemTable
+						{digestsOpen ? <AdminDigestsMain digests={digests} /> : (<AdminItemTable
 							bulkActions={
 								activeLinkPick ? null : (
 								<div
@@ -2598,7 +2607,7 @@ export default function AdminWorkbench({
 							sort={filters.sort}
 							sortDirection={filters.sortDirection}
 							sources={library.sources}
-						/>
+						/>)}
 					</section>
 					</div>
 
@@ -2624,7 +2633,7 @@ export default function AdminWorkbench({
 							mobilePane === "inspector" ? "block" : "hidden"
 						} xl:block xl:w-[22.5rem] xl:flex-none`}
 					>
-						<EditorialInspector
+						{digestsOpen ? <AdminDigestsInspector digests={digests} configurationHref={configurationHref} /> : (<EditorialInspector
 							concurrentConflict={concurrentConflict}
 							onResolveConcurrentConflict={resolveConcurrentConflict}
                             reviewQueue={filters.reviewQueue}
@@ -2707,7 +2716,7 @@ export default function AdminWorkbench({
 							sources={library.sources}
 							validationErrors={validationErrors}
 							validationRevision={validationRevision}
-						/>
+						/>)}
 					</aside>
 				</div>
 			</AdminDragDropRoot>

@@ -6,9 +6,10 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationDelivery, notificationEdition, notificationEditionEvent, notificationSubscriber } from "@/db/schema/notifications";
 import { generateNotificationEdition, prepareDigestForPeriod, prepareNotificationEditions } from "@/lib/notifications/editions";
-import { getAdminDigest, listAdminDigests, listDigestPapers, moveDigest, saveDigestDraft, type DigestActor } from "@/lib/notifications/editorial";
+import { readAdminDigest, getDigestPapers, listAdminDigests, listDigestPapers, moveDigest, saveDigestDraft, type DigestActor } from "@/lib/notifications/editorial";
 import { getDigestEdition } from "@/lib/notifications/public";
 import { confirmSubscription, requestSubscription } from "@/lib/notifications/subscriptions";
+import { ItemMutationConflictError } from "@/lib/admin/native-item-service";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
@@ -43,7 +44,7 @@ const edited = { title: "August in classrooms", summary: "One study, read closel
 it("keeps a person's changes private until an Editor publishes them, signed and with their note", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const id = await publishedEdition(db, client);
-    const start = await getAdminDigest(db, config, id);
+    const start = await readAdminDigest(db, config, id);
     expect(start).toMatchObject({ state: "published", revision: 0, words: { ...written, note: "" }, ai: written, checkedBy: null });
     expect(start.events.map(event => event.kind)).toEqual(["written"]);
 
@@ -52,7 +53,7 @@ it("keeps a person's changes private until an Editor publishes them, signed and 
     // Readers still have what was published.
     expect(await getDigestEdition(db, config, "en-GB", id)).toMatchObject(written);
     // A save made from an older revision is refused, so nobody overwrites text they have not seen.
-    await expect(saveDigestDraft(db, config, { id, expectedRevision: 0, words: { ...edited, title: "Stale" } }, other)).rejects.toThrow("The digest changed");
+    await expect(saveDigestDraft(db, config, { id, expectedRevision: 0, words: { ...edited, title: "Stale" } }, other)).rejects.toThrow(ItemMutationConflictError);
     // One person's run of saves is one step in the history.
     const again = await saveDigestDraft(db, config, { id, expectedRevision: 1, words: { ...edited, summary: "One study, read twice." } }, creator);
     expect(again.events.map(event => [event.kind, event.actor?.name ?? null])).toEqual([["written", null], ["edited", "Eunice Jengo"]]);
@@ -122,7 +123,7 @@ it("refuses text a digest cannot hold, with the reason", async () => {
     await expect(save("See [Nobody, 2026](/lib/ZZZZZZZZ).")).rejects.toThrow("readers cannot open: ZZZZZZZZ");
     await expect(save(edited.markdown, { title: "Two\nlines" })).rejects.toThrow("Keep the title on one line");
     await expect(save(edited.markdown, { title: "  " })).rejects.toThrow();
-    expect((await getAdminDigest(db, config, id)).state).toBe("published");
+    expect((await readAdminDigest(db, config, id)).state).toBe("published");
   });
 }, 120_000);
 
@@ -136,7 +137,7 @@ it("does not rewrite a digest under a person's unpublished changes, and replaces
       // While AI writes, nobody can change the text it is about to replace.
       await expect(saveDigestDraft(db, config, { id, expectedRevision: 0, words: edited }, creator)).rejects.toThrow("AI is writing this digest");
       await generateNotificationEdition(db, config);
-      const drafted = await getAdminDigest(db, config, id);
+      const drafted = await readAdminDigest(db, config, id);
       expect(drafted).toMatchObject({ state: "draft", revision: 1, words: { ...rewrite, note: "" }, published: { ...written, note: "" }, ai: rewrite });
       expect(drafted.events.map(event => event.kind)).toEqual(["written", "written"]);
       // AI's own draft can be rewritten again.
@@ -144,7 +145,7 @@ it("does not rewrite a digest under a person's unpublished changes, and replaces
       await generateNotificationEdition(db, config);
       await saveDigestDraft(db, config, { id, expectedRevision: 2, words: edited }, creator);
       await expect(prepareDigestForPeriod(db, config, period)).rejects.toThrow("changes that are not published");
-      expect((await getAdminDigest(db, config, id)).words).toEqual(edited);
+      expect((await readAdminDigest(db, config, id)).words).toEqual(edited);
     } finally {
       openScholar.mockRestore();
     }
@@ -157,7 +158,8 @@ it("offers the edition's publications a page at a time, searched, narrowed and s
       { key: "PAPAAAAA", title: "Maize under heat", creators: ["Ada Mills"], date: "2026-08-03", kind: "study" },
       { key: "PAPAAAAB", title: "Drought: a systematic review", creators: ["Ben Okoro", "Cy Adu"], date: "2026-08-20", kind: "review" },
       { key: "PAPAAAAC", title: "Adaptation pooled", creators: ["Dee Zhang", "Eli Abebe", "Fay Noor"], date: "2026-08-11", kind: "meta-analysis" },
-      { key: "PAPAAAAD", title: "Flood maps", creators: [], date: null },
+      // Saved by an older release, with a creator that is not a name.
+      { key: "PAPAAAAD", title: "Flood maps", creators: [null], date: null },
       { key: "PAPAAAAE", title: "Heat in cities", creators: ["Gil Baker"], date: "2026-08-30", kind: "study" },
       { key: "PAPAAAAF", title: "Hidden since", creators: ["Hal Cole"], date: "2026-08-12", kind: "study" },
       { key: "PAPAAAAG", title: "Water storage", creators: ["Ivy Diaz"], date: "2026-08-05", kind: "study" },
@@ -180,6 +182,8 @@ it("offers the edition's publications a page at a time, searched, narrowed and s
     // Search reads titles and authors, and counts follow it.
     expect(await list({ query: "okoro REVIEW" })).toMatchObject({ total: 1, counts: { all: 1, reviews: 1, uncited: 1 } });
     expect((await list({ query: "100%" })).total).toBe(0);
+    // The publications a text cites are named from the edition, hidden or not, and a key it never held is passed over.
+    expect((await getDigestPapers(db, config, edition.id, ["PAPAAAAC", "PAPAAAAF", "ZZZZZZZZ"])).papers.map(paper => [paper.key, paper.label]).sort()).toEqual([["PAPAAAAC", "Zhang et al., 2026"], ["PAPAAAAF", "Cole, 2026"]]);
   });
 }, 120_000);
 
