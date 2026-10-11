@@ -18,12 +18,12 @@ export function AttachedItemChip({ item, onRemove }: { item: AttachedItem; onRem
 		<span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full bg-accent/10 pl-2.5 pr-1 text-sm text-black/80 dark:text-white/80">
 			<HugeiconsIcon icon={BookOpen01Icon} className="size-3.5 shrink-0 text-accent" aria-hidden />
 			<Link href={`/lib/${item.key}`} target="_blank" rel="noopener noreferrer" className="min-w-0 rounded-sm outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent">
-				<TruncatedText text={item.title} className="max-w-[28rem]" />
+				<TruncatedText text={item.title || t("untitledPublication")} className="max-w-[28rem]" />
 			</Link>
 			{onRemove ? (
 				<button
 					type="button"
-					aria-label={t("removeAttached", { title: item.title })}
+					aria-label={t("removeAttached", { title: item.title || t("untitledPublication") })}
 					onClick={onRemove}
 					className="grid size-5 shrink-0 place-items-center rounded-full text-black/50 outline-none transition-colors hover:bg-black/10 hover:text-black focus-visible:ring-2 focus-visible:ring-accent dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
 				>

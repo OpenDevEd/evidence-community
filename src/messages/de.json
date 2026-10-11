@@ -542,6 +542,7 @@
     "chatDescription": "Mit dieser Ressource chatten.",
     "askMeAnything": "Fragen Sie mich nach dieser Veröffentlichung.",
     "removeAttached": "{title} entfernen",
+    "untitledPublication": "Veröffentlichung ohne Titel",
     "reasoning": "Denkprozess",
     "errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "change": "KI-Modell ändern",

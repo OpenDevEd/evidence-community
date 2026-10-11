@@ -6,6 +6,9 @@ import {
 import { z } from "zod";
 import { currentDateContext } from "./prompt-context";
 
+/** What a publication with no title is called in what a question is about; the server checks the same words. */
+export const UNTITLED_PUBLICATION = "Untitled publication";
+
 const currentPublicationSchema = z
 	.object({
 		key: z

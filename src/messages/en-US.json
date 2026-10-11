@@ -531,6 +531,7 @@
     "chatDescription": "Chat with this resource.",
     "askMeAnything": "Ask me about this publication.",
     "removeAttached": "Remove {title}",
+    "untitledPublication": "Untitled publication",
     "reasoning": "Reasoning",
     "errorMessage": "I'm sorry, but I encountered an error. Please try again later.",
     "change": "Change AI Model",

@@ -45,8 +45,6 @@ type ChatWindowState = ReturnType<typeof useChatWindow>;
 export type ChatWindowHandle = {
 	/** Answers whether the question was taken. */
 	ask: (question: string) => boolean;
-	/** Makes a publication the subject of the next question, keeping the conversation. */
-	attach: (item: AttachedItem) => void;
 };
 
 type Message = ResearchUIMessage;
@@ -528,8 +526,9 @@ function ChatWindowTopBar({
 type ChatModalProps = {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
-	/** The publication the window opens about, if any; more can be attached once it is open. */
-	publication?: AttachedItem;
+	/** The publication the next question is about, held by whoever opened the window, who also hears when the reader removes it. */
+	publication?: AttachedItem | null;
+	onPublicationChange?: (item: AttachedItem | null) => void;
 	modelId: AIModelId;
 	/** Lets the page ask a question when it opens the window. */
 	ref?: React.Ref<ChatWindowHandle>;
@@ -550,6 +549,7 @@ function ChatModalContent({
 	isOpen,
 	onOpenChange,
 	publication,
+	onPublicationChange,
 	modelId,
 	ref,
 	searchContext,
@@ -565,13 +565,14 @@ function ChatModalContent({
 	const modelPresentation = getAIModelPresentation(modelId, ai.providers);
 	const chat = useChatWindow({
 		publication,
+		onPublicationChange,
 		modelId,
 		onConversationStateChange,
 		searchContext,
 	});
-	const { ask, setAttached } = chat;
+	const { ask } = chat;
 	const questions = useStarterQuestions(chat.attached, isOpen && !chat.conversationStarted);
-	React.useImperativeHandle(ref, () => ({ ask, attach: setAttached }), [ask, setAttached]);
+	React.useImperativeHandle(ref, () => ({ ask }), [ask]);
 	const {
 		canRunScreening,
 		chatFailure,

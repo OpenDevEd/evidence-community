@@ -6,9 +6,15 @@ import { SparklesIcon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/nextui/Button";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { UNTITLED_PUBLICATION } from "@/lib/ai/request-context";
 
-/** A publication handed to the chat, so the reader can see what a question is about. */
+/** A publication handed to the chat, so the reader can see what a question is about. An empty title is an untitled one. */
 export type AttachedItem = { key: string; title: string };
+
+/** What a question carries about the attached publication. */
+export function questionPublication(item: AttachedItem | null) {
+	return item ? { key: item.key, title: item.title || UNTITLED_PUBLICATION } : undefined;
+}
 
 /**
  * Hands a publication to the chat the page has: the one beside the results on
@@ -23,8 +29,11 @@ export function useAskAbout() {
 	return useContext(AskAboutContext);
 }
 
+/** Whether the page's chat has a conversation going, which changing the model would end. */
+export const AskAboutConversation = createContext(false);
+
 export function attachedItem(item: { key?: string | null; title?: string | null } | undefined): AttachedItem | null {
-	return item?.key ? { key: item.key, title: item.title || "Untitled publication" } : null;
+	return item?.key ? { key: item.key, title: item.title ?? "" } : null;
 }
 
 /** Ask AI about one publication: a labelled button on a card, an icon in a hover card. */

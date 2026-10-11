@@ -31,6 +31,7 @@ import {
 	researchRequestContextText,
 	researchRequestContextsEqual,
 	type ResearchRequestContextSnapshot,
+	UNTITLED_PUBLICATION,
 } from "@/lib/ai/request-context";
 import { chatRequestSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
@@ -86,7 +87,7 @@ async function currentPublication(itemKey?: string) {
 
 
 	return {
-		reference: {key: item.key, title: item.title || "Untitled publication"},
+		reference: {key: item.key, title: item.title || UNTITLED_PUBLICATION},
 		hasPdf: hasVisiblePdfAttachment(item),
 	};
 }

@@ -219,9 +219,7 @@ describe("turning a page citation into a link", () => {
 			],
 		});
 
-		expect(sources).toEqual({
-			"paper.pdf": "/lib/NEWEST01/download/PDF0001",
-		});
+		expect(sources["paper.pdf"]).toBe("/lib/NEWEST01/download/PDF0001");
 	});
 
 	it("has nothing for a publication that has not loaded yet", () => {

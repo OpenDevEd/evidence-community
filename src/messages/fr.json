@@ -542,6 +542,7 @@
     "chatDescription": "Discuter avec cette ressource.",
     "askMeAnything": "Renseignez-vous sur cette publication.",
     "removeAttached": "Retirer {title}",
+    "untitledPublication": "Publication sans titre",
     "reasoning": "Raisonnement",
     "errorMessage": "Je suis désolé, mais j'ai rencontré une erreur. Veuillez réessayer plus tard.",
     "change": "Changer de modèle d'IA",

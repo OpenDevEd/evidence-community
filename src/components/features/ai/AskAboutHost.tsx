@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState, type ReactNode } from "react";
-
+import { useCallback, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 
-import type { ChatWindowHandle } from "@/components/features/modals/ChatModal";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { usePathname } from "@/i18n/routing";
 import { ADMIN_HOME_PATH } from "@/lib/runtime-routing";
-import { AskAboutProvider, type AttachedItem } from "./AskAbout";
+import { AskAboutConversation, AskAboutProvider, type AttachedItem } from "./AskAbout";
 
 // Every public page has this host, but few readers open the chat: its code loads with the first Ask AI.
 const ChatModal = dynamic(() => import("@/components/features/modals/ChatModal"), { ssr: false });
@@ -17,38 +15,44 @@ const ChatModal = dynamic(() => import("@/components/features/modals/ChatModal")
 /**
  * The full-screen chat a public page opens about a publication. The first
  * publication opens it; later ones are attached to the same conversation, which
- * outlives closing the window. The admin has no chat, and neither does a library
- * with AI off, so there nothing offers to ask.
+ * outlives closing the window. The attachment is kept here, so it survives a
+ * change of model, which starts the conversation again. The admin has no chat,
+ * and neither does a library with AI off, so there nothing offers to ask.
  */
 export function AskAboutHost({ children }: { children: ReactNode }) {
 	const isAdmin = usePathname().startsWith(ADMIN_HOME_PATH);
 	const isAIEnabled = useLibraryFeature("ai");
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
-	const [opened, setOpened] = useState<AttachedItem | null>(null);
+	const [attached, setAttached] = useState<AttachedItem | null>(null);
+	const [opened, setOpened] = useState(false);
 	const [isOpen, setIsOpen] = useState(false);
-	const chatRef = useRef<ChatWindowHandle>(null);
+	// A conversation belongs to the model it was had with: another model starts the window again.
+	const [conversation, setConversation] = useState<{ modelId: string | null; started: boolean }>({ modelId: null, started: false });
 	const askAbout = useCallback((item: AttachedItem) => {
-		// Before the window exists it starts with the publication; once it does, the publication joins its conversation.
-		if (chatRef.current) chatRef.current.attach(item);
-		else setOpened(item);
+		setAttached(item);
+		setOpened(true);
 		setIsOpen(true);
 	}, []);
 	const available = !isAdmin && isAIEnabled && Boolean(selectedModelId);
+	const hasConversation = conversation.started && conversation.modelId === selectedModelId;
 
 	return (
 		<AskAboutProvider value={available ? askAbout : null}>
-			{children}
-			{available && opened && (
-				<ChatModal
-					key={selectedModelId}
-					ref={chatRef}
-					isOpen={isOpen}
-					onOpenChange={setIsOpen}
-					publication={opened}
-					modelId={selectedModelId}
-					onModelChange={setSelectedModelId}
-				/>
-			)}
+			<AskAboutConversation value={hasConversation}>
+				{children}
+				{available && opened && (
+					<ChatModal
+						key={selectedModelId}
+						isOpen={isOpen}
+						onOpenChange={setIsOpen}
+						publication={attached}
+						onPublicationChange={setAttached}
+						modelId={selectedModelId}
+						onModelChange={setSelectedModelId}
+						onConversationStateChange={started => setConversation({ modelId: selectedModelId, started })}
+					/>
+				)}
+			</AskAboutConversation>
 		</AskAboutProvider>
 	);
 }

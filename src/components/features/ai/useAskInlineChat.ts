@@ -13,6 +13,7 @@ import { chatRequestOptions, isAnswering } from "@/lib/ai/chat-request";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { useChatMode } from "./useChatActions";
+import { questionPublication } from "./AskAbout";
 
 /**
  * Hands a question typed elsewhere on the library page to the chat beside the
@@ -53,7 +54,7 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 					parts: researchMessageParts(
 						chat.messages,
 						createResearchRequestContextSnapshot({
-							currentPublication: attached ?? undefined,
+							currentPublication: questionPublication(attached),
 							searchContext: questionContext,
 						}),
 						question,

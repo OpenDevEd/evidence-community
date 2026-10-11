@@ -58,10 +58,11 @@ export function bucketPdfCitationSources(
 	const sources: Record<string, string> = {};
 	for (let index = keysNewestFirst.length - 1; index >= 0; index -= 1) {
 		const key = keysNewestFirst[index];
-		Object.assign(
-			sources,
-			publicationPdfCitationSources(key, attachmentsByKey[key]),
-		);
+		for (const [name, target] of Object.entries(publicationPdfCitationSources(key, attachmentsByKey[key]))) {
+			sources[name] = target;
+			// Keyed by itself too: a name can only point at one PDF, and every one read must still be citable.
+			sources[target] = target;
+		}
 	}
 
 	return sources;

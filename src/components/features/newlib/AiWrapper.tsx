@@ -11,7 +11,7 @@ import {
 } from "@nextui-org/react";
 import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { useLocalStorage } from "usehooks-ts";
@@ -26,7 +26,7 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { twMerge } from "@/lib/tw-merge";
-import { attachedItem, useAskAbout } from "@/components/features/ai/AskAbout";
+import { AskAboutConversation, attachedItem, useAskAbout } from "@/components/features/ai/AskAbout";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
 
 function randomUUID() {
@@ -109,6 +109,7 @@ function AiModals({
 				onOpenChange={onChangeOpenChange}
 				selectedModelId={selectedModelId}
 				onModelChange={onModelChange}
+				hasConversation={use(AskAboutConversation)}
 			/>
 			{generativeFeatures.map(({ feature, title }) => (
 				<GenerativeModal

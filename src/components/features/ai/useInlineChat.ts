@@ -11,7 +11,6 @@ import {
 } from "@/context/InlineChatLayout";
 import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
 import { isAnswering } from "@/lib/ai/chat-request";
-import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import type { AIModelId } from "@/lib/ai/models";
 import type { ChatMode } from "@/types/ai";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -24,6 +23,7 @@ import {
 	useScreeningControls,
 	useSendWithContext,
 	useTranscriptExport,
+	useCurrentRequestContext,
 } from "./useChatActions";
 import { useComposerDock } from "./useComposerDock";
 import { useInlineChatSession } from "./useInlineChatSession";
@@ -85,14 +85,7 @@ function useInlineConversation({
 		modelId,
 		searchContext,
 	});
-	const currentRequestContext = useCallback(
-		() =>
-			createResearchRequestContextSnapshot({
-				currentPublication: attached ?? undefined,
-				searchContext,
-			}),
-		[attached, searchContext],
-	);
+	const currentRequestContext = useCurrentRequestContext(attached, searchContext);
 	const resetChat = useCallback(() => {
 		clearError();
 		setMessages((current) => current.slice(0, 1));

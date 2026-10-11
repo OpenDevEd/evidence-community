@@ -22,7 +22,9 @@ import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { analyticsIdField } from "@/lib/ai/chat-request";
-import type { ResearchRequestContextSnapshot } from "@/lib/ai/request-context";
+import { createResearchRequestContextSnapshot, type ResearchRequestContextSnapshot } from "@/lib/ai/request-context";
+import type { LibrarySearchContext } from "@/lib/search-context";
+import { questionPublication, type AttachedItem } from "./AskAbout";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
 import type { ChatMode, SmartScreeningField } from "@/types/ai";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -364,4 +366,16 @@ export function useScreeningControls({
 		}),
 		smartScreeningFields,
 	};
+}
+
+/** What the next question is about: the attached publication and the reader's search, read when it is sent. */
+export function useCurrentRequestContext(attached: AttachedItem | null, searchContext?: LibrarySearchContext) {
+	return useCallback(
+		() =>
+			createResearchRequestContextSnapshot({
+				currentPublication: questionPublication(attached),
+				searchContext,
+			}),
+		[attached, searchContext],
+	);
 }

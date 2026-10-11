@@ -5,7 +5,6 @@ import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
 import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
-import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import { isAnswering } from "@/lib/ai/chat-request";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -21,6 +20,7 @@ import {
 	useScreeningControls,
 	useSendWithContext,
 	useTranscriptExport,
+	useCurrentRequestContext,
 } from "./useChatActions";
 import { useTranslations } from "next-intl";
 import { useChatWindowSession } from "./useChatWindowSession";
@@ -51,13 +51,15 @@ function useChatScrolling() {
 /** The conversation: its messages, and the ways they change. */
 function useChatConversation({
 	publication,
+	onPublicationChange,
 	mode,
 	modelId,
 	onConversationStateChange,
 	searchContext,
 }: {
-	/** The publication the window opens about, if any. */
-	publication?: AttachedItem;
+	/** The publication the next question is about. With `onPublicationChange` it belongs to whoever opened the window; without it, it is where the window starts. */
+	publication?: AttachedItem | null;
+	onPublicationChange?: (item: AttachedItem | null) => void;
 	mode: ChatMode;
 	modelId: AIModelId;
 	onConversationStateChange?: (hasConversation: boolean) => void;
@@ -66,11 +68,10 @@ function useChatConversation({
 	// The publication the next question is about: the one the window was opened
 	// for, then whichever the reader attaches or removes. Changing it keeps the
 	// conversation; each question carries the one it was asked about.
-	const [attached, setAttached] = useState<AttachedItem | null>(() =>
-		publication ?? null,
-	);
+	const [own, setOwn] = useState<AttachedItem | null>(() => publication ?? null);
+	const attached = onPublicationChange ? (publication ?? null) : own;
+	const setAttached = onPublicationChange ?? setOwn;
 	const publicationKey = attached?.key;
-	const publicationTitle = attached?.title;
 	const {
 		chat,
 		messages,
@@ -89,19 +90,7 @@ function useChatConversation({
 		searchContext,
 	});
 
-	const currentRequestContext = useCallback(
-		() =>
-			createResearchRequestContextSnapshot({
-				currentPublication: publicationKey
-					? {
-							key: publicationKey,
-							title: publicationTitle || "Untitled publication",
-						}
-					: undefined,
-				searchContext,
-			}),
-		[publicationKey, publicationTitle, searchContext],
-	);
+	const currentRequestContext = useCurrentRequestContext(attached, searchContext);
 
 	const resetChat = useCallback(() => {
 		clearError();
@@ -183,12 +172,14 @@ function useChatComposer({
  */
 export function useChatWindow({
 	publication,
+	onPublicationChange,
 	modelId,
 	onConversationStateChange,
 	searchContext,
 }: {
-	/** The publication the window opens about, if any. */
-	publication?: AttachedItem;
+	/** The publication the next question is about; see useChatConversation. */
+	publication?: AttachedItem | null;
+	onPublicationChange?: (item: AttachedItem | null) => void;
 	modelId: AIModelId;
 	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
@@ -196,6 +187,7 @@ export function useChatWindow({
 	const { isDeepResearchEnabled, mode, setMode } = useChatMode();
 	const conversation = useChatConversation({
 		publication,
+		onPublicationChange,
 		mode,
 		modelId,
 		onConversationStateChange,
