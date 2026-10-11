@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef } from "react";
 
 import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
+import { ADMIN_COLLECTION_PAGE_SIZE, NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type {
 	AdminCollectionCatalogEntry,
+	AdminCollectionCatalogPage,
 	AdminSource,
 } from "@/lib/admin/types";
 
@@ -453,10 +455,33 @@ function errorMessage(error: unknown) {
 		: "Collections could not be loaded.";
 }
 
+/**
+ * The first page of the library's own collections as the admin page was served, so the tree has its rows and its
+ * height from the first paint. Null when it could not be read with the page.
+ */
+export const FirstCollections = createContext<AdminCollectionCatalogPage | null>(null);
+
+/** The pages a tree has already started from. A tree opened again later starts empty and reads its own. */
+const started = new WeakSet<AdminCollectionCatalogPage>();
+
+function stateWith(first: AdminCollectionCatalogPage | null): AdminCollectionCatalogueState {
+	if (!first || started.has(first)) return INITIAL_STATE;
+	// "idle": its rows are shown, and the tree reads the branch again as it reads any branch it has not read itself,
+	// so a collection made since the page was served shows.
+	const root: AdminCollectionCatalogueBranch = { error: null, items: first.items, loadingMore: false, loadMoreError: null, nextCursor: first.nextCursor, revealed: [], requestId: 0, status: "idle" };
+	return {
+		...INITIAL_STATE,
+		branches: new Map([[adminCollectionBranchKey(NATIVE_SOURCE_CONNECTION_KEY, null), root]]),
+		entries: new Map(first.items.map((entry) => [entry.key, entry])),
+	};
+}
+
 export function useAdminCollectionCatalogue() {
+	const first = useContext(FirstCollections);
 	const [state, dispatch] = useReducer(
 		adminCollectionCatalogueReducer,
-		INITIAL_STATE,
+		first,
+		stateWith,
 	);
 	const stateRef = useRef(state);
 	stateRef.current = state;
@@ -519,7 +544,7 @@ export function useAdminCollectionCatalogue() {
 				const page = await getAdminCollectionChildren(
 					{
 						cursor,
-						pageSize: 50,
+						pageSize: ADMIN_COLLECTION_PAGE_SIZE,
 						parentCollection,
 						sourceConnectionKey,
 					},
@@ -556,6 +581,11 @@ export function useAdminCollectionCatalogue() {
 		},
 		[],
 	);
+
+	// The page it came with is used once: by the time this tree is opened again it is out of date.
+	useEffect(() => {
+		if (first) started.add(first);
+	}, [first]);
 
 	const loadSearch = useCallback(
 		async (
@@ -608,7 +638,7 @@ export function useAdminCollectionCatalogue() {
 				const page = await searchAdminCollectionCatalog(
 					{
 						cursor,
-						pageSize: 50,
+						pageSize: ADMIN_COLLECTION_PAGE_SIZE,
 						...input,
 					},
 					controller.signal,

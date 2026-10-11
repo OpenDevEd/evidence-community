@@ -1015,6 +1015,9 @@ export function AdminCollectionCatalogue({
 		estimateSize: () => ROW_HEIGHT,
 		getItemKey: (index) => rowId(rows[index]!),
 		getScrollElement: () => scrollElementRef.current,
+		// Before the sidebar is measured, and on the server, the rows a sidebar this tall would show are drawn, so the
+		// tree is there with the page.
+		initialRect: { width: 0, height: 900 },
 		overscan: 8,
 		scrollMargin,
 		rangeExtractor: (range) => {

@@ -4115,19 +4115,21 @@ test("pages and virtualizes large collection catalogues while loading sources la
 		exact: true,
 	});
 	await nativeGroup.focus();
+	// The tree comes with the page and is read again once open: the group is busy while that read is held, and
+	// the collections the page itself came with are already listed under it.
 	await expect(nativeGroup).toHaveAttribute("aria-busy", "true");
-	await page.keyboard.press("ArrowRight");
-	await expect(nativeGroup).toBeFocused();
+	await expect(tree.locator('[role="treeitem"][aria-level="2"]').first()).toBeVisible();
 	releaseRootPage();
+	await expect(
+		tree.getByText("Collection 001", { exact: true }),
+	).toBeVisible();
+	await page.keyboard.press("ArrowRight");
 	await expect(
 		tree.getByRole("treeitem", {
 			name: teacherCollection.name,
 			exact: true,
 		}),
 	).toBeFocused();
-	await expect(
-		tree.getByText("Collection 001", { exact: true }),
-	).toBeVisible();
 	await expect
 		.poll(
 			() =>
