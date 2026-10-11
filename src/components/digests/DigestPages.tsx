@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useState } from "react";
+import { Suspense, use, useEffect, useOptimistic, useState, useTransition, type ReactNode } from "react";
 import { useLocale } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
@@ -29,12 +29,27 @@ import { Face, Icon, TextLink, muted } from "./DigestPrimitives";
 import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
 import { Subscription, type Preferences } from "./Subscription";
 
-/** The page number lives in the URL, so every page can be shared and reloaded. */
-/** `anchor` is the list's own heading: turning its page brings the top of the list back into view, where a shorter page would leave the reader below it. */
-function PageControls({page, pages, href, anchor}: {page: number; pages: number; href: (page: number) => string; anchor?: string}) {
+/**
+ * A list with its page controls. The page number lives in the URL, so every page can be shared and reloaded. Turning
+ * the page brings `anchor`, the list's heading, into view at once, and the rows on show stay, dimmed, until the next
+ * page's rows are in.
+ */
+function Paged({page, pages, href, anchor, children}: {page: number; pages: number; href: (page: number) => string; anchor: string; children: ReactNode}) {
   const router = useRouter();
-  if (pages < 2) return null;
-  return <Pagination showControls page={page} total={pages} onChange={next => router.push(anchor ? `${href(next)}#${anchor}` : href(next), {scroll: Boolean(anchor)})} className="mt-6 flex justify-center" />;
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(page);
+  function turn(next: number) {
+    const instant = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(anchor)?.scrollIntoView({behavior: instant ? "auto" : "smooth", block: "start"});
+    startTransition(() => {
+      setShown(next);
+      router.push(`${href(next)}#${anchor}`, {scroll: false});
+    });
+  }
+  return <>
+    <div aria-busy={pending} className={twMerge("transition-opacity duration-200 motion-reduce:transition-none", pending && "pointer-events-none opacity-50")}>{children}</div>
+    {pages > 1 && <Pagination showControls page={shown} total={pages} onChange={turn} className="mt-6 flex justify-center" />}
+  </>;
 }
 
 /** Who stands behind an edition: the person who checked it, or that AI wrote it and nobody has. Nothing when the library does not say. */
@@ -134,7 +149,7 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
       <div className={withRail}>
-        <section aria-label="Digest archive" className="min-w-0">
+        <section id="archive" aria-label="Digest archive" className="min-w-0 scroll-mt-8">
           <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
         </section>
         <aside className="space-y-4 lg:sticky lg:top-8">
@@ -186,13 +201,12 @@ function ArchiveLoading() {
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const {editions: items, page, pages} = use(editions);
   if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
-  return <div className="space-y-8">
+  return <Paged page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} anchor="archive"><div className="space-y-8">
     {byYear(items).map(({year, items: ofYear}) => <section key={year} aria-labelledby={`year-${year}`}>
       <SectionTitle className="mb-3 flex items-baseline gap-2 text-xl"><span id={`year-${year}`}>{year}</span><span className={`text-sm font-normal tabular-nums ${muted}`}>{ofYear.length}</span></SectionTitle>
       <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} />)}</div>
     </section>)}
-    <PageControls page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} />
-  </div>;
+  </div></Paged>;
 }
 
 /** Publications per edition, oldest first, as the library's Years card shows publications per year. Pointing at a bar reads it out; the latest is read out otherwise. */
@@ -360,10 +374,9 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
 /** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
 function EditionLists({edition, cards, path, locale}: {edition: DigestEdition; cards: Promise<EditionCardsData>; path: string; locale: string}) {
   const {reviews} = edition;
-  const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <>
+  const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <Paged page={page} pages={pages} href={href} anchor={anchor}>
     <Suspense fallback={<CardsLoading keys={keys} />}><EditionCards cards={cards} keys={keys} /></Suspense>
-    <PageControls page={page} pages={pages} href={href} anchor={anchor} />
-  </>;
+  </Paged>;
   if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
     <ListHeading id="reviews" title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
@@ -385,14 +398,14 @@ function ListHeading({id, title, count, locale}: {id: string; title: string; cou
   return <h3 id={id} className="mb-4 flex scroll-mt-8 items-baseline gap-2 font-heading text-xl font-medium">{title}<span className={`text-sm font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
 }
 function CardsLoading({keys}: {keys: string[]}) {
-  return <div className={cardList}>{keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>;
+  return <div className={cardList}>{keys.map(key => <Resource key={key} as="div" abstract hideUnapi isLoading itemData={undefined} />)}</div>;
 }
 function EditionCards({cards: pending, keys}: {cards: Promise<EditionCardsData>; /** The cards of one list, in its order. */ keys: string[]}) {
   const {cards, profiles} = use(pending);
   const listed = keys.flatMap(key => cards.find(card => card.key === key) ?? []);
   // The server read the authors with the cards, so no card looks them up on its own.
   return <AuthorProfilesContext value={new Map(profiles.map(profile => [profile.id, profile]))}>
-    <div className={cardList}>{listed.map(card => <Resource key={card.key} as="div" abstract={false} hideUnapi itemData={card} />)}</div>
+    <div className={cardList}>{listed.map(card => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
   </AuthorProfilesContext>;
 }
 function PastDigests({earlier, base, locale}: {earlier: Promise<DigestSummary[]>; base: string; locale: string}) {
