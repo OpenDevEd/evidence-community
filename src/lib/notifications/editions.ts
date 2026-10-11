@@ -10,7 +10,7 @@ import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
-import { listedAsReview, publicationKindsSchema, publicationMarks, savePublicationKinds, startDigestRequest } from "./kinds";
+import { LIKELY_REVIEWS_READ, publicationKindsSchema, publicationMarks, reviewStanding, savePublicationKinds, startDigestRequest } from "./kinds";
 import type { NotificationPublication, NotificationStream, PublicationKind } from "./types";
 
 function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>) {
@@ -51,8 +51,8 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
 
 /**
  * Counts a digest's publications and picks the ones it lists. Every
- * meta-analysis and review comes first: a record read as one, or a likely one
- * nobody has read yet. The rest follow best first: a real abstract, then a
+ * meta-analysis and review comes first, then the likely ones nobody has read
+ * yet, as many as one request has read. The rest follow best first: a real abstract, then a
  * score of the journal's standing, references, known institutions and
  * citations. A retracted record is left out. The journal and withdrawal flags
  * come from the OpenAlex record, so other sources score on the rest. A preprint and its
@@ -64,7 +64,7 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
 async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
   const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
     WITH candidate AS (
-      SELECT ${item.key} AS key, ${listedAsReview} AS review, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
+      SELECT ${item.key} AS key, ${reviewStanding} AS standing, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
         ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
         CASE WHEN length(coalesce(${item.title}, '')) >= 25 AND author.surname <> ''
           THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname
@@ -89,11 +89,19 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (
       -- One record stands for a work. Its own title, abstract and type say whether it is a likely review, since it is the one sent to be read.
-      SELECT DISTINCT ON (work) key, review, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
+      SELECT DISTINCT ON (work) key, standing, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
+    ), ranked AS (
+      -- Every meta-analysis and review of the period goes first. Likely ones nobody has read go next, but only as many
+      -- as one request has read: a library with more of them in a period than that would otherwise list nothing else.
+      -- The rest of the likely ones take their place by rank, and are read by a later digest that lists them.
+      SELECT key, abstract, score, refs, CASE
+          WHEN standing = 2 THEN 2
+          WHEN standing = 1 AND row_number() OVER (PARTITION BY standing ORDER BY abstract DESC, score DESC, refs DESC, key) <= ${LIKELY_REVIEWS_READ} THEN 1
+          ELSE 0 END AS first
+      FROM chosen
     )
     SELECT (SELECT count(*)::int FROM chosen) AS total,
-      -- Every meta-analysis and review of the period is listed, then the rest in rank order.
-      ARRAY(SELECT key FROM chosen ORDER BY review DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}) AS keys
+      ARRAY(SELECT key FROM ranked ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}) AS keys
   `);
   return { total: result.total, keys: result.keys ?? [] };
 }

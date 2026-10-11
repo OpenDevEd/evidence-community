@@ -19,8 +19,14 @@ const ABSTRACT = "meta[-‐ ]?analy|systematic(ally)? review|scoping review|lite
 const likelyReview = sql`(coalesce(${item.title}, '') ~* ${TITLE} OR coalesce(${item.abstractNote}, '') ~* ${ABSTRACT}
   OR EXISTS (SELECT 1 FROM "sourceSnapshot" WHERE "sourceSnapshot"."itemKey" = ${item.key} AND "sourceSnapshot"."payload" ->> 'type' = 'review'))`;
 
-/** True for a record to list ahead of the rest: one read as a meta-analysis or a review, or a likely one nobody has read yet. */
-export const listedAsReview = sql`coalesce((SELECT "kind" IN ('meta-analysis', 'review') FROM "notificationItemKind" WHERE "notificationItemKind"."itemKey" = ${item.key}), ${likelyReview})`;
+/** OpenScholar reads at most this many likely reviews for one digest (`MAX_DIGEST_KINDS` there). */
+export const LIKELY_REVIEWS_READ = 300;
+
+/**
+ * Where a record stands for a digest's list: 2 when it was read as a meta-analysis or a review, 1 when it is a likely
+ * one nobody has read yet, 0 for everything else, a likely one read as a single study included.
+ */
+export const reviewStanding = sql`coalesce((SELECT CASE WHEN "kind" IN ('meta-analysis', 'review') THEN 2 ELSE 0 END FROM "notificationItemKind" WHERE "notificationItemKind"."itemKey" = ${item.key}), CASE WHEN ${likelyReview} THEN 1 ELSE 0 END)`;
 
 export const publicationKindsSchema = z.record(z.string(), z.enum(["meta-analysis", "review", "study"]));
 type Marks = Pick<NotificationPublication, "candidate" | "kind">;

@@ -180,3 +180,25 @@ it("sends what another digest already had read, and keeps a list that was replac
     }
   });
 }, 120_000);
+
+it("puts only as many unread likely reviews first as one request has read, so a large library's studies are still listed", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
+    // 305 likely reviews by title, none with an abstract, and one study whose abstract ranks it above all of them.
+    const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const keys = Array.from({ length: 305 }, (_, index) => `REVAAA${letters[Math.floor(index / 24)]}${letters[index % 24]}`);
+    await client.query(
+      `WITH keys AS (SELECT unnest($1::text[]) AS key), identity AS (INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") SELECT key, 'native', key FROM keys)
+       INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", title, date) SELECT key, 'native', key, 'Report', 'A review of topic ' || key, '2026-08-10' FROM keys`, [keys]);
+    await publication(client, "PUBAAAAA", "Maize under heat", STUDY);
+    const prepared = await prepareDigestForPeriod(db, config, period);
+    expect(prepared).toMatchObject({ status: "queued", publicationCount: 306 });
+    const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    const listed = edition.publications.map(entry => entry.key);
+    expect(listed).toHaveLength(306);
+    expect(listed.indexOf("PUBAAAAA")).toBe(300);
+    expect(edition.publications.slice(0, 300).every(entry => entry.candidate === true)).toBe(true);
+    // The five left over are still marked, so a later digest that lists them has them read.
+    expect(edition.publications.slice(301).every(entry => entry.candidate === true)).toBe(true);
+  });
+}, 120_000);
