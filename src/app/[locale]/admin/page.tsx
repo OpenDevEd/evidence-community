@@ -33,13 +33,14 @@ function openScholarConfigurationHref(libraryUrl: string) {
  * first paint. When either cannot be read the admin still opens, and says so when it reads them again.
  */
 async function sidebarWithThePage() {
-	const database = await getDatabase();
+	// One promise for the database, so a library whose database cannot be reached falls back like a failed read.
+	const database = getDatabase();
 	const [initialLibrary, firstCollections] = await Promise.all([
-		getAdminLibrarySnapshot(database).catch((error: unknown) => {
+		database.then(getAdminLibrarySnapshot).catch((error: unknown) => {
 			console.error("The admin's sources were not read with the page", error);
 			return { sources: [] };
 		}),
-		getAdminCollectionChildrenPage(database, { cursor: null, pageSize: ADMIN_COLLECTION_PAGE_SIZE, parentCollection: null, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY }).catch((error: unknown) => {
+		database.then((db) => getAdminCollectionChildrenPage(db, { cursor: null, pageSize: ADMIN_COLLECTION_PAGE_SIZE, parentCollection: null, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY })).catch((error: unknown) => {
 			console.error("The admin's collections were not read with the page", error);
 			return null;
 		}),

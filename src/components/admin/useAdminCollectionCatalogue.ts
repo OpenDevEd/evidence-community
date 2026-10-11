@@ -461,9 +461,14 @@ function errorMessage(error: unknown) {
  */
 export const FirstCollections = createContext<AdminCollectionCatalogPage | null>(null);
 
+/** The pages a tree has already started from. A tree opened again later starts empty and reads its own. */
+const started = new WeakSet<AdminCollectionCatalogPage>();
+
 function stateWith(first: AdminCollectionCatalogPage | null): AdminCollectionCatalogueState {
-	if (!first) return INITIAL_STATE;
-	const root: AdminCollectionCatalogueBranch = { error: null, items: first.items, loadingMore: false, loadMoreError: null, nextCursor: first.nextCursor, revealed: [], requestId: 0, status: "ready" };
+	if (!first || started.has(first)) return INITIAL_STATE;
+	// "idle": its rows are shown, and the tree reads the branch again as it reads any branch it has not read itself,
+	// so a collection made since the page was served shows.
+	const root: AdminCollectionCatalogueBranch = { error: null, items: first.items, loadingMore: false, loadMoreError: null, nextCursor: first.nextCursor, revealed: [], requestId: 0, status: "idle" };
 	return {
 		...INITIAL_STATE,
 		branches: new Map([[adminCollectionBranchKey(NATIVE_SOURCE_CONNECTION_KEY, null), root]]),
@@ -577,11 +582,10 @@ export function useAdminCollectionCatalogue() {
 		[],
 	);
 
-	// What came with the page is read again once the tree is open, so a collection made since shows. The rows it
-	// came with stay where they are meanwhile.
+	// The page it came with is used once: by the time this tree is opened again it is out of date.
 	useEffect(() => {
-		if (first) void loadChildren(NATIVE_SOURCE_CONNECTION_KEY, null, { force: true });
-	}, [first, loadChildren]);
+		if (first) started.add(first);
+	}, [first]);
 
 	const loadSearch = useCallback(
 		async (
