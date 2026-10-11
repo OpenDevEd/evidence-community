@@ -124,12 +124,12 @@ function PaperRow({ id, paper, active, current, cited, onRest, onPick }: { id: s
 function Narrow({ query, counts, arriving, onChange }: { query: DigestPapersQuery; counts: Record<DigestPapersQuery["show"], number> | undefined; arriving: string; onChange: (patch: Partial<DigestPapersQuery>) => void }) {
 	return <div className="flex items-center justify-between gap-2">
 		<div className="flex rounded-lg bg-black/[0.05] p-0.5 dark:bg-white/[0.06]">
-			{SHOWS.map(([show, label]) => <button key={show} type="button" aria-pressed={query.show === show} onClick={() => onChange({ show })} className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${query.show === show ? "bg-white text-black shadow-sm dark:bg-white/10 dark:text-white" : `${muted} hover:text-black/80 dark:hover:text-white/80`}`}>
+			{SHOWS.map(([show, label]) => <button key={show} type="button" aria-pressed={query.show === show} onClick={() => onChange({ show })} className={`inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors ${query.show === show ? "bg-white text-black shadow-sm dark:bg-white/10 dark:text-white" : `${muted} hover:text-black/80 dark:hover:text-white/80`}`}>
 				{label}<span className="inline-block min-w-4 text-left tabular-nums opacity-60">{counts && <span className={arriving}>{counts[show]}</span>}</span>
 			</button>)}
 		</div>
 		<Select
-			aria-label="Sort publications" size="sm" className="w-32" classNames={{ trigger: "h-8 min-h-8 rounded-lg", value: "text-xs" }}
+			aria-label="Sort publications" size="sm" className="w-[4.25rem] shrink-0 sm:w-32" classNames={{ trigger: "h-8 min-h-8 rounded-lg", value: "text-xs max-sm:hidden" }}
 			startContent={<HugeiconsIcon icon={Sorting05Icon} aria-hidden size={14} className={`shrink-0 ${muted}`} />}
 			selectedKeys={new Set([query.sort])} disallowEmptySelection
 			onSelectionChange={(keys) => onChange({ sort: SORTS.find(([key]) => key === [...keys][0])?.[0] ?? "newest" })}
