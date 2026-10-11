@@ -117,23 +117,25 @@ export function useAdminItemList(
 		return () => clearTimeout(timer);
 	}, [filters]);
 
-	// Back and Forward are navigation even when they return to an address this hook wrote earlier.
-	const traversed = useRef(false);
+	// Back and Forward: the filters follow the address the browser returned to, at once. A write still waiting for
+	// the entry just left goes with them, so it cannot land in the entry returned to.
 	useEffect(() => {
-		const note = () => { traversed.current = true; };
-		window.addEventListener("popstate", note);
-		return () => window.removeEventListener("popstate", note);
+		const follow = () => {
+			const returned = addressFilters(window.location.search);
+			inAddress.current = returned;
+			setFilters((current) => (JSON.stringify(current) === returned ? current : parseAdminItemViewFilters(new URLSearchParams(window.location.search))));
+		};
+		window.addEventListener("popstate", follow);
+		return () => window.removeEventListener("popstate", follow);
 	}, []);
 
 	// The route reports the address back: this hook's own writes, sometimes late, and changes to other parameters.
-	// Only navigation moves the filters: Back or Forward, or an address the hook did not write.
+	// Only an address the hook did not write is navigation, and only then do the filters follow it.
 	useEffect(() => {
 		const reported = addressFilters(routeSearch);
-		if (reported !== addressFilters(window.location.search)) return;
-		if (reported === inAddress.current && !traversed.current) return;
-		traversed.current = false;
+		if (reported !== addressFilters(window.location.search) || reported === inAddress.current) return;
 		inAddress.current = reported;
-		setFilters((current) => (JSON.stringify(current) === reported ? current : parseAdminItemViewFilters(new URLSearchParams(routeSearch))));
+		setFilters(parseAdminItemViewFilters(new URLSearchParams(routeSearch)));
 	}, [routeSearch]);
 
 	const loadItems = useCallback(

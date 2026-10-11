@@ -134,6 +134,7 @@ import { AdminPublicPages } from "./AdminPublicPages";
 import { DEFAULT_PREVIEW_ZOOM } from "./DraftPreviewPane";
 import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
+	ADMIN_SEARCH_MAX,
 	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
@@ -2169,6 +2170,7 @@ export default function AdminWorkbench({
 						color="filled"
 						aria-label="Search records"
 						id="admin-record-search"
+						maxLength={ADMIN_SEARCH_MAX}
 						className="min-w-0 flex-1"
 						classNames={{
 							input: "text-sm",

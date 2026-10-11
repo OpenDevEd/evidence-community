@@ -24,6 +24,9 @@ function parseJson(value: string | null): unknown {
 	}
 }
 
+/** The longest record search the library reads. The search field takes no more. */
+export const ADMIN_SEARCH_MAX = 500;
+
 export function parseAdminItemViewFilters(
 	searchParams: URLSearchParams,
 ): AdminItemViewFilters {
@@ -43,7 +46,7 @@ export function parseAdminItemViewFilters(
 	return {
 		reviewQueue: searchParams.get("review") === "pending",
 		filters,
-		query: (searchParams.get("search") ?? "").trim().slice(0, 500),
+		query: (searchParams.get("search") ?? "").trim().slice(0, ADMIN_SEARCH_MAX),
 		sort,
 		sortDirection:
 			requestedDirection === "asc" || requestedDirection === "desc"
