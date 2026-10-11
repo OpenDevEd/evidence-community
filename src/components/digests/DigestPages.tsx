@@ -5,7 +5,7 @@ import { useLocale } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
-import { AiMagicIcon, Calendar03Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
+import { AiMagicIcon, ArrowRight01Icon, Calendar03Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
 import type { DigestArchivePage, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
@@ -305,8 +305,8 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
           <AIMarkdown>{part.body}</AIMarkdown>
         </section>)}</div>
         <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
-          <SectionTitle className="mb-2"><span id="publications-title">In this edition</span></SectionTitle>
-          {edition.publicationCount > edition.listed && <p className={`mb-6 max-w-2xl text-sm leading-6 ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: meta-analyses and reviews first, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
+          <SectionTitle className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span>{edition.publicationCount > edition.listed && <span className={`text-sm font-normal tabular-nums ${muted}`}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)} listed</span>}</SectionTitle>
+          <ListOrder />
           <EditionLists edition={edition} cards={cards} path={path} locale={locale} />
         </section>
       </article>
@@ -370,6 +370,18 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
       <a href={row.href} className={railRow}><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${row.tone}`} /><span className="min-w-0 flex-1">{row.label}</span><span className="text-sm font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span></a>
     </li>)}</ul>
   </SidebarCard>;
+}
+
+/** How the lists are ordered, step by step, as the library ranks them (`reviewStanding`, then an abstract, then the score). */
+const ORDER = ["Meta-analyses and reviews", "With an abstract"];
+const RANKED_BY = ["Journal standing", "References", "Known institutions", "Citations"];
+function ListOrder() {
+  const chip = "inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium";
+  const next = <span aria-hidden className={muted}><Icon value={ArrowRight01Icon} size={14} /></span>;
+  return <ol aria-label="How this list is ordered" className="mb-8 flex flex-wrap items-center gap-x-2 gap-y-2">
+    {ORDER.map(step => <li key={step} className="flex items-center gap-2"><span className={`${chip} bg-accent/10 text-accent`}>{step}</span>{next}</li>)}
+    <li className="flex flex-wrap items-center gap-1.5"><span className={`mr-0.5 text-xs ${muted}`}>Ranked by</span>{RANKED_BY.map(signal => <span key={signal} className={`${chip} bg-black/5 text-black/70 dark:bg-white/10 dark:text-white/70`}>{signal}</span>)}</li>
+  </ol>;
 }
 
 /** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
