@@ -46,4 +46,9 @@ describe("which PDFs a page citation may open", () => {
 		expect(parsePageCitations("report.pdf — 2", sources)[0].href).toBe("/lib/NEWER111/download/PDFNEWER#page=2");
 		expect(parsePageCitations("/lib/OLDER222/download/PDFOLDER — 2", sources)[0].href).toBe("/lib/OLDER222/download/PDFOLDER#page=2");
 	});
+
+	it("opens a read publication's only PDF when a citation names the publication by its key", () => {
+		const sources = bucketPdfCitationSources(["SOLE1111"], { SOLE1111: [pdf("PDFSOLE1", "sole.pdf")] });
+		expect(parsePageCitations("SOLE1111 — 6", sources)[0].href).toBe("/lib/SOLE1111/download/PDFSOLE1#page=6");
+	});
 });

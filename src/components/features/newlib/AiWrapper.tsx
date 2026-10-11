@@ -254,7 +254,8 @@ function AiButton({
 			const item = attachedItem(data?.item);
 			if (item) askAbout?.(item);
 		},
-	);
+	// Where the page has no chat, as in the admin's preview, the menu offers no Ask AI.
+	).filter((item) => askAbout || item.key !== "chat");
 
 	return (
 		<motion.div

@@ -1,5 +1,6 @@
 "use client";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { publicationsAsked } from "@/lib/ai/request-context";
 
 import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -66,12 +67,14 @@ type ChatMessageListProps = {
 
 /** One message, sliding in from the side that sent it. */
 function ChatMessageRow({
+	askedAbout,
 	hasError,
 	isStreaming,
 	message,
 	modelId,
 	pdfSources,
 }: {
+	askedAbout?: { key: string; title: string };
 	hasError: boolean;
 	isStreaming: boolean;
 	message: Message;
@@ -96,6 +99,7 @@ function ChatMessageRow({
 				error={hasError}
 				pdfSources={pdfSources}
 				isStreaming={isStreaming}
+				askedAbout={askedAbout}
 			/>
 		</motion.div>
 	);
@@ -168,6 +172,7 @@ function ChatMessageList({
 }: ChatMessageListProps) {
 	const t = useTranslations("ai");
 	const lastIndex = messages.length - 1;
+	const asked = publicationsAsked(messages);
 	const isWaitingForReply = isStreaming && messages.at(-1)?.role === "user";
 
 	return (
@@ -190,6 +195,7 @@ function ChatMessageList({
 					{messages.slice(1).map((message, index) => (
 						<ChatMessageRow
 							key={message.id}
+							askedAbout={asked.get(message.id)}
 							hasError={hasError}
 							isStreaming={
 								isStreaming &&

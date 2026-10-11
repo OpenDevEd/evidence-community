@@ -10,6 +10,7 @@ import {
 	useInlineChatLayout,
 } from "@/context/InlineChatLayout";
 import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import { isAnswering } from "@/lib/ai/chat-request";
 import type { AIModelId } from "@/lib/ai/models";
 import type { ChatMode } from "@/types/ai";
@@ -101,7 +102,10 @@ function useInlineConversation({
 		error,
 		isLoading: status === "submitted" || status === "streaming",
 		messages,
-		reload: regenerate,
+		reload: () => {
+			setMessages((current) => withLatestRequestContext(current, currentRequestContext()));
+			return regenerate();
+		},
 		resetChat,
 		sendMessageWithContext: useSendWithContext({
 			currentRequestContext,

@@ -72,7 +72,7 @@ export function bucketPdfCitationSources(
 function onlyPdfOf(source: string, read: string[]) {
 	const key = source.match(/^(?:\/lib\/)?([A-Za-z0-9]+)(?:\/download\/[^/?#]+)?$/)?.[1];
 	if (!key) return undefined;
-	const pdfs = read.filter((target) => target.startsWith(`/lib/${key}/download/`));
+	const pdfs = [...new Set(read.filter((target) => target.startsWith(`/lib/${key}/download/`)))];
 	return pdfs.length === 1 ? pdfs[0] : undefined;
 }
 

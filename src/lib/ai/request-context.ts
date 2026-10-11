@@ -61,6 +61,24 @@ export function researchRequestContextsEqual(
 	return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
 }
 
+/**
+ * The publication each of the reader's questions was asked about. A question
+ * carries its context only when it changed, so the last one seen before it
+ * stands for the questions that follow.
+ */
+export function publicationsAsked(
+	messages: ReadonlyArray<{ id: string; role: string; parts: ReadonlyArray<{ type: string; data?: unknown }> }>,
+) {
+	const asked = new Map<string, { key: string; title: string }>();
+	let current: { key: string; title: string } | null = null;
+	for (const message of messages) {
+		const context = latestResearchRequestContext([message]);
+		if (context) current = context.currentPublication;
+		if (message.role === "user" && current) asked.set(message.id, current);
+	}
+	return asked;
+}
+
 export function latestResearchRequestContext(
 	messages: ReadonlyArray<{
 		parts: ReadonlyArray<{ type: string; data?: unknown }>;

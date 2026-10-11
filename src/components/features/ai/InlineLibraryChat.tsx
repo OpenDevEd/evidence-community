@@ -1,6 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { publicationsAsked } from "@/lib/ai/request-context";
 import { ArrowDown01Icon, Cancel01Icon, Loading03Icon, ReloadIcon } from "@hugeicons/core-free-icons";
 
 import { useDisclosure } from "@nextui-org/react";
@@ -137,6 +138,7 @@ function InlineChatMessages({
 		scrollToBottom,
 	} = chat;
 	const lastIndex = messages.length - 1;
+	const asked = publicationsAsked(messages);
 
 	return (
 		<>
@@ -159,6 +161,7 @@ function InlineChatMessages({
 						>
 							<MessageComponent
 								message={message}
+								askedAbout={asked.get(message.id)}
 								modelId={modelId}
 								error={Boolean(error)}
 								pdfSources={pdfSources}

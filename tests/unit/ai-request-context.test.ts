@@ -18,6 +18,7 @@ import {
 	researchRequestContextPart,
 	researchRequestContextText,
 	researchRequestContextsEqual,
+	publicationsAsked,
 } from "@/lib/ai/request-context";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 
@@ -244,5 +245,21 @@ describe("turning a page citation into a link", () => {
 		expect(pdfFilename({ key: "PDF0001", title: "Report 2024" })).toBe(
 			"Report 2024.pdf",
 		);
+	});
+});
+
+describe("which publication each question was asked about", () => {
+	const context = (currentPublication: { key: string; title: string } | null) => ({ type: "data-requestContext", data: { currentDate: "2026-10-11", currentPublication, searchContext: null } });
+	const question = (id: string, ...parts: { type: string; data?: unknown }[]) => ({ id, role: "user", parts: [...parts, { type: "text", text: "Why?" }] });
+	it("keeps a publication on the questions after the one that attached it, until it is removed", () => {
+		const radio = { key: "ABCD1234", title: "Radio lessons" };
+		const asked = publicationsAsked([
+			question("q1", context(radio)),
+			{ id: "a1", role: "assistant", parts: [{ type: "text", text: "Because." }] },
+			question("q2"),
+			question("q3", context(null)),
+			question("q4"),
+		]);
+		expect([...asked]).toEqual([["q1", radio], ["q2", radio]]);
 	});
 });

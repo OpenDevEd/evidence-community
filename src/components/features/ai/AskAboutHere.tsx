@@ -3,6 +3,7 @@
 import { useCallback, type ReactNode } from "react";
 
 import { useInlineChatDraftActions, useInlineChatLayout } from "@/context/InlineChatLayout";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { usePathname } from "@/i18n/routing";
 import { AskAboutProvider, useAskAbout, type AttachedItem } from "./AskAbout";
@@ -19,6 +20,8 @@ export function AskAboutHere({ ownList, children }: { ownList: boolean; children
 	const { setAttached } = useInlineChatDraftActions();
 	const { selectedModelId } = useSelectedModel();
 	const onLibraryPage = /^\/lib\/?$/.test(usePathname());
+	// The chat beside the results answers about the whole library, which is the AI search feature.
+	const isAISearchEnabled = useLibraryFeature("aiSearch");
 	const attach = useCallback(
 		(item: AttachedItem) => {
 			setAttached(item);
@@ -26,6 +29,6 @@ export function AskAboutHere({ ownList, children }: { ownList: boolean; children
 		},
 		[setAttached, setEngaged],
 	);
-	const beside = Boolean(fromPage && selectedModelId) && !ownList && onLibraryPage;
+	const beside = Boolean(fromPage && selectedModelId && isAISearchEnabled) && !ownList && onLibraryPage;
 	return <AskAboutProvider value={beside ? attach : fromPage}>{children}</AskAboutProvider>;
 }
