@@ -14,6 +14,8 @@ import {
 } from "@/i18n/runtime";
 import { ADMIN_CONTENT_PERMISSION, authorizeAdminRequest } from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
+import { getAdminCollectionChildrenPage } from "@/lib/admin/collection-catalog-service";
+import { ADMIN_COLLECTION_PAGE_SIZE, NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
 import { ADMIN_HOME_PATH, buildAdminSignInPath } from "@/lib/runtime-routing";
 
@@ -26,14 +28,23 @@ function openScholarConfigurationHref(libraryUrl: string) {
 	return url.toString();
 }
 
-/** The sources as the page is served. When they cannot be read the admin still opens, and says so when it reads them again. */
-async function sourcesWithThePage() {
-	try {
-		return await getAdminLibrarySnapshot(await getDatabase());
-	} catch (error) {
-		console.error("The admin's sources were not read with the page", error);
-		return { sources: [] };
-	}
+/**
+ * The sources and the first page of the library's own collections as the page is served, so the sidebar is whole at
+ * first paint. When either cannot be read the admin still opens, and says so when it reads them again.
+ */
+async function sidebarWithThePage() {
+	const database = await getDatabase();
+	const [initialLibrary, firstCollections] = await Promise.all([
+		getAdminLibrarySnapshot(database).catch((error: unknown) => {
+			console.error("The admin's sources were not read with the page", error);
+			return { sources: [] };
+		}),
+		getAdminCollectionChildrenPage(database, { cursor: null, pageSize: ADMIN_COLLECTION_PAGE_SIZE, parentCollection: null, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY }).catch((error: unknown) => {
+			console.error("The admin's collections were not read with the page", error);
+			return null;
+		}),
+	]);
+	return { initialLibrary, firstCollections };
 }
 
 export default async function AdminPage({
@@ -70,6 +81,7 @@ export default async function AdminPage({
 		redirect(buildAdminSignInPath(query ? `${pathname}?${query}` : pathname));
 	}
 
+	const { initialLibrary, firstCollections } = await sidebarWithThePage();
 	const definitions = getZoteroSchema().itemTypes.map((definition) => ({
 		creatorTypes: definition.creatorTypes,
 		fields: definition.fields,
@@ -82,7 +94,8 @@ export default async function AdminPage({
 			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
-			initialLibrary={await sourcesWithThePage()}
+			initialCollections={firstCollections}
+			initialLibrary={initialLibrary}
 		/>
 		</AdminSessionProvider>
 	);

@@ -40,6 +40,7 @@ import { Tooltip } from "@/components/nextui/Tooltip";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import type {
 	AdminCollectionCatalogEntry,
+	AdminCollectionCatalogPage,
 	AdminItemDraft,
 	AdminItemDetail,
 	AdminItemLinkKind,
@@ -127,6 +128,7 @@ import {
 	clearChangedAdminFieldErrors,
 	shouldClearAdminValidationErrors,
 } from "./admin-validation";
+import { FirstCollections } from "./useAdminCollectionCatalogue";
 import { useAdminItemList } from "./useAdminItemList";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
@@ -390,12 +392,15 @@ type BatchFeedback = {
 export default function AdminWorkbench({
 	configurationHref,
 	definitions,
+	initialCollections,
 	initialFilters,
 	initialLibrary,
 }: {
 	/** The library's source settings in OpenScholar. */
 	configurationHref: string;
 	definitions: AdminSchemaDefinition[];
+	/** The first page of the library's own collections as the page was served, or null when it could not be read. */
+	initialCollections: AdminCollectionCatalogPage | null;
 	initialFilters: AdminItemViewFilters;
 	/** The sources as the page was served, so the sidebar's list does not arrive after it. */
 	initialLibrary: AdminLibrarySnapshot;
@@ -2476,7 +2481,7 @@ export default function AdminWorkbench({
 								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
-								<DigestsPage value={digestsPage}>{navigationPane}</DigestsPage>
+								<FirstCollections value={initialCollections}><DigestsPage value={digestsPage}>{navigationPane}</DigestsPage></FirstCollections>
 							</div>
 						</div>
 					</aside>
