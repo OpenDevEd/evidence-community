@@ -143,7 +143,7 @@ function FixURL(url: string | null) {
  * library holds, and how many OpenAlex lists in all. The first number opens the library's list, the second the
  * whole list in OpenScholar. A direction with nothing on either side is left out.
  */
-export function CitationCounts({
+function CitationCounts({
 	itemData,
 }: {
 	itemData: Item | ListItem | undefined;
