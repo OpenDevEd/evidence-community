@@ -257,6 +257,22 @@ it("stops retrying a digest after six failed generation attempts", async () => {
   });
 }, 120_000);
 
+it("waits as long as OpenScholar asks before starting another digest, without counting a failed attempt", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await db.insert(notificationEdition).values({stream: "digest", windowStart: new Date("2026-09-01"), windowEnd: new Date("2026-09-08"), publications: [], attempts: 5, lastError: "OpenScholar digest generation returned 503"});
+    const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({error: "digest_rate_limited"}, {status: 429, headers: {"Retry-After": "600"}}));
+    try {
+      const asked = Date.now();
+      await generateNotificationEdition(db, config);
+      const [waiting] = await db.select().from(notificationEdition);
+      // Not started, so the next request is made afresh.
+      expect(waiting).toMatchObject({attempts: 5, lastError: null, leaseToken: null, leaseExpiresAt: null, requestedAt: null, publishedAt: null});
+      expect(waiting!.nextAttemptAt!.getTime() - asked).toBeGreaterThanOrEqual(600_000);
+      expect(waiting!.nextAttemptAt!.getTime() - asked).toBeLessThan(660_000);
+    } finally { request.mockRestore(); }
+  });
+}, 120_000);
+
 it("collects late commits and newly revealed items once without replaying every missed hourly email", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const visibleConfig = {...config, content: {...config.content, tags: {...config.content.tags, hidden: ["hide"]}}};
