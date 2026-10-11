@@ -541,6 +541,7 @@
     "jumpToLatest": "नवीनतम संदेश पर जाएँ",
     "chatDescription": "इस संसाधन के साथ चैट करें।",
     "askMeAnything": "इस प्रकाशन के बारे में मुझसे पूछें।",
+    "removeAttached": "{title} हटाएँ",
     "reasoning": "तर्क",
     "errorMessage": "क्षमा करें, लेकिन एक त्रुटि हुई। कृपया बाद में पुनः प्रयास करें।",
     "change": "AI मॉडल बदलें",

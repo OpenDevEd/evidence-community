@@ -541,6 +541,7 @@
     "jumpToLatest": "Jump to the latest message",
     "chatDescription": "Chat with this resource.",
     "askMeAnything": "Ask me about this publication.",
+    "removeAttached": "Remove {title}",
     "reasoning": "Reasoning",
     "errorMessage": "I'm sorry, but I encountered an error. Please try again later.",
     "change": "Change AI Model",

@@ -105,7 +105,9 @@ describe("the full-screen chat window", () => {
 		root = createRoot(container);
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async (_url: string, init: RequestInit) => {
+			vi.fn(async (url: string, init: RequestInit) => {
+				// The window also asks for questions to start with; only questions to the assistant are recorded.
+				if (!String(url).includes("/ai/chat")) return Response.json([]);
 				asked.push(
 					JSON.parse(String(init.body)) as Record<string, unknown>,
 				);
@@ -212,9 +214,7 @@ describe("the full-screen chat window", () => {
 
 	it("tells the assistant which publication is open", async () => {
 		await render({
-			data: {
-				item: { key: "ABC123", title: "Teacher training in Kenya" },
-			} as Parameters<typeof ChatModal>[0]["data"],
+			publication: { key: "ABC123", title: "Teacher training in Kenya" },
 		});
 		await ask("What does it say?");
 

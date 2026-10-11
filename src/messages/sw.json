@@ -542,6 +542,7 @@
     "jumpToLatest": "Nenda kwenye ujumbe wa hivi punde",
     "chatDescription": "Ongea na rasilimali hii.",
     "askMeAnything": "Niulize kuhusu chapisho hili.",
+    "removeAttached": "Ondoa {title}",
     "reasoning": "Hoja",
     "errorMessage": "Samahani, nimekumbana na hitilafu. Tafadhali jaribu tena baadaye.",
     "change": "Badilisha Modeli ya AI",

@@ -17,7 +17,6 @@ import { Logo } from "@/components/layout/navbar/Logo";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
-import type { ItemGetResponse } from "@/app/api/item/types";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { createTextMessage } from "@/lib/ai/chat-messages";
 import type { AIModelId } from "@/lib/ai/models";
@@ -33,6 +32,7 @@ import { MessageComponent } from "../ai/ChatMessage";
 import { useChatWindow } from "../ai/useChatWindow";
 import type { AttachedItem } from "../ai/AskAbout";
 import { AttachedRow } from "../ai/AttachedRow";
+import { useStarterQuestions } from "../ai/useStarterQuestions";
 import {
 	AIGeneratedContentControls,
 	type ControlAction,
@@ -528,9 +528,9 @@ function ChatWindowTopBar({
 type ChatModalProps = {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
-	data?: ItemGetResponse | undefined;
+	/** The publication the window opens about, if any; more can be attached once it is open. */
+	publication?: AttachedItem;
 	modelId: AIModelId;
-	questions?: undefined | string[];
 	/** Lets the page ask a question when it opens the window. */
 	ref?: React.Ref<ChatWindowHandle>;
 	searchContext?: LibrarySearchContext;
@@ -549,9 +549,8 @@ export default function ChatModal(
 function ChatModalContent({
 	isOpen,
 	onOpenChange,
-	data,
+	publication,
 	modelId,
-	questions,
 	ref,
 	searchContext,
 	onModelChange,
@@ -565,12 +564,13 @@ function ChatModalContent({
 	const { ai } = useLibraryConfig();
 	const modelPresentation = getAIModelPresentation(modelId, ai.providers);
 	const chat = useChatWindow({
-		data,
+		publication,
 		modelId,
 		onConversationStateChange,
 		searchContext,
 	});
 	const { ask, setAttached } = chat;
+	const questions = useStarterQuestions(chat.attached, isOpen && !chat.conversationStarted);
 	React.useImperativeHandle(ref, () => ({ ask, attach: setAttached }), [ask, setAttached]);
 	const {
 		canRunScreening,

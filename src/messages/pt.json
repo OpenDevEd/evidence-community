@@ -541,6 +541,7 @@
     "jumpToLatest": "Ir para a mensagem mais recente",
     "chatDescription": "Conversar com este recurso.",
     "askMeAnything": "Pergunte-me sobre esta publicação.",
+    "removeAttached": "Remover {title}",
     "reasoning": "Raciocínio",
     "errorMessage": "Desculpe, mas encontrei um erro. Por favor, tente novamente mais tarde.",
     "change": "Mudar Modelo de IA",

@@ -541,6 +541,7 @@
     "jumpToLatest": "Zur neuesten Nachricht springen",
     "chatDescription": "Mit dieser Ressource chatten.",
     "askMeAnything": "Fragen Sie mich nach dieser Veröffentlichung.",
+    "removeAttached": "{title} entfernen",
     "reasoning": "Denkprozess",
     "errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "change": "KI-Modell ändern",

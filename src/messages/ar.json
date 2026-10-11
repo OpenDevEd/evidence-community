@@ -541,6 +541,7 @@
     "jumpToLatest": "الانتقال إلى أحدث رسالة",
     "chatDescription": "تحدث مع هذا المصدر",
     "askMeAnything": "اسألني عن هذا المنشور.",
+    "removeAttached": "إزالة {title}",
     "reasoning": "الاستدلال",
     "errorMessage": "عذراً، حدث خطأ. يرجى المحاولة مرة أخرى لاحقاً",
     "change": "تغيير نموذج الذكاء الاصطناعي",

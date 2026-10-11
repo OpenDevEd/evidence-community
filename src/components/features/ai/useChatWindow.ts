@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
-import type { ItemGetResponse } from "@/app/api/item/types";
 import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import { isAnswering } from "@/lib/ai/chat-request";
@@ -25,7 +24,7 @@ import {
 } from "./useChatActions";
 import { useTranslations } from "next-intl";
 import { useChatWindowSession } from "./useChatWindowSession";
-import { attachedItem, type AttachedItem } from "./AskAbout";
+import type { AttachedItem } from "./AskAbout";
 
 /** Keeps the newest message in view, and fades the edges while scrolling. */
 function useChatScrolling() {
@@ -51,13 +50,14 @@ function useChatScrolling() {
 
 /** The conversation: its messages, and the ways they change. */
 function useChatConversation({
-	data,
+	publication,
 	mode,
 	modelId,
 	onConversationStateChange,
 	searchContext,
 }: {
-	data?: ItemGetResponse;
+	/** The publication the window opens about, if any. */
+	publication?: AttachedItem;
 	mode: ChatMode;
 	modelId: AIModelId;
 	onConversationStateChange?: (hasConversation: boolean) => void;
@@ -67,7 +67,7 @@ function useChatConversation({
 	// for, then whichever the reader attaches or removes. Changing it keeps the
 	// conversation; each question carries the one it was asked about.
 	const [attached, setAttached] = useState<AttachedItem | null>(() =>
-		attachedItem(data?.item),
+		publication ?? null,
 	);
 	const publicationKey = attached?.key;
 	const publicationTitle = attached?.title;
@@ -182,19 +182,20 @@ function useChatComposer({
  * typed, how far they have scrolled, and the actions they can take.
  */
 export function useChatWindow({
-	data,
+	publication,
 	modelId,
 	onConversationStateChange,
 	searchContext,
 }: {
-	data?: ItemGetResponse;
+	/** The publication the window opens about, if any. */
+	publication?: AttachedItem;
 	modelId: AIModelId;
 	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 }) {
 	const { isDeepResearchEnabled, mode, setMode } = useChatMode();
 	const conversation = useChatConversation({
-		data,
+		publication,
 		mode,
 		modelId,
 		onConversationStateChange,

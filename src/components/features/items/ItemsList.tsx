@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useItemsList } from "@/hooks/useItemsList";
 import { ResourcesView } from "../resources/ResourcesView";
+import { AskAboutHere } from "../ai/AskAboutHere";
 
 function NumberWrapper({ children }: { children: ReactNode }) {
 	return (
@@ -42,6 +43,7 @@ export default function ItemsList({
 
 	return (
 		<ItemsContext.Provider value={props}>
+			<AskAboutHere ownList={Boolean(userData)}>
 			<ResourcesView
 				contentId={contentId}
 				header={header}
@@ -93,6 +95,7 @@ export default function ItemsList({
 							),
 					  })}
 			/>
+			</AskAboutHere>
 		</ItemsContext.Provider>
 	);
 }
