@@ -68,6 +68,7 @@ function useInlineConversation({
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
+	const { attached } = useInlineChatDraft();
 	const {
 		chat,
 		messages,
@@ -79,13 +80,18 @@ function useInlineConversation({
 		clearError,
 	} = useInlineChatSession({
 		greeting: t("askMeAnythingPublications"),
+		itemKey: attached?.key,
 		mode,
 		modelId,
 		searchContext,
 	});
 	const currentRequestContext = useCallback(
-		() => createResearchRequestContextSnapshot({ searchContext }),
-		[searchContext],
+		() =>
+			createResearchRequestContextSnapshot({
+				currentPublication: attached ?? undefined,
+				searchContext,
+			}),
+		[attached, searchContext],
 	);
 	const resetChat = useCallback(() => {
 		clearError();

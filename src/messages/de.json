@@ -542,7 +542,6 @@
     "chatDescription": "Mit dieser Ressource chatten.",
     "askMeAnything": "Fragen Sie mich nach dieser Veröffentlichung.",
     "reasoning": "Denkprozess",
-    "chatPlaceholder": "Hallo! Wie kann ich Ihnen heute helfen? Sie können mir Fragen zu \"{title}\" oder anderen verwandten Themen stellen.",
     "errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "change": "KI-Modell ändern",
     "changeDescription": "Aktuell wird {model} verwendet.",

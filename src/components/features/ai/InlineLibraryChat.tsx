@@ -26,6 +26,8 @@ import {
 import { ChatErrorCard, ShortcutHint } from "./chat-shared";
 import { SmartScreeningModal } from "./SmartScreeningModal";
 import { useInlineChat, useInlineChatComposer } from "./useInlineChat";
+import { AttachedRow } from "./AttachedRow";
+import { useInlineChatDraft } from "@/context/InlineChatLayout";
 
 type InlineChat = ReturnType<typeof useInlineChat>;
 
@@ -254,6 +256,7 @@ function InlineChatComposer({
 	// rather than the conversation and the sources beside it.
 	const { handleSubmit, input, isInputReady, setInput } =
 		useInlineChatComposer({ ask, isWaiting, resizeComposer });
+	const { attached, setAttached } = useInlineChatDraft();
 	const isLit = isComposerFocused || isWaiting;
 
 	return (
@@ -297,6 +300,7 @@ function InlineChatComposer({
 					}}
 					className="pointer-events-none absolute inset-x-8 top-0 h-px origin-center bg-gradient-to-r from-transparent via-accent to-transparent"
 				/>
+				<AttachedRow item={attached} onRemove={() => setAttached(null)} onHeightChange={resizeComposer} />
 				<form ref={composerFormRef} onSubmit={handleSubmit}>
 					{/*
 					 * A plain field on purpose: the one NextUI ships grows to
@@ -318,7 +322,7 @@ function InlineChatComposer({
 						}}
 						autoComplete="off"
 						aria-label={t("askAI")}
-						placeholder={t("askMeAnythingPublications")}
+						placeholder={t(attached ? "askMeAnything" : "askMeAnythingPublications")}
 						value={input}
 						onChange={(event) => setInput(event.target.value)}
 						className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"

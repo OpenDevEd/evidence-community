@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback } from "react";
 
 import {
-	useInlineChatDraftActions,
+	useInlineChatDraft,
 	useInlineChatLayout,
 } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
@@ -29,7 +29,7 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 	const { mode } = useChatMode();
 	const { selectedModelId } = useSelectedModel();
 	const { getInlineChat, setEngaged } = useInlineChatLayout();
-	const { setDraft } = useInlineChatDraftActions();
+	const { attached, setDraft } = useInlineChatDraft();
 
 	return useCallback(
 		(text: string) => {
@@ -53,12 +53,14 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 					parts: researchMessageParts(
 						chat.messages,
 						createResearchRequestContextSnapshot({
+							currentPublication: attached ?? undefined,
 							searchContext: questionContext,
 						}),
 						question,
 					),
 				},
 				chatRequestOptions({
+					itemKey: attached?.key,
 					locale,
 					mode,
 					modelId: selectedModelId,
@@ -69,6 +71,7 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 			return true;
 		},
 		[
+			attached,
 			getInlineChat,
 			greeting,
 			locale,

@@ -18,6 +18,7 @@ import {
 	ReactNode,
 	type ComponentProps,
 	use,
+	useCallback,
 	useId,
 	useContext,
 	useEffect,
@@ -56,7 +57,12 @@ import {
 	EngagedLibraryPanel,
 	type EngagedLibraryView,
 } from "./EngagedLibraryPanel";
-import { useInlineChatLayout } from "@/context/InlineChatLayout";
+import {
+	useInlineChatDraftActions,
+	useInlineChatLayout,
+} from "@/context/InlineChatLayout";
+import { AskAboutProvider, useAskAbout, type AttachedItem } from "@/components/features/ai/AskAbout";
+import { usePathname } from "@/i18n/routing";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { AskHandedOverQuestion } from "@/components/features/ai/useHandedOverQuestion";
@@ -826,7 +832,7 @@ export function ResourcesView({
 	const [engagedAbstract, setEngagedAbstract] = useState(false);
 	const itemsContext = use(ItemsContext);
 
-	const { engaged: chatEngaged } = useInlineChatLayout();
+	const { engaged: chatEngaged, setEngaged } = useInlineChatLayout();
 	const { selectedModelId } = useSelectedModel();
 	const engaged =
 		chatEngaged && !itemsContext.userData && Boolean(selectedModelId);
@@ -839,10 +845,12 @@ export function ResourcesView({
 		? undefined
 		: normalizeLibrarySearchContext(itemsContext.queryParams);
 	useResultsAnalytics(itemsContext);
+	const askAboutHere = useAskAboutHere(Boolean(!itemsContext.userData && selectedModelId), setEngaged);
 	const resultAbstract = engaged ? engagedAbstract : abstract;
 	const resultView = engaged ? "list" : view;
 
 	return (
+		<AskAboutProvider value={askAboutHere}>
 		<ResourcesViewFrame
 			contentId={contentId}
 			engaged={engaged}
@@ -890,6 +898,7 @@ export function ResourcesView({
 				view={resultView}
 			/>
 		</ResourcesViewFrame>
+		</AskAboutProvider>
 	);
 }
 
@@ -903,3 +912,22 @@ const PLANE_SPRING = {
 	damping: 30,
 	mass: 1.05,
 } as const;
+
+/**
+ * On the library page a publication goes to the chat beside the results,
+ * joining its conversation and opening it if it is closed. Elsewhere, and
+ * where that chat is not offered, the page's own choice stands.
+ */
+function useAskAboutHere(hasInlineChat: boolean, setEngaged: (engaged: boolean) => void) {
+	const fromPage = useAskAbout();
+	const { setAttached } = useInlineChatDraftActions();
+	const onLibraryPage = /^\/lib\/?$/.test(usePathname());
+	const attach = useCallback(
+		(item: AttachedItem) => {
+			setAttached(item);
+			setEngaged(true);
+		},
+		[setAttached, setEngaged],
+	);
+	return fromPage && hasInlineChat && onLibraryPage ? attach : fromPage;
+}

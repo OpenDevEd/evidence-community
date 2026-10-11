@@ -10,7 +10,9 @@ import {
 	type ComponentProps,
 	type CSSProperties,
 	type ReactNode,
+	useState,
 } from "react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import useSWR from "swr";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
@@ -33,6 +35,7 @@ import { abstractPlainText } from "@/lib/abstract-text";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
+import { AskAboutButton } from "@/components/features/ai/AskAbout";
 
 const pdfHrefPattern = /^\/lib\/([^/?#]+)\/download\/([^/?#]+)(?:[?#].*)?$/;
 
@@ -56,17 +59,24 @@ function CitationCopyLink({
 	const { identity } = useLibraryConfig();
 	const itemUrl = useLibraryItemUrl();
 	const t = useTranslations("ui");
+	// An icon beside Ask AI, which keeps its label; the tooltip names it.
 	return (
-		<CopyButton
-			content={
-				itemKey
-					? itemUrl(itemKey)
-					: new URL(href, identity.baseUrl).toString()
-			}
-			text={t("copyLink")}
-			textOnCopy={t("linkCopied")}
-			classNames={copyLinkClassNames}
-		/>
+		<Tooltip content={t("copyLink")}>
+			{/* CopyButton takes no extra props, so the tooltip listens on a span around it. */}
+			<span className="inline-flex">
+				<CopyButton
+					content={
+						itemKey
+							? itemUrl(itemKey)
+							: new URL(href, identity.baseUrl).toString()
+					}
+					text={t("copyLink")}
+					textOnCopy={t("linkCopied")}
+					classNames={copyLinkClassNames}
+					isIconOnly
+				/>
+			</span>
+		</Tooltip>
 	);
 }
 
@@ -365,9 +375,12 @@ function PublicationStrip({
 export function PublicationLinkPreview({
 	itemKey,
 	href,
+	onAsked,
 }: {
 	itemKey: string;
 	href: string;
+	/** Closes the hover card once its publication is handed to the chat, so the card does not sit over it. */
+	onAsked?: () => void;
 }) {
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
@@ -412,7 +425,7 @@ export function PublicationLinkPreview({
 					<SiteFavicon className="size-3.5 rounded-favicon" />
 					<span className="truncate">{identity.name}</span>
 				</span>
-				<span className="pointer-events-auto"><CitationCopyLink href={href} itemKey={itemKey} /></span>
+				<span className="pointer-events-auto flex items-center gap-1"><AskAboutButton item={{ key: itemKey, title: preview.title === "-" ? itemKey : preview.title }} compact onAsked={onAsked} /><CitationCopyLink href={href} itemKey={itemKey} /></span>
 			</div>
 			<div className="pointer-events-none relative">
 			<PublicationHoverPreview
@@ -440,9 +453,10 @@ export function PublicationLink({
 	itemKey: string;
 	children: ReactNode;
 }) {
+	const [open, setOpen] = useState(false);
 	return (
 		<InlineCitation className="inline align-baseline">
-			<InlineCitationCard>
+			<InlineCitationCard open={open} onOpenChange={setOpen}>
 				<InlineCitationCardTrigger>
 					<Link
 						href={href}
@@ -458,7 +472,7 @@ export function PublicationLink({
 				</InlineCitationCardTrigger>
 				<InlineCitationCardBody className="w-96 max-w-[calc(100vw-1.5rem)]">
 					<InlineCitationSource>
-						<PublicationLinkPreview itemKey={itemKey} href={href} />
+						<PublicationLinkPreview itemKey={itemKey} href={href} onAsked={() => setOpen(false)} />
 					</InlineCitationSource>
 				</InlineCitationCardBody>
 			</InlineCitationCard>

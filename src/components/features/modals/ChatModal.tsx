@@ -31,6 +31,8 @@ import { ChatErrorCard } from "../ai/chat-shared";
 import { useChatFailure } from "../ai/useChatActions";
 import { MessageComponent } from "../ai/ChatMessage";
 import { useChatWindow } from "../ai/useChatWindow";
+import type { AttachedItem } from "../ai/AskAbout";
+import { AttachedRow } from "../ai/AttachedRow";
 import {
 	AIGeneratedContentControls,
 	type ControlAction,
@@ -43,6 +45,8 @@ type ChatWindowState = ReturnType<typeof useChatWindow>;
 export type ChatWindowHandle = {
 	/** Answers whether the question was taken. */
 	ask: (question: string) => boolean;
+	/** Makes a publication the subject of the next question, keeping the conversation. */
+	attach: (item: AttachedItem) => void;
 };
 
 type Message = ResearchUIMessage;
@@ -414,6 +418,11 @@ function ChatWindowComposer({
 						isLit={isComposerFocused || isWaiting}
 						prefersReducedMotion={prefersReducedMotion}
 					/>
+					<AttachedRow
+						item={chat.attached}
+						onRemove={() => chat.setAttached(null)}
+						onHeightChange={onHeightChange}
+					/>
 					<ChatMessageBox
 						hasPublication={hasPublication}
 						input={input}
@@ -561,8 +570,8 @@ function ChatModalContent({
 		onConversationStateChange,
 		searchContext,
 	});
-	const { ask } = chat;
-	React.useImperativeHandle(ref, () => ({ ask }), [ask]);
+	const { ask, setAttached } = chat;
+	React.useImperativeHandle(ref, () => ({ ask, attach: setAttached }), [ask, setAttached]);
 	const {
 		canRunScreening,
 		chatFailure,
@@ -704,9 +713,7 @@ function ChatModalContent({
 										</AnimatePresence>
 										<ChatWindowComposer
 											chat={chat}
-											hasPublication={Boolean(
-												data?.item?.title,
-											)}
+											hasPublication={Boolean(chat.attached)}
 											onHeightChange={() => {
 												if (!isAtBottom) return;
 												void scrollToBottom({
