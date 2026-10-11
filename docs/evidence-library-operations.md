@@ -947,14 +947,17 @@ role. Their account ID is never sent to readers. Off, the default, readers see
 neither the name nor the note.
 
 A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
-period has more, every meta-analysis and review comes first, then the likely
+period has more, every meta-analysis and review is picked first, then the likely
 ones nobody has read yet, as many as one request has read (300), then the rest
-are ranked: a record with an abstract of at least 200 characters first, then by a
+by rank: a record with an abstract of at least 200 characters first, then by a
 score of 3 for a journal OpenAlex marks as core, 2 for ten or more references
 (1 for fewer), 1 for a known institution and twice the natural log of one plus
 the citation count. A dataset or software record loses 1. A retracted record
-or a journal's front matter is in no digest. The digest's page says how its
-publications were chosen whenever it lists fewer than the period has.
+or a journal's front matter is in no digest. The edition stores and sends what
+was picked in that rank order, so each of its two lists on the digest's page,
+meta-analyses and reviews and other publications, is one ranking once the
+likely reviews are read. The page shows how its publications were chosen
+whenever it lists fewer than the period has.
 
 A meta-analysis or review is told from a single study by reading it. A record
 is a likely one when its title, its abstract or its OpenAlex type (`review`)
@@ -968,7 +971,7 @@ requests send as `kind`. An edition listed before another digest had a record
 read takes that answer on when its own request first goes out
 (`notificationEdition.requestedAt`). So a record is read once, only when a
 digest first covers it, and never because it sits in the library. A read that fails leaves
-the record a likely review: it is listed first and read again with the next
+the record a likely review: it is picked first and read again with the next
 digest that covers it.
 
 To write the digest of a past period, or rewrite the edition that already ends
