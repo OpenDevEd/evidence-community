@@ -1,9 +1,8 @@
 import { Marked, type Token } from "marked";
 import { z } from "zod";
 import { AdminValidationError } from "@/lib/admin/errors";
-import type { DigestDraft } from "./types";
+import { MOST_TEXT, type DigestDraft } from "./types";
 
-const MOST_TEXT = 50_000;
 const TOO_LONG = "Keep the digest's text under 50,000 characters.";
 
 // The same limits the writer's own text is held to.

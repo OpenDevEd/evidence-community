@@ -2,7 +2,8 @@
 
 // Digests in the admin. AI writes each one. The library's team reads it, changes it and sends it for review, and an
 // Editor or Owner publishes it under their own name. As with a record, readers see a change only once it is published.
-import { useEffect, useState, type ReactNode } from "react";
+import { parseAsStringLiteral, useQueryState } from "nuqs";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import {
 	AiMagicIcon,
@@ -73,13 +74,24 @@ const wideOnly = "hidden 2xl:block";
 const notOnPhone = "hidden sm:block";
 const day = (at: string) => new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 const time = (at: string) => `${day(at)}, ${new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
-/** Which page of editions is listed, narrowed and sorted how. */
+const SHOWS = ["all", "draft", "review", "published"] as const satisfies readonly AdminDigestsQuery["show"][];
+// Another person's step shows within a minute, as the library's sources do.
+const LIST_POLL_MS = 60_000;
+
+/** Which page of editions is listed, narrowed and sorted how. Which digests are listed is in the address, so a reload keeps it. */
 function useDigestList() {
-	const [query, setQuery] = useState<AdminDigestsQuery>({ page: 1, show: "all", sort: "newest" });
+	const [show, setShow] = useQueryState("digestState", parseAsStringLiteral(SHOWS).withDefault("all"));
+	const [{ page, sort }, setPaged] = useState<Pick<AdminDigestsQuery, "page" | "sort">>({ page: 1, sort: "newest" });
+	const query = useMemo((): AdminDigestsQuery => ({ page, show, sort }), [page, show, sort]);
+	const setQuery = useCallback((change: AdminDigestsQuery | ((query: AdminDigestsQuery) => AdminDigestsQuery)) => {
+		const next = typeof change === "function" ? change(query) : change;
+		setPaged({ page: next.page, sort: next.sort });
+		void setShow(next.show);
+	}, [query, setShow]);
 	// The list also tells the navigation how many digests wait for review, so it is read while another view is open.
-	const list = useSWR(["admin-digests", query] as const, ([, value]) => getAdminDigests(value), { keepPreviousData: true });
+	const list = useSWR(["admin-digests", query] as const, ([, value]) => getAdminDigests(value), { keepPreviousData: true, refreshInterval: LIST_POLL_MS });
 	// Rows kept from the page or filter before are shown dimmed until the new ones arrive.
-	return { list: list.data, listStale: list.isLoading && list.data !== undefined, query, setQuery };
+	return { list: list.data, listStale: list.isLoading && list.data !== undefined, query, setQuery, refreshList: list.mutate };
 }
 
 /**
@@ -124,8 +136,9 @@ function useLeaving(session: DigestSession | null) {
 function useOpenDigest(openId: string | null) {
 	const detail = useSWR(openId ? (["admin-digest", openId] as const) : null, ([, id]) => getAdminDigest(id), {
 		revalidateOnFocus: false,
-		// An edition AI is still writing is asked for again until its text is there.
-		refreshInterval: (latest) => (latest?.writing ? 15_000 : 0),
+		// An edition AI is still writing is asked for again until its text is there. Any other is read again as the
+		// list is, so another person's step shows; what this person has typed and not saved is never replaced.
+		refreshInterval: (latest) => (latest?.writing ? 15_000 : LIST_POLL_MS),
 	});
 	const sessions = useSessions();
 	const loaded = detail.data && detail.data.id === openId ? detail.data : undefined;
@@ -137,7 +150,7 @@ function useOpenDigest(openId: string | null) {
 	/** Loads the edition afresh, dropping what this person had typed since someone else changed it. */
 	const reload = () => detail.mutate().then((fresh) => sessions.hold(sessionToStart(fresh, undefined)));
 	useLeaving(session);
-	return { digest: snapshot ? snapshot.digest : loaded, missing: Boolean(detail.error) && !loaded, session, snapshot, reload };
+	return { digest: snapshot ? snapshot.digest : loaded, missing: Boolean(detail.error) && !loaded, session, snapshot, reload, refreshOpen: detail.mutate };
 }
 
 /**
@@ -150,6 +163,10 @@ export function useAdminDigests(param: string | null, setParam: (value: string |
 	const listed = useDigestList();
 	const opened = useOpenDigest(openId);
 	const leave = (to: string) => { void opened.session?.save(); setParam(to); };
+	const { refreshList } = listed;
+	const { refreshOpen } = opened;
+	/** Reads the list and the open edition again, as the admin's Refresh does for records. */
+	const refresh = useCallback(() => Promise.all([refreshList(), refreshOpen()]), [refreshList, refreshOpen]);
 	return {
 		...listed,
 		...opened,
@@ -159,6 +176,7 @@ export function useAdminDigests(param: string | null, setParam: (value: string |
 		view,
 		setView,
 		waiting: listed.list?.counts.review ?? 0,
+		refresh,
 	};
 }
 type Digests = ReturnType<typeof useAdminDigests>;

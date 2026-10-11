@@ -134,6 +134,7 @@ import { AdminPublicPages } from "./AdminPublicPages";
 import { DEFAULT_PREVIEW_ZOOM } from "./DraftPreviewPane";
 import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
+	ADMIN_SEARCH_MAX,
 	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
@@ -390,11 +391,14 @@ export default function AdminWorkbench({
 	configurationHref,
 	definitions,
 	initialFilters,
+	initialLibrary,
 }: {
 	/** The library's source settings in OpenScholar. */
 	configurationHref: string;
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
+	/** The sources as the page was served, so the sidebar's list does not arrive after it. */
+	initialLibrary: AdminLibrarySnapshot;
 }) {
 	const router = useRouter();
 	const showImportLabel = useBreakpoint("lg");
@@ -402,9 +406,7 @@ export default function AdminWorkbench({
 	const { canPublish } = useAdminSession();
 	const { navigation, theme } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
-	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
-		sources: [],
-	});
+	const [library, setLibrary] = useState(initialLibrary);
 	// In the address, so OpenScholar can link straight to a source's status.
 	const [syncSourceKey, setSyncSourceKey] = useQueryState("source", parseAsString);
 	const syncSource =
@@ -488,6 +490,9 @@ export default function AdminWorkbench({
 	const digests = useAdminDigests(digestsParam, (value) => void setDigestsParam(value));
 	const digestsOpen = digestsParam !== null;
 	const digestsShow = digests.query.show;
+	const { setQuery: setDigestsQuery, refresh: refreshDigests } = digests;
+	// Records have no digest state: it leaves the address with the digests.
+	const forgetDigestsShow = useCallback(() => setDigestsQuery((query) => ({ ...query, show: "all" })), [setDigestsQuery]);
 	const selectNavigationFilter = useCallback((next: Parameters<typeof setFilters>[0]) => {
 		// Leaving the digests for records keeps the state the digests were narrowed to, where records have it too.
 		setFilters(digestsOpen ? (current) => {
@@ -497,9 +502,12 @@ export default function AdminWorkbench({
 		} : next);
 		// Only when the digests view is open: an address update on every keystroke of a search races with the
 		// filters' own, and typed characters are lost.
-		if (digestsOpen) void setDigestsParam(null);
+		if (digestsOpen) {
+			void setDigestsParam(null);
+			forgetDigestsShow();
+		}
 		setMobilePane("list");
-	}, [setFilters, digestsOpen, digestsShow, setDigestsParam]);
+	}, [setFilters, digestsOpen, digestsShow, setDigestsParam, forgetDigestsShow]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [newItemSearch, setNewItemSearch] = useState("");
@@ -655,6 +663,8 @@ export default function AdminWorkbench({
 		}
 	}, []);
 
+	// The page comes with the sources as they were when it was served. They are
+	// read again once it is open, so an import that started since shows at once.
 	useEffect(() => {
 		void loadLibrary();
 	}, [loadLibrary]);
@@ -864,10 +874,12 @@ export default function AdminWorkbench({
 			await Promise.all([
 				loadLibrary(),
 				loadItems(),
+				// The digest list says for itself when it cannot be read; it must not fail a refresh of the records.
+				refreshDigests().catch(() => undefined),
 				detailKey ? loadDetail(detailKey) : Promise.resolve(),
 			]);
 		},
-		[loadDetail, loadItems, loadLibrary],
+		[loadDetail, loadItems, loadLibrary, refreshDigests],
 	);
 
 	const executeSave = useCallback(
@@ -2068,7 +2080,7 @@ export default function AdminWorkbench({
 
 
 	const digestsWaiting = digests.waiting;
-	const { setQuery: setDigestsQuery, close: showDigestList } = digests;
+	const { close: showDigestList } = digests;
 	const digestsPage = useMemo(() => ({
 		selected: digestsOpen,
 		waiting: digestsWaiting,
@@ -2158,6 +2170,7 @@ export default function AdminWorkbench({
 						color="filled"
 						aria-label="Search records"
 						id="admin-record-search"
+						maxLength={ADMIN_SEARCH_MAX}
 						className="min-w-0 flex-1"
 						classNames={{
 							input: "text-sm",
@@ -2469,7 +2482,7 @@ export default function AdminWorkbench({
 					</aside>
 
 					<section
-						aria-label="Records"
+						aria-label={digestsOpen ? "Digests" : "Records"}
 						id="admin-list-pane"
 						tabIndex={-1}
 						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${

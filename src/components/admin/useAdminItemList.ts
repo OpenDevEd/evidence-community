@@ -62,6 +62,10 @@ function selectingReviewQueue(filters: AdminItemViewFilters, pinned: boolean) {
  return filters.reviewQueue && !pinned;
 }
 
+const ADDRESS_FOLLOWS_AFTER_MS = 150;
+/** The filters an address holds, in one form to compare by. */
+const addressFilters = (search: string) => JSON.stringify(parseAdminItemViewFilters(new URLSearchParams(search)));
+
 export function useAdminItemList(
 	requestedColumns: readonly AdminItemColumnId[],
 	initialFilters: AdminItemViewFilters,
@@ -90,23 +94,50 @@ export function useAdminItemList(
 		[setSelectedKeyInUrl],
 	);
 
+	// The filters as this hook last put them in the address, or found them there.
+	const inAddress = useRef(JSON.stringify(initialFilters));
+	// The browser's address is an outside system. It follows the filters a moment after they settle, not on every
+	// keystroke: each write makes the router write too, and Safari refuses more than 100 address changes in ten seconds.
+	const waiting = useRef<ReturnType<typeof setTimeout>>(undefined);
 	useEffect(() => {
-		const next = writeAdminItemViewFilters(
-			new URLSearchParams(window.location.search),
-			filters,
-		);
-		const search = next.toString();
-		const href = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
-		window.history.replaceState(window.history.state, "", href);
+		const timer = waiting.current = setTimeout(() => {
+			const next = writeAdminItemViewFilters(
+				new URLSearchParams(window.location.search),
+				filters,
+			);
+			const search = next.toString();
+			const href = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+			if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+			try {
+				window.history.replaceState(window.history.state, "", href);
+				inAddress.current = addressFilters(search);
+			} catch {
+				// The browser refused another address change for now. The next change to the filters writes it.
+			}
+		}, ADDRESS_FOLLOWS_AFTER_MS);
+		return () => clearTimeout(timer);
 	}, [filters]);
 
+	// Back and Forward: the filters follow the address the browser returned to, at once. A write still waiting for
+	// the entry just left goes with them, so it cannot land in the entry returned to.
 	useEffect(() => {
-		const next = parseAdminItemViewFilters(
-			new URLSearchParams(routeSearch),
-		);
-		setFilters((current) =>
-			JSON.stringify(current) === JSON.stringify(next) ? current : next,
-		);
+		const follow = () => {
+			clearTimeout(waiting.current);
+			const returned = addressFilters(window.location.search);
+			inAddress.current = returned;
+			setFilters((current) => (JSON.stringify(current) === returned ? current : parseAdminItemViewFilters(new URLSearchParams(window.location.search))));
+		};
+		window.addEventListener("popstate", follow);
+		return () => window.removeEventListener("popstate", follow);
+	}, []);
+
+	// The route reports the address back: this hook's own writes, sometimes late, and changes to other parameters.
+	// Only an address the hook did not write is navigation, and only then do the filters follow it.
+	useEffect(() => {
+		const reported = addressFilters(routeSearch);
+		if (reported !== addressFilters(window.location.search) || reported === inAddress.current) return;
+		inAddress.current = reported;
+		setFilters(parseAdminItemViewFilters(new URLSearchParams(routeSearch)));
 	}, [routeSearch]);
 
 	const loadItems = useCallback(

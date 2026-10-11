@@ -134,6 +134,11 @@ describe("the text a person has in hand for a digest", () => {
     session.change({ title: "August", markdown: "مرحبا ".repeat(6000) });
     expect(session.leave()).toBe(false);
     expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    // Text over the library's limit, though short enough to send: the library would refuse it and the summary with it.
+    session.change({ markdown: "a".repeat(50_001) });
+    expect(session.leave()).toBe(false);
+    expect(api.saveAdminDigest).not.toHaveBeenCalled();
+    session.change({ markdown: "مرحبا ".repeat(6000) });
     // The person stays: the pause after typing still ends in a save.
     api.saveAdminDigest.mockResolvedValue(digest(4));
     await vi.advanceTimersByTimeAsync(700);

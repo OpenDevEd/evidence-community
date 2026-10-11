@@ -64,7 +64,8 @@ import {
 } from "./admin-api";
 import { SourceProviderIcon } from "./SourceProviderIcon";
 
-const count = (value: number) => value.toLocaleString();
+// One locale for the server and every browser: the sidebar's badges are drawn with the page, and the two must write a number the same way.
+const count = (value: number) => value.toLocaleString("en-GB");
 
 const ISSUES_POLL_MS = 10_000;
 

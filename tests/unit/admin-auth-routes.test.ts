@@ -36,6 +36,9 @@ vi.mock("@opendeved/evidence-library-core/zotero-schema", () => ({
 	getZoteroSchema: () => ({ itemTypes: [] }),
 }));
 vi.mock("@/components/admin/AdminWorkbench", () => ({ default: () => null }));
+// The page reads the library's sources for the workbench; these tests are about who gets in.
+vi.mock("@/db", () => ({ getDatabase: async () => ({}) }));
+vi.mock("@/lib/admin/library-query-service", () => ({ getAdminLibrarySnapshot: async () => ({ sources: [] }) }));
 
 import AdminPage from "@/app/[locale]/admin/page";
 import { GET as startSignIn } from "@/app/api/admin/sign-in/route";
