@@ -70,8 +70,15 @@ export function useAdminItemList(
 	// The view lives in the address: a reload, Back and Forward, and a link all bring it back.
 	const [{ review, filters: columnFilters, search, sort, direction }, setParams] = useQueryStates(adminItemViewParsers, { history: "replace", limitUrlUpdates: debounce(ADDRESS_FOLLOWS_AFTER_MS) });
 	const filters = useMemo(() => viewFromParams({ review, filters: columnFilters, search, sort, direction }), [review, columnFilters, search, sort, direction]);
+	// The view as last set, which can be ahead of the one drawn: two changes made in one moment each build on the
+	// one before, as with React's own state.
+	const latest = useRef(filters);
+	latest.current = filters;
 	const setFilters = useCallback(
-		(next: SetStateAction<AdminItemViewFilters>) => void setParams((current) => paramsFromView(typeof next === "function" ? next(viewFromParams(current)) : next)),
+		(next: SetStateAction<AdminItemViewFilters>) => {
+			latest.current = typeof next === "function" ? next(latest.current) : next;
+			void setParams(paramsFromView(latest.current));
+		},
 		[setParams],
 	);
 	const [items, setItems] = useState<AdminItemListRow[]>([]);
