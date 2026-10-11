@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
-import { publicationPdfCitationSources } from "@/lib/ai/citations";
+import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import { isAnswering } from "@/lib/ai/chat-request";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
@@ -14,6 +14,7 @@ import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ChatMode } from "@/types/ai";
 import { useScrollEdges } from "./chat-shared";
+import { useBucketPublications } from "./ContextBucket";
 import {
 	useAppendMessage,
 	useChatFailure,
@@ -192,12 +193,6 @@ export function useChatWindow({
 	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 }) {
-	const publicationKey = data?.item?.key;
-	const attachmentsData = data?.item?.attachmentsData;
-	const pdfSources = useMemo(
-		() => publicationPdfCitationSources(publicationKey, attachmentsData),
-		[publicationKey, attachmentsData],
-	);
 	const { isDeepResearchEnabled, mode, setMode } = useChatMode();
 	const conversation = useChatConversation({
 		data,
@@ -230,6 +225,10 @@ export function useChatWindow({
 		return true;
 	};
 	const composer = useChatComposer({ isBusy, onSend: ask });
+	// Page links work for every publication the conversation has read, attached or found, as in the chat beside the results.
+	const { pdfSources } = useBucketPublications(
+		bucketEntriesFromMessages(conversation.messages),
+	);
 	const scrolling = useChatScrolling();
 
 	return {
