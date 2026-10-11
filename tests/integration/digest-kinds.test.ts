@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
@@ -29,32 +30,38 @@ function openScholar(answer: () => Response) {
 }
 const marks = (publications: { key: string; candidate?: boolean; kind?: string }[]) => publications.map(entry => [entry.key, entry.candidate, entry.kind ?? null]);
 
-it("lists every likely review first, has each read once, and keeps what it was read as", async () => {
+it("marks every likely review, has each read once, keeps what it was read as, and lists each list best first", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
     await publication(client, "PUBAAAAA", "Maize under heat", STUDY);
-    // Neither has an abstract worth ranking, so only being a likely review puts them ahead of the study.
+    // None of the likely reviews has an abstract worth ranking, so the study with one is listed above them.
     await publication(client, "PUBAAAAB", "Drought: a systematic review");
     await publication(client, "PUBAAAAC", "Farm incomes after floods", "We pooled forty trials in a meta-analysis.");
     await publication(client, "PUBAAAAD", "A review of my summer");
     const prepared = await prepareDigestForPeriod(db, config, period);
     if (prepared.status !== "queued") throw new Error("The edition was not prepared");
     const edition = async () => (await db.select().from(notificationEdition).where(eq(notificationEdition.id, prepared.editionId)))[0];
-    expect(marks((await edition()).publications)).toEqual([["PUBAAAAB", true, null], ["PUBAAAAC", true, null], ["PUBAAAAD", true, null], ["PUBAAAAA", false, null]]);
+    expect(marks((await edition()).publications)).toEqual([["PUBAAAAA", false, null], ["PUBAAAAB", true, null], ["PUBAAAAC", true, null], ["PUBAAAAD", true, null]]);
 
     const service = openScholar(() => Response.json({ digest: { ...written("PUBAAAAA"), kinds: { PUBAAAAB: "review", PUBAAAAC: "meta-analysis", PUBAAAAD: "study", ZZZZZZZZ: "review" } } }));
     try {
       await generateNotificationEdition(db, config);
       // The library marks every publication, so OpenScholar reads the likely ones and guesses at none.
-      expect(marks(service.sent[0])).toEqual([["PUBAAAAB", true, null], ["PUBAAAAC", true, null], ["PUBAAAAD", true, null], ["PUBAAAAA", false, null]]);
+      expect(marks(service.sent[0])).toEqual([["PUBAAAAA", false, null], ["PUBAAAAB", true, null], ["PUBAAAAC", true, null], ["PUBAAAAD", true, null]]);
       // The answers are kept with each record and on the edition. One for a record it does not list is dropped.
       expect((await db.select().from(notificationItemKind).orderBy(notificationItemKind.itemKey)).map(row => [row.itemKey, row.kind])).toEqual([["PUBAAAAB", "review"], ["PUBAAAAC", "meta-analysis"], ["PUBAAAAD", "study"]]);
-      expect(marks((await edition()).publications).map(([key, , kind]) => [key, kind])).toEqual([["PUBAAAAB", "review"], ["PUBAAAAC", "meta-analysis"], ["PUBAAAAD", "study"], ["PUBAAAAA", null]]);
+      expect(marks((await edition()).publications).map(([key, , kind]) => [key, kind])).toEqual([["PUBAAAAA", null], ["PUBAAAAB", "review"], ["PUBAAAAC", "meta-analysis"], ["PUBAAAAD", "study"]]);
+      // A reader sees each list in rank order: the likely review read as a single study takes its place below the study with an abstract.
+      const { getDigestEdition } = await import("@/lib/notifications/public");
+      await client.query('UPDATE "notificationEdition" SET "publishedAt" = now()');
+      const shown = await getDigestEdition(db, config, "en-GB", prepared.editionId);
+      expect(shown?.reviews?.keys).toEqual(["PUBAAAAB", "PUBAAAAC"]);
+      expect(shown?.keys).toEqual(["PUBAAAAA", "PUBAAAAD"]);
 
-      // Written again, the answers go with the request, so nothing is read twice. What was read as a single study no longer goes first.
+      // Written again, the answers go with the request, so nothing is read twice.
       await prepareDigestForPeriod(db, config, period);
       await generateNotificationEdition(db, config);
-      expect(marks(service.sent[1])).toEqual([["PUBAAAAB", true, "review"], ["PUBAAAAC", true, "meta-analysis"], ["PUBAAAAA", false, null], ["PUBAAAAD", true, "study"]]);
+      expect(marks(service.sent[1])).toEqual([["PUBAAAAA", false, null], ["PUBAAAAB", true, "review"], ["PUBAAAAC", true, "meta-analysis"], ["PUBAAAAD", true, "study"]]);
     } finally {
       service.restore();
     }
@@ -107,7 +114,7 @@ it("takes OpenAlex's word that a record may be a review, and leaves a retracted 
     const prepared = await prepareDigestForPeriod(db, config, period);
     expect(prepared).toMatchObject({ status: "queued", publicationCount: 2 });
     const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
-    expect(marks(edition.publications)).toEqual([["PUBAAAAB", true, null], ["PUBAAAAA", false, null]]);
+    expect(marks(edition.publications)).toEqual([["PUBAAAAA", false, null], ["PUBAAAAB", true, null]]);
   });
 }, 120_000);
 
@@ -173,7 +180,7 @@ it("sends what another digest already had read, and keeps a list that was replac
       await generateNotificationEdition(db, config);
       const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.id, august.editionId));
       // The answer came back for the old list. The new list stands, and waits to be written.
-      expect(marks(edition.publications)).toEqual([["PUBAAAAB", true, "review"], ["PUBAAAAC", false, null]]);
+      expect(marks(edition.publications)).toEqual([["PUBAAAAC", false, null], ["PUBAAAAB", true, "review"]]);
       expect(edition.nextAttemptAt).not.toBeNull();
     } finally {
       service.restore();
@@ -181,7 +188,7 @@ it("sends what another digest already had read, and keeps a list that was replac
   });
 }, 120_000);
 
-it("puts only as many unread likely reviews first as one request has read, so a large library's studies are still listed", async () => {
+it("keeps a large library's many likely reviews marked, and lists the best publication first whatever it is", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     await prepareNotificationEditions(db, config, new Date("2026-09-09T00:00:00Z"));
     // 305 likely reviews by title, none with an abstract, and one study whose abstract ranks it above all of them.
@@ -196,9 +203,28 @@ it("puts only as many unread likely reviews first as one request has read, so a 
     const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
     const listed = edition.publications.map(entry => entry.key);
     expect(listed).toHaveLength(306);
-    expect(listed.indexOf("PUBAAAAA")).toBe(300);
-    expect(edition.publications.slice(0, 300).every(entry => entry.candidate === true)).toBe(true);
-    // The five left over are still marked, so a later digest that lists them has them read.
-    expect(edition.publications.slice(301).every(entry => entry.candidate === true)).toBe(true);
+    expect(listed[0]).toBe("PUBAAAAA");
+    // Every likely review is marked, so OpenScholar reads the first 300 and a later digest that lists the rest has them read.
+    expect(edition.publications.slice(1).every(entry => entry.candidate === true)).toBe(true);
+    expect(listed.slice(1)).toEqual(keys);
+  });
+}, 120_000);
+
+it("reorders the digests listed before ranked lists, best first, keeping every publication", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await publication(client, "PUBAAAAA", "Maize under heat", STUDY);
+    await publication(client, "PUBAAAAB", "Drought: a systematic review");
+    await publication(client, "PUBAAAAC", "Rice under heat", STUDY);
+    const entry = (key: string, kind?: string) => ({ key, title: `Publication ${key}`, creators: [], date: "2026-08-10", abstract: null, publicationType: "Report", doi: null, candidate: key === "PUBAAAAB", ...(kind ? { kind } : {}) });
+    // Stored the old way: the likely review first, though it was read as a single study and has no abstract.
+    const stored = [entry("PUBAAAAB", "study"), entry("PUBAAAAC"), entry("PUBAAAAA"), entry("PUBGONEX")];
+    const [edition] = await db.insert(notificationEdition).values({ stream: "digest", windowStart: period.start, windowEnd: period.end, publications: stored as never, publicationCount: 4, nextAttemptAt: null }).returning();
+    const reorder = readFileSync("drizzle/0081_digest-ranked-order.sql", "utf8").split("--> statement-breakpoint").filter(statement => /^\s*(--.*\n\s*)*UPDATE/.test(statement));
+    expect(reorder).toHaveLength(1);
+    for (const statement of reorder) await client.query(statement);
+    const [after] = await db.select().from(notificationEdition).where(eq(notificationEdition.id, edition.id));
+    // The two with an abstract first, then the one without, and a record that is gone last.
+    expect(after.publications.map(publication => publication.key)).toEqual(["PUBAAAAA", "PUBAAAAC", "PUBAAAAB", "PUBGONEX"]);
+    expect(after.publications).toEqual(expect.arrayContaining(stored));
   });
 }, 120_000);

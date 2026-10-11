@@ -51,10 +51,12 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
 
 /**
  * Counts a digest's publications and picks the ones it lists. Every
- * meta-analysis and review comes first, then the likely ones nobody has read
+ * meta-analysis and review is picked first, then the likely ones nobody has read
  * yet, as many as one request has read. The rest follow best first: a real abstract, then a
  * score of the journal's standing, references, known institutions and
- * citations. A retracted record is left out. The journal and withdrawal flags
+ * citations. `keys` is the order they are picked in, which a size limit cuts from the end; `ranked` is the same
+ * publications best first, the order the edition lists them in, so each of its lists keeps that order once the
+ * likely reviews are read. A retracted record is left out. The journal and withdrawal flags
  * come from the OpenAlex record, so other sources score on the rest. A preprint and its
  * article, or two deposits of one upload, count once: records with one title
  * and first author's surname are one work. The record with an abstract stands
@@ -62,7 +64,7 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
  * or both lack one, the published record does.
  */
 async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
-  const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null }>(sql`
+  const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null; ranked: string[] | null }>(sql`
     WITH candidate AS (
       SELECT ${item.key} AS key, ${reviewStanding} AS standing, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
         ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
@@ -91,19 +93,23 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       -- One record stands for a work. Its own title, abstract and type say whether it is a likely review, since it is the one sent to be read.
       SELECT DISTINCT ON (work) key, standing, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
     ), ranked AS (
-      -- Every meta-analysis and review of the period goes first. Likely ones nobody has read go next, but only as many
-      -- as one request has read: a library with more of them in a period than that would otherwise list nothing else.
-      -- The rest of the likely ones take their place by rank, and are read by a later digest that lists them.
+      -- Every meta-analysis and review of the period is picked first, so a size limit never cuts one. Likely ones nobody
+      -- has read come next, but only as many as one request has read: a library with more of them in a period than that
+      -- would otherwise list nothing else. The rest of the likely ones take their place by rank, and are read by a later
+      -- digest that lists them. The edition lists what is picked best first (ranked, below).
       SELECT key, abstract, score, refs, CASE
           WHEN standing = 2 THEN 2
           WHEN standing = 1 AND row_number() OVER (PARTITION BY standing ORDER BY abstract DESC, score DESC, refs DESC, key) <= ${LIKELY_REVIEWS_READ} THEN 1
           ELSE 0 END AS first
       FROM chosen
+    ), listed AS (
+      SELECT key, abstract, score, refs, first FROM ranked ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}
     )
     SELECT (SELECT count(*)::int FROM chosen) AS total,
-      ARRAY(SELECT key FROM ranked ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}) AS keys
+      ARRAY(SELECT key FROM listed ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key) AS keys,
+      ARRAY(SELECT key FROM listed ORDER BY abstract DESC, score DESC, refs DESC, key) AS ranked
   `);
-  return { total: result.total, keys: result.keys ?? [] };
+  return { total: result.total, keys: result.keys ?? [], ranked: result.ranked ?? [] };
 }
 
 /**
@@ -124,6 +130,13 @@ async function coverCandidates(db: DatabaseTransaction, config: LibraryServerCon
       ARRAY(SELECT "itemKey" FROM covered ORDER BY "firstPublishedAt", "itemKey" LIMIT ${EDITION_LISTED_LIMIT}) AS keys
   `);
   return { total: result.total, keys: result.keys ?? [] };
+}
+
+/** The publications in `ranked` order, when the list was ranked; an additions list keeps the order it was picked in. */
+function inRankOrder(publications: NotificationPublication[], ranked: string[] | undefined) {
+  if (!ranked) return publications;
+  const place = new Map(ranked.map((key, index) => [key, index]));
+  return publications.toSorted((left, right) => place.get(left.key)! - place.get(right.key)!);
 }
 
 async function listPublications(db: DatabaseTransaction, config: LibraryServerConfig, keys: string[]) {
@@ -165,7 +178,7 @@ function notificationWindows(state: typeof notificationState.$inferSelect, diges
 }
 
 /** How many publications the edition covers, and the keys of those it lists. */
-async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string) {
+async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string): Promise<{ total: number; keys: string[]; ranked?: string[] }> {
   // Additions are marked as covered whatever a digest covers, so a library that
   // later switches to additions starts from this edition.
   const additions = await coverCandidates(tx, config, after, window, editionId);
@@ -191,8 +204,8 @@ async function prepareWindow(
     await tx.update(notificationState).set(cursor);
     return { status: "empty" };
   }
-  const { total, keys } = await editionPublications(tx, config, after, window, editionId);
-  const publications = await listPublications(tx, config, keys);
+  const { total, keys, ranked } = await editionPublications(tx, config, after, window, editionId);
+  const publications = inRankOrder(await listPublications(tx, config, keys), ranked);
   let result: DigestPreparation = { status: "empty" };
   if (!publications.length) {
     await tx.delete(notificationEdition).where(eq(notificationEdition.id, editionId));
@@ -296,8 +309,8 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     const [existing] = await tx.select({ id: notificationEdition.id, draft: notificationEdition.draft, ai: notificationEdition.ai, note: notificationEdition.note, publishedAt: notificationEdition.publishedAt }).from(notificationEdition)
       .where(and(eq(notificationEdition.stream, "digest"), eq(notificationEdition.windowEnd, period.end))).for("update");
     if (existing && await draftIsEdited(tx, existing)) throw new AdminValidationError("This digest has changes that are not published. Publish them, or change its text back, before rewriting it.");
-    const { total, keys } = await rankPublications(tx, publishedIn(tx, config, period));
-    const publications = await listPublications(tx, config, keys);
+    const { total, keys, ranked } = await rankPublications(tx, publishedIn(tx, config, period));
+    const publications = inRankOrder(await listPublications(tx, config, keys), ranked);
     if (!publications.length) return { status: "empty" };
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
     // The worker compares the next attempt with the database's clock, so that clock sets it.
