@@ -330,7 +330,10 @@ function writtenEdition(edition: typeof notificationEdition.$inferSelect, words:
   return { ai, held, changes: { ...words, publishedAt: new Date(), ...(edition.draft ? { draft: null, ...moved } : {}) } };
 }
 
-/** An edition's words: OpenScholar's for a digest, null while it is still writing, or a count for the email about additions. */
+/**
+ * An edition's words: OpenScholar's for a digest, or a count for the email about additions. A number is how long to
+ * wait before asking OpenScholar again, when it has no digest to give yet.
+ */
 async function editionOutput(db: Database, config: LibraryServerConfig, edition: typeof notificationEdition.$inferSelect, signal?: AbortSignal) {
   if (edition.stream !== "digest") {
     const summary = `${edition.publicationCount} new ${edition.publicationCount === 1 ? "publication" : "publications"}`;
@@ -355,9 +358,9 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
   if (!edition) return false;
   try {
     const output = await editionOutput(db, config, edition, signal);
-    if (!output) {
-      // OpenScholar is still writing it. Checking back is not a failed attempt.
-      await db.update(notificationEdition).set({ nextAttemptAt: new Date(Date.now() + DIGEST_CHECK_MS), leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned);
+    if (typeof output === "number") {
+      // OpenScholar is still writing it, or has asked the library to wait before it starts. Neither is a failed attempt.
+      await db.update(notificationEdition).set({ nextAttemptAt: new Date(Date.now() + output), leaseToken: null, leaseExpiresAt: null, lastError: null }).where(owned);
       return true;
     }
     await db.transaction(async tx => {
@@ -389,13 +392,23 @@ async function requestDigest(config: LibraryServerConfig, edition: typeof notifi
     body: JSON.stringify({ libraryId: service.libraryId, editionId: edition.id, locale: config.localization.defaultLocale, periodStart: edition.windowStart.toISOString(), periodEnd: edition.windowEnd.toISOString(), publicationCount: edition.publicationCount, publications: edition.publications.map(({ item: _item, ...metadata }) => metadata) }),
     signal: AbortSignal.any([AbortSignal.timeout(210_000), ...(signal ? [signal] : [])]),
   });
-  if (response.status === 202) return null;
+  if (response.status === 202) return DIGEST_CHECK_MS;
+  if (response.status === 429) return digestWait(response);
   if (!response.ok) {
     const body = await response.text();
     throw new DigestRequestError(`OpenScholar digest generation returned ${response.status}: ${body.slice(0, 500)}`, failureKinds(body));
   }
   const output: unknown = await response.json();
   return z.object({ digest: digestResponseSchema }).parse(output).digest;
+}
+
+/**
+ * How long OpenScholar asks a library to wait before it starts another digest: what its answer says, a minute when it
+ * does not say, and an hour at most.
+ */
+function digestWait(response: Response) {
+  const seconds = Number(response.headers.get("Retry-After"));
+  return Math.min(3_600_000, Math.max(DIGEST_CHECK_MS, (seconds > 0 ? seconds : 60) * 1000));
 }
 
 /** A digest OpenScholar could not write. It may still have read the edition's likely reviews, and says what each is. */
