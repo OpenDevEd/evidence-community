@@ -272,7 +272,7 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
         {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
         <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
           <div className="min-w-0 [&>section]:h-full">
-            <SidebarCard title="More digests" aside={<TextLink href={base}>All digests</TextLink>}>
+            <SidebarCard title="More digests" aside={<TextLink href={base}>Browse all digests</TextLink>}>
               <PastDigests earlier={earlier} base={base} locale={locale} />
             </SidebarCard>
           </div>
@@ -298,11 +298,7 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
   const {intro, parts} = editionParts(edition.markdown);
   const listAnchor = edition.reviews ? "reviews" : "publications";
   return <>
-    <header className="mb-12 mt-8 max-w-4xl">
-      <h1 className="font-heading text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">{edition.title}</h1>
-      <MarkdownExcerpt className={`mt-5 max-w-3xl text-lg leading-8 ${muted}`}>{edition.summary}</MarkdownExcerpt>
-      <div className="mt-6"><EditionMeta edition={edition} /></div>
-    </header>
+    <EditionHeader edition={edition} />
     <div className={withRail}>
       <article className="min-w-0">
         <EditorNote edition={edition} />
@@ -311,11 +307,7 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
           <SectionTitle className="mb-4"><span id={`${part.id}-title`}>{part.title}</span></SectionTitle>
           <AIMarkdown>{part.body}</AIMarkdown>
         </section>)}</div>
-        <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
-          <SectionTitle className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span>{edition.publicationCount > edition.listed && <span className={`text-sm font-normal tabular-nums ${muted}`}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)} listed</span>}</SectionTitle>
-          <ListOrder />
-          <EditionLists edition={edition} records={records} path={path} locale={locale} />
-        </section>
+        <InThisEdition edition={edition} records={records} path={path} locale={locale} />
       </article>
       <aside className="space-y-4 lg:sticky lg:top-8">
         <Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} />
@@ -323,6 +315,22 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
       </aside>
     </div>
   </>;
+}
+
+function EditionHeader({edition}: {edition: DigestEdition}) {
+  return <header className="mb-12 mt-8 max-w-4xl">
+    <h1 className="font-heading text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">{edition.title}</h1>
+    <MarkdownExcerpt className={`mt-5 max-w-3xl text-lg leading-8 ${muted}`}>{edition.summary}</MarkdownExcerpt>
+    <div className="mt-6"><EditionMeta edition={edition} /></div>
+  </header>;
+}
+/** The edition's publications under their heading, with how many are listed when it is not all of them, and how they are ordered. */
+function InThisEdition({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
+  return <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
+    <SectionTitle className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span>{edition.publicationCount > edition.listed && <span className={`text-sm font-normal tabular-nums ${muted}`}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)} listed</span>}</SectionTitle>
+    <ListOrder />
+    <EditionLists edition={edition} records={records} path={path} locale={locale} />
+  </section>;
 }
 
 /** The section the reader is in: the first section crossing a band near the top of the window. Kept while the reader is between two sections. */
@@ -362,12 +370,16 @@ function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition:
   </SidebarCard>;
 }
 /** The edition's two lists as shares of the period's new publications; the bar's empty track is the rest of the period. */
-function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
-  const reviews = edition.reviews?.listed ?? 0;
-  const rows = [
-    ...(edition.reviews ? [{href: "#reviews", label: "Meta-analyses and reviews", count: reviews, tone: "bg-accent"}] : []),
-    {href: edition.reviews ? "#other-publications" : "#publications", label: edition.reviews ? "Other publications" : "Publications", count: edition.listed - reviews, tone: "bg-accent/45"},
+/** The edition's lists as rows: its meta-analyses and reviews and its other publications, or one list when it has no review. */
+function shareRows({reviews, listed}: DigestEdition) {
+  if (!reviews) return [{href: "#publications", label: "Publications", count: listed, tone: "bg-accent/45"}];
+  return [
+    {href: "#reviews", label: "Meta-analyses and reviews", count: reviews.listed, tone: "bg-accent"},
+    {href: "#other-publications", label: "Other publications", count: listed - reviews.listed, tone: "bg-accent/45"},
   ].filter(row => row.count > 0);
+}
+function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
+  const rows = shareRows(edition);
   const total = edition.publicationCount;
   return <SidebarCard title="Publications" band={<>
     <HeadFigure value={edition.listed.toLocaleString(locale)} label={edition.listed < total ? `of ${total.toLocaleString(locale)} new publications` : "new publications"} />
