@@ -80,6 +80,8 @@ function useComposerAutosize(composerFormRef: RefObject<HTMLFormElement | null>)
 	// Outside system: the browser's focus and caret. The field is built when
 	// the split view opens, so there is no click or key press to act on.
 	useEffect(() => {
+		// On a phone the keyboard would open over the field without scrolling to it; there the reader taps it.
+		if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
 		const frame = requestAnimationFrame(() => {
 			const element = composerTextarea(composerFormRef);
 			if (!element) return;

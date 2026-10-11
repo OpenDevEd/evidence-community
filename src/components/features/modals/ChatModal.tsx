@@ -188,7 +188,7 @@ function ChatMessageList({
 			>
 				<div
 					ref={contentRef}
-					className="mx-auto flex min-h-full max-w-chat flex-col gap-8 pb-8 pt-28 lg:px-24"
+					className="mx-auto flex min-h-full max-w-chat flex-col gap-8 px-4 pb-8 pt-28 lg:px-24"
 				>
 					{/* The greeting is the window's own text, not part of
 					    the conversation, so it is drawn elsewhere. */}
@@ -279,7 +279,7 @@ function StarterQuestions({
 			initial={{ opacity: 0, y: 100 }}
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: -100 }}
-			className="w-full flex flex-col lg:flex-row gap-4 max-w-chat lg:px-14 mx-auto"
+			className="w-full min-h-0 overflow-y-auto flex flex-col lg:flex-row gap-4 max-w-chat lg:px-14 mx-auto"
 		>
 			{questions.map((question) => (
 				<li key={question}>
@@ -329,7 +329,8 @@ function ChatMessageBox({
 				event.preventDefault();
 				onSubmit(event);
 			}}
-			autoFocus
+			// On a phone the keyboard would cover half the window as it opens, so the reader taps the box first. Only drawn once the window opens, in the browser.
+			autoFocus={matchMedia("(hover: hover) and (pointer: fine)").matches}
 			autoComplete="off"
 			aria-label={t("askAI")}
 			placeholder={t(
@@ -341,7 +342,8 @@ function ChatMessageBox({
 				base: "w-full min-w-0",
 				inputWrapper:
 					"min-h-14 !rounded-2xl !border-0 !bg-transparent !px-2 !py-1 !shadow-none group-data-[focus=true]:!bg-transparent group-data-[hover=true]:!bg-transparent data-[focus=true]:!outline-none dark:!bg-transparent",
-				input: "text-base leading-6",
+				// A quarter of the visible height at most (NextUI sets the variable on the wrapper), so above a keyboard the box never pushes Send out of view.
+				input: "text-base leading-6 max-h-[calc(var(--visual-viewport-height)/4)]",
 			}}
 		/>
 	);
@@ -399,7 +401,7 @@ function ChatWindowComposer({
 
 	return (
 		<form
-			className="relative flex min-w-0 w-full flex-col gap-4 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:gap-8 sm:p-8"
+			className="relative flex min-h-0 min-w-0 w-full flex-col gap-4 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:gap-8 sm:p-8"
 			onSubmit={handleSubmit}
 		>
 			<AnimatePresence mode="popLayout">
@@ -412,7 +414,7 @@ function ChatWindowComposer({
 				) : null}
 				<ChatComposerShell
 					key="composer"
-					className="mx-auto max-w-3xl rounded-3xl p-2 dark:bg-card"
+					className="mx-auto max-w-3xl shrink-0 rounded-3xl p-2 dark:bg-card"
 					isComposerFocused={isComposerFocused}
 					isWaiting={isWaiting}
 					prefersReducedMotion={prefersReducedMotion}
@@ -644,7 +646,8 @@ function ChatModalContent({
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				classNames={{
-					base: "m-0 h-dvh min-h-dvh max-h-dvh w-screen max-w-none rounded-none border-none dark:border-none",
+					// The wrapper is as tall as the part of the screen a phone's keyboard leaves visible; the window fills it, so the box stays above the keyboard.
+					base: "m-0 h-full min-h-0 max-h-full w-screen max-w-none rounded-none border-none dark:border-none",
 					wrapper: "overflow-hidden p-0",
 				}}
 			>
@@ -668,7 +671,8 @@ function ChatModalContent({
 										"relative h-full min-h-0 min-w-0 w-full",
 										conversationStarted
 											? "grid grid-rows-chat"
-											: "flex justify-center items-center",
+											// Below the top bar on a phone or a short screen; when the questions and the box don't fit, as above a keyboard, the questions scroll and the box stays.
+											: "flex flex-col items-center justify-center pt-16 sm:[@media(min-height:40rem)]:pt-0",
 									)}
 								>
 									{conversationStarted && (
@@ -696,7 +700,7 @@ function ChatModalContent({
 											bounce: 0.25,
 											duration: 0.5,
 										}}
-										className="relative flex min-w-0 w-full flex-col items-center"
+										className="relative flex min-h-0 min-w-0 w-full flex-col items-center"
 									>
 										<AnimatePresence>
 											{conversationStarted &&

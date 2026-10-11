@@ -62,7 +62,7 @@ export default defineConfig({
 			{ extends: true, test: { name: "unit", environment: "node", include: unitTests, exclude: [...domTests, ...mockingTests, ...workerTests], isolate: false, setupFiles: ["./tests/shared-worker.ts"] } },
 			{ extends: true, test: { name: "unit-mocks", environment: "node", include: mockingTests, pool: "vmThreads" } },
 			{ extends: true, test: { name: "dom", environment: "jsdom", include: domTests, pool: "vmThreads", setupFiles: ["./tests/dom-globals.ts"] } },
-			{ extends: true, test: { name: "workers", environment: "node", include: workerTests } },
+			{ extends: true, test: { name: "workers", environment: "node", include: workerTests, setupFiles: ["./tests/dom-globals.ts"] } },
 		],
 	},
 });

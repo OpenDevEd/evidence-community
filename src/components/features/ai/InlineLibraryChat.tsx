@@ -328,7 +328,7 @@ function InlineChatComposer({
 						placeholder={t(attached ? "askMeAnything" : "askMeAnythingPublications")}
 						value={input}
 						onChange={(event) => setInput(event.target.value)}
-						className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
+						className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-base leading-6 md:[@media(pointer:fine)]:text-sm text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
 					/>
 					<ChatComposerControls
 						compact
