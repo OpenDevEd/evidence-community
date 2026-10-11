@@ -67,20 +67,27 @@ export function bucketPdfCitationSources(
 	return sources;
 }
 
+/** The one read PDF of the publication a source names by its key, `KEY`, `/lib/KEY` or `/lib/KEY/download/…`; none when it has several. */
+function onlyPdfOf(source: string, read: string[]) {
+	const key = source.match(/^(?:\/lib\/)?([A-Za-z0-9]+)(?:\/download\/[^/?#]+)?$/)?.[1];
+	if (!key) return undefined;
+	const pdfs = read.filter((target) => target.startsWith(`/lib/${key}/download/`));
+	return pdfs.length === 1 ? pdfs[0] : undefined;
+}
+
 function pageCitation(
 	source: string,
 	page: string,
 	knownSources: Record<string, string>,
 ): PageCitation {
-	const target = source.startsWith("/lib/")
-		? source
-		: knownSources[source];
+	const read = Object.values(knownSources);
+	const named = source.startsWith("/lib/") ? source : knownSources[source];
 	// Only a PDF the conversation read can be opened: a model copies the prompt's example target or guesses an
-	// attachment key, and those addresses lead nowhere.
+	// attachment key, and those addresses lead nowhere. A model that names a read publication by its key, alone or
+	// with an invented attachment, means that publication's PDF when it has only one.
+	const target = named && read.includes(named) ? named : onlyPdfOf(source, read);
 	const safeTarget =
-		target &&
-		Object.values(knownSources).includes(target) &&
-		/^\/lib\/[^/?#]+\/download\/[^/?#]+$/.test(target)
+		target && /^\/lib\/[^/?#]+\/download\/[^/?#]+$/.test(target)
 			? target
 			: undefined;
 	const pageNumber = page.match(/\d+/)?.[0];

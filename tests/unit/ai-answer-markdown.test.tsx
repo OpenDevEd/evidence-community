@@ -118,9 +118,9 @@ describe("what an AI answer shows the reader", () => {
 	});
 
 	it("never links a library PDF the conversation did not read", async () => {
-		// A model can copy the prompt's example target or guess an attachment key.
+		// A model can copy the prompt's example target or name a publication it never read.
 		await render(
-			"Copied. [PAGE /lib/KEY/download/ATTACHMENT_KEY — 12 PAGE/] Guessed. [PAGE /lib/ABCD1234/download/WRONG001 — 4 PAGE/]",
+			"Copied. [PAGE /lib/KEY/download/ATTACHMENT_KEY — 12 PAGE/] Guessed. [PAGE /lib/ZZZZ9999/download/WRONG001 — 4 PAGE/]",
 		);
 
 		expect(container.querySelector('a[href*="#page="]')).toBeNull();

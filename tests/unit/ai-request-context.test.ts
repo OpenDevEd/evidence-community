@@ -165,8 +165,22 @@ describe("turning a page citation into a link", () => {
 			parsePageCitations("/lib/KEY/download/ATTACHMENT_KEY — 12", read)[0].href,
 		).toBeUndefined();
 		expect(
-			parsePageCitations("/lib/ABCD1234/download/PDF0009 — 3", read)[0].href,
+			parsePageCitations("/lib/ZZZZ9999/download/PDF0009 — 3", read)[0].href,
 		).toBeUndefined();
+	});
+
+	// Models write the publication key, or invent the attachment key, instead of the target they were given.
+	it("links a read publication named by its key to its only PDF", () => {
+		for (const source of ["ABCD1234", "/lib/ABCD1234", "/lib/ABCD1234/download/PDF0009"]) {
+			expect(parsePageCitations(`${source} — 5`, read)[0].href).toBe(
+				"/lib/ABCD1234/download/PDF0001#page=5",
+			);
+		}
+	});
+
+	it("does not guess between the PDFs of a publication that has several", () => {
+		const twoPdfs = { ...read, "annex.pdf": "/lib/ABCD1234/download/PDF0002" };
+		expect(parsePageCitations("ABCD1234 — 5", twoPdfs)[0].href).toBeUndefined();
 	});
 
 	it("resolves a filename the model used instead of a path", () => {
