@@ -97,6 +97,9 @@ export function useAdminItemList(
 		);
 		const search = next.toString();
 		const href = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+		// Writing the address it already has still makes the router update. On the first load that update can arrive
+		// before the page is hydrated, and the browser then draws the whole page a second time.
+		if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
 		window.history.replaceState(window.history.state, "", href);
 	}, [filters]);
 
