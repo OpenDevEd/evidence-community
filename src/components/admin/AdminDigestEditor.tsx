@@ -162,8 +162,9 @@ function Cited({ current, cited, onRemove }: { current: Current; cited: string[]
 function Pages({ page, pages, total, arriving, onChange }: { page: number; pages: number; total: number | undefined; arriving: string; onChange: (page: number) => void }) {
 	return <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-t border-black/[0.06] pl-4 pr-2 dark:border-white/[0.08]">
 		{total !== undefined && <>
-			<span className={`text-xs tabular-nums ${muted} ${arriving}`}>{range(page, total)}</span>
-			<div className={arriving}><Pagination aria-label="Pages of publications" size="sm" showControls siblings={0} total={pages} page={page} onChange={onChange} /></div>
+			{/* A phone has room for the page numbers alone; the range is still read out. */}
+			<span className={`sr-only whitespace-nowrap text-xs tabular-nums sm:not-sr-only ${muted} ${arriving}`}>{range(page, total)}</span>
+			<div className={`ms-auto ${arriving}`}><Pagination aria-label="Pages of publications" size="sm" showControls siblings={0} total={pages} page={page} onChange={onChange} /></div>
 		</>}
 	</div>;
 }
