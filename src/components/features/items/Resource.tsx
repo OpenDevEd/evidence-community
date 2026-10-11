@@ -153,56 +153,80 @@ function CitationCounts({
 	const locale = useLocale();
 	const resourceHref = useResourceHref();
 	const openScholar = useOpenScholarUrl();
-	const key = itemData?.key ?? "";
-	// OpenAlex's own totals, as of the last import.
-	const source = openAlexTotals(itemData);
-	const there = (list: OpenScholarList) => { const path = openScholarList(itemData, list)?.path; return path && openScholar(path); };
-	const counts = [
-		{
-			id: "references", icon: ArrowUpRight01Icon, tone: "reference" as const, colour: "text-violet-700 dark:text-violet-300",
-			held: itemData?.links?.cites.length ?? 0, total: source?.referencedWorksCount ?? null,
-			here: `${resourceHref(key, { set: { links: "references" } })}#relations-tabs`, there: there("references"),
-			label: (count: number) => t("referenceLabel", { count }),
-			words: (held: number, total: number | null) => total === null ? t("referencesHeldOnly", { held }) : t("referencesHeld", { held, total }),
-		},
-		{
-			id: "citations", icon: ArrowDownLeft01Icon, tone: "library" as const, colour: "text-accent",
-			held: itemData?.links?.citedBy.length ?? 0, total: source?.citedByCount ?? null,
-			here: resourceHref(key, { base: "/citation" }), there: there("citations"),
-			label: (count: number) => t("citationLabel", { count }),
-			words: (held: number, total: number | null) => total === null ? t("citationsHeldOnly", { held }) : t("citationsHeld", { held, total }),
-		},
-	].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
+	const context: CountContext = {
+		t, key: itemData?.key ?? "", links: itemData?.links,
+		// OpenAlex's own totals, as of the last import.
+		source: openAlexTotals(itemData), resourceHref,
+		there: (list) => { const path = openScholarList(itemData, list)?.path; return path ? openScholar(path) : undefined; },
+	};
+	const counts = [referenceRow(context), citationRow(context)].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
 	if (counts.length === 0) return null;
 
-	// A narrow card drops the words; the tooltip and screen readers still get them.
-	const labelClassName = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
-	const number = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
 	return (
 		<div
 			data-count-row
 			className="flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap"
 			onClick={(e) => e.stopPropagation()}
 		>
-			{counts.map(({ id, icon, tone, colour, held, total, here, there, label, words }) => {
-				// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
-				const all = total !== null && total >= held ? total : null;
-				return (
-					<CountTooltip key={id} tone={tone} icon={icon} text={words(held, all)}>
-						<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
-							<HugeiconsIcon icon={icon} className="size-3.5" />
-							{held > 0 ? <Link href={here} aria-label={words(held, null)} className={number}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
-							{all !== null && <>
-								<span className="opacity-60">{t("of")}</span>
-								{there ? <a href={there} target="_blank" rel="noreferrer" aria-label={`${all.toLocaleString(locale)} ${label(all)}, ${t("onOpenAlex", { count: all.toLocaleString(locale) })}`} className={number}>{all.toLocaleString(locale)}</a> : <span className="font-semibold tabular-nums">{all.toLocaleString(locale)}</span>}
-							</>}
-							<span data-count-label className={twMerge("opacity-70", labelClassName)}>{label(all ?? held)}</span>
-						</span>
-					</CountTooltip>
-				);
-			})}
+			{counts.map((count) => <CountItem key={count.id} count={count} locale={locale} of={t("of")} onOpenAlex={(all) => t("onOpenAlex", { count: all })} />)}
 		</div>
 	);
+}
+
+type CountContext = {
+	t: ReturnType<typeof useTranslations>; key: string; links: (Item | ListItem)["links"]; source: { referencedWorksCount?: number | null; citedByCount?: number | null } | undefined;
+	resourceHref: ReturnType<typeof useResourceHref>; there: (list: OpenScholarList) => string | undefined;
+};
+function referenceRow({ t, key, links, source, resourceHref, there }: CountContext): CountRow {
+	return {
+		id: "references", icon: ArrowUpRight01Icon, tone: "reference", colour: "text-violet-700 dark:text-violet-300",
+		held: links?.cites.length ?? 0, total: source?.referencedWorksCount ?? null,
+		here: `${resourceHref(key, { set: { links: "references" } })}#relations-tabs`, there: there("references"),
+		label: (count) => t("referenceLabel", { count }),
+		words: (held, total) => total === null ? t("referencesHeldOnly", { held }) : t("referencesHeld", { held, total }),
+	};
+}
+function citationRow({ t, key, links, source, resourceHref, there }: CountContext): CountRow {
+	return {
+		id: "citations", icon: ArrowDownLeft01Icon, tone: "library", colour: "text-accent",
+		held: links?.citedBy.length ?? 0, total: source?.citedByCount ?? null,
+		here: resourceHref(key, { base: "/citation" }), there: there("citations"),
+		label: (count) => t("citationLabel", { count }),
+		words: (held, total) => total === null ? t("citationsHeldOnly", { held }) : t("citationsHeld", { held, total }),
+	};
+}
+
+type CountRow = {
+	id: string; icon: typeof ArrowUpRight01Icon; tone: "reference" | "library"; colour: string; held: number; total: number | null;
+	here: string; there: string | null | undefined; label: (count: number) => string; words: (held: number, total: number | null) => string;
+};
+// A narrow card drops the words; the tooltip and screen readers still get them.
+const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
+const COUNT_NUMBER = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
+
+/** One direction: how many the library holds, linked to its list, and of how many in OpenScholar. */
+function CountItem({ count, locale, of, onOpenAlex }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string }) {
+	const { icon, tone, colour, held, total, here, label, words } = count;
+	// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
+	const all = total !== null && total >= held ? total : null;
+	return (
+		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
+			<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
+				<HugeiconsIcon icon={icon} className="size-3.5" />
+				{held > 0 ? <Link href={here} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
+				{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
+				<span data-count-label className={twMerge("opacity-70", COUNT_LABEL)}>{label(all ?? held)}</span>
+			</span>
+		</CountTooltip>
+	);
+}
+
+function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string }) {
+	const text = all.toLocaleString(locale);
+	return <>
+		<span className="opacity-60">{of}</span>
+		{count.there ? <a href={count.there} target="_blank" rel="noreferrer" aria-label={`${text} ${count.label(all)}, ${onOpenAlex(text)}`} className={COUNT_NUMBER}>{text}</a> : <span className="font-semibold tabular-nums">{text}</span>}
+	</>;
 }
 
 // Each tooltip wears the colours of the count it explains. The tint is layered
