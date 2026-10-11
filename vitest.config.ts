@@ -47,7 +47,9 @@ export default defineConfig({
 		},
 	},
 	test: {
-		server: { deps: { inline: ["next-intl"] } },
+		// @react-aria/i18n 3.13.1 ships ES module files in its CommonJS build, so the packages that use it are read
+		// through their ES module builds here, as the application's own bundler reads them.
+		server: { deps: { inline: ["next-intl", /node_modules\/@(react-aria|react-stately|nextui-org)\//] } },
 		clearMocks: true,
 		restoreMocks: true,
 		// The CI guest's 8 vCPUs run these beside the static checks and runtime jobs, where a

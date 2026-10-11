@@ -662,6 +662,12 @@ export default function AdminWorkbench({
 		}
 	}, []);
 
+	// The page comes with the sources as they were when it was served. They are
+	// read again once it is open, so an import that started since shows at once.
+	useEffect(() => {
+		void loadLibrary();
+	}, [loadLibrary]);
+
 	// The sync worker is an outside process: keep the sidebar import state
 	// fresh, quickly while an import runs or its dialog is open.
 	const watchingImport =
