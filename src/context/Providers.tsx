@@ -32,6 +32,7 @@ import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { ReaderSessionProvider, type Reader } from "@/components/layout/navbar/ReaderSession";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
+import { AskAboutHost } from "@/components/features/ai/AskAboutHost";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 type RuntimeStatus = PublicLibraryStatus;
@@ -249,7 +250,7 @@ export default function Providers({
 									</Suspense>
 									<UtmAttributionProvider />
 									<InlineChatLayoutProvider>
-										{children}
+										<AskAboutHost>{children}</AskAboutHost>
 									</InlineChatLayoutProvider>
 									<AnalyticsVendors
 										googleAnalyticsId={

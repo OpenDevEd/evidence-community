@@ -15,11 +15,13 @@ import { useChatSession } from "./useChatSession";
  */
 export function useInlineChatSession({
 	greeting,
+	itemKey,
 	mode,
 	modelId,
 	searchContext,
 }: {
 	greeting: string;
+	itemKey?: string;
 	mode: ChatMode;
 	modelId: string;
 	searchContext?: LibrarySearchContext;
@@ -28,6 +30,7 @@ export function useInlineChatSession({
 	const [chat] = useState(() => getInlineChat(modelId, greeting));
 
 	return useChatSession(chat, {
+		itemKey,
 		locale: useLocale(),
 		mode,
 		modelId,

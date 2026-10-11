@@ -30,6 +30,8 @@ import Resource from "../items/Resource";
 import { ToolActivity } from "./ToolActivity";
 import { useMessageExport } from "./useChatActions";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { latestResearchRequestContext } from "@/lib/ai/request-context";
+import { AttachedItemChip } from "./AttachedItemChip";
 
 type Message = ResearchUIMessage;
 
@@ -414,6 +416,7 @@ export function MessageComponent({
 					</div>
 				) : (
 					<>
+						{message.role === "user" && <AskedAbout message={message} />}
 						<MessageBody
 							content={content}
 							isStreaming={isStreaming}
@@ -435,5 +438,16 @@ export function MessageComponent({
 				)}
 			</div>
 		</>
+	);
+}
+
+/** The publication a question was asked about, on the question where the reader attached it. */
+function AskedAbout({ message }: { message: Message }) {
+	const item = latestResearchRequestContext([message])?.currentPublication;
+	if (!item) return null;
+	return (
+		<div className="flex px-4 pt-3 -mb-2">
+			<AttachedItemChip item={item} />
+		</div>
 	);
 }

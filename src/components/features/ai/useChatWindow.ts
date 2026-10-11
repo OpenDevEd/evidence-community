@@ -22,7 +22,9 @@ import {
 	useSendWithContext,
 	useTranscriptExport,
 } from "./useChatActions";
-import { useChatGreeting, useChatWindowSession } from "./useChatWindowSession";
+import { useTranslations } from "next-intl";
+import { useChatWindowSession } from "./useChatWindowSession";
+import { attachedItem, type AttachedItem } from "./AskAbout";
 
 /** Keeps the newest message in view, and fades the edges while scrolling. */
 function useChatScrolling() {
@@ -60,8 +62,14 @@ function useChatConversation({
 	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 }) {
-	const publicationKey = data?.item?.key;
-	const publicationTitle = data?.item?.title;
+	// The publication the next question is about: the one the window was opened
+	// for, then whichever the reader attaches or removes. Changing it keeps the
+	// conversation; each question carries the one it was asked about.
+	const [attached, setAttached] = useState<AttachedItem | null>(() =>
+		attachedItem(data?.item),
+	);
+	const publicationKey = attached?.key;
+	const publicationTitle = attached?.title;
 	const {
 		chat,
 		messages,
@@ -72,7 +80,8 @@ function useChatConversation({
 		setMessages,
 		clearError,
 	} = useChatWindowSession({
-		greeting: useChatGreeting(publicationTitle ?? undefined),
+		// The attached publication shows as a chip, so the greeting does not name it.
+		greeting: useTranslations("ai")("askMeAnythingPublications"),
 		itemKey: publicationKey,
 		mode,
 		modelId,
@@ -124,6 +133,8 @@ function useChatConversation({
 
 	return {
 		appendMessage: useAppendMessage(setMessages),
+		attached,
+		setAttached,
 		chat,
 		chatFailure: useChatFailure(error),
 		error,

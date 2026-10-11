@@ -543,7 +543,6 @@
     "chatDescription": "Ongea na rasilimali hii.",
     "askMeAnything": "Niulize kuhusu chapisho hili.",
     "reasoning": "Hoja",
-    "chatPlaceholder": "Hujambo! Nawezaje kukusaidia leo? Unaweza kuniuliza maswali kuhusu \"{title}\" au chochote kinachohusiana na data.",
     "errorMessage": "Samahani, nimekumbana na hitilafu. Tafadhali jaribu tena baadaye.",
     "change": "Badilisha Modeli ya AI",
     "changeDescription": "Kwa sasa inatumia {model}.",

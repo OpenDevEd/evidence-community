@@ -2,7 +2,7 @@
 
 import { Chat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale } from "next-intl";
 import { useState } from "react";
 
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -40,10 +40,4 @@ export function useChatWindowSession({
 		modelId,
 		searchContext,
 	});
-}
-
-/** The greeting text for a publication chat, or the whole library. */
-export function useChatGreeting(publicationTitle?: string) {
-	const t = useTranslations("ai");
-	return t("chatPlaceholder", { title: publicationTitle || "" });
 }

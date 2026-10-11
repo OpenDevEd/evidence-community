@@ -15,6 +15,7 @@ import { DefaultChatTransport } from "ai";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { createTextMessage } from "@/lib/ai/chat-messages";
 import { usePathname } from "@/i18n/routing";
+import type { AttachedItem } from "@/components/features/ai/AskAbout";
 
 export type BucketEntry = {
 	key: string;
@@ -45,8 +46,15 @@ type InlineChatLayoutValue = {
 };
 
 /** Text typed but not yet sent. One owner, so it survives page visits. */
-type InlineChatDraftValue = { draft: string };
-type InlineChatDraftActions = { setDraft: (draft: string) => void };
+type InlineChatDraftValue = {
+	draft: string;
+	/** The publication the next question is about, shown as a chip above the box. */
+	attached: AttachedItem | null;
+};
+type InlineChatDraftActions = {
+	setDraft: (draft: string) => void;
+	setAttached: (item: AttachedItem | null) => void;
+};
 
 const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 	engaged: false,
@@ -66,9 +74,11 @@ const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
  */
 const InlineChatDraftContext = createContext<InlineChatDraftValue>({
 	draft: "",
+	attached: null,
 });
 const InlineChatDraftActionsContext = createContext<InlineChatDraftActions>({
 	setDraft: () => {},
+	setAttached: () => {},
 });
 
 /** The split view only exists on the library list page. */
@@ -126,6 +136,7 @@ export function InlineChatLayoutProvider({
 	const pathname = usePathname();
 	const [searchFocusRequest, setSearchFocusRequest] = useState(0);
 	const [draft, setDraft] = useState("");
+	const [attached, setAttached] = useState<AttachedItem | null>(null);
 	const requestSearchFocus = useCallback(
 		() => setSearchFocusRequest(Date.now()),
 		[],
@@ -149,8 +160,8 @@ export function InlineChatLayoutProvider({
 			setEngaged,
 		],
 	);
-	const draftValue = useMemo(() => ({ draft }), [draft]);
-	const draftActions = useMemo(() => ({ setDraft }), []);
+	const draftValue = useMemo(() => ({ draft, attached }), [draft, attached]);
+	const draftActions = useMemo(() => ({ setDraft, setAttached }), []);
 
 	return (
 		<InlineChatLayoutContext.Provider value={value}>
