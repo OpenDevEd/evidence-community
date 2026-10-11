@@ -117,13 +117,23 @@ export function useAdminItemList(
 		return () => clearTimeout(timer);
 	}, [filters]);
 
+	// Back and Forward are navigation even when they return to an address this hook wrote earlier.
+	const traversed = useRef(false);
+	useEffect(() => {
+		const note = () => { traversed.current = true; };
+		window.addEventListener("popstate", note);
+		return () => window.removeEventListener("popstate", note);
+	}, []);
+
 	// The route reports the address back: this hook's own writes, sometimes late, and changes to other parameters.
-	// Only an address the hook did not write is navigation, such as Back, and only then do the filters follow it.
+	// Only navigation moves the filters: Back or Forward, or an address the hook did not write.
 	useEffect(() => {
 		const reported = addressFilters(routeSearch);
-		if (reported !== addressFilters(window.location.search) || reported === inAddress.current) return;
+		if (reported !== addressFilters(window.location.search)) return;
+		if (reported === inAddress.current && !traversed.current) return;
+		traversed.current = false;
 		inAddress.current = reported;
-		setFilters(parseAdminItemViewFilters(new URLSearchParams(routeSearch)));
+		setFilters((current) => (JSON.stringify(current) === reported ? current : parseAdminItemViewFilters(new URLSearchParams(routeSearch))));
 	}, [routeSearch]);
 
 	const loadItems = useCallback(
