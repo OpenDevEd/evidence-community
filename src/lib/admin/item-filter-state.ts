@@ -5,6 +5,8 @@ import {
 	type AdminItemFilter,
 	type AdminItemSortColumnId,
 } from "./item-list-contract";
+import { createParser, parseAsString, parseAsStringLiteral, type inferParserType } from "nuqs/server";
+
 import type { AdminItemViewFilters } from "./types";
 
 export const DEFAULT_ADMIN_ITEM_VIEW_FILTERS: AdminItemViewFilters = {
@@ -15,64 +17,53 @@ export const DEFAULT_ADMIN_ITEM_VIEW_FILTERS: AdminItemViewFilters = {
 	sortDirection: "desc",
 };
 
-function parseJson(value: string | null): unknown {
-	if (!value) return [];
-	try {
-		return JSON.parse(value);
-	} catch {
-		return [];
-	}
-}
-
 /** The longest record search the library reads. The search field takes no more. */
 export const ADMIN_SEARCH_MAX = 500;
 
-export function parseAdminItemViewFilters(
-	searchParams: URLSearchParams,
-): AdminItemViewFilters {
-	let filters: AdminItemFilter[] = [];
-	try {
-		filters = parseAdminItemFilters(parseJson(searchParams.get("filters")));
-	} catch {
-		// Keep the other valid URL controls when only the filter payload is stale.
-	}
-	const requestedSort = searchParams.get("sort");
-	const sort = ADMIN_ITEM_SORT_COLUMN_IDS.includes(
-		requestedSort as AdminItemSortColumnId,
-	)
-		? (requestedSort as AdminItemSortColumnId)
-		: DEFAULT_ADMIN_ITEM_VIEW_FILTERS.sort;
-	const requestedDirection = searchParams.get("direction");
+/**
+ * The address parameters that hold the record view, as nuqs reads and writes them. A parameter that does not parse
+ * (a stale `filters` value, an unknown sort) reads as its default and leaves the others standing.
+ */
+export const adminItemViewParsers = {
+	review: parseAsStringLiteral(["pending"] as const),
+	filters: createParser<AdminItemFilter[]>({
+		parse(value) {
+			try {
+				return parseAdminItemFilters(JSON.parse(value));
+			} catch {
+				return null;
+			}
+		},
+		serialize: (value) => JSON.stringify(value),
+		eq: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+	}).withDefault([]),
+	search: parseAsString.withDefault(""),
+	sort: parseAsStringLiteral(ADMIN_ITEM_SORT_COLUMN_IDS).withDefault(DEFAULT_ADMIN_ITEM_VIEW_FILTERS.sort),
+	direction: parseAsStringLiteral(["asc", "desc"] as const).withDefault(DEFAULT_ADMIN_ITEM_VIEW_FILTERS.sortDirection),
+};
+type AdminItemViewParams = inferParserType<typeof adminItemViewParsers>;
+
+/** The record view the address parameters describe. */
+export function viewFromParams(params: AdminItemViewParams): AdminItemViewFilters {
 	return {
-		reviewQueue: searchParams.get("review") === "pending",
-		filters,
-		query: (searchParams.get("search") ?? "").trim().slice(0, ADMIN_SEARCH_MAX),
-		sort,
-		sortDirection:
-			requestedDirection === "asc" || requestedDirection === "desc"
-				? requestedDirection
-				: DEFAULT_ADMIN_ITEM_VIEW_FILTERS.sortDirection,
+		reviewQueue: params.review === "pending",
+		filters: params.filters,
+		// As typed: trimming here would take a space away while the next word is on its way.
+		query: params.search.slice(0, ADMIN_SEARCH_MAX),
+		sort: params.sort,
+		sortDirection: params.direction,
 	};
 }
 
-export function writeAdminItemViewFilters(
-	searchParams: URLSearchParams,
-	view: AdminItemViewFilters,
-) {
-	const next = new URLSearchParams(searchParams);
-	for (const key of ["direction", "filters", "search", "sort", "review"]) {
-		next.delete(key);
-	}
-	if (view.reviewQueue) next.set("review", "pending");
-	if (view.query) next.set("search", view.query);
-	if (view.filters.length > 0) {
-		next.set("filters", JSON.stringify(view.filters));
-	}
-	if (view.sort !== "updated") next.set("sort", view.sort);
-	if (view.sortDirection !== "desc") {
-		next.set("direction", view.sortDirection);
-	}
-	return next;
+/** The address parameters for a record view. */
+export function paramsFromView(view: AdminItemViewFilters): AdminItemViewParams {
+	return {
+		review: view.reviewQueue ? "pending" : null,
+		filters: view.filters,
+		search: view.query,
+		sort: view.sort,
+		direction: view.sortDirection,
+	};
 }
 
 export function singleAdminItemFilterValue(

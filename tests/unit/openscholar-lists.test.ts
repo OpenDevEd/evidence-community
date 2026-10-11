@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openScholarList } from "@/lib/links/openscholar-lists";
+import { openAlexTotals, openScholarList } from "@/lib/links/openscholar-lists";
 
 const metric = { citedByCount: 7, referencedWorksCount: 131 };
 
@@ -9,6 +9,16 @@ describe("a record's lists in OpenScholar", () => {
 		// OpenScholar's filters name the direction from the listed works' side: the references are the works cited by this one.
 		expect(openScholarList(work, "references")).toEqual({ total: 131, path: "/results?citedBy=W4412345678" });
 		expect(openScholarList(work, "citations")).toEqual({ total: 7, path: "/results?cites=W4412345678" });
+	});
+
+	it("opens the lists of a record matched to OpenAlex from another source, by the work its totals are for", () => {
+		const other = { citedByCount: 2, referencedWorksCount: 9, workId: null };
+		const zotero = { sourceRecordKey: "ABCD2345", citationMetrics: [other, { ...metric, workId: "W900000004" }] };
+		expect(openScholarList(zotero, "references")).toEqual({ total: 131, path: "/results?citedBy=W900000004" });
+		expect(openScholarList(zotero, "citations")).toEqual({ total: 7, path: "/results?cites=W900000004" });
+		// The number a card shows comes from the same counts as the list it opens.
+		expect(openAlexTotals(zotero)).toMatchObject({ workId: "W900000004", referencedWorksCount: 131 });
+		expect(openAlexTotals({ citationMetrics: [other] })).toBe(other);
 	});
 
 	it("still opens the list when the library holds no totals for the work", () => {

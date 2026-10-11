@@ -393,7 +393,6 @@ export default function AdminWorkbench({
 	configurationHref,
 	definitions,
 	initialCollections,
-	initialFilters,
 	initialLibrary,
 }: {
 	/** The library's source settings in OpenScholar. */
@@ -401,7 +400,6 @@ export default function AdminWorkbench({
 	definitions: AdminSchemaDefinition[];
 	/** The first page of the library's own collections as the page was served, or null when it could not be read. */
 	initialCollections: AdminCollectionCatalogPage | null;
-	initialFilters: AdminItemViewFilters;
 	/** The sources as the page was served, so the sidebar's list does not arrive after it. */
 	initialLibrary: AdminLibrarySnapshot;
 }) {
@@ -446,7 +444,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(requestedColumns, initialFilters, Boolean(linkPick?.kind), Boolean(linkPick));
+	} = useAdminItemList(requestedColumns, Boolean(linkPick?.kind), Boolean(linkPick));
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(

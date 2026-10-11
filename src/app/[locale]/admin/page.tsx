@@ -13,7 +13,6 @@ import {
 	type PlatformLocale,
 } from "@/i18n/runtime";
 import { ADMIN_CONTENT_PERMISSION, authorizeAdminRequest } from "@/lib/admin/access";
-import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
 import { getAdminCollectionChildrenPage } from "@/lib/admin/collection-catalog-service";
 import { ADMIN_COLLECTION_PAGE_SIZE, NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
@@ -94,7 +93,6 @@ export default async function AdminPage({
 		<AdminWorkbench
 			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
 			definitions={definitions}
-			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
 			initialCollections={firstCollections}
 			initialLibrary={initialLibrary}
 		/>
