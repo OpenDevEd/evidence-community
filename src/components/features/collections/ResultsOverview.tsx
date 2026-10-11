@@ -233,7 +233,7 @@ function YearTicks({ axis }: { axis: NonNullable<ReturnType<typeof yearAxis>> })
 }
 
 /** A large figure and what it counts, for a card's head. */
-function HeadFigure({ value, label }: { value: React.ReactNode; label: React.ReactNode }) {
+export function HeadFigure({ value, label }: { value: React.ReactNode; label: React.ReactNode }) {
 	return (
 		<p className="flex items-baseline gap-2" aria-live="polite">
 			<span className="font-heading text-3xl font-semibold leading-none tabular-nums">{value}</span>
