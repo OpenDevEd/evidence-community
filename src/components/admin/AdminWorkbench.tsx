@@ -390,13 +390,11 @@ type BatchFeedback = {
 export default function AdminWorkbench({
 	configurationHref,
 	definitions,
-	initialFilters,
 	initialLibrary,
 }: {
 	/** The library's source settings in OpenScholar. */
 	configurationHref: string;
 	definitions: AdminSchemaDefinition[];
-	initialFilters: AdminItemViewFilters;
 	/** The sources as the page was served, so the sidebar's list does not arrive after it. */
 	initialLibrary: AdminLibrarySnapshot;
 }) {
@@ -441,7 +439,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(requestedColumns, initialFilters, Boolean(linkPick?.kind), Boolean(linkPick));
+	} = useAdminItemList(requestedColumns, Boolean(linkPick?.kind), Boolean(linkPick));
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(

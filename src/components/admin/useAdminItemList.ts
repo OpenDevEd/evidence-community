@@ -1,8 +1,7 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { parseAsString, useQueryState } from "nuqs";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { debounce, parseAsString, useQueryState, useQueryStates } from "nuqs";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { toast } from "sonner";
 
 import type { AdminItemColumnId } from "@/lib/admin/item-list-contract";
@@ -14,10 +13,7 @@ import type {
 import { adminErrorMessage, getAdminItems } from "./admin-api";
 
 
-import {
-	parseAdminItemViewFilters,
-	writeAdminItemViewFilters,
-} from "@/lib/admin/item-filter-state";
+import { adminItemViewParsers, paramsFromView, viewFromParams } from "@/lib/admin/item-filter-state";
 
 function mergeItemPages(
 	current: readonly AdminItemListRow[],
@@ -62,20 +58,22 @@ function selectingReviewQueue(filters: AdminItemViewFilters, pinned: boolean) {
  return filters.reviewQueue && !pinned;
 }
 
+// The address follows the view a moment after it settles, not on every keystroke: each write makes the router write
+// too, and Safari refuses more than 100 address changes in ten seconds.
 const ADDRESS_FOLLOWS_AFTER_MS = 150;
-/** The filters an address holds, in one form to compare by. */
-const addressFilters = (search: string) => JSON.stringify(parseAdminItemViewFilters(new URLSearchParams(search)));
 
 export function useAdminItemList(
 	requestedColumns: readonly AdminItemColumnId[],
-	initialFilters: AdminItemViewFilters,
     linkPicking = false,
     selectionPinned = false,
 ) {
-	const routeSearchParams = useSearchParams();
-	const routeSearch = routeSearchParams.toString();
-	const [filters, setFilters] =
-		useState<AdminItemViewFilters>(initialFilters);
+	// The view lives in the address: a reload, Back and Forward, and a link all bring it back.
+	const [{ review, filters: columnFilters, search, sort, direction }, setParams] = useQueryStates(adminItemViewParsers, { history: "replace", limitUrlUpdates: debounce(ADDRESS_FOLLOWS_AFTER_MS) });
+	const filters = useMemo(() => viewFromParams({ review, filters: columnFilters, search, sort, direction }), [review, columnFilters, search, sort, direction]);
+	const setFilters = useCallback(
+		(next: SetStateAction<AdminItemViewFilters>) => void setParams((current) => paramsFromView(typeof next === "function" ? next(viewFromParams(current)) : next)),
+		[setParams],
+	);
 	const [items, setItems] = useState<AdminItemListRow[]>([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -93,52 +91,6 @@ export function useAdminItemList(
 		(key: string | null) => void setSelectedKeyInUrl(key),
 		[setSelectedKeyInUrl],
 	);
-
-	// The filters as this hook last put them in the address, or found them there.
-	const inAddress = useRef(JSON.stringify(initialFilters));
-	// The browser's address is an outside system. It follows the filters a moment after they settle, not on every
-	// keystroke: each write makes the router write too, and Safari refuses more than 100 address changes in ten seconds.
-	const waiting = useRef<ReturnType<typeof setTimeout>>(undefined);
-	useEffect(() => {
-		const timer = waiting.current = setTimeout(() => {
-			const next = writeAdminItemViewFilters(
-				new URLSearchParams(window.location.search),
-				filters,
-			);
-			const search = next.toString();
-			const href = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
-			if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
-			try {
-				window.history.replaceState(window.history.state, "", href);
-				inAddress.current = addressFilters(search);
-			} catch {
-				// The browser refused another address change for now. The next change to the filters writes it.
-			}
-		}, ADDRESS_FOLLOWS_AFTER_MS);
-		return () => clearTimeout(timer);
-	}, [filters]);
-
-	// Back and Forward: the filters follow the address the browser returned to, at once. A write still waiting for
-	// the entry just left goes with them, so it cannot land in the entry returned to.
-	useEffect(() => {
-		const follow = () => {
-			clearTimeout(waiting.current);
-			const returned = addressFilters(window.location.search);
-			inAddress.current = returned;
-			setFilters((current) => (JSON.stringify(current) === returned ? current : parseAdminItemViewFilters(new URLSearchParams(window.location.search))));
-		};
-		window.addEventListener("popstate", follow);
-		return () => window.removeEventListener("popstate", follow);
-	}, []);
-
-	// The route reports the address back: this hook's own writes, sometimes late, and changes to other parameters.
-	// Only an address the hook did not write is navigation, and only then do the filters follow it.
-	useEffect(() => {
-		const reported = addressFilters(routeSearch);
-		if (reported !== addressFilters(window.location.search) || reported === inAddress.current) return;
-		inAddress.current = reported;
-		setFilters(parseAdminItemViewFilters(new URLSearchParams(routeSearch)));
-	}, [routeSearch]);
 
 	const loadItems = useCallback(
 		async (cursor: string | null = null, append = false) => {

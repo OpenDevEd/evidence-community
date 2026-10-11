@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { createLoader, createSerializer } from "nuqs/server";
+
 import {
 	DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
-	parseAdminItemViewFilters,
+	adminItemViewParsers,
+	paramsFromView,
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
-	writeAdminItemViewFilters,
+	viewFromParams,
 } from "@/lib/admin/item-filter-state";
 import { parseAdminItemFilters } from "@/lib/admin/item-list-contract";
 
@@ -38,50 +41,56 @@ describe("admin item filter URL state", () => {
 		).toThrow("Choose at least one value for PDF");
 	});
 
-	it("parses valid search, typed filters, and sorting", () => {
+	// As nuqs reads an address and writes one, without a browser.
+	const load = createLoader(adminItemViewParsers);
+	const address = createSerializer(adminItemViewParsers);
+	const viewAt = (search: URLSearchParams) => viewFromParams(load(search));
+
+	it("reads search, typed filters and sorting from the address", () => {
 		const searchParams = new URLSearchParams({
 			direction: "asc",
 			filters: JSON.stringify([
 				{ column: "state", operator: "anyOf", value: ["draft"] },
 				{ column: "year", operator: "between", value: [2020, 2026] },
 			]),
-			search: "  teacher development  ",
+			review: "pending",
+			search: "teacher development ",
 			sort: "year",
 		});
 
-		expect(parseAdminItemViewFilters(searchParams)).toEqual({
-			reviewQueue: false,
+		expect(viewAt(searchParams)).toEqual({
+			reviewQueue: true,
 			filters: [
 				{ column: "state", operator: "anyOf", value: ["draft"] },
 				{ column: "year", operator: "between", value: [2020, 2026] },
 			],
-			query: "teacher development",
+			// As typed, with its trailing space: the next word is on its way.
+			query: "teacher development ",
 			sort: "year",
 			sortDirection: "asc",
 		});
 	});
 
-	it("drops only malformed controls and preserves valid URL state", () => {
+	it("drops only malformed controls and keeps the rest of the address", () => {
 		const searchParams = new URLSearchParams({
 			direction: "sideways",
 			filters: JSON.stringify([
 				{ column: "title", operator: "between", value: [1, 2] },
 			]),
+			review: "maybe",
 			search: "teacher",
 			sort: "unknown",
 		});
 
-		expect(parseAdminItemViewFilters(searchParams)).toEqual({
+		expect(viewAt(searchParams)).toEqual({
 			...DEFAULT_ADMIN_ITEM_VIEW_FILTERS,
 			query: "teacher",
 		});
+		expect(viewAt(new URLSearchParams({ filters: "{not json" }))).toEqual(DEFAULT_ADMIN_ITEM_VIEW_FILTERS);
 	});
 
-	it("writes canonical state without deleting unrelated parameters", () => {
-		const searchParams = new URLSearchParams(
-			"locale=en&search=old&sort=title",
-		);
-		const next = writeAdminItemViewFilters(searchParams, {
+	it("writes a view to the address without its defaults and without touching other parameters", () => {
+		const next = new URLSearchParams(address("?locale=en&search=old&sort=title", paramsFromView({
 			reviewQueue: true,
 			filters: [
 				{
@@ -93,17 +102,18 @@ describe("admin item filter URL state", () => {
 			query: "reading",
 			sort: "updated",
 			sortDirection: "asc",
-		});
+		})));
 
 		expect(next.get("locale")).toBe("en");
 		expect(next.get("review")).toBe("pending");
-		expect(parseAdminItemViewFilters(next).reviewQueue).toBe(true);
 		expect(next.get("search")).toBe("reading");
 		expect(next.get("sort")).toBeNull();
 		expect(next.get("direction")).toBe("asc");
 		expect(JSON.parse(next.get("filters")!)).toEqual([
 			{ column: "fileState", operator: "anyOf", value: ["published"] },
 		]);
+		// The default view leaves nothing of its own in the address.
+		expect(address("?locale=en&search=old&review=pending", paramsFromView(DEFAULT_ADMIN_ITEM_VIEW_FILTERS))).toBe("?locale=en");
 	});
 
 	it("upserts and removes navigation filters without duplicates", () => {
