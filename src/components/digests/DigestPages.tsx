@@ -267,11 +267,13 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
   return <PageContainer className="mx-auto overflow-clip">
       <TextLink href={base} back>All digests</TextLink>
       <Suspense fallback={<EditionLoading />}><EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} /></Suspense>
-      <div className={`mt-20 ${withRail}`}>
-        <section aria-labelledby="more-digests" className="min-w-0">
-          <div className="mb-3 flex items-center justify-between gap-4"><SectionTitle className="text-xl"><span id="more-digests">More digests</span></SectionTitle><TextLink href={base}>All digests</TextLink></div>
-          <Suspense fallback={<ArchiveLoading />}><PastDigests earlier={earlier} base={base} locale={locale} /></Suspense>
-        </section>
+      {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
+      <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
+        <div className="min-w-0 [&>section]:h-full">
+          <SidebarCard title="More digests" aside={<TextLink href={base}>All digests</TextLink>}>
+            <Suspense fallback={<div className="-mx-4 -my-3">{[0, 1, 2, 3].map(index => <Skeleton key={index} className="m-4 h-12 rounded-lg" />)}</div>}><PastDigests earlier={earlier} base={base} locale={locale} /></Suspense>
+          </SidebarCard>
+        </div>
         {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
       </div>
   </PageContainer>;
@@ -411,7 +413,7 @@ function EditionCards({cards: pending, keys}: {cards: Promise<EditionCardsData>;
 function PastDigests({earlier, base, locale}: {earlier: Promise<DigestSummary[]>; base: string; locale: string}) {
   const older = use(earlier);
   if (!older.length) return <p className={`text-sm ${muted}`}>This is the first edition.</p>;
-  return <div className={rowCard}>{older.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} summary={false} />)}</div>;
+  return <div className="-mx-4 -my-3">{older.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} summary={false} />)}</div>;
 }
 
 function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
