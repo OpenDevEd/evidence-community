@@ -342,7 +342,8 @@ function ChatMessageBox({
 				base: "w-full min-w-0",
 				inputWrapper:
 					"min-h-14 !rounded-2xl !border-0 !bg-transparent !px-2 !py-1 !shadow-none group-data-[focus=true]:!bg-transparent group-data-[hover=true]:!bg-transparent data-[focus=true]:!outline-none dark:!bg-transparent",
-				input: "text-base leading-6",
+				// A quarter of the visible height at most (NextUI sets the variable on the wrapper), so above a keyboard the box never pushes Send out of view.
+				input: "text-base leading-6 max-h-[calc(var(--visual-viewport-height)/4)]",
 			}}
 		/>
 	);
@@ -670,8 +671,8 @@ function ChatModalContent({
 										"relative h-full min-h-0 min-w-0 w-full",
 										conversationStarted
 											? "grid grid-rows-chat"
-											// Below the top bar on a phone; when the questions and the box don't fit, as above a keyboard, the questions scroll and the box stays.
-											: "flex flex-col items-center justify-center pt-16 sm:pt-0",
+											// Below the top bar on a phone or a short screen; when the questions and the box don't fit, as above a keyboard, the questions scroll and the box stays.
+											: "flex flex-col items-center justify-center pt-16 sm:[@media(min-height:40rem)]:pt-0",
 									)}
 								>
 									{conversationStarted && (
