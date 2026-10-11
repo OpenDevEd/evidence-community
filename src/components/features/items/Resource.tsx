@@ -37,7 +37,7 @@ import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
-import { openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
+import { openAlexTotals, openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
 import { useItemLink } from "@/hooks/useItemLink";
 import { hasAnyTag, hasTag } from "@/lib/tags";
 import { generateCOinS } from "@/lib/coins";
@@ -154,7 +154,7 @@ export function CitationCounts({
 	const openScholar = useOpenScholarUrl();
 	const key = itemData?.key ?? "";
 	// OpenAlex's own totals, as of the last import.
-	const source = itemData?.citationMetrics?.[0];
+	const source = openAlexTotals(itemData);
 	const there = (list: OpenScholarList) => { const path = openScholarList(itemData, list)?.path; return path && openScholar(path); };
 	const counts = [
 		{
