@@ -26,6 +26,16 @@ function openScholarConfigurationHref(libraryUrl: string) {
 	return url.toString();
 }
 
+/** The sources as the page is served. When they cannot be read the admin still opens, and says so when it reads them again. */
+async function sourcesWithThePage() {
+	try {
+		return await getAdminLibrarySnapshot(await getDatabase());
+	} catch (error) {
+		console.error("The admin's sources were not read with the page", error);
+		return { sources: [] };
+	}
+}
+
 export default async function AdminPage({
 	params,
 	searchParams,
@@ -72,7 +82,7 @@ export default async function AdminPage({
 			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
-			initialLibrary={await getAdminLibrarySnapshot(await getDatabase())}
+			initialLibrary={await sourcesWithThePage()}
 		/>
 		</AdminSessionProvider>
 	);

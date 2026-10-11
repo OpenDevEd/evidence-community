@@ -873,7 +873,8 @@ export default function AdminWorkbench({
 			await Promise.all([
 				loadLibrary(),
 				loadItems(),
-				refreshDigests(),
+				// The digest list says for itself when it cannot be read; it must not fail a refresh of the records.
+				refreshDigests().catch(() => undefined),
 				detailKey ? loadDetail(detailKey) : Promise.resolve(),
 			]);
 		},
