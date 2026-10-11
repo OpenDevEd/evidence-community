@@ -387,7 +387,7 @@ export function MessageComponent({
 		() => parseScreeningResults(message.id, content),
 		[content, message.id],
 	);
-	const getMessageContent = useMessageExport(message);
+	const getMessageContent = useMessageExport(message, pdfSources);
 	const showMessageActions = canExportMessage({
 		error,
 		hasScreeningResults: Boolean(screeningResults),

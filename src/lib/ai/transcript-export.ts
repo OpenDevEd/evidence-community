@@ -34,7 +34,11 @@ function absoluteUrl(href: string, origin?: string) {
 	return new URL(href, origin).toString();
 }
 
-function normalizeEvidenceMarkdown(content: string, origin?: string) {
+function normalizeEvidenceMarkdown(
+	content: string,
+	origin?: string,
+	pdfSources: Record<string, string> = {},
+) {
 	let normalized = content.replace(
 		/\[QUOTE\s*([\s\S]*?)\s*QUOTE\/\][\s.,]*/g,
 		"\n> $1\n",
@@ -42,7 +46,7 @@ function normalizeEvidenceMarkdown(content: string, origin?: string) {
 	normalized = normalized.replace(
 		/\[PAGE\s*(.*?)\s*PAGE\/\]/g,
 		(_match, citationTarget: string) =>
-			parsePageCitations(citationTarget)
+			parsePageCitations(citationTarget, pdfSources)
 				.map((citation) =>
 					citation.href
 						? `[Source, p. ${citation.page}](${absoluteUrl(citation.href, origin)})`
@@ -261,12 +265,13 @@ function messagePartLines(
 	labels: ChatTranscriptLabels,
 	markdownToHtml?: MarkdownToHtml,
 	origin?: string,
+	pdfSources?: Record<string, string>,
 ): string[] {
 	return message.parts.flatMap((part) => {
 		if (isTextUIPart(part) && part.text.trim()) {
 			return answerLines(
 				format,
-				normalizeEvidenceMarkdown(part.text, origin),
+				normalizeEvidenceMarkdown(part.text, origin, pdfSources),
 				markdownToHtml,
 			);
 		}
@@ -274,7 +279,7 @@ function messagePartLines(
 		if (isReasoningUIPart(part) && part.text.trim()) {
 			return reasoningLines(
 				format,
-				normalizeEvidenceMarkdown(part.text, origin),
+				normalizeEvidenceMarkdown(part.text, origin, pdfSources),
 				labels.reasoning,
 				markdownToHtml,
 			);
@@ -292,6 +297,8 @@ export async function chatTranscriptContent(
 	messages: UIMessage[],
 	labels: ChatTranscriptLabels,
 	origin?: string,
+	/** The PDFs the conversation read, by file name: page citations link only to these. */
+	pdfSources?: Record<string, string>,
 ) {
 	const markdownToHtml =
 		format === "html"
@@ -314,6 +321,7 @@ export async function chatTranscriptContent(
 				labels,
 				markdownToHtml,
 				origin,
+				pdfSources,
 			),
 		);
 		if (format === "html") output.push("</section>");
@@ -341,13 +349,14 @@ export async function chatMessageContent(
 	format: ChatTranscriptFormat,
 	message: UIMessage,
 	origin?: string,
+	pdfSources?: Record<string, string>,
 ) {
 	const content = message.parts
 		.filter(isTextUIPart)
 		.map((part) => part.text)
 		.filter(Boolean)
 		.join("\n\n");
-	return evidenceContent(format, content, origin);
+	return evidenceContent(format, content, origin, pdfSources);
 }
 
 /** Shared export for an AI answer, summary, or explanation. */
@@ -355,8 +364,9 @@ export async function evidenceContent(
 	format: ChatTranscriptFormat,
 	content: string,
 	origin?: string,
+	pdfSources?: Record<string, string>,
 ) {
-	const markdown = normalizeEvidenceMarkdown(content, origin);
+	const markdown = normalizeEvidenceMarkdown(content, origin, pdfSources);
 	if (format === "markdown") return markdown;
 	if (format === "plaintext") return markdownToPlainText(markdown);
 	const markdownToHtml = await createSafeMarkdownRenderer(origin);

@@ -245,9 +245,12 @@ export function AIContentControls({
 	content,
 	isDisabled,
 	appearance = "default",
+	pdfSources,
 }: {
 	content: string;
 	isDisabled?: boolean;
+	/** The PDFs the answer was written from, so exported page citations link only to these. */
+	pdfSources?: Record<string, string>;
 	appearance?: "default" | "header";
 }) {
 	const { identity } = useLibraryConfig();
@@ -257,7 +260,7 @@ export function AIContentControls({
 		if (action === "csv")
 			throw new Error("Unstructured answers cannot be exported as CSV");
 		return {
-			content: await evidenceContent(action, content, identity.baseUrl),
+			content: await evidenceContent(action, content, identity.baseUrl, pdfSources),
 			...CHAT_EXPORT_OUTPUT[action],
 		};
 	};

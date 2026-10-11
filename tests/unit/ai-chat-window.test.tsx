@@ -50,6 +50,8 @@ class NoResize {
 	disconnect() {}
 }
 globalThis.ResizeObserver ??= NoResize as unknown as typeof ResizeObserver;
+// The attached publication's chip measures its title once fonts load; jsdom has no font loading.
+if (!("fonts" in document)) Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
 
 /** Set while a test wants the answer to stay half-written. */
 const answering = { held: false, release: () => {} };
