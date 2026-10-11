@@ -72,10 +72,19 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 // has. Only the parts that read digest rows wait, each behind its own
 // placeholder. Links between digest pages prefetch the whole page, data
 // included, so an edition opened from the list is already complete.
+const NOT_SENDING = "This library is not sending digests at the moment.";
+
+/** What the library's settings mean for these pages. A library that is not sending digests names no day for the next one, here or beside the choice to subscribe. */
+function useDigestSettings(locale: string): DigestSettings {
+  const {identity, notifications} = useLibraryConfig();
+  const sending = notifications.enabled && notifications.pausedSince === null;
+  const schedule = sending ? describeDigestSchedule(notifications.schedule, locale, notifications.approval) : NOT_SENDING;
+  return {libraryName: identity.name, enabled: notifications.enabled, sending, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule};
+}
+
 export default function DigestPages(props: ArchiveProps | EditionProps | PreferencesProps) {
   const locale = useLocale(); const base = "/digests";
-  const {identity, notifications} = useLibraryConfig();
-  const settings = {libraryName: identity.name, enabled: notifications.enabled, sending: notifications.enabled && notifications.pausedSince === null, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule: describeDigestSchedule(notifications.schedule, locale, notifications.approval)};
+  const settings = useDigestSettings(locale);
   if (props.view === "preferences") return <DigestPreferences {...props} settings={settings} base={base} />;
   if (props.view === "archive") return <DigestArchive {...props} settings={settings} base={base} locale={locale} />;
   return <DigestDetail {...props} settings={settings} base={base} />;
@@ -141,7 +150,7 @@ function EmptyArchive({next, settings}: {next: DigestDate | null; settings: Dige
   // A library that sends no digests is not promised an edition.
   const [title, text] = settings.sending
     ? ["Editions will collect here", `Each digest sums up the publications added since the one before. ${firstEdition(next)}`]
-    : ["No editions yet", "This library is not sending digests at the moment."];
+    : ["No editions yet", NOT_SENDING];
   const tile = "rounded-xl px-1 py-3 text-center";
   const row = "grid grid-cols-[56px_minmax(0,1fr)] items-start gap-4 rounded-2xl p-5 sm:grid-cols-[64px_minmax(0,1fr)] sm:gap-5";
   return <div>

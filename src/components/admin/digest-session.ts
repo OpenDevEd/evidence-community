@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { MOST_TEXT } from "@/lib/notifications/types";
 import type { DigestAction } from "@/lib/notifications/editorial";
 import { AdminApiError, moveAdminDigest, saveAdminDigest, type AdminDigest, type AdminDigestWords } from "./admin-api";
 
@@ -26,7 +27,7 @@ const MOST_LEAVING_BYTES = 60_000;
  */
 function canLeaveWith(words: AdminDigestWords) {
 	const filled = [words.title, words.summary, words.markdown].every((value) => value.trim() !== "");
-	const short = words.title.length <= 200 && words.summary.length <= 1000 && words.note.length <= 2000;
+	const short = words.title.length <= 200 && words.summary.length <= 1000 && words.note.length <= 2000 && words.markdown.trim().length <= MOST_TEXT;
 	return filled && short && new Blob([JSON.stringify(words)]).size <= MOST_LEAVING_BYTES;
 }
 

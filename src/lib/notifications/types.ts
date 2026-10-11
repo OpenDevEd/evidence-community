@@ -1,5 +1,8 @@
 import type { getPublicItemCard } from "@/lib/public-item-card";
 
+/** The most characters a digest's text may have. The editor checks it too, before a page is left. */
+export const MOST_TEXT = 50_000;
+
 export type NotificationPublication = {
   key: string;
   title: string;

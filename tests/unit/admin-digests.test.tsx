@@ -17,6 +17,7 @@ vi.mock("@/components/admin/AdminDigestEditor", () => ({
 
 import * as api from "@/components/admin/admin-api";
 import { AdminDigestsInspector, AdminDigestsMain, useAdminDigests } from "@/components/admin/AdminDigests";
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { AdminSessionProvider } from "@/components/admin/AdminSessionProvider";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,11 +52,11 @@ function Panes({ start }: { start: string }) {
 	const digests = useAdminDigests(param, setParam);
 	return <><main><AdminDigestsMain digests={digests} /></main><aside><AdminDigestsInspector digests={digests} configurationHref="https://openscholar.example/libraries/amber/configuration?section=sources" /></aside><output>{param} waiting {digests.waiting}</output></>;
 }
-async function show(start: string, role: "creator" | "editor") {
+async function show(start: string, role: "creator" | "editor", address = "") {
 	await act(async () => root.render(
 		<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
 			<NextUIProvider disableAnimation>
-				<AdminSessionProvider session={{ role, userId: role === "creator" ? creator.id : "user_editor", name: role === "creator" ? creator.name : "Gugulethu Dube", image: null }}><Panes start={start} /></AdminSessionProvider>
+				<NuqsTestingAdapter searchParams={address}><AdminSessionProvider session={{ role, userId: role === "creator" ? creator.id : "user_editor", name: role === "creator" ? creator.name : "Gugulethu Dube", image: null }}><Panes start={start} /></AdminSessionProvider></NuqsTestingAdapter>
 			</NextUIProvider>
 		</SWRConfig>,
 	));
@@ -94,6 +95,12 @@ describe("digests in the admin", () => {
 		await settle();
 		expect(text()).toContain(`${ID} waiting`);
 		expect(mocked.getAdminDigest).toHaveBeenCalledWith(ID);
+	});
+
+	it("lists the digests the address names, so a reload keeps them", async () => {
+		mocked.getAdminDigests.mockResolvedValue(list([row(ID, "Heat and harvests", "review")]));
+		await show("list", "editor", "?digestState=review");
+		expect(mocked.getAdminDigests).toHaveBeenLastCalledWith(expect.objectContaining({ show: "review" }));
 	});
 
 	it("offers a Creator review, never publishing, and shows who did what", async () => {

@@ -168,6 +168,15 @@ function Pages({ page, pages, total, arriving, onChange }: { page: number; pages
 	</div>;
 }
 
+/**
+ * How what arrives after the list opened is shown: opened before its first page, the counts and the page numbers fade
+ * in where they stand. Nothing fades when they were there on opening.
+ */
+function useArriving(there: boolean) {
+	const [late] = useState(!there);
+	return late ? "animate-in fade-in duration-200 motion-reduce:animate-none" : "";
+}
+
 type RowsProps = { id: string; /** Undefined before the first answer. */ rows: DigestPaper[] | undefined; failed: boolean; dimmed: boolean; active: number; setActive: (index: number) => void; current?: Current; cited: string[]; onPick: (paper: DigestPaper) => void };
 
 /**
@@ -197,9 +206,7 @@ function Papers({ cited, current, onPick, onRemove }: { cited: string[]; current
 	const { data, error, isLoading, behind } = useSearchedPapers(editionId, { ...query, cited }, typed);
 	// Before the first answer the list is empty and stands on its first page.
 	const { papers: rows, page, pages } = data ?? { papers: [], page: 1, pages: 1 };
-	// Opened before its first page arrived, the counts and the page numbers fade in where they stand. Nothing fades when they were there on opening.
-	const [late] = useState(data === undefined);
-	const arriving = late ? "animate-in fade-in duration-200 motion-reduce:animate-none" : "";
+	const arriving = useArriving(data !== undefined);
 	const narrow = (patch: Partial<DigestPapersQuery>) => { setQuery({ ...query, page: 1, ...patch }); setActive(0); };
 	return <>
 		{current && <Cited current={current} cited={cited} onRemove={onRemove} />}
