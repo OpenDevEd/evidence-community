@@ -98,8 +98,9 @@ export function useAdminItemList(
 	const inAddress = useRef(JSON.stringify(initialFilters));
 	// The browser's address is an outside system. It follows the filters a moment after they settle, not on every
 	// keystroke: each write makes the router write too, and Safari refuses more than 100 address changes in ten seconds.
+	const waiting = useRef<ReturnType<typeof setTimeout>>(undefined);
 	useEffect(() => {
-		const timer = setTimeout(() => {
+		const timer = waiting.current = setTimeout(() => {
 			const next = writeAdminItemViewFilters(
 				new URLSearchParams(window.location.search),
 				filters,
@@ -121,6 +122,7 @@ export function useAdminItemList(
 	// the entry just left goes with them, so it cannot land in the entry returned to.
 	useEffect(() => {
 		const follow = () => {
+			clearTimeout(waiting.current);
 			const returned = addressFilters(window.location.search);
 			inAddress.current = returned;
 			setFilters((current) => (JSON.stringify(current) === returned ? current : parseAdminItemViewFilters(new URLSearchParams(window.location.search))));

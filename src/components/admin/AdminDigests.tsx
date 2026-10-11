@@ -91,7 +91,7 @@ function useDigestList() {
 	// The list also tells the navigation how many digests wait for review, so it is read while another view is open.
 	const list = useSWR(["admin-digests", query] as const, ([, value]) => getAdminDigests(value), { keepPreviousData: true, refreshInterval: LIST_POLL_MS });
 	// Rows kept from the page or filter before are shown dimmed until the new ones arrive.
-	return { list: list.data, listStale: list.isLoading && list.data !== undefined, query, setQuery, refresh: list.mutate };
+	return { list: list.data, listStale: list.isLoading && list.data !== undefined, query, setQuery, refreshList: list.mutate };
 }
 
 /**
@@ -136,8 +136,9 @@ function useLeaving(session: DigestSession | null) {
 function useOpenDigest(openId: string | null) {
 	const detail = useSWR(openId ? (["admin-digest", openId] as const) : null, ([, id]) => getAdminDigest(id), {
 		revalidateOnFocus: false,
-		// An edition AI is still writing is asked for again until its text is there.
-		refreshInterval: (latest) => (latest?.writing ? 15_000 : 0),
+		// An edition AI is still writing is asked for again until its text is there. Any other is read again as the
+		// list is, so another person's step shows; what this person has typed and not saved is never replaced.
+		refreshInterval: (latest) => (latest?.writing ? 15_000 : LIST_POLL_MS),
 	});
 	const sessions = useSessions();
 	const loaded = detail.data && detail.data.id === openId ? detail.data : undefined;
@@ -149,7 +150,7 @@ function useOpenDigest(openId: string | null) {
 	/** Loads the edition afresh, dropping what this person had typed since someone else changed it. */
 	const reload = () => detail.mutate().then((fresh) => sessions.hold(sessionToStart(fresh, undefined)));
 	useLeaving(session);
-	return { digest: snapshot ? snapshot.digest : loaded, missing: Boolean(detail.error) && !loaded, session, snapshot, reload };
+	return { digest: snapshot ? snapshot.digest : loaded, missing: Boolean(detail.error) && !loaded, session, snapshot, reload, refreshOpen: detail.mutate };
 }
 
 /**
@@ -162,6 +163,10 @@ export function useAdminDigests(param: string | null, setParam: (value: string |
 	const listed = useDigestList();
 	const opened = useOpenDigest(openId);
 	const leave = (to: string) => { void opened.session?.save(); setParam(to); };
+	const { refreshList } = listed;
+	const { refreshOpen } = opened;
+	/** Reads the list and the open edition again, as the admin's Refresh does for records. */
+	const refresh = useCallback(() => Promise.all([refreshList(), refreshOpen()]), [refreshList, refreshOpen]);
 	return {
 		...listed,
 		...opened,
@@ -171,6 +176,7 @@ export function useAdminDigests(param: string | null, setParam: (value: string |
 		view,
 		setView,
 		waiting: listed.list?.counts.review ?? 0,
+		refresh,
 	};
 }
 type Digests = ReturnType<typeof useAdminDigests>;
