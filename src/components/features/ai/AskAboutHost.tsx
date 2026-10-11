@@ -2,12 +2,17 @@
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
 
-import ChatModal, { type ChatWindowHandle } from "@/components/features/modals/ChatModal";
+import dynamic from "next/dynamic";
+
+import type { ChatWindowHandle } from "@/components/features/modals/ChatModal";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { usePathname } from "@/i18n/routing";
 import { ADMIN_HOME_PATH } from "@/lib/runtime-routing";
 import { AskAboutProvider, type AttachedItem } from "./AskAbout";
+
+// Every public page has this host, but few readers open the chat: its code loads with the first Ask AI.
+const ChatModal = dynamic(() => import("@/components/features/modals/ChatModal"), { ssr: false });
 
 /**
  * The full-screen chat a public page opens about a publication. The first

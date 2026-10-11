@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 
@@ -32,8 +32,10 @@ export function AskAboutButton({ item, compact = false, onAsked }: { item: { key
 	const askAbout = useAskAbout();
 	const t = useTranslations("ai");
 	const attached = attachedItem(item);
-	if (!askAbout || !attached) return null;
+	if (!askAbout) return null;
 	const icon = <HugeiconsIcon icon={SparklesIcon} className="size-3.5 shrink-0" />;
+	// A card still loading shows the button disabled, so its row of buttons is its final width before the record arrives.
+	if (!attached) return compact ? null : <CardButton icon={icon} label={t("askAI")} />;
 	if (compact) {
 		return (
 			<button
@@ -49,16 +51,21 @@ export function AskAboutButton({ item, compact = false, onAsked }: { item: { key
 			</button>
 		);
 	}
-	// Shortcut: icon-only below 720 px with no tooltip, as the card's Copy link button is; give both one when the card gets tooltips.
+	return <CardButton icon={icon} label={t("askAI")} onPress={() => askAbout(attached)} />;
+}
+
+// Shortcut: icon-only below 720 px with no tooltip, as the card's Copy link button is; give both one when the card gets tooltips.
+function CardButton({ icon, label, onPress }: { icon: ReactNode; label: string; /** None while the card is loading. */ onPress?: () => void }) {
 	return (
 		<Button
 			size="sm"
-			aria-label={t("askAI")}
-			onPress={() => askAbout(attached)}
+			aria-label={label}
+			isDisabled={!onPress}
+			onPress={onPress}
 			className="min-w-0 aspect-square px-0 @[720px]:aspect-auto @[720px]:px-3"
 			startContent={icon}
 		>
-			<span className="hidden @[720px]:inline">{t("askAI")}</span>
+			<span className="hidden @[720px]:inline">{label}</span>
 		</Button>
 	);
 }
