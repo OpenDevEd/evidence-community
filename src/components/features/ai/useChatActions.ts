@@ -201,9 +201,12 @@ function useScreeningTooltip({
 export function useTranscriptExport<TMessage extends UIMessage>({
 	messages,
 	modelId,
+	pdfSources,
 }: {
 	messages: TMessage[];
 	modelId: string;
+	/** The PDFs the conversation read, so exported page citations link only to these. */
+	pdfSources: Record<string, string>;
 }) {
 	const t = useTranslations("ai");
 	const { ai } = useLibraryConfig();
@@ -228,16 +231,18 @@ export function useTranscriptExport<TMessage extends UIMessage>({
 					smartScreening: tUI("smartScreening"),
 				},
 				window.location.origin,
+				pdfSources,
 			);
 			return { content, ...CHAT_EXPORT_OUTPUT[format] };
 		},
-		[messages, modelId, t, tUI, ai.providers],
+		[messages, modelId, pdfSources, t, tUI, ai.providers],
 	);
 }
 
 /** Copy or download one answer. */
 export function useMessageExport<TMessage extends UIMessage>(
 	message: TMessage,
+	pdfSources: Record<string, string>,
 ) {
 	return useCallback(
 		async (action: ControlAction): Promise<GeneratedContent> => {
@@ -250,10 +255,11 @@ export function useMessageExport<TMessage extends UIMessage>(
 				format,
 				message as UIMessage,
 				window.location.origin,
+				pdfSources,
 			);
 			return { content: exported, ...CHAT_EXPORT_OUTPUT[format] };
 		},
-		[message],
+		[message, pdfSources],
 	);
 }
 

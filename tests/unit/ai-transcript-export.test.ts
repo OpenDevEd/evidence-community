@@ -86,6 +86,7 @@ describe("keeping a copy of the conversation", () => {
 			conversation,
 			labels,
 			"https://library.example.org",
+			{ "radio.pdf": "/lib/ABCD1234/download/PDF00001" },
 		);
 
 		expect(markdown).toContain(

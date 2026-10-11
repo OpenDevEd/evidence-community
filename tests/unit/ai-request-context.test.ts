@@ -102,7 +102,7 @@ describe("what the assistant is told about this request", () => {
 describe("what the assistant is told about citing evidence", () => {
 	it("demands the combined source and page token", () => {
 		expect(EVIDENCE_CITATION_INSTRUCTIONS).toContain(
-			"[PAGE /lib/KEY/download/ATTACHMENT_KEY — 12 PAGE/]",
+			"[PAGE CITATION_TARGET — 12 PAGE/]",
 		);
 		expect(EVIDENCE_CITATION_INSTRUCTIONS).toMatch(
 			/never use page numbers printed in the document/i,
@@ -121,9 +121,15 @@ describe("what the assistant is told about citing evidence", () => {
 });
 
 describe("turning a page citation into a link", () => {
+	/** The PDFs the conversation read, by file name. */
+	const read = {
+		"report.pdf": "/lib/ABCD1234/download/PDF0001",
+		"PAGE key.pdf": "/lib/ABCDPAGE/download/PDF00001",
+	};
+
 	it("opens the cited PDF at the cited page", () => {
 		expect(
-			parsePageCitations("/lib/ABCD1234/download/PDF0001 — 12"),
+			parsePageCitations("/lib/ABCD1234/download/PDF0001 — 12", read),
 		).toEqual([
 			{ page: "12", href: "/lib/ABCD1234/download/PDF0001#page=12" },
 		]);
@@ -133,7 +139,7 @@ describe("turning a page citation into a link", () => {
 	it("gives every page a model packed into one token its own link", () => {
 		const file = "/lib/ABCD1234/download/PDF0001";
 		const pages = (value: string) =>
-			parsePageCitations(value).map(({ page, href }) => [page, href]);
+			parsePageCitations(value, read).map(({ page, href }) => [page, href]);
 
 		expect(pages(`${file} — 7 PAGE/, PAGE ${file} — 8`)).toEqual([
 			["7", `${file}#page=7`],
@@ -152,6 +158,15 @@ describe("turning a page citation into a link", () => {
 		expect(pages("/lib/ABCDPAGE/download/PDF00001 — 12")).toEqual([
 			["12", "/lib/ABCDPAGE/download/PDF00001#page=12"],
 		]);
+	});
+
+	it("links no PDF the conversation did not read", () => {
+		expect(
+			parsePageCitations("/lib/KEY/download/ATTACHMENT_KEY — 12", read)[0].href,
+		).toBeUndefined();
+		expect(
+			parsePageCitations("/lib/ABCD1234/download/PDF0009 — 3", read)[0].href,
+		).toBeUndefined();
 	});
 
 	it("resolves a filename the model used instead of a path", () => {

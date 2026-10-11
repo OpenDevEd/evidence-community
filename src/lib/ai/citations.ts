@@ -75,9 +75,14 @@ function pageCitation(
 	const target = source.startsWith("/lib/")
 		? source
 		: knownSources[source];
-	const safeTarget = target?.match(/^\/lib\/[^/?#]+\/download\/[^/?#]+$/)
-		? target
-		: undefined;
+	// Only a PDF the conversation read can be opened: a model copies the prompt's example target or guesses an
+	// attachment key, and those addresses lead nowhere.
+	const safeTarget =
+		target &&
+		Object.values(knownSources).includes(target) &&
+		/^\/lib\/[^/?#]+\/download\/[^/?#]+$/.test(target)
+			? target
+			: undefined;
 	const pageNumber = page.match(/\d+/)?.[0];
 
 	return {
@@ -95,7 +100,8 @@ const PACKED_ENTRY_SEPARATOR = /\s+PAGE\/\s*,?\s*(?:PAGE\s+)?/;
  * The pages one PAGE token cites, one citation per page. Models sometimes
  * pack several pages into one token (`— 3 PAGE/, PAGE /lib/… — 4`,
  * `— 3 PAGE/, 4` or `— 3, 4`); an entry without its own file uses the file
- * named before it.
+ * named before it. `knownSources` are the PDFs the conversation read, by file
+ * name; a citation links only to one of them.
  */
 export function parsePageCitations(
 	value: string,
