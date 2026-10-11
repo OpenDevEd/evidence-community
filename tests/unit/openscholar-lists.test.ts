@@ -11,6 +11,13 @@ describe("a record's lists in OpenScholar", () => {
 		expect(openScholarList(work, "citations")).toEqual({ total: 7, path: "/results?cites=W4412345678" });
 	});
 
+	it("opens the lists of a record matched to OpenAlex from another source, by the work its totals are for", () => {
+		const other = { citedByCount: 2, referencedWorksCount: 9, workId: null };
+		const zotero = { sourceRecordKey: "ABCD2345", citationMetrics: [other, { ...metric, workId: "W900000004" }] };
+		expect(openScholarList(zotero, "references")).toEqual({ total: 131, path: "/results?citedBy=W900000004" });
+		expect(openScholarList(zotero, "citations")).toEqual({ total: 7, path: "/results?cites=W900000004" });
+	});
+
 	it("still opens the list when the library holds no totals for the work", () => {
 		expect(openScholarList({ sourceRecordKey: "W1" }, "references")).toEqual({ total: null, path: "/results?citedBy=W1" });
 	});

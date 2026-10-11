@@ -1,8 +1,8 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { SourceProvider } from "@opendeved/evidence-library-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
-import { sourceConnection } from "@/db/schema/source";
+import { itemSourceLink, sourceConnection } from "@/db/schema/source";
 import { itemCitationMetric } from "@/db/schema/tables/itemCitationMetric";
 import { sourceDisplayLabel } from "@/lib/admin/source-label";
 import { isOpenAlexWorkProvider } from "@/lib/source-providers";
@@ -13,6 +13,8 @@ export type SourceCitationMetric = {
 	sourceConnectionKey: string;
 	sourceLabel: string;
 	provider: SourceProvider;
+	/** The OpenAlex work these counts are for, whichever source the record itself came from. Null for another provider's counts, and in index documents written before it was kept. */
+	workId?: string | null;
 	citedByCount: number | null;
 	referencedWorksCount: number | null;
 	observedAt: string;
@@ -33,11 +35,19 @@ export async function getSourceCitationMetricsForKeys(
 			citedByCount: itemCitationMetric.citedByCount,
 			referencedWorksCount: itemCitationMetric.referencedWorksCount,
 			observedAt: itemCitationMetric.observedAt,
+			sourceRecordKey: itemSourceLink.sourceRecordKey,
 		})
 		.from(itemCitationMetric)
 		.innerJoin(
 			sourceConnection,
 			eq(sourceConnection.key, itemCitationMetric.sourceConnectionKey),
+		)
+		.innerJoin(
+			itemSourceLink,
+			and(
+				eq(itemSourceLink.itemKey, itemCitationMetric.itemKey),
+				eq(itemSourceLink.sourceConnectionKey, itemCitationMetric.sourceConnectionKey),
+			),
 		)
 		.where(inArray(itemCitationMetric.itemKey, [...itemKeys]))
 		.orderBy(
@@ -63,6 +73,7 @@ export async function getSourceCitationMetricsForKeys(
 						externalScopeKey: row.externalScopeKey,
 					}),
 			provider: row.provider,
+			workId: openAlex && /^W\d+$/.test(row.sourceRecordKey) ? row.sourceRecordKey : null,
 			citedByCount: row.citedByCount,
 			referencedWorksCount: row.referencedWorksCount,
 			observedAt: row.observedAt.toISOString(),
