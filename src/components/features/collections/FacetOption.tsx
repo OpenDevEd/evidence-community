@@ -5,7 +5,7 @@ import { ArrowDown01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { twMerge } from "@/lib/tw-merge";
-import { barWidth } from "./ResultsOverview";
+import { barWidth } from "./SidebarCard";
 
 /** A small ring filled to a share: a sliver at least for any count, empty for none. */
 export function ShareRing({ share }: { share: number }) {

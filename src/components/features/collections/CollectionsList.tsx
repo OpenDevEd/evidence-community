@@ -58,7 +58,8 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection, withoutBareRoots } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { ResultsOverview, shareOf, SIDEBAR_GREY, useFacetTotal } from "./ResultsOverview";
+import { ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
+import { SIDEBAR_GREY } from "./SidebarCard";
 import { FacetOption, ShareRing } from "./FacetOption";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";

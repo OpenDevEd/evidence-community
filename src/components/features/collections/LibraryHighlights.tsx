@@ -5,7 +5,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimePageAvailability } from "@/config/library-config/pages";
 import { loadLatestDigests } from "@/components/pages/home-data";
 import { LibraryPageLinks } from "./LibraryPageLinks";
-import { SidebarCard } from "./ResultsOverview";
+import { SidebarCard } from "./SidebarCard";
 import { DigestCover } from "@/components/digests/DigestCover";
 
 const ROW = "group/row flex min-w-0 flex-col gap-1 rounded-xl p-2 -mx-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5";

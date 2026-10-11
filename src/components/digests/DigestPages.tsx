@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense, use } from "react";
+import { Suspense, use, useEffect, useOptimistic, useState, useTransition, type ReactNode } from "react";
 import { useLocale } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
-import { AiMagicIcon, Calendar03Icon, ArrowRight01Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
-import type { DigestArchivePage, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
+import { AiMagicIcon, ArrowRight01Icon, Calendar03Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
+import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
@@ -16,8 +16,10 @@ import { DIGEST_SIGNER_ROLE } from "@/lib/notifications/types";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { twMerge } from "@/lib/tw-merge";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
+import { HeadFigure, SidebarCard, barWidth } from "@/components/features/collections/SidebarCard";
 
 import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Markdown";
 
@@ -26,13 +28,29 @@ import { SectionTitle } from "@/components/typography/SectionTitle";
 import { Face, Icon, TextLink, muted } from "./DigestPrimitives";
 import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
 import { Subscription, type Preferences } from "./Subscription";
+import { editionParts, type Part } from "./edition-parts";
 
-/** The page number lives in the URL, so every page can be shared and reloaded. */
-/** `anchor` is the list's own heading: turning its page brings the top of the list back into view, where a shorter page would leave the reader below it. */
-function PageControls({page, pages, href, anchor}: {page: number; pages: number; href: (page: number) => string; anchor?: string}) {
+/**
+ * A list with its page controls. The page number lives in the URL, so every page can be shared and reloaded. Turning
+ * the page brings `anchor`, the list's heading, into view at once, and the rows on show stay, dimmed, until the next
+ * page's rows are in.
+ */
+function Paged({page, pages, href, anchor, children}: {page: number; pages: number; href: (page: number) => string; anchor: string; children: ReactNode}) {
   const router = useRouter();
-  if (pages < 2) return null;
-  return <Pagination showControls page={page} total={pages} onChange={next => router.push(anchor ? `${href(next)}#${anchor}` : href(next), {scroll: Boolean(anchor)})} className="mt-6 flex justify-center" />;
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(page);
+  function turn(next: number) {
+    const instant = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(anchor)?.scrollIntoView({behavior: instant ? "auto" : "smooth", block: "start"});
+    startTransition(() => {
+      setShown(next);
+      router.push(`${href(next)}#${anchor}`, {scroll: false});
+    });
+  }
+  return <>
+    <div aria-busy={pending} className={twMerge("transition-opacity duration-200 motion-reduce:transition-none", pending && "pointer-events-none opacity-50")}>{children}</div>
+    {pages > 1 && <Pagination showControls page={shown} total={pages} onChange={turn} className="mt-6 flex justify-center" />}
+  </>;
 }
 
 /** Who stands behind an edition: the person who checked it, or that AI wrote it and nobody has. Nothing when the library does not say. */
@@ -44,12 +62,12 @@ function Attribution({ by }: { by: DigestSignature | undefined }) {
 }
 function EditionMeta({ edition }: { edition: DigestSummary }) {
   const locale = useLocale();
-  return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={Calendar03Icon} size={14} /><time dateTime={edition.published.at}>{edition.published.date}</time></span><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(edition.publicationCount, locale)}</span><Attribution by={edition.by} /></div>;
+  return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-sm ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={Calendar03Icon} size={16} /><time dateTime={edition.published.at}>{edition.published.date}</time></span><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, locale)}</span><Attribution by={edition.by} /></div>;
 }
 /** The words of the person who checked the edition, above its text. */
 function EditorNote({ edition }: { edition: DigestEdition }) {
   if (!edition.note || !edition.by) return null;
-  return <figure className="mb-9 rounded-2xl bg-card_light p-5 dark:bg-card">
+  return <figure className="mb-10 rounded-2xl bg-card_light p-6 dark:bg-card">
     <blockquote className="whitespace-pre-line text-base leading-7">{edition.note}</blockquote>
     <figcaption className="mt-4 flex items-center gap-3 text-sm">
       <Face person={edition.by} size={36} />
@@ -57,13 +75,12 @@ function EditorNote({ edition }: { edition: DigestEdition }) {
     </figcaption>
   </figure>;
 }
-function DigestContent({ edition }: { edition: DigestEdition }) {
-  return <AIMarkdown>{edition.markdown}</AIMarkdown>;
-}
+
+
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
 type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; /** An editor publishes each digest, so the next one has a day and no time. */ approval: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
-type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>};
+type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; chart: Promise<DigestChart>; nextEdition: Promise<DigestDate | null>};
 export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
 type EditionProps = {view: "edition"; slug: string; earlier: Promise<DigestSummary[]>; edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>};
 type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber: Promise<Preferences | null>};
@@ -102,9 +119,12 @@ function SubscriberPreferences({subscriber, token: pending, schedule}: {subscrib
   return <Subscription key="preferences" initial={initial} preferences token={token} schedule={schedule} />;
 }
 
-function DigestArchive({settings, latest, editions, nextEdition, base, locale}: ArchiveProps & Base & {locale: string}) {
+/** Content beside a 320 px rail, as the library page lays out its results and sidebar. */
+const withRail = "grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12";
+
+function DigestArchive({settings, latest, editions, chart, nextEdition, base, locale}: ArchiveProps & Base & {locale: string}) {
   return <PageContainer className="mx-auto relative z-0 -mt-6 overflow-visible pt-0 lg:pt-0 xl:pt-0">
-      <header className={`${styles.hero} relative isolate mb-8 grid items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
+      <header className={`${styles.hero} relative isolate mb-12 grid items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 -top-[100vh] -z-10 w-screen -translate-x-1/2 bg-card_light dark:bg-card" />
         <div className="max-w-lg">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
@@ -113,12 +133,14 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
         </div>
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Latest editions</h2></div>
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12">
-        <section aria-label="Digest archive" className="space-y-3">
-          <Suspense fallback={[0, 1, 2].map(index => <Skeleton key={index} className="h-40 rounded-2xl" />)}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
+      <div className={withRail}>
+        <section id="archive" aria-label="Digest archive" className="min-w-0 scroll-mt-8">
+          <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
         </section>
-        {settings.enabled && <aside className="space-y-5 lg:sticky lg:top-12"><Subscription initial={newReader} schedule={settings.schedule} /></aside>}
+        <aside className="space-y-4 lg:sticky lg:top-8">
+          <Suspense fallback={<Skeleton className="h-[19rem] rounded-2xl" />}><EditionsChart chart={chart} base={base} locale={locale} /></Suspense>
+          {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
+        </aside>
       </div>
   </PageContainer>;
 }
@@ -135,14 +157,73 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
     <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>Next edition</p><p className="mt-1 truncate font-medium">{settings.approval ? next.dayName : `${next.dayName} at ${next.time}`}</p><TruncatedText text={settings.approval ? "Once an editor has checked it" : timeZoneLabel(settings.timezone)} className={`mt-0.5 text-xs ${muted}`} /></div>
   </div>;
 }
+
+/** One edition in a list: its date in a gutter, then its title and opening. The archive and an edition's "More digests" share it. */
+function EditionRow({item, base, locale, summary = true}: {item: DigestSummary; base: string; locale: string; summary?: boolean}) {
+  return <Link href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-xl p-4 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5 sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:gap-6">
+    <time dateTime={item.published.at} aria-label={item.published.date} className="pt-0.5 text-center"><span className="block font-heading text-3xl font-semibold leading-none tabular-nums">{Number(item.published.day)}</span><span className={`mt-1.5 block text-xs ${muted}`}>{item.published.month}</span></time>
+    <div className="min-w-0">
+      <h3 className="font-heading text-xl font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</h3>
+      {summary && <MarkdownExcerpt className={`mt-1.5 line-clamp-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt>}
+      <span className={`mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span><Attribution by={item.by} /></span>
+    </div>
+  </Link>;
+}
+/** Editions under the year they came out in, each year one card of rows. */
+function byYear(items: DigestSummary[]) {
+  const years: {year: string; items: DigestSummary[]}[] = [];
+  for (const item of items) {
+    const year = item.published.year;
+    if (years.at(-1)?.year === year) years.at(-1)!.items.push(item);
+    else years.push({year, items: [item]});
+  }
+  return years;
+}
+const rowCard = "rounded-2xl bg-card_light p-2 dark:bg-card";
+function ArchiveLoading() {
+  return <div className={rowCard}>{[0, 1, 2].map(index => <div key={index} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-6 p-4"><Skeleton className="mx-auto h-10 w-10 rounded-lg" /><div className="space-y-3"><Skeleton className="h-5 w-3/5 rounded-lg" /><Skeleton className="h-3 w-full rounded-lg" /><Skeleton className="h-3 w-24 rounded-lg" /></div></div>)}</div>;
+}
 function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const {editions: items, page, pages} = use(editions);
   if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
-  return <>{items.map(item => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[56px_minmax(0,1fr)_18px] items-start gap-4 rounded-2xl bg-card_light p-5 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055] sm:grid-cols-[64px_minmax(0,1fr)_18px] sm:gap-5">
-            <time dateTime={item.published.at} aria-label={item.published.date} className="rounded-xl bg-black/[0.04] px-1 py-3 text-center dark:bg-white/[0.04]"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(item.published.day)}</span><span className={`mt-2 block text-xs ${muted}`}>{item.published.month}</span></time>
-            <div><h2 className="text-xl font-semibold leading-snug transition-colors group-hover:text-accent">{item.title}</h2><MarkdownExcerpt className={`mt-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt><span className={`mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span><Attribution by={item.by} /></span></div><span className="mt-1 text-accent"><Icon value={ArrowRight01Icon} size={18} /></span>
-          </Link>)}
-    <PageControls page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} /></>;
+  return <Paged page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} anchor="archive"><div className="space-y-8">
+    {byYear(items).map(({year, items: ofYear}) => <section key={year} aria-labelledby={`year-${year}`}>
+      <SectionTitle className="mb-3 text-xl"><span id={`year-${year}`}>{year}</span></SectionTitle>
+      <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} />)}</div>
+    </section>)}
+  </div></Paged>;
+}
+
+/** The bar read out: the one pointed at while it is on this page, else the latest. A page turned while pointing can show fewer bars. */
+const chartFocus = (pointed: number | null, count: number) => (pointed !== null && pointed < count ? pointed : count - 1);
+/** The Editions card before the first edition: the same parts, so the card below it stays where it is. */
+function EmptyEditionsChart() {
+  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>0</span>} band={<>
+    <HeadFigure value="0" label="publications" />
+    <div aria-hidden className="h-24 border-b-2 border-dashed border-accent/30" />
+  </>}>
+    <div className="-mt-1 h-[4.25rem]"><p className={`text-sm ${muted}`}>No editions yet</p></div>
+  </SidebarCard>;
+}
+/** Publications per edition, oldest first, as the library's Years card shows publications per year. Pointing at a bar reads it out; the latest is read out otherwise. */
+function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base: string; locale: string}) {
+  const {editions: items, total} = use(chart);
+  const [pointed, setPointed] = useState<number | null>(null);
+  if (!items.length) return <EmptyEditionsChart />;
+  const shown = items.toReversed();
+  const largest = Math.max(...shown.map(item => item.publicationCount));
+  const focus = chartFocus(pointed, shown.length);
+  const edition = shown[focus];
+  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>{total.toLocaleString(locale)}</span>} band={<>
+    <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
+    <div className="flex h-24 items-end gap-1" onMouseLeave={() => setPointed(null)}>
+      {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={`${item.title}, ${publicationCount(item.publicationCount, locale)}`} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <span className={twMerge("block w-full rounded-t-[3px] transition-colors duration-200 motion-reduce:transition-none", index === focus ? "bg-accent" : "bg-accent/30")} style={{height: barWidth(item.publicationCount, largest)}} />
+      </Link>)}
+    </div>
+  </>}>
+    <div className="-mt-1 h-[4.25rem]"><p className={`text-xs ${muted}`}>{edition.published.monthYear}</p><p className="mt-1 line-clamp-2 font-medium leading-6">{edition.title}</p></div>
+  </SidebarCard>;
 }
 
 /** Before the first edition: the first row is kept for it, dated when it is scheduled, and the rows after it wait faintly below. */
@@ -178,52 +259,152 @@ function firstEdition(next: DigestDate | null) {
 }
 
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
- return <PageContainer className="mx-auto ">
-
+  const locale = useLocale();
+  return <PageContainer className="mx-auto overflow-clip">
       <TextLink href={base} back>All digests</TextLink>
-      <div className="mt-8 grid items-start gap-8 lg:grid-cols-12">
-        <article className="min-w-0 lg:col-span-8 xl:col-span-9">
-          <Suspense fallback={<EditionLoading />}><EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} /></Suspense>
-        </article>
-        <aside className="space-y-8 lg:col-span-4 xl:col-span-3">
-          <section aria-label="Past digests">
-            <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={Calendar03Icon} /></span>Past digests</SectionTitle>
-            <Suspense fallback={<div className="space-y-2">{[0, 1].map(index => <Skeleton key={index} className="h-[4.5rem] rounded-xl" />)}</div>}><PastDigests earlier={earlier} base={base} /></Suspense>
-            <div className="mt-4"><TextLink href={base}>Browse all digests</TextLink></div>
-          </section>
+      {/* One boundary for the edition and the digests after it: they appear together, so nothing below the text moves when it arrives. */}
+      <Suspense fallback={<EditionLoading />}>
+        <EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} />
+        {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
+        <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
+          <div className="min-w-0 [&>section]:h-full">
+            <SidebarCard title="More digests" aside={<TextLink href={base}>Browse all digests</TextLink>}>
+              <PastDigests earlier={earlier} base={base} locale={locale} />
+            </SidebarCard>
+          </div>
           {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
-        </aside>
-      </div>
- </PageContainer>;
+        </div>
+      </Suspense>
+  </PageContainer>;
 }
 function EditionLoading() {
-  return <div aria-hidden="true">
-    <div className="mb-9 space-y-5"><Skeleton className="h-9 w-3/4 rounded-xl" /><Skeleton className="h-4 w-56 rounded-lg" /></div>
-    <div className="space-y-3"><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-4/5 rounded-lg" /></div>
+  // At least a screen tall, as every edition is: the footer stays below the fold instead of jumping down when the edition arrives.
+  return <div aria-hidden="true" className="mt-8 min-h-screen">
+    <div className="mb-12 max-w-3xl space-y-5"><Skeleton className="h-11 w-3/4 rounded-xl" /><Skeleton className="h-5 w-full rounded-lg" /><Skeleton className="h-4 w-64 rounded-lg" /></div>
+    <div className={withRail}><div className="space-y-3"><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-4/5 rounded-lg" /></div><Skeleton className="h-80 rounded-2xl" /></div>
   </div>;
 }
 function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>; path: string}) {
   const edition = use(pending);
+  // The records arrive with the text: a placeholder card cannot know how tall each real one is, so a list that
+  // filled in afterwards moved the page.
+  const records = use(cards);
   const locale = useLocale();
   if (!edition) notFound();
+  const {intro, parts} = editionParts(edition.markdown);
+  const listAnchor = edition.reviews ? "reviews" : "publications";
   return <>
-          <header className="mb-9"><h1 className="text-3xl font-medium leading-tight">{edition.title}</h1><div className="mt-5"><EditionMeta edition={edition} /></div></header>
-          <EditorNote edition={edition} />
-          <DigestContent edition={edition} />
-          <section id="publications" className="mt-10 scroll-mt-28" aria-label="Referenced publications">
-            <SectionTitle className="mb-4 flex items-center gap-2"><span className="text-accent"><Icon value={BookOpen01Icon} /></span>In this edition<span className={`ml-auto text-xs font-normal ${muted}`}>{edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
-            {edition.publicationCount > edition.listed && <p className={`-mt-2 mb-4 text-sm ${muted}`}>{edition.listed.toLocaleString(locale)} of {publicationCount(edition.publicationCount, locale)} from this period: meta-analyses and reviews first, then the publications with an abstract, ranked by the journal&apos;s standing, references, known institutions and citations.</p>}
-            <EditionLists edition={edition} cards={cards} path={path} locale={locale} />
-          </section>
+    <EditionHeader edition={edition} />
+    <div className={withRail}>
+      <article className="min-w-0">
+        <EditorNote edition={edition} />
+        {intro && <AIMarkdown>{intro}</AIMarkdown>}
+        <div className="space-y-12">{parts.map(part => <section key={part.id} id={part.id} aria-labelledby={`${part.id}-title`} className="scroll-mt-8">
+          <SectionTitle className="mb-4"><span id={`${part.id}-title`}>{part.title}</span></SectionTitle>
+          <AIMarkdown>{part.body}</AIMarkdown>
+        </section>)}</div>
+        <InThisEdition edition={edition} records={records} path={path} locale={locale} />
+      </article>
+      <aside className="order-first space-y-4 lg:sticky lg:top-8 lg:order-none">
+        <Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} />
+        <EditionShare edition={edition} locale={locale} />
+      </aside>
+    </div>
   </>;
 }
+
+function EditionHeader({edition}: {edition: DigestEdition}) {
+  return <header className="mb-12 mt-8 max-w-4xl">
+    <h1 className="font-heading text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">{edition.title}</h1>
+    <MarkdownExcerpt className={`mt-5 max-w-3xl text-lg leading-8 ${muted}`}>{edition.summary}</MarkdownExcerpt>
+    <div className="mt-6"><EditionMeta edition={edition} /></div>
+  </header>;
+}
+/** The edition's publications under their heading, with how many are listed when it is not all of them, and how they are ordered. */
+function InThisEdition({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
+  return <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
+    <SectionTitle className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span>{edition.publicationCount > edition.listed && <span className={`text-sm font-normal tabular-nums ${muted}`}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)} listed</span>}</SectionTitle>
+    <ListOrder />
+    <EditionLists edition={edition} records={records} path={path} locale={locale} />
+  </section>;
+}
+
+/** The section the reader is in: the first section crossing a band near the top of the window. Kept while the reader is between two sections. */
+function useActiveSection(ids: string[]) {
+  const key = ids.join(" ");
+  const [active, setActive] = useState<string | null>(null);
+  // IntersectionObserver: where the reader is in the edition, for the contents list.
+  useEffect(() => {
+    const watched = key.split(" ").filter(Boolean);
+    const crossing = new Map<string, boolean>();
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) crossing.set(entry.target.id, entry.isIntersecting);
+      const first = watched.find(id => crossing.get(id));
+      if (first) setActive(first);
+    }, {rootMargin: "-24px 0px -70% 0px"});
+    for (const id of watched) {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    }
+    return () => observer.disconnect();
+  }, [key]);
+  return active ?? key.split(" ")[0] ?? null;
+}
+const railRow = "flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5";
+/** The edition's subjects and its publication list, each with how many publications it cites, the one being read marked. */
+function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition: DigestEdition; listAnchor: string; locale: string}) {
+  const active = useActiveSection([...parts.map(part => part.id), "publications"]);
+  const rows = [...parts.map(part => ({id: part.id, href: part.id, title: part.title, count: part.cited, label: `${part.cited} cited`})), {id: "publications", href: listAnchor, title: "In this edition", count: edition.listed, label: `${edition.listed} listed`}];
+  if (!parts.length) return null;
+  return <SidebarCard title="Contents">
+    <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.id}>
+      <a href={`#${row.href}`} aria-current={active === row.id ? "location" : undefined} className={twMerge(railRow, active === row.id && "bg-black/5 font-medium text-accent dark:bg-white/5")}>
+        <span className="min-w-0 flex-1 leading-5">{row.title}</span>
+        <span aria-label={row.label} className={`inline-flex shrink-0 items-center gap-1 text-xs tabular-nums ${muted}`}><Icon value={BookOpen01Icon} size={12} />{row.count.toLocaleString(locale)}</span>
+      </a>
+    </li>)}</ul>
+  </SidebarCard>;
+}
+/** The edition's two lists as shares of the period's new publications; the bar's empty track is the rest of the period. */
+/** The edition's lists as rows: its meta-analyses and reviews and its other publications, or one list when it has no review. */
+function shareRows({reviews, listed}: DigestEdition) {
+  if (!reviews) return [{href: "#publications", label: "Publications", count: listed, tone: "bg-accent/45"}];
+  return [
+    {href: "#reviews", label: "Meta-analyses and reviews", count: reviews.listed, tone: "bg-accent"},
+    {href: "#other-publications", label: "Other publications", count: listed - reviews.listed, tone: "bg-accent/45"},
+  ].filter(row => row.count > 0);
+}
+function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
+  const rows = shareRows(edition);
+  const total = edition.publicationCount;
+  return <SidebarCard title="Publications" band={<>
+    <HeadFigure value={edition.listed.toLocaleString(locale)} label={edition.listed < total ? `of ${total.toLocaleString(locale)} new publications` : "new publications"} />
+    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.map(row => <span key={row.label} className={`h-full min-w-[3px] ${row.tone}`} style={{width: `${(row.count / total) * 100}%`}} />)}{edition.listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
+  </>}>
+    <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.label}>
+      <a href={row.href} className={railRow}><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${row.tone}`} /><span className="min-w-0 flex-1">{row.label}</span><span className="text-sm font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span></a>
+    </li>)}</ul>
+  </SidebarCard>;
+}
+
+/** How the lists are ordered, step by step, as the library ranks them (`reviewStanding`, then an abstract, then the score). */
+const ORDER = ["Meta-analyses and reviews", "With an abstract"];
+const RANKED_BY = ["Journal standing", "References", "Known institutions", "Citations"];
+function ListOrder() {
+  const chip = "inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium";
+  const next = <span aria-hidden className={muted}><Icon value={ArrowRight01Icon} size={14} /></span>;
+  return <ol aria-label="How this list is ordered" className="mb-8 flex flex-wrap items-center gap-x-2 gap-y-2">
+    {ORDER.map(step => <li key={step} className="flex items-center gap-2"><span className={`${chip} bg-accent/10 text-accent`}>{step}</span>{next}</li>)}
+    <li className="flex flex-wrap items-center gap-1.5"><span className={`mr-0.5 text-xs ${muted}`}>Ranked by</span>{RANKED_BY.map(signal => <span key={signal} className={`${chip} bg-black/5 text-black/70 dark:bg-white/10 dark:text-white/70`}>{signal}</span>)}</li>
+  </ol>;
+}
+
 /** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
-function EditionLists({edition, cards, path, locale}: {edition: DigestEdition; cards: Promise<EditionCardsData>; path: string; locale: string}) {
+function EditionLists({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
   const {reviews} = edition;
-  const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <>
-    <Suspense fallback={<CardsLoading keys={keys} />}><EditionCards cards={cards} keys={keys} /></Suspense>
-    <PageControls page={page} pages={pages} href={href} anchor={anchor} />
-  </>;
+  const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <Paged page={page} pages={pages} href={href} anchor={anchor}>
+    <EditionCards records={records} keys={keys} />
+  </Paged>;
   if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
     <ListHeading id="reviews" title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
@@ -232,7 +413,8 @@ function EditionLists({edition, cards, path, locale}: {edition: DigestEdition; c
     {list("other-publications", edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}
   </>;
 }
-const cardGrid = "grid grid-cols-1 gap-4 sm:grid-cols-2";
+/** One card per row, as the library's results list shows records. */
+const cardList = "flex flex-col gap-4";
 /** An edition page's address: each list keeps the page the other is on. */
 function address(path: string, page: number, reviews = 1) {
   const query = new URLSearchParams();
@@ -241,25 +423,19 @@ function address(path: string, page: number, reviews = 1) {
   return query.size ? `${path}?${query}` : path;
 }
 function ListHeading({id, title, count, locale}: {id: string; title: string; count: number; locale: string}) {
-  return <h3 id={id} className="mb-4 flex scroll-mt-28 items-baseline gap-2 text-lg font-medium">{title}<span className={`text-xs font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
+  return <h3 id={id} className="mb-4 flex scroll-mt-8 items-baseline gap-2 font-heading text-xl font-medium">{title}<span className={`text-sm font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
 }
-function CardsLoading({keys}: {keys: string[]}) {
-  return <div className={cardGrid}>{keys.map(key => <Resource key={key} as="div" abstract={false} hideUnapi isLoading itemData={undefined} />)}</div>;
-}
-function EditionCards({cards: pending, keys}: {cards: Promise<EditionCardsData>; /** The cards of one list, in its order. */ keys: string[]}) {
-  const {cards, profiles} = use(pending);
+function EditionCards({records: {cards, profiles}, keys}: {records: EditionCardsData; /** The cards of one list, in its order. */ keys: string[]}) {
   const listed = keys.flatMap(key => cards.find(card => card.key === key) ?? []);
   // The server read the authors with the cards, so no card looks them up on its own.
   return <AuthorProfilesContext value={new Map(profiles.map(profile => [profile.id, profile]))}>
-    <div className={cardGrid}>{listed.map(card => <Resource key={card.key} as="div" abstract={false} hideUnapi itemData={card} />)}</div>
+    <div className={cardList}>{listed.map(card => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
   </AuthorProfilesContext>;
 }
-function PastDigests({earlier, base}: {earlier: Promise<DigestSummary[]>; base: string}) {
+function PastDigests({earlier, base, locale}: {earlier: Promise<DigestSummary[]>; base: string; locale: string}) {
   const older = use(earlier);
   if (!older.length) return <p className={`text-sm ${muted}`}>This is the first edition.</p>;
-  return <div className="space-y-2">{older.map(item => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch className="group block rounded-xl bg-card_light p-4 transition-colors hover:bg-black/[0.06] dark:bg-card dark:hover:bg-white/[0.055]">
-              <time dateTime={item.published.at} className={`text-xs ${muted}`}>{item.published.date}</time><h3 className="mt-1.5 text-sm font-semibold leading-5 group-hover:text-accent">{item.title}</h3>
-            </Link>)}</div>;
+  return <div className="-mx-4 -my-3">{older.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} summary={false} />)}</div>;
 }
 
 function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
