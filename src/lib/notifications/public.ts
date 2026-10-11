@@ -15,7 +15,7 @@ const EDITION_PAGE_SIZE = 12;
  * A date written out in the library's time zone. Only the server writes it: the
  * browser's time zone data can disagree with the server's, and the page would not hydrate.
  */
-export type DigestDate = {at: string; day: string; month: string; monthYear: string; weekday: string; dayName: string; date: string; time: string};
+export type DigestDate = {at: string; day: string; month: string; monthYear: string; /** The year in the library's time zone, as the other parts are. */ year: string; weekday: string; dayName: string; date: string; time: string};
 /** Who stands behind a digest: the Editor or Owner who checked it, or null when it went out as AI wrote it. Their account is not told. */
 export type DigestSignature = Omit<DigestSigner, "id"> | null;
 /** `by` is left out when the library does not tell readers who checks its digests. */
@@ -33,6 +33,9 @@ export type DigestReviews = {listed: number; page: number; pages: number; keys: 
 /** The records an edition's page shows cards for: this page of its reviews, then this page of the others. */
 export const editionCardKeys = (edition: DigestEdition) => [...(edition.reviews?.keys ?? []), ...edition.keys];
 export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages: number};
+/** The archive's chart: the latest editions whatever page the list is on, and how many there are in all. */
+export type DigestChart = {editions: DigestSummary[]; total: number};
+const CHART_EDITIONS = 24;
 
 // Lists read these small columns only, never an edition's stored publications.
 const summaryColumns = {
@@ -51,7 +54,7 @@ export function digestSignature(config: LibraryServerConfig, checkedBy: DigestSi
 function digestDate(value: Date, locale: string, config: LibraryServerConfig): DigestDate {
   const text = (options: Intl.DateTimeFormatOptions) => value.toLocaleString(locale, {...options, timeZone: config.notifications.schedule.timezone});
   return {
-    at: value.toISOString(), day: text({day: "2-digit"}), month: text({month: "short"}), monthYear: text({month: "long", year: "numeric"}),
+    at: value.toISOString(), day: text({day: "2-digit"}), month: text({month: "short"}), monthYear: text({month: "long", year: "numeric"}), year: text({year: "numeric"}),
     weekday: text({weekday: "long", day: "numeric", month: "long"}), dayName: text({weekday: "long"}), date: text({day: "numeric", month: "long", year: "numeric"}),
     time: text({hour: "2-digit", minute: "2-digit", hour12: false}),
   };
@@ -91,6 +94,12 @@ export async function listDigestEditions(db: Database, config: LibraryServerConf
   const rows = await db.select(summaryColumns).from(notificationEdition).where(visibleEdition)
     .orderBy(desc(notificationEdition.windowEnd)).limit(ARCHIVE_PAGE_SIZE).offset((current - 1) * ARCHIVE_PAGE_SIZE);
   return {editions: rows.map(row => editionSummary(row, locale, config)), page: current, pages};
+}
+
+export async function listDigestChart(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestChart> {
+  const [{total}] = await db.select({total: count()}).from(notificationEdition).where(visibleEdition);
+  const rows = await db.select(summaryColumns).from(notificationEdition).where(visibleEdition).orderBy(desc(notificationEdition.windowEnd)).limit(CHART_EDITIONS);
+  return {editions: rows.map(row => editionSummary(row, locale, config)), total};
 }
 
 export async function getLatestDigest(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestSummary | null> {

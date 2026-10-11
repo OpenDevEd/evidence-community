@@ -4,8 +4,7 @@ import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { Switch } from "@/components/nextui/Switch";
 import { Mail01Icon, Calendar03Icon, Tick01Icon, BookOpen01Icon } from "@hugeicons/core-free-icons";
-import { SectionTitle } from "@/components/typography/SectionTitle";
-import { Card } from "@/components/nextui/Card";
+import { SidebarCard } from "@/components/features/collections/SidebarCard";
 import { Icon, muted } from "./DigestPrimitives";
 import { changeSubscription, subscriptionError } from "./subscription-client";
 export type Preferences = { email: string; digest: boolean; instant: boolean; confirmed: boolean };
@@ -76,10 +75,11 @@ function SubscriptionBody({preferences, schedule, model}: {preferences: boolean;
 export function Subscription(props: SubscriptionProps) {
   const {preferences = false, schedule} = props;
   const model = useSubscriptionForm(props);
-  const appearance = preferences ? {color: "transparent", className: "border-0 p-0"} as const : {color: "card", className: "p-5"} as const;
-  return <Card as="section" id="subscribe" aria-label="Email updates" color={appearance.color} shadow="none" className={appearance.className}>
-    {!preferences && <><SectionTitle className="mb-2 flex items-center gap-2 text-xl"><span className="text-accent"><Icon value={Mail01Icon} /></span>Email updates</SectionTitle><p className={`mb-6 text-xs leading-5 ${muted}`}>Choose how often you hear from this library.</p></>}
+  const body = <>
     <SubscriptionBody preferences={preferences} schedule={schedule} model={model} />
-    {model.error && <p role="alert" className="mt-3 text-sm text-danger">{model.error}</p>}
-  </Card>;
+    {model.error && <p role="alert" className="-mt-2 text-sm text-danger">{model.error}</p>}
+  </>;
+  if (preferences) return <section aria-label="Email updates">{body}</section>;
+  // The library sidebar's card, so the form sits in the page the way the library's filters do.
+  return <div id="subscribe" className="h-full scroll-mt-8 [&>section]:h-full"><SidebarCard title="Email updates" band={<p className={`text-sm ${muted}`}>Choose how often you hear from this library.</p>}>{body}</SidebarCard></div>;
 }
