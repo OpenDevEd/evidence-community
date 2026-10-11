@@ -81,5 +81,5 @@ export function Subscription(props: SubscriptionProps) {
   </>;
   if (preferences) return <section aria-label="Email updates">{body}</section>;
   // The library sidebar's card, so the form sits in the page the way the library's filters do.
-  return <div id="subscribe" className="scroll-mt-8"><SidebarCard title="Email updates" band={<p className={`text-sm ${muted}`}>Choose how often you hear from this library.</p>}>{body}</SidebarCard></div>;
+  return <div id="subscribe" className="h-full scroll-mt-8 [&>section]:h-full"><SidebarCard title="Email updates" band={<p className={`text-sm ${muted}`}>Choose how often you hear from this library.</p>}>{body}</SidebarCard></div>;
 }

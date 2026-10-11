@@ -28,6 +28,7 @@ import { SectionTitle } from "@/components/typography/SectionTitle";
 import { Face, Icon, TextLink, muted } from "./DigestPrimitives";
 import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
 import { Subscription, type Preferences } from "./Subscription";
+import { editionParts, type Part } from "./edition-parts";
 
 /**
  * A list with its page controls. The page number lives in the URL, so every page can be shared and reloaded. Turning
@@ -75,22 +76,6 @@ function EditorNote({ edition }: { edition: DigestEdition }) {
   </figure>;
 }
 
-type Part = {id: string; title: string; body: string; /** Publications the section cites, each counted once. */ cited: number};
-/** The edition's text cut at its subject headings, so each subject is a section the contents can point to. */
-function editionParts(markdown: string): {intro: string; parts: Part[]} {
-  const [intro, ...chunks] = markdown.split(/^## /m);
-  const taken = new Set<string>();
-  return {intro: intro.trim(), parts: chunks.map(chunk => {
-    const end = chunk.indexOf("\n");
-    const title = (end < 0 ? chunk : chunk.slice(0, end)).trim();
-    const body = end < 0 ? "" : chunk.slice(end + 1);
-    const base = `section-${title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "")}`;
-    let id = base;
-    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    taken.add(id);
-    return {id, title, body, cited: new Set(body.match(/\]\(\/lib\/[^)\s]+\)/g)).size};
-  })};
-}
 
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
 type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; /** An editor publishes each digest, so the next one has a day and no time. */ approval: boolean; timezone: string; schedule: string};
@@ -209,14 +194,25 @@ function ArchiveList({editions, nextEdition, settings, base, locale}: {editions:
   </div></Paged>;
 }
 
+/** The bar read out: the one pointed at while it is on this page, else the latest. A page turned while pointing can show fewer bars. */
+const chartFocus = (pointed: number | null, count: number) => (pointed !== null && pointed < count ? pointed : count - 1);
+/** The Editions card before the first edition: the same parts, so the card below it stays where it is. */
+function EmptyEditionsChart() {
+  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>0</span>} band={<>
+    <HeadFigure value="0" label="publications" />
+    <div aria-hidden className="h-24 border-b-2 border-dashed border-accent/30" />
+  </>}>
+    <div className="-mt-1 h-[4.25rem]"><p className={`text-sm ${muted}`}>No editions yet</p></div>
+  </SidebarCard>;
+}
 /** Publications per edition, oldest first, as the library's Years card shows publications per year. Pointing at a bar reads it out; the latest is read out otherwise. */
 function EditionsChart({editions, base, locale}: {editions: Promise<DigestArchivePage>; base: string; locale: string}) {
   const {editions: items} = use(editions);
   const [pointed, setPointed] = useState<number | null>(null);
-  if (!items.length) return null;
+  if (!items.length) return <EmptyEditionsChart />;
   const shown = items.toReversed();
   const largest = Math.max(...shown.map(item => item.publicationCount));
-  const focus = pointed ?? shown.length - 1;
+  const focus = chartFocus(pointed, shown.length);
   const edition = shown[focus];
   return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>{items.length}</span>} band={<>
     <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
@@ -345,7 +341,7 @@ function useActiveSection(ids: string[]) {
       for (const entry of entries) crossing.set(entry.target.id, entry.isIntersecting);
       const first = watched.find(id => crossing.get(id));
       if (first) setActive(first);
-    }, {rootMargin: "-15% 0px -70% 0px"});
+    }, {rootMargin: "-24px 0px -70% 0px"});
     for (const id of watched) {
       const element = document.getElementById(id);
       if (element) observer.observe(element);
