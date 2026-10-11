@@ -16,8 +16,8 @@ describe("cutting a digest's text into the sections its contents list", () => {
 
 	// The writer is asked for plain headings; one that comes back marked up or underlined is still a section.
 	it("reads a marked-up or underlined heading as plain text", () => {
-		const { parts } = editionParts("## **Schools**\n\nText.\n\nHealth `care`\n-------\n\nMore.");
-		expect(parts.map(({ title }) => title)).toEqual(["Schools", "Health care"]);
+		const { parts } = editionParts("## **Schools**\n\nText.\n\nHealth `care`\n-------\n\nMore.\n\n## [Water](/lib/ABCD1234)\n\nLast.");
+		expect(parts.map(({ title }) => title)).toEqual(["Schools", "Health care", "Water"]);
 	});
 
 	it("reads an indented heading and one with closing hashes", () => {

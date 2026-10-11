@@ -1,7 +1,7 @@
 export type Part = {id: string; title: string; body: string; /** Publications the section cites, each counted once. */ cited: number};
 
-/** A heading's text without closing hashes or inline Markdown: `## **Schools** ##` reads Schools. */
-const plainHeading = (text: string) => text.replace(/[ \t]+#+[ \t]*$/, "").replace(/(\*\*|__|\*|_|`)(.+?)\1/g, "$2").trim();
+/** A heading's text without closing hashes, links or inline Markdown: `## [**Schools**](/lib/KEY) ##` reads Schools. */
+const plainHeading = (text: string) => text.replace(/[ \t]+#+[ \t]*$/, "").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/(\*\*|__|\*|_|`)(.+?)\1/g, "$2").trim();
 
 /** The publications a section links to, each once, whether or not a link carries a title. */
 const citedKeys = (body: string) => new Set(Array.from(body.matchAll(/\]\(\/lib\/([A-Za-z0-9]+)/g), match => match[1]));

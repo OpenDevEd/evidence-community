@@ -188,7 +188,7 @@ function ArchiveList({editions, nextEdition, settings, base, locale}: {editions:
   if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
   return <Paged page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} anchor="archive"><div className="space-y-8">
     {byYear(items).map(({year, items: ofYear}) => <section key={year} aria-labelledby={`year-${year}`}>
-      <SectionTitle className="mb-3 flex items-baseline gap-2 text-xl"><span id={`year-${year}`}>{year}</span><span className={`text-sm font-normal tabular-nums ${muted}`}>{ofYear.length}</span></SectionTitle>
+      <SectionTitle className="mb-3 text-xl"><span id={`year-${year}`}>{year}</span></SectionTitle>
       <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} />)}</div>
     </section>)}
   </div></Paged>;
