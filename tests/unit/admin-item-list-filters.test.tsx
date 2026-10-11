@@ -15,11 +15,12 @@ import { useAdminItemList } from "@/components/admin/useAdminItemList";
 let container: HTMLDivElement;
 let root: Root;
 let list: ReturnType<typeof useAdminItemList>;
-function Probe() {
-	list = useAdminItemList([]);
+/** Hands the hook's latest answer to the test. */
+function Probe({ onList }: { onList: (value: ReturnType<typeof useAdminItemList>) => void }) {
+	onList(useAdminItemList([]));
 	return null;
 }
-const show = (address: string) => act(async () => root.render(<NuqsTestingAdapter searchParams={address}><Probe /></NuqsTestingAdapter>));
+const show = (address: string) => act(async () => root.render(<NuqsTestingAdapter searchParams={address}><Probe onList={(value) => { list = value; }} /></NuqsTestingAdapter>));
 
 beforeEach(() => { container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
