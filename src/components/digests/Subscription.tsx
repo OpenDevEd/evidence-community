@@ -4,7 +4,7 @@ import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { Switch } from "@/components/nextui/Switch";
 import { Mail01Icon, Calendar03Icon, Tick01Icon, BookOpen01Icon } from "@hugeicons/core-free-icons";
-import { SidebarCard } from "@/components/features/collections/ResultsOverview";
+import { SidebarCard } from "@/components/features/collections/SidebarCard";
 import { Icon, muted } from "./DigestPrimitives";
 import { changeSubscription, subscriptionError } from "./subscription-client";
 export type Preferences = { email: string; digest: boolean; instant: boolean; confirmed: boolean };

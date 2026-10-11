@@ -5,7 +5,8 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
 import { useMemo, memo } from "react";
 import { useFormatter } from "next-intl";
-import { barWidth, shareOf } from "./ResultsOverview";
+import { shareOf } from "./ResultsOverview";
+import { barWidth } from "./SidebarCard";
 interface CollectionHierarchyProps {
 	collectionData: Collection;
 	collections: Collection[];

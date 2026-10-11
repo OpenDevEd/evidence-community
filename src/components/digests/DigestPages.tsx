@@ -19,7 +19,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { twMerge } from "@/lib/tw-merge";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
-import { HeadFigure, SidebarCard, barWidth } from "@/components/features/collections/ResultsOverview";
+import { HeadFigure, SidebarCard, barWidth } from "@/components/features/collections/SidebarCard";
 
 import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Markdown";
 
@@ -266,26 +266,33 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
   const locale = useLocale();
   return <PageContainer className="mx-auto overflow-clip">
       <TextLink href={base} back>All digests</TextLink>
-      <Suspense fallback={<EditionLoading />}><EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} /></Suspense>
-      {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
-      <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
-        <div className="min-w-0 [&>section]:h-full">
-          <SidebarCard title="More digests" aside={<TextLink href={base}>All digests</TextLink>}>
-            <Suspense fallback={<div className="-mx-4 -my-3">{[0, 1, 2, 3].map(index => <Skeleton key={index} className="m-4 h-12 rounded-lg" />)}</div>}><PastDigests earlier={earlier} base={base} locale={locale} /></Suspense>
-          </SidebarCard>
+      {/* One boundary for the edition and the digests after it: they appear together, so nothing below the text moves when it arrives. */}
+      <Suspense fallback={<EditionLoading />}>
+        <EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} />
+        {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
+        <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
+          <div className="min-w-0 [&>section]:h-full">
+            <SidebarCard title="More digests" aside={<TextLink href={base}>All digests</TextLink>}>
+              <PastDigests earlier={earlier} base={base} locale={locale} />
+            </SidebarCard>
+          </div>
+          {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
         </div>
-        {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
-      </div>
+      </Suspense>
   </PageContainer>;
 }
 function EditionLoading() {
-  return <div aria-hidden="true" className="mt-8">
+  // At least a screen tall, as every edition is: the footer stays below the fold instead of jumping down when the edition arrives.
+  return <div aria-hidden="true" className="mt-8 min-h-screen">
     <div className="mb-12 max-w-3xl space-y-5"><Skeleton className="h-11 w-3/4 rounded-xl" /><Skeleton className="h-5 w-full rounded-lg" /><Skeleton className="h-4 w-64 rounded-lg" /></div>
     <div className={withRail}><div className="space-y-3"><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-4/5 rounded-lg" /></div><Skeleton className="h-80 rounded-2xl" /></div>
   </div>;
 }
 function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>; path: string}) {
   const edition = use(pending);
+  // The records arrive with the text: a placeholder card cannot know how tall each real one is, so a list that
+  // filled in afterwards moved the page.
+  const records = use(cards);
   const locale = useLocale();
   if (!edition) notFound();
   const {intro, parts} = editionParts(edition.markdown);
@@ -307,7 +314,7 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
         <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
           <SectionTitle className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span>{edition.publicationCount > edition.listed && <span className={`text-sm font-normal tabular-nums ${muted}`}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)} listed</span>}</SectionTitle>
           <ListOrder />
-          <EditionLists edition={edition} cards={cards} path={path} locale={locale} />
+          <EditionLists edition={edition} records={records} path={path} locale={locale} />
         </section>
       </article>
       <aside className="space-y-4 lg:sticky lg:top-8">
@@ -385,10 +392,10 @@ function ListOrder() {
 }
 
 /** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
-function EditionLists({edition, cards, path, locale}: {edition: DigestEdition; cards: Promise<EditionCardsData>; path: string; locale: string}) {
+function EditionLists({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
   const {reviews} = edition;
   const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <Paged page={page} pages={pages} href={href} anchor={anchor}>
-    <Suspense fallback={<CardsLoading keys={keys} />}><EditionCards cards={cards} keys={keys} /></Suspense>
+    <EditionCards records={records} keys={keys} />
   </Paged>;
   if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
@@ -410,11 +417,7 @@ function address(path: string, page: number, reviews = 1) {
 function ListHeading({id, title, count, locale}: {id: string; title: string; count: number; locale: string}) {
   return <h3 id={id} className="mb-4 flex scroll-mt-8 items-baseline gap-2 font-heading text-xl font-medium">{title}<span className={`text-sm font-normal tabular-nums ${muted}`}>{count.toLocaleString(locale)}</span></h3>;
 }
-function CardsLoading({keys}: {keys: string[]}) {
-  return <div className={cardList}>{keys.map(key => <Resource key={key} as="div" abstract hideUnapi isLoading itemData={undefined} />)}</div>;
-}
-function EditionCards({cards: pending, keys}: {cards: Promise<EditionCardsData>; /** The cards of one list, in its order. */ keys: string[]}) {
-  const {cards, profiles} = use(pending);
+function EditionCards({records: {cards, profiles}, keys}: {records: EditionCardsData; /** The cards of one list, in its order. */ keys: string[]}) {
   const listed = keys.flatMap(key => cards.find(card => card.key === key) ?? []);
   // The server read the authors with the cards, so no card looks them up on its own.
   return <AuthorProfilesContext value={new Map(profiles.map(profile => [profile.id, profile]))}>
