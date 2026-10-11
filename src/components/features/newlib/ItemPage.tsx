@@ -51,7 +51,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
 import { openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
 import LikeButton from "../items/LikeButton";
-import { AddButton, CitationCounts } from "../items/Resource";
+import { AddButton } from "../items/Resource";
 import {
 	createContext,
 	use,
@@ -1213,15 +1213,11 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 			item.links.related.length > 0),
 	);
 
-	// How many of the record's references and citations the library holds, out of all OpenAlex counts. Shown even when
-	// the library holds none, since the totals still open in OpenScholar.
-	const counts = <div className="@container"><CitationCounts itemData={item} /></div>;
 	// OpenAlex records show provider relations elsewhere; only in-library links belong here.
-	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return counts;
+	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return null;
 
 	return (
 		<div className="flex flex-col gap-4">
-			{counts}
 			<div className="w-full">
 				<Relations
 					links={item?.links}
