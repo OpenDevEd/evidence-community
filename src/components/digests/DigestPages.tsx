@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
 import { AiMagicIcon, ArrowRight01Icon, Calendar03Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
-import type { DigestArchivePage, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
+import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
@@ -80,7 +80,7 @@ function EditorNote({ edition }: { edition: DigestEdition }) {
 const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
 type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; /** An editor publishes each digest, so the next one has a day and no time. */ approval: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
-type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>};
+type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; chart: Promise<DigestChart>; nextEdition: Promise<DigestDate | null>};
 export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
 type EditionProps = {view: "edition"; slug: string; earlier: Promise<DigestSummary[]>; edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>};
 type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber: Promise<Preferences | null>};
@@ -122,7 +122,7 @@ function SubscriberPreferences({subscriber, token: pending, schedule}: {subscrib
 /** Content beside a 320 px rail, as the library page lays out its results and sidebar. */
 const withRail = "grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12";
 
-function DigestArchive({settings, latest, editions, nextEdition, base, locale}: ArchiveProps & Base & {locale: string}) {
+function DigestArchive({settings, latest, editions, chart, nextEdition, base, locale}: ArchiveProps & Base & {locale: string}) {
   return <PageContainer className="mx-auto relative z-0 -mt-6 overflow-visible pt-0 lg:pt-0 xl:pt-0">
       <header className={`${styles.hero} relative isolate mb-12 grid items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 -top-[100vh] -z-10 w-screen -translate-x-1/2 bg-card_light dark:bg-card" />
@@ -138,7 +138,7 @@ function DigestArchive({settings, latest, editions, nextEdition, base, locale}: 
           <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
         </section>
         <aside className="space-y-4 lg:sticky lg:top-8">
-          <Suspense fallback={<Skeleton className="h-[19rem] rounded-2xl" />}><EditionsChart editions={editions} base={base} locale={locale} /></Suspense>
+          <Suspense fallback={<Skeleton className="h-[19rem] rounded-2xl" />}><EditionsChart chart={chart} base={base} locale={locale} /></Suspense>
           {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
         </aside>
       </div>
@@ -173,7 +173,7 @@ function EditionRow({item, base, locale, summary = true}: {item: DigestSummary; 
 function byYear(items: DigestSummary[]) {
   const years: {year: string; items: DigestSummary[]}[] = [];
   for (const item of items) {
-    const year = item.published.at.slice(0, 4);
+    const year = item.published.year;
     if (years.at(-1)?.year === year) years.at(-1)!.items.push(item);
     else years.push({year, items: [item]});
   }
@@ -206,15 +206,15 @@ function EmptyEditionsChart() {
   </SidebarCard>;
 }
 /** Publications per edition, oldest first, as the library's Years card shows publications per year. Pointing at a bar reads it out; the latest is read out otherwise. */
-function EditionsChart({editions, base, locale}: {editions: Promise<DigestArchivePage>; base: string; locale: string}) {
-  const {editions: items} = use(editions);
+function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base: string; locale: string}) {
+  const {editions: items, total} = use(chart);
   const [pointed, setPointed] = useState<number | null>(null);
   if (!items.length) return <EmptyEditionsChart />;
   const shown = items.toReversed();
   const largest = Math.max(...shown.map(item => item.publicationCount));
   const focus = chartFocus(pointed, shown.length);
   const edition = shown[focus];
-  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>{items.length}</span>} band={<>
+  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>{total.toLocaleString(locale)}</span>} band={<>
     <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
     <div className="flex h-24 items-end gap-1" onMouseLeave={() => setPointed(null)}>
       {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={`${item.title}, ${publicationCount(item.publicationCount, locale)}`} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
@@ -305,7 +305,7 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
         </section>)}</div>
         <InThisEdition edition={edition} records={records} path={path} locale={locale} />
       </article>
-      <aside className="space-y-4 lg:sticky lg:top-8">
+      <aside className="order-first space-y-4 lg:sticky lg:top-8 lg:order-none">
         <Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} />
         <EditionShare edition={edition} locale={locale} />
       </aside>

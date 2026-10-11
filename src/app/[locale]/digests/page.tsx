@@ -1,4 +1,4 @@
-import { getLatestDigest, getNextDigestEdition, listDigestEditions, pageNumber } from "@/lib/notifications/public";
+import { getLatestDigest, getNextDigestEdition, listDigestChart, listDigestEditions, pageNumber } from "@/lib/notifications/public";
 import DigestPages from "@/components/digests/DigestPages";
 import { readDigests } from "./read";
 
@@ -9,5 +9,6 @@ export default function Page({params, searchParams}: Props) {
   return <DigestPages view="archive"
     latest={readDigests(locale, getLatestDigest)}
     editions={readDigests(locale, async (db, config, locale) => listDigestEditions(db, config, locale, await page))}
+    chart={readDigests(locale, listDigestChart)}
     nextEdition={readDigests(locale, (db, config, locale) => getNextDigestEdition(db, config, locale))} />;
 }
