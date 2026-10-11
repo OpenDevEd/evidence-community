@@ -7,12 +7,14 @@ import { AdminNoAccess } from "@/components/admin/AdminNoAccess";
 import { AdminSessionProvider } from "@/components/admin/AdminSessionProvider";
 import AdminWorkbench from "@/components/admin/AdminWorkbench";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { getDatabase } from "@/db";
 import {
 	buildRuntimeLocalizedPathname,
 	type PlatformLocale,
 } from "@/i18n/runtime";
 import { ADMIN_CONTENT_PERMISSION, authorizeAdminRequest } from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
+import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
 import { ADMIN_HOME_PATH, buildAdminSignInPath } from "@/lib/runtime-routing";
 
 /** The library's source settings on OpenScholar's page for this library. */
@@ -70,6 +72,7 @@ export default async function AdminPage({
 			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
 			definitions={definitions}
 			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
+			initialLibrary={await getAdminLibrarySnapshot(await getDatabase())}
 		/>
 		</AdminSessionProvider>
 	);

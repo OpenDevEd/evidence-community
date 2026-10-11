@@ -121,11 +121,11 @@ function PaperRow({ id, paper, active, current, cited, onRest, onPick }: { id: s
 }
 
 /** Which of the edition's publications are listed, and in what order. */
-function Narrow({ query, counts, onChange }: { query: DigestPapersQuery; counts: Record<DigestPapersQuery["show"], number> | undefined; onChange: (patch: Partial<DigestPapersQuery>) => void }) {
+function Narrow({ query, counts, arriving, onChange }: { query: DigestPapersQuery; counts: Record<DigestPapersQuery["show"], number> | undefined; arriving: string; onChange: (patch: Partial<DigestPapersQuery>) => void }) {
 	return <div className="flex items-center justify-between gap-2">
 		<div className="flex rounded-lg bg-black/[0.05] p-0.5 dark:bg-white/[0.06]">
 			{SHOWS.map(([show, label]) => <button key={show} type="button" aria-pressed={query.show === show} onClick={() => onChange({ show })} className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${query.show === show ? "bg-white text-black shadow-sm dark:bg-white/10 dark:text-white" : `${muted} hover:text-black/80 dark:hover:text-white/80`}`}>
-				{label}<span className="inline-block min-w-4 text-left tabular-nums opacity-60">{counts?.[show] ?? ""}</span>
+				{label}<span className="inline-block min-w-4 text-left tabular-nums opacity-60">{counts && <span className={arriving}>{counts[show]}</span>}</span>
 			</button>)}
 		</div>
 		<Select
@@ -159,10 +159,12 @@ function Cited({ current, cited, onRemove }: { current: Current; cited: string[]
 }
 
 /** Where the list stands among its pages, and the way to the others. */
-function Pages({ page, pages, total, onChange }: { page: number; pages: number; total: number | undefined; onChange: (page: number) => void }) {
+function Pages({ page, pages, total, arriving, onChange }: { page: number; pages: number; total: number | undefined; arriving: string; onChange: (page: number) => void }) {
 	return <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-t border-black/[0.06] pl-4 pr-2 dark:border-white/[0.08]">
-		<span className={`text-xs tabular-nums ${muted}`}>{total !== undefined && range(page, total)}</span>
-		<Pagination aria-label="Pages of publications" size="sm" showControls siblings={0} total={pages} page={page} onChange={onChange} />
+		{total !== undefined && <>
+			<span className={`text-xs tabular-nums ${muted} ${arriving}`}>{range(page, total)}</span>
+			<div className={arriving}><Pagination aria-label="Pages of publications" size="sm" showControls siblings={0} total={pages} page={page} onChange={onChange} /></div>
+		</>}
 	</div>;
 }
 
@@ -195,6 +197,9 @@ function Papers({ cited, current, onPick, onRemove }: { cited: string[]; current
 	const { data, error, isLoading, behind } = useSearchedPapers(editionId, { ...query, cited }, typed);
 	// Before the first answer the list is empty and stands on its first page.
 	const { papers: rows, page, pages } = data ?? { papers: [], page: 1, pages: 1 };
+	// Opened before its first page arrived, the counts and the page numbers fade in where they stand. Nothing fades when they were there on opening.
+	const [late] = useState(data === undefined);
+	const arriving = late ? "animate-in fade-in duration-200 motion-reduce:animate-none" : "";
 	const narrow = (patch: Partial<DigestPapersQuery>) => { setQuery({ ...query, page: 1, ...patch }); setActive(0); };
 	return <>
 		{current && <Cited current={current} cited={cited} onRemove={onRemove} />}
@@ -206,10 +211,10 @@ function Papers({ cited, current, onPick, onRemove }: { cited: string[]; current
 				startContent={<HugeiconsIcon icon={Search01Icon} className="size-4 shrink-0 text-black/40 dark:text-white/40" />}
 				classNames={{ inputWrapper: "h-9 min-h-9 rounded-lg border-0 bg-black/[0.035] shadow-none dark:bg-white/[0.045]", input: "text-sm" }}
 			/>
-			<Narrow query={query} counts={data?.counts} onChange={narrow} />
+			<Narrow query={query} counts={data?.counts} arriving={arriving} onChange={narrow} />
 		</div>
 		<Rows id={list} rows={data?.papers} failed={error !== undefined} dimmed={behind && data !== undefined} active={active} setActive={setActive} current={current} cited={cited} onPick={onPick} />
-		<Pages page={page} pages={pages} total={data?.total} onChange={(next) => { setQuery({ ...query, page: next }); setActive(0); }} />
+		<Pages page={page} pages={pages} total={data?.total} arriving={arriving} onChange={(next) => { setQuery({ ...query, page: next }); setActive(0); }} />
 	</>;
 }
 

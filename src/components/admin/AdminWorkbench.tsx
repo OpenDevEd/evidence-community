@@ -390,11 +390,14 @@ export default function AdminWorkbench({
 	configurationHref,
 	definitions,
 	initialFilters,
+	initialLibrary,
 }: {
 	/** The library's source settings in OpenScholar. */
 	configurationHref: string;
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
+	/** The sources as the page was served, so the sidebar's list does not arrive after it. */
+	initialLibrary: AdminLibrarySnapshot;
 }) {
 	const router = useRouter();
 	const showImportLabel = useBreakpoint("lg");
@@ -402,9 +405,7 @@ export default function AdminWorkbench({
 	const { canPublish } = useAdminSession();
 	const { navigation, theme } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
-	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
-		sources: [],
-	});
+	const [library, setLibrary] = useState(initialLibrary);
 	// In the address, so OpenScholar can link straight to a source's status.
 	const [syncSourceKey, setSyncSourceKey] = useQueryState("source", parseAsString);
 	const syncSource =
@@ -654,10 +655,6 @@ export default function AdminWorkbench({
 			toast.error(errorMessage(error));
 		}
 	}, []);
-
-	useEffect(() => {
-		void loadLibrary();
-	}, [loadLibrary]);
 
 	// The sync worker is an outside process: keep the sidebar import state
 	// fresh, quickly while an import runs or its dialog is open.
