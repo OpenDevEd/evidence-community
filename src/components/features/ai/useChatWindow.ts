@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
-import type { ItemGetResponse } from "@/app/api/item/types";
-import { publicationPdfCitationSources } from "@/lib/ai/citations";
-import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
+import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
 import { isAnswering } from "@/lib/ai/chat-request";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -14,6 +12,7 @@ import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ChatMode } from "@/types/ai";
 import { useScrollEdges } from "./chat-shared";
+import { useBucketPublications } from "./ContextBucket";
 import {
 	useAppendMessage,
 	useChatFailure,
@@ -21,8 +20,11 @@ import {
 	useScreeningControls,
 	useSendWithContext,
 	useTranscriptExport,
+	useCurrentRequestContext,
 } from "./useChatActions";
-import { useChatGreeting, useChatWindowSession } from "./useChatWindowSession";
+import { useTranslations } from "next-intl";
+import { useChatWindowSession } from "./useChatWindowSession";
+import type { AttachedItem } from "./AskAbout";
 
 /** Keeps the newest message in view, and fades the edges while scrolling. */
 function useChatScrolling() {
@@ -48,20 +50,28 @@ function useChatScrolling() {
 
 /** The conversation: its messages, and the ways they change. */
 function useChatConversation({
-	data,
+	publication,
+	onPublicationChange,
 	mode,
 	modelId,
 	onConversationStateChange,
 	searchContext,
 }: {
-	data?: ItemGetResponse;
+	/** The publication the next question is about. With `onPublicationChange` it belongs to whoever opened the window; without it, it is where the window starts. */
+	publication?: AttachedItem | null;
+	onPublicationChange?: (item: AttachedItem | null) => void;
 	mode: ChatMode;
 	modelId: AIModelId;
 	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 }) {
-	const publicationKey = data?.item?.key;
-	const publicationTitle = data?.item?.title;
+	// The publication the next question is about: the one the window was opened
+	// for, then whichever the reader attaches or removes. Changing it keeps the
+	// conversation; each question carries the one it was asked about.
+	const [own, setOwn] = useState<AttachedItem | null>(() => publication ?? null);
+	const attached = onPublicationChange ? (publication ?? null) : own;
+	const setAttached = onPublicationChange ?? setOwn;
+	const publicationKey = attached?.key;
 	const {
 		chat,
 		messages,
@@ -72,26 +82,15 @@ function useChatConversation({
 		setMessages,
 		clearError,
 	} = useChatWindowSession({
-		greeting: useChatGreeting(publicationTitle ?? undefined),
+		// The attached publication shows as a chip, so the greeting does not name it.
+		greeting: useTranslations("ai")("askMeAnythingPublications"),
 		itemKey: publicationKey,
 		mode,
 		modelId,
 		searchContext,
 	});
 
-	const currentRequestContext = useCallback(
-		() =>
-			createResearchRequestContextSnapshot({
-				currentPublication: publicationKey
-					? {
-							key: publicationKey,
-							title: publicationTitle || "Untitled publication",
-						}
-					: undefined,
-				searchContext,
-			}),
-		[publicationKey, publicationTitle, searchContext],
-	);
+	const currentRequestContext = useCurrentRequestContext(attached, searchContext);
 
 	const resetChat = useCallback(() => {
 		clearError();
@@ -124,10 +123,11 @@ function useChatConversation({
 
 	return {
 		appendMessage: useAppendMessage(setMessages),
+		attached,
+		setAttached,
 		chat,
 		chatFailure: useChatFailure(error),
 		error,
-		getTranscriptContent: useTranscriptExport({ messages, modelId }),
 		isLoading: status === "submitted" || status === "streaming",
 		messages,
 		reload,
@@ -171,25 +171,23 @@ function useChatComposer({
  * typed, how far they have scrolled, and the actions they can take.
  */
 export function useChatWindow({
-	data,
+	publication,
+	onPublicationChange,
 	modelId,
 	onConversationStateChange,
 	searchContext,
 }: {
-	data?: ItemGetResponse;
+	/** The publication the next question is about; see useChatConversation. */
+	publication?: AttachedItem | null;
+	onPublicationChange?: (item: AttachedItem | null) => void;
 	modelId: AIModelId;
 	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 }) {
-	const publicationKey = data?.item?.key;
-	const attachmentsData = data?.item?.attachmentsData;
-	const pdfSources = useMemo(
-		() => publicationPdfCitationSources(publicationKey, attachmentsData),
-		[publicationKey, attachmentsData],
-	);
 	const { isDeepResearchEnabled, mode, setMode } = useChatMode();
 	const conversation = useChatConversation({
-		data,
+		publication,
+		onPublicationChange,
 		mode,
 		modelId,
 		onConversationStateChange,
@@ -219,6 +217,10 @@ export function useChatWindow({
 		return true;
 	};
 	const composer = useChatComposer({ isBusy, onSend: ask });
+	// Page links work for every publication the conversation has read, attached or found, as in the chat beside the results.
+	const { pdfSources } = useBucketPublications(
+		bucketEntriesFromMessages(conversation.messages),
+	);
 	const scrolling = useChatScrolling();
 
 	return {
@@ -227,6 +229,11 @@ export function useChatWindow({
 		...composer,
 		...scrolling,
 		ask,
+		getTranscriptContent: useTranscriptExport({
+			messages: conversation.messages,
+			modelId,
+			pdfSources,
+		}),
 		conversationStarted: conversation.messages.length > 1,
 		isDeepResearchEnabled,
 		isWaiting: isBusy && !conversation.error,

@@ -44,6 +44,7 @@ import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { AskAboutButton } from "@/components/features/ai/AskAbout";
 
 export function AddButton({
 	itemData,
@@ -318,6 +319,7 @@ function ResourceInteractions({
 							itemData={itemData}
 							revalidateResults={revalidateResults}
 						/>
+						<AskAboutButton item={itemData} />
 						<CitationControl item={itemData} />
 						<CopyButton
 							itemData={itemData}

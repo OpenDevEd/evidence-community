@@ -18,6 +18,7 @@ import {
 	researchRequestContextPart,
 	researchRequestContextText,
 	researchRequestContextsEqual,
+	publicationsAsked,
 } from "@/lib/ai/request-context";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 
@@ -102,7 +103,7 @@ describe("what the assistant is told about this request", () => {
 describe("what the assistant is told about citing evidence", () => {
 	it("demands the combined source and page token", () => {
 		expect(EVIDENCE_CITATION_INSTRUCTIONS).toContain(
-			"[PAGE /lib/KEY/download/ATTACHMENT_KEY — 12 PAGE/]",
+			"[PAGE CITATION_TARGET — 12 PAGE/]",
 		);
 		expect(EVIDENCE_CITATION_INSTRUCTIONS).toMatch(
 			/never use page numbers printed in the document/i,
@@ -121,9 +122,15 @@ describe("what the assistant is told about citing evidence", () => {
 });
 
 describe("turning a page citation into a link", () => {
+	/** The PDFs the conversation read, by file name. */
+	const read = {
+		"report.pdf": "/lib/ABCD1234/download/PDF0001",
+		"PAGE key.pdf": "/lib/ABCDPAGE/download/PDF00001",
+	};
+
 	it("opens the cited PDF at the cited page", () => {
 		expect(
-			parsePageCitations("/lib/ABCD1234/download/PDF0001 — 12"),
+			parsePageCitations("/lib/ABCD1234/download/PDF0001 — 12", read),
 		).toEqual([
 			{ page: "12", href: "/lib/ABCD1234/download/PDF0001#page=12" },
 		]);
@@ -133,7 +140,7 @@ describe("turning a page citation into a link", () => {
 	it("gives every page a model packed into one token its own link", () => {
 		const file = "/lib/ABCD1234/download/PDF0001";
 		const pages = (value: string) =>
-			parsePageCitations(value).map(({ page, href }) => [page, href]);
+			parsePageCitations(value, read).map(({ page, href }) => [page, href]);
 
 		expect(pages(`${file} — 7 PAGE/, PAGE ${file} — 8`)).toEqual([
 			["7", `${file}#page=7`],
@@ -152,6 +159,29 @@ describe("turning a page citation into a link", () => {
 		expect(pages("/lib/ABCDPAGE/download/PDF00001 — 12")).toEqual([
 			["12", "/lib/ABCDPAGE/download/PDF00001#page=12"],
 		]);
+	});
+
+	it("links no PDF the conversation did not read", () => {
+		expect(
+			parsePageCitations("/lib/KEY/download/ATTACHMENT_KEY — 12", read)[0].href,
+		).toBeUndefined();
+		expect(
+			parsePageCitations("/lib/ZZZZ9999/download/PDF0009 — 3", read)[0].href,
+		).toBeUndefined();
+	});
+
+	// Models write the publication key, or invent the attachment key, instead of the target they were given.
+	it("links a read publication named by its key to its only PDF", () => {
+		for (const source of ["ABCD1234", "/lib/ABCD1234", "/lib/ABCD1234/download/PDF0009"]) {
+			expect(parsePageCitations(`${source} — 5`, read)[0].href).toBe(
+				"/lib/ABCD1234/download/PDF0001#page=5",
+			);
+		}
+	});
+
+	it("does not guess between the PDFs of a publication that has several", () => {
+		const twoPdfs = { ...read, "annex.pdf": "/lib/ABCD1234/download/PDF0002" };
+		expect(parsePageCitations("ABCD1234 — 5", twoPdfs)[0].href).toBeUndefined();
 	});
 
 	it("resolves a filename the model used instead of a path", () => {
@@ -190,9 +220,7 @@ describe("turning a page citation into a link", () => {
 			],
 		});
 
-		expect(sources).toEqual({
-			"paper.pdf": "/lib/NEWEST01/download/PDF0001",
-		});
+		expect(sources["paper.pdf"]).toBe("/lib/NEWEST01/download/PDF0001");
 	});
 
 	it("has nothing for a publication that has not loaded yet", () => {
@@ -217,5 +245,21 @@ describe("turning a page citation into a link", () => {
 		expect(pdfFilename({ key: "PDF0001", title: "Report 2024" })).toBe(
 			"Report 2024.pdf",
 		);
+	});
+});
+
+describe("which publication each question was asked about", () => {
+	const context = (currentPublication: { key: string; title: string } | null) => ({ type: "data-requestContext", data: { currentDate: "2026-10-11", currentPublication, searchContext: null } });
+	const question = (id: string, ...parts: { type: string; data?: unknown }[]) => ({ id, role: "user", parts: [...parts, { type: "text", text: "Why?" }] });
+	it("keeps a publication on the questions after the one that attached it, until it is removed", () => {
+		const radio = { key: "ABCD1234", title: "Radio lessons" };
+		const asked = publicationsAsked([
+			question("q1", context(radio)),
+			{ id: "a1", role: "assistant", parts: [{ type: "text", text: "Because." }] },
+			question("q2"),
+			question("q3", context(null)),
+			question("q4"),
+		]);
+		expect([...asked]).toEqual([["q1", radio], ["q2", radio]]);
 	});
 });

@@ -1,5 +1,6 @@
 "use client";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { publicationsAsked } from "@/lib/ai/request-context";
 
 import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -17,7 +18,6 @@ import { Logo } from "@/components/layout/navbar/Logo";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
-import type { ItemGetResponse } from "@/app/api/item/types";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { createTextMessage } from "@/lib/ai/chat-messages";
 import type { AIModelId } from "@/lib/ai/models";
@@ -31,6 +31,9 @@ import { ChatErrorCard } from "../ai/chat-shared";
 import { useChatFailure } from "../ai/useChatActions";
 import { MessageComponent } from "../ai/ChatMessage";
 import { useChatWindow } from "../ai/useChatWindow";
+import type { AttachedItem } from "../ai/AskAbout";
+import { AttachedRow } from "../ai/AttachedRow";
+import { useStarterQuestions } from "../ai/useStarterQuestions";
 import {
 	AIGeneratedContentControls,
 	type ControlAction,
@@ -64,12 +67,14 @@ type ChatMessageListProps = {
 
 /** One message, sliding in from the side that sent it. */
 function ChatMessageRow({
+	askedAbout,
 	hasError,
 	isStreaming,
 	message,
 	modelId,
 	pdfSources,
 }: {
+	askedAbout?: { key: string; title: string };
 	hasError: boolean;
 	isStreaming: boolean;
 	message: Message;
@@ -94,6 +99,7 @@ function ChatMessageRow({
 				error={hasError}
 				pdfSources={pdfSources}
 				isStreaming={isStreaming}
+				askedAbout={askedAbout}
 			/>
 		</motion.div>
 	);
@@ -166,6 +172,7 @@ function ChatMessageList({
 }: ChatMessageListProps) {
 	const t = useTranslations("ai");
 	const lastIndex = messages.length - 1;
+	const asked = publicationsAsked(messages);
 	const isWaitingForReply = isStreaming && messages.at(-1)?.role === "user";
 
 	return (
@@ -188,6 +195,7 @@ function ChatMessageList({
 					{messages.slice(1).map((message, index) => (
 						<ChatMessageRow
 							key={message.id}
+							askedAbout={asked.get(message.id)}
 							hasError={hasError}
 							isStreaming={
 								isStreaming &&
@@ -414,6 +422,11 @@ function ChatWindowComposer({
 						isLit={isComposerFocused || isWaiting}
 						prefersReducedMotion={prefersReducedMotion}
 					/>
+					<AttachedRow
+						item={chat.attached}
+						onRemove={() => chat.setAttached(null)}
+						onHeightChange={onHeightChange}
+					/>
 					<ChatMessageBox
 						hasPublication={hasPublication}
 						input={input}
@@ -519,9 +532,10 @@ function ChatWindowTopBar({
 type ChatModalProps = {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
-	data?: ItemGetResponse | undefined;
+	/** The publication the next question is about, held by whoever opened the window, who also hears when the reader removes it. */
+	publication?: AttachedItem | null;
+	onPublicationChange?: (item: AttachedItem | null) => void;
 	modelId: AIModelId;
-	questions?: undefined | string[];
 	/** Lets the page ask a question when it opens the window. */
 	ref?: React.Ref<ChatWindowHandle>;
 	searchContext?: LibrarySearchContext;
@@ -540,9 +554,9 @@ export default function ChatModal(
 function ChatModalContent({
 	isOpen,
 	onOpenChange,
-	data,
+	publication,
+	onPublicationChange,
 	modelId,
-	questions,
 	ref,
 	searchContext,
 	onModelChange,
@@ -556,12 +570,14 @@ function ChatModalContent({
 	const { ai } = useLibraryConfig();
 	const modelPresentation = getAIModelPresentation(modelId, ai.providers);
 	const chat = useChatWindow({
-		data,
+		publication,
+		onPublicationChange,
 		modelId,
 		onConversationStateChange,
 		searchContext,
 	});
 	const { ask } = chat;
+	const questions = useStarterQuestions(chat.attached, isOpen && !chat.conversationStarted);
 	React.useImperativeHandle(ref, () => ({ ask }), [ask]);
 	const {
 		canRunScreening,
@@ -704,9 +720,7 @@ function ChatModalContent({
 										</AnimatePresence>
 										<ChatWindowComposer
 											chat={chat}
-											hasPublication={Boolean(
-												data?.item?.title,
-											)}
+											hasPublication={Boolean(chat.attached)}
 											onHeightChange={() => {
 												if (!isAtBottom) return;
 												void scrollToBottom({

@@ -27,6 +27,8 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import { minimalLibraryConfig } from "../fixtures/library-config";
 
 const config = projectPublicLibraryConfig(libraryConfigSchema.parse(minimalLibraryConfig));
+/** The PDFs the conversation has read, by file name, as the chat hands them to an answer. */
+const READ_PDFS = { "radio-report.pdf": "/lib/ABCD1234/download/PDF00001" };
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -46,11 +48,11 @@ describe("what an AI answer shows the reader", () => {
 		container.remove();
 	});
 
-	async function render(answer: string) {
+	async function render(answer: string, pdfSources: Record<string, string> = READ_PDFS) {
 		await act(async () => {
 			root.render(
 				<LibraryConfigProvider config={config}>
-					<AIMarkdown>{answer}</AIMarkdown>
+					<AIMarkdown pdfSources={pdfSources}>{answer}</AIMarkdown>
 				</LibraryConfigProvider>,
 			);
 		});
@@ -113,6 +115,18 @@ describe("what an AI answer shows the reader", () => {
 		expect(
 			container.querySelector('a[href^="/lib/"]'),
 		).toBeNull();
+	});
+
+	it("never links a library PDF the conversation did not read", async () => {
+		// A model can copy the prompt's example target or name a publication it never read.
+		await render(
+			"Copied. [PAGE /lib/KEY/download/ATTACHMENT_KEY — 12 PAGE/] Guessed. [PAGE /lib/ZZZZ9999/download/WRONG001 — 4 PAGE/]",
+		);
+
+		expect(container.querySelector('a[href*="#page="]')).toBeNull();
+		expect(
+			container.querySelectorAll('[aria-label^="Citation source unavailable"]'),
+		).toHaveLength(2);
 	});
 
 	it("keeps a titled publication link as a link, not a card", async () => {

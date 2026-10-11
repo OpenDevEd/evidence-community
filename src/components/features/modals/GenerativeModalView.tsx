@@ -171,6 +171,7 @@ function SelectedHistoryDate({
 
 function ContentToolbar({
 	content,
+	pdfSources,
 	deleteDisabled,
 	format,
 	onDelete,
@@ -181,6 +182,7 @@ function ContentToolbar({
 	historyLabel,
 }: {
 	content: string;
+	pdfSources?: Record<string, string>;
 	deleteDisabled: boolean;
 	format: Formatter;
 	onDelete: () => void;
@@ -200,7 +202,7 @@ function ContentToolbar({
 			>
 				{historyLabel}
 			</Button>
-			<AIContentControls content={content} isDisabled={!content} />
+			<AIContentControls content={content} isDisabled={!content} pdfSources={pdfSources} />
 			{selectedItem && (
 				<SelectedHistoryDate format={format} item={selectedItem} />
 			)}
@@ -405,6 +407,7 @@ export default function GenerativeModalView({
 									>
 										<ContentToolbar
 											content={content.content}
+											pdfSources={content.pdfSources}
 											deleteDisabled={
 												history.deleteDisabled
 											}

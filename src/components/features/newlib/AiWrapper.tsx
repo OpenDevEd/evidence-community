@@ -10,11 +10,8 @@ import {
 	useDisclosure,
 } from "@nextui-org/react";
 import GenerativeModal from "@/components/features/modals/GenerativeModal";
-import ChatModal from "@/components/features/modals/ChatModal";
-import { useLocale, useTranslations } from "next-intl";
-import useSWR from "swr";
-import { fetcher, fetcherPOST } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import { use, useMemo, useState } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { useLocalStorage } from "usehooks-ts";
@@ -29,8 +26,7 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { twMerge } from "@/lib/tw-merge";
-import { getAnalyticsDistinctId } from "@/lib/analytics";
-import { analyticsIdField } from "@/lib/ai/chat-request";
+import { AskAboutConversation, attachedItem, useAskAbout } from "@/components/features/ai/AskAbout";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
 
 function randomUUID() {
@@ -70,16 +66,11 @@ function AiModals({
 	data,
 	explainFeature,
 	explainTitle,
-	hasChatConversation,
 	histories,
 	id,
 	isChangeOpen,
-	isChatOpen,
 	onChangeOpenChange,
-	onChatOpenChange,
-	onConversationStateChange,
 	onModelChange,
-	questions,
 	selectedModelId,
 	setHistories,
 	summaryFeature,
@@ -88,16 +79,11 @@ function AiModals({
 	data: ItemGetResponse | undefined;
 	explainFeature: AIFeature;
 	explainTitle: string;
-	hasChatConversation: boolean;
 	histories: Record<string, AIHistory[]>;
 	id: string;
 	isChangeOpen: boolean;
-	isChatOpen: boolean;
 	onChangeOpenChange: () => void;
-	onChatOpenChange: () => void;
-	onConversationStateChange: (hasConversation: boolean) => void;
 	onModelChange: (modelId: string) => void;
-	questions: string[] | undefined;
 	selectedModelId: string | null;
 	setHistories: HistoriesSetter;
 	summaryFeature: AIFeature;
@@ -123,18 +109,7 @@ function AiModals({
 				onOpenChange={onChangeOpenChange}
 				selectedModelId={selectedModelId}
 				onModelChange={onModelChange}
-				hasConversation={hasChatConversation}
-				onResetConversation={() => onConversationStateChange(false)}
-			/>
-			<ChatModal
-				key={selectedModelId ?? "no-model"}
-				isOpen={isChatOpen}
-				onOpenChange={onChatOpenChange}
-				data={data}
-				modelId={selectedModelId}
-				onModelChange={onModelChange}
-				onConversationStateChange={onConversationStateChange}
-				questions={questions}
+				hasConversation={use(AskAboutConversation)}
 			/>
 			{generativeFeatures.map(({ feature, title }) => (
 				<GenerativeModal
@@ -222,36 +197,11 @@ function AiButton({
 }) {
 	const { selectedModelId, setSelectedModelId, modelPresentation } =
 		useSelectedModel();
-	const body = {
-		prompt: data?.item?.key,
-		...analyticsIdField(getAnalyticsDistinctId()),
-	};
-	const locale = useLocale();
-
-	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
-		useDisclosure();
+	// The chat is the page's own, shared with every card's Ask AI, so this publication joins whatever is being discussed.
+	const askAbout = useAskAbout();
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
-
-	const { data: questions } = useSWR(
-		isChatOpen
-			? [
-					`/ai/questions`,
-					body,
-					{
-						"Accept-Language": locale,
-					},
-				]
-			: null,
-		fetcherPOST,
-		{
-			revalidateOnFocus: false,
-			revalidateOnReconnect: false,
-			revalidateIfStale: false,
-		},
-	);
 	const [id, setId] = useState(randomUUID);
-	const [hasChatConversation, setHasChatConversation] = useState(false);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 	const [histories, setHistories] = useLocalStorage<
@@ -289,7 +239,6 @@ function AiButton({
 
 	const handleModelChange = (modelId: string) => {
 		setSelectedModelId(modelId);
-		setHasChatConversation(false);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
@@ -301,8 +250,12 @@ function AiButton({
 		onChangeOpenChange,
 		summaryFeature,
 		explainFeature,
-		onChatOpenChange,
-	);
+		() => {
+			const item = attachedItem(data?.item);
+			if (item) askAbout?.(item);
+		},
+	// Where the page has no chat, as in the admin's preview, the menu offers no Ask AI.
+	).filter((item) => askAbout || item.key !== "chat");
 
 	return (
 		<motion.div
@@ -324,16 +277,11 @@ function AiButton({
 					data={data}
 					explainFeature={explainFeature}
 					explainTitle={t("explain")}
-					hasChatConversation={hasChatConversation}
 					histories={histories}
 					id={id}
 					isChangeOpen={isChangeOpen}
-					isChatOpen={isChatOpen}
 					onChangeOpenChange={onChangeOpenChange}
-					onChatOpenChange={onChatOpenChange}
-					onConversationStateChange={setHasChatConversation}
 					onModelChange={handleModelChange}
-					questions={questions}
 					selectedModelId={selectedModelId}
 					setHistories={setHistories}
 					summaryFeature={summaryFeature}

@@ -55,6 +55,8 @@ export function useBucketPublications(
 	// The order the chat shows them in, kept as one value so the work below is
 	// only done again when the list itself changes.
 	const shownOrder = entries.map((entry) => entry.key).join(" ");
+	// Page citations open only PDFs the assistant read: a search hit or a link it wrote does not count.
+	const readOrder = entries.filter((entry) => entry.source === "read").map((entry) => entry.key).join(" ");
 	const wanted = [...new Set(entries.map((entry) => entry.key))].sort();
 	const { data: items, isLoading } = useSWR<ListItem[]>(
 		wanted.length > 0 ? ["/items/batch", { keys: wanted }] : null,
@@ -89,11 +91,11 @@ export function useBucketPublications(
 			byKey,
 			isLoading,
 			pdfSources: bucketPdfCitationSources(
-				shownOrder ? shownOrder.split(" ") : [],
+				readOrder ? readOrder.split(" ") : [],
 				attachmentsByKey,
 			),
 		};
-	}, [isLoading, items, shownOrder]);
+	}, [isLoading, items, readOrder]);
 }
 
 function BucketCard({

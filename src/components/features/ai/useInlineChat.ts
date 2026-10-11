@@ -10,8 +10,8 @@ import {
 	useInlineChatLayout,
 } from "@/context/InlineChatLayout";
 import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import { isAnswering } from "@/lib/ai/chat-request";
-import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import type { AIModelId } from "@/lib/ai/models";
 import type { ChatMode } from "@/types/ai";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -24,6 +24,7 @@ import {
 	useScreeningControls,
 	useSendWithContext,
 	useTranscriptExport,
+	useCurrentRequestContext,
 } from "./useChatActions";
 import { useComposerDock } from "./useComposerDock";
 import { useInlineChatSession } from "./useInlineChatSession";
@@ -68,6 +69,7 @@ function useInlineConversation({
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
+	const { attached } = useInlineChatDraft();
 	const {
 		chat,
 		messages,
@@ -79,14 +81,12 @@ function useInlineConversation({
 		clearError,
 	} = useInlineChatSession({
 		greeting: t("askMeAnythingPublications"),
+		itemKey: attached?.key,
 		mode,
 		modelId,
 		searchContext,
 	});
-	const currentRequestContext = useCallback(
-		() => createResearchRequestContextSnapshot({ searchContext }),
-		[searchContext],
-	);
+	const currentRequestContext = useCurrentRequestContext(attached, searchContext);
 	const resetChat = useCallback(() => {
 		clearError();
 		setMessages((current) => current.slice(0, 1));
@@ -100,10 +100,12 @@ function useInlineConversation({
 		chat,
 		chatFailure: useChatFailure(error),
 		error,
-		getTranscriptContent: useTranscriptExport({ messages, modelId }),
 		isLoading: status === "submitted" || status === "streaming",
 		messages,
-		reload: regenerate,
+		reload: () => {
+			setMessages((current) => withLatestRequestContext(current, currentRequestContext()));
+			return regenerate();
+		},
 		resetChat,
 		sendMessageWithContext: useSendWithContext({
 			currentRequestContext,
@@ -205,6 +207,11 @@ export function useInlineChat({
 		...scrolling,
 		ask,
 		closeChat,
+		getTranscriptContent: useTranscriptExport({
+			messages: conversation.messages,
+			modelId,
+			pdfSources: publications.pdfSources,
+		}),
 		conversationStarted: conversation.messages.length > 1,
 		isComposerFocused,
 		isDeepResearchEnabled,

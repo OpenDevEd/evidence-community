@@ -22,7 +22,9 @@ import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { analyticsIdField } from "@/lib/ai/chat-request";
-import type { ResearchRequestContextSnapshot } from "@/lib/ai/request-context";
+import { createResearchRequestContextSnapshot, type ResearchRequestContextSnapshot } from "@/lib/ai/request-context";
+import type { LibrarySearchContext } from "@/lib/search-context";
+import { questionPublication, type AttachedItem } from "./AskAbout";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
 import type { ChatMode, SmartScreeningField } from "@/types/ai";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -201,9 +203,12 @@ function useScreeningTooltip({
 export function useTranscriptExport<TMessage extends UIMessage>({
 	messages,
 	modelId,
+	pdfSources,
 }: {
 	messages: TMessage[];
 	modelId: string;
+	/** The PDFs the conversation read, so exported page citations link only to these. */
+	pdfSources: Record<string, string>;
 }) {
 	const t = useTranslations("ai");
 	const { ai } = useLibraryConfig();
@@ -228,16 +233,18 @@ export function useTranscriptExport<TMessage extends UIMessage>({
 					smartScreening: tUI("smartScreening"),
 				},
 				window.location.origin,
+				pdfSources,
 			);
 			return { content, ...CHAT_EXPORT_OUTPUT[format] };
 		},
-		[messages, modelId, t, tUI, ai.providers],
+		[messages, modelId, pdfSources, t, tUI, ai.providers],
 	);
 }
 
 /** Copy or download one answer. */
 export function useMessageExport<TMessage extends UIMessage>(
 	message: TMessage,
+	pdfSources: Record<string, string>,
 ) {
 	return useCallback(
 		async (action: ControlAction): Promise<GeneratedContent> => {
@@ -250,10 +257,11 @@ export function useMessageExport<TMessage extends UIMessage>(
 				format,
 				message as UIMessage,
 				window.location.origin,
+				pdfSources,
 			);
 			return { content: exported, ...CHAT_EXPORT_OUTPUT[format] };
 		},
-		[message],
+		[message, pdfSources],
 	);
 }
 
@@ -358,4 +366,16 @@ export function useScreeningControls({
 		}),
 		smartScreeningFields,
 	};
+}
+
+/** What the next question is about: the attached publication and the reader's search, read when it is sent. */
+export function useCurrentRequestContext(attached: AttachedItem | null, searchContext?: LibrarySearchContext) {
+	return useCallback(
+		() =>
+			createResearchRequestContextSnapshot({
+				currentPublication: questionPublication(attached),
+				searchContext,
+			}),
+		[attached, searchContext],
+	);
 }

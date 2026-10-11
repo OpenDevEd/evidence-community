@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback } from "react";
 
 import {
-	useInlineChatDraftActions,
+	useInlineChatDraft,
 	useInlineChatLayout,
 } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
@@ -13,6 +13,7 @@ import { chatRequestOptions, isAnswering } from "@/lib/ai/chat-request";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { useChatMode } from "./useChatActions";
+import { questionPublication } from "./AskAbout";
 
 /**
  * Hands a question typed elsewhere on the library page to the chat beside the
@@ -29,7 +30,7 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 	const { mode } = useChatMode();
 	const { selectedModelId } = useSelectedModel();
 	const { getInlineChat, setEngaged } = useInlineChatLayout();
-	const { setDraft } = useInlineChatDraftActions();
+	const { attached, setDraft } = useInlineChatDraft();
 
 	return useCallback(
 		(text: string) => {
@@ -53,12 +54,14 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 					parts: researchMessageParts(
 						chat.messages,
 						createResearchRequestContextSnapshot({
+							currentPublication: questionPublication(attached),
 							searchContext: questionContext,
 						}),
 						question,
 					),
 				},
 				chatRequestOptions({
+					itemKey: attached?.key,
 					locale,
 					mode,
 					modelId: selectedModelId,
@@ -69,6 +72,7 @@ export function useAskInlineChat(searchContext?: LibrarySearchContext) {
 			return true;
 		},
 		[
+			attached,
 			getInlineChat,
 			greeting,
 			locale,

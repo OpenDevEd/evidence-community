@@ -6,6 +6,9 @@ import {
 import { z } from "zod";
 import { currentDateContext } from "./prompt-context";
 
+/** What a publication with no title is called in what a question is about; the server checks the same words. */
+export const UNTITLED_PUBLICATION = "Untitled publication";
+
 const currentPublicationSchema = z
 	.object({
 		key: z
@@ -56,6 +59,24 @@ export function researchRequestContextsEqual(
 	right: ResearchRequestContextSnapshot,
 ) {
 	return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
+}
+
+/**
+ * The publication each of the reader's questions was asked about. A question
+ * carries its context only when it changed, so the last one seen before it
+ * stands for the questions that follow.
+ */
+export function publicationsAsked(
+	messages: ReadonlyArray<{ id: string; role: string; parts: ReadonlyArray<{ type: string; data?: unknown }> }>,
+) {
+	const asked = new Map<string, { key: string; title: string }>();
+	let current: { key: string; title: string } | null = null;
+	for (const message of messages) {
+		const context = latestResearchRequestContext([message]);
+		if (context) current = context.currentPublication;
+		if (message.role === "user" && current) asked.set(message.id, current);
+	}
+	return asked;
 }
 
 export function latestResearchRequestContext(

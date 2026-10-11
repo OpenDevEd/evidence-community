@@ -1,4 +1,5 @@
 import Providers from "@/context/Providers";
+import { AskAboutHost } from "@/components/features/ai/AskAboutHost";
 import { FiltersProvider } from "@/context/FiltersProvider";
 import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
@@ -53,6 +54,8 @@ async function BaseContent({
 				    navbar AND the page so collections/params stay resident across
 				    navigation (no chip flash, no duplicate fetches). */}
 				<FiltersProvider>
+					{/* The chat a public page opens about a publication, from a card or a link's preview. */}
+					<AskAboutHost>
 					<MainWrapper>
 						<SiteChrome
 							skipNavigationLabel={t("skipNavAriaLabel")}
@@ -62,6 +65,7 @@ async function BaseContent({
 							{children}
 						</SiteChrome>
 					</MainWrapper>
+					</AskAboutHost>
 				</FiltersProvider>
 			</Providers>
 		</NextIntlClientProvider>

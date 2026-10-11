@@ -58,13 +58,22 @@ export function bucketPdfCitationSources(
 	const sources: Record<string, string> = {};
 	for (let index = keysNewestFirst.length - 1; index >= 0; index -= 1) {
 		const key = keysNewestFirst[index];
-		Object.assign(
-			sources,
-			publicationPdfCitationSources(key, attachmentsByKey[key]),
-		);
+		for (const [name, target] of Object.entries(publicationPdfCitationSources(key, attachmentsByKey[key]))) {
+			sources[name] = target;
+			// Keyed by itself too: a name can only point at one PDF, and every one read must still be citable.
+			sources[target] = target;
+		}
 	}
 
 	return sources;
+}
+
+/** The one read PDF of the publication a source names by its key, `KEY`, `/lib/KEY` or `/lib/KEY/download/…`; none when it has several. */
+function onlyPdfOf(source: string, read: string[]) {
+	const key = source.match(/^(?:\/lib\/)?([A-Za-z0-9]+)(?:\/download\/[^/?#]+)?$/)?.[1];
+	if (!key) return undefined;
+	const pdfs = [...new Set(read.filter((target) => target.startsWith(`/lib/${key}/download/`)))];
+	return pdfs.length === 1 ? pdfs[0] : undefined;
 }
 
 function pageCitation(
@@ -72,12 +81,16 @@ function pageCitation(
 	page: string,
 	knownSources: Record<string, string>,
 ): PageCitation {
-	const target = source.startsWith("/lib/")
-		? source
-		: knownSources[source];
-	const safeTarget = target?.match(/^\/lib\/[^/?#]+\/download\/[^/?#]+$/)
-		? target
-		: undefined;
+	const read = Object.values(knownSources);
+	const named = source.startsWith("/lib/") ? source : knownSources[source];
+	// Only a PDF the conversation read can be opened: a model copies the prompt's example target or guesses an
+	// attachment key, and those addresses lead nowhere. A model that names a read publication by its key, alone or
+	// with an invented attachment, means that publication's PDF when it has only one.
+	const target = named && read.includes(named) ? named : onlyPdfOf(source, read);
+	const safeTarget =
+		target && /^\/lib\/[^/?#]+\/download\/[^/?#]+$/.test(target)
+			? target
+			: undefined;
 	const pageNumber = page.match(/\d+/)?.[0];
 
 	return {
@@ -95,7 +108,8 @@ const PACKED_ENTRY_SEPARATOR = /\s+PAGE\/\s*,?\s*(?:PAGE\s+)?/;
  * The pages one PAGE token cites, one citation per page. Models sometimes
  * pack several pages into one token (`— 3 PAGE/, PAGE /lib/… — 4`,
  * `— 3 PAGE/, 4` or `— 3, 4`); an entry without its own file uses the file
- * named before it.
+ * named before it. `knownSources` are the PDFs the conversation read, by file
+ * name; a citation links only to one of them.
  */
 export function parsePageCitations(
 	value: string,

@@ -30,6 +30,7 @@ import Resource from "../items/Resource";
 import { ToolActivity } from "./ToolActivity";
 import { useMessageExport } from "./useChatActions";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { AttachedItemChip } from "./AttachedItemChip";
 
 type Message = ResearchUIMessage;
 
@@ -372,12 +373,15 @@ export function MessageComponent({
 	error,
 	pdfSources,
 	isStreaming,
+	askedAbout,
 }: {
 	message: Message;
 	modelId: AIModelId;
 	error: boolean;
 	pdfSources: Record<string, string>;
 	isStreaming: boolean;
+	/** The publication a question was asked about. */
+	askedAbout?: { key: string; title: string };
 }) {
 	const content = uiMessageText(message);
 	const visibleParts = visibleMessageParts(message);
@@ -385,7 +389,7 @@ export function MessageComponent({
 		() => parseScreeningResults(message.id, content),
 		[content, message.id],
 	);
-	const getMessageContent = useMessageExport(message);
+	const getMessageContent = useMessageExport(message, pdfSources);
 	const showMessageActions = canExportMessage({
 		error,
 		hasScreeningResults: Boolean(screeningResults),
@@ -414,6 +418,7 @@ export function MessageComponent({
 					</div>
 				) : (
 					<>
+						{askedAbout && <AskedAbout item={askedAbout} />}
 						<MessageBody
 							content={content}
 							isStreaming={isStreaming}
@@ -435,5 +440,14 @@ export function MessageComponent({
 				)}
 			</div>
 		</>
+	);
+}
+
+/** The publication a question was asked about, on every question sent while it was attached. */
+function AskedAbout({ item }: { item: { key: string; title: string } }) {
+	return (
+		<div className="flex px-4 pt-3 -mb-2">
+			<AttachedItemChip item={item} />
+		</div>
 	);
 }
