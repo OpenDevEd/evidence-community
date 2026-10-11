@@ -354,22 +354,21 @@ function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition:
     </li>)}</ul>
   </SidebarCard>;
 }
-/** The period's publications as one bar: the meta-analyses and reviews listed, the other publications listed, and those not listed. */
+/** The edition's two lists as shares of the period's new publications; the bar's empty track is the rest of the period. */
 function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
   const reviews = edition.reviews?.listed ?? 0;
   const rows = [
     ...(edition.reviews ? [{href: "#reviews", label: "Meta-analyses and reviews", count: reviews, tone: "bg-accent"}] : []),
-    {href: edition.reviews ? "#other-publications" : "#publications", label: edition.reviews ? "Other publications" : "Listed", count: edition.listed - reviews, tone: "bg-accent/45"},
-    {href: null, label: "Not listed", count: edition.publicationCount - edition.listed, tone: "bg-black/10 dark:bg-white/15"},
+    {href: edition.reviews ? "#other-publications" : "#publications", label: edition.reviews ? "Other publications" : "Publications", count: edition.listed - reviews, tone: "bg-accent/45"},
   ].filter(row => row.count > 0);
+  const total = edition.publicationCount;
   return <SidebarCard title="Publications" band={<>
-    <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
-    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.map(row => <span key={row.label} className={`h-full min-w-[3px] ${row.tone}`} style={{flexGrow: row.count, flexBasis: 0}} />)}</div>
+    <HeadFigure value={edition.listed.toLocaleString(locale)} label={edition.listed < total ? `of ${total.toLocaleString(locale)} new publications` : "new publications"} />
+    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.map(row => <span key={row.label} className={`h-full min-w-[3px] ${row.tone}`} style={{width: `${(row.count / total) * 100}%`}} />)}{edition.listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
   </>}>
-    <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => {
-      const content = <><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${row.tone}`} /><span className="min-w-0 flex-1">{row.label}</span><span className="text-sm font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span></>;
-      return <li key={row.label}>{row.href ? <a href={row.href} className={railRow}>{content}</a> : <div className={twMerge(railRow, "hover:bg-transparent dark:hover:bg-transparent")}>{content}</div>}</li>;
-    })}</ul>
+    <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.label}>
+      <a href={row.href} className={railRow}><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${row.tone}`} /><span className="min-w-0 flex-1">{row.label}</span><span className="text-sm font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span></a>
+    </li>)}</ul>
   </SidebarCard>;
 }
 
