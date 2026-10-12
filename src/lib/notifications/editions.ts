@@ -10,7 +10,8 @@ import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
-import { isSynthesis, publicationTypes, recordStudyType } from "./digest-types";
+import { isSynthesis, recordStudyType } from "./digest-types";
+import type { StudyTypeKey } from "@/lib/readings/study-types";
 import type { DigestTypeCounts, NotificationPublication, NotificationStream } from "./types";
 
 function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>) {
@@ -54,8 +55,9 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
  * picked first, by the type an editor gave it or its reading found. The rest follow best first: a real abstract, then
  * a score of the journal's standing, references, known institutions and citations. `keys` is the order they are
  * picked in, which a size limit cuts from the end; `ranked` is the same publications best first, the order the
- * edition lists them in. `types` counts every publication the period has, so it adds up to `total`. A retracted
- * record is left out. The journal and withdrawal flags
+ * edition lists them in. `types` counts every publication the period has, so it adds up to `total`, and `typed` is the
+ * type of each picked one that has one: both from the one query, so a reading that lands meanwhile changes neither.
+ * A retracted record is left out. The journal and withdrawal flags
  * come from the OpenAlex record, so other sources score on the rest. A preprint and its
  * article, or two deposits of one upload, count once: records with one title
  * and first author's surname are one work. The record with an abstract stands
@@ -63,7 +65,7 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
  * or both lack one, the published record does.
  */
 async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
-  const { rows: [result] } = await db.execute<{ total: number; types: DigestTypeCounts; keys: string[] | null; ranked: string[] | null }>(sql`
+  const { rows: [result] } = await db.execute<{ total: number; types: DigestTypeCounts; typed: Record<string, StudyTypeKey>; keys: string[] | null; ranked: string[] | null }>(sql`
     WITH candidate AS (
       SELECT ${item.key} AS key, ${recordStudyType} AS type, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
         ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
@@ -94,17 +96,18 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
     ), ranked AS (
       -- Every review and synthesis of the period is picked first, so a size limit never cuts one. The edition lists what
       -- is picked best first (ranked, below).
-      SELECT key, abstract, score, refs, CASE WHEN ${isSynthesis(sql`type`)} THEN 1 ELSE 0 END AS first
+      SELECT key, type, abstract, score, refs, CASE WHEN ${isSynthesis(sql`type`)} THEN 1 ELSE 0 END AS first
       FROM chosen
     ), listed AS (
-      SELECT key, abstract, score, refs, first FROM ranked ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}
+      SELECT key, type, abstract, score, refs, first FROM ranked ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}
     )
     SELECT (SELECT count(*)::int FROM chosen) AS total,
       (SELECT coalesce(jsonb_object_agg(coalesce(type, 'unread'), works), '{}'::jsonb) FROM (SELECT type, count(*)::int AS works FROM chosen GROUP BY type) counted) AS types,
+      (SELECT coalesce(jsonb_object_agg(key, type) FILTER (WHERE type IS NOT NULL), '{}'::jsonb) FROM listed) AS typed,
       ARRAY(SELECT key FROM listed ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key) AS keys,
       ARRAY(SELECT key FROM listed ORDER BY abstract DESC, score DESC, refs DESC, key) AS ranked
   `);
-  return { total: result.total, types: result.types, keys: result.keys ?? [], ranked: result.ranked ?? [] };
+  return { total: result.total, types: result.types, typed: new Map(Object.entries(result.typed)), keys: result.keys ?? [], ranked: result.ranked ?? [] };
 }
 
 /**
@@ -134,11 +137,11 @@ function inRankOrder(publications: NotificationPublication[], ranked: string[] |
   return publications.toSorted((left, right) => place.get(left.key)! - place.get(right.key)!);
 }
 
-async function listPublications(db: DatabaseTransaction, config: LibraryServerConfig, keys: string[]) {
+/** The publications to list, each with its study type as the ranking found it. An additions email lists none with a type. */
+async function listPublications(db: DatabaseTransaction, config: LibraryServerConfig, keys: string[], types = new Map<string, StudyTypeKey>()) {
   const publications: NotificationPublication[] = [];
   let metadataBytes = 0;
   const cards = new Map((await getPublicItemCards(db, keys, config)).map(card => [card.key, card]));
-  const types = await publicationTypes(db, keys);
   for (const key of keys) {
     const card = cards.get(key);
     if (!card) continue;
@@ -174,7 +177,7 @@ function notificationWindows(state: typeof notificationState.$inferSelect, diges
 }
 
 /** How many publications the edition covers, and the keys of those it lists. */
-async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string): Promise<{ total: number; keys: string[]; ranked?: string[]; types?: DigestTypeCounts }> {
+async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string): Promise<{ total: number; keys: string[]; ranked?: string[]; types?: DigestTypeCounts; typed?: Map<string, StudyTypeKey> }> {
   // Additions are marked as covered whatever a digest covers, so a library that
   // later switches to additions starts from this edition.
   const additions = await coverCandidates(tx, config, after, window, editionId);
@@ -200,8 +203,8 @@ async function prepareWindow(
     await tx.update(notificationState).set(cursor);
     return { status: "empty" };
   }
-  const { total, keys, ranked, types } = await editionPublications(tx, config, after, window, editionId);
-  const publications = inRankOrder(await listPublications(tx, config, keys), ranked);
+  const { total, keys, ranked, types, typed } = await editionPublications(tx, config, after, window, editionId);
+  const publications = inRankOrder(await listPublications(tx, config, keys, typed), ranked);
   let result: DigestPreparation = { status: "empty" };
   if (!publications.length) {
     await tx.delete(notificationEdition).where(eq(notificationEdition.id, editionId));
@@ -305,8 +308,8 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     const [existing] = await tx.select({ id: notificationEdition.id, draft: notificationEdition.draft, ai: notificationEdition.ai, note: notificationEdition.note, publishedAt: notificationEdition.publishedAt }).from(notificationEdition)
       .where(and(eq(notificationEdition.stream, "digest"), eq(notificationEdition.windowEnd, period.end))).for("update");
     if (existing && await draftIsEdited(tx, existing)) throw new AdminValidationError("This digest has changes that are not published. Publish them, or change its text back, before rewriting it.");
-    const { total, keys, ranked, types } = await rankPublications(tx, publishedIn(tx, config, period));
-    const publications = inRankOrder(await listPublications(tx, config, keys), ranked);
+    const { total, keys, ranked, types, typed } = await rankPublications(tx, publishedIn(tx, config, period));
+    const publications = inRankOrder(await listPublications(tx, config, keys, typed), ranked);
     if (!publications.length) return { status: "empty" };
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
     // The worker compares the next attempt with the database's clock, so that clock sets it.

@@ -370,6 +370,8 @@ function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition:
     </li>)}</ul>
   </SidebarCard>;
 }
+/** Records not read yet, in the bar and beside their count: an outline, since their type is not known. */
+const UNREAD_TONE = "border border-dashed border-black/35 dark:border-white/40";
 /** How many of a study type a count holds; none when it was not counted. */
 const share = (counts: DigestTypeCounts | null, key: keyof DigestTypeCounts) => counts?.[key] ?? 0;
 type TypeShare = {type: (typeof STUDY_TYPES)[number]; listed: number; period: number | null};
@@ -394,17 +396,18 @@ function levelList(edition: DigestEdition, level: StudyLevel) {
 function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
   const rows = typeShares(edition.types);
   const n = (count: number) => count.toLocaleString(locale);
-  return <SidebarCard title="Publications" band={<ShareBand rows={rows} listed={edition.listed} total={edition.publicationCount} n={n} />}>
+  const unread = share(edition.types.listed, "unread");
+  return <SidebarCard title="Publications" band={<ShareBand rows={rows} unread={unread} listed={edition.listed} total={edition.publicationCount} n={n} />}>
     <ShareLevels rows={rows} href={level => levelList(edition, level)} n={n} />
-    <UnreadShare listed={share(edition.types.listed, "unread")} period={edition.types.period && share(edition.types.period, "unread")} n={n} />
+    <UnreadShare listed={unread} period={edition.types.period && share(edition.types.period, "unread")} n={n} />
   </SidebarCard>;
 }
 
-/** How many the edition lists of the period's, and a bar of the listed records by type. */
-function ShareBand({rows, listed, total, n}: {rows: TypeShare[]; listed: number; total: number; n: (count: number) => string}) {
+/** How many the edition lists of the period's, and a bar of the listed records by type, those not read yet last. */
+function ShareBand({rows, unread, listed, total, n}: {rows: TypeShare[]; unread: number; listed: number; total: number; n: (count: number) => string}) {
   return <>
     <HeadFigure value={n(listed)} label={listed < total ? `of ${n(total)} new publications` : "new publications"} />
-    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.filter(row => row.listed > 0).map(row => <span key={row.type.key} className={`h-full min-w-[3px] ${studyTone(row.type.key)}`} style={{width: `${(row.listed / total) * 100}%`}} />)}{listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
+    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.filter(row => row.listed > 0).map(row => <span key={row.type.key} className={`h-full min-w-[3px] ${studyTone(row.type.key)}`} style={{width: `${(row.listed / total) * 100}%`}} />)}{unread > 0 && <span className={`h-full min-w-[3px] rounded-[2px] ${UNREAD_TONE}`} style={{width: `${(unread / total) * 100}%`}} />}{listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
   </>;
 }
 
@@ -437,7 +440,7 @@ function UnreadShare({listed, period, n}: {listed: number; period: number | null
   const t = useTranslations("studyTypes");
   if (!listed && !period) return null;
   return <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-black/5 pt-3 text-sm dark:border-white/10">
-    <span className="font-medium">{t("notRead")}</span>
+    <span className="flex items-center gap-3 font-medium"><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${UNREAD_TONE}`} />{t("notRead")}</span>
     <span className="tabular-nums"><span className="font-semibold">{n(listed)}</span>{period !== null && <span className={muted}> of {n(period)}</span>}</span>
   </p>;
 }
