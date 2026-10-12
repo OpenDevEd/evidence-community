@@ -545,6 +545,12 @@ test("shares a private collection by email: OpenScholar sends the invitation and
 	expect((await request.delete(`/api/reader/collections/${id}/members/${invitee.readerId}`, { headers: { cookie: owner.cookie } })).status()).toBe(204);
 	expect((await request.post(`/api/reader/invitations/${invitation.id}/accept`, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
 	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
+
+	// Inviting them again is a new invitation, which brings them back.
+	const again = (await (await request.post(`/api/reader/collections/${id}/invitations`, { data: { email: `invitee${run}@example.org`, role: "viewer" }, headers: { cookie: owner.cookie } })).json()) as { id: string };
+	expect(again.id).not.toBe(invitation.id);
+	expect((await request.post(`/api/reader/invitations/${again.id}/accept`, { headers: { cookie: invitee.cookie } })).status()).toBe(200);
+	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(200);
 });
 
 test("delivers configured contact mail through SMTP only when enabled", async ({

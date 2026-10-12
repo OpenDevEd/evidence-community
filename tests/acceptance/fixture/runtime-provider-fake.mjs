@@ -174,9 +174,10 @@ async function collectionInvitation(request, response, action) {
 	if (action === "invite") {
 		const email = String(body.email ?? "").trim().toLowerCase();
 		if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) return json(response, 400, { error: "invalid_email" });
-		// One row an address and collection, whatever became of the invitation before.
+		// One still waiting at an address and collection is sent again; one answered, cancelled or expired is replaced by a new invitation with its own ID.
 		const existing = [...collectionInvitations.values()].find((invitation) => invitation.libraryId === libraryId && invitation.collectionId === body.collectionId && invitation.email === email);
-		const invitation = existing ?? { id: `inv_${Math.random().toString(36).slice(2, 12)}`, libraryId, collectionId: body.collectionId, email };
+		if (existing && !pendingNow(existing)) collectionInvitations.delete(existing.id);
+		const invitation = existing && pendingNow(existing) ? existing : { id: `inv_${Math.random().toString(36).slice(2, 12)}`, libraryId, collectionId: body.collectionId, email };
 		Object.assign(invitation, { collectionName: body.collectionName, role: body.role, invitedBy: body.clerkUserId, state: "pending", acceptedBy: null });
 		sendInvitation(invitation);
 		collectionInvitations.set(invitation.id, invitation);

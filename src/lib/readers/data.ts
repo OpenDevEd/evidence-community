@@ -441,6 +441,20 @@ export async function joinCollection(database: Database, invitationId: string, c
 	});
 }
 
+/**
+ * Where a reader stands with the collection an invitation they accepted was to: their role in it now, `ended` once
+ * the owner took them out, or `unrecorded` when the library never recorded the acceptance, which accepting finishes.
+ */
+export async function invitationStanding(database: Pick<Database, "select">, invitationId: string, collectionId: string, userId: string) {
+	const role = await memberRole(database, collectionId, userId);
+	if (role) return role;
+	const [used] = await database
+		.select({ invitationId: readerCollectionInvitationUse.invitationId })
+		.from(readerCollectionInvitationUse)
+		.where(eq(readerCollectionInvitationUse.invitationId, invitationId));
+	return used ? ("ended" as const) : ("unrecorded" as const);
+}
+
 /** Changes a member's role. Owner only; false when there is no such member. */
 export async function setCollectionMemberRole(database: Database, ownerUserId: string, collectionId: string, memberUserId: string, role: ReaderCollectionRole) {
 	if ((await collectionAccess(database, ownerUserId, collectionId)) !== "owner") return false;
@@ -454,6 +468,7 @@ export async function setCollectionMemberRole(database: Database, ownerUserId: s
 
 /** The owner takes someone out of a collection, or a member leaves it. False when neither applies. */
 export async function removeCollectionMember(database: Database, actorUserId: string, collectionId: string, memberUserId: string) {
+	if (!isReaderCollectionId(collectionId)) return false;
 	if (actorUserId !== memberUserId && (await collectionAccess(database, actorUserId, collectionId)) !== "owner") return false;
 	const removed = await database
 		.delete(readerCollectionMember)

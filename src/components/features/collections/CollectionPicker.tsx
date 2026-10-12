@@ -118,7 +118,7 @@ export function CollectionPicker({
 			<div className={twMerge("grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none", entries ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
 				<div className="min-h-0 overflow-hidden">
 					<ul className="flex flex-col">
-						<NewCollectionRow initialName={search.trim()} onCreate={create} />
+						<NewCollectionRow initialName={search.trim()} onCreate={create} disabled={!itemKey} />
 						<li className="flex flex-col" style={{ minHeight: pages > 1 ? `${PER_PAGE * 4}rem` : undefined }}>
 							<ul className="flex flex-col">
 								{shown.map(({ collection, ownerId, owner }) => (
@@ -222,7 +222,16 @@ function PickerControls({ search, onSearch, sort, onSort }: { search: string; on
  * collection is made private, as one made on the profile is, with the record
  * already in it.
  */
-function NewCollectionRow({ initialName, onCreate }: { initialName: string; onCreate: (name: string) => Promise<void> }) {
+function NewCollectionRow({
+	initialName,
+	onCreate,
+	disabled,
+}: {
+	initialName: string;
+	onCreate: (name: string) => Promise<void>;
+	/** The record isn't known yet, so a collection can't be made with it in. */
+	disabled: boolean;
+}) {
 	const t = useTranslations("ui");
 	const [editing, setEditing] = useState(false);
 	const [name, setName] = useState("");
@@ -239,12 +248,13 @@ function NewCollectionRow({ initialName, onCreate }: { initialName: string; onCr
 			<li>
 				<button
 					type="button"
+					disabled={disabled}
 					// What the reader searched for and didn't find is the name they likely want.
 					onClick={() => {
 						setName(initialName.slice(0, READER_COLLECTION_NAME_LIMIT));
 						setEditing(true);
 					}}
-					className="flex h-16 w-full items-center gap-3 rounded-xl px-2 text-start font-medium text-accent outline-none hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/[0.06]"
+					className="flex h-16 w-full items-center gap-3 rounded-xl px-2 text-start font-medium text-accent outline-none hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default dark:hover:bg-white/[0.06]"
 				>
 					{tile}
 					{t("newCollection")}

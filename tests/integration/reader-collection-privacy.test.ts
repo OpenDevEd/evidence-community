@@ -34,7 +34,7 @@ import { getDatabase, getDatabaseForConfig } from "@/db";
 import type { Database } from "@/db/database-schema";
 import { readerCollection, readerCollectionItem, readerCollectionMember, readerUser, type ReaderCollectionRole } from "@/db/schema/tables/reader";
 import { createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
-import { joinCollection, setCollectionMemberRole } from "@/lib/readers/data";
+import { invitationStanding, joinCollection, setCollectionMemberRole } from "@/lib/readers/data";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
 const OWNER_CLERK_ID = "user_owner";
@@ -143,15 +143,21 @@ it("lets an editor take records out and put them in, whoever added them, and ref
 it("makes someone a member once per invitation, so accepting it again gives back nothing the owner changed or ended", async () => {
 	await withCollections(async ({ savedPrivate, itemKey }) => {
 		const join = (invitationId: string, role: ReaderCollectionRole, collectionId = savedPrivate) => joinCollection(database, invitationId, collectionId, OTHER, role);
+		const standing = (invitationId: string) => invitationStanding(database, invitationId, savedPrivate, OTHER);
+		expect(await standing("inv_first")).toBe("unrecorded");
 		expect(await join("inv_first", "editor")).toEqual({ ownerId: OWNER });
 		// A retry, as after a failed write, answers the same.
 		expect(await join("inv_first", "editor")).toEqual({ ownerId: OWNER });
 		await setCollectionMemberRole(database, OWNER, savedPrivate, OTHER, "viewer");
 		await join("inv_first", "editor");
+		expect(await standing("inv_first")).toBe("viewer");
 		expect((await toggle(savedPrivate, itemKey, OTHER_CLERK_ID)).status).toBe(404);
 		await leave(savedPrivate, OWNER_CLERK_ID, OTHER);
 		expect(await join("inv_first", "editor")).toEqual({ ended: true });
+		expect(await standing("inv_first")).toBe("ended");
 		expect((await readList(savedPrivate, OTHER_CLERK_ID)).status).toBe(403);
+		// Leaving a collection that can't exist is refused like any other there's no such member of.
+		expect((await leave("not-a-collection", OTHER_CLERK_ID, OTHER)).status).toBe(404);
 		// A newer invitation is the owner's newer decision.
 		expect(await join("inv_second", "viewer")).toEqual({ ownerId: OWNER });
 		expect((await readList(savedPrivate, OTHER_CLERK_ID)).status).toBe(200);

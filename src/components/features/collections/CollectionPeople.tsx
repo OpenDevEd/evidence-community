@@ -264,11 +264,13 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 		}
 		try {
 			await run();
-			await after();
 		} catch (error) {
 			if (removing) markLeaving(removing, false);
 			toast({ type: "error", title: t("sharingFailed"), description: error instanceof Error ? error.message : undefined });
+			return;
 		}
+		// The change is made: a list that fails to reload keeps its row closed, and shows the change on its next read.
+		await after().catch((error: unknown) => console.error("Reloading who a collection is shared with failed", error));
 	};
 	const people = `/reader/collections/${collection.id}/members`;
 	const changeMember = (member: CollectionMember, role: ReaderCollectionRole | null) =>
