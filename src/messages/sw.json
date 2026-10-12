@@ -284,6 +284,8 @@
     "collapseFilters": "Funga Vichujio",
     "expandFilters": "Panua Vichujio",
     "internal": "Ndani",
+    "openAccess": "Ufikiaji huria",
+    "closedAccess": "Ufikiaji uliozuiliwa",
     "openDocument": "Fungua Hati",
     "databaseStatistics": "Takwimu za Hifadhidata",
     "databaseStatisticsDescription": "Ufahamu wa kina katika hifadhidata yetu ya utafiti, ikijumuisha taasisi, machapisho, manukuu, na metriki za ukamilishaji wa data.",

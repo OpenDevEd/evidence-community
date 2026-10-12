@@ -283,6 +283,8 @@
     "collapseFilters": "طي عوامل التصفية",
     "expandFilters": "توسيع عوامل التصفية",
     "internal": "داخلي",
+    "openAccess": "وصول مفتوح",
+    "closedAccess": "وصول مقيّد",
     "openDocument": "فتح المستند",
     "databaseStatistics": "إحصائيات قاعدة البيانات",
     "databaseStatisticsDescription": "رؤى شاملة في قاعدة بياناتنا البحثية، بما في ذلك المؤسسات والمنشورات والاقتباسات ومقاييس اكتمال البيانات.",

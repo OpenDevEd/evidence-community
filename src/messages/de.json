@@ -283,6 +283,8 @@
     "collapseFilters": "Filter einklappen",
     "expandFilters": "Filter erweitern",
     "internal": "Intern",
+    "openAccess": "Open Access",
+    "closedAccess": "Zugang beschränkt",
     "openDocument": "Dokument öffnen",
     "databaseStatistics": "Datenbankstatistiken",
     "databaseStatisticsDescription": "Umfassende Einblicke in unsere Forschungsdatenbank, einschließlich Institutionen, Publikationen, Zitationen und Metriken zur Datenvollständigkeit.",

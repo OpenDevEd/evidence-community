@@ -16,6 +16,7 @@ export default defineConfig({
 			"tests/integration/topics-lifecycle.test.ts",
 			"tests/integration/openalex-refresh.test.ts",
 			"tests/integration/openalex-source.test.ts",
+			"tests/integration/open-access.test.ts",
 			"tests/integration/search-requeue.test.ts",
 			"tests/integration/openscholar-source.test.ts",
 			"tests/integration/openalex-attachment-processor.test.ts",

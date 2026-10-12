@@ -88,3 +88,9 @@ export const openAlexWorkSchema = z
 	.loose();
 
 export type OpenAlexWork = z.infer<typeof openAlexWorkSchema>;
+
+/** OpenAlex's `open_access.is_oa` in a work as stored, or null when it has none. */
+export function workIsOpenAccess(work: unknown) {
+	const isOa = (work as { open_access?: { is_oa?: unknown } } | null | undefined)?.open_access?.is_oa;
+	return typeof isOa === "boolean" ? isOa : null;
+}
