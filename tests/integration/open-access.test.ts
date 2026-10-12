@@ -8,6 +8,7 @@ import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
 import { lookUpOpenAccess } from "@/lib/open-access-lookup";
 import { generateSearchProjectionPlans } from "@/lib/search-index/projection";
+import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
 import { OpenAlexClient } from "@/lib/source-ingestion/openalex/client";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { reconcileOpenAlexMemberships } from "@/lib/source-ingestion/openalex/reconciliation";
@@ -17,6 +18,12 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
 const DAY = 24 * 60 * 60_000;
+const openAlexSettings = {
+	name: "AI in education",
+	searchUrl: "/results/saved-search-1",
+	approvedQuery: { version: "v1", approvedAt: "2026-09-24T10:00:00Z", query: { search: "AI in education" } },
+	downloadPdfs: false,
+};
 
 /** OpenAlex as the lookup sees it: the works it holds for each DOI, and the DOIs each lookup asked about. */
 function fakeOpenAlex(works: Record<string, boolean[]>) {
@@ -203,6 +210,21 @@ it("labels a record from its newest OpenAlex work, else from OpenAlex's answer f
 			cursor: { v: 2 },
 			startedAt: "2026-10-07T00:00:00Z",
 		});
+		expect(await queuedForSearch(db)).toEqual([fromOpenAlex]);
+		expect(await openAccessOf(db, [fromOpenAlex])).toEqual({ [fromOpenAlex]: true });
+
+		// A source taken out of the library stops counting, and one put back counts again; its records are searched again
+		// both times.
+		await markSearched(db);
+		await reconcileConfiguredSources(db, []);
+		expect(await queuedForSearch(db)).toEqual([fromOpenAlex]);
+		expect(await openAccessOf(db, [fromOpenAlex])).toEqual({ [fromOpenAlex]: null });
+		await markSearched(db);
+		const { sources } = libraryConfigSchema.parse({
+			...maximalLibraryConfig,
+			sources: [{ key: "openalex-oa", provider: "openalex", apiKey: "test-key", settings: openAlexSettings }],
+		});
+		await reconcileConfiguredSources(db, sources);
 		expect(await queuedForSearch(db)).toEqual([fromOpenAlex]);
 		expect(await openAccessOf(db, [fromOpenAlex])).toEqual({ [fromOpenAlex]: true });
 	});
