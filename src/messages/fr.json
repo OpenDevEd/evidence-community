@@ -1108,7 +1108,7 @@
       },
       "not-research": {
         "label": "Pas un article de recherche",
-        "plural": "Pas des articles de recherche",
+        "plural": "Hors articles de recherche",
         "description": "Un jeu de données, un logiciel, une correction, un compte rendu de livre ou un fichier qui accompagne un autre article."
       }
     }
