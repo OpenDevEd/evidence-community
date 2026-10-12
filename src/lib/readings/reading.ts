@@ -24,5 +24,6 @@ export async function readStudyReading(db: Pick<Database, "select">, itemKey: st
 		.innerJoin(item, eq(item.key, itemReading.itemKey))
 		.where(eq(itemReading.itemKey, itemKey))
 		.limit(1);
-	return row?.contentHash === contentHashOf(readingText(row.title, row.abstractNote)) ? studyReadingOf(row, null) : null;
+	if (!row || row.contentHash !== contentHashOf(readingText(row.title, row.abstractNote))) return null;
+	return studyReadingOf(row, null);
 }

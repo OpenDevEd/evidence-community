@@ -116,6 +116,8 @@ it("reads the type of every record a library with a key brings in, grades only f
 		const none = jev(answering);
 		await runReadingCycle(db, keyless, undefined, none.request);
 		expect(none.asked).toEqual([]);
+		// The inspector says a record nobody has read is not read yet.
+		expect(await readStudyReading(db, "KEYLESS2")).toBeNull();
 		expect((await db.select({ key: itemReading.itemKey }).from(itemReading)).map((row) => row.key)).toEqual(["TYPEAAA2"]);
 	});
 }, 120_000);
