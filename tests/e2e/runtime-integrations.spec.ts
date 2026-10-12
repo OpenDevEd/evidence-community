@@ -508,6 +508,55 @@ test("offers OpenScholar sign-in only where reader accounts are on", { tag: "@sm
 	expect((await request.get(listUrl)).status()).toBe(403);
 });
 
+test("shares a private collection by email: OpenScholar sends the invitation and the library keeps the member", { tag: "@smoke" }, async ({ request }) => {
+	test.skip(!expectedAuthentication, "Reader accounts are off in this library.");
+	// The fake OpenScholar verifies <name>@example.org on the account user_mock_<name>.
+	const run = Date.now();
+	const owner = await readerSessionHeader(`user_mock_owner${run}`);
+	const invitee = await readerSessionHeader(`user_mock_invitee${run}`);
+	const created = await request.post("/api/reader/collections", { data: { name: "Shared reading", private: true }, headers: { cookie: owner.cookie } });
+	const { id } = (await created.json()) as { id: string };
+	const listUrl = `/api/user/items/${owner.readerId}?collectionId=${id}`;
+	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
+
+	const invited = await request.post(`/api/reader/collections/${id}/invitations`, {
+		data: { email: `invitee${run}@example.org`, role: "editor" },
+		headers: { cookie: owner.cookie },
+	});
+	expect(invited.status()).toBe(201);
+	const invitation = (await invited.json()) as { id: string; delivery: string };
+	expect(invitation.delivery).toBe("sent");
+	const sent = (await (await request.get("/api/reader/invitations", { headers: { cookie: owner.cookie } })).json()) as { invitations: { id: string }[] };
+	expect(sent.invitations.map((one) => one.id)).toContain(invitation.id);
+	const resend = (collectionId: string) => request.patch(`/api/reader/invitations/${invitation.id}`, { data: { resend: true, collectionId }, headers: { cookie: owner.cookie } });
+	expect((await resend(id)).status()).toBe(204);
+	// Only for one of the owner's collections, which OpenScholar checks is the invitation's own.
+	expect((await resend("00000000-0000-4000-8000-000000000000")).status()).toBe(404);
+
+	// Only the account with the invited address accepts it, and it opens the owner's collection.
+	expect((await request.post(`/api/reader/invitations/${invitation.id}/accept`, { headers: { cookie: owner.cookie } })).status()).toBe(403);
+	const accepted = await request.post(`/api/reader/invitations/${invitation.id}/accept`, { headers: { cookie: invitee.cookie } });
+	expect(await accepted.json()).toEqual({ collectionId: id, role: "editor", ownerId: owner.readerId });
+	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(200);
+
+	// The owner sees them among the collection's people, and they see it among the collections shared with them.
+	const ownerData = (await (await request.get("/api/reader", { headers: { cookie: owner.cookie } })).json()) as { collections: { id: string; members: { id: string; role: string }[] }[] };
+	expect(ownerData.collections.find((collection) => collection.id === id)?.members).toEqual([expect.objectContaining({ id: invitee.readerId, role: "editor" })]);
+	const inviteeData = (await (await request.get("/api/reader", { headers: { cookie: invitee.cookie } })).json()) as { shared: { id: string; access: string }[] };
+	expect(inviteeData.shared).toEqual([expect.objectContaining({ id, access: "editor" })]);
+
+	// Once the owner takes them out, accepting the same invitation again gives nothing back.
+	expect((await request.delete(`/api/reader/collections/${id}/members/${invitee.readerId}`, { headers: { cookie: owner.cookie } })).status()).toBe(204);
+	expect((await request.post(`/api/reader/invitations/${invitation.id}/accept`, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
+	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
+
+	// Inviting them again is a new invitation, which brings them back.
+	const again = (await (await request.post(`/api/reader/collections/${id}/invitations`, { data: { email: `invitee${run}@example.org`, role: "viewer" }, headers: { cookie: owner.cookie } })).json()) as { id: string };
+	expect(again.id).not.toBe(invitation.id);
+	expect((await request.post(`/api/reader/invitations/${again.id}/accept`, { headers: { cookie: invitee.cookie } })).status()).toBe(200);
+	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(200);
+});
+
 test("delivers configured contact mail through SMTP only when enabled", async ({
 	page,
 	request,

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { toggleCollectionItem } from "@/lib/readers/data";
 import { changeForRecord, READER_RESPONSE_HEADERS, readerError, readReaderRequest } from "@/lib/readers/http";
 
-/** Puts a record into one of the reader's own collections, or takes it out. */
+/** Puts a record into a collection the reader owns or edits, or takes it out. */
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
 	const access = await readReaderRequest(request);
 	if (access.response) return access.response;

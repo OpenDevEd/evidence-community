@@ -31,6 +31,7 @@ const GapMaps = fromPage(() => import("@/components/pages/GapMaps"));
 const NotFound = fromPage(() => import("@/components/layout/NotFound"));
 const DigestPages = fromPage(() => import("@/components/digests/DigestPages"));
 const Contact = fromPage(() => import("@/components/pages/Contact"));
+const CollectionInvitationPlaceholder = fromPage(async () => ({ default: (await import("@/components/pages/CollectionInvitation")).CollectionInvitationPlaceholder }));
 const HomePlaceholder = fromPage(async () => ({ default: (await import("@/components/pages/HomePage")).HomePlaceholder }));
 
 // Data the page has not read yet: parts that wait on it keep their own placeholders until the page replaces them.
@@ -74,6 +75,7 @@ const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) =>
 	"404": () => <NotFound />,
 	digests: (slug) => <DigestFallback slug={slug} />,
 	contact: (_, server) => <Contact formEnabled={server.contactForm} />,
+	invitations: (id) => id && <CollectionInvitationPlaceholder invitationId={id} />,
 };
 
 /**

@@ -4,17 +4,19 @@ import useSWR, { useSWRConfig } from "swr";
 
 import { useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
-import type { ReaderCollectionSummary } from "@/lib/readers/data";
+import type { ReaderCollectionSummary, SharedCollectionSummary } from "@/lib/readers/data";
 import { fetcher } from "@/lib/utils";
 
 type ReaderData = {
 	bookmarks: Record<string, string>;
 	collections: ReaderCollectionSummary[];
+	/** The collections others shared with the reader. */
+	shared: SharedCollectionSummary[];
 	itemCollections: Record<string, string[]>;
 };
 
 /**
- * The signed-in reader's bookmarks and collections; nothing for anyone signed
+ * The signed-in reader's bookmarks and collections, their own and the ones shared with them; nothing for anyone signed
  * out. `refresh` reloads them and every reader list already shown, such as a
  * profile's list and its collection covers, after a bookmark or collection
  * change.

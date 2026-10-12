@@ -83,6 +83,8 @@ const RESERVED_ROUTE_SEGMENTS = new Set([
 	"contact",
 	"cookie-policy",
 	"gapmaps",
+	// Where a reader's collection invitation email links.
+	"invitations",
 	"lib",
 	"map",
 	"newlib",

@@ -1,5 +1,5 @@
 {
-  "id": "8b39e0c5-09a2-4419-9a6d-e74969e4f1e2",
+  "id": "eb54dd66-a297-41bd-a781-a87309183917",
   "prevId": "e28c53ac-ed41-4f53-a37c-418d31224f56",
   "version": "7",
   "dialect": "postgresql",
@@ -2282,304 +2282,6 @@
           "value": "(\n\t\t\t\t(\"zenodoPublishJournal\".\"status\" IN ('preparing', 'ready_to_publish')\n\t\t\t\t\tAND \"zenodoPublishJournal\".\"publishedRecordId\" IS NULL\n\t\t\t\t\tAND \"zenodoPublishJournal\".\"identifiers\" IS NULL\n\t\t\t\t\tAND \"zenodoPublishJournal\".\"publishedAt\" IS NULL)\n\t\t\t\tOR (\"zenodoPublishJournal\".\"status\" = 'published'\n\t\t\t\t\tAND \"zenodoPublishJournal\".\"publishedRecordId\" IS NOT NULL\n\t\t\t\t\tAND \"zenodoPublishJournal\".\"identifiers\" IS NOT NULL\n\t\t\t\t\tAND \"zenodoPublishJournal\".\"publishedAt\" IS NOT NULL)\n\t\t\t)"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.itemGrade": {
-      "name": "itemGrade",
-      "schema": "",
-      "columns": {
-        "itemKey": {
-          "name": "itemKey",
-          "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sourceConnectionKey": {
-          "name": "sourceConnectionKey",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "score": {
-          "name": "score",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "subjectHash": {
-          "name": "subjectHash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "gradedAt": {
-          "name": "gradedAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "itemGrade_source_idx": {
-          "name": "itemGrade_source_idx",
-          "columns": [
-            {
-              "expression": "sourceConnectionKey",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "itemGrade_itemKey_sourceConnectionKey_itemSourceLink_itemKey_sourceConnectionKey_fk": {
-          "name": "itemGrade_itemKey_sourceConnectionKey_itemSourceLink_itemKey_sourceConnectionKey_fk",
-          "tableFrom": "itemGrade",
-          "tableTo": "itemSourceLink",
-          "columnsFrom": [
-            "itemKey",
-            "sourceConnectionKey"
-          ],
-          "columnsTo": [
-            "itemKey",
-            "sourceConnectionKey"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {
-        "itemGrade_itemKey_sourceConnectionKey_pk": {
-          "name": "itemGrade_itemKey_sourceConnectionKey_pk",
-          "columns": [
-            "itemKey",
-            "sourceConnectionKey"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.itemReading": {
-      "name": "itemReading",
-      "schema": "",
-      "columns": {
-        "itemKey": {
-          "name": "itemKey",
-          "type": "varchar(8)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "studyType": {
-          "name": "studyType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "typeConfidence": {
-          "name": "typeConfidence",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "typedBy": {
-          "name": "typedBy",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "pooled": {
-          "name": "pooled",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "region": {
-          "name": "region",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "effects": {
-          "name": "effects",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "input": {
-          "name": "input",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contentHash": {
-          "name": "contentHash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "questionSet": {
-          "name": "questionSet",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "model": {
-          "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "readAt": {
-          "name": "readAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "itemReading_itemKey_itemIdentity_key_fk": {
-          "name": "itemReading_itemKey_itemIdentity_key_fk",
-          "tableFrom": "itemReading",
-          "tableTo": "itemIdentity",
-          "columnsFrom": [
-            "itemKey"
-          ],
-          "columnsTo": [
-            "key"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.itemReadingQueue": {
-      "name": "itemReadingQueue",
-      "schema": "",
-      "columns": {
-        "itemKey": {
-          "name": "itemKey",
-          "type": "varchar(8)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "generation": {
-          "name": "generation",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "revision": {
-          "name": "revision",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "nextAttemptAt": {
-          "name": "nextAttemptAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
-        },
-        "leaseToken": {
-          "name": "leaseToken",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "leaseExpiresAt": {
-          "name": "leaseExpiresAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lastError": {
-          "name": "lastError",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "itemReadingQueue_pending_idx": {
-          "name": "itemReadingQueue_pending_idx",
-          "columns": [
-            {
-              "expression": "nextAttemptAt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"itemReadingQueue\".\"nextAttemptAt\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.readingSpend": {
-      "name": "readingSpend",
-      "schema": "",
-      "columns": {
-        "day": {
-          "name": "day",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "reads": {
-          "name": "reads",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "usd": {
-          "name": "usd",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.itemFileRemoval": {
@@ -8060,6 +7762,102 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.reader_collection_invitation_use": {
+      "name": "reader_collection_invitation_use",
+      "schema": "",
+      "columns": {
+        "invitationId": {
+          "name": "invitationId",
+          "type": "varchar(128)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "collectionId": {
+          "name": "collectionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "reader_collection_invitation_use_collectionId_idx": {
+          "name": "reader_collection_invitation_use_collectionId_idx",
+          "columns": [
+            {
+              "expression": "collectionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "reader_collection_invitation_use_userId_idx": {
+          "name": "reader_collection_invitation_use_userId_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "reader_collection_invitation_use_collectionId_reader_collection_id_fk": {
+          "name": "reader_collection_invitation_use_collectionId_reader_collection_id_fk",
+          "tableFrom": "reader_collection_invitation_use",
+          "tableTo": "reader_collection",
+          "columnsFrom": [
+            "collectionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "reader_collection_invitation_use_userId_reader_user_id_fk": {
+          "name": "reader_collection_invitation_use_userId_reader_user_id_fk",
+          "tableFrom": "reader_collection_invitation_use",
+          "tableTo": "reader_user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.reader_collection_item": {
       "name": "reader_collection_item",
       "schema": "",
@@ -8141,6 +7939,107 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.reader_collection_member": {
+      "name": "reader_collection_member",
+      "schema": "",
+      "columns": {
+        "collectionId": {
+          "name": "collectionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "reader_collection_member_userId_idx": {
+          "name": "reader_collection_member_userId_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "reader_collection_member_collectionId_reader_collection_id_fk": {
+          "name": "reader_collection_member_collectionId_reader_collection_id_fk",
+          "tableFrom": "reader_collection_member",
+          "tableTo": "reader_collection",
+          "columnsFrom": [
+            "collectionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "reader_collection_member_userId_reader_user_id_fk": {
+          "name": "reader_collection_member_userId_reader_user_id_fk",
+          "tableFrom": "reader_collection_member",
+          "tableTo": "reader_user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "reader_collection_member_collectionId_userId_pk": {
+          "name": "reader_collection_member_collectionId_userId_pk",
+          "columns": [
+            "collectionId",
+            "userId"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "reader_collection_member_role_valid": {
+          "name": "reader_collection_member_role_valid",
+          "value": "\"reader_collection_member\".\"role\" in ('editor', 'viewer')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.reader_session": {
