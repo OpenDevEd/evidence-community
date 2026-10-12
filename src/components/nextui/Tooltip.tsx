@@ -12,6 +12,7 @@ import {
 	type Ref,
 } from "react";
 import { mergeProps, useFocusable } from "react-aria";
+import { twMerge } from "@/lib/tw-merge";
 import {
 	Tooltip as AriaTooltip,
 	TooltipTrigger,
@@ -120,6 +121,40 @@ export function Tooltip({
 				<TooltipOverlay {...overlay} isDisabled={isDisabled} />
 			</TooltipStateOverrides>
 		</TooltipTrigger>
+	);
+}
+
+/**
+ * Text that says more about itself on hover or keyboard focus, such as a date or a count. Its dashed underline marks it
+ * the same way wherever it is.
+ */
+export function Hint({
+	content,
+	children,
+	className,
+	contentClassName,
+	placement,
+}: {
+	content: ReactNode;
+	children: ReactNode;
+	/** Classes for the text. */
+	className?: string;
+	/** Classes for the tooltip. */
+	contentClassName?: string;
+	placement?: Placement;
+}) {
+	return (
+		<Tooltip content={content} placement={placement} className={contentClassName}>
+			<span
+				tabIndex={0}
+				className={twMerge(
+					"inline-flex cursor-help items-center gap-1.5 rounded-md underline decoration-black/25 decoration-dashed underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent dark:decoration-white/30",
+					className,
+				)}
+			>
+				{children}
+			</span>
+		</Tooltip>
 	);
 }
 

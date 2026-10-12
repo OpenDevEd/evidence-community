@@ -3,8 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
-import { Tooltip } from "@/components/nextui/Tooltip";
-import { twMerge } from "@/lib/tw-merge";
+import { Hint } from "@/components/nextui/Tooltip";
 
 /** Explains, on hover, why a publication date is later than today. */
 export function FuturePublicationHint({
@@ -16,19 +15,12 @@ export function FuturePublicationHint({
 }) {
 	const t = useTranslations("ui");
 	return (
-		<Tooltip
+		<Hint
 			content={t("futurePublicationDate")}
-			className="max-w-72 py-2 text-sm"
+			contentClassName="max-w-72 py-2 text-sm"
+			className={className}
 		>
-			<span
-				tabIndex={0}
-				className={twMerge(
-					"inline-flex cursor-help items-center gap-1.5",
-					className,
-				)}
-			>
-				{children}
-			</span>
-		</Tooltip>
+			{children}
+		</Hint>
 	);
 }
