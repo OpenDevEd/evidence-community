@@ -11,6 +11,8 @@ import {
 
 export type AdminDraftDiff = {
 	countryFocus: { previous: string[] | null } | null;
+	/** The published choice when the draft changed it: true, false, or null for OpenAlex. */
+	openAccess: { previous: boolean | null } | null;
 	collections: string[] | null;
 	creators: AdminCreator[] | null;
 	fields: Record<string, string>;
@@ -22,6 +24,7 @@ export type AdminDraftDiff = {
 
 export const EMPTY_ADMIN_DRAFT_DIFF: AdminDraftDiff = {
 	countryFocus: null,
+	openAccess: null,
 	collections: null,
 	creators: null,
 	fields: {},
@@ -99,6 +102,11 @@ function countryFocusDiff(current: unknown, previous: unknown) {
 	return { previous: Array.isArray(previous) ? previous as string[] : null };
 }
 
+function openAccessDiff(current: unknown, previous: unknown) {
+	if (sameValue(current ?? null, previous ?? null)) return null;
+	return { previous: typeof previous === "boolean" ? previous : null };
+}
+
 export function computeAdminDraftDiff(
 	detail: AdminItemDetail,
 	payload: Record<string, unknown>,
@@ -145,6 +153,7 @@ export function computeAdminDraftDiff(
 
 	return {
 		countryFocus: countryFocusDiff(payload.countryFocus, published.countryFocus),
+		openAccess: openAccessDiff(payload.openAccess, published.openAccess),
 		collections: collectionsChanged ? originalCollections : null,
 		creators: creatorsChanged ? originalCreators : null,
 		fields,

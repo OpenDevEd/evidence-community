@@ -39,7 +39,9 @@ import { sourceDisplayLabel } from "./source-label";
 import {
 	adminCanonicalDraftToItemFields,
 	adminCanonicalPayloadToItemFields,
+	isTopLevelAdminItemType,
 } from "./item-fields";
+import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -412,6 +414,9 @@ export async function getAdminItemDetail(
 	const payload = draft
 		? applyItemDraftPatch(basePayload, draft.patch)
 		: basePayload;
+	const fromSources = published && isTopLevelAdminItemType(published.itemType)
+		? await readOpenAccessFromSourcesFor(db, itemKey, payload)
+		: null;
 	const draftTags = draft ? payloadStringList(payload, "tags") : null;
 	const draftCollections = draft
 		? payloadStringList(payload, "collections")
@@ -483,6 +488,7 @@ export async function getAdminItemDetail(
 		filePublication: filePublicationJson(filePublication),
 		fileRemovalPending: Boolean(removal),
 		links,
+		openAccessFromSources: fromSources,
 		parentItem,
 		parentState:
 			parentItem && (parentPublished || parentDraft)

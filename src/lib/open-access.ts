@@ -7,3 +7,8 @@ export function shownOpenAccess(openAccess: boolean | null | undefined, label: O
 	if (typeof openAccess !== "boolean" || label === "off") return null;
 	return openAccess || label === "both" ? openAccess : null;
 }
+
+/** An editor's open-access choice in words: open, closed, or left to OpenAlex. */
+export function describeOpenAccessChoice(value: unknown) {
+	return value === true ? "Open access" : value === false ? "Closed access" : "From OpenAlex";
+}

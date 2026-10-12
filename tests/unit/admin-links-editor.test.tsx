@@ -35,6 +35,7 @@ function detail(): AdminItemDetail {
 		fileDraft: null,
 		filePublication: null,
 		fileRemovalPending: false,
+		openAccessFromSources: null,
 		fileState: "none",
 		itemType: "Book",
 		key: "SELF2345",

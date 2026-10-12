@@ -1,5 +1,5 @@
 {
-  "id": "c1ee6e18-cca9-4d29-b33c-261d2f669951",
+  "id": "e28c53ac-ed41-4f53-a37c-418d31224f56",
   "prevId": "160600c7-4bf3-4a64-82ef-db163223c29f",
   "version": "7",
   "dialect": "postgresql",
@@ -6519,6 +6519,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "openAccess": {
+          "name": "openAccess",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
         "assignee": {
           "name": "assignee",
           "type": "varchar",
@@ -7756,102 +7762,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.reader_collection_invitation_use": {
-      "name": "reader_collection_invitation_use",
-      "schema": "",
-      "columns": {
-        "invitationId": {
-          "name": "invitationId",
-          "type": "varchar(128)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "collectionId": {
-          "name": "collectionId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "userId": {
-          "name": "userId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "reader_collection_invitation_use_collectionId_idx": {
-          "name": "reader_collection_invitation_use_collectionId_idx",
-          "columns": [
-            {
-              "expression": "collectionId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "reader_collection_invitation_use_userId_idx": {
-          "name": "reader_collection_invitation_use_userId_idx",
-          "columns": [
-            {
-              "expression": "userId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reader_collection_invitation_use_collectionId_reader_collection_id_fk": {
-          "name": "reader_collection_invitation_use_collectionId_reader_collection_id_fk",
-          "tableFrom": "reader_collection_invitation_use",
-          "tableTo": "reader_collection",
-          "columnsFrom": [
-            "collectionId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reader_collection_invitation_use_userId_reader_user_id_fk": {
-          "name": "reader_collection_invitation_use_userId_reader_user_id_fk",
-          "tableFrom": "reader_collection_invitation_use",
-          "tableTo": "reader_user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.reader_collection_item": {
       "name": "reader_collection_item",
       "schema": "",
@@ -7933,107 +7843,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.reader_collection_member": {
-      "name": "reader_collection_member",
-      "schema": "",
-      "columns": {
-        "collectionId": {
-          "name": "collectionId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "userId": {
-          "name": "userId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "varchar(16)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "reader_collection_member_userId_idx": {
-          "name": "reader_collection_member_userId_idx",
-          "columns": [
-            {
-              "expression": "userId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reader_collection_member_collectionId_reader_collection_id_fk": {
-          "name": "reader_collection_member_collectionId_reader_collection_id_fk",
-          "tableFrom": "reader_collection_member",
-          "tableTo": "reader_collection",
-          "columnsFrom": [
-            "collectionId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reader_collection_member_userId_reader_user_id_fk": {
-          "name": "reader_collection_member_userId_reader_user_id_fk",
-          "tableFrom": "reader_collection_member",
-          "tableTo": "reader_user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "reader_collection_member_collectionId_userId_pk": {
-          "name": "reader_collection_member_collectionId_userId_pk",
-          "columns": [
-            "collectionId",
-            "userId"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "reader_collection_member_role_valid": {
-          "name": "reader_collection_member_role_valid",
-          "value": "\"reader_collection_member\".\"role\" in ('editor', 'viewer')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.reader_session": {

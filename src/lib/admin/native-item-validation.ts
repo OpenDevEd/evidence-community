@@ -300,6 +300,14 @@ function countryFocusFields(value: unknown, source: boolean | undefined) {
 	return { countryFocus: result.data };
 }
 
+/** An editor marks a record open or closed, or leaves it to OpenAlex with null. Source imports never send it. */
+function openAccessFields(value: unknown, source: boolean | undefined) {
+	if (source || value === undefined) return {};
+	const result = z.boolean().nullable().safeParse(value);
+	if (!result.success) throw new NativeItemValidationError("Choose whether this item is open access.", { openAccess: "Choose open, closed or OpenAlex." });
+	return { openAccess: result.data };
+}
+
 function topicFields(value: unknown) {
 	if (value === undefined) return {};
 	return { topics: [...new Set(z.array(topicIdSchema).max(100).parse(value))].sort() };
@@ -332,6 +340,7 @@ function parseNativeItemDraft(
 	const itemValues: Record<string, unknown> = {
 		itemType: normalizedItemType,
 		...countryFocusFields(payload.countryFocus, options.source),
+		...openAccessFields(payload.openAccess, options.source),
 		...topicFields(payload.topics),
 		...normalizeDraftFields(
 			payload,
