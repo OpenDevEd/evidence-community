@@ -64,12 +64,15 @@ export async function listSentInvitations(service: OpenScholarService, clerkUser
 	return answer.invitations;
 }
 
-/** Changes the role a waiting invitation gives, sends it again, or cancels it. Only the reader who sent it may. */
+/**
+ * Changes the role a waiting invitation gives, sends it again, or cancels it. Only the reader who sent it may.
+ * Sending again names the invitation's collection and the name it has now, for the email.
+ */
 export async function changeSentInvitation(
 	service: OpenScholarService,
 	clerkUserId: string,
 	invitationId: string,
-	change: { role: (typeof READER_COLLECTION_ROLES)[number] } | { resend: true } | { cancel: true },
+	change: { role: (typeof READER_COLLECTION_ROLES)[number] } | { resend: true; collectionId: string; collectionName: string } | { cancel: true },
 ) {
 	await call(service, "change", { clerkUserId, invitationId, ...change }, "resend" in change ? SENDS_EMAIL : undefined);
 }

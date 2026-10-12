@@ -528,6 +528,10 @@ test("shares a private collection by email: OpenScholar sends the invitation and
 	expect(invitation.delivery).toBe("sent");
 	const sent = (await (await request.get("/api/reader/invitations", { headers: { cookie: owner.cookie } })).json()) as { invitations: { id: string }[] };
 	expect(sent.invitations.map((one) => one.id)).toContain(invitation.id);
+	const resend = (collectionId: string) => request.patch(`/api/reader/invitations/${invitation.id}`, { data: { resend: true, collectionId }, headers: { cookie: owner.cookie } });
+	expect((await resend(id)).status()).toBe(204);
+	// Only for one of the owner's collections, which OpenScholar checks is the invitation's own.
+	expect((await resend("00000000-0000-4000-8000-000000000000")).status()).toBe(404);
 
 	// Only the account with the invited address accepts it, and it opens the owner's collection.
 	expect((await request.post(`/api/reader/invitations/${invitation.id}/accept`, { headers: { cookie: owner.cookie } })).status()).toBe(403);

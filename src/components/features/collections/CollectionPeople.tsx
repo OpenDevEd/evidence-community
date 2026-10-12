@@ -341,7 +341,7 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 								label={t("accessOf", { name: invitation.email })}
 								onRole={(role) => void changeInvitation(invitation, { role })}
 								actions={[
-									{ key: "resend", label: t("resendInvitation"), icon: RefreshIcon, onPress: () => void changeInvitation(invitation, { resend: true }) },
+									{ key: "resend", label: t("resendInvitation"), icon: RefreshIcon, onPress: () => void changeInvitation(invitation, { resend: true, collectionId: collection.id }) },
 									{ key: "cancel", label: t("cancelInvitation"), icon: Delete02Icon, danger: true, onPress: () => void changeInvitation(invitation, null) },
 								]}
 							/>

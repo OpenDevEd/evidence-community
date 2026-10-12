@@ -196,8 +196,9 @@ async function collectionInvitation(request, response, action) {
 	const invitation = collectionInvitations.get(body.invitationId);
 	if (action === "change") {
 		if (!sentByCaller(invitation) || !pendingNow(invitation)) return json(response, 404, { error: "not_found" });
+		if (body.resend && body.collectionId !== invitation.collectionId) return json(response, 404, { error: "not_found" });
 		if (body.cancel) invitation.state = "cancelled";
-		else if (body.resend) sendInvitation(invitation);
+		else if (body.resend) sendInvitation(Object.assign(invitation, { collectionName: body.collectionName }));
 		else if (body.role) invitation.role = body.role;
 		return json(response, 200, {});
 	}
