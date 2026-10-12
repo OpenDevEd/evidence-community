@@ -23,6 +23,7 @@ import {
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { itemReading } from "@/db/schema/readings";
+import { contentHashOf, readingText } from "@/lib/readings/reading-text";
 import type { StudyReading, StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
@@ -69,9 +70,9 @@ type CollectionRow = Pick<
 type ItemRow = typeof item.$inferSelect;
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
-/** A record's study type for its search document: none until it has been read. */
-function readingFields(row: { type: StudyTypeKey; confidence: number; by: StudyReading["by"]; input: StudyReading["input"] } | undefined) {
-	if (!row) return {};
+/** A record's study type for its search document: none until it has been read, or while its reading is of text it no longer has. */
+function readingFields(row: { type: StudyTypeKey; confidence: number; by: StudyReading["by"]; input: StudyReading["input"]; contentHash: string } | undefined, record: ItemRow) {
+	if (!row || row.contentHash !== contentHashOf(readingText(record.title, record.abstractNote))) return {};
 	const reading: StudyReading = { type: row.type, confidence: row.confidence, by: row.by, input: row.input };
 	return { studyType: row.type, reading };
 }
@@ -323,7 +324,7 @@ async function buildSearchProjectionPlanForKeys(
 		(await database
 			.select({
 				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, type: itemReading.studyType,
-				confidence: itemReading.typeConfidence, by: itemReading.typedBy, input: itemReading.input,
+				confidence: itemReading.typeConfidence, by: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash,
 			})
 			.from(itemReading)
 			.where(inArray(itemReading.itemKey, topLevelKeys)))
@@ -539,7 +540,7 @@ async function buildSearchProjectionPlanForKeys(
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
 				revision: parent.revision,
 				// What kind of work it is, once read: filtered and counted by `studyType`, shown from `reading`.
-				...readingFields(readings.get(parent.key)),
+				...readingFields(readings.get(parent.key), parent),
 				sourceConnectionKey: parent.sourceConnectionKey,
 				sourceExternalScopeKey,
 				sourceRecordKey: parent.sourceRecordKey,

@@ -139,6 +139,12 @@ again with the new questions. The removal of `notificationItemKind` ships in the
 digest slice, after the reading has filled `itemReading` on AIED, TVET and
 ECCAR. Rollback drops the new tables and trigger.
 
+No migration queues the records a library already holds, since reading them is
+the owner's spend to start. At rollout they are queued once the owner approves
+it: AIED through its sources' Grade them (2026-10-12); TVET and ECCAR, which do
+not screen, by queuing every top-level record that has no reading, as
+`requestGrading` queues a source's records.
+
 ## Slices
 
 Each slice is one PR with its focused tests; the issue carries the checks.
