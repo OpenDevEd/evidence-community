@@ -22,6 +22,7 @@ import {
 } from "@/config/library-config/institutions";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { itemReading } from "@/db/schema/readings";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
@@ -310,8 +311,16 @@ async function buildSearchProjectionPlanForKeys(
 		)
 		.where(inArray(item.key, topLevelKeys))
 		.orderBy(asc(item.key));
+	// A record its sources screen out leaves the index, and comes back if a grade or source lets it in again.
+	const screenedOut = new Set(
+		(await database
+			.select({ key: itemReading.itemKey })
+			.from(itemReading)
+			.where(and(inArray(itemReading.itemKey, topLevelKeys), eq(itemReading.screenedOut, true))))
+			.map((row) => row.key),
+	);
 	const activeParents = itemRows.filter(
-		(row) => isPublicTopLevelItem(row.item) && row.item.deleted !== 1,
+		(row) => isPublicTopLevelItem(row.item) && row.item.deleted !== 1 && !screenedOut.has(row.item.key),
 	);
 	const activeParentKeys = activeParents.map(({ item }) => item.key);
 	const children =
