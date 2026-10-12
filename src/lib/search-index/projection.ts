@@ -511,7 +511,7 @@ async function buildSearchProjectionPlanForKeys(
 				],
 				links,
 				metadataSearch: metadataSearchValues(parent),
-				openAccess: openAccessOf(parent.key, doi, parent.openAccess),
+				openAccess: openAccessOf(parent.key, doi),
 				topicAncestors: topicAncestry(parent.topics),
 				topics: config.topics.enabled ? uniqueSorted(parent.topics) : [],
 				key: parent.key,

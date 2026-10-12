@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull, ne, not, sql } from "drizzle-orm";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemSourceLink, sourceConnection, sourceSnapshot } from "@/db/schema/source";
+import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
 import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 
@@ -14,14 +15,33 @@ export const hasCurrentOpenAlexWork = (itemKey: unknown) => sql`EXISTS (
 		AND c.provider IN (${sql.join(OPENALEX_WORK_PROVIDERS.map((provider) => sql`${provider}`), sql`, `)}))`;
 
 /**
- * Reads whether records are open access: an editor's choice, else the `is_oa` of the newest copy of the record's OpenAlex
- * work that its search still finds, else OpenAlex's answer for the DOI the record shows, else null.
+ * Reads whether records are open access as readers see them: an editor's choice, else what OpenAlex says
+ * ({@link readSourceOpenAccess}). Every caller gets the choice, so a change OpenAlex makes under it changes nothing.
  */
 export async function readOpenAccess(
 	database: Pick<Database | DatabaseTransaction, "select">,
 	keys: readonly string[],
-): Promise<(key: string, doi: string | null, chosen?: boolean | null) => boolean | null> {
+): Promise<(key: string, doi: string | null) => boolean | null> {
 	if (keys.length === 0) return () => null;
+	const [fromSources, choices] = await Promise.all([
+		readSourceOpenAccess(database, keys),
+		database
+			.select({ key: item.key, openAccess: item.openAccess })
+			.from(item)
+			.where(and(inArray(item.key, [...keys]), isNotNull(item.openAccess))),
+	]);
+	const choiceOf = new Map(choices.map((row) => [row.key, row.openAccess]));
+	return (key, doi) => choiceOf.get(key) ?? fromSources(key, doi);
+}
+
+/**
+ * What OpenAlex says about records: the `is_oa` of the newest copy of the record's OpenAlex work that its search still
+ * finds, else OpenAlex's answer for the DOI the record shows, else null.
+ */
+async function readSourceOpenAccess(
+	database: Pick<Database | DatabaseTransaction, "select">,
+	keys: readonly string[],
+): Promise<(key: string, doi: string | null) => boolean | null> {
 	const [works, lookups] = await Promise.all([
 		database
 			.select({
@@ -55,21 +75,25 @@ export async function readOpenAccess(
 	]);
 	const fromWork = new Map(works.map((row) => [row.itemKey, row.isOpenAccess]));
 	const lookupOf = new Map(lookups.map((row) => [row.itemKey, row]));
-	return (key, doi, chosen) => {
+	return (key, doi) => {
 		const lookup = lookupOf.get(key);
-		return chosen ?? fromWork.get(key) ?? (lookup && lookup.doi === doi ? lookup.isOpenAccess : null);
+		return fromWork.get(key) ?? (lookup && lookup.doi === doi ? lookup.isOpenAccess : null);
 	};
 }
 
 /**
  * What OpenAlex says about one record, whatever an editor chose and whether or not readers can see it: its OpenAlex
- * work, else the last answer for its DOI. That answer counts whichever DOI it was for, as the record is looked up again
- * soon after its DOI changes.
+ * work, else the last answer for its DOI. Given a DOI, such as one a draft changes to, the answer counts only for that
+ * DOI; otherwise it counts whichever DOI it was for, as the record is looked up again soon after its DOI changes.
  */
-export async function readOpenAccessFromSources(database: Pick<Database | DatabaseTransaction, "select">, key: string) {
-	const [openAccessOf, [lookup]] = await Promise.all([
-		readOpenAccess(database, [key]),
+export async function readOpenAccessFromSources(
+	database: Pick<Database | DatabaseTransaction, "select">,
+	key: string,
+	doi?: string | null,
+) {
+	const [fromSources, [lookup]] = await Promise.all([
+		readSourceOpenAccess(database, [key]),
 		database.select({ doi: itemOpenAccessLookup.doi }).from(itemOpenAccessLookup).where(eq(itemOpenAccessLookup.itemKey, key)),
 	]);
-	return openAccessOf(key, lookup?.doi ?? null);
+	return fromSources(key, doi === undefined ? (lookup?.doi ?? null) : doi);
 }

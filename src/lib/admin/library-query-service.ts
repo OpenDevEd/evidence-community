@@ -42,6 +42,7 @@ import {
 	isTopLevelAdminItemType,
 } from "./item-fields";
 import { readOpenAccessFromSources } from "@/lib/search-index/open-access";
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -349,6 +350,14 @@ export async function adminItemLinks(
 	};
 }
 
+const text = (value: unknown) => (typeof value === "string" ? value : null);
+
+/** The DOI a draft changes the record to, or undefined when it leaves the DOI alone: an answer for an old DOI would mislead. */
+function draftDoi(payload: Record<string, unknown>, published: Record<string, unknown>) {
+	if (payload.DOI === published.DOI && payload.extra === published.extra) return undefined;
+	return resolvePublicDoi({ DOI: text(payload.DOI), extra: text(payload.extra) });
+}
+
 export async function getAdminItemDetail(
 	db: Database,
 	itemKey: string,
@@ -388,7 +397,7 @@ export async function getAdminItemDetail(
 		]);
 	if (!identity || (!published && !draft)) throw new ItemNotFoundError(itemKey);
 
-	const [tagRows, membershipRows, attachments, publishedLinkKeys, fromSources] =
+	const [tagRows, membershipRows, attachments, publishedLinkKeys] =
 		await Promise.all([
 			published
 				? db
@@ -404,9 +413,6 @@ export async function getAdminItemDetail(
 				: Promise.resolve([]),
 			getAdminAttachments(db, itemKey),
 			getManualLinkKeys(db, itemKey),
-			published && isTopLevelAdminItemType(published.itemType)
-				? readOpenAccessFromSources(db, itemKey)
-				: Promise.resolve(null),
 		]);
 	const basePayload = publishedAdminItemPayload(published, {
 		collectionKeys: membershipRows.map(({ key }) => key),
@@ -417,6 +423,9 @@ export async function getAdminItemDetail(
 	const payload = draft
 		? applyItemDraftPatch(basePayload, draft.patch)
 		: basePayload;
+	const fromSources = published && isTopLevelAdminItemType(published.itemType)
+		? await readOpenAccessFromSources(db, itemKey, draftDoi(payload, basePayload))
+		: null;
 	const draftTags = draft ? payloadStringList(payload, "tags") : null;
 	const draftCollections = draft
 		? payloadStringList(payload, "collections")

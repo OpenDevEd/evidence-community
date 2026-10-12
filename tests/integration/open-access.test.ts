@@ -239,7 +239,7 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 			{ key: "zotero-maximal", provider: "zotero", scopeKind: "group", externalScopeKey: "6632364" },
 			{ key: "openalex-choice", provider: "openalex", scopeKind: "query", config: {} },
 		]);
-		const importWork = (cursor: number, title = "An open OpenAlex work") =>
+		const importWork = (cursor: number, title = "An open OpenAlex work", isOa = true, version = cursor) =>
 			writeSourceIngestionBatch(db, {
 				sourceConnectionKey: "openalex-choice",
 				expectedCursor: cursor === 1 ? {} : { v: cursor - 1 },
@@ -251,8 +251,8 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 					title: title,
 					type: "article",
 					doi: "https://doi.org/10.1234/chosen",
-					updated_date: `2026-10-0${cursor}T00:00:00Z`,
-					open_access: { is_oa: true },
+					updated_date: `2026-10-0${version}T00:00:00Z`,
+					open_access: { is_oa: isOa },
 				}).items,
 			});
 		const work = (await importWork(1)).itemKeys.W88!;
@@ -298,6 +298,15 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 		await importWork(2, "An open OpenAlex work, revised");
 		expect((await db.select().from(item).where(eq(item.key, work)))[0]?.title).toBe("An open OpenAlex work, revised");
 		expect(await openAccessOf(db, [work])).toEqual({ [work]: false });
+		// OpenAlex turning the work closed changes nothing readers see under the choice: no new revision, nothing to search.
+		await markSearched(db);
+		const revisionOf = async () => (await db.select({ revision: item.revision }).from(item).where(eq(item.key, work)))[0]?.revision;
+		const before = await revisionOf();
+		// The same OpenAlex version with only is_oa changed, so nothing else about the record moves.
+		await importWork(3, "An open OpenAlex work, revised", false, 2);
+		expect(await revisionOf()).toBe(before);
+		expect(await queuedForSearch(db)).toEqual([]);
+		expect(await readOpenAccessFromSources(db, work)).toBe(false);
 
 		// A record an editor decided is not looked up.
 		await choose(zotero, true);
@@ -306,10 +315,10 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 		expect(openAlexApi.asked).toEqual([]);
 		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: true });
 
-		// Left to OpenAlex again, the work shows what OpenAlex says, and the record is looked up.
+		// Left to OpenAlex again, the work shows what OpenAlex now says, and the record is looked up.
 		await choose(work, null);
 		await choose(zotero, null);
-		expect(await openAccessOf(db, [work])).toEqual({ [work]: true });
+		expect(await openAccessOf(db, [work])).toEqual({ [work]: false });
 		expect(await lookUpOpenAccess({ database: db, client: openAlexApi.client, config, now: new Date() })).toBe(1);
 		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: false });
 
@@ -317,5 +326,7 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 		await choose(zotero, true);
 		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: true });
 		expect(await readOpenAccessFromSources(db, zotero)).toBe(false);
+		// A draft that moves the record to another DOI is not told what OpenAlex said about the old one.
+		expect(await readOpenAccessFromSources(db, zotero, "10.1234/elsewhere")).toBeNull();
 	});
 }, 120_000);
