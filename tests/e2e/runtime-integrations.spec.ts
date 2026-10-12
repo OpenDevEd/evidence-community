@@ -540,6 +540,11 @@ test("shares a private collection by email: OpenScholar sends the invitation and
 	expect(ownerData.collections.find((collection) => collection.id === id)?.members).toEqual([expect.objectContaining({ id: invitee.readerId, role: "editor" })]);
 	const inviteeData = (await (await request.get("/api/reader", { headers: { cookie: invitee.cookie } })).json()) as { shared: { id: string; access: string }[] };
 	expect(inviteeData.shared).toEqual([expect.objectContaining({ id, access: "editor" })]);
+
+	// Once the owner takes them out, accepting the same invitation again gives nothing back.
+	expect((await request.delete(`/api/reader/collections/${id}/members/${invitee.readerId}`, { headers: { cookie: owner.cookie } })).status()).toBe(204);
+	expect((await request.post(`/api/reader/invitations/${invitation.id}/accept`, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
+	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
 });
 
 test("delivers configured contact mail through SMTP only when enabled", async ({

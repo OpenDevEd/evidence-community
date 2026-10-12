@@ -34,6 +34,7 @@ import { getDatabase, getDatabaseForConfig } from "@/db";
 import type { Database } from "@/db/database-schema";
 import { readerCollection, readerCollectionItem, readerCollectionMember, readerUser, type ReaderCollectionRole } from "@/db/schema/tables/reader";
 import { createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
+import { joinCollection, setCollectionMemberRole } from "@/lib/readers/data";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
 const OWNER_CLERK_ID = "user_owner";
@@ -72,6 +73,7 @@ function leave(collectionId: string, clerkUserId: string, memberId: string) {
 }
 
 let share: (collectionId: string, role: ReaderCollectionRole) => Promise<unknown>;
+let database: Database;
 
 async function withCollections(
 	verify: (collections: { emptyPrivate: string; savedPrivate: string; itemKey: string }) => Promise<void>,
@@ -83,6 +85,7 @@ async function withCollections(
 		signedInHeaders = await signInReaders(db, config, [OWNER_CLERK_ID, OTHER_CLERK_ID]);
 		// What accepting an invitation in OpenScholar leaves here.
 		share = (collectionId, role) => db.insert(readerCollectionMember).values({ collectionId, userId: OTHER, role });
+		database = db;
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
 		const [emptyPrivate, savedPrivate] = await db
@@ -134,6 +137,25 @@ it("lets an editor take records out and put them in, whoever added them, and ref
 		await share(savedPrivate, "editor");
 		expect(await (await toggle(savedPrivate, itemKey, OTHER_CLERK_ID)).json()).toEqual({ inCollection: false });
 		expect(await (await toggle(savedPrivate, itemKey, OTHER_CLERK_ID)).json()).toEqual({ inCollection: true });
+	});
+});
+
+it("makes someone a member once per invitation, so accepting it again gives back nothing the owner changed or ended", async () => {
+	await withCollections(async ({ savedPrivate, itemKey }) => {
+		const join = (invitationId: string, role: ReaderCollectionRole, collectionId = savedPrivate) => joinCollection(database, invitationId, collectionId, OTHER, role);
+		expect(await join("inv_first", "editor")).toEqual({ ownerId: OWNER });
+		// A retry, as after a failed write, answers the same.
+		expect(await join("inv_first", "editor")).toEqual({ ownerId: OWNER });
+		await setCollectionMemberRole(database, OWNER, savedPrivate, OTHER, "viewer");
+		await join("inv_first", "editor");
+		expect((await toggle(savedPrivate, itemKey, OTHER_CLERK_ID)).status).toBe(404);
+		await leave(savedPrivate, OWNER_CLERK_ID, OTHER);
+		expect(await join("inv_first", "editor")).toEqual({ ended: true });
+		expect((await readList(savedPrivate, OTHER_CLERK_ID)).status).toBe(403);
+		// A newer invitation is the owner's newer decision.
+		expect(await join("inv_second", "viewer")).toEqual({ ownerId: OWNER });
+		expect((await readList(savedPrivate, OTHER_CLERK_ID)).status).toBe(200);
+		expect(await join("inv_third", "viewer", "00000000-0000-4000-8000-000000000000")).toEqual({ gone: true });
 	});
 });
 

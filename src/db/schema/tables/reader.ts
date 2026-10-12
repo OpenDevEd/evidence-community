@@ -124,6 +124,23 @@ export const readerCollectionMember = pgTable("reader_collection_member", {
 	check("reader_collection_member_role_valid", sql`${table.role} in ('editor', 'viewer')`),
 ]);
 
+/**
+ * Each OpenScholar invitation that made someone a member here, recorded with
+ * the membership it made. OpenScholar answers an accepted invitation the same
+ * way each time it is accepted again, so this is what keeps a second accept
+ * from undoing the owner's later change of role or removal, while a retry
+ * after a failed write still completes.
+ */
+export const readerCollectionInvitationUse = pgTable("reader_collection_invitation_use", {
+	invitationId: varchar("invitationId", { length: 128 }).primaryKey(),
+	collectionId: uuid("collectionId").notNull().references(() => readerCollection.id, { onDelete: "cascade" }),
+	userId: text("userId").notNull().references(() => readerUser.id, { onDelete: "cascade" }),
+	createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+}, (table) => [
+	index("reader_collection_invitation_use_collectionId_idx").on(table.collectionId),
+	index("reader_collection_invitation_use_userId_idx").on(table.userId),
+]);
+
 export const readerUserRelations = relations(readerUser, ({ many }) => ({
 	sessions: many(readerSession),
 	accounts: many(readerAccount),

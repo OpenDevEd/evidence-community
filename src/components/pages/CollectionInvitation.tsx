@@ -149,8 +149,11 @@ async function acceptInvitation(invitationId: string, failedMessage: string): Pr
 	throw new Error(z.object({ error: z.string() }).catch({ error: failedMessage }).parse(answer).error);
 }
 
-/** Accepts the invitation, unless it was already, and opens the collection on its owner's profile. */
-function useOpen(invitationId: string, opened?: OpenedCollection) {
+/**
+ * Accepts the invitation and opens the collection on its owner's profile. One accepted already goes through
+ * accepting too: that finishes an acceptance the library failed to record, and refuses access the owner ended since.
+ */
+function useOpen(invitationId: string) {
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const [opening, setOpening] = useState(false);
@@ -159,7 +162,7 @@ function useOpen(invitationId: string, opened?: OpenedCollection) {
 		setOpening(true);
 		setFailed(null);
 		try {
-			const target = opened ?? (await acceptInvitation(invitationId, t("invitationOpenFailed")));
+			const target = await acceptInvitation(invitationId, t("invitationOpenFailed"));
 			router.push(`/profile/${target.ownerId}?collectionId=${target.collectionId}`);
 		} catch (error) {
 			setOpening(false);
@@ -243,7 +246,7 @@ function SentElsewhere({ invitationId }: { invitationId: string }) {
 function InvitationToOpen({ invitationId, view }: { invitationId: string; view: Extract<InvitationView, { collection: unknown }> }) {
 	const t = useTranslations("ui");
 	const { collection } = view;
-	const { open, opening, failed } = useOpen(invitationId, view.state === "accepted" ? { ownerId: collection.owner.id, collectionId: collection.id } : undefined);
+	const { open, opening, failed } = useOpen(invitationId);
 	return (
 		<Landing
 			hero={

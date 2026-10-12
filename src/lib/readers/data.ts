@@ -12,6 +12,7 @@ import {
 	readerCollection,
 	readerCollectionItem,
 	readerCollectionMember,
+	readerCollectionInvitationUse,
 	readerUser,
 	type ReaderCollectionRole,
 } from "@/db/schema/tables/reader";
@@ -412,20 +413,32 @@ export async function readCollectionForInvitation(database: Database, collection
 
 /**
  * Makes the reader a member once OpenScholar accepted their invitation, and
- * says whose collection it is; null when it was deleted since. An invitation
- * accepted by someone already in the collection gives them its role.
+ * says whose collection it is. Each invitation makes a member once: accepting
+ * it again, as a retry after a failed write does, finds the membership it
+ * made, and finds none once the owner ended it. A newer invitation to someone
+ * already in the collection gives them its role. `gone` when the collection
+ * was deleted, `ended` when the owner ended what this invitation gave.
  */
-export async function addCollectionMember(database: Database, collectionId: string, userId: string, role: ReaderCollectionRole) {
-	const [collection] = await database.select({ ownerId: readerCollection.userId }).from(readerCollection).where(eq(readerCollection.id, collectionId));
-	if (!collection) return null;
-	// The owner accepting an invitation to their own collection changes nothing.
-	if (collection.ownerId !== userId) {
-		await database
-			.insert(readerCollectionMember)
-			.values({ collectionId, userId, role })
-			.onConflictDoUpdate({ target: [readerCollectionMember.collectionId, readerCollectionMember.userId], set: { role, updatedAt: new Date() } });
-	}
-	return collection;
+export async function joinCollection(database: Database, invitationId: string, collectionId: string, userId: string, role: ReaderCollectionRole) {
+	return database.transaction(async (transaction) => {
+		const [collection] = await transaction.select({ ownerId: readerCollection.userId }).from(readerCollection).where(eq(readerCollection.id, collectionId)).for("update");
+		if (!collection) return { gone: true as const };
+		// The owner accepting an invitation to their own collection changes nothing.
+		if (collection.ownerId === userId) return { ownerId: collection.ownerId };
+		const [first] = await transaction
+			.insert(readerCollectionInvitationUse)
+			.values({ invitationId, collectionId, userId })
+			.onConflictDoNothing()
+			.returning({ invitationId: readerCollectionInvitationUse.invitationId });
+		if (first) {
+			await transaction
+				.insert(readerCollectionMember)
+				.values({ collectionId, userId, role })
+				.onConflictDoUpdate({ target: [readerCollectionMember.collectionId, readerCollectionMember.userId], set: { role, updatedAt: new Date() } });
+			return { ownerId: collection.ownerId };
+		}
+		return (await memberRole(transaction, collectionId, userId)) ? { ownerId: collection.ownerId } : { ended: true as const };
+	});
 }
 
 /** Changes a member's role. Owner only; false when there is no such member. */
