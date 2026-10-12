@@ -39,6 +39,14 @@ const collections: CollectionSeed[] = [
 	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0005", owner: "user_mock_daniel", name: "Girls in STEM", description: null, private: true, records: 4, members: [["user_mock_amina", "viewer"]] },
 	// For `npm run verify -- shift --as editor`, whose account is user_acceptance_admin.
 	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0006", owner: "user_acceptance_admin", name: "Verify shared", description: "Shared for the motion checks", private: true, records: 5, members: [["user_mock_daniel", "editor"], ["user_mock_priya", "viewer"]] },
+	// Enough of the verify editor's own for two pages of the profile's column.
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0020", owner: "user_acceptance_admin", name: "Numeracy", description: null, private: false, records: 3, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0021", owner: "user_acceptance_admin", name: "Early grade reading", description: null, private: false, records: 2, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0022", owner: "user_acceptance_admin", name: "Teacher training", description: null, private: false, records: 4, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0023", owner: "user_acceptance_admin", name: "Inclusion", description: null, private: false, records: 1, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0024", owner: "user_acceptance_admin", name: "Assessment", description: null, private: false, records: 2, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0025", owner: "user_acceptance_admin", name: "Distance learning", description: null, private: false, records: 3, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0026", owner: "user_acceptance_admin", name: "Language of instruction", description: null, private: false, records: 2, members: [] },
 	// Enough of Amina's own to fill more than one page of the record picker.
 	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0010", owner: "user_mock_amina", name: "Assessment tools", description: "Reading and maths tests used in the studies", private: false, records: 4, members: [] },
 	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0011", owner: "user_mock_amina", name: "Mother tongue", description: null, private: true, records: 2, members: [] },
@@ -88,7 +96,8 @@ async function seed() {
 				[collection.id, readerId(collection.owner), collection.name, collection.description, collection.private, String(30 - index)],
 			);
 			await client.query(`delete from reader_collection_item where "collectionId" = $1`, [collection.id]);
-			for (const key of keys.slice(index * 3, index * 3 + collection.records)) {
+			// Wraps round the records, so every collection gets its count however many there are.
+			for (const key of Array.from({ length: collection.records }, (_, offset) => keys[(index * 3 + offset) % keys.length]!)) {
 				await client.query(`insert into reader_collection_item ("collectionId", "itemKey") values ($1, $2)`, [collection.id, key]);
 			}
 			await client.query(`delete from reader_collection_member where "collectionId" = $1`, [collection.id]);

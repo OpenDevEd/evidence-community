@@ -39,6 +39,7 @@ import type { CollectionAccess, CollectionMember, ReaderCollectionSummary, Share
 import { Link } from "@/i18n/routing";
 import { MemberFaces, RoleChip, ShareCollectionDialog, useSentInvitations } from "@/components/features/collections/CollectionPeople";
 import { CoverStack, useShelfItems } from "@/components/features/collections/CoverStack";
+import { ListPager, pageOf, pageWith } from "@/components/features/collections/ListPager";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import PageContainer from "@/components/layout/PageContainer";
 
@@ -61,6 +62,7 @@ async function sendCollectionChange(url: string, method: "POST" | "PATCH" | "DEL
 		body: body ? JSON.stringify(body) : undefined,
 	});
 	if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
+	return response.status === 201 ? ((await response.json()) as { id: string }) : null;
 }
 
 /** Which collection the owner is editing, or a new one; nothing for visitors. */
@@ -125,8 +127,10 @@ function useCollectionChanges(selected: string, select: (id: string) => void) {
 	};
 	return {
 		save: async (id: string | null, input: CollectionInput) => {
-			await sendCollectionChange(id ? `/reader/collections/${id}` : "/reader/collections", id ? "PATCH" : "POST", input);
+			const made = await sendCollectionChange(id ? `/reader/collections/${id}` : "/reader/collections", id ? "PATCH" : "POST", input);
 			await refresh();
+			// A new collection opens at once, which also turns the column to the page it is on.
+			if (made) select(made.id);
 		},
 		remove: async (id: string) => {
 			await sendCollectionChange(`/reader/collections/${id}`, "DELETE");
@@ -587,6 +591,9 @@ function CollectionsNav({
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
+	const [all, ...collections] = shelves;
+	const page = useFollowingPage(collections, selected);
+	const { pages, current, shown } = pageOf(collections, page.number, COLLECTIONS_PER_PAGE);
 	return (
 		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
 			{/* The same card as the profile's own, its head tinted like the cover band above. */}
@@ -610,23 +617,50 @@ function CollectionsNav({
 					) : null}
 				</div>
 				<div className="flex flex-col gap-1 p-3">
-					{shelves.map((shelf) => (
-						<CollectionRow
-							key={shelf.id || "all"}
-							userId={userId}
-							shelf={shelf}
-							isSelected={shelf.id === selected}
-							onSelect={() => onSelect(shelf.id)}
-							onEdit={onEdit && shelf.id ? () => onEdit(shelf.id) : undefined}
-							onShare={onShare && shelf.id ? () => onShare(shelf.id) : undefined}
-							onLeave={() => onLeave(shelf.id)}
-						/>
-					))}
+					{all ? <CollectionRow userId={userId} shelf={all} isSelected={selected === ""} onSelect={() => onSelect("")} /> : null}
+					{/* A page keeps a full page's height, so turning to a shorter last page moves nothing below. */}
+					<div className="flex flex-col gap-1" style={{ minHeight: pages > 1 ? COLLECTIONS_PAGE_HEIGHT : undefined }}>
+						{shown.map((shelf) => (
+							<CollectionRow
+								key={shelf.id}
+								userId={userId}
+								shelf={shelf}
+								isSelected={shelf.id === selected}
+								onSelect={() => onSelect(shelf.id)}
+								onEdit={onEdit ? () => onEdit(shelf.id) : undefined}
+								onShare={onShare ? () => onShare(shelf.id) : undefined}
+								onLeave={() => onLeave(shelf.id)}
+							/>
+						))}
+					</div>
+					<div className="px-2 pt-2 empty:hidden">
+						<ListPager page={current} pages={pages} total={collections.length} perPage={COLLECTIONS_PER_PAGE} onChange={page.turn} />
+					</div>
 				</div>
 				{shared.length > 0 ? <SharedWithYou collections={shared} /> : null}
 			</nav>
 		</aside>
 	);
+}
+
+/** Collections on one page of the profile's column. */
+const COLLECTIONS_PER_PAGE = 6;
+/** That many rows (a cover stack and its padding, 6rem) with the gaps between them. */
+const COLLECTIONS_PAGE_HEIGHT = `calc(${COLLECTIONS_PER_PAGE} * 6rem + ${COLLECTIONS_PER_PAGE - 1} * 0.25rem)`;
+
+/**
+ * The page of the column to show. It is the page the chosen collection is
+ * on, so one chosen from elsewhere (a link, the record picker, a collection
+ * just made) is in view, until the reader turns to another page. Choosing a
+ * collection follows it again; choosing All bookmarks, which is above every
+ * page, keeps the page the reader turned to.
+ */
+function useFollowingPage(collections: Shelf[], selected: string) {
+	const [turned, setTurned] = useState<{ page: number; selected: string } | null>(null);
+	const listed = collections.some((shelf) => shelf.id === selected);
+	const followed = pageWith(collections, (shelf) => shelf.id === selected, COLLECTIONS_PER_PAGE);
+	const number = turned && (turned.selected === selected || !listed) ? turned.page : followed;
+	return { number, turn: (page: number) => setTurned({ page, selected }) };
 }
 
 /**
@@ -650,7 +684,8 @@ function CollectionRow({
 	onSelect: () => void;
 	onEdit?: () => void;
 	onShare?: () => void;
-	onLeave: () => void;
+	/** For a collection shared with the reader. */
+	onLeave?: () => void;
 }) {
 	const t = useTranslations("ui");
 	const memberRole = shelf.access === "editor" || shelf.access === "viewer" ? shelf.access : null;
@@ -711,7 +746,7 @@ function CollectionRowDetails({
 	onEdit?: () => void;
 	onShare?: () => void;
 	memberRole: "editor" | "viewer" | null;
-	onLeave: () => void;
+	onLeave?: () => void;
 }) {
 	const t = useTranslations("ui");
 	return (
@@ -773,14 +808,16 @@ function CollectionRowDetails({
 function SharedWithYou({ collections }: { collections: SharedCollectionSummary[] }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
+	const [page, setPage] = useState(1);
+	const { pages, current, shown } = pageOf(collections, page, COLLECTIONS_PER_PAGE);
 	return (
 		<div className="border-t border-black/[0.06] p-3 pt-4 dark:border-white/[0.08]">
 			<h3 className="flex items-center gap-2 px-3 pb-2 text-small font-semibold text-black/60 dark:text-white/60">
 				{t("sharedWithYou")}
 				<span className="rounded-full bg-black/[0.05] px-2 text-tiny font-medium tabular-nums dark:bg-white/10">{format.number(collections.length)}</span>
 			</h3>
-			<ul className="flex flex-col gap-1">
-				{collections.map((collection) => (
+			<ul className="flex flex-col gap-1" style={{ minHeight: pages > 1 ? COLLECTIONS_PAGE_HEIGHT : undefined }}>
+				{shown.map((collection) => (
 					<li key={collection.id}>
 						<Link
 							href={`/profile/${collection.owner.id}?collectionId=${collection.id}`}
@@ -809,6 +846,9 @@ function SharedWithYou({ collections }: { collections: SharedCollectionSummary[]
 					</li>
 				))}
 			</ul>
+			<div className="px-2 pt-2 empty:hidden">
+				<ListPager page={current} pages={pages} total={collections.length} perPage={COLLECTIONS_PER_PAGE} onChange={setPage} />
+			</div>
 		</div>
 	);
 }

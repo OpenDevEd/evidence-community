@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
 import {
 	Add01Icon,
@@ -20,12 +20,12 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Input } from "@/components/nextui/Input";
-import { Pagination } from "@/components/nextui/Pagination";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { toast } from "@/components/layout/Toast";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import { CoverStack } from "@/components/features/collections/CoverStack";
+import { ListPager, pageOf } from "@/components/features/collections/ListPager";
 import { MemberFaces } from "@/components/features/collections/CollectionPeople";
 import { useReaderData } from "@/hooks/useReaderData";
 import { Link } from "@/i18n/routing";
@@ -82,7 +82,6 @@ export function CollectionPicker({
 	onToggle: (collectionId: string) => Promise<void>;
 }) {
 	const t = useTranslations("ui");
-	const format = useFormatter();
 	const { data, refresh } = useReaderData();
 	const [search, setSearch] = useState("");
 	const [sort, setSort] = useState<Sort>("recent");
@@ -92,9 +91,7 @@ export function CollectionPicker({
 	// The rows there when the picker opened; a collection made since slides open.
 	const [opened] = useState(() => new Set([...(data?.collections ?? []), ...(data?.shared ?? [])].map((collection) => collection.id)));
 	const total = entries?.length ?? 0;
-	const pages = Math.max(1, Math.ceil(total / PER_PAGE));
-	const current = Math.min(page, pages);
-	const shown = entries?.slice((current - 1) * PER_PAGE, current * PER_PAGE) ?? [];
+	const { pages, current, shown } = pageOf(entries ?? [], page, PER_PAGE);
 	const inCollection = new Set(itemKey ? (data?.itemCollections[itemKey] ?? []) : []);
 
 	const toggle = async (collectionId: string) => {
@@ -189,18 +186,7 @@ export function CollectionPicker({
 					</ul>
 				</div>
 			</div>
-			{pages > 1 ? (
-				<div className="flex items-center justify-between gap-3">
-					<span className="text-small tabular-nums text-black/50 dark:text-white/50">
-						{t("collectionsRange", {
-							from: format.number((current - 1) * PER_PAGE + 1),
-							to: format.number(Math.min(current * PER_PAGE, total)),
-							total: format.number(total),
-						})}
-					</span>
-					<Pagination total={pages} page={current} onChange={setPage} siblings={0} size="sm" showControls />
-				</div>
-			) : null}
+			<ListPager page={current} pages={pages} total={total} perPage={PER_PAGE} onChange={setPage} />
 		</div>
 	);
 }
