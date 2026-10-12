@@ -106,7 +106,7 @@ export function AdminImportDialog({
 }) {
 	return (
 		<DialogModal
-			classNames={{ base: "h-[min(46rem,calc(100dvh-2rem))] max-w-[68rem] overflow-hidden" }}
+			classNames={{ base: "my-4 h-[min(46rem,calc(100dvh-2rem))] max-w-[68rem] overflow-hidden sm:my-4" }}
 			isOpen={isOpen}
 			onOpenChange={(open) => {
 				if (!open) onClose();
