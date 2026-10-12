@@ -22,6 +22,35 @@ export function timeZoneLabel(timezone: string) {
   return /^(etc\/)?(utc|uct|gmt(0|[+-]0)?|greenwich|universal|zulu)$/i.test(timezone) ? "UTC" : timezone;
 }
 
+/**
+ * The days an edition covers, as readers are told. A digest of publication dates covers whole days in the library's
+ * time zone, from the day its window starts to the day before the one it ends on (`publishedIn`); a digest of
+ * additions covers the days its window touches. `first` and `last` are those days as YYYY-MM-DD, `label` the period in
+ * words ("September 2026" for a whole month), and `days` and `months` the two lines of a date tile.
+ */
+export type DigestPeriod = {first: string; last: string; label: string; from: string; to: string; days: string; months: string; year: string};
+export function digestPeriod(start: Date, end: Date, covers: "published" | "added", timeZone: string, locale: string): DigestPeriod {
+  const day = (date: Date) => date.toLocaleDateString("en-CA", {timeZone});
+  const first = day(start);
+  const shifted = new Date(`${day(end)}T00:00:00Z`);
+  if (covers === "published") shifted.setUTCDate(shifted.getUTCDate() - 1);
+  const last = shifted.toISOString().slice(0, 10);
+  // The two days are calendar days, so they are written as UTC dates, never moved by a zone.
+  const [a, b] = [new Date(`${first}T00:00:00Z`), new Date(`${last}T00:00:00Z`)];
+  const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, {...options, timeZone: "UTC"});
+  const sameMonth = first.slice(0, 7) === last.slice(0, 7);
+  const monthEnd = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 1, 0)).getUTCDate();
+  const wholeMonth = sameMonth && a.getUTCDate() === 1 && b.getUTCDate() === monthEnd;
+  const long = format({day: "numeric", month: "long", year: "numeric"});
+  const dayOnly = format({day: "numeric"});
+  return {
+    first, last, from: long.format(a), to: long.format(b), year: String(b.getUTCFullYear()),
+    label: wholeMonth ? format({month: "long", year: "numeric"}).format(b) : long.formatRange(a, b),
+    days: first === last ? dayOnly.format(a) : sameMonth ? dayOnly.formatRange(a, b) : `${dayOnly.format(a)}–${dayOnly.format(b)}`,
+    months: format({month: "short"}).formatRange(a, b),
+  };
+}
+
 export function nextDigestDate(schedule: DigestSchedule, after: Date) {
   const [hour, minute] = schedule.time.split(":").map(Number);
   const days = schedule.frequency === "weekly"

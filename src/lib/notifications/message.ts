@@ -15,6 +15,7 @@ import {
 } from "@/lib/emails/library-template";
 import { digestSignature } from "./public";
 import { DIGEST_SIGNER_ROLE } from "./types";
+import { digestPeriod } from "./schedule";
 
 export type EmailSubscriber = Pick<
 	typeof notificationSubscriber.$inferSelect,
@@ -153,17 +154,9 @@ async function editionContent(
 			emailStyles,
 		);
 		content = `${signed.html}${await render(edition.markdown ?? "")}<div style="margin-top:28px">${button("Read this edition", editionUrl)}</div>`;
-		const date = new Intl.DateTimeFormat(
-			config.localization.defaultLocale,
-			{
-				day: "numeric",
-				month: "short",
-				year: "numeric",
-				timeZone: config.notifications.schedule.timezone,
-			},
-		);
+		const { digestCovers, schedule } = config.notifications;
 		detail = {
-			dateRange: date.formatRange(edition.windowStart, edition.windowEnd),
+			dateRange: digestPeriod(edition.windowStart, edition.windowEnd, digestCovers, schedule.timezone, config.localization.defaultLocale).label,
 			publicationCount: edition.publicationCount,
 		};
 	} else {
