@@ -4,6 +4,7 @@ import { libraryMetadata } from "../../lib/page";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { getDatabaseForConfig } from "@/db";
+import { PROFILE_COLLECTIONS_PER_PAGE } from "@/lib/readers/collection-pages";
 import { readReaderProfile } from "@/lib/readers/data";
 import { getSignedInReader } from "@/lib/readers/session";
 import { getConfigForEnabledFeature } from "@/lib/runtime-feature";
@@ -21,13 +22,15 @@ export async function generateMetadata(props: {
 // fallow-ignore-next-line unused-export
 export const instant = false;
 
-export default async function ProfilePage(props: { params: Promise<{ id: string }> }) {
+export default async function ProfilePage(props: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
 	await connection();
 	const config = await getConfigForEnabledFeature("readerAccounts");
 	if (!config) notFound();
 
-	const [{ id }, viewer] = await Promise.all([props.params, getSignedInReader(undefined, config)]);
-	const profile = await readReaderProfile(await getDatabaseForConfig(config), id, viewer?.id ?? null);
+	const [{ id }, viewer, query] = await Promise.all([props.params, getSignedInReader(undefined, config), props.searchParams]);
+	// The column opens on the page the chosen collection is on, so one opened from a link is in view.
+	const chosenId = typeof query.collectionId === "string" ? query.collectionId : null;
+	const profile = await readReaderProfile(await getDatabaseForConfig(config), id, viewer?.id ?? null, { chosenId, pageSize: PROFILE_COLLECTIONS_PER_PAGE });
 	if (!profile) notFound();
 
 	return <ReaderProfile data={profile} />;

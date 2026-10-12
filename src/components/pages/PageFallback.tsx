@@ -61,7 +61,7 @@ type ServerFlags = { contactForm: boolean; home: { intro?: ReactNode } | null };
 /** What each page draws before its server data is in, by the first part of its address and the id after it. */
 const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) => ReactNode> = {
 	"": (_, server) => server.home && <HomePlaceholder intro={server.home.intro} />,
-	profile: (id) => id && <ReaderProfile data={{ id, name: "", image: null, bookmarks: {}, collections: [] }} loading />,
+	profile: (id) => id && <ReaderProfile data={{ id, name: "", image: null, bookmarks: {}, collections: { rows: [], chosen: null, page: 1, pages: 1, total: 0 }, shared: null }} loading />,
 	lib: (id) => (id ? <ItemLoading /> : <EvidenceLibrary />),
 	newlib: (id) => id && <ItemLoading />,
 	citation: (id) => id && <CitationLoading />,
