@@ -771,11 +771,11 @@ test.describe("overlay lifecycle", () => {
 		for (let cycle = 0; cycle < 3; cycle++) {
 			await page.getByRole("button", { name: "Import Item", exact: true }).click();
 			const dialog = page.getByRole("dialog");
-			const files = dialog.getByRole("tab", { name: "Bibliography files" });
+			const files = dialog.getByRole("radio", { name: /^Bibliography files/ });
 			await files.click();
-			await expect(files).toHaveAttribute("aria-selected", "true");
+			await expect(files).toHaveAttribute("aria-checked", "true");
 			await page.setViewportSize({ width: cycle % 2 ? 1280 : 820, height: 900 });
-			await dialog.getByRole("tab", { name: "DOIs", exact: true }).click();
+			await dialog.getByRole("radio", { name: /^DOIs/ }).click();
 			await expect(dialog.getByRole("textbox", { name: "DOIs", exact: true })).toBeVisible();
 			await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
 			await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);

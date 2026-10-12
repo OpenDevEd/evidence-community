@@ -3,10 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
 	doiPreviewRequest,
 	filePreviewRequest,
-	importRowStatus,
 	selectedImportRecords,
 	summarizeImportResults,
-	toggleImportSelection,
 } from "@/components/admin/admin-import";
 import type { AdminImportPreviewRecord } from "@/lib/admin/item-import-contract";
 
@@ -54,23 +52,9 @@ describe("import preview selection", () => {
 			record({ id: "2", payload: null, state: "attention" }),
 			record({ id: "3", method: "doi", payload: { itemType: "Book" } }),
 		];
-		const selected = toggleImportSelection(new Set(["1", "2"]), "3", true);
-		expect(selectedImportRecords(records, toggleImportSelection(selected, "1", false))).toEqual([
+		expect(selectedImportRecords(records, new Set(["2", "3"]))).toEqual([
 			{ id: "3", method: "doi", payload: { itemType: "Book" } },
 		]);
-	});
-
-	it("shows the preview state until a commit result replaces it", () => {
-		const existing = record({ id: "1", existingKey: "ABCD2345", state: "existing" });
-		expect(importRowStatus(existing, undefined)).toMatchObject({ label: "Already in library" });
-		expect(importRowStatus(existing, { id: "1", itemKey: "WXYZ6789", outcome: "created" })).toMatchObject({
-			label: "Draft created",
-			tone: "ready",
-		});
-		expect(importRowStatus(existing, { id: "1", message: "Check the title.", outcome: "failed" })).toMatchObject({
-			label: "Check the title.",
-			tone: "attention",
-		});
 	});
 
 	it("summarizes created keys and failures for the toast", () => {

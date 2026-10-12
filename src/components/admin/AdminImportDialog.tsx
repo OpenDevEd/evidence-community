@@ -1,63 +1,49 @@
 "use client";
 
-import { TruncatedText } from "@/components/nextui/TruncatedText";
-
-import {
-	ModalBody,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-} from "@nextui-org/react";
-import { useState, type ReactNode } from "react";
+import { Folder01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
+import { ModalContent, Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useState } from "react";
 import { toast } from "sonner";
 
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
-import { Checkbox } from "@/components/nextui/Checkbox";
 import DialogModal from "@/components/nextui/DialogModal";
-import { Tab, Tabs } from "@/components/nextui/Tabs";
-import { Textarea } from "@/components/nextui/Textarea";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import {
-	ADMIN_IMPORT_FILE_EXTENSIONS,
-	ADMIN_IMPORT_FILE_FORMATS,
-	ADMIN_IMPORT_MAX_FILES,
-	ADMIN_IMPORT_MAX_RECORDS,
-	type AdminImportCommitResult,
-	type AdminImportPreviewRecord,
-} from "@/lib/admin/item-import-contract";
+import { parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
-import { PdfInputPanel, PdfPreviewTable, PdfReadProgress, type AttachState } from "./AdminPdfImport";
+import { ImportDone } from "./ImportDone";
+import { BibliographyInput, DoiInput, PdfInput } from "./ImportInputs";
+import { ImportRail, type ImportKind, type ImportStage } from "./ImportRail";
+import { ReviewDetail, ReviewList, SummaryStrip, type AttachState } from "./ImportReview";
 import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
-import { uploadPdfFile } from "./admin-pdf";
 import {
 	doiPreviewRequest,
 	filePreviewRequest,
-	IMPORT_STATE_TONE,
-	pendingPdfReads,
+	initialTopicChoice,
+	pendingPdfRows,
 	readPdfs,
-	storeCheckResults,
+	reviewCounts,
+	reviewMatches,
+	rowsFromRecords,
+	selectedImportRecords,
 	storeCriteria,
 	storedCriteria,
-	validateCriteria,
-	validatePdfFiles,
-	type PdfRead,
-	importRowCells,
-	importRowStatus,
-	importStage,
-	readyImportIds,
-	selectedImportRecords,
+	storeReview,
 	summarizeImportResults,
-	toggleImportSelection,
+	validateCriteria,
 	validateImportFiles,
+	validatePdfFiles,
+	type ImportRow,
+	type ReviewFilter,
 } from "./admin-import";
+import { uploadPdfFile } from "./admin-pdf";
 
-type ImportTab = "dois" | "files" | "pdfs";
-type ImportStage = "done" | "input" | "preview";
-type ImportPreview = { importId: string; records: AdminImportPreviewRecord[] };
-type PdfImport = { criteriaCount: number; importId: string; reads: PdfRead[] };
+type Review = { importId: string; rows: ImportRow[] };
 
 function errorMessage(error: unknown) {
 	if (error instanceof AdminApiError) {
@@ -67,13 +53,13 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-function importInputError(tab: ImportTab, doiText: string, files: readonly File[], pdfs: readonly File[], criteriaText: string): string | null {
+function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], criteria: readonly string[]) {
 	try {
-		if (tab === "dois") doiPreviewRequest(doiText);
-		else if (tab === "files") validateImportFiles(files);
+		if (kind === "dois") doiPreviewRequest(doiText);
+		else if (kind === "files") validateImportFiles(files);
 		else {
 			validatePdfFiles(pdfs);
-			validateCriteria(criteriaText);
+			validateCriteria(criteria);
 		}
 		return null;
 	} catch (error) {
@@ -81,11 +67,15 @@ function importInputError(tab: ImportTab, doiText: string, files: readonly File[
 	}
 }
 
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+/** "Read 5 PDFs", or "Read PDFs" before there are any. */
+const action = (verb: string, count: number, one: string, many: string) => (count ? `${verb} ${plural(count, one, many)}` : `${verb} ${many}`);
+
 /**
- * Import records from a pasted DOI list, bibliography files or PDFs. Each
- * path returns one preview; the chosen rows become native drafts in one call.
- * PDFs are read by AI, which fills their metadata and runs the library's
- * checks, and each PDF is attached to its draft.
+ * Import records from PDFs, a pasted DOI list or bibliography files. PDFs are
+ * read by AI, which fills their metadata, judges their OpenAlex topics and
+ * answers the library's checks. Every source ends in the same review, and the
+ * chosen records become unpublished drafts in one call.
  */
 export function AdminImportDialog({
 	isOpen,
@@ -102,23 +92,19 @@ export function AdminImportDialog({
 }) {
 	return (
 		<DialogModal
+			classNames={{ base: "h-[min(48rem,calc(100dvh-2rem))] max-w-[72rem] overflow-hidden" }}
 			isOpen={isOpen}
 			onOpenChange={(open) => {
 				if (!open) onClose();
 			}}
-			scrollBehavior="inside"
-			size="3xl"
+			size="5xl"
 		>
-			<ModalContent>
-				{isOpen ? (
-					<ImportForm onClose={onClose} onImported={onImported} onOpenRecord={onOpenRecord} sources={sources} />
-				) : null}
-			</ModalContent>
+			<ModalContent>{isOpen ? <ImportFlow onClose={onClose} onImported={onImported} onOpenRecord={onOpenRecord} sources={sources} /> : null}</ModalContent>
 		</DialogModal>
 	);
 }
 
-function ImportForm({
+function ImportFlow({
 	onClose,
 	onImported,
 	onOpenRecord,
@@ -129,21 +115,32 @@ function ImportForm({
 	onOpenRecord: (itemKey: string) => void;
 	sources: readonly AdminSource[];
 }) {
-	const [tab, setTab] = useState<ImportTab>("dois");
+	const topicsEnabled = useLibraryConfig().topics.enabled;
+	const reduceMotion = useReducedMotion();
+	const [kind, setKind] = useState<ImportKind>("pdfs");
 	const [doiText, setDoiText] = useState("");
 	const [files, setFiles] = useState<File[]>([]);
 	const [pdfs, setPdfs] = useState<File[]>([]);
-	const [criteriaText, setCriteriaText] = useState(storedCriteria);
-	const [pdfImport, setPdfImport] = useState<PdfImport | null>(null);
+	const [criteria, setCriteria] = useState(storedCriteria);
+	const [review, setReview] = useState<Review | null>(null);
+	const [activeId, setActiveId] = useState<string | null>(null);
+	const [filter, setFilter] = useState<ReviewFilter>("all");
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const [topicChoice, setTopicChoice] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+	const [collections, setCollections] = useState<string[]>([]);
+	const [results, setResults] = useState<AdminImportCommitResult[] | null>(null);
 	const [attach, setAttach] = useState<ReadonlyMap<string, AttachState>>(new Map());
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [preview, setPreview] = useState<ImportPreview | null>(null);
-	const [selected, setSelected] = useState<Set<string>>(new Set());
-	const [collections, setCollections] = useState<string[]>([]);
-	const [results, setResults] = useState<AdminImportCommitResult[] | null>(null);
-	const stage: ImportStage = importStage(preview ?? pdfImport, results);
-	const inputError = importInputError(tab, doiText, files, pdfs, criteriaText);
+
+	const stage: ImportStage = results ? "done" : review ? "review" : "input";
+	const problem = inputError(kind, doiText, files, pdfs, criteria);
+	const rows = review?.rows ?? [];
+	const counts = reviewCounts(rows);
+	const reading = kind === "pdfs" && counts.done < counts.total;
+	const shown = rows.filter((row) => reviewMatches(row, filter));
+	const activeRow = rows.find(({ id }) => id === activeId) ?? shown[0] ?? null;
+	const resultById = new Map((results ?? []).map((result) => [result.id, result]));
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -157,506 +154,242 @@ function ImportForm({
 		}
 	};
 
-	const runPdfReads = () =>
+	const changeRow = (row: ImportRow) => {
+		setReview((current) => current && { ...current, rows: current.rows.map((other) => (other.id === row.id ? row : other)) });
+		if (row.state !== "read") return;
+		setTopicChoice((current) => new Map(current).set(row.id, initialTopicChoice(row.topics)));
+		if (row.record?.state === "ready") setSelected((current) => new Set(current).add(row.id));
+	};
+
+	const start = () =>
 		run(async () => {
-			const criteria = validateCriteria(criteriaText);
-			storeCriteria(criteriaText);
-			const reads = pendingPdfReads(pdfs);
-			setSelected(new Set());
-			setPdfImport({ criteriaCount: criteria.length, importId: crypto.randomUUID(), reads });
-			await readPdfs(
-				reads,
-				(file) => readAdminImportPdf(file, criteria),
-				(row) => {
-					setPdfImport((current) => current && { ...current, reads: current.reads.map((other) => (other.id === row.id ? row : other)) });
-					if (row.record?.state === "ready") setSelected((current) => new Set(current).add(row.id));
-				},
-				errorMessage,
-			);
+			setFilter("all");
+			if (kind === "pdfs") {
+				storeCriteria(criteria);
+				const pending = pendingPdfRows(pdfs);
+				setSelected(new Set());
+				setActiveId(pending[0]?.id ?? null);
+				setReview({ importId: crypto.randomUUID(), rows: pending });
+				await readPdfs(pending, (file) => readAdminImportPdf(file, criteria), changeRow, errorMessage);
+				return;
+			}
+			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
+			const previewRows = rowsFromRecords(response.records);
+			setActiveId(previewRows[0]?.id ?? null);
+			setSelected(new Set(previewRows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []))));
+			setReview({ importId: crypto.randomUUID(), rows: previewRows });
 		});
 
 	const attachPdfs = async (created: AdminImportCommitResult[]) => {
-		const readById = new Map(pdfImport?.reads.map((read) => [read.id, read]));
+		const rowById = new Map(rows.map((row) => [row.id, row]));
 		const mark = (id: string, state: AttachState) => setAttach((current) => new Map(current).set(id, state));
+		for (const { id } of created) mark(id, "attaching");
 		await Promise.all(
 			created.map(async ({ id, itemKey }) => {
-				const read = readById.get(id);
-				if (!read || !itemKey) return;
-				storeCheckResults(itemKey, read.checks);
-				mark(id, "attaching");
+				const row = rowById.get(id);
+				if (!row?.file || !itemKey) return;
 				try {
-					const attachment = await createAdminDraft({ collections: [], itemType: "attachment", parentItem: itemKey, tags: [], title: read.file.name });
-					await uploadPdfFile(attachment.itemKey, read.file, () => undefined);
+					const attachment = await createAdminDraft({ collections: [], itemType: "attachment", parentItem: itemKey, tags: [], title: row.file.name });
+					await uploadPdfFile(attachment.itemKey, row.file, () => undefined);
 					mark(id, "attached");
-				} catch (error) {
-					console.error("Attaching the PDF failed", read.file.name, error);
+				} catch (caught) {
+					console.error("Attaching the PDF failed", row.file.name, caught);
 					mark(id, "failed");
 				}
 			}),
 		);
 	};
 
-	const runPreview = () =>
+	const commit = () =>
 		run(async () => {
-			const request = tab === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files);
-			const response = await previewAdminImport(request);
-			setPreview({ importId: crypto.randomUUID(), records: response.records });
-			setSelected(new Set(readyImportIds(response.records)));
-		});
-
-	const runCommit = () =>
-		run(async () => {
-			const current = preview ?? (pdfImport && { importId: pdfImport.importId, records: pdfImport.reads.flatMap(({ record }) => (record ? [record] : [])) });
-			if (!current) return;
-			const response = await commitAdminImport({
-				collections,
-				importId: current.importId,
-				records: selectedImportRecords(current.records, selected),
-			});
+			if (!review) return;
+			const chosen = (id: string) => [...(topicChoice.get(id) ?? [])];
+			const records = selectedImportRecords(
+				rows.flatMap(({ record }) => (record ? [record] : [])),
+				selected,
+			).map((record) => (topicsEnabled && chosen(record.id).length ? { ...record, payload: { ...record.payload, topics: chosen(record.id) } } : record));
+			const response = await commitAdminImport({ collections, importId: review.importId, records });
 			setResults(response.results);
-			if (pdfImport) await attachPdfs(response.results.filter(({ outcome }) => outcome === "created"));
+			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
+			for (const { id, itemKey } of created) {
+				const row = rows.find((other) => other.id === id);
+				if (row) storeReview(itemKey!, { checks: row.checks, topics: row.topics.filter((topic) => topicChoice.get(id)?.has(topic.id)) });
+			}
 			const summary = summarizeImportResults(response.results);
+			if (kind === "pdfs") void attachPdfs(created);
 			await onImported(summary.createdKeys);
 			(summary.failed ? toast.warning : toast.success)(summary.message);
 		});
 
+	const restart = () => {
+		setReview(null);
+		setResults(null);
+		setAttach(new Map());
+		setTopicChoice(new Map());
+		setSelected(new Set());
+		setCollections([]);
+		setError(null);
+		if (stage === "done") {
+			setPdfs([]);
+			setFiles([]);
+			setDoiText("");
+		}
+	};
+
+	const inputNote = {
+		dois: doiText.trim() ? plural(parseDoiList(doiText).dois.length, "DOI", "DOIs") : "Paste DOIs",
+		files: files.length ? plural(files.length, "file", "files") : "Choose files",
+		pdfs: pdfs.length ? `${plural(pdfs.length, "PDF", "PDFs")}, ${plural(criteria.length, "check", "checks")}` : "Choose PDFs",
+	}[kind];
+	const stepNotes: Record<ImportStage, string> = {
+		done: results ? plural(summarizeImportResults(results).createdKeys.length, "draft", "drafts") : "",
+		input: inputNote,
+		review: review ? (reading ? `${counts.done} of ${counts.total} read` : `${counts.ready} ready, ${selected.size} chosen`) : "",
+	};
+	const primaryLabel = { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: action("Read", pdfs.length, "PDF", "PDFs") }[kind];
+	// The DOI box marks entries that are not DOIs itself.
+	const footerProblem = stage === "input" && kind !== "dois" && (files.length || pdfs.length) ? problem : null;
+	const headings = {
+		done: "Imported",
+		input: { dois: "Paste DOIs", files: "Add bibliography files", pdfs: "Add PDFs" }[kind],
+		review: "Review",
+	}[stage];
+
 	return (
-		<>
-			<ModalHeader className="flex flex-col gap-1">
-				Import records
-				<span className="text-xs font-normal text-black/55 dark:text-white/55">
-					Creates unpublished drafts. Up to {ADMIN_IMPORT_MAX_RECORDS} records at once.
-				</span>
-			</ModalHeader>
-			<ModalBody className="gap-3">
-				{preview || pdfImport ? (
-					<ImportPreviewPanel
-						collections={collections}
-						onCollectionsChange={setCollections}
-						results={results}
-						sources={sources}
+		<div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[16.5rem_minmax(0,1fr)] md:grid-rows-1">
+			<ImportRail kind={kind} locked={stage !== "input" || busy} onKindChange={(value) => { setKind(value); setError(null); }} stage={stage} stepNotes={stepNotes} />
+			<div className="flex min-h-0 flex-col">
+				<header className="flex h-16 shrink-0 items-center gap-3 px-7">
+					<h3 className="text-base font-semibold text-black/85 dark:text-white/85">{headings}</h3>
+					{stage === "input" && kind === "pdfs" ? (
+						<span className="flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
+							<HugeiconsIcon aria-hidden icon={SparklesIcon} size={12} />
+							Read by Claude Haiku 5.5
+						</span>
+					) : null}
+				</header>
+				<AnimatePresence initial={false} mode="wait">
+					<motion.div
+						animate={{ opacity: 1, y: 0 }}
+						className="flex min-h-0 flex-1 flex-col"
+						exit={{ opacity: 0, y: reduceMotion ? 0 : -6 }}
+						initial={{ opacity: 0, y: reduceMotion ? 0 : 10 }}
+						key={stage === "input" ? `input-${kind}` : stage}
+						transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
 					>
-						{pdfImport ? (
-							<>
-								<PdfReadProgress criteriaCount={pdfImport.criteriaCount} reads={pdfImport.reads} />
-								<PdfPreviewTable
-									attach={attach}
-									criteriaCount={pdfImport.criteriaCount}
-									locked={busy || results !== null}
-									onOpenRecord={onOpenRecord}
-									onSelectedChange={setSelected}
-									reads={pdfImport.reads}
-									results={results}
-									selected={selected}
-								/>
-							</>
-						) : preview ? (
-							<PreviewTable
-								locked={busy || results !== null}
-								onSelectedChange={setSelected}
-								records={preview.records}
-								results={results}
-								selected={selected}
-							/>
+						{stage === "input" ? (
+							<div className="min-h-0 flex-1 overflow-y-auto px-7 pb-6">
+								{kind === "pdfs" ? <PdfInput busy={busy} criteria={criteria} files={pdfs} onCriteriaChange={(value) => { setCriteria(value); storeCriteria(value); }} onFilesChange={setPdfs} /> : null}
+								{kind === "dois" ? <DoiInput busy={busy} onChange={setDoiText} text={doiText} /> : null}
+								{kind === "files" ? <BibliographyInput busy={busy} files={files} onFilesChange={setFiles} /> : null}
+							</div>
 						) : null}
-					</ImportPreviewPanel>
-				) : (
-					<ImportInputPanel
-						busy={busy}
-						criteriaText={criteriaText}
-						doiText={doiText}
-						files={files}
-						inputError={inputError}
-						onCriteriaChange={setCriteriaText}
-						onPdfsChange={(value) => {
-							setPdfs(value);
-							setError(null);
-						}}
-						pdfs={pdfs}
-						onDoiTextChange={(value) => {
-							setDoiText(value);
-							setError(null);
-						}}
-						onFilesChange={(value) => {
-							setFiles(value);
-							setError(null);
-						}}
-						onTabChange={(value) => {
-							setTab(value);
-							setError(null);
-						}}
-						tab={tab}
-					/>
-				)}
-				{error ? (
-					<p className="text-sm text-danger" role="alert">
-						{error}
-					</p>
-				) : null}
-			</ModalBody>
-			<ImportFooter
-				busy={busy}
-				canPreview={inputError === null}
-				onBack={() => {
-					setPreview(null);
-					setPdfImport(null);
-					setError(null);
-				}}
-				onClose={onClose}
-				onCommit={() => void runCommit()}
-				onPreview={() => void (tab === "pdfs" ? runPdfReads() : runPreview())}
-				previewLabel={tab === "pdfs" ? `Read ${pdfs.length || ""} ${pdfs.length === 1 ? "PDF" : "PDFs"}`.replace("  ", " ") : "Preview"}
-				selectedCount={selected.size}
-				stage={stage}
-			/>
-		</>
-	);
-}
-
-function ImportInputPanel({
-	busy,
-	criteriaText,
-	doiText,
-	files,
-	inputError,
-	onCriteriaChange,
-	onDoiTextChange,
-	onFilesChange,
-	onPdfsChange,
-	onTabChange,
-	pdfs,
-	tab,
-}: {
-	busy: boolean;
-	criteriaText: string;
-	doiText: string;
-	files: File[];
-	inputError: string | null;
-	onCriteriaChange: (value: string) => void;
-	onDoiTextChange: (value: string) => void;
-	onFilesChange: (files: File[]) => void;
-	onPdfsChange: (files: File[]) => void;
-	onTabChange: (tab: ImportTab) => void;
-	pdfs: File[];
-	tab: ImportTab;
-}) {
-	return (
-		<Tabs
-			aria-label="Import source"
-			isDisabled={busy}
-			onSelectionChange={(key) => onTabChange(key as ImportTab)}
-			selectedKey={tab}
-		>
-			<Tab key="dois" title="DOIs">
-				<Textarea
-					aria-label="DOIs"
-					isDisabled={busy}
-					isInvalid={Boolean(doiText.trim() && inputError)}
-					errorMessage={inputError}
-					minRows={6}
-					onValueChange={onDoiTextChange}
-					placeholder={"10.1000/xyz123\nhttps://doi.org/10.1000/abc456"}
-					value={doiText}
-				/>
-				<p className="mt-1 text-xs text-black/55 dark:text-white/55">
-					One DOI per line or separated by commas. Plain DOIs and doi.org links both work.
-				</p>
-			</Tab>
-			<Tab key="files" title="Bibliography files">
-				<BibliographyFileInput busy={busy} files={files} inputError={inputError} onFilesChange={onFilesChange} />
-			</Tab>
-			<Tab key="pdfs" title="PDFs">
-				<PdfInputPanel
-					busy={busy}
-					criteriaText={criteriaText}
-					files={pdfs}
-					inputError={inputError}
-					onCriteriaChange={onCriteriaChange}
-					onFilesChange={onPdfsChange}
-				/>
-			</Tab>
-		</Tabs>
-	);
-}
-
-function BibliographyFileInput({ busy, files, inputError, onFilesChange }: {
-	busy: boolean;
-	files: File[];
-	inputError: string | null;
-	onFilesChange: (files: File[]) => void;
-}) {
-	const fileError = files.length > 0 ? inputError : null;
-	return (
-		<>
-			<input
-				accept={ADMIN_IMPORT_FILE_EXTENSIONS}
-				aria-label="Bibliography files"
-				className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-black/[0.05] file:px-3 file:py-2 file:text-sm file:font-medium dark:file:bg-white/[0.08]"
-				disabled={busy}
-				aria-describedby={fileError ? "import-file-error" : undefined}
-				aria-invalid={Boolean(fileError)}
-				multiple
-				onChange={(event) => onFilesChange(Array.from(event.currentTarget.files ?? []))}
-				type="file"
-			/>
-			<p className="mt-2 text-xs text-black/55 dark:text-white/55">
-				Supported formats: {ADMIN_IMPORT_FILE_FORMATS.join(", ")}. Up to {ADMIN_IMPORT_MAX_FILES} files, 5 MB each.
-			</p>
-			<ul className="mt-2 text-xs text-black/70 dark:text-white/70">
-				{files.map((file) => (
-					<li key={file.name}>{file.name}</li>
-				))}
-			</ul>
-			{fileError ? (
-				<p className="mt-2 text-sm text-danger" id="import-file-error" role="alert">
-					{fileError}
-				</p>
-			) : null}
-		</>
-	);
-}
-
-function ImportPreviewPanel({
-	children,
-	collections,
-	onCollectionsChange,
-	results,
-	sources,
-}: {
-	children: ReactNode;
-	collections: string[];
-	onCollectionsChange: (keys: string[]) => void;
-	results: AdminImportCommitResult[] | null;
-	sources: readonly AdminSource[];
-}) {
-	return (
-		<>
-			{children}
-			{results === null ? (
-				<div>
-					<p className="mb-1 text-xs font-medium text-black/70 dark:text-white/70">
-						Add the imported drafts to collections (optional)
-					</p>
-					<AdminCollectionPicker
-						allowedSourceKeys={editableItemCollectionSourceKeysForItems(
-							[NATIVE_SOURCE_CONNECTION_KEY],
-							sources,
+						{stage === "review" ? (
+							<div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pb-5">
+								<SummaryStrip counts={counts} filter={filter} kind={kind} onFilter={setFilter} />
+								<div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+									<div className="min-h-0 overflow-y-auto">
+										<ReviewList activeId={activeRow?.id ?? null} attach={attach} criteriaCount={criteria.length} filter={filter} locked={busy} onActivate={setActiveId} onSelectedChange={setSelected} readyIds={rows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []))} results={results} rows={shown} selected={selected} />
+									</div>
+									<div className="min-h-0 overflow-y-auto rounded-2xl bg-white p-6 shadow-card-hairline ring-1 ring-black/[0.06] dark:bg-white/[0.03] dark:ring-white/10">
+										{activeRow ? (
+											<ReviewDetail
+												attach={attach.get(activeRow.id)}
+												chosenTopics={topicChoice.get(activeRow.id) ?? new Set()}
+												criteriaCount={criteria.length}
+												key={activeRow.id}
+												locked={busy}
+												onOpenRecord={onOpenRecord}
+												onToggleTopic={(topicId) =>
+													setTopicChoice((current) => {
+														const next = new Set(current.get(activeRow.id));
+														if (next.has(topicId)) next.delete(topicId);
+														else next.add(topicId);
+														return new Map(current).set(activeRow.id, next);
+													})
+												}
+												result={resultById.get(activeRow.id)}
+												row={activeRow}
+											/>
+										) : null}
+									</div>
+								</div>
+							</div>
+						) : null}
+						{stage === "done" && results ? (
+							<div className="min-h-0 flex-1 overflow-y-auto px-7 pb-6">
+								<ImportDone attach={attach} onOpenRecord={onOpenRecord} results={results} rows={rows} />
+							</div>
+						) : null}
+					</motion.div>
+				</AnimatePresence>
+				<footer className="flex h-[4.25rem] shrink-0 items-center gap-2 border-t border-black/[0.06] px-7 dark:border-white/[0.06]">
+					{error || footerProblem ? (
+						<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
+							{error ?? footerProblem}
+						</p>
+					) : stage === "review" ? (
+						<CollectionsButton collections={collections} locked={busy} onChange={setCollections} sources={sources} />
+					) : (
+						<span className="flex-1" />
+					)}
+					<span className="ms-auto flex items-center gap-2">
+						{stage === "review" ? (
+							<Button isDisabled={busy} onPress={restart} size="sm" variant="transparent">
+								Back
+							</Button>
+						) : null}
+						{stage === "done" ? (
+							<Button onPress={restart} size="sm" variant="transparent">
+								Import more
+							</Button>
+						) : (
+							<Button isDisabled={busy && stage === "input"} onPress={onClose} size="sm" variant="transparent">
+								Cancel
+							</Button>
 						)}
-						onSelectionChange={onCollectionsChange}
+						{stage === "input" ? (
+							<Button className="min-w-32 font-medium" color="accent" isDisabled={problem !== null} isLoading={busy} onPress={() => void start()} size="sm" variant="solid">
+								{primaryLabel}
+							</Button>
+						) : null}
+						{stage === "review" ? (
+							<Button className="min-w-36 font-medium" color="accent" isDisabled={reading || selected.size === 0} isLoading={busy && !reading} onPress={() => void commit()} size="sm" variant="solid">
+								{action("Import", selected.size, "record", "records")}
+							</Button>
+						) : null}
+						{stage === "done" ? (
+							<Button className="min-w-24 font-medium" color="accent" onPress={onClose} size="sm" variant="solid">
+								Done
+							</Button>
+						) : null}
+					</span>
+				</footer>
+			</div>
+		</div>
+	);
+}
+
+/** Collections for the new drafts, picked in a popover so the review keeps its room. */
+function CollectionsButton({ collections, locked, onChange, sources }: { collections: string[]; locked: boolean; onChange: (keys: string[]) => void; sources: readonly AdminSource[] }) {
+	return (
+		<Popover placement="top-start">
+			<PopoverTrigger>
+				<Button isDisabled={locked} size="sm" startContent={<HugeiconsIcon aria-hidden icon={Folder01Icon} size={15} />} variant="muted">
+					{collections.length ? plural(collections.length, "collection", "collections") : "Add to collections"}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className="w-[24rem] p-3">
+				<div className="max-h-[22rem] w-full overflow-y-auto">
+					<AdminCollectionPicker
+						allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], sources)}
+						onSelectionChange={onChange}
 						selectedKeys={collections}
 						selectionMode="multiple"
 						sources={sources}
 					/>
 				</div>
-			) : null}
-		</>
-	);
-}
-
-function PreviewTable({
-	locked,
-	onSelectedChange,
-	records,
-	results,
-	selected,
-}: {
-	locked: boolean;
-	onSelectedChange: (selected: Set<string>) => void;
-	records: AdminImportPreviewRecord[];
-	results: AdminImportCommitResult[] | null;
-	selected: Set<string>;
-}) {
-	const readyIds = readyImportIds(records);
-	const resultById = new Map((results ?? []).map((result) => [result.id, result]));
-	return (
-		<div className="max-h-80 overflow-auto rounded-xl border border-black/10 dark:border-white/10">
-			<table className="w-full text-left text-xs">
-				<thead className="sticky top-0 bg-background_light dark:bg-card">
-					<tr className="text-black/55 dark:text-white/55">
-						<th className="p-2">
-							<SelectAllCheckbox
-								locked={locked}
-								onSelectedChange={onSelectedChange}
-								readyIds={readyIds}
-								selected={selected}
-							/>
-						</th>
-						<th className="p-2 font-medium">Title</th>
-						<th className="p-2 font-medium">Creators</th>
-						<th className="p-2 font-medium">Year</th>
-						<th className="p-2 font-medium">Type</th>
-						<th className="p-2 font-medium">Source</th>
-						<th className="p-2 font-medium">Status</th>
-					</tr>
-				</thead>
-				<tbody>
-					{records.map((record) => (
-						<PreviewRow
-							key={record.id}
-							locked={locked}
-							onToggle={(checked) =>
-								onSelectedChange(toggleImportSelection(selected, record.id, checked))
-							}
-							record={record}
-							result={resultById.get(record.id)}
-							selected={selected.has(record.id)}
-						/>
-					))}
-				</tbody>
-			</table>
-		</div>
-	);
-}
-
-function SelectAllCheckbox({
-	locked,
-	onSelectedChange,
-	readyIds,
-	selected,
-}: {
-	locked: boolean;
-	onSelectedChange: (selected: Set<string>) => void;
-	readyIds: string[];
-	selected: Set<string>;
-}) {
-	const none = readyIds.length === 0;
-	const all = !none && selected.size === readyIds.length;
-	return (
-		<Checkbox
-			aria-label="Select all ready records"
-			isDisabled={locked || none}
-			isIndeterminate={selected.size > 0 && !all}
-			isSelected={all}
-			onValueChange={(checked) => onSelectedChange(new Set(checked ? readyIds : []))}
-			size="sm"
-		/>
-	);
-}
-
-function PreviewRow({
-	locked,
-	onToggle,
-	record,
-	result,
-	selected,
-}: {
-	locked: boolean;
-	onToggle: (checked: boolean) => void;
-	record: AdminImportPreviewRecord;
-	result: AdminImportCommitResult | undefined;
-	selected: boolean;
-}) {
-	const cells = importRowCells(record);
-	const status = importRowStatus(record, result);
-	return (
-		<tr className="border-t border-black/[0.06] align-top dark:border-white/[0.06]">
-			<td className="p-2">
-				<Checkbox
-					aria-label={cells.label}
-					isDisabled={locked || !cells.selectable}
-					isSelected={selected}
-					onValueChange={onToggle}
-					size="sm"
-				/>
-			</td>
-			<td className="p-2 text-black/85 dark:text-white/85">
-				{cells.title ?? <span className="italic opacity-60">No title</span>}
-			</td>
-			<td className="p-2">{cells.creators}</td>
-			<td className="p-2 tabular-nums">{cells.year}</td>
-			<td className="p-2">{cells.itemType}</td>
-			<td className="max-w-40 p-2">
-				<TruncatedText text={record.source} focusable />
-			</td>
-			<td className={`p-2 ${IMPORT_STATE_TONE[status.tone]}`}>
-				{status.label}
-				{status.detail ? (
-					<span className="block text-black/55 dark:text-white/55">{status.detail}</span>
-				) : null}
-			</td>
-		</tr>
-	);
-}
-
-function ImportFooter({
-	busy,
-	canPreview,
-	onBack,
-	onClose,
-	onCommit,
-	onPreview,
-	previewLabel,
-	selectedCount,
-	stage,
-}: {
-	busy: boolean;
-	canPreview: boolean;
-	onBack: () => void;
-	onClose: () => void;
-	onCommit: () => void;
-	onPreview: () => void;
-	previewLabel: string;
-	selectedCount: number;
-	stage: ImportStage;
-}) {
-	return (
-		<ModalFooter>
-			{stage === "preview" ? (
-				<Button isDisabled={busy} onPress={onBack} size="xs" variant="transparent">
-					Back
-				</Button>
-			) : null}
-			<Button isDisabled={busy} onPress={onClose} size="xs" variant="transparent">
-				{stage === "done" ? "Close" : "Cancel"}
-			</Button>
-			<PrimaryAction
-				busy={busy}
-				canPreview={canPreview}
-				onCommit={onCommit}
-				onPreview={onPreview}
-				previewLabel={previewLabel}
-				selectedCount={selectedCount}
-				stage={stage}
-			/>
-		</ModalFooter>
-	);
-}
-
-function PrimaryAction({
-	busy,
-	canPreview,
-	onCommit,
-	onPreview,
-	previewLabel,
-	selectedCount,
-	stage,
-}: {
-	busy: boolean;
-	canPreview: boolean;
-	onCommit: () => void;
-	onPreview: () => void;
-	previewLabel: string;
-	selectedCount: number;
-	stage: ImportStage;
-}) {
-	if (stage === "done") return null;
-	if (stage === "input") {
-		return (
-			<Button color="accent" isDisabled={!canPreview} isLoading={busy} onPress={onPreview} size="xs" variant="solid">
-				{previewLabel}
-			</Button>
-		);
-	}
-	return (
-		<Button
-			color="accent"
-			isDisabled={selectedCount === 0}
-			isLoading={busy}
-			onPress={onCommit}
-			size="xs"
-			variant="solid"
-		>
-			Import {selectedCount} {selectedCount === 1 ? "record" : "records"}
-		</Button>
+			</PopoverContent>
+		</Popover>
 	);
 }

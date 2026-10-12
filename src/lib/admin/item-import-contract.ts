@@ -87,14 +87,6 @@ export type AdminImportRecordState =
 	| "attention"
 	| "unresolved";
 
-export const ADMIN_IMPORT_STATE_LABELS: Record<AdminImportRecordState, string> = {
-	attention: "Needs attention",
-	existing: "Already in library",
-	ready: "Ready",
-	repeated: "Repeated in import",
-	unresolved: "Could not resolve",
-};
-
 export type AdminImportPreviewRecord = {
 	creators: string[];
 	/** The key of the record already in the library, for `existing`. */
@@ -129,8 +121,18 @@ export type PdfCheckResult = {
 	result: "met" | "not_met" | "unclear";
 };
 
+/** An OpenAlex topic the AI judged to fit a PDF, with its domain, field and subfield. */
+export type TopicSuggestion = {
+	fit: "partial" | "strong";
+	id: string;
+	name: string;
+	path: string[];
+	reason: string;
+};
+
 export type AdminPdfReadResponse = {
 	checks: PdfCheckResult[];
+	topics: TopicSuggestion[];
 	costUsd: number | null;
 	inputTokens: number | null;
 	ms: number;
@@ -138,13 +140,6 @@ export type AdminPdfReadResponse = {
 	record: AdminImportPreviewRecord;
 };
 
-/** One check per line; blank lines are dropped. */
-export function parseCriteria(text: string) {
-	return text
-		.split("\n")
-		.map((line) => line.trim())
-		.filter(Boolean);
-}
 
 export type AdminImportCommitResult = {
 	existingKey?: string;

@@ -2,19 +2,17 @@ import {
 	PDF_IMPORT_MAX_CRITERIA,
 	PDF_IMPORT_MAX_CRITERION_LENGTH,
 	PDF_IMPORT_MAX_FILE_BYTES,
-	parseCriteria,
 	type PdfCheckResult,
+	type TopicSuggestion,
 	ADMIN_IMPORT_MAX_FILE_BYTES,
 	ADMIN_IMPORT_MAX_FILES,
 	ADMIN_IMPORT_MAX_RECORDS,
-	ADMIN_IMPORT_STATE_LABELS,
 	parseDoiList,
 	type AdminImportCommitResult,
 	type AdminImportPreviewRecord,
 	type AdminImportPreviewRequest,
 } from "@/lib/admin/item-import-contract";
 
-import { humanizeAdminField } from "./admin-schema";
 
 /** A problem with what the user typed or chose, shown before any request. */
 class ImportInputError extends Error {
@@ -70,21 +68,6 @@ export async function filePreviewRequest(
 	};
 }
 
-export function readyImportIds(records: readonly AdminImportPreviewRecord[]) {
-	return records.filter(({ state }) => state === "ready").map(({ id }) => id);
-}
-
-export function toggleImportSelection(
-	current: ReadonlySet<string>,
-	id: string,
-	selected: boolean,
-) {
-	const next = new Set(current);
-	if (selected) next.add(id);
-	else next.delete(id);
-	return next;
-}
-
 export function selectedImportRecords(
 	records: readonly AdminImportPreviewRecord[],
 	selected: ReadonlySet<string>,
@@ -92,44 +75,6 @@ export function selectedImportRecords(
 	return records.flatMap(({ id, method, payload }) =>
 		selected.has(id) && payload ? [{ id, method, payload }] : [],
 	);
-}
-
-export function importRowCells(record: AdminImportPreviewRecord) {
-	return {
-		creators: record.creators.join("; "),
-		itemType: record.itemType ? humanizeAdminField(record.itemType) : "",
-		/** Accessible name for the row checkbox. */
-		label: `Import ${record.title ?? record.source}`,
-		selectable: record.state === "ready",
-		title: record.title,
-		year: record.year === null ? "" : String(record.year),
-	};
-}
-
-export function importStage(
-	preview: unknown,
-	results: unknown,
-): "done" | "input" | "preview" {
-	if (results) return "done";
-	return preview ? "preview" : "input";
-}
-
-export function importRowStatus(
-	record: AdminImportPreviewRecord,
-	result: AdminImportCommitResult | undefined,
-) {
-	if (!result) {
-		return {
-			detail: record.message ?? null,
-			label: ADMIN_IMPORT_STATE_LABELS[record.state],
-			tone: record.state,
-		};
-	}
-	return {
-		detail: null,
-		label: result.outcome === "created" ? "Draft created" : result.message ?? "Failed",
-		tone: result.outcome === "created" ? ("ready" as const) : ("attention" as const),
-	};
 }
 
 export function summarizeImportResults(
@@ -149,17 +94,20 @@ export function summarizeImportResults(
 	};
 }
 
-export type PdfRead = {
+/** One record in the review, from a DOI, a bibliography file or a PDF the AI reads. */
+export type ImportRow = {
 	checks: PdfCheckResult[];
-	file: File;
+	/** The PDF this row reads; null for DOIs and bibliography files. */
+	file: File | null;
 	/** The row's id, also the id its record is committed under. */
 	id: string;
 	message?: string;
 	record: AdminImportPreviewRecord | null;
 	state: "failed" | "read" | "reading" | "waiting";
+	topics: TopicSuggestion[];
 };
 
-const PDF_IMPORT_MAX_FILES = 100;
+export const PDF_IMPORT_MAX_FILES = 100;
 const PDF_READ_CONCURRENCY = 8;
 
 export function validatePdfFiles(files: readonly File[]): void {
@@ -175,18 +123,20 @@ export function validatePdfFiles(files: readonly File[]): void {
 	if (empty) throw new ImportInputError(`${empty.name} is empty.`);
 }
 
-export function validateCriteria(text: string) {
-	const criteria = parseCriteria(text);
+export function validateCriteria(criteria: readonly string[]) {
 	if (criteria.length > PDF_IMPORT_MAX_CRITERIA) {
 		throw new ImportInputError(`Use no more than ${PDF_IMPORT_MAX_CRITERIA} checks.`);
 	}
 	const long = criteria.find((criterion) => criterion.length > PDF_IMPORT_MAX_CRITERION_LENGTH);
 	if (long) throw new ImportInputError(`Keep each check under ${PDF_IMPORT_MAX_CRITERION_LENGTH} characters.`);
-	return criteria;
 }
 
-export function pendingPdfReads(files: readonly File[]): PdfRead[] {
-	return files.map((file, index) => ({ checks: [], file, id: String(index + 1), record: null, state: "waiting" }));
+export function pendingPdfRows(files: readonly File[]): ImportRow[] {
+	return files.map((file, index) => ({ checks: [], file, id: String(index + 1), record: null, state: "waiting", topics: [] }));
+}
+
+export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): ImportRow[] {
+	return records.map((record) => ({ checks: [], file: null, id: record.id, record, state: "read", topics: [] }));
 }
 
 /**
@@ -194,20 +144,20 @@ export function pendingPdfReads(files: readonly File[]): PdfRead[] {
  * PDF that fails is marked on its own row; the others carry on.
  */
 export async function readPdfs(
-	reads: readonly PdfRead[],
-	read: (file: File) => Promise<{ checks: PdfCheckResult[]; record: AdminImportPreviewRecord }>,
-	onChange: (row: PdfRead) => void,
+	rows: readonly ImportRow[],
+	read: (file: File) => Promise<{ checks: PdfCheckResult[]; record: AdminImportPreviewRecord; topics: TopicSuggestion[] }>,
+	onChange: (row: ImportRow) => void,
 	errorText: (error: unknown) => string,
 ) {
 	let next = 0;
 	await Promise.all(
-		Array.from({ length: Math.min(PDF_READ_CONCURRENCY, reads.length) }, async () => {
-			while (next < reads.length) {
-				const row = reads[next++]!;
+		Array.from({ length: Math.min(PDF_READ_CONCURRENCY, rows.length) }, async () => {
+			while (next < rows.length) {
+				const row = rows[next++]!;
 				onChange({ ...row, state: "reading" });
 				try {
-					const { checks, record } = await read(row.file);
-					onChange({ ...row, checks, record: { ...record, id: row.id }, state: "read" });
+					const { checks, record, topics } = await read(row.file!);
+					onChange({ ...row, checks, record: { ...record, id: row.id }, state: "read", topics });
 				} catch (error) {
 					onChange({ ...row, message: errorText(error), state: "failed" });
 				}
@@ -216,33 +166,63 @@ export async function readPdfs(
 	);
 }
 
+export type ReviewFilter = "all" | "attention" | "existing" | "improve" | "ready";
+
+const needsAttention = (row: ImportRow) =>
+	row.state === "failed" || row.record?.state === "attention" || row.record?.state === "unresolved";
+const toImprove = (row: ImportRow) => row.checks.some(({ result }) => result !== "met");
+
+export function reviewMatches(row: ImportRow, filter: ReviewFilter) {
+	if (filter === "ready") return row.record?.state === "ready";
+	if (filter === "existing") return row.record?.state === "existing" || row.record?.state === "repeated";
+	if (filter === "attention") return needsAttention(row);
+	if (filter === "improve") return toImprove(row);
+	return true;
+}
+
+export function reviewCounts(rows: readonly ImportRow[]) {
+	return {
+		attention: rows.filter(needsAttention).length,
+		done: rows.filter(({ state }) => state === "read" || state === "failed").length,
+		existing: rows.filter((row) => reviewMatches(row, "existing")).length,
+		improve: rows.filter(toImprove).length,
+		ready: rows.filter((row) => reviewMatches(row, "ready")).length,
+		total: rows.length,
+	};
+}
+
+/** The strong fits start chosen; the editor adds or drops the rest. */
+export function initialTopicChoice(topics: readonly TopicSuggestion[]) {
+	return new Set(topics.filter(({ fit }) => fit === "strong").map(({ id }) => id));
+}
+
 // shortcut: the mock keeps the library's checks and each draft's results in
 // this browser; the real build stores both in the library's database.
 const CRITERIA_KEY = "evidence-library:pdf-import-checks";
 const RESULTS_KEY = "evidence-library:pdf-import-results:";
-const DEFAULT_CRITERIA = "Names the funder of the work\nStates a licence for reuse, such as Creative Commons\nHas an abstract or executive summary";
+const DEFAULT_CRITERIA = ["Names the funder of the work", "States a licence for reuse, such as Creative Commons", "Has an abstract or executive summary"];
 
-export function storedCriteria() {
-	return localStorage.getItem(CRITERIA_KEY) ?? DEFAULT_CRITERIA;
+export function storedCriteria(): string[] {
+	const stored = localStorage.getItem(CRITERIA_KEY);
+	return stored ? (JSON.parse(stored) as string[]) : DEFAULT_CRITERIA;
 }
 
-export function storeCriteria(text: string) {
-	localStorage.setItem(CRITERIA_KEY, text);
+export function storeCriteria(criteria: readonly string[]) {
+	localStorage.setItem(CRITERIA_KEY, JSON.stringify(criteria));
 }
 
-/** The saved results as text, so a store snapshot compares equal between reads. */
-export function storedCheckResults(itemKey: string) {
+export type StoredReview = { checks: PdfCheckResult[]; topics: TopicSuggestion[] };
+
+/** The saved review as text, so a store snapshot compares equal between reads. */
+export function storedReview(itemKey: string) {
 	return localStorage.getItem(RESULTS_KEY + itemKey);
 }
 
-export function storeCheckResults(itemKey: string, checks: PdfCheckResult[]) {
-	if (checks.length) localStorage.setItem(RESULTS_KEY + itemKey, JSON.stringify(checks));
+export function storeReview(itemKey: string, review: StoredReview) {
+	if (review.checks.length || review.topics.length) localStorage.setItem(RESULTS_KEY + itemKey, JSON.stringify(review));
 }
 
-export const IMPORT_STATE_TONE: Record<AdminImportPreviewRecord["state"], string> = {
-	attention: "text-amber-700 dark:text-amber-400",
-	existing: "text-black/55 dark:text-white/55",
-	ready: "text-emerald-700 dark:text-emerald-400",
-	repeated: "text-black/55 dark:text-white/55",
-	unresolved: "text-danger",
-};
+/** A path without a level that repeats the one above it ("Social Sciences" as both domain and field). */
+export function topicPath(path: readonly string[]) {
+	return path.filter((name, index) => name !== path[index - 1]);
+}

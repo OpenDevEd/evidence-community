@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
 			ms: Date.now() - started,
 			outputTokens: reading.outputTokens,
 			record: records[0]!,
+			topics: reading.topics,
 		};
 		return NextResponse.json(response, { headers: ADMIN_RESPONSE_HEADERS });
 	} catch (error) {
