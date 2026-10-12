@@ -7,6 +7,7 @@ import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readScreeningStatuses, requestGrading, saveSourceScreening } from "@/lib/readings/screening";
 import { readSourceStatuses } from "@/lib/source-ingestion/source-status";
 import { runReadingCycle, trySubject } from "@/lib/readings/worker";
+import { readPublicItem } from "@/lib/search-index/projection";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
@@ -87,15 +88,24 @@ it("reads each published record once, again only when its text or its source's s
 	});
 }, 120_000);
 
-it("does not read, when screening turns on, what was published while nothing screened", async () => {
+it("reads the type of every record a library with a key brings in, grades only for sources that screen, and reads nothing without a key", async () => {
 	await withIsolatedPublicationDatabase(async (db, client) => {
-		await publish(client, "BEFREAD2", "Coastal flooding in Lagos", "Flood risk across 40 wards.");
-		const offConfig = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [{ ...source, screening: { enabled: false } }] });
-		await runReadingCycle(db, offConfig, undefined, jev(answering).request);
-		const on = jev(answering);
-		await runReadingCycle(db, configWith("Climate adaptation in farming"), undefined, on.request);
-		expect(on.asked).toEqual([]);
-		expect(await db.select().from(itemReading)).toEqual([]);
+		const keyed = configWith("unused");
+		const unscreened = libraryConfigSchema.parse({ ...keyed, sources: [{ ...source, screening: { enabled: false } }] });
+		await publish(client, "TYPEAAA2", "Drought and maize: a meta-analysis", "We pooled 40 trials.");
+		const typed = jev(answering);
+		await runReadingCycle(db, unscreened, undefined, typed.request);
+		expect(typed.asked).toEqual([["type", "pooled", "region", "effects"]]);
+		expect(await db.select().from(itemGrade)).toEqual([]);
+		// Readers see the type on the record: its search document carries it.
+		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toEqual({ type: "meta-analysis", confidence: 0.91, by: "ai", input: "abstract" });
+
+		await publish(client, "KEYLESS2", "Coastal flooding in Lagos", "Flood risk across 40 wards.");
+		const keyless = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [{ ...source, screening: { enabled: false } }] });
+		const none = jev(answering);
+		await runReadingCycle(db, keyless, undefined, none.request);
+		expect(none.asked).toEqual([]);
+		expect((await db.select({ key: itemReading.itemKey }).from(itemReading)).map((row) => row.key)).toEqual(["TYPEAAA2"]);
 	});
 }, 120_000);
 

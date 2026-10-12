@@ -5,6 +5,9 @@
  * author or fourteen, many countries, every common item type.
  */
 
+import { QUESTION_SET } from "../../src/lib/readings/questions";
+import { STUDY_TYPE_KEYS } from "../../src/lib/readings/study-types";
+
 const KEY_ALPHABET = "23456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
 
 function random(seed: number) {
@@ -170,9 +173,20 @@ function citationRows(itemKey: string, index: number): string[] {
 
 const outboxRow = (entityType: string, entityKey: string) => `INSERT INTO "outbox" ("entityType", "entityKey", "operation", "revision") VALUES ('${entityType}', ${sql(entityKey)}, 'upsert', 1);`;
 
+/**
+ * Jev's reading of a record, for most of them: a study type by its place in the list, every type in turn, a few read
+ * with low confidence and every seventh not read yet. No random draw, so the records stay as they were.
+ */
+function readingRow(itemKey: string, index: number): string[] {
+	if (index % 7 === 3) return [];
+	const type = STUDY_TYPE_KEYS[index % STUDY_TYPE_KEYS.length];
+	const confidence = index % 11 === 0 ? 0.45 : 0.9;
+	return [`INSERT INTO "itemReading" ("itemKey", "studyType", "typeConfidence", "typedBy", "pooled", "region", "effects", "input", "contentHash", "questionSet", "model") VALUES (${sql(itemKey)}, ${sql(type)}, ${confidence}, 'ai', 0.1, 'sub-saharan-africa', 0.5, 'abstract', 'verify', ${QUESTION_SET}, 'typesafe/jev-1.13');`];
+}
+
 function itemRows(index: number, members: Map<string, string[]>): string[] {
 	const itemKey = key("V", index);
-	const rows = [`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(itemKey)}, 'native', ${sql(itemKey)});`, itemRow(itemKey, index)];
+	const rows = [`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(itemKey)}, 'native', ${sql(itemKey)});`, itemRow(itemKey, index), ...readingRow(itemKey, index)];
 	rows.push(...maybe(0.65, () => citationRows(itemKey, index), []));
 	for (const collection of COLLECTIONS) members.get(collection.key)!.push(...maybe(0.25, () => [itemKey], []));
 	return [...rows, outboxRow("item", itemKey)];

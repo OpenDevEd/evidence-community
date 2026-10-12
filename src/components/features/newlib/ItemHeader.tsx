@@ -29,8 +29,19 @@ import GapMapAction from "@/components/features/gapmaps/GapMapAction";
 import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { FuturePublicationHint } from "@/components/features/items/FuturePublicationHint";
+import { StudyTypeLabel } from "@/components/features/items/StudyTypeLabel";
 import { isFuturePublication } from "@/lib/bibliographic-date";
 import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
+
+/** The record's study type in the header, once it has been read. */
+function ItemStudyType({ reading }: { reading: Item["reading"] }) {
+	if (!reading) return null;
+	return (
+		<HeaderSection>
+			<StudyTypeLabel reading={reading} className="gap-2 text-base" />
+		</HeaderSection>
+	);
+}
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -246,6 +257,7 @@ export default function ItemHeader({
 							/>
 							{item?.itemType ? tItemType(item?.itemType) : "-"}
 						</HeaderSection>
+						<ItemStudyType reading={item?.reading} />
 						<OpenAccessLabel openAccess={item?.openAccess} className="gap-2" />
 					</div>
 					<ItemHeaderActions

@@ -3,8 +3,12 @@
  * them up, and the reviews of those syntheses. `criterion` is what Jev is told a type means; `description` is what
  * readers are told.
  */
-const STUDY_LEVELS = ["synthesis", "primary", "other"] as const;
-export type StudyLevel = (typeof STUDY_LEVELS)[number];
+export const STUDY_LEVELS = [
+	{ key: "synthesis", label: "Reviews and syntheses" },
+	{ key: "primary", label: "Primary studies" },
+	{ key: "other", label: "Other work" },
+] as const;
+export type StudyLevel = (typeof STUDY_LEVELS)[number]["key"];
 
 export const STUDY_TYPES = [
 	{
@@ -75,3 +79,16 @@ export const STUDY_TYPES = [
 ] as const satisfies readonly { key: string; level: StudyLevel; label: string; plural: string; description: string; criterion: string }[];
 export type StudyTypeKey = (typeof STUDY_TYPES)[number]["key"];
 export const STUDY_TYPE_KEYS = STUDY_TYPES.map((type) => type.key) as [StudyTypeKey, ...StudyTypeKey[]];
+export const studyType = (key: string) => STUDY_TYPES.find((type) => type.key === key);
+
+/**
+ * One record's reading as readers see it: its type, how sure Jev was, whether the record's own metadata said it
+ * instead, and what Jev read.
+ */
+export type StudyReading = { type: StudyTypeKey; confidence: number; by: "ai" | "metadata"; input: "abstract" | "title" | "pdf" };
+/** Below this, Jev's type is shown as uncertain, and asked again from the record's PDF once it has one. */
+export const SURE = 0.6;
+
+/** How types are read, as readers are told wherever types appear. */
+export const STUDY_TYPE_METHOD =
+	"Each record's type is read when it enters the library. Jev, an AI classifier, reads its title and abstract and picks one of these types; a record with no abstract is judged on its title. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type Jev is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one.";

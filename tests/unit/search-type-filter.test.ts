@@ -26,3 +26,12 @@ describe("item type filter", () => {
 		expect(request.finalFilters.some((filter) => filter.startsWith("itemType IN"))).toBe(false);
 	});
 });
+
+describe("study type filter", () => {
+	it("keeps results of any chosen study type, in the results and in the counts beside them", () => {
+		const request = resolveSearchRequest({ study: ["meta-analysis", "systematic-review"] }, config);
+		const filter = 'studyType IN ["meta-analysis","systematic-review"]';
+		expect(request.finalFilters).toContain(filter);
+		expect(request.facetFilters).toContain(filter);
+	});
+});

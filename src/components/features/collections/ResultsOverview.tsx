@@ -10,6 +10,7 @@ import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import { STUDY_LEVELS, STUDY_TYPES, STUDY_TYPE_METHOD, studyType, type StudyLevel, type StudyTypeKey } from "@/lib/readings/study-types";
 import useSWR from "swr";
 import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
@@ -240,6 +241,67 @@ function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect }: { labe
 				<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
 			</button>
 		</li>
+	);
+}
+
+/** Each level's types in shades of one tone: reviews and syntheses in the accent, since readers start there. */
+const LEVEL_RAMP: Record<StudyLevel, string[]> = {
+	synthesis: ["bg-accent", "bg-accent/80", "bg-accent/60", "bg-accent/45", "bg-accent/30"],
+	primary: ["bg-black/70 dark:bg-white/70", "bg-black/55 dark:bg-white/55", "bg-black/40 dark:bg-white/40", "bg-black/30 dark:bg-white/30", "bg-black/20 dark:bg-white/20"],
+	other: ["bg-black/15 dark:bg-white/15", "bg-black/10 dark:bg-white/10", "bg-black/[0.06] dark:bg-white/[0.06]"],
+};
+const studyTone = (key: StudyTypeKey) => {
+	const type = studyType(key)!;
+	return LEVEL_RAMP[type.level][STUDY_TYPES.filter((other) => other.level === type.level).findIndex((other) => other.key === key)];
+};
+
+/**
+ * What kind of work the results are, as Jev read them, under the three levels of evidence; choosing a row filters the
+ * results. Records not read yet are counted apart, and the card says how types are read.
+ */
+function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string[]; onSelect: (type: string) => void }) {
+	const format = useFormatter();
+	const base = useFacetTotal("studyType");
+	const shown = STUDY_TYPES.filter((type) => (counts?.[type.key] ?? 0) > 0 || selected.includes(type.key));
+	if (shown.length === 0) return null;
+	const read = shown.reduce((sum, type) => sum + (counts?.[type.key] ?? 0), 0);
+	const unread = Math.max(0, base - read);
+	const dimmed = (key: string) => selected.length > 0 && !selected.includes(key);
+	return (
+		<SidebarCard
+			title="Study types"
+			aside={<span className={`text-sm tabular-nums ${MUTED}`}>{format.number(read)} read</span>}
+			band={
+				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
+					{shown.map((type) => (
+						<span key={type.key} className={twMerge("h-full transition-opacity", studyTone(type.key), dimmed(type.key) && "opacity-25")} style={{ flexGrow: counts?.[type.key] ?? 0, flexBasis: 0 }} />
+					))}
+				</div>
+			}
+		>
+			<div className="-mx-3 -mt-2 flex flex-col gap-3">
+				{STUDY_LEVELS.map((level) => {
+					const rows = shown.filter((type) => type.level === level.key);
+					if (rows.length === 0) return null;
+					return (
+						<section key={level.key} aria-label={level.label}>
+							<h5 className={`px-3 pb-1 text-sm ${MUTED}`}>{level.label}</h5>
+							<ul className="flex flex-col">
+								{rows.map((type) => (
+									<TypeRow key={type.key} label={type.plural} count={counts?.[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} />
+								))}
+							</ul>
+						</section>
+					);
+				})}
+			</div>
+			<div className="flex flex-col gap-2 border-t border-black/5 pt-4 text-sm leading-6 dark:border-white/10">
+				{unread > 0 && selected.length === 0 && (
+					<p className="flex items-baseline justify-between gap-4"><span className="font-medium">Not read yet</span><span className="tabular-nums">{format.number(unread)}</span></p>
+				)}
+				<p className={MUTED}>{STUDY_TYPE_METHOD}</p>
+			</div>
+		</SidebarCard>
 	);
 }
 
@@ -666,9 +728,11 @@ export function ResultsOverview({
 	facetDistribution,
 	range,
 	types,
+	studies,
 	author,
 	onRangeChange,
 	onTypeSelect,
+	onStudySelect,
 	onAuthorSelect,
 	showYears,
 	showAuthors,
@@ -677,9 +741,11 @@ export function ResultsOverview({
 	facetDistribution: FacetDistribution | undefined;
 	range: string;
 	types: string[];
+	studies: string[];
 	author: string;
 	onRangeChange: (start: string | null, end: string | null) => void;
 	onTypeSelect: (type: string) => void;
+	onStudySelect: (type: string) => void;
 	onAuthorSelect: (author: string) => void;
 	showYears: boolean;
 	showAuthors: boolean;
@@ -690,6 +756,7 @@ export function ResultsOverview({
 		<>
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
+			<StudyTypeRows counts={facetDistribution?.studyType} selected={studies} onSelect={onStudySelect} />
 			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} shown={shown} />}
 			<MostCited shown={shown} />
 		</>

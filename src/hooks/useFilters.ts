@@ -228,6 +228,17 @@ export function useFilters() {
 		[params.type, setParams],
 	);
 
+	const handleStudySelect = useCallback(
+		(study: string) =>
+			setParams({
+				study: params.study.includes(study)
+					? params.study.filter((value) => value !== study)
+					: [...params.study, study],
+				page: 1,
+			}),
+		[params.study, setParams],
+	);
+
 	const handleClearFilters = useCallback(() => {
 		setParams({
 			author: "",
@@ -237,6 +248,7 @@ export function useFilters() {
 			range: "",
 			topics: [],
 			type: [],
+			study: [],
 		});
 	}, [setParams]);
 
@@ -305,6 +317,7 @@ export function useFilters() {
 		handleCountrySelect,
 		handleTopicsChange,
 		handleTypeSelect,
+		handleStudySelect,
 		handleClearFilters,
 		handleCheckboxChange,
 		collectionsData,

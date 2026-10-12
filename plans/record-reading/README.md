@@ -16,11 +16,12 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
 
 ## Decisions (the user, 2026-10-12)
 
-- Every record a screening source brings in is read once by Jev when it comes
-  in. No cap. The read runs on the library's own OpenRouter key; a library
-  without one gets no reading.
+- Every record that comes into a library is read once by Jev when it comes in,
+  from every kind of source, screening or not. No cap. The read runs on the
+  library's own OpenRouter key; a library without one gets no reading.
 - One call answers everything, since Jev charges only for input: the grade
-  against the source's subject (score, four levels), the study type (choice, 13
+  against the subject of each screening source that holds the record (score,
+  four levels), the study type (choice, 13
   types in three levels), whether the authors pooled results themselves
   (noul), the region studied (choice), and whether the abstract reports
   quantitative results (noul).

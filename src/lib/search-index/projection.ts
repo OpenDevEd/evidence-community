@@ -23,6 +23,7 @@ import {
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { itemReading } from "@/db/schema/readings";
+import type { StudyReading, StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
@@ -67,6 +68,13 @@ type CollectionRow = Pick<
 >;
 type ItemRow = typeof item.$inferSelect;
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
+
+/** A record's study type for its search document: none until it has been read. */
+function readingFields(row: { type: StudyTypeKey; confidence: number; by: StudyReading["by"]; input: StudyReading["input"] } | undefined) {
+	if (!row) return {};
+	const reading: StudyReading = { type: row.type, confidence: row.confidence, by: row.by, input: row.input };
+	return { studyType: row.type, reading };
+}
 
 function uniqueSorted(values: Iterable<string>) {
 	return [...new Set(values)].sort();
@@ -311,16 +319,19 @@ async function buildSearchProjectionPlanForKeys(
 		)
 		.where(inArray(item.key, topLevelKeys))
 		.orderBy(asc(item.key));
-	// A record its sources screen out leaves the index, and comes back if a grade or source lets it in again.
-	const screenedOut = new Set(
+	const readings = new Map(
 		(await database
-			.select({ key: itemReading.itemKey })
+			.select({
+				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, type: itemReading.studyType,
+				confidence: itemReading.typeConfidence, by: itemReading.typedBy, input: itemReading.input,
+			})
 			.from(itemReading)
-			.where(and(inArray(itemReading.itemKey, topLevelKeys), eq(itemReading.screenedOut, true))))
-			.map((row) => row.key),
+			.where(inArray(itemReading.itemKey, topLevelKeys)))
+			.map((row) => [row.key, row]),
 	);
+	// A record its sources screen out leaves the index, and comes back if a grade or source lets it in again.
 	const activeParents = itemRows.filter(
-		(row) => isPublicTopLevelItem(row.item) && row.item.deleted !== 1 && !screenedOut.has(row.item.key),
+		(row) => isPublicTopLevelItem(row.item) && row.item.deleted !== 1 && !readings.get(row.item.key)?.screenedOut,
 	);
 	const activeParentKeys = activeParents.map(({ item }) => item.key);
 	const children =
@@ -527,6 +538,8 @@ async function buildSearchProjectionPlanForKeys(
 				provider,
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
 				revision: parent.revision,
+				// What kind of work it is, once read: filtered and counted by `studyType`, shown from `reading`.
+				...readingFields(readings.get(parent.key)),
 				sourceConnectionKey: parent.sourceConnectionKey,
 				sourceExternalScopeKey,
 				sourceRecordKey: parent.sourceRecordKey,

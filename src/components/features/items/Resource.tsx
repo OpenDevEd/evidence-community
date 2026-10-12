@@ -20,6 +20,7 @@ import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { FuturePublicationHint } from "./FuturePublicationHint";
+import { StudyTypeLabel } from "./StudyTypeLabel";
 import { isFuturePublication } from "@/lib/bibliographic-date";
 import { Link } from "@/i18n/routing";
 import { preloadItemCovers } from "./PdfCover";
@@ -452,6 +453,12 @@ function ResourceArticle({
 								<ResourceDivider />
 							</>
 						)}
+					{finalItemData?.reading && (
+						<>
+							<StudyTypeLabel reading={finalItemData.reading} />
+							<ResourceDivider />
+						</>
+					)}
 					<OpenAccessLabel
 						openAccess={finalItemData?.openAccess}
 						className="text-lg"
