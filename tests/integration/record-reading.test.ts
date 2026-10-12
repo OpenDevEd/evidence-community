@@ -8,6 +8,7 @@ import { readScreeningStatuses, requestGrading, saveSourceScreening } from "@/li
 import { readSourceStatuses } from "@/lib/source-ingestion/source-status";
 import { runReadingCycle, trySubject } from "@/lib/readings/worker";
 import { readPublicItem } from "@/lib/search-index/projection";
+import { readStudyReading } from "@/lib/readings/reading";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
@@ -102,6 +103,7 @@ it("reads the type of every record a library with a key brings in, grades only f
 		// New text: the type read from the old text is not shown while the new one waits to be read.
 		await publish(client, "TYPEAAA2", "Drought and maize: a meta-analysis", "We pooled 52 trials.", 2);
 		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toBeUndefined();
+		expect(await readStudyReading(db, "TYPEAAA2")).toBeNull();
 
 		// An editor's correction wins over the reading, and a later read of new text leaves it.
 		await client.query(`UPDATE item SET "studyType" = 'commentary' WHERE key = 'TYPEAAA2'`);
@@ -114,6 +116,8 @@ it("reads the type of every record a library with a key brings in, grades only f
 		const none = jev(answering);
 		await runReadingCycle(db, keyless, undefined, none.request);
 		expect(none.asked).toEqual([]);
+		// The inspector says a record nobody has read is not read yet.
+		expect(await readStudyReading(db, "KEYLESS2")).toBeNull();
 		expect((await db.select({ key: itemReading.itemKey }).from(itemReading)).map((row) => row.key)).toEqual(["TYPEAAA2"]);
 	});
 }, 120_000);
