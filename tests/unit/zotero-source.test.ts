@@ -51,6 +51,7 @@ describe("Zotero source configuration", () => {
 				enabled: true,
 				writebackEnabled: true,
 				settings: zoteroConnectionConfigSchema.parse({}),
+				screening: { enabled: false, subject: "", keptOut: ["not-about"] },
 			},
 		]);
 		await expect(resolver("zotero-test")).resolves.toBe("secret");

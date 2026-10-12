@@ -1,4 +1,5 @@
 import { runTopicAssociationCycle } from "../src/lib/topics/association-delivery";
+import { runReadingCycle } from "../src/lib/readings/worker";
 import { runNotificationCycle } from "../src/lib/notifications/worker";
 import { runAuthorAssociationCycle } from "../src/lib/authors/association-delivery";
 import { randomUUID } from "node:crypto";
@@ -172,6 +173,7 @@ async function main() {
 			try {
 				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
 				await runTopicAssociationCycle(resource.database, config, abortController.signal);
+				await runReadingCycle(resource.database, config, abortController.signal);
 				const notificationError = await runNotificationCycle(resource.database, config, abortController.signal);
 				const cycle = await runPublicationWorkerCycle(
 					resource.database,

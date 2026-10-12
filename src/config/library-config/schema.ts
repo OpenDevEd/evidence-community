@@ -1369,6 +1369,30 @@ const servicesSchema = z
 	})
 	.strict();
 
+/** How close a record is to its source's subject, lowest first, as screening grades it. */
+export const SCREENING_GRADES = ["not-about", "passing", "touches", "about"] as const;
+export type ScreeningGrade = (typeof SCREENING_GRADES)[number];
+
+/**
+ * A source's screening: whether Jev reads the records it brings in, the subject it grades them against, and the
+ * grades that keep a record out of the library. A screening source needs a subject.
+ */
+const sourceScreeningSchema = z
+	.object({
+		enabled: z.boolean().default(false),
+		subject: z.string().trim().max(1_000).default(""),
+		keptOut: z
+			.array(z.enum(SCREENING_GRADES))
+			.max(SCREENING_GRADES.length)
+			.default(["not-about"])
+			.refine((grades) => new Set(grades).size === grades.length, "Each grade can be kept out once"),
+	})
+	.strict()
+	.refine((screening) => !screening.enabled || screening.subject.length > 0, {
+		message: "Write what this source's records should be about before screening them",
+		path: ["subject"],
+	});
+
 const zoteroSourceConfigurationSchema = z
 	.object({
 		key: z
@@ -1383,6 +1407,7 @@ const zoteroSourceConfigurationSchema = z
 		enabled: z.boolean().default(true),
 		writebackEnabled: z.boolean().default(false),
 		settings: zoteroConnectionConfigSchema.prefault({}),
+		screening: sourceScreeningSchema.prefault({}),
 	})
 	.strict();
 

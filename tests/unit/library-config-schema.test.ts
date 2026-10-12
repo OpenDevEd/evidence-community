@@ -104,6 +104,8 @@ describe("library configuration fixtures", () => {
 					// Existing groups keep adding their tagged PDFs.
 					downloadPdfs: true,
 				},
+				// A source screens nothing until its owner turns screening on and writes a subject.
+				screening: { enabled: false, subject: "", keptOut: ["not-about"] },
 			},
 		]);
 		expect(config.ai.providers[0].enabled).toBe(true);
@@ -1296,5 +1298,18 @@ describe("policy redirect destinations", () => {
 		{ cookiePolicy: "/terms", termsOfService: "https://external.example.org/terms" },
 	])("allows local documents and chains with a destination: %j", (legal) => {
 		expect(libraryConfigSchema.safeParse({ ...minimalLibraryConfig, legal }).success).toBe(true);
+	});
+});
+
+describe("source screening", () => {
+	const withScreening = (screening: unknown) => libraryConfigSchema.safeParse({ ...maximalLibraryConfig, sources: [{ ...maximalLibraryConfig.sources[0], screening }] });
+
+	it("needs a subject before a source screens its records", () => {
+		expect(withScreening({ enabled: true }).success).toBe(false);
+		expect(withScreening({ enabled: true, subject: "Climate adaptation in farming" }).success).toBe(true);
+	});
+
+	it("keeps each grade out at most once", () => {
+		expect(withScreening({ keptOut: ["not-about", "not-about"] }).success).toBe(false);
 	});
 });
