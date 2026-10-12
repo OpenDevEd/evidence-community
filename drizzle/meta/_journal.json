@@ -589,6 +589,13 @@
       "when": 1791823142269,
       "tag": "0083_item-open-access-choice",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1791827515812,
+      "tag": "0084_reader-collection-members",
+      "breakpoints": true
     }
   ]
 }

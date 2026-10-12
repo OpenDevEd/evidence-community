@@ -30,7 +30,7 @@ import CopyButton from "./CopyButton";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
-import CollectionsList from "../user/CollectionsList";
+import { CollectionPicker } from "../collections/CollectionPicker";
 import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -57,38 +57,26 @@ export function AddButton({
 	collectionId?: string;
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const [loading, setLoading] = useState(false);
 	const { reader, data, refresh } = useReaderData();
 	const t = useTranslations("ui");
 	const highlightedCollections = itemData ? (data?.itemCollections[itemData.key] ?? []) : [];
+	// Puts the record in the collection or takes it out. Taking it out of the collection this list shows closes the picker, as the record leaves the list behind it.
 	const onCollectionSelect = async (pressedCollectionId: string) => {
-		setLoading(true);
-		try {
-			const willClose =
-				pressedCollectionId === collectionId &&
-				highlightedCollections.includes(pressedCollectionId);
-			if (!itemData) return;
-			const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey: itemData.key } });
-			if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
-			await Promise.allSettled([
-				revalidateResults && revalidateResults(),
-				refresh(),
-			]);
-			if (willClose) {
-				onClose();
-			}
-		} catch (error) {
-			console.error(error);
-		} finally {
-			setLoading(false);
-		}
+		if (!itemData) return;
+		const willClose = pressedCollectionId === collectionId && highlightedCollections.includes(pressedCollectionId);
+		const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey: itemData.key } });
+		if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
+		await Promise.allSettled([revalidateResults && revalidateResults(), refresh()]);
+		if (willClose) onClose();
 	};
 
 	return (
 		reader && (
 			<>
+				{/* On wider screens it hangs from a fixed top, so a page of fewer rows or a new collection grows it downward. */}
 				<DialogModal
 					size="lg"
+					classNames={{ wrapper: "sm:items-start", base: "sm:mt-[12vh]" }}
 					isOpen={isOpen}
 					onOpenChange={onOpenChange}
 				>
@@ -96,25 +84,8 @@ export function AddButton({
 						<GenericHeader onClose={onClose}>
 							{t("selectCollection")}
 						</GenericHeader>
-						<ModalBody className="p-6 pt-0 gap-6">
-							<Skeleton
-								className="w-full rounded-2xl"
-								isLoaded={!!itemData}
-							>
-								<div className="flex flex-col gap-4">
-									<CollectionsList
-										isLoading={loading}
-										highlightedCollections={
-											highlightedCollections
-										}
-										collections={data?.collections ?? []}
-										classNames={{
-											container: "gap-3",
-										}}
-										onCollectionSelect={onCollectionSelect}
-									/>
-								</div>
-							</Skeleton>
+						<ModalBody className="px-6 pb-6 pt-0">
+							<CollectionPicker itemKey={itemData?.key} onToggle={onCollectionSelect} />
 						</ModalBody>
 					</ModalContent>
 				</DialogModal>

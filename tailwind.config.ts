@@ -272,6 +272,11 @@ const config: Config = {
 					"0%": { opacity: "0", transform: "translateY(28px)" },
 					"100%": { opacity: "1", transform: "translateY(0)" },
 				},
+				// A list row that arrives after its list was shown: it opens to its height and fades in.
+				"row-open": {
+					"0%": { gridTemplateRows: "0fr", opacity: "0" },
+					"100%": { gridTemplateRows: "1fr", opacity: "1" },
+				},
 				"rise-in": {
 					"0%": {
 						opacity: "0",
@@ -288,6 +293,7 @@ const config: Config = {
 				// "backwards" rather than "both", so the last frame stops
 				// applying once it is done and hover still moves the button.
 				"fade-in": "fade-in 0.6s ease-out backwards",
+				"row-open": "row-open 0.25s ease-out backwards",
 				"rise-in":
 					"rise-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards",
 				// CSS rather than JavaScript, so the page's first paint already plays it.
