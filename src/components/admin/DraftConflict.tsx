@@ -1,6 +1,7 @@
 "use client";
 
 import { describeCountryFocus } from "@/lib/country-focus";
+import { describeOpenAccessChoice } from "@/lib/open-access";
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { adminCanonicalPayloadToItemFields } from "@/lib/admin/item-fields";
 
@@ -39,6 +40,7 @@ export function ConflictValue({
 	value: unknown;
 }) {
 	if (field === "countryFocus") return describeCountryFocus(value);
+	if (field === "openAccess") return describeOpenAccessChoice(value);
 	if (
 		value == null ||
 		value === "" ||

@@ -39,7 +39,9 @@ import { sourceDisplayLabel } from "./source-label";
 import {
 	adminCanonicalDraftToItemFields,
 	adminCanonicalPayloadToItemFields,
+	isTopLevelAdminItemType,
 } from "./item-fields";
+import { openAccessFromSources } from "./item-preview";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -386,7 +388,7 @@ export async function getAdminItemDetail(
 		]);
 	if (!identity || (!published && !draft)) throw new ItemNotFoundError(itemKey);
 
-	const [tagRows, membershipRows, attachments, publishedLinkKeys] =
+	const [tagRows, membershipRows, attachments, publishedLinkKeys, fromSources] =
 		await Promise.all([
 			published
 				? db
@@ -402,6 +404,9 @@ export async function getAdminItemDetail(
 				: Promise.resolve([]),
 			getAdminAttachments(db, itemKey),
 			getManualLinkKeys(db, itemKey),
+			published && isTopLevelAdminItemType(published.itemType)
+				? openAccessFromSources(db, itemKey, config)
+				: Promise.resolve(null),
 		]);
 	const basePayload = publishedAdminItemPayload(published, {
 		collectionKeys: membershipRows.map(({ key }) => key),
@@ -483,6 +488,7 @@ export async function getAdminItemDetail(
 		filePublication: filePublicationJson(filePublication),
 		fileRemovalPending: Boolean(removal),
 		links,
+		openAccessFromSources: fromSources,
 		parentItem,
 		parentState:
 			parentItem && (parentPublished || parentDraft)

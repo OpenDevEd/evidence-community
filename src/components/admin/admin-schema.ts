@@ -92,6 +92,7 @@ function sharedPayloadFromDetail(
 		collections: detail.collectionKeys,
 		links: detail.links.publishedKeys,
 		countryFocus: published.countryFocus ?? null,
+		openAccess: published.openAccess ?? null,
 		creators: published.creators ?? detail.creators,
 		...(detail.parentItem ? { parentItem: detail.parentItem } : {}),
 	};

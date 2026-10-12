@@ -6,6 +6,8 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
+import { openAccessFromSources } from "@/lib/admin/item-preview";
+import { openItemDraft, publishItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { lookUpOpenAccess } from "@/lib/open-access-lookup";
 import { generateSearchProjectionPlans } from "@/lib/search-index/projection";
 import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
@@ -17,6 +19,7 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
+const policy = { writebackConfig: config };
 const DAY = 24 * 60 * 60_000;
 const openAlexSettings = {
 	name: "AI in education",
@@ -229,3 +232,85 @@ it("labels a record from its newest OpenAlex work, else from OpenAlex's answer f
 		expect(await openAccessOf(db, [fromOpenAlex])).toEqual({ [fromOpenAlex]: true });
 	});
 });
+
+it("puts an editor's choice before OpenAlex, keeps it through source sync, and asks OpenAlex nothing about it", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values([
+			{ key: "zotero-maximal", provider: "zotero", scopeKind: "group", externalScopeKey: "6632364" },
+			{ key: "openalex-choice", provider: "openalex", scopeKind: "query", config: {} },
+		]);
+		const importWork = (cursor: number, title = "An open OpenAlex work") =>
+			writeSourceIngestionBatch(db, {
+				sourceConnectionKey: "openalex-choice",
+				expectedCursor: cursor === 1 ? {} : { v: cursor - 1 },
+				nextCursor: { v: cursor },
+				mappingProfileVersion: "openalex-v1",
+				fetchedAt: new Date(),
+				items: mapOpenAlexWork({
+					id: "W88",
+					title: title,
+					type: "article",
+					doi: "https://doi.org/10.1234/chosen",
+					updated_date: `2026-10-0${cursor}T00:00:00Z`,
+					open_access: { is_oa: true },
+				}).items,
+			});
+		const work = (await importWork(1)).itemKeys.W88!;
+		const zotero = (
+			await writeSourceIngestionBatch(db, {
+				sourceConnectionKey: "zotero-maximal",
+				expectedCursor: {},
+				nextCursor: { version: 1 },
+				mappingProfileVersion: "canonical-v1",
+				fetchedAt: new Date(),
+				items: [
+					{
+						operation: "upsert",
+						sourceRecordKey: "DCDE2345",
+						remoteVersion: "1",
+						raw: {},
+						metadata: { itemType: "journalArticle", title: "Decided", DOI: "10.1234/decided" },
+					},
+				],
+			})
+		).itemKeys.DCDE2345!;
+		const choose = async (key: string, openAccess: boolean | null) => {
+			const draft = await openItemDraft(db, key, policy);
+			await saveItemDraft(
+				db,
+				{
+					itemKey: key,
+					expectedDraftGeneration: draft.generation,
+					expectedDraftRevision: draft.draftRevision,
+					expectedPayload: draft.payload,
+					payload: { ...draft.payload, openAccess },
+				},
+				policy,
+			);
+			await publishItemDraft(db, key, policy);
+		};
+
+		// An editor marks the open OpenAlex work closed: readers see closed, the admin still sees what OpenAlex says, and
+		// the next sync of the work keeps the choice.
+		await choose(work, false);
+		expect(await openAccessOf(db, [work])).toEqual({ [work]: false });
+		expect(await openAccessFromSources(db, work, config)).toBe(true);
+		await importWork(2, "An open OpenAlex work, revised");
+		expect((await db.select().from(item).where(eq(item.key, work)))[0]?.title).toBe("An open OpenAlex work, revised");
+		expect(await openAccessOf(db, [work])).toEqual({ [work]: false });
+
+		// A record an editor decided is not looked up.
+		await choose(zotero, true);
+		const openAlexApi = fakeOpenAlex({ "10.1234/decided": [false] });
+		expect(await lookUpOpenAccess({ database: db, client: openAlexApi.client, config, now: new Date() })).toBe(0);
+		expect(openAlexApi.asked).toEqual([]);
+		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: true });
+
+		// Left to OpenAlex again, the work shows what OpenAlex says, and the record is looked up.
+		await choose(work, null);
+		await choose(zotero, null);
+		expect(await openAccessOf(db, [work])).toEqual({ [work]: true });
+		expect(await lookUpOpenAccess({ database: db, client: openAlexApi.client, config, now: new Date() })).toBe(1);
+		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: false });
+	});
+}, 120_000);

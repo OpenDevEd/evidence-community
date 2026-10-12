@@ -151,6 +151,7 @@ export async function getAdminReviewSnapshot(
 						payload.url,
 					),
 					filePublication: null,
+					openAccessFromSources: null,
 					fileRemovalPending: files.some(
 						(entry) =>
 							entry.itemKey === record.itemKey &&

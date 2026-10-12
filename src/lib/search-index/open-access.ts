@@ -14,13 +14,13 @@ export const hasCurrentOpenAlexWork = (itemKey: unknown) => sql`EXISTS (
 		AND c.provider IN (${sql.join(OPENALEX_WORK_PROVIDERS.map((provider) => sql`${provider}`), sql`, `)}))`;
 
 /**
- * Reads whether records are open access: the `is_oa` of the newest copy of the record's OpenAlex work that its
- * search still finds, else OpenAlex's answer for the DOI the record shows, else null.
+ * Reads whether records are open access: an editor's choice, else the `is_oa` of the newest copy of the record's OpenAlex
+ * work that its search still finds, else OpenAlex's answer for the DOI the record shows, else null.
  */
 export async function readOpenAccess(
 	database: Pick<Database | DatabaseTransaction, "select">,
 	keys: readonly string[],
-): Promise<(key: string, doi: string | null) => boolean | null> {
+): Promise<(key: string, doi: string | null, chosen?: boolean | null) => boolean | null> {
 	if (keys.length === 0) return () => null;
 	const [works, lookups] = await Promise.all([
 		database
@@ -55,8 +55,8 @@ export async function readOpenAccess(
 	]);
 	const fromWork = new Map(works.map((row) => [row.itemKey, row.isOpenAccess]));
 	const lookupOf = new Map(lookups.map((row) => [row.itemKey, row]));
-	return (key, doi) => {
+	return (key, doi, chosen) => {
 		const lookup = lookupOf.get(key);
-		return fromWork.get(key) ?? (lookup && lookup.doi === doi ? lookup.isOpenAccess : null);
+		return chosen ?? fromWork.get(key) ?? (lookup && lookup.doi === doi ? lookup.isOpenAccess : null);
 	};
 }

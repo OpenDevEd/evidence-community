@@ -57,6 +57,7 @@ export class AdminValidationError extends Error {
 const fieldLabels: Record<string, string> = {
 	abstractNote: "Abstract",
 	countryFocus: "Country focus",
+	openAccess: "Open access",
 	beforeCollection: "Collection position",
 	expectedDraftRevision: "Draft revision",
 	expectedRevision: "Revision",

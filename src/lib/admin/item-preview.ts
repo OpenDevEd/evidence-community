@@ -40,6 +40,31 @@ export async function previewItem(db: Database, rootKey: string, config: Library
 	return preview ?? null;
 }
 
+/**
+ * What OpenAlex says about a published record's open access, whatever an editor chose: the record projected with the
+ * choice taken out, in a transaction that is always rolled back.
+ */
+export async function openAccessFromSources(db: Database, key: string, config: LibraryServerConfig) {
+	let fromSources: boolean | null = null;
+	try {
+		await db.transaction(async (transaction) => {
+			await transaction.update(item).set({ openAccess: null }).where(eq(item.key, key));
+			const [projected] = await projectPublicItems(transaction, [key], config);
+			fromSources = projected?.openAccess ?? null;
+			throw UNDO;
+		});
+	} catch (error) {
+		if (error !== UNDO) throw error;
+	}
+	return fromSources;
+}
+
+/**
+ * Thrown to roll a transaction back. The production server can load drizzle more than once, so its own rollback
+ * error fails an `instanceof` check against the class imported here.
+ */
+const UNDO = new Error("Rolled back on purpose");
+
 async function publishWorkingDrafts(transaction: DatabaseTransaction, rootKey: string, config: LibraryServerConfig): Promise<PreviewFiles> {
 	const keys = [rootKey, ...(await reviewChildKeys(transaction, rootKey))];
 	const [drafts, { choice }] = await Promise.all([
