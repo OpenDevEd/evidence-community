@@ -1,9 +1,10 @@
 // An edition's text marked up against the text AI wrote, so a reviewer sees what a person changed.
 import Link from "next/link";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, use } from "react";
 
 import { InlineCitationCard, InlineCitationCardBody, InlineCitationCardTrigger, InlineCitationSource } from "@/components/ai-elements/InlineCitation";
-import { PublicationLinkPreview } from "@/components/features/markdown/Citation";
+import { CitedPublications, PublicationLinkPreview } from "@/components/features/markdown/Citation";
+import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
 
 import { CHIP } from "./AdminDigestEditor";
 
@@ -12,12 +13,14 @@ import { type Part } from "./digest-changes";
 export const ADDED = "rounded-sm bg-emerald-500/15 text-emerald-900 no-underline dark:text-emerald-200";
 export const REMOVED = "rounded-sm bg-red-500/10 text-red-900/70 line-through dark:text-red-200/70";
 
-/** A citation as the text shows it: a link to its record, with the record's card on hover. A link to anywhere else stays a label. */
+/** A citation as the text shows it: a link to its record, marked open or closed access as readers see it, with the
+ * record's card on hover. A link to anywhere else stays a label. */
 function Cited({ label, href }: { label: string; href: string }) {
 	const itemKey = /^\/lib\/([A-Z0-9]{8})$/.exec(href)?.[1];
+	const openAccess = use(CitedPublications)[itemKey ?? ""]?.openAccess;
 	if (!itemKey) return <span className={CHIP}>{label}</span>;
 	return <InlineCitationCard>
-		<InlineCitationCardTrigger><Link href={href} target="_blank" rel="noopener noreferrer" className={CHIP}>{label}</Link></InlineCitationCardTrigger>
+		<InlineCitationCardTrigger><Link href={href} target="_blank" rel="noopener noreferrer" className={CHIP}><OpenAccessLabel openAccess={openAccess} iconOnly className="me-1 align-[-0.12em]" iconClassName="size-3.5" />{label}</Link></InlineCitationCardTrigger>
 		<InlineCitationCardBody className="w-96 max-w-[calc(100vw-1.5rem)]">
 			<InlineCitationSource><PublicationLinkPreview itemKey={itemKey} href={href} /></InlineCitationSource>
 		</InlineCitationCardBody>
