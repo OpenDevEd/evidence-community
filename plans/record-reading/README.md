@@ -19,6 +19,11 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
 - Every record that comes into a library is read once by Jev when it comes in,
   from every kind of source, screening or not. No cap. The read runs on the
   library's own OpenRouter key; a library without one gets no reading.
+  - Changed 2026-10-12. The first decision read only the records a screening
+    source brings in. Types, the Study types filter and the per-type digest
+    counts cover the whole library, so a record from a source that does not
+    screen needs a type too. Proof: the reader slice (#589, PR #598) reads
+    every record of a library that has a key.
 - One call answers everything, since Jev charges only for input: the grade
   against the subject of each screening source that holds the record (score,
   four levels), the study type (choice, 13

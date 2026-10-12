@@ -1030,5 +1030,87 @@
     "domain": "Domínio",
     "field": "Campo",
     "subfield": "Subcampo"
+  },
+  "studyTypes": {
+    "title": "Tipos de estudo",
+    "read": "{count, number} lidos",
+    "notRead": "Ainda não lidos",
+    "chip": "Tipo de estudo",
+    "uncertain": "incerto",
+    "metadata": "Tipo obtido do próprio registro.",
+    "ai": "Lido por Jev a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
+    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Jev, um classificador de IA, lê o título e o resumo e escolhe um destes tipos; um registro sem resumo é avaliado pelo título. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza de Jev é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um.",
+    "levels": {
+      "synthesis": "Revisões e sínteses",
+      "primary": "Estudos primários",
+      "other": "Outros trabalhos"
+    },
+    "types": {
+      "review-of-reviews": {
+        "label": "Revisão de revisões",
+        "plural": "Revisões de revisões",
+        "description": "Reúne e resume revisões ou meta-análises anteriores, como uma revisão guarda-chuva."
+      },
+      "meta-analysis": {
+        "label": "Meta-análise",
+        "plural": "Meta-análises",
+        "description": "Os próprios autores combinam estatisticamente os resultados de vários estudos anteriores. Citar o resultado combinado de outro trabalho não conta."
+      },
+      "systematic-review": {
+        "label": "Revisão sistemática",
+        "plural": "Revisões sistemáticas",
+        "description": "Resume estudos anteriores encontrados com uma busca e critérios de inclusão declarados, sem combinar os resultados. Inclui revisões de escopo e revisões rápidas."
+      },
+      "literature-review": {
+        "label": "Revisão de literatura",
+        "plural": "Outras revisões de literatura",
+        "description": "Uma revisão narrativa, crítica ou integrativa sem método de busca declarado."
+      },
+      "bibliometric": {
+        "label": "Estudo bibliométrico",
+        "plural": "Estudos bibliométricos",
+        "description": "Conta e mapeia publicações, autores ou citações sobre um tema, em vez do que os estudos encontraram."
+      },
+      "rct": {
+        "label": "Ensaio randomizado",
+        "plural": "Ensaios randomizados",
+        "description": "Participantes, grupos ou locais foram designados aleatoriamente às condições."
+      },
+      "quasi-experiment": {
+        "label": "Quase-experimento",
+        "plural": "Quase-experimentos",
+        "description": "Uma intervenção comparada com um grupo de comparação escolhido sem designação aleatória."
+      },
+      "quantitative": {
+        "label": "Estudo quantitativo",
+        "plural": "Outros quantitativos",
+        "description": "Levantamentos, estudos correlacionais e observacionais, testes antes e depois com um único grupo, análises de dados existentes."
+      },
+      "qualitative": {
+        "label": "Estudo qualitativo",
+        "plural": "Qualitativos e mistos",
+        "description": "Entrevistas, grupos focais, estudos de caso, etnografia ou análise documental, sozinhos ou com dados quantitativos."
+      },
+      "modelling": {
+        "label": "Estudo de modelagem",
+        "plural": "Estudos de modelagem",
+        "description": "Constrói, simula, projeta ou testa um modelo, método, ferramenta ou sistema, avaliado pelo seu desempenho."
+      },
+      "protocol": {
+        "label": "Protocolo",
+        "plural": "Protocolos",
+        "description": "Um estudo ou revisão planejado ou em andamento, ainda sem resultados."
+      },
+      "commentary": {
+        "label": "Comentário",
+        "plural": "Comentários",
+        "description": "Um editorial, opinião, análise de políticas, teoria ou modelo conceitual sem dados novos."
+      },
+      "not-research": {
+        "label": "Não é um artigo de pesquisa",
+        "plural": "Não são artigos de pesquisa",
+        "description": "Um conjunto de dados, software, correção, resenha de livro ou arquivo que acompanha outro artigo."
+      }
+    }
   }
 }

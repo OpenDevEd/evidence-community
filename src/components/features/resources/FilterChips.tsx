@@ -206,6 +206,7 @@ export function FilterChips() {
 	const { topics } = useLibraryConfig();
 	const t = useTranslations("ui");
 	const itemTypeName = useTranslations("itemType");
+	const studyTypes = useTranslations("studyTypes");
 	const selectedTopics = topics.enabled
 		? (itemsContext.queryParams.topics ?? [])
 		: [];
@@ -287,8 +288,8 @@ export function FilterChips() {
 							transition={{ duration: 0.2 }}
 						>
 							<Chip
-								group="Study type"
-								title={studyType(study)?.label ?? study}
+								group={studyTypes("chip")}
+								title={studyType(study) ? studyTypes(`types.${study}.label`) : study}
 								callback={() => itemsContext.handleStudySelect(study)}
 								classNames={{
 									button: "bg-success/80 dark:bg-success/80",

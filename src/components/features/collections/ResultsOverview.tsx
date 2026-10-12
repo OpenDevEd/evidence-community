@@ -10,7 +10,7 @@ import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
-import { STUDY_LEVELS, STUDY_TYPES, STUDY_TYPE_METHOD, studyType, type StudyLevel, type StudyTypeKey } from "@/lib/readings/study-types";
+import { STUDY_LEVELS, STUDY_TYPES, studyType, type StudyLevel, type StudyTypeKey } from "@/lib/readings/study-types";
 import useSWR from "swr";
 import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
@@ -260,6 +260,7 @@ const studyTone = (key: StudyTypeKey) => {
  * results. Records not read yet are counted apart, and the card says how types are read.
  */
 function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string[]; onSelect: (type: string) => void }) {
+	const t = useTranslations("studyTypes");
 	const format = useFormatter();
 	const base = useFacetTotal("studyType");
 	const shown = STUDY_TYPES.filter((type) => (counts?.[type.key] ?? 0) > 0 || selected.includes(type.key));
@@ -269,8 +270,8 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 	const dimmed = (key: string) => selected.length > 0 && !selected.includes(key);
 	return (
 		<SidebarCard
-			title="Study types"
-			aside={<span className={`text-sm tabular-nums ${MUTED}`}>{format.number(read)} read</span>}
+			title={t("title")}
+			aside={<span className={`text-sm tabular-nums ${MUTED}`}>{t("read", { count: read })}</span>}
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
 					{shown.map((type) => (
@@ -284,11 +285,11 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 					const rows = shown.filter((type) => type.level === level.key);
 					if (rows.length === 0) return null;
 					return (
-						<section key={level.key} aria-label={level.label}>
-							<h5 className={`px-3 pb-1 text-sm ${MUTED}`}>{level.label}</h5>
+						<section key={level.key} aria-label={t(`levels.${level.key}`)}>
+							<h5 className={`px-3 pb-1 text-sm ${MUTED}`}>{t(`levels.${level.key}`)}</h5>
 							<ul className="flex flex-col">
 								{rows.map((type) => (
-									<TypeRow key={type.key} label={type.plural} count={counts?.[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} />
+									<TypeRow key={type.key} label={t(`types.${type.key}.plural`)} count={counts?.[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} />
 								))}
 							</ul>
 						</section>
@@ -297,9 +298,9 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 			</div>
 			<div className="flex flex-col gap-2 border-t border-black/5 pt-4 text-sm leading-6 dark:border-white/10">
 				{unread > 0 && selected.length === 0 && (
-					<p className="flex items-baseline justify-between gap-4"><span className="font-medium">Not read yet</span><span className="tabular-nums">{format.number(unread)}</span></p>
+					<p className="flex items-baseline justify-between gap-4"><span className="font-medium">{t("notRead")}</span><span className="tabular-nums">{format.number(unread)}</span></p>
 				)}
-				<p className={MUTED}>{STUDY_TYPE_METHOD}</p>
+				<p className={MUTED}>{t("method")}</p>
 			</div>
 		</SidebarCard>
 	);
