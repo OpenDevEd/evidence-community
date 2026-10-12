@@ -75,7 +75,7 @@ describe("whole-library citation query", () => {
 			250,
 		).toSQL();
 
-		expect(withoutHiddenTags.sql).not.toMatch(/not exists/iu);
+		expect(withoutHiddenTags.sql).not.toMatch(/"itemToTag"/u);
 	});
 
 	it("holds only record keys until the bounded selection is known", () => {
