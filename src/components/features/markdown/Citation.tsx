@@ -504,6 +504,7 @@ export function PublicationLink({
  */
 export function PageCitation({ href, page }: { href?: string; page: string }) {
 	const match = href?.match(pdfHrefPattern);
+	const openAccess = use(CitedPublications)[match?.[1] ?? ""]?.openAccess;
 	if (!href || !match) {
 		return (
 			<StaticCitationChip
@@ -522,6 +523,7 @@ export function PageCitation({ href, page }: { href?: string; page: string }) {
 						href={href}
 						ariaLabel={`Open citation source at page ${page}`}
 					>
+						<OpenAccessLabel openAccess={openAccess} iconOnly iconClassName="size-3.5" />
 						<SourcePageLabel page={page} />
 					</CitationLinkChip>
 				</InlineCitationCardTrigger>

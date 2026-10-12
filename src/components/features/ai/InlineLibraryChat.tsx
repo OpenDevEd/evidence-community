@@ -132,8 +132,8 @@ function InlineChatMessages({
 		isWaitingForAssistant,
 		messages,
 		messagesScrollRef,
+		cited,
 		pdfSources,
-		publications,
 		reload,
 		resetChat,
 		scrollEdges,
@@ -153,7 +153,7 @@ function InlineChatMessages({
 					className="flex min-h-full flex-col gap-6 px-4 pt-5"
 					style={{ paddingBottom: composerDockHeight + 20 }}
 				>
-					<CitedPublications value={publications.byKey}>
+					<CitedPublications value={cited}>
 						{messages.slice(1).map((message, index) => (
 							<div
 								key={message.id}

@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
-import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import { bucketEntriesFromMessages, openAccessFromMessages } from "@/lib/ai/context-bucket";
 import { isAnswering } from "@/lib/ai/chat-request";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -241,7 +241,8 @@ export function useChatWindow({
 		mode,
 		pdfSources,
 		prefersReducedMotion: useReducedMotion(),
-		publications,
+		// What its citation links say about open access: the search hits, then the publications once they load.
+		cited: { ...openAccessFromMessages(conversation.messages), ...publications.byKey },
 		setMode,
 	};
 }

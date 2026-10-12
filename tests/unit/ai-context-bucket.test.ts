@@ -5,6 +5,7 @@ import {
 	BUCKET_PAGE_SIZE,
 	bucketEntriesFromMessages,
 	loadBucketPages,
+	openAccessFromMessages,
 } from "@/lib/ai/context-bucket";
 
 type Part = ResearchUIMessage["parts"][number];
@@ -152,5 +153,25 @@ describe("loading the publications a conversation has used", () => {
 
 		await expect(loading).rejects.toThrow("The library did not answer.");
 		expect(asked).toEqual([1, 2]);
+	});
+});
+
+describe("what a conversation's searches said about open access", () => {
+	it("keeps each hit's answer, the latest search winning, and leaves out hits with none", () => {
+		const hits = (...found: Array<{ key: string; openAccess?: boolean | null }>) =>
+			({
+				type: "tool-searchLibrary",
+				toolCallId: `call-${found.length}`,
+				state: "output-available",
+				input: {},
+				output: { queries: [{ hits: found }] },
+			}) as unknown as Part;
+
+		expect(
+			openAccessFromMessages([
+				assistant(hits({ key: "OPEN", openAccess: true }, { key: "SHUT", openAccess: false }, { key: "NONE", openAccess: null })),
+				assistant(read("OPEN"), text("[Open](/lib/OPEN)"), hits({ key: "SHUT", openAccess: true }), hits({ key: "OLD" })),
+			]),
+		).toEqual({ OPEN: { openAccess: true }, SHUT: { openAccess: true } });
 	});
 });

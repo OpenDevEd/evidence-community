@@ -606,7 +606,7 @@ function ChatModalContent({
 		onSmartScreeningOpenChange,
 		pdfSources,
 		prefersReducedMotion,
-		publications,
+		cited,
 		reload,
 		resetChat,
 		screenableContent,
@@ -678,7 +678,7 @@ function ChatModalContent({
 									)}
 								>
 									{conversationStarted && (
-										<CitedPublications value={publications.byKey}>
+										<CitedPublications value={cited}>
 											<ChatMessageList
 												chatFailure={chatFailure}
 												contentRef={contentRef}

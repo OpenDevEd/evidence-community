@@ -71,6 +71,24 @@ export function bucketEntriesFromMessages(
 	return Array.from(entries, ([key, source]) => ({ key, source })).reverse();
 }
 
+/**
+ * Whether each publication the assistant found is open access, as its searches returned it. The hits arrive before
+ * the answer that cites them, so a citation link shows its padlock from the start, before the publications load.
+ */
+export function openAccessFromMessages(messages: ResearchUIMessage[]) {
+	const found: Record<string, { openAccess: boolean }> = {};
+	for (const part of messages.flatMap((message) => message.parts)) {
+		if (!isToolUIPart(part) || part.type !== "tool-searchLibrary") continue;
+		const output = part.output as
+			| { queries?: Array<{ hits?: Array<{ key?: string; openAccess?: unknown }> }> }
+			| undefined;
+		for (const hit of (output?.queries ?? []).flatMap((query) => query.hits ?? [])) {
+			if (hit.key && typeof hit.openAccess === "boolean") found[hit.key] = { openAccess: hit.openAccess };
+		}
+	}
+	return found;
+}
+
 /** How many publications one request asks the library for. */
 export const BUCKET_PAGE_SIZE = 200;
 
