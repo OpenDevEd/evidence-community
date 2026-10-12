@@ -680,6 +680,20 @@ export function createDockerLibraryRuntimeGuard(
 		return requireGuard(updated, input);
 	};
 
+	/** Stops and deletes a guard container; one already gone is fine. */
+	const deleteGuard = async (containerId: string) => {
+		await request(
+			`${dockerApiVersion}/containers/${containerId}/stop?t=10`,
+			{ method: "POST" },
+			[204, 304, 404],
+		);
+		await request(
+			`${dockerApiVersion}/containers/${containerId}?v=true`,
+			{ method: "DELETE" },
+			[204, 404],
+		);
+	};
+
 	const createGuard = async (
 		name: string,
 		initialNetwork: string,
@@ -759,6 +773,12 @@ export function createDockerLibraryRuntimeGuard(
 				);
 			}
 			let container = await inspect(name, true);
+			// A guard that is not running was left by a hand-off that stopped part-way, such as one whose caller gave up
+			// between creating it and starting it. It serves nothing, so a fresh one replaces it.
+			if (container && container.state.Status !== "running") {
+				await deleteGuard(requireOwnedGuard(container, input.applicationUuid).id);
+				container = null;
+			}
 			if (container) {
 				container = await connectGuardNetworks(
 					requireGuard(container, input),
@@ -825,17 +845,7 @@ export function createDockerLibraryRuntimeGuard(
 			const name = guardName(applicationUuid);
 			const container = await inspect(name, true);
 			if (!container) return;
-			requireOwnedGuard(container, applicationUuid);
-			await request(
-				`${dockerApiVersion}/containers/${container.id}/stop?t=10`,
-				{ method: "POST" },
-				[204, 304, 404],
-			);
-			await request(
-				`${dockerApiVersion}/containers/${container.id}?v=true`,
-				{ method: "DELETE" },
-				[204, 404],
-			);
+			await deleteGuard(requireOwnedGuard(container, applicationUuid).id);
 		},
 	};
 }
