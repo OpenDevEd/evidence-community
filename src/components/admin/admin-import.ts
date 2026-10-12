@@ -202,9 +202,24 @@ const CRITERIA_KEY = "evidence-library:pdf-import-checks";
 const RESULTS_KEY = "evidence-library:pdf-import-results:";
 const DEFAULT_CRITERIA = ["Names the funder of the work", "States a licence for reuse, such as Creative Commons", "Has an abstract or executive summary"];
 
-export function storedCriteria(): string[] {
-	const stored = localStorage.getItem(CRITERIA_KEY);
-	return stored ? (JSON.parse(stored) as string[]) : DEFAULT_CRITERIA;
+function parseJson(text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+}
+
+/** The checks saved in this browser; the first mock saved them as lines of text. */
+export function criteriaFrom(stored: string | null): string[] {
+	if (stored === null) return DEFAULT_CRITERIA;
+	const parsed = parseJson(stored);
+	if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) return parsed;
+	return stored.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+export function storedCriteria() {
+	return criteriaFrom(localStorage.getItem(CRITERIA_KEY));
 }
 
 export function storeCriteria(criteria: readonly string[]) {
@@ -216,6 +231,14 @@ export type StoredReview = { checks: PdfCheckResult[]; topics: TopicSuggestion[]
 /** The saved review as text, so a store snapshot compares equal between reads. */
 export function storedReview(itemKey: string) {
 	return localStorage.getItem(RESULTS_KEY + itemKey);
+}
+
+/** A draft's saved review; the first mock saved only its checks, as a list. Anything else reads as none. */
+export function reviewFrom(stored: string): StoredReview | null {
+	const parsed = parseJson(stored);
+	if (Array.isArray(parsed)) return { checks: parsed as PdfCheckResult[], topics: [] };
+	const review = parsed as Partial<StoredReview> | null | undefined;
+	return Array.isArray(review?.checks) && Array.isArray(review?.topics) ? (review as StoredReview) : null;
 }
 
 export function storeReview(itemKey: string, review: StoredReview) {

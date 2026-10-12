@@ -25,7 +25,7 @@ import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
 import { InspectorSection } from "./InspectorSection";
 import { humanizeAdminField } from "./admin-schema";
-import { storedReview, topicPath, type ImportRow, type ReviewFilter, type StoredReview } from "./admin-import";
+import { reviewFrom, storedReview, topicPath, type ImportRow, type ReviewFilter } from "./admin-import";
 import type { ImportKind } from "./ImportRail";
 
 const ROWS_PER_PAGE = 7;
@@ -456,8 +456,8 @@ const unchanging = () => () => undefined;
 /** What the AI found in the PDF this draft was imported from: its topics and the library's checks. */
 export function ImportReviewSection({ itemKey }: { itemKey: string }) {
 	const stored = useSyncExternalStore(unchanging, () => storedReview(itemKey), () => null);
-	if (!stored) return null;
-	const review = JSON.parse(stored) as StoredReview;
+	const review = stored ? reviewFrom(stored) : null;
+	if (!review) return null;
 	return (
 		<InspectorSection icon={CheckListIcon} id="admin-import-review" title="PDF review">
 			<div className="flex flex-col gap-5">

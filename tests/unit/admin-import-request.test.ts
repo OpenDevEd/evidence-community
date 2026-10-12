@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	criteriaFrom,
 	doiPreviewRequest,
 	filePreviewRequest,
 	selectedImportRecords,
@@ -42,6 +43,14 @@ describe("import input checks", () => {
 		await expect(
 			filePreviewRequest([new File(["TY  - JOUR"], "a.ris")]),
 		).resolves.toEqual({ dois: [], files: [{ content: "TY  - JOUR", name: "a.ris" }] });
+	});
+});
+
+describe("checks saved in the browser", () => {
+	it("reads the saved list, the first mock's lines of text, or the defaults", () => {
+		expect(criteriaFrom(JSON.stringify(["Names the funder"]))).toEqual(["Names the funder"]);
+		expect(criteriaFrom("Names the funder\n\n States a licence ")).toEqual(["Names the funder", "States a licence"]);
+		expect(criteriaFrom(null)).toContain("Names the funder of the work");
 	});
 });
 
