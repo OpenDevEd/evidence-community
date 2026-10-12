@@ -6,7 +6,7 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
-import { readOpenAccessFromSources } from "@/lib/search-index/open-access";
+import { readOpenAccessFromSources, readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import { openItemDraft, publishItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { lookUpOpenAccess } from "@/lib/open-access-lookup";
 import { generateSearchProjectionPlans } from "@/lib/search-index/projection";
@@ -326,7 +326,9 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 		await choose(zotero, true);
 		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: true });
 		expect(await readOpenAccessFromSources(db, zotero)).toBe(false);
-		// A draft that moves the record to another DOI is not told what OpenAlex said about the old one.
-		expect(await readOpenAccessFromSources(db, zotero, "10.1234/elsewhere")).toBeNull();
+		// A draft or submitted version that keeps the DOI gets that answer; one that moves the record to another DOI is not
+		// told what OpenAlex said about the old one.
+		expect(await readOpenAccessFromSourcesFor(db, zotero, { DOI: "10.1234/decided" })).toBe(false);
+		expect(await readOpenAccessFromSourcesFor(db, zotero, { DOI: "10.1234/elsewhere" })).toBeNull();
 	});
 }, 120_000);

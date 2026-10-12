@@ -4,6 +4,7 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemSourceLink, sourceConnection, sourceSnapshot } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 
 /** SQL that is true when a record has a copy of its OpenAlex work that still counts: its search still finds it. */
@@ -96,4 +97,21 @@ export async function readOpenAccessFromSources(
 		database.select({ doi: itemOpenAccessLookup.doi }).from(itemOpenAccessLookup).where(eq(itemOpenAccessLookup.itemKey, key)),
 	]);
 	return fromSources(key, doi === undefined ? (lookup?.doi ?? null) : doi);
+}
+
+const text = (value: unknown) => (typeof value === "string" ? value : null);
+
+/**
+ * What OpenAlex says about a record as a draft or a submitted version shows it. A version that changes the record's DOI
+ * or Extra is asked about the DOI it changes to: what OpenAlex said about the old one would mislead.
+ */
+export async function readOpenAccessFromSourcesFor(
+	database: Pick<Database | DatabaseTransaction, "select">,
+	key: string,
+	payload: Readonly<Record<string, unknown>>,
+) {
+	const [published] = await database.select({ DOI: item.DOI, extra: item.extra }).from(item).where(eq(item.key, key));
+	const same = (field: "DOI" | "extra") => text(payload[field]) === (published?.[field] ?? null);
+	const doi = same("DOI") && same("extra") ? undefined : resolvePublicDoi({ DOI: text(payload.DOI), extra: text(payload.extra) });
+	return readOpenAccessFromSources(database, key, doi);
 }

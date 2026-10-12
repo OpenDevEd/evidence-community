@@ -41,8 +41,7 @@ import {
 	adminCanonicalPayloadToItemFields,
 	isTopLevelAdminItemType,
 } from "./item-fields";
-import { readOpenAccessFromSources } from "@/lib/search-index/open-access";
-import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
+import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -350,14 +349,6 @@ export async function adminItemLinks(
 	};
 }
 
-const text = (value: unknown) => (typeof value === "string" ? value : null);
-
-/** The DOI a draft changes the record to, or undefined when it leaves the DOI alone: an answer for an old DOI would mislead. */
-function draftDoi(payload: Record<string, unknown>, published: Record<string, unknown>) {
-	if (payload.DOI === published.DOI && payload.extra === published.extra) return undefined;
-	return resolvePublicDoi({ DOI: text(payload.DOI), extra: text(payload.extra) });
-}
-
 export async function getAdminItemDetail(
 	db: Database,
 	itemKey: string,
@@ -424,7 +415,7 @@ export async function getAdminItemDetail(
 		? applyItemDraftPatch(basePayload, draft.patch)
 		: basePayload;
 	const fromSources = published && isTopLevelAdminItemType(published.itemType)
-		? await readOpenAccessFromSources(db, itemKey, draftDoi(payload, basePayload))
+		? await readOpenAccessFromSourcesFor(db, itemKey, payload)
 		: null;
 	const draftTags = draft ? payloadStringList(payload, "tags") : null;
 	const draftCollections = draft
