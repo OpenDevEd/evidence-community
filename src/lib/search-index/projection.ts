@@ -23,8 +23,9 @@ import {
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { itemReading } from "@/db/schema/readings";
+import { studyReadingOf } from "@/lib/readings/reading";
 import { contentHashOf, readingText } from "@/lib/readings/reading-text";
-import type { StudyReading, StudyTypeKey } from "@/lib/readings/study-types";
+import type { StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
@@ -70,11 +71,14 @@ type CollectionRow = Pick<
 type ItemRow = typeof item.$inferSelect;
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
-/** A record's study type for its search document: none until it has been read, or while its reading is of text it no longer has. */
-function readingFields(row: { type: StudyTypeKey; confidence: number; by: StudyReading["by"]; input: StudyReading["input"]; contentHash: string } | undefined, record: ItemRow) {
-	if (!row || row.contentHash !== contentHashOf(readingText(record.title, record.abstractNote))) return {};
-	const reading: StudyReading = { type: row.type, confidence: row.confidence, by: row.by, input: row.input };
-	return { studyType: row.type, reading };
+/**
+ * A record's study type for its search document: an editor's correction, else its reading while that was made from the
+ * text the record has now; none until either.
+ */
+function readingFields(row: (Parameters<typeof studyReadingOf>[0] & { contentHash: string }) | undefined, record: ItemRow) {
+	const current = row?.contentHash === contentHashOf(readingText(record.title, record.abstractNote)) ? row : undefined;
+	const reading = studyReadingOf(current, record.studyType);
+	return reading ? { studyType: reading.type, reading } : {};
 }
 
 function uniqueSorted(values: Iterable<string>) {
@@ -323,8 +327,8 @@ async function buildSearchProjectionPlanForKeys(
 	const readings = new Map(
 		(await database
 			.select({
-				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, type: itemReading.studyType,
-				confidence: itemReading.typeConfidence, by: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash,
+				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, studyType: itemReading.studyType,
+				typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash,
 			})
 			.from(itemReading)
 			.where(inArray(itemReading.itemKey, topLevelKeys)))

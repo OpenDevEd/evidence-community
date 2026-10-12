@@ -1,9 +1,10 @@
 "use client";
 import { extendVariants, Select as NextUISelect } from "@nextui-org/react";
+import type { ComponentProps } from "react";
 
 import { filledFieldSurface } from "./field-styles";
 
-export const Select = extendVariants(NextUISelect, {
+const VariantSelect = extendVariants(NextUISelect, {
 	variants: {
 		color: {
 			filled: {
@@ -65,3 +66,11 @@ export const Select = extendVariants(NextUISelect, {
 		placement: "center",
 	},
 });
+
+/**
+ * A list stays open when the panel around it scrolls. React Aria stops the page scrolling while a list is open, and
+ * Firefox answers that with a scroll event on every scrolling panel, which would shut a list in one at once.
+ */
+export function Select(props: ComponentProps<typeof VariantSelect>) {
+	return <VariantSelect {...props} popoverProps={{ shouldCloseOnScroll: false, ...props.popoverProps }} />;
+}

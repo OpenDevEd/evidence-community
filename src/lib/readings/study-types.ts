@@ -67,11 +67,15 @@ export const STUDY_TYPES = [
 export type StudyTypeKey = (typeof STUDY_TYPES)[number]["key"];
 export const STUDY_TYPE_KEYS = STUDY_TYPES.map((type) => type.key) as [StudyTypeKey, ...StudyTypeKey[]];
 export const studyType = (key: string) => STUDY_TYPES.find((type) => type.key === key);
+/** An editor's study type choice in words: the type, or none, which leaves it to the reading. */
+export const describeStudyTypeChoice = (value: unknown) => (typeof value === "string" && studyType(value)?.label) || "From the reading";
 
 /**
- * One record's reading as readers see it: its type, how sure Jev was, whether the record's own metadata said it
- * instead, and what Jev read.
+ * One record's study type as readers see it: an editor's correction, or the reading's type with how sure Jev was,
+ * whether the record's own metadata said it instead, and what Jev read.
  */
-export type StudyReading = { type: StudyTypeKey; confidence: number; by: "ai" | "metadata"; input: "abstract" | "title" | "pdf" };
+export type StudyReading =
+	| { type: StudyTypeKey; by: "editor" }
+	| { type: StudyTypeKey; confidence: number; by: "ai" | "metadata"; input: "abstract" | "title" | "pdf" };
 /** Below this, Jev's type is shown as uncertain, and asked again from the record's PDF once it has one. */
 export const SURE = 0.6;

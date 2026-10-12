@@ -91,8 +91,9 @@ function sharedPayloadFromDetail(
 		tags: detail.tags,
 		collections: detail.collectionKeys,
 		links: detail.links.publishedKeys,
-		countryFocus: published.countryFocus ?? null,
-		openAccess: published.openAccess ?? null,
+		...Object.fromEntries(
+			(["countryFocus", "openAccess", "studyType"] as const).map((field) => [field, published[field] ?? null]),
+		),
 		creators: published.creators ?? detail.creators,
 		...(detail.parentItem ? { parentItem: detail.parentItem } : {}),
 	};

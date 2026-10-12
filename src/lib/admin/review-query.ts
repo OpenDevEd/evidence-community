@@ -16,6 +16,7 @@ import { payloadStringList } from "./item-payload";
 import type { AdminItemDetail } from "./types";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
+import { readStudyReading } from "@/lib/readings/reading";
 
 function snapshotFileDraft(
 	file: (typeof itemReviewFile.$inferSelect)["file"] | undefined,
@@ -153,6 +154,7 @@ export async function getAdminReviewSnapshot(
 					),
 					filePublication: null,
 					openAccessFromSources: await readOpenAccessFromSourcesFor(db, record.itemKey, payload),
+					readingStudyType: await readStudyReading(db, record.itemKey),
 					fileRemovalPending: files.some(
 						(entry) =>
 							entry.itemKey === record.itemKey &&

@@ -1,3 +1,4 @@
+import type { StudyTypeKey } from "@/lib/readings/study-types";
 import {
 	canonicalRecordKeyCheck,
 	itemIdentity,
@@ -108,6 +109,8 @@ export const item = pgTable(
 		countryFocus: varchar().array(),
 		// Library-owned. Null leaves open access to OpenAlex; true or false is an editor's choice and wins.
 		openAccess: boolean(),
+		// Library-owned. Null leaves the study type to the record's reading; a type is an editor's correction and wins.
+		studyType: varchar().$type<StudyTypeKey>(),
 		assignee: varchar(),
 		filingDate: varchar(),
 		applicationNumber: varchar(),

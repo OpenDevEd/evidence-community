@@ -2,6 +2,7 @@
 
 import { describeCountryFocus } from "@/lib/country-focus";
 import { describeOpenAccessChoice } from "@/lib/open-access";
+import { describeStudyTypeChoice } from "@/lib/readings/study-types";
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { adminCanonicalPayloadToItemFields } from "@/lib/admin/item-fields";
 
@@ -41,6 +42,7 @@ export function ConflictValue({
 }) {
 	if (field === "countryFocus") return describeCountryFocus(value);
 	if (field === "openAccess") return describeOpenAccessChoice(value);
+	if (field === "studyType") return describeStudyTypeChoice(value);
 	if (
 		value == null ||
 		value === "" ||

@@ -316,6 +316,12 @@ describe("native item draft validation", () => {
 		).toMatchObject({ accessDate: "" });
 	});
 
+	it("takes an editor's study type, or none to leave it to the reading, and refuses one that isn't a type", () => {
+		expect(validateNativeItemDraft({ itemType: "journalArticle", studyType: "meta-analysis" }).payload).toMatchObject({ studyType: "meta-analysis" });
+		expect(validateNativeItemDraft({ itemType: "journalArticle", studyType: null }).payload).toMatchObject({ studyType: null });
+		expect(() => validateNativeItemDraft({ itemType: "journalArticle", studyType: "novel" })).toThrow();
+	});
+
 	it("requires a title only when publishing", () => {
 		expect(
 			validateNativeItemDraft({ itemType: "book", title: "" }).payload,

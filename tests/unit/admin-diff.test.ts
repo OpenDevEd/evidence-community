@@ -45,6 +45,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 		filePublication: null,
 		fileRemovalPending: false,
 		openAccessFromSources: null,
+		readingStudyType: null,
 		links: {
 			fromSources: [],
 			citedBy: [],

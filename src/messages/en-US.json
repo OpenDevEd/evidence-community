@@ -1026,9 +1026,10 @@
     "notRead": "Not read yet",
     "chip": "Study type",
     "uncertain": "uncertain",
+    "editor": "Set by an editor of this library.",
     "metadata": "Typed from the record itself.",
     "ai": "Read by Jev from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
-    "method": "Each record's type is read when it enters the library. Jev, an AI classifier, reads its title and abstract and picks one of these types; a record with no abstract is judged on its title. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type Jev is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one.",
+    "method": "Each record's type is read when it enters the library. Jev, an AI classifier, reads its title and abstract and picks one of these types; a record with no abstract is judged on its title. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type Jev is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type.",
     "levels": {
       "synthesis": "Reviews and syntheses",
       "primary": "Primary studies",

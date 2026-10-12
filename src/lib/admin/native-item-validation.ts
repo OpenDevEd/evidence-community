@@ -1,3 +1,4 @@
+import { STUDY_TYPE_KEYS } from "@/lib/readings/study-types";
 import {
 	describeZoteroItemTypeFields,
 	getZoteroItemType,
@@ -300,6 +301,14 @@ function countryFocusFields(value: unknown, source: boolean | undefined) {
 	return { countryFocus: result.data };
 }
 
+/** An editor corrects a record's study type, or leaves it to the reading with null. Source imports never send it. */
+function studyTypeFields(value: unknown, source: boolean | undefined) {
+	if (source || value === undefined) return {};
+	const result = z.enum(STUDY_TYPE_KEYS).nullable().safeParse(value);
+	if (!result.success) throw new NativeItemValidationError("Choose a study type.", { studyType: "Choose one of the study types, or leave it to the reading." });
+	return { studyType: result.data };
+}
+
 /** An editor marks a record open or closed, or leaves it to OpenAlex with null. Source imports never send it. */
 function openAccessFields(value: unknown, source: boolean | undefined) {
 	if (source || value === undefined) return {};
@@ -341,6 +350,7 @@ function parseNativeItemDraft(
 		itemType: normalizedItemType,
 		...countryFocusFields(payload.countryFocus, options.source),
 		...openAccessFields(payload.openAccess, options.source),
+		...studyTypeFields(payload.studyType, options.source),
 		...topicFields(payload.topics),
 		...normalizeDraftFields(
 			payload,
